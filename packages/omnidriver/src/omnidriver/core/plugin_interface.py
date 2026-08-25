@@ -62,7 +62,7 @@ if TYPE_CHECKING:
     from omnidriver.core.tutorials_display import TutorialDisplay
     from omnidriver.core.plugin_capabilities import ResolvedInput
     from omnidriver.core.report_catalog import ReportDefinition
-    from omnidriver.core.specs.apply_overrides import OverrideScope, RegenerationScope
+    from omnidriver.openfoam.apply_overrides import OverrideScope, RegenerationScope
     from pathlib import Path
 
 

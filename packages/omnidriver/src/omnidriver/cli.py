@@ -34,7 +34,7 @@ from pathlib import Path
 
 from .core.runtime.failure_context import build_failure_context
 from .core.runtime.launch_readiness import is_execution_successful, is_launchable
-from .core.runtime.openfoam_environment import load_openfoam_environment
+from omnidriver.openfoam.openfoam_environment import load_openfoam_environment
 from .core.runtime.remediation import build_candidate_remediations
 from .core.runtime.remediation_audit import append_remediation_record
 from .core.runtime.workflow_runner import run_workflow_step, _step_state_by_id
@@ -50,7 +50,7 @@ from omnidriver.core.specs.paths import (
     driverfoam_scratch_root,
     repo_root_default,
 )
-from omnidriver.core.specs.apply_overrides import validate_overrides, apply_overrides, OverrideError
+from omnidriver.openfoam.apply_overrides import validate_overrides, apply_overrides, OverrideError
 from omnidriver.core.strict_planning import (
     StrictDiagnostic,
     _environment_diagnostics,

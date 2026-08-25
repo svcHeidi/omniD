@@ -1,6 +1,6 @@
 """CLI: print the regression-equivalence matrix.
 
-    python -m omnidriver.tests.regression_equivalence [--run-phase2]
+    python -m regression_equivalence [--run-phase2]
 
 Phase 1 (solver-free) always runs: agent dict-layer idempotence + agent
 addressability of each case/driver.
@@ -18,12 +18,12 @@ import argparse
 from collections.abc import Iterator
 from typing import Any
 
-from omnidriver.tests.regression_equivalence.dual_run import verify_reproduction
-from omnidriver.tests.regression_equivalence.registry import REGRESSION_CASES
-from omnidriver.tests.regression_equivalence.round_trip import (
+from regression_equivalence.dual_run import verify_reproduction
+from regression_equivalence.registry import REGRESSION_CASES
+from regression_equivalence.round_trip import (
     electro_build_parse_fixpoint,
 )
-from omnidriver.tests.regression_equivalence.staging import (
+from regression_equivalence.staging import (
     resolve_generic,
     resolve_strict,
 )

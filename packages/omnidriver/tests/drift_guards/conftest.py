@@ -6,7 +6,7 @@ the entire test_*.py collection in this package.
 """
 import pytest
 
-from omnidriver.tests.conftest import monorepo_root
+from conftest import monorepo_root
 
 pytestmark = pytest.mark.skipif(
     monorepo_root is None,

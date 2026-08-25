@@ -41,7 +41,7 @@ import pytest
 from omnidriver.core.plugin_capabilities import ResolvedInput, RuntimeDependency
 from omnidriver.core.plugin_interface import default_driver_context, driver_context, generic_openfoam_context
 from omnidriver.core.runtime.provenance_inputs import enumerate_case_inputs
-from omnidriver.tests.plugins.minimal_plugin import MinimalOpenFOAMPlugin
+from plugins.minimal_plugin import MinimalOpenFOAMPlugin
 
 
 def _paths(components, *, kind: str | None = None) -> set[str]:

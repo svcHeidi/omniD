@@ -14,10 +14,12 @@ from omnidriver.cardiac.overrides import (
     apply_physics_property_overrides,
 )
 from omnidriver.core.specs.common import (
-    load_python_module,
-    replace_block_mesh_resolutions,
     resolve_run_script_path,
     resolve_spec_paths,
+)
+from omnidriver.openfoam.utils import (
+    load_python_module,
+    replace_block_mesh_resolutions,
     set_delta_t,
     set_end_time,
 )

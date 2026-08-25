@@ -18,7 +18,7 @@ def test_recorder_is_empty_when_no_fallback_is_invoked() -> None:
 
 
 def test_explicit_v2_plugin_calls_no_legacy_fallback() -> None:
-    from omnidriver.tests.plugins.minimal_plugin import MinimalOpenFOAMPlugin
+    from plugins.minimal_plugin import MinimalOpenFOAMPlugin
     from omnidriver.core.plugin_interface import driver_context
 
     context = driver_context(MinimalOpenFOAMPlugin(), source="test:minimal")

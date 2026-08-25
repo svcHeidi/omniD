@@ -35,7 +35,7 @@ from pathlib import Path
 from omnidriver.core.runtime.execution_context import resolve_execution_context
 from omnidriver.core.runtime.registry import load_entry_spec
 
-from omnidriver.tests.conftest import monorepo_root, skip_without_monorepo
+from conftest import monorepo_root, skip_without_monorepo
 
 
 

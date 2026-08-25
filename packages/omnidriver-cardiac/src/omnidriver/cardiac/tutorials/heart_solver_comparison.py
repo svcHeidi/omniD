@@ -53,7 +53,7 @@ from pathlib import Path
 from typing import Final
 
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
-from omnidriver.core.runtime.parallel_execution import solve_steps
+from omnidriver.openfoam.parallel_execution import solve_steps
 from omnidriver.core.specs.paths import resolve_spec_paths
 
 # The owner's four named studies -- each key is a directory name under

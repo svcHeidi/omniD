@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 import pytest
-from omnidriver.tests.conftest import skip_without_monorepo
+from conftest import skip_without_monorepo
 pytestmark = skip_without_monorepo
 
 

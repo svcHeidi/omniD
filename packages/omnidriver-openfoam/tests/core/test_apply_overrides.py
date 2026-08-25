@@ -1,14 +1,14 @@
 import pytest
 from pathlib import Path
-from omnidriver.tests.conftest import assert_foam_entry, skip_without_monorepo
+from conftest import assert_foam_entry, skip_without_monorepo
 pytestmark = skip_without_monorepo
 
-from omnidriver.core.specs.apply_overrides import (
+from omnidriver.openfoam.apply_overrides import (
     validate_overrides,
     apply_overrides,
     OverrideError,
 )
-from omnidriver.core.runtime.mutators import read_foam_entry
+from omnidriver.openfoam.mutators import read_foam_entry
 
 REPO_ROOT = Path(__file__).resolve().parents[6]
 SINGLE_CELL = REPO_ROOT / "tutorials" / "electrophysiologyProtocols" / "singleCell"

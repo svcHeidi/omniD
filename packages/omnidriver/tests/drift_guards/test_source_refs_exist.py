@@ -78,7 +78,7 @@ from omnidriver.dict_entries import (
 from omnidriver.plugins.cardiacfoam.common_dict_entries import (
     CONTROL_DICT_ENTRIES,
 )
-from omnidriver.tests.conftest import monorepo_root
+from conftest import monorepo_root
 
 # ---------------------------------------------------------------------------
 # Module-level skip (inherited from drift_guards/conftest.py pytestmark, but

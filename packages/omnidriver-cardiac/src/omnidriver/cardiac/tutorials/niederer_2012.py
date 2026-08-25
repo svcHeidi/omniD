@@ -39,8 +39,10 @@ from omnidriver.cardiac.overrides import (
     apply_physics_property_overrides,
 )
 from omnidriver.core.specs.common import (
-    replace_block_mesh_resolutions,
     resolve_spec_paths,
+)
+from omnidriver.openfoam.utils import (
+    replace_block_mesh_resolutions,
     set_delta_t,
 )
 from omnidriver.openfoam.mesh_provisioning import cell_counts_from_dx

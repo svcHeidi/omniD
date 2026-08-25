@@ -37,15 +37,17 @@ from pathlib import Path
 from omnidriver.cardiac.tutorials.defaults import manufactured_eikonal_ecg as defaults
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 from omnidriver.openfoam.mutators import update_foam_entry
-from omnidriver.core.runtime.parallel_execution import solve_steps
+from omnidriver.openfoam.parallel_execution import solve_steps
 from omnidriver.cardiac.overrides import (
     apply_electro_property_overrides,
     apply_physics_property_overrides,
 )
 from omnidriver.core.specs.common import (
-    replace_block_mesh_resolutions,
     resolve_run_script_path,
     resolve_spec_paths,
+)
+from omnidriver.openfoam.utils import (
+    replace_block_mesh_resolutions,
     set_delta_t,
 )
 from omnidriver.core.specs.tet_mesh_provisioning import render_tet_geo

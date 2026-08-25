@@ -4,12 +4,12 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from omnidriver.tests.conftest import skip_without_monorepo
+from conftest import skip_without_monorepo
 pytestmark = skip_without_monorepo
 
-from omnidriver.tests.regression_equivalence.registry import REGRESSION_CASES, RegressionCase
-from omnidriver.tests.regression_equivalence import dual_run
-from omnidriver.tests.regression_equivalence.dual_run import (
+from regression_equivalence.registry import REGRESSION_CASES, RegressionCase
+from regression_equivalence import dual_run
+from regression_equivalence.dual_run import (
     extract_summary_value,
     parse_columnar_reference,
     read_series_value,

@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import pytest
-from omnidriver.tests.conftest import skip_without_monorepo
+from conftest import skip_without_monorepo
 pytestmark = skip_without_monorepo
 
-from omnidriver.tests.regression_equivalence.registry import REGRESSION_CASES
-from omnidriver.tests.regression_equivalence.staging import (
+from regression_equivalence.registry import REGRESSION_CASES
+from regression_equivalence.staging import (
     resolve_generic,
     resolve_strict,
 )

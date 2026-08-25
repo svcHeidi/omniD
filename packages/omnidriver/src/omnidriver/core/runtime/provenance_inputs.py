@@ -79,8 +79,8 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, TYPE_CHECKING
 
 from ..plugin_capabilities import ResolvedInput, RuntimeDependency
-from .environment_preflight import _MPI_LAUNCHERS, _unwrap_mpi_program
-from .mutators import read_foam_entry
+from omnidriver.openfoam.environment_preflight import _MPI_LAUNCHERS, _unwrap_mpi_program
+from omnidriver.openfoam.mutators import read_foam_entry
 from .provenance import ProvenanceComponent, component_for_path
 from .provenance_dependencies import component_for_runtime_dependency
 from .workflow import CASE_SCRIPT_COMMANDS

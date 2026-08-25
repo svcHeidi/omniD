@@ -37,7 +37,7 @@ from omnidriver.core.plugin_interface import (
     driver_context,
     generic_openfoam_context,
 )
-from omnidriver.tests.plugins.minimal_plugin import MinimalOpenFOAMPlugin
+from plugins.minimal_plugin import MinimalOpenFOAMPlugin
 
 
 def test_generic_plugin_declares_no_required_inputs(tmp_path: Path) -> None:

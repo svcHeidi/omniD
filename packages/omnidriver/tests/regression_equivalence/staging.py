@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from omnidriver.core.runtime.registry import resolve_entry
-from omnidriver.tests.regression_equivalence.registry import RegressionCase
+from regression_equivalence.registry import RegressionCase
 
 
 def resolve_generic(case: RegressionCase) -> dict[str, Any]:

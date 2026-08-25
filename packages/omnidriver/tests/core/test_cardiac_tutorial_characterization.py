@@ -20,7 +20,7 @@ import pytest
 from omnidriver.core.plugin_interface import default_driver_context
 from omnidriver.core.runtime.registry import load_entry_spec
 from omnidriver.core.strict_planning import strict_plan
-from omnidriver.tests.conftest import monorepo_root, skip_without_monorepo
+from conftest import monorepo_root, skip_without_monorepo
 
 pytestmark = skip_without_monorepo
 

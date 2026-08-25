@@ -35,7 +35,7 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
-from omnidriver.tests.conftest import skip_without_monorepo
+from conftest import skip_without_monorepo
 pytestmark = skip_without_monorepo
 
 from omnidriver.core import strict_planning
@@ -563,7 +563,7 @@ def test_dictionary_resolution_audit_text_is_plugin_neutral_for_non_cardiac_plug
     in its own audit text."""
     from omnidriver.core.runtime.strict_audit import _build_simulation_audit
     from omnidriver.core.plugin_interface import driver_context
-    from omnidriver.tests.plugins.minimal_plugin import MinimalOpenFOAMPlugin
+    from plugins.minimal_plugin import MinimalOpenFOAMPlugin
 
     context = driver_context(MinimalOpenFOAMPlugin(), source="test:minimal")
     spec = SimpleNamespace(

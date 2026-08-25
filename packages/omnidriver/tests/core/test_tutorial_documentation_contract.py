@@ -29,7 +29,7 @@ from pathlib import Path
 import re
 import subprocess
 import pytest
-from omnidriver.tests.conftest import skip_without_monorepo
+from conftest import skip_without_monorepo
 pytestmark = skip_without_monorepo
 
 from omnidriver.core.runtime.registry import list_tutorials, _normalized_registry

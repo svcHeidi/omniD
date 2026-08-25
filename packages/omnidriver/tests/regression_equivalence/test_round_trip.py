@@ -4,11 +4,11 @@ from __future__ import annotations
 import difflib
 
 import pytest
-from omnidriver.tests.conftest import skip_without_monorepo
+from conftest import skip_without_monorepo
 pytestmark = skip_without_monorepo
 
-from omnidriver.tests.regression_equivalence.registry import REGRESSION_CASES
-from omnidriver.tests.regression_equivalence.round_trip import (
+from regression_equivalence.registry import REGRESSION_CASES
+from regression_equivalence.round_trip import (
     electro_build_parse_fixpoint,
 )
 

@@ -36,10 +36,10 @@ import re
 from pathlib import Path
 
 import pytest
-from omnidriver.tests.conftest import skip_without_monorepo
+from conftest import skip_without_monorepo
 pytestmark = skip_without_monorepo
 
-from omnidriver.core.specs import mesh_geometry
+from omnidriver.openfoam import mesh_geometry
 
 
 def _checkmesh_source() -> str:

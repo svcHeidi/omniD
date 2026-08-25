@@ -36,7 +36,7 @@ from pathlib import Path
 
 from omnidriver.cli import main
 from omnidriver.core.introspection import describe_tutorial
-from omnidriver.tests.conftest import monorepo_root, skip_without_monorepo
+from conftest import monorepo_root, skip_without_monorepo
 
 
 def test_run_state_schema_does_not_advertise_unwritten_action_events_file():

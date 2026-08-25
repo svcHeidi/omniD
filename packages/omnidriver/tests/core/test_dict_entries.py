@@ -37,7 +37,7 @@ from omnidriver.dict_entries import (
     all_documented_driver_paths,
 )
 from omnidriver.plugins.cardiacfoam.overrides import apply_electro_property_overrides
-from omnidriver.tests.conftest import assert_foam_entry
+from conftest import assert_foam_entry
 
 
 class TestDictEntryCatalog(unittest.TestCase):

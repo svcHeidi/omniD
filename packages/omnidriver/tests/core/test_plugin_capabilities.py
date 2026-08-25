@@ -14,7 +14,7 @@ from omnidriver.core.plugin_capabilities import (
 )
 from omnidriver.core.plugin_interface import DriverContext, driver_context
 from omnidriver.core.runtime.models import TutorialSpec
-from omnidriver.tests.plugins.minimal_plugin import MinimalOpenFOAMPlugin
+from plugins.minimal_plugin import MinimalOpenFOAMPlugin
 
 
 def _spec(tmp_path: Path) -> TutorialSpec:

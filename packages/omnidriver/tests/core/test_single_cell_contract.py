@@ -32,7 +32,7 @@ import unittest
 from pathlib import Path
 
 from omnidriver.core.runtime.registry import load_tutorial_spec
-from omnidriver.tests.conftest import monorepo_root, skip_without_monorepo
+from conftest import monorepo_root, skip_without_monorepo
 
 
 @skip_without_monorepo

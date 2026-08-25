@@ -7,7 +7,7 @@ and monkeypatches shutil.which / os.environ instead of touching the machine.
 import pytest
 
 from omnidriver.core import strict_planning
-from omnidriver.core.runtime.openfoam_environment import load_openfoam_environment
+from omnidriver.openfoam.openfoam_environment import load_openfoam_environment
 from omnidriver.core.strict_planning import (
     StrictDiagnostic,
     StrictPlanReport,
@@ -97,7 +97,7 @@ def _make_exec(path):
 def test_build_staleness_warns_when_user_binary_older_than_source(tmp_path):
     import os
 
-    from omnidriver.core.runtime.environment_preflight import (
+    from omnidriver.openfoam.environment_preflight import (
         _build_staleness_diagnostics,
     )
 
@@ -124,7 +124,7 @@ def test_build_staleness_warns_when_user_binary_older_than_source(tmp_path):
 def test_build_staleness_silent_when_binary_newer_than_source(tmp_path):
     import os
 
-    from omnidriver.core.runtime.environment_preflight import (
+    from omnidriver.openfoam.environment_preflight import (
         _build_staleness_diagnostics,
     )
 
@@ -149,7 +149,7 @@ def test_build_staleness_ignores_binaries_outside_user_appbin(tmp_path):
     # older than source -- only user-compiled utilities are policed.
     import os
 
-    from omnidriver.core.runtime.environment_preflight import (
+    from omnidriver.openfoam.environment_preflight import (
         _build_staleness_diagnostics,
     )
 
@@ -170,7 +170,7 @@ def test_build_staleness_ignores_binaries_outside_user_appbin(tmp_path):
 
 
 def test_build_staleness_no_src_root_is_silent(tmp_path):
-    from omnidriver.core.runtime.environment_preflight import (
+    from omnidriver.openfoam.environment_preflight import (
         _build_staleness_diagnostics,
     )
 

@@ -35,7 +35,7 @@ from pathlib import Path
 
 import omnidriver
 from omnidriver.core.specs.common import tutorials_root_default
-from omnidriver.tests.regression_equivalence.registry import RegressionCase
+from regression_equivalence.registry import RegressionCase
 
 
 # --------------------------------------------------------------------------- #
@@ -331,7 +331,7 @@ def check_protocol(case_dir: str, case_path: Path) -> tuple[bool, str]:
     Returns (ok, detail). The protocol is loaded from `equivalence_protocol.yaml`.
     Raises NotImplementedError if no rules exist for the case (unsupported).
     """
-    from omnidriver.tests.equivalence.protocol import load_protocol
+    from equivalence.protocol import load_protocol
     
     pkg_root = Path(omnidriver.__file__).resolve().parent.parent
     protocol_path = pkg_root / "equivalence_protocol.yaml"

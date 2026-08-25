@@ -9,7 +9,7 @@ from omnidriver.cli import main
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime.run_document_exec import build_execution_inputs
 from omnidriver.core.runtime.run_model import RunDocument
-from omnidriver.tests.plugins.minimal_plugin import MinimalOpenFOAMPlugin
+from plugins.minimal_plugin import MinimalOpenFOAMPlugin
 
 
 def test_generic_plugin_executes_plain_allrun_case(tmp_path: Path) -> None:
@@ -46,7 +46,7 @@ def test_trusted_minimal_plugin_executes_plain_allrun_case(
         "run",
         "--strict",
         "--plugin",
-        "omnidriver.tests.plugins.minimal_plugin:MinimalOpenFOAMPlugin",
+        "plugins.minimal_plugin:MinimalOpenFOAMPlugin",
         "--entry", "plainOpenFoamCase",
         "--tutorials-root", str(tmp_path),
     ])

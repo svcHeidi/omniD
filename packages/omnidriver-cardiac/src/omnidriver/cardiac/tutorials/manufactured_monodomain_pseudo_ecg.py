@@ -41,10 +41,12 @@ from omnidriver.cardiac.overrides import (
     remove_electro_property_dict,
 )
 from omnidriver.core.specs.common import (
-    load_python_module,
-    replace_block_mesh_resolutions,
     resolve_run_script_path,
     resolve_spec_paths,
+)
+from omnidriver.openfoam.utils import (
+    load_python_module,
+    replace_block_mesh_resolutions,
     set_delta_t,
 )
 from omnidriver.core.specs.utils import (
@@ -52,7 +54,7 @@ from omnidriver.core.specs.utils import (
 )
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 from omnidriver.openfoam.mutators import update_foam_entry
-from omnidriver.core.runtime.parallel_execution import solve_steps
+from omnidriver.openfoam.parallel_execution import solve_steps
 from omnidriver.core.specs.tet_mesh_provisioning import render_tet_geo
 
 # Stable driver-side names mapped to the literal OpenFOAM tokens -- "GaussLinear"

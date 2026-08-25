@@ -1,6 +1,6 @@
 import pytest
 
-from omnidriver.core.runtime import foam_backend
+from omnidriver.openfoam import foam_backend
 
 
 HEADER = "FoamFile { version 2.0; class dictionary; object d; }\n"

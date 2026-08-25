@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
 
 from .runtime.artifacts import predict_data_artifacts
-from .runtime.environment_preflight import (
+from omnidriver.openfoam.environment_preflight import (
     _environment_diagnostics,
     _required_executables,
     _unwrap_mpi_program,
@@ -70,7 +70,7 @@ from ..scripts._dict_keys_scanner import (
 )
 from omnidriver.core.specs.function_object_fields import function_object_field_diagnostics
 from omnidriver.core.specs.case_dict_keys import case_dict_key_diagnostics as _case_dict_key_diagnostics
-from omnidriver.core.specs.mesh_geometry import mesh_geometry_diagnostics as _detect_mesh_geometry
+from omnidriver.openfoam.mesh_geometry import mesh_geometry_diagnostics as _detect_mesh_geometry
 
 
 @dataclass(frozen=True)

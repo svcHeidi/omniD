@@ -4,12 +4,12 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from omnidriver.tests.conftest import skip_without_monorepo
+from conftest import skip_without_monorepo
 pytestmark = skip_without_monorepo
 
-from omnidriver.tests.regression_equivalence import __main__ as cli_matrix
-from omnidriver.tests.regression_equivalence.__main__ import build_matrix_iter
-from omnidriver.tests.regression_equivalence.registry import REGRESSION_CASES
+from regression_equivalence import __main__ as cli_matrix
+from regression_equivalence.__main__ import build_matrix_iter
+from regression_equivalence.registry import REGRESSION_CASES
 
 
 def test_matrix_has_row_per_case_driver():

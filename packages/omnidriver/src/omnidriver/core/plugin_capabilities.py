@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from .runtime.models import DataArtifact, TutorialSpec
     from omnidriver.core.planning_types import StrictDiagnostic
     from omnidriver.core.report_catalog import ReportDefinition
-    from omnidriver.core.specs.apply_overrides import OverrideScope, RegenerationScope
+    from omnidriver.openfoam.apply_overrides import OverrideScope, RegenerationScope
 
 
 @dataclass(frozen=True)
@@ -582,7 +582,7 @@ class NamedCatalogsCapability(Protocol):
 
 class OverrideScopeCapability(Protocol):
     """Plugin-declared ``$TOKEN.`` override scopes for the agent-facing
-    ``step --strict --apply`` path (:mod:`omnidriver.core.specs.apply_overrides`).
+    ``step --strict --apply`` path (:mod:`omnidriver.openfoam.apply_overrides`).
 
     Generalizes what was previously a single hardcoded cardiac scope
     (``$ELECTRO_MODEL_COEFFS`` -> ``constant/electroProperties``): core no
@@ -605,7 +605,7 @@ class OverrideScopeCapability(Protocol):
 class DictRegenerationCapability(Protocol):
     """Plugin-declared bare "selector" overrides that must REGENERATE a
     dict file rather than key-patch it, for the agent-facing
-    ``step --strict --apply`` path (:mod:`omnidriver.core.specs.apply_overrides`).
+    ``step --strict --apply`` path (:mod:`omnidriver.openfoam.apply_overrides`).
 
     A sibling of :class:`OverrideScopeCapability`: that one covers
     ``$TOKEN.``-scoped leaves that patch in place; this one covers bare

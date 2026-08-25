@@ -42,7 +42,7 @@ from omnidriver.core.sweep.sweep_expansion import SweepValidationError, check_ca
 from omnidriver.sweep_materialize import materialize_case
 from omnidriver.sweep_routing import route_case_values, route_entry_case_values
 from .fresh import ensure_fresh_output_dir
-from .openfoam_environment import configure_plugin_environment
+from omnidriver.openfoam.openfoam_environment import configure_plugin_environment
 from .output_collection import collect_new_outputs, snapshot_postprocessing
 from .postprocess_phase import build_sweep_context, run_postprocessing_module
 from .registry import load_entry_spec

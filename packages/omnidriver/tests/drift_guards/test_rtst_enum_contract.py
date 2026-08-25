@@ -44,7 +44,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 import pytest
-from omnidriver.tests.conftest import skip_without_monorepo
+from conftest import skip_without_monorepo
 
 from omnidriver.scripts._rtst_scanner import (
     iter_catalogue_enums,

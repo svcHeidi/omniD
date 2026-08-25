@@ -35,7 +35,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from omnidriver.core.runtime.mutators import read_foam_entry
+from omnidriver.openfoam.mutators import read_foam_entry
 
 _DECOMPOSE_PAR_DICT_RELPATH = Path("system/decomposeParDict")
 

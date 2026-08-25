@@ -28,7 +28,7 @@ from omnidriver.plugins.cardiacfoam.dict_builder import (
     build_electro_properties,
     parse_electro_properties,
 )
-from omnidriver.tests.regression_equivalence.registry import RegressionCase
+from regression_equivalence.registry import RegressionCase
 
 
 def _build_from_parse(path: Path) -> str:

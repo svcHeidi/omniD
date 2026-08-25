@@ -34,10 +34,10 @@ import unittest
 from pathlib import Path
 
 import pytest
-from omnidriver.tests.conftest import skip_without_monorepo
+from conftest import skip_without_monorepo
 pytestmark = skip_without_monorepo
 
-from omnidriver.core.specs.mesh_geometry import (
+from omnidriver.openfoam.mesh_geometry import (
     BoundingBox,
     MeshParseError,
     MeshRegion,

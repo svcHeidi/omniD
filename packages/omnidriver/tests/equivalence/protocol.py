@@ -25,7 +25,7 @@ from pathlib import Path
 
 import yaml
 
-from omnidriver.tests.regression_equivalence.dual_run import (
+from regression_equivalence.dual_run import (
     parse_columnar_reference,
 )
 

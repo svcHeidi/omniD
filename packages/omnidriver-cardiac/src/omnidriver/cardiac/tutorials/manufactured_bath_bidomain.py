@@ -36,7 +36,7 @@ from pathlib import Path
 from omnidriver.cardiac.tutorials.defaults import manufactured_bath_bidomain as defaults
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 from omnidriver.openfoam.mutators import update_foam_entry
-from omnidriver.core.runtime.parallel_execution import solve_steps
+from omnidriver.openfoam.parallel_execution import solve_steps
 from omnidriver.cardiac.overrides import (
     apply_electro_property_overrides,
     apply_physics_property_overrides,
@@ -46,10 +46,12 @@ from omnidriver.cardiac.overrides import (
     remove_electro_property_entry,
 )
 from omnidriver.core.specs.common import (
-    load_python_module,
-    replace_block_mesh_resolutions,
     resolve_run_script_path,
     resolve_spec_paths,
+)
+from omnidriver.openfoam.utils import (
+    load_python_module,
+    replace_block_mesh_resolutions,
     set_delta_t,
     set_end_time,
 )

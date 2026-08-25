@@ -4,7 +4,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent.parent))
 
-from omnidriver.tests.core.test_cardiac_tutorial_characterization import _current_characterization, _FIXTURE
+from core.test_cardiac_tutorial_characterization import _current_characterization, _FIXTURE
 
 def update_fixture():
     data = _current_characterization()

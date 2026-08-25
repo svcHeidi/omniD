@@ -56,7 +56,7 @@ from pathlib import Path
 import pytest
 
 from omnidriver.core.specs.apply_overrides import OverrideError, validate_overrides
-from omnidriver.tests.conftest import monorepo_root, skip_without_monorepo
+from conftest import monorepo_root, skip_without_monorepo
 
 pytestmark = skip_without_monorepo
 

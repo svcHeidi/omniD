@@ -31,7 +31,7 @@ import re
 
 import pytest
 
-from omnidriver.core.specs.mesh_provisioning import (
+from omnidriver.openfoam.mesh_provisioning import (
     cell_counts_from_dx,
     default_block_mesh_dict_text,
 )

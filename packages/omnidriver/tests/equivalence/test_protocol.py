@@ -15,7 +15,7 @@ postProcessing/probes/0/Vm.dat 2.0 P2 -79.4 0.5
 
 class TestTranscription(unittest.TestCase):
     def test_one_row_per_reference_point(self) -> None:
-        from omnidriver.tests.equivalence.protocol import transcribe_reference
+        from equivalence.protocol import transcribe_reference
         rows = transcribe_reference(
             "electrophysiologyProtocols/singleCell",
             "regression/singleCell.reference",
@@ -24,7 +24,7 @@ class TestTranscription(unittest.TestCase):
         self.assertEqual(len(rows), 2)
 
     def test_tolerance_and_provenance_are_carried(self) -> None:
-        from omnidriver.tests.equivalence.protocol import transcribe_reference
+        from equivalence.protocol import transcribe_reference
         rows = transcribe_reference(
             "electrophysiologyProtocols/singleCell",
             "regression/singleCell.reference",
@@ -37,7 +37,7 @@ class TestTranscription(unittest.TestCase):
         self.assertIn("committed", row.rationale)
 
     def test_non_columnar_reference_yields_no_rows(self) -> None:
-        from omnidriver.tests.equivalence.protocol import transcribe_reference
+        from equivalence.protocol import transcribe_reference
         rows = transcribe_reference("x", "y.reference", "kind key metric a b c d\n")
         self.assertEqual(rows, [])
 
@@ -59,7 +59,7 @@ class TestMetricTranscription(unittest.TestCase):
     """
 
     def test_transcribes_every_metric_row(self) -> None:
-        from omnidriver.tests.equivalence.protocol import (
+        from equivalence.protocol import (
             transcribe_metric_reference,
         )
         rows = transcribe_metric_reference(
@@ -68,7 +68,7 @@ class TestMetricTranscription(unittest.TestCase):
         self.assertEqual(len(rows), 4)
 
     def test_captures_norm_tolerances(self) -> None:
-        from omnidriver.tests.equivalence.protocol import (
+        from equivalence.protocol import (
             transcribe_metric_reference,
         )
         rows = transcribe_metric_reference("c", "r.reference", METRIC_TEXT)
@@ -77,19 +77,19 @@ class TestMetricTranscription(unittest.TestCase):
         self.assertEqual(norms[("Vm", "Linf")], 1e-7)
 
     def test_columnar_reference_yields_no_metric_rows(self) -> None:
-        from omnidriver.tests.equivalence.protocol import (
+        from equivalence.protocol import (
             transcribe_metric_reference,
         )
         self.assertEqual(transcribe_metric_reference("c", "r", REFERENCE_TEXT), [])
 
     def test_metric_reference_yields_no_columnar_rows(self) -> None:
-        from omnidriver.tests.equivalence.protocol import transcribe_reference
+        from equivalence.protocol import transcribe_reference
         self.assertEqual(transcribe_reference("c", "r", METRIC_TEXT), [])
 
 
 class TestRoundTrip(unittest.TestCase):
     def test_written_protocol_loads_back_identically(self) -> None:
-        from omnidriver.tests.equivalence.protocol import (
+        from equivalence.protocol import (
             transcribe_reference, transcribe_metric_reference,
             write_protocol, load_protocol,
         )

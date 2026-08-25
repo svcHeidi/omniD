@@ -8,7 +8,7 @@ from pathlib import Path
 
 class TestInputTreeHash(unittest.TestCase):
     def test_hashes_every_file_by_relative_path(self) -> None:
-        from omnidriver.tests.equivalence.evidence import hash_input_tree
+        from equivalence.evidence import hash_input_tree
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "system").mkdir()
@@ -20,7 +20,7 @@ class TestInputTreeHash(unittest.TestCase):
             )
 
     def test_excludes_volatile_paths(self) -> None:
-        from omnidriver.tests.equivalence.evidence import hash_input_tree
+        from equivalence.evidence import hash_input_tree
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "postProcessing").mkdir()
@@ -32,7 +32,7 @@ class TestInputTreeHash(unittest.TestCase):
             self.assertNotIn("postProcessing/out.dat", hashes)
 
     def test_identical_trees_share_a_digest(self) -> None:
-        from omnidriver.tests.equivalence.evidence import (
+        from equivalence.evidence import (
             hash_input_tree, tree_digest,
         )
         digests = []
@@ -45,7 +45,7 @@ class TestInputTreeHash(unittest.TestCase):
         self.assertEqual(digests[0], digests[1])
 
     def test_differing_trees_differ_in_digest(self) -> None:
-        from omnidriver.tests.equivalence.evidence import (
+        from equivalence.evidence import (
             hash_input_tree, tree_digest,
         )
         digests = []
@@ -60,7 +60,7 @@ class TestInputTreeHash(unittest.TestCase):
 
 class TestEnvironmentManifest(unittest.TestCase):
     def test_records_openfoam_identity(self) -> None:
-        from omnidriver.tests.equivalence.evidence import environment_manifest
+        from equivalence.evidence import environment_manifest
         manifest = environment_manifest({
             "WM_PROJECT_DIR": "/opt/openfoam",
             "WM_PROJECT_VERSION": "v2512",
@@ -72,7 +72,7 @@ class TestEnvironmentManifest(unittest.TestCase):
         self.assertNotIn("IRRELEVANT", manifest)
 
     def test_absent_variables_are_none_not_missing(self) -> None:
-        from omnidriver.tests.equivalence.evidence import environment_manifest
+        from equivalence.evidence import environment_manifest
         manifest = environment_manifest({})
         self.assertIn("WM_PROJECT_DIR", manifest)
         self.assertIsNone(manifest["WM_PROJECT_DIR"])
