@@ -1,0 +1,8 @@
+openfoam:
+  bashrc: /Volumes/OpenFOAM-v2412/etc/bashrc
+
+plugins:
+  org.cardiacfoam:
+    backend: full
+    solids4foam_root: /Users/simaocastro/noFrontendCardiacFoam_minor_errors/modules/solids4foam
+    build_manifest: /Users/simaocastro/OpenFOAM/simaocastro-v2412/platforms/darwin64ClangDPInt32Opt/lib/cardiacFoam.build.json
