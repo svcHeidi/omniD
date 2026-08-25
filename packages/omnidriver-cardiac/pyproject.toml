@@ -35,4 +35,8 @@ where = ["src"]
 include = ["omnidriver*"]
 
 [tool.setuptools.package-data]
-"omnidriver.cardiac" = ["plugin.yaml", "dict_key_allowlist.json"]
+"omnidriver.cardiac" = [
+    "plugin.yaml",
+    "dict_key_allowlist.json",
+    "fixtures/template/constant/*",
+]
