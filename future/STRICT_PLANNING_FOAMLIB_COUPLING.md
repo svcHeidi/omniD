@@ -1,12 +1,17 @@
 # `strict_planning.py` Has a Hard, Unconditional `foamlib` Dependency
 
-**Status: open, not fixed.** Found during Task 3 (bulk-copy core) of
+**Status: unblocked, not resolved.** Found during Task 3 (bulk-copy core) of
 `docs/superpowers/plans/2026-08-25-monorepo-package-migration.md`'s Step 4
 verification grep, which turned up more core/OpenFOAM coupling than the plan
-anticipated. Parked rather than fixed in place because the fix isn't a file
-move — it's the same class of design work as Task 5's `ConfigValueCapability`,
-but for a richer, harder interface, on the single most load-bearing file in
-core.
+anticipated. During Task 4, the immediate breakage this caused (import
+errors, a real circular import between `omnidriver.core` and
+`omnidriver.openfoam`) was fixed just enough to make both packages importable
+and their test suites pass — see §5. The underlying design problem described
+below is **not** fixed, only unblocked: `omnidriver.core` still imports
+`omnidriver.openfoam` directly in three places, which is a real,
+currently-accepted violation of `ARCHITECTURE.md`'s "core MUST NOT import
+openfoam" rule. Proper resolution is still the capability-design work
+described in §2, not yet done.
 
 ## 1. What's coupled
 
@@ -98,3 +103,55 @@ task is reached, rather than needing its own design pass.
   `ARCHITECTURE.md`'s Global Constraints is **not yet satisfied**. Don't
   claim Task 3/7 "core is clean" without re-running the `foamlib` grep from
   Task 3 Step 4 and getting zero hits.
+
+## 5. What Task 4 actually did to unblock this (not to fix it)
+
+Task 4's own verification (installing all three packages and importing
+`omnidriver.cli`) turned up a second, more fundamental bug caused by the
+`strict_planning.py` coupling: `omnidriver.core.__init__.py` had been copied
+from the monorepo's `openfoam_driver/__init__.py` verbatim, including its
+eager re-exports (`from .introspection import describe_entry,
+describe_tutorial`). `core.introspection` imports `core.strict_planning`,
+which — once `environment_preflight.py` moved to `omnidriver.openfoam` in
+this same task — needed `omnidriver.openfoam`, which itself needs
+`omnidriver.core.planning_types`. That's a real circular import:
+`omnidriver.core.__init__` → `strict_planning` → `omnidriver.openfoam` →
+`omnidriver.core.planning_types`, which re-enters `omnidriver.core.__init__`
+mid-execution.
+
+Separately — and this is the more consequential bug — `packages/omnidriver/src/omnidriver/__init__.py`
+also existed at all (also copied verbatim from the monorepo). A real
+`__init__.py` at that exact path makes `omnidriver` a **regular** package
+rather than a PEP 420 namespace package, which means its `__path__` is fixed
+to `packages/omnidriver/src/omnidriver/` only — Python never looks in
+`packages/omnidriver-openfoam/src/omnidriver/` or
+`packages/omnidriver-cardiac/src/omnidriver/` for `omnidriver.openfoam` /
+`omnidriver.cardiac` at all. This silently broke the entire point of the
+three-package split from the moment Task 3 copied that file, not just the
+`strict_planning.py` coupling — every cross-package import would have failed
+`ModuleNotFoundError: No module named 'omnidriver.openfoam'` regardless of
+whether `strict_planning.py` was involved. Fixed by deleting
+`packages/omnidriver/src/omnidriver/__init__.py` entirely (confirmed no
+package ships one at that path now) and moving its re-exports into
+`core/__init__.py` — then dropping those re-exports too, once they turned
+out to be the thing causing the circular import, since nothing outside the
+package actually consumed them (checked: one caller did `import omnidriver`
+with zero attribute access).
+
+With both of those fixed, the three `core → openfoam` imports the original
+finding (§1) described became merely explicit instead of broken:
+`strict_planning.py:42` (`environment_preflight`), `strict_planning.py:73`
+(`mesh_geometry`), and `provenance_inputs.py:82-83`
+(`environment_preflight`, `mutators`) all now import
+`omnidriver.openfoam.*` directly and absolutely. `omnidriver-openfoam`'s own
+test suite passes cleanly against this (100 passed, 59 skipped, 0 failed).
+**This makes the boundary violation in §1 real and observable rather than a
+buried transitive dependency** — which is arguably useful (it's now one
+`grep` away from being found and counted) but is still a violation, not a
+fix. Anyone picking up §2's capability-design work should start by re-running:
+
+```bash
+grep -rn "^from omnidriver\.openfoam\|^import omnidriver\.openfoam" packages/omnidriver/src --include="*.py"
+```
+
+and treating every hit as an open item.
