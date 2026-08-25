@@ -1,17 +1,10 @@
-# `strict_planning.py` Has a Hard, Unconditional `foamlib` Dependency
+# `strict_planning.py` Had a Hard, Unconditional `foamlib` Dependency
 
-**Status: unblocked, not resolved.** Found during Task 3 (bulk-copy core) of
-`docs/superpowers/plans/2026-08-25-monorepo-package-migration.md`'s Step 4
-verification grep, which turned up more core/OpenFOAM coupling than the plan
-anticipated. During Task 4, the immediate breakage this caused (import
-errors, a real circular import between `omnidriver.core` and
-`omnidriver.openfoam`) was fixed just enough to make both packages importable
-and their test suites pass — see §5. The underlying design problem described
-below is **not** fixed, only unblocked: `omnidriver.core` still imports
-`omnidriver.openfoam` directly in three places, which is a real,
-currently-accepted violation of `ARCHITECTURE.md`'s "core MUST NOT import
-openfoam" rule. Proper resolution is still the capability-design work
-described in §2, not yet done.
+**Status: resolved.** See §6 for what actually shipped. §1-5 are the
+original finding and are kept as the record of how the problem was
+discovered and why it wasn't a trivial fix — read them for context, but the
+code they describe (`omnidriver.core` importing `omnidriver.openfoam`
+directly) no longer exists.
 
 ## 1. What's coupled
 
@@ -155,3 +148,73 @@ grep -rn "^from omnidriver\.openfoam\|^import omnidriver\.openfoam" packages/omn
 ```
 
 and treating every hit as an open item.
+
+## 6. What actually shipped
+
+The full capability-design work §2 called for was done. `omnidriver.core`
+now has **zero** runtime imports of `omnidriver.openfoam` and **zero**
+runtime imports of `foamlib`, confirmed by:
+
+```bash
+grep -rn "^from omnidriver\.openfoam\|^import omnidriver\.openfoam" packages/omnidriver/src/omnidriver/core --include="*.py"   # no hits
+grep -rln "foamlib" packages/omnidriver/src --include="*.py"   # only docstring mentions, no import foamlib
+```
+
+Three new capabilities closed the six real call sites found (more than the
+three originally documented in §1 — `provenance_inputs.py` and
+`sweep_runner.py` also had direct openfoam imports the original grep missed):
+
+- **`EnvironmentPreflightCapability`** (`diagnostics`, `configure`) —
+  replaces `strict_planning.py`'s and `cli.py`'s direct
+  `environment_preflight._environment_diagnostics` calls, and
+  `sweep_runner.py`'s direct `openfoam_environment.configure_plugin_environment`
+  call. Fallback: `legacy_environment_diagnostics` /
+  `legacy_configured_environment` in `compatibility.py`, same "preserve
+  historical behavior, unconditionally OpenFOAM until a plugin opts in"
+  pattern as every other legacy fallback in that file.
+- **`MeshDiagnosticPolicyCapability.base_geometry_diagnostics`** (new method
+  on the existing capability) — replaces `strict_planning.py`'s direct
+  `mesh_geometry.mesh_geometry_diagnostics` call. Worth noting: the
+  capability's own docstring had claimed "core classifies the physical scale
+  of every polyMesh region" — that was never true; polyMesh parsing is
+  OpenFOAM-specific by definition. The docstring was wrong from the start,
+  just invisible while core and the OpenFOAM environment were one package.
+- **`DictDiagnosticsCapability`** (`function_object_fields`, `case_dict_keys`)
+  — new capability, exactly as sketched in §2. `function_object_fields.py`
+  and `case_dict_keys.py` moved from `core/specs/` to
+  `omnidriver-openfoam/src/omnidriver/openfoam/` (with their two test files),
+  closing the `foamlib` import that lived in core's own source, not just an
+  import of the openfoam package.
+
+**Bonus fix, not a capability:** `provenance_inputs.py`'s and
+`strict_planning.py`'s `_MPI_LAUNCHERS`/`_unwrap_mpi_program` imports turned
+out to be a plain miscategorization, not a real boundary crossing — the MPI
+launcher-recognition logic has zero OpenFOAM-specific content (no `FOAM_*`,
+no bashrc). Moved to `core/runtime/workflow.py` (core, correctly) instead of
+capability-wrapping something that was never openfoam-specific in the first
+place; `environment_preflight.py` now imports it back from core.
+
+**Deliberately left as-is, not part of this fix:**
+
+- `omnidriver/cli.py` still has two direct `omnidriver.openfoam` imports
+  (`load_openfoam_environment` for bashrc sourcing, `apply_overrides`/
+  `validate_overrides`/`OverrideError` for the `--apply` flag). Scope
+  decision: `cli.py` is the leaf CLI entry point, not part of `omnidriver.core`
+  the library — and it already isn't solver-agnostic at the UX level (its own
+  `--openfoam-bashrc` flag name is OpenFOAM-specific), so fixing its imports
+  alone would be cosmetic without also redesigning the CLI's flag surface to
+  be plugin-driven, which is out of scope here.
+- `core/runtime/workflow.py::_is_installed_openfoam_app` hardcodes
+  `FOAM_APPBIN`/`FOAM_USER_APPBIN` env var names inline — no import, so it
+  didn't show up in any `grep openfoam` sweep, but it's the same "core
+  assumes OpenFOAM" category of issue. Not fixed: `validate_workflow_commands`
+  currently treats this check as unconditional regardless of which plugin
+  (or no plugin) is active — see `test_an_installed_openfoam_app_is_authorized_whatever_the_plugin` —
+  and turning it into a capability would change that "even with no context"
+  behavior, which is a real product decision, not a mechanical extraction.
+  Flagging for whoever picks this up next.
+
+Full three-package suite after this work: 1432 passed, 293 skipped, 1 failed
+(the same pre-existing `test_a_factory_failure_fails_one_case_not_the_command`
+failure noted throughout this migration — confirmed unrelated, reproduces
+identically against the untouched source monorepo).

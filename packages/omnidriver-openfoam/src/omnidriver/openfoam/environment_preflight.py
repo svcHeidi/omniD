@@ -35,28 +35,15 @@ from pathlib import Path
 from typing import Any
 
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
-from omnidriver.core.runtime.workflow import CASE_SCRIPT_COMMANDS
+from omnidriver.core.runtime.workflow import (
+    CASE_SCRIPT_COMMANDS,
+    _MPI_LAUNCHERS,
+    _unwrap_mpi_program,
+)
 from .openfoam_environment import load_openfoam_environment
 
 
-_MPI_LAUNCHERS = frozenset({"mpirun", "mpiexec", "orterun"})
 _INTERPRETER_SKIP = frozenset({"python", "python3"})
-_MPI_VALUE_FLAGS = frozenset({"-np", "-n", "--np"})
-
-
-def _unwrap_mpi_program(args: tuple[str, ...]) -> str | None:
-    """Return the wrapped program from an MPI launcher's args, or None."""
-    index = 0
-    while index < len(args):
-        token = args[index]
-        if token in _MPI_VALUE_FLAGS:
-            index += 2
-            continue
-        if token.startswith("-"):
-            index += 1
-            continue
-        return token
-    return None
 
 
 @dataclass(frozen=True)

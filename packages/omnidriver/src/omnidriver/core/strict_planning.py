@@ -38,13 +38,9 @@ if TYPE_CHECKING:
     from .plugin_interface import DriverContext
 
 
+import shutil
+
 from .runtime.artifacts import predict_data_artifacts
-from omnidriver.openfoam.environment_preflight import (
-    _environment_diagnostics,
-    _required_executables,
-    _unwrap_mpi_program,
-    shutil,
-)
 from .runtime.execution_context import resolve_execution_context
 from .runtime.models import DataArtifact
 from .runtime.registry import load_entry_spec
@@ -53,6 +49,7 @@ from .runtime.run_model import RunDocument
 from .runtime.strict_audit import _build_simulation_audit
 from .runtime.workflow import (
     WorkflowDiagnostic,
+    _unwrap_mpi_program,
     normalize_workflow_dag,
     validate_workflow_commands,
     workflow_output_artifacts,
@@ -68,9 +65,6 @@ from ..scripts._dict_keys_scanner import (
     catalogued_paths as _catalogued_paths,
     strict_dict_key_report,
 )
-from omnidriver.core.specs.function_object_fields import function_object_field_diagnostics
-from omnidriver.core.specs.case_dict_keys import case_dict_key_diagnostics as _case_dict_key_diagnostics
-from omnidriver.openfoam.mesh_geometry import mesh_geometry_diagnostics as _detect_mesh_geometry
 
 
 @dataclass(frozen=True)
@@ -322,7 +316,11 @@ def _mesh_geometry_diagnostics(
     from .compatibility import resolve_public_driver_context
 
     driver_context = resolve_public_driver_context(driver_context)
-    detected = list(_detect_mesh_geometry(Path(case_root)))
+    detected = list(
+        driver_context.capabilities.mesh_diagnostic_policy.base_geometry_diagnostics(
+            Path(case_root),
+        )
+    )
     detected.extend(
         driver_context.capabilities.mesh_diagnostic_policy.extra_geometry_diagnostics(
             Path(case_root),
@@ -429,7 +427,7 @@ def strict_plan(
     artifact_diagnostics = _artifact_diagnostics(
         spec, artifacts, workflow_dag, driver_context,
     )
-    env_diagnostics = _environment_diagnostics(
+    env_diagnostics = driver_context.capabilities.environment_preflight.diagnostics(
         workflow_dag,
         openfoam_bashrc=str(openfoam_bashrc) if openfoam_bashrc is not None else None,
         driver_context=driver_context,
@@ -472,11 +470,11 @@ def strict_plan(
     raw_capability_manifest = dict(driver_context.capabilities.manifest.manifest())
     raw_capability_manifest["plugin_identity"] = driver_context.identity.to_json()
     capability_manifest = _jsonable(raw_capability_manifest)
-    function_object_diagnostics = function_object_field_diagnostics(
+    function_object_diagnostics = driver_context.capabilities.dict_diagnostics.function_object_fields(
         spec.case_root,
         samplable=raw_capability_manifest.get("samplable_fields", {}),
     )
-    case_dict_key_diagnostics = _case_dict_key_diagnostics(
+    case_dict_key_diagnostics = driver_context.capabilities.dict_diagnostics.case_dict_keys(
         spec.case_root,
         catalogued_paths=_catalogued_paths(
             driver_context.capabilities.dictionaries.entries()

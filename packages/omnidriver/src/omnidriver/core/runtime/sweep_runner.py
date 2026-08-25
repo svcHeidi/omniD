@@ -42,7 +42,6 @@ from omnidriver.core.sweep.sweep_expansion import SweepValidationError, check_ca
 from omnidriver.sweep_materialize import materialize_case
 from omnidriver.sweep_routing import route_case_values, route_entry_case_values
 from .fresh import ensure_fresh_output_dir
-from omnidriver.openfoam.openfoam_environment import configure_plugin_environment
 from .output_collection import collect_new_outputs, snapshot_postprocessing
 from .postprocess_phase import build_sweep_context, run_postprocessing_module
 from .registry import load_entry_spec
@@ -367,10 +366,10 @@ def sweep_run(
     from ..compatibility import resolve_public_driver_context
 
     driver_context = resolve_public_driver_context(driver_context)
-    execution_environment = configure_plugin_environment(
+    execution_environment = driver_context.capabilities.environment_preflight.configure(
         os.environ,
         driver_context,
-    ).env
+    )
     sweep_spec = _load_spec(spec_path)
     check_case_count_cap(sweep_spec, max_cases=max_cases)
 

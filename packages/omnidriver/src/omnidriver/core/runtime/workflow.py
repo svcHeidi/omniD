@@ -73,6 +73,28 @@ OPENFOAM_OR_DRIVER_COMMANDS = CORE_NEUTRAL_COMMANDS
 # binary. Imported by workflow_runner for _resolve_command.
 CASE_SCRIPT_COMMANDS = frozenset({"Allrun", "Allclean", "Allrun.pre", "Allrun.post"})
 
+# MPI launcher recognition: generic to any parallel workflow step (OpenMPI,
+# MPICH, ...), not OpenFOAM-specific. Moved here from
+# omnidriver.openfoam.environment_preflight, which had no OpenFOAM content in
+# either constant -- environment_preflight now imports these back from core.
+_MPI_LAUNCHERS = frozenset({"mpirun", "mpiexec", "orterun"})
+_MPI_VALUE_FLAGS = frozenset({"-np", "-n", "--np"})
+
+
+def _unwrap_mpi_program(args: tuple[str, ...]) -> str | None:
+    """Return the wrapped program from an MPI launcher's args, or None."""
+    index = 0
+    while index < len(args):
+        token = args[index]
+        if token in _MPI_VALUE_FLAGS:
+            index += 2
+            continue
+        if token.startswith("-"):
+            index += 1
+            continue
+        return token
+    return None
+
 
 @dataclass(frozen=True)
 class WorkflowDiagnostic:

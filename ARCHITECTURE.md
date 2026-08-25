@@ -129,13 +129,15 @@ plugin. The two sweep fallbacks cannot be neutral and refuse by hook name.
 | `artifacts` | `ArtifactPredictorCapability` | `predict_data_artifacts` | `omnidriver/core/runtime/artifacts.py` | none | mandatory |
 | `run_document_configuration` | `RunDocumentConfigurationCapability` | `build_run_document_config`, `get_run_document_config_schema` | `omnidriver/core/runtime/run_document_adapter.py`, `omnidriver/core/runtime/run_document_exec.py` | `legacy_run_document_config`, `legacy_run_document_config_schema` | optional |
 | `cxx_mapping` | `CxxMappingCapability` | `get_profile` | `omnidriver/core/strict_planning.py` | none | mandatory |
-| `mesh_diagnostic_policy` | `MeshDiagnosticPolicyCapability` | `get_mesh_geometry_diagnostics`, `is_nondimensional_case` | `omnidriver/core/strict_planning.py` | `legacy_nondimensional_case` | optional |
+| `mesh_diagnostic_policy` | `MeshDiagnosticPolicyCapability` | `get_mesh_geometry_diagnostics`, `get_base_mesh_geometry_diagnostics`, `is_nondimensional_case` | `omnidriver/core/strict_planning.py` | `legacy_nondimensional_case`, `legacy_base_mesh_geometry_diagnostics` | optional |
 | `case_compatibility` | `CaseCompatibilityCapability` | `has_case_marker`, `is_case_runnable_without_workflow` | `omnidriver/core/runtime/registry.py` | `legacy_case_marker`, `legacy_case_runnable_without_workflow` | optional |
 | `sweep_materializer` | `SweepMaterializerCapability` | `materialize_sweep_case`, `route_sweep_case_values` | `omnidriver/sweep_materialize.py`, `omnidriver/sweep_routing.py` | `legacy_materialize_sweep_case`, `legacy_route_sweep_case` | optional |
 | `command_authorization` | `CommandAuthorizationCapability` | `get_auxiliary_commands`, `get_solver_commands`, `get_utility_manifests`, `get_utility_roots` | `omnidriver/core/runtime/artifacts.py`, `omnidriver/core/runtime/workflow.py`, `omnidriver/core/strict_planning.py` | `legacy_auxiliary_commands`, `legacy_solver_commands`, `legacy_utility_manifests`, `legacy_utility_roots` | optional |
 | `case_introspection` | `CaseIntrospectionCapability` | `get_samplable_fields`, `resolve_case_models` | `omnidriver/core/capability_manifest.py`, `omnidriver/core/runtime/provenance_inputs.py` | `legacy_resolve_case_models`, `legacy_samplable_fields` | optional |
 | `case_files` | `CaseFileContractCapability` | `get_profile`, `get_config_resolution_description` | `omnidriver/core/runtime/strict_audit.py`, `omnidriver/core/tutorial_contracts.py`, `omnidriver/core/runtime/provenance_inputs.py` | `legacy_describe_config_resolution` | mixed |
 | `config_values` | `ConfigValueCapability` | `get_config_value_reader` | `omnidriver/core/runtime/provenance_inputs.py` | `legacy_config_value_reader` | optional |
+| `environment_preflight` | `EnvironmentPreflightCapability` | `get_environment_diagnostics`, `get_configured_environment` | `omnidriver/core/strict_planning.py`, `omnidriver/core/runtime/sweep_runner.py` | `legacy_environment_diagnostics`, `legacy_configured_environment` | optional |
+| `dict_diagnostics` | `DictDiagnosticsCapability` | `get_function_object_field_diagnostics`, `get_case_dict_key_diagnostics` | `omnidriver/core/strict_planning.py` | `legacy_function_object_field_diagnostics`, `legacy_case_dict_key_diagnostics` | optional |
 | `override_schema` | `OverrideSchemaCapability` | `get_dict_entry_catalog`, `get_override_schema` | `omnidriver/core/introspection.py` | `legacy_dict_entry_catalog`, `legacy_override_schema` | optional |
 | `runtime_evidence` | `RuntimeEvidenceCapability` | `get_artifact_value_reader`, `get_extra_provenance_paths`, `get_solve_step_commands`, `get_telemetry_source_globs` | `omnidriver/core/runtime/provenance_inputs.py` | none | optional |
 | `case_provenance` | `CaseProvenanceCapability` | `get_generated_output_globs`, `get_required_inputs` | `omnidriver/core/runtime/provenance_inputs.py` | none | optional |
@@ -144,6 +146,6 @@ plugin. The two sweep fallbacks cannot be neutral and refuse by hook name.
 | `override_scopes` | `OverrideScopeCapability` | `get_override_scopes` | `omnidriver/openfoam/apply_overrides.py` | `legacy_override_scopes` | optional |
 | `dict_regeneration` | `DictRegenerationCapability` | `get_regeneration_scopes` | `omnidriver/openfoam/apply_overrides.py` | `legacy_dict_regeneration_scopes` | optional |
 
-22 capability seams.
+24 capability seams.
 
 <!-- END GENERATED: capability-seams -->

@@ -53,7 +53,6 @@ from omnidriver.core.specs.paths import (
 from omnidriver.openfoam.apply_overrides import validate_overrides, apply_overrides, OverrideError
 from omnidriver.core.strict_planning import (
     StrictDiagnostic,
-    _environment_diagnostics,
     _utility_produces_by_command,
     strict_plan,
 )
@@ -420,7 +419,7 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
         output_dir=inputs.output_dir,
         expected_artifacts=inputs.expected_artifacts,
         setup_root=Path(setup_root_raw) if setup_root_raw else None,
-        environment_diagnostics=_environment_diagnostics(
+        environment_diagnostics=driver_context.capabilities.environment_preflight.diagnostics(
             inputs.workflow_dag,
             openfoam_bashrc=args.openfoam_bashrc,
             driver_context=driver_context,

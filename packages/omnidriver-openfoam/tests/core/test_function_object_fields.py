@@ -6,7 +6,7 @@ import pytest
 from conftest import skip_without_monorepo
 pytestmark = skip_without_monorepo
 
-from omnidriver.core.specs.function_object_fields import (
+from omnidriver.openfoam.function_object_fields import (
     function_object_field_diagnostics,
 )
 

@@ -8,11 +8,13 @@ import pytest
 
 from omnidriver.core import strict_planning
 from omnidriver.openfoam.openfoam_environment import load_openfoam_environment
+from omnidriver.openfoam.environment_preflight import (
+    _environment_diagnostics,
+    _required_executables,
+)
 from omnidriver.core.strict_planning import (
     StrictDiagnostic,
     StrictPlanReport,
-    _environment_diagnostics,
-    _required_executables,
 )
 
 

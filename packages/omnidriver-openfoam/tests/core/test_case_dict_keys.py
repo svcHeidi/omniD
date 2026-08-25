@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from omnidriver.core.specs.case_dict_keys import case_dict_key_diagnostics
+from omnidriver.openfoam.case_dict_keys import case_dict_key_diagnostics
 from omnidriver.core.specs.paths import repo_root_default
 from conftest import monorepo_root, skip_without_monorepo
 

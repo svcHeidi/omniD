@@ -244,6 +244,85 @@ def legacy_nondimensional_case(plugin, spec) -> bool:
 
 
 @_instrumented
+def legacy_base_mesh_geometry_diagnostics(case_root) -> tuple:
+    """Plugins predating get_base_mesh_geometry_diagnostics().
+
+    Why: strict_planning.py has always run the OpenFOAM polyMesh scale
+    classifier unconditionally, for every plugin, without checking which one
+    was active -- the classifier isn't actually solver-neutral (it parses
+    OpenFOAM's polyMesh format), that was just never visible while core and
+    the OpenFOAM environment were one package. Preserved as-is here rather
+    than narrowed to cardiac-only, since narrowing it would change observable
+    behavior for any other plugin (there wasn't one before this migration).
+    Plan 2 seam: a genuinely non-OpenFOAM plugin should implement
+    get_base_mesh_geometry_diagnostics itself (returning ``()`` is valid) or
+    override this default."""
+
+    from omnidriver.openfoam.mesh_geometry import mesh_geometry_diagnostics
+
+    return mesh_geometry_diagnostics(case_root)
+
+
+@_instrumented
+def legacy_environment_diagnostics(
+    workflow_dag, *, env=None, openfoam_bashrc=None, driver_context=None,
+) -> tuple:
+    """Plugins predating get_environment_diagnostics().
+
+    Why: strict_planning.py has always preflighted every plan against the
+    OpenFOAM runtime environment (WM_PROJECT_DIR, bashrc sourcing, PATH)
+    unconditionally, the same "was never actually solver-neutral" situation
+    as legacy_base_mesh_geometry_diagnostics. Preserved as-is; a non-OpenFOAM
+    plugin implements get_environment_diagnostics itself."""
+
+    from omnidriver.openfoam.environment_preflight import _environment_diagnostics
+
+    return _environment_diagnostics(
+        workflow_dag, env=env, openfoam_bashrc=openfoam_bashrc,
+        driver_context=driver_context,
+    )
+
+
+@_instrumented
+def legacy_configured_environment(env, driver_context) -> dict:
+    """Plugins predating get_configured_environment(). sweep_runner.py has
+    always applied the OpenFOAM plugin environment contract unconditionally,
+    same historical-behavior-preserved reasoning as the other environment
+    fallbacks above."""
+
+    from omnidriver.openfoam.openfoam_environment import configure_plugin_environment
+
+    return configure_plugin_environment(env, driver_context).env
+
+
+@_instrumented
+def legacy_function_object_field_diagnostics(case_root, *, samplable) -> tuple:
+    """Plugins predating get_function_object_field_diagnostics().
+    strict_planning.py has always warned about controlDict function objects
+    sampling fields absent from the capability manifest, by parsing the
+    OpenFOAM controlDict directly via foamlib -- same
+    was-never-actually-solver-neutral situation as the other diagnostics
+    fallbacks in this file."""
+
+    from omnidriver.openfoam.function_object_fields import function_object_field_diagnostics
+
+    return function_object_field_diagnostics(case_root, samplable=samplable)
+
+
+@_instrumented
+def legacy_case_dict_key_diagnostics(case_root, *, catalogued_paths, dict_relpaths) -> tuple:
+    """Plugins predating get_case_dict_key_diagnostics(). Same reasoning as
+    legacy_function_object_field_diagnostics: preserved as-is, parses
+    OpenFOAM dict files via foamlib."""
+
+    from omnidriver.openfoam.case_dict_keys import case_dict_key_diagnostics
+
+    return case_dict_key_diagnostics(
+        case_root, catalogued_paths=catalogued_paths, dict_relpaths=dict_relpaths,
+    )
+
+
+@_instrumented
 def legacy_route_sweep_case(plugin, *, base, resolved_axis_values, driver_context):
     """Plugins predating route_sweep_case_values().
 

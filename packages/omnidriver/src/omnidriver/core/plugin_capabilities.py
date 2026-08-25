@@ -291,6 +291,37 @@ class CxxMappingCapability(Protocol):
     def profile(self) -> Any: ...
 
 
+class DictDiagnosticsCapability(Protocol):
+    """Warn-only checks of a case's on-disk dict files against declared
+    vocabulary: sampled fields absent from the capability manifest, and dict
+    keys absent from the plugin's catalogue.
+
+    Both read and parse the case's dictionary files (via ``foamlib`` for
+    OpenFOAM), which core has no business doing itself -- a FEniCS plugin's
+    catalogue is checked against its own config format, not OpenFOAM syntax.
+    Neither ever fails a plan; a false positive here is a question for a
+    human, not a defect (see :func:`strict_planning._resolve_entry`'s call
+    site for why they stay out of ``plan_diagnostics``).
+
+    :adapts: get_function_object_field_diagnostics, get_case_dict_key_diagnostics
+    :consumed-by: omnidriver/core/strict_planning.py
+    :fallback: legacy_function_object_field_diagnostics, legacy_case_dict_key_diagnostics
+    :status: optional
+    """
+
+    def function_object_fields(
+        self, case_root: Path, *, samplable: dict[str, Any],
+    ) -> tuple[Any, ...]: ...
+
+    def case_dict_keys(
+        self,
+        case_root: Path,
+        *,
+        catalogued_paths: Any,
+        dict_relpaths: tuple[str, ...],
+    ) -> tuple[Any, ...]: ...
+
+
 class MeshDiagnosticPolicyCapability(Protocol):
     """Plugin-owned exemptions from, and additions to, core's mesh diagnostics.
 
@@ -306,14 +337,20 @@ class MeshDiagnosticPolicyCapability(Protocol):
     which keeps the diagnostics on -- the conservative direction, since the
     failure mode of a wrong exemption is silence.
 
-    :adapts: get_mesh_geometry_diagnostics, is_nondimensional_case
+    ``base_geometry_diagnostics`` is the classification itself -- despite the
+    class docstring above, it was never actually core's own logic; it's
+    OpenFOAM-specific (``polyMesh`` region parsing), so it has to be
+    plugin-routed like everything else here, not called directly by core.
+
+    :adapts: get_mesh_geometry_diagnostics, get_base_mesh_geometry_diagnostics, is_nondimensional_case
     :consumed-by: omnidriver/core/strict_planning.py
-    :fallback: legacy_nondimensional_case
+    :fallback: legacy_nondimensional_case, legacy_base_mesh_geometry_diagnostics
     :status: optional
     """
 
     def is_nondimensional(self, spec: "TutorialSpec") -> bool: ...
     def extra_geometry_diagnostics(self, case_root: Path) -> tuple[Any, ...]: ...
+    def base_geometry_diagnostics(self, case_root: Path) -> tuple[Any, ...]: ...
 
 
 class CaseCompatibilityCapability(Protocol):
@@ -467,6 +504,38 @@ class ConfigValueCapability(Protocol):
     """
 
     def read(self, path: Path, key: str) -> str | None: ...
+
+
+class EnvironmentPreflightCapability(Protocol):
+    """Preflight the runtime environment a plan's workflow_dag will execute in.
+
+    Sourcing a bashrc, checking ``$FOAM_APPBIN``-style env vars, and
+    resolving executables on PATH are all environment-specific -- a FEniCS
+    plugin's preflight would source a Python venv and check for MPI, not
+    ``WM_PROJECT_DIR``. Core only knows it needs an answer before launch.
+
+    ``configure`` applies the plugin's environment contract (e.g. an
+    already-sourced OpenFOAM environment plus any plugin-specific overlay)
+    without re-sourcing anything, returning the resolved variable mapping.
+
+    :adapts: get_environment_diagnostics, get_configured_environment
+    :consumed-by: omnidriver/core/strict_planning.py, omnidriver/core/runtime/sweep_runner.py
+    :fallback: legacy_environment_diagnostics, legacy_configured_environment
+    :status: optional
+    """
+
+    def diagnostics(
+        self,
+        workflow_dag: dict[str, Any] | None,
+        *,
+        env: dict[str, str] | None = None,
+        openfoam_bashrc: str | None = None,
+        driver_context: Any | None = None,
+    ) -> tuple[Any, ...]: ...
+
+    def configure(
+        self, env: dict[str, str], driver_context: Any | None,
+    ) -> dict[str, str]: ...
 
 
 class OverrideSchemaCapability(Protocol):
@@ -743,6 +812,39 @@ class _CxxMappingAdapter:
 
 
 @dataclass(frozen=True)
+class _DictDiagnosticsAdapter:
+    plugin: "SolverPlugin"
+
+    def function_object_fields(
+        self, case_root: Path, *, samplable: dict[str, Any],
+    ) -> tuple[Any, ...]:
+        hook = getattr(self.plugin, "get_function_object_field_diagnostics", None)
+        if callable(hook):
+            return tuple(hook(case_root, samplable=samplable))
+        from .compatibility import legacy_function_object_field_diagnostics
+
+        return tuple(legacy_function_object_field_diagnostics(case_root, samplable=samplable))
+
+    def case_dict_keys(
+        self,
+        case_root: Path,
+        *,
+        catalogued_paths: Any,
+        dict_relpaths: tuple[str, ...],
+    ) -> tuple[Any, ...]:
+        hook = getattr(self.plugin, "get_case_dict_key_diagnostics", None)
+        if callable(hook):
+            return tuple(hook(
+                case_root, catalogued_paths=catalogued_paths, dict_relpaths=dict_relpaths,
+            ))
+        from .compatibility import legacy_case_dict_key_diagnostics
+
+        return tuple(legacy_case_dict_key_diagnostics(
+            case_root, catalogued_paths=catalogued_paths, dict_relpaths=dict_relpaths,
+        ))
+
+
+@dataclass(frozen=True)
 class _MeshDiagnosticPolicyAdapter:
     plugin: "SolverPlugin"
 
@@ -768,6 +870,17 @@ class _MeshDiagnosticPolicyAdapter:
         if callable(hook):
             return tuple(hook(case_root))
         return ()
+
+    def base_geometry_diagnostics(self, case_root: Path) -> tuple[Any, ...]:
+        """The polyMesh scale classification itself -- OpenFOAM-specific, so
+        core never calls the parser directly; every plugin routes it through
+        this hook or the OpenFOAM-shaped legacy fallback."""
+        hook = getattr(self.plugin, "get_base_mesh_geometry_diagnostics", None)
+        if callable(hook):
+            return tuple(hook(case_root))
+        from .compatibility import legacy_base_mesh_geometry_diagnostics
+
+        return tuple(legacy_base_mesh_geometry_diagnostics(case_root))
 
 
 @dataclass(frozen=True)
@@ -926,6 +1039,42 @@ class _ConfigValueAdapter:
         from .compatibility import legacy_config_value_reader
 
         return legacy_config_value_reader(path, key)
+
+
+@dataclass(frozen=True)
+class _EnvironmentPreflightAdapter:
+    plugin: "SolverPlugin"
+
+    def diagnostics(
+        self,
+        workflow_dag: dict[str, Any] | None,
+        *,
+        env: dict[str, str] | None = None,
+        openfoam_bashrc: str | None = None,
+        driver_context: Any | None = None,
+    ) -> tuple[Any, ...]:
+        hook = getattr(self.plugin, "get_environment_diagnostics", None)
+        if callable(hook):
+            return tuple(hook(
+                workflow_dag, env=env, openfoam_bashrc=openfoam_bashrc,
+                driver_context=driver_context,
+            ))
+        from .compatibility import legacy_environment_diagnostics
+
+        return tuple(legacy_environment_diagnostics(
+            workflow_dag, env=env, openfoam_bashrc=openfoam_bashrc,
+            driver_context=driver_context,
+        ))
+
+    def configure(
+        self, env: dict[str, str], driver_context: Any | None,
+    ) -> dict[str, str]:
+        hook = getattr(self.plugin, "get_configured_environment", None)
+        if callable(hook):
+            return dict(hook(env, driver_context))
+        from .compatibility import legacy_configured_environment
+
+        return dict(legacy_configured_environment(env, driver_context))
 
 
 @dataclass(frozen=True)
@@ -1108,6 +1257,8 @@ class PluginCapabilities:
     case_introspection: CaseIntrospectionCapability
     case_files: CaseFileContractCapability
     config_values: ConfigValueCapability
+    environment_preflight: EnvironmentPreflightCapability
+    dict_diagnostics: DictDiagnosticsCapability
     override_schema: OverrideSchemaCapability
     runtime_evidence: RuntimeEvidenceCapability
     case_provenance: CaseProvenanceCapability
@@ -1143,6 +1294,8 @@ def adapt_plugin_capabilities(plugin: "SolverPlugin") -> PluginCapabilities:
         case_introspection=_CaseIntrospectionAdapter(plugin),
         case_files=_CaseFileContractAdapter(plugin),
         config_values=_ConfigValueAdapter(plugin),
+        environment_preflight=_EnvironmentPreflightAdapter(plugin),
+        dict_diagnostics=_DictDiagnosticsAdapter(plugin),
         override_schema=_OverrideSchemaAdapter(plugin),
         runtime_evidence=_RuntimeEvidenceAdapter(plugin),
         case_provenance=_CaseProvenanceAdapter(plugin),

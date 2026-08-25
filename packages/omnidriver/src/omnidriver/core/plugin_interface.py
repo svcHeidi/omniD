@@ -341,6 +341,12 @@ class SolverPluginOptionalHooks(Protocol):
         extra checks" is correct for a plugin that has none."""
         ...
 
+    def get_base_mesh_geometry_diagnostics(self, case_root: "Path") -> tuple[Any, ...]:
+        """The polyMesh scale classification itself. Absent -> the OpenFOAM
+        polyMesh classifier runs unconditionally (the historical behavior,
+        preserved as a Plan 2 seam -- see legacy_base_mesh_geometry_diagnostics)."""
+        ...
+
     # -- SweepMaterializerCapability -----------------------------------------
     def route_sweep_case_values(
         self,
@@ -371,6 +377,39 @@ class SolverPluginOptionalHooks(Protocol):
         entry out of this plugin's configuration file format. Absent -> a
         foamlib-based OpenFOAM reader (not a safe default for other
         environments -- a non-OpenFOAM plugin must implement this)."""
+        ...
+
+    # -- EnvironmentPreflightCapability -----------------------------------------
+    def get_environment_diagnostics(
+        self, workflow_dag, *, env=None, openfoam_bashrc=None, driver_context=None,
+    ) -> tuple[Any, ...]:
+        """Preflight the runtime environment a plan's workflow_dag will run
+        in. Absent -> the OpenFOAM environment preflight runs unconditionally
+        (the historical behavior, preserved as a Plan 2 seam -- see
+        legacy_environment_diagnostics)."""
+        ...
+
+    def get_configured_environment(self, env, driver_context) -> dict[str, str]:
+        """Apply this plugin's environment contract to an already-sourced
+        environment mapping. Absent -> the OpenFOAM plugin environment
+        contract applies unconditionally (see legacy_configured_environment)."""
+        ...
+
+    # -- DictDiagnosticsCapability ---------------------------------------------
+    def get_function_object_field_diagnostics(
+        self, case_root: "Path", *, samplable: dict[str, Any],
+    ) -> tuple[Any, ...]:
+        """Warn about controlDict function objects sampling fields absent
+        from ``samplable``. Absent -> the OpenFOAM/foamlib-based check runs
+        unconditionally (see legacy_function_object_field_diagnostics)."""
+        ...
+
+    def get_case_dict_key_diagnostics(
+        self, case_root: "Path", *, catalogued_paths, dict_relpaths: tuple[str, ...],
+    ) -> tuple[Any, ...]:
+        """Warn about dict keys absent from the plugin's catalogue. Absent ->
+        the OpenFOAM/foamlib-based check runs unconditionally (see
+        legacy_case_dict_key_diagnostics)."""
         ...
 
     # -- CaseProvenanceCapability --------------------------------------------
