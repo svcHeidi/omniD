@@ -16,14 +16,12 @@
 #     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
 #
 # Module
-#     __init__
+#     schemas
 #
 # Description
-#     Exposes reusable components for the module context.
+#     Packaged JSON schemas used by omnidriver.
 #
 # Author
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
-
-"""Core shared modules for the OpenFOAM driver."""
 

@@ -25,5 +25,5 @@
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-"""Core shared modules for the OpenFOAM driver."""
+"""Runtime engine and models."""
 

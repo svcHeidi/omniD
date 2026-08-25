@@ -16,14 +16,42 @@
 #     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
 #
 # Module
-#     __init__
+#     common
 #
 # Description
-#     Exposes reusable components for the module context.
+#     Provides shared definitions and defaults for specification templates.
+#     (Refactored into a facade: imports from paths, utils.)  Solver-specific
+#     helpers are NOT re-exported here: cardiac dictionary detection and
+#     electro/physics-property overrides live in
+#     `plugins/cardiacfoam/{detection,overrides}.py` and must be imported from
+#     there directly.
 #
 # Author
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-"""Core shared modules for the OpenFOAM driver."""
+from .paths import (
+    default_setup_dir_name,
+    repo_root_default,
+    resolve_run_script_path,
+    resolve_spec_paths,
+    tutorials_root_default,
+)
+from .utils import (
+    load_python_module,
+    replace_block_mesh_resolutions,
+    set_delta_t,
+    set_end_time,
+)
 
+__all__ = [
+    "repo_root_default",
+    "tutorials_root_default",
+    "default_setup_dir_name",
+    "resolve_spec_paths",
+    "resolve_run_script_path",
+    "load_python_module",
+    "set_delta_t",
+    "set_end_time",
+    "replace_block_mesh_resolutions",
+]

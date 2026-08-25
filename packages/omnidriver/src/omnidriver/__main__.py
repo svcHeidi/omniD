@@ -15,15 +15,18 @@
 #     You should have received a copy of the GNU General Public License
 #     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Module
-#     __init__
+# Script
+#     __main__
 #
 # Description
-#     Exposes reusable components for the module context.
+#     Provides primary entry point for module execution.
 #
 # Author
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-"""Core shared modules for the OpenFOAM driver."""
+from .cli import main
 
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -25,5 +25,17 @@
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-"""Core shared modules for the OpenFOAM driver."""
+"""Reusable OpenFOAM tutorial automation driver."""
 
+from .core.runtime.models import CaseConfig, TutorialSpec
+from omnidriver.dict_entries import DictEntry, all_documented_driver_paths
+from omnidriver.core.introspection import describe_entry, describe_tutorial
+
+__all__ = [
+    "CaseConfig",
+    "TutorialSpec",
+    "DictEntry",
+    "all_documented_driver_paths",
+    "describe_entry",
+    "describe_tutorial",
+]
