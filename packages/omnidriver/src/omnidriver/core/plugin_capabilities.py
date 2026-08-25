@@ -445,6 +445,24 @@ class CaseFileContractCapability(Protocol):
     def describe_config_resolution(self) -> str: ...
 
 
+class ConfigValueCapability(Protocol):
+    """Read a single key out of a plugin-format configuration file.
+
+    core resolves *which* file by role (``CaseFileContractCapability``);
+    this capability resolves the *value* inside it, so core never needs to
+    know the file's syntax. The OpenFOAM plugin implements this over
+    ``foamlib``; a FEniCS plugin would implement it over its own XML/JSON
+    reader.
+
+    :adapts: get_config_value_reader
+    :consumed-by: omnidriver/core/runtime/provenance_inputs.py
+    :fallback: legacy_config_value_reader
+    :status: optional
+    """
+
+    def read(self, path: Path, key: str) -> str | None: ...
+
+
 class OverrideSchemaCapability(Protocol):
     """The plugin's authored configuration vocabulary.
 
@@ -888,6 +906,20 @@ class _CaseFileContractAdapter:
 
 
 @dataclass(frozen=True)
+class _ConfigValueAdapter:
+    plugin: "SolverPlugin"
+
+    def read(self, path: Path, key: str) -> str | None:
+        hook = getattr(self.plugin, "get_config_value_reader", None)
+        if callable(hook):
+            reader = hook()
+            return reader(path, key)
+        from .compatibility import legacy_config_value_reader
+
+        return legacy_config_value_reader(path, key)
+
+
+@dataclass(frozen=True)
 class _OverrideSchemaAdapter:
     plugin: "SolverPlugin"
 
@@ -1066,6 +1098,7 @@ class PluginCapabilities:
     command_authorization: CommandAuthorizationCapability
     case_introspection: CaseIntrospectionCapability
     case_files: CaseFileContractCapability
+    config_values: ConfigValueCapability
     override_schema: OverrideSchemaCapability
     runtime_evidence: RuntimeEvidenceCapability
     case_provenance: CaseProvenanceCapability
@@ -1100,6 +1133,7 @@ def adapt_plugin_capabilities(plugin: "SolverPlugin") -> PluginCapabilities:
         command_authorization=_CommandAuthorizationAdapter(plugin),
         case_introspection=_CaseIntrospectionAdapter(plugin),
         case_files=_CaseFileContractAdapter(plugin),
+        config_values=_ConfigValueAdapter(plugin),
         override_schema=_OverrideSchemaAdapter(plugin),
         runtime_evidence=_RuntimeEvidenceAdapter(plugin),
         case_provenance=_CaseProvenanceAdapter(plugin),

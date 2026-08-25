@@ -55,7 +55,7 @@ from __future__ import annotations
 import pytest
 
 from omnidriver.core.plugin_interface import default_driver_context
-from omnidriver.plugins.cardiacfoam.dict_builder import (
+from omnidriver.cardiac.dict_builder import (
     build_electro_properties,
     select_applicable_entries,
 )

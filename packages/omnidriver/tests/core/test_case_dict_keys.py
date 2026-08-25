@@ -262,7 +262,7 @@ def test_a_misspelled_key_is_silently_replaced_by_the_catalogue_default(tmp_path
     """
     import shutil
 
-    from omnidriver.plugins.cardiacfoam import dict_builder as DB
+    from omnidriver.cardiac import dict_builder as DB
     from omnidriver.core.strict_planning import strict_plan
 
     tutorials_root = tmp_path / "tutorials"

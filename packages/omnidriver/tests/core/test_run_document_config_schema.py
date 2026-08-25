@@ -40,7 +40,7 @@ import tempfile
 from pathlib import Path
 
 from omnidriver.core.plugin_interface import default_driver_context
-from omnidriver.plugins.cardiacfoam.run_document_config import _read_physics_type
+from omnidriver.cardiac.run_document_config import _read_physics_type
 from omnidriver.core.strict_planning import strict_plan
 
 

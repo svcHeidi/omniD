@@ -9,9 +9,10 @@ import pytest
 
 from omnidriver.core.generic_plugin import GenericOpenFOAMPlugin
 from omnidriver.core.plugin_profile import PluginProfile, load_plugin_profile
-from omnidriver.plugins.cardiacfoam import runtime_profile
-from omnidriver.plugins.cardiacfoam.runtime_profile import configure_runtime_environment
-from omnidriver.plugins.cardiacfoam_plugin import CardiacFoamPlugin
+from omnidriver.cardiac import runtime_profile
+from omnidriver.cardiac.runtime_profile import configure_runtime_environment
+from omnidriver.cardiac.cardiacfoam_plugin import CardiacFoamPlugin
+from conftest import skip_without_monorepo
 
 
 def test_cardiac_profile_declares_case_files_and_cxx_provenance() -> None:
@@ -25,8 +26,18 @@ def test_cardiac_profile_declares_case_files_and_cxx_provenance() -> None:
     }
     assert profile.cxx_mapping is not None
     assert profile.cxx_mapping.allowlist_path.is_file()
-    assert all(path.is_dir() for path in profile.cxx_mapping.source_roots)
     assert profile.digest.startswith("sha256:")
+
+
+@skip_without_monorepo
+def test_cardiac_profile_cxx_source_roots_exist() -> None:
+    """cxx_mapping.source_roots points into the C++ solver source tree,
+    which this standalone Python-only repo doesn't ship (see
+    GITHUB_MIGRATION.md: "we are moving *only the Python framework*").
+    Only verifiable when checked out inside the full cardiacFoam monorepo."""
+
+    profile = CardiacFoamPlugin().get_profile()
+    assert all(path.is_dir() for path in profile.cxx_mapping.source_roots)
 
 
 def test_cardiac_catalog_partitions_entries_by_document() -> None:

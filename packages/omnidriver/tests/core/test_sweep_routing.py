@@ -161,7 +161,7 @@ def test_cellzone_override_lands_inside_the_solver_coeffs_block():
     was created, and the run silently used the whole mesh, bath included,
     instead of the requested zone. No error, plausible-looking results.
     """
-    from omnidriver.plugins.cardiacfoam.dict_builder import build_electro_properties
+    from omnidriver.cardiac.dict_builder import build_electro_properties
 
     text = build_electro_properties(
         selectors={

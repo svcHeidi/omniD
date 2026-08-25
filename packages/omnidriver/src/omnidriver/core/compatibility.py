@@ -56,9 +56,9 @@ def legacy_default_driver_context() -> "DriverContext":
     """
 
     from .plugin_interface import driver_context
-    from ..plugins.cardiacfoam_plugin import CardiacFoamPlugin
+    from omnidriver.cardiac.cardiacfoam_plugin import CardiacFoamPlugin
 
-    target = "omnidriver.plugins.cardiacfoam_plugin:CardiacFoamPlugin"
+    target = "omnidriver.cardiac.cardiacfoam_plugin:CardiacFoamPlugin"
     return driver_context(
         CardiacFoamPlugin(), source=f"trusted-import:{target}",
     )
@@ -83,7 +83,7 @@ def legacy_generic_case_mutation(*args, **kwargs) -> None:
     this with explicit generic dictionary mutations.
     """
 
-    from ..plugins.cardiacfoam.generic_case_mutation import apply_case_mutation
+    from omnidriver.cardiac.generic_case_mutation import apply_case_mutation
 
     apply_case_mutation(*args, **kwargs)
 
@@ -173,7 +173,7 @@ def legacy_case_marker(plugin, case_root) -> bool:
     ``electroProperties`` file was claimed by whichever plugin was loaded."""
 
     if getattr(plugin, "plugin_id", "") == "org.cardiacfoam":
-        from ..plugins.cardiacfoam.case_compatibility import has_case_marker
+        from omnidriver.cardiac.case_compatibility import has_case_marker
 
         return has_case_marker(case_root)
     return False
@@ -188,7 +188,7 @@ def legacy_case_runnable_without_workflow(plugin, case_root) -> bool:
     executable ``Allrun``, which is plugin-neutral filesystem evidence."""
 
     if getattr(plugin, "plugin_id", "") == "org.cardiacfoam":
-        from ..plugins.cardiacfoam.case_compatibility import is_runnable_without_workflow
+        from omnidriver.cardiac.case_compatibility import is_runnable_without_workflow
 
         return is_runnable_without_workflow(case_root)
     return False
@@ -208,7 +208,7 @@ def legacy_run_document_config(plugin, spec):
     plugin that never declared those phases contradicts the schema."""
 
     if getattr(plugin, "plugin_id", "") == "org.cardiacfoam":
-        from ..plugins.cardiacfoam.run_document_config import build_config
+        from omnidriver.cardiac.run_document_config import build_config
 
         return build_config(spec)
     return {}, ()
@@ -221,7 +221,7 @@ def legacy_run_document_config_schema(plugin) -> dict:
     open schema (no constraint) and must declare their own by migrating to v2."""
 
     if getattr(plugin, "plugin_id", "") == "org.cardiacfoam":
-        from ..plugins.cardiacfoam.config_schema import get_run_document_config_schema
+        from omnidriver.cardiac.config_schema import get_run_document_config_schema
 
         return get_run_document_config_schema()
     return {"type": "object", "additionalProperties": True}
@@ -237,7 +237,7 @@ def legacy_nondimensional_case(plugin, spec) -> bool:
     than silently exempting a case from them."""
 
     if getattr(plugin, "plugin_id", "") == "org.cardiacfoam":
-        from ..plugins.cardiacfoam.planning_policy import is_nondimensional_case
+        from omnidriver.cardiac.planning_policy import is_nondimensional_case
 
         return is_nondimensional_case(spec)
     return False
@@ -258,7 +258,7 @@ def legacy_route_sweep_case(plugin, *, base, resolved_axis_values, driver_contex
     plugin's axes in cardiac terms -- or, worse, accepted them."""
 
     if getattr(plugin, "plugin_id", "") == "org.cardiacfoam":
-        from ..plugins.cardiacfoam.sweep import route_case_values
+        from omnidriver.cardiac.sweep import route_case_values
 
         return route_case_values(
             base=base,
@@ -286,7 +286,7 @@ def legacy_materialize_sweep_case(plugin, *, case_dir, routed) -> None:
     was loaded (reproduced against GenericOpenFOAMPlugin, 2026-08-19)."""
 
     if getattr(plugin, "plugin_id", "") == "org.cardiacfoam":
-        from ..plugins.cardiacfoam.sweep import materialize_case
+        from omnidriver.cardiac.sweep import materialize_case
 
         materialize_case(case_dir=case_dir, routed=routed)
         return
@@ -307,7 +307,7 @@ def legacy_solver_commands(plugin) -> frozenset[str]:
     must declare its commands by migrating to v2."""
 
     if getattr(plugin, "plugin_id", "") == "org.cardiacfoam":
-        from ..plugins.cardiacfoam.command_authorization import solver_commands
+        from omnidriver.cardiac.command_authorization import solver_commands
 
         return solver_commands()
     return frozenset()
@@ -320,7 +320,7 @@ def legacy_auxiliary_commands(plugin) -> frozenset[str]:
     non-solver commands authorized."""
 
     if getattr(plugin, "plugin_id", "") == "org.cardiacfoam":
-        from ..plugins.cardiacfoam.command_authorization import auxiliary_commands
+        from omnidriver.cardiac.command_authorization import auxiliary_commands
 
         return auxiliary_commands()
     return frozenset()
@@ -331,7 +331,7 @@ def legacy_utility_manifests(plugin) -> dict:
     """Preserve the cardiac utility catalog for plugins without the new hook."""
 
     if getattr(plugin, "plugin_id", "") == "org.cardiacfoam":
-        from ..plugins.cardiacfoam.command_authorization import utility_manifests
+        from omnidriver.cardiac.command_authorization import utility_manifests
 
         # Cached read-only view; copy so a caller cannot reach the shared cache.
         return dict(utility_manifests())
@@ -343,7 +343,7 @@ def legacy_utility_roots(plugin) -> tuple:
     """Preserve the cardiac utilities root for plugins without the new hook."""
 
     if getattr(plugin, "plugin_id", "") == "org.cardiacfoam":
-        from ..plugins.cardiacfoam.command_authorization import utility_roots
+        from omnidriver.cardiac.command_authorization import utility_roots
 
         return utility_roots()
     return ()
@@ -356,7 +356,7 @@ def legacy_resolve_case_models(plugin, case_root) -> dict:
     declare their own resolution by migrating to v2."""
 
     if getattr(plugin, "plugin_id", "") == "org.cardiacfoam":
-        from ..plugins.cardiacfoam.case_introspection import resolve_case_models
+        from omnidriver.cardiac.case_introspection import resolve_case_models
 
         return resolve_case_models(case_root)
     return {}
@@ -369,7 +369,7 @@ def legacy_samplable_fields(plugin, resolved) -> dict:
     names any fields."""
 
     if getattr(plugin, "plugin_id", "") == "org.cardiacfoam":
-        from ..plugins.cardiacfoam.case_introspection import samplable_fields
+        from omnidriver.cardiac.case_introspection import samplable_fields
 
         return samplable_fields(resolved)
     return {}
@@ -382,7 +382,7 @@ def legacy_override_schema(plugin, tutorial_name: str, make_spec_info: dict) -> 
     empty schema and must declare their own by migrating to v2."""
 
     if getattr(plugin, "plugin_id", "") == "org.cardiacfoam":
-        from ..plugins.cardiacfoam.override_schema import config_schema
+        from omnidriver.cardiac.override_schema import config_schema
 
         return config_schema(tutorial_name, make_spec_info)
     return {}
@@ -395,7 +395,7 @@ def legacy_dict_entry_catalog(plugin) -> dict:
     electro/physics document shape."""
 
     if getattr(plugin, "plugin_id", "") == "org.cardiacfoam":
-        from ..plugins.cardiacfoam.override_schema import dict_entry_catalog
+        from omnidriver.cardiac.override_schema import dict_entry_catalog
 
         return dict_entry_catalog(
             plugin.get_dictionary_catalog(), plugin.get_dict_groups(),
@@ -415,6 +415,22 @@ def legacy_describe_config_resolution(plugin) -> str:
 
 
 @_instrumented
+def legacy_config_value_reader(path, key: str) -> str | None:
+    """Preserve the historical direct-foamlib read for plugins that don't
+    implement get_config_value_reader.
+
+    Why: every existing plugin call site read entries via
+    mutators.read_foam_entry before this capability existed. Activation: a
+    plugin has no get_config_value_reader hook. Plan 2 seam: a non-OpenFOAM
+    plugin must implement the hook explicitly -- this fallback assumes
+    OpenFOAM syntax and is not a safe default for other environments."""
+
+    from omnidriver.openfoam.mutators import read_foam_entry
+
+    return read_foam_entry(path, key)
+
+
+@_instrumented
 def legacy_report_catalog(plugin) -> tuple:
     """v1 plugins predate get_report_catalog(). Same rule as
     :func:`legacy_override_schema`: only the built-in cardiac plugin has an
@@ -422,7 +438,7 @@ def legacy_report_catalog(plugin) -> tuple:
     must declare their own by migrating to v2."""
 
     if getattr(plugin, "plugin_id", "") == "org.cardiacfoam":
-        from ..plugins.cardiacfoam.reports import CARDIAC_REPORTS
+        from omnidriver.cardiac.reports import CARDIAC_REPORTS
 
         return CARDIAC_REPORTS
     return ()
@@ -436,7 +452,7 @@ def legacy_named_catalogs(plugin) -> dict:
     declare their own by migrating to v2."""
 
     if getattr(plugin, "plugin_id", "") == "org.cardiacfoam":
-        from ..plugins.cardiacfoam.named_catalogs import named_catalogs
+        from omnidriver.cardiac.named_catalogs import named_catalogs
 
         return named_catalogs(plugin.get_capabilities())
     return {}
@@ -450,7 +466,7 @@ def legacy_override_scopes(plugin) -> tuple:
     get_override_scopes()."""
 
     if getattr(plugin, "plugin_id", "") == "org.cardiacfoam":
-        from ..plugins.cardiacfoam.overrides import electro_model_coeffs_scope
+        from omnidriver.cardiac.overrides import electro_model_coeffs_scope
 
         return (electro_model_coeffs_scope(),)
     return ()
@@ -464,7 +480,7 @@ def legacy_dict_regeneration_scopes(plugin) -> tuple:
     their own by implementing get_regeneration_scopes()."""
 
     if getattr(plugin, "plugin_id", "") == "org.cardiacfoam":
-        from ..plugins.cardiacfoam.overrides import electro_properties_regeneration_scope
+        from omnidriver.cardiac.overrides import electro_properties_regeneration_scope
 
         return (electro_properties_regeneration_scope(),)
     return ()

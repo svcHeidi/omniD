@@ -156,7 +156,7 @@ def test_schema_rejects_unknown_heterogeneity_mode() -> None:
     # The physics-phase vocabulary moved to the cardiac plugin's own config
     # schema (P2.2) -- core's run-document schema no longer enforces it, so
     # this now validates against the plugin schema directly.
-    from omnidriver.plugins.cardiacfoam.config_schema import CONFIG_SCHEMA
+    from omnidriver.cardiac.config_schema import CONFIG_SCHEMA
 
     doc = _valid_run_dict()
     doc["config"]["physics"] = {"ionicHeterogeneity.mode": "bogusMode"}
@@ -167,7 +167,7 @@ def test_schema_rejects_unknown_heterogeneity_mode() -> None:
 def test_schema_rejects_unknown_tissue() -> None:
     # See test_schema_rejects_unknown_heterogeneity_mode: validated against
     # the cardiac plugin's own config schema now, not core's.
-    from omnidriver.plugins.cardiacfoam.config_schema import CONFIG_SCHEMA
+    from omnidriver.cardiac.config_schema import CONFIG_SCHEMA
 
     doc = _valid_run_dict()
     doc["config"]["physics"] = {"tissue": "notATissue"}

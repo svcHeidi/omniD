@@ -24,7 +24,7 @@ import tempfile
 from pathlib import Path
 
 from omnidriver.core.specs.common import tutorials_root_default
-from omnidriver.plugins.cardiacfoam.dict_builder import (
+from omnidriver.cardiac.dict_builder import (
     build_electro_properties,
     parse_electro_properties,
 )

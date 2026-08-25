@@ -146,7 +146,7 @@ def test_generic_plugin_authorizes_neither_kind_of_command() -> None:
 def test_utility_manifests_are_not_a_shared_mutable_dict() -> None:
     """The cache hands the same object to every caller, so no consumer may be
     able to corrupt the authorization input of all the others."""
-    from omnidriver.plugins.cardiacfoam.command_authorization import (
+    from omnidriver.cardiac.command_authorization import (
         utility_manifests,
     )
 
@@ -164,6 +164,6 @@ def test_plugin_utilities_root_matches_the_utility_catalog_root() -> None:
     """Derived from one constant, not recomputed -- a drift would silently
     degrade to no authorized utilities at all."""
     from omnidriver.core.utility_catalog import UTILITIES_ROOT
-    from omnidriver.plugins.cardiacfoam.command_authorization import utility_roots
+    from omnidriver.cardiac.command_authorization import utility_roots
 
     assert utility_roots() == (UTILITIES_ROOT,)

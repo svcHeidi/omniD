@@ -80,7 +80,12 @@ class CardiacFoamPlugin:
     def get_profile():
         from omnidriver.core.plugin_profile import load_plugin_profile
 
-        return load_plugin_profile(Path(__file__).parent / "cardiacfoam" / "plugin.yaml")
+        return load_plugin_profile(Path(__file__).parent / "plugin.yaml")
+
+    def get_config_value_reader(self):
+        from omnidriver.openfoam.config_values import openfoam_config_value_reader
+
+        return openfoam_config_value_reader()
 
     def configure_execution_environment(self, env: dict[str, str]):
         """Apply the plugin's declared backend and build-manifest contract."""
