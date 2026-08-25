@@ -26,9 +26,11 @@ from omnidriver.core import (
     plugin_capabilities,
     plugin_interface,
 )
+from omnidriver.core.specs.paths import repo_root_default
 
-DRIVER_ROOT = Path(plugin_capabilities.__file__).resolve().parents[2]
-REPO_ROOT = DRIVER_ROOT.parents[2]
+# plugin_capabilities.__file__ = .../src/omnidriver/core/plugin_capabilities.py
+DRIVER_ROOT = Path(plugin_capabilities.__file__).resolve().parent.parent.parent
+REPO_ROOT = repo_root_default()
 GENERATOR = REPO_ROOT / "scripts" / "export-capability-seams.py"
 
 # :consumed-by: paths were written for the old single-package layout, where
@@ -168,7 +170,7 @@ def test_every_ungated_cardiac_fallback_is_accounted_for() -> None:
         if not isinstance(node, ast.FunctionDef):
             continue
         segment = ast.get_source_segment(source, node) or ""
-        if "plugins.cardiacfoam" not in segment:
+        if "omnidriver.cardiac" not in segment:
             continue
         if "org.cardiacfoam" in segment:
             continue

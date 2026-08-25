@@ -34,7 +34,7 @@ import unittest
 from pathlib import Path
 
 import pytest
-from conftest import skip_without_monorepo
+from conftest import monorepo_root, skip_without_monorepo
 pytestmark = skip_without_monorepo
 
 from omnidriver.openfoam.mesh_geometry import (
@@ -48,6 +48,7 @@ from omnidriver.openfoam.mesh_geometry import (
     read_bounding_box,
 )
 from omnidriver.core.utility_catalog import UTILITY_CATALOG
+from omnidriver.core.specs.paths import repo_root_default
 
 
 _HEADER = (
@@ -278,7 +279,7 @@ def test_read_bounding_box_matches_real_repo_points_file():
     hand-rolled scanner and foamlib were measured against directly before
     this migration, confirmed to match bit-for-bit.
     """
-    repo_root = Path(__file__).resolve().parents[6]
+    repo_root = monorepo_root or repo_root_default()
     points_path = (
         repo_root
         / "tutorials"

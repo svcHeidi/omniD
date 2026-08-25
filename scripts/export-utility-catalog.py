@@ -45,8 +45,12 @@ import sys
 from pathlib import Path
 
 from omnidriver.core.utility_catalog import UTILITY_CATALOG
+from omnidriver.core.specs.paths import cardiacfoam_monorepo_root, repo_root_default
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+# manifest.source_path is rooted under UTILITIES_ROOT (applications/utilities/
+# in the cardiacFoam monorepo, see utility_catalog.py) -- relativize against
+# whichever root that path actually lives under, not always this repo's own.
+REPO_ROOT = cardiacfoam_monorepo_root() or repo_root_default()
 
 
 def _manifest_to_record(manifest) -> dict:

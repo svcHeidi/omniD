@@ -44,27 +44,25 @@ import re
 import sys
 from pathlib import Path
 
-DRIVER_PKG = Path(__file__).resolve().parents[1]
-REPO_ROOT = DRIVER_PKG.parents[2]
-
-# Make the openfoam_driver package importable when the script is run directly.
-sys.path.insert(0, str(DRIVER_PKG))
-
-from openfoam_driver.scripts._names_parser import (  # noqa: E402
+from omnidriver.scripts._names_parser import (
     EXCLUDED_FROM_HEADER_SYNC,
     ParsedNames,
     find_names_header,
     parse_names_header,
 )
+from omnidriver.core.specs.paths import cardiacfoam_monorepo_root, repo_root_default
 
+REPO_ROOT = repo_root_default()
 CATALOG_PATH = (
-    DRIVER_PKG
-    / "openfoam_driver"
-    / "plugins"
-    / "cardiacfoam"
+    REPO_ROOT
+    / "packages" / "omnidriver-cardiac" / "src" / "omnidriver" / "cardiac"
     / "ionic_model_catalog.py"
 )
-IONIC_MODELS_DIR = REPO_ROOT / "src" / "ionicModels"
+# The *_Names.H headers this script syncs against live in the C++ solver
+# source, which this Python-only repo doesn't ship (see
+# future/UTILITY_CATALOG_STANDALONE_GAP.md for the same class of gap) --
+# only resolvable when run from inside the full cardiacFoam monorepo.
+IONIC_MODELS_DIR = (cardiacfoam_monorepo_root() or REPO_ROOT) / "src" / "ionicModels"
 
 
 def _format_tuple(items: tuple[str, ...]) -> str:
@@ -125,6 +123,15 @@ def main() -> int:
         help="Exit non-zero if the catalogue would change; do not write.",
     )
     args = parser.parse_args()
+
+    if not IONIC_MODELS_DIR.is_dir():
+        print(
+            f"No usable C++ source root at {IONIC_MODELS_DIR} -- this is a "
+            "Python-only repo, the ionic model headers live in the full "
+            "cardiacFoam monorepo. Nothing to regenerate from here.",
+            file=sys.stderr,
+        )
+        return 0
 
     original = CATALOG_PATH.read_text(encoding="utf-8")
     text = original

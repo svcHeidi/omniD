@@ -18,10 +18,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from omnidriver.core.specs.case_dict_keys import case_dict_key_diagnostics
-from conftest import skip_without_monorepo
+from omnidriver.core.specs.paths import repo_root_default
+from conftest import monorepo_root, skip_without_monorepo
 
 _SINGLE_CELL = (
-    Path(__file__).resolve().parents[6]
+    (monorepo_root or repo_root_default())
     / "tutorials" / "electrophysiologyProtocols" / "singleCell"
 )
 

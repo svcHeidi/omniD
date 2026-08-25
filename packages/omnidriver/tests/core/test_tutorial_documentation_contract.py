@@ -29,13 +29,14 @@ from pathlib import Path
 import re
 import subprocess
 import pytest
-from conftest import skip_without_monorepo
+from conftest import monorepo_root, skip_without_monorepo
+from omnidriver.core.specs.paths import repo_root_default
 pytestmark = skip_without_monorepo
 
 from omnidriver.core.runtime.registry import list_tutorials, _normalized_registry
 
 
-REPO_ROOT = Path(__file__).resolve().parents[6]
+REPO_ROOT = monorepo_root or repo_root_default()
 TUTORIALS_ROOT = REPO_ROOT / "tutorials"
 README = TUTORIALS_ROOT / "README.md"
 REGRESSION_RUNNER = TUTORIALS_ROOT / "Alltest-regression"

@@ -24,7 +24,8 @@ from unittest import mock
 
 import pytest
 
-from conftest import skip_without_monorepo
+from conftest import monorepo_root, skip_without_monorepo
+from omnidriver.core.specs.paths import repo_root_default
 
 pytestmark = skip_without_monorepo
 
@@ -38,7 +39,7 @@ from omnidriver.core.runtime.workflow_runner import (
 from omnidriver.core.runtime.workflow_state import initial_workflow_state
 from omnidriver.core.strict_planning import strict_plan
 
-REPO_ROOT = Path(__file__).resolve().parents[6]
+REPO_ROOT = monorepo_root or repo_root_default()
 SECURITY_MD = REPO_ROOT / "applications" / "scripts" / "driverFoam" / "SECURITY.md"
 SINGLE_CELL_ROOT = REPO_ROOT / "tutorials" / "electrophysiologyProtocols" / "singleCell"
 

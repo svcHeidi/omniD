@@ -37,7 +37,10 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[min(7, len(Path(__file__).resolve().parents) - 1)]
+from conftest import monorepo_root
+from omnidriver.core.specs.paths import repo_root_default
+
+REPO_ROOT = monorepo_root or repo_root_default()
 SINGLE_CELL_ELECTRO_PROPERTIES = (
     REPO_ROOT / "tutorials" / "electrophysiologyProtocols" / "singleCell"
     / "constant" / "electroProperties"

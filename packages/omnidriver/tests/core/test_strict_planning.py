@@ -35,7 +35,8 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
-from conftest import skip_without_monorepo
+from conftest import monorepo_root, skip_without_monorepo
+from omnidriver.core.specs.paths import repo_root_default
 pytestmark = skip_without_monorepo
 
 from omnidriver.core import strict_planning
@@ -56,7 +57,7 @@ from omnidriver.core.strict_planning import (
 )
 
 
-REPO_ROOT = Path(__file__).resolve().parents[6]
+REPO_ROOT = monorepo_root or repo_root_default()
 CARDIAC_PLUGIN = CardiacFoamPlugin()
 CARDIAC_MAPPING = CARDIAC_PLUGIN.get_profile().cxx_mapping
 

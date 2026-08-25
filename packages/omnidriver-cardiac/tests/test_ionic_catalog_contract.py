@@ -43,14 +43,15 @@ import unittest
 from pathlib import Path
 
 from omnidriver.cardiac.ionic_model_catalog import IONIC_MODEL_CATALOG
-from conftest import skip_without_monorepo
+from conftest import monorepo_root, skip_without_monorepo
+from omnidriver.core.specs.paths import repo_root_default
 from omnidriver.scripts._names_parser import (
     EXCLUDED_FROM_HEADER_SYNC,
     find_names_header,
     parse_names_header,
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[min(7, len(Path(__file__).resolve().parents) - 1)]
+REPO_ROOT = monorepo_root or repo_root_default()
 IONIC_MODELS_DIR = REPO_ROOT / "src" / "ionicModels"
 
 _REGEN_HINT = (

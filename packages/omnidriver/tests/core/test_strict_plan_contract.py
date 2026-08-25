@@ -21,8 +21,9 @@ import sys
 from pathlib import Path
 
 from conftest import skip_without_monorepo
+from omnidriver.core.specs.paths import repo_root_default
 
-DRIVER_ROOT = Path(__file__).resolve().parents[4]
+DRIVER_ROOT = repo_root_default()
 _SINGLE_CELL = (
     DRIVER_ROOT / "tutorials" / "electrophysiologyProtocols" / "singleCell"
 )

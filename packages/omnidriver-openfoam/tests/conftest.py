@@ -33,22 +33,13 @@ from pathlib import Path
 os.environ["SKIP_ENV_DIAGNOSTICS"] = "1"
 
 
-def _find_monorepo_root() -> Path | None:
-    """Walk parent directories looking for the cardiacFoam monorepo root.
-
-    Returns the first ancestor that has both ``tutorials/`` and
-    ``applications/`` siblings, or ``None`` when running in a standalone
-    (temp-folder / CI) checkout that does not include the full monorepo tree.
-    """
-    current = Path(__file__).resolve()
-    for parent in current.parents:
-        if (parent / "tutorials").exists() and (parent / "applications").exists():
-            return parent
-    return None
-
+from omnidriver.core.specs.paths import cardiacfoam_monorepo_root
 
 #: The monorepo root resolved once at collection time.  ``None`` in standalone.
-monorepo_root: Path | None = _find_monorepo_root()
+#: Shared with shipped code (e.g. utility_catalog.py's UTILITIES_ROOT) via
+#: cardiacfoam_monorepo_root() rather than each conftest.py recomputing its
+#: own copy of the same walk-up search.
+monorepo_root: Path | None = cardiacfoam_monorepo_root()
 
 #: Apply this decorator to any test class/function that reads real tutorial
 #: case directories from the monorepo ``tutorials/`` tree.  The test is

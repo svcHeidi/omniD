@@ -44,14 +44,15 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 import pytest
-from conftest import skip_without_monorepo
+from conftest import monorepo_root, skip_without_monorepo
+from omnidriver.core.specs.paths import repo_root_default
 
 from omnidriver.scripts._rtst_scanner import (
     iter_catalogue_enums,
     scan_rtst_registrations,
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[6]
+REPO_ROOT = monorepo_root or repo_root_default()
 SRC_ROOT = REPO_ROOT / "src"
 
 

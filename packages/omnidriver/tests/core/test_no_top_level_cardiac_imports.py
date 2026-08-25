@@ -5,7 +5,9 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-_PACKAGE_ROOT = Path(__file__).parents[2] / "src" / "omnidriver"
+import omnidriver.core
+
+_PACKAGE_ROOT = Path(omnidriver.core.__file__).resolve().parent.parent
 _EXEMPT = {
     _PACKAGE_ROOT / "core" / "compatibility.py",
 }

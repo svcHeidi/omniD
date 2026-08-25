@@ -18,6 +18,7 @@ import json
 from pathlib import Path
 
 from omnidriver.core.runtime.sweep_runner import sweep_plan
+from omnidriver.core.specs.paths import repo_root_default
 
 _SPEC = {
     "base": {
@@ -81,7 +82,7 @@ def test_a_malformed_spec_still_exits_non_zero(tmp_path):
 
     spec_path = tmp_path / "sweep.json"
     spec_path.write_text("{ not json")
-    driver_root = Path(__file__).resolve().parents[3]
+    driver_root = repo_root_default()
 
     result = subprocess.run(
         [

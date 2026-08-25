@@ -45,7 +45,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[4]
+from omnidriver.core.specs.paths import repo_root_default
+
+REPO = repo_root_default()
 SCRIPT = REPO / "scripts" / "export-tutorials-catalog.py"
 
 

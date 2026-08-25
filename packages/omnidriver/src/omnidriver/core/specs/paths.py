@@ -1,18 +1,49 @@
 from pathlib import Path
 
 
+def cardiacfoam_monorepo_root(start: Path | None = None) -> Path | None:
+    """Walk parent directories looking for the full cardiacFoam monorepo root.
+
+    Returns the first ancestor of ``start`` (default: this file) that has
+    both ``tutorials/`` and ``applications/`` siblings -- the monorepo
+    ``omnidriver`` was extracted from -- or ``None`` when running in a
+    standalone checkout that doesn't happen to sit inside that tree (the
+    normal case: this repo has its own remote and isn't nested in the
+    monorepo). Shared by test ``conftest.py`` files (via ``skip_without_monorepo``)
+    and by shipped code that reads monorepo-only content, e.g.
+    ``utility_catalog.py``'s ``UTILITIES_ROOT``.
+    """
+    current = (start or Path(__file__)).resolve()
+    for parent in current.parents:
+        if (parent / "tutorials").exists() and (parent / "applications").exists():
+            return parent
+    return None
+
+
 def repo_root_default() -> Path:
-    """Locate the repository / package root using a three-tier fallback.
+    """Locate the repository root using a three-tier fallback.
+
+    Every tier walks up from this file and recognises its target by marker
+    files/directories, never by counting path segments — a fixed
+    ``parents[N]`` silently breaks the moment this file's nesting depth
+    changes (it did, twice, across the package split), and breaks silently
+    because every candidate directory exists, it's just the wrong one.
 
     Tier 1 (monorepo): ancestor directory that has both ``tutorials/`` and
         ``src/`` siblings — the full cardiacFoam checkout.
     Tier 2 (standalone-with-tutorials): ancestor directory that has a
         ``tutorials/`` sibling but no ``src/`` — driverFOAM cloned with a
         companion tutorials tree.
-    Tier 3 (fully standalone): the ``driverFoam/`` directory that contains
-        ``omnidriver/`` — i.e. the package root itself.  This is the
-        fallback when neither a monorepo nor an external tutorials tree is
-        present, e.g. in a temp-folder clone or CI.
+    Tier 3 (fully standalone): the ancestor directory that has both
+        ``packages/`` and ``ARCHITECTURE.md`` — the omnidriver monorepo
+        root itself. This is the fallback when neither a cardiacFoam
+        monorepo nor an external tutorials tree is present, e.g. in a
+        temp-folder clone or CI.
+
+    Raises ``RuntimeError`` if no tier matches, rather than returning some
+    existing-but-wrong ancestor directory (e.g. a package's own ``src/``) —
+    a caller silently writing scratch output or resolving tutorials against
+    the wrong root is worse than a loud, early failure.
     """
     current = Path(__file__).resolve()
     tier2_candidate: Path | None = None
@@ -27,13 +58,15 @@ def repo_root_default() -> Path:
             tier2_candidate = parent
     if tier2_candidate is not None:
         return tier2_candidate
-    # Tier 3: the directory containing omnidriver/ (driverFoam/ package root)
-    # current = …/omnidriver/core/specs/paths.py → parents[2] = omnidriver/
-    # parents[3] = driverFoam/ (the package root with pyproject.toml).
-    # (Verified empirically, not just by counting path segments by eye —
-    # this exact line was off by one at the pre-move depth, silently dead
-    # code because Tier 1/2 always win inside this monorepo checkout.)
-    return current.parents[3]
+    # Tier 3: the omnidriver monorepo root, recognised by its own markers.
+    for parent in current.parents:
+        if (parent / "packages").is_dir() and (parent / "ARCHITECTURE.md").is_file():
+            return parent
+    raise RuntimeError(
+        f"Could not locate the omnidriver repository root by walking up "
+        f"from {current}: no ancestor has both tutorials/+src/ (monorepo), "
+        f"tutorials/ alone, or packages/+ARCHITECTURE.md (standalone repo)."
+    )
 
 
 def tutorials_root_default() -> Path:

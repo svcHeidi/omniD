@@ -45,7 +45,9 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-ARCHITECTURE = Path(__file__).resolve().parents[5] / "ARCHITECTURE.md"
+from .specs.paths import repo_root_default
+
+ARCHITECTURE = repo_root_default() / "ARCHITECTURE.md"
 BEGIN_MARKER = "<!-- BEGIN GENERATED: capability-seams -->"
 END_MARKER = "<!-- END GENERATED: capability-seams -->"
 

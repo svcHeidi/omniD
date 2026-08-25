@@ -36,15 +36,14 @@ import re
 from pathlib import Path
 
 import pytest
-from conftest import skip_without_monorepo
+from conftest import monorepo_root, skip_without_monorepo
 pytestmark = skip_without_monorepo
 
 from omnidriver.openfoam import mesh_geometry
 
 
 def _checkmesh_source() -> str:
-    # tests/ -> omnidriver/ -> driverFoam/ -> scripts/ -> applications/
-    applications = Path(__file__).resolve().parents[5]
+    applications = (monorepo_root or Path()) / "applications"
     src = applications / "utilities" / "checkMeshGeometry" / "checkMeshGeometry.C"
     return src.read_text()
 

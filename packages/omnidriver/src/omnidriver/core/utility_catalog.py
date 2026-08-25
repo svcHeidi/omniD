@@ -115,6 +115,7 @@ else:
             ) from exc
 
 from .runtime.models import _validate_path_pattern
+from .specs.paths import cardiacfoam_monorepo_root, repo_root_default
 
 MANIFEST_FILENAME: Final[str] = "utility.manifest.toml"
 
@@ -532,11 +533,19 @@ def load_utility_manifests(utilities_root: Path) -> dict[str, UtilityManifest]:
     return catalog
 
 
-#: Repo root holding the ``utility.manifest.toml`` sidecars. Public so that a
+#: Root holding the ``utility.manifest.toml`` sidecars. Public so that a
 #: plugin declaring the same root derives it from here rather than recomputing
 #: its own ``Path(__file__).parents[N]`` arithmetic, which can silently drift.
+#:
+#: This content (``applications/utilities/*/utility.manifest.toml``) lives in
+#: the full cardiacFoam monorepo, not in this standalone Python-only repo --
+#: see future/UTILITY_CATALOG_STANDALONE_GAP.md. ``cardiacfoam_monorepo_root()``
+#: returns ``None`` outside that monorepo, in which case this resolves to a
+#: path that does not exist; ``load_utility_manifests`` degrades to an empty
+#: catalog for a missing directory rather than raising.
 UTILITIES_ROOT: Final[Path] = (
-    Path(__file__).resolve().parents[5] / "utilities"
+    (cardiacfoam_monorepo_root() or repo_root_default())
+    / "applications" / "utilities"
 )
 
 UTILITY_CATALOG: Final[dict[str, UtilityManifest]] = load_utility_manifests(

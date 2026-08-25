@@ -49,6 +49,7 @@ import sys
 from pathlib import Path
 
 from omnidriver.core.utility_catalog import UTILITY_CATALOG
+from omnidriver.core.specs.paths import repo_root_default
 from conftest import skip_without_monorepo
 
 # UTILITY_CATALOG is loaded from applications/utilities/*/utility.manifest.toml,
@@ -57,7 +58,7 @@ from conftest import skip_without_monorepo
 # vacuous or raises outright against an empty catalog.
 pytestmark = skip_without_monorepo
 
-REPO = Path(__file__).resolve().parents[4]
+REPO = repo_root_default()
 SCRIPT = REPO / "scripts" / "export-utility-catalog.py"
 
 

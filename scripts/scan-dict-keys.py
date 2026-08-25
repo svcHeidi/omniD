@@ -49,19 +49,16 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-DRIVER_PKG = Path(__file__).resolve().parents[1]
-REPO_ROOT = DRIVER_PKG.parents[2]
-
-# Make the openfoam_driver package importable when the script is run directly.
-sys.path.insert(0, str(DRIVER_PKG))
-
-from openfoam_driver.scripts._dict_keys_scanner import (  # noqa: E402
+from omnidriver.scripts._dict_keys_scanner import (
     CataloguePath,
     DictRead,
     iter_catalogue_paths,
     scan_dict_reads,
     strict_dict_key_report,
 )
+from omnidriver.core.specs.paths import cardiacfoam_monorepo_root, repo_root_default
+
+REPO_ROOT = cardiacfoam_monorepo_root() or repo_root_default()
 
 def _plugin_scan_inputs(plugin: str | None):
     """Resolve the active plugin's C++ mapping and dictionary catalogue.
@@ -70,7 +67,7 @@ def _plugin_scan_inputs(plugin: str | None):
     the catalogue are plugin-owned provenance, not constants of this script.
     Returns ``(cxx_mapping | None, entries)``.
     """
-    from openfoam_driver.core.plugin_interface import (
+    from omnidriver.core.plugin_interface import (
         default_driver_context,
         generic_openfoam_context,
         load_plugin_context,
