@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "omnidriver-cardiac"
+version = "0.1.0"
+description = "cardiacFoam electrophysiology domain plugin for omnidriver."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Simao Nieto de Castro, UCD" }]
+dependencies = [
+  "omnidriver",
+  "omnidriver-openfoam",
+  "numpy>=1.24",
+]
+
+[project.entry-points."omnidriver.plugins"]
+cardiacfoam = "omnidriver.cardiac.cardiacfoam_plugin:CardiacFoamPlugin"
+
+[project.optional-dependencies]
+post = [
+  "matplotlib>=3.7",
+  "pandas>=2.0",
+  "plotly>=5.0",
+  "prompt-toolkit>=3.0",
+  "openpyxl>=3.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["omnidriver*"]
+
+[tool.setuptools.package-data]
+"omnidriver.cardiac" = ["plugin.yaml", "dict_key_allowlist.json"]

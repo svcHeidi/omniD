@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "omnidriver"
+version = "0.1.0"
+description = "Solver-agnostic scientific workflow orchestrator: DAG execution, provenance, schema validation."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Simao Nieto de Castro, UCD" }]
+dependencies = [
+  "jsonschema>=4.0",
+  "PyYAML>=6.0",
+]
+
+[project.entry-points."omnidriver.plugins"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["omnidriver*"]
+
+[tool.setuptools.package-data]
+"omnidriver.core" = ["generic-plugin.yaml"]
+"omnidriver.schemas" = ["run-document.json"]

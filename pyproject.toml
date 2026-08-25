@@ -1,52 +1,10 @@
-[build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
-name = "cardiacfoam-tutorials-driver"
+name = "omnidriver-workspace"
 version = "0.1.0"
-description = "Reusable Python-spec driver for OpenFOAM tutorial automation."
-readme = "openfoam_driver/README.md"
+description = "Monorepo workspace root. Install individual packages: pip install -e packages/omnidriver -e packages/omnidriver-openfoam -e packages/omnidriver-cardiac"
 requires-python = ">=3.11"
-authors = [
-  { name = "cardiacFoam contributors" }
-]
-dependencies = [
-  "foamlib>=1.7.5,<2",
-  "gmsh>=4.15.2",
-  "jsonschema>=4.0",
-  "numpy>=1.24",
-  "PyYAML>=6.0",
-]
-
-[project.optional-dependencies]
-post = [
-  "matplotlib>=3.7",
-  "pandas>=2.0",
-  "plotly>=5.0",
-  "prompt-toolkit>=3.0",
-  "openpyxl>=3.1",
-]
-[project.scripts]
-driverFoam = "openfoam_driver.cli:main"
-
-[project.entry-points."driverfoam.plugins"]
 
 [tool.pytest.ini_options]
 markers = [
     "integration: tests requiring a real cardiacFoam binary (skipped by default in CI)",
 ]
-
-[tool.setuptools]
-include-package-data = false
-
-[tool.setuptools.package-data]
-"openfoam_driver.schemas" = ["run-document.json"]
-"openfoam_driver.core" = ["generic-plugin.yaml"]
-"openfoam_driver.core.specs" = [
-    "fixtures/template/constant/*",
-]
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["openfoam_driver*"]

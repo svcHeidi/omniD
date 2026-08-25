@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "omnidriver-openfoam"
+version = "0.1.0"
+description = "OpenFOAM environment plugin for omnidriver: controlDict/blockMeshDict handling, foamlib-based dictionary mutation."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Simao Nieto de Castro, UCD" }]
+dependencies = [
+  "omnidriver",
+  "foamlib>=1.7.5,<2",
+  "gmsh>=4.15.2",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["omnidriver*"]
