@@ -39,10 +39,7 @@ import argparse
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT))
-
-from openfoam_driver.core.capability_seams import (  # noqa: E402
+from omnidriver.core.capability_seams import (
     ARCHITECTURE,
     collect_seams,
     render,

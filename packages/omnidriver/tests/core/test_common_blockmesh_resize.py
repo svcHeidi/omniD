@@ -27,7 +27,7 @@
 
 import pytest
 
-from omnidriver.core.specs.common import replace_block_mesh_resolutions
+from omnidriver.openfoam.utils import replace_block_mesh_resolutions
 
 
 def _write_template(path):

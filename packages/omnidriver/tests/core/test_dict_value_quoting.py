@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import pytest
 
-from omnidriver.core.specs.dict_builder import _openfoam_value_token
+from omnidriver.openfoam.dict_builder import _openfoam_value_token
 
 
 @pytest.mark.parametrize("value", ["3D", "1D", "2D", "3Dfoo"])

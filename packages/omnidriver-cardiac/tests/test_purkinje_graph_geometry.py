@@ -40,7 +40,7 @@ from omnidriver.cardiac.mesh_geometry import (
     purkinje_graph_diagnostics,
     read_purkinje_graph_bbox,
 )
-from omnidriver.core.specs.mesh_geometry import MeshParseError
+from omnidriver.openfoam.mesh_geometry import MeshParseError
 
 
 _HEADER = (

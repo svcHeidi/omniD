@@ -13,7 +13,7 @@ from typing import Any
 from foamlib import FoamFile
 
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
-from omnidriver.core.specs.dict_builder import populate_values
+from omnidriver.openfoam.dict_builder import populate_values
 from omnidriver.cardiac.dict_builder import (
     build_electro_properties,
     build_physics_properties,

@@ -18,6 +18,13 @@ plugin:
 #               openfoam.solver_settings    : system/fvSolution
 #               openfoam.decomposition      : system/decomposeParDict
 #               openfoam.mesh_generation    : system/blockMeshDict
+#               openfoam.case_directory     : a top-level OpenFOAM case
+#                                             directory (system, constant)
+#                                             present regardless of solver --
+#                                             core derives which top-level
+#                                             directories to walk for
+#                                             provenance from these entries,
+#                                             not from a hardcoded list
 #               openfoam.entrypoint         : Allrun
 #               openfoam.cleanup            : Allclean
 #               plugin.configuration        : solver-specific constant/* file
@@ -27,9 +34,19 @@ plugin:
 #               always       : the driver expects this file at plan time
 #               conditional  : optional; driver skips checks if file is absent
 case_profile:
-  dictionaries: []   # No plugin-owned dictionaries for the generic stub.
-                     # A real plugin lists its constant/* files here; see
-                     # plugins/cardiacfoam/plugin.yaml for a full example.
+  dictionaries:
+    # These two are true of every OpenFOAM case regardless of solver -- not
+    # "plugin-owned" in the solver-specific sense. A real plugin adds its own
+    # constant/* files with role plugin.configuration; see
+    # plugins/cardiacfoam/plugin.yaml for a full example.
+    - path: system/controlDict
+      kind: openfoam_dictionary
+      role: openfoam.control_dict
+      required: always
+    - path: constant
+      kind: openfoam_dictionary
+      role: openfoam.case_directory
+      required: always
 
 # cxx_mapping is OPTIONAL.
 # Include it only if your plugin has C++ source files whose dict keys should

@@ -55,7 +55,7 @@ def test_strict_plan_reports_a_structured_diagnostic_for_schema_violation(monkey
     surface a StrictDiagnostic an agent can read and act on -- not a raw
     jsonschema traceback and not a silent pass."""
     from omnidriver.core.plugin_capabilities import RunDocumentConfigurationRequest
-    from omnidriver.plugins import cardiacfoam_plugin
+    from omnidriver.cardiac import cardiacfoam_plugin
 
     context = default_driver_context()
 

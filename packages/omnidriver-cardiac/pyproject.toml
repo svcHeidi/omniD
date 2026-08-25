@@ -30,6 +30,7 @@ post = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["tests"]
+addopts = "--import-mode=importlib"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -32,19 +32,6 @@ from typing import Any
 _NON_ROUTABLE_KEYS: frozenset[str] = frozenset({"caseId"})
 
 
-def _route_case_values_legacy(
-    *, base: dict[str, Any], resolved_axis_values: dict[str, Any], driver_context=None,
-) -> dict[str, Any]:
-    """Legacy public route, implemented by the cardiacFoam plugin."""
-    from .plugins.cardiacfoam.sweep import route_case_values
-
-    return route_case_values(
-        base=base,
-        resolved_axis_values=resolved_axis_values,
-        driver_context=driver_context,
-    )
-
-
 def route_case_values(
     *, base: dict[str, Any], resolved_axis_values: dict[str, Any], driver_context=None,
 ) -> dict[str, Any]:

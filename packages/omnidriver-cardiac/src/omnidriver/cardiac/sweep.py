@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError
-from omnidriver.core.specs.dict_builder import is_known_override_driver_path
+from omnidriver.openfoam.dict_builder import is_known_override_driver_path
 from .dict_builder import (
     SELECTOR_KEYS,
     build_and_launch,

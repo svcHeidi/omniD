@@ -37,7 +37,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[7]
+REPO_ROOT = Path(__file__).resolve().parents[min(7, len(Path(__file__).resolve().parents) - 1)]
 SINGLE_CELL_ELECTRO_PROPERTIES = (
     REPO_ROOT / "tutorials" / "electrophysiologyProtocols" / "singleCell"
     / "constant" / "electroProperties"
@@ -199,7 +199,7 @@ class TestValuePopulation(unittest.TestCase):
     the applicability filter."""
 
     def test_override_wins_over_typical_value(self) -> None:
-        from omnidriver.core.specs.dict_builder import populate_values
+        from omnidriver.openfoam.dict_builder import populate_values
         from omnidriver.cardiac.dict_builder import (
             resolve_context,
             select_applicable_entries,
@@ -216,7 +216,7 @@ class TestValuePopulation(unittest.TestCase):
         self.assertEqual(populated["singleCellStimulus.stim_amplitude"], "0.4")
 
     def test_typical_value_fills_when_no_override(self) -> None:
-        from omnidriver.core.specs.dict_builder import populate_values
+        from omnidriver.openfoam.dict_builder import populate_values
         from omnidriver.cardiac.dict_builder import (
             resolve_context,
             select_applicable_entries,
@@ -235,7 +235,7 @@ class TestValuePopulation(unittest.TestCase):
         self.assertEqual(populated["singleCellStimulus.stim_amplitude"], "60")
 
     def test_fallback_disabled_omits_typical_value(self) -> None:
-        from omnidriver.core.specs.dict_builder import populate_values
+        from omnidriver.openfoam.dict_builder import populate_values
         from omnidriver.cardiac.dict_builder import (
             resolve_context,
             select_applicable_entries,
@@ -252,7 +252,7 @@ class TestValuePopulation(unittest.TestCase):
         """Selectors are part of the context AND many of them correspond to
         DictEntry paths (myocardiumSolver, ionicModel, tissue). Those entries
         must end up in the populated dict using the selector's own value."""
-        from omnidriver.core.specs.dict_builder import populate_values
+        from omnidriver.openfoam.dict_builder import populate_values
         from omnidriver.cardiac.dict_builder import (
             resolve_context,
             select_applicable_entries,
@@ -274,7 +274,7 @@ class TestRequiredCheck(unittest.TestCase):
     earlier by select_applicable_entries)."""
 
     def test_silent_when_all_required_present(self) -> None:
-        from omnidriver.core.specs.dict_builder import (
+        from omnidriver.openfoam.dict_builder import (
             check_required,
             populate_values,
         )
@@ -291,7 +291,7 @@ class TestRequiredCheck(unittest.TestCase):
         check_required(entries, populated, context=ctx)
 
     def test_raises_listing_missing_required_paths(self) -> None:
-        from omnidriver.core.specs.dict_builder import (
+        from omnidriver.openfoam.dict_builder import (
             check_required,
             populate_values,
         )
@@ -318,7 +318,7 @@ class TestRequiredCheck(unittest.TestCase):
         """A required=False entry that is absent from the populated dict
         is not a violation, even when no typical_value fallback was used."""
         from omnidriver.dict_entries import DictEntry
-        from omnidriver.core.specs.dict_builder import check_required
+        from omnidriver.openfoam.dict_builder import check_required
 
         only_optional = [
             DictEntry(

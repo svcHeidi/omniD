@@ -38,7 +38,7 @@ Design discipline (plan v2 section 3):
   catalogs; the predictor reads them rather than reimplementing branching.
   Today the predictor actively consumes
   ``ionic_model_catalog.IONIC_MODEL_CATALOG`` (state + algebraic variables),
-  ``plugins.cardiacfoam.detection.detect_ionic_export_list`` (user-declared
+  ``omnidriver.cardiac.detection.detect_ionic_export_list`` (user-declared
   exports),
   ``active_tension_catalog.ACTIVE_TENSION_MODEL_CATALOG`` (AT state variables,
   fired when ``activeTensionModel`` block is present), and

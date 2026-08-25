@@ -46,7 +46,7 @@ import pytest
 from omnidriver.core.runtime.run_model import RunDocument
 
 SCHEMA_PATH = (
-    Path(__file__).resolve().parents[3] / "schemas" / "run-document.json"
+    Path(__file__).resolve().parents[4] / "schemas" / "run-document.json"
 )
 
 
@@ -97,7 +97,7 @@ def test_packaged_schema_resource_matches_fixture_schema(schema):
 def test_packaged_schema_is_reproducible_from_the_generator() -> None:
     result = subprocess.run(
         [sys.executable, "schemas/generate_run_document_schema.py"],
-        cwd=Path(__file__).resolve().parents[3],  # applications/scripts/driverFoam
+        cwd=Path(__file__).resolve().parents[4],  # omnidriver repo root
         capture_output=True,
         text=True,
     )
@@ -108,9 +108,9 @@ def test_packaged_schema_is_reproducible_from_the_generator() -> None:
             "diff",
             "--stat",
             "--",
-            "omnidriver/schemas/run-document.json",
+            "packages/omnidriver/src/omnidriver/schemas/run-document.json",
         ],
-        cwd=Path(__file__).resolve().parents[3],
+        cwd=Path(__file__).resolve().parents[4],
         capture_output=True,
         text=True,
     )

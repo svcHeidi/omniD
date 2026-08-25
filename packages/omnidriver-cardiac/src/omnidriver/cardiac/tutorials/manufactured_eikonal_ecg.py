@@ -50,7 +50,7 @@ from omnidriver.openfoam.utils import (
     replace_block_mesh_resolutions,
     set_delta_t,
 )
-from omnidriver.core.specs.tet_mesh_provisioning import render_tet_geo
+from omnidriver.openfoam.tet_mesh_provisioning import render_tet_geo
 
 
 def _build_cases(

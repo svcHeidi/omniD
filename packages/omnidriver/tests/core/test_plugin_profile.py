@@ -231,10 +231,19 @@ def test_cardiac_runtime_file_selects_backend_and_bashrc(tmp_path: Path) -> None
 
 
 def test_generic_profile_declares_no_solver_specific_files() -> None:
+    """The generic stub declares the two structural facts true of any
+    OpenFOAM case (system/controlDict, the constant/ directory) so core can
+    derive provenance-walk roots and startFrom/startTime resolution without
+    a plugin present -- but declares nothing solver-specific (no plugin.*
+    role, e.g. no electroProperties-style constant/* file)."""
     profile = GenericOpenFOAMPlugin().get_profile()
 
     assert profile.plugin_id == "org.driverfoam.generic-openfoam"
-    assert profile.case_files == ()
+    assert {rule.path for rule in profile.case_files} == {
+        "system/controlDict",
+        "constant",
+    }
+    assert all(rule.role.startswith("openfoam.") for rule in profile.case_files)
     assert profile.cxx_mapping is None
 
 

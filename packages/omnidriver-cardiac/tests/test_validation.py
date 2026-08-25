@@ -344,7 +344,7 @@ def test_applicable_when_matches_a_scope_prefixed_predicate_key():
     "$..._present"/"$..._supported" tokens -- silently never matched,
     which is what made the restitutionEikonalSolver1D build drop its own
     solver-specific keys without error."""
-    from omnidriver.core.specs.dict_builder import select_applicable_entries
+    from omnidriver.openfoam.dict_builder import select_applicable_entries
 
     entry = _entry(
         "$ELECTRO_MODEL_COEFFS.gatedByPrefixedKey",
@@ -375,7 +375,7 @@ def test_applicable_when_matches_a_dynamic_placeholder_sibling_key():
     resolved instance name (e.g. "purkinjeNetwork"), so the two can never
     be made equal by prefix-stripping alone -- the placeholder must be
     treated as a wildcard and matched against any configured instance."""
-    from omnidriver.core.specs.dict_builder import select_applicable_entries
+    from omnidriver.openfoam.dict_builder import select_applicable_entries
 
     entry = _entry(
         "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>."

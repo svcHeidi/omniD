@@ -138,7 +138,7 @@ class TutorialCatalogCapability(Protocol):
     than omitting the member.
 
     :adapts: get_tutorial_catalog, get_tutorial_displays
-    :consumed-by: omnidriver/core/runtime/registry.py, omnidriver/plugins/cardiacfoam/dict_builder.py
+    :consumed-by: omnidriver/core/runtime/registry.py, omnidriver/cardiac/dict_builder.py
     :fallback: none
     :status: mandatory
     """
@@ -161,7 +161,7 @@ class DictionaryCatalogCapability(Protocol):
     *meaning* (the plugin's).
 
     :adapts: get_dict_entries, get_dict_groups, get_dictionary_catalog
-    :consumed-by: omnidriver/dict_entries.py, omnidriver/plugins/cardiacfoam/sweep.py, omnidriver/core/specs/apply_overrides.py, omnidriver/core/specs/dict_builder.py, omnidriver/core/specs/validation.py, omnidriver/core/strict_planning.py
+    :consumed-by: omnidriver/dict_entries.py, omnidriver/cardiac/sweep.py, omnidriver/openfoam/apply_overrides.py, omnidriver/openfoam/dict_builder.py, omnidriver/core/specs/validation.py, omnidriver/core/strict_planning.py
     :fallback: none
     :status: mandatory
     """
@@ -433,8 +433,13 @@ class CaseFileContractCapability(Protocol):
     plugins and plugins that never authored one -- cardiac-shaped only for
     the built-in cardiac plugin, plugin-neutral for everyone else.
 
+    ``all_rules`` returns every declared rule regardless of ``required``
+    status -- a role-lookup consumer (e.g. finding the file whose role is
+    ``openfoam.control_dict``) must search the full set, since a control
+    file can legitimately be declared ``conditional``, not just ``always``.
+
     :adapts: get_profile, get_config_resolution_description
-    :consumed-by: omnidriver/core/runtime/strict_audit.py, omnidriver/core/tutorial_contracts.py
+    :consumed-by: omnidriver/core/runtime/strict_audit.py, omnidriver/core/tutorial_contracts.py, omnidriver/core/runtime/provenance_inputs.py
     :fallback: legacy_describe_config_resolution
     :status: mixed
     """
@@ -442,6 +447,7 @@ class CaseFileContractCapability(Protocol):
     def required_files(self) -> tuple[str, ...]: ...
     def conditional_files(self) -> tuple[str, ...]: ...
     def required_rules(self) -> tuple["CaseFileRule", ...]: ...
+    def all_rules(self) -> tuple["CaseFileRule", ...]: ...
     def describe_config_resolution(self) -> str: ...
 
 
@@ -612,7 +618,7 @@ class OverrideScopeCapability(Protocol):
     :class:`ReportCatalogCapability`/:class:`NamedCatalogsCapability`.
 
     :adapts: get_override_scopes
-    :consumed-by: omnidriver/core/specs/apply_overrides.py
+    :consumed-by: omnidriver/openfoam/apply_overrides.py
     :fallback: legacy_override_scopes
     :status: optional
     """
@@ -636,7 +642,7 @@ class DictRegenerationCapability(Protocol):
     else, matching :class:`OverrideScopeCapability`.
 
     :adapts: get_regeneration_scopes
-    :consumed-by: omnidriver/core/specs/apply_overrides.py
+    :consumed-by: omnidriver/openfoam/apply_overrides.py
     :fallback: legacy_dict_regeneration_scopes
     :status: optional
     """
@@ -895,6 +901,9 @@ class _CaseFileContractAdapter:
 
     def conditional_files(self) -> tuple[str, ...]:
         return tuple(rule.path for rule in self._rules() if rule.required != "always")
+
+    def all_rules(self) -> tuple["CaseFileRule", ...]:
+        return self._rules()
 
     def describe_config_resolution(self) -> str:
         hook = getattr(self.plugin, "get_config_resolution_description", None)

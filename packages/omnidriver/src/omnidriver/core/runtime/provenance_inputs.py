@@ -80,7 +80,6 @@ from typing import Any, Iterable, Mapping, TYPE_CHECKING
 
 from ..plugin_capabilities import ResolvedInput, RuntimeDependency
 from omnidriver.openfoam.environment_preflight import _MPI_LAUNCHERS, _unwrap_mpi_program
-from omnidriver.openfoam.mutators import read_foam_entry
 from .provenance import ProvenanceComponent, component_for_path
 from .provenance_dependencies import component_for_runtime_dependency
 from .workflow import CASE_SCRIPT_COMMANDS
@@ -92,17 +91,44 @@ if TYPE_CHECKING:
 _DEFAULT_START_TIME = "0"
 
 
-def _select_start_time(case_root: Path) -> str:
-    """The **selected** start-time directory, per ``system/controlDict``.
+def _case_root_dirnames(driver_context: "DriverContext") -> tuple[str, ...]:
+    """Top-level case directories the active plugin's declared case files
+    live under, derived from the first path segment of each ``case_files``
+    rule -- e.g. ``{"system", "constant"}`` for the OpenFOAM plugin. Not
+    hardcoded, so a plugin for a different environment (different top-level
+    directory names entirely) is walked correctly without a core change."""
+    rules = driver_context.capabilities.case_files.all_rules()
+    segments = {Path(rule.path).parts[0] for rule in rules if rule.path}
+    return tuple(sorted(segments))
+
+
+def _control_file_path(case_root: Path, driver_context: "DriverContext") -> Path | None:
+    """The case file whose role is ``openfoam.control_dict``, if the active
+    plugin declares one. Searches every declared rule, not just
+    ``required_rules()``, since a control file can legitimately be declared
+    ``conditional``."""
+    rules = driver_context.capabilities.case_files.all_rules()
+    for rule in rules:
+        if rule.role == "openfoam.control_dict":
+            return case_root / rule.path
+    return None
+
+
+def _select_start_time(case_root: Path, driver_context: "DriverContext") -> str:
+    """The **selected** start-time directory, per the plugin's control file.
 
     ``startFrom latestTime`` selects the latest written time, not ``0``;
     ``firstTime`` selects the earliest. Anything else (including an absent
-    ``controlDict``) falls back to the literal ``startTime`` value, or
-    ``"0"`` if that too is absent -- the common case, but never assumed
-    without checking.
+    control file, or a plugin that declares no ``openfoam.control_dict``
+    role) falls back to the literal ``startTime`` value, or ``"0"`` if that
+    too is absent -- the common case, but never assumed without checking.
     """
-    control_dict = case_root / "system" / "controlDict"
-    start_from = (read_foam_entry(control_dict, "startFrom") or "startTime").strip()
+    control_dict = _control_file_path(case_root, driver_context)
+    if control_dict is None:
+        return _DEFAULT_START_TIME
+
+    read = driver_context.capabilities.config_values.read
+    start_from = (read(control_dict, "startFrom") or "startTime").strip()
 
     if start_from in ("latestTime", "firstTime"):
         candidates = _list_time_dir_names(case_root)
@@ -111,7 +137,7 @@ def _select_start_time(case_root: Path) -> str:
         selector = max if start_from == "latestTime" else min
         return selector(candidates, key=float)
 
-    start_time = read_foam_entry(control_dict, "startTime")
+    start_time = read(control_dict, "startTime")
     return start_time.strip() if start_time is not None else _DEFAULT_START_TIME
 
 
@@ -306,7 +332,7 @@ def enumerate_case_inputs(
     capabilities = driver_context.capabilities
 
     resolved_case = capabilities.case_introspection.resolve_case_models(case_root)
-    selected_start_time = _select_start_time(case_root)
+    selected_start_time = _select_start_time(case_root, driver_context)
 
     consumed_relpaths = _collect_consumed_relpaths(workflow_dag)
     required_inputs = capabilities.case_provenance.required_inputs(
@@ -319,12 +345,15 @@ def enumerate_case_inputs(
     components: dict[tuple[str, str], ProvenanceComponent] = {}
     add = _ComponentAdder(components)
 
-    # -- system/**, constant/**, the selected start-time dir, and
-    # processor*/<selected-time>/** (I9) -- classified by precedence steps
-    # 1 (consumes), 3 (generated_output_globs), 4 (fallback required). Step 2
-    # (plugin required_inputs) is applied uniformly below instead, since a
-    # resolved input's path need not fall under any of these directories.
-    walk_roots = [case_root / "system", case_root / "constant", case_root / selected_start_time]
+    # -- every top-level directory the active plugin declares a case file
+    # under (e.g. system/**, constant/** for OpenFOAM), the selected
+    # start-time dir, and processor*/<selected-time>/** (I9) -- classified by
+    # precedence steps 1 (consumes), 3 (generated_output_globs), 4 (fallback
+    # required). Step 2 (plugin required_inputs) is applied uniformly below
+    # instead, since a resolved input's path need not fall under any of
+    # these directories.
+    walk_roots = [case_root / d for d in _case_root_dirnames(driver_context)]
+    walk_roots.append(case_root / selected_start_time)
     for processor_dir in sorted(case_root.glob("processor*")):
         if processor_dir.is_dir():
             walk_roots.append(processor_dir / selected_start_time)

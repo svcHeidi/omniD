@@ -365,6 +365,14 @@ class SolverPluginOptionalHooks(Protocol):
         RunDocument config. Absent -> a plugin-neutral sentence."""
         ...
 
+    # -- ConfigValueCapability ------------------------------------------------
+    def get_config_value_reader(self):
+        """Return a ``(path, key) -> str | None`` callable that reads a single
+        entry out of this plugin's configuration file format. Absent -> a
+        foamlib-based OpenFOAM reader (not a safe default for other
+        environments -- a non-OpenFOAM plugin must implement this)."""
+        ...
+
     # -- CaseProvenanceCapability --------------------------------------------
     def get_required_inputs(
         self,

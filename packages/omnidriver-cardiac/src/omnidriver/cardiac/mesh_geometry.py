@@ -46,7 +46,7 @@ import gzip
 import re
 from pathlib import Path
 
-from omnidriver.core.specs.mesh_geometry import (
+from omnidriver.openfoam.mesh_geometry import (
     ASCII_TRIPLE_RE,
     BoundingBox,
     MeshDiagnostic,

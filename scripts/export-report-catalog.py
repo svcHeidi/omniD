@@ -47,14 +47,11 @@ import json
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO))
-
-from openfoam_driver.core.report_catalog import to_record  # noqa: E402
+from omnidriver.core.report_catalog import to_record
 
 
 def build_catalog(plugin: str | None) -> dict:
-    from openfoam_driver.core.plugin_interface import (  # noqa: E402
+    from omnidriver.core.plugin_interface import (
         default_driver_context,
         generic_openfoam_context,
         load_plugin_context,

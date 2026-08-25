@@ -20,9 +20,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-DRIVER_ROOT = Path(__file__).resolve().parents[3]
+from conftest import skip_without_monorepo
+
+DRIVER_ROOT = Path(__file__).resolve().parents[4]
 _SINGLE_CELL = (
-    DRIVER_ROOT.parents[2] / "tutorials" / "electrophysiologyProtocols" / "singleCell"
+    DRIVER_ROOT / "tutorials" / "electrophysiologyProtocols" / "singleCell"
 )
 
 
@@ -39,6 +41,7 @@ def _case_without_solver_selector(tmp_path: Path) -> Path:
     return tutorials_root
 
 
+@skip_without_monorepo
 def test_unresolvable_solver_selector_is_reported_as_a_diagnostic(tmp_path):
     from omnidriver.core.strict_planning import strict_plan
 
@@ -65,6 +68,7 @@ def test_unresolvable_solver_selector_is_reported_as_a_diagnostic(tmp_path):
     assert any("myocardiumSolver" in item["message"] for item in reported)
 
 
+@skip_without_monorepo
 def test_the_cli_still_emits_parseable_json(tmp_path):
     """The end-to-end shape an agent actually consumes."""
     tutorials_root = _case_without_solver_selector(tmp_path)

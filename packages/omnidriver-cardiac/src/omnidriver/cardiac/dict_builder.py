@@ -48,7 +48,7 @@ from omnidriver.dict_entries import (
     DictEntry,
     get_electro_property_entry_groups,
 )
-from omnidriver.core.specs.dict_builder import (
+from omnidriver.openfoam.dict_builder import (
     _PLACEHOLDER_RE,
     _openfoam_value_token,
     _populated_to_run,
@@ -56,7 +56,7 @@ from omnidriver.core.specs.dict_builder import (
     _set_nested,
     populate_values,
 )
-from omnidriver.core.specs.dict_builder import (
+from omnidriver.openfoam.dict_builder import (
     select_applicable_entries as _select_applicable_entries,
 )
 from omnidriver.core.specs.validation import (
@@ -956,7 +956,7 @@ def build_and_launch(
     driver_context = resolve_public_driver_context(driver_context)
     make_spec = driver_context.capabilities.tutorials.catalog()["make_generic_case_spec"]
     from omnidriver.core.runtime.execution_context import resolve_execution_context
-    from omnidriver.core.runtime.openfoam_environment import load_openfoam_environment
+    from omnidriver.openfoam.openfoam_environment import load_openfoam_environment
     from omnidriver.core.runtime.workflow import normalize_workflow_dag, validate_workflow_commands
     from omnidriver.core.runtime.workflow_orchestrator import run_workflow
     from omnidriver.core.runtime.workflow_state import initial_workflow_state

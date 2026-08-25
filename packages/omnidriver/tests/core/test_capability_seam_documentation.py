@@ -28,7 +28,27 @@ from omnidriver.core import (
 )
 
 DRIVER_ROOT = Path(plugin_capabilities.__file__).resolve().parents[2]
-GENERATOR = DRIVER_ROOT / "scripts" / "export-capability-seams.py"
+REPO_ROOT = DRIVER_ROOT.parents[2]
+GENERATOR = REPO_ROOT / "scripts" / "export-capability-seams.py"
+
+# :consumed-by: paths were written for the old single-package layout, where
+# every module lived under one src/ tree. Now core/openfoam/cardiac are
+# separate packages with separate src/ roots, plus a repo-root scripts/
+# directory -- resolve each relpath against whichever root actually has it.
+_PACKAGE_ROOTS = (
+    DRIVER_ROOT,
+    REPO_ROOT / "packages" / "omnidriver-openfoam" / "src",
+    REPO_ROOT / "packages" / "omnidriver-cardiac" / "src",
+    REPO_ROOT,
+)
+
+
+def _resolve_consumed_by(relpath: str) -> Path | None:
+    for root in _PACKAGE_ROOTS:
+        candidate = root / relpath
+        if candidate.is_file():
+            return candidate
+    return None
 
 REQUIRED_FIELDS = ("adapts", "consumed-by", "fallback", "status")
 VALID_STATUSES = {"mandatory", "optional", "mixed"}
@@ -118,8 +138,8 @@ def test_consumed_by_names_modules_that_touch_the_capability(field: str) -> None
     # but the list need not be exhaustive -- adding a consumer must not break
     # the build.
     for relpath in (item.strip() for item in declared.split(",")):
-        path = DRIVER_ROOT / relpath
-        assert path.is_file(), f"{name} :consumed-by: names missing file {relpath}"
+        path = _resolve_consumed_by(relpath)
+        assert path is not None, f"{name} :consumed-by: names missing file {relpath}"
         assert f"capabilities.{field}" in path.read_text(), (
             f"{name} :consumed-by: names {relpath}, which does not reference "
             f"capabilities.{field}"
@@ -168,7 +188,7 @@ def test_architecture_seam_table_is_up_to_date() -> None:
         [sys.executable, str(GENERATOR), "--check"],
         capture_output=True,
         text=True,
-        cwd=DRIVER_ROOT,
+        cwd=REPO_ROOT,
     )
     assert result.returncode == 0, result.stderr or result.stdout
 

@@ -17,8 +17,8 @@ from omnidriver.core.specs.common import (
     resolve_run_script_path,
     resolve_spec_paths,
 )
+from omnidriver.core.specs.utils import load_python_module
 from omnidriver.openfoam.utils import (
-    load_python_module,
     replace_block_mesh_resolutions,
     set_delta_t,
     set_end_time,

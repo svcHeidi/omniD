@@ -9,7 +9,7 @@ pytestmark = skip_without_monorepo
 from omnidriver.cardiac.active_tension_catalog import ACTIVE_TENSION_MODEL_CATALOG
 
 
-REPO_ROOT = Path(__file__).resolve().parents[7]
+REPO_ROOT = Path(__file__).resolve().parents[min(7, len(Path(__file__).resolve().parents) - 1)]
 
 
 def test_manufactured_active_tension_is_introspectable():

@@ -50,7 +50,7 @@ from omnidriver.scripts._names_parser import (
     parse_names_header,
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[7]
+REPO_ROOT = Path(__file__).resolve().parents[min(7, len(Path(__file__).resolve().parents) - 1)]
 IONIC_MODELS_DIR = REPO_ROOT / "src" / "ionicModels"
 
 _REGEN_HINT = (

@@ -31,20 +31,6 @@ from pathlib import Path
 from typing import Any
 
 
-def _materialize_case_legacy(*, case_dir: Path, routed: dict[str, Any]) -> None:
-    """Write a resolved+routed case's dict files and Allrun script.
-
-    Raises ValueError (propagated from build_and_launch/
-    build_electro_properties) if the routed selectors are structurally invalid
-    — the caller treats that as this case's failure, not a crash of the whole
-    sweep. Per-run workflow intent/state is persisted later by strict planning
-    and execution as ``run_document.json`` and ``workflow_state.json``.
-    """
-    from .plugins.cardiacfoam.sweep import materialize_case
-
-    materialize_case(case_dir=case_dir, routed=routed)
-
-
 def materialize_case(
     *, case_dir: Path, routed: dict[str, Any], driver_context=None,
 ) -> None:

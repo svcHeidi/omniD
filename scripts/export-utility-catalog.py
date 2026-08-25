@@ -44,12 +44,9 @@ import json
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO))
+from omnidriver.core.utility_catalog import UTILITY_CATALOG
 
-from openfoam_driver.core.utility_catalog import UTILITY_CATALOG  # noqa: E402
-
-REPO_ROOT = Path(__file__).resolve().parents[4]
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _manifest_to_record(manifest) -> dict:

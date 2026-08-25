@@ -43,15 +43,12 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO))
-
-from openfoam_driver.dict_entries import (  # noqa: E402
+from omnidriver.dict_entries import (
     PHYSICS_PROPERTY_ENTRIES,
     get_electro_property_entry_groups,
 )
-from openfoam_driver.plugins.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG  # noqa: E402
-from openfoam_driver.plugins.cardiacfoam.active_tension_catalog import (  # noqa: E402
+from omnidriver.cardiac.ionic_model_catalog import IONIC_MODEL_CATALOG
+from omnidriver.cardiac.active_tension_catalog import (
     ACTIVE_TENSION_MODEL_CATALOG,
 )
 

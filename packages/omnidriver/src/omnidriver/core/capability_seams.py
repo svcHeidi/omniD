@@ -45,7 +45,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-ARCHITECTURE = Path(__file__).resolve().parents[2] / "ARCHITECTURE.md"
+ARCHITECTURE = Path(__file__).resolve().parents[5] / "ARCHITECTURE.md"
 BEGIN_MARKER = "<!-- BEGIN GENERATED: capability-seams -->"
 END_MARKER = "<!-- END GENERATED: capability-seams -->"
 

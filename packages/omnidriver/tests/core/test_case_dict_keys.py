@@ -18,6 +18,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from omnidriver.core.specs.case_dict_keys import case_dict_key_diagnostics
+from conftest import skip_without_monorepo
 
 _SINGLE_CELL = (
     Path(__file__).resolve().parents[6]
@@ -109,6 +110,7 @@ singleCellSolverCoefs
     assert [d.field for d in diags] == ["singleCellSolverCoefs"]
 
 
+@skip_without_monorepo
 def test_strict_plan_reports_a_misspelled_key_without_failing(tmp_path):
     """A misspelled key must surface as a warning and leave the plan valid.
 
@@ -244,6 +246,7 @@ ecgDomains
 # ---------------------------------------------------------------------------
 
 
+@skip_without_monorepo
 def test_a_misspelled_key_is_silently_replaced_by_the_catalogue_default(tmp_path):
     """The catalogue's own required_when rule cannot catch a misspelling.
 

@@ -8,3 +8,9 @@ requires-python = ">=3.11"
 markers = [
     "integration: tests requiring a real cardiacFoam binary (skipped by default in CI)",
 ]
+addopts = "--import-mode=importlib"
+pythonpath = [
+    "packages/omnidriver/tests",
+    "packages/omnidriver-openfoam/tests",
+    "packages/omnidriver-cardiac/tests",
+]

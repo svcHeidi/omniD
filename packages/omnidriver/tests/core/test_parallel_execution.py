@@ -32,7 +32,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from omnidriver.core.runtime.parallel_execution import (
+from omnidriver.openfoam.parallel_execution import (
     read_number_of_subdomains,
     solve_steps,
 )

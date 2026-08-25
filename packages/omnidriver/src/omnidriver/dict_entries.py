@@ -77,7 +77,7 @@ def __getattr__(name: str):
     external callers while removing the module-scope import.
     """
     if name in ("CONTROL_DICT_ENTRIES", "PHYSICS_PROPERTY_ENTRIES"):
-        from .plugins.cardiacfoam.common_dict_entries import (
+        from omnidriver.cardiac.common_dict_entries import (
             CONTROL_DICT_ENTRIES,
             PHYSICS_PROPERTY_ENTRIES,
         )

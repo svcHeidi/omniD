@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 def test_security_doc_exists_and_is_linked_from_agent_guide() -> None:
-    driver_root = Path(__file__).resolve().parents[3]  # .../driverFoam
+    driver_root = Path(__file__).resolve().parents[4]  # omnidriver repo root
     security = driver_root / "SECURITY.md"
     guide = driver_root / "AGENT_GUIDE.md"
     assert security.is_file(), "SECURITY.md must exist"

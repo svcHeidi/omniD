@@ -60,7 +60,7 @@ from conftest import skip_without_monorepo
 # ---------------------------------------------------------------------------
 # Repository layout
 # ---------------------------------------------------------------------------
-REPO_ROOT = Path(__file__).resolve().parents[7]
+REPO_ROOT = Path(__file__).resolve().parents[min(7, len(Path(__file__).resolve().parents) - 1)]
 IONIC_MODELS_DIR = REPO_ROOT / "src" / "ionicModels"
 
 # ---------------------------------------------------------------------------

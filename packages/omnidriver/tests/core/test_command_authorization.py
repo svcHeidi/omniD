@@ -12,6 +12,7 @@ from omnidriver.core.runtime.workflow import (
     CORE_NEUTRAL_COMMANDS,
     validate_workflow_commands,
 )
+from conftest import skip_without_monorepo
 
 
 def _dag(command: str) -> dict:
@@ -118,6 +119,7 @@ def test_case_scripts_remain_core_owned() -> None:
     assert validate_workflow_commands(_dag("./Allrun"), driver_context=context) == ()
 
 
+@skip_without_monorepo
 def test_cardiac_utilities_come_from_the_plugin() -> None:
     context = default_driver_context()
     manifests = context.capabilities.command_authorization.utility_manifests()
@@ -160,6 +162,7 @@ def test_utility_manifests_are_not_a_shared_mutable_dict() -> None:
     assert "injected" not in plugin.get_utility_manifests()
 
 
+@skip_without_monorepo
 def test_plugin_utilities_root_matches_the_utility_catalog_root() -> None:
     """Derived from one constant, not recomputed -- a drift would silently
     degrade to no authorized utilities at all."""
