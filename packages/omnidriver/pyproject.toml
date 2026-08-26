@@ -14,6 +14,20 @@ dependencies = [
   "PyYAML>=6.0",
 ]
 
+# omnidriver.postprocessing renders tables and plots AFTER a run; core's
+# plan/run/sweep-run path never imports it. Optional so a headless install
+# stays light -- but the CI core job installs [post], because
+# tests/core/test_table_writer.py exercises it and a test that silently skips
+# proves nothing. This extra was lost in the migration from
+# noFrontendCardiacFoam, which is why that test could not be collected.
+[project.optional-dependencies]
+post = [
+  "matplotlib>=3.7",
+  "pandas>=2.0",
+  "plotly>=5.0",
+]
+
+
 [project.scripts]
 omnidriver = "omnidriver.cli:main"
 

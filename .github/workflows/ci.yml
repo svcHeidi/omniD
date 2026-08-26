@@ -23,7 +23,7 @@ jobs:
           cache-dependency-path: packages/omnidriver/pyproject.toml
 
       - name: Install omnidriver
-        run: pip install -e packages/omnidriver
+        run: pip install -e "packages/omnidriver[post]"
 
       - name: Run tests
         run: python -m pytest packages/omnidriver/tests -q
