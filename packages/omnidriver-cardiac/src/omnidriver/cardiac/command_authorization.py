@@ -55,16 +55,18 @@ from typing import Any
 # commands.
 CARDIAC_SOLVER_COMMANDS = frozenset({"cardiacFoam"})
 
-# bathBidomainInterfaceMetrics is listed here rather than coming through
-# utility_manifests() because it ships no utility.manifest.toml, so
-# UTILITY_CATALOG does not contain it -- yet it is a live workflow step in the
-# manufacturedFDABathBidomain tutorial. It is post-processing: it reads the
-# reconstructed final-time solution the solver already wrote.
-#
 # gradientReconstructionOrder (applications/test/gradientReconstructionOrder)
-# is the same shape of thing: no utility.manifest.toml, but a live workflow
-# step in manufactured_eikonal_ecg.py's gradient_reconstruction=True path,
-# appended after the solve step (see that module's _workflow_dag_for).
+# is listed here rather than coming through utility_manifests() because it
+# ships no utility.manifest.toml -- yet it is a live workflow step in
+# manufactured_eikonal_ecg.py's gradient_reconstruction=True path, appended
+# after the solve step (see that module's _workflow_dag_for).
+#
+# bathBidomainInterfaceMetrics used to be listed here for the same reason
+# (no manifest); it now has one (see utilities/bathBidomainInterfaceMetrics/
+# utility.manifest.toml) and is authorized through utility_manifests()
+# instead -- listing it here too would be redundant, not wrong (see
+# runtime/workflow.py: plugin_commands and utilities are both checked, not
+# mutually exclusive), so it was dropped rather than left as dead weight.
 #
 # The error_localisation_analysis=True path's other two steps need no entry
 # here: `postProcess` is already core-authorized generically
@@ -74,7 +76,6 @@ CARDIAC_SOLVER_COMMANDS = frozenset({"cardiacFoam"})
 # workflow_runner._resolve_command: a "/" in the command is used verbatim as
 # an explicit opt-in, the same as any case's own Allrun/Allclean script.
 CARDIAC_AUXILIARY_COMMANDS = frozenset({
-    "bathBidomainInterfaceMetrics",
     "gradientReconstructionOrder",
 })
 

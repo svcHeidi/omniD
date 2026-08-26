@@ -26,13 +26,14 @@ def test_core_neutral_commands_contain_no_solver_names() -> None:
 
 
 def test_cardiac_plugin_authorizes_its_unmanifested_utility() -> None:
-    """bathBidomainInterfaceMetrics has no utility.manifest.toml, so it cannot
+    """gradientReconstructionOrder has no utility.manifest.toml, so it cannot
     come through utility_manifests(); the plugin must authorize it directly or
-    the manufacturedBathBidomain workflow stops validating."""
+    manufactured_eikonal_ecg.py's gradient_reconstruction=True workflow stops
+    validating."""
     context = default_driver_context()
     errors = [
         d for d in validate_workflow_commands(
-            _dag("bathBidomainInterfaceMetrics"), driver_context=context
+            _dag("gradientReconstructionOrder"), driver_context=context
         )
         if d.level == "error"
     ]
@@ -129,9 +130,7 @@ def test_solver_and_auxiliary_commands_are_distinct() -> None:
     run's artifacts (see normalize_workflow_dag's producer heuristic)."""
     auth = default_driver_context().capabilities.command_authorization
     assert auth.solver_commands() == frozenset({"cardiacFoam"})
-    assert auth.auxiliary_commands() == frozenset(
-        {"bathBidomainInterfaceMetrics", "gradientReconstructionOrder"}
-    )
+    assert auth.auxiliary_commands() == frozenset({"gradientReconstructionOrder"})
     assert not (auth.solver_commands() & auth.auxiliary_commands())
 
 
