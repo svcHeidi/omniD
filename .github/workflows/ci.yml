@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test-core:
+    name: test-core (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: packages/omnidriver/pyproject.toml
+
+      - name: Install omnidriver
+        run: pip install -e packages/omnidriver
+
+      - name: Run tests
+        run: python -m pytest packages/omnidriver/tests -q
+
+  test-openfoam:
+    name: test-openfoam (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            packages/omnidriver/pyproject.toml
+            packages/omnidriver-openfoam/pyproject.toml
+
+      # gmsh's Linux wheel links against GUI libs even for headless use.
+      - name: Install gmsh runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libglu1-mesa libxcursor1 libxinerama1 libxft2
+
+      - name: Install omnidriver + omnidriver-openfoam
+        run: pip install -e packages/omnidriver -e packages/omnidriver-openfoam
+
+      - name: Run tests
+        run: python -m pytest packages/omnidriver-openfoam/tests -q
+
+  test-cardiac:
+    name: test-cardiac (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            packages/omnidriver/pyproject.toml
+            packages/omnidriver-openfoam/pyproject.toml
+            packages/omnidriver-cardiac/pyproject.toml
+
+      - name: Install gmsh runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libglu1-mesa libxcursor1 libxinerama1 libxft2
+
+      - name: Install omnidriver + omnidriver-openfoam + omnidriver-cardiac
+        run: |
+          pip install -e packages/omnidriver \
+                      -e packages/omnidriver-openfoam \
+                      -e packages/omnidriver-cardiac
+
+      - name: Run tests
+        run: python -m pytest packages/omnidriver-cardiac/tests -q
+
+  import-boundary-check:
+    name: import-boundary-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check core/openfoam/cardiac stay decoupled
+        run: python3 scripts/check-import-boundaries.py
