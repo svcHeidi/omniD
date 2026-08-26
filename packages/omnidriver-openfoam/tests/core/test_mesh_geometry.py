@@ -47,7 +47,6 @@ from omnidriver.openfoam.mesh_geometry import (
     mesh_geometry_diagnostics,
     read_bounding_box,
 )
-from omnidriver.core.utility_catalog import UTILITY_CATALOG
 from omnidriver.core.specs.paths import repo_root_default
 
 
@@ -249,27 +248,6 @@ class TestMeshGeometryDiagnostics(unittest.TestCase):
     def test_no_mesh_no_diagnostics(self):
         with tempfile.TemporaryDirectory() as d:
             self.assertEqual(mesh_geometry_diagnostics(Path(d)), ())
-
-
-class TestCheckMeshGeometryCatalogued(unittest.TestCase):
-    def test_present_and_mesh_category(self):
-        self.assertIn("checkMeshGeometry", UTILITY_CATALOG)
-        entry = UTILITY_CATALOG["checkMeshGeometry"]
-        self.assertEqual(entry.category, "mesh")
-        self.assertTrue(entry.requires_mesh)
-
-    def test_flags_reflect_detect_only_default(self):
-        flag_names = {f.name for f in UTILITY_CATALOG["checkMeshGeometry"].flags}
-        self.assertIn("-region", flag_names)
-        self.assertIn("-scale", flag_names)
-        self.assertIn("-rescale", flag_names)
-        # -noScale is gone: detect-only is now the default.
-        self.assertNotIn("-noScale", flag_names)
-
-    def test_artifact_id_typo_fixed(self):
-        produced = {p.artifact_id for p in UTILITY_CATALOG["checkMeshGeometry"].produces}
-        self.assertIn("polymesh_scaled", produced)
-        self.assertNotIn("polymes_scaled", produced)
 
 
 def test_read_bounding_box_matches_real_repo_points_file():

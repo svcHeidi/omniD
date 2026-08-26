@@ -41,4 +41,5 @@ include = ["omnidriver*"]
     "plugin.yaml",
     "dict_key_allowlist.json",
     "fixtures/template/constant/*",
+    "utilities/*/utility.manifest.toml",
 ]

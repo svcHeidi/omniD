@@ -89,16 +89,17 @@ def auxiliary_commands() -> frozenset[str]:
     return CARDIAC_AUXILIARY_COMMANDS
 
 
+#: This plugin's own bundled ``utility.manifest.toml`` sidecars -- package
+#: data shipped inside ``omnidriver-cardiac`` (see that package's
+#: pyproject.toml ``[tool.setuptools.package-data]``), not read from a
+#: sibling cardiacFoam monorepo checkout. core has no knowledge of this path;
+#: it only ever sees the roots this function hands it.
+_BUNDLED_UTILITIES_ROOT = Path(__file__).parent / "utilities"
+
+
 def utility_roots() -> tuple[Path, ...]:
-    """Roots holding this plugin's ``utility.manifest.toml`` sidecars.
-
-    Derived from ``utility_catalog``'s own constant rather than recomputed
-    from ``__file__``, so the two cannot drift apart (``utility_roots()``
-    returns ``()`` on a missing directory, which would degrade silently).
-    """
-    from omnidriver.core.utility_catalog import UTILITIES_ROOT
-
-    return (UTILITIES_ROOT,) if UTILITIES_ROOT.is_dir() else ()
+    """Roots holding this plugin's ``utility.manifest.toml`` sidecars."""
+    return (_BUNDLED_UTILITIES_ROOT,) if _BUNDLED_UTILITIES_ROOT.is_dir() else ()
 
 
 @lru_cache(maxsize=1)

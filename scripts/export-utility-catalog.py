@@ -26,11 +26,15 @@
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-"""Export the utility manifest catalog to JSON.
+"""Export the active plugin's utility manifest catalog to JSON.
 
 Each entry in the catalog is serialised to a flat JSON record; the ``flags``
 list is inlined as an array of objects. ``source_path`` is converted to a
-string relative to the repository root so the output is portable.
+string relative to whichever utility root the manifest was loaded from, so
+the output is portable regardless of where that root is installed.
+
+Defaults to the built-in cardiacFoam plugin, matching v1 behavior, unless
+``--plugin`` selects otherwise -- same convention as export-report-catalog.py.
 
 Usage::
 
@@ -44,16 +48,8 @@ import json
 import sys
 from pathlib import Path
 
-from omnidriver.core.utility_catalog import UTILITY_CATALOG
-from omnidriver.core.specs.paths import cardiacfoam_monorepo_root, repo_root_default
 
-# manifest.source_path is rooted under UTILITIES_ROOT (applications/utilities/
-# in the cardiacFoam monorepo, see utility_catalog.py) -- relativize against
-# whichever root that path actually lives under, not always this repo's own.
-REPO_ROOT = cardiacfoam_monorepo_root() or repo_root_default()
-
-
-def _manifest_to_record(manifest) -> dict:
+def _manifest_to_record(manifest, utility_roots: tuple[Path, ...]) -> dict:
     """Serialise a ``UtilityManifest`` to a JSON-ready dict.
 
     Every field of ``UtilityManifest`` is emitted. The catalog is an agent
@@ -102,18 +98,41 @@ def _manifest_to_record(manifest) -> dict:
         ],
         "example": manifest.example,
         "category": manifest.category,
-        "source_path": str(
-            manifest.source_path.relative_to(REPO_ROOT)
-        ),
+        "source_path": str(_relativize(manifest.source_path, utility_roots)),
     }
 
 
-def build_catalog() -> dict:
+def _relativize(path: Path, roots: tuple[Path, ...]) -> Path:
+    for root in roots:
+        try:
+            return path.relative_to(root)
+        except ValueError:
+            continue
+    return path
+
+
+def build_catalog(plugin: str | None) -> dict:
+    from omnidriver.core.plugin_interface import (
+        default_driver_context,
+        generic_openfoam_context,
+        load_plugin_context,
+    )
+
+    if plugin == "none":
+        context = generic_openfoam_context()
+    elif plugin:
+        context = load_plugin_context(plugin)
+    else:
+        context = default_driver_context()
+
+    authorization = context.capabilities.command_authorization
+    manifests = authorization.utility_manifests()
+    roots = authorization.utility_roots()
     return {
         "version": "1",
         "utilities": [
-            _manifest_to_record(m)
-            for m in sorted(UTILITY_CATALOG.values(), key=lambda m: m.name)
+            _manifest_to_record(m, roots)
+            for m in sorted(manifests.values(), key=lambda m: m.name)
         ],
     }
 
@@ -121,8 +140,17 @@ def build_catalog() -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", required=True, help="output JSON path")
+    parser.add_argument(
+        "--plugin",
+        help=(
+            "Plugin whose utility catalog to export: an installed plugin id, "
+            "a trusted local-development import target "
+            "(module.path:PluginClass), or 'none' for generic OpenFOAM. "
+            "Defaults to built-in cardiacFoam."
+        ),
+    )
     args = parser.parse_args()
-    catalog = build_catalog()
+    catalog = build_catalog(args.plugin)
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(catalog, indent=2, sort_keys=True))

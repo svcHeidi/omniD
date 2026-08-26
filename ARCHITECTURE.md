@@ -51,10 +51,10 @@ rather than left to go stale a second time.
 Tracked as standalone notes in `future/`, each with its own status:
 
 - [`future/UTILITY_CATALOG_STANDALONE_GAP.md`](future/UTILITY_CATALOG_STANDALONE_GAP.md) —
-  open. `UTILITY_CATALOG` resolves empty in this repo; the 12
-  `utility.manifest.toml` sidecars it reads live in the cardiacFoam
-  monorepo's `applications/utilities/`, not shipped here. Decision needed:
-  copy them into `omnidriver-cardiac` as package data, or accept the gap.
+  resolved. The 12 `utility.manifest.toml` sidecars are now bundled as
+  `omnidriver-cardiac` package data and read through the
+  `command_authorization` capability seam; core no longer hardcodes any
+  plugin's utilities root.
 - [`future/ELECTROPROPERTIES_TEMPLATE_FIXTURE_REVIEW.md`](future/ELECTROPROPERTIES_TEMPLATE_FIXTURE_REVIEW.md) —
   open. The bundled `electroProperties` template fixture's accuracy against
   the current dict-key catalog hasn't been verified, and two more consumers

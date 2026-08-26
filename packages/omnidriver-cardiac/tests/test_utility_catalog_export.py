@@ -34,10 +34,16 @@ come back. That makes ``positional_args``, ``flags`` (with their
 earlier version of the exporter dropped all three, which is precisely why
 the emitted JSON had no consumer.
 
-Source of truth is the distributed ``utility.manifest.toml`` sidecar next to
-each utility's C++, aggregated into ``core/utility_catalog.py``. These tests
-pin the exporter to that dataclass so a new manifest field cannot be added
-without also reaching the JSON.
+Source of truth is the ``utility.manifest.toml`` sidecar bundled as package
+data next to each utility's C++ under this package's ``utilities/`` dir (see
+``pyproject.toml``'s ``package-data``), read through
+``omnidriver.cardiac.command_authorization.utility_manifests()`` — the same
+capability path the exporter script itself now uses (previously it imported
+``omnidriver.core.utility_catalog.UTILITY_CATALOG`` directly, a catalog that
+only ever populated inside the full cardiacFoam monorepo; see
+future/UTILITY_CATALOG_STANDALONE_GAP.md for that history). These tests pin
+the exporter to the ``UtilityManifest`` dataclass so a new manifest field
+cannot be added without also reaching the JSON.
 """
 
 from __future__ import annotations
@@ -48,15 +54,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-from omnidriver.core.utility_catalog import UTILITY_CATALOG
+from omnidriver.cardiac.command_authorization import utility_manifests
 from omnidriver.core.specs.paths import repo_root_default
-from conftest import skip_without_monorepo
 
-# UTILITY_CATALOG is loaded from applications/utilities/*/utility.manifest.toml,
-# monorepo-only content this standalone Python package doesn't ship (see
-# future/UTILITY_CATALOG_STANDALONE_GAP.md) -- every assertion here is
-# vacuous or raises outright against an empty catalog.
-pytestmark = skip_without_monorepo
+UTILITY_CATALOG = utility_manifests()
 
 REPO = repo_root_default()
 SCRIPT = REPO / "scripts" / "export-utility-catalog.py"
@@ -152,7 +153,7 @@ def test_positional_args_survive_export(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_source_paths_are_repo_relative(tmp_path):
+def test_source_paths_are_relative(tmp_path):
     data = _run(tmp_path / "u.json")
     for record in data["utilities"]:
         assert not Path(record["source_path"]).is_absolute(), record["name"]
