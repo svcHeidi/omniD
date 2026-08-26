@@ -1,7 +1,6 @@
 # `electroProperties` Template Fixture — Placement and Staleness
 
-**Status: investigated and largely resolved.** One deliberate gap remains,
-left open on purpose (see §4).
+**Status: resolved.**
 
 ## 1. Placement
 
@@ -44,28 +43,19 @@ not, is exactly the kind of leak this migration has been closing elsewhere
 
 Ran the same scoped-key-extraction + catalog-addressability check
 `test_tutorial_keys_are_catalog_addressable.py` uses against the monorepo's
-live tutorials, directly against the bundled fixture instead: 38 scoped
-keys (after §4's fix; was 39), all but one addressable through
-`validate_overrides`.
+live tutorials, directly against the bundled fixture instead: originally 39
+scoped keys, 2 not addressable through `validate_overrides` — both named
+`initialODEStep`, one at the myocardium-level scope
+(`$ELECTRO_MODEL_COEFFS.initialODEStep`), one at the Purkinje-network scope
+(`$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.initialODEStep`).
 
-`$ELECTRO_MODEL_COEFFS.initialODEStep` (the myocardium-level key) was
-**removed** — confirmed dead by pre-existing comments already in the repo
-(`test_apply_overrides.py:66-68`): "zero reads in this repo or in OpenFOAM
-... deleted from the tutorial dicts". The fixture, the now-deleted core
-duplicate, and two worked examples in `override_schema.py`'s `--config`
-schema help text (lines ~90, ~153) still referenced it after that removal —
-all four fixed to match.
-
-## 4. Remaining open gap
-
-`$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.initialODEStep`
-— the **Purkinje-network-scoped** sibling of the removed key — is still
-live in the fixture and still not catalog-addressable. Left in place
-deliberately, not removed: unlike the myocardium-level key, this one has
-not been checked against the Purkinje network's own ODE integrator (a
-different C++ code path from the myocardium `ODESolver.C:70` reader the
-removed key was confirmed dead against). It may be genuinely read there, or
-equally dead — undetermined. Marked with an inline comment at the fixture
-site pointing back to this file. Resolving it means checking the Purkinje
-solver's own ODE-step reader before deciding remove-or-catalog, same as was
-done for the myocardium-level key.
+Both removed. The myocardium-level key was already confirmed dead by
+pre-existing comments in the repo (`test_apply_overrides.py:66-68`): "zero
+reads in this repo or in OpenFOAM ... deleted from the tutorial dicts". The
+Purkinje-scoped sibling was judged the same — dead, same key, same
+treatment — and removed too rather than kept as a partially-resolved
+special case. The fixture, the now-deleted core duplicate, and two worked
+examples in `override_schema.py`'s `--config` schema help text (lines ~90,
+~153) all referenced the myocardium-level key after its removal from the
+catalog — all fixed to match. Re-running the same check now finds 37 scoped
+keys, all addressable.

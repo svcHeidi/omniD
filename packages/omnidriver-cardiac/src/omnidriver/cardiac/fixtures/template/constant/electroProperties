@@ -378,7 +378,6 @@ monodomainSolverCoeffs
                 vm1DRest       -0.084;  // resting potential [V]
 
                 solver          RKF45;
-                initialODEStep  1e-6;
                 maxSteps        1000000000;
 
                 chi     1400.0;   // [1/m]

@@ -56,10 +56,9 @@ Tracked as standalone notes in `future/`, each with its own status:
   `command_authorization` capability seam; core no longer hardcodes any
   plugin's utilities root.
 - [`future/ELECTROPROPERTIES_TEMPLATE_FIXTURE_REVIEW.md`](future/ELECTROPROPERTIES_TEMPLATE_FIXTURE_REVIEW.md) —
-  largely resolved. The bundled fixture is verified accurate against the
-  dict-key catalog (one dead key removed, a duplicate unreferenced copy in
-  core deleted); one Purkinje-scoped key is deliberately left open pending a
-  C++ reader check.
+  resolved. The bundled fixture is verified accurate against the dict-key
+  catalog (every scoped key catalog-addressable, both dead `initialODEStep`
+  keys removed, a duplicate unreferenced copy in core deleted).
 - [`future/STRICT_PLANNING_FOAMLIB_COUPLING.md`](future/STRICT_PLANNING_FOAMLIB_COUPLING.md) —
   resolved; kept for the record of what the coupling was and why it wasn't a
   trivial fix.
