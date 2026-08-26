@@ -378,13 +378,6 @@ monodomainSolverCoeffs
                 vm1DRest       -0.084;  // resting potential [V]
 
                 solver          RKF45;
-                // initialODEStep is NOT catalog-addressable (see
-                // future/ELECTROPROPERTIES_TEMPLATE_FIXTURE_REVIEW.md) --
-                // unlike the myocardium-level key of the same name (removed,
-                // dead: zero readers), this purkinjeGraphModelCoeffs-scoped
-                // one has not been checked against the Purkinje network's
-                // own ODE integrator and is left in place, unresolved, on
-                // purpose.
                 initialODEStep  1e-6;
                 maxSteps        1000000000;
 
