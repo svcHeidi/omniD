@@ -118,8 +118,8 @@ also existed at all (also copied verbatim from the monorepo). A real
 rather than a PEP 420 namespace package, which means its `__path__` is fixed
 to `packages/omnidriver/src/omnidriver/` only — Python never looks in
 `packages/omnidriver-openfoam/src/omnidriver/` or
-`packages/omnidriver-cardiac/src/omnidriver/` for `omnidriver.openfoam` /
-`omnidriver.cardiac` at all. This silently broke the entire point of the
+`packages/omnidriver-cardiacfoam/src/omnidriver/` for `omnidriver.openfoam` /
+`omnidriver.cardiacfoam` at all. This silently broke the entire point of the
 three-package split from the moment Task 3 copied that file, not just the
 `strict_planning.py` coupling — every cross-package import would have failed
 `ModuleNotFoundError: No module named 'omnidriver.openfoam'` regardless of

@@ -5,8 +5,8 @@
 ## 1. Placement
 
 The bundled fallback template lives at
-`packages/omnidriver-cardiac/src/omnidriver/cardiac/fixtures/template/constant/electroProperties`,
-declared as `omnidriver-cardiac` package data. `test_template_contract.py::_template_path()`
+`packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/fixtures/template/constant/electroProperties`,
+declared as `omnidriver-cardiacfoam` package data. `test_template_contract.py::_template_path()`
 resolves it in two tiers: Tier 1, a live `tutorials/template/constant/electroProperties`
 found by walking up from the test file (only exists inside the full
 cardiacFoam monorepo checkout); Tier 2, this bundled fixture.

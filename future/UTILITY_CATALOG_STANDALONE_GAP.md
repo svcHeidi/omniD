@@ -3,9 +3,9 @@
 **Status: resolved.** The 12 `utility.manifest.toml` sidecars
 (`1DgraphToFoam`, `recomputePseudoECG`, `runPurkinjeGraph`, etc.) are now
 bundled as package data at
-`packages/omnidriver-cardiac/src/omnidriver/cardiac/utilities/<name>/utility.manifest.toml`,
+`packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/utilities/<name>/utility.manifest.toml`,
 declared in that package's `pyproject.toml`
-(`[tool.setuptools.package-data]`). They ship with an `omnidriver-cardiac`
+(`[tool.setuptools.package-data]`). They ship with an `omnidriver-cardiacfoam`
 install regardless of whether a full cardiacFoam monorepo checkout is
 present.
 
@@ -18,7 +18,7 @@ present.
   — generic parsing machinery with zero knowledge of any plugin's bundled
   path, matching the `dictionaries`/`tutorials`/`named_catalogs` capability
   seams' existing core/plugin split.
-- `omnidriver-cardiac/command_authorization.py::utility_roots()` resolves its
+- `omnidriver-cardiacfoam/command_authorization.py::utility_roots()` resolves its
   own bundled `Path(__file__).parent / "utilities"` instead of importing a
   core constant. The `command_authorization` capability seam
   (`get_utility_manifests`/`get_utility_roots`, already listed in
@@ -34,7 +34,7 @@ present.
   `--plugin none` for generic OpenFOAM). `source_path` in the exported JSON
   is relativized against the plugin's own utility root, not a repo root.
 - `packages/omnidriver/tests/core/test_utility_catalog_export.py` moved to
-  `packages/omnidriver-cardiac/tests/` (it tests cardiac-owned data through
+  `packages/omnidriver-cardiacfoam/tests/` (it tests cardiac-owned data through
   cardiac's own `utility_manifests()`) and dropped its
   `skip_without_monorepo` guard — the assertions that used to be vacuous
   (`assert expected > 0, "... test is vacuous"`) now run for real. Two tests
@@ -47,7 +47,7 @@ present.
 - A `checkMeshGeometry`-manifest content test that had drifted into
   `omnidriver-openfoam/tests/core/test_mesh_geometry.py` (testing
   cardiac-domain package data from the openfoam package's suite) moved to
-  `packages/omnidriver-cardiac/tests/test_check_mesh_geometry_manifest.py`.
+  `packages/omnidriver-cardiacfoam/tests/test_check_mesh_geometry_manifest.py`.
 
 ## Left as-is, noted in passing
 
