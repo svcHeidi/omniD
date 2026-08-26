@@ -1,83 +1,71 @@
-# `electroProperties` Template Fixture — Placement and Staleness Unverified
+# `electroProperties` Template Fixture — Placement and Staleness
 
-**Status: open, not investigated beyond locating the consumers.** Parked here
-during the monorepo→packages migration (see
-`docs/superpowers/plans/2026-08-25-monorepo-package-migration.md`, Task 2)
-rather than chased down, so this doesn't get silently decided in passing.
+**Status: investigated and largely resolved.** One deliberate gap remains,
+left open on purpose (see §4).
 
-## 1. What moved and why
+## 1. Placement
 
-The monorepo ships a bundled fallback template at
-`applications/scripts/driverFoam/openfoam_driver/core/specs/fixtures/template/constant/electroProperties`,
-used when the live `tutorials/template/constant/electroProperties` tree isn't
-available (standalone / CI installs without the full monorepo checkout).
+The bundled fallback template lives at
+`packages/omnidriver-cardiac/src/omnidriver/cardiac/fixtures/template/constant/electroProperties`,
+declared as `omnidriver-cardiac` package data. `test_template_contract.py::_template_path()`
+resolves it in two tiers: Tier 1, a live `tutorials/template/constant/electroProperties`
+found by walking up from the test file (only exists inside the full
+cardiacFoam monorepo checkout); Tier 2, this bundled fixture.
 
-It was declared as **core** package data in the old root `pyproject.toml`:
+This standalone repo has no `tutorials/` sibling, so Tier 1 never fires here
+— Tier 2 is not dead weight, it is the *only* path this repo's test suite
+ever exercises. Confirmed: `test_template_uses_code_backed_selector_keys`
+runs unconditionally (no skip guard) and passes against the bundled fixture
+on every run.
 
-```toml
-"openfoam_driver.core.specs" = ["fixtures/template/constant/*"]
-```
+A byte-identical, **unreferenced** duplicate of this fixture also existed at
+`packages/omnidriver/src/omnidriver/core/specs/fixtures/template/constant/electroProperties`
+— left behind by the Task 3 bulk-copy commit, never declared in
+`packages/omnidriver/pyproject.toml`'s package-data, never imported by any
+code. Cardiac-domain content sitting in core's source tree, unreferenced or
+not, is exactly the kind of leak this migration has been closing elsewhere
+(see `future/UTILITY_CATALOG_STANDALONE_GAP.md`). Deleted.
 
-but its content — an `electroProperties` dict — is cardiac-domain data, not
-solver-agnostic. During the package split I moved it to
-`packages/omnidriver-cardiac/src/omnidriver/cardiac/fixtures/template/constant/electroProperties`
-and updated `packages/omnidriver-cardiac/pyproject.toml`'s package-data to
-match. I only fixed the one caller I was actively touching,
-`packages/omnidriver-cardiac/tests/test_template_contract.py`'s
-`_template_path()`, which previously found it via a hardcoded
-`Path(__file__).parents[3]` — a depth that assumed the old
-`tests/plugins/cardiacfoam/` nesting and silently breaks once that directory
-was flattened to `tests/` directly. Rewrote it to resolve via the installed
-`omnidriver.cardiac` package's own `__file__` instead of a directory-depth
-count.
+## 2. The other consumers
 
-## 2. What's unverified
+- `heart_solver_comparison.py` — a false alarm. Its `"electroProperties"`
+  references are unrelated: a *different* electroProperties file, copied at
+  runtime from `case_root/setup/solverVariants/<variant>/` into a live
+  tutorial case. No `Path(__file__).parents[N]` fragility, no connection to
+  the bundled fixture.
+- `test_tutorial_keys_are_catalog_addressable.py` (now in
+  `packages/omnidriver/tests/core/`) — also doesn't touch the bundled
+  fixture. It walks the *monorepo's live* `tutorials/` tree via
+  `git ls-files`, and correctly self-skips here via `skip_without_monorepo`.
+  Not the cross-package test dependency the original note worried it might
+  be — it needs the monorepo checkout, not any package data.
 
-**I have not confirmed this fixture is still accurate or still needed.**
-Specifically:
+## 3. Staleness check
 
-- Whether the `electroProperties` keys/values in the fixture still match the
-  current dict-key catalog (`omnidriver.cardiac.dict_entries_catalog` /
-  `common_dict_entries.py`) — it may predate recent catalog changes and be
-  silently stale, since nothing appears to regenerate it automatically.
-- Whether Tier 1 (the live `tutorials/template/` monorepo path) is what
-  actually gets exercised in every real test run, making Tier 2 (this bundled
-  fixture) effectively dead weight that only fires in a standalone/CI context
-  nobody currently runs.
+Ran the same scoped-key-extraction + catalog-addressability check
+`test_tutorial_keys_are_catalog_addressable.py` uses against the monorepo's
+live tutorials, directly against the bundled fixture instead: 38 scoped
+keys (after §4's fix; was 39), all but one addressable through
+`validate_overrides`.
 
-## 3. Other consumers found but not yet checked
+`$ELECTRO_MODEL_COEFFS.initialODEStep` (the myocardium-level key) was
+**removed** — confirmed dead by pre-existing comments already in the repo
+(`test_apply_overrides.py:66-68`): "zero reads in this repo or in OpenFOAM
+... deleted from the tutorial dicts". The fixture, the now-deleted core
+duplicate, and two worked examples in `override_schema.py`'s `--config`
+schema help text (lines ~90, ~153) still referenced it after that removal —
+all four fixed to match.
 
-A grep for `fixtures/template` / `template...electroProperties` while
-writing this note turned up two more references I have **not** yet
-inspected, beyond the one test I fixed:
+## 4. Remaining open gap
 
-- `packages/omnidriver-cardiac/src/omnidriver/cardiac/tutorials/heart_solver_comparison.py`
-  (copied wholesale in Task 2 — may contain its own hardcoded path assuming
-  the old directory depth, same class of bug as the test had; not checked).
-- `tests/core/test_tutorial_keys_are_catalog_addressable.py` in the monorepo
-  — this one lives under `tests/core/`, meaning it's a **core-subject** test
-  (deferred to Task 3's bulk core-test copy, not yet copied at all as of
-  this note) that also depends on cardiac-domain fixture data. If it needs
-  this fixture at runtime, that's a real cross-package test dependency
-  (`omnidriver` tests needing `omnidriver-cardiac` package data) worth
-  deciding deliberately rather than discovering as a failure during Task 6/7
-  verification.
-
-## 4. Suggested next steps
-
-- Before trusting Task 7's full-suite pytest run, check whether
-  `test_template_contract.py` and `test_tutorial_keys_are_catalog_addressable.py`
-  actually pass with the moved fixture, or whether they were silently
-  skipped (both use `skip_without_monorepo`-style guards elsewhere in the
-  file, worth confirming this particular fixture path isn't also
-  conditionally skipped in a way that's been masking staleness).
-- Diff the fixture's `electroProperties` keys against
-  `omnidriver.cardiac.dict_entries_catalog`'s current catalog to confirm it
-  isn't stale.
-- Check `heart_solver_comparison.py` for the same `parents[N]`-depth fragility
-  pattern the test had.
-- Decide, deliberately, whether this fixture is core-owned bootstrap data
-  (available to any plugin) or genuinely cardiac-only — the fact it's
-  referenced from a `tests/core/` test suggests someone originally treated it
-  as core-shared, which conflicts with the "cardiac-domain data" judgment
-  call made in Task 2. Worth resolving before Task 6/7, not after.
+`$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.initialODEStep`
+— the **Purkinje-network-scoped** sibling of the removed key — is still
+live in the fixture and still not catalog-addressable. Left in place
+deliberately, not removed: unlike the myocardium-level key, this one has
+not been checked against the Purkinje network's own ODE integrator (a
+different C++ code path from the myocardium `ODESolver.C:70` reader the
+removed key was confirmed dead against). It may be genuinely read there, or
+equally dead — undetermined. Marked with an inline comment at the fixture
+site pointing back to this file. Resolving it means checking the Purkinje
+solver's own ODE-step reader before deciding remove-or-catalog, same as was
+done for the myocardium-level key.

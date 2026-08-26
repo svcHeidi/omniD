@@ -87,7 +87,6 @@ def config_schema(
             break
     # Always show an electro_property_overrides example with real driver_path keys
     example_section["electro_property_overrides"] = {
-        "$ELECTRO_MODEL_COEFFS.initialODEStep": "1e-5",
         "$ELECTRO_MODEL_COEFFS.maxSteps": "1000",
     }
 
@@ -151,7 +150,7 @@ def config_schema(
                     "example": {
                         "$ELECTRO_MODEL_COEFFS.chi": "140000",
                         "$ELECTRO_MODEL_COEFFS.cm": "0.01",
-                        "$ELECTRO_MODEL_COEFFS.initialODEStep": "1e-5",
+                        "$ELECTRO_MODEL_COEFFS.maxSteps": "1000",
                         "$ELECTRO_MODEL_COEFFS.ionicModel": "TNNP",
                     },
                 },
