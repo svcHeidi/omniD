@@ -55,7 +55,7 @@ from omnidriver.core.specs.paths import cardiacfoam_monorepo_root, repo_root_def
 REPO_ROOT = repo_root_default()
 CATALOG_PATH = (
     REPO_ROOT
-    / "packages" / "omnidriver-cardiac" / "src" / "omnidriver" / "cardiac"
+    / "packages" / "omnidriver-cardiacfoam" / "src" / "omnidriver" / "cardiac"
     / "ionic_model_catalog.py"
 )
 # The *_Names.H headers this script syncs against live in the C++ solver

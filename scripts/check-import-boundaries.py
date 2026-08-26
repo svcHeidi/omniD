@@ -2,12 +2,12 @@
 """Enforce ARCHITECTURE.md's package-independence rules as a CI gate.
 
 Rules (see ARCHITECTURE.md "Architectural Rules"):
-  1. omnidriver.core must not import omnidriver.openfoam or omnidriver.cardiac,
+  1. omnidriver.core must not import omnidriver.openfoam or omnidriver.cardiacfoam,
      and must never import foamlib directly.
-  2. omnidriver.openfoam must not import omnidriver.cardiac.
+  2. omnidriver.openfoam must not import omnidriver.cardiacfoam.
 
 The one documented exception is core/compatibility.py, whose whole purpose is
-lazily importing omnidriver.openfoam/omnidriver.cardiac inside legacy_*
+lazily importing omnidriver.openfoam/omnidriver.cardiacfoam inside legacy_*
 fallback functions (see docs/superpowers/plans/2026-08-25-monorepo-package-migration.md
 Task 5 Step 3) -- those imports are never reached unless a plugin declines to
 implement the corresponding capability hook. compatibility.py may still not
@@ -82,11 +82,11 @@ def main() -> int:
         if path == COMPATIBILITY_FILE:
             forbidden = ("foamlib",)
         else:
-            forbidden = ("foamlib", "omnidriver.openfoam", "omnidriver.cardiac")
+            forbidden = ("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam")
         violations.extend(_check_file(path, forbidden))
 
     for path in OPENFOAM_SRC.rglob("*.py"):
-        violations.extend(_check_file(path, ("omnidriver.cardiac",)))
+        violations.extend(_check_file(path, ("omnidriver.cardiacfoam",)))
 
     if violations:
         print("Import boundary violations found:\n")
@@ -94,10 +94,10 @@ def main() -> int:
             print(f"  {v}")
         print(
             "\nomnidriver.core must not import foamlib, omnidriver.openfoam, or "
-            "omnidriver.cardiac at runtime (except inside core/compatibility.py's "
-            "legacy_* fallbacks, which may import omnidriver.openfoam/omnidriver.cardiac "
+            "omnidriver.cardiacfoam at runtime (except inside core/compatibility.py's "
+            "legacy_* fallbacks, which may import omnidriver.openfoam/omnidriver.cardiacfoam "
             "but never foamlib directly). omnidriver.openfoam must not import "
-            "omnidriver.cardiac. See ARCHITECTURE.md's Architectural Rules."
+            "omnidriver.cardiacfoam. See ARCHITECTURE.md's Architectural Rules."
         )
         return 1
 

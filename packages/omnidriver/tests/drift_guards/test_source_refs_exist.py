@@ -75,7 +75,7 @@ from omnidriver.dict_entries import (
     get_electro_property_entry_groups,
     PHYSICS_PROPERTY_ENTRIES,
 )
-from omnidriver.cardiac.common_dict_entries import (
+from omnidriver.cardiacfoam.common_dict_entries import (
     CONTROL_DICT_ENTRIES,
 )
 from conftest import monorepo_root

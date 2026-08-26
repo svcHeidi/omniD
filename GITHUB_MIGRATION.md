@@ -1,6 +1,6 @@
 # GitHub Migration Guide
 
-This document explains how to migrate active Python development from the monolithic `noFrontendCardiacFoam` repository into this new `omniDriver` Monorepo.
+This document explains how to migrate active Python development from the monolithic `noFrontendCardiacFoam` repository into this new `omniD` Monorepo (originally created as `omniDriver`, renamed since).
 
 ## The Goal
 Currently, the Python orchestrator is actively developed inside `noFrontendCardiacFoam/applications/scripts/driverFoam`. Because the C++ OpenFOAM environment is heavy, we are moving *only the Python framework* into this standalone repository. 
@@ -23,9 +23,9 @@ Copy all OpenFOAM-specific parsing logic (e.g., `mesh_provisioning.py`, `foamlib
 
 *Rule:* This package depends on the core, but knows nothing about Cardiology.
 
-### 3. Migrate the Domain (`omnidriver-cardiac`)
+### 3. Migrate the Domain (`omnidriver-cardiacfoam`)
 Copy the `plugins/cardiacfoam` directory (containing electrophysiology logic and ionic models) into:
-`packages/omnidriver-cardiac/src/omnidriver/cardiac/`
+`packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/`
 
 *Rule:* This package depends on both the core and the OpenFOAM environment to execute its physics rules.
 

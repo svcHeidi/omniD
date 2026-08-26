@@ -40,7 +40,7 @@ GENERATOR = REPO_ROOT / "scripts" / "export-capability-seams.py"
 _PACKAGE_ROOTS = (
     DRIVER_ROOT,
     REPO_ROOT / "packages" / "omnidriver-openfoam" / "src",
-    REPO_ROOT / "packages" / "omnidriver-cardiac" / "src",
+    REPO_ROOT / "packages" / "omnidriver-cardiacfoam" / "src",
     REPO_ROOT,
 )
 
@@ -170,7 +170,7 @@ def test_every_ungated_cardiac_fallback_is_accounted_for() -> None:
         if not isinstance(node, ast.FunctionDef):
             continue
         segment = ast.get_source_segment(source, node) or ""
-        if "omnidriver.cardiac" not in segment:
+        if "omnidriver.cardiacfoam" not in segment:
             continue
         if "org.cardiacfoam" in segment:
             continue

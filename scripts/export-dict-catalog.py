@@ -47,8 +47,8 @@ from omnidriver.dict_entries import (
     PHYSICS_PROPERTY_ENTRIES,
     get_electro_property_entry_groups,
 )
-from omnidriver.cardiac.ionic_model_catalog import IONIC_MODEL_CATALOG
-from omnidriver.cardiac.active_tension_catalog import (
+from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG
+from omnidriver.cardiacfoam.active_tension_catalog import (
     ACTIVE_TENSION_MODEL_CATALOG,
 )
 

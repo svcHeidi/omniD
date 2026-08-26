@@ -138,7 +138,7 @@ class TutorialCatalogCapability(Protocol):
     than omitting the member.
 
     :adapts: get_tutorial_catalog, get_tutorial_displays
-    :consumed-by: omnidriver/core/runtime/registry.py, omnidriver/cardiac/dict_builder.py
+    :consumed-by: omnidriver/core/runtime/registry.py, omnidriver/cardiacfoam/dict_builder.py
     :fallback: none
     :status: mandatory
     """
@@ -161,7 +161,7 @@ class DictionaryCatalogCapability(Protocol):
     *meaning* (the plugin's).
 
     :adapts: get_dict_entries, get_dict_groups, get_dictionary_catalog
-    :consumed-by: omnidriver/dict_entries.py, omnidriver/cardiac/sweep.py, omnidriver/openfoam/apply_overrides.py, omnidriver/openfoam/dict_builder.py, omnidriver/core/specs/validation.py, omnidriver/core/strict_planning.py
+    :consumed-by: omnidriver/dict_entries.py, omnidriver/cardiacfoam/sweep.py, omnidriver/openfoam/apply_overrides.py, omnidriver/openfoam/dict_builder.py, omnidriver/core/specs/validation.py, omnidriver/core/strict_planning.py
     :fallback: none
     :status: mandatory
     """

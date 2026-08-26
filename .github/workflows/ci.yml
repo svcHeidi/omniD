@@ -76,7 +76,7 @@ jobs:
           cache-dependency-path: |
             packages/omnidriver/pyproject.toml
             packages/omnidriver-openfoam/pyproject.toml
-            packages/omnidriver-cardiac/pyproject.toml
+            packages/omnidriver-cardiacfoam/pyproject.toml
 
       - name: Install gmsh runtime libraries
         run: |
@@ -84,14 +84,14 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libglu1-mesa libxcursor1 libxinerama1 libxft2
 
-      - name: Install omnidriver + omnidriver-openfoam + omnidriver-cardiac
+      - name: Install omnidriver + omnidriver-openfoam + omnidriver-cardiacfoam
         run: |
           pip install -e packages/omnidriver \
                       -e packages/omnidriver-openfoam \
-                      -e packages/omnidriver-cardiac
+                      -e packages/omnidriver-cardiacfoam
 
       - name: Run tests
-        run: python -m pytest packages/omnidriver-cardiac/tests -q
+        run: python -m pytest packages/omnidriver-cardiacfoam/tests -q
 
   import-boundary-check:
     name: import-boundary-check

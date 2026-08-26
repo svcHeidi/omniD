@@ -19,20 +19,20 @@ omnidriver/ (GitHub Root)
 │   ├── omnidriver-openfoam/         (import omnidriver.openfoam)
 │   │   └── src/omnidriver/openfoam/ <-- Translates core requests into OpenFOAM
 │   │
-│   └── omnidriver-cardiac/          (import omnidriver.cardiac)
-│       └── src/omnidriver/cardiac/  <-- Cardiac physics and logic
+│   └── omnidriver-cardiacfoam/          (import omnidriver.cardiacfoam)
+│       └── src/omnidriver/cardiacfoam/  <-- Cardiac physics and logic
 ```
 
 ### Architectural Rules
 1. **Core Independence:** `omnidriver.core` MUST NOT import anything from `openfoam` or `cardiac`. It must contain **zero** physics rules and **zero** OpenFOAM vocabulary.
 2. **Environment Boundary:** `omnidriver.openfoam` depends on `omnidriver.core`, but knows nothing about specific physics.
-3. **Domain Implementation:** `omnidriver.cardiac` depends on both.
+3. **Domain Implementation:** `omnidriver.cardiacfoam` depends on both.
 
 ## Migration Status
 
 The monorepo→packages migration described by `GITHUB_MIGRATION.md` is
 **complete**. `packages/omnidriver`, `packages/omnidriver-openfoam`, and
-`packages/omnidriver-cardiac` are populated, install cleanly, and the
+`packages/omnidriver-cardiacfoam` are populated, install cleanly, and the
 combined suite passes: 1432 passed, 293 skipped, 1 pre-existing failure
 (confirmed unrelated to this repo — reproduces identically against the
 untouched source monorepo). `omnidriver.core` has zero runtime imports of
@@ -52,7 +52,7 @@ Tracked as standalone notes in `future/`, each with its own status:
 
 - [`future/UTILITY_CATALOG_STANDALONE_GAP.md`](future/UTILITY_CATALOG_STANDALONE_GAP.md) —
   resolved. The 12 `utility.manifest.toml` sidecars are now bundled as
-  `omnidriver-cardiac` package data and read through the
+  `omnidriver-cardiacfoam` package data and read through the
   `command_authorization` capability seam; core no longer hardcodes any
   plugin's utilities root.
 - [`future/ELECTROPROPERTIES_TEMPLATE_FIXTURE_REVIEW.md`](future/ELECTROPROPERTIES_TEMPLATE_FIXTURE_REVIEW.md) —
@@ -85,8 +85,8 @@ plugin. The two sweep fallbacks cannot be neutral and refuse by hook name.
 
 | capability | protocol | adapts | consumed by | fallback | status |
 |---|---|---|---|---|---|
-| `tutorials` | `TutorialCatalogCapability` | `get_tutorial_catalog`, `get_tutorial_displays` | `omnidriver/core/runtime/registry.py`, `omnidriver/cardiac/dict_builder.py` | none | mandatory |
-| `dictionaries` | `DictionaryCatalogCapability` | `get_dict_entries`, `get_dict_groups`, `get_dictionary_catalog` | `omnidriver/dict_entries.py`, `omnidriver/cardiac/sweep.py`, `omnidriver/openfoam/apply_overrides.py`, `omnidriver/openfoam/dict_builder.py`, `omnidriver/core/specs/validation.py`, `omnidriver/core/strict_planning.py` | none | mandatory |
+| `tutorials` | `TutorialCatalogCapability` | `get_tutorial_catalog`, `get_tutorial_displays` | `omnidriver/core/runtime/registry.py`, `omnidriver/cardiacfoam/dict_builder.py` | none | mandatory |
+| `dictionaries` | `DictionaryCatalogCapability` | `get_dict_entries`, `get_dict_groups`, `get_dictionary_catalog` | `omnidriver/dict_entries.py`, `omnidriver/cardiacfoam/sweep.py`, `omnidriver/openfoam/apply_overrides.py`, `omnidriver/openfoam/dict_builder.py`, `omnidriver/core/specs/validation.py`, `omnidriver/core/strict_planning.py` | none | mandatory |
 | `manifest` | `CapabilityManifestCapability` | `get_capabilities` | `omnidriver/dict_entries.py`, `omnidriver/core/introspection.py`, `omnidriver/core/strict_planning.py` | none | mandatory |
 | `configuration_validator` | `ConfigurationValidatorCapability` | `validate_configuration` | `omnidriver/core/strict_planning.py` | none | mandatory |
 | `run_semantic_validator` | `RunSemanticValidatorCapability` | `validate_run_semantics` | `omnidriver/core/specs/validation.py` | none | mandatory |

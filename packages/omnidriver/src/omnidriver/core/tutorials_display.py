@@ -28,7 +28,7 @@
 """Display metadata for exported tutorial catalogs.
 
 The hardcoded backend tutorials live in
-``omnidriver.cardiac.tutorials.registry.REGISTERED_TUTORIALS``
+``omnidriver.cardiacfoam.tutorials.registry.REGISTERED_TUTORIALS``
 (factory identifiers used to build a ``TutorialSpec``). Those identifiers are
 fine for the CLI but unhelpful for an end-user reading a catalog. They need a
 title, a one-line summary, a thumbnail, some tags, and a preset that walks the

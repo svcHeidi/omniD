@@ -9,9 +9,9 @@ import pytest
 
 from omnidriver.core.generic_plugin import GenericOpenFOAMPlugin
 from omnidriver.core.plugin_profile import PluginProfile, load_plugin_profile
-from omnidriver.cardiac import runtime_profile
-from omnidriver.cardiac.runtime_profile import configure_runtime_environment
-from omnidriver.cardiac.cardiacfoam_plugin import CardiacFoamPlugin
+from omnidriver.cardiacfoam import runtime_profile
+from omnidriver.cardiacfoam.runtime_profile import configure_runtime_environment
+from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from conftest import skip_without_monorepo
 
 

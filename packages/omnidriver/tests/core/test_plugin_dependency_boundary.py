@@ -22,10 +22,10 @@ def test_core_imports_cardiac_implementation_only_at_compatibility_boundary() ->
                 module = node.module or ""
             elif isinstance(node, ast.Import):
                 for alias in node.names:
-                    if "omnidriver.cardiac" in alias.name:
+                    if "omnidriver.cardiacfoam" in alias.name:
                         offenders.append(f"{path.relative_to(_CORE_ROOT)}:{node.lineno}")
                 continue
-            if "omnidriver.cardiac" in module:
+            if "omnidriver.cardiacfoam" in module:
                 offenders.append(f"{path.relative_to(_CORE_ROOT)}:{node.lineno}")
 
     assert offenders == []

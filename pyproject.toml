@@ -1,7 +1,7 @@
 [project]
 name = "omnidriver-workspace"
 version = "0.1.0"
-description = "Monorepo workspace root. Install individual packages: pip install -e packages/omnidriver -e packages/omnidriver-openfoam -e packages/omnidriver-cardiac"
+description = "Monorepo workspace root. Install individual packages: pip install -e packages/omnidriver -e packages/omnidriver-openfoam -e packages/omnidriver-cardiacfoam"
 requires-python = ">=3.11"
 
 [tool.pytest.ini_options]
@@ -12,5 +12,5 @@ addopts = "--import-mode=importlib"
 pythonpath = [
     "packages/omnidriver/tests",
     "packages/omnidriver-openfoam/tests",
-    "packages/omnidriver-cardiac/tests",
+    "packages/omnidriver-cardiacfoam/tests",
 ]

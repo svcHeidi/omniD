@@ -40,7 +40,7 @@ import tempfile
 from pathlib import Path
 
 from omnidriver.core.plugin_interface import default_driver_context
-from omnidriver.cardiac.run_document_config import _read_physics_type
+from omnidriver.cardiacfoam.run_document_config import _read_physics_type
 from omnidriver.core.strict_planning import strict_plan
 
 
@@ -55,7 +55,7 @@ def test_strict_plan_reports_a_structured_diagnostic_for_schema_violation(monkey
     surface a StrictDiagnostic an agent can read and act on -- not a raw
     jsonschema traceback and not a silent pass."""
     from omnidriver.core.plugin_capabilities import RunDocumentConfigurationRequest
-    from omnidriver.cardiac import cardiacfoam_plugin
+    from omnidriver.cardiacfoam import cardiacfoam_plugin
 
     context = default_driver_context()
 

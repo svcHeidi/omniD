@@ -143,7 +143,7 @@ def test_generic_plugin_authorizes_neither_kind_of_command() -> None:
 def test_utility_manifests_are_not_a_shared_mutable_dict() -> None:
     """The cache hands the same object to every caller, so no consumer may be
     able to corrupt the authorization input of all the others."""
-    from omnidriver.cardiac.command_authorization import (
+    from omnidriver.cardiacfoam.command_authorization import (
         utility_manifests,
     )
 
@@ -161,7 +161,7 @@ def test_plugin_utility_root_is_its_own_bundled_data() -> None:
     """The plugin owns its utilities root as package data, not a path core
     hands it -- core has no knowledge of where any plugin's utility
     manifests live (see future/UTILITY_CATALOG_STANDALONE_GAP.md)."""
-    from omnidriver.cardiac.command_authorization import utility_roots
+    from omnidriver.cardiacfoam.command_authorization import utility_roots
 
     (root,) = utility_roots()
     assert root.is_dir()

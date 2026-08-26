@@ -115,7 +115,7 @@ class TestCardiacPluginBehaviourIsUnchanged(unittest.TestCase):
     """Gating must be invisible to cardiacFoam, which implements every hook."""
 
     def _cardiac_capabilities(self):
-        from omnidriver.cardiac.cardiacfoam_plugin import CardiacFoamPlugin
+        from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
         context = driver_context(CardiacFoamPlugin(), source="test:cardiacfoam")
         return context.capabilities

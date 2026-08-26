@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Simao Nieto de Castro, UCD" }]
 dependencies = [
-  "omnidriver",
+  "omnidriver~=0.1.0",
   "foamlib>=1.7.5,<2",
   "gmsh>=4.15.2",
 ]

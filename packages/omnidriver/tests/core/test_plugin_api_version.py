@@ -94,7 +94,7 @@ def test_both_builtin_plugins_satisfy_the_full_protocol() -> None:
     plugin previously declared v2 while implementing 8 of 12, riding the
     adapter's degrade-to-empty fallback."""
     from omnidriver.core.plugin_interface import SolverPlugin
-    from omnidriver.cardiac.cardiacfoam_plugin import CardiacFoamPlugin
+    from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
     for plugin in (CardiacFoamPlugin(), GenericOpenFOAMPlugin()):
         assert isinstance(plugin, SolverPlugin), type(plugin).__name__

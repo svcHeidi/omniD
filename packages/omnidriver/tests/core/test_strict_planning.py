@@ -45,7 +45,7 @@ from omnidriver.scripts._dict_keys_scanner import (
     compute_dict_key_drift,
     strict_dict_key_report,
 )
-from omnidriver.cardiac.cardiacfoam_plugin import CardiacFoamPlugin
+from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from types import SimpleNamespace
 
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
@@ -490,7 +490,7 @@ def test_electromechanics_is_advertised_as_not_working_while_it_is_not():
     """
     from omnidriver.core.plugin_interface import default_driver_context
     from omnidriver.core import strict_planning as sp
-    from omnidriver.cardiac.tutorials.display import TUTORIALS
+    from omnidriver.cardiacfoam.tutorials.display import TUTORIALS
 
     entry = "manufacturedMonodomainTotalLagrangianEM"
 
@@ -526,7 +526,7 @@ def test_absent_stimulus_block_is_not_invented_from_defaults():
     block yielded stim_amplitude 60 and nstim1 3, turning a quiescent run
     into a paced one.
     """
-    from omnidriver.cardiac.dict_builder import (
+    from omnidriver.cardiacfoam.dict_builder import (
         build_electro_properties,
         parse_electro_properties,
     )
