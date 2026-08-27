@@ -7,7 +7,7 @@ for a new solver to driverFOAM:
   2. Fill in the identity properties (``plugin_name``, ``plugin_id``, etc.).
   3. Author a ``plugin.yaml`` (see ``generic-plugin.yaml`` for the template).
   4. Register an entry-point in your ``pyproject.toml`` under the
-     ``[project.entry-points."driverfoam.plugins"]`` group.
+     ``[project.entry-points."omnidriver.plugins"]`` group.
   5. Follow the full step-by-step guide in:
      ``.agents/skills/driverfoam-plugin-builder/SKILL.md``
 

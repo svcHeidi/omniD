@@ -12,7 +12,7 @@ Quick navigational map for every reader type. All paths are relative to
 | `openfoam_driver/core/plugin_interface.py` | **Start here.** Defines `SolverPlugin` (the single 27-member contract), `SolverPluginOptionalHooks`, `DriverContext`, and `validate_plugin()`. |
 | `openfoam_driver/core/plugin_capabilities.py` | 17 capability Protocol classes + adapter dataclasses + `adapt_plugin_capabilities()`. Every plugin capability seam is documented here. |
 | `openfoam_driver/core/compatibility.py` | Backward-compatibility shims for optional-hook capabilities: cardiac-shaped fallbacks for the built-in cardiac plugin, neutral fallbacks for every other plugin. |
-| `openfoam_driver/core/plugin_discovery.py` | Entry-point discovery via `importlib.metadata`. Explains `driverfoam.plugins` group name, ambiguity handling, and `_entry_points()` test seam. |
+| `packages/omnidriver/src/omnidriver/core/plugin_discovery.py` | Entry-point discovery via `importlib.metadata`. Explains `omnidriver.plugins` group name, ambiguity handling, and `_entry_points()` test seam. |
 | `openfoam_driver/core/strict_planning.py` | The strict planner: `strict_plan()` / `driverFoam plan --strict`. Non-mutating; produces machine-readable JSON with readiness score, diagnostics, and launch command. |
 | `openfoam_driver/cli.py` | `driverFoam` / `driverFoam` CLI entry-point. All public subcommands are here. |
 | `ARCHITECTURE.md` | Deep architectural review: layer map, claim discipline, coupling analysis, runtime flow diagrams. ~1400 lines. Read §3 and §4.5 first. |
@@ -33,7 +33,7 @@ Quick navigational map for every reader type. All paths are relative to
 | `openfoam_driver/plugins/cardiacfoam_plugin.py` | Full plugin reference (428 lines). | Shows all method signatures, `@lru_cache`, `@staticmethod get_profile()`, catalog patterns. |
 | `openfoam_driver/core/contracts/dictionary.py` | `DictEntry` dataclass — the vocabulary unit. | Every dictionary key your solver reads must be a `DictEntry`. |
 | `openfoam_driver/core/contracts/dictionary_catalog.py` | `DictionaryCatalog` — immutable partitioned store. | Return from `get_dictionary_catalog()`; validates uniqueness at construction. |
-| `pyproject.toml` | Entry-point registration. | You must add your plugin under `[project.entry-points."driverfoam.plugins"]`. |
+| `pyproject.toml` | Entry-point registration. | You must add your plugin under `[project.entry-points."omnidriver.plugins"]`. |
 | `openfoam_driver/core/plugin_interface.py` | Full contract definition. | Read `SolverPlugin` and `SolverPluginOptionalHooks`. |
 
 ### Plugin Contract Quick Reference
@@ -110,7 +110,7 @@ Quick navigational map for every reader type. All paths are relative to
 
 ```bash
 # Verify the entry-point is registered under the exact group name:
-python -c "from importlib.metadata import entry_points; print(list(entry_points(group='driverfoam.plugins')))"
+python -c "from importlib.metadata import entry_points; print(list(entry_points(group='omnidriver.plugins')))"
 ```
 
 **Profile id mismatch (`TypeError: SolverPlugin profile id does not match plugin_id`)**

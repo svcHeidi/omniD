@@ -619,7 +619,7 @@ def load_plugin_context(target: str) -> DriverContext:
 
     A colon always means the trusted local-development import form, which the
     CLI labels unsafe. Without a colon the argument names an installed plugin
-    from the ``driverfoam.plugins`` entry-point group. Neither form is
+    from the ``omnidriver.plugins`` entry-point group. Neither form is
     sandboxed: loading a plugin executes its Python code.
     """
 

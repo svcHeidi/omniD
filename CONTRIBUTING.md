@@ -49,4 +49,4 @@ Write clear, descriptive commit messages and open a Pull Request against the mai
 
 ## Plugin Development
 
-driverFOAM is designed to be extensible. External solvers or pipelines should ideally be developed as separate Python packages exposing a `driverfoam.plugins` entry point. Please check the documentation on how to scaffold and link your own plugins without modifying the core `driverFOAM` repository.
+driverFOAM is designed to be extensible. External solvers or pipelines should ideally be developed as separate Python packages exposing a `omnidriver.plugins` entry point. Please check the documentation on how to scaffold and link your own plugins without modifying the core `driverFOAM` repository.

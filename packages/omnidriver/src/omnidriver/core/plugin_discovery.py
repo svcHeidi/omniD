@@ -19,7 +19,7 @@
 #     plugin_discovery
 #
 # Description
-#     Discovery of installed solver plugins through the 'driverfoam.plugins'
+#     Discovery of installed solver plugins through the 'omnidriver.plugins'
 #     entry-point group. This is discovery, not sandboxing: loading a plugin
 #     executes its Python code, exactly as the trusted module:Class form does.
 #
@@ -30,9 +30,9 @@
 """Discovery of installed driverFOAM solver plugins via Python entry-points.
 
 Plugins register themselves in the installing package's ``pyproject.toml``
-under the ``[project.entry-points."driverfoam.plugins"]`` group::
+under the ``[project.entry-points."omnidriver.plugins"]`` group::
 
-    [project.entry-points."driverfoam.plugins"]
+    [project.entry-points."omnidriver.plugins"]
     mysolver = "my_package.my_solver_plugin:MySolverPlugin"
 
 The entry-point **name** (``mysolver`` above) is what users pass to
@@ -45,10 +45,10 @@ Discovery is not sandboxed: loading a plugin executes its Python code in the
 same process, exactly as the trusted ``module:Class`` form does.
 
 Troubleshooting — plugin not found:
-  Verify the entry-point group name is exactly ``driverfoam.plugins``::
+  Verify the entry-point group name is exactly ``omnidriver.plugins``::
 
       python -c "from importlib.metadata import entry_points; \\
-                 print(list(entry_points(group='driverfoam.plugins')))"
+                 print(list(entry_points(group='omnidriver.plugins')))"
 """
 
 from __future__ import annotations
@@ -56,7 +56,7 @@ from __future__ import annotations
 from importlib.metadata import entry_points
 from typing import Any
 
-ENTRY_POINT_GROUP = "driverfoam.plugins"
+ENTRY_POINT_GROUP = "omnidriver.plugins"
 
 
 def _entry_points() -> tuple[Any, ...]:

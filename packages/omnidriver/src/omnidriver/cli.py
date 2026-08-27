@@ -589,7 +589,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--plugin",
         help=(
             "Plugin to drive: an installed plugin id from the "
-            "'driverfoam.plugins' entry-point group, a trusted "
+            "'omnidriver.plugins' entry-point group, a trusted "
             "local-development import target (module.path:PluginClass), or "
             "'none' for generic OpenFOAM. Defaults to built-in cardiacFoam. "
             "A colon always selects the import form. Either form executes "

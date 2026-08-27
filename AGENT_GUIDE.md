@@ -815,7 +815,7 @@ If your agent depends on any of these, expect failure and consider a workaround 
 
 ## Plugin selection (Phase 1)
 
-`--plugin` accepts an installed plugin id from the `driverfoam.plugins`
+`--plugin` accepts an installed plugin id from the `omnidriver.plugins`
 entry-point group, a trusted `module.path:PluginClass` local-development
 import (a colon always selects this form), or `none` for generic OpenFOAM.
 The `capability_manifest` accept-surface is plugin-dependent:
@@ -908,7 +908,7 @@ Two Protocol classes define the contract:
 |---|---|
 | `my_solver_plugin.py` | Python class implementing the contract |
 | `plugin.yaml` | Manifest: identity, case file rules, optional C++ roots |
-| `pyproject.toml` entry-point | `[project.entry-points."driverfoam.plugins"]` |
+| `pyproject.toml` entry-point | `[project.entry-points."omnidriver.plugins"]` |
 
 ### Required Members (all plugins)
 
@@ -965,7 +965,7 @@ Two have no neutral fallback — sweeps fail if they are absent:
 ### Entry-point registration
 
 ```toml
-[project.entry-points."driverfoam.plugins"]
+[project.entry-points."omnidriver.plugins"]
 mysolver = "my_package.my_solver_plugin:MySolverPlugin"
 
 [tool.setuptools.package-data]
@@ -977,7 +977,7 @@ mysolver = "my_package.my_solver_plugin:MySolverPlugin"
 ```bash
 # Verify entry-point is discoverable
 python -c "from importlib.metadata import entry_points; \
-           print(list(entry_points(group='driverfoam.plugins')))"
+           print(list(entry_points(group='omnidriver.plugins')))"
 
 # Load and validate
 python -c "

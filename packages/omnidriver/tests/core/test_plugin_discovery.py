@@ -57,7 +57,7 @@ def test_an_unknown_discovered_id_raises_keyerror() -> None:
         load_plugin_context("definitelyNotInstalled")
 
 
-def test_discovery_reads_the_driverfoam_plugins_group(monkeypatch) -> None:
+def test_discovery_reads_the_omnidriver_plugins_group(monkeypatch) -> None:
     monkeypatch.setattr(
         plugin_discovery, "_entry_points", lambda: (_FakeEntryPoint(),)
     )
