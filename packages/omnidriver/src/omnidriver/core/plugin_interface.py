@@ -445,6 +445,28 @@ class SolverPluginOptionalHooks(Protocol):
         fine here: generated diagnostics have fixed names. Absent -> ``()``."""
         ...
 
+    # -- EnvironmentPreflightCapability --------------------------------------
+    def get_loaded_environment(
+        self, *, explicit_bashrc: Any | None, driver_context: Any,
+    ) -> dict[str, str]:
+        """Build the execution environment from scratch, e.g. by sourcing a
+        shell profile. Distinct from ``get_configured_environment``, which
+        overlays a plugin contract onto an environment that already exists.
+
+        Absent -> ``legacy_load_environment`` sources an OpenFOAM bashrc, which
+        is what the CLI has always done for every plugin."""
+        ...
+
+    # -- OverrideScopeCapability ---------------------------------------------
+    def apply_overrides(self, overrides: Any, *, case_root: "Path") -> None:
+        """Validate and apply a ``--apply`` override document to a case.
+
+        One call, not two: core has only ever validated and applied together,
+        and separating them would let a caller apply without validating. Raise
+        a ``ValueError`` subclass to reject. Absent ->
+        ``legacy_apply_overrides`` uses the OpenFOAM dictionary mutators."""
+        ...
+
     # -- ReportCatalogCapability ---------------------------------------------
     def get_report_catalog(self) -> tuple["ReportDefinition", ...]:
         """Post-run reports this plugin offers. Core owns the machinery; the

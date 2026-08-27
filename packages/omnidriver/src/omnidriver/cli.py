@@ -34,7 +34,6 @@ from pathlib import Path
 
 from .core.runtime.failure_context import build_failure_context
 from .core.runtime.launch_readiness import is_execution_successful, is_launchable
-from omnidriver.openfoam.openfoam_environment import load_openfoam_environment
 from .core.runtime.remediation import build_candidate_remediations
 from .core.runtime.remediation_audit import append_remediation_record
 from .core.runtime.workflow_runner import run_workflow_step, _step_state_by_id
@@ -50,7 +49,6 @@ from omnidriver.core.specs.paths import (
     driverfoam_scratch_root,
     repo_root_default,
 )
-from omnidriver.openfoam.apply_overrides import validate_overrides, apply_overrides, OverrideError
 from omnidriver.core.strict_planning import (
     StrictDiagnostic,
     _utility_produces_by_command,
@@ -72,6 +70,9 @@ class _ExecutionContext:
     environment_diagnostics: tuple[StrictDiagnostic, ...] = ()
     execution_env: dict[str, str] | None = None
     source_path: str | None = None
+    # Carried so _dispatch_context can reach plugin capabilities without
+    # importing a sibling package. Both construction sites already hold one.
+    driver_context: object | None = None
 
 
 def _step_payload(
@@ -164,6 +165,7 @@ def _execute_step(
     tail_lines: int,
     execution_env: dict[str, str] | None = None,
     apply_overrides_path: str | None = None,
+    driver_context: object | None = None,
 ) -> int:
     """Run one workflow step, print the JSON payload, return the exit code.
 
@@ -188,9 +190,17 @@ def _execute_step(
     if apply_overrides_path is not None:
         try:
             overrides = json.loads(Path(apply_overrides_path).read_text())
-            validate_overrides(overrides)
-            apply_overrides(overrides, case_root=case_root)
-        except (OSError, ValueError, OverrideError) as exc:
+            if driver_context is None:
+                raise ValueError(
+                    "--apply needs a driver context to resolve the plugin's "
+                    "override scopes; none was threaded to this step"
+                )
+            # OverrideError subclasses ValueError, so ValueError covers it and
+            # core needs no import of the exception type.
+            driver_context.capabilities.override_scopes.apply(
+                overrides, case_root=case_root,
+            )
+        except (OSError, ValueError) as exc:
             print(json.dumps({
                 "status": "failed",
                 "entry": entry_label,
@@ -406,10 +416,10 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
             "diagnostics": list(diagnostics),
         }, indent=2))
         return None
-    execution_env = load_openfoam_environment(
+    execution_env = driver_context.capabilities.environment_preflight.load(
         explicit_bashrc=args.openfoam_bashrc,
         driver_context=driver_context,
-    ).env
+    )
     setup_root_raw = (run_doc.launch or {}).get("setupRoot")
     return _ExecutionContext(
         entry_label=run_doc.name,
@@ -425,6 +435,7 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
             driver_context=driver_context,
         ),
         execution_env=execution_env,
+        driver_context=driver_context,
         source_path=args.run_document,
     )
 
@@ -492,10 +503,10 @@ def _context_from_entry(
         if not readiness.structural_ok:
             print(json.dumps(report.to_json(), indent=2))
             return None, 1
-    execution_env = load_openfoam_environment(
+    execution_env = driver_context.capabilities.environment_preflight.load(
         explicit_bashrc=openfoam_bashrc,
         driver_context=driver_context,
-    ).env
+    )
     return (
         _ExecutionContext(
             entry_label=selected_entry,
@@ -507,6 +518,7 @@ def _context_from_entry(
             setup_root=Path(report.launch["setup_root"]),
             environment_diagnostics=report.environment_diagnostics,
             execution_env=execution_env,
+            driver_context=driver_context,
         ),
         0,
     )
@@ -540,6 +552,7 @@ def _dispatch_context(args, context: _ExecutionContext) -> int:
             tail_lines=args.tail_lines,
             execution_env=context.execution_env,
             apply_overrides_path=args.apply,
+            driver_context=context.driver_context,
         )
     return _execute_run(
         entry_label=context.entry_label,

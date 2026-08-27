@@ -42,14 +42,13 @@ COMPATIBILITY_FILE = CORE_SRC / "core" / "compatibility.py"
 #
 # Both entries are tracked in GITHUB_MIGRATION.md's round-2 scope.
 KNOWN_VIOLATIONS: frozenset[str] = frozenset({
-    # cli.py cannot be imported without omnidriver-openfoam. Needs a capability
-    # or entry-point seam, the way a2eb34b removed core's foamlib imports.
-    "cli.py:37:omnidriver.openfoam.openfoam_environment",
-    "cli.py:53:omnidriver.openfoam.apply_overrides",
     # PEP 562 lazy re-export kept for external importers of the deprecated
     # CONTROL_DICT_ENTRIES / PHYSICS_PROPERTY_ENTRIES names.
     "dict_entries.py:80:omnidriver.cardiacfoam.common_dict_entries",
 })
+# Removed once fixed: cli.py's two module-scope omnidriver.openfoam imports,
+# which made `import omnidriver.cli` fail in a core-only install. They now go
+# through EnvironmentPreflightCapability.load and OverrideScopeCapability.apply.
 
 
 def _module_name(node: ast.Import | ast.ImportFrom) -> list[str]:

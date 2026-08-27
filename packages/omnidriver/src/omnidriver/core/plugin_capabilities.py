@@ -518,9 +518,9 @@ class EnvironmentPreflightCapability(Protocol):
     already-sourced OpenFOAM environment plus any plugin-specific overlay)
     without re-sourcing anything, returning the resolved variable mapping.
 
-    :adapts: get_environment_diagnostics, get_configured_environment
-    :consumed-by: omnidriver/core/strict_planning.py, omnidriver/core/runtime/sweep_runner.py
-    :fallback: legacy_environment_diagnostics, legacy_configured_environment
+    :adapts: get_environment_diagnostics, get_configured_environment, get_loaded_environment
+    :consumed-by: omnidriver/core/strict_planning.py, omnidriver/core/runtime/sweep_runner.py, omnidriver/cli.py
+    :fallback: legacy_environment_diagnostics, legacy_configured_environment, legacy_load_environment
     :status: optional
     """
 
@@ -686,13 +686,15 @@ class OverrideScopeCapability(Protocol):
     else, matching the pattern already used by
     :class:`ReportCatalogCapability`/:class:`NamedCatalogsCapability`.
 
-    :adapts: get_override_scopes
-    :consumed-by: omnidriver/openfoam/apply_overrides.py
-    :fallback: legacy_override_scopes
+    :adapts: get_override_scopes, apply_overrides
+    :consumed-by: omnidriver/openfoam/apply_overrides.py, omnidriver/cli.py
+    :fallback: legacy_override_scopes, legacy_apply_overrides
     :status: optional
     """
 
     def scopes(self) -> tuple["OverrideScope", ...]: ...
+
+    def apply(self, overrides: Any, *, case_root: Any) -> None: ...
 
 
 class DictRegenerationCapability(Protocol):
@@ -1076,6 +1078,18 @@ class _EnvironmentPreflightAdapter:
 
         return dict(legacy_configured_environment(env, driver_context))
 
+    def load(
+        self, *, explicit_bashrc: Any | None, driver_context: Any | None,
+    ) -> dict[str, str]:
+        hook = getattr(self.plugin, "get_loaded_environment", None)
+        if callable(hook):
+            return dict(hook(explicit_bashrc=explicit_bashrc, driver_context=driver_context))
+        from .compatibility import legacy_load_environment
+
+        return dict(legacy_load_environment(
+            explicit_bashrc=explicit_bashrc, driver_context=driver_context,
+        ))
+
 
 @dataclass(frozen=True)
 class _OverrideSchemaAdapter:
@@ -1185,6 +1199,15 @@ class _OverrideScopeAdapter:
         from .compatibility import legacy_override_scopes
 
         return legacy_override_scopes(self.plugin)
+
+    def apply(self, overrides: Any, *, case_root: Any) -> None:
+        hook = getattr(self.plugin, "apply_overrides", None)
+        if callable(hook):
+            hook(overrides, case_root=case_root)
+            return
+        from .compatibility import legacy_apply_overrides
+
+        legacy_apply_overrides(overrides, case_root=case_root)
 
 
 @dataclass(frozen=True)

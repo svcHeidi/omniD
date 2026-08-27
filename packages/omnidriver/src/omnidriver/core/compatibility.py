@@ -296,6 +296,44 @@ def legacy_configured_environment(env, driver_context) -> dict:
 
 
 @_instrumented
+def legacy_load_environment(*, explicit_bashrc, driver_context) -> dict:
+    """Plugins predating get_loaded_environment(). cli.py has always sourced an
+    OpenFOAM bashrc before executing a workflow, unconditionally and for every
+    plugin -- same historical-behavior-preserved reasoning as the other
+    environment fallbacks above.
+
+    This exists so cli.py does not import omnidriver.openfoam at module scope.
+    It did, on two lines, which made ``import omnidriver.cli`` raise
+    ModuleNotFoundError in a core-only install and took the entire CLI surface
+    with it."""
+
+    from omnidriver.openfoam.openfoam_environment import load_openfoam_environment
+
+    return dict(
+        load_openfoam_environment(
+            explicit_bashrc=explicit_bashrc, driver_context=driver_context,
+        ).env
+    )
+
+
+@_instrumented
+def legacy_apply_overrides(overrides, *, case_root) -> None:
+    """Plugins predating apply_overrides(). The ``step --strict --apply`` path
+    has always validated and applied overrides through the OpenFOAM dictionary
+    mutators, for every plugin.
+
+    Validation and application are one call because core has only ever used
+    them together, and splitting them would let a caller apply without
+    validating. Raises OverrideError, a ValueError subclass, so core catches
+    ValueError and needs no import of the exception type."""
+
+    from omnidriver.openfoam.apply_overrides import apply_overrides, validate_overrides
+
+    validate_overrides(overrides)
+    apply_overrides(overrides, case_root=case_root)
+
+
+@_instrumented
 def legacy_function_object_field_diagnostics(case_root, *, samplable) -> tuple:
     """Plugins predating get_function_object_field_diagnostics().
     strict_planning.py has always warned about controlDict function objects

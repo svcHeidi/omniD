@@ -115,14 +115,14 @@ plugin. The two sweep fallbacks cannot be neutral and refuse by hook name.
 | `case_introspection` | `CaseIntrospectionCapability` | `get_samplable_fields`, `resolve_case_models` | `omnidriver/core/capability_manifest.py`, `omnidriver/core/runtime/provenance_inputs.py` | `legacy_resolve_case_models`, `legacy_samplable_fields` | optional |
 | `case_files` | `CaseFileContractCapability` | `get_profile`, `get_config_resolution_description` | `omnidriver/core/runtime/strict_audit.py`, `omnidriver/core/tutorial_contracts.py`, `omnidriver/core/runtime/provenance_inputs.py` | `legacy_describe_config_resolution` | mixed |
 | `config_values` | `ConfigValueCapability` | `get_config_value_reader` | `omnidriver/core/runtime/provenance_inputs.py` | `legacy_config_value_reader` | optional |
-| `environment_preflight` | `EnvironmentPreflightCapability` | `get_environment_diagnostics`, `get_configured_environment` | `omnidriver/core/strict_planning.py`, `omnidriver/core/runtime/sweep_runner.py` | `legacy_environment_diagnostics`, `legacy_configured_environment` | optional |
+| `environment_preflight` | `EnvironmentPreflightCapability` | `get_environment_diagnostics`, `get_configured_environment`, `get_loaded_environment` | `omnidriver/core/strict_planning.py`, `omnidriver/core/runtime/sweep_runner.py`, `omnidriver/cli.py` | `legacy_environment_diagnostics`, `legacy_configured_environment`, `legacy_load_environment` | optional |
 | `dict_diagnostics` | `DictDiagnosticsCapability` | `get_function_object_field_diagnostics`, `get_case_dict_key_diagnostics` | `omnidriver/core/strict_planning.py` | `legacy_function_object_field_diagnostics`, `legacy_case_dict_key_diagnostics` | optional |
 | `override_schema` | `OverrideSchemaCapability` | `get_dict_entry_catalog`, `get_override_schema` | `omnidriver/core/introspection.py` | `legacy_dict_entry_catalog`, `legacy_override_schema` | optional |
 | `runtime_evidence` | `RuntimeEvidenceCapability` | `get_artifact_value_reader`, `get_extra_provenance_paths`, `get_solve_step_commands`, `get_telemetry_source_globs` | `omnidriver/core/runtime/provenance_inputs.py` | none | optional |
 | `case_provenance` | `CaseProvenanceCapability` | `get_generated_output_globs`, `get_required_inputs` | `omnidriver/core/runtime/provenance_inputs.py` | none | optional |
 | `report_catalog` | `ReportCatalogCapability` | `get_report_catalog` | `scripts/export-report-catalog.py` | `legacy_report_catalog` | optional |
 | `named_catalogs` | `NamedCatalogsCapability` | `get_named_catalogs` | `omnidriver/core/introspection.py` | `legacy_named_catalogs` | optional |
-| `override_scopes` | `OverrideScopeCapability` | `get_override_scopes` | `omnidriver/openfoam/apply_overrides.py` | `legacy_override_scopes` | optional |
+| `override_scopes` | `OverrideScopeCapability` | `get_override_scopes`, `apply_overrides` | `omnidriver/openfoam/apply_overrides.py`, `omnidriver/cli.py` | `legacy_override_scopes`, `legacy_apply_overrides` | optional |
 | `dict_regeneration` | `DictRegenerationCapability` | `get_regeneration_scopes` | `omnidriver/openfoam/apply_overrides.py` | `legacy_dict_regeneration_scopes` | optional |
 
 24 capability seams.
