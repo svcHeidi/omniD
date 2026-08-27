@@ -25,9 +25,31 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-CORE_SRC = REPO_ROOT / "packages/omnidriver/src/omnidriver/core"
+# The WHOLE core package, not just its core/ subdirectory. Scanning only
+# core/ left packages/omnidriver/src/omnidriver/*.py unchecked -- which is
+# exactly where the worst violation lives: cli.py hard-imports
+# omnidriver.openfoam at module scope, so `import omnidriver.cli` raises
+# ModuleNotFoundError in the core-only install this project's test-core CI job
+# claims to verify. This gate reported "boundaries OK" throughout.
+CORE_SRC = REPO_ROOT / "packages/omnidriver/src/omnidriver"
 OPENFOAM_SRC = REPO_ROOT / "packages/omnidriver-openfoam/src/omnidriver/openfoam"
-COMPATIBILITY_FILE = CORE_SRC / "compatibility.py"
+COMPATIBILITY_FILE = CORE_SRC / "core" / "compatibility.py"
+
+# Pre-existing violations, waived so widening the scope does not turn CI red on
+# work that predates it. This list may only SHRINK. A new violation fails the
+# gate; a waiver that no longer matches anything also fails it, so the list
+# cannot rot into a lie the way the old narrow scope did.
+#
+# Both entries are tracked in GITHUB_MIGRATION.md's round-2 scope.
+KNOWN_VIOLATIONS: frozenset[str] = frozenset({
+    # cli.py cannot be imported without omnidriver-openfoam. Needs a capability
+    # or entry-point seam, the way a2eb34b removed core's foamlib imports.
+    "cli.py:37:omnidriver.openfoam.openfoam_environment",
+    "cli.py:53:omnidriver.openfoam.apply_overrides",
+    # PEP 562 lazy re-export kept for external importers of the deprecated
+    # CONTROL_DICT_ENTRIES / PHYSICS_PROPERTY_ENTRIES names.
+    "dict_entries.py:80:omnidriver.cardiacfoam.common_dict_entries",
+})
 
 
 def _module_name(node: ast.Import | ast.ImportFrom) -> list[str]:
@@ -65,28 +87,57 @@ def _runtime_import_nodes(tree: ast.Module) -> list[ast.Import | ast.ImportFrom]
     return found
 
 
-def _check_file(path: Path, forbidden_prefixes: tuple[str, ...]) -> list[str]:
+def _check_file(
+    path: Path, forbidden_prefixes: tuple[str, ...], root: Path,
+) -> list[tuple[str, str]]:
+    """Return (waiver_key, human_message) for each forbidden runtime import."""
     tree = ast.parse(path.read_text(), filename=str(path))
     violations = []
     for node in _runtime_import_nodes(tree):
         for name in _module_name(node):
             if any(name == p or name.startswith(p + ".") for p in forbidden_prefixes):
-                violations.append(f"{path}:{node.lineno}: runtime import of {name!r}")
+                key = f"{path.relative_to(root)}:{node.lineno}:{name}"
+                violations.append(
+                    (key, f"{path}:{node.lineno}: runtime import of {name!r}")
+                )
     return violations
 
 
 def main() -> int:
-    violations: list[str] = []
+    found: list[tuple[str, str]] = []
 
     for path in CORE_SRC.rglob("*.py"):
         if path == COMPATIBILITY_FILE:
             forbidden = ("foamlib",)
         else:
             forbidden = ("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam")
-        violations.extend(_check_file(path, forbidden))
+        found.extend(_check_file(path, forbidden, CORE_SRC))
 
     for path in OPENFOAM_SRC.rglob("*.py"):
-        violations.extend(_check_file(path, ("omnidriver.cardiacfoam",)))
+        found.extend(_check_file(path, ("omnidriver.cardiacfoam",), OPENFOAM_SRC))
+
+    waived = {key for key, _ in found if key in KNOWN_VIOLATIONS}
+    violations = [msg for key, msg in found if key not in KNOWN_VIOLATIONS]
+
+    # A waiver matching nothing means the violation was fixed (good) or moved
+    # (bad) -- either way the list is out of date and must be corrected, or it
+    # decays into the same false reassurance the narrow scope gave for months.
+    stale = sorted(KNOWN_VIOLATIONS - waived)
+    if stale:
+        print("Stale entries in KNOWN_VIOLATIONS -- these no longer match anything:\n")
+        for key in stale:
+            print(f"  {key}")
+        print(
+            "\nIf you fixed them, delete them from KNOWN_VIOLATIONS in this script. "
+            "The list may only shrink."
+        )
+        return 1
+
+    if waived:
+        print(f"{len(waived)} known violation(s) waived (see KNOWN_VIOLATIONS):")
+        for key in sorted(waived):
+            print(f"  {key}")
+        print()
 
     if violations:
         print("Import boundary violations found:\n")
@@ -101,7 +152,13 @@ def main() -> int:
         )
         return 1
 
-    print("Import boundaries OK: core/openfoam/cardiac stay decoupled.")
+    if waived:
+        print(
+            "Import boundaries OK apart from the waived entries above: no NEW "
+            "coupling between core, openfoam and cardiac."
+        )
+    else:
+        print("Import boundaries OK: core/openfoam/cardiac stay decoupled.")
     return 0
 
 
