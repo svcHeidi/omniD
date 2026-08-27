@@ -1,7 +1,7 @@
 # Migration status: cardiacFoam's driverFOAM → omniD
 
-**Round 1 (the bulk copy) is DONE. Round 2 runs soon — see §3 for what it
-must bring across.**
+**Round 1 (the bulk copy) is DONE. One blocker stands in front of round 2:
+core does not yet stand alone — §2. Round 2 scope is §3.**
 
 The Python orchestrator was developed inside
 `noFrontendCardiacFoam/applications/scripts/driverFoam`. Because the C++
@@ -18,46 +18,62 @@ own solvers with it.
 | `omnidriver-cardiacfoam` | electrophysiology, ionic models, the cardiac plugin | depends on both |
 
 Round 1 delivered all three, plus cross-package entry-point discovery
-(`dfa07d2`), a core free of `foamlib`/OpenFOAM imports (`a2eb34b`,
-`39e56d1`, `59fd6a2`), marker-based path resolution replacing
+(`dfa07d2`), a `core/` subdirectory free of `foamlib`/OpenFOAM imports
+(`a2eb34b`, `39e56d1`, `59fd6a2` — note this holds for `core/`, NOT for the
+package: see §2), marker-based path resolution replacing
 `Path(__file__).parents[N]` (`6a105d8`), utility manifests as package data
 (`5114623`), and GitHub Actions CI (`6cff329`).
 
-## 2. BLOCKER: CI is red, and one line per file fixes it
+## 2. BLOCKER: core does not stand alone — 20 collection errors
 
-`packages/omnidriver/src/omnidriver/core/plugin_interface.py` annotates types
-imported only under `if TYPE_CHECKING:` — `DictEntry`, `TutorialSpec`,
-`TutorialDisplay`, `DataArtifact`, `Path` — without
-`from __future__ import annotations`. Those names are then resolved when the
-class body executes, so **importing the module raises**:
+*(The previous blocker in this slot — `NameError: name 'DictEntry' is not
+defined` on Python < 3.14 — was fixed in `7a4be70` and `078afd4`. The
+`test-openfoam` and `test-cardiacfoam` jobs are now genuinely green: 107 and
+292 passed on a real 3.13 interpreter. `test-core` is not.)*
+
+Run exactly as CI runs it — **core installed alone**, `pip install -e
+"packages/omnidriver[post]"` then `pytest packages/omnidriver/tests` — the core
+job produces **20 collection errors**: 11 × `No module named
+'omnidriver.openfoam'`, 9 × `No module named 'omnidriver.cardiacfoam'`.
+
+Verify against a core-only virtualenv. This repo's own `.venv` has all three
+packages installed and hides the problem entirely.
+
+### The severe part is not the tests
 
 ```
-NameError: name 'DictEntry' is not defined
+$ python -c "import omnidriver.cli"
+ModuleNotFoundError: No module named 'omnidriver.openfoam'   (cli.py:37)
 ```
 
-on every Python before 3.14. The CI matrix is **3.11 and 3.12** — exactly the
-affected versions — so all six jobs die at collection. Reproduced by running
-`ci.yml`'s own command: **38 collection errors.**
+`cli.py` imports `omnidriver.openfoam` unconditionally at module scope on lines
+37 and 53, so **the whole CLI surface — `plan`, `run`, `step`, `sweep-plan`,
+`sweep-run` — is unreachable in a core-only install.** Anyone who installs
+core as advertised cannot run the tool.
 
-Three files need the import:
+`scripts/check-import-boundaries.py` reported "boundaries OK" throughout,
+because it scanned only `src/omnidriver/core/` while `cli.py` sits one level
+up. Scope widened in `2f6ce63`; the three pre-existing violations are waived
+and printed on every run, and the waiver list can only shrink.
 
-```
-openfoam_driver/core/plugin_interface.py                            (legacy tree)
-packages/omnidriver/src/omnidriver/core/plugin_interface.py         (the real one)
-packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/validation.py
-```
+### The 20 failing modules, audited
 
-The third is safe today only because its annotations happen to be quoted — one
-edit from the same failure.
+| category | count | fix |
+|---|---|---|
+| **misplaced** — tests a sibling's behaviour from core's tree | 10 | move to that package's `tests/` |
+| **core test, leaking** — tests core but reaches for a sibling | 7 | remove the sibling dependency; 5 of these fail *only* transitively through `cli.py` and need no edit at all once it is fixed |
+| **genuine cross-package integration** | 3 | give them a job that installs all three |
 
-**Why nobody saw it:** this repo's `.venv` is Python 3.14, where PEP 649 defers
-annotation evaluation and hides the bug entirely. A fully green local suite
-coexists with a CI that cannot collect a single test. The fix and a mechanical
-guard test (a module with a `TYPE_CHECKING` block must defer its annotations)
-are already proven in the cardiacFoam tree at commit `6921e4f2`, verified on a
-real 3.13 interpreter.
+Two files (`test_dict_value_quoting.py`, `test_dict_entries.py`) mix a clean
+core test with an embedded cardiac one in the same file — those need a split,
+not a `git mv`.
 
-**Nothing else here can be validated until this lands.**
+### Do not "fix" this by installing all three packages in the core job
+
+It would go green immediately and **delete the only automated check that core
+stands alone** — the check whose absence let `cli.py` rot unnoticed. The
+correct moves are a fourth job for the genuine integration tests, and actually
+fixing `cli.py`.
 
 ## 3. Round 2 — what still has to come across
 

@@ -31,14 +31,29 @@ omnidriver/ (GitHub Root)
 ## Migration Status
 
 The monorepo→packages migration described by `GITHUB_MIGRATION.md` is
-**complete**. `packages/omnidriver`, `packages/omnidriver-openfoam`, and
-`packages/omnidriver-cardiacfoam` are populated, install cleanly, and the
-combined suite passes: 1432 passed, 293 skipped, 1 pre-existing failure
-(confirmed unrelated to this repo — reproduces identically against the
-untouched source monorepo). `omnidriver.core` has zero runtime imports of
-`omnidriver.openfoam` and zero runtime imports of `foamlib`. The
-`omnidriver` console script and the `omnidriver.plugins` entry-point group
-both work (`cardiacfoam` discoverable via `importlib.metadata`).
+**structurally complete but Rule 1 does not yet hold.** `packages/omnidriver`,
+`packages/omnidriver-openfoam`, and `packages/omnidriver-cardiacfoam` are
+populated and install cleanly, and with all three installed the combined suite
+passes: 1432 passed, 293 skipped, 1 pre-existing failure. The `omnidriver`
+console script and the `omnidriver.plugins` entry-point group both work
+(`cardiacfoam` discoverable via `importlib.metadata`).
+
+**Corrected 2026-08-27.** This section previously claimed "`omnidriver.core`
+has zero runtime imports of `omnidriver.openfoam`". That was true of the
+`core/` *subdirectory* and false of the *package*: `cli.py`, one level up,
+imports `omnidriver.openfoam` unconditionally at module scope on lines 37 and
+53. `import omnidriver.cli` therefore raises `ModuleNotFoundError` in a
+core-only install — the entire CLI surface is unreachable. The
+`check-import-boundaries.py` gate reported "boundaries OK" throughout, because
+it scanned only `core/`; its scope was widened in `2f6ce63` and the three
+pre-existing violations are now waived-and-printed rather than invisible.
+
+The "combined suite passes" figure above is also measured with all three
+packages installed, which is not what CI's `test-core` job does. Installed
+alone, as that job installs it, core's own suite produces **20 collection
+errors** — 11 for `omnidriver.openfoam`, 9 for `omnidriver.cardiacfoam`.
+Round 2 (`GITHUB_MIGRATION.md` §3) is what makes Rule 1 true; until then,
+treat Rule 1 as the target, not the state.
 
 Full history of how this was reached: `docs/superpowers/plans/2026-08-25-monorepo-package-migration.md`
 (the executed plan) and `MIGRATION_AUDIT_v2.md` (the pre-migration audit
