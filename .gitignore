@@ -6,3 +6,7 @@ __pycache__/
 .mypy_cache/
 build/
 dist/
+
+# Agent worktrees created by Claude Code (.claude/ itself may hold tracked
+# settings/skills, so scope the ignore to the worktree directory only).
+.claude/worktrees/
