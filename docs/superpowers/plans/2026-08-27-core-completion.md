@@ -633,6 +633,15 @@ one `CaseFileRule`. Insert this `__init__` directly above the `plugin_name`
 property:
 
 ```python
+    #: Declared as a CLASS attribute, not only assigned in ``__init__``.
+    #: Subclasses in this suite (e.g. ``test_provenance_inputs.py``'s
+    #: ``_FakePlugin``) override ``__init__`` without calling ``super()``, so an
+    #: instance-only attribute would not exist on them and ``get_profile``
+    #: would raise ``AttributeError``. A class default resolves for every
+    #: instance, which is what lets ``get_profile`` read ``self._entrypoint``
+    #: directly instead of defensively.
+    _entrypoint: str | None = None
+
     def __init__(self, *, entrypoint: str | None = None) -> None:
         """`entrypoint` declares an ``openfoam.entrypoint`` case-file rule.
 
@@ -641,6 +650,11 @@ property:
         """
         self._entrypoint = entrypoint
 ```
+
+The class attribute is load-bearing, not style. Without it, adding `__init__`
+to a base class that already has subclasses overriding `__init__` without
+`super()` breaks three tests in `test_provenance_inputs.py` with an
+`AttributeError` that has nothing to do with entrypoints.
 
 Then replace the body of `get_profile` (currently `case_files=()`) with:
 
