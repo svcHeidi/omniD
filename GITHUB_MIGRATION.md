@@ -1,7 +1,8 @@
 # Migration status: cardiacFoam's driverFOAM → omniD
 
-**Round 1 (the bulk copy) is DONE. One blocker stands in front of round 2:
-core does not yet stand alone — §2. Round 2 scope is §3.**
+**Round 1 (the bulk copy) is DONE. The collection blocker that stood in
+front of round 2 is CLOSED — §2. Round 2 scope is §3, and §2 turned up
+evidence of just how large §3's first item actually is.**
 
 The Python orchestrator was developed inside
 `noFrontendCardiacFoam/applications/scripts/driverFoam`. Because the C++
@@ -24,56 +25,81 @@ package: see §2), marker-based path resolution replacing
 `Path(__file__).parents[N]` (`6a105d8`), utility manifests as package data
 (`5114623`), and GitHub Actions CI (`6cff329`).
 
-## 2. BLOCKER: core does not stand alone — 20 collection errors
+## 2. RESOLVED: core installs and collects alone with zero errors
 
 *(The previous blocker in this slot — `NameError: name 'DictEntry' is not
 defined` on Python < 3.14 — was fixed in `7a4be70` and `078afd4`. The
-`test-openfoam` and `test-cardiacfoam` jobs are now genuinely green: 107 and
-292 passed on a real 3.13 interpreter. `test-core` is not.)*
+`test-openfoam` and `test-cardiacfoam` jobs were already genuinely green: 107
+and 292 passed on a real 3.13 interpreter. `test-core` was not — 20 collection
+errors, then 14 after `cli.py` was fixed in `f51387b`.)*
 
-Run exactly as CI runs it — **core installed alone**, `pip install -e
-"packages/omnidriver[post]"` then `pytest packages/omnidriver/tests` — the core
-job produces **20 collection errors**: 11 × `No module named
-'omnidriver.openfoam'`, 9 × `No module named 'omnidriver.cardiacfoam'`.
+`cli.py` imported `omnidriver.openfoam` unconditionally at module scope,
+making the entire CLI surface (`plan`, `run`, `step`, `sweep-plan`,
+`sweep-run`) unreachable in a core-only install; `f51387b` moved that import
+behind a plugin capability seam. The remaining 14 collection errors were each
+either misplaced (a sibling's test living in core's tree) or mixed (a clean
+core test and a sibling-dependent one sharing a file) — **no file met the
+"genuine cross-package integration, needs a fourth CI job" bar** this section
+used to anticipate. All 14 were resolved by moving or splitting test files;
+see `docs/superpowers/plans/2026-08-27-test-core-decoupling.md` for the exact
+per-file disposition and the reasoning behind each call.
 
-Verify against a core-only virtualenv. This repo's own `.venv` has all three
-packages installed and hides the problem entirely.
-
-### The severe part is not the tests
+Verify against a core-only virtualenv, on the Python 3.13 floor, not this
+repo's own `.venv` — it has all three packages installed (and, separately,
+was found mid-migration to hold a *stale* editable install of the pre-rename
+`omnidriver-cardiac` distribution rather than `omnidriver-cardiacfoam`; fixed
+in the venv itself, not tracked in git, so any other clone's `.venv` will
+need the same `pip uninstall omnidriver-cardiac && pip install -e
+packages/omnidriver-cardiacfoam` if it predates the rename).
 
 ```
-$ python -c "import omnidriver.cli"
-ModuleNotFoundError: No module named 'omnidriver.openfoam'   (cli.py:37)
+rm -rf /tmp/core_only_venv_check
+/opt/homebrew/bin/python3.13 -m venv /tmp/core_only_venv_check
+source /tmp/core_only_venv_check/bin/activate
+cd ~/omnidriver && pip install -q -e "packages/omnidriver[post]" pytest
+python -m pytest packages/omnidriver/tests --collect-only -q   # 0 errors
 ```
 
-`cli.py` imports `omnidriver.openfoam` unconditionally at module scope on lines
-37 and 53, so **the whole CLI surface — `plan`, `run`, `step`, `sweep-plan`,
-`sweep-run` — is unreachable in a core-only install.** Anyone who installs
-core as advertised cannot run the tool.
+### Collecting cleanly is not the same as running cleanly
 
-`scripts/check-import-boundaries.py` reported "boundaries OK" throughout,
-because it scanned only `src/omnidriver/core/` while `cli.py` sits one level
-up. Scope widened in `2f6ce63`; the three pre-existing violations are waived
-and printed on every run, and the waiver list can only shrink.
+Running the collected core suite standalone (not `--collect-only`) surfaces
+**161 failures, 506 passed, 89 skipped** — all traced to the same root cause:
+`compatibility.legacy_default_driver_context()` hard-imports
+`omnidriver.cardiacfoam.cardiacfoam_plugin.CardiacFoamPlugin` and is still the
+silent default behind `resolve_public_driver_context()`, which many core
+functions call when a caller omits an explicit `DriverContext`. This is
+exactly §3's first row ("explicit `DriverContext` in core") — this run is
+concrete evidence of its blast radius in *this* repo, not a new defect and
+not something this collection-error cleanup was scoped to fix. Two tests
+that looked core-safe on import inspection alone
+(`test_mesh_adapter_flags_non_si`, `test_exempt_short_circuits_unit_domain`)
+turned out to need `omnidriver.openfoam` installed even when passed an
+explicit `generic_openfoam_context()` — core's own
+`_mesh_geometry_diagnostics` delegates its default detection backend to
+`omnidriver.openfoam.mesh_geometry` (`compatibility.py:261`) — so they moved
+to `omnidriver-openfoam` instead of staying in core; import inspection alone
+is not sufficient to categorize a test, only running it standalone is.
 
-### The 20 failing modules, audited
+Two follow-ups were identified during the cleanup but deliberately left
+undone (judgment calls about test doubles, not test-tree surgery):
+- Three tests now in `omnidriver-cardiacfoam/tests/test_strict_planning.py`
+  (`test_strict_plan_fails_on_unknown_workflow_command`,
+  `test_strict_plan_fails_on_unknown_workflow_dependency`,
+  `test_strict_dict_key_scanner_fails_on_unallowlisted_key`) use
+  `CardiacFoamPlugin` only as a convenient concrete fixture for generic
+  strict-planning/scanner behavior — swapping them to `GenericOpenFOAMPlugin`
+  or `plugins.minimal_plugin.MinimalOpenFOAMPlugin` would let them move back
+  to core.
+- `packages/omnidriver-cardiacfoam/tests/plugins/minimal_plugin.py` duplicates
+  `packages/omnidriver/tests/plugins/minimal_plugin.py` in spirit (both
+  implement the same no-domain plugin contract) — worth deduplicating.
 
-| category | count | fix |
-|---|---|---|
-| **misplaced** — tests a sibling's behaviour from core's tree | 10 | move to that package's `tests/` |
-| **core test, leaking** — tests core but reaches for a sibling | 7 | remove the sibling dependency; 5 of these fail *only* transitively through `cli.py` and need no edit at all once it is fixed |
-| **genuine cross-package integration** | 3 | give them a job that installs all three |
-
-Two files (`test_dict_value_quoting.py`, `test_dict_entries.py`) mix a clean
-core test with an embedded cardiac one in the same file — those need a split,
-not a `git mv`.
-
-### Do not "fix" this by installing all three packages in the core job
+### Do not "fix" the §3 gap by installing all three packages in the core job
 
 It would go green immediately and **delete the only automated check that core
-stands alone** — the check whose absence let `cli.py` rot unnoticed. The
-correct moves are a fourth job for the genuine integration tests, and actually
-fixing `cli.py`.
+stands alone** — the same reasoning that applied to `cli.py` above applies to
+every one of the 161 failures: the fix is converting call sites to accept an
+explicit `DriverContext`, not widening what the core CI job installs.
 
 ## 3. Round 2 — what still has to come across
 
@@ -82,7 +108,7 @@ present there and absent here:
 
 | work | why it matters |
 |---|---|
-| **explicit `DriverContext` in core** — 21 call sites converted | 7 core files here still call `resolve_public_driver_context`, silently becoming cardiacFoam whenever a caller omits a context. A missed site does not raise; it keeps working and stays cardiac. Ported with a static AST guard. |
+| **explicit `DriverContext` in core** — 21 call sites converted | 7 core files here still call `resolve_public_driver_context`, silently becoming cardiacFoam whenever a caller omits a context. A missed site does not raise; it keeps working and stays cardiac — until cardiacfoam isn't installed, at which point it doesn't keep working: a core-only `pytest packages/omnidriver/tests` run (§2) hits this in 161 places (506 passed, 89 skipped). Ported with a static AST guard. |
 | **`get_phases()` optional hook** | Without it, `primary_phase()` returns `None` for any plugin whose phase words differ from cardiac's four, and validation *silently skips* required-field and enum checks while writing entries into a `"physics"` slice the plugin never declared. The only silent-wrong defect in the set. |
 | **retire the 20 cardiac-gated `legacy_*` branches** | `compatibility.py` here still branches on `plugin_id == "org.cardiacfoam"` in 20 places. They became unreachable there once cardiacFoam implemented all 15 optional hooks; deletion was gated on instrumenting each branch and confirming zero were reachable across the full suite. |
 | **drop unused declared dependencies** | `omnidriver-cardiacfoam` declares `numpy`, `omnidriver-openfoam` declares `gmsh` — neither is imported anywhere here. `gmsh` is a workflow *binary* name, not a Python import, and pulls a ~100MB wheel. Core's deps are already clean. A guard test asserting every declared distribution is imported comes with it. |
