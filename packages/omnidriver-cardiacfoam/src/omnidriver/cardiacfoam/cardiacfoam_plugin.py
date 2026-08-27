@@ -233,6 +233,25 @@ class CardiacFoamPlugin:
             self.get_dictionary_catalog(), self.get_dict_groups(),
         )
 
+    def get_config_resolution_description(self) -> str:
+        """Which files resolve into a valid RunDocument config, in one sentence.
+
+        Moved here from core's legacy_describe_config_resolution fallback, which
+        hardcoded this string behind a plugin_id check. Core owning a sentence
+        about electroProperties was the last reachable cardiac gate.
+        """
+        return (
+            "physicsProperties and electroProperties resolve into a valid "
+            "RunDocument config."
+        )
+
+    def get_report_catalog(self) -> tuple:
+        """Post-run reports this plugin offers. Core owns the machinery; the
+        catalog is plugin data."""
+        from omnidriver.cardiacfoam.reports import CARDIAC_REPORTS
+
+        return CARDIAC_REPORTS
+
     def get_named_catalogs(self) -> dict:
         """This plugin's own catalogs -- ionic models and active-tension
         models -- namespaced under introspection's generic
