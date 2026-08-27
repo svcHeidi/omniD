@@ -77,6 +77,20 @@ Tracked as standalone notes in `future/`, each with its own status:
 - [`future/STRICT_PLANNING_FOAMLIB_COUPLING.md`](future/STRICT_PLANNING_FOAMLIB_COUPLING.md) —
   resolved; kept for the record of what the coupling was and why it wasn't a
   trivial fix.
+- [`future/ENVIRONMENT_CONTRACT.md`](future/ENVIRONMENT_CONTRACT.md) —
+  **open, and it supersedes Rule 1 above.** Rule 1's second sentence ("zero
+  OpenFOAM vocabulary") is not satisfied and, as stated, is not the goal:
+  `Allrun`, `system/controlDict` and `$FOAM_APPBIN` are one environment's
+  *bindings* of concepts core legitimately owns. That document restates the
+  rule as something checkable — core may name a binding only where it is
+  reached through a declared role, a capability hook, or a documented,
+  overridable default — and measures which of core's bindings currently
+  qualify. Read it before acting on Rule 1 as written.
+
+  It also corrects the claim in Migration Status above that "the
+  `omnidriver.plugins` entry-point group works": the packaging declares that
+  group, `core/plugin_discovery.py:59` reads `driverfoam.plugins`, and
+  selecting a plugin by name resolves nothing. See `GITHUB_MIGRATION.md` §1.
 
 
 ## Plugin capability seams

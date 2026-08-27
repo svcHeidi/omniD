@@ -18,12 +18,23 @@ own solvers with it.
 | `omnidriver-openfoam` | `foamlib` mutators, mesh provisioning, OpenFOAM parsing | depends on core; knows no cardiology |
 | `omnidriver-cardiacfoam` | electrophysiology, ionic models, the cardiac plugin | depends on both |
 
-Round 1 delivered all three, plus cross-package entry-point discovery
-(`dfa07d2`), a `core/` subdirectory free of `foamlib`/OpenFOAM imports
-(`a2eb34b`, `39e56d1`, `59fd6a2` — note this holds for `core/`, NOT for the
-package: see §2), marker-based path resolution replacing
-`Path(__file__).parents[N]` (`6a105d8`), utility manifests as package data
-(`5114623`), and GitHub Actions CI (`6cff329`).
+Round 1 delivered all three, plus a `core/` subdirectory free of
+`foamlib`/OpenFOAM imports (`a2eb34b`, `39e56d1`, `59fd6a2` — note this holds
+for `core/`, NOT for the package: see §2), marker-based path resolution
+replacing `Path(__file__).parents[N]` (`6a105d8`), utility manifests as package
+data (`5114623`), and GitHub Actions CI (`6cff329`).
+
+**Corrected 2026-08-27.** This list used to include "cross-package entry-point
+discovery (`dfa07d2`)". It does not work. `dfa07d2` registered the `omnidriver`
+console script and confirmed that `importlib.metadata` *reports* the
+`omnidriver.plugins` group — it never touched
+`core/plugin_discovery.py:59`, which still reads `ENTRY_POINT_GROUP =
+"driverfoam.plugins"`. On a clean clone with all three packages installed,
+`load_plugin_context("cardiacfoam")` raises `KeyError: No installed driverFOAM
+plugin named 'cardiacfoam' in entry-point group 'driverfoam.plugins'`. The
+legacy `driverFoam` tree is self-consistent on `driverfoam.plugins` and works;
+this is a regression the rename introduced. Every discovery test monkeypatches
+the `_entry_points()` seam, so nothing has ever read the constant. Fixed in §3.
 
 ## 2. RESOLVED: core installs and collects alone with zero errors
 
@@ -45,12 +56,17 @@ see `docs/superpowers/plans/2026-08-27-test-core-decoupling.md` for the exact
 per-file disposition and the reasoning behind each call.
 
 Verify against a core-only virtualenv, on the Python 3.13 floor, not this
-repo's own `.venv` — it has all three packages installed (and, separately,
-was found mid-migration to hold a *stale* editable install of the pre-rename
-`omnidriver-cardiac` distribution rather than `omnidriver-cardiacfoam`; fixed
-in the venv itself, not tracked in git, so any other clone's `.venv` will
-need the same `pip uninstall omnidriver-cardiac && pip install -e
-packages/omnidriver-cardiacfoam` if it predates the rename).
+repo's own `.venv` — it runs Python 3.14 (PEP 649 hides annotation-evaluation
+bugs that break the 3.11/3.12 CI matrix) and has all three packages installed.
+
+**Corrected 2026-08-27.** This paragraph used to say the stale pre-rename
+`omnidriver-cardiac` editable install "was fixed in the venv itself". It was
+not — both distributions are still installed there, and both export the
+entry-point name `cardiacfoam`, so any discovery measurement taken in that venv
+is meaningless. Run `pip uninstall omnidriver-cardiac`. Separately, the
+untracked `cardiacfoam_tutorials_driver.egg-info` at the repo root injects a
+broken `driverfoam.plugins` entry point into any process started from the repo
+root, so run installed-behaviour checks from a neutral cwd.
 
 ```
 rm -rf /tmp/core_only_venv_check
@@ -63,14 +79,21 @@ python -m pytest packages/omnidriver/tests --collect-only -q   # 0 errors
 ### Collecting cleanly is not the same as running cleanly
 
 Running the collected core suite standalone (not `--collect-only`) surfaces
-**161 failures, 506 passed, 89 skipped** — all traced to the same root cause:
-`compatibility.legacy_default_driver_context()` hard-imports
-`omnidriver.cardiacfoam.cardiacfoam_plugin.CardiacFoamPlugin` and is still the
-silent default behind `resolve_public_driver_context()`, which many core
-functions call when a caller omits an explicit `DriverContext`. This is
-exactly §3's first row ("explicit `DriverContext` in core") — this run is
-concrete evidence of its blast radius in *this* repo, not a new defect and
-not something this collection-error cleanup was scoped to fix. Two tests
+**161 failures, 506 passed, 89 skipped**.
+
+**Corrected 2026-08-27.** This paragraph used to say those were "all traced to
+the same root cause". They are not — re-measured, they are four:
+
+| count | cause |
+|---|---|
+| 130 | `omnidriver.cardiacfoam` — `legacy_default_driver_context()` behind `resolve_public_driver_context()`. The documented one; §3's first row. |
+| 12 | `omnidriver.openfoam` — the **ungated** fallbacks at `compatibility.py:278` (`legacy_environment_diagnostics`) and `:545` (`legacy_config_value_reader`), plus one misplaced core test. Nothing in §3 covers these. |
+| 8 | `regression_equivalence` — `f1651b7` moved that package to cardiacfoam and left `packages/omnidriver/tests/equivalence/protocol.py:28` importing it. A regression from this section's own cleanup, invisible to `--collect-only` because `test_protocol.py` imports inside its test methods. |
+| 11 | subprocess failures in `scripts/export-*.py`, which resolve the implicit cardiac context one layer out. |
+
+Only the first group is "not a new defect". The second shows core→openfoam is
+its own leak, not a corollary of the cardiac default; the third was introduced
+here. Two tests
 that looked core-safe on import inspection alone
 (`test_mesh_adapter_flags_non_si`, `test_exempt_short_circuits_unit_domain`)
 turned out to need `omnidriver.openfoam` installed even when passed an
@@ -103,15 +126,34 @@ explicit `DriverContext`, not widening what the core CI job installs.
 
 ## 3. Round 2 — what still has to come across
 
-Measured 2026-08-27 against `noFrontendCardiacFoam` at `5fda4006`. Each is
-present there and absent here:
+Originally measured 2026-08-27 against `noFrontendCardiacFoam` at `5fda4006`.
+**Re-verified the same day by an independent audit**, which confirmed three of
+the four rows, sharpened the third, and found five items this section never
+listed. The executable plan is
+[`docs/superpowers/plans/2026-08-27-core-completion.md`](docs/superpowers/plans/2026-08-27-core-completion.md);
+the ownership rule it serves is
+[`future/ENVIRONMENT_CONTRACT.md`](future/ENVIRONMENT_CONTRACT.md).
+
+### Ported from `driverFoam` (present there, absent here)
+
+| work | status | why it matters |
+|---|---|---|
+| **explicit `DriverContext` in core** | verified | 7 core files / **18 call sites** still call `resolve_public_driver_context`, silently becoming cardiacFoam whenever a caller omits a context. A missed site does not raise; it keeps working and stays cardiac — until cardiacfoam isn't installed. Measured blast radius: `resolve_public_driver_context(None)` fires **35,395** times per full-suite run against **915** explicit resolutions — 97.5% implicit. Legacy's own census records 51,540 before its conversion and asserts zero after. **Undercounted here:** three more sites live in `omnidriver-openfoam` (`apply_overrides.py:148,288`, `dict_builder.py:276`), so `apply_overrides(…, driver_context=None)` raises `ModuleNotFoundError: omnidriver.cardiacfoam` in a core+openfoam install — a wrong-direction leak the import gate cannot see. 21 sites total. Port legacy's two guards: `test_core_context_is_explicit.py` (static AST) and `test_fallback_census.py` (runtime). |
+| **`get_phases()` optional hook** | verified | Confirmed absent here, present in legacy with `legacy_phases()`, `_DictionaryCatalogAdapter.phases()`, and `phase_order` threaded through `primary_phase()`. Here `primary_phase(entry)` walks a fixed `Phase = Literal["anatomy","physics","stimulus","solver"]` in `run_model.py:44`. Still the only silent-wrong defect in the set — and the worked example of the closed-core-enum → plugin-declaration transform `future/ENVIRONMENT_CONTRACT.md` §7 asks for elsewhere. |
+| **retire the 20 cardiac-gated `legacy_*` branches** | **much closer than described** | The stated precondition — "unreachable there once cardiacFoam implemented all 15 optional hooks" — does not hold here: `CardiacFoamPlugin` is missing three (`get_config_resolution_description`, `get_report_catalog`, `get_phases`). The instrumentation this row was gated on has now been run. Across the full 1729-test suite the **cardiac branch is taken by exactly one function**, `legacy_describe_config_resolution` (12×); every other call arrives from a non-cardiac plugin and takes the neutral branch. Port the three hooks (two in Phase 1, `get_phases` in Phase 2) and all 20 become deletable. |
+| **drop unused declared dependencies** | verified | `omnidriver-cardiacfoam` declares `numpy`, `omnidriver-openfoam` declares `gmsh` — grep confirms **zero** Python imports of either. `gmsh` is a workflow *binary* name and pulls a ~100 MB wheel, and forces both the `test-openfoam` and `test-cardiac` CI jobs to `apt-get install` GUI libraries. Core's deps are already clean. A guard test asserting every declared distribution is imported comes with it. |
+
+### Found by the audit, not previously listed
 
 | work | why it matters |
 |---|---|
-| **explicit `DriverContext` in core** — 21 call sites converted | 7 core files here still call `resolve_public_driver_context`, silently becoming cardiacFoam whenever a caller omits a context. A missed site does not raise; it keeps working and stays cardiac — until cardiacfoam isn't installed, at which point it doesn't keep working: a core-only `pytest packages/omnidriver/tests` run (§2) hits this in 161 places (506 passed, 89 skipped). Ported with a static AST guard. |
-| **`get_phases()` optional hook** | Without it, `primary_phase()` returns `None` for any plugin whose phase words differ from cardiac's four, and validation *silently skips* required-field and enum checks while writing entries into a `"physics"` slice the plugin never declared. The only silent-wrong defect in the set. |
-| **retire the 20 cardiac-gated `legacy_*` branches** | `compatibility.py` here still branches on `plugin_id == "org.cardiacfoam"` in 20 places. They became unreachable there once cardiacFoam implemented all 15 optional hooks; deletion was gated on instrumenting each branch and confirming zero were reachable across the full suite. |
-| **drop unused declared dependencies** | `omnidriver-cardiacfoam` declares `numpy`, `omnidriver-openfoam` declares `gmsh` — neither is imported anywhere here. `gmsh` is a workflow *binary* name, not a Python import, and pulls a ~100MB wheel. Core's deps are already clean. A guard test asserting every declared distribution is imported comes with it. |
+| **entry-point group mismatch** | Highest severity found. See the correction in §1 — plugin selection by name does not work in any install. One-line fix plus a test that reads real `importlib.metadata` rather than the `_entry_points()` seam. |
+| **core cannot be installed as a wheel** | `core/capability_seams.py:50` calls `repo_root_default()` at **module scope**, and that function walks up for a development checkout (`tutorials/+src/`, `tutorials/`, or `packages/+ARCHITECTURE.md`) and raises rather than guess. From site-packages nothing matches, so `import omnidriver.core.capability_seams` raises `RuntimeError`. Editable installs hide it completely — and `release.yml` builds exactly this wheel. Same root cause as the "1 pre-existing unrelated failure" in `test_sweep_plan_contract.py`, which is really a missing `@skip_without_monorepo`. |
+| **the role vocabulary is unenforced** | `CaseFileRule.role` is the environment seam — `openfoam.control_dict`, `openfoam.entrypoint`, `plugin.configuration` — and `plugin_profile.py:101` validates it only as "non-empty string". `plugin_capabilities.py:461` warns in prose that a rule written `control_dict` instead of `openfoam.control_dict` is silently reclassified as plugin-owned. Nothing enforces it. |
+| **declared roles that nothing reads** | `openfoam.entrypoint` is declared in `cardiacfoam/plugin.yaml:64` and consumed nowhere, while `Allrun` is hardcoded at `registry.py:79,88,302`, `generic_case.py:137` and `workflow.py:74`. Same for `openfoam.cleanup` and `openfoam.mesh_generation`. Only two sites in the repo consume a role semantically. |
+| **misplaced modules in core** | `core/specs/spatial_pacing.py` is S1–S2 cardiac pacing-protocol generation emitting OpenFOAM list syntax, with one cardiacfoam consumer. `scripts/_rtst_scanner.py`, `_names_parser.py` and `_dict_keys_scanner.py` are OpenFOAM/cardiacFoam **C++ source** parsers; `_rtst_scanner` reaches cardiacfoam through `dict_entries`'s waived PEP 562 re-export, which is why the import gate cannot see it. |
+| **licensing** | No `LICENSE` file anywhere, no `license` field in any of the three `pyproject.toml`, and 72 source files carrying a "This file is part of cardiacFoam / GPLv3" header. Three packages cannot be published under an undeclared licence carrying another project's header. `packages/omnidriver/README.md` — the PyPI long description — also claims "zero OpenFOAM-specific vocabulary" and links to `../../ARCHITECTURE.md`, which will not resolve off-repo. |
+| **CI does not test what ships** | Matrix is 3.11/3.12; the dev venv is 3.14; the migration instructions verify on 3.13. No job installs a built wheel. The root `pyproject.toml` puts all three test roots on `pythonpath`, which is what lets `packages/omnidriver/tests/equivalence` pass only when cardiacfoam's test tree is co-collected. |
 
 ## 4. How to port — no shared history
 
@@ -135,6 +177,13 @@ not (see §1). Neither side is simply ahead.
 
 ## Related
 
+- `future/ENVIRONMENT_CONTRACT.md` — what core owns and how; supersedes
+  `ARCHITECTURE.md`'s Rule 1 with a version the code can satisfy
+- `docs/superpowers/plans/2026-08-27-core-completion.md` — the executable plan
+  for §3, with the definition of "core is finished"
 - `noFrontendCardiacFoam/applications/scripts/driverFoam/MIGRATION.md` — the
   sending side's view
-- `MIGRATION_AUDIT_v2.md`, `future/` — this repo's own decoupling records
+- `MIGRATION_AUDIT_v2.md`, `future/` — this repo's own decoupling records.
+  Note `MIGRATION_AUDIT_v2.md` predates the package split and its file paths
+  all name the retired flat `openfoam_driver/` tree; read it for reasoning,
+  not for locations.
