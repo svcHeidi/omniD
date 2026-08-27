@@ -62,6 +62,31 @@ def _mapping_error(path: Path, message: str) -> ValueError:
     return ValueError(f"Invalid plugin profile {path}: {message}")
 
 
+#: Case-file roles core recognises. The prefix is load-bearing: ``openfoam.*``
+#: marks a file the OpenFOAM runtime itself requires, ``plugin.*`` one the
+#: solver plugin requires, ``case.*`` one that belongs to the case as a
+#: document rather than to either. Consumers split on that prefix
+#: (tutorial_contracts.py) and look up specific roles by exact string
+#: (provenance_inputs.py, registry.py), so an unvalidated typo silently
+#: reclassifies a file instead of failing. See future/ENVIRONMENT_CONTRACT.md.
+#:
+#: Adding a role here is a contract change: document it in
+#: core/generic-plugin.yaml's role reference in the same edit.
+KNOWN_ROLES: frozenset[str] = frozenset({
+    "openfoam.control_dict",
+    "openfoam.discretisation",
+    "openfoam.solver_settings",
+    "openfoam.decomposition",
+    "openfoam.mesh_generation",
+    "openfoam.case_directory",
+    "openfoam.entrypoint",
+    "openfoam.cleanup",
+    "plugin.configuration",
+    "case.documentation",
+    "case.regression_test",
+})
+
+
 def load_plugin_profile(path: str | Path) -> PluginProfile:
     """Load a small, safe YAML profile and convert it into immutable data.
 
@@ -110,6 +135,13 @@ def load_plugin_profile(path: str | Path) -> PluginProfile:
             raise _mapping_error(
                 profile_path,
                 "required currently supports only 'always', 'never', or 'conditional'",
+            )
+        if values["role"] not in KNOWN_ROLES:
+            raise _mapping_error(
+                profile_path,
+                f"unknown case-file role {values['role']!r}; known roles are "
+                + ", ".join(sorted(KNOWN_ROLES))
+                + " (see future/ENVIRONMENT_CONTRACT.md)",
             )
         rules.append(CaseFileRule(**values))
 

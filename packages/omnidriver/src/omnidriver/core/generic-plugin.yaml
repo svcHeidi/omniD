@@ -12,7 +12,9 @@ plugin:
 #               openfoam_dictionary  : standard OpenFOAM keyword-value file
 #               case_script          : shell script (Allrun, Allclean, ...)
 #               documentation        : human-readable file (README.md, ...)
-#   role      (required) - semantic role tag; common values:
+#   role      (required) - semantic role tag. VALIDATED at load time against
+#                          core.plugin_profile.KNOWN_ROLES -- an unlisted role
+#                          is an error, not a warning. The full set:
 #               openfoam.control_dict       : system/controlDict
 #               openfoam.discretisation     : system/fvSchemes
 #               openfoam.solver_settings    : system/fvSolution
