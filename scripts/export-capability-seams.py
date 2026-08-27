@@ -40,7 +40,7 @@ import sys
 from pathlib import Path
 
 from omnidriver.core.capability_seams import (
-    ARCHITECTURE,
+    architecture_path,
     collect_seams,
     render,
     splice,
@@ -56,8 +56,9 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    architecture = architecture_path()
     seams = collect_seams()
-    document = ARCHITECTURE.read_text()
+    document = architecture.read_text()
     updated = splice(document, render(seams))
 
     if args.check:
@@ -71,8 +72,8 @@ def main() -> int:
         print("ARCHITECTURE.md capability seam table is up to date.")
         return 0
 
-    ARCHITECTURE.write_text(updated)
-    print(f"Wrote {len(seams)} capability seams to {ARCHITECTURE.name}")
+    architecture.write_text(updated)
+    print(f"Wrote {len(seams)} capability seams to {architecture.name}")
     return 0
 
 

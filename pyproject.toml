@@ -7,6 +7,13 @@ requires-python = ">=3.11"
 [tool.pytest.ini_options]
 markers = [
     "integration: tests requiring a real cardiacFoam binary (skipped by default in CI)",
+    # Duplicated in packages/omnidriver/pyproject.toml on purpose: a whole-repo
+    # run (`pytest packages/`) resolves its config here, a per-package run
+    # (`pytest packages/omnidriver/tests`, what CI's test-core job does)
+    # resolves it there. A marker registered in only one place warns in the
+    # other, and an unregistered marker is one typo away from silently
+    # selecting nothing.
+    "slow: builds a wheel in a throwaway venv; minutes, not seconds",
 ]
 addopts = "--import-mode=importlib"
 pythonpath = [

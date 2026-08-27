@@ -37,6 +37,9 @@ omnidriver = "omnidriver.cli:main"
 testpaths = ["tests"]
 pythonpath = ["tests"]
 addopts = "--import-mode=importlib"
+markers = [
+    "slow: builds a wheel in a throwaway venv; minutes, not seconds",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

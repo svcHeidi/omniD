@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from conftest import skip_without_monorepo
 from omnidriver.core.runtime.sweep_runner import sweep_plan
 from omnidriver.core.specs.paths import repo_root_default
 
@@ -42,6 +43,7 @@ _SPEC = {
 }
 
 
+@skip_without_monorepo
 def test_a_factory_failure_fails_one_case_not_the_command(tmp_path):
     """An unknown ionic model must cost exactly one case."""
     spec_path = tmp_path / "sweep.json"

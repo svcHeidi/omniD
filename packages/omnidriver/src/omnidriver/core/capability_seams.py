@@ -47,7 +47,18 @@ from pathlib import Path
 
 from .specs.paths import repo_root_default
 
-ARCHITECTURE = repo_root_default() / "ARCHITECTURE.md"
+
+def architecture_path() -> Path:
+    """Path to ARCHITECTURE.md in a development checkout.
+
+    A function, not a module constant: ``repo_root_default()`` raises when no
+    checkout is found, and evaluating it at import time made this module
+    unimportable from an installed wheel. Only the export script calls this,
+    and that script only ever runs inside a checkout.
+    """
+    return repo_root_default() / "ARCHITECTURE.md"
+
+
 BEGIN_MARKER = "<!-- BEGIN GENERATED: capability-seams -->"
 END_MARKER = "<!-- END GENERATED: capability-seams -->"
 
