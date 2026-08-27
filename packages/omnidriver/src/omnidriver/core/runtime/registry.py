@@ -62,6 +62,37 @@ ENTRY_KIND_VALUES = (
     "case_folder",
 )
 
+#: Historical entrypoint name, used when the active plugin declares no
+#: ``openfoam.entrypoint`` rule (and when no context is available at all).
+#: Documented and overridable rather than hardcoded -- see
+#: future/ENVIRONMENT_CONTRACT.md §4.
+_DEFAULT_ENTRYPOINT_RELPATHS: tuple[str, ...] = ("Allrun",)
+
+
+def _entrypoint_relpaths(driver_context: "DriverContext | None") -> tuple[str, ...]:
+    """Case-relative entrypoint scripts the active plugin declares.
+
+    Searches every declared rule, not just ``required_rules()``: an entrypoint
+    is legitimately ``conditional`` (both shipped profiles declare it so), and
+    ``required_rules()`` filters to ``required == "always"``.
+    """
+    if driver_context is None:
+        return _DEFAULT_ENTRYPOINT_RELPATHS
+    declared = tuple(
+        rule.path
+        for rule in driver_context.capabilities.case_files.all_rules()
+        if rule.role == "openfoam.entrypoint"
+    )
+    return declared or _DEFAULT_ENTRYPOINT_RELPATHS
+
+
+def _has_entrypoint(case_root: Path, driver_context: "DriverContext | None") -> bool:
+    return any(
+        (case_root / relpath).is_file()
+        for relpath in _entrypoint_relpaths(driver_context)
+    )
+
+
 def _is_case_directory(
     path: Path,
     driver_context: "DriverContext | None" = None,
@@ -76,7 +107,7 @@ def _is_case_directory(
         driver_context.capabilities.case_compatibility.has_case_marker(
             CaseCompatibilityRequest(path),
         )
-        or (path / "Allrun").is_file()
+        or _has_entrypoint(path, driver_context)
     )
 
 
@@ -85,13 +116,12 @@ def _case_is_runnable(
     *,
     driver_context: "DriverContext | None" = None,
 ) -> bool:
-    if (case_root / "Allrun").is_file():
-        return True
-
     from ..compatibility import resolve_public_driver_context
     from ..plugin_capabilities import CaseCompatibilityRequest
 
     driver_context = resolve_public_driver_context(driver_context)
+    if _has_entrypoint(case_root, driver_context):
+        return True
     return driver_context.capabilities.case_compatibility.is_runnable_without_workflow(
         CaseCompatibilityRequest(case_root),
     )
@@ -260,7 +290,7 @@ def load_tutorial_spec(
 ) -> TutorialSpec:
     resolution = resolve_tutorial(name, overrides=overrides, driver_context=driver_context)
     spec = resolution["factory"](**resolution["factory_overrides"])
-    return _with_entry_metadata(spec, resolution)
+    return _with_entry_metadata(spec, resolution, driver_context=driver_context)
 
 
 def load_entry_spec(
@@ -277,12 +307,14 @@ def load_entry_spec(
         driver_context=driver_context,
     )
     spec = resolution["factory"](**resolution["factory_overrides"])
-    return _with_entry_metadata(spec, resolution)
+    return _with_entry_metadata(spec, resolution, driver_context=driver_context)
 
 
 def _with_entry_metadata(
     spec: TutorialSpec,
     resolution: dict[str, object],
+    *,
+    driver_context: "DriverContext | None" = None,
 ) -> TutorialSpec:
     metadata = dict(spec.metadata)
     metadata.update(
@@ -295,11 +327,12 @@ def _with_entry_metadata(
             "resolution": resolution["resolution"],
         }
     )
-    # Plain case folders are owned by their on-disk Allrun. If a discovered
-    # folder has no Allrun, do not preserve the generic-spec placeholder DAG.
+    # Plain case folders are owned by their on-disk entrypoint (the plugin's
+    # declared openfoam.entrypoint, Allrun by default). If a discovered
+    # folder has no entrypoint, do not preserve the generic-spec placeholder DAG.
     if (
         resolution["resolution"] == "case_folder"
-        and not (Path(spec.case_root) / "Allrun").is_file()
+        and not _has_entrypoint(Path(spec.case_root), driver_context)
     ):
         metadata["workflow_dag"] = None
     return replace(spec, metadata=metadata)

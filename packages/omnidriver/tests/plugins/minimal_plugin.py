@@ -4,12 +4,29 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from omnidriver.core.plugin_profile import PluginProfile
+from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile
 from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 
 
 class MinimalOpenFOAMPlugin:
     """Implements only the required plugin contract; adds no solver meaning."""
+
+    #: Declared as a CLASS attribute, not only assigned in ``__init__``.
+    #: Subclasses in this suite (e.g. ``test_provenance_inputs.py``'s
+    #: ``_FakePlugin``) override ``__init__`` without calling ``super()``, so an
+    #: instance-only attribute would not exist on them and ``get_profile``
+    #: would raise ``AttributeError``. A class default resolves for every
+    #: instance, which is what lets ``get_profile`` read ``self._entrypoint``
+    #: directly instead of defensively.
+    _entrypoint: str | None = None
+
+    def __init__(self, *, entrypoint: str | None = None) -> None:
+        """`entrypoint` declares an ``openfoam.entrypoint`` case-file rule.
+
+        Default `None` declares none, so every existing no-argument
+        construction in the suite is unchanged.
+        """
+        self._entrypoint = entrypoint
 
     @property
     def plugin_name(self) -> str:
@@ -28,11 +45,28 @@ class MinimalOpenFOAMPlugin:
         return "2"
 
     def get_profile(self) -> PluginProfile:
+        case_files: tuple[CaseFileRule, ...] = ()
+        dictionaries: list[dict[str, str]] = []
+        if self._entrypoint is not None:
+            case_files = (
+                CaseFileRule(
+                    path=self._entrypoint,
+                    kind="case_script",
+                    role="openfoam.entrypoint",
+                    required="conditional",
+                ),
+            )
+            dictionaries = [{
+                "path": self._entrypoint,
+                "kind": "case_script",
+                "role": "openfoam.entrypoint",
+                "required": "conditional",
+            }]
         return PluginProfile(
             path=Path(__file__),
             plugin_id=self.plugin_id,
             api_version=self.plugin_api_version,
-            case_files=(),
+            case_files=case_files,
             cxx_mapping=None,
             payload={
                 "schema_version": 1,
@@ -40,7 +74,7 @@ class MinimalOpenFOAMPlugin:
                     "id": self.plugin_id,
                     "api_version": self.plugin_api_version,
                 },
-                "case_profile": {"dictionaries": []},
+                "case_profile": {"dictionaries": dictionaries},
             },
         )
 

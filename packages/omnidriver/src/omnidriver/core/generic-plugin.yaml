@@ -49,6 +49,10 @@ case_profile:
       kind: openfoam_dictionary
       role: openfoam.case_directory
       required: always
+    - path: Allrun
+      kind: case_script
+      role: openfoam.entrypoint
+      required: conditional
 
 # cxx_mapping is OPTIONAL.
 # Include it only if your plugin has C++ source files whose dict keys should

@@ -13,17 +13,19 @@ from omnidriver.core.plugin_profile import (
 
 
 def test_generic_profile_declares_no_solver_specific_files() -> None:
-    """The generic stub declares the two structural facts true of any
-    OpenFOAM case (system/controlDict, the constant/ directory) so core can
-    derive provenance-walk roots and startFrom/startTime resolution without
-    a plugin present -- but declares nothing solver-specific (no plugin.*
-    role, e.g. no electroProperties-style constant/* file)."""
+    """The generic stub declares the structural facts true of any OpenFOAM
+    case (system/controlDict, the constant/ directory, and its Allrun
+    entrypoint -- see future/ENVIRONMENT_CONTRACT.md) so core can derive
+    provenance-walk roots, startFrom/startTime resolution, and entrypoint
+    discovery without a plugin present -- but declares nothing solver-specific
+    (no plugin.* role, e.g. no electroProperties-style constant/* file)."""
     profile = GenericOpenFOAMPlugin().get_profile()
 
     assert profile.plugin_id == "org.driverfoam.generic-openfoam"
     assert {rule.path for rule in profile.case_files} == {
         "system/controlDict",
         "constant",
+        "Allrun",
     }
     assert all(rule.role.startswith("openfoam.") for rule in profile.case_files)
     assert profile.cxx_mapping is None
