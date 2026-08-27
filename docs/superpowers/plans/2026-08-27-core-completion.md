@@ -55,10 +55,8 @@ the endpoint is visible, not so they can be started from this document.
 ## Global Constraints
 
 - **Verify in a clean 3.13 virtualenv, never `~/omnidriver/.venv`.** That venv
-  runs 3.14 (which hides annotation-evaluation bugs via PEP 649) and holds a
-  stale `omnidriver-cardiac` editable install alongside `omnidriver-cardiacfoam`.
-  Both export the entry-point name `cardiacfoam`, which will corrupt Task 1's
-  results.
+  runs 3.14, which hides annotation-evaluation bugs via PEP 649 that the
+  3.11/3.12 CI matrix would catch.
   ```bash
   rm -rf /tmp/od_all && /opt/homebrew/bin/python3.13 -m venv /tmp/od_all
   /tmp/od_all/bin/pip install -q -e "packages/omnidriver[post]" \
@@ -70,9 +68,15 @@ the endpoint is visible, not so they can be started from this document.
   /tmp/od_core/bin/pip install -q -e "packages/omnidriver[post]" pytest
   ```
 - **Run commands from a neutral cwd (`cd /tmp`) when testing installed
-  behaviour.** The repo root contains an untracked
-  `cardiacfoam_tutorials_driver.egg-info` that injects a broken
-  `driverfoam.plugins` entry point into any process started there.
+  behaviour.** A Python process started from a repo root puts stray `.egg-info`
+  metadata on `sys.path`. Two such directories were removed here on 2026-08-27
+  — an `omnidriver_cardiac.egg-info` left by the pre-rename package (which made
+  `pip list` report a phantom `omnidriver-cardiac` install that `pip uninstall`
+  refused to remove) and a root `cardiacfoam_tutorials_driver.egg-info`
+  injecting a broken `driverfoam.plugins` entry point. Neither is tracked, so
+  any other clone that predates the rename will have them back. This is the
+  exact trap that hid the Task 1 bug: it makes entry-point discovery report a
+  confident wrong answer.
 - **No `git commit` steps appear in this plan.** Committing is the operator's
   call, at whatever granularity they choose.
 - **Behaviour must not change in Phase 1.** Every task here is either a fix to
@@ -389,7 +393,7 @@ def test_the_generic_profile_uses_only_known_roles() -> None:
 def test_the_cardiac_profile_uses_only_known_roles() -> None:
     """Skipped in the core-only CI job, which installs no plugin package.
 
-    Worth asserting anyway: cardiacFoam's profile declares nine of the eleven
+    Worth asserting anyway: cardiacFoam's profile declares ten of the eleven
     roles, so it is the real drift risk. Core's own declares two.
     """
     cardiacfoam_plugin = pytest.importorskip(
@@ -403,9 +407,10 @@ def test_the_cardiac_profile_uses_only_known_roles() -> None:
         assert rule.role in KNOWN_ROLES, rule
 ```
 
-`GenericOpenFOAMPlugin.get_profile` is an `lru_cache`d `staticmethod`, so
-calling it on the class (no instance) is correct; `CardiacFoamPlugin`'s is an
-ordinary method and needs the instance. Do not "fix" either to match the other.
+Both plugins' `get_profile` is an `lru_cache`d `staticmethod`
+(`cardiacfoam_plugin.py:78`), so either spelling works — on the class or via an
+instance. The two calls above differ only stylistically; there is no asymmetry
+to preserve, and nothing to "fix".
 
 Add the imports that file needs at its top: `pytest`, and from
 `omnidriver.core.plugin_profile` both `load_plugin_profile` and `KNOWN_ROLES`.
@@ -479,8 +484,8 @@ for cls in (GenericOpenFOAMPlugin, CardiacFoamPlugin):
     roles = sorted({r.role for r in cls().get_profile().case_files})
     print(cls.__name__, roles)"
 ```
-Expected: both print without raising. cardiacFoam prints nine roles, the
-generic plugin two. A `ValueError` here means the enum is missing a role one
+Expected: both print without raising. cardiacFoam prints **ten** unique roles
+(every one except `openfoam.case_directory`), the generic plugin two. A `ValueError` here means the enum is missing a role one
 of them actually uses — add it rather than editing the profile.
 
 - [ ] **Step 6: Make the YAML comment authoritative**
@@ -505,13 +510,20 @@ missing and none is surplus, so this step changes the framing line only.
 Verify that with:
 
 ```bash
-diff <(grep -oE '^#               [a-z._]+' packages/omnidriver/src/omnidriver/core/generic-plugin.yaml \
+diff <(grep -oE '^#               [a-z]+\.[a-z_]+' packages/omnidriver/src/omnidriver/core/generic-plugin.yaml \
         | awk '{print $2}' | sort) \
      <(cd /tmp && /tmp/od_core/bin/python -c \
         "from omnidriver.core.plugin_profile import KNOWN_ROLES; print('\n'.join(sorted(KNOWN_ROLES)))")
 ```
 Expected: no output. Any difference means the comment and the enum have drifted
 — fix whichever is wrong before moving on.
+
+The `[a-z]+\.[a-z_]+` (dotted) filter is load-bearing. The `kind` and
+`required` value blocks in that comment sit at the same 15-space indentation as
+the `role` block, so a looser pattern also matches `always`, `conditional`,
+`case_script`, `documentation` and `openfoam_dictionary` and reports five
+phantom differences. Every role is namespaced and no `kind`/`required` value
+contains a dot, which is what makes the filter exact.
 
 ---
 
