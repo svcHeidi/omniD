@@ -30,36 +30,55 @@ omnidriver/ (GitHub Root)
 
 ## Migration Status
 
-The monorepo→packages migration described by `GITHUB_MIGRATION.md` is
-**structurally complete but Rule 1 does not yet hold.** `packages/omnidriver`,
-`packages/omnidriver-openfoam`, and `packages/omnidriver-cardiacfoam` are
-populated and install cleanly, and with all three installed the combined suite
-passes: 1432 passed, 293 skipped, 1 pre-existing failure. The `omnidriver`
-console script and the `omnidriver.plugins` entry-point group both work
-(`cardiacfoam` discoverable via `importlib.metadata`).
+**Phase 1 of core completion has landed** (branch `phase1-core-completion`,
+`a57eac4`..`8418365`). The monorepo→packages migration is structurally
+complete; Rule 1 as originally written is superseded — see
+`future/ENVIRONMENT_CONTRACT.md` and the Open Items below.
 
-**Corrected 2026-08-27.** This section previously claimed "`omnidriver.core`
-has zero runtime imports of `omnidriver.openfoam`". That was true of the
-`core/` *subdirectory* and false of the *package*: `cli.py`, one level up,
-imports `omnidriver.openfoam` unconditionally at module scope on lines 37 and
-53. `import omnidriver.cli` therefore raises `ModuleNotFoundError` in a
-core-only install — the entire CLI surface is unreachable. The
-`check-import-boundaries.py` gate reported "boundaries OK" throughout, because
-it scanned only `core/`; its scope was widened in `2f6ce63` and the three
-pre-existing violations are now waived-and-printed rather than invisible.
+Measured on that branch tip, 2026-08-27, Python 3.13:
 
-The "combined suite passes" figure above is also measured with all three
-packages installed, which is not what CI's `test-core` job does. Installed
-alone, as that job installs it, core's own suite produces **20 collection
-errors** — 11 for `omnidriver.openfoam`, 9 for `omnidriver.cardiacfoam`.
-Round 2 (`GITHUB_MIGRATION.md` §3) is what makes Rule 1 true; until then,
-treat Rule 1 as the target, not the state.
+| | state |
+|---|---|
+| all three packages installed | **1469 passed, 273 skipped, 0 failed** |
+| core installed alone | 514 passed, 91 skipped, **160 failed** |
+| core imported from a built wheel | ✅ guarded by `test_wheel_install_imports.py` |
+| plugin resolves by entry-point name | ✅ guarded by `test_entry_point_group_matches_packaging.py` |
+| core's CLI usable alone | ✗ `--help` dies resolving an implicit context |
+| `"org.cardiacfoam"` in core | ✗ 20 occurrences, all now provably unreachable |
 
-Full history of how this was reached: `docs/superpowers/plans/2026-08-25-monorepo-package-migration.md`
-(the executed plan) and `MIGRATION_AUDIT_v2.md` (the pre-migration audit
-that informed it). The task list that used to live in this section described
-the old flat `openfoam_driver/` tree, which no longer exists — removed
-rather than left to go stale a second time.
+The 160 core-only failures are the honest measure of how far core is from
+standing alone, and they are **four** distinct causes, not one — 129 from the
+implicit cardiac `DriverContext`, 11 from two *ungated* OpenFOAM fallbacks, 8
+from a test-tree regression, 11 from export scripts. Closing them is Phase 2:
+`docs/superpowers/plans/2026-08-27-core-completion-phase-2.md`.
+
+**Two claims this section used to make, both withdrawn 2026-08-27:**
+
+- *"the `omnidriver.plugins` entry-point group works (`cardiacfoam`
+  discoverable via `importlib.metadata`)"* — the metadata was discoverable; the
+  code read a different group name (`driverfoam.plugins`), so selecting a plugin
+  by name resolved nothing in any install. Fixed in `d760b88`, and the fix is
+  guarded by a test that reads real installed metadata rather than the
+  `_entry_points()` mock every other discovery test uses.
+- *"core's own suite produces 20 collection errors"* — collection errors are
+  zero and have been since the test-core decoupling pass. Collecting cleanly is
+  a much weaker property than it reads as: function-scoped imports are invisible
+  to `--collect-only`, which is why 8 failures hid behind a clean collection
+  report. Count failures, not collection errors.
+
+An earlier correction, retained because the lesson generalises: this section
+once claimed core had zero runtime imports of `omnidriver.openfoam`. That was
+true of the `core/` *subdirectory* and false of the *package* — `cli.py`, one
+level up, imported it at module scope, so `import omnidriver.cli` raised
+`ModuleNotFoundError` in a core-only install and the whole CLI surface was
+unreachable. The `check-import-boundaries.py` gate printed "boundaries OK"
+throughout, because it scanned only `core/`. Scope widened in `2f6ce63`;
+`cli.py` fixed in `f51387b`.
+
+Full history: `docs/superpowers/plans/2026-08-25-monorepo-package-migration.md`
+(the executed migration), `docs/superpowers/plans/2026-08-27-core-completion.md`
+(Phase 1, complete), and `MIGRATION_AUDIT_v2.md` (the pre-migration audit —
+note its file paths name the retired flat `openfoam_driver/` tree).
 
 ## Open Items
 
@@ -78,19 +97,20 @@ Tracked as standalone notes in `future/`, each with its own status:
   resolved; kept for the record of what the coupling was and why it wasn't a
   trivial fix.
 - [`future/ENVIRONMENT_CONTRACT.md`](future/ENVIRONMENT_CONTRACT.md) —
-  **open, and it supersedes Rule 1 above.** Rule 1's second sentence ("zero
-  OpenFOAM vocabulary") is not satisfied and, as stated, is not the goal:
-  `Allrun`, `system/controlDict` and `$FOAM_APPBIN` are one environment's
-  *bindings* of concepts core legitimately owns. That document restates the
-  rule as something checkable — core may name a binding only where it is
-  reached through a declared role, a capability hook, or a documented,
+  **partly implemented, and it supersedes Rule 1 above.** Rule 1's second
+  sentence ("zero OpenFOAM vocabulary") is not satisfied and, as stated, is not
+  the goal: `Allrun`, `system/controlDict` and `$FOAM_APPBIN` are one
+  environment's *bindings* of concepts core legitimately owns. That document
+  restates the rule as something checkable — core may name a binding only where
+  it is reached through a declared role, a capability hook, or a documented,
   overridable default — and measures which of core's bindings currently
-  qualify. Read it before acting on Rule 1 as written.
+  qualify. **Read it before acting on Rule 1 as written.**
 
-  It also corrects the claim in Migration Status above that "the
-  `omnidriver.plugins` entry-point group works": the packaging declares that
-  group, `core/plugin_discovery.py:59` reads `driverfoam.plugins`, and
-  selecting a plugin by name resolves nothing. See `GITHUB_MIGRATION.md` §1.
+  Its §5a landed in Phase 1: the role vocabulary is validated at profile load
+  (`plugin_profile.KNOWN_ROLES`), and a case's entrypoint is resolved from the
+  plugin's declared `openfoam.entrypoint` rule instead of a hardcoded `Allrun`.
+  Its §5b — the trust boundary — is deliberately still open, and §6's
+  `GenericEnvironmentPlugin` rename is blocked on it.
 
 
 ## Plugin capability seams

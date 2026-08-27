@@ -1,5 +1,21 @@
 # Migration Audit v2: Solver-Agnostic Core Engine (evidence-checked)
 
+> **⚠ Historical. Read for reasoning, not for locations.** This audit predates
+> the three-package split: every path it names lives in the retired flat
+> `openfoam_driver/` tree, and its line numbers do not correspond to anything
+> in the current layout. Its §0 blocker (a broken default context) and §3
+> finding (`_case_is_runnable` was already capability-routed) were both
+> resolved during the migration.
+>
+> Current state and remaining work:
+> [`GITHUB_MIGRATION.md`](GITHUB_MIGRATION.md) §3,
+> [`future/ENVIRONMENT_CONTRACT.md`](future/ENVIRONMENT_CONTRACT.md), and
+> `docs/superpowers/plans/2026-08-27-core-completion-phase-2.md`.
+>
+> One item here is still live and still uncorrected elsewhere: §3's note that
+> `sweep_materialize.py::_materialize_case_legacy` is dead code called from
+> nowhere. It still exists. Confirm it is still callerless before removing it.
+
 **Status:** the v1 audit's *direction* is correct but its *problem statement is
 incomplete and its Task 2 targets code that doesn't have the bug it
 describes*. This version replaces claims with file:line evidence gathered by

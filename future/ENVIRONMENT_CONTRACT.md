@@ -1,9 +1,18 @@
 # The Environment Contract: what `omnidriver` core owns, and how
 
-**Status: specification, not yet implemented.** Written 2026-08-27 after an
+**Status: §5a implemented, §5b and §6 open.** Written 2026-08-27 after an
 evidence-checked audit of the three-package split. Supersedes the framing in
 `ARCHITECTURE.md`'s Rule 1, which this document replaces with something the
 code can actually satisfy.
+
+| section | state |
+|---|---|
+| §4 the restated rule | adopted; `ARCHITECTURE.md` Open Items points here |
+| §5a role validation | **done** — `plugin_profile.KNOWN_ROLES`, enforced at load (Phase 1 Task 2) |
+| §5a entrypoint wiring | **done** — `registry._entrypoint_relpaths()` (Phase 1 Task 3) |
+| §5b trust boundary | open, deliberately deferred — Phase 3 |
+| §6 `GenericEnvironmentPlugin` | open, blocked on §5b |
+| §7 the cardiac `Phase` enum | open — Phase 2 Task 3 ports `get_phases()` |
 
 ## 1. The problem with Rule 1 as written
 
@@ -57,7 +66,7 @@ That is the pattern. The gap is that almost nothing else follows it.
 | case directories to walk | `system`, `constant` | `openfoam.case_directory` | **yes** — `provenance_inputs.py:93` derives from declared path segments |
 | time-control document | `system/controlDict` | `openfoam.control_dict` | **yes** — `provenance_inputs.py:111` |
 | plugin vs environment file split | — | prefix `openfoam.` / `plugin.` | **yes** — `tutorial_contracts.py:123,127` |
-| entrypoint script | `Allrun` | `openfoam.entrypoint` | **no** — declared in `cardiacfoam/plugin.yaml:64`, read nowhere; `Allrun` hardcoded at `registry.py:79,88,302`, `generic_case.py:137` |
+| entrypoint script | `Allrun` | `openfoam.entrypoint` | **yes, since Phase 1** — `registry._entrypoint_relpaths()` resolves it by role, falling back to `("Allrun",)` when a plugin declares none. `generic_case.py:137` is still hardcoded: it has no `driver_context` at all (Phase 2) |
 | cleanup script | `Allclean` | `openfoam.cleanup` | **no** — declared, read nowhere |
 | mesh generation input | `system/blockMeshDict` | `openfoam.mesh_generation` | **no** — declared, read nowhere |
 | trusted executable roots | `$FOAM_APPBIN`, `$FOAM_USER_APPBIN` | — | **no seam** — `os.environ` read directly at `workflow.py:483` |
@@ -69,10 +78,11 @@ That is the pattern. The gap is that almost nothing else follows it.
 
 Two further facts:
 
-- **`role` is unvalidated.** `plugin_profile.py:101` checks only that it is a
-  non-empty string. A plugin writing `control_dict` instead of
-  `openfoam.control_dict` is silently reclassified as plugin-owned.
-  `plugin_capabilities.py:461` warns about this in prose; nothing enforces it.
+- ~~**`role` is unvalidated.**~~ **Fixed in Phase 1 Task 2.**
+  `plugin_profile.KNOWN_ROLES` is the eleven-role enum, enforced at profile
+  load, so `control_dict` instead of `openfoam.control_dict` now fails loudly
+  instead of being silently reclassified as plugin-owned. Both shipped profiles
+  loaded unchanged — the enum described reality rather than constraining it.
 - **`generic-plugin.yaml` declares OpenFOAM paths.** `system/controlDict` and
   `constant`. So renaming `GenericOpenFOAMPlugin` without changing what it
   declares would be cosmetic.

@@ -1,5 +1,22 @@
 # Core Completion — Phase 1 Implementation Plan
 
+> ## ✅ COMPLETE — all five tasks landed 2026-08-27
+>
+> Branch `phase1-core-completion`, commits `a57eac4`..`8418365`. The unchecked
+> `- [ ]` boxes below are the plan as written, kept as the record of what was
+> specified; they are **not** outstanding work. Delivered: G1 (core imports
+> from a built wheel) and G2 (a plugin resolves by entry-point name), both
+> guarded; the role vocabulary validated; the case entrypoint plugin-declared;
+> and 19 of the 20 cardiac gates proven unreachable with the twentieth closed.
+>
+> Suite went from **1456 passed / 1 failed** to **1469 passed / 0 failed**.
+> Core installed alone is still 160 failed — that is Phase 2's target, not a
+> regression here.
+>
+> Executing this plan found **five real defects in it**, each corrected in
+> place and recorded in `a4a5cc1` and `8418365`. Next:
+> [`2026-08-27-core-completion-phase-2.md`](2026-08-27-core-completion-phase-2.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make the four claims `omnidriver` already advertises actually true —
