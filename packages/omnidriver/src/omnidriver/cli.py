@@ -198,7 +198,7 @@ def _execute_step(
             # OverrideError subclasses ValueError, so ValueError covers it and
             # core needs no import of the exception type.
             driver_context.capabilities.override_scopes.apply(
-                overrides, case_root=case_root,
+                overrides, case_root=case_root, driver_context=driver_context,
             )
         except (OSError, ValueError) as exc:
             print(json.dumps({

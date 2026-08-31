@@ -694,7 +694,7 @@ class OverrideScopeCapability(Protocol):
 
     def scopes(self) -> tuple["OverrideScope", ...]: ...
 
-    def apply(self, overrides: Any, *, case_root: Any) -> None: ...
+    def apply(self, overrides: Any, *, case_root: Any, driver_context: Any) -> None: ...
 
 
 class DictRegenerationCapability(Protocol):
@@ -1200,14 +1200,29 @@ class _OverrideScopeAdapter:
 
         return legacy_override_scopes(self.plugin)
 
-    def apply(self, overrides: Any, *, case_root: Any) -> None:
+    def apply(self, overrides: Any, *, case_root: Any, driver_context: Any) -> None:
+        """``driver_context`` is threaded through because the fallback needs it.
+
+        ``legacy_apply_overrides`` delegates to the OpenFOAM mutators, and
+        those now require an explicit context (Phase 2 Task 6, so that
+        ``omnidriver-openfoam`` stops silently resolving the cardiac default).
+        The adapter holds only ``self.plugin``, so without this parameter the
+        fallback had no context to pass and raised ``TypeError`` on the
+        ``step --strict --apply`` path -- invisible here because every test
+        covering it is ``skip_without_monorepo``.
+
+        Same shape as :meth:`SweepMaterializerCapability.route` and the
+        environment-preflight methods, which already take the context this way.
+        """
         hook = getattr(self.plugin, "apply_overrides", None)
         if callable(hook):
             hook(overrides, case_root=case_root)
             return
         from .compatibility import legacy_apply_overrides
 
-        legacy_apply_overrides(overrides, case_root=case_root)
+        legacy_apply_overrides(
+            overrides, case_root=case_root, driver_context=driver_context,
+        )
 
 
 @dataclass(frozen=True)

@@ -285,7 +285,7 @@ def legacy_load_environment(*, explicit_bashrc, driver_context) -> dict:
 
 
 @_instrumented
-def legacy_apply_overrides(overrides, *, case_root) -> None:
+def legacy_apply_overrides(overrides, *, case_root, driver_context) -> None:
     """Plugins predating apply_overrides(). The ``step --strict --apply`` path
     has always validated and applied overrides through the OpenFOAM dictionary
     mutators, for every plugin.
@@ -297,8 +297,8 @@ def legacy_apply_overrides(overrides, *, case_root) -> None:
 
     from omnidriver.openfoam.apply_overrides import apply_overrides, validate_overrides
 
-    validate_overrides(overrides)
-    apply_overrides(overrides, case_root=case_root)
+    validate_overrides(overrides, driver_context=driver_context)
+    apply_overrides(overrides, case_root=case_root, driver_context=driver_context)
 
 
 @_instrumented
