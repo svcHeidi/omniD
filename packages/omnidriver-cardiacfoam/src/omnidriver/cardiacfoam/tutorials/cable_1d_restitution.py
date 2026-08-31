@@ -23,7 +23,7 @@ from omnidriver.openfoam.utils import (
     set_delta_t,
     set_end_time,
 )
-from omnidriver.core.specs.spatial_pacing import generate_spatial_s1_s2_stimulus_lists
+from omnidriver.cardiacfoam.spatial_pacing import generate_spatial_s1_s2_stimulus_lists
 from omnidriver.openfoam.mesh_provisioning import cell_counts_from_dx
 
 

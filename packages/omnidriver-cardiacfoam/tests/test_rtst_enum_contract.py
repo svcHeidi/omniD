@@ -47,7 +47,7 @@ import pytest
 from conftest import monorepo_root, skip_without_monorepo
 from omnidriver.core.specs.paths import repo_root_default
 
-from omnidriver.scripts._rtst_scanner import (
+from omnidriver.cardiacfoam.rtst_scanner import (
     iter_catalogue_enums,
     scan_rtst_registrations,
 )

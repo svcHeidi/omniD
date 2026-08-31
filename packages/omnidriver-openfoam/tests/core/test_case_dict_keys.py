@@ -170,7 +170,7 @@ def test_catalogued_names_covers_wildcard_leaves_and_containers():
     false-positive rate on the C++ side.
     """
     from omnidriver.core.contracts.dictionary import DictEntry
-    from omnidriver.scripts._dict_keys_scanner import catalogued_names
+    from omnidriver.openfoam.dict_keys_scanner import catalogued_names
 
     entries = [
         DictEntry(

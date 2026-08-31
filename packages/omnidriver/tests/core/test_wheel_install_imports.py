@@ -35,12 +35,7 @@ for module in pkgutil.walk_packages(omnidriver.__path__, "omnidriver."):
 # Modules known to fail from a wheel for a reason tracked elsewhere. This set
 # may only SHRINK: an entry that stops matching fails the test, so it cannot
 # rot into a lie the way a silently-broad assertion would.
-KNOWN_UNIMPORTABLE = {
-    # Imports PHYSICS_PROPERTY_ENTRIES from omnidriver.dict_entries, whose PEP
-    # 562 __getattr__ resolves it out of omnidriver.cardiacfoam. Phase 2 moves
-    # this module to omnidriver-cardiacfoam and deletes this entry.
-    "omnidriver.scripts._rtst_scanner",
-}
+KNOWN_UNIMPORTABLE = set()
 
 unexpected = [line for line in bad if line.split(":")[0] not in KNOWN_UNIMPORTABLE]
 stale = KNOWN_UNIMPORTABLE - {line.split(":")[0] for line in bad}

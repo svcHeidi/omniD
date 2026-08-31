@@ -49,7 +49,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-from omnidriver.scripts._dict_keys_scanner import (
+from omnidriver.openfoam.dict_keys_scanner import (
     CataloguePath,
     DictRead,
     iter_catalogue_paths,

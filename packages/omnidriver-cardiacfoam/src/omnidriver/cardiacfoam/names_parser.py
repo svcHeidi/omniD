@@ -16,7 +16,7 @@
 #     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
 #
 # Module
-#     _names_parser
+#     names_parser
 #
 # Description
 #     Parses string identifiers and names from definitions.

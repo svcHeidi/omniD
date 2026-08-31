@@ -16,7 +16,7 @@
 #     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
 #
 # Module
-#     _dict_keys_scanner
+#     dict_keys_scanner
 #
 # Description
 #     Scans dictionary definitions for schema validation.
@@ -72,7 +72,7 @@ if TYPE_CHECKING:
 
 
 # ---------------------------------------------------------------------------
-# Comment stripping  (identical pattern to _rtst_scanner.py)
+# Comment stripping  (identical pattern to rtst_scanner.py)
 
 _BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
 _LINE_COMMENT = re.compile(r"//[^\n]*")

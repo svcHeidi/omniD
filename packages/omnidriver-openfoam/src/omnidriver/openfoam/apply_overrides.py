@@ -35,7 +35,7 @@
 #     override whose token matches no declared scope is rejected with an
 #     explicit "unknown scope token" error rather than the generic
 #     "not catalog-addressable" this module used to raise for every $-prefixed
-#     miss. specs/validation.py and scripts/_dict_keys_scanner.py separately
+#     miss. specs/validation.py and openfoam/dict_keys_scanner.py separately
 #     strip a leading "$TOKEN." for phase-slice/drift-scan normalization —
 #     that's a syntactic transform needing no plugin lookup, so it stayed
 #     generalized independently rather than routed through this capability.

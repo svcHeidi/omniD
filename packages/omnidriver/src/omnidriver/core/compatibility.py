@@ -361,6 +361,21 @@ def legacy_case_dict_key_diagnostics(case_root, *, catalogued_paths, dict_relpat
 
 
 @_instrumented
+def legacy_dict_key_scanner():
+    """Plugins predating a C++ dict-key scanner hook. strict_planning has
+    always scanned OpenFOAM C++ sources for dictionary-read call sites, for
+    every plugin -- the same was-never-actually-solver-neutral situation as
+    legacy_case_dict_key_diagnostics, which parses the dicts themselves.
+    Preserved as-is; a non-OpenFOAM plugin implements this itself."""
+
+    from omnidriver.openfoam.dict_keys_scanner import (
+        catalogued_paths, strict_dict_key_report,
+    )
+
+    return catalogued_paths, strict_dict_key_report
+
+
+@_instrumented
 def legacy_route_sweep_case(plugin, *, base, resolved_axis_values, driver_context):
     """Plugins predating route_sweep_case_values().
 
