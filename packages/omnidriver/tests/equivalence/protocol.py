@@ -25,15 +25,60 @@ from pathlib import Path
 
 import yaml
 
-from regression_equivalence.dual_run import (
-    parse_columnar_reference,
-)
-
 
 _RATIONALE = (
     "Transcribed verbatim from the committed regression reference, which "
     "predates E1; adopting it involves no post hoc threshold selection."
 )
+
+
+@dataclass(frozen=True)
+class _ReferencePoint:
+    data_file: str
+    time: float
+    variable: str
+    expected: float
+    tolerance: float
+
+
+def _parse_columnar_reference(text: str) -> list[_ReferencePoint]:
+    """Parse a `file time variable expected tolerance` reference file.
+
+    Returns [] for reference files that don't follow this columnar layout
+    (e.g. the bidomain `kind key metric ...` metric style), signalling the
+    caller to fall back to the case's own regressionTest.sh as the gate.
+
+    Duplicated (not imported) from
+    ``regression_equivalence.dual_run.parse_columnar_reference`` in
+    cardiacfoam's test tree: that module imports
+    ``regression_equivalence.registry``, a sibling module that lives only in
+    cardiacfoam's own tests directory, so importing it from core's test suite
+    would pull a cardiacfoam-only test package into a core-only install (the
+    regression this duplication fixes, see
+    docs/superpowers/plans/2026-08-27-core-completion-phase-2.md, Task 1).
+    This function itself is generic -- no cardiac knowledge -- so copying it
+    is safe and cheaper than relocating this whole module.
+    """
+    points: list[_ReferencePoint] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        cols = line.split()
+        if len(cols) < 5:
+            return []
+        data_file, time, variable, expected, tolerance = cols[:5]
+        try:
+            points.append(
+                _ReferencePoint(
+                    data_file, float(time), variable,
+                    float(expected), float(tolerance),
+                )
+            )
+        except ValueError:
+            # Non-numeric where numbers are expected -> not this layout.
+            return []
+    return points
 
 
 @dataclass(frozen=True)
@@ -88,7 +133,7 @@ def transcribe_reference(
             source_reference=reference_relpath,
             rationale=_RATIONALE,
         )
-        for point in parse_columnar_reference(reference_text)
+        for point in _parse_columnar_reference(reference_text)
     ]
 
 
