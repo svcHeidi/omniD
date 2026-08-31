@@ -11,6 +11,7 @@ locally with -m 'not slow'; CI runs it.
 """
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 import venv
@@ -60,6 +61,15 @@ def test_every_core_module_imports_from_a_wheel(tmp_path) -> None:
         [str(python), "-m", "pip", "install", "-q", "build"],
         check=True, capture_output=True,
     )
+    # setuptools keeps a build/lib cache in the package directory and reuses
+    # it, so a module deleted or MOVED since the last build is still packaged
+    # from that cache. That is not hypothetical: after Phase 2 Task 2 moved
+    # scripts/_rtst_scanner.py to omnidriver-cardiacfoam, a stale build/lib
+    # put the old file back into the wheel and failed this test against a
+    # module the source tree no longer contains. The same staleness can fail
+    # in the other direction and pass a wheel that is missing something.
+    # build/ is gitignored, so nothing else cleans it.
+    shutil.rmtree(_REPO_ROOT / "packages" / "omnidriver" / "build", ignore_errors=True)
     subprocess.run(
         [str(python), "-m", "build", "--wheel",
          str(_REPO_ROOT / "packages" / "omnidriver"), "-o", str(tmp_path / "dist")],
