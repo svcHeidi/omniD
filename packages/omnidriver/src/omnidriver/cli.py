@@ -596,12 +596,21 @@ def build_parser() -> argparse.ArgumentParser:
             "the plugin's Python code."
         ),
     )
+    from .core.plugin_interface import generic_openfoam_context
+
+    # No --plugin has been parsed yet at this point in parser construction,
+    # so this can only ever be the built-in neutral binding -- never the
+    # plugin the invocation will actually select. list_tutorials() now
+    # requires an explicit DriverContext (registry.py no longer resolves an
+    # implicit cardiac default); generic_openfoam_context() is a core-owned
+    # context that needs no plugin package installed, so --help works in a
+    # core-only install (G4).
     parser.add_argument(
         "--entry",
         required=False,
         help=(
             "Entry name or relative workflow/case path to run "
-            f"({', '.join(list_tutorials())}, genericCase)"
+            f"({', '.join(list_tutorials(generic_openfoam_context()))}, genericCase)"
         ),
     )
     parser.add_argument(

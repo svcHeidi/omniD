@@ -14,11 +14,20 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from omnidriver.core.plugin_interface import generic_openfoam_context
 from omnidriver.core.runtime.run_document_exec import (
     build_execution_inputs,
     load_run_document,
 )
 from omnidriver.core.runtime.run_model import RunDocument
+
+# A neutral, in-core context: these tests exercise the executor's own
+# diagnostic behaviour (loading, v1 migration, path/DAG validation), none of
+# which depends on a specific plugin's vocabulary. `driver_context` is a
+# mandatory parameter now (see test_core_context_is_explicit.py); this is
+# the built-in generic binding, not a judgement about which real plugin
+# owns this test.
+_CTX = generic_openfoam_context()
 
 
 def _empty_config() -> dict:
@@ -26,7 +35,14 @@ def _empty_config() -> dict:
 
 
 def _make_runnable_case(root: Path) -> Path:
-    """Create a minimal but _case_is_runnable-passing OpenFOAM case dir."""
+    """Create a minimal but _case_is_runnable-passing OpenFOAM case dir.
+
+    Includes an ``Allrun`` entrypoint (``registry._DEFAULT_ENTRYPOINT_RELPATHS``)
+    so the directory reads as runnable under any plugin's case-compatibility
+    hook, not only a cardiac one -- these tests exercise path/allowed-root
+    resolution, not plugin-specific case semantics, and now take an explicit
+    ``driver_context``.
+    """
     case = root / "case"
     (case / "constant").mkdir(parents=True)
     (case / "system").mkdir()
@@ -38,6 +54,7 @@ def _make_runnable_case(root: Path) -> Path:
         "system/fvSolution",
     ):
         (case / rel).write_text("\n")
+    (case / "Allrun").write_text("#!/bin/sh\nexit 0\n")
     return case
 
 
@@ -112,14 +129,14 @@ class TestLoadRunDocument(unittest.TestCase):
 class TestBuildExecutionInputsDiagnostics(unittest.TestCase):
     def test_missing_workflow_dag_is_not_executable(self) -> None:
         doc = _minimal_doc(workflowDag=None)
-        inputs, diagnostics = build_execution_inputs(doc)
+        inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
         self.assertIsNone(inputs)
         codes = {d["code"] for d in diagnostics}
         self.assertIn("missing_workflow_dag", codes)
 
     def test_missing_launch_paths_are_not_executable(self) -> None:
         doc = _minimal_doc(launch={})
-        inputs, diagnostics = build_execution_inputs(doc)
+        inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
         self.assertIsNone(inputs)
         codes = {d["code"] for d in diagnostics}
         self.assertIn("missing_case_root", codes)
@@ -130,7 +147,7 @@ class TestBuildExecutionInputsDiagnostics(unittest.TestCase):
             "steps": [{"id": "s", "command": "rm", "args": [], "cwd": ".",
                        "depends_on": [], "produces": [], "consumes": []}],
         })
-        inputs, diagnostics = build_execution_inputs(doc)
+        inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
         self.assertIsNone(inputs)
         codes = {d["code"] for d in diagnostics}
         self.assertIn("unknown_workflow_command", codes)
@@ -139,35 +156,35 @@ class TestBuildExecutionInputsDiagnostics(unittest.TestCase):
         doc = _minimal_doc(expectedArtifacts=[
             {"artifact_id": "x", "path_pattern": "a/{bogus}.dat", "format": "csv_probe"},
         ])
-        inputs, diagnostics = build_execution_inputs(doc)
+        inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
         self.assertIsNone(inputs)
         codes = {d["code"] for d in diagnostics}
         self.assertIn("invalid_expected_artifact", codes)
 
     def test_non_dict_launch_does_not_raise(self) -> None:
         doc = _minimal_doc(launch="not-a-dict")
-        inputs, diagnostics = build_execution_inputs(doc)  # must not raise
+        inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)  # must not raise
         self.assertIsNone(inputs)
         codes = {d["code"] for d in diagnostics}
         self.assertIn("invalid_launch", codes)
 
     def test_non_iterable_expected_artifacts_does_not_raise(self) -> None:
         doc = _minimal_doc(expectedArtifacts=42)
-        inputs, diagnostics = build_execution_inputs(doc)  # must not raise
+        inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)  # must not raise
         self.assertIsNone(inputs)
         codes = {d["code"] for d in diagnostics}
         self.assertIn("invalid_expected_artifacts", codes)
 
     def test_malformed_workflow_state_is_reported(self) -> None:
         doc = _minimal_doc(workflowState={"bogus": "shape"})
-        inputs, diagnostics = build_execution_inputs(doc)  # must not raise
+        inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)  # must not raise
         self.assertIsNone(inputs)
         codes = {d["code"] for d in diagnostics}
         self.assertIn("invalid_workflow_state", codes)
 
     def test_every_diagnostic_has_required_keys(self) -> None:
         doc = _minimal_doc(workflowDag=None, launch={})
-        _inputs, diagnostics = build_execution_inputs(doc)
+        _inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
         for d in diagnostics:
             self.assertIn("level", d)
             self.assertIn("code", d)
@@ -183,7 +200,7 @@ class TestCaseRootValidation(unittest.TestCase):
                 "caseRoot": str(missing),
                 "outputDir": str(missing / "out"),
             })
-            inputs, diagnostics = build_execution_inputs(doc)
+            inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
             self.assertIsNone(inputs)
             codes = {d["code"] for d in diagnostics}
             self.assertIn("case_root_missing", codes)
@@ -196,7 +213,7 @@ class TestCaseRootValidation(unittest.TestCase):
                 "caseRoot": str(empty),
                 "outputDir": str(empty / "out"),
             })
-            inputs, diagnostics = build_execution_inputs(doc)
+            inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
             self.assertIsNone(inputs)
             codes = {d["code"] for d in diagnostics}
             self.assertIn("case_root_not_a_runnable_case", codes)
@@ -212,7 +229,7 @@ class TestCaseRootValidation(unittest.TestCase):
                 "omnidriver.core.runtime.run_document_exec.validate_run",
                 return_value=[],
             ):
-                inputs, diagnostics = build_execution_inputs(doc)
+                inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
             self.assertIsNotNone(inputs, diagnostics)
             self.assertEqual(inputs.case_root, case.resolve())
             self.assertEqual(inputs.output_dir, (case.resolve() / "output"))
@@ -234,7 +251,7 @@ class TestAllowedRunsRoot(unittest.TestCase):
                      "omnidriver.core.runtime.run_document_exec.validate_run",
                      return_value=[],
                  ):
-                inputs, diagnostics = build_execution_inputs(doc)
+                inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
             self.assertIsNone(inputs)
             codes = {d["code"] for d in diagnostics}
             self.assertIn("case_root_outside_allowed_root", codes)
@@ -255,7 +272,7 @@ class TestAllowedRunsRoot(unittest.TestCase):
                      "omnidriver.core.runtime.run_document_exec.validate_run",
                      return_value=[],
                  ):
-                inputs, diagnostics = build_execution_inputs(doc)
+                inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
             self.assertIsNone(inputs)
             codes = {d["code"] for d in diagnostics}
             self.assertIn("output_dir_outside_allowed_root", codes)
@@ -273,7 +290,7 @@ class TestAllowedRunsRoot(unittest.TestCase):
                      "omnidriver.core.runtime.run_document_exec.validate_run",
                      return_value=[],
                  ):
-                inputs, diagnostics = build_execution_inputs(doc)
+                inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
             self.assertIsNotNone(inputs, diagnostics)
 
     def test_unset_allowed_root_permits_separate_output_dir(self) -> None:
@@ -295,7 +312,7 @@ class TestAllowedRunsRoot(unittest.TestCase):
                      return_value=[],
                  ):
                 os.environ.pop("DRIVERFOAM_ALLOWED_RUNS_ROOT", None)
-                inputs, diagnostics = build_execution_inputs(doc)
+                inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
             self.assertIsNotNone(inputs, diagnostics)
             self.assertEqual(inputs.output_dir, separate_out.resolve())
 

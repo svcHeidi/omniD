@@ -447,9 +447,12 @@ def test_command_allowlist_has_one_owner_shared_by_both_producers() -> None:
                 steps=[{"id": "run", "command": "curl", "depends_on": []}],
             ),
         ):
+            from omnidriver.core.plugin_interface import default_driver_context
+
             plan_report = strict_plan(
                 CASE_NAME,
                 overrides={"tutorials_root": str(planner_root)},
+                driver_context=default_driver_context(),
             ).to_json()
         assert "unknown_workflow_command" in _plan_codes(plan_report), plan_report
 

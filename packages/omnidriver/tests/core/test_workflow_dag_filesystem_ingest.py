@@ -37,7 +37,25 @@ import unittest
 from pathlib import Path
 import tempfile
 
+import pytest
+
 from omnidriver.core.runtime.registry import load_tutorial_spec, resolve_entry
+
+# These cases carry cardiac dict content (electroProperties,
+# myocardiumSolver) -- load_tutorial_spec/resolve_entry now require an
+# explicit DriverContext (test_core_context_is_explicit.py); the cardiac
+# context reproduces the previous implicit default exactly. Skipped cleanly,
+# not failed, when omnidriver-cardiacfoam is not installed.
+_cardiacfoam_plugin_module = pytest.importorskip(
+    "omnidriver.cardiacfoam.cardiacfoam_plugin",
+    reason="omnidriver-cardiacfoam is not installed",
+)
+from omnidriver.core.plugin_interface import driver_context as _driver_context  # noqa: E402
+
+_CTX = _driver_context(
+    _cardiacfoam_plugin_module.CardiacFoamPlugin(),
+    source="test:workflow_dag_filesystem_ingest",
+)
 
 
 class TestFilesystemCaseWorkflowOwnership(unittest.TestCase):
@@ -62,7 +80,7 @@ class TestFilesystemCaseWorkflowOwnership(unittest.TestCase):
             spec = load_tutorial_spec(
                 "myCase",
                 overrides={"tutorials_root": tutorials_root},
-            )
+                driver_context=_CTX,)
 
             dag = spec.metadata.get("workflow_dag")
             self.assertEqual(
@@ -79,7 +97,7 @@ class TestFilesystemCaseWorkflowOwnership(unittest.TestCase):
             spec = load_tutorial_spec(
                 "bareCase",
                 overrides={"tutorials_root": tutorials_root},
-            )
+                driver_context=_CTX,)
 
             dag = spec.metadata.get("workflow_dag")
             self.assertIsNone(dag, "workflow_dag must be None when Allrun is absent")
@@ -100,7 +118,7 @@ class TestFilesystemCaseWorkflowOwnership(unittest.TestCase):
             resolution = resolve_entry(
                 "variantCase",
                 overrides={"tutorials_root": tutorials_root},
-            )
+                driver_context=_CTX,)
 
             self.assertEqual(resolution["resolution"], "case_folder")
             self.assertTrue(resolution["is_runnable"])

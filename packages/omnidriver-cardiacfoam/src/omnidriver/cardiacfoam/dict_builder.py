@@ -59,6 +59,7 @@ from omnidriver.openfoam.dict_builder import (
 from omnidriver.openfoam.dict_builder import (
     select_applicable_entries as _select_applicable_entries,
 )
+from omnidriver.core.plugin_interface import default_driver_context
 from omnidriver.core.specs.validation import (
     _predicate_matches,
     slot_key,
@@ -270,7 +271,7 @@ def build_electro_properties(
     # entry-point. `check_required` stays exported for callers that want
     # just the required-field subset.
     run = _populated_to_run(populated, entries)
-    errors = [e for e in validate_run(run, entries=entries) if e.level == "error"]
+    errors = [e for e in validate_run(run, entries=entries, driver_context=default_driver_context()) if e.level == "error"]
     if errors:
         raise ValueError(
             "build_electro_properties: validator rejected synthesised dict:\n  - "
@@ -815,7 +816,7 @@ def build_physics_properties(
     )
 
     run = _populated_to_run(populated, entries)
-    errors = [e for e in validate_run(run, entries=entries) if e.level == "error"]
+    errors = [e for e in validate_run(run, entries=entries, driver_context=default_driver_context()) if e.level == "error"]
     if errors:
         raise ValueError(
             "build_physics_properties: validator rejected synthesised dict:\n  - "

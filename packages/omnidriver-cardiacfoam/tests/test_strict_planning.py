@@ -19,6 +19,7 @@ from omnidriver.openfoam.dict_keys_scanner import (
 )
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
+from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 from omnidriver.core.strict_planning import strict_plan
 
@@ -26,6 +27,11 @@ from omnidriver.core.strict_planning import strict_plan
 REPO_ROOT = monorepo_root or repo_root_default()
 CARDIAC_PLUGIN = CardiacFoamPlugin()
 CARDIAC_MAPPING = CARDIAC_PLUGIN.get_profile().cxx_mapping
+
+# strict_plan now takes a mandatory driver_context
+# (test_core_context_is_explicit.py); this file already builds
+# CARDIAC_PLUGIN above, so this reproduces the previous implicit default.
+_CTX = _driver_context(CARDIAC_PLUGIN, source="test:strict_planning")
 
 
 def _spec_with_workflow(case_root: Path, *, steps: list[dict]) -> TutorialSpec:
@@ -48,7 +54,7 @@ def _spec_with_workflow(case_root: Path, *, steps: list[dict]) -> TutorialSpec:
 
 
 def test_strict_plan_succeeds_for_single_cell() -> None:
-    report = strict_plan("singleCell", openfoam_bashrc="/no/such/openfoam/bashrc")
+    report = strict_plan("singleCell", openfoam_bashrc="/no/such/openfoam/bashrc", driver_context=_CTX)
     payload = report.to_json()
 
     assert payload["status"] == "ok"
@@ -109,7 +115,7 @@ def test_strict_plan_succeeds_for_single_cell() -> None:
 
 
 def test_strict_plan_succeeds_for_manufactured_tutorial() -> None:
-    report = strict_plan("manufacturedBidomain")
+    report = strict_plan("manufacturedBidomain", driver_context=_CTX)
     payload = report.to_json()
 
     assert payload["status"] == "ok"
@@ -153,7 +159,7 @@ def test_strict_plan_status_ignores_environment_only_errors(monkeypatch) -> None
         lambda name, *_, **__: f"/usr/bin/{name}" if name == "cardiacFoam" else None,
     )
 
-    report = strict_plan("singleCell", openfoam_bashrc="/no/such/openfoam/bashrc")
+    report = strict_plan("singleCell", openfoam_bashrc="/no/such/openfoam/bashrc", driver_context=_CTX)
     payload = report.to_json()
 
     assert payload["status"] == "ok"
@@ -225,8 +231,7 @@ def test_strict_plan_fails_on_unknown_workflow_command() -> None:
         ):
             report = strict_plan(
                 "badCase",
-                overrides={"tutorials_root": str(tutorials_root)},
-            )
+                overrides={"tutorials_root": str(tutorials_root)}, driver_context=_CTX,)
 
     payload = report.to_json()
     assert payload["status"] == "failed"
@@ -264,8 +269,7 @@ def test_strict_plan_fails_on_unknown_workflow_dependency() -> None:
         ):
             report = strict_plan(
                 "badDependency",
-                overrides={"tutorials_root": str(tutorials_root)},
-            )
+                overrides={"tutorials_root": str(tutorials_root)}, driver_context=_CTX,)
 
     payload = report.to_json()
     assert payload["status"] == "failed"
@@ -303,8 +307,7 @@ def test_strict_plan_fails_when_artifact_prediction_is_empty() -> None:
 
         report = strict_plan(
             "missingArtifacts",
-            overrides={"tutorials_root": str(tutorials_root)},
-        )
+            overrides={"tutorials_root": str(tutorials_root)}, driver_context=_CTX,)
 
     payload = report.to_json()
     assert payload["status"] == "failed"

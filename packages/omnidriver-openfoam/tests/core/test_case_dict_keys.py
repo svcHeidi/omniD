@@ -120,6 +120,7 @@ def test_strict_plan_reports_a_misspelled_key_without_failing(tmp_path):
     """
     import shutil
 
+    from omnidriver.core.plugin_interface import default_driver_context
     from omnidriver.core.strict_planning import strict_plan
 
     tutorials_root = tmp_path / "tutorials"
@@ -138,6 +139,7 @@ def test_strict_plan_reports_a_misspelled_key_without_failing(tmp_path):
         entry_kind="case_folder",
         overrides={"tutorials_root": str(tutorials_root)},
         openfoam_bashrc="/no/such/openfoam/bashrc",
+        driver_context=default_driver_context(),
     )
     payload = report.to_json()
 
@@ -267,6 +269,7 @@ def test_a_misspelled_key_is_silently_replaced_by_the_catalogue_default(tmp_path
     import shutil
 
     from omnidriver.cardiacfoam import dict_builder as DB
+    from omnidriver.core.plugin_interface import default_driver_context
     from omnidriver.core.strict_planning import strict_plan
 
     tutorials_root = tmp_path / "tutorials"
@@ -292,6 +295,7 @@ def test_a_misspelled_key_is_silently_replaced_by_the_catalogue_default(tmp_path
         entry_kind="case_folder",
         overrides={"tutorials_root": str(tutorials_root)},
         openfoam_bashrc="/no/such/openfoam/bashrc",
+        driver_context=default_driver_context(),
     ).to_json()
 
     # The plan is valid -- the built dict really is complete and correct.

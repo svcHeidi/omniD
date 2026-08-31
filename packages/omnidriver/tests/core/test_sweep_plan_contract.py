@@ -17,9 +17,27 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from conftest import skip_without_monorepo
 from omnidriver.core.runtime.sweep_runner import sweep_plan
 from omnidriver.core.specs.paths import repo_root_default
+
+# Spec below is cardiac vocabulary (singleCell entry, ionic models) --
+# sweep_plan now takes a mandatory driver_context
+# (test_core_context_is_explicit.py). The cardiac context reproduces this
+# file's prior implicit behaviour; skipped cleanly, not failed, when
+# omnidriver-cardiacfoam is not installed. See test_sweep_runner.py for the
+# same disposition and its rationale.
+_cardiacfoam_plugin_module = pytest.importorskip(
+    "omnidriver.cardiacfoam.cardiacfoam_plugin",
+    reason="omnidriver-cardiacfoam is not installed",
+)
+from omnidriver.core.plugin_interface import driver_context as _driver_context  # noqa: E402
+
+_CTX = _driver_context(
+    _cardiacfoam_plugin_module.CardiacFoamPlugin(), source="test:sweep_plan_contract",
+)
 
 _SPEC = {
     "base": {
@@ -49,7 +67,7 @@ def test_a_factory_failure_fails_one_case_not_the_command(tmp_path):
     spec_path = tmp_path / "sweep.json"
     spec_path.write_text(json.dumps(_SPEC))
 
-    report = sweep_plan(spec_path, output_dir=tmp_path / "out")
+    report = sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=_CTX)
 
     failed = [c for c in report["cases"] if c["status"] == "failed"]
     assert len(failed) == 1, report["cases"]
@@ -62,7 +80,7 @@ def test_a_malformed_spec_is_reported_structurally(tmp_path):
     spec_path = tmp_path / "sweep.json"
     spec_path.write_text("{ not json")
 
-    report = sweep_plan(spec_path, output_dir=tmp_path / "out")
+    report = sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=_CTX)
 
     assert report["case_count"] == 0
     assert report["cases"] == []
@@ -73,7 +91,7 @@ def test_a_malformed_spec_is_reported_structurally(tmp_path):
 def test_a_valid_spec_reports_no_spec_error(tmp_path):
     spec_path = tmp_path / "sweep.json"
     spec_path.write_text(json.dumps(_SPEC))
-    report = sweep_plan(spec_path, output_dir=tmp_path / "out")
+    report = sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=_CTX)
     assert "spec_error" not in report
 
 

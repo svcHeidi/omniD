@@ -138,7 +138,7 @@ def test_resolve_case_models_missing_file_is_none():
 def test_describe_entry_includes_capability_manifest():
     from omnidriver.core.introspection import describe_entry
 
-    payload = describe_entry("singleCell")
+    payload = describe_entry("singleCell", driver_context=default_driver_context())
     manifest = payload["capability_manifest"]
     assert "cardiacFoam" in manifest["allowed_commands"]["core"]
     assert "electro" in manifest["samplable_fields"]
@@ -148,5 +148,7 @@ def test_strict_plan_carries_capability_manifest(monkeypatch):
     monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
     from omnidriver.core.strict_planning import strict_plan
 
-    report = strict_plan("singleCell").to_json()
+    report = strict_plan(
+        "singleCell", driver_context=default_driver_context(),
+    ).to_json()
     assert "cardiacFoam" in report["capability_manifest"]["allowed_commands"]["core"]

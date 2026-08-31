@@ -44,6 +44,7 @@ def _case_without_solver_selector(tmp_path: Path) -> Path:
 
 @skip_without_monorepo
 def test_unresolvable_solver_selector_is_reported_as_a_diagnostic(tmp_path):
+    from omnidriver.core.plugin_interface import default_driver_context
     from omnidriver.core.strict_planning import strict_plan
 
     tutorials_root = _case_without_solver_selector(tmp_path)
@@ -52,6 +53,7 @@ def test_unresolvable_solver_selector_is_reported_as_a_diagnostic(tmp_path):
         entry_kind="case_folder",
         overrides={"tutorials_root": str(tutorials_root)},
         openfoam_bashrc="/no/such/openfoam/bashrc",
+        driver_context=default_driver_context(),
     ).to_json()
 
     assert payload["status"] == "failed"

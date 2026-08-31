@@ -22,7 +22,9 @@ def test_report_has_mesh_geometry_field() -> None:
 
 def test_mesh_gate_skipped_by_env(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("SKIP_MESH_DIAGNOSTICS", "1")
-    assert _mesh_geometry_diagnostics(tmp_path) == ()
+    assert _mesh_geometry_diagnostics(
+        tmp_path, driver_context=generic_openfoam_context(),
+    ) == ()
 
 
 def test_manufactured_entry_is_nondimensional(tmp_path: Path) -> None:
@@ -30,7 +32,9 @@ def test_manufactured_entry_is_nondimensional(tmp_path: Path) -> None:
         case_root=str(tmp_path),
         metadata={"entry_name": "manufacturedBidomain"},
     )
-    assert _is_nondimensional_entry(spec) is True
+    assert _is_nondimensional_entry(
+        spec, driver_context=generic_openfoam_context(),
+    ) is True
 
 
 def test_plain_entry_is_dimensional(tmp_path: Path) -> None:

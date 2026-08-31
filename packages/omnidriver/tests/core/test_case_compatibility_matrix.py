@@ -6,6 +6,22 @@ import pytest
 
 from omnidriver.core.runtime.registry import list_entries
 
+# The matrix below is cardiac vocabulary (electroProperties as case marker)
+# -- list_entries()'s underlying registry function now requires an explicit
+# DriverContext (test_core_context_is_explicit.py); the cardiac context
+# reproduces the previous implicit default exactly. Skipped cleanly, not
+# failed, when omnidriver-cardiacfoam is not installed.
+_cardiacfoam_plugin_module = pytest.importorskip(
+    "omnidriver.cardiacfoam.cardiacfoam_plugin",
+    reason="omnidriver-cardiacfoam is not installed",
+)
+from omnidriver.core.plugin_interface import driver_context as _driver_context  # noqa: E402
+
+_CTX = _driver_context(
+    _cardiacfoam_plugin_module.CardiacFoamPlugin(),
+    source="test:case_compatibility_matrix",
+)
+
 
 def _touch(case_root: Path, relative: str) -> None:
     path = case_root / relative
@@ -45,7 +61,7 @@ def test_existing_case_discovery_and_runnability_matrix(
         _touch(case_root, relative)
 
     matches = [
-        entry for entry in list_entries(tmp_path)
+        entry for entry in list_entries(tmp_path, driver_context=_CTX)
         if entry["entry_name"] == "candidate"
     ]
     assert bool(matches) is discovered

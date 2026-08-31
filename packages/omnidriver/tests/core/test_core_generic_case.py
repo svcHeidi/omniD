@@ -29,6 +29,7 @@ def test_plain_allrun_case_plans_without_cardiac_dictionaries(tmp_path: Path) ->
     report = strict_plan(
         "plainOpenFoamCase",
         overrides={"tutorials_root": str(tmp_path)},
+        driver_context=driver_context(GenericOpenFOAMPlugin(), source="test"),
     )
 
     assert report.status == "ok"
