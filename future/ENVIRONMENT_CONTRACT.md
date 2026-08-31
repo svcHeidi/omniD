@@ -83,6 +83,16 @@ Two further facts:
   load, so `control_dict` instead of `openfoam.control_dict` now fails loudly
   instead of being silently reclassified as plugin-owned. Both shipped profiles
   loaded unchanged — the enum described reality rather than constraining it.
+- **A binding can hide in a helper's *location*, not just its name.**
+  `catalogued_paths` parses core's own `DictEntry.driver_path`; it reads no
+  file and knows no C++. It lived in the OpenFOAM C++ dict-key scanner, so
+  moving that scanner out of core (Phase 2 Task 2) silently made core's
+  `strict_plan` depend on `omnidriver.openfoam` — and unavoidably, because it
+  is called *eagerly* to build an argument, before the capability can dispatch
+  to a plugin's own hook. Fixed by splitting the vocabulary
+  (`core/contracts/catalogue_paths.py`) from the scanning. The rule in §4 has
+  to be applied to what a function *does*, not to the module it happens to
+  sit in.
 - **`generic-plugin.yaml` declares OpenFOAM paths.** `system/controlDict` and
   `constant`. So renaming `GenericOpenFOAMPlugin` without changing what it
   declares would be cosmetic.

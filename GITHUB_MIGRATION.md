@@ -134,6 +134,13 @@ listed. The executable plan is
 the ownership rule it serves is
 [`future/ENVIRONMENT_CONTRACT.md`](future/ENVIRONMENT_CONTRACT.md).
 
+**Progress, 2026-08-27.** Phase 1 (branch `phase1-core-completion`) closed the
+entry-point and wheel-install rows and validated the role vocabulary. Phase 2's
+first wave took core-only failures 160 → 140, closing the
+`regression_equivalence` and `omnidriver.openfoam` categories entirely. The
+`DriverContext` row below is now known to be **two** pieces of work, only one of
+which is mechanical — see the Phase 2 plan's "Task 5, remeasured".
+
 ### Ported from `driverFoam` (present there, absent here)
 
 | work | status | why it matters |

@@ -35,22 +35,28 @@ omnidriver/ (GitHub Root)
 complete; Rule 1 as originally written is superseded — see
 `future/ENVIRONMENT_CONTRACT.md` and the Open Items below.
 
-Measured on that branch tip, 2026-08-27, Python 3.13:
+Measured on `d6566a1` (Phase 2 wave 1 landed), 2026-08-27, Python 3.13:
 
 | | state |
 |---|---|
 | all three packages installed | **1469 passed, 273 skipped, 0 failed** |
-| core installed alone | 514 passed, 91 skipped, **160 failed** |
+| core installed alone | 529 passed, 91 skipped, **140 failed** |
 | core imported from a built wheel | ✅ guarded by `test_wheel_install_imports.py` |
 | plugin resolves by entry-point name | ✅ guarded by `test_entry_point_group_matches_packaging.py` |
 | core's CLI usable alone | ✗ `--help` dies resolving an implicit context |
 | `"org.cardiacfoam"` in core | ✗ 20 occurrences, all now provably unreachable |
 
-The 160 core-only failures are the honest measure of how far core is from
-standing alone, and they are **four** distinct causes, not one — 129 from the
-implicit cardiac `DriverContext`, 11 from two *ungated* OpenFOAM fallbacks, 8
-from a test-tree regression, 11 from export scripts. Closing them is Phase 2:
-`docs/superpowers/plans/2026-08-27-core-completion-phase-2.md`.
+The core-only failure count is the honest measure of how far core is from
+standing alone. It began at 160 across four distinct causes; Phase 2's first
+wave closed two of them entirely — the test-tree regression and every failure
+reaching `omnidriver.openfoam`. The remaining 140 are 129 from the implicit
+cardiac `DriverContext` and 11 subprocess failures in export scripts.
+
+Those 129 are **not** mostly a threading problem, which the Phase 2 plan
+originally assumed. Measured: only ~13% are in test files that already build a
+non-cardiac context; ~87% need a per-test decision about which plugin the test
+should run under, and some cannot pass under any plugin because they are written
+against cardiacFoam's tutorial catalogue. See that plan's "Task 5, remeasured".
 
 **Two claims this section used to make, both withdrawn 2026-08-27:**
 

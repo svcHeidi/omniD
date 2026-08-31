@@ -1,5 +1,35 @@
 # Core Completion — Phase 2 Implementation Plan
 
+> ## Progress: Tasks 1, 2, 4 landed. Task 5 RESCOPED — read §"Task 5, remeasured" before starting it.
+>
+> Core-only failures **160 → 140**; all-packages still **1469 passed / 0 failed**.
+> Two of the four failure categories are now zero: `regression_equivalence` (Task 1)
+> and `omnidriver.openfoam` (Task 4). Remaining: 129 `omnidriver.cardiacfoam`,
+> 11 subprocess.
+>
+> | task | state |
+> |---|---|
+> | 1 equivalence regression | ✅ `9df738b` |
+> | 2 relocate four modules | ✅ `1bde1a5`, corrected by `2e7ac99` |
+> | 3 `get_phases()` | not started |
+> | 4 neutral environment plugin | ✅ `4a96c18` |
+> | 5 explicit `DriverContext` | **rescoped — see below** |
+> | 6 openfoam context sites | not started |
+> | 7 delete the 20 gates | not started |
+>
+> **Merging 2 and 4 produced 3 failures neither had alone.** Both were cut from
+> the same base; Task 2 added `legacy_dict_key_scanner` afterwards, and
+> `strict_plan()` calls `catalogued_paths` *eagerly* to build an argument, so the
+> openfoam import fires before the capability can dispatch to a plugin's hook.
+> Root cause was that Task 2 moved too much: `catalogued_paths` parses core's own
+> `DictEntry`, reads no file and knows no C++. Extracted to
+> `core/contracts/catalogue_paths.py` in `2e7ac99`. **Lesson for the remaining
+> waves: parallel tasks that both touch `compatibility.py` need a combined run
+> before either is called done.**
+>
+> Also fixed: the wheel guard could be poisoned by a stale setuptools
+> `build/lib` cache, which is gitignored so nothing cleaned it (`d6566a1`).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make `omnidriver` stand alone — its own test suite passes with only
@@ -35,7 +65,7 @@ validated enum (`plugin_profile.KNOWN_ROLES`), the case entrypoint is resolved
 by declared role, and `test_no_cardiac_gate_is_reached.py` is the standing
 census that makes Task 7's deletion safe.
 
-## The 160, broken down
+## The 160, broken down *(as first measured; now 140 — see the progress banner)*
 
 Measured on the Phase 1 tip in a core-only 3.13 venv. Every task below names
 which slice it removes.
@@ -805,6 +835,85 @@ almost certainly the second kind. Verify by reading it.
 Expected: core-only **140 failed** (152 minus these 12); all-packages 0 failed.
 Every remaining core-only failure should now name `omnidriver.cardiacfoam`
 — confirm with the `--tb=line` breakdown and quote it.
+
+---
+
+### Task 5, remeasured — it is not one task, and it is not mostly mechanical
+
+**Read this before Task 5 as written below.** The task description assumes the
+129 remaining failures are a threading problem that converting 21 signatures
+fixes. Measured on `d6566a1`, that is wrong.
+
+**Where the 129 enter core** (last core frame before `compatibility.py`):
+
+| n | entry point |
+|---|---|
+| 43 | `plugin_interface.py:652 default_driver_context()` — the **test itself** asked for the cardiac context |
+| 17 | `sweep_runner.py:368 sweep_run()` |
+| 12 | `registry.py:483 _get_plugin_tutorials()` |
+| 12 | `sweep_routing.py:43 route_case_values()` — a module Task 5 deliberately does **not** convert |
+| 10 | `validation.py:324 validate_run()` |
+| 8 | `sweep_runner.py:263 sweep_plan()` |
+| 4 | `sweep_materialize.py:42 materialize_case()` — likewise **not** converted |
+| 23 | the remaining core sites |
+
+**Why signature conversion alone fixes almost none of them.** Making
+`driver_context` required does not give a test a plugin; it changes
+`ModuleNotFoundError` into `TypeError: missing required argument`. Every one of
+the 129 still needs a decision: *which plugin should this test run under?*
+
+**And for many, no context makes them pass.** `test_sweep_runner.py` — 23 of the
+129 — has 79 lines of cardiac vocabulary and a shared fixture defaulting to
+`entry="niederer2012"`. There is no `niederer2012` tutorial without
+`omnidriver-cardiacfoam` installed. Threading a context cannot help; the file is
+a core test written against cardiacFoam's tutorial catalogue.
+
+**Classified by what each failing test file already does:**
+
+| n | the file … | disposition |
+|---|---|---|
+| 17 | builds a non-cardiac context and still fails | genuine threading gap — mechanical |
+| 19 | builds only the cardiac context | ownership decision |
+| 27 | builds both | per-test decision |
+| 77 | builds no context at all | ownership decision |
+
+**~13% mechanical, ~87% per-test judgement.**
+
+### Split Task 5 in two
+
+**Task 5a — thread explicit context through `core/` (mechanical).** The 21
+signature sites, the transformation below, and both guards. Legacy's diff is a
+faithful template. Expect it to fix ~17 failures and to convert most of the rest
+from `ModuleNotFoundError` to `TypeError`, which is *progress*: the guard test
+then names every site that still lacks a context, instead of the failure being
+invisible until cardiacfoam is uninstalled. Safe to hand to an agent.
+
+**Task 5b — adjudicate the test suite (judgement).** For each remaining failing
+test, decide: does it exercise **core** behaviour using cardiacFoam as a
+convenient concrete fixture (→ give it `GenericOpenFOAMPlugin` or
+`NeutralEnvironmentPlugin`, keep it in core), or does it exercise **cardiacFoam**
+behaviour (→ move it to `packages/omnidriver-cardiacfoam/tests/`)?
+
+**This is the one task in either phase that must not be batch-delegated without
+per-file review.** Its failure mode is silent and it is not the usual one. The
+"never weaken a test" rule catches an assertion being softened; here the
+assertions survive intact and simply stop being exercised against anything
+meaningful — swap `niederer2012` for a generic plugin and the test goes green
+while testing nothing. A green suite would then certify an isolation the code
+does not have, which is precisely the class of false reassurance this repository
+has produced three times already (an import gate scanning the wrong directory, a
+collection check blind to function-scoped imports, a wheel guard reading a stale
+build cache).
+
+Two rules for 5b:
+
+1. **A test that goes green under a generic plugin must still fail if the
+   behaviour it names regresses.** Mutation-check a sample, do not assume.
+2. **Moving to cardiacfoam is the default, not the fallback.** If a test needs
+   cardiacFoam's tutorial catalogue, ionic models, or dictionary vocabulary to
+   mean anything, it is a cardiacFoam test that was written in the wrong tree.
+   `test_sweep_runner.py` and `test_sweep_routing.py` are the obvious
+   candidates; read them before deciding.
 
 ---
 
