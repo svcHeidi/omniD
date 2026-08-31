@@ -43,11 +43,14 @@ which slice it removes.
 | count | cause | task |
 |---|---|---|
 | 129 | `omnidriver.cardiacfoam` — `legacy_default_driver_context()` behind `resolve_public_driver_context()` | 5, 6 |
-| 8 | `omnidriver.openfoam` at `compatibility.py:545` — `legacy_config_value_reader`, an **ungated** fallback | 4 |
-| 3 | `omnidriver.openfoam` at `compatibility.py:278` — `legacy_environment_diagnostics`, likewise ungated | 4 |
-| 1 | `omnidriver.openfoam` imported directly by `tests/core/test_sweep_materialize.py:98` | 4 |
+| 12 | `omnidriver.openfoam` — the two **ungated** fallbacks (`legacy_config_value_reader`, `legacy_environment_diagnostics`) plus one direct test import | 4 |
+| 11 | subprocess failures — 10 `CalledProcessError` from `scripts/export-*.py`, 1 `JSONDecodeError` from a CLI test. All resolve the implicit context one layer out | 5 (follows) |
 | 8 | `regression_equivalence` — a regression introduced by `f1651b7` | 1 |
-| 11 | subprocess failures in `scripts/export-*.py`, which resolve the implicit context one layer out | 5 (follows) |
+
+*Re-measured 2026-08-27 on `fb0b91d` with a `pytest_runtest_logreport` hook,
+not by pairing `--tb=line` output: that pairing silently misaligns, because the
+11 subprocess failures do not emit a cause line. An earlier count in this plan
+split the openfoam slice 8/3/1 across the wrong files. Trust the hook.*
 
 The 11 export-script failures are not a separate defect: those scripts call
 core APIs without a context, so they resolve automatically once Task 5 lands.
@@ -679,13 +682,50 @@ which is also the only way core's suite proves core works without OpenFOAM.
 - Modify: the core test files that currently trip the fallbacks
 - Modify or move: `packages/omnidriver/tests/core/test_sweep_materialize.py`
 
-- [ ] **Step 1: Identify the exact failing tests**
+- [ ] **Step 1: Confirm the worklist**
 
-```bash
-/tmp/od_core/bin/python -m pytest packages/omnidriver/tests -q -m "not slow" --tb=line 2>&1 \
-  | grep "omnidriver.openfoam" -B2
+Measured on `fb0b91d`. These are the 12, in four files:
+
+| file | n | tests |
+|---|---|---|
+| `tests/core/test_provenance_inputs.py` | 8 | `test_selected_start_time_directory_is_included_others_excluded`, `test_latest_time_selects_the_latest_written_time_directory`, `test_postprocessing_and_workflow_logs_are_excluded`, `test_generic_plugin_still_requires_unknown_files`, `test_an_allrun_named_by_the_dag_is_included`, `test_a_parallel_step_includes_both_mpirun_and_its_payload`, `test_a_required_but_unresolved_step_executable_is_unavailable_not_omitted`, `test_processor_selected_time_is_included_other_processor_times_excluded` |
+| `tests/core/test_generic_plan_has_no_cardiac_semantics.py` | 2 | `test_generic_plan_contains_no_cardiac_semantics`, `test_generic_plan_still_produces_a_usable_contract` |
+| `tests/core/test_core_generic_case.py` | 1 | `test_plain_allrun_case_works_with_the_no_domain_context` |
+| `tests/core/test_sweep_materialize.py` | 1 | `test_materialize_case_honours_dx_for_spatial_solver` |
+
+Confirm with the hook rather than by grepping tracebacks — a `--tb=line` pairing
+misaligns here:
+
+```python
+# /tmp/failcause.py
+import collections
+_rows = []
+def pytest_runtest_logreport(report):
+    if report.failed and report.when == "call":
+        text = str(report.longrepr)
+        for pat in ("omnidriver.cardiacfoam", "omnidriver.openfoam",
+                    "regression_equivalence"):
+            if f"No module named '{pat}'" in text:
+                _rows.append((report.nodeid, pat)); return
+        _rows.append((report.nodeid, "other"))
+def pytest_sessionfinish(session, exitstatus):
+    print(collections.Counter(c for _, c in _rows))
+    for nid, c in _rows:
+        if c == "omnidriver.openfoam": print(nid)
 ```
-Record the test ids. There should be 12.
+```bash
+PYTHONPATH=/tmp /tmp/od_core/bin/python -m pytest packages/omnidriver/tests \
+  -q -p failcause -m "not slow"
+```
+
+**Two of these are worth reading before you touch them.**
+`test_generic_plan_has_no_cardiac_semantics.py` is an *architecture guard* —
+that it cannot run in a core-only install is itself a finding, and the guard is
+the kind of test that must keep asserting exactly what it asserts today.
+`test_provenance_inputs.py` owns 8 of the 12 and contains `_FakePlugin`, a
+subclass of `MinimalOpenFOAMPlugin` that overrides `__init__` without calling
+`super()` — Phase 1 Task 3 had to accommodate it. Expect it to need the neutral
+hooks too, and prefer giving `_FakePlugin` the hooks over rewriting each test.
 
 - [ ] **Step 2: Write the neutral plugin**
 
