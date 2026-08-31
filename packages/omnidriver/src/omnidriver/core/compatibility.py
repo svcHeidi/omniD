@@ -366,13 +366,18 @@ def legacy_dict_key_scanner():
     always scanned OpenFOAM C++ sources for dictionary-read call sites, for
     every plugin -- the same was-never-actually-solver-neutral situation as
     legacy_case_dict_key_diagnostics, which parses the dicts themselves.
-    Preserved as-is; a non-OpenFOAM plugin implements this itself."""
+    Preserved as-is; a non-OpenFOAM plugin implements this itself.
 
-    from omnidriver.openfoam.dict_keys_scanner import (
-        catalogued_paths, strict_dict_key_report,
-    )
+    Returns only the C++ REPORT. The catalogue-path vocabulary that used to
+    come back alongside it is core's own (see
+    core/contracts/catalogue_paths.py) and must not be routed through here:
+    strict_plan calls it eagerly to build an argument, so an openfoam import
+    at that point fires even for a plugin that implements
+    get_case_dict_key_diagnostics and would never reach the fallback."""
 
-    return catalogued_paths, strict_dict_key_report
+    from omnidriver.openfoam.dict_keys_scanner import strict_dict_key_report
+
+    return strict_dict_key_report
 
 
 @_instrumented

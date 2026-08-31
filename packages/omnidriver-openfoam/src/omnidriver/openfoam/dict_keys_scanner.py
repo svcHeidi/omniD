@@ -225,16 +225,21 @@ def scan_dict_reads(src_root: Path) -> list[DictRead]:
 # ---------------------------------------------------------------------------
 # Catalogue-side helper
 
-@dataclass(frozen=True)
-class CataloguePath:
-    driver_path: str            # original value from DictEntry
-    normalised: str             # driver_path with a leading $SCOPE_TOKEN. stripped
-    leaf: str                   # last dot-segment
-    parents: tuple[str, ...]    # all segments before the leaf
-    has_wildcard: bool          # True if any segment matches <...>
-
-    # Whether the entry is flagged as dynamic_path=True in the catalogue.
-    dynamic_path: bool
+# ---------------------------------------------------------------------------
+# Catalogue-side vocabulary -- owned by core, re-exported here.
+#
+# CataloguePath and friends parse core's own DictEntry.driver_path; they read
+# no file and know no C++. They lived here until core's strict_planning could
+# no longer import them without pulling in omnidriver.openfoam. Re-exported so
+# this module's own drift checks (and its tests) keep their existing names.
+from omnidriver.core.contracts.catalogue_paths import (  # noqa: F401
+    _WILDCARD_RE,
+    CataloguePath,
+    _as_paths,
+    _parse_path,
+    catalogued_paths,
+    iter_catalogue_paths,
+)
 
 
 @dataclass(frozen=True)
@@ -279,40 +284,6 @@ class DictKeyStrictReport:
         }
 
 
-_WILDCARD_RE = re.compile(r"<[^>]+>")
-# Any plugin-declared override scope token, not just the built-in cardiac
-# plugin's $ELECTRO_MODEL_COEFFS -- this is a syntactic "$TOKEN." shape,
-# never resolved to a file or scope path here, so no plugin lookup is
-# needed to recognize and strip it.
-_SCOPE_TOKEN_PREFIX_RE = re.compile(r"^\$[A-Z][A-Z0-9_]*\.")
-
-
-def _parse_path(driver_path: str, is_dynamic: bool) -> CataloguePath:
-    # Strip a leading scope-token prefix, if present.
-    normalised = _SCOPE_TOKEN_PREFIX_RE.sub("", driver_path, count=1)
-
-    segments = normalised.split(".")
-    leaf = segments[-1]
-    parents = tuple(segments[:-1])
-    has_wildcard = any(_WILDCARD_RE.search(s) for s in segments)
-
-    return CataloguePath(
-        driver_path=driver_path,
-        normalised=normalised,
-        leaf=leaf,
-        parents=parents,
-        has_wildcard=has_wildcard,
-        dynamic_path=is_dynamic,
-    )
-
-
-def iter_catalogue_paths(
-    entries: Iterable["DictEntry"],
-) -> Iterable[CataloguePath]:
-    """Yield paths from the active plugin's explicit dictionary catalogue."""
-    for entry in entries:
-        yield _parse_path(entry.driver_path, entry.dynamic_path)
-
 
 IGNORED_FOAMFILE_KEYS: frozenset[str] = frozenset(
     {
@@ -348,25 +319,6 @@ def load_dict_key_allowlist(path: Path) -> dict[str, set[str]]:
         "unmatched_subdicts": set(payload.get("unmatched_subdicts", [])),
     }
 
-
-def _as_paths(entries):
-    """Accept either DictEntry objects or already-parsed CataloguePath ones."""
-    items = list(entries)
-    if items and isinstance(items[0], CataloguePath):
-        return items
-    return list(iter_catalogue_paths(items))
-
-
-def catalogued_paths(entries: Iterable["DictEntry"]) -> tuple[str, ...]:
-    """Scope-stripped catalogue paths, for position-aware matching.
-
-    ``catalogued_names`` flattens the catalogue to a set of bare names, which
-    is all the C++ side can use -- a regex match on source gives no position.
-    A case file does give position, so ``core/specs/case_dict_keys.py`` uses
-    these full paths instead and can tell an author's instance label under a
-    ``<placeholder>`` from a real misspelling.
-    """
-    return tuple(path.normalised for path in _as_paths(entries))
 
 
 def catalogued_names(entries: Iterable["DictEntry"]) -> set[str]:

@@ -62,6 +62,7 @@ from omnidriver.core.planning_types import (
     diagnostic as _diagnostic,
 )
 from .compatibility import legacy_dict_key_scanner
+from .contracts.catalogue_paths import catalogued_paths as _catalogued_paths
 
 
 @dataclass(frozen=True)
@@ -252,7 +253,7 @@ def _catalog_diagnostics(driver_context: "DriverContext") -> tuple[StrictDiagnos
     mapping = driver_context.capabilities.cxx_mapping.profile().cxx_mapping
     if mapping is None:
         return ()
-    _, strict_dict_key_report = legacy_dict_key_scanner()
+    strict_dict_key_report = legacy_dict_key_scanner()
     diagnostics: list[StrictDiagnostic] = []
     for source_root in mapping.source_roots:
         if not source_root.is_dir():
@@ -472,7 +473,6 @@ def strict_plan(
         spec.case_root,
         samplable=raw_capability_manifest.get("samplable_fields", {}),
     )
-    _catalogued_paths, _ = legacy_dict_key_scanner()
     case_dict_key_diagnostics = driver_context.capabilities.dict_diagnostics.case_dict_keys(
         spec.case_root,
         catalogued_paths=_catalogued_paths(
