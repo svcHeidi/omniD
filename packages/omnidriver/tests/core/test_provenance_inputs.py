@@ -39,9 +39,9 @@ from pathlib import Path
 import pytest
 
 from omnidriver.core.plugin_capabilities import ResolvedInput, RuntimeDependency
-from omnidriver.core.plugin_interface import default_driver_context, driver_context, generic_openfoam_context
+from omnidriver.core.plugin_interface import default_driver_context, driver_context
 from omnidriver.core.runtime.provenance_inputs import enumerate_case_inputs
-from plugins.minimal_plugin import MinimalOpenFOAMPlugin
+from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
 
 
 def _paths(components, *, kind: str | None = None) -> set[str]:
@@ -69,9 +69,17 @@ def _make_executable(path: Path, content: bytes) -> None:
     path.chmod(path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
 
-class _FakePlugin(MinimalOpenFOAMPlugin):
+class _FakePlugin(NeutralEnvironmentPlugin):
     """A v1 plugin that declares CaseProvenanceCapability / RuntimeEvidence
-    hooks inline, so precedence can be exercised without a tutorial."""
+    hooks inline, so precedence can be exercised without a tutorial.
+
+    Base class changed from ``MinimalOpenFOAMPlugin`` to
+    ``NeutralEnvironmentPlugin`` (Task 4): the latter answers
+    ``get_config_value_reader``/``get_environment_diagnostics`` itself and
+    declares the canonical ``system/controlDict`` / ``constant`` / ``Allrun``
+    case-file rules, which is what lets every test in this module run without
+    ``omnidriver.openfoam`` installed. ``NeutralEnvironmentPlugin`` is itself a
+    ``MinimalOpenFOAMPlugin`` subclass, so this remains a v1 plugin."""
 
     def __init__(self, *, required_inputs=(), generated_output_globs=(), extra_provenance_paths=()):
         self._required_inputs = required_inputs
@@ -116,7 +124,7 @@ def test_selected_start_time_directory_is_included_others_excluded(tmp_path: Pat
         (time_dir / "Vm").write_text(f"field-at-{time_name}")
 
     components = enumerate_case_inputs(
-        tmp_path, workflow_dag={"steps": []}, driver_context=generic_openfoam_context(),
+        tmp_path, workflow_dag={"steps": []}, driver_context=driver_context(_FakePlugin(), source="test"),
     )
     included = _paths(components, kind="case_file")
 
@@ -135,7 +143,7 @@ def test_latest_time_selects_the_latest_written_time_directory(tmp_path: Path) -
         (time_dir / "Vm").write_text(f"field-at-{time_name}")
 
     components = enumerate_case_inputs(
-        tmp_path, workflow_dag={"steps": []}, driver_context=generic_openfoam_context(),
+        tmp_path, workflow_dag={"steps": []}, driver_context=driver_context(_FakePlugin(), source="test"),
     )
     included = _paths(components, kind="case_file")
 
@@ -151,7 +159,7 @@ def test_postprocessing_and_workflow_logs_are_excluded(tmp_path: Path) -> None:
     (tmp_path / "postProcessing" / "ecgProbes" / "0" / "data").write_text("probe data")
 
     components = enumerate_case_inputs(
-        tmp_path, workflow_dag={"steps": []}, driver_context=generic_openfoam_context(),
+        tmp_path, workflow_dag={"steps": []}, driver_context=driver_context(_FakePlugin(), source="test"),
     )
     included = _paths(components, kind="case_file")
 
@@ -177,7 +185,7 @@ def test_generic_plugin_still_requires_unknown_files(tmp_path: Path) -> None:
     (tmp_path / "constant" / "C").write_bytes(b"mesh-diagnostic-byproduct")
 
     components = enumerate_case_inputs(
-        tmp_path, workflow_dag={"steps": []}, driver_context=generic_openfoam_context(),
+        tmp_path, workflow_dag={"steps": []}, driver_context=driver_context(_FakePlugin(), source="test"),
     )
 
     assert "constant/C" in _paths(components, kind="case_file")
@@ -189,7 +197,7 @@ def test_an_allrun_named_by_the_dag_is_included(tmp_path: Path) -> None:
 
     workflow_dag = {"steps": [{"id": "solve", "command": "Allrun", "depends_on": []}]}
     components = enumerate_case_inputs(
-        tmp_path, workflow_dag=workflow_dag, driver_context=generic_openfoam_context(),
+        tmp_path, workflow_dag=workflow_dag, driver_context=driver_context(_FakePlugin(), source="test"),
     )
 
     allrun = _by_path(components, "Allrun")
@@ -215,7 +223,7 @@ def test_a_parallel_step_includes_both_mpirun_and_its_payload(tmp_path: Path) ->
     }
     env = {"PATH": str(bin_dir)}
     components = enumerate_case_inputs(
-        tmp_path, workflow_dag=workflow_dag, driver_context=generic_openfoam_context(), env=env,
+        tmp_path, workflow_dag=workflow_dag, driver_context=driver_context(_FakePlugin(), source="test"), env=env,
     )
 
     mpirun = _by_path(components, "mpirun")
@@ -232,7 +240,7 @@ def test_a_required_but_unresolved_step_executable_is_unavailable_not_omitted(tm
     env = {"PATH": str(tmp_path / "nowhere")}
 
     components = enumerate_case_inputs(
-        tmp_path, workflow_dag=workflow_dag, driver_context=generic_openfoam_context(), env=env,
+        tmp_path, workflow_dag=workflow_dag, driver_context=driver_context(_FakePlugin(), source="test"), env=env,
     )
 
     block_mesh = _by_path(components, "blockMesh")
@@ -339,7 +347,7 @@ def test_processor_selected_time_is_included_other_processor_times_excluded(tmp_
     (proc0 / "0.5" / "Vm").write_text("later time, not an input")
 
     components = enumerate_case_inputs(
-        tmp_path, workflow_dag={"steps": []}, driver_context=generic_openfoam_context(),
+        tmp_path, workflow_dag={"steps": []}, driver_context=driver_context(_FakePlugin(), source="test"),
     )
     included = _paths(components, kind="case_file")
 

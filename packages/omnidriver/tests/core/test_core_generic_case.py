@@ -2,8 +2,23 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from omnidriver.core.plugin_interface import generic_openfoam_context
+from omnidriver.core.generic_plugin import GenericOpenFOAMPlugin
+from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.strict_planning import strict_plan
+from plugins.neutral_environment_plugin import _EnvironmentNeutralHooks
+
+
+class _GenericOpenFOAMPluginWithNeutralEnvironment(_EnvironmentNeutralHooks, GenericOpenFOAMPlugin):
+    """``GenericOpenFOAMPlugin`` -- same identity, same declared case files,
+    same capability manifest -- plus the neutral answers to the hooks whose
+    core.compatibility fallback imports omnidriver.openfoam unconditionally.
+
+    Needed here specifically (rather than swapping in
+    ``NeutralEnvironmentPlugin``) because
+    ``test_plain_allrun_case_works_with_the_no_domain_context`` asserts
+    ``report.plugin["id"] == "org.driverfoam.generic-openfoam"`` -- it is
+    pinning the built-in generic plugin's identity, not merely "some
+    plugin", so the double must keep that identity intact."""
 
 
 def test_plain_allrun_case_plans_without_cardiac_dictionaries(tmp_path: Path) -> None:
@@ -42,7 +57,9 @@ def test_plain_allrun_case_works_with_the_no_domain_context(tmp_path: Path) -> N
     report = strict_plan(
         "plainOpenFoamCase",
         overrides={"tutorials_root": str(tmp_path)},
-        driver_context=generic_openfoam_context(),
+        driver_context=driver_context(
+            _GenericOpenFOAMPluginWithNeutralEnvironment(), source="test",
+        ),
     )
 
     assert report.status == "ok"

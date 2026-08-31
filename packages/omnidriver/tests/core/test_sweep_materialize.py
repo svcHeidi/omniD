@@ -21,6 +21,12 @@
 # Description
 #     Tests sweep case materialization via build_and_launch.
 #
+#     test_materialize_case_honours_dx_for_spatial_solver moved to
+#     omnidriver-openfoam/tests/core/test_sweep_materialize.py (Phase 2
+#     Task 4): it imports omnidriver.openfoam.mesh_provisioning directly and
+#     asserts on its OpenFOAM blockMeshDict output, so it belongs with the
+#     OpenFOAM-behaviour tests, not core's.
+#
 # Author
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
@@ -92,23 +98,6 @@ def test_materialize_case_runs_block_mesh_first_for_spatial_solver(tmp_path):
     assert (case_dir / "system" / "blockMeshDict").exists()
     allrun_text = (case_dir / "Allrun").read_text()
     assert allrun_text.index("blockMesh") < allrun_text.index("cardiacFoam")
-
-
-def test_materialize_case_honours_dx_for_spatial_solver(tmp_path):
-    from omnidriver.openfoam.mesh_provisioning import default_block_mesh_dict_text
-
-    case_dir = tmp_path / "TNNP_monodomain_fine"
-    materialize_case(
-        case_dir=case_dir,
-        routed={
-            "electro_selectors": {"myocardiumSolver": "monodomainSolver", "tissue": "epicardialCells", "ionicModel": "TNNP"},
-            "physics_selectors": {"type": "electroModel"},
-            "electro_overrides": {}, "physics_overrides": {},
-            "delta_t": None, "end_time": None, "dx": 0.0004,
-        },
-    )
-    written = (case_dir / "system" / "blockMeshDict").read_text()
-    assert written == default_block_mesh_dict_text(dx_m=0.0004)
 
 
 def test_materialize_case_raises_on_invalid_combination(tmp_path):
