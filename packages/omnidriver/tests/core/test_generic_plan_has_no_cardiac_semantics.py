@@ -33,9 +33,10 @@ import json
 import stat
 from pathlib import Path
 
-from omnidriver.core.plugin_interface import generic_openfoam_context
+from omnidriver.core.plugin_interface import driver_context, generic_openfoam_context
 from omnidriver.core.introspection import describe_entry
 from omnidriver.core.strict_planning import strict_plan
+from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
 
 # Every token that would betray a cardiac assumption leaking into a plan
 # produced for a non-cardiac solver.
@@ -72,11 +73,22 @@ def _minimal_case(root: Path) -> Path:
 
 
 def _generic_plan(tmp_path: Path) -> dict:
+    """Plans against ``NeutralEnvironmentPlugin`` rather than
+    ``generic_openfoam_context()`` (Task 4): ``GenericOpenFOAMPlugin`` has no
+    ``get_environment_diagnostics`` hook of its own, so ``strict_plan`` falls
+    through to ``core.compatibility``'s ungated default, which imports
+    ``omnidriver.openfoam`` unconditionally -- making this architecture guard
+    unable to run in a core-only install, which defeats its own point.
+    ``NeutralEnvironmentPlugin`` answers the hook itself and declares the same
+    ``system/controlDict`` / ``constant`` / ``Allrun`` case-file rules
+    ``GenericOpenFOAMPlugin`` does, so the plan produced is equivalent for
+    every assertion below -- none of which pins the built-in plugin's
+    identity, only the absence of cardiac semantics."""
     case = _minimal_case(tmp_path)
     return strict_plan(
         str(case.relative_to(tmp_path)),
         overrides={"tutorials_root": str(tmp_path)},
-        driver_context=generic_openfoam_context(),
+        driver_context=driver_context(NeutralEnvironmentPlugin(), source="test"),
     ).to_json()
 
 
