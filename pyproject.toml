@@ -18,6 +18,4 @@ markers = [
 addopts = "--import-mode=importlib"
 pythonpath = [
     "packages/omnidriver/tests",
-    "packages/omnidriver-openfoam/tests",
-    "packages/omnidriver-cardiacfoam/tests",
 ]
