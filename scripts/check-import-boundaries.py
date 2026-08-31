@@ -6,11 +6,17 @@ Rules (see ARCHITECTURE.md "Architectural Rules"):
      and must never import foamlib directly.
   2. omnidriver.openfoam must not import omnidriver.cardiacfoam.
 
-The one documented exception is core/compatibility.py, whose whole purpose is
-lazily importing omnidriver.openfoam/omnidriver.cardiacfoam inside legacy_*
-fallback functions (see docs/superpowers/plans/2026-08-25-monorepo-package-migration.md
-Task 5 Step 3) -- those imports are never reached unless a plugin declines to
-implement the corresponding capability hook. compatibility.py may still not
+core/compatibility.py is exempt from the omnidriver.openfoam prefix only: its
+ungated environment fallbacks are a documented, overridable default (see
+future/ENVIRONMENT_CONTRACT.md §4) -- those imports are never reached unless a
+plugin declines to implement the corresponding capability hook.
+compatibility.py is NOT exempt from the omnidriver.cardiacfoam prefix any
+more: after Phase 2 Task 7 removed the twenty cardiac-gated fallbacks, the
+only remaining cardiac imports in the file
+(legacy_default_driver_context, legacy_generic_case_mutation) are the public
+compatibility edge Task 5 deliberately preserved, and are individually waived
+in KNOWN_VIOLATIONS below rather than blanket-exempted -- a new cardiac import
+anywhere else in the file now fails this gate. compatibility.py may still not
 import foamlib directly; it must go through omnidriver.openfoam.
 
 Imports inside ``if TYPE_CHECKING:`` blocks are never runtime imports, so
@@ -45,6 +51,16 @@ KNOWN_VIOLATIONS: frozenset[str] = frozenset({
     # PEP 562 lazy re-export kept for external importers of the deprecated
     # CONTROL_DICT_ENTRIES / PHYSICS_PROPERTY_ENTRIES names.
     "dict_entries.py:80:omnidriver.cardiacfoam.common_dict_entries",
+    # Permanent compatibility edge (not debt): the historical public API lets
+    # a caller omit a plugin/context entirely, and the only sane default has
+    # always been cardiacFoam. dict_entries.py, sweep_routing.py,
+    # sweep_materialize.py and cli.py all deliberately keep reaching this.
+    # Phase 2 Task 5a preserved it on purpose; Task 7 only removed the twenty
+    # gated fallbacks sitting alongside it.
+    "core/compatibility.py:59:omnidriver.cardiacfoam.cardiacfoam_plugin",
+    # Same permanent compatibility edge as above, for the historical public
+    # make_spec's cardiac dictionary mutation. Not debt.
+    "core/compatibility.py:86:omnidriver.cardiacfoam.generic_case_mutation",
 })
 # Removed once fixed: cli.py's two module-scope omnidriver.openfoam imports,
 # which made `import omnidriver.cli` fail in a core-only install. They now go
@@ -107,7 +123,13 @@ def main() -> int:
 
     for path in CORE_SRC.rglob("*.py"):
         if path == COMPATIBILITY_FILE:
-            forbidden = ("foamlib",)
+            # Still exempt for omnidriver.openfoam: the ungated environment
+            # fallbacks are a documented, overridable default
+            # (future/ENVIRONMENT_CONTRACT.md §4). NOT exempt for
+            # omnidriver.cardiacfoam any more -- after Task 7 the only cardiac
+            # imports left serve the public compatibility edge, and any new one
+            # is a regression.
+            forbidden = ("foamlib", "omnidriver.cardiacfoam")
         else:
             forbidden = ("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam")
         found.extend(_check_file(path, forbidden, CORE_SRC))
@@ -143,11 +165,12 @@ def main() -> int:
         for v in violations:
             print(f"  {v}")
         print(
-            "\nomnidriver.core must not import foamlib, omnidriver.openfoam, or "
-            "omnidriver.cardiacfoam at runtime (except inside core/compatibility.py's "
-            "legacy_* fallbacks, which may import omnidriver.openfoam/omnidriver.cardiacfoam "
-            "but never foamlib directly). omnidriver.openfoam must not import "
-            "omnidriver.cardiacfoam. See ARCHITECTURE.md's Architectural Rules."
+            "\nomnidriver.core must not import foamlib or omnidriver.cardiacfoam at "
+            "runtime, and must not import omnidriver.openfoam except inside "
+            "core/compatibility.py's ungated environment fallbacks (a documented, "
+            "overridable default -- see future/ENVIRONMENT_CONTRACT.md §4). "
+            "omnidriver.openfoam must not import omnidriver.cardiacfoam. "
+            "See ARCHITECTURE.md's Architectural Rules."
         )
         return 1
 

@@ -7,12 +7,22 @@ That import-level test cannot see *which plugin* the fallback is answering
 for, though: a fallback may legally live in ``compatibility.py`` and still
 route every caller into cardiac code.
 
-Thirteen fallbacks gate on ``plugin_id == "org.cardiacfoam"`` and hand a
-neutral value to everyone else. Six reachable through a capability adapter did
-not, so the shipped ``GenericOpenFOAMPlugin`` -- which implements only one of
-the six hooks -- answered cardiac questions about non-cardiac cases. The worst
-of them wrote an ``Allrun`` invoking the ``cardiacFoam`` binary for a sweep
-under a plugin that is not cardiacFoam.
+Historically, thirteen fallbacks reachable through a capability adapter gated
+on ``plugin_id == "org.cardiacfoam"`` and handed a neutral value to everyone
+else; six did not gate at all, so the shipped ``GenericOpenFOAMPlugin`` --
+which implements only one of the six hooks -- answered cardiac questions about
+non-cardiac cases. The worst of them wrote an ``Allrun`` invoking the
+``cardiacFoam`` binary for a sweep under a plugin that is not cardiacFoam.
+
+Phase 2 Task 7 deleted every ``plugin_id`` gate once the standing census
+(``test_no_cardiac_gate_is_reached.py``) proved none of them was still reached
+-- CardiacFoamPlugin now implements every hook directly, so every fallback in
+this file hands the same neutral value (or refusal) to *any* plugin,
+cardiacFoam included. The tests below stay behavioural rather than
+gate-counting for exactly the reason this docstring originally gave: they
+still need to prove the cardiac code path is not what makes a non-cardiac
+case runnable, and that cardiacFoam's own hooks -- not a fallback -- are what
+make a cardiac case runnable now.
 
 These tests are behavioural on purpose. Asserting "the cardiac module was not
 imported" is unreliable once any other test has imported it; asserting that a
