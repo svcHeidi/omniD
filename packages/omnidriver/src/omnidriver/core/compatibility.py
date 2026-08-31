@@ -473,6 +473,28 @@ def legacy_dict_entry_catalog(plugin) -> dict:
 
 
 @_instrumented
+def legacy_phases(plugin) -> tuple[str, ...]:
+    """The dictionary phases for a plugin that does not implement
+    ``get_phases()``: those its own ``DictEntry`` values declare, sorted for
+    determinism.
+
+    Sorted, not ordered -- and the order is the semantics, since
+    ``primary_phase()`` returns the first phase in it that an entry claims. A
+    plugin with multi-phase entries should implement ``get_phases()`` rather
+    than accept an alphabetical guess. What this must never do is hand back
+    cardiacFoam's four to a plugin that never declared them: that was the
+    silent defect this replaces.
+
+    Ungated -- no ``plugin_id`` check. It derives from the plugin's own
+    ``DictEntry`` values, so it is correct for every plugin."""
+
+    declared: set[str] = set()
+    for entry in plugin.get_dict_entries():
+        declared.update(entry.phases)
+    return tuple(sorted(declared))
+
+
+@_instrumented
 def legacy_describe_config_resolution(plugin) -> str:
     """v1 plugins predate describe_config_resolution(). A plugin that does not
     implement the hook gets a plugin-neutral sentence."""

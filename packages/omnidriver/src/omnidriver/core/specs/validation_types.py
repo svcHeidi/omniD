@@ -1,11 +1,9 @@
 from dataclasses import dataclass
 
-from omnidriver.core.contracts.dictionary import Phase
-
 
 @dataclass(frozen=True)
 class ValidationError:
-    phase: Phase
+    phase: str          # a plugin-declared phase, not core's Phase literal
     field: str
     message: str
     level: str  # "error" | "warning"

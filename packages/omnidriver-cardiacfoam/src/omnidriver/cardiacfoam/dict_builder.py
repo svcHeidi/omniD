@@ -270,8 +270,11 @@ def build_electro_properties(
     # does), so we don't pre-call `check_required` from the public builder
     # entry-point. `check_required` stays exported for callers that want
     # just the required-field subset.
-    run = _populated_to_run(populated, entries)
-    errors = [e for e in validate_run(run, entries=entries, driver_context=default_driver_context()) if e.level == "error"]
+    context_ = default_driver_context()
+    run = _populated_to_run(
+        populated, entries, context_.capabilities.dictionaries.phases(),
+    )
+    errors = [e for e in validate_run(run, entries=entries, driver_context=context_) if e.level == "error"]
     if errors:
         raise ValueError(
             "build_electro_properties: validator rejected synthesised dict:\n  - "
@@ -815,8 +818,11 @@ def build_physics_properties(
         entries, context, typical_value_fallback=typical_value_fallback,
     )
 
-    run = _populated_to_run(populated, entries)
-    errors = [e for e in validate_run(run, entries=entries, driver_context=default_driver_context()) if e.level == "error"]
+    context_ = default_driver_context()
+    run = _populated_to_run(
+        populated, entries, context_.capabilities.dictionaries.phases(),
+    )
+    errors = [e for e in validate_run(run, entries=entries, driver_context=context_) if e.level == "error"]
     if errors:
         raise ValueError(
             "build_physics_properties: validator rejected synthesised dict:\n  - "

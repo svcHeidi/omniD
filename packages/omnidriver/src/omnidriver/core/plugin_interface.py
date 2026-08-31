@@ -297,7 +297,7 @@ class SolverPluginOptionalHooks(Protocol):
     inert at load time: ``validate_plugin`` never consults it, and declaring or
     omitting any of these changes no plugin's loading behaviour.
 
-    **Why this class exists.** Until it did, these fourteen hooks appeared
+    **Why this class exists.** Until it did, these fifteen hooks appeared
     nowhere in the plugin contract. They were reachable only by reading the
     private ``_*Adapter`` bodies, so a plugin author reading this file could
     not discover that the extension points existed at all -- while *not*
@@ -489,6 +489,20 @@ class SolverPluginOptionalHooks(Protocol):
         """Bare selector overrides whose value change REGENERATES a dict file
         rather than patching it -- renaming sub-blocks or changing which
         sibling keys are legal. Absent -> ``()``."""
+        ...
+
+    # -- DictionaryCatalogCapability ------------------------------------------
+    def get_phases(self) -> tuple[str, ...]:
+        """This plugin's dictionary editing phases, in order.
+
+        The ORDER is the semantics, not decoration: ``primary_phase()`` returns
+        the first phase in this tuple that an entry claims, and every other
+        phase the entry declares is a read-only mirror. These strings are also
+        the top-level keys of ``RunDocument.config``.
+
+        Absent -> the phases the plugin's own ``DictEntry`` values declare,
+        which is correct but unordered. Declare this hook if any entry is
+        multi-phase, because otherwise which phase is "primary" is arbitrary."""
         ...
 
 

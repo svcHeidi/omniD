@@ -47,7 +47,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from openfoam_driver.dict_entries import DictEntry
 from omnidriver.core.runtime.run_model import RunDocument
 from omnidriver.core.specs.validation import (
     _entry_is_applicable,
@@ -57,6 +56,15 @@ from omnidriver.core.specs.validation import (
 )
 
 if TYPE_CHECKING:
+    # DictEntry appears only in annotations here, and this module has
+    # `from __future__ import annotations`, so it is never needed at runtime.
+    # It used to be imported at MODULE SCOPE from `openfoam_driver.dict_entries`
+    # -- the pre-migration package name, which exists in no install. That made
+    # `import omnidriver.openfoam.dict_builder` raise ModuleNotFoundError from
+    # any cwd outside this repo, and it went unnoticed because the retired
+    # `openfoam_driver/` tree is still tracked at the repo root: running pytest
+    # from there puts cwd on sys.path and the stale package resolves.
+    from omnidriver.core.contracts.dictionary import DictEntry
     from omnidriver.core.plugin_interface import DriverContext
 
 
@@ -226,28 +234,30 @@ def populate_values(
 def _populated_to_run(
     populated: dict[str, str],
     entries: list[DictEntry],
+    phase_order: tuple[str, ...],
 ) -> RunDocument:
     """Distribute populated values into a Run document keyed by each
     entry's primary phase. Selector keys (which may not correspond to any
     entry, but always do here for the dict-builder entry pool) are placed
-    in the physics slice as a sensible default."""
-    config: dict[str, dict[str, str]] = {
-        "anatomy": {}, "physics": {}, "stimulus": {}, "solver": {},
-    }
+    in the first declared phase's slice as a sensible default."""
+    # Slices come from the ACTIVE PLUGIN's declared phases, not a hardcoded
+    # cardiac four -- a plugin with different phase words must not KeyError here.
+    config: dict[str, dict[str, str]] = {ph: {} for ph in phase_order}
+    default_phase = phase_order[0] if phase_order else ""
     placed: set[str] = set()
     for entry in entries:
         key = slot_key(entry.driver_path)
         if key not in populated:
             continue
-        ph = primary_phase(entry) or "physics"
+        ph = primary_phase(entry, phase_order) or default_phase
         config[ph][key] = populated[key]
         placed.add(key)
-    # Any populated keys without a matching entry land in physics. This
-    # only triggers for selector keys that don't correspond to DictEntry —
-    # uncommon, but safe.
+    # Any populated keys without a matching entry land in the default phase.
+    # This only triggers for selector keys that don't correspond to
+    # DictEntry -- uncommon, but safe.
     for key, val in populated.items():
         if key not in placed:
-            config["physics"][key] = val
+            config[default_phase][key] = val
     return RunDocument(id="dict_builder", name="dict_builder",
                        status="draft", config=config)
 
