@@ -1,9 +1,13 @@
 """No shipped module may import the pre-migration ``openfoam_driver`` package.
 
 That package name is what everything was called before the three-way split. It
-exists in no install — but the retired `openfoam_driver/` tree is **still
-tracked at this repo's root** (193 files), so running Python from the repo root
-puts cwd on `sys.path` and the stale name resolves anyway.
+exists in no install, so any such import is a defect.
+
+It used to be worse than a defect — it was an *invisible* defect. A retired
+`openfoam_driver/` tree (193 files, a stale 186-file subset of the real
+reference) was tracked at this repo's root, so running Python from the repo root
+put cwd on `sys.path` and the stale name resolved. Every suite runs from the
+repo root, so every suite passed.
 
 That is not hypothetical. `omnidriver-openfoam`'s `dict_builder.py` carried
 
@@ -21,8 +25,10 @@ builds core's wheel only, so it could never have caught this one. This guard
 covers all three packages cheaply, by reading source rather than installing
 anything.
 
-Delete this test only when the legacy `openfoam_driver/` tree is removed from
-the repo root — until then, the trap it guards is one stray import away.
+The legacy tree has since been deleted, so a stray import now fails loudly
+instead of resolving. This guard is kept anyway, for two reasons: it catches the
+mistake in source review rather than at import time, and it fails immediately if
+anyone restores that tree and reintroduces the masking.
 """
 from __future__ import annotations
 
