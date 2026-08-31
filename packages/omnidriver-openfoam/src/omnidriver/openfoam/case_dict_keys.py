@@ -27,7 +27,7 @@
 
 """Warn about case-dictionary keys the active plugin's catalogue does not know.
 
-This is the opposite direction to ``scripts/_dict_keys_scanner.py``. That one
+This is the opposite direction to ``openfoam/dict_keys_scanner.py``. That one
 asks *what keys does the C++ accept?* -- information that lives only in C++
 source, because a defaulted read nobody sets appears in no dictionary at all.
 This one asks *what keys did the author actually write?* -- information that

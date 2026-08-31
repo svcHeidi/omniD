@@ -44,7 +44,7 @@ import re
 import sys
 from pathlib import Path
 
-from omnidriver.scripts._names_parser import (
+from omnidriver.cardiacfoam.names_parser import (
     EXCLUDED_FROM_HEADER_SYNC,
     ParsedNames,
     find_names_header,

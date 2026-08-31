@@ -45,7 +45,7 @@ from pathlib import Path
 from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG
 from conftest import monorepo_root, skip_without_monorepo
 from omnidriver.core.specs.paths import repo_root_default
-from omnidriver.scripts._names_parser import (
+from omnidriver.cardiacfoam.names_parser import (
     EXCLUDED_FROM_HEADER_SYNC,
     find_names_header,
     parse_names_header,

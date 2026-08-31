@@ -7,7 +7,7 @@ register its own scope token under the same $TOKEN. convention.
 """
 from __future__ import annotations
 
-from omnidriver.scripts._dict_keys_scanner import _parse_path
+from omnidriver.openfoam.dict_keys_scanner import _parse_path
 
 
 def test_strips_the_cardiac_scope_token() -> None:

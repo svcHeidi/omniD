@@ -16,7 +16,7 @@
 #     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
 #
 # Module
-#     _rtst_scanner
+#     rtst_scanner
 #
 # Description
 #     Scans runtime selection tables for available implementations.
@@ -43,11 +43,9 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from omnidriver.dict_entries import (
-    get_electro_property_entry_groups,
-    PHYSICS_PROPERTY_ENTRIES,
-    DictEntry,
-)
+from omnidriver.cardiacfoam.common_dict_entries import PHYSICS_PROPERTY_ENTRIES
+from omnidriver.core.contracts.dictionary import DictEntry
+from omnidriver.dict_entries import get_electro_property_entry_groups
 
 
 # `addToRunTimeSelectionTable(base, derived, ctor);` — argument layout is

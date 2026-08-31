@@ -13,7 +13,7 @@ pytestmark = skip_without_monorepo
 
 from omnidriver.core import strict_planning
 from omnidriver.cli import main
-from omnidriver.scripts._dict_keys_scanner import (
+from omnidriver.openfoam.dict_keys_scanner import (
     compute_dict_key_drift,
     strict_dict_key_report,
 )
