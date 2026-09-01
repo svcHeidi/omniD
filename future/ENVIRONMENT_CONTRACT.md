@@ -334,14 +334,38 @@ it. It now asserts the bundled file is present, verified by removing the
 `package-data` line and watching it fail *after* `all modules imported`
 succeeds.
 
-### Tier 2 — the seam exists; wire it
+### Tier 2 — the seam exists; wire it *(closed 2026-09-01)*
 
 | item | payoff |
 |---|---|
 | ~~**open `KNOWN_ROLES` with a non-OpenFOAM tier**~~ **done 2026-09-01, §11** | removed the hard block, *for loading only* — `tutorial_contracts.py`, `provenance_inputs.py` and `registry.py` still branch on literal `openfoam.*` roles, so a foreign environment's files now load and are then ignored by those three. Generalising them is the rest of this tier. Original rationale: `get_profile()` is required, so *nothing* else about non-OpenFOAM plugins can be attempted until this lands. Also fixes `CaseFileRule`, `PluginProfile` and `ResolvedInput` in one place — their dataclasses are already neutral; only the enum's values were not |
 | ~~**an output-directory role for `postProcessing`**~~ **withdrawn 2026-09-01 — owner's decision** | `postProcessing` is taken as universal: every simulation environment in scope has one, so it needs no plugin-declared role. The eight sites were never one thing anyway — see below. What *was* real in them is fixed |
-| `producer_commands = {"Allrun"}` → the `openfoam.entrypoint` role | the role is already resolved 20 lines away in `registry.py`; this site just does not use it |
-| `generic_case.py:137`'s `Allrun` | needs a `driver_context` threaded into a module that has none — slightly more than a wiring job |
+| ~~`producer_commands = {"Allrun"}`~~ **done 2026-09-01** | `workflow.py:426`. The literal meant a plugin whose entrypoint has any other name had its own run step left out of the producer set, so unclaimed artifacts were credited to **no step at all** |
+| ~~`generic_case.py:137`'s `Allrun`~~ **done 2026-09-01** | the one-step DAG invoked a script the case need not contain. `make_spec` and `_workflow_dag_for` take an optional `driver_context`; with none, both fall back to the same documented default `registry.py` uses, so the two agree by construction rather than by coincidence |
+| ~~`tutorial_contracts.py`'s `openfoam.` prefix split~~ **done 2026-09-01** | not in the original list — found while wiring the above. `role.startswith("openfoam.")` answered "is this the environment's file?" correctly for every shipped role and wrongly for every escape role, filing a foreign environment's required inputs under **core's own**. Now `is_environment_role()`, which asks the closed question (is the namespace `plugin` or `case`?) rather than the open one |
+
+#### What Tier 2 leaves behind
+
+One literal survives deliberately. `provenance_inputs.py:111` matches
+`rule.role == "openfoam.control_dict"` to find the case's control file, and
+there is no generalisation available: core needs *the* control file, and a
+foreign environment's escape role (`x-fenics.something`) does not tell it
+which of several declared files that is. Fixing it needs either a
+namespace-neutral role name or a capability hook — a contract to design, not
+a wiring job, so it belongs in Tier 3 and has been moved there.
+
+`workflow.py`'s `missing_workflow_dag` diagnostic also still says "A case
+folder needs an executable Allrun" in user-facing prose. Cosmetic, but it will
+read as a lie to the first non-OpenFOAM plugin author.
+
+**A note on how the three fixed sites were verified.** Each was reverted to its
+literal to confirm the new tests fail. Two were caught immediately; the
+`tutorial_contracts` revert was **not** — the parametrized test covered
+`is_environment_role` itself, which passes whether or not the call site invokes
+it. That needed a separate test driving `describe_tutorial_contract` end to end
+with a foreign plugin. Fifth instance in this repository of a guard that looks
+correct and checks nothing, and the reason every new guard here is mutated
+before it is trusted.
 
 #### Why the eight `postProcessing` sites were not one item
 
@@ -375,7 +399,9 @@ one thing at all five.
 
 ### Tier 3 — needs a contract designed
 
-`ArtifactFormat` opened or plugin-extensible (and core stops mislabelling its
+`provenance_inputs.py`'s `openfoam.control_dict` lookup (moved here from
+Tier 2: it needs a namespace-neutral role or a capability hook, not
+wiring); `ArtifactFormat` opened or plugin-extensible (and core stops mislabelling its
 own logs); `utility_catalog`'s OpenFOAM type vocabulary moved to
 `omnidriver-openfoam`; a seam for `processor*`; `--openfoam-bashrc` renamed with
 a deprecation alias, and `EnvironmentPreflightCapability`'s own

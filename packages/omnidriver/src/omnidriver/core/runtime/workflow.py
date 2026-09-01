@@ -37,6 +37,7 @@ from pathlib import Path, PurePath
 from typing import Any, Iterable
 
 from .models import DataArtifact
+from omnidriver.core.plugin_profile import entrypoint_relpaths
 
 
 STEP_STATUS_VALUES = ("pending", "running", "completed", "failed", "skipped")
@@ -423,7 +424,12 @@ def normalize_workflow_dag(
         # run but are post-processing, and ``produces`` is enforced per-step
         # (workflow_runner's missing_artifacts check), so crediting one would
         # make a silent solver fail the wrong step.
-        producer_commands = {"Allrun"}
+        # The entrypoint comes from the plugin's declared role, not a literal:
+        # registry.py already resolved it that way for case detection, so
+        # hardcoding "Allrun" here meant a plugin whose entrypoint is named
+        # anything else had its run step silently omitted from the producer
+        # set, and its unclaimed artifacts credited to no step at all.
+        producer_commands = set(entrypoint_relpaths(driver_context))
         if driver_context is not None:
             producer_commands |= (
                 driver_context.capabilities.command_authorization.solver_commands()

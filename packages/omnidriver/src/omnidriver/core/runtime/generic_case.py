@@ -20,6 +20,7 @@ from omnidriver.core.specs.common import (
 )
 
 from .models import CaseConfig, TutorialSpec
+from omnidriver.core.plugin_profile import entrypoint_command
 
 OUTPUT_DIR_NAME = "postProcessing"
 # ``run_case.sh`` ships inside the installed package (``omnidriver/scripts/``),
@@ -140,9 +141,24 @@ def _workflow_dag_for(
     *,
     solver_command: str | Sequence[str] | None,
     pre_solve_commands: Sequence[str | Sequence[str]],
+    driver_context: Any | None = None,
 ) -> dict[str, Any]:
+    """Build the workflow DAG for a generic case.
+
+    With no ``solver_command`` the whole run is one step invoking the case's
+    entrypoint. That entrypoint is the plugin's declared
+    ``openfoam.entrypoint`` rule, not the literal ``"Allrun"`` this used to
+    emit -- a plugin naming its entrypoint anything else got a DAG whose one
+    step invoked a script its case does not contain.
+
+    ``driver_context`` is optional because ``make_spec`` is called from places
+    that legitimately have none; the fallback is the same documented default
+    (``Allrun``) that ``registry.py`` uses for case detection, so the two agree
+    by construction rather than by coincidence.
+    """
     if solver_command is None:
-        return {"steps": [{"id": "run", "command": "Allrun", "depends_on": []}]}
+        entrypoint = entrypoint_command(driver_context)
+        return {"steps": [{"id": "run", "command": entrypoint, "depends_on": []}]}
 
     steps: list[dict[str, Any]] = []
     depends_on: list[str] = []
@@ -186,6 +202,7 @@ def make_spec(
     openfoam_bashrc: str | Path | None = None,
     collect_patterns: Sequence[str] = (),
     run_script_relpath: str | Path = RUN_CASE_SCRIPT_RELPATH,
+    driver_context: Any | None = None,
     solver_command: str | Sequence[str] | None = None,
     pre_solve_commands: Sequence[str | Sequence[str]] | None = None,
     _apply_case_mutation=None,
@@ -287,6 +304,7 @@ def make_spec(
             "workflow_dag": _workflow_dag_for(
                 solver_command=solver_command,
                 pre_solve_commands=normalized_pre_solve,
+                driver_context=driver_context,
             ),
             "dict_file_relpaths": {
                 key: str(value) for key, value in resolved_relpaths.items()

@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from .runtime.models import TutorialSpec
+from .plugin_profile import is_environment_role
 
 if TYPE_CHECKING:
     from .plugin_interface import DriverContext
@@ -117,14 +118,18 @@ def describe_tutorial_contract(
     # would make core re-derive plugin semantics from a string, and would
     # misfile a plugin-owned dictionary that happens to live under system/
     # (or a required initial-condition file that does not).
+    # ``is_environment_role`` rather than a literal ``openfoam.`` prefix: the
+    # escape tier admits other environments, and a FEniCS plugin's
+    # ``x-fenics.mesh_file`` is environment-owned in exactly the sense this
+    # split means. A prefix test files it under core's own required inputs.
     required_rules = driver_context.capabilities.case_files.required_rules()
     core_required_files = tuple(
         rule.path for rule in required_rules
-        if not rule.role.startswith("openfoam.")
+        if not is_environment_role(rule.role)
     )
     solver_required_files = tuple(
         rule.path for rule in required_rules
-        if rule.role.startswith("openfoam.")
+        if is_environment_role(rule.role)
     )
     conditional_files = tuple(
         driver_context.capabilities.case_files.conditional_files()

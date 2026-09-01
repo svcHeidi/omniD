@@ -135,6 +135,70 @@ def _is_valid_escape_role(role: str) -> bool:
     return namespace not in _RESERVED_ROLE_NAMESPACES
 
 
+#: The role naming a case's executable entrypoint. Named here rather than
+#: spelled as a literal at each use: before this, three sites independently
+#: hardcoded ``"Allrun"`` while a fourth resolved it properly from the role.
+ENTRYPOINT_ROLE = "openfoam.entrypoint"
+
+#: Used when no plugin declares an entrypoint. This is a documented default a
+#: plugin can override -- not a hardcoded binding -- which is what Rule 1
+#: requires of a concrete environment name in core.
+DEFAULT_ENTRYPOINT_RELPATHS: tuple[str, ...] = ("Allrun",)
+
+#: Namespaces whose files belong to the plugin or the case rather than to the
+#: simulation environment. Everything else -- ``openfoam.*`` and any ``x-``
+#: escape for a foreign environment -- is environment-owned.
+_NON_ENVIRONMENT_NAMESPACES: frozenset[str] = frozenset({"plugin", "case"})
+
+
+def is_environment_role(role: str) -> bool:
+    """True when ``role`` names a file the simulation environment owns.
+
+    Callers used to ask this as ``role.startswith("openfoam.")``, which was
+    right while ``openfoam`` was the only environment namespace and became
+    wrong the moment the escape tier admitted others: a FEniCS plugin's
+    ``x-fenics.mesh_file`` is as environment-owned as ``openfoam.control_dict``
+    is, and a prefix test files it under core's own inputs instead.
+
+    Asking it the other way round -- is this namespace one of the two that are
+    NOT an environment -- stays correct as environments are added, because
+    ``plugin`` and ``case`` are core's own vocabulary and closed.
+    """
+    namespace, separator, _ = role.partition(".")
+    if not separator:
+        return False
+    if namespace.startswith(ESCAPE_ROLE_PREFIX):
+        return True
+    return namespace not in _NON_ENVIRONMENT_NAMESPACES
+
+
+def entrypoint_relpaths(driver_context: Any | None) -> tuple[str, ...]:
+    """Case-relative paths the active plugin declares as its entrypoint.
+
+    Searches every declared rule, not just ``required_rules()``: an entrypoint
+    is legitimately ``conditional`` (both shipped profiles declare it so), and
+    ``required_rules()`` filters to ``required == "always"``.
+    """
+    if driver_context is None:
+        return DEFAULT_ENTRYPOINT_RELPATHS
+    declared = tuple(
+        rule.path
+        for rule in driver_context.capabilities.case_files.all_rules()
+        if rule.role == ENTRYPOINT_ROLE
+    )
+    return declared or DEFAULT_ENTRYPOINT_RELPATHS
+
+
+def entrypoint_command(driver_context: Any | None) -> str:
+    """The single command name a generated workflow step should invoke.
+
+    A workflow step names one command; ``entrypoint_relpaths`` may return
+    several. The first declared wins, which matches what ``_has_entrypoint``
+    already treats as sufficient for case detection.
+    """
+    return entrypoint_relpaths(driver_context)[0]
+
+
 def load_plugin_profile(path: str | Path) -> PluginProfile:
     """Load a small, safe YAML profile and convert it into immutable data.
 

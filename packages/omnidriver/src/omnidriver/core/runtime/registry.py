@@ -35,6 +35,10 @@ from typing import TYPE_CHECKING, Callable
 from .models import TutorialSpec
 from .generic_case import make_generic_case_spec
 from omnidriver.core.specs.common import tutorials_root_default
+from omnidriver.core.plugin_profile import (
+    DEFAULT_ENTRYPOINT_RELPATHS,
+    entrypoint_relpaths,
+)
 
 if TYPE_CHECKING:
     from ..plugin_interface import DriverContext
@@ -62,28 +66,12 @@ ENTRY_KIND_VALUES = (
     "case_folder",
 )
 
-#: Historical entrypoint name, used when the active plugin declares no
-#: ``openfoam.entrypoint`` rule (and when no context is available at all).
-#: Documented and overridable rather than hardcoded -- see
-#: future/ENVIRONMENT_CONTRACT.md §4.
-_DEFAULT_ENTRYPOINT_RELPATHS: tuple[str, ...] = ("Allrun",)
-
-
-def _entrypoint_relpaths(driver_context: "DriverContext | None") -> tuple[str, ...]:
-    """Case-relative entrypoint scripts the active plugin declares.
-
-    Searches every declared rule, not just ``required_rules()``: an entrypoint
-    is legitimately ``conditional`` (both shipped profiles declare it so), and
-    ``required_rules()`` filters to ``required == "always"``.
-    """
-    if driver_context is None:
-        return _DEFAULT_ENTRYPOINT_RELPATHS
-    declared = tuple(
-        rule.path
-        for rule in driver_context.capabilities.case_files.all_rules()
-        if rule.role == "openfoam.entrypoint"
-    )
-    return declared or _DEFAULT_ENTRYPOINT_RELPATHS
+#: Re-exported for the tests and callers that referenced these here first.
+#: The definitions moved to ``core.plugin_profile`` once three other sites
+#: turned out to need the same answer and had each hardcoded ``"Allrun"``
+#: instead. See future/ENVIRONMENT_CONTRACT.md §4.
+_DEFAULT_ENTRYPOINT_RELPATHS = DEFAULT_ENTRYPOINT_RELPATHS
+_entrypoint_relpaths = entrypoint_relpaths
 
 
 def _has_entrypoint(case_root: Path, driver_context: "DriverContext | None") -> bool:
