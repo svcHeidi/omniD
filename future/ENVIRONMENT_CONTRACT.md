@@ -305,3 +305,46 @@ transform the rest need.
 The defects are concentrated in **fallback bodies and closed enums**, not in the
 architecture. That is the good news, and it is why this is a work list rather
 than a redesign.
+
+## 10. The work list, sequenced
+
+Ordered by cost and risk, not by how offensive each binding looks. Tiers 1 and
+2 are most of the value; tier 4 is the one that needs a threat model.
+
+### Tier 1 — not architecture, just broken
+
+| item | why now |
+|---|---|
+| `RUN_CASE_SCRIPT_RELPATH` names a nonexistent path (`generic_case.py:25`) | anyone relying on the default gets `FileNotFoundError` |
+| `run_case.sh` hardcodes `/Volumes/OpenFOAM-v2412/etc/bashrc` | machine-specific absolute path in shipped source; the real install here is `/Volumes/OpenFOAM/OpenFOAM-12` |
+| dead `Phase` imports (`contracts/dictionary.py:12`, `dict_entries.py:31`) | vestigial since `get_phases()` landed |
+| `cardiacfoam_monorepo_root()` — zero call sites in core | docstring cites `utility_catalog.UTILITIES_ROOT`, which no longer exists |
+| dead cardiac metadata keys (`strict_planning.py:230`) | sits three lines under a docstring saying core does not know `electroProperties` exists |
+
+### Tier 2 — the seam exists; wire it
+
+| item | payoff |
+|---|---|
+| **open `KNOWN_ROLES` with a non-OpenFOAM tier** | removes the hard block. `get_profile()` is required, so *nothing* else about non-OpenFOAM plugins can be attempted until this lands. Also fixes `CaseFileRule`, `PluginProfile` and `ResolvedInput` in one place — their dataclasses are already neutral; only the enum's values were not |
+| **an output-directory role for `postProcessing`** | closes **8** sites at once, the same shape as the entrypoint role that closed five in Phase 1 |
+| `producer_commands = {"Allrun"}` → the `openfoam.entrypoint` role | the role is already resolved 20 lines away in `registry.py`; this site just does not use it |
+| `generic_case.py:137`'s `Allrun` | needs a `driver_context` threaded into a module that has none — slightly more than a wiring job |
+
+### Tier 3 — needs a contract designed
+
+`ArtifactFormat` opened or plugin-extensible (and core stops mislabelling its
+own logs); `utility_catalog`'s OpenFOAM type vocabulary moved to
+`omnidriver-openfoam`; a seam for `processor*`; `--openfoam-bashrc` renamed with
+a deprecation alias, and `EnvironmentPreflightCapability`'s own
+`explicit_bashrc`/`openfoam_bashrc` inconsistency resolved.
+
+Also here: **`apply_overrides` is the one genuinely unavoidable fallback** —
+no plugin implements it, and `step --strict --apply` crashes with a raw
+traceback for every plugin including the neutral double.
+
+### Tier 4 — the trust boundary, unchanged from §5b
+
+`CASE_SCRIPT_COMMANDS`, `CORE_NEUTRAL_COMMANDS`, `_is_installed_openfoam_app`.
+These decide what may execute and what may resolve to a case-local binary
+rather than PATH. They need their own pass with a threat model extending
+`SECURITY.md`, and they are correctly deferred until the tiers above are done.
