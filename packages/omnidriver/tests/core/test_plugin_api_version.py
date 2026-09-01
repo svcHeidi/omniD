@@ -32,7 +32,6 @@ import pytest
 from omnidriver.core.generic_plugin import GenericOpenFOAMPlugin
 from omnidriver.core.plugin_interface import (
     SUPPORTED_PLUGIN_API_VERSIONS,
-    default_driver_context,
     driver_context,
     generic_openfoam_context,
 )
@@ -42,8 +41,10 @@ def test_supported_version_is_two() -> None:
     assert SUPPORTED_PLUGIN_API_VERSIONS == frozenset({"2"})
 
 
-def test_builtin_plugins_are_v2() -> None:
-    assert default_driver_context().identity.api_version == "2"
+def test_generic_builtin_plugin_is_v2() -> None:
+    """Half of what was test_builtin_plugins_are_v2; the cardiac half moved
+    to omnidriver-cardiacfoam's tests/test_plugin_api_version.py as
+    CardiacFoamPlugin().plugin_api_version == "2"."""
     assert generic_openfoam_context().identity.api_version == "2"
 
 
@@ -89,12 +90,13 @@ def test_the_shape_check_names_what_is_missing() -> None:
     assert "get_utility_roots" in message
 
 
-def test_both_builtin_plugins_satisfy_the_full_protocol() -> None:
-    """cardiac AND generic exercise every required capability. The generic
-    plugin previously declared v2 while implementing 8 of 12, riding the
-    adapter's degrade-to-empty fallback."""
+def test_generic_builtin_plugin_satisfies_the_full_protocol() -> None:
+    """Half of what was test_both_builtin_plugins_satisfy_the_full_protocol:
+    cardiac AND generic must each exercise every required capability -- this
+    test previously caught the generic plugin declaring v2 while
+    implementing only 8 of 12, riding the adapter's degrade-to-empty
+    fallback. The cardiac half moved to omnidriver-cardiacfoam's
+    tests/test_plugin_api_version.py, preserving that same intent there."""
     from omnidriver.core.plugin_interface import SolverPlugin
-    from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
-    for plugin in (CardiacFoamPlugin(), GenericOpenFOAMPlugin()):
-        assert isinstance(plugin, SolverPlugin), type(plugin).__name__
+    assert isinstance(GenericOpenFOAMPlugin(), SolverPlugin)

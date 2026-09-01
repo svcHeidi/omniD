@@ -35,10 +35,7 @@ from __future__ import annotations
 
 import json
 
-from omnidriver.core.plugin_interface import (
-    default_driver_context,
-    generic_openfoam_context,
-)
+from omnidriver.core.plugin_interface import generic_openfoam_context
 
 # Every token that would betray cardiac vocabulary leaking into a generic
 # plugin's machine-readable schema.
@@ -63,18 +60,6 @@ def test_generic_config_schema_mentions_no_cardiac_tokens() -> None:
     assert leaked == [], f"generic config schema leaked cardiac tokens: {leaked}"
 
 
-def test_cardiac_config_schema_keeps_its_documented_tokens() -> None:
-    schema = default_driver_context().capabilities.override_schema.config_schema(
-        "singleCell", _MAKE_SPEC_INFO
-    )
-    blob = json.dumps(schema)
-    assert "$ELECTRO_MODEL_COEFFS" in blob
-    assert "electroProperties" in blob
-    # The worked example is tutorial-specific, so the name must be threaded
-    # through rather than baked into the plugin.
-    assert "singleCell" in schema["worked_example"]["json"]
-
-
 def test_generic_dict_entry_catalog_names_no_cardiac_document() -> None:
     """The previous version of this test asserted only on ``.values()``, so a
     cardiac leak in the *keys* (``physicsProperties``/``electroProperties``)
@@ -84,13 +69,3 @@ def test_generic_dict_entry_catalog_names_no_cardiac_document() -> None:
     leaked = [token for token in _CARDIAC_TOKENS if token in blob]
     assert leaked == [], f"generic dict entry catalog leaked: {leaked}"
     assert all(not value for value in catalog.values()), catalog
-
-
-def test_cardiac_dict_entry_catalog_keeps_its_document_shape() -> None:
-    catalog = default_driver_context().capabilities.override_schema.dict_entry_catalog()
-    assert "physicsProperties" in catalog
-    assert "electroProperties" in catalog
-    # physicsProperties is a flat sequence; electroProperties is grouped. That
-    # asymmetry is cardiac document knowledge, not a core convention.
-    assert isinstance(catalog["electroProperties"], dict)
-    assert catalog["electroProperties"], "cardiac plugin must expose entry groups"

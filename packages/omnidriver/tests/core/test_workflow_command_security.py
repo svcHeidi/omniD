@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from omnidriver.core.plugin_interface import default_driver_context
+from omnidriver.core.plugin_interface import generic_openfoam_context
 from omnidriver.core.runtime.workflow import validate_workflow_commands
 from omnidriver.core.runtime.workflow_runner import (
     _resolve_case_cwd,
@@ -22,13 +22,14 @@ def _make_executable(path: Path) -> None:
 
 class TestValidateWorkflowCommands(unittest.TestCase):
     def setUp(self) -> None:
-        # The allowlist is now sourced from the active plugin context; the
-        # cardiac context is what these cases have always exercised.
-        self.context = default_driver_context()
-
-    def test_known_openfoam_command_is_allowed(self) -> None:
-        dag = {"steps": [{"id": "s", "command": "cardiacFoam"}]}
-        self.assertEqual(validate_workflow_commands(dag, driver_context=self.context), ())
+        # The allowlist is sourced from the active plugin context. These
+        # cases exercise the generic command-boundary mechanism itself
+        # (CORE_NEUTRAL_COMMANDS / CASE_SCRIPT_COMMANDS short-circuit before
+        # plugin_commands is even read), so a generic, non-cardiac context
+        # is sufficient and keeps this file plugin-agnostic. The two cases
+        # that genuinely assert cardiac-authorized commands moved to
+        # omnidriver-cardiacfoam's tests/test_workflow_command_security.py.
+        self.context = generic_openfoam_context()
 
     def test_case_script_command_is_allowed(self) -> None:
         dag = {"steps": [{"id": "s", "command": "Allrun"}]}
@@ -48,15 +49,6 @@ class TestValidateWorkflowCommands(unittest.TestCase):
 
     def test_check_mesh_is_allowed(self) -> None:
         dag = {"steps": [{"id": "s", "command": "checkMesh"}]}
-        self.assertEqual(validate_workflow_commands(dag, driver_context=self.context), ())
-
-    def test_bath_bidomain_interface_metrics_is_allowed(self) -> None:
-        # bath_tet's canonical reported metrics come from this utility (a
-        # post-hoc pass over the reconstructed mesh, since the live verifier
-        # can't do heart/bath mesh-subsetting during a parallel-decomposed
-        # solve) run as its own workflow step after solve -- authorized by the
-        # cardiac plugin (it ships no utility.manifest.toml), not by core.
-        dag = {"steps": [{"id": "s", "command": "bathBidomainInterfaceMetrics"}]}
         self.assertEqual(validate_workflow_commands(dag, driver_context=self.context), ())
 
     def test_mpirun_is_allowed(self) -> None:
@@ -109,7 +101,7 @@ class TestValidateWorkflowCommands(unittest.TestCase):
 
 class TestValidateWorkflowCommandsFoamApp(unittest.TestCase):
     def setUp(self) -> None:
-        self.context = default_driver_context()
+        self.context = generic_openfoam_context()
 
     def test_installed_openfoam_app_is_allowed(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

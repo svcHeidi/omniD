@@ -33,7 +33,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from omnidriver.core.plugin_interface import (
-    default_driver_context,
     driver_context,
     generic_openfoam_context,
 )
@@ -57,27 +56,3 @@ def test_a_v1_plugin_with_no_hooks_gets_the_empty_fallback(tmp_path: Path) -> No
     context = driver_context(MinimalOpenFOAMPlugin(), source="test")
     assert context.capabilities.case_provenance.required_inputs(tmp_path, {}, "0") == ()
     assert context.capabilities.case_provenance.generated_output_globs(tmp_path, {}, "0") == ()
-
-
-def test_cardiac_declares_the_mesh_diagnostic_fields_as_generated_outputs(
-    tmp_path: Path,
-) -> None:
-    """constant/C, Cx, Cy, Cz, skewness are consumed by nothing -- confirmed
-    by exhaustive grep across src/ and applications/: zero hits."""
-    cardiac = default_driver_context().capabilities.case_provenance
-    globs = cardiac.generated_output_globs(tmp_path, {}, "0")
-    assert set(globs) == {
-        "constant/C",
-        "constant/Cx",
-        "constant/Cy",
-        "constant/Cz",
-        "constant/skewness",
-    }
-
-
-def test_cardiac_required_inputs_defers_to_the_safe_default(tmp_path: Path) -> None:
-    """Model-dependent per-field required-input resolution is Task 2b's job
-    (input enumeration). Returning () here is safe under I1's precedence:
-    an unclassified file still defaults to required_input upstream."""
-    cardiac = default_driver_context().capabilities.case_provenance
-    assert cardiac.required_inputs(tmp_path, {}, "0") == ()

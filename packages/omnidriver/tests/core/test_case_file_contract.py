@@ -2,18 +2,8 @@
 
 from __future__ import annotations
 
-from omnidriver.core.plugin_interface import (
-    default_driver_context,
-    generic_openfoam_context,
-)
-
-
-def test_cardiac_required_files_include_its_dictionaries() -> None:
-    contract = default_driver_context().capabilities.case_files
-    required = contract.required_files()
-    assert "constant/electroProperties" in required
-    assert "constant/physicsProperties" in required
-    assert "system/controlDict" in required
+from omnidriver.core.plugin_interface import driver_context, generic_openfoam_context
+from plugins.minimal_plugin import MinimalOpenFOAMPlugin
 
 
 def test_generic_plugin_requires_no_solver_dictionaries() -> None:
@@ -24,7 +14,15 @@ def test_generic_plugin_requires_no_solver_dictionaries() -> None:
 
 
 def test_conditional_files_are_separated_from_required() -> None:
-    contract = default_driver_context().capabilities.case_files
-    conditional = contract.conditional_files()
-    assert "system/blockMeshDict" in conditional
-    assert "system/blockMeshDict" not in contract.required_files()
+    """Exercises `_CaseFileContractAdapter`'s always/conditional split -- core
+    mechanics, not cardiac vocabulary. `MinimalOpenFOAMPlugin(entrypoint=...)`
+    is the smallest available fixture that declares a `required="conditional"`
+    case-file rule, so the string here is "Allrun" (what that fixture
+    declares) rather than the cardiac plugin's "blockMeshDict"; the mechanic
+    under test -- conditional files excluded from required_files() -- is the
+    same either way."""
+    contract = driver_context(
+        MinimalOpenFOAMPlugin(entrypoint="Allrun"), source="test"
+    ).capabilities.case_files
+    assert "Allrun" in contract.conditional_files()
+    assert "Allrun" not in contract.required_files()
