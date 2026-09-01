@@ -7,7 +7,6 @@ from pathlib import Path
 
 from omnidriver.core.generic_plugin import GenericOpenFOAMPlugin
 from omnidriver.core.plugin_interface import (
-    default_driver_context,
     driver_context,
     validate_plugin,
 )
@@ -140,7 +139,10 @@ def test_plugin_contexts_remain_isolated_sequentially_and_concurrently() -> None
         driver_context(_Plugin("example.alpha", "alpha"), source="test"),
         driver_context(_Plugin("example.beta", "beta"), source="test"),
         driver_context(GenericOpenFOAMPlugin(), source="test"),
-        default_driver_context(),
+        # Any distinct, non-cardiac fourth context works here: `expected` is
+        # computed from `contexts[-1]` below, so the isolation property this
+        # test checks does not depend on which plugin occupies this slot.
+        driver_context(_Plugin("example.gamma", "gamma"), source="test"),
     )
     expected = (
         ["alpha"],
