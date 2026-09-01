@@ -39,21 +39,24 @@ from omnidriver.core.runtime.sweep_runner import (
 )
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError
 
-# This file's specs are cardiac vocabulary throughout (niederer2012, ionic
-# models, electro/physics selectors) -- sweep_plan/sweep_run now take a
-# mandatory driver_context (test_core_context_is_explicit.py), and the
-# context that reproduces this file's prior implicit behaviour is the
-# cardiac one. Skipped cleanly, not failed, when omnidriver-cardiacfoam is
-# not installed. Whether this file's tests belong in omnidriver-cardiacfoam's
-# own test tree instead is a separate, not-yet-made decision (Phase 2 Task 5b).
-_cardiacfoam_plugin_module = pytest.importorskip(
-    "omnidriver.cardiacfoam.cardiacfoam_plugin",
-    reason="omnidriver-cardiacfoam is not installed",
-)
-from omnidriver.core.plugin_interface import driver_context as _driver_context  # noqa: E402
+# Phase 2 Task 5b / test-ownership split: this file used to require
+# omnidriver-cardiacfoam (its specs were cardiac vocabulary throughout --
+# niederer2012, ionic models, electro/physics selectors) and was hidden
+# from core's collection behind an importorskip. The 11 tests that genuinely
+# exercise real cardiac routing/materialization moved to
+# packages/omnidriver-cardiacfoam/tests/test_sweep_runner.py, where they run
+# against the real plugin. What remains here either never reaches routing at
+# all (entry-mode tests mock load_entry_spec; the over-cap/hash-mismatch
+# tests raise before any per-case work), or mocks
+# omnidriver.core.runtime.sweep_runner.route_case_values directly and uses
+# content-free axis vocabulary -- so it needs only *a* plugin, not the
+# cardiac one, to prove core's own sweep bookkeeping (resume/fresh/retry/
+# timeout/archive) still works.
+from omnidriver.core.plugin_interface import driver_context as _driver_context
+from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
 
 _CTX = _driver_context(
-    _cardiacfoam_plugin_module.CardiacFoamPlugin(), source="test:sweep_runner",
+    NeutralEnvironmentPlugin(), source="test:sweep_runner",
 )
 
 
@@ -80,6 +83,26 @@ def _write_entry_spec(path, entry="niederer2012", values=(0.5, 0.2)):
             "mode": "cross_product",
             "independent": {"dx_values": [[v] for v in values]},
             "dependent": [{"name": "caseId", "derive": "output_dir_name_template", "of": ["dx_values"]}],
+        },
+    }
+    path.write_text(json.dumps(spec))
+    return spec
+
+
+def _write_placeholder_spec(path: Path, values=("x",)):
+    """A cross_product spec with no plugin-specific axis vocabulary.
+
+    Used by the resume/fresh/retry/timeout tests below, which mock
+    ``route_case_values`` directly and assert only on sweep-runner
+    bookkeeping (skip/retry/outcome/manifest), never on what routing
+    itself produced -- so the axis name and values are placeholders, not
+    a stand-in for any real solver parameter."""
+    spec = {
+        "base": {},
+        "sweep": {
+            "mode": "cross_product",
+            "independent": {"param": list(values)},
+            "dependent": [{"name": "caseId", "derive": "case_id_template", "of": ["param"]}],
         },
     }
     path.write_text(json.dumps(spec))
@@ -231,47 +254,6 @@ def test_sweep_run_entry_mode_executes_run_document_sequentially(tmp_path):
     assert result["postprocess"]["status"] == "stub"
 
 
-def test_sweep_run_writes_case_record_json_for_every_case(tmp_path):
-    spec_path = tmp_path / "sweep.json"
-    _write_spec(spec_path)
-    output_dir = tmp_path / "out"
-
-    result = sweep_run(spec_path, output_dir=output_dir, driver_context=_CTX)
-
-    assert result["completed_count"] == 2
-    for case_id in ("TNNP", "BuenoOrovio"):
-        record_path = output_dir / case_id / "case_record.json"
-        assert record_path.is_file()
-        record = json.loads(record_path.read_text())
-        assert record["case_id"] == case_id
-        assert record["status"] == "completed"
-
-
-def test_sweep_run_writes_case_record_json_even_when_a_case_fails(tmp_path):
-    # case_record.json must exist for every case regardless of whether the
-    # whole sweep succeeded -- an agent diagnosing a partially-failed sweep
-    # needs the successful cases' records just as much as a clean sweep does.
-    spec_path = tmp_path / "sweep.json"
-    spec = {
-        "base": {
-            "electro_selectors": {"myocardiumSolver": "singleCellSolver", "tissue": "epicardialCells"},
-            "physics_selectors": {"type": "electroModel"},
-        },
-        "sweep": {
-            "mode": "cross_product",
-            "independent": {"ionicModel": ["TNNP", "not_a_real_model"]},
-            "dependent": [{"name": "caseId", "derive": "case_id_template", "of": ["ionicModel"]}],
-        },
-    }
-    spec_path.write_text(json.dumps(spec))
-    output_dir = tmp_path / "out"
-
-    result = sweep_run(spec_path, output_dir=output_dir, driver_context=_CTX)
-
-    assert result["failed_count"] >= 1
-    assert (output_dir / "TNNP" / "case_record.json").is_file()
-
-
 def test_sweep_run_archives_each_case_postprocessing_output_when_configured(tmp_path):
     # base.archive_dir_name opts an entry-mode sweep into the generic
     # snapshot/diff collection (output_collection.py): real bug this
@@ -398,36 +380,6 @@ def test_sweep_run_archives_each_case_postprocessing_output_by_default(tmp_path)
     assert (case_output_dirs[2] / "collectedOutput" / "case_2.dat").read_text() == "result 2"
 
 
-def test_sweep_run_archives_nothing_for_generic_case_folder_sweeps(tmp_path):
-    # archive_dir_name only applies to entry mode (see sweep_runner.sweep_run's
-    # archive_dir_name assignment) -- a generic/case-folder sweep must not
-    # gain a spurious "collectedOutput" subfolder just because the default
-    # changed from None to a string.
-    spec_path = tmp_path / "sweep.json"
-    _write_spec(spec_path)
-    output_dir = tmp_path / "out"
-
-    result = sweep_run(spec_path, output_dir=output_dir, driver_context=_CTX)
-
-    assert result["completed_count"] == 2
-    for case_id in ("TNNP", "BuenoOrovio"):
-        assert not (output_dir / case_id / "collectedOutput").exists()
-
-
-def test_sweep_plan_materializes_and_audits_each_case_for_real(tmp_path):
-    spec_path = tmp_path / "sweep.json"
-    _write_spec(spec_path)
-    output_dir = tmp_path / "out"
-
-    result = sweep_plan(spec_path, output_dir=output_dir, driver_context=_CTX)
-
-    assert result["case_count"] == 2
-    assert {c["case_id"] for c in result["cases"]} == {"TNNP", "BuenoOrovio"}
-    for case in result["cases"]:
-        assert case["plan"]["status"] == "ok"
-        assert (output_dir / case["case_id"] / "constant" / "electroProperties").exists()
-
-
 def test_sweep_plan_refuses_over_cap_without_expanding(tmp_path):
     spec = {
         "base": {"electro_selectors": {"myocardiumSolver": "singleCellSolver", "tissue": "epicardialCells"},
@@ -441,142 +393,6 @@ def test_sweep_plan_refuses_over_cap_without_expanding(tmp_path):
         with pytest.raises(SweepValidationError):
             sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=_CTX)
     mock_materialize.assert_not_called()
-
-
-def test_sweep_plan_records_materialization_failure_and_continues(tmp_path):
-    spec = {
-        "base": {
-            "electro_selectors": {"myocardiumSolver": "singleCellSolver", "tissue": "epicardialCells"},
-            "physics_selectors": {"type": "electroModel"},
-        },
-        "sweep": {
-            "mode": "cross_product",
-            "independent": {"ionicModel": ["TNNP", "NotARealModel"]},
-            "dependent": [{"name": "caseId", "derive": "case_id_template", "of": ["ionicModel"]}],
-        },
-    }
-    spec_path = tmp_path / "sweep.json"
-    spec_path.write_text(json.dumps(spec))
-
-    result = sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=_CTX)
-
-    by_id = {case["case_id"]: case for case in result["cases"]}
-    assert by_id["TNNP"]["status"] == "ok"
-    assert by_id["NotARealModel"]["status"] == "failed"
-    assert "materialization_error" in by_id["NotARealModel"]
-
-
-def test_sweep_plan_records_unrecognized_axis_as_per_case_failure(tmp_path):
-    # route_case_values now raises SweepValidationError for an unrecognized
-    # axis like "bogusAxis" (see sweep_routing.py fix). That per-case error
-    # must be caught and recorded like any other materialization failure,
-    # not propagate uncaught and crash the whole sweep_plan call -- a caller
-    # sweeping N cases with one bad axis should still see a clean per-case
-    # report, the same as an invalid ionicModel does today.
-    spec = {
-        "base": {
-            "electro_selectors": {"myocardiumSolver": "singleCellSolver", "tissue": "myocyte"},
-            "physics_selectors": {"type": "electroModel"},
-        },
-        "sweep": {
-            "mode": "cross_product",
-            "independent": {"bogusAxis": [0.5, 0.2]},
-            "dependent": [{"name": "caseId", "derive": "case_id_template", "of": ["bogusAxis"]}],
-        },
-    }
-    spec_path = tmp_path / "sweep.json"
-    spec_path.write_text(json.dumps(spec))
-
-    result = sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=_CTX)
-
-    assert result["case_count"] == 2
-    for case in result["cases"]:
-        assert case["status"] == "failed"
-        assert "bogusAxis" in case["materialization_error"]
-
-
-def test_sweep_run_writes_run_documents_and_continues_past_failure(tmp_path):
-    spec_path = tmp_path / "sweep.json"
-    _write_spec(spec_path)
-    output_dir = tmp_path / "out"
-
-    call_log = []
-    real_subprocess_run = subprocess.run  # captured before patching, so real internal
-    # subprocess calls materialize_case makes (e.g. foamDictionary, when it's on PATH)
-    # still execute for real instead of being swallowed by this fake.
-
-    def fake_subprocess_run(cmd, **kwargs):
-        if "--run-document" not in cmd:
-            return real_subprocess_run(cmd, **kwargs)
-        call_log.append(cmd)
-        run_doc_path = Path(cmd[cmd.index("--run-document") + 1])
-        run_doc = json.loads(run_doc_path.read_text())
-        workflow_state_path = Path(run_doc["launch"]["outputDir"]) / "workflow_state.json"
-        workflow_state_path.parent.mkdir(parents=True, exist_ok=True)
-        failed = "BuenoOrovio" in str(run_doc_path.parent)
-        state = {"status": "failed" if failed else "completed"}
-        workflow_state_path.write_text(json.dumps(state))
-        return mock.Mock(returncode=1 if failed else 0, stdout="", stderr="")
-
-    with mock.patch("omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run):
-        from omnidriver.core.runtime.sweep_runner import sweep_run
-        result = sweep_run(spec_path, output_dir=output_dir, driver_context=_CTX)
-
-    assert len(call_log) == 2
-    assert (output_dir / "TNNP" / "run_document.json").exists()
-    assert (output_dir / "BuenoOrovio" / "run_document.json").exists()
-    run_doc = json.loads((output_dir / "TNNP" / "run_document.json").read_text())
-    step = run_doc["workflowDag"]["steps"][0]
-    assert step["id"] == "run"
-    assert step["command"] == "Allrun"
-    assert step["depends_on"] == []
-    state_step = run_doc["workflowState"]["steps"][0]
-    assert state_step["step_id"] == "run"
-    assert state_step["status"] == "pending"
-    assert state_step["attempt"] == 0
-
-    manifest_path = output_dir / "sweep_manifest.json"
-    assert manifest_path.exists()
-    from omnidriver.core.runtime.sweep_manifest import read_manifest
-    manifest = read_manifest(manifest_path)
-    statuses = {c.case_id: c.status for c in manifest.cases}
-    assert statuses["TNNP"] == "completed"
-    assert statuses["BuenoOrovio"] == "failed"
-    state_paths = {c.case_id: c.workflow_state_path for c in manifest.cases}
-    assert state_paths["TNNP"] == "TNNP/postProcessing/workflow_state.json"
-    assert result["failed_count"] == 1
-    assert result["completed_count"] == 1
-    assert result["postprocess"]["status"] == "skipped"
-
-
-def test_sweep_run_records_unrecognized_axis_as_per_case_failure(tmp_path):
-    # Mirrors test_sweep_plan_records_unrecognized_axis_as_per_case_failure:
-    # route_case_values's SweepValidationError must be caught per-case inside
-    # sweep_run's loop too, not crash the whole call.
-    spec = {
-        "base": {
-            "electro_selectors": {"myocardiumSolver": "singleCellSolver", "tissue": "myocyte"},
-            "physics_selectors": {"type": "electroModel"},
-        },
-        "sweep": {
-            "mode": "cross_product",
-            "independent": {"bogusAxis": [0.5, 0.2]},
-            "dependent": [{"name": "caseId", "derive": "case_id_template", "of": ["bogusAxis"]}],
-        },
-    }
-    spec_path = tmp_path / "sweep.json"
-    spec_path.write_text(json.dumps(spec))
-
-    from omnidriver.core.runtime.sweep_runner import sweep_run
-    with mock.patch("omnidriver.core.runtime.sweep_runner.subprocess.run") as mock_run:
-        result = sweep_run(spec_path, output_dir=tmp_path / "out", driver_context=_CTX)
-
-    mock_run.assert_not_called()
-    assert result["failed_count"] == 2
-    assert result["completed_count"] == 0
-    for case in result["cases"]:
-        assert case["status"] == "failed"
-        assert "bogusAxis" in case["materialization_error"]
 
 
 def test_sweep_run_refuses_over_cap_without_expanding(tmp_path):
@@ -630,7 +446,7 @@ def test_sweep_run_accepts_over_cap_with_explicit_override(tmp_path):
 
 def test_resume_skips_terminal_completed_case(tmp_path):
     spec_path = tmp_path / "sweep.json"
-    _write_spec(spec_path, models=("TNNP",))
+    _write_placeholder_spec(spec_path)
     spec = json.loads(spec_path.read_text())
     output_dir = tmp_path / "out"
     output_dir.mkdir()
@@ -638,7 +454,7 @@ def test_resume_skips_terminal_completed_case(tmp_path):
     from omnidriver.core.runtime.sweep_manifest import (
         CaseManifestEntry, SweepManifest, compute_spec_hash, write_manifest,
     )
-    case_dir = output_dir / "TNNP"
+    case_dir = output_dir / "x"
     state_dir = case_dir / "postProcessing"
     state_dir.mkdir(parents=True)
     (state_dir / "workflow_state.json").write_text('{"status": "completed"}')
@@ -646,15 +462,23 @@ def test_resume_skips_terminal_completed_case(tmp_path):
         schema_version="1.0", sweep_spec_hash=compute_spec_hash(spec),
         created_at="t0", updated_at="t0",
         cases=[CaseManifestEntry(
-            case_id="TNNP", resolved_axis_values={"ionicModel": "TNNP"},
-            override_hash="sha256:x", run_document_path="TNNP/run_document.json",
-            workflow_state_path="TNNP/postProcessing/workflow_state.json",
+            case_id="x", resolved_axis_values={"param": "x"},
+            override_hash="sha256:x", run_document_path="x/run_document.json",
+            workflow_state_path="x/postProcessing/workflow_state.json",
             status="completed", outcome="fresh", started_at="t0", updated_at="t0",
         )],
     )
     write_manifest(output_dir / "sweep_manifest.json", manifest)
 
-    with mock.patch("omnidriver.core.runtime.sweep_runner.materialize_case") as mock_materialize, \
+    # sweep_run calls route_case_values() unconditionally for every case,
+    # before prior_status is ever consulted (see sweep_runner.py's
+    # "routed = route_case_values(...)" ahead of the "elif prior_status ==
+    # 'completed'" branch) -- so a real plugin's routing catalog would
+    # otherwise be reached here even though this test is about resume
+    # bookkeeping, not routing. Mocked because nothing below asserts on what
+    # `routed` contains.
+    with mock.patch("omnidriver.core.runtime.sweep_runner.route_case_values", return_value={}), \
+         mock.patch("omnidriver.core.runtime.sweep_runner.materialize_case") as mock_materialize, \
          mock.patch("omnidriver.core.runtime.sweep_runner.subprocess.run") as mock_run:
         from omnidriver.core.runtime.sweep_runner import sweep_run
         result = sweep_run(spec_path, output_dir=output_dir, driver_context=_CTX)
@@ -671,7 +495,7 @@ def test_fresh_reruns_case_reported_as_completed_and_wipes_stray_files(tmp_path)
     # silently reported as fresh) and asserts --fresh actually reruns it and
     # wipes the whole output_dir, not just the state file.
     spec_path = tmp_path / "sweep.json"
-    _write_spec(spec_path, models=("TNNP",))
+    _write_placeholder_spec(spec_path)
     spec = json.loads(spec_path.read_text())
     output_dir = tmp_path / "out"
     output_dir.mkdir()
@@ -679,7 +503,7 @@ def test_fresh_reruns_case_reported_as_completed_and_wipes_stray_files(tmp_path)
     from omnidriver.core.runtime.sweep_manifest import (
         CaseManifestEntry, SweepManifest, compute_spec_hash, write_manifest,
     )
-    case_dir = output_dir / "TNNP"
+    case_dir = output_dir / "x"
     state_dir = case_dir / "postProcessing"
     state_dir.mkdir(parents=True)
     (state_dir / "workflow_state.json").write_text('{"status": "completed"}')
@@ -689,9 +513,9 @@ def test_fresh_reruns_case_reported_as_completed_and_wipes_stray_files(tmp_path)
         schema_version="1.0", sweep_spec_hash=compute_spec_hash(spec),
         created_at="t0", updated_at="t0",
         cases=[CaseManifestEntry(
-            case_id="TNNP", resolved_axis_values={"ionicModel": "TNNP"},
-            override_hash="sha256:x", run_document_path="TNNP/run_document.json",
-            workflow_state_path="TNNP/postProcessing/workflow_state.json",
+            case_id="x", resolved_axis_values={"param": "x"},
+            override_hash="sha256:x", run_document_path="x/run_document.json",
+            workflow_state_path="x/postProcessing/workflow_state.json",
             status="completed", outcome="fresh", started_at="t0", updated_at="t0",
         )],
     )
@@ -709,7 +533,8 @@ def test_fresh_reruns_case_reported_as_completed_and_wipes_stray_files(tmp_path)
         (state_dir / "workflow_state.json").write_text('{"status": "completed"}')
         return mock.Mock(returncode=0, stdout="", stderr="")
 
-    with mock.patch("omnidriver.core.runtime.sweep_runner.materialize_case") as mock_materialize, \
+    with mock.patch("omnidriver.core.runtime.sweep_runner.route_case_values", return_value={}), \
+         mock.patch("omnidriver.core.runtime.sweep_runner.materialize_case") as mock_materialize, \
          mock.patch("omnidriver.core.runtime.sweep_runner.strict_plan", return_value=fake_report), \
          mock.patch("omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run) as mock_run:
         from omnidriver.core.runtime.sweep_runner import sweep_run
@@ -720,7 +545,7 @@ def test_fresh_reruns_case_reported_as_completed_and_wipes_stray_files(tmp_path)
     assert result["completed_count"] == 1
     assert not stray_path.exists()
     by_id = {case["case_id"]: case for case in result["cases"]}
-    assert by_id["TNNP"]["outcome"] != "skipped"
+    assert by_id["x"]["outcome"] != "skipped"
 
 
 def test_fresh_defaults_to_false_and_preserves_resume_behavior(tmp_path):
@@ -729,7 +554,7 @@ def test_fresh_defaults_to_false_and_preserves_resume_behavior(tmp_path):
     # terminal_completed_case already verifies -- this just re-asserts it
     # with fresh explicitly passed as False, at the new call signature.
     spec_path = tmp_path / "sweep.json"
-    _write_spec(spec_path, models=("TNNP",))
+    _write_placeholder_spec(spec_path)
     spec = json.loads(spec_path.read_text())
     output_dir = tmp_path / "out"
     output_dir.mkdir()
@@ -737,7 +562,7 @@ def test_fresh_defaults_to_false_and_preserves_resume_behavior(tmp_path):
     from omnidriver.core.runtime.sweep_manifest import (
         CaseManifestEntry, SweepManifest, compute_spec_hash, write_manifest,
     )
-    case_dir = output_dir / "TNNP"
+    case_dir = output_dir / "x"
     state_dir = case_dir / "postProcessing"
     state_dir.mkdir(parents=True)
     (state_dir / "workflow_state.json").write_text('{"status": "completed"}')
@@ -745,15 +570,16 @@ def test_fresh_defaults_to_false_and_preserves_resume_behavior(tmp_path):
         schema_version="1.0", sweep_spec_hash=compute_spec_hash(spec),
         created_at="t0", updated_at="t0",
         cases=[CaseManifestEntry(
-            case_id="TNNP", resolved_axis_values={"ionicModel": "TNNP"},
-            override_hash="sha256:x", run_document_path="TNNP/run_document.json",
-            workflow_state_path="TNNP/postProcessing/workflow_state.json",
+            case_id="x", resolved_axis_values={"param": "x"},
+            override_hash="sha256:x", run_document_path="x/run_document.json",
+            workflow_state_path="x/postProcessing/workflow_state.json",
             status="completed", outcome="fresh", started_at="t0", updated_at="t0",
         )],
     )
     write_manifest(output_dir / "sweep_manifest.json", manifest)
 
-    with mock.patch("omnidriver.core.runtime.sweep_runner.materialize_case") as mock_materialize, \
+    with mock.patch("omnidriver.core.runtime.sweep_runner.route_case_values", return_value={}), \
+         mock.patch("omnidriver.core.runtime.sweep_runner.materialize_case") as mock_materialize, \
          mock.patch("omnidriver.core.runtime.sweep_runner.subprocess.run") as mock_run:
         from omnidriver.core.runtime.sweep_runner import sweep_run
         result = sweep_run(spec_path, output_dir=output_dir, fresh=False, driver_context=_CTX)
@@ -765,7 +591,7 @@ def test_fresh_defaults_to_false_and_preserves_resume_behavior(tmp_path):
 
 def test_resume_leaves_terminal_failed_alone_without_retry_flag(tmp_path):
     spec_path = tmp_path / "sweep.json"
-    _write_spec(spec_path, models=("TNNP",))
+    _write_placeholder_spec(spec_path)
     spec = json.loads(spec_path.read_text())
     output_dir = tmp_path / "out"
     output_dir.mkdir()
@@ -773,7 +599,7 @@ def test_resume_leaves_terminal_failed_alone_without_retry_flag(tmp_path):
     from omnidriver.core.runtime.sweep_manifest import (
         CaseManifestEntry, SweepManifest, compute_spec_hash, write_manifest,
     )
-    case_dir = output_dir / "TNNP"
+    case_dir = output_dir / "x"
     state_dir = case_dir / "postProcessing"
     state_dir.mkdir(parents=True)
     (state_dir / "workflow_state.json").write_text('{"status": "failed"}')
@@ -781,15 +607,16 @@ def test_resume_leaves_terminal_failed_alone_without_retry_flag(tmp_path):
         schema_version="1.0", sweep_spec_hash=compute_spec_hash(spec),
         created_at="t0", updated_at="t0",
         cases=[CaseManifestEntry(
-            case_id="TNNP", resolved_axis_values={"ionicModel": "TNNP"},
-            override_hash="sha256:x", run_document_path="TNNP/run_document.json",
-            workflow_state_path="TNNP/postProcessing/workflow_state.json",
+            case_id="x", resolved_axis_values={"param": "x"},
+            override_hash="sha256:x", run_document_path="x/run_document.json",
+            workflow_state_path="x/postProcessing/workflow_state.json",
             status="failed", outcome="fresh", started_at="t0", updated_at="t0",
         )],
     )
     write_manifest(output_dir / "sweep_manifest.json", manifest)
 
-    with mock.patch("omnidriver.core.runtime.sweep_runner.materialize_case") as mock_materialize, \
+    with mock.patch("omnidriver.core.runtime.sweep_runner.route_case_values", return_value={}), \
+         mock.patch("omnidriver.core.runtime.sweep_runner.materialize_case") as mock_materialize, \
          mock.patch("omnidriver.core.runtime.sweep_runner.subprocess.run") as mock_run:
         from omnidriver.core.runtime.sweep_runner import sweep_run
         result = sweep_run(spec_path, output_dir=output_dir, retry_failed=False, driver_context=_CTX)
@@ -801,7 +628,7 @@ def test_resume_leaves_terminal_failed_alone_without_retry_flag(tmp_path):
 
 def test_resume_retries_terminal_failed_case_with_retry_flag(tmp_path):
     spec_path = tmp_path / "sweep.json"
-    _write_spec(spec_path, models=("TNNP",))
+    _write_placeholder_spec(spec_path)
     spec = json.loads(spec_path.read_text())
     output_dir = tmp_path / "out"
     output_dir.mkdir()
@@ -809,7 +636,7 @@ def test_resume_retries_terminal_failed_case_with_retry_flag(tmp_path):
     from omnidriver.core.runtime.sweep_manifest import (
         CaseManifestEntry, SweepManifest, compute_spec_hash, write_manifest,
     )
-    case_dir = output_dir / "TNNP"
+    case_dir = output_dir / "x"
     state_dir = case_dir / "postProcessing"
     state_dir.mkdir(parents=True)
     (state_dir / "workflow_state.json").write_text('{"status": "failed"}')
@@ -817,9 +644,9 @@ def test_resume_retries_terminal_failed_case_with_retry_flag(tmp_path):
         schema_version="1.0", sweep_spec_hash=compute_spec_hash(spec),
         created_at="t0", updated_at="t0",
         cases=[CaseManifestEntry(
-            case_id="TNNP", resolved_axis_values={"ionicModel": "TNNP"},
-            override_hash="sha256:x", run_document_path="TNNP/run_document.json",
-            workflow_state_path="TNNP/postProcessing/workflow_state.json",
+            case_id="x", resolved_axis_values={"param": "x"},
+            override_hash="sha256:x", run_document_path="x/run_document.json",
+            workflow_state_path="x/postProcessing/workflow_state.json",
             status="failed", outcome="fresh", started_at="t0", updated_at="t0",
         )],
     )
@@ -837,7 +664,8 @@ def test_resume_retries_terminal_failed_case_with_retry_flag(tmp_path):
         (state_dir / "workflow_state.json").write_text('{"status": "completed"}')
         return mock.Mock(returncode=0, stdout="", stderr="")
 
-    with mock.patch("omnidriver.core.runtime.sweep_runner.materialize_case") as mock_materialize, \
+    with mock.patch("omnidriver.core.runtime.sweep_runner.route_case_values", return_value={}), \
+         mock.patch("omnidriver.core.runtime.sweep_runner.materialize_case") as mock_materialize, \
          mock.patch("omnidriver.core.runtime.sweep_runner.strict_plan", return_value=fake_report), \
          mock.patch("omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run) as mock_run:
         from omnidriver.core.runtime.sweep_runner import sweep_run
@@ -848,8 +676,8 @@ def test_resume_retries_terminal_failed_case_with_retry_flag(tmp_path):
     assert result["completed_count"] == 1
     assert result["failed_count"] == 0
     by_id = {case["case_id"]: case for case in result["cases"]}
-    assert by_id["TNNP"]["outcome"] == "retried"
-    assert by_id["TNNP"]["status"] == "completed"
+    assert by_id["x"]["outcome"] == "retried"
+    assert by_id["x"]["status"] == "completed"
 
 
 def test_sweep_run_case_timeout_marks_failed_and_continues(tmp_path):
@@ -857,7 +685,7 @@ def test_sweep_run_case_timeout_marks_failed_and_continues(tmp_path):
     # per-case failure (not crash the whole sweep), and the timeout must be
     # passed through to subprocess.run.
     spec_path = tmp_path / "sweep.json"
-    _write_spec(spec_path, models=("TNNP",))
+    _write_placeholder_spec(spec_path)
     output_dir = tmp_path / "out"
 
     def fake_materialize(*, case_dir, routed):
@@ -869,7 +697,7 @@ def test_sweep_run_case_timeout_marks_failed_and_continues(tmp_path):
         "status": "ok",
         "run_document": {
             "version": "3",
-            "launch": {"outputDir": str(output_dir / "TNNP" / "postProcessing")},
+            "launch": {"outputDir": str(output_dir / "x" / "postProcessing")},
         },
     }
 
@@ -879,7 +707,8 @@ def test_sweep_run_case_timeout_marks_failed_and_continues(tmp_path):
         seen_kwargs.update(kwargs)
         raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout"))
 
-    with mock.patch("omnidriver.core.runtime.sweep_runner.materialize_case", side_effect=fake_materialize), \
+    with mock.patch("omnidriver.core.runtime.sweep_runner.route_case_values", return_value={}), \
+         mock.patch("omnidriver.core.runtime.sweep_runner.materialize_case", side_effect=fake_materialize), \
          mock.patch("omnidriver.core.runtime.sweep_runner.strict_plan", return_value=fake_report), \
          mock.patch("omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run):
         from omnidriver.core.runtime.sweep_runner import sweep_run
@@ -889,8 +718,8 @@ def test_sweep_run_case_timeout_marks_failed_and_continues(tmp_path):
     assert result["failed_count"] == 1
     assert result["completed_count"] == 0
     by_id = {case["case_id"]: case for case in result["cases"]}
-    assert by_id["TNNP"]["status"] == "failed"
-    assert "timeout" in by_id["TNNP"]["timeout_error"].lower()
+    assert by_id["x"]["status"] == "failed"
+    assert "timeout" in by_id["x"]["timeout_error"].lower()
     # sweep stayed resumable: manifest was still written
     assert (output_dir / "sweep_manifest.json").exists()
 

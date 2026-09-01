@@ -37,9 +37,7 @@ _CORE_TESTS = pathlib.Path(__file__).resolve().parent.parent
 #: Core test files that skip wholesale without a sibling package, with the
 #: number of tests each removes from core's suite. Task 5b relocates them;
 #: this list may only shrink.
-KNOWN_HIDDEN_FILES: dict[str, int] = {
-    "core/test_sweep_runner.py": 24,
-}
+KNOWN_HIDDEN_FILES: dict[str, int] = {}
 
 
 def _module_level_importorskip(path: pathlib.Path) -> bool:

@@ -33,10 +33,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from omnidriver.core.plugin_interface import (
-    default_driver_context,
-    generic_openfoam_context,
-)
+from omnidriver.core.plugin_interface import generic_openfoam_context
 
 
 def test_generic_declares_no_solve_steps() -> None:
@@ -45,7 +42,7 @@ def test_generic_declares_no_solve_steps() -> None:
 
 
 def test_a_command_with_no_declared_globs_returns_empty() -> None:
-    evidence = default_driver_context().capabilities.runtime_evidence
+    evidence = generic_openfoam_context().capabilities.runtime_evidence
     assert evidence.telemetry_source_globs("blockMesh") == ()
 
 
@@ -55,7 +52,7 @@ def test_extra_provenance_paths_default_to_empty(tmp_path: Path) -> None:
 
 
 def test_an_unknown_artifact_format_has_no_reader() -> None:
-    evidence = default_driver_context().capabilities.runtime_evidence
+    evidence = generic_openfoam_context().capabilities.runtime_evidence
     assert evidence.artifact_value_reader("not_a_real_format") is None
 
 

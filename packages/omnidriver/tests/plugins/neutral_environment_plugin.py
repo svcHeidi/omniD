@@ -102,6 +102,18 @@ class _EnvironmentNeutralHooks:
 
         return dict(os.environ)
 
+    def get_configured_environment(self, env, driver_context) -> dict:
+        """No environment contract to apply: this plugin's steps run with
+        whatever environment mapping they are handed, unchanged. Same
+        ungated-fallback reasoning as the hooks above --
+        ``legacy_configured_environment`` also imports
+        ``omnidriver.openfoam`` unconditionally when a plugin omits this,
+        which is what lets ``sweep_runner.py``'s ``sweep_run`` (it calls
+        ``environment_preflight.configure`` before anything else) execute
+        without ``omnidriver.openfoam`` installed."""
+        del driver_context
+        return dict(env)
+
     def get_function_object_field_diagnostics(self, case_root, *, samplable) -> tuple:
         """No function-object/samplable-field vocabulary of its own, so no
         warnings to raise. Same ungated-fallback reasoning as the hook

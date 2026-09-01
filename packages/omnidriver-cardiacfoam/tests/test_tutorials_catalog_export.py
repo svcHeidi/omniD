@@ -36,6 +36,11 @@ exporter serializes it (plus a thin display-metadata layer) to
 JSON for external consumers.
 
 Source-of-truth stays in Python.
+
+Moved out of core's test tree (Part A, test-ownership split): the
+exported script resolves a driver context and serializes cardiacFoam's
+tutorial registry specifically, so these assertions are only
+non-vacuous against real cardiac content.
 """
 
 from __future__ import annotations
