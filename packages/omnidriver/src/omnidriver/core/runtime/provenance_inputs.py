@@ -47,9 +47,11 @@ still a mandatory input. The resolution precedence, first match wins:
    phase exists to prevent.
 
 Concretely: ``system/**``, ``constant/**``, the **selected** start-time
-directory (read from ``system/controlDict``'s ``startFrom``/``startTime`` --
-not always ``0/``), and ``processor*/<selected-time>/**`` during a decomposed
-restart (I9) are walked and classified by that precedence. The exact
+directory (as answered by the active plugin's
+``CaseIntrospectionCapability.selected_start_time`` -- OpenFOAM's
+``system/controlDict`` ``startFrom``/``startTime`` by default, not always
+``0/``), and ``processor*/<selected-time>/**`` during a decomposed restart
+(I9) are walked and classified by that precedence. The exact
 Allrun-family scripts named by the DAG are added directly. Other time
 directories, ``postProcessing/`` (which holds ``workflow_logs/``), and
 state/manifest files are never walked, so they are excluded by construction
@@ -87,8 +89,6 @@ from .workflow_runner import _resolve_case_cwd, _resolve_command
 if TYPE_CHECKING:
     from ..plugin_interface import DriverContext
 
-_DEFAULT_START_TIME = "0"
-
 
 def _case_root_dirnames(driver_context: "DriverContext") -> tuple[str, ...]:
     """Top-level case directories the active plugin's declared case files
@@ -99,62 +99,6 @@ def _case_root_dirnames(driver_context: "DriverContext") -> tuple[str, ...]:
     rules = driver_context.capabilities.case_files.all_rules()
     segments = {Path(rule.path).parts[0] for rule in rules if rule.path}
     return tuple(sorted(segments))
-
-
-def _control_file_path(case_root: Path, driver_context: "DriverContext") -> Path | None:
-    """The case file whose role is ``openfoam.control_dict``, if the active
-    plugin declares one. Searches every declared rule, not just
-    ``required_rules()``, since a control file can legitimately be declared
-    ``conditional``."""
-    rules = driver_context.capabilities.case_files.all_rules()
-    for rule in rules:
-        if rule.role == "openfoam.control_dict":
-            return case_root / rule.path
-    return None
-
-
-def _select_start_time(case_root: Path, driver_context: "DriverContext") -> str:
-    """The **selected** start-time directory, per the plugin's control file.
-
-    ``startFrom latestTime`` selects the latest written time, not ``0``;
-    ``firstTime`` selects the earliest. Anything else (including an absent
-    control file, or a plugin that declares no ``openfoam.control_dict``
-    role) falls back to the literal ``startTime`` value, or ``"0"`` if that
-    too is absent -- the common case, but never assumed without checking.
-    """
-    control_dict = _control_file_path(case_root, driver_context)
-    if control_dict is None:
-        return _DEFAULT_START_TIME
-
-    read = driver_context.capabilities.config_values.read
-    start_from = (read(control_dict, "startFrom") or "startTime").strip()
-
-    if start_from in ("latestTime", "firstTime"):
-        candidates = _list_time_dir_names(case_root)
-        if not candidates:
-            return _DEFAULT_START_TIME
-        selector = max if start_from == "latestTime" else min
-        return selector(candidates, key=float)
-
-    start_time = read(control_dict, "startTime")
-    return start_time.strip() if start_time is not None else _DEFAULT_START_TIME
-
-
-def _list_time_dir_names(case_root: Path) -> list[str]:
-    names: list[str] = []
-    try:
-        children = list(case_root.iterdir())
-    except OSError:
-        return names
-    for child in children:
-        if not child.is_dir():
-            continue
-        try:
-            float(child.name)
-        except ValueError:
-            continue
-        names.append(child.name)
-    return names
 
 
 def _walk_files(root: Path) -> list[Path]:
@@ -331,7 +275,9 @@ def enumerate_case_inputs(
     capabilities = driver_context.capabilities
 
     resolved_case = capabilities.case_introspection.resolve_case_models(case_root)
-    selected_start_time = _select_start_time(case_root, driver_context)
+    selected_start_time = capabilities.case_introspection.selected_start_time(
+        case_root, resolved_case, driver_context=driver_context,
+    )
 
     consumed_relpaths = _collect_consumed_relpaths(workflow_dag)
     required_inputs = capabilities.case_provenance.required_inputs(

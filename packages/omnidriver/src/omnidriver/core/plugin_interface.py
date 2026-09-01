@@ -445,6 +445,19 @@ class SolverPluginOptionalHooks(Protocol):
         fine here: generated diagnostics have fixed names. Absent -> ``()``."""
         ...
 
+    # -- CaseIntrospectionCapability ------------------------------------------
+    def get_selected_start_time(
+        self, case_root: "Path", resolved_case: dict[str, Any],
+    ) -> str:
+        """Which on-disk time directory a run resumes from. Absent -> the file
+        whose declared role is ``openfoam.control_dict``, read for
+        ``startFrom``/``startTime``/``latestTime``/``firstTime`` (see
+        legacy_selected_start_time). Exists so a plugin declaring no
+        ``openfoam.control_dict`` role -- a foreign environment using the
+        role-vocabulary escape tier -- can still answer this question in its
+        own terms (future/ENVIRONMENT_CONTRACT.md §10, Tier 3)."""
+        ...
+
     # -- EnvironmentPreflightCapability --------------------------------------
     def get_loaded_environment(
         self, *, explicit_bashrc: Any | None, driver_context: Any,

@@ -437,14 +437,29 @@ class CaseIntrospectionCapability(Protocol):
     plugin with no solver semantics (the generic plugin) resolves nothing and
     exposes no fields.
 
-    :adapts: get_samplable_fields, resolve_case_models
+    ``selected_start_time`` answers which on-disk time directory a run
+    resumes from -- the one place core previously reached for the
+    ``openfoam.control_dict`` role directly (``provenance_inputs.py``,
+    Tier 3, ``future/ENVIRONMENT_CONTRACT.md`` §10). That role has exactly
+    one consumer, so rather than generalise the role lookup this hook lets a
+    plugin answer the question outright; the fallback preserves the
+    historical OpenFOAM ``startFrom``/``startTime``/``latestTime``/
+    ``firstTime`` behaviour exactly. ``driver_context`` is threaded through
+    for the same reason :class:`OverrideScopeCapability`'s ``apply`` takes
+    it: the adapter holds only ``self.plugin``, and the fallback needs
+    ``case_files``/``config_values`` to do the OpenFOAM-shaped lookup.
+
+    :adapts: get_samplable_fields, get_selected_start_time, resolve_case_models
     :consumed-by: omnidriver/core/capability_manifest.py, omnidriver/core/runtime/provenance_inputs.py
-    :fallback: legacy_resolve_case_models, legacy_samplable_fields
+    :fallback: legacy_resolve_case_models, legacy_samplable_fields, legacy_selected_start_time
     :status: optional
     """
 
     def resolve_case_models(self, case_root: Path) -> dict[str, Any]: ...
     def samplable_fields(self, resolved: dict[str, Any]) -> dict[str, tuple[str, ...]]: ...
+    def selected_start_time(
+        self, case_root: Path, resolved_case: dict[str, Any], *, driver_context: Any,
+    ) -> str: ...
 
 
 class CaseFileContractCapability(Protocol):
@@ -499,7 +514,7 @@ class ConfigValueCapability(Protocol):
     reader.
 
     :adapts: get_config_value_reader
-    :consumed-by: omnidriver/core/runtime/provenance_inputs.py
+    :consumed-by: omnidriver/core/compatibility.py
     :fallback: legacy_config_value_reader
     :status: optional
     """
@@ -1006,6 +1021,27 @@ class _CaseIntrospectionAdapter:
         from .compatibility import legacy_samplable_fields
 
         return legacy_samplable_fields(self.plugin, resolved)
+
+    def selected_start_time(
+        self, case_root: Path, resolved_case: dict[str, Any], *, driver_context: Any,
+    ) -> str:
+        hook = getattr(self.plugin, "get_selected_start_time", None)
+        if callable(hook):
+            result = hook(case_root, resolved_case)
+            # A blank result is not "no opinion" -- ``case_root / "" ==
+            # case_root``, so it would silently walk the entire case tree
+            # instead of the intended time directory. Fail loudly, matching
+            # this codebase's rule that an unclassified/malformed input is a
+            # spurious refusal, never a silent misclassification.
+            if not isinstance(result, str) or not result:
+                raise TypeError(
+                    f"{self.plugin.plugin_id}.get_selected_start_time() must return "
+                    f"a non-empty string, got {result!r}"
+                )
+            return result
+        from .compatibility import legacy_selected_start_time
+
+        return legacy_selected_start_time(case_root, resolved_case, driver_context=driver_context)
 
 
 @dataclass(frozen=True)

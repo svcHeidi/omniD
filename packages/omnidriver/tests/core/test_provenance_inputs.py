@@ -40,6 +40,7 @@ import pytest
 
 from omnidriver.core.plugin_capabilities import ResolvedInput, RuntimeDependency
 from omnidriver.core.plugin_interface import driver_context
+from omnidriver.core.plugin_profile import PluginProfile
 from omnidriver.core.runtime.provenance_inputs import enumerate_case_inputs
 from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
 
@@ -129,6 +130,66 @@ def test_latest_time_selects_the_latest_written_time_directory(tmp_path: Path) -
 
     assert "0.5/Vm" in included
     assert "0/Vm" not in included
+
+
+class _ForeignEnvironmentPlugin(NeutralEnvironmentPlugin):
+    """A plugin that answers ``get_selected_start_time`` itself and declares
+    no case-file roles at all -- proves the hook is a genuine escape from
+    ``openfoam.control_dict``, not just a different path to the same lookup
+    (future/ENVIRONMENT_CONTRACT.md §10, Tier 3)."""
+
+    def __init__(self, *, chosen_start_time: str) -> None:
+        self._chosen_start_time = chosen_start_time
+
+    def get_profile(self) -> PluginProfile:
+        return PluginProfile(
+            path=Path(__file__),
+            plugin_id=self.plugin_id,
+            api_version=self.plugin_api_version,
+            case_files=(),
+            cxx_mapping=None,
+            payload={
+                "schema_version": 1,
+                "plugin": {"id": self.plugin_id, "api_version": self.plugin_api_version},
+                "case_profile": {"dictionaries": []},
+            },
+        )
+
+    def get_selected_start_time(self, case_root, resolved_case) -> str:
+        return self._chosen_start_time
+
+
+def test_plugin_implemented_start_time_hook_overrides_the_openfoam_default(
+    tmp_path: Path,
+) -> None:
+    for time_name in ("0", "0.5", "1"):
+        time_dir = tmp_path / time_name
+        time_dir.mkdir()
+        (time_dir / "Vm").write_text(f"field-at-{time_name}")
+
+    plugin = _ForeignEnvironmentPlugin(chosen_start_time="0.5")
+    assert plugin.get_profile().case_files == ()
+
+    components = enumerate_case_inputs(
+        tmp_path, workflow_dag={"steps": []}, driver_context=driver_context(plugin, source="test"),
+    )
+    included = _paths(components, kind="case_file")
+
+    assert "0.5/Vm" in included
+    assert "0/Vm" not in included
+    assert "1/Vm" not in included
+
+
+def test_start_time_hook_must_return_a_non_empty_string(tmp_path: Path) -> None:
+    """A blank result is not "no opinion" -- ``case_root / "" == case_root``
+    would silently walk the entire case tree. The adapter must fail loudly
+    instead."""
+    plugin = _ForeignEnvironmentPlugin(chosen_start_time="")
+
+    with pytest.raises(TypeError, match="get_selected_start_time"):
+        enumerate_case_inputs(
+            tmp_path, workflow_dag={"steps": []}, driver_context=driver_context(plugin, source="test"),
+        )
 
 
 def test_postprocessing_and_workflow_logs_are_excluded(tmp_path: Path) -> None:

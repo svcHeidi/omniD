@@ -452,6 +452,61 @@ def legacy_samplable_fields(plugin, resolved) -> dict:
     return {}
 
 
+def _list_time_dir_names(case_root) -> list[str]:
+    names: list[str] = []
+    try:
+        children = list(case_root.iterdir())
+    except OSError:
+        return names
+    for child in children:
+        if not child.is_dir():
+            continue
+        try:
+            float(child.name)
+        except ValueError:
+            continue
+        names.append(child.name)
+    return names
+
+
+@_instrumented
+def legacy_selected_start_time(case_root, resolved_case, *, driver_context) -> str:
+    """Plugins predating get_selected_start_time(). provenance_inputs.py has
+    always found the case's control file by the ``openfoam.control_dict``
+    role and read ``startFrom``/``startTime`` from it -- the OpenFOAM-shaped
+    default a plugin overrides by implementing the hook itself (Tier 3,
+    future/ENVIRONMENT_CONTRACT.md §10). Needs no ``omnidriver.openfoam``
+    import, unlike most fallbacks here: the OpenFOAM-ness is only in the
+    literal key names passed to the already plugin-neutral
+    ``config_values.read()``, not in any parsing code.
+
+    ``resolved_case`` is unused by this default -- the historical behaviour
+    never looked at it -- but is accepted so the signature matches the hook
+    a plugin implements."""
+
+    del resolved_case
+    default_start_time = "0"
+    rules = driver_context.capabilities.case_files.all_rules()
+    control_dict = next(
+        (case_root / rule.path for rule in rules if rule.role == "openfoam.control_dict"), None,
+    )
+    if control_dict is None:
+        return default_start_time
+
+    read = driver_context.capabilities.config_values.read
+    start_from = (read(control_dict, "startFrom") or "startTime").strip()
+
+    if start_from in ("latestTime", "firstTime"):
+        candidates = _list_time_dir_names(case_root)
+        if not candidates:
+            return default_start_time
+        selector = max if start_from == "latestTime" else min
+        return selector(candidates, key=float)
+
+    start_time = read(control_dict, "startTime")
+    return start_time.strip() if start_time is not None else default_start_time
+
+
 @_instrumented
 def legacy_override_schema(plugin, tutorial_name: str, make_spec_info: dict) -> dict:
     """v1 plugins predate get_override_schema(). A plugin that does not
