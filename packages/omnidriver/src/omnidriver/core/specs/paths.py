@@ -9,9 +9,11 @@ def cardiacfoam_monorepo_root(start: Path | None = None) -> Path | None:
     ``omnidriver`` was extracted from -- or ``None`` when running in a
     standalone checkout that doesn't happen to sit inside that tree (the
     normal case: this repo has its own remote and isn't nested in the
-    monorepo). Shared by test ``conftest.py`` files (via ``skip_without_monorepo``)
-    and by shipped code that reads monorepo-only content, e.g.
-    ``utility_catalog.py``'s ``UTILITIES_ROOT``.
+    monorepo). Shared by each package's test ``conftest.py`` (via
+    ``skip_without_monorepo``) and by the root-level ``scripts/`` (e.g.
+    ``regenerate-ionic-catalog.py``, ``scan-dict-keys.py``) that read
+    monorepo-only content. No call sites exist inside core itself; this
+    function has no callers unless something outside core imports it.
     """
     current = (start or Path(__file__)).resolve()
     for parent in current.parents:

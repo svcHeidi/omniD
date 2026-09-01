@@ -29,9 +29,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from omnidriver.core.runtime.generic_case import (
+    RUN_CASE_SCRIPT_RELPATH as _CORE_RUN_CASE_SCRIPT_RELPATH,
+)
+
 
 CONTROL_DICT_RELPATH = Path("system/controlDict")
 ELECTRO_PROPERTIES_RELPATH = Path("constant/electroProperties")
-RUN_CASE_SCRIPT_RELPATH = Path("applications/scripts/driverFoam/openfoam_driver/scripts/run_case.sh")
+# Re-exported from core rather than duplicated. This module used to carry
+# its own literal naming the pre-migration monorepo layout
+# (``applications/scripts/driverFoam/openfoam_driver/...``) -- a path that
+# exists nowhere, and one that still spelled the retired ``openfoam_driver``
+# package name. Every tutorial default below chains to this constant, so
+# that copy, not core's, was the one on the live cardiac path.
+RUN_CASE_SCRIPT_RELPATH = _CORE_RUN_CASE_SCRIPT_RELPATH
 OUTPUT_DIR_NAME = "postProcessing"
 OUTPUT_RELPATH = Path(OUTPUT_DIR_NAME)

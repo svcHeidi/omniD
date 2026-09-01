@@ -23,8 +23,6 @@ TOUCH_CASE_FOAM=false
 DEFAULT_OPENFOAM_BASHRC=""
 if [[ -n "${WM_PROJECT_DIR:-}" && -f "${WM_PROJECT_DIR}/etc/bashrc" ]]; then
     DEFAULT_OPENFOAM_BASHRC="${WM_PROJECT_DIR}/etc/bashrc"
-elif [[ -f "/Volumes/OpenFOAM-v2412/etc/bashrc" ]]; then
-    DEFAULT_OPENFOAM_BASHRC="/Volumes/OpenFOAM-v2412/etc/bashrc"
 fi
 OPENFOAM_BASHRC="${OPENFOAM_BASHRC:-$DEFAULT_OPENFOAM_BASHRC}"
 
