@@ -376,6 +376,27 @@ about `KNOWN_ROLES`.
 Rejected outright, no tier accepts them: a role with no dot at all (`control_dict`),
 and any role that isn't in `KNOWN_ROLES` and doesn't carry the `x-` marker.
 
+### Reservation: the marker privileges OpenFOAM, and the goal is that it should not
+
+Recorded against this design rather than deferred silently. The brief's stated
+acceptance was that a bare `fenics.mesh_file` load; what landed requires
+`x-fenics.mesh_file`. The reasoning for the change is sound -- bare
+unknown-namespace acceptance would have swallowed `opnefoam.control_dict` -- but
+the shape it produces says `openfoam.*` is the standard vocabulary and every
+other environment is an extension. That is backwards relative to where this is
+going: the end state has OpenFOAM as *a* plugin, peer to any other, not the
+namespace the enum is built around.
+
+The third option in the brief avoids both problems and was rejected only on the
+cost of a schema field: a profile that declares its own namespaces
+(`namespaces: [fenics]`) may then use `fenics.mesh_file` unmarked, and
+`opnefoam.control_dict` still fails -- because `opnefoam` was never declared.
+That is strictly stronger typo-catching *and* peer status, for one key.
+
+Not changed now: there are zero non-OpenFOAM plugins, so the migration cost is
+near zero today and rises only once the first one exists. Revisit before that,
+not after.
+
 ### Why a marker prefix, not a bare "unknown namespace passes" rule
 
 The design brief for this (§10's Tier 2 first row) offered three shapes: a namespace-based rule with no
