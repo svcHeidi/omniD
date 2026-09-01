@@ -20,13 +20,41 @@ class MinimalOpenFOAMPlugin:
     #: directly instead of defensively.
     _entrypoint: str | None = None
 
-    def __init__(self, *, entrypoint: str | None = None) -> None:
-        """`entrypoint` declares an ``openfoam.entrypoint`` case-file rule.
+    #: Class-level defaults for the same reason as ``_entrypoint``: a subclass
+    #: that overrides ``__init__`` without calling ``super()`` must still
+    #: resolve them.
+    _solver_commands: frozenset[str] = frozenset()
+    _telemetry_globs: dict[str, tuple[str, ...]] = {}
 
-        Default `None` declares none, so every existing no-argument
-        construction in the suite is unchanged.
+    def __init__(
+        self,
+        *,
+        entrypoint: str | None = None,
+        solver_commands: frozenset[str] | set[str] | None = None,
+        telemetry_globs: dict[str, tuple[str, ...]] | None = None,
+    ) -> None:
+        """Declare just enough for a test to be non-vacuous.
+
+        `entrypoint` declares an ``openfoam.entrypoint`` case-file rule.
+
+        `solver_commands` and `telemetry_globs` exist because a plugin that
+        declares NOTHING makes several core assertions trivially true. Asking
+        an empty plugin for an undeclared command's globs and getting ``()``
+        proves nothing -- it returns ``()`` for every input. The meaningful
+        claim is the CONTRAST: a plugin that declares globs for one command
+        still returns ``()`` for another. Same for command authorization,
+        where core's suite otherwise never exercises
+        ``validate_workflow_commands``'s ``plugin_commands`` branch with a
+        non-empty set at all.
+
+        All default to empty, so every existing no-argument construction in
+        the suite is unchanged.
         """
         self._entrypoint = entrypoint
+        if solver_commands is not None:
+            self._solver_commands = frozenset(solver_commands)
+        if telemetry_globs is not None:
+            self._telemetry_globs = dict(telemetry_globs)
 
     @property
     def plugin_name(self) -> str:
@@ -106,7 +134,7 @@ class MinimalOpenFOAMPlugin:
         return ()
 
     def get_solver_commands(self) -> frozenset[str]:
-        return frozenset()
+        return self._solver_commands
 
     def get_auxiliary_commands(self) -> frozenset[str]:
         return frozenset()
@@ -136,8 +164,7 @@ class MinimalOpenFOAMPlugin:
         return frozenset()
 
     def get_telemetry_source_globs(self, command: str) -> tuple:
-        del command
-        return ()
+        return self._telemetry_globs.get(command, ())
 
     def get_extra_provenance_paths(self, case_root) -> tuple:
         del case_root

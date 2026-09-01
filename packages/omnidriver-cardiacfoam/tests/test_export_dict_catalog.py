@@ -32,6 +32,11 @@ phase: an entry with ``phases={"anatomy", "physics"}`` appears in BOTH
 the ``anatomy`` and ``physics`` buckets, and each emitted record is
 stamped with a single ``phase`` equal to its bucket. The full ``phases``
 list is preserved on every record for downstream validation and agent use.
+
+Moved out of core's test tree (Part A, test-ownership split): the
+exported script hardcodes ``from omnidriver.cardiacfoam.ionic_model_catalog
+import IONIC_MODEL_CATALOG`` with no generic-plugin abstraction, so there
+is no fixture swap that would keep this test meaningful under core alone.
 """
 
 from __future__ import annotations

@@ -33,10 +33,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from omnidriver.core.plugin_interface import (
-    default_driver_context,
-    generic_openfoam_context,
-)
+from omnidriver.core.plugin_interface import driver_context, generic_openfoam_context
+
+from plugins.minimal_plugin import MinimalOpenFOAMPlugin
 
 
 def test_generic_declares_no_solve_steps() -> None:
@@ -45,7 +44,19 @@ def test_generic_declares_no_solve_steps() -> None:
 
 
 def test_a_command_with_no_declared_globs_returns_empty() -> None:
-    evidence = default_driver_context().capabilities.runtime_evidence
+    """The CONTRAST is the assertion, not the empty tuple.
+
+    Asked of a plugin that declares nothing, this returned () for every input
+    -- including one it does declare, because there is no such input. That is
+    vacuous: it holds however broken the lookup is. Declaring globs for one
+    command and asking for another is the claim worth pinning.
+    """
+    plugin = MinimalOpenFOAMPlugin(telemetry_globs={"Allrun": ("log.*",)})
+    evidence = driver_context(
+        plugin, source="test:telemetry",
+    ).capabilities.runtime_evidence
+
+    assert evidence.telemetry_source_globs("Allrun") == ("log.*",)
     assert evidence.telemetry_source_globs("blockMesh") == ()
 
 
@@ -55,7 +66,16 @@ def test_extra_provenance_paths_default_to_empty(tmp_path: Path) -> None:
 
 
 def test_an_unknown_artifact_format_has_no_reader() -> None:
-    evidence = default_driver_context().capabilities.runtime_evidence
+    """Kept deliberately weak, and labelled as such.
+
+    ``get_artifact_value_reader`` returns None for EVERY format in every
+    shipped plugin today -- runtime_evidence.py records that readers arrive in
+    Phase 5 -- so this cannot yet assert a contrast the way its sibling above
+    does. It is a placeholder guarding the adapter's plumbing, not the
+    behaviour. When Phase 5 lands a real reader, rewrite this to assert the
+    known format resolves and an unrelated string does not.
+    """
+    evidence = generic_openfoam_context().capabilities.runtime_evidence
     assert evidence.artifact_value_reader("not_a_real_format") is None
 
 

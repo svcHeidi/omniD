@@ -7,10 +7,15 @@ utility (``bathBidomainInterfaceMetrics``), the ``Allrun``-redirected
 dependency -- all cardiac plugin knowledge. The generic-plugin tests in that
 file (which already passed without cardiacfoam installed) stayed in core,
 along with two cases (``test_a_command_with_no_declared_globs_returns_empty``
-and ``test_an_unknown_artifact_format_has_no_reader``) that were left
-failing there deliberately: they are trivially true under any plugin and
-``artifact_value_reader`` has no real implementation yet, so moving them
-would not have been a meaningful split.
+and ``test_an_unknown_artifact_format_has_no_reader``) that are trivially
+true under any plugin -- ``artifact_value_reader`` has no real
+implementation yet, so moving them would not have been a meaningful split
+either. A later pass (Phase 2, Milestone 4 test-ownership split) needed
+core-only to be genuinely green and found those two still calling
+``default_driver_context()`` (which unconditionally imports cardiacfoam)
+instead of ``generic_openfoam_context()`` like their neighbors in the same
+file; that was a leftover inconsistency, not a deliberate cardiac
+dependency, so it was corrected in place there rather than moved here.
 """
 
 from __future__ import annotations
