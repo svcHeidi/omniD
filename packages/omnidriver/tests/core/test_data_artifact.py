@@ -40,6 +40,7 @@ import typing
 import unittest
 
 from omnidriver.core.runtime.models import (
+    CORE_ARTIFACT_FORMATS,
     ArtifactFormat,
     DataArtifact,
     expand_path_pattern,
@@ -118,26 +119,33 @@ class TestDataArtifact(unittest.TestCase):
         self.assertEqual(artifact.variables, ("Vm", "Iion", "Cai"))
 
 
-class TestArtifactFormatLiteral(unittest.TestCase):
-    """ArtifactFormat is a closed Literal — adding values requires updating
-    every consumer that branches on format. Lock the set here."""
+class TestArtifactFormatIsOpen(unittest.TestCase):
+    """ArtifactFormat is deliberately NOT a closed Literal (Tier 3,
+    future/ENVIRONMENT_CONTRACT.md §10): most format strings in practice are
+    a solver plugin's own vocabulary for its own outputs, which core has no
+    business validating. What IS closed is the much smaller set of formats
+    core writes for its own artifacts -- lock that instead."""
 
-    _EXPECTED_FORMATS: frozenset[str] = frozenset({
-        "csv_probe",
-        "csv_sweep",
-        "vtk_sequence",
-        "openfoam_time_dirs",
-        "openfoam_log",
-        "json_summary",
-    })
+    def test_artifact_format_is_a_plain_string_type(self) -> None:
+        self.assertIs(ArtifactFormat, str)
+        self.assertEqual(typing.get_args(ArtifactFormat), ())
 
-    def test_literal_values_match_documented_set(self) -> None:
-        actual = frozenset(typing.get_args(ArtifactFormat))
+    def test_core_artifact_formats_match_documented_set(self) -> None:
         self.assertEqual(
-            actual, self._EXPECTED_FORMATS,
-            "ArtifactFormat enum changed — update plan section 2.1 and every "
-            "consumer that branches on format before changing this assertion.",
+            CORE_ARTIFACT_FORMATS, frozenset({"json_summary", "log"}),
+            "CORE_ARTIFACT_FORMATS changed — update every DataArtifact core "
+            "predicts for itself (runtime/artifacts.py) before changing this "
+            "assertion.",
         )
+
+    def test_a_plugin_owned_format_string_is_accepted_without_validation(self) -> None:
+        """DataArtifact does not validate .format at all -- a plugin is free
+        to use vocabulary core has never heard of (e.g. a FEniCS plugin's
+        "xdmf_sequence")."""
+        artifact = DataArtifact(
+            artifact_id="a", path_pattern="p", format="xdmf_sequence",
+        )
+        self.assertEqual(artifact.format, "xdmf_sequence")
 
 
 class TestExpandPathPattern(unittest.TestCase):

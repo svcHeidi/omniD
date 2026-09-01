@@ -173,7 +173,7 @@ def _core_generic_artifacts(spec: TutorialSpec) -> tuple[DataArtifact, ...]:
         DataArtifact(
             artifact_id="core.workflow_logs",
             path_pattern=f"{prefix}/workflow_logs",
-            format="openfoam_log",
+            format="log",
             description="Per-step stdout and stderr logs written by driverFOAM.",
             produced_by="driverFOAM",
             optional=True,

@@ -30,20 +30,22 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Final, Literal
+from typing import Any, Callable, Final
 
 
-ArtifactFormat = Literal[
-    "csv_probe",
-    "csv_sweep",
-    "vtk_sequence",
-    "openfoam_time_dirs",
-    "openfoam_log",
-    "json_summary",
-]
-"""Closed enum of artifact output formats. Extending this set is a contract
-change — every consumer that branches on ``DataArtifact.format`` must be
-updated alongside the addition, and the plan (section 2.1) must be amended."""
+ArtifactFormat = str
+"""Artifact output format. Open-ended by design, not a closed enum: nothing
+in core branches on this value today, and most format strings in practice
+(``openfoam_log``, ``vtk_sequence``, ``csv_probe``, ``openfoam_time_dirs``,
+...) are a solver plugin's own vocabulary for its own outputs -- core has no
+business validating spellings it does not own (future/ENVIRONMENT_CONTRACT.md
+§10, Tier 3). ``CORE_ARTIFACT_FORMATS`` below names the only two values core
+itself ever writes, for its own artifacts."""
+
+CORE_ARTIFACT_FORMATS: Final[frozenset[str]] = frozenset({"json_summary", "log"})
+"""Format values used by artifacts core predicts for itself (see
+``runtime/artifacts.py``'s generic-case fallback) -- not a validation gate
+on plugin-declared formats, which may be anything."""
 
 
 @dataclass(frozen=True)

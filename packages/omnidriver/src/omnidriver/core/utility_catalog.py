@@ -55,15 +55,19 @@ The following fields are optional:
         name          (str)              – flag name, e.g. "-noScale".
         description   (str)              – what the flag does.
         takes_value   (bool)             – whether the flag accepts an argument.
-        argument_kind (str, optional)    – one of ALLOWED_ARGUMENT_KINDS:
-                                           scalar|label|path|word|word_list|switch
+        argument_kind (str, optional)    – a non-empty, plugin-chosen label for
+                                           the argument's shape (e.g. OpenFOAM
+                                           utilities use scalar/label/path/word/
+                                           word_list/switch). Core does not
+                                           validate the spelling — see
+                                           future/ENVIRONMENT_CONTRACT.md §10.
         required      (bool, default False) – whether the flag is mandatory.
         default       (str, optional)    – default value as a string.
 
     positional_args = [...]            – ordered list of positional argument
         tables, each with:
         name          (str)
-        argument_kind (str)  – one of ALLOWED_ARGUMENT_KINDS
+        argument_kind (str)  – non-empty, plugin-chosen (see [[flags]] above)
         description   (str)
 
     produces = [...]                   – structured output declarations that
@@ -72,8 +76,9 @@ The following fields are optional:
         path_pattern  (str)   – case-relative path; may contain {case_id} or
                                  {time} placeholders (validated at load time
                                  via models._validate_path_pattern — Gap B).
-        format        (str)   – one of the ArtifactFormat values from
-                                 core.runtime.models.
+        format        (str)   – non-empty, plugin-chosen (see
+                                 core.runtime.models.ArtifactFormat — open by
+                                 design, not a closed enum core validates).
         description   (str, optional)
         produced_by   (str, optional)  – utility/solver name.
         variables     (list[str], optional)
@@ -83,8 +88,6 @@ The following fields are optional:
 Public API
 ----------
     ALLOWED_CATEGORIES     – frozenset of valid category strings.
-    ALLOWED_ARGUMENT_KINDS – frozenset of valid argument_kind strings.
-    ALLOWED_ARTIFACT_FORMATS – frozenset of valid produces[*].format strings.
     PositionalArg          – frozen dataclass for a positional argument.
     UtilityFlag            – frozen dataclass for a single CLI flag.
     ProducesEntry          – frozen dataclass for a produces entry.
@@ -126,21 +129,6 @@ ALLOWED_CATEGORIES: Final[frozenset[str]] = frozenset(
         "io-conversion",
         "verification",
         "parametric-sweep",
-    }
-)
-
-ALLOWED_ARGUMENT_KINDS: Final[frozenset[str]] = frozenset(
-    {"scalar", "label", "path", "word", "word_list", "switch"}
-)
-
-ALLOWED_ARTIFACT_FORMATS: Final[frozenset[str]] = frozenset(
-    {
-        "csv_probe",
-        "csv_sweep",
-        "vtk_sequence",
-        "openfoam_time_dirs",
-        "openfoam_log",
-        "json_summary",
     }
 )
 
@@ -192,7 +180,8 @@ class PositionalArg:
     """Argument name, e.g. 'vtk_file'."""
 
     argument_kind: str
-    """One of ALLOWED_ARGUMENT_KINDS."""
+    """Plugin-chosen, non-empty. Not validated against a closed set — see
+    module docstring."""
 
     description: str
     """What the argument represents."""
@@ -212,7 +201,8 @@ class UtilityFlag:
     """Whether the flag accepts a follow-on argument."""
 
     argument_kind: str = ""
-    """One of ALLOWED_ARGUMENT_KINDS. Empty string means not specified."""
+    """Plugin-chosen. Empty string means not specified; not validated
+    against a closed set — see module docstring."""
 
     required: bool = False
     """Whether the flag is mandatory."""
@@ -232,7 +222,8 @@ class ProducesEntry:
     """Case-relative path; may contain {case_id} / {time} placeholders."""
 
     format: str
-    """One of ALLOWED_ARTIFACT_FORMATS."""
+    """Plugin-chosen, non-empty. See ``core.runtime.models.ArtifactFormat``
+    — open by design, not validated against a closed set."""
 
     description: str = ""
     """Human-readable purpose. May be empty."""
@@ -308,11 +299,11 @@ def _parse_positional_arg(raw: object, manifest_path: Path) -> PositionalArg:
             raise ValueError(
                 f"{manifest_path}: positional_args entry is missing {required_field!r}"
             )
-    kind: str = raw["argument_kind"]
-    if kind not in ALLOWED_ARGUMENT_KINDS:
+    kind = raw["argument_kind"]
+    if not isinstance(kind, str) or not kind:
         raise ValueError(
-            f"{manifest_path}: positional_args entry {raw['name']!r} has unknown "
-            f"argument_kind {kind!r}; allowed: {sorted(ALLOWED_ARGUMENT_KINDS)}"
+            f"{manifest_path}: positional_args entry {raw['name']!r} has an "
+            f"invalid argument_kind {kind!r}; must be a non-empty string"
         )
     return PositionalArg(
         name=raw["name"],
@@ -337,11 +328,11 @@ def _parse_produces_entry(raw: object, manifest_path: Path) -> ProducesEntry:
             raise ValueError(
                 f"{manifest_path}: produces entry is missing {required_field!r}"
             )
-    fmt: str = raw["format"]
-    if fmt not in ALLOWED_ARTIFACT_FORMATS:
+    fmt = raw["format"]
+    if not isinstance(fmt, str) or not fmt:
         raise ValueError(
-            f"{manifest_path}: produces entry {raw['artifact_id']!r} has unknown "
-            f"format {fmt!r}; allowed: {sorted(ALLOWED_ARTIFACT_FORMATS)}"
+            f"{manifest_path}: produces entry {raw['artifact_id']!r} has an "
+            f"invalid format {fmt!r}; must be a non-empty string"
         )
     pattern: str = raw["path_pattern"]
     # Gap B: validate placeholders at TOML-load time reusing the same validator
@@ -390,11 +381,11 @@ def _parse_flag(raw: object, manifest_path: Path) -> UtilityFlag:
         raise ValueError(
             f"{manifest_path}: [[flags]] entry {raw['name']!r} is missing 'description'"
         )
-    argument_kind: str = raw.get("argument_kind", "")
-    if argument_kind and argument_kind not in ALLOWED_ARGUMENT_KINDS:
+    argument_kind = raw.get("argument_kind", "")
+    if argument_kind and not isinstance(argument_kind, str):
         raise ValueError(
-            f"{manifest_path}: [[flags]] entry {raw['name']!r} has unknown "
-            f"argument_kind {argument_kind!r}; allowed: {sorted(ALLOWED_ARGUMENT_KINDS)}"
+            f"{manifest_path}: [[flags]] entry {raw['name']!r} has a non-string "
+            f"argument_kind {argument_kind!r}"
         )
     raw_default = raw.get("default", None)
     if raw_default is not None and not isinstance(raw_default, str):

@@ -18,6 +18,7 @@ code can actually satisfy.
 | §10 Tier 3, `openfoam.control_dict` lookup | **done** — `CaseIntrospectionCapability.selected_start_time()` (Phase 3), 2026-09-01 |
 | §10 Tier 3, `processor*` decomposition seam | **done** — `CaseFileContractCapability.decomposition_dirname_prefix()` (Phase 3), 2026-09-01 |
 | §10 Tier 3, `apply_overrides` raw-traceback crash | **done** — `legacy_apply_overrides` refuses cleanly (Phase 3), 2026-09-01 |
+| §10 Tier 3, `ArtifactFormat` + `utility_catalog` vocabulary | **done** — both opened to plugin-chosen strings (Phase 3), 2026-09-02 |
 
 ## 1. The problem with Rule 1 as written
 
@@ -96,8 +97,8 @@ correction came from executing rather than reading.
 | `$FOAM_APPBIN` / `$FOAM_USER_APPBIN` | `workflow.py:483` | its own binary root is never recognised |
 | `producer_commands = {"Allrun"}` | `workflow.py:426` | a differently-named entrypoint is never credited with producing artifacts — and this does **not** use the `openfoam.entrypoint` role that `registry.py` already resolves |
 | `{"command": "Allrun"}` default DAG | `generic_case.py:137` | no `driver_context` in that module at all |
-| `ArtifactFormat` closed `Literal` | `models.py:36` | cannot name XDMF/HDF5. Already forces core to **mislabel its own** per-step logs as `openfoam_log` (`artifacts.py:152`) |
-| `utility_catalog` `ALLOWED_ARGUMENT_KINDS` | `utility_catalog.py:132` | `{scalar, label, path, word, word_list, switch}` — OpenFOAM's primitive type names. `ALLOWED_ARTIFACT_FORMATS` duplicates `ArtifactFormat` verbatim |
+| ~~`ArtifactFormat` closed `Literal`~~ **fixed 2026-09-02, §10 Tier 3** | `models.py:36` | was: cannot name XDMF/HDF5, and forced core to **mislabel its own** per-step logs as `openfoam_log` (`artifacts.py:152`). Now `ArtifactFormat = str` — open by design, since nothing in core actually branches on the value (checked: zero `.format ==` sites in core). `CORE_ARTIFACT_FORMATS = {"json_summary", "log"}` names only the two core writes for its own artifacts; core's own step-log artifact now uses `"log"` instead of borrowing OpenFOAM's `"openfoam_log"` |
+| ~~`utility_catalog` `ALLOWED_ARGUMENT_KINDS`/`ALLOWED_ARTIFACT_FORMATS`~~ **fixed 2026-09-02, §10 Tier 3** | `utility_catalog.py` | was: `{scalar, label, path, word, word_list, switch}` — OpenFOAM's primitive type names, plus `ALLOWED_ARTIFACT_FORMATS` duplicating `ArtifactFormat` verbatim, both enforced at `utility.manifest.toml` load time. Real usage (grepped every `format = "..."` across cardiacfoam's shipped manifests) confirmed the split: `openfoam_log`/`csv_probe`/`csv_sweep`/`vtk_sequence`/`openfoam_time_dirs` are all genuinely OpenFOAM/solver vocabulary (11+ real manifests use `openfoam_log` alone), only `json_summary` is core-neutral. Both constants removed; `_parse_produces_entry`/`_parse_positional_arg`/`_parse_flag` now check structural validity only (non-empty string) — same reasoning §11 already used for escape-tier roles: core has no vocabulary to validate spellings it does not own. `ALLOWED_CATEGORIES` (`mesh`/`field-setup`/`post-processing`/...) is untouched — that taxonomy is core's own, not OpenFOAM's |
 | ~~`startFrom`/`startTime`/`latestTime`/`firstTime` keywords + numeric time-dir naming~~ **fixed 2026-09-01, §10 Tier 3** | `provenance_inputs.py:90,119-155` | was: even having declared `openfoam.control_dict`, the *keyword vocabulary* inside it was still OpenFOAM's. Now lives only in `compatibility.legacy_selected_start_time`, the documented default behind `CaseIntrospectionCapability.selected_start_time()` — a plugin overrides the whole computation, not just the file lookup |
 | `("constant", "system")` directory guess | `strict_planning.py:230-244` | plus dead cardiac metadata keys three lines under a docstring saying core does not know `electroProperties` exists |
 | `--openfoam-bashrc` CLI flag + `openfoam_bashrc` parameter | `cli.py:643`, threaded through 6 files | a FEniCS user types `--openfoam-bashrc`. The same capability is internally inconsistent: `load()` takes `explicit_bashrc`, `diagnostics()` takes `openfoam_bashrc` |
@@ -171,12 +172,12 @@ Those changes are worth making, and they need their own pass with their own
 threat model and tests — the same standard `SECURITY.md` applies to the
 existing command boundary. They are not bundled into a discovery cleanup.
 
-Until then, `CASE_SCRIPT_COMMANDS`, `CORE_NEUTRAL_COMMANDS`,
-`_is_installed_openfoam_app`, and `ArtifactFormat` stay hardcoded, each
-carrying a comment naming it as an OpenFOAM-family default and pointing
-here. (The `processor*` glob itself was resolved outside the trust boundary
-in Tier 3 — see §10 — since none of its four sites decide what may execute;
-they only decide what to read or prune.)
+Until then, `CASE_SCRIPT_COMMANDS`, `CORE_NEUTRAL_COMMANDS`, and
+`_is_installed_openfoam_app` stay hardcoded, each carrying a comment naming
+it as an OpenFOAM-family default and pointing here. (`ArtifactFormat` and the
+`processor*` glob were both resolved outside the trust boundary in Tier 3 —
+see §10 — since none of their sites decide what may execute; they only
+decide what to read, label, or prune.)
 
 ## 6. `GenericOpenFOAMPlugin` → `GenericEnvironmentPlugin`
 
@@ -413,12 +414,11 @@ one thing at all five.
 | ~~`provenance_inputs.py`'s `openfoam.control_dict` lookup~~ **done 2026-09-01** | moved from Tier 2: needed a namespace-neutral role or a capability hook, not wiring. Landed as `CaseIntrospectionCapability.selected_start_time()` — a new optional hook, `get_selected_start_time(case_root, resolved_case)`, alongside `resolve_case_models`/`get_samplable_fields`. `openfoam.control_dict`'s only consumer in the whole codebase was this one question ("what start time does this run resume from?"), so rather than generalise the role, core now lets the plugin answer the question outright. The fallback (`legacy_selected_start_time`) is today's OpenFOAM-shaped logic verbatim — `KNOWN_ROLES` is untouched, zero behaviour change for a plugin that implements nothing new. As a side effect this also resolves the adjacent `startFrom`/`startTime`/`latestTime`/`firstTime` keyword-vocabulary defect from §3/§8: that logic now lives entirely in the fallback, not in core proper. Proven by `test_plugin_implemented_start_time_hook_overrides_the_openfoam_default` in `packages/omnidriver/tests/core/test_provenance_inputs.py` — a plugin declaring **no** `openfoam.control_dict` role at all still gets its own start time honoured end to end |
 | ~~a seam for `processor*`~~ **done 2026-09-01** | four sites — `provenance_inputs.py` (I9 decomposed-restart walk), `workflow_runner.py` (accepting a not-yet-reconstructed parallel location as evidence a time-indexed artifact was produced), `registry.py` (pruning it during tutorial discovery), `sweep_runner.py` (excluding it when staging a fresh sweep case, where *not* recognising a foreign plugin's differently-named decomposition dir would have re-copied stale output — exactly the bug that staging boundary exists to prevent). Unlike `control_dict`, this didn't need a capability hook computing a value from case state — `processor*` names a wildcard family, not a single static path a `CaseFileRule` role can hold, so it is a bare no-argument optional hook (`get_decomposition_dirname_prefix()`) on `CaseFileContractCapability`, the same shape as `get_phases()`. Default `"processor"`; `plugin_profile.decomposition_dirname_prefix(driver_context)` wraps it and returns the default directly when `driver_context` is `None`, mirroring `entrypoint_relpaths()`. `run_workflow_step()`/`_stage_entry_case()` gained a `driver_context` parameter they didn't carry before (threaded from `cli.py`/`_materialize_entry_case()`, both of which already had it in scope) |
 | ~~`apply_overrides` raw-traceback crash~~ **done 2026-09-01** | `legacy_apply_overrides` (`compatibility.py`) did an unconditional `from omnidriver.openfoam.apply_overrides import ...`; in a core-only install (or any plugin without that package and without its own `apply_overrides()` hook) this raised `ModuleNotFoundError` uncaught — `cli.py`'s `except (OSError, ValueError)` around the call does not catch it. Reproduced directly by blocking the import via `sys.modules[name] = None` before the fix, confirmed clean after. The fix is deliberately narrow and does **not** add a neutral default: applying an override means writing bytes into a dict file whose syntax only `omnidriver-openfoam`'s mutators understand, so there is no safe universal answer the way there is for e.g. environment diagnostics — same shape as `route_sweep_case_values`/`materialize_sweep_case` already refusing by name rather than pretending to be neutral. The import is now wrapped in `try/except ImportError`, re-raised as a plain `ValueError` (not `OverrideError`, which lives in the package that may not be importable) naming the plugin via `driver_context.identity.id` — not `driver_context.plugin.plugin_id`, which `test_plugin_dependency_boundary.py` forbids outside `plugin_capabilities.py`/`plugin_interface.py`. `apply_overrides.py` itself needed no change — it already lives in `omnidriver-openfoam`, not core; only core's fallback *wiring* was the defect. Proven by `test_the_fallback_refuses_cleanly_when_openfoam_is_not_installed` in `packages/omnidriver/tests/core/test_override_apply_threads_a_context.py` |
+| ~~`ArtifactFormat` + `utility_catalog` vocabulary~~ **done 2026-09-02** | see §3 rows above. Two files, no capability/hook needed — this one really was mechanical once the real-usage grep confirmed which values were core's and which were the plugins' |
 
-Still open: `ArtifactFormat` opened or plugin-extensible (and core stops
-mislabelling its own logs); `utility_catalog`'s OpenFOAM type vocabulary
-moved to `omnidriver-openfoam`; `--openfoam-bashrc`
-renamed with a deprecation alias, and `EnvironmentPreflightCapability`'s own
-`explicit_bashrc`/`openfoam_bashrc` inconsistency resolved.
+Still open: `--openfoam-bashrc` renamed with a deprecation alias, and
+`EnvironmentPreflightCapability`'s own `explicit_bashrc`/`openfoam_bashrc`
+inconsistency resolved.
 
 ### Tier 4 — the trust boundary, unchanged from §5b
 
