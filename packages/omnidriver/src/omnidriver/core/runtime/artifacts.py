@@ -134,22 +134,45 @@ def _merge_static_override(
     return tuple(by_id.values())
 
 
+def _output_dir_prefix(spec: TutorialSpec) -> str:
+    """The spec's output directory, as a case-relative POSIX prefix.
+
+    ``path_pattern`` is case-relative (see ``models.DataArtifact``), and core
+    writes its own state and logs under ``spec.output_dir`` -- never under a
+    fixed ``postProcessing/``. Those two facts were previously connected by a
+    string literal, so overriding ``output_dir_name`` moved the files and left
+    the prediction behind.
+
+    ``resolve_spec_paths`` builds ``output_dir`` as ``case_root / name``, so
+    the relative form normally exists. An absolute ``output_dir_name`` escapes
+    the case root; there is no case-relative pattern for that, so predict
+    nothing rather than predict a wrong path.
+    """
+    try:
+        return Path(spec.output_dir).relative_to(Path(spec.case_root)).as_posix()
+    except ValueError:
+        return ""
+
+
 def _core_generic_artifacts(spec: TutorialSpec) -> tuple[DataArtifact, ...]:
     """Artifacts guaranteed by the driver for a generic case-folder run."""
 
     if not (spec.metadata or {}).get("generic_case"):
         return ()
+    prefix = _output_dir_prefix(spec)
+    if not prefix:
+        return ()
     return (
         DataArtifact(
             artifact_id="core.workflow_state",
-            path_pattern="postProcessing/workflow_state.json",
+            path_pattern=f"{prefix}/workflow_state.json",
             format="json_summary",
             description="Persistent state of the normalized driverFOAM workflow.",
             produced_by="driverFOAM",
         ),
         DataArtifact(
             artifact_id="core.workflow_logs",
-            path_pattern="postProcessing/workflow_logs",
+            path_pattern=f"{prefix}/workflow_logs",
             format="openfoam_log",
             description="Per-step stdout and stderr logs written by driverFOAM.",
             produced_by="driverFOAM",

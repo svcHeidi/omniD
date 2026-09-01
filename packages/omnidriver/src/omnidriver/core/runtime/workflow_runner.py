@@ -201,7 +201,7 @@ def run_workflow_step(
     step_id: str,
     *,
     case_root: Path,
-    log_dir: Path | None = None,
+    log_dir: Path,
     state_path: Path | None = None,
     env: Mapping[str, str] | None = None,
     expected_artifacts: tuple[DataArtifact, ...] = (),
@@ -222,7 +222,13 @@ def run_workflow_step(
         raise ValueError(f"Workflow step {step_id!r} has incomplete dependencies")
 
     attempt = previous_step_state.attempt + 1
-    resolved_log_dir = log_dir or (Path(case_root) / "postProcessing" / "workflow_logs")
+    # log_dir is required rather than defaulted. The default it replaced --
+    # ``case_root / "postProcessing" / "workflow_logs"`` -- was wrong twice
+    # over: it hardcoded the default value of ``output_dir_name`` instead of
+    # reading it, and it anchored on case_root where every real caller anchors
+    # on output_dir. No shipped caller or test ever took it, so it was a dead
+    # default silently disagreeing with the live one.
+    resolved_log_dir = Path(log_dir)
     resolved_log_dir.mkdir(parents=True, exist_ok=True)
     safe_id = _safe_step_id(step_id)
     stdout_log = resolved_log_dir / f"{safe_id}.attempt{attempt}.stdout.log"

@@ -271,7 +271,10 @@ def test_run_workflow_step_rejects_incomplete_dependencies() -> None:
 
     with tempfile.TemporaryDirectory() as temp_dir:
         with pytest.raises(ValueError, match="incomplete dependencies"):
-            run_workflow_step(dag, state, "solve", case_root=Path(temp_dir))
+            run_workflow_step(
+                dag, state, "solve", case_root=Path(temp_dir),
+                log_dir=Path(temp_dir) / "logs",
+            )
 
 
 def test_run_workflow_step_rejects_cwd_escape() -> None:
@@ -297,7 +300,10 @@ def test_run_workflow_step_rejects_cwd_escape() -> None:
 
     with tempfile.TemporaryDirectory() as temp_dir:
         with pytest.raises(ValueError, match="escapes case root"):
-            run_workflow_step(dag, state, "run", case_root=Path(temp_dir))
+            run_workflow_step(
+                dag, state, "run", case_root=Path(temp_dir),
+                log_dir=Path(temp_dir) / "logs",
+            )
 
 
 def test_case_script_step_preserves_dyld_vars_through_shell_hop() -> None:
