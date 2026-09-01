@@ -48,6 +48,18 @@ if unexpected:
     print("\\n".join(unexpected))
     sys.exit(1)
 print("all modules imported")
+
+# Importability is not the whole contract: a module can import fine and then
+# point at a data file the wheel never shipped. RUN_CASE_SCRIPT_RELPATH is
+# exactly that -- it resolves relative to the installed package, so it is
+# correct in a checkout and wrong in an install unless run_case.sh is declared
+# in [tool.setuptools.package-data]. That declaration was missing, and nothing
+# here noticed, because this test only ever imported.
+from omnidriver.core.runtime.generic_case import RUN_CASE_SCRIPT_RELPATH
+if not RUN_CASE_SCRIPT_RELPATH.is_file():
+    print(f"bundled data file missing from the wheel: {RUN_CASE_SCRIPT_RELPATH}")
+    sys.exit(1)
+print("bundled data files present")
 """
 
 

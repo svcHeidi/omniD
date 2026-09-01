@@ -76,9 +76,12 @@ _CTX = _driver_context(
 #:
 #: They were silently environment-dependent: green on a machine where OpenFOAM
 #: happened to be reachable, red otherwise, with nothing in the test saying so.
-#: `run_case.sh` hardcodes `/Volumes/OpenFOAM-v2412/etc/bashrc` as its fallback,
-#: which does not match this machine's `/Volumes/OpenFOAM/OpenFOAM-12`, so even
-#: a mounted install may not resolve.
+#: `run_case.sh` used to hardcode `/Volumes/OpenFOAM-v2412/etc/bashrc` as a
+#: fallback, which did not match this machine's `/Volumes/OpenFOAM/OpenFOAM-12`.
+#: That fallback is gone: the script now honours `WM_PROJECT_DIR` and otherwise
+#: fails with a message naming OPENFOAM_BASHRC. So a mounted install resolves
+#: only when the environment is actually sourced, which is what the skipif below
+#: is really testing for.
 #:
 #: The `integration` marker was declared in the root pyproject.toml for exactly
 #: this ("tests requiring a real cardiacFoam binary, skipped by default in CI")
