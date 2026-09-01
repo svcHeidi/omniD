@@ -339,9 +339,39 @@ succeeds.
 | item | payoff |
 |---|---|
 | ~~**open `KNOWN_ROLES` with a non-OpenFOAM tier**~~ **done 2026-09-01, §11** | removed the hard block, *for loading only* — `tutorial_contracts.py`, `provenance_inputs.py` and `registry.py` still branch on literal `openfoam.*` roles, so a foreign environment's files now load and are then ignored by those three. Generalising them is the rest of this tier. Original rationale: `get_profile()` is required, so *nothing* else about non-OpenFOAM plugins can be attempted until this lands. Also fixes `CaseFileRule`, `PluginProfile` and `ResolvedInput` in one place — their dataclasses are already neutral; only the enum's values were not |
-| **an output-directory role for `postProcessing`** | closes **8** sites at once, the same shape as the entrypoint role that closed five in Phase 1 |
+| ~~**an output-directory role for `postProcessing`**~~ **withdrawn 2026-09-01 — owner's decision** | `postProcessing` is taken as universal: every simulation environment in scope has one, so it needs no plugin-declared role. The eight sites were never one thing anyway — see below. What *was* real in them is fixed |
 | `producer_commands = {"Allrun"}` → the `openfoam.entrypoint` role | the role is already resolved 20 lines away in `registry.py`; this site just does not use it |
 | `generic_case.py:137`'s `Allrun` | needs a `driver_context` threaded into a module that has none — slightly more than a wiring job |
+
+#### Why the eight `postProcessing` sites were not one item
+
+Kept because the miscount is instructive, not because the work is pending.
+They carried three different meanings behind one string:
+
+1. **the solver's output directory** — genuinely OpenFOAM's convention, not
+   core presuming anything. Every C++ verifier and every OpenFOAM
+   `functionObject` independently computes `<time>.globalPath()/"postProcessing"`,
+   which is exactly why `output_collection.py` can archive a case's output
+   without knowing what produced it. Correctly hardcoded.
+2. **core's own bookkeeping** (`workflow_state.json`, `workflow_logs/`) — core's
+   entirely, and *already* parameterised: `execution_context.py:62` defines it
+   as `output_dir / "workflow_state.json"` and never names `postProcessing`. A
+   plugin-declared role here would have been actively wrong; it would let a
+   plugin relocate core's own state file.
+3. **exclusion vocabulary** — `registry.py`'s "not a case directory" and
+   `sweep_runner.py`'s "generated directory" are two different predicates that
+   merely overlap. Neither is an output-directory role.
+
+The real defect was in none of those categories: **three sites hardcoded the
+default *value* of `output_dir_name` instead of reading it**, so overriding it
+made core write `results/workflow_state.json` while `artifacts.py` kept
+promising `postProcessing/workflow_state.json`. Reachable today with no second
+plugin. Fixed 2026-09-01; `workflow_runner.py`'s `log_dir` default — a dead
+third copy that also anchored on the wrong root — is gone with it.
+
+The lesson worth keeping: **a count of grep hits is not a count of concepts.**
+The `Allrun` entrypoint role really did close five sites, because `Allrun` meant
+one thing at all five.
 
 ### Tier 3 — needs a contract designed
 
