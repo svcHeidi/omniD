@@ -37,6 +37,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from omnidriver.core.generic_plugin import GenericOpenFOAMPlugin
 from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile
 from plugins.minimal_plugin import MinimalOpenFOAMPlugin
 
@@ -87,6 +88,19 @@ class _EnvironmentNeutralHooks:
         profile. Returning () is a real answer, not a stub."""
         del workflow_dag, env, openfoam_bashrc, driver_context
         return ()
+
+    def get_loaded_environment(self, *, explicit_bashrc=None, driver_context=None) -> dict:
+        """No OpenFOAM bashrc to source: the current process environment is
+        already everything this plugin's steps need to run. Same ungated-
+        fallback reasoning as the hook above -- ``legacy_load_environment``
+        also imports ``omnidriver.openfoam`` unconditionally when a plugin
+        omits this, which is what lets ``cli.py``'s ``run --strict`` execute
+        a plain ``Allrun`` end to end without ``omnidriver.openfoam``
+        installed."""
+        del explicit_bashrc, driver_context
+        import os
+
+        return dict(os.environ)
 
     def get_function_object_field_diagnostics(self, case_root, *, samplable) -> tuple:
         """No function-object/samplable-field vocabulary of its own, so no
@@ -162,3 +176,23 @@ class NeutralEnvironmentPlugin(_EnvironmentNeutralHooks, MinimalOpenFOAMPlugin):
                 },
             },
         )
+
+
+class _GenericOpenFOAMPluginWithNeutralEnvironment(_EnvironmentNeutralHooks, GenericOpenFOAMPlugin):
+    """``GenericOpenFOAMPlugin`` -- same identity, same declared case files,
+    same capability manifest -- plus the neutral answers to the hooks whose
+    core.compatibility fallback imports omnidriver.openfoam unconditionally.
+
+    Needed here specifically (rather than swapping in
+    ``NeutralEnvironmentPlugin``) whenever a test pins the built-in generic
+    plugin's own identity (``report.plugin["id"] ==
+    "org.driverfoam.generic-openfoam"``) or needs it reachable by trusted
+    ``module:Class`` import (e.g. ``--plugin
+    plugins.neutral_environment_plugin:_GenericOpenFOAMPluginWithNeutralEnvironment``)
+    -- "some plugin" is not enough, so the double must keep that identity
+    intact.
+
+    Lifted out of ``tests/core/test_core_generic_case.py`` (Phase 2,
+    Milestone 3) so both that file and
+    ``tests/core/test_generic_plugin_execution.py`` can import one
+    definition instead of duplicating it within core's own test tree."""

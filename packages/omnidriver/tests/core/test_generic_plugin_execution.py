@@ -13,6 +13,12 @@ from plugins.minimal_plugin import MinimalOpenFOAMPlugin
 
 
 def test_generic_plugin_executes_plain_allrun_case(tmp_path: Path) -> None:
+    # ``--plugin none`` resolves to the built-in GenericOpenFOAMPlugin, whose
+    # legacy_environment_diagnostics fallback reaches omnidriver.openfoam
+    # unconditionally (an ungated core default, not cardiac-specific -- see
+    # ENVIRONMENT_CONTRACT.md sec.4). Swapped to a trusted-import plugin that
+    # answers the environment hooks itself so this exercises the CLI
+    # execution path without needing omnidriver.openfoam installed.
     case_root = tmp_path / "plainOpenFoamCase"
     case_root.mkdir()
     allrun = case_root / "Allrun"
@@ -22,7 +28,8 @@ def test_generic_plugin_executes_plain_allrun_case(tmp_path: Path) -> None:
     exit_code = main([
         "run",
         "--strict",
-        "--plugin", "none",
+        "--plugin",
+        "plugins.neutral_environment_plugin:_GenericOpenFOAMPluginWithNeutralEnvironment",
         "--entry", "plainOpenFoamCase",
         "--tutorials-root", str(tmp_path),
     ])
@@ -36,6 +43,9 @@ def test_trusted_minimal_plugin_executes_plain_allrun_case(
     tmp_path: Path,
     capsys,
 ) -> None:
+    # MinimalOpenFOAMPlugin's environment-diagnostics fallback also reaches
+    # omnidriver.openfoam unconditionally; swapped to NeutralEnvironmentPlugin,
+    # which answers get_environment_diagnostics() -> () itself.
     case_root = tmp_path / "plainOpenFoamCase"
     case_root.mkdir()
     allrun = case_root / "Allrun"
@@ -46,7 +56,7 @@ def test_trusted_minimal_plugin_executes_plain_allrun_case(
         "run",
         "--strict",
         "--plugin",
-        "plugins.minimal_plugin:MinimalOpenFOAMPlugin",
+        "plugins.neutral_environment_plugin:NeutralEnvironmentPlugin",
         "--entry", "plainOpenFoamCase",
         "--tutorials-root", str(tmp_path),
     ])

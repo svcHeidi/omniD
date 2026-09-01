@@ -28,8 +28,26 @@
 """Tests for filesystem case workflow ownership.
 
 Plain case folders are owned by their on-disk Allrun. Registry discovery may
-still find a non-runnable cardiac-marked folder, but it must not invent a
+still find a non-runnable marked folder, but it must not invent a
 workflow_dag unless Allrun exists.
+
+Phase 2 Task M2: ``test_variant_electro_properties_case_is_discoverable_and_runnable``
+moved to
+packages/omnidriver-cardiacfoam/tests/test_workflow_dag_filesystem_ingest.py
+-- it asserts cardiacFoam's own electroProperties-variant case marker. The
+two tests kept here assert core's own DAG-synthesis rule (Allrun present ->
+single-step DAG; Allrun absent -> None), independent of what marks a folder
+a case at all, so ``_write_case_files`` now writes ``system/controlDict`` +
+``constant/`` -- the two filesystem entries GenericOpenFOAMPlugin's own
+profile declares (role ``openfoam.control_dict`` / ``openfoam.case_directory``,
+see generic-plugin.yaml) -- instead of cardiacFoam's electroProperties/
+physicsProperties. A local ``_NeutralFilesystemMarkerPlugin`` declares those
+two paths as its ``has_case_marker`` (GenericOpenFOAMPlugin itself declares
+none, so a bare folder with no Allrun would otherwise not be discoverable at
+all) and wires ``make_generic_case_spec`` into its tutorial catalog -- the
+same core-owned factory ``resolve_entry`` already falls back to when no
+marker matches, so both branches behave identically and no cardiac
+vocabulary is reachable.
 """
 from __future__ import annotations
 
@@ -37,23 +55,40 @@ import unittest
 from pathlib import Path
 import tempfile
 
-import pytest
-
+from omnidriver.core.generic_plugin import GenericOpenFOAMPlugin
+from omnidriver.core.runtime.generic_case import make_generic_case_spec
 from omnidriver.core.runtime.registry import load_tutorial_spec, resolve_entry
+from omnidriver.core.plugin_interface import driver_context as _driver_context
 
-# These cases carry cardiac dict content (electroProperties,
-# myocardiumSolver) -- load_tutorial_spec/resolve_entry now require an
-# explicit DriverContext (test_core_context_is_explicit.py); the cardiac
-# context reproduces the previous implicit default exactly. Skipped cleanly,
-# not failed, when omnidriver-cardiacfoam is not installed.
-_cardiacfoam_plugin_module = pytest.importorskip(
-    "omnidriver.cardiacfoam.cardiacfoam_plugin",
-    reason="omnidriver-cardiacfoam is not installed",
-)
-from omnidriver.core.plugin_interface import driver_context as _driver_context  # noqa: E402
+
+class _NeutralFilesystemMarkerPlugin(GenericOpenFOAMPlugin):
+    """A case marker built only from filesystem entries core itself owns.
+
+    ``system/controlDict`` + a ``constant/`` directory are true of every
+    OpenFOAM case regardless of solver (see generic-plugin.yaml's own
+    case_profile.dictionaries) -- carrying no cardiac vocabulary, unlike
+    cardiacFoam's electroProperties marker.
+    """
+
+    def has_case_marker(self, case_root: Path) -> bool:
+        return (
+            (case_root / "system" / "controlDict").is_file()
+            and (case_root / "constant").is_dir()
+        )
+
+    def get_tutorial_catalog(self):
+        # resolve_entry() looks up "make_generic_case_spec" in the selected
+        # plugin's own tutorial catalog once has_case_marker() is True (see
+        # registry.py); wire it to the same core factory the no-marker
+        # branch already falls back to, so which branch runs makes no
+        # behavioural difference here.
+        catalog = dict(super().get_tutorial_catalog())
+        catalog["make_generic_case_spec"] = make_generic_case_spec
+        return catalog
+
 
 _CTX = _driver_context(
-    _cardiacfoam_plugin_module.CardiacFoamPlugin(),
+    _NeutralFilesystemMarkerPlugin(),
     source="test:workflow_dag_filesystem_ingest",
 )
 
@@ -63,12 +98,8 @@ class TestFilesystemCaseWorkflowOwnership(unittest.TestCase):
 
     def _write_case_files(self, case_root: Path) -> None:
         (case_root / "constant").mkdir(parents=True, exist_ok=True)
-        (case_root / "constant" / "electroProperties").write_text(
-            "myocardiumSolver singleCellSolver;\n"
-        )
-        (case_root / "constant" / "physicsProperties").write_text(
-            "type electroModel;\n"
-        )
+        (case_root / "system").mkdir(parents=True, exist_ok=True)
+        (case_root / "system" / "controlDict").write_text("")
 
     def test_filesystem_case_with_allrun_uses_allrun_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -101,27 +132,6 @@ class TestFilesystemCaseWorkflowOwnership(unittest.TestCase):
 
             dag = spec.metadata.get("workflow_dag")
             self.assertIsNone(dag, "workflow_dag must be None when Allrun is absent")
-
-    def test_variant_electro_properties_case_is_discoverable_and_runnable(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            tutorials_root = Path(temp_dir)
-            case_root = tutorials_root / "variantCase"
-            (case_root / "constant").mkdir(parents=True, exist_ok=True)
-            (case_root / "system").mkdir(parents=True, exist_ok=True)
-            (case_root / "constant" / "electroProperties.monodomain").write_text(
-                "myocardiumSolver monodomainSolver;\n"
-            )
-            (case_root / "constant" / "physicsProperties").write_text("type electroModel;\n")
-            for relpath in ("controlDict", "fvSchemes", "fvSolution"):
-                (case_root / "system" / relpath).write_text("\n")
-
-            resolution = resolve_entry(
-                "variantCase",
-                overrides={"tutorials_root": tutorials_root},
-                driver_context=_CTX,)
-
-            self.assertEqual(resolution["resolution"], "case_folder")
-            self.assertTrue(resolution["is_runnable"])
 
 
 if __name__ == "__main__":

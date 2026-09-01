@@ -2,23 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from omnidriver.core.generic_plugin import GenericOpenFOAMPlugin
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.strict_planning import strict_plan
-from plugins.neutral_environment_plugin import _EnvironmentNeutralHooks
-
-
-class _GenericOpenFOAMPluginWithNeutralEnvironment(_EnvironmentNeutralHooks, GenericOpenFOAMPlugin):
-    """``GenericOpenFOAMPlugin`` -- same identity, same declared case files,
-    same capability manifest -- plus the neutral answers to the hooks whose
-    core.compatibility fallback imports omnidriver.openfoam unconditionally.
-
-    Needed here specifically (rather than swapping in
-    ``NeutralEnvironmentPlugin``) because
-    ``test_plain_allrun_case_works_with_the_no_domain_context`` asserts
-    ``report.plugin["id"] == "org.driverfoam.generic-openfoam"`` -- it is
-    pinning the built-in generic plugin's identity, not merely "some
-    plugin", so the double must keep that identity intact."""
+from plugins.neutral_environment_plugin import _GenericOpenFOAMPluginWithNeutralEnvironment
 
 
 def test_plain_allrun_case_plans_without_cardiac_dictionaries(tmp_path: Path) -> None:
@@ -29,7 +15,9 @@ def test_plain_allrun_case_plans_without_cardiac_dictionaries(tmp_path: Path) ->
     report = strict_plan(
         "plainOpenFoamCase",
         overrides={"tutorials_root": str(tmp_path)},
-        driver_context=driver_context(GenericOpenFOAMPlugin(), source="test"),
+        driver_context=driver_context(
+            _GenericOpenFOAMPluginWithNeutralEnvironment(), source="test",
+        ),
     )
 
     assert report.status == "ok"
@@ -277,20 +265,3 @@ def test_make_generic_case_spec_applies_no_solver_mutation(tmp_path: Path) -> No
     assert calls == []
 
 
-def test_bare_make_spec_still_defaults_to_the_legacy_cardiac_mutation(
-    tmp_path: Path,
-) -> None:
-    """The other half of the same contract: a direct make_spec caller with no
-    callback keeps the historical behaviour via the named seam."""
-    from omnidriver.core import compatibility
-
-    case_root = tmp_path / "aCase"
-    (case_root / "constant").mkdir(parents=True)
-    (case_root / "constant" / "physicsProperties").write_text("type electroModel;\n")
-
-    spec = _spec(tmp_path, dict_file_overrides={"physics": {"type": "electroMechanicalModel"}})
-    with compatibility.track_fallback_calls() as calls:
-        spec.apply_case(spec.case_root, spec.build_cases()[0])
-
-    assert "legacy_generic_case_mutation" in calls
-    assert "electroMechanicalModel" in (case_root / "constant" / "physicsProperties").read_text()

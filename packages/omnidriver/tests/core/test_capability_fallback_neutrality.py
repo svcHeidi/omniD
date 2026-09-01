@@ -121,29 +121,5 @@ class TestGenericPluginDoesNotInheritCardiacSemantics(unittest.TestCase):
         )
 
 
-class TestCardiacPluginBehaviourIsUnchanged(unittest.TestCase):
-    """Gating must be invisible to cardiacFoam, which implements every hook."""
-
-    def _cardiac_capabilities(self):
-        from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
-
-        context = driver_context(CardiacFoamPlugin(), source="test:cardiacfoam")
-        return context.capabilities
-
-    def test_cardiac_plugin_still_claims_a_cardiac_case(self) -> None:
-        capabilities = self._cardiac_capabilities()
-        request = CaseCompatibilityRequest(case_root=_cardiac_looking_case())
-
-        self.assertTrue(capabilities.case_compatibility.has_case_marker(request))
-
-    def test_cardiac_plugin_still_declares_it_runnable(self) -> None:
-        capabilities = self._cardiac_capabilities()
-        request = CaseCompatibilityRequest(case_root=_cardiac_looking_case())
-
-        self.assertTrue(
-            capabilities.case_compatibility.is_runnable_without_workflow(request)
-        )
-
-
 if __name__ == "__main__":
     unittest.main()

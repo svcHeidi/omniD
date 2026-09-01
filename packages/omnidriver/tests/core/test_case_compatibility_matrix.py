@@ -1,26 +1,28 @@
+"""Existing-case discovery/runnability, for markers core itself defines.
+
+Phase 2 Task M2: three of the five parametrized rows in this file, plus
+their fixture, asserted cardiacFoam's own has_case_marker/
+is_runnable_without_workflow (electroProperties as case marker) and moved to
+packages/omnidriver-cardiacfoam/tests/test_case_compatibility_matrix.py. The
+two rows kept here -- an empty folder, and a bare Allrun -- exercise only
+core's own entrypoint-based discovery/runnability
+(_has_entrypoint/_is_case_directory in registry.py), which is meaningful
+under the plugin-neutral generic_openfoam_context(): GenericOpenFOAMPlugin
+declares no has_case_marker hook at all (always False), so these two rows
+are driven purely by Allrun's presence, independent of any plugin
+vocabulary.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
 
+from omnidriver.core.plugin_interface import generic_openfoam_context
 from omnidriver.core.runtime.registry import list_entries
 
-# The matrix below is cardiac vocabulary (electroProperties as case marker)
-# -- list_entries()'s underlying registry function now requires an explicit
-# DriverContext (test_core_context_is_explicit.py); the cardiac context
-# reproduces the previous implicit default exactly. Skipped cleanly, not
-# failed, when omnidriver-cardiacfoam is not installed.
-_cardiacfoam_plugin_module = pytest.importorskip(
-    "omnidriver.cardiacfoam.cardiacfoam_plugin",
-    reason="omnidriver-cardiacfoam is not installed",
-)
-from omnidriver.core.plugin_interface import driver_context as _driver_context  # noqa: E402
-
-_CTX = _driver_context(
-    _cardiacfoam_plugin_module.CardiacFoamPlugin(),
-    source="test:case_compatibility_matrix",
-)
+_CTX = generic_openfoam_context()
 
 
 def _touch(case_root: Path, relative: str) -> None:
@@ -34,19 +36,6 @@ def _touch(case_root: Path, relative: str) -> None:
     [
         ((), False, False),
         (("Allrun",), True, True),
-        (("constant/electroProperties",), True, False),
-        (("constant/electroProperties.variant",), True, False),
-        (
-            (
-                "constant/electroProperties",
-                "constant/physicsProperties",
-                "system/controlDict",
-                "system/fvSchemes",
-                "system/fvSolution",
-            ),
-            True,
-            True,
-        ),
     ],
 )
 def test_existing_case_discovery_and_runnability_matrix(

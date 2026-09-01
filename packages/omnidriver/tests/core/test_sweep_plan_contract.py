@@ -10,6 +10,17 @@ Two paths bypassed it. The per-case guard caught only ``OSError`` and
 unknown ionic model, say) escaped and took the run down with a traceback --
 zero bytes on stdout for the caller. And the spec file was read before any
 guard at all, so a malformed JSON spec did the same.
+
+Phase 2 Task M2: ``test_a_factory_failure_fails_one_case_not_the_command``
+moved to packages/omnidriver-cardiacfoam/tests/test_sweep_plan_contract.py
+-- it needs the real ``singleCell`` factory to prove one bad axis costs one
+case, which is cardiacFoam-specific. The three tests kept here never depend
+on that: the two malformed-spec tests never reach ``_SPEC``'s content at all
+(spec loading fails before expansion), and the valid-spec test only checks
+the absence of ``spec_error``, not what happened to any case. ``_SPEC`` was
+trimmed to a trivially generic single-axis sweep and
+``generic_openfoam_context()`` satisfies ``sweep_plan``'s now-mandatory
+``driver_context`` -- no cardiac fixture data needed.
 """
 
 from __future__ import annotations
@@ -17,63 +28,21 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
-from conftest import skip_without_monorepo
 from omnidriver.core.runtime.sweep_runner import sweep_plan
 from omnidriver.core.specs.paths import repo_root_default
+from omnidriver.core.plugin_interface import generic_openfoam_context
 
-# Spec below is cardiac vocabulary (singleCell entry, ionic models) --
-# sweep_plan now takes a mandatory driver_context
-# (test_core_context_is_explicit.py). The cardiac context reproduces this
-# file's prior implicit behaviour; skipped cleanly, not failed, when
-# omnidriver-cardiacfoam is not installed. See test_sweep_runner.py for the
-# same disposition and its rationale.
-_cardiacfoam_plugin_module = pytest.importorskip(
-    "omnidriver.cardiacfoam.cardiacfoam_plugin",
-    reason="omnidriver-cardiacfoam is not installed",
-)
-from omnidriver.core.plugin_interface import driver_context as _driver_context  # noqa: E402
-
-_CTX = _driver_context(
-    _cardiacfoam_plugin_module.CardiacFoamPlugin(), source="test:sweep_plan_contract",
-)
+_CTX = generic_openfoam_context()
 
 _SPEC = {
-    "base": {
-        "entry": "singleCell",
-        "case_dir_name": "electrophysiologyProtocols/singleCell",
-        "setup_dir_name": "setup",
-    },
+    "base": {},
     "sweep": {
         "mode": "zip",
         "independent": {
-            "ionic_model": ["Courtemanche", "TotallyFakeModel"],
-            "tissue": ["myocyte", "myocyte"],
+            "axisA": ["valueA", "valueB"],
         },
-        "dependent": [
-            {"name": "caseId", "derive": "case_id_template",
-             "of": ["ionic_model", "tissue"]},
-            {"name": "output_dir_name", "derive": "output_dir_name_template",
-             "of": ["ionic_model", "tissue"]},
-        ],
     },
 }
-
-
-@skip_without_monorepo
-def test_a_factory_failure_fails_one_case_not_the_command(tmp_path):
-    """An unknown ionic model must cost exactly one case."""
-    spec_path = tmp_path / "sweep.json"
-    spec_path.write_text(json.dumps(_SPEC))
-
-    report = sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=_CTX)
-
-    failed = [c for c in report["cases"] if c["status"] == "failed"]
-    assert len(failed) == 1, report["cases"]
-    assert "TotallyFakeModel" in failed[0]["materialization_error"]
-    # ...and the good case still planned.
-    assert any(c["status"] != "failed" for c in report["cases"]), report["cases"]
 
 
 def test_a_malformed_spec_is_reported_structurally(tmp_path):
@@ -107,6 +76,11 @@ def test_a_malformed_spec_still_exits_non_zero(tmp_path):
     result = subprocess.run(
         [
             sys.executable, "-m", "omnidriver", "sweep-plan",
+            # --plugin none selects generic_openfoam_context() the same way
+            # _CTX does above, so this subprocess doesn't need
+            # omnidriver-cardiacfoam installed to reach the spec-loading
+            # guard this test targets.
+            "--plugin", "none",
             "--spec", str(spec_path), "--output-dir", str(tmp_path / "out"),
         ],
         cwd=driver_root, capture_output=True, text=True,

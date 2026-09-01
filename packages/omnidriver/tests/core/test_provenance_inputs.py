@@ -39,7 +39,7 @@ from pathlib import Path
 import pytest
 
 from omnidriver.core.plugin_capabilities import ResolvedInput, RuntimeDependency
-from omnidriver.core.plugin_interface import default_driver_context, driver_context
+from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime.provenance_inputs import enumerate_case_inputs
 from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
 
@@ -96,26 +96,6 @@ class _FakePlugin(NeutralEnvironmentPlugin):
         return self._extra_provenance_paths
 
 
-def test_system_and_constant_are_required_and_diagnostic_outputs_are_excluded(tmp_path: Path) -> None:
-    """cardiacFoam's own CaseProvenanceCapability excludes the mesh-diagnostic
-    byproducts nothing reads (I1's worked example)."""
-    _write_control_dict(tmp_path, start_from="startTime", start_time="0")
-    (tmp_path / "constant").mkdir()
-    (tmp_path / "constant" / "electroProperties").write_text("solver monodomain;\n")
-    (tmp_path / "constant" / "C").write_bytes(b"mesh-diagnostic-byproduct")
-    (tmp_path / "constant" / "skewness").write_bytes(b"mesh-diagnostic-byproduct")
-
-    components = enumerate_case_inputs(
-        tmp_path, workflow_dag={"steps": []}, driver_context=default_driver_context(),
-    )
-    included = _paths(components, kind="case_file")
-
-    assert "system/controlDict" in included
-    assert "constant/electroProperties" in included
-    assert "constant/C" not in included
-    assert "constant/skewness" not in included
-
-
 def test_selected_start_time_directory_is_included_others_excluded(tmp_path: Path) -> None:
     _write_control_dict(tmp_path, start_from="startTime", start_time="0")
     for time_name in ("0", "0.5", "1"):
@@ -170,7 +150,7 @@ def test_a_case_with_no_constant_does_not_raise(tmp_path: Path) -> None:
     _write_control_dict(tmp_path, start_from="startTime", start_time="0")
 
     components = enumerate_case_inputs(
-        tmp_path, workflow_dag={"steps": []}, driver_context=default_driver_context(),
+        tmp_path, workflow_dag={"steps": []}, driver_context=driver_context(_FakePlugin(), source="test"),
     )
 
     assert "system/controlDict" in _paths(components, kind="case_file")
@@ -293,7 +273,7 @@ def test_dag_consumes_declaration_wins_over_a_generated_output_glob(tmp_path: Pa
         ]
     }
     components = enumerate_case_inputs(
-        tmp_path, workflow_dag=workflow_dag, driver_context=default_driver_context(),
+        tmp_path, workflow_dag=workflow_dag, driver_context=driver_context(_FakePlugin(), source="test"),
     )
 
     assert "constant/C" in _paths(components, kind="case_file")

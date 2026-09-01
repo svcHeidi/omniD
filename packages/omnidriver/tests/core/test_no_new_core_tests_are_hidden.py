@@ -39,9 +39,6 @@ _CORE_TESTS = pathlib.Path(__file__).resolve().parent.parent
 #: this list may only shrink.
 KNOWN_HIDDEN_FILES: dict[str, int] = {
     "core/test_sweep_runner.py": 24,
-    "core/test_case_compatibility_matrix.py": 7,
-    "core/test_sweep_plan_contract.py": 4,
-    "core/test_workflow_dag_filesystem_ingest.py": 3,
 }
 
 

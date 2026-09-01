@@ -21,11 +21,15 @@
 # Description
 #     Tests sweep case materialization via build_and_launch.
 #
-#     test_materialize_case_honours_dx_for_spatial_solver moved to
-#     omnidriver-openfoam/tests/core/test_sweep_materialize.py (Phase 2
-#     Task 4): it imports omnidriver.openfoam.mesh_provisioning directly and
-#     asserts on its OpenFOAM blockMeshDict output, so it belongs with the
-#     OpenFOAM-behaviour tests, not core's.
+#     Moved from omnidriver/tests/core/test_sweep_materialize.py (Phase 2
+#     Task M2): every test in that module asserted
+#     constant/electroProperties contents and that the generated Allrun
+#     invokes cardiacFoam -- cardiacFoam vocabulary, not core's own
+#     routing/dispatch. A sibling test in this same module,
+#     test_materialize_case_honours_dx_for_spatial_solver, had already moved
+#     to omnidriver-openfoam/tests/core/test_sweep_materialize.py for
+#     asserting OpenFOAM blockMeshDict output specifically; this is the rest
+#     of that module, one step further down the same seam.
 #
 # Author
 #     Simao Nieto de Castro, UCD.

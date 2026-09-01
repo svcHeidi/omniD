@@ -151,29 +151,6 @@ def test_schema_accepts_valid_heterogeneity_block(schema):
     jsonschema.validate(doc, schema)  # does not raise
 
 
-def test_schema_rejects_unknown_heterogeneity_mode() -> None:
-    # The physics-phase vocabulary moved to the cardiac plugin's own config
-    # schema (P2.2) -- core's run-document schema no longer enforces it, so
-    # this now validates against the plugin schema directly.
-    from omnidriver.cardiacfoam.config_schema import CONFIG_SCHEMA
-
-    doc = _valid_run_dict()
-    doc["config"]["physics"] = {"ionicHeterogeneity.mode": "bogusMode"}
-    with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate(doc["config"], CONFIG_SCHEMA)
-
-
-def test_schema_rejects_unknown_tissue() -> None:
-    # See test_schema_rejects_unknown_heterogeneity_mode: validated against
-    # the cardiac plugin's own config schema now, not core's.
-    from omnidriver.cardiacfoam.config_schema import CONFIG_SCHEMA
-
-    doc = _valid_run_dict()
-    doc["config"]["physics"] = {"tissue": "notATissue"}
-    with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate(doc["config"], CONFIG_SCHEMA)
-
-
 def test_schema_still_allows_unlisted_physics_keys(schema):
     # additionalProperties stays open: the dict-catalog has far more keys
     # than the schema enumerates.
