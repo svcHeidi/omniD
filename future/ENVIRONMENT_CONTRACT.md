@@ -14,6 +14,7 @@ code can actually satisfy.
 | §6 `GenericEnvironmentPlugin` | open, blocked on §5b |
 | §7 the cardiac `Phase` enum | **done** — `get_phases()` + `legacy_phases()` landed (Phase 2 Task 3) |
 | §8 the complete binding inventory | **new** — three independent audits, 2026-09-01 |
+| §11 role-vocabulary escape tier | **done** — `plugin_profile.ESCAPE_ROLE_PREFIX` (Phase 3 Task 3b), 2026-09-01 |
 
 ## 1. The problem with Rule 1 as written
 
@@ -98,7 +99,7 @@ correction came from executing rather than reading.
 | `("constant", "system")` directory guess | `strict_planning.py:230-244` | plus dead cardiac metadata keys three lines under a docstring saying core does not know `electroProperties` exists |
 | `--openfoam-bashrc` CLI flag + `openfoam_bashrc` parameter | `cli.py:643`, threaded through 6 files | a FEniCS user types `--openfoam-bashrc`. The same capability is internally inconsistent: `load()` takes `explicit_bashrc`, `diagnostics()` takes `openfoam_bashrc` |
 | `DictEntry.value_kind = "openfoam_literal"` | `contracts/dictionary.py:21` | a core dataclass whose **default** is OpenFOAM |
-| **`KNOWN_ROLES` closed to 11 values, 8 `openfoam.*`** | `plugin_profile.py:75` | **the hard block.** `get_profile()` is REQUIRED; a plugin declaring `fenics.mesh_file` fails at load with `ValueError`. Verified live. Introduced by Phase 1 Task 2 — validating the enum was right, closing it with no escape tier was not |
+| ~~`KNOWN_ROLES` closed to 11 values, 8 `openfoam.*`~~ **fixed 2026-09-01, §11** | `plugin_profile.py:75` | was **the hard block**: `get_profile()` is REQUIRED, so a plugin declaring `fenics.mesh_file` failed at load with `ValueError`. `KNOWN_ROLES` is still an exact-match closed enum for `openfoam.*`/`plugin.*`/`case.*` — that guarantee is unchanged — but a role of the shape `x-<namespace>.<leaf>` now bypasses it for a namespace core has no vocabulary for. See §11 for the design and what a typo still costs |
 
 ### Correctness bugs found by the same sweep — not architecture
 
@@ -311,21 +312,33 @@ than a redesign.
 Ordered by cost and risk, not by how offensive each binding looks. Tiers 1 and
 2 are most of the value; tier 4 is the one that needs a threat model.
 
-### Tier 1 — not architecture, just broken
+### Tier 1 — not architecture, just broken *(closed 2026-09-01)*
 
-| item | why now |
+Two of the five were real. Three were misreadings in the audit, corrected here
+rather than deleted, because the reasoning that produced them is the kind that
+recurs: **"no callers in core" is not "no callers", and "unused in this module"
+is not "unused"** when the module is a re-export seam.
+
+| item | outcome |
 |---|---|
-| `RUN_CASE_SCRIPT_RELPATH` names a nonexistent path (`generic_case.py:25`) | anyone relying on the default gets `FileNotFoundError` |
-| `run_case.sh` hardcodes `/Volumes/OpenFOAM-v2412/etc/bashrc` | machine-specific absolute path in shipped source; the real install here is `/Volumes/OpenFOAM/OpenFOAM-12` |
-| dead `Phase` imports (`contracts/dictionary.py:12`, `dict_entries.py:31`) | vestigial since `get_phases()` landed |
-| `cardiacfoam_monorepo_root()` — zero call sites in core | docstring cites `utility_catalog.UTILITIES_ROOT`, which no longer exists |
-| dead cardiac metadata keys (`strict_planning.py:230`) | sits three lines under a docstring saying core does not know `electroProperties` exists |
+| `RUN_CASE_SCRIPT_RELPATH` names a nonexistent path (`generic_case.py:25`) | **fixed**, and larger than reported. Latent, not live: `resolve_run_script_path` has **zero call sites** in any package, so nothing raises today — the value's one real consumer is the `run_script_relpath` entry in spec metadata. Resolving it against the installed package was only half a fix: `omnidriver.scripts` was not in `package-data`, so `run_case.sh` shipped in no wheel and the new path was wrong in exactly the old way. `cardiacfoam` also carried **its own copy** of the constant — still spelling the retired `openfoam_driver` name — and all ten tutorial defaults chain to *that* one, so the core fix alone would not have reached the live path |
+| `run_case.sh` hardcodes `/Volumes/OpenFOAM-v2412/etc/bashrc` | **fixed** — fallback removed; `WM_PROJECT_DIR` and the existing `OPENFOAM_BASHRC` error already covered it |
+| ~~dead `Phase` imports~~ | **not dead.** Both are re-export seams pinned by tests: `test_run_model.py` asserts `contracts.dictionary.Phase is run_model.Phase` to catch a type-distinct redeclaration, and `test_dict_entries.py` imports `Phase` from `omnidriver.dict_entries`. Left alone |
+| ~~`cardiacfoam_monorepo_root()` — zero call sites~~ | **live.** Zero callers *in core*; real callers in both sibling packages' `conftest.py` and in root-level `scripts/`. Only the stale `utility_catalog.UTILITIES_ROOT` citation in its docstring was wrong, and that is fixed |
+| ~~dead cardiac metadata keys (`strict_planning.py:230`)~~ | **live.** Eleven `omnidriver-cardiacfoam` tutorials set them on spec metadata; core reading generic metadata keys the plugin populates is the seam working as designed, not a leak |
+
+The guard that should have caught the packaging half of item 1 could not:
+`test_wheel_install_imports.py` only *imports* modules, so a module that
+imports cleanly and then points at a data file the wheel never shipped passed
+it. It now asserts the bundled file is present, verified by removing the
+`package-data` line and watching it fail *after* `all modules imported`
+succeeds.
 
 ### Tier 2 — the seam exists; wire it
 
 | item | payoff |
 |---|---|
-| **open `KNOWN_ROLES` with a non-OpenFOAM tier** | removes the hard block. `get_profile()` is required, so *nothing* else about non-OpenFOAM plugins can be attempted until this lands. Also fixes `CaseFileRule`, `PluginProfile` and `ResolvedInput` in one place — their dataclasses are already neutral; only the enum's values were not |
+| ~~**open `KNOWN_ROLES` with a non-OpenFOAM tier**~~ **done 2026-09-01, §11** | removed the hard block, *for loading only* — `tutorial_contracts.py`, `provenance_inputs.py` and `registry.py` still branch on literal `openfoam.*` roles, so a foreign environment's files now load and are then ignored by those three. Generalising them is the rest of this tier. Original rationale: `get_profile()` is required, so *nothing* else about non-OpenFOAM plugins can be attempted until this lands. Also fixes `CaseFileRule`, `PluginProfile` and `ResolvedInput` in one place — their dataclasses are already neutral; only the enum's values were not |
 | **an output-directory role for `postProcessing`** | closes **8** sites at once, the same shape as the entrypoint role that closed five in Phase 1 |
 | `producer_commands = {"Allrun"}` → the `openfoam.entrypoint` role | the role is already resolved 20 lines away in `registry.py`; this site just does not use it |
 | `generic_case.py:137`'s `Allrun` | needs a `driver_context` threaded into a module that has none — slightly more than a wiring job |
@@ -348,3 +361,85 @@ traceback for every plugin including the neutral double.
 These decide what may execute and what may resolve to a case-local binary
 rather than PATH. They need their own pass with a threat model extending
 `SECURITY.md`, and they are correctly deferred until the tiers above are done.
+
+## 11. The role-vocabulary escape tier (Phase 3 Task 3b, landed 2026-09-01)
+
+§3's hard block is fixed. The fix is deliberately narrow: it opens a tier for
+a role core cannot possibly own the vocabulary for, and touches nothing else
+about `KNOWN_ROLES`.
+
+| tier | shape | validated how | status |
+|---|---|---|---|
+| Tier 1 — core-owned namespaces | `openfoam.*`, `plugin.*`, `case.*` | exact string membership in `KNOWN_ROLES`, a closed `frozenset` | unchanged, Phase 1 Task 2 |
+| Tier 2 — foreign-environment escape | `x-<namespace>.<leaf>` | shape only: both segments non-empty, `<namespace>` not one of the three reserved words. `<namespace>`/`<leaf>` spelling is never checked | **new**, this task |
+
+Rejected outright, no tier accepts them: a role with no dot at all (`control_dict`),
+and any role that isn't in `KNOWN_ROLES` and doesn't carry the `x-` marker.
+
+### Why a marker prefix, not a bare "unknown namespace passes" rule
+
+The design brief for this (§10's Tier 2 first row) offered three shapes: a namespace-based rule with no
+marker (an unrecognised dotted prefix is accepted outright), an explicit
+escape prefix, or a registration step where a plugin lists its own
+namespaces. The first was rejected specifically because of what it does to
+the typo case that Phase 1 Task 2 exists to catch.
+
+Under a bare namespace rule, `openfoam.control_dict` misspelled as
+`opnefoam.control_dict` is **not** a typo of a known namespace as far as the
+validator can tell — `opnefoam` is just another unrecognised prefix, so it
+would load silently, exactly the failure mode the closed enum was built to
+prevent (`plugin_capabilities.py:461`). A registration step (the plugin
+lists `custom_role_namespaces: [fenics]` in its own YAML) closes that gap
+almost as well, but only by adding a second field a plugin author could
+equally typo, and by making every profile schema change carry a new
+required/optional key.
+
+The `x-` marker gets the same protection more cheaply: getting through the
+escape hatch requires typing two characters (`x-`) that no fat-fingering of
+`openfoam.`, `plugin.`, or `case.` produces by accident. It also composes
+directly with `tutorial_contracts.py:123,127`'s `role.startswith("openfoam.")`
+split — an escaped role never starts with `openfoam.`, so it is never
+misfiled as solver-owned, with no change needed at that call site.
+
+### What a typo costs now, compared to before
+
+- **A typo inside a known namespace — unchanged, still a load-time
+  `ValueError`.** `openfoam.controldict`, `openfoam.control_dickt`, and bare
+  `control_dict` all still raise, verified by
+  `test_a_typo_in_a_known_namespace_still_raises_under_the_escape_tier` in
+  `packages/omnidriver/tests/core/test_plugin_profile.py`. This is the
+  guarantee Phase 1 Task 2 introduced, and it is 100% intact.
+- **A typo of the escape marker itself against a reserved namespace — also
+  caught.** `x-openfoam.control_dict`, `x-plugin.configuration`, and
+  `x-case.documentation` are rejected: the namespace-after-`x-` may not be
+  one of the three reserved words, so the escape hatch cannot be used to
+  quietly dodge the closed-enum check on something that looks like it
+  should be core's.
+- **A typo *inside* an escaped foreign namespace or leaf — genuinely not
+  caught, and cannot be**, e.g. `x-fenics.msh_file` (missing an `e`) loads
+  without complaint. Core has no FEniCS vocabulary to check that spelling
+  against; validating it would mean core inventing and owning a vocabulary
+  for an environment it is explicitly not supposed to know about, which is
+  the exact thing this whole document argues against. This is the residual
+  gap under every shape considered, escape-prefix or otherwise — a
+  registration step narrows it slightly (a *consistent* typo across both the
+  registration list and the role string is required to slip through) but
+  does not close it, at the cost noted above.
+- **A typo that produces something that merely looks like a new environment's
+  own namespace but is actually a typo of `openfoam`/`plugin`/`case` — the
+  one gap a bare "unknown namespace passes" rule would have had — does not
+  arise under the chosen design**, because nothing except the `x-` marker is
+  ever treated as an escape. A role with no marker and no exact `KNOWN_ROLES`
+  match is rejected regardless of how namespace-shaped it looks.
+
+### Where this is proven
+
+`packages/omnidriver/tests/core/test_plugin_profile.py`:
+`test_an_escape_role_for_a_foreign_environment_loads` (the literal acceptance
+test — `x-fenics.mesh_file` loads via `load_plugin_profile`),
+`test_a_typo_in_a_known_namespace_still_raises_under_the_escape_tier`,
+`test_a_malformed_or_shadowing_escape_role_still_raises`, and
+`test_a_non_openfoam_role_survives_driver_context_end_to_end` (constructs a
+`PluginProfile` with an escape-tier role directly, passes it through
+`driver_context(...)`, and confirms the rule comes back out of
+`capabilities.case_files.all_rules()`/`required_rules()` unchanged).
