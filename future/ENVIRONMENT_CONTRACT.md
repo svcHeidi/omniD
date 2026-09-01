@@ -17,6 +17,7 @@ code can actually satisfy.
 | §11 role-vocabulary escape tier | **done** — `plugin_profile.ESCAPE_ROLE_PREFIX` (Phase 3 Task 3b), 2026-09-01 |
 | §10 Tier 3, `openfoam.control_dict` lookup | **done** — `CaseIntrospectionCapability.selected_start_time()` (Phase 3), 2026-09-01 |
 | §10 Tier 3, `processor*` decomposition seam | **done** — `CaseFileContractCapability.decomposition_dirname_prefix()` (Phase 3), 2026-09-01 |
+| §10 Tier 3, `apply_overrides` raw-traceback crash | **done** — `legacy_apply_overrides` refuses cleanly (Phase 3), 2026-09-01 |
 
 ## 1. The problem with Rule 1 as written
 
@@ -248,7 +249,9 @@ plugin that declares a C++ mapping, which already implies OpenFOAM tooling.
 
 **The genuinely unavoidable one is `apply_overrides`.** It raises for all three
 plugins including the neutral double, has no implementation anywhere, and
-crashes the CLI with a raw traceback rather than a structured error.
+crashes the CLI with a raw traceback rather than a structured error. **Fixed
+2026-09-01, §10 Tier 3** — see below; the "unavoidable" part is still true (no
+plugin implements the hook), only the crash-vs-structured-error part changed.
 
 `get_base_mesh_geometry_diagnostics` also raises for all three when called
 directly, but is not reached through the normal pipeline for
@@ -409,16 +412,13 @@ one thing at all five.
 |---|---|
 | ~~`provenance_inputs.py`'s `openfoam.control_dict` lookup~~ **done 2026-09-01** | moved from Tier 2: needed a namespace-neutral role or a capability hook, not wiring. Landed as `CaseIntrospectionCapability.selected_start_time()` — a new optional hook, `get_selected_start_time(case_root, resolved_case)`, alongside `resolve_case_models`/`get_samplable_fields`. `openfoam.control_dict`'s only consumer in the whole codebase was this one question ("what start time does this run resume from?"), so rather than generalise the role, core now lets the plugin answer the question outright. The fallback (`legacy_selected_start_time`) is today's OpenFOAM-shaped logic verbatim — `KNOWN_ROLES` is untouched, zero behaviour change for a plugin that implements nothing new. As a side effect this also resolves the adjacent `startFrom`/`startTime`/`latestTime`/`firstTime` keyword-vocabulary defect from §3/§8: that logic now lives entirely in the fallback, not in core proper. Proven by `test_plugin_implemented_start_time_hook_overrides_the_openfoam_default` in `packages/omnidriver/tests/core/test_provenance_inputs.py` — a plugin declaring **no** `openfoam.control_dict` role at all still gets its own start time honoured end to end |
 | ~~a seam for `processor*`~~ **done 2026-09-01** | four sites — `provenance_inputs.py` (I9 decomposed-restart walk), `workflow_runner.py` (accepting a not-yet-reconstructed parallel location as evidence a time-indexed artifact was produced), `registry.py` (pruning it during tutorial discovery), `sweep_runner.py` (excluding it when staging a fresh sweep case, where *not* recognising a foreign plugin's differently-named decomposition dir would have re-copied stale output — exactly the bug that staging boundary exists to prevent). Unlike `control_dict`, this didn't need a capability hook computing a value from case state — `processor*` names a wildcard family, not a single static path a `CaseFileRule` role can hold, so it is a bare no-argument optional hook (`get_decomposition_dirname_prefix()`) on `CaseFileContractCapability`, the same shape as `get_phases()`. Default `"processor"`; `plugin_profile.decomposition_dirname_prefix(driver_context)` wraps it and returns the default directly when `driver_context` is `None`, mirroring `entrypoint_relpaths()`. `run_workflow_step()`/`_stage_entry_case()` gained a `driver_context` parameter they didn't carry before (threaded from `cli.py`/`_materialize_entry_case()`, both of which already had it in scope) |
+| ~~`apply_overrides` raw-traceback crash~~ **done 2026-09-01** | `legacy_apply_overrides` (`compatibility.py`) did an unconditional `from omnidriver.openfoam.apply_overrides import ...`; in a core-only install (or any plugin without that package and without its own `apply_overrides()` hook) this raised `ModuleNotFoundError` uncaught — `cli.py`'s `except (OSError, ValueError)` around the call does not catch it. Reproduced directly by blocking the import via `sys.modules[name] = None` before the fix, confirmed clean after. The fix is deliberately narrow and does **not** add a neutral default: applying an override means writing bytes into a dict file whose syntax only `omnidriver-openfoam`'s mutators understand, so there is no safe universal answer the way there is for e.g. environment diagnostics — same shape as `route_sweep_case_values`/`materialize_sweep_case` already refusing by name rather than pretending to be neutral. The import is now wrapped in `try/except ImportError`, re-raised as a plain `ValueError` (not `OverrideError`, which lives in the package that may not be importable) naming the plugin via `driver_context.identity.id` — not `driver_context.plugin.plugin_id`, which `test_plugin_dependency_boundary.py` forbids outside `plugin_capabilities.py`/`plugin_interface.py`. `apply_overrides.py` itself needed no change — it already lives in `omnidriver-openfoam`, not core; only core's fallback *wiring* was the defect. Proven by `test_the_fallback_refuses_cleanly_when_openfoam_is_not_installed` in `packages/omnidriver/tests/core/test_override_apply_threads_a_context.py` |
 
 Still open: `ArtifactFormat` opened or plugin-extensible (and core stops
 mislabelling its own logs); `utility_catalog`'s OpenFOAM type vocabulary
 moved to `omnidriver-openfoam`; `--openfoam-bashrc`
 renamed with a deprecation alias, and `EnvironmentPreflightCapability`'s own
 `explicit_bashrc`/`openfoam_bashrc` inconsistency resolved.
-
-Also open: **`apply_overrides` is the one genuinely unavoidable fallback** —
-no plugin implements it, and `step --strict --apply` crashes with a raw
-traceback for every plugin including the neutral double.
 
 ### Tier 4 — the trust boundary, unchanged from §5b
 

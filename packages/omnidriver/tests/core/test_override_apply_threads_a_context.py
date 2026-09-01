@@ -23,6 +23,8 @@ context were still missing we would get ``TypeError`` instead.
 """
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 from omnidriver.core.plugin_interface import driver_context
@@ -71,3 +73,21 @@ def test_the_fallback_reaches_openfoam_with_the_context_it_was_given() -> None:
         "TypeError means the context never reached omnidriver.openfoam; "
         "ValueError means it did and the override was rejected on its merits"
     )
+
+
+def test_the_fallback_refuses_cleanly_when_openfoam_is_not_installed(monkeypatch) -> None:
+    """No omnidriver-openfoam, no plugin-implemented apply_overrides() hook:
+    the fallback must raise a clean ValueError naming the gap, not a raw
+    ModuleNotFoundError -- there is no neutral default for "patch a dict file
+    whose syntax core does not know" (future/ENVIRONMENT_CONTRACT.md §10,
+    Tier 3). ``sys.modules[name] = None`` is the standard way to make Python's
+    import system raise ImportError for one module without touching any
+    other test's already-imported state.
+    """
+    monkeypatch.setitem(sys.modules, "omnidriver.openfoam.apply_overrides", None)
+
+    context = _context()
+    with pytest.raises(ValueError, match="apply_overrides"):
+        context.capabilities.override_scopes.apply(
+            [], case_root="/tmp", driver_context=context,
+        )

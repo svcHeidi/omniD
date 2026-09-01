@@ -293,9 +293,28 @@ def legacy_apply_overrides(overrides, *, case_root, driver_context) -> None:
     Validation and application are one call because core has only ever used
     them together, and splitting them would let a caller apply without
     validating. Raises OverrideError, a ValueError subclass, so core catches
-    ValueError and needs no import of the exception type."""
+    ValueError and needs no import of the exception type.
 
-    from omnidriver.openfoam.apply_overrides import apply_overrides, validate_overrides
+    There is no neutral default here the way there is for e.g. environment
+    diagnostics: applying an override means writing bytes into a dict file
+    whose syntax only ``omnidriver-openfoam``'s mutators understand, so a
+    plugin with neither that package installed nor its own ``apply_overrides()``
+    hook genuinely cannot be swept into this path (future/ENVIRONMENT_CONTRACT.md
+    §10, Tier 3) -- same shape as ``route_sweep_case_values``/
+    ``materialize_sweep_case`` refusing by name rather than pretending to be
+    neutral. Without this catch, the import raised ModuleNotFoundError
+    uncaught -- cli.py's ``except (OSError, ValueError)`` around this call
+    does not catch it, so it reached the terminal as a raw traceback."""
+
+    try:
+        from omnidriver.openfoam.apply_overrides import apply_overrides, validate_overrides
+    except ImportError as exc:
+        raise ValueError(
+            f"plugin {driver_context.identity.id!r} has no apply_overrides() "
+            "of its own, and omnidriver-openfoam (core's OpenFOAM-shaped default "
+            "for this operation) is not installed -- step --strict --apply is not "
+            "supported for this plugin"
+        ) from exc
 
     validate_overrides(overrides, driver_context=driver_context)
     apply_overrides(overrides, case_root=case_root, driver_context=driver_context)
