@@ -70,6 +70,10 @@ def _mapping_error(path: Path, message: str) -> ValueError:
 #: (provenance_inputs.py, registry.py), so an unvalidated typo silently
 #: reclassifies a file instead of failing. See future/ENVIRONMENT_CONTRACT.md.
 #:
+#: This set is closed and stays closed -- it is NOT the vocabulary a
+#: non-OpenFOAM plugin uses. That plugin declares roles via the
+#: ``ESCAPE_ROLE_PREFIX`` tier below instead of adding to this frozenset.
+#:
 #: Adding a role here is a contract change: document it in
 #: core/generic-plugin.yaml's role reference in the same edit.
 KNOWN_ROLES: frozenset[str] = frozenset({
@@ -85,6 +89,50 @@ KNOWN_ROLES: frozenset[str] = frozenset({
     "case.documentation",
     "case.regression_test",
 })
+
+#: Reserved first-segment words. These are the namespaces core actually
+#: validates the leaf of (against ``KNOWN_ROLES`` above); a role using one of
+#: them is never eligible for the escape tier below, even if the exact
+#: string is not in ``KNOWN_ROLES`` -- that is precisely the typo case the
+#: escape tier must NOT swallow.
+_RESERVED_ROLE_NAMESPACES: frozenset[str] = frozenset({"openfoam", "plugin", "case"})
+
+#: Escape marker for a case-file role naming an environment core has no
+#: vocabulary for at all (FEniCS, deal.II, SU2, ...). A role of the exact
+#: shape ``x-<namespace>.<leaf>`` bypasses the closed ``KNOWN_ROLES`` enum;
+#: neither ``<namespace>`` nor ``<leaf>`` is checked against a vocabulary,
+#: because core does not and should not own one for a foreign environment.
+#:
+#: What this does NOT do: it does not touch the three reserved namespaces.
+#: ``openfoam.controldict``, ``openfoam.control_dickt``, or bare
+#: ``control_dict`` still raise -- none of them carry the ``x-`` marker, so
+#: they are checked against ``KNOWN_ROLES`` exactly as before and fail. The
+#: marker is deliberately a prefix a typo of a reserved namespace cannot
+#: land on by accident (``openfoam.*`` -> ``x-openfoam.*`` is not a
+#: plausible fat-finger slip), which is the property a bare "unknown
+#: namespace passes" rule would not have had: it would have silently
+#: accepted ``opnefoam.control_dict`` as if it were a new environment's
+#: namespace. See future/ENVIRONMENT_CONTRACT.md §10.
+ESCAPE_ROLE_PREFIX = "x-"
+
+
+def _is_valid_escape_role(role: str) -> bool:
+    """True if ``role`` has the escape shape ``x-<namespace>.<leaf>``.
+
+    Both segments must be non-empty, and ``<namespace>`` must not be one of
+    the three reserved words -- otherwise a role could dodge the closed-enum
+    check by spelling e.g. ``x-openfoam.control_dict``, which would look
+    like a genuine core-owned role to any consumer splitting on
+    ``role.startswith("openfoam.")`` while never having been validated
+    against ``KNOWN_ROLES``.
+    """
+    if not role.startswith(ESCAPE_ROLE_PREFIX):
+        return False
+    rest = role[len(ESCAPE_ROLE_PREFIX):]
+    namespace, sep, leaf = rest.partition(".")
+    if not sep or not namespace or not leaf:
+        return False
+    return namespace not in _RESERVED_ROLE_NAMESPACES
 
 
 def load_plugin_profile(path: str | Path) -> PluginProfile:
@@ -136,12 +184,15 @@ def load_plugin_profile(path: str | Path) -> PluginProfile:
                 profile_path,
                 "required currently supports only 'always', 'never', or 'conditional'",
             )
-        if values["role"] not in KNOWN_ROLES:
+        if values["role"] not in KNOWN_ROLES and not _is_valid_escape_role(values["role"]):
             raise _mapping_error(
                 profile_path,
                 f"unknown case-file role {values['role']!r}; known roles are "
                 + ", ".join(sorted(KNOWN_ROLES))
-                + " (see future/ENVIRONMENT_CONTRACT.md)",
+                + f", or an escape role of the form {ESCAPE_ROLE_PREFIX}<namespace>.<leaf> "
+                + "for an environment core has no vocabulary for, e.g. "
+                + f"{ESCAPE_ROLE_PREFIX}fenics.mesh_file "
+                + "(see future/ENVIRONMENT_CONTRACT.md)",
             )
         rules.append(CaseFileRule(**values))
 

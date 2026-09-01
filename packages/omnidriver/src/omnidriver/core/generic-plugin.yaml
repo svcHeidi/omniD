@@ -14,7 +14,8 @@ plugin:
 #               documentation        : human-readable file (README.md, ...)
 #   role      (required) - semantic role tag. VALIDATED at load time against
 #                          core.plugin_profile.KNOWN_ROLES -- an unlisted role
-#                          is an error, not a warning. The full set:
+#                          is an error, not a warning, UNLESS it uses the
+#                          escape tier documented below. The closed set:
 #               openfoam.control_dict       : system/controlDict
 #               openfoam.discretisation     : system/fvSchemes
 #               openfoam.solver_settings    : system/fvSolution
@@ -32,6 +33,22 @@ plugin:
 #               plugin.configuration        : solver-specific constant/* file
 #               case.documentation          : README.md
 #               case.regression_test        : runRegressionTest.sh
+#
+#             This set is OpenFOAM's vocabulary and stays closed -- a typo
+#             against it (wrong case, wrong word, missing the namespace
+#             entirely) is a load-time ValueError, not a silent
+#             misclassification. It is NOT the vocabulary for a plugin
+#             whose environment is not OpenFOAM at all (FEniCS, deal.II,
+#             SU2, ...). That plugin instead uses the escape tier: a role
+#             of the exact shape "x-<namespace>.<leaf>", e.g.
+#             "x-fenics.mesh_file". Core does not and will not validate
+#             <namespace> or <leaf> spelling for an escaped role -- it has
+#             no vocabulary for a foreign environment to validate against.
+#             The "x-" marker may not be followed by one of the three
+#             reserved words above (so "x-openfoam.foo" is still rejected);
+#             that keeps the escape hatch from being used to dodge the
+#             closed-enum check on a role that looks like it should be
+#             OpenFOAM's. See future/ENVIRONMENT_CONTRACT.md §10.
 #   required  (required) - one of:
 #               always       : the driver expects this file at plan time
 #               conditional  : optional; driver skips checks if file is absent

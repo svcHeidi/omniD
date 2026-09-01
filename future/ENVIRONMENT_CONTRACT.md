@@ -14,6 +14,7 @@ code can actually satisfy.
 | §6 `GenericEnvironmentPlugin` | open, blocked on §5b |
 | §7 the cardiac `Phase` enum | **done** — `get_phases()` + `legacy_phases()` landed (Phase 2 Task 3) |
 | §8 the complete binding inventory | **new** — three independent audits, 2026-09-01 |
+| §10 role-vocabulary escape tier | **done** — `plugin_profile.ESCAPE_ROLE_PREFIX` (Phase 3 Task 3b), 2026-09-01 |
 
 ## 1. The problem with Rule 1 as written
 
@@ -98,7 +99,7 @@ correction came from executing rather than reading.
 | `("constant", "system")` directory guess | `strict_planning.py:230-244` | plus dead cardiac metadata keys three lines under a docstring saying core does not know `electroProperties` exists |
 | `--openfoam-bashrc` CLI flag + `openfoam_bashrc` parameter | `cli.py:643`, threaded through 6 files | a FEniCS user types `--openfoam-bashrc`. The same capability is internally inconsistent: `load()` takes `explicit_bashrc`, `diagnostics()` takes `openfoam_bashrc` |
 | `DictEntry.value_kind = "openfoam_literal"` | `contracts/dictionary.py:21` | a core dataclass whose **default** is OpenFOAM |
-| **`KNOWN_ROLES` closed to 11 values, 8 `openfoam.*`** | `plugin_profile.py:75` | **the hard block.** `get_profile()` is REQUIRED; a plugin declaring `fenics.mesh_file` fails at load with `ValueError`. Verified live. Introduced by Phase 1 Task 2 — validating the enum was right, closing it with no escape tier was not |
+| ~~`KNOWN_ROLES` closed to 11 values, 8 `openfoam.*`~~ **fixed 2026-09-01, §10** | `plugin_profile.py:75` | was **the hard block**: `get_profile()` is REQUIRED, so a plugin declaring `fenics.mesh_file` failed at load with `ValueError`. `KNOWN_ROLES` is still an exact-match closed enum for `openfoam.*`/`plugin.*`/`case.*` — that guarantee is unchanged — but a role of the shape `x-<namespace>.<leaf>` now bypasses it for a namespace core has no vocabulary for. See §10 for the design and what a typo still costs |
 
 ### Correctness bugs found by the same sweep — not architecture
 
@@ -305,3 +306,85 @@ transform the rest need.
 The defects are concentrated in **fallback bodies and closed enums**, not in the
 architecture. That is the good news, and it is why this is a work list rather
 than a redesign.
+
+## 10. The role-vocabulary escape tier (Phase 3 Task 3b, landed 2026-09-01)
+
+§3's hard block is fixed. The fix is deliberately narrow: it opens a tier for
+a role core cannot possibly own the vocabulary for, and touches nothing else
+about `KNOWN_ROLES`.
+
+| tier | shape | validated how | status |
+|---|---|---|---|
+| Tier 1 — core-owned namespaces | `openfoam.*`, `plugin.*`, `case.*` | exact string membership in `KNOWN_ROLES`, a closed `frozenset` | unchanged, Phase 1 Task 2 |
+| Tier 2 — foreign-environment escape | `x-<namespace>.<leaf>` | shape only: both segments non-empty, `<namespace>` not one of the three reserved words. `<namespace>`/`<leaf>` spelling is never checked | **new**, this task |
+
+Rejected outright, no tier accepts them: a role with no dot at all (`control_dict`),
+and any role that isn't in `KNOWN_ROLES` and doesn't carry the `x-` marker.
+
+### Why a marker prefix, not a bare "unknown namespace passes" rule
+
+§10's design brief offered three shapes: a namespace-based rule with no
+marker (an unrecognised dotted prefix is accepted outright), an explicit
+escape prefix, or a registration step where a plugin lists its own
+namespaces. The first was rejected specifically because of what it does to
+the typo case that Phase 1 Task 2 exists to catch.
+
+Under a bare namespace rule, `openfoam.control_dict` misspelled as
+`opnefoam.control_dict` is **not** a typo of a known namespace as far as the
+validator can tell — `opnefoam` is just another unrecognised prefix, so it
+would load silently, exactly the failure mode the closed enum was built to
+prevent (`plugin_capabilities.py:461`). A registration step (the plugin
+lists `custom_role_namespaces: [fenics]` in its own YAML) closes that gap
+almost as well, but only by adding a second field a plugin author could
+equally typo, and by making every profile schema change carry a new
+required/optional key.
+
+The `x-` marker gets the same protection more cheaply: getting through the
+escape hatch requires typing two characters (`x-`) that no fat-fingering of
+`openfoam.`, `plugin.`, or `case.` produces by accident. It also composes
+directly with `tutorial_contracts.py:123,127`'s `role.startswith("openfoam.")`
+split — an escaped role never starts with `openfoam.`, so it is never
+misfiled as solver-owned, with no change needed at that call site.
+
+### What a typo costs now, compared to before
+
+- **A typo inside a known namespace — unchanged, still a load-time
+  `ValueError`.** `openfoam.controldict`, `openfoam.control_dickt`, and bare
+  `control_dict` all still raise, verified by
+  `test_a_typo_in_a_known_namespace_still_raises_under_the_escape_tier` in
+  `packages/omnidriver/tests/core/test_plugin_profile.py`. This is the
+  guarantee Phase 1 Task 2 introduced, and it is 100% intact.
+- **A typo of the escape marker itself against a reserved namespace — also
+  caught.** `x-openfoam.control_dict`, `x-plugin.configuration`, and
+  `x-case.documentation` are rejected: the namespace-after-`x-` may not be
+  one of the three reserved words, so the escape hatch cannot be used to
+  quietly dodge the closed-enum check on something that looks like it
+  should be core's.
+- **A typo *inside* an escaped foreign namespace or leaf — genuinely not
+  caught, and cannot be**, e.g. `x-fenics.msh_file` (missing an `e`) loads
+  without complaint. Core has no FEniCS vocabulary to check that spelling
+  against; validating it would mean core inventing and owning a vocabulary
+  for an environment it is explicitly not supposed to know about, which is
+  the exact thing this whole document argues against. This is the residual
+  gap under every shape considered, escape-prefix or otherwise — a
+  registration step narrows it slightly (a *consistent* typo across both the
+  registration list and the role string is required to slip through) but
+  does not close it, at the cost noted above.
+- **A typo that produces something that merely looks like a new environment's
+  own namespace but is actually a typo of `openfoam`/`plugin`/`case` — the
+  one gap a bare "unknown namespace passes" rule would have had — does not
+  arise under the chosen design**, because nothing except the `x-` marker is
+  ever treated as an escape. A role with no marker and no exact `KNOWN_ROLES`
+  match is rejected regardless of how namespace-shaped it looks.
+
+### Where this is proven
+
+`packages/omnidriver/tests/core/test_plugin_profile.py`:
+`test_an_escape_role_for_a_foreign_environment_loads` (the literal acceptance
+test — `x-fenics.mesh_file` loads via `load_plugin_profile`),
+`test_a_typo_in_a_known_namespace_still_raises_under_the_escape_tier`,
+`test_a_malformed_or_shadowing_escape_role_still_raises`, and
+`test_a_non_openfoam_role_survives_driver_context_end_to_end` (constructs a
+`PluginProfile` with an escape-tier role directly, passes it through
+`driver_context(...)`, and confirms the rule comes back out of
+`capabilities.case_files.all_rules()`/`required_rules()` unchanged).
