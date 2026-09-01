@@ -12,7 +12,8 @@ code can actually satisfy.
 | §5a entrypoint wiring | **done** — `registry._entrypoint_relpaths()` (Phase 1 Task 3) |
 | §5b trust boundary | open, deliberately deferred — Phase 3 |
 | §6 `GenericEnvironmentPlugin` | open, blocked on §5b |
-| §7 the cardiac `Phase` enum | open — Phase 2 Task 3 ports `get_phases()` |
+| §7 the cardiac `Phase` enum | **done** — `get_phases()` + `legacy_phases()` landed (Phase 2 Task 3) |
+| §8 the complete binding inventory | **new** — three independent audits, 2026-09-01 |
 
 ## 1. The problem with Rule 1 as written
 
@@ -61,41 +62,55 @@ That is the pattern. The gap is that almost nothing else follows it.
 
 ## 3. Measured state of the seam
 
-| Generic concept | OpenFOAM binding | Role declared? | Consumed by core? |
-|---|---|---|---|
-| case directories to walk | `system`, `constant` | `openfoam.case_directory` | **yes** — `provenance_inputs.py:93` derives from declared path segments |
-| time-control document | `system/controlDict` | `openfoam.control_dict` | **yes** — `provenance_inputs.py:111` |
-| plugin vs environment file split | — | prefix `openfoam.` / `plugin.` | **yes** — `tutorial_contracts.py:123,127` |
-| entrypoint script | `Allrun` | `openfoam.entrypoint` | **yes, since Phase 1** — `registry._entrypoint_relpaths()` resolves it by role, falling back to `("Allrun",)` when a plugin declares none. `generic_case.py:137` is still hardcoded: it has no `driver_context` at all (Phase 2) |
-| cleanup script | `Allclean` | `openfoam.cleanup` | **no** — declared, read nowhere |
-| mesh generation input | `system/blockMeshDict` | `openfoam.mesh_generation` | **no** — declared, read nowhere |
-| trusted executable roots | `$FOAM_APPBIN`, `$FOAM_USER_APPBIN` | — | **no seam** — `os.environ` read directly at `workflow.py:483` |
-| environment-neutral commands | 11 OpenFOAM/gmsh binaries | — | **no seam** — frozenset literal at `workflow.py:52`; `CommandAuthorizationCapability` is union-only, a plugin can add but never replace |
-| case-local executable names | `Allrun`-family | — | **no seam** — `CASE_SCRIPT_COMMANDS`, `workflow.py:74` |
-| parallel decomposition dirs | `processor*` | — | **no seam** — glob at `provenance_inputs.py:356` |
-| artifact formats | `openfoam_time_dirs`, `openfoam_log` | — | **closed `Literal`**, `models.py:36` |
-| dictionary editing phases | *(cardiac, not OpenFOAM)* | — | **closed `Literal`**, `run_model.py:44` |
+**Re-measured 2026-09-01 by three independent audits — static (AST over all
+shipped core source), runtime (an import hook logging every reach while driving
+every public API under three plugins), and contract (could a FEniCS plugin be
+written today).** The table below replaces an earlier one that listed 11 rows.
+It was incomplete on five of them and stale on one. Treat *this* table as
+provisional too: the inventory has now been wrong four separate times, and each
+correction came from executing rather than reading.
 
-Two further facts:
+### Seamed — reached through a declared role or hook
 
-- ~~**`role` is unvalidated.**~~ **Fixed in Phase 1 Task 2.**
-  `plugin_profile.KNOWN_ROLES` is the eleven-role enum, enforced at profile
-  load, so `control_dict` instead of `openfoam.control_dict` now fails loudly
-  instead of being silently reclassified as plugin-owned. Both shipped profiles
-  loaded unchanged — the enum described reality rather than constraining it.
-- **A binding can hide in a helper's *location*, not just its name.**
-  `catalogued_paths` parses core's own `DictEntry.driver_path`; it reads no
-  file and knows no C++. It lived in the OpenFOAM C++ dict-key scanner, so
-  moving that scanner out of core (Phase 2 Task 2) silently made core's
-  `strict_plan` depend on `omnidriver.openfoam` — and unavoidably, because it
-  is called *eagerly* to build an argument, before the capability can dispatch
-  to a plugin's own hook. Fixed by splitting the vocabulary
-  (`core/contracts/catalogue_paths.py`) from the scanning. The rule in §4 has
-  to be applied to what a function *does*, not to the module it happens to
-  sit in.
-- **`generic-plugin.yaml` declares OpenFOAM paths.** `system/controlDict` and
-  `constant`. So renaming `GenericOpenFOAMPlugin` without changing what it
-  declares would be cosmetic.
+| concept | OpenFOAM binding | seam |
+|---|---|---|
+| case directories to walk | `system`, `constant` | derived from declared path segments, `provenance_inputs.py:93` |
+| time-control document | `system/controlDict` | role lookup, `provenance_inputs.py:111` |
+| plugin vs environment file split | — | role prefix, `tutorial_contracts.py:123,127` |
+| entrypoint script | `Allrun` | `registry._entrypoint_relpaths()`, Phase 1 |
+| dictionary editing phases | *(cardiac)* | `get_phases()` / `legacy_phases()`, Phase 2 |
+
+### Hardcoded — no declaration path. These are the defects.
+
+| binding | sites | what a non-OpenFOAM plugin gets |
+|---|---|---|
+| **`postProcessing` directory name** | **8** — `output_collection.py:83,118`, `generic_case.py:24`, `registry.py:142`, `sweep_runner.py:198,413`, `workflow_runner.py:225`, `artifacts.py:148` | sweep output archiving is a **silent no-op**. `output_collection.py` is an entire module built on this one string; `OUTPUT_DIR_NAME` exists but other sites re-declare the literal instead of using it |
+| `processor*` decomposition dirs | **4 code sites** — `provenance_inputs.py:356`, `registry.py:141`, `sweep_runner.py:223`, `workflow_runner.py:311` | no time-indexed artifact matching for its own parallel layout |
+| `_stage_entry_case`'s generated-name vocabulary | `sweep_runner.py:196-244` | `{postProcessing, logs, workflow_logs, cachedCasePostProcessing, polyMesh, archivedPostProcessing, results, data}` + `log.*` + `.foam/.msh/.geo` + numeric-time-dir detection. Either stale state leaks, or **its real output is silently deleted** |
+| `CORE_NEUTRAL_COMMANDS` | `workflow.py:52` | 11 OpenFOAM/gmsh binaries permanently allowlisted; union-only, cannot be removed |
+| `CASE_SCRIPT_COMMANDS` | `workflow.py:74` | **trust boundary** — must literally ship files named `Allrun`/`Allclean` to get PATH-shadow protection |
+| `$FOAM_APPBIN` / `$FOAM_USER_APPBIN` | `workflow.py:483` | its own binary root is never recognised |
+| `producer_commands = {"Allrun"}` | `workflow.py:426` | a differently-named entrypoint is never credited with producing artifacts — and this does **not** use the `openfoam.entrypoint` role that `registry.py` already resolves |
+| `{"command": "Allrun"}` default DAG | `generic_case.py:137` | no `driver_context` in that module at all |
+| `ArtifactFormat` closed `Literal` | `models.py:36` | cannot name XDMF/HDF5. Already forces core to **mislabel its own** per-step logs as `openfoam_log` (`artifacts.py:152`) |
+| `utility_catalog` `ALLOWED_ARGUMENT_KINDS` | `utility_catalog.py:132` | `{scalar, label, path, word, word_list, switch}` — OpenFOAM's primitive type names. `ALLOWED_ARTIFACT_FORMATS` duplicates `ArtifactFormat` verbatim |
+| `startFrom`/`startTime`/`latestTime`/`firstTime` keywords + numeric time-dir naming | `provenance_inputs.py:90,119-155` | even having declared `openfoam.control_dict`, the *keyword vocabulary* inside it is still OpenFOAM's |
+| `("constant", "system")` directory guess | `strict_planning.py:230-244` | plus dead cardiac metadata keys three lines under a docstring saying core does not know `electroProperties` exists |
+| `--openfoam-bashrc` CLI flag + `openfoam_bashrc` parameter | `cli.py:643`, threaded through 6 files | a FEniCS user types `--openfoam-bashrc`. The same capability is internally inconsistent: `load()` takes `explicit_bashrc`, `diagnostics()` takes `openfoam_bashrc` |
+| `DictEntry.value_kind = "openfoam_literal"` | `contracts/dictionary.py:21` | a core dataclass whose **default** is OpenFOAM |
+| **`KNOWN_ROLES` closed to 11 values, 8 `openfoam.*`** | `plugin_profile.py:75` | **the hard block.** `get_profile()` is REQUIRED; a plugin declaring `fenics.mesh_file` fails at load with `ValueError`. Verified live. Introduced by Phase 1 Task 2 — validating the enum was right, closing it with no escape tier was not |
+
+### Correctness bugs found by the same sweep — not architecture
+
+| bug | site |
+|---|---|
+| `RUN_CASE_SCRIPT_RELPATH` names `applications/scripts/driverFoam/...`, a path that **does not exist** in this repo. Anyone relying on the default gets `FileNotFoundError` | `generic_case.py:25` |
+| `run_case.sh` hardcodes `/Volumes/OpenFOAM-v2412/etc/bashrc` — a machine-specific absolute path in shipped source | `scripts/run_case.sh:26` |
+| dead `Phase` import | `contracts/dictionary.py:12`, `dict_entries.py:31` |
+| `cardiacfoam_monorepo_root()` — zero call sites in core; its docstring cites `utility_catalog.UTILITIES_ROOT`, which no longer exists | `specs/paths.py` |
+| 55 of ~74 core files carry a `"This file is part of cardiacFoam"` GPL header | throughout |
+
+**Confirmed clean:** `postprocessing/` (all four modules) and `schemas/run-document.json` carry no bindings.
 
 ## 4. Rule 1, restated
 
@@ -204,3 +219,89 @@ through `primary_phase()`. Port that first and it becomes the template for
 - `docs/superpowers/plans/2026-08-27-core-completion.md` — the executable plan
 - `GITHUB_MIGRATION.md` §3 — round-2 scope, corrected 2026-08-27
 - `SECURITY.md` — the existing command-boundary threat model that §5b must extend
+
+## 8. What only running the code revealed
+
+Static reading has now missed something four times. This section records what
+execution found that inspection did not — driven under three plugins in a
+core-only venv with an import hook logging every reach.
+
+### The nine ungated `omnidriver.openfoam` fallbacks, by escapability
+
+| | count | which |
+|---|---|---|
+| hook exists, the neutral test double implements it | 6 | config value reader, environment diagnostics, loaded environment, configured environment, function-object fields, case dict keys |
+| hook exists, **nothing implements it** | 2 | `apply_overrides`, `get_base_mesh_geometry_diagnostics` |
+| **no hook at all** | 1 | `legacy_dict_key_scanner` |
+
+**Correction to an earlier claim.** `legacy_dict_key_scanner` having no hook
+does *not* make it unavoidable: `strict_planning._catalog_diagnostics` returns
+early when the plugin declares no `cxx_mapping`, and all three plugins default
+to `None`. Verified both ways — never imported for the three, imported
+immediately when a `CxxMapping` is monkeypatched on. It is a gap only for a
+plugin that declares a C++ mapping, which already implies OpenFOAM tooling.
+
+**The genuinely unavoidable one is `apply_overrides`.** It raises for all three
+plugins including the neutral double, has no implementation anywhere, and
+crashes the CLI with a raw traceback rather than a structured error.
+
+`get_base_mesh_geometry_diagnostics` also raises for all three when called
+directly, but is not reached through the normal pipeline for
+`GenericOpenFOAMPlugin`: that plugin registers zero tutorials, so every entry it
+can plan is a bare case folder, which `strict_planning` flags `generic_case=True`
+and exempts from mesh diagnostics before the capability is consulted.
+
+### The shipped-plugin gap, operation by operation
+
+`GenericOpenFOAMPlugin` is what core *ships*. In a core-only install:
+
+| operation | result |
+|---|---|
+| `describe`, `--help`, introspection | **works** |
+| `plan --strict`, `run --strict`, `step --strict` | raises `ModuleNotFoundError` |
+| `sweep-plan` | does not crash; every case fails with a hookless routing refusal, exit 1 |
+| `sweep-run` | crashes **before the spec is parsed** — `get_configured_environment` is line 1 |
+| `step --strict --apply` | crashes, raw traceback |
+| no `--plugin` at all | fails at plugin load: `ModuleNotFoundError: omnidriver.cardiacfoam`, exit 2 |
+
+So core's suite passing at 615/0 rests on `NeutralEnvironmentPlugin`, a double
+that lives in the **test tree**. "Core's tests pass alone" and "core works
+alone" are different statements and only the first is currently true.
+
+The failures are at least **loud** — uncaught tracebacks, not silent degradation.
+
+### The one silent path, and an asymmetry worth knowing
+
+`sweep_run`'s per-case loop wraps materialisation *and* the per-case
+`strict_plan` call in a single `except Exception`, folding any error into a
+`plan_error` string. A plugin that clears `sweep_run`'s first-line check but
+lacks one of the other five environment hooks has its `ModuleNotFoundError`
+downgraded to an ordinary-looking per-case failure — no traceback, nothing
+distinguishing it from a genuine planning error.
+
+**`sweep_plan` does not have that try/except around `strict_plan`.** The same
+reach crashes it outright. So `sweep-plan` is *not* a reliable dry-run proxy for
+what `sweep-run` will do — they differ in failure behaviour, not just in
+side effects.
+
+## 9. Verdict on the architecture claim
+
+`ARCHITECTURE.md` opens by describing a shift to "a universal scientific
+workflow engine capable of orchestrating... FEniCS, deal.II, OpenFOAM."
+
+**As of 2026-09-01 that is aspirational.** What exists is an **OpenFOAM engine
+with a solver-plugin seam** — which is a coherent and useful thing, and is what
+cardiacFoam demonstrates. A FEniCS plugin cannot be written today: it fails at
+`get_profile()`, a required member, because the role vocabulary has no non-
+OpenFOAM tier.
+
+The seam *mechanism* is sound. The 24 capability Protocols, the `getattr`-probed
+optional hooks, the `:adapts:/:fallback:/:status:` discipline, and the rule that
+no production module touches `driver_context.plugin` directly are all correct
+multi-solver design. Six fallbacks already default the right way — `False`,
+`{}`, `()`, or refuse-by-name — and `get_phases()` is the worked example of the
+transform the rest need.
+
+The defects are concentrated in **fallback bodies and closed enums**, not in the
+architecture. That is the good news, and it is why this is a work list rather
+than a redesign.

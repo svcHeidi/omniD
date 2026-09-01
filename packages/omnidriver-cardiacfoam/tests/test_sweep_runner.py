@@ -53,6 +53,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import shutil
 from pathlib import Path
 from unittest import mock
 
@@ -66,6 +67,30 @@ from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 _CTX = _driver_context(
     CardiacFoamPlugin(), source="test:sweep_runner",
 )
+
+#: These two tests invoke a REAL solver run: sweep_run shells out to
+#: `python -m omnidriver run`, whose workflow executes `Allrun`, which invokes
+#: the `cardiacFoam` binary. Without an OpenFOAM environment they report every
+#: case failed, with no materialization_error and no plan_error -- the failure
+#: is in the subprocess, so nothing surfaces in the sweep result.
+#:
+#: They were silently environment-dependent: green on a machine where OpenFOAM
+#: happened to be reachable, red otherwise, with nothing in the test saying so.
+#: `run_case.sh` hardcodes `/Volumes/OpenFOAM-v2412/etc/bashrc` as its fallback,
+#: which does not match this machine's `/Volumes/OpenFOAM/OpenFOAM-12`, so even
+#: a mounted install may not resolve.
+#:
+#: The `integration` marker was declared in the root pyproject.toml for exactly
+#: this ("tests requiring a real cardiacFoam binary, skipped by default in CI")
+#: and had never been applied to anything. A marker alone does not skip, so the
+#: skipif is what actually makes the dependency honest; the marker lets CI
+#: deselect the whole class with -m "not integration".
+_HAS_SOLVER = shutil.which("cardiacFoam") is not None
+requires_solver = pytest.mark.skipif(
+    not _HAS_SOLVER,
+    reason="needs a real cardiacFoam binary on PATH (sweep_run executes Allrun)",
+)
+
 
 
 def _write_spec(path: Path, models=("TNNP", "BuenoOrovio")):
@@ -84,6 +109,8 @@ def _write_spec(path: Path, models=("TNNP", "BuenoOrovio")):
     return spec
 
 
+@pytest.mark.integration
+@requires_solver
 def test_sweep_run_writes_case_record_json_for_every_case(tmp_path):
     spec_path = tmp_path / "sweep.json"
     _write_spec(spec_path)
@@ -125,6 +152,8 @@ def test_sweep_run_writes_case_record_json_even_when_a_case_fails(tmp_path):
     assert (output_dir / "TNNP" / "case_record.json").is_file()
 
 
+@pytest.mark.integration
+@requires_solver
 def test_sweep_run_archives_nothing_for_generic_case_folder_sweeps(tmp_path):
     # archive_dir_name only applies to entry mode (see sweep_runner.sweep_run's
     # archive_dir_name assignment) -- a generic/case-folder sweep must not

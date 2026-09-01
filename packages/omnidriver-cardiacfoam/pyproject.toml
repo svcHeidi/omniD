@@ -28,6 +28,12 @@ post = [
 ]
 
 [tool.pytest.ini_options]
+# Duplicated from the root pyproject.toml on purpose: pytest resolves one
+# config per run, so a per-package run reads this file and a whole-repo run
+# reads the root. A marker registered in only one place warns in the other.
+markers = [
+    "integration: tests requiring a real cardiacFoam binary (skipped by default in CI)",
+]
 testpaths = ["tests"]
 pythonpath = ["tests"]
 addopts = "--import-mode=importlib"
