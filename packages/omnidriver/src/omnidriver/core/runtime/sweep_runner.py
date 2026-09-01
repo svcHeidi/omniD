@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from omnidriver.core.strict_planning import strict_plan
+from omnidriver.core.plugin_profile import decomposition_dirname_prefix
 from omnidriver.core.sweep.sweep_derivation_catalog import get_derivation
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError, check_case_count_cap, expand_sweep
 from omnidriver.sweep_materialize import materialize_case
@@ -151,7 +152,7 @@ def _materialize_entry_case(
     if staging_root is not None and spec.case_root.exists():
         source_case_root = Path(spec.case_root).resolve()
         staged_case_root = Path(staging_root).resolve()
-        _stage_entry_case(source_case_root, staged_case_root)
+        _stage_entry_case(source_case_root, staged_case_root, driver_context=driver_context)
         # ``make_spec`` resolves case_root as tutorials_root/case_dir_name.
         # Redirect both values together; changing only tutorials_root would
         # leave a nested original case_dir_name and recreate the source tree
@@ -181,7 +182,9 @@ def _materialize_entry_case(
     return effective_routed
 
 
-def _stage_entry_case(source_case_root: Path, staged_case_root: Path) -> None:
+def _stage_entry_case(
+    source_case_root: Path, staged_case_root: Path, *, driver_context=None,
+) -> None:
     """Copy a registered case into scratch storage without old run output.
 
     Registered tutorial folders contain source dictionaries and scripts next
@@ -194,6 +197,7 @@ def _stage_entry_case(source_case_root: Path, staged_case_root: Path) -> None:
     if staged_case_root.exists():
         shutil.rmtree(staged_case_root)
 
+    decomposition_prefix = decomposition_dirname_prefix(driver_context)
     generated_dir_names = {
         "postProcessing", "logs", "workflow_logs", "cachedCasePostProcessing",
         "polyMesh", "archivedPostProcessing", "results", "data",
@@ -220,7 +224,7 @@ def _stage_entry_case(source_case_root: Path, staged_case_root: Path) -> None:
             if name in generated_dir_names or name in generated_file_names:
                 ignored.add(name)
                 continue
-            if name.startswith("processor") or name.startswith("driverPostProcessingArchive"):
+            if name.startswith(decomposition_prefix) or name.startswith("driverPostProcessingArchive"):
                 ignored.add(name)
                 continue
             if (

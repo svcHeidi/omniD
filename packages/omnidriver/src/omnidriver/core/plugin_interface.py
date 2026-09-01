@@ -380,6 +380,12 @@ class SolverPluginOptionalHooks(Protocol):
         RunDocument config. Absent -> a plugin-neutral sentence."""
         ...
 
+    def get_decomposition_dirname_prefix(self) -> str:
+        """Dirname prefix a parallel run's per-rank output directories share.
+        Absent -> ``"processor"``, OpenFOAM's own decomposition convention
+        (see legacy_decomposition_dirname_prefix)."""
+        ...
+
     # -- ConfigValueCapability ------------------------------------------------
     def get_config_value_reader(self):
         """Return a ``(path, key) -> str | None`` callable that reads a single

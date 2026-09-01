@@ -16,6 +16,7 @@ code can actually satisfy.
 | §8 the complete binding inventory | **new** — three independent audits, 2026-09-01 |
 | §11 role-vocabulary escape tier | **done** — `plugin_profile.ESCAPE_ROLE_PREFIX` (Phase 3 Task 3b), 2026-09-01 |
 | §10 Tier 3, `openfoam.control_dict` lookup | **done** — `CaseIntrospectionCapability.selected_start_time()` (Phase 3), 2026-09-01 |
+| §10 Tier 3, `processor*` decomposition seam | **done** — `CaseFileContractCapability.decomposition_dirname_prefix()` (Phase 3), 2026-09-01 |
 
 ## 1. The problem with Rule 1 as written
 
@@ -87,7 +88,7 @@ correction came from executing rather than reading.
 | binding | sites | what a non-OpenFOAM plugin gets |
 |---|---|---|
 | **`postProcessing` directory name** | **8** — `output_collection.py:83,118`, `generic_case.py:24`, `registry.py:142`, `sweep_runner.py:198,413`, `workflow_runner.py:225`, `artifacts.py:148` | sweep output archiving is a **silent no-op**. `output_collection.py` is an entire module built on this one string; `OUTPUT_DIR_NAME` exists but other sites re-declare the literal instead of using it |
-| `processor*` decomposition dirs | **4 code sites** — `provenance_inputs.py:356`, `registry.py:141`, `sweep_runner.py:223`, `workflow_runner.py:311` | no time-indexed artifact matching for its own parallel layout |
+| ~~`processor*` decomposition dirs~~ **fixed 2026-09-01, §10 Tier 3** | **4 code sites** — `provenance_inputs.py`, `registry.py`, `sweep_runner.py`, `workflow_runner.py` | was: no time-indexed artifact matching for its own parallel layout. Now `plugin_profile.decomposition_dirname_prefix(driver_context)`, a bare optional hook (`get_decomposition_dirname_prefix`) on `CaseFileContractCapability` — not a `CaseFileRule` role, since this names a wildcard dirname family rather than one static path. Default `"processor"`, matching OpenFOAM's own `decomposePar` convention exactly, so no shipped plugin needs to change |
 | `_stage_entry_case`'s generated-name vocabulary | `sweep_runner.py:196-244` | `{postProcessing, logs, workflow_logs, cachedCasePostProcessing, polyMesh, archivedPostProcessing, results, data}` + `log.*` + `.foam/.msh/.geo` + numeric-time-dir detection. Either stale state leaks, or **its real output is silently deleted** |
 | `CORE_NEUTRAL_COMMANDS` | `workflow.py:52` | 11 OpenFOAM/gmsh binaries permanently allowlisted; union-only, cannot be removed |
 | `CASE_SCRIPT_COMMANDS` | `workflow.py:74` | **trust boundary** — must literally ship files named `Allrun`/`Allclean` to get PATH-shadow protection |
@@ -170,9 +171,11 @@ threat model and tests — the same standard `SECURITY.md` applies to the
 existing command boundary. They are not bundled into a discovery cleanup.
 
 Until then, `CASE_SCRIPT_COMMANDS`, `CORE_NEUTRAL_COMMANDS`,
-`_is_installed_openfoam_app`, the `processor*` glob, and `ArtifactFormat` stay
-hardcoded, each carrying a comment naming it as an OpenFOAM-family default and
-pointing here.
+`_is_installed_openfoam_app`, and `ArtifactFormat` stay hardcoded, each
+carrying a comment naming it as an OpenFOAM-family default and pointing
+here. (The `processor*` glob itself was resolved outside the trust boundary
+in Tier 3 — see §10 — since none of its four sites decide what may execute;
+they only decide what to read or prune.)
 
 ## 6. `GenericOpenFOAMPlugin` → `GenericEnvironmentPlugin`
 
@@ -405,10 +408,11 @@ one thing at all five.
 | item | outcome |
 |---|---|
 | ~~`provenance_inputs.py`'s `openfoam.control_dict` lookup~~ **done 2026-09-01** | moved from Tier 2: needed a namespace-neutral role or a capability hook, not wiring. Landed as `CaseIntrospectionCapability.selected_start_time()` — a new optional hook, `get_selected_start_time(case_root, resolved_case)`, alongside `resolve_case_models`/`get_samplable_fields`. `openfoam.control_dict`'s only consumer in the whole codebase was this one question ("what start time does this run resume from?"), so rather than generalise the role, core now lets the plugin answer the question outright. The fallback (`legacy_selected_start_time`) is today's OpenFOAM-shaped logic verbatim — `KNOWN_ROLES` is untouched, zero behaviour change for a plugin that implements nothing new. As a side effect this also resolves the adjacent `startFrom`/`startTime`/`latestTime`/`firstTime` keyword-vocabulary defect from §3/§8: that logic now lives entirely in the fallback, not in core proper. Proven by `test_plugin_implemented_start_time_hook_overrides_the_openfoam_default` in `packages/omnidriver/tests/core/test_provenance_inputs.py` — a plugin declaring **no** `openfoam.control_dict` role at all still gets its own start time honoured end to end |
+| ~~a seam for `processor*`~~ **done 2026-09-01** | four sites — `provenance_inputs.py` (I9 decomposed-restart walk), `workflow_runner.py` (accepting a not-yet-reconstructed parallel location as evidence a time-indexed artifact was produced), `registry.py` (pruning it during tutorial discovery), `sweep_runner.py` (excluding it when staging a fresh sweep case, where *not* recognising a foreign plugin's differently-named decomposition dir would have re-copied stale output — exactly the bug that staging boundary exists to prevent). Unlike `control_dict`, this didn't need a capability hook computing a value from case state — `processor*` names a wildcard family, not a single static path a `CaseFileRule` role can hold, so it is a bare no-argument optional hook (`get_decomposition_dirname_prefix()`) on `CaseFileContractCapability`, the same shape as `get_phases()`. Default `"processor"`; `plugin_profile.decomposition_dirname_prefix(driver_context)` wraps it and returns the default directly when `driver_context` is `None`, mirroring `entrypoint_relpaths()`. `run_workflow_step()`/`_stage_entry_case()` gained a `driver_context` parameter they didn't carry before (threaded from `cli.py`/`_materialize_entry_case()`, both of which already had it in scope) |
 
 Still open: `ArtifactFormat` opened or plugin-extensible (and core stops
 mislabelling its own logs); `utility_catalog`'s OpenFOAM type vocabulary
-moved to `omnidriver-openfoam`; a seam for `processor*`; `--openfoam-bashrc`
+moved to `omnidriver-openfoam`; `--openfoam-bashrc`
 renamed with a deprecation alias, and `EnvironmentPreflightCapability`'s own
 `explicit_bashrc`/`openfoam_bashrc` inconsistency resolved.
 

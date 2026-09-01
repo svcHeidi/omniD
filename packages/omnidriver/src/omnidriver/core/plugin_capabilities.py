@@ -491,9 +491,24 @@ class CaseFileContractCapability(Protocol):
     ``openfoam.control_dict``) must search the full set, since a control
     file can legitimately be declared ``conditional``, not just ``always``.
 
-    :adapts: get_profile, get_config_resolution_description
+    ``decomposition_dirname_prefix`` is different again: not a file at all,
+    but the dirname prefix a parallel run's per-rank output directories
+    share (OpenFOAM's ``decomposePar``/every solver running in parallel
+    names them ``processor0``, ``processor1``, ...). It can't be expressed
+    as a ``CaseFileRule`` -- a role names one static path, and this names a
+    wildcard family -- so it is a bare optional hook instead, following the
+    same shape as ``get_phases()``: no per-case arguments, a documented
+    default (``"processor"``) a plugin overrides outright. Reached only
+    through ``plugin_profile.decomposition_dirname_prefix(driver_context)``,
+    never called on this capability directly -- the same indirection
+    ``entrypoint_relpaths()`` already uses for ``ENTRYPOINT_ROLE``, which is
+    why ``registry.py``/``sweep_runner.py``/``workflow_runner.py`` (its real
+    callers) aren't listed below. See future/ENVIRONMENT_CONTRACT.md §10,
+    Tier 3.
+
+    :adapts: get_profile, get_config_resolution_description, get_decomposition_dirname_prefix
     :consumed-by: omnidriver/core/runtime/strict_audit.py, omnidriver/core/tutorial_contracts.py, omnidriver/core/runtime/provenance_inputs.py
-    :fallback: legacy_describe_config_resolution
+    :fallback: legacy_describe_config_resolution, legacy_decomposition_dirname_prefix
     :status: mixed
     """
 
@@ -502,6 +517,7 @@ class CaseFileContractCapability(Protocol):
     def required_rules(self) -> tuple["CaseFileRule", ...]: ...
     def all_rules(self) -> tuple["CaseFileRule", ...]: ...
     def describe_config_resolution(self) -> str: ...
+    def decomposition_dirname_prefix(self) -> str: ...
 
 
 class ConfigValueCapability(Protocol):
@@ -1072,6 +1088,20 @@ class _CaseFileContractAdapter:
         from .compatibility import legacy_describe_config_resolution
 
         return legacy_describe_config_resolution(self.plugin)
+
+    def decomposition_dirname_prefix(self) -> str:
+        hook = getattr(self.plugin, "get_decomposition_dirname_prefix", None)
+        if callable(hook):
+            result = hook()
+            if not isinstance(result, str) or not result:
+                raise TypeError(
+                    f"{self.plugin.plugin_id}.get_decomposition_dirname_prefix() must "
+                    f"return a non-empty string, got {result!r}"
+                )
+            return result
+        from .compatibility import legacy_decomposition_dirname_prefix
+
+        return legacy_decomposition_dirname_prefix()
 
 
 @dataclass(frozen=True)

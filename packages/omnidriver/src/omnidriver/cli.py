@@ -218,6 +218,7 @@ def _execute_step(
             state_path=state_path,
             expected_artifacts=expected_artifacts,
             env=execution_env,
+            driver_context=driver_context,
         )
     except Exception as exc:
         if overrides is not None:
@@ -484,7 +485,7 @@ def _context_from_entry(
         ).strip("._") or "entry"
         staged_case_root = driverfoam_scratch_root() / "runs" / safe_entry
         if fresh or not staged_case_root.exists():
-            _stage_entry_case(source_case_root, staged_case_root)
+            _stage_entry_case(source_case_root, staged_case_root, driver_context=driver_context)
         staged_overrides = dict(overrides or {})
         staged_overrides["tutorials_root"] = str(staged_case_root.parent)
         staged_overrides["case_dir_name"] = staged_case_root.name

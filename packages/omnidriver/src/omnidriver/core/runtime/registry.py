@@ -37,6 +37,7 @@ from .generic_case import make_generic_case_spec
 from omnidriver.core.specs.common import tutorials_root_default
 from omnidriver.core.plugin_profile import (
     DEFAULT_ENTRYPOINT_RELPATHS,
+    decomposition_dirname_prefix,
     entrypoint_relpaths,
 )
 
@@ -119,6 +120,7 @@ def _iter_case_directories_recursive(
         return []
 
     discovered: list[Path] = []
+    decomposition_prefix = decomposition_dirname_prefix(driver_context)
     for current_root, dirnames, _filenames in os.walk(tutorials_root):
         path = Path(current_root)
         dirnames[:] = [
@@ -126,7 +128,7 @@ def _iter_case_directories_recursive(
             for dirname in dirnames
             if not dirname.startswith(".")
             and dirname != "__pycache__"
-            and not dirname.startswith("processor")
+            and not dirname.startswith(decomposition_prefix)
             and dirname not in {"postProcessing", "logs"}
         ]
         if _is_case_directory(path, driver_context):

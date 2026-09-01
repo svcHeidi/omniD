@@ -37,6 +37,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
+from ..plugin_profile import decomposition_dirname_prefix
 from .workflow import CASE_SCRIPT_COMMANDS
 from .workflow_state import (
     WorkflowRunState,
@@ -205,6 +206,7 @@ def run_workflow_step(
     state_path: Path | None = None,
     env: Mapping[str, str] | None = None,
     expected_artifacts: tuple[DataArtifact, ...] = (),
+    driver_context: Any | None = None,
 ) -> WorkflowStepRunResult:
     """Execute one normalized workflow step and return the updated state.
 
@@ -307,14 +309,18 @@ def run_workflow_step(
                     if artifact.optional:
                         continue
                     expanded = artifact.path_pattern.format(case_id=case_root.name, time="*")
-                    # OpenFOAM output relations: serial/reconstructed outputs live at
-                    # caseRoot/<time>/<field>; a parallel run that has not yet been
-                    # reconstructed writes caseRoot/processor<N>/<time>/<field>. Accept
-                    # either for time-indexed artifacts so a decomposed run does not
-                    # false-fail. postProcessing/config artifacts stay caseRoot-relative.
+                    # Serial/reconstructed outputs live at caseRoot/<time>/<field>; a
+                    # parallel run that has not yet been reconstructed writes
+                    # caseRoot/<decomposition-prefix><N>/<time>/<field> (OpenFOAM:
+                    # processor<N>). Accept either for time-indexed artifacts so a
+                    # decomposed run does not false-fail. postProcessing/config
+                    # artifacts stay caseRoot-relative.
                     candidate_patterns = [str(case_root / expanded)]
                     if artifact.time_indexed:
-                        candidate_patterns.append(str(case_root / "processor*" / expanded))
+                        decomposition_prefix = decomposition_dirname_prefix(driver_context)
+                        candidate_patterns.append(
+                            str(case_root / f"{decomposition_prefix}*" / expanded)
+                        )
                     if not any(glob.glob(p) for p in candidate_patterns):
                         missing_artifacts.append(artifact_id)
         if missing_artifacts:

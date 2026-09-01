@@ -559,6 +559,17 @@ def legacy_describe_config_resolution(plugin) -> str:
 
 
 @_instrumented
+def legacy_decomposition_dirname_prefix() -> str:
+    """Plugins predating get_decomposition_dirname_prefix(). Every OpenFOAM
+    decomposition tool (decomposePar, reconstructPar, and every solver run
+    in parallel) has always named per-rank output ``processorN`` -- the
+    historical default every core call site assumed directly before this
+    hook existed (Tier 3, future/ENVIRONMENT_CONTRACT.md §10)."""
+
+    return "processor"
+
+
+@_instrumented
 def legacy_config_value_reader(path, key: str) -> str | None:
     """Preserve the historical direct-foamlib read for plugins that don't
     implement get_config_value_reader.

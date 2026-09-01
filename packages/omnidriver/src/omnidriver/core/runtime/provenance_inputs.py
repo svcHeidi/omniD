@@ -50,8 +50,10 @@ Concretely: ``system/**``, ``constant/**``, the **selected** start-time
 directory (as answered by the active plugin's
 ``CaseIntrospectionCapability.selected_start_time`` -- OpenFOAM's
 ``system/controlDict`` ``startFrom``/``startTime`` by default, not always
-``0/``), and ``processor*/<selected-time>/**`` during a decomposed restart
-(I9) are walked and classified by that precedence. The exact
+``0/``), and each parallel-decomposition directory's ``<selected-time>/**``
+during a decomposed restart (I9, dirname prefix from
+``CaseFileContractCapability.decomposition_dirname_prefix`` -- ``processor*``
+by default) are walked and classified by that precedence. The exact
 Allrun-family scripts named by the DAG are added directly. Other time
 directories, ``postProcessing/`` (which holds ``workflow_logs/``), and
 state/manifest files are never walked, so they are excluded by construction
@@ -81,6 +83,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, TYPE_CHECKING
 
 from ..plugin_capabilities import ResolvedInput, RuntimeDependency
+from ..plugin_profile import decomposition_dirname_prefix
 from .provenance import ProvenanceComponent, component_for_path
 from .provenance_dependencies import component_for_runtime_dependency
 from .workflow import CASE_SCRIPT_COMMANDS, _MPI_LAUNCHERS, _unwrap_mpi_program
@@ -292,14 +295,15 @@ def enumerate_case_inputs(
 
     # -- every top-level directory the active plugin declares a case file
     # under (e.g. system/**, constant/** for OpenFOAM), the selected
-    # start-time dir, and processor*/<selected-time>/** (I9) -- classified by
-    # precedence steps 1 (consumes), 3 (generated_output_globs), 4 (fallback
+    # start-time dir, and <decomposition-prefix>*/<selected-time>/** (I9)
+    # -- classified by precedence steps 1 (consumes), 3 (generated_output_globs), 4 (fallback
     # required). Step 2 (plugin required_inputs) is applied uniformly below
     # instead, since a resolved input's path need not fall under any of
     # these directories.
     walk_roots = [case_root / d for d in _case_root_dirnames(driver_context)]
     walk_roots.append(case_root / selected_start_time)
-    for processor_dir in sorted(case_root.glob("processor*")):
+    decomposition_prefix = decomposition_dirname_prefix(driver_context)
+    for processor_dir in sorted(case_root.glob(f"{decomposition_prefix}*")):
         if processor_dir.is_dir():
             walk_roots.append(processor_dir / selected_start_time)
 

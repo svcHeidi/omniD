@@ -133,13 +133,16 @@ def test_latest_time_selects_the_latest_written_time_directory(tmp_path: Path) -
 
 
 class _ForeignEnvironmentPlugin(NeutralEnvironmentPlugin):
-    """A plugin that answers ``get_selected_start_time`` itself and declares
-    no case-file roles at all -- proves the hook is a genuine escape from
-    ``openfoam.control_dict``, not just a different path to the same lookup
-    (future/ENVIRONMENT_CONTRACT.md §10, Tier 3)."""
+    """A plugin that answers ``get_selected_start_time``/
+    ``get_decomposition_dirname_prefix`` itself and declares no case-file
+    roles at all -- proves each hook is a genuine escape from OpenFOAM's
+    default (``openfoam.control_dict``, the ``processor`` prefix), not just
+    a different path to the same lookup (future/ENVIRONMENT_CONTRACT.md §10,
+    Tier 3)."""
 
-    def __init__(self, *, chosen_start_time: str) -> None:
+    def __init__(self, *, chosen_start_time: str, decomposition_prefix: str = "processor") -> None:
         self._chosen_start_time = chosen_start_time
+        self._decomposition_prefix = decomposition_prefix
 
     def get_profile(self) -> PluginProfile:
         return PluginProfile(
@@ -157,6 +160,9 @@ class _ForeignEnvironmentPlugin(NeutralEnvironmentPlugin):
 
     def get_selected_start_time(self, case_root, resolved_case) -> str:
         return self._chosen_start_time
+
+    def get_decomposition_dirname_prefix(self) -> str:
+        return self._decomposition_prefix
 
 
 def test_plugin_implemented_start_time_hook_overrides_the_openfoam_default(
@@ -190,6 +196,31 @@ def test_start_time_hook_must_return_a_non_empty_string(tmp_path: Path) -> None:
         enumerate_case_inputs(
             tmp_path, workflow_dag={"steps": []}, driver_context=driver_context(plugin, source="test"),
         )
+
+
+def test_plugin_implemented_decomposition_prefix_hook_overrides_processor(
+    tmp_path: Path,
+) -> None:
+    """A plugin whose parallel decomposition directories are named e.g.
+    ``rank0`` rather than ``processor0`` still gets them walked as I9
+    inputs, and a stray ``processor0`` (not this plugin's convention) is
+    left alone (future/ENVIRONMENT_CONTRACT.md §10, Tier 3)."""
+    rank0 = tmp_path / "rank0"
+    (rank0 / "0").mkdir(parents=True)
+    (rank0 / "0" / "Vm").write_text("decomposed restart field")
+    stray_processor0 = tmp_path / "processor0"
+    (stray_processor0 / "0").mkdir(parents=True)
+    (stray_processor0 / "0" / "Vm").write_text("not this plugin's convention")
+
+    plugin = _ForeignEnvironmentPlugin(chosen_start_time="0", decomposition_prefix="rank")
+
+    components = enumerate_case_inputs(
+        tmp_path, workflow_dag={"steps": []}, driver_context=driver_context(plugin, source="test"),
+    )
+    included = _paths(components, kind="case_file")
+
+    assert "rank0/0/Vm" in included
+    assert "processor0/0/Vm" not in included
 
 
 def test_postprocessing_and_workflow_logs_are_excluded(tmp_path: Path) -> None:

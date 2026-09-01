@@ -199,6 +199,26 @@ def entrypoint_command(driver_context: Any | None) -> str:
     return entrypoint_relpaths(driver_context)[0]
 
 
+#: Documented default for :func:`decomposition_dirname_prefix` -- OpenFOAM's
+#: own domain-decomposition convention, not a hardcoded binding: a plugin
+#: overrides it via ``get_decomposition_dirname_prefix()``. See
+#: future/ENVIRONMENT_CONTRACT.md §10, Tier 3.
+DEFAULT_DECOMPOSITION_DIRNAME_PREFIX = "processor"
+
+
+def decomposition_dirname_prefix(driver_context: Any | None) -> str:
+    """Dirname prefix a parallel run's per-rank output directories share
+    (``processor0``, ``processor1``, ... for OpenFOAM). Not a ``CaseFileRule``
+    role -- a role names one static path, and this names a wildcard family --
+    so it is a bare optional hook via ``CaseFileContractCapability``, with
+    ``driver_context=None`` (no active plugin) using the documented default
+    directly, same as :func:`entrypoint_relpaths`.
+    """
+    if driver_context is None:
+        return DEFAULT_DECOMPOSITION_DIRNAME_PREFIX
+    return driver_context.capabilities.case_files.decomposition_dirname_prefix()
+
+
 def load_plugin_profile(path: str | Path) -> PluginProfile:
     """Load a small, safe YAML profile and convert it into immutable data.
 
