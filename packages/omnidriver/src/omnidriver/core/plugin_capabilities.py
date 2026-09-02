@@ -1357,10 +1357,15 @@ class PluginCapabilities:
     ``:adapts:`` names a real plugin member and every ``:fallback:`` a real
     compatibility function, so a stale reference fails rather than rots.
 
-    **What a missing optional hook means.** The named fallback runs, returning
-    cardiac data only for ``org.cardiacfoam`` and a neutral value for every
-    other plugin. Two cannot be neutral: a plugin without the sweep hooks is
-    refused by name rather than swept by another plugin's writer.
+    **What a missing optional hook means.** The named fallback runs. No
+    fallback branches on plugin identity any more -- Phase 2 Task 7 deleted the
+    twenty ``plugin_id == "org.cardiacfoam"`` branches -- so a given fallback
+    returns the same answer for every plugin. Several of those answers are
+    still OpenFOAM-shaped defaults that delegate to ``omnidriver.openfoam``
+    (see ``future/ENVIRONMENT_CONTRACT.md`` §4); a plugin displaces one by
+    implementing the hook. Two fallbacks cannot be neutral at all: a plugin
+    without the sweep hooks is refused by name rather than swept by another
+    plugin's writer.
     """
 
     tutorials: TutorialCatalogCapability

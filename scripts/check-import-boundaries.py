@@ -48,9 +48,6 @@ COMPATIBILITY_FILE = CORE_SRC / "core" / "compatibility.py"
 #
 # Both entries are tracked in GITHUB_MIGRATION.md's round-2 scope.
 KNOWN_VIOLATIONS: frozenset[str] = frozenset({
-    # PEP 562 lazy re-export kept for external importers of the deprecated
-    # CONTROL_DICT_ENTRIES / PHYSICS_PROPERTY_ENTRIES names.
-    "dict_entries.py:80:omnidriver.cardiacfoam.common_dict_entries",
     # Permanent compatibility edge (not debt): the historical public API lets
     # a caller omit a plugin/context entirely, and the only sane default has
     # always been cardiacFoam. dict_entries.py, sweep_routing.py,

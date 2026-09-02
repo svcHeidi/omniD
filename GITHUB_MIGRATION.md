@@ -12,10 +12,14 @@ side effect of that separate work. What's genuinely still open, in priority
 order for a publication-ready release: **licensing** (no `LICENSE` file, no
 declared license, core still carries someone else's GPL header on 58/71
 files — the largest remaining blocker), the CI matrix (still 3.11/3.12 only,
-no wheel-install job), the two unused declared dependencies (`numpy`,
-`gmsh`), the 20 cardiac-gated `legacy_*` branches (now unblocked but
-unmeasured since), and the remaining 6 `DriverContext` call sites. See each
-row in §3 for detail.
+no wheel-install job), and the two unused declared dependencies (`numpy`,
+`gmsh`). The 20 cardiac-gated `legacy_*` branches turned out to be **already
+deleted** — that row was stale, not open. The remaining 6 `DriverContext` call
+sites are all at the public edge and legal under the current guard, but
+measuring them found a live defect core launders past that guard; both are
+specced in
+[`docs/superpowers/specs/2026-09-02-neutral-default-context-design.md`](docs/superpowers/specs/2026-09-02-neutral-default-context-design.md).
+See each row in §3 for detail.
 
 The Python orchestrator was developed inside
 `noFrontendCardiacFoam/applications/scripts/driverFoam`. Because the C++
@@ -158,9 +162,9 @@ which is mechanical — see the Phase 2 plan's "Task 5, remeasured".
 
 | work | status | why it matters |
 |---|---|---|
-| **explicit `DriverContext` in core** | **down to 6 sites, re-measured 2026-09-02** | Was 21 sites total (18 in core + 3 in `omnidriver-openfoam`). Grepped fresh: only 6 real call sites to `resolve_public_driver_context(` remain across both packages — `omnidriver/dict_entries.py:44,52,60`, `omnidriver/sweep_materialize.py:42`, `omnidriver/sweep_routing.py:43`, `omnidriver-cardiacfoam/dict_builder.py:963`. The `apply_overrides.py`/`dict_builder.py:276` sites this row used to flag in `omnidriver-openfoam` are gone. Not yet zero, and the two guard tests (`test_core_context_is_explicit.py`, `test_fallback_census.py`) described below are not yet ported, but the blast radius this row exists to track has shrunk by two-thirds without a dedicated pass — worth re-measuring the 35,395-implicit-call figure before deciding whether the remaining 6 justify one. |
+| **explicit `DriverContext` in core** | **6 sites, all at the public edge; counting them was not the point** | Was 21 (18 in core + 3 in `omnidriver-openfoam`); 6 remain — `omnidriver/dict_entries.py:17,25,33`, `omnidriver/sweep_materialize.py:15`, `omnidriver/sweep_routing.py:16`, `omnidriver-cardiacfoam/dict_builder.py:963`. **Corrected 2026-09-02**, three ways. (a) The line numbers this row carried (`dict_entries.py:44,52,60`, `sweep_materialize.py:42`, `sweep_routing.py:43`) were stale. (b) The two guard tests it said were "not yet ported" — `test_core_context_is_explicit.py`, `test_fallback_census.py` — are both present under `packages/omnidriver/tests/core/` and passing. (c) The count was a misleading proxy: all 6 sites sit at what the static guard explicitly blesses as the public edge, so all 6 are legal, while `core/runtime/sweep_runner.py:273` and `:449` call `materialize_case()` **without** threading the context they already hold — a sweep under an explicit non-cardiac plugin materializes through cardiacFoam. Confirmed at runtime. Neither guard catches it: the AST guard only looks inside `core/` for direct `resolve_public_driver_context` calls, and the census exercises capability reads but never the sweep path. Fixing that defect and making the implicit default resolve through entry-point discovery instead of a hardcoded `CardiacFoamPlugin` import is specced in [`docs/superpowers/specs/2026-09-02-neutral-default-context-design.md`](docs/superpowers/specs/2026-09-02-neutral-default-context-design.md). |
 | ~~**`get_phases()` optional hook**~~ | **done, Phase 2** | Landed as described: `get_phases()` on `SolverPluginOptionalHooks` (`plugin_interface.py:517`), `legacy_phases()` fallback (`compatibility.py:502`), `phase_order` threaded through `primary_phase()` (`specs/validation.py:67`). `run_model.py:44`'s `Phase = Literal[...]` alias still exists as a type, but nothing walks it as a closed enum anymore — `primary_phase()` takes `phase_order` as a parameter instead. See `future/ENVIRONMENT_CONTRACT.md` §7. |
-| **retire the 20 cardiac-gated `legacy_*` branches** | **unblocked, not yet done** | The stated precondition is now met: `CardiacFoamPlugin` implements all three hooks that were missing (`get_config_resolution_description:250`, `get_report_catalog:262`, `get_phases:107` in `cardiacfoam_plugin.py`) — confirmed by reading the class directly, 2026-09-02. Re-run the instrumentation this row was gated on (which functions still take the cardiac branch across a full-suite run) before deleting; it hasn't been re-measured since the hooks landed. |
+| ~~**retire the 20 cardiac-gated `legacy_*` branches**~~ | **done — this row was stale, re-measured 2026-09-02** | Already deleted, by Phase 2 Task 7. `grep -c 'org\.cardiacfoam' packages/omnidriver/src/omnidriver/core/compatibility.py` returns **0**, and `packages/omnidriver-cardiacfoam/tests/test_no_cardiac_gate_is_reached.py` already guards the gated set at empty — its own docstring records the deletion. The precondition this row tracked (`CardiacFoamPlugin` implementing `get_config_resolution_description`, `get_report_catalog`, `get_phases`) was met, the census was re-run, and the branches went. What the deletion left behind was two published sentences still describing the gates as if they existed (`plugin_capabilities.py`, `capability_seams.py`, and the `ARCHITECTURE.md` table the latter generates) — corrected 2026-09-02. Core's *ungated* cardiac vocabulary is a different row: see the `DriverContext` row above. |
 | **drop unused declared dependencies** | **still true, re-confirmed 2026-09-02** | `omnidriver-cardiacfoam` still declares `numpy>=1.24`, `omnidriver-openfoam` still declares `gmsh>=4.15.2` — grep confirms **zero** Python imports of either, unchanged since the original audit. Neither has been dropped. |
 
 ### Found by the audit, not previously listed

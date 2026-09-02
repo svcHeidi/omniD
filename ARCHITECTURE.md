@@ -153,9 +153,11 @@ contract a plugin author implements. `PluginCapabilities` in
 plugin — it points the opposite way and is not an authoring surface.
 
 A capability marked `optional` degrades when the plugin does not implement
-its hook: the named `compatibility.py` fallback runs instead, returning
-cardiac data only for `org.cardiacfoam` and a neutral value for every other
-plugin. The two sweep fallbacks cannot be neutral and refuse by hook name.
+its hook: the named `compatibility.py` fallback runs instead. No fallback
+branches on plugin identity, so a given fallback answers the same for every
+plugin; several answers are still OpenFOAM-shaped defaults delegating to
+`omnidriver.openfoam`. The two sweep fallbacks cannot be neutral at all and
+refuse by hook name.
 
 | capability | protocol | adapts | consumed by | fallback | status |
 |---|---|---|---|---|---|
