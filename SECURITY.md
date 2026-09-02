@@ -86,3 +86,12 @@ results directory — it is not forced under `caseRoot`.
   `update_foam_entry`'s direct write path (both tiers, above) is guarded.
   This is a pre-existing gap; `dict_builder.py` synthesizes dicts rather than
   mutating them and was never migrated to the guarded write path.
+
+## Proposed extensions
+
+- `future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md` — a scoped,
+  reviewed-but-not-yet-implemented proposal to let a plugin's declared
+  `openfoam.entrypoint` resolve case-locally under the same "no command
+  shadowing" rule `Allrun`-family names already get, instead of exactly the
+  four hardcoded names. Read that document for the trust-boundary reasoning;
+  this file describes only what is true of the code today.

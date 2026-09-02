@@ -427,6 +427,17 @@ These decide what may execute and what may resolve to a case-local binary
 rather than PATH. They need their own pass with a threat model extending
 `SECURITY.md`, and they are correctly deferred until the tiers above are done.
 
+**2026-09-02: scoped and threat-modeled, not yet implemented.** The entrypoint
+slice of `CASE_SCRIPT_COMMANDS` — the part with a verified, concrete gap
+(`entrypoint_relpaths()` doesn't reach `_resolve_command`/
+`validate_workflow_commands`, so a plugin naming its entrypoint anything
+other than `"Allrun"` cannot execute today) — has a full threat model and
+site-by-site implementation design in
+`future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md`. `Allclean`/
+`Allrun.pre`/`Allrun.post` (no `cleanup_relpaths()` equivalent exists),
+`CORE_NEUTRAL_COMMANDS`, and `_is_installed_openfoam_app` are explicitly
+out of scope there too — deferred for the same reasons recorded here.
+
 ## 11. The role-vocabulary escape tier (Phase 3 Task 3b, landed 2026-09-01)
 
 §3's hard block is fixed. The fix is deliberately narrow: it opens a tier for
