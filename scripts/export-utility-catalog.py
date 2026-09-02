@@ -62,7 +62,6 @@ def _manifest_to_record(manifest, utility_roots: tuple[Path, ...]) -> dict:
         "description": manifest.description,
         "purpose": manifest.purpose,
         "inputs": list(manifest.inputs),
-        "outputs": list(manifest.outputs),
         "requires_mesh": manifest.requires_mesh,
         "positional_args": [
             {

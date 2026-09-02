@@ -26,10 +26,6 @@ inputs = [
   "constant/polyMesh",
 ]
 
-outputs = [
-  "postProcessing/bathBidomainInterfaceMetrics.csv",
-]
-
 requires_mesh = true
 example = "bathBidomainInterfaceMetrics -latestTime -case ./manufacturedBathBidomain"
 

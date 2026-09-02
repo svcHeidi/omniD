@@ -44,10 +44,6 @@ The following fields are optional:
 
     purpose       (str)                – 2–4 sentence extended description.
     inputs        (list[str])          – case-relative paths this utility reads.
-    outputs       (list[str])          – case-relative paths this utility writes.
-                                         Deprecated: prefer ``produces``. A
-                                         UserWarning is emitted if ``outputs``
-                                         and ``produces`` disagree.
     requires_mesh (bool, default True) – False for 0-D / file-only tools.
     example       (str)                – representative command-line invocation.
 
@@ -70,8 +66,8 @@ The following fields are optional:
         argument_kind (str)  – non-empty, plugin-chosen (see [[flags]] above)
         description   (str)
 
-    produces = [...]                   – structured output declarations that
-        supersede ``outputs`` over time. Each entry:
+    produces = [...]                   – structured output declarations. Each
+        entry:
         artifact_id   (str)   – stable identifier.
         path_pattern  (str)   – case-relative path; may contain {case_id} or
                                  {time} placeholders (validated at load time
@@ -99,7 +95,6 @@ Public API
 from __future__ import annotations
 
 import sys
-import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
@@ -140,7 +135,6 @@ _KNOWN_FIELDS: Final[frozenset[str]] = frozenset(
         "description",
         "purpose",
         "inputs",
-        "outputs",
         "requires_mesh",
         "flags",
         "example",
@@ -256,10 +250,6 @@ class UtilityManifest:
 
     inputs: tuple[str, ...]
     """Case-relative paths the utility reads. May be empty."""
-
-    outputs: tuple[str, ...]
-    """Case-relative paths the utility writes. May be empty.
-    Deprecated: prefer ``produces``. Kept for backward compatibility."""
 
     requires_mesh: bool
     """True when the utility needs a meshed OpenFOAM case."""
@@ -454,29 +444,11 @@ def _parse_manifest(toml_path: Path) -> UtilityManifest:
 
     produces = tuple(_parse_produces_entry(e, toml_path) for e in raw_produces)
 
-    outputs: tuple[str, ...] = tuple(raw.get("outputs", []))
-
-    # Emit UserWarning if outputs and produces disagree (outputs has paths not
-    # mirrored in any produces entry). This is a deprecation signal — outputs
-    # is kept for backward compatibility but produces should be the authority.
-    if outputs and produces:
-        produces_paths = {e.path_pattern for e in produces}
-        disagreeing = [p for p in outputs if p not in produces_paths]
-        if disagreeing:
-            warnings.warn(
-                f"{toml_path}: 'outputs' contains path(s) {disagreeing!r} not "
-                f"mirrored in any 'produces' entry. Prefer 'produces' as the "
-                f"authoritative output declaration.",
-                UserWarning,
-                stacklevel=2,
-            )
-
     return UtilityManifest(
         name=name,
         description=raw["description"],
         purpose=raw.get("purpose", ""),
         inputs=tuple(raw.get("inputs", [])),
-        outputs=outputs,
         requires_mesh=bool(raw.get("requires_mesh", True)),
         flags=flags,
         example=raw.get("example", ""),

@@ -21,10 +21,6 @@ inputs = [
   "<time>/Vm",
 ]
 
-outputs = [
-  "postProcessing/pseudoECG.dat",
-]
-
 requires_mesh = true
 example = "recomputePseudoECG -case ./LBBB -output postProcessing/pseudoECG_corrected.dat"
 

@@ -18,20 +18,6 @@ inputs = [
   "0/t",
 ]
 
-outputs = [
-  "0/t",
-  "0/et",
-  "0/en",
-  "0/el",
-  "0/alphaRadians",
-  "0/f0",
-  "0/etf",
-  "0/enf",
-  "0/elf",
-  "0/alphaRadiansf",
-  "0/f0f",
-]
-
 requires_mesh = true
 
 example = "setFibreField -case ./ellipsoid_run"

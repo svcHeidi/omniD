@@ -17,10 +17,6 @@ inputs = [
   "constant/polyMesh",
 ]
 
-outputs = [
-  "constant/polyMesh",
-]
-
 requires_mesh = true
 example = "checkMeshGeometry -region purkinje -scale 1e-3 -case ./coupled_run"
 

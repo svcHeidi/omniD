@@ -32,10 +32,6 @@ inputs = [
   "0/<fieldName>",
 ]
 
-outputs = [
-  "0/*",
-]
-
 requires_mesh = false
 example = "setFieldDimensions -case ./myCase"
 

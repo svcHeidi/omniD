@@ -18,10 +18,6 @@ inputs = [
   "constant/polyMesh",
 ]
 
-outputs = [
-  "0/bodyAndOrgansConductivity",
-]
-
 requires_mesh = true
 
 example = "setTorsoOrganConductivityField -case ./torso_run"

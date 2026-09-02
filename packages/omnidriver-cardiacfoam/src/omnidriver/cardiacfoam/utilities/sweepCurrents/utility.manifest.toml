@@ -18,10 +18,6 @@ inputs = [
   "constant/sweepCurrents",
 ]
 
-outputs = [
-  "postProcessing/<model>_<tissue>_<current>_sweep.txt",
-]
-
 requires_mesh = false
 example = "sweepCurrents -case ./singleCell_run"
 

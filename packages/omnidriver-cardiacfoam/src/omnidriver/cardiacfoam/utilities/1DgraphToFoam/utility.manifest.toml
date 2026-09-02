@@ -17,10 +17,6 @@ inputs = [
   "<vtk-file>",
 ]
 
-outputs = [
-  "constant/purkinjeGraph",
-]
-
 positional_args = [
   {name = "vtk_file", argument_kind = "path", description = "Input ASCII VTK file containing 1D line elements (UNSTRUCTURED_GRID or POLYDATA)."},
 ]

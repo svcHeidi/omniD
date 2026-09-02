@@ -21,10 +21,6 @@ inputs = [
   "system/controlDict",
 ]
 
-outputs = [
-  "{time}/",
-]
-
 requires_mesh = true
 example = "runPurkinjeGraph -case ./purkinje_run -conductionDomain purkinjeNetwork"
 

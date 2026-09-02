@@ -28,10 +28,6 @@ inputs = [
   "<vtk-file>",
 ]
 
-outputs = [
-  "constant/polyMesh",
-]
-
 requires_mesh = false
 
 positional_args = [

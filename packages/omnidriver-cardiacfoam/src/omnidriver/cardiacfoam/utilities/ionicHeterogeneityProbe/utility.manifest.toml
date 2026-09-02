@@ -17,13 +17,6 @@ inputs = [
   "constant/ionicHeterogeneityProbe",
 ]
 
-outputs = [
-  "postProcessing/ionicHeterogeneityProbe/Vm_traces.csv",
-  "postProcessing/ionicHeterogeneityProbe/AP_metrics.csv",
-  "postProcessing/ionicHeterogeneityProbe/smoothness_report.csv",
-  "postProcessing/ionicHeterogeneityProbe/APD_envelope_report.csv",
-]
-
 requires_mesh = false
 
 example = "ionicHeterogeneityProbe -case ./singleCell_run"

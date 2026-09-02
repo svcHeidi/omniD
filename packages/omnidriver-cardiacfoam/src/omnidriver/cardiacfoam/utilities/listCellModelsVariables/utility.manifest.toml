@@ -17,10 +17,6 @@ inputs = [
   "constant/electroProperties",
 ]
 
-outputs = [
-  "postProcessing/listCellModelsVariables.txt",
-]
-
 requires_mesh = false
 
 example = "listCellModelsVariables -case ./myCardiacCase"
