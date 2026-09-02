@@ -42,7 +42,14 @@ results directory — it is not forced under `caseRoot`.
 - Single command allowlist owner (`validate_workflow_commands`), enforced once
   at ingestion.
 - No command shadowing: bare names resolve via `PATH` only; only `Allrun`-family
-  resolve case-locally.
+  names, plus the active plugin's own declared `openfoam.entrypoint` path (if
+  different), resolve case-locally. The value that widens this set is read
+  from the plugin's own static profile — never from the agent-authored
+  `RunDocument` or case-folder content this document actually distrusts — so
+  a plugin naming its own entrypoint doesn't change who can shadow `PATH`,
+  only lets an already-trusted plugin author pick their own name. See
+  `future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md` for the full
+  reasoning and the six call sites this touches.
 - Workflow `cwd` cannot escape `caseRoot`.
 - `caseRoot` must be a runnable OpenFOAM case; `caseRoot`/`outputDir` resolved to
   canonical paths; opt-in `DRIVERFOAM_ALLOWED_RUNS_ROOT` containment.
@@ -86,12 +93,3 @@ results directory — it is not forced under `caseRoot`.
   `update_foam_entry`'s direct write path (both tiers, above) is guarded.
   This is a pre-existing gap; `dict_builder.py` synthesizes dicts rather than
   mutating them and was never migrated to the guarded write path.
-
-## Proposed extensions
-
-- `future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md` — a scoped,
-  reviewed-but-not-yet-implemented proposal to let a plugin's declared
-  `openfoam.entrypoint` resolve case-locally under the same "no command
-  shadowing" rule `Allrun`-family names already get, instead of exactly the
-  four hardcoded names. Read that document for the trust-boundary reasoning;
-  this file describes only what is true of the code today.

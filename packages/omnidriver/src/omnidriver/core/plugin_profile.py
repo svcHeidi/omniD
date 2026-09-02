@@ -11,7 +11,7 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 import yaml
 
@@ -172,6 +172,11 @@ def is_environment_role(role: str) -> bool:
     return namespace not in _NON_ENVIRONMENT_NAMESPACES
 
 
+def _entrypoint_relpaths_from_rules(rules: Iterable[CaseFileRule]) -> tuple[str, ...]:
+    declared = tuple(rule.path for rule in rules if rule.role == ENTRYPOINT_ROLE)
+    return declared or DEFAULT_ENTRYPOINT_RELPATHS
+
+
 def entrypoint_relpaths(driver_context: Any | None) -> tuple[str, ...]:
     """Case-relative paths the active plugin declares as its entrypoint.
 
@@ -181,12 +186,20 @@ def entrypoint_relpaths(driver_context: Any | None) -> tuple[str, ...]:
     """
     if driver_context is None:
         return DEFAULT_ENTRYPOINT_RELPATHS
-    declared = tuple(
-        rule.path
-        for rule in driver_context.capabilities.case_files.all_rules()
-        if rule.role == ENTRYPOINT_ROLE
-    )
-    return declared or DEFAULT_ENTRYPOINT_RELPATHS
+    return _entrypoint_relpaths_from_rules(driver_context.capabilities.case_files.all_rules())
+
+
+def entrypoint_relpaths_from_profile(profile: PluginProfile) -> tuple[str, ...]:
+    """Same rule as :func:`entrypoint_relpaths`, but reading a
+    :class:`PluginProfile` directly rather than through a ``DriverContext``.
+
+    For a plugin's own ``get_capabilities()``, which runs before any
+    ``DriverContext`` necessarily wraps it -- a ``DriverContext`` is
+    constructed *from* a validated plugin, not the reverse -- but which
+    already has its own profile via ``self.get_profile()``. See
+    future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md §5.
+    """
+    return _entrypoint_relpaths_from_rules(profile.case_files)
 
 
 def entrypoint_command(driver_context: Any | None) -> str:

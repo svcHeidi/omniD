@@ -1,11 +1,26 @@
 # Threat model: letting a plugin's declared entrypoint resolve case-locally
 
-**Status: proposed, not implemented.** Extends `SECURITY.md`'s existing
+**Status: implemented, 2026-09-02.** Extends `SECURITY.md`'s existing
 command-boundary threat model for one narrow change — the entrypoint slice of
 Tier 4 (`future/ENVIRONMENT_CONTRACT.md` §10). Written before touching code,
 per that document's own instruction: Tier 4 "need[s] its own pass with a
 threat model extending `SECURITY.md`", not a discovery-cleanup pass like
 Tier 1–3.
+
+All six sites in §4 landed exactly as designed, plus site 6's
+`entrypoint_relpaths_from_profile` helper in §5 (extracted so
+`generic_plugin.py`/`cardiacfoam_plugin.py` don't each reimplement the same
+rule-filtering). Verified both by the automated suite
+(`test_case_script_commands_entrypoint_seam.py`, `omnidriver-openfoam`'s
+`test_a_declared_entrypoint_is_also_not_path_checked`, and a new case in
+`test_trust_boundary_end_to_end.py`) and manually end to end, because
+`test_trust_boundary_end_to_end.py` is entirely `skip_without_monorepo`-gated
+in a standalone checkout — the automated pass alone would not have caught a
+regression there, which is exactly why the new
+`test_case_script_commands_entrypoint_seam.py` exists as monorepo-independent
+coverage of the same invariant. Both shipped plugins produce byte-identical
+`case_scripts` output before and after (verified directly), confirming zero
+behavior change for `GenericOpenFOAMPlugin`/`CardiacFoamPlugin`.
 
 ## 1. The problem, verified
 
@@ -172,6 +187,14 @@ advertisement (what `describe` shows an agent), not enforcement — but should
 land in the same change so the manifest doesn't lie about what the allowlist
 actually accepts.
 
+**Implementation note:** rather than inline the rule-filtering twice (once
+per plugin), `plugin_profile.py`'s `entrypoint_relpaths(driver_context)` was
+split into a shared `_entrypoint_relpaths_from_rules(rules)` plus a new
+`entrypoint_relpaths_from_profile(profile)` that both `entrypoint_relpaths`
+and each plugin's `get_capabilities()` call — one place owns "what counts as
+a declared entrypoint", read from either a `DriverContext` or a
+`PluginProfile` directly.
+
 ## 6. What must not regress
 
 `packages/omnidriver/tests/core/test_trust_boundary_end_to_end.py` encodes
@@ -204,12 +227,11 @@ not just an assertion against the shipped ones).
 
 ## 7. Sequencing
 
-This document is the design; it does not implement anything. When
-implementing: sites 1–5 (mechanical threading, one shared accessor) land
-first with the extended `test_case_directory_cannot_shadow_a_trusted_path_binary`
-case; site 6 (manifest advertisement) lands in the same change since it's
-small, or immediately after. `Allclean`/`Allrun.pre`/`Allrun.post`,
-`CORE_NEUTRAL_COMMANDS`, and `_is_installed_openfoam_app` stay exactly as
+**Done.** Sites 1–6 landed together in one change, including the extended
+`test_case_directory_cannot_shadow_a_trusted_path_binary` coverage (as a new
+sibling test, not a rewrite of the existing one) and the manifest
+advertisement. `Allclean`/`Allrun.pre`/`Allrun.post`, `CORE_NEUTRAL_COMMANDS`,
+and `_is_installed_openfoam_app` stay exactly as
 `future/ENVIRONMENT_CONTRACT.md` §10 Tier 4 already scoped them: deferred,
 each carrying a comment naming it as an OpenFOAM-family default and pointing
 here.

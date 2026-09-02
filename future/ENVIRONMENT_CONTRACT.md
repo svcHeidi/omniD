@@ -20,6 +20,7 @@ code can actually satisfy.
 | §10 Tier 3, `apply_overrides` raw-traceback crash | **done** — `legacy_apply_overrides` refuses cleanly (Phase 3), 2026-09-01 |
 | §10 Tier 3, `ArtifactFormat` + `utility_catalog` vocabulary | **done** — both opened to plugin-chosen strings (Phase 3), 2026-09-02 |
 | §10 Tier 3 | **closed** — all six items done, 2026-09-02. Tier 4 next |
+| §10 Tier 4, `CASE_SCRIPT_COMMANDS` entrypoint slice | **done** — `future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md`, threat-modeled and implemented, 2026-09-02. `Allclean`/`Allrun.pre`/`Allrun.post`, `CORE_NEUTRAL_COMMANDS`, `_is_installed_openfoam_app` remain open |
 
 ## 1. The problem with Rule 1 as written
 
@@ -427,16 +428,18 @@ These decide what may execute and what may resolve to a case-local binary
 rather than PATH. They need their own pass with a threat model extending
 `SECURITY.md`, and they are correctly deferred until the tiers above are done.
 
-**2026-09-02: scoped and threat-modeled, not yet implemented.** The entrypoint
-slice of `CASE_SCRIPT_COMMANDS` — the part with a verified, concrete gap
-(`entrypoint_relpaths()` doesn't reach `_resolve_command`/
-`validate_workflow_commands`, so a plugin naming its entrypoint anything
-other than `"Allrun"` cannot execute today) — has a full threat model and
-site-by-site implementation design in
-`future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md`. `Allclean`/
-`Allrun.pre`/`Allrun.post` (no `cleanup_relpaths()` equivalent exists),
-`CORE_NEUTRAL_COMMANDS`, and `_is_installed_openfoam_app` are explicitly
-out of scope there too — deferred for the same reasons recorded here.
+**2026-09-02: entrypoint slice done.** The part of `CASE_SCRIPT_COMMANDS`
+with a verified, concrete gap (`entrypoint_relpaths()` didn't reach
+`_resolve_command`/`validate_workflow_commands`, so a plugin naming its
+entrypoint anything other than `"Allrun"` couldn't execute) is threat-modeled
+and implemented — see `future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md`
+for the design, the six sites it touched (`workflow.py`, `workflow_runner.py`
+×2, `provenance_inputs.py`, `omnidriver-openfoam/environment_preflight.py`,
+`capability_manifest.py`), and how each was verified given
+`test_trust_boundary_end_to_end.py`'s own `skip_without_monorepo` blind spot.
+`Allclean`/`Allrun.pre`/`Allrun.post` (no `cleanup_relpaths()` equivalent
+exists), `CORE_NEUTRAL_COMMANDS`, and `_is_installed_openfoam_app` remain
+explicitly out of scope, deferred for the reasons recorded there.
 
 ## 11. The role-vocabulary escape tier (Phase 3 Task 3b, landed 2026-09-01)
 

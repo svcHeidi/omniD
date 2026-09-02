@@ -86,7 +86,7 @@ from ..plugin_capabilities import ResolvedInput, RuntimeDependency
 from ..plugin_profile import decomposition_dirname_prefix
 from .provenance import ProvenanceComponent, component_for_path
 from .provenance_dependencies import component_for_runtime_dependency
-from .workflow import CASE_SCRIPT_COMMANDS, _MPI_LAUNCHERS, _unwrap_mpi_program
+from .workflow import _MPI_LAUNCHERS, _unwrap_mpi_program, case_script_commands
 from .workflow_runner import _resolve_case_cwd, _resolve_command
 
 if TYPE_CHECKING:
@@ -166,7 +166,12 @@ def _component_for_resolved_input(
 
 
 def _is_case_local_script(
-    command: str, executable: str, *, resolved_cwd: Path, case_root: Path
+    command: str,
+    executable: str,
+    *,
+    resolved_cwd: Path,
+    case_root: Path,
+    driver_context: "DriverContext | None" = None,
 ) -> Path | None:
     """If ``_resolve_command`` would run a script from inside the case tree
     for this exact ``command``, return its on-disk path; else ``None``.
@@ -176,7 +181,7 @@ def _is_case_local_script(
     checking existence for every bare command name here would find files the
     real executor's PATH-only bare-name rule would never run.
     """
-    if "/" not in command and command not in CASE_SCRIPT_COMMANDS:
+    if "/" not in command and command not in case_script_commands(driver_context):
         return None
     candidate = Path(executable)
     if not candidate.is_absolute():
@@ -231,10 +236,12 @@ def _register_step_executable(
     env: Mapping[str, str],
     add_case_file: "_ComponentAdder",
     dependencies: dict[str, RuntimeDependency],
+    driver_context: "DriverContext | None" = None,
 ) -> None:
-    executable = _resolve_command(name, resolved_cwd)
+    executable = _resolve_command(name, resolved_cwd, driver_context)
     local_script = _is_case_local_script(
-        name, executable, resolved_cwd=resolved_cwd, case_root=case_root
+        name, executable,
+        resolved_cwd=resolved_cwd, case_root=case_root, driver_context=driver_context,
     )
     if local_script is not None:
         add_case_file(component_for_path(local_script, kind="case_file", relative_to=case_root))
@@ -349,6 +356,7 @@ def enumerate_case_inputs(
             env=environment,
             add_case_file=add,
             dependencies=dependencies,
+            driver_context=driver_context,
         )
         if command in _MPI_LAUNCHERS:
             payload = _unwrap_mpi_program(args)
@@ -360,6 +368,7 @@ def enumerate_case_inputs(
                     env=environment,
                     add_case_file=add,
                     dependencies=dependencies,
+                    driver_context=driver_context,
                 )
 
     # -- plugin-declared runtime dependencies (Task 2a): the solver binary,

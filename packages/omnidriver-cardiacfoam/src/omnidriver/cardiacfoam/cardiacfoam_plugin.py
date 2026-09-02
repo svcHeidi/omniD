@@ -42,6 +42,8 @@ from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 from omnidriver.cardiacfoam.active_tension_catalog import ACTIVE_TENSION_MODEL_CATALOG
 from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG
 from omnidriver.core.capability_manifest import build_capability_manifest
+from omnidriver.core.plugin_profile import entrypoint_relpaths_from_profile
+from omnidriver.core.runtime.workflow import CASE_SCRIPT_COMMANDS
 from omnidriver.cardiacfoam.solver_coupling import SOLVER_COMPATIBILITY_RULES
 from omnidriver.core.runtime.registry import list_tutorials
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
@@ -149,6 +151,13 @@ class CardiacFoamPlugin:
             plugin_commands=self.get_solver_commands() | self.get_auxiliary_commands(),
             utility_manifests=self.get_utility_manifests(),
             samplable_fields=self.get_samplable_fields(resolved),
+            # This plugin's own declared entrypoint, not just the fixed
+            # Allrun-family names -- read from get_profile() directly since
+            # get_capabilities() runs before any DriverContext necessarily
+            # wraps the plugin (future/
+            # CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md §5).
+            case_script_commands=CASE_SCRIPT_COMMANDS
+            | frozenset(entrypoint_relpaths_from_profile(self.get_profile())),
         )
         manifest["heterogeneity_models"] = HETEROGENEITY_MODELS
         manifest["ionic_models"] = IONIC_MODEL_CATALOG

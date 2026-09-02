@@ -38,7 +38,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from ..plugin_profile import decomposition_dirname_prefix
-from .workflow import CASE_SCRIPT_COMMANDS
+from .workflow import case_script_commands
 from .workflow_state import (
     WorkflowRunState,
     WorkflowStepState,
@@ -113,19 +113,20 @@ def _dependencies_completed(
     return isinstance(depends_on, list) and all(str(dep) in completed for dep in depends_on)
 
 
-def _resolve_command(command: str, cwd: Path) -> str:
+def _resolve_command(command: str, cwd: Path, driver_context: Any | None = None) -> str:
     """Resolve a step command to what subprocess should execute.
 
     - Explicit paths (containing ``/``, e.g. ``./Allrun`` or an absolute
       path) are used verbatim — the author opted in.
-    - A recognized case-script name (``Allrun``-family) resolves to the
-      case-local executable when present, else falls through to PATH.
+    - A recognized case-script name (``Allrun``-family, plus the active
+      plugin's own declared entrypoint) resolves to the case-local
+      executable when present, else falls through to PATH.
     - Any other bare name resolves via PATH only (subprocess does not search
       cwd), so a case directory cannot shadow a trusted binary.
     """
     if "/" in command:
         return command
-    if command in CASE_SCRIPT_COMMANDS:
+    if command in case_script_commands(driver_context):
         local_command = cwd / command
         if local_command.is_file() and os.access(local_command, os.X_OK):
             return str(local_command)
@@ -146,6 +147,7 @@ def _argv_for_execution(
     executable: str,
     args: tuple[str, ...],
     env: Mapping[str, str] | None,
+    driver_context: Any | None = None,
 ) -> tuple[str, ...]:
     """Build the argv subprocess should exec for one workflow step.
 
@@ -177,7 +179,7 @@ def _argv_for_execution(
     dot-sourced, fixing the self-location idiom without reintroducing the
     exec-boundary SIP-stripping problem the dot-source was chosen to avoid.
     """
-    if command not in CASE_SCRIPT_COMMANDS or not env:
+    if command not in case_script_commands(driver_context) or not env:
         return (executable, *args)
     exports = [f"export {name}={shlex.quote(env[name])}" for name in _DYLD_VAR_NAMES if env.get(name)]
     if not exports:
@@ -240,7 +242,7 @@ def run_workflow_step(
     cwd = str(step.get("cwd", "."))
     command = str(step["command"])
     resolved_cwd = _resolve_case_cwd(Path(case_root), cwd)
-    executable = _resolve_command(command, resolved_cwd)
+    executable = _resolve_command(command, resolved_cwd, driver_context)
     running_step = WorkflowStepState(
         step_id=step_id,
         status="running",
@@ -272,7 +274,7 @@ def run_workflow_step(
     try:
         with stdout_log.open("w") as stdout_handle, stderr_log.open("w") as stderr_handle:
             completed = subprocess.run(
-                _argv_for_execution(command, executable, args, env),
+                _argv_for_execution(command, executable, args, env, driver_context),
                 cwd=resolved_cwd,
                 stdout=stdout_handle,
                 stderr=stderr_handle,

@@ -70,6 +70,29 @@ CORE_NEUTRAL_COMMANDS = frozenset(
 # binary. Imported by workflow_runner for _resolve_command.
 CASE_SCRIPT_COMMANDS = frozenset({"Allrun", "Allclean", "Allrun.pre", "Allrun.post"})
 
+
+def case_script_commands(driver_context: Any | None) -> frozenset[str]:
+    """Bare command names that may resolve to a case-LOCAL executable, for
+    the active plugin.
+
+    :data:`CASE_SCRIPT_COMMANDS` (the Allrun-family fixed names) always
+    qualify -- OpenFOAM's own convention, and every shipped plugin's
+    default -- unioned with the active plugin's declared entrypoint
+    path(s), so a plugin naming its entrypoint anything else still gets
+    case-local resolution for that exact name. ``Allclean``/``Allrun.pre``/
+    ``Allrun.post`` stay fixed: no role exists yet for a plugin to name its
+    own cleanup/pre/post scripts (see
+    future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md §3).
+
+    The value flowing in here is set in the plugin's own static profile,
+    never touched by an agent-authored ``RunDocument`` or case-folder
+    content -- the two things this module's trust boundary actually
+    distrusts (see the threat model doc above) -- so widening this set to
+    a plugin's own declared name does not change who can shadow PATH.
+    """
+    return CASE_SCRIPT_COMMANDS | frozenset(entrypoint_relpaths(driver_context))
+
+
 # MPI launcher recognition: generic to any parallel workflow step (OpenMPI,
 # MPICH, ...), not OpenFOAM-specific. Moved here from
 # omnidriver.openfoam.environment_preflight, which had no OpenFOAM content in
@@ -504,20 +527,22 @@ def validate_workflow_commands(
 
     The allowlist is the union of :data:`CORE_NEUTRAL_COMMANDS`, the commands
     ``driver_context`` authorizes through its
-    ``CommandAuthorizationCapability``, :data:`CASE_SCRIPT_COMMANDS`, that
-    context's utility manifests that declare ``produces``, and executables
-    installed under ``$FOAM_APPBIN`` / ``$FOAM_USER_APPBIN`` (see
-    :func:`_is_installed_openfoam_app`). Without a ``driver_context`` no plugin
-    command and no utility is authorized, leaving only the core-neutral
-    commands, case scripts, and installed OpenFOAM apps. An explicit path form
-    (``command`` containing ``/``) is allowed only as ``./<name>`` where
-    ``<name>`` is a case script — this keeps the gate in parity with
-    ``_resolve_command`` (which lets ``./Allrun`` through) while still refusing
-    arbitrary ``./script`` and absolute paths. This is the one owner of the
-    command allowlist; both ``strict_plan`` and the run-document adapter call
-    it so neither can drift. Runs on the *normalized* DAG, where ``command``
-    is the bare executable (args already split out).
+    ``CommandAuthorizationCapability``, :func:`case_script_commands` (the
+    Allrun-family fixed names plus the active plugin's own declared
+    entrypoint), that context's utility manifests that declare ``produces``,
+    and executables installed under ``$FOAM_APPBIN`` / ``$FOAM_USER_APPBIN``
+    (see :func:`_is_installed_openfoam_app`). Without a ``driver_context`` no
+    plugin command and no utility is authorized, leaving only the
+    core-neutral commands, case scripts, and installed OpenFOAM apps. An
+    explicit path form (``command`` containing ``/``) is allowed only as
+    ``./<name>`` where ``<name>`` is a case script — this keeps the gate in
+    parity with ``_resolve_command`` (which lets ``./Allrun`` through) while
+    still refusing arbitrary ``./script`` and absolute paths. This is the one
+    owner of the command allowlist; both ``strict_plan`` and the run-document
+    adapter call it so neither can drift. Runs on the *normalized* DAG, where
+    ``command`` is the bare executable (args already split out).
     """
+    case_scripts = case_script_commands(driver_context)
     if driver_context is not None:
         authorization = driver_context.capabilities.command_authorization
         # Authorization is the union: both kinds of plugin command may run.
@@ -546,7 +571,7 @@ def validate_workflow_commands(
             # Explicit path form. Only ``./<case-script>`` is permitted (gate
             # parity with _resolve_command); an arbitrary ``./script`` or any
             # absolute path is refused so it cannot bypass the allowlist.
-            if command.startswith("./") and command[2:] in CASE_SCRIPT_COMMANDS:
+            if command.startswith("./") and command[2:] in case_scripts:
                 continue
             diagnostics.append(WorkflowDiagnostic(
                 level="error",
@@ -561,7 +586,7 @@ def validate_workflow_commands(
         if (
             command in CORE_NEUTRAL_COMMANDS
             or command in plugin_commands
-            or command in CASE_SCRIPT_COMMANDS
+            or command in case_scripts
         ):
             continue
         manifest = utilities.get(command)

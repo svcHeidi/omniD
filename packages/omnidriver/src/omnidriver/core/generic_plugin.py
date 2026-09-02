@@ -65,13 +65,23 @@ class GenericOpenFOAMPlugin:
         OpenFOAM commands it may actually run. Returning a hand-written stub
         here previously omitted that block entirely and hardcoded cardiac
         region names (``electro``/``solid``) for a plugin that has neither.
+
+        ``case_scripts`` includes this plugin's own declared entrypoint, not
+        just the fixed Allrun-family names -- read from ``get_profile()``
+        directly since this method runs before any ``DriverContext``
+        necessarily wraps the plugin (future/
+        CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md §5).
         """
         from omnidriver.core.capability_manifest import build_capability_manifest
+        from omnidriver.core.plugin_profile import entrypoint_relpaths_from_profile
+        from omnidriver.core.runtime.workflow import CASE_SCRIPT_COMMANDS
 
         return build_capability_manifest(
             plugin_commands=self.get_solver_commands() | self.get_auxiliary_commands(),
             utility_manifests=self.get_utility_manifests(),
             samplable_fields=self.get_samplable_fields({}),
+            case_script_commands=CASE_SCRIPT_COMMANDS
+            | frozenset(entrypoint_relpaths_from_profile(self.get_profile())),
         )
 
     def get_tutorial_catalog(self):

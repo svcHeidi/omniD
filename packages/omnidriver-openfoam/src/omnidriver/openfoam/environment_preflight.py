@@ -36,9 +36,9 @@ from typing import Any
 
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 from omnidriver.core.runtime.workflow import (
-    CASE_SCRIPT_COMMANDS,
     _MPI_LAUNCHERS,
     _unwrap_mpi_program,
+    case_script_commands,
 )
 from .openfoam_environment import load_openfoam_environment
 
@@ -53,17 +53,20 @@ class _ExecutableRequirements:
     mpi_launcher_in_dag: bool
 
 
-def _required_executables(workflow_dag: dict[str, Any] | None) -> _ExecutableRequirements:
+def _required_executables(
+    workflow_dag: dict[str, Any] | None, driver_context: Any | None = None,
+) -> _ExecutableRequirements:
     """Derive the executables a plan will invoke from its workflow DAG."""
     executables: list[str] = []
     is_parallel = False
     mpi_launcher_in_dag = False
+    case_scripts = case_script_commands(driver_context)
 
     def _add(name: str) -> None:
         if (
             name
             and name not in _INTERPRETER_SKIP
-            and name not in CASE_SCRIPT_COMMANDS
+            and name not in case_scripts
             and name not in executables
         ):
             executables.append(name)
@@ -133,6 +136,7 @@ def _build_staleness_diagnostics(
     checked_env: dict[str, str],
     *,
     src_root: Path | str | None,
+    driver_context: Any | None = None,
 ) -> tuple[StrictDiagnostic, ...]:
     """Warn (never block) when a user-compiled utility the plan invokes is older
     than the newest C++/CUDA source under ``src_root`` -- i.e. the binary was
@@ -156,7 +160,7 @@ def _build_staleness_diagnostics(
     # the (potentially large) source-tree walk.
     candidates: list[tuple[str, str]] = []
     path = checked_env.get("PATH")
-    for executable in _required_executables(workflow_dag).executables:
+    for executable in _required_executables(workflow_dag, driver_context).executables:
         resolved = shutil.which(executable, path=path)
         if not resolved:
             continue
@@ -234,7 +238,7 @@ def _environment_diagnostics(
                     field=var,
                 ))
 
-    requirements = _required_executables(workflow_dag)
+    requirements = _required_executables(workflow_dag, driver_context)
     for executable in requirements.executables:
         if not shutil.which(executable, path=checked_env.get("PATH")):
             diagnostics.append(diagnostic(
@@ -263,7 +267,8 @@ def _environment_diagnostics(
 
     diagnostics.extend(
         _build_staleness_diagnostics(
-            workflow_dag, checked_env, src_root=_discover_src_root()
+            workflow_dag, checked_env, src_root=_discover_src_root(),
+            driver_context=driver_context,
         )
     )
 

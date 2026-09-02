@@ -74,13 +74,20 @@ def build_capability_manifest(
     plugin_commands: Iterable[str] = (),
     utility_manifests: dict[str, Any] | None = None,
     samplable_fields: dict[str, tuple[str, ...]] | None = None,
+    case_script_commands: frozenset[str] = CASE_SCRIPT_COMMANDS,
 ) -> dict[str, Any]:
     """Return the driver's accept-surface as a plain JSON-able dict.
 
-    ``plugin_commands``, ``utility_manifests``, and ``samplable_fields`` are
-    all supplied by the calling plugin so that core names no solver here;
-    together with :data:`CORE_NEUTRAL_COMMANDS` the commands reproduce
-    exactly what ``validate_workflow_commands`` accepts for that plugin.
+    ``plugin_commands``, ``utility_manifests``, ``samplable_fields``, and
+    ``case_script_commands`` are all supplied by the calling plugin so that
+    core names no solver here; together with :data:`CORE_NEUTRAL_COMMANDS`
+    the commands reproduce exactly what ``validate_workflow_commands``
+    accepts for that plugin. ``case_script_commands`` defaults to the fixed
+    Allrun-family set; a plugin whose entrypoint has its own declared name
+    passes ``runtime.workflow.case_script_commands(driver_context)`` instead
+    (its ``get_capabilities()`` has no ``DriverContext`` to read one from,
+    but does have its own ``get_profile()`` -- see
+    future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md §5).
 
     ``allowed_commands`` names exactly what a workflow DAG step may invoke;
     ``samplable_fields`` names the fields a function object may sample for the
@@ -95,7 +102,7 @@ def build_capability_manifest(
     return {
         "allowed_commands": {
             "core": sorted(set(CORE_NEUTRAL_COMMANDS) | set(plugin_commands)),
-            "case_scripts": sorted(CASE_SCRIPT_COMMANDS),
+            "case_scripts": sorted(case_script_commands),
             "utilities": _utility_commands(utility_manifests or {}),
             "installed_openfoam_apps_note": (
                 "When OpenFOAM is sourced, any executable under $FOAM_APPBIN or "

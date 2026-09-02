@@ -503,6 +503,57 @@ def test_case_directory_cannot_shadow_a_trusted_path_binary() -> None:
         assert not sentinel.exists(), "case-local binary shadowed a PATH command"
 
 
+def test_a_plugins_declared_entrypoint_resolves_case_locally_but_blockmesh_still_never_does() -> None:
+    """SECURITY.md: "No command shadowing", extended to the Tier 4 entrypoint
+    seam (future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md) -- a plugin
+    naming its entrypoint anything other than "Allrun" gets the same
+    case-local resolution Allrun already has, but CORE_NEUTRAL_COMMANDS names
+    like blockMesh must never resolve case-locally, regardless of which
+    plugin is active. Unit-level only (no CLI/RunDocument round-trip, unlike
+    the sibling test above) -- full coverage of this exact seam without any
+    monorepo dependency lives in
+    test_case_script_commands_entrypoint_seam.py.
+    """
+    from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+
+    from omnidriver.core.plugin_interface import driver_context as _driver_context
+    from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile
+
+    class _ForeignEntrypointPlugin(NeutralEnvironmentPlugin):
+        def get_profile(self) -> PluginProfile:
+            return PluginProfile(
+                path=Path(__file__),
+                plugin_id=self.plugin_id,
+                api_version=self.plugin_api_version,
+                case_files=(
+                    CaseFileRule(
+                        path="run.sh", kind="case_script",
+                        role="openfoam.entrypoint", required="conditional",
+                    ),
+                ),
+                cxx_mapping=None,
+                payload={
+                    "schema_version": 1,
+                    "plugin": {"id": self.plugin_id, "api_version": self.plugin_api_version},
+                    "case_profile": {"dictionaries": []},
+                },
+            )
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        case_root = Path(temp_dir)
+        (case_root / "run.sh").write_text("#!/bin/sh\n")
+        os.chmod(case_root / "run.sh", 0o755)
+        (case_root / "blockMesh").write_text("#!/bin/sh\ntouch PWNED\n")
+        os.chmod(case_root / "blockMesh", 0o755)
+
+        ctx = _driver_context(_ForeignEntrypointPlugin(), source="test")
+
+        assert _resolve_command("run.sh", case_root, ctx) == str(case_root / "run.sh")
+        assert _resolve_command("blockMesh", case_root, ctx) == "blockMesh"
+        # Without the plugin declaring it, the same name is not a case script.
+        assert _resolve_command("run.sh", case_root) == "run.sh"
+
+
 # --------------------------------------------------------------------------
 # Documented-closed claim: "Workflow cwd cannot escape caseRoot".
 # --------------------------------------------------------------------------
