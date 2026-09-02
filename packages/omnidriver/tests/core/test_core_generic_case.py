@@ -116,29 +116,17 @@ def test_generic_dict_file_overrides_reach_the_mutation_callback(tmp_path: Path)
     }
 
 
-def test_deprecated_cardiac_kwargs_still_work_as_aliases(tmp_path: Path) -> None:
-    """P2.6 keeps the historical names working -- they are advertised as common
-    override keys and reach make_spec verbatim from --config/--set -- but they
-    now arrive at the callback under the generic mapping."""
-    spy = _MutationSpy()
-    spec = _spec(
-        tmp_path,
-        electro_properties_relpath="constant/electro/electroProperties",
-        electro_property_overrides={"a.b": "1"},
-        physics_property_overrides={"type": "electroModel"},
-        _apply_case_mutation=spy,
-    )
-    case = spec.build_cases()[0]
-    spec.apply_case(spec.case_root, case)
+def test_cardiac_named_kwargs_are_no_longer_accepted(tmp_path: Path) -> None:
+    """The cardiac-named make_spec() kwargs (electro_properties_relpath and
+    friends) were a deprecated-alias mechanism with zero real production
+    callers -- every cardiacfoam tutorial that uses these names calls its
+    own per-tutorial make_spec(), never core's generic-case factory.
+    Pre-publication is the moment to drop it rather than carry it forward
+    (future/ENVIRONMENT_CONTRACT.md §10, Tier 3)."""
+    import pytest
 
-    assert spy.calls[0]["dict_file_relpaths"] == {
-        "electro": Path("constant/electro/electroProperties"),
-        "physics": Path("constant/physicsProperties"),
-    }
-    assert spy.calls[0]["dict_file_overrides"] == {
-        "electro": {"a.b": "1"},
-        "physics": {"type": "electroModel"},
-    }
+    with pytest.raises(TypeError, match="electro_properties_relpath"):
+        _spec(tmp_path, electro_properties_relpath="constant/electro/electroProperties")
 
 
 def test_explicit_bashrc_kwarg_reaches_case_params(tmp_path: Path) -> None:
@@ -171,15 +159,12 @@ def test_per_case_openfoam_bashrc_key_is_silently_unused(tmp_path: Path) -> None
     assert case.params["explicit_bashrc"] is None
 
 
-def test_per_case_entries_accept_both_generic_and_deprecated_override_keys(
-    tmp_path: Path,
-) -> None:
+def test_per_case_entries_accept_generic_override_keys(tmp_path: Path) -> None:
     spec = _spec(
         tmp_path,
         dict_file_overrides={"electro": {"spec.level": "0"}},
         cases=[
             {"case_id": "generic", "dict_file_overrides": {"electro": {"a": "1"}}},
-            {"case_id": "deprecated", "electro_property_overrides": {"a": "2"}},
             {"case_id": "inherits"},
         ],
         _apply_case_mutation=_MutationSpy(),
@@ -187,8 +172,22 @@ def test_per_case_entries_accept_both_generic_and_deprecated_override_keys(
     by_id = {case.case_id: case.params["dict_file_overrides"] for case in spec.build_cases()}
 
     assert by_id["generic"] == {"electro": {"a": "1"}}
-    assert by_id["deprecated"] == {"electro": {"a": "2"}}
     assert by_id["inherits"] == {"electro": {"spec.level": "0"}}
+
+
+def test_per_case_deprecated_cardiac_override_key_is_silently_unused(
+    tmp_path: Path,
+) -> None:
+    """A cases[] entry only recognises "dict_file_overrides" now -- an old
+    cardiac-named key like "electro_property_overrides" is just an
+    unrecognised field, tolerated like any other, not translated."""
+    spec = _spec(
+        tmp_path,
+        cases=[{"case_id": "deprecated", "electro_property_overrides": {"a": "2"}}],
+        _apply_case_mutation=_MutationSpy(),
+    )
+    case = spec.build_cases()[0]
+    assert case.params["dict_file_overrides"] == {}
 
 
 def test_genuinely_unknown_keyword_still_raises_type_error(tmp_path: Path) -> None:

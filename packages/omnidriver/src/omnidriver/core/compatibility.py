@@ -97,16 +97,6 @@ _LEGACY_GENERIC_CASE_DICT_FILES = (
     ("physics", "constant/physicsProperties"),
 )
 
-# Historical cardiac-named ``make_spec`` keyword arguments, mapped onto the
-# generic ``(bucket, dict-file name)`` they now address.
-_LEGACY_GENERIC_CASE_ALIASES = {
-    "electro_properties_relpath": ("relpaths", "electro"),
-    "physics_properties_relpath": ("relpaths", "physics"),
-    "electro_property_overrides": ("overrides", "electro"),
-    "physics_property_overrides": ("overrides", "physics"),
-}
-
-
 @_instrumented
 def legacy_generic_case_dict_file_relpaths() -> dict[str, str]:
     """Return the dictionary files core ``make_spec`` has always defaulted to.
@@ -120,44 +110,6 @@ def legacy_generic_case_dict_file_relpaths() -> dict[str, str]:
     """
 
     return dict(_LEGACY_GENERIC_CASE_DICT_FILES)
-
-
-def legacy_generic_case_alias_names() -> frozenset[str]:
-    """Names :func:`legacy_generic_case_dict_file_aliases` recognises.
-
-    Uninstrumented on purpose: callers use it to *decide* whether a legacy
-    alias is present at all, so consulting it is not itself a fallback.
-    """
-
-    return frozenset(_LEGACY_GENERIC_CASE_ALIASES)
-
-
-@_instrumented
-def legacy_generic_case_dict_file_aliases(
-    payload,
-) -> tuple[dict, dict, list[str]]:
-    """Translate deprecated cardiac-named generic-case keywords.
-
-    Why: ``electro_property_overrides`` and friends are advertised as common
-    override keys and reach ``make_spec`` verbatim from ``--config``/``--set``.
-    Activation: any such key appears in a ``make_spec`` call or in a ``cases``
-    entry.  Returns ``(relpaths, overrides, unknown_keys)`` so the caller keeps
-    ownership of rejecting genuinely unknown keywords.  Plan 2 seam: the
-    aliases may be dropped once callers migrate to ``dict_file_relpaths`` and
-    ``dict_file_overrides``.
-    """
-
-    relpaths: dict = {}
-    overrides: dict = {}
-    unknown: list[str] = []
-    for key, value in dict(payload).items():
-        target = _LEGACY_GENERIC_CASE_ALIASES.get(key)
-        if target is None:
-            unknown.append(key)
-            continue
-        bucket, name = target
-        (relpaths if bucket == "relpaths" else overrides)[name] = value
-    return relpaths, overrides, unknown
 
 
 @_instrumented

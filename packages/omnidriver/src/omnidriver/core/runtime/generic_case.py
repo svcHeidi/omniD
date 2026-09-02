@@ -48,24 +48,8 @@ def _merged_dict_file_overrides(
     A case entry may name only some of the dictionary files; the remaining ones
     keep whatever the spec-level default declared for them.
     """
-    from omnidriver.core.compatibility import (
-        legacy_generic_case_alias_names,
-        legacy_generic_case_dict_file_aliases,
-    )
-
     merged = dict(default_overrides)
     merged.update(item.get("dict_file_overrides") or {})
-
-    deprecated = {
-        key: value
-        for key, value in item.items()
-        if key in legacy_generic_case_alias_names()
-    }
-    if deprecated:
-        _relpaths, alias_overrides, _unknown = legacy_generic_case_dict_file_aliases(
-            deprecated,
-        )
-        merged.update(alias_overrides)
     return {key: value for key, value in merged.items() if value}
 
 
@@ -207,45 +191,22 @@ def make_spec(
     solver_command: str | Sequence[str] | None = None,
     pre_solve_commands: Sequence[str | Sequence[str]] | None = None,
     _apply_case_mutation=None,
-    **deprecated_kwargs: Any,
 ) -> TutorialSpec:
     if not str(case_dir_name).strip():
         raise ValueError("case_dir_name cannot be empty")
 
-    from omnidriver.core.compatibility import (
-        legacy_generic_case_dict_file_aliases,
-        legacy_generic_case_dict_file_relpaths,
-    )
-
-    # ``dict_file_relpaths``/``dict_file_overrides`` are the supported spelling.
-    # The historical solver-specific keyword names survive only as deprecated
-    # aliases, translated by the named compatibility seam so that no plugin
-    # vocabulary reaches core.
-    alias_relpaths: dict[str, Any] = {}
-    alias_overrides: dict[str, Any] = {}
-    unknown_kwargs: list[str] = []
-    if deprecated_kwargs:
-        alias_relpaths, alias_overrides, unknown_kwargs = (
-            legacy_generic_case_dict_file_aliases(deprecated_kwargs)
-        )
-    if unknown_kwargs:
-        raise TypeError(
-            "make_spec() got an unexpected keyword argument "
-            + ", ".join(repr(key) for key in sorted(unknown_kwargs))
-        )
+    from omnidriver.core.compatibility import legacy_generic_case_dict_file_relpaths
 
     resolved_relpaths_raw: dict[str, Any] = dict(
         legacy_generic_case_dict_file_relpaths()
         if dict_file_relpaths is None
         else dict_file_relpaths
     )
-    resolved_relpaths_raw.update(alias_relpaths)
     resolved_relpaths = {
         str(key): Path(value) for key, value in resolved_relpaths_raw.items()
     }
 
     resolved_overrides: dict[str, Any] = dict(dict_file_overrides or {})
-    resolved_overrides.update(alias_overrides)
     resolved_overrides = {key: value for key, value in resolved_overrides.items() if value}
 
     run_script_path = Path(run_script_relpath)
