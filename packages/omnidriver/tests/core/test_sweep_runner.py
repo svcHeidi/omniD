@@ -423,7 +423,11 @@ def test_sweep_run_accepts_over_cap_with_explicit_override(tmp_path):
     spec_path.write_text(json.dumps(spec))
     output_dir = tmp_path / "out"
 
-    def fake_materialize(*, case_dir, routed):
+    def fake_materialize(*, case_dir, routed, driver_context):
+        # sweep_runner threads its context into materialize_case (Part B of
+        # the 2026-09-02 neutral-default spec); a double that refused the
+        # kwarg would fail for the wrong reason.
+        del driver_context
         case_dir.mkdir(parents=True, exist_ok=True)
 
     fake_report = mock.Mock()
@@ -688,7 +692,11 @@ def test_sweep_run_case_timeout_marks_failed_and_continues(tmp_path):
     _write_placeholder_spec(spec_path)
     output_dir = tmp_path / "out"
 
-    def fake_materialize(*, case_dir, routed):
+    def fake_materialize(*, case_dir, routed, driver_context):
+        # sweep_runner threads its context into materialize_case (Part B of
+        # the 2026-09-02 neutral-default spec); a double that refused the
+        # kwarg would fail for the wrong reason.
+        del driver_context
         case_dir.mkdir(parents=True, exist_ok=True)
 
     fake_report = mock.Mock()

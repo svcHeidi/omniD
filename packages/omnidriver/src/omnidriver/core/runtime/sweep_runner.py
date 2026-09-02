@@ -270,7 +270,11 @@ def sweep_plan(
                     resolved_axis_values=case.resolved_axis_values,
                     driver_context=driver_context,
                 )
-                materialize_case(case_dir=output_dir / case.case_id, routed=routed)
+                materialize_case(
+                    case_dir=output_dir / case.case_id,
+                    routed=routed,
+                    driver_context=driver_context,
+                )
         except Exception as exc:
             # Deliberately broad. A sweep's contract is that one bad axis
             # value costs one case, not the command -- and a tutorial factory
@@ -446,7 +450,11 @@ def sweep_run(
                     )
                     report = strict_plan(entry, overrides=routed, driver_context=driver_context)
                 else:
-                    materialize_case(case_dir=case_dir, routed=routed)
+                    materialize_case(
+                        case_dir=case_dir,
+                        routed=routed,
+                        driver_context=driver_context,
+                    )
                     report = strict_plan(
                         case.case_id,
                         entry_kind="case_folder",

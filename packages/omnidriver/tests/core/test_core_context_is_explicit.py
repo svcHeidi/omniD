@@ -89,3 +89,85 @@ def test_openfoam_never_resolves_an_implicit_driver_context() -> None:
         + "\n".join(f"  {f}: lines {ls}" for f, ls in sorted(offenders.items()))
         + "\nMake driver_context a required parameter instead."
     )
+
+
+# The public-edge functions that accept a DriverContext and resolve the
+# implicit default when handed none. A core module may call these -- they are
+# the public API -- but it must thread its own context through, or it launders
+# the cardiac default past the two guards above: the call itself lives in
+# omnidriver/*.py, which _CORE_ROOT does not scan, and nothing in core names
+# resolve_public_driver_context.
+#
+# sweep_runner.py:273 and :449 did exactly that until Part B of
+# docs/superpowers/specs/2026-09-02-neutral-default-context-design.md, calling
+# materialize_case() with no context one line after route_case_values() was
+# given one.
+#
+# This set is written out rather than inferred. An inferred rule would either
+# miss functions or fire on unrelated same-named calls; an explicit list is
+# greppable, and _test_the_guarded_names_still_exist below fails loudly if one
+# of these stops existing rather than letting the guard quietly shrink.
+_CONTEXT_TAKING_PUBLIC_EDGE = {
+    "materialize_case": "omnidriver.sweep_materialize",
+    "route_case_values": "omnidriver.sweep_routing",
+    "get_heterogeneity_models": "omnidriver.dict_entries",
+    "get_electro_property_entry_groups": "omnidriver.dict_entries",
+    "all_documented_driver_paths": "omnidriver.dict_entries",
+}
+
+
+def _unthreaded_public_edge_calls(path: pathlib.Path) -> list[tuple[str, int]]:
+    tree = ast.parse(path.read_text(), filename=str(path))
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        name = getattr(func, "id", None) or getattr(func, "attr", None)
+        if name not in _CONTEXT_TAKING_PUBLIC_EDGE:
+            continue
+        passes_context = any(
+            # keyword.arg is None for **kwargs, which does thread a context
+            # when the caller forwards one; treat it as threaded rather than
+            # guessing, since the behavioural census covers what static
+            # analysis cannot see.
+            keyword.arg in ("driver_context", None)
+            for keyword in node.keywords
+        )
+        if not passes_context:
+            found.append((name, node.lineno))
+    return found
+
+
+def test_the_guarded_names_still_exist() -> None:
+    """A guard naming functions that no longer exist guards nothing."""
+    import importlib
+
+    for name, module_path in sorted(_CONTEXT_TAKING_PUBLIC_EDGE.items()):
+        module = importlib.import_module(module_path)
+        assert hasattr(module, name), (
+            f"{module_path}.{name} is named by _CONTEXT_TAKING_PUBLIC_EDGE but "
+            "no longer exists. Update the set rather than deleting the entry "
+            "silently -- the function may have been renamed, not removed."
+        )
+
+
+def test_core_threads_its_context_through_the_public_edge() -> None:
+    offenders: dict[str, list[tuple[str, int]]] = {}
+    for path in sorted(_CORE_ROOT.rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        hits = _unthreaded_public_edge_calls(path)
+        if hits:
+            offenders[str(path.relative_to(_CORE_ROOT))] = hits
+
+    assert offenders == {}, (
+        "core/ modules calling a public-edge function without threading their "
+        "DriverContext (each such call silently resolves the built-in "
+        "default):\n"
+        + "\n".join(
+            f"  {f}: " + ", ".join(f"{name}() at line {line}" for name, line in hits)
+            for f, hits in sorted(offenders.items())
+        )
+        + "\nPass driver_context=driver_context."
+    )
