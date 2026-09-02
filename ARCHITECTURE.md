@@ -35,16 +35,28 @@ omnidriver/ (GitHub Root)
 complete; Rule 1 as originally written is superseded — see
 `future/ENVIRONMENT_CONTRACT.md` and the Open Items below.
 
-Measured on `d6566a1` (Phase 2 wave 1 landed), 2026-08-27, Python 3.13:
+**Re-measured 2026-09-02**, after `future/ENVIRONMENT_CONTRACT.md`'s Tier 3
+(closed) and Tier 4's entrypoint slice (done), against a **freshly built**
+core-only venv (`/opt/homebrew/bin/python3.13 -m venv`, per the recipe in
+`GITHUB_MIGRATION.md` §2 — not this repo's own `.venv`, which has all three
+packages installed):
 
 | | state |
 |---|---|
-| all three packages installed | **1469 passed, 273 skipped, 0 failed** |
-| core installed alone | 529 passed, 91 skipped, **140 failed** |
+| all three packages installed | **1543 passed, 276 skipped, 40 subtests, 0 failed** |
+| core installed alone | **676 passed, 93 skipped, 0 failed** |
 | core imported from a built wheel | ✅ guarded by `test_wheel_install_imports.py` |
 | plugin resolves by entry-point name | ✅ guarded by `test_entry_point_group_matches_packaging.py` |
-| core's CLI usable alone | ✗ `--help` dies resolving an implicit context |
-| `"org.cardiacfoam"` in core | ✗ 20 occurrences, all now provably unreachable |
+| core's CLI usable alone | ✅ `omnidriver --help` exits 0 in a core-only install |
+| `"org.cardiacfoam"` in core | 2 occurrences, both in docstrings/comments describing the fallback naming convention (`plugin_capabilities.py:1361`, `capability_seams.py:160`) — zero in executable logic |
+
+The core-only failure count that this table used to track as the honest
+measure of how far core is from standing alone is now **zero**. It began at
+160 across four distinct causes (2026-08-27); Tier 1–4 of
+`future/ENVIRONMENT_CONTRACT.md` closed the rest. Core genuinely stands alone
+today, not just in test-collection terms — the CLI, `describe`, and the full
+core-only suite all run clean from a wheel-equivalent install with nothing
+else on the path.
 
 The core-only failure count is the honest measure of how far core is from
 standing alone. It began at 160 across four distinct causes; Phase 2's first
@@ -103,20 +115,27 @@ Tracked as standalone notes in `future/`, each with its own status:
   resolved; kept for the record of what the coupling was and why it wasn't a
   trivial fix.
 - [`future/ENVIRONMENT_CONTRACT.md`](future/ENVIRONMENT_CONTRACT.md) —
-  **partly implemented, and it supersedes Rule 1 above.** Rule 1's second
-  sentence ("zero OpenFOAM vocabulary") is not satisfied and, as stated, is not
-  the goal: `Allrun`, `system/controlDict` and `$FOAM_APPBIN` are one
-  environment's *bindings* of concepts core legitimately owns. That document
-  restates the rule as something checkable — core may name a binding only where
-  it is reached through a declared role, a capability hook, or a documented,
-  overridable default — and measures which of core's bindings currently
-  qualify. **Read it before acting on Rule 1 as written.**
+  **Tiers 1–3 closed, Tier 4 partly done, and it supersedes Rule 1 above.**
+  Rule 1's second sentence ("zero OpenFOAM vocabulary") is not satisfied and,
+  as stated, is not the goal: `Allrun`, `system/controlDict` and
+  `$FOAM_APPBIN` are one environment's *bindings* of concepts core legitimately
+  owns. That document restates the rule as something checkable — core may name
+  a binding only where it is reached through a declared role, a capability
+  hook, or a documented, overridable default — and measures which of core's
+  bindings currently qualify. **Read it before acting on Rule 1 as written.**
 
-  Its §5a landed in Phase 1: the role vocabulary is validated at profile load
+  §5a landed in Phase 1: the role vocabulary is validated at profile load
   (`plugin_profile.KNOWN_ROLES`), and a case's entrypoint is resolved from the
   plugin's declared `openfoam.entrypoint` rule instead of a hardcoded `Allrun`.
-  Its §5b — the trust boundary — is deliberately still open, and §6's
-  `GenericEnvironmentPlugin` rename is blocked on it.
+  Tier 3 (six items: `control_dict` start-time lookup, `processor*`
+  decomposition seam, `apply_overrides`'s crash, `ArtifactFormat` +
+  `utility_catalog` vocabulary, the `--openfoam-bashrc` rename) closed
+  2026-09-02. Tier 4 — the trust boundary, §5b — is the
+  `CASE_SCRIPT_COMMANDS` entrypoint slice only so far
+  (`future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md`); `Allclean`/
+  `Allrun.pre`/`Allrun.post`, `CORE_NEUTRAL_COMMANDS`, and
+  `_is_installed_openfoam_app` remain open, and §6's
+  `GenericEnvironmentPlugin` rename stays blocked until Tier 4 is fully closed.
 
 
 ## Plugin capability seams
