@@ -396,12 +396,15 @@ class SolverPluginOptionalHooks(Protocol):
 
     # -- EnvironmentPreflightCapability -----------------------------------------
     def get_environment_diagnostics(
-        self, workflow_dag, *, env=None, openfoam_bashrc=None, driver_context=None,
+        self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None,
     ) -> tuple[Any, ...]:
         """Preflight the runtime environment a plan's workflow_dag will run
         in. Absent -> the OpenFOAM environment preflight runs unconditionally
         (the historical behavior, preserved as a Plan 2 seam -- see
-        legacy_environment_diagnostics)."""
+        legacy_environment_diagnostics). ``explicit_bashrc`` -- not
+        ``openfoam_bashrc`` -- matches ``get_loaded_environment``'s own
+        parameter for the same concept (Tier 3,
+        future/ENVIRONMENT_CONTRACT.md §10)."""
         ...
 
     def get_configured_environment(self, env, driver_context) -> dict[str, str]:

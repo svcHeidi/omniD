@@ -374,7 +374,7 @@ def strict_plan(
     entry_kind: str | None = None,
     overrides: dict[str, Any] | None = None,
     config_path: str | Path | None = None,
-    openfoam_bashrc: str | Path | None = None,
+    explicit_bashrc: str | Path | None = None,
     driver_context: "DriverContext",
 ) -> StrictPlanReport:
     """Build a non-mutating strict simulation plan report."""
@@ -419,7 +419,7 @@ def strict_plan(
     )
     env_diagnostics = driver_context.capabilities.environment_preflight.diagnostics(
         workflow_dag,
-        openfoam_bashrc=str(openfoam_bashrc) if openfoam_bashrc is not None else None,
+        explicit_bashrc=str(explicit_bashrc) if explicit_bashrc is not None else None,
         driver_context=driver_context,
     )
     mesh_diagnostics = _mesh_geometry_diagnostics(

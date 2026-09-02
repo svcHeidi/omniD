@@ -550,6 +550,14 @@ class EnvironmentPreflightCapability(Protocol):
     already-sourced OpenFOAM environment plus any plugin-specific overlay)
     without re-sourcing anything, returning the resolved variable mapping.
 
+    ``diagnostics`` and ``load`` both take an explicit path to an
+    environment-sourcing script, and both now spell it ``explicit_bashrc`` --
+    ``diagnostics`` used to spell it ``openfoam_bashrc``, naming OpenFOAM
+    specifically for a parameter every environment needs (future/
+    ENVIRONMENT_CONTRACT.md §10, Tier 3). The CLI flag threading it in is
+    ``--environment-bashrc``, with ``--openfoam-bashrc`` kept working as a
+    deprecated alias.
+
     :adapts: get_environment_diagnostics, get_configured_environment, get_loaded_environment
     :consumed-by: omnidriver/core/strict_planning.py, omnidriver/core/runtime/sweep_runner.py, omnidriver/cli.py
     :fallback: legacy_environment_diagnostics, legacy_configured_environment, legacy_load_environment
@@ -561,7 +569,7 @@ class EnvironmentPreflightCapability(Protocol):
         workflow_dag: dict[str, Any] | None,
         *,
         env: dict[str, str] | None = None,
-        openfoam_bashrc: str | None = None,
+        explicit_bashrc: str | None = None,
         driver_context: Any | None = None,
     ) -> tuple[Any, ...]: ...
 
@@ -1127,19 +1135,19 @@ class _EnvironmentPreflightAdapter:
         workflow_dag: dict[str, Any] | None,
         *,
         env: dict[str, str] | None = None,
-        openfoam_bashrc: str | None = None,
+        explicit_bashrc: str | None = None,
         driver_context: Any | None = None,
     ) -> tuple[Any, ...]:
         hook = getattr(self.plugin, "get_environment_diagnostics", None)
         if callable(hook):
             return tuple(hook(
-                workflow_dag, env=env, openfoam_bashrc=openfoam_bashrc,
+                workflow_dag, env=env, explicit_bashrc=explicit_bashrc,
                 driver_context=driver_context,
             ))
         from .compatibility import legacy_environment_diagnostics
 
         return tuple(legacy_environment_diagnostics(
-            workflow_dag, env=env, openfoam_bashrc=openfoam_bashrc,
+            workflow_dag, env=env, explicit_bashrc=explicit_bashrc,
             driver_context=driver_context,
         ))
 

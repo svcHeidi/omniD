@@ -141,6 +141,37 @@ def test_deprecated_cardiac_kwargs_still_work_as_aliases(tmp_path: Path) -> None
     }
 
 
+def test_openfoam_bashrc_kwarg_still_works_as_a_deprecated_alias(tmp_path: Path) -> None:
+    """make_spec's openfoam_bashrc kwarg is a deprecated alias for
+    explicit_bashrc (Tier 3, future/ENVIRONMENT_CONTRACT.md #10) -- an
+    existing caller (e.g. cardiacfoam's build_and_launch) keeps working
+    unchanged."""
+    spec = _spec(tmp_path, openfoam_bashrc="/opt/openfoam/etc/bashrc")
+    case = spec.build_cases()[0]
+    assert case.params["explicit_bashrc"] == "/opt/openfoam/etc/bashrc"
+
+
+def test_explicit_bashrc_wins_when_both_kwargs_are_given(tmp_path: Path) -> None:
+    spec = _spec(
+        tmp_path, explicit_bashrc="/new/bashrc", openfoam_bashrc="/old/bashrc",
+    )
+    case = spec.build_cases()[0]
+    assert case.params["explicit_bashrc"] == "/new/bashrc"
+
+
+def test_per_case_openfoam_bashrc_key_still_works_as_a_deprecated_alias(
+    tmp_path: Path,
+) -> None:
+    """The same deprecated-alias rule applies inside a per-case ``cases``
+    entry, not just at the spec-default level."""
+    spec = _spec(
+        tmp_path,
+        cases=[{"case_id": "c1", "openfoam_bashrc": "/opt/openfoam/etc/bashrc"}],
+    )
+    case = spec.build_cases()[0]
+    assert case.params["explicit_bashrc"] == "/opt/openfoam/etc/bashrc"
+
+
 def test_per_case_entries_accept_both_generic_and_deprecated_override_keys(
     tmp_path: Path,
 ) -> None:

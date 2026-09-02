@@ -82,11 +82,11 @@ class _EnvironmentNeutralHooks:
         return _read
 
     def get_environment_diagnostics(
-        self, workflow_dag, *, env=None, openfoam_bashrc=None, driver_context=None,
+        self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None,
     ) -> tuple:
         """No environment preconditions: this plugin's steps need no sourced
         profile. Returning () is a real answer, not a stub."""
-        del workflow_dag, env, openfoam_bashrc, driver_context
+        del workflow_dag, env, explicit_bashrc, driver_context
         return ()
 
     def get_loaded_environment(self, *, explicit_bashrc=None, driver_context=None) -> dict:

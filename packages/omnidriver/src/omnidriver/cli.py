@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -418,7 +419,7 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
         }, indent=2))
         return None
     execution_env = driver_context.capabilities.environment_preflight.load(
-        explicit_bashrc=args.openfoam_bashrc,
+        explicit_bashrc=args.environment_bashrc,
         driver_context=driver_context,
     )
     setup_root_raw = (run_doc.launch or {}).get("setupRoot")
@@ -432,7 +433,7 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
         setup_root=Path(setup_root_raw) if setup_root_raw else None,
         environment_diagnostics=driver_context.capabilities.environment_preflight.diagnostics(
             inputs.workflow_dag,
-            openfoam_bashrc=args.openfoam_bashrc,
+            explicit_bashrc=args.environment_bashrc,
             driver_context=driver_context,
         ),
         execution_env=execution_env,
@@ -447,7 +448,7 @@ def _context_from_entry(
     entry_kind: str | None,
     overrides: dict | None,
     config_path: str | None,
-    openfoam_bashrc: str | None,
+    explicit_bashrc: str | None,
     driver_context,
     stage_for_execution: bool = False,
     fresh: bool = False,
@@ -457,7 +458,7 @@ def _context_from_entry(
         entry_kind=entry_kind,
         overrides=overrides,
         config_path=config_path,
-        openfoam_bashrc=openfoam_bashrc,
+        explicit_bashrc=explicit_bashrc,
         driver_context=driver_context,
     )
     readiness = is_launchable(
@@ -494,7 +495,7 @@ def _context_from_entry(
             entry_kind=entry_kind,
             overrides=staged_overrides,
             config_path=config_path,
-            openfoam_bashrc=openfoam_bashrc,
+            explicit_bashrc=explicit_bashrc,
             driver_context=driver_context,
         )
         readiness = is_launchable(
@@ -505,7 +506,7 @@ def _context_from_entry(
             print(json.dumps(report.to_json(), indent=2))
             return None, 1
     execution_env = driver_context.capabilities.environment_preflight.load(
-        explicit_bashrc=openfoam_bashrc,
+        explicit_bashrc=explicit_bashrc,
         driver_context=driver_context,
     )
     return (
@@ -639,12 +640,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="For action=plan/step/run, fail on incomplete machine-readable coverage.",
     )
     parser.add_argument(
-        "--openfoam-bashrc",
+        "--environment-bashrc",
+        dest="environment_bashrc",
+        default=None,
         help=(
-            "OpenFOAM bashrc to source for strict plan/step/run. Defaults to "
-            "OPENFOAM_BASHRC, $WM_PROJECT_DIR/etc/bashrc, or a known local "
-            "OpenFOAM install path."
+            "Environment-sourcing script (e.g. an OpenFOAM bashrc) to source "
+            "for strict plan/step/run. Defaults to OPENFOAM_BASHRC, "
+            "$WM_PROJECT_DIR/etc/bashrc, or a known local OpenFOAM install path."
         ),
+    )
+    parser.add_argument(
+        "--openfoam-bashrc",
+        dest="openfoam_bashrc",
+        default=None,
+        help=argparse.SUPPRESS,  # deprecated alias for --environment-bashrc
     )
     parser.add_argument(
         "--step",
@@ -804,14 +813,34 @@ _FLAG_ERRORS_BY_ACTION = {
 }
 
 
+def _resolve_environment_bashrc(args: argparse.Namespace) -> None:
+    """Merge the deprecated ``--openfoam-bashrc`` alias into
+    ``--environment-bashrc``, in place on ``args``.
+
+    ``--environment-bashrc`` wins if both are given -- the new flag is
+    authoritative rather than this raising over a redundant but
+    non-conflicting invocation. Warns once to stderr when the deprecated
+    spelling is used at all (future/ENVIRONMENT_CONTRACT.md §10, Tier 3).
+    """
+    if args.openfoam_bashrc is not None:
+        if args.environment_bashrc is None:
+            args.environment_bashrc = args.openfoam_bashrc
+        print(
+            "warning: --openfoam-bashrc is deprecated; use --environment-bashrc instead",
+            file=sys.stderr,
+        )
+
+
 def _validate_args(parser: argparse.ArgumentParser, args) -> None:
     for flag_name, message in _FLAG_ERRORS_BY_ACTION.get(args.action, ()):
         if getattr(args, flag_name):
             parser.error(message)
     if args.action not in {"plan", "step", "run"} and args.strict:
         parser.error("--strict is only valid with action=plan, action=step, or action=run")
-    if args.openfoam_bashrc and args.action not in {"plan", "step", "run"}:
-        parser.error("--openfoam-bashrc is only valid with action=plan, action=step, or action=run")
+    if args.environment_bashrc and args.action not in {"plan", "step", "run"}:
+        parser.error(
+            "--environment-bashrc is only valid with action=plan, action=step, or action=run"
+        )
     if args.action != "step" and args.step:
         parser.error("--step is only valid with action=step")
     if args.apply is not None and args.action != "step":
@@ -853,6 +882,7 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    _resolve_environment_bashrc(args)
     _validate_args(parser, args)
 
     from .core.plugin_interface import (
@@ -902,7 +932,7 @@ def main(argv: list[str] | None = None) -> int:
             entry_kind=args.entry_kind,
             overrides=overrides,
             config_path=args.config,
-            openfoam_bashrc=args.openfoam_bashrc,
+            explicit_bashrc=args.environment_bashrc,
             driver_context=driver_context,
         )
         print(json.dumps(report.to_json(), indent=2))
@@ -924,7 +954,7 @@ def main(argv: list[str] | None = None) -> int:
             entry_kind=args.entry_kind,
             overrides=overrides,
             config_path=args.config,
-            openfoam_bashrc=args.openfoam_bashrc,
+            explicit_bashrc=args.environment_bashrc,
             driver_context=driver_context,
             stage_for_execution=True,
             fresh=args.fresh,
@@ -943,7 +973,7 @@ def main(argv: list[str] | None = None) -> int:
             entry_kind=args.entry_kind,
             overrides=overrides,
             config_path=args.config,
-            openfoam_bashrc=args.openfoam_bashrc,
+            explicit_bashrc=args.environment_bashrc,
             driver_context=driver_context,
             stage_for_execution=True,
             fresh=args.fresh,

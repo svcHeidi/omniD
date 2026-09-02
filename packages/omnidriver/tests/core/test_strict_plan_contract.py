@@ -52,7 +52,7 @@ def test_unresolvable_solver_selector_is_reported_as_a_diagnostic(tmp_path):
         "case",
         entry_kind="case_folder",
         overrides={"tutorials_root": str(tutorials_root)},
-        openfoam_bashrc="/no/such/openfoam/bashrc",
+        explicit_bashrc="/no/such/openfoam/bashrc",
         driver_context=default_driver_context(),
     ).to_json()
 

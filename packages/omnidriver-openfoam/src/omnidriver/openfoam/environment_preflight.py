@@ -191,7 +191,7 @@ def _environment_diagnostics(
     workflow_dag: dict[str, Any] | None,
     *,
     env: dict[str, str] | None = None,
-    openfoam_bashrc: str | None = None,
+    explicit_bashrc: str | None = None,
     driver_context: Any | None = None,
 ) -> tuple[StrictDiagnostic, ...]:
     """Preflight the runtime environment against the plan's actual commands."""
@@ -202,7 +202,7 @@ def _environment_diagnostics(
     loaded_environment = None
     if checked_env is None:
         loaded_environment = load_openfoam_environment(
-            explicit_bashrc=openfoam_bashrc,
+            explicit_bashrc=explicit_bashrc,
             driver_context=driver_context,
         )
         checked_env = loaded_environment.env
@@ -213,7 +213,7 @@ def _environment_diagnostics(
             "openfoam_env_source_failed",
             loaded_environment.error,
             source="environment",
-            field=loaded_environment.bashrc or openfoam_bashrc or "",
+            field=loaded_environment.bashrc or explicit_bashrc or "",
         ))
 
     if "WM_PROJECT_DIR" not in checked_env:

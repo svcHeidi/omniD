@@ -233,7 +233,7 @@ def legacy_base_mesh_geometry_diagnostics(case_root) -> tuple:
 
 @_instrumented
 def legacy_environment_diagnostics(
-    workflow_dag, *, env=None, openfoam_bashrc=None, driver_context=None,
+    workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None,
 ) -> tuple:
     """Plugins predating get_environment_diagnostics().
 
@@ -246,7 +246,7 @@ def legacy_environment_diagnostics(
     from omnidriver.openfoam.environment_preflight import _environment_diagnostics
 
     return _environment_diagnostics(
-        workflow_dag, env=env, openfoam_bashrc=openfoam_bashrc,
+        workflow_dag, env=env, explicit_bashrc=explicit_bashrc,
         driver_context=driver_context,
     )
 
