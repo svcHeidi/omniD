@@ -1,33 +1,3 @@
-#----------------------------------------------------------------------------#
-# License
-#     This file is part of cardiacFoam.
-#
-#     cardiacFoam is free software: you can redistribute it and/or modify it
-#     under the terms of the GNU General Public License as published by the
-#     Free Software Foundation, either version 3 of the License, or (at your
-#     option) any later version.
-#
-#     cardiacFoam is distributed in the hope that it will be useful, but
-#     WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#     General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Module
-#     run_document_exec
-#
-# Description
-#     Adapts an agent-authored RunDocument v3 into the inputs the strict
-#     workflow executor consumes. The producer-side counterpart to
-#     strict_planning.strict_plan: instead of deriving the plan from the
-#     on-disk case, it executes the plan the agent already authored.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
-
 """Load and adapt a RunDocument v3 for strict workflow execution.
 
 ``load_run_document(path)`` reads and schema-validates a document (migrating

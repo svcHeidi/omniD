@@ -1,36 +1,3 @@
-#----------------------------------------------------------------------------#
-# License
-#     This file is part of cardiacFoam.
-#
-#     cardiacFoam is free software: you can redistribute it and/or modify it
-#     under the terms of the GNU General Public License as published by the
-#     Free Software Foundation, either version 3 of the License, or (at your
-#     option) any later version.
-#
-#     cardiacFoam is distributed in the hope that it will be useful, but
-#     WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#     General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Module
-#     capability_manifest
-#
-# Description
-#     Assembles the machine-readable surface of what the driver will accept:
-#     the allowed workflow-command set and the field names each solver can
-#     sample. Pure assembly from explicit inputs supplied by the calling
-#     plugin (commands, utility manifests, samplable fields) plus the
-#     core-neutral workflow allowlist, so the manifest cannot drift from the
-#     enforcers that actually gate execution and this module holds no solver
-#     knowledge of its own.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
-
 from __future__ import annotations
 
 from typing import Any, Iterable

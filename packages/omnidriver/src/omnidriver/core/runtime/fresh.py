@@ -1,34 +1,3 @@
-#----------------------------------------------------------------------------#
-# License
-#     This file is part of cardiacFoam.
-#
-#     cardiacFoam is free software: you can redistribute it and/or modify it
-#     under the terms of the GNU General Public License as published by the
-#     Free Software Foundation, either version 3 of the License, or (at your
-#     option) any later version.
-#
-#     cardiacFoam is distributed in the hope that it will be useful, but
-#     WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#     General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Module
-#     fresh
-#
-# Description
-#     Safety-gated deletion for the --fresh flag: deletes a resolved output
-#     directory before a run/sweep-run so a stale workflow_state.json /
-#     sweep_manifest.json cannot silently resume as "completed". See
-#     docs/superpowers/specs/2026-08-06-driverfoam-fresh-flag-design.md for
-#     the incident and design rationale.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
-
 from __future__ import annotations
 
 import shutil

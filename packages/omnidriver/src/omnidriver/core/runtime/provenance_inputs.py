@@ -1,36 +1,3 @@
-#----------------------------------------------------------------------------#
-# License
-#     This file is part of cardiacFoam.
-#
-#     cardiacFoam is free software: you can redistribute it and/or modify it
-#     under the terms of the GNU General Public License as published by the
-#     Free Software Foundation, either version 3 of the License, or (at your
-#     option) any later version.
-#
-#     cardiacFoam is distributed in the hope that it will be useful, but
-#     WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#     General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Module
-#     provenance_inputs
-#
-# Description
-#     Canonical input enumeration: which files, case scripts, and runtime
-#     dependencies a workflow run actually consumes, so Task 3 can
-#     checkpoint the answer. Reuses Task 1's snapshot model
-#     (component_for_path) and Task 2a's runtime-dependency composition
-#     (component_for_runtime_dependency) rather than building a parallel
-#     one, and resolves step executables through the executor's own
-#     _resolve_command rather than a second PATH rule.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
-
 """Enumerate a case's canonical provenance inputs.
 
 Classification is by **consumption, not authorship** (I1). ``constant/polyMesh``

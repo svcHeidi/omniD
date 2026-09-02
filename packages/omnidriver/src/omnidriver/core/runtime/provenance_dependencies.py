@@ -1,33 +1,3 @@
-#----------------------------------------------------------------------------#
-# License
-#     This file is part of cardiacFoam.
-#
-#     cardiacFoam is free software: you can redistribute it and/or modify it
-#     under the terms of the GNU General Public License as published by the
-#     Free Software Foundation, either version 3 of the License, or (at your
-#     option) any later version.
-#
-#     cardiacFoam is distributed in the hope that it will be useful, but
-#     WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#     General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Module
-#     provenance_dependencies
-#
-# Description
-#     Turns a plugin-declared RuntimeDependency into a fingerprinted
-#     ProvenanceComponent, reusing Task 1's provenance model (component_for_
-#     path's content-hash / degrade-to-metadata / unavailable policy)
-#     instead of building a parallel one.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
-
 """Compose ``RuntimeDependency`` declarations into ``ProvenanceComponent``s.
 
 A runtime dependency's resolved path is not under any case root -- a library
