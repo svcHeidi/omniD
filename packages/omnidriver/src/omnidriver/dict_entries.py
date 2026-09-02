@@ -63,27 +63,3 @@ def all_documented_driver_paths(
         for entry in driver_context.capabilities.dictionaries.entries()
     ]
     return tuple(dict.fromkeys(paths))
-
-
-def __getattr__(name: str):
-    """PEP 562 lazy resolution for deprecated cardiac-catalog re-exports.
-
-    ``CONTROL_DICT_ENTRIES``/``PHYSICS_PROPERTY_ENTRIES`` used to be imported
-    at module scope from the cardiacFoam plugin, which meant every consumer
-    of this (solver-neutral) module transitively imported cardiac plugin
-    internals just by importing ``dict_entries``. Resolving them lazily here
-    keeps ``from omnidriver.dict_entries import CONTROL_DICT_ENTRIES``
-    (and ``PHYSICS_PROPERTY_ENTRIES``) working unchanged for existing
-    external callers while removing the module-scope import.
-    """
-    if name in ("CONTROL_DICT_ENTRIES", "PHYSICS_PROPERTY_ENTRIES"):
-        from omnidriver.cardiacfoam.common_dict_entries import (
-            CONTROL_DICT_ENTRIES,
-            PHYSICS_PROPERTY_ENTRIES,
-        )
-
-        return {
-            "CONTROL_DICT_ENTRIES": CONTROL_DICT_ENTRIES,
-            "PHYSICS_PROPERTY_ENTRIES": PHYSICS_PROPERTY_ENTRIES,
-        }[name]
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

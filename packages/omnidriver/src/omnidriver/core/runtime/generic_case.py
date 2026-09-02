@@ -95,12 +95,7 @@ def _normalize_case_specs(
     normalized: list[CaseConfig] = []
     for index, item in enumerate(cases, start=1):
         case_id = str(item.get("case_id", f"case{index:03d}"))
-        # "openfoam_bashrc" is a deprecated alias for "explicit_bashrc" --
-        # neither key is read downstream today (Tier 3,
-        # future/ENVIRONMENT_CONTRACT.md §10), but the fallback keeps an
-        # existing --config JSON using the old key from silently changing
-        # which value would land here if a real reader is added later.
-        item_bashrc = item.get("explicit_bashrc", item.get("openfoam_bashrc"))
+        item_bashrc = item.get("explicit_bashrc")
         normalized.append(
             CaseConfig(
                 case_id=case_id,
@@ -206,7 +201,6 @@ def make_spec(
     parallel: bool = False,
     touch_case_foam: bool = False,
     explicit_bashrc: str | Path | None = None,
-    openfoam_bashrc: str | Path | None = None,  # deprecated alias for explicit_bashrc
     collect_patterns: Sequence[str] = (),
     run_script_relpath: str | Path = RUN_CASE_SCRIPT_RELPATH,
     driver_context: Any | None = None,
@@ -217,8 +211,6 @@ def make_spec(
 ) -> TutorialSpec:
     if not str(case_dir_name).strip():
         raise ValueError("case_dir_name cannot be empty")
-    if openfoam_bashrc is not None and explicit_bashrc is None:
-        explicit_bashrc = openfoam_bashrc
 
     from omnidriver.core.compatibility import (
         legacy_generic_case_dict_file_aliases,

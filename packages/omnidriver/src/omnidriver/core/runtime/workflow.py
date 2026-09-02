@@ -65,10 +65,6 @@ CORE_NEUTRAL_COMMANDS = frozenset(
     }
 )
 
-# Compatibility alias for pre-Phase-1 importers. Prefer CORE_NEUTRAL_COMMANDS
-# plus the active context's plugin commands.
-OPENFOAM_OR_DRIVER_COMMANDS = CORE_NEUTRAL_COMMANDS
-
 # Bare command names that may resolve to a case-LOCAL executable. Every other
 # bare name resolves via PATH only, so a case dir cannot shadow a trusted
 # binary. Imported by workflow_runner for _resolve_command.

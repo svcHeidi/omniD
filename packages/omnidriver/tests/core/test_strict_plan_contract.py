@@ -80,7 +80,7 @@ def test_the_cli_still_emits_parseable_json(tmp_path):
             sys.executable, "-m", "omnidriver", "plan", "--strict",
             "--tutorials-root", str(tutorials_root),
             "--entry", "case", "--entry-kind", "case_folder",
-            "--openfoam-bashrc", "/no/such/openfoam/bashrc",
+            "--environment-bashrc", "/no/such/openfoam/bashrc",
         ],
         cwd=DRIVER_ROOT, capture_output=True, text=True,
     )

@@ -450,7 +450,7 @@ class CaseIntrospectionCapability(Protocol):
     ``case_files``/``config_values`` to do the OpenFOAM-shaped lookup.
 
     :adapts: get_samplable_fields, get_selected_start_time, resolve_case_models
-    :consumed-by: omnidriver/core/capability_manifest.py, omnidriver/core/runtime/provenance_inputs.py
+    :consumed-by: omnidriver/core/runtime/provenance_inputs.py
     :fallback: legacy_resolve_case_models, legacy_samplable_fields, legacy_selected_start_time
     :status: optional
     """

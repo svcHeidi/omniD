@@ -42,9 +42,11 @@ the test focused on validator behaviour rather than field enumeration.
 from __future__ import annotations
 
 from omnidriver.dict_entries import (
-    CONTROL_DICT_ENTRIES,
     DictEntry,
     get_electro_property_entry_groups,
+)
+from omnidriver.cardiacfoam.common_dict_entries import (
+    CONTROL_DICT_ENTRIES,
     PHYSICS_PROPERTY_ENTRIES,
 )
 from omnidriver.core.plugin_interface import default_driver_context
@@ -687,9 +689,9 @@ Fixture-to-solver mapping (derived from each spec's defaults.ELECTRO_PROPERTIES_
 
 import pytest
 
-from omnidriver.dict_entries import (
+from omnidriver.dict_entries import get_electro_property_entry_groups
+from omnidriver.cardiacfoam.common_dict_entries import (
     CONTROL_DICT_ENTRIES,
-    get_electro_property_entry_groups,
     PHYSICS_PROPERTY_ENTRIES,
 )
 from omnidriver.core.runtime.run_model import RunDocument

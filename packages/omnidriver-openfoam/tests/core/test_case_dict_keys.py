@@ -138,7 +138,7 @@ def test_strict_plan_reports_a_misspelled_key_without_failing(tmp_path):
         "case",
         entry_kind="case_folder",
         overrides={"tutorials_root": str(tutorials_root)},
-        openfoam_bashrc="/no/such/openfoam/bashrc",
+        explicit_bashrc="/no/such/openfoam/bashrc",
         driver_context=default_driver_context(),
     )
     payload = report.to_json()
@@ -294,7 +294,7 @@ def test_a_misspelled_key_is_silently_replaced_by_the_catalogue_default(tmp_path
         "case",
         entry_kind="case_folder",
         overrides={"tutorials_root": str(tutorials_root)},
-        openfoam_bashrc="/no/such/openfoam/bashrc",
+        explicit_bashrc="/no/such/openfoam/bashrc",
         driver_context=default_driver_context(),
     ).to_json()
 

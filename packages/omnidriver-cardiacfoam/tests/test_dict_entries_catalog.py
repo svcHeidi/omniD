@@ -7,10 +7,10 @@ from pathlib import Path
 
 from omnidriver.dict_entries import (
     get_electro_property_entry_groups,
-    PHYSICS_PROPERTY_ENTRIES,
     all_documented_driver_paths,
     Phase,
 )
+from omnidriver.cardiacfoam.common_dict_entries import PHYSICS_PROPERTY_ENTRIES
 from omnidriver.cardiacfoam.overrides import apply_electro_property_overrides
 from conftest import assert_foam_entry
 
@@ -519,13 +519,13 @@ class TestControlDictEntries(unittest.TestCase):
     """CONTROL_DICT_ENTRIES catalog shape contract."""
 
     def test_catalog_exposes_delta_t_and_end_time(self) -> None:
-        from omnidriver.dict_entries import CONTROL_DICT_ENTRIES
+        from omnidriver.cardiacfoam.common_dict_entries import CONTROL_DICT_ENTRIES
         driver_paths = {e.driver_path for e in CONTROL_DICT_ENTRIES}
         self.assertIn("deltaT", driver_paths)
         self.assertIn("endTime", driver_paths)
 
     def test_time_entries_carry_seconds_unit(self) -> None:
-        from omnidriver.dict_entries import CONTROL_DICT_ENTRIES
+        from omnidriver.cardiacfoam.common_dict_entries import CONTROL_DICT_ENTRIES
         time_entries = {"deltaT", "endTime", "startTime", "writeInterval"}
         for entry in CONTROL_DICT_ENTRIES:
             if entry.driver_path in time_entries:
@@ -535,13 +535,13 @@ class TestControlDictEntries(unittest.TestCase):
                 )
 
     def test_entries_belong_to_solver_phase(self) -> None:
-        from omnidriver.dict_entries import CONTROL_DICT_ENTRIES
+        from omnidriver.cardiacfoam.common_dict_entries import CONTROL_DICT_ENTRIES
         for entry in CONTROL_DICT_ENTRIES:
             self.assertIn("solver", entry.phases,
                           f"{entry.driver_path} must be in solver phase")
 
     def test_entries_are_marked_required(self) -> None:
-        from omnidriver.dict_entries import CONTROL_DICT_ENTRIES
+        from omnidriver.cardiacfoam.common_dict_entries import CONTROL_DICT_ENTRIES
         for entry in CONTROL_DICT_ENTRIES:
             self.assertTrue(entry.required,
                             f"{entry.driver_path} must be required=True")

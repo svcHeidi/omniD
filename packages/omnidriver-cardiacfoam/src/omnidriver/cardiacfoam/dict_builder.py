@@ -973,7 +973,7 @@ def build_and_launch(
         case_dir_name=case_dir.name,
         solver_command="cardiacFoam",
         pre_solve_commands=list(pre_solve_commands or ()),
-        openfoam_bashrc=openfoam_bashrc,
+        explicit_bashrc=openfoam_bashrc,
     )
     execution_context = resolve_execution_context(spec)
     workflow_dag, _dag_diagnostics = normalize_workflow_dag(

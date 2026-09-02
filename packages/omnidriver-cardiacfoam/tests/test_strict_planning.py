@@ -54,7 +54,7 @@ def _spec_with_workflow(case_root: Path, *, steps: list[dict]) -> TutorialSpec:
 
 
 def test_strict_plan_succeeds_for_single_cell() -> None:
-    report = strict_plan("singleCell", openfoam_bashrc="/no/such/openfoam/bashrc", driver_context=_CTX)
+    report = strict_plan("singleCell", explicit_bashrc="/no/such/openfoam/bashrc", driver_context=_CTX)
     payload = report.to_json()
 
     assert payload["status"] == "ok"
@@ -159,7 +159,7 @@ def test_strict_plan_status_ignores_environment_only_errors(monkeypatch) -> None
         lambda name, *_, **__: f"/usr/bin/{name}" if name == "cardiacFoam" else None,
     )
 
-    report = strict_plan("singleCell", openfoam_bashrc="/no/such/openfoam/bashrc", driver_context=_CTX)
+    report = strict_plan("singleCell", explicit_bashrc="/no/such/openfoam/bashrc", driver_context=_CTX)
     payload = report.to_json()
 
     assert payload["status"] == "ok"

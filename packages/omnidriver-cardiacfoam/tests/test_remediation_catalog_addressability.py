@@ -4,9 +4,9 @@ catalog, so a hint never points an agent at a key the driver cannot set."""
 from __future__ import annotations
 
 from omnidriver.core.runtime.remediation import STATIC_REMEDIATION_HINTS, RemediationHint
-from omnidriver.dict_entries import (
+from omnidriver.dict_entries import get_electro_property_entry_groups
+from omnidriver.cardiacfoam.common_dict_entries import (
     CONTROL_DICT_ENTRIES,
-    get_electro_property_entry_groups,
     PHYSICS_PROPERTY_ENTRIES,
 )
 

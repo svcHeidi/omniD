@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -650,12 +649,6 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
-        "--openfoam-bashrc",
-        dest="openfoam_bashrc",
-        default=None,
-        help=argparse.SUPPRESS,  # deprecated alias for --environment-bashrc
-    )
-    parser.add_argument(
         "--step",
         help="Workflow step id to execute when action=step.",
     )
@@ -813,24 +806,6 @@ _FLAG_ERRORS_BY_ACTION = {
 }
 
 
-def _resolve_environment_bashrc(args: argparse.Namespace) -> None:
-    """Merge the deprecated ``--openfoam-bashrc`` alias into
-    ``--environment-bashrc``, in place on ``args``.
-
-    ``--environment-bashrc`` wins if both are given -- the new flag is
-    authoritative rather than this raising over a redundant but
-    non-conflicting invocation. Warns once to stderr when the deprecated
-    spelling is used at all (future/ENVIRONMENT_CONTRACT.md §10, Tier 3).
-    """
-    if args.openfoam_bashrc is not None:
-        if args.environment_bashrc is None:
-            args.environment_bashrc = args.openfoam_bashrc
-        print(
-            "warning: --openfoam-bashrc is deprecated; use --environment-bashrc instead",
-            file=sys.stderr,
-        )
-
-
 def _validate_args(parser: argparse.ArgumentParser, args) -> None:
     for flag_name, message in _FLAG_ERRORS_BY_ACTION.get(args.action, ()):
         if getattr(args, flag_name):
@@ -882,7 +857,6 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    _resolve_environment_bashrc(args)
     _validate_args(parser, args)
 
     from .core.plugin_interface import (
