@@ -19,6 +19,8 @@ from pathlib import Path
 
 import pytest
 
+from conftest import skip_without_repo
+
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 
 _WALK = """
@@ -64,6 +66,7 @@ print("bundled data files present")
 
 
 @pytest.mark.slow
+@skip_without_repo
 def test_every_core_module_imports_from_a_wheel(tmp_path) -> None:
     env_dir = tmp_path / "venv"
     venv.create(env_dir, with_pip=True)

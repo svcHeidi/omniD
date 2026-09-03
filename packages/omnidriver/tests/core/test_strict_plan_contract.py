@@ -20,10 +20,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from conftest import skip_without_monorepo
-from omnidriver.core.specs.paths import repo_root_default
+from conftest import skip_without_monorepo, NO_REPO_ROOT, repo_root, skip_without_repo
 
-DRIVER_ROOT = repo_root_default()
+pytestmark = skip_without_repo
+
+DRIVER_ROOT = repo_root or NO_REPO_ROOT
 _SINGLE_CELL = (
     DRIVER_ROOT / "tutorials" / "electrophysiologyProtocols" / "singleCell"
 )

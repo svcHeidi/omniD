@@ -23,6 +23,8 @@ import pathlib
 
 import omnidriver.core
 
+from conftest import skip_without_repo
+
 _CORE_ROOT = pathlib.Path(omnidriver.core.__file__).resolve().parent
 
 # compatibility.py defines the function; it is allowed to mention its own name.
@@ -75,6 +77,7 @@ def test_core_never_resolves_an_implicit_driver_context() -> None:
     )
 
 
+@skip_without_repo
 def test_openfoam_never_resolves_an_implicit_driver_context() -> None:
     assert _OPENFOAM_ROOT.is_dir(), (
         f"expected omnidriver-openfoam's source tree at {_OPENFOAM_ROOT}, but "

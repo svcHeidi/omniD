@@ -37,6 +37,8 @@ import pathlib
 
 import omnidriver.core
 
+from conftest import skip_without_repo
+
 #: .../packages — parents[4] of core/__init__.py: core, omnidriver, src,
 #: omnidriver (the package dir), packages. Asserted below rather than trusted:
 #: a guard whose root does not resolve passes by scanning nothing, which this
@@ -67,6 +69,7 @@ def _offenders() -> list[str]:
     return found
 
 
+@skip_without_repo
 def test_the_scan_root_resolves() -> None:
     assert _PACKAGES.is_dir(), _PACKAGES
     assert sorted(p.parent.name for p in _PACKAGES.glob("*/src")) == [

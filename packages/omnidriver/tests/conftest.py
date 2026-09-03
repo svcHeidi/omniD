@@ -6,7 +6,47 @@ from pathlib import Path
 os.environ["SKIP_ENV_DIAGNOSTICS"] = "1"
 
 
-from omnidriver.core.specs.paths import cardiacfoam_monorepo_root
+from omnidriver.core.specs.paths import cardiacfoam_monorepo_root, repo_root_default
+
+
+def _repo_root_or_none() -> Path | None:
+    """The repository root, or ``None`` when there is no checkout.
+
+    ``repo_root_default()`` raises rather than guessing, which is right for
+    runtime code -- silently resolving to the wrong ancestor is worse than
+    failing. But a *test module* that calls it at import time turns "no
+    checkout" into a collection error, which no skipif marker can catch
+    because the module never finishes importing. Eight modules did exactly
+    that, so `pytest packages/omnidriver/tests` could not even be collected
+    against an installed wheel; see scripts/check-wheel-artifact.py.
+    """
+    try:
+        return repo_root_default()
+    except RuntimeError:
+        return None
+
+
+#: The repository root resolved once at collection time. ``None`` when running
+#: against an installed distribution with no checkout above it.
+repo_root: Path | None = _repo_root_or_none()
+
+#: Stand-in so a module-level ``REPO_ROOT / "schemas" / ...`` expression stays
+#: constructible when there is no checkout. Building a Path touches no
+#: filesystem; every test that would dereference it is skipped by
+#: ``skip_without_repo``, so this value is never read.
+NO_REPO_ROOT = Path("/nonexistent-no-repository-checkout")
+
+#: Apply to any test module that reads files out of the repository itself --
+#: schemas, scripts, ARCHITECTURE.md, the tutorials tree. Distinct from
+#: ``skip_without_monorepo``: that one asks for the *cardiacFoam* tree, this
+#: one only asks that we are running inside a checkout at all.
+skip_without_repo = pytest.mark.skipif(
+    repo_root is None,
+    reason=(
+        "Requires a repository checkout (this module reads files from it). "
+        "Not available when running against an installed distribution."
+    ),
+)
 
 #: The monorepo root resolved once at collection time.  ``None`` in standalone.
 #: Shared with shipped code (e.g. utility_catalog.py's UTILITIES_ROOT) via

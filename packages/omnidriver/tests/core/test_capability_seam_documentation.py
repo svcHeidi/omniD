@@ -26,11 +26,14 @@ from omnidriver.core import (
     plugin_capabilities,
     plugin_interface,
 )
-from omnidriver.core.specs.paths import repo_root_default
+
+from conftest import NO_REPO_ROOT, repo_root, skip_without_repo
 
 # plugin_capabilities.__file__ = .../src/omnidriver/core/plugin_capabilities.py
 DRIVER_ROOT = Path(plugin_capabilities.__file__).resolve().parent.parent.parent
-REPO_ROOT = repo_root_default()
+pytestmark = skip_without_repo
+
+REPO_ROOT = repo_root or NO_REPO_ROOT
 GENERATOR = REPO_ROOT / "scripts" / "export-capability-seams.py"
 
 # :consumed-by: paths were written for the old single-package layout, where

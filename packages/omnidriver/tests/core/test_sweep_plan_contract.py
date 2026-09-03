@@ -29,7 +29,7 @@ import json
 from pathlib import Path
 
 from omnidriver.core.runtime.sweep_runner import sweep_plan
-from omnidriver.core.specs.paths import repo_root_default
+from conftest import NO_REPO_ROOT, repo_root, skip_without_repo
 from omnidriver.core.plugin_interface import generic_openfoam_context
 
 _CTX = generic_openfoam_context()
@@ -64,6 +64,7 @@ def test_a_valid_spec_reports_no_spec_error(tmp_path):
     assert "spec_error" not in report
 
 
+@skip_without_repo
 def test_a_malformed_spec_still_exits_non_zero(tmp_path):
     """Structured is not the same as successful."""
     import subprocess
@@ -71,7 +72,7 @@ def test_a_malformed_spec_still_exits_non_zero(tmp_path):
 
     spec_path = tmp_path / "sweep.json"
     spec_path.write_text("{ not json")
-    driver_root = repo_root_default()
+    driver_root = repo_root or NO_REPO_ROOT
 
     result = subprocess.run(
         [

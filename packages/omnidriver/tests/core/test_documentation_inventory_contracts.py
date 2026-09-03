@@ -4,12 +4,11 @@ import re
 from pathlib import Path
 
 import pytest
-from conftest import monorepo_root, skip_without_monorepo
-from omnidriver.core.specs.paths import repo_root_default
-pytestmark = skip_without_monorepo
+from conftest import monorepo_root, skip_without_monorepo, NO_REPO_ROOT, repo_root, skip_without_repo
+pytestmark = [skip_without_repo, skip_without_monorepo]
 
 
-ROOT = monorepo_root or repo_root_default()
+ROOT = monorepo_root or repo_root or NO_REPO_ROOT
 
 
 def _registered_types(library: str, table: str) -> set[str]:

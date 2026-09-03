@@ -8,14 +8,13 @@ from io import StringIO
 from pathlib import Path
 
 import pytest
-from conftest import monorepo_root, skip_without_monorepo
-from omnidriver.core.specs.paths import repo_root_default
-pytestmark = skip_without_monorepo
+from conftest import monorepo_root, skip_without_monorepo, NO_REPO_ROOT, repo_root, skip_without_repo
+pytestmark = [skip_without_repo, skip_without_monorepo]
 
 from omnidriver.cli import main
 
 
-REPO_ROOT = monorepo_root or repo_root_default()
+REPO_ROOT = monorepo_root or repo_root or NO_REPO_ROOT
 SINGLE_CELL_ROOT = REPO_ROOT / "tutorials" / "electrophysiologyProtocols" / "singleCell"
 
 

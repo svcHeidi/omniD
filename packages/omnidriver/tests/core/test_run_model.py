@@ -17,9 +17,11 @@ import jsonschema
 import pytest
 
 from omnidriver.core.runtime.run_model import RunDocument
-from omnidriver.core.specs.paths import repo_root_default
+from conftest import NO_REPO_ROOT, repo_root, skip_without_repo
 
-SCHEMA_PATH = repo_root_default() / "schemas" / "run-document.json"
+pytestmark = skip_without_repo
+
+SCHEMA_PATH = (repo_root or NO_REPO_ROOT) / "schemas" / "run-document.json"
 
 
 @pytest.fixture
@@ -69,7 +71,7 @@ def test_packaged_schema_resource_matches_fixture_schema(schema):
 def test_packaged_schema_is_reproducible_from_the_generator() -> None:
     result = subprocess.run(
         [sys.executable, "schemas/generate_run_document_schema.py"],
-        cwd=repo_root_default(),
+        cwd=repo_root or NO_REPO_ROOT,
         capture_output=True,
         text=True,
     )
@@ -82,7 +84,7 @@ def test_packaged_schema_is_reproducible_from_the_generator() -> None:
             "--",
             "packages/omnidriver/src/omnidriver/schemas/run-document.json",
         ],
-        cwd=repo_root_default(),
+        cwd=repo_root or NO_REPO_ROOT,
         capture_output=True,
         text=True,
     )
