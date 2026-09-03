@@ -43,12 +43,12 @@ packages installed):
 
 | | state |
 |---|---|
-| all three packages installed | **1543 passed, 276 skipped, 40 subtests, 0 failed** |
-| core installed alone | **676 passed, 93 skipped, 0 failed** |
+| all three packages installed | **1546 passed, 276 skipped, 40 subtests, 0 failed** |
+| core installed alone | **679 passed, 93 skipped, 0 failed** |
 | core imported from a built wheel | ✅ guarded by `test_wheel_install_imports.py` |
 | plugin resolves by entry-point name | ✅ guarded by `test_entry_point_group_matches_packaging.py` |
 | core's CLI usable alone | ✅ `omnidriver --help` exits 0 in a core-only install |
-| `"org.cardiacfoam"` in core | 2 occurrences, both in docstrings/comments describing the fallback naming convention (`plugin_capabilities.py:1361`, `capability_seams.py:160`) — zero in executable logic |
+| `"org.cardiacfoam"` in core | 1 occurrence, in a docstring recording that the twenty gated fallbacks were deleted (`plugin_capabilities.py:1362`) — zero in executable logic. **Corrected 2026-09-03**: this said 2 occurrences and named `capability_seams.py:160`, whose copy went in `6a212dd`. |
 
 The core-only failure count that this table used to track as the honest
 measure of how far core is from standing alone is now **zero**. It began at

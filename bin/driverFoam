@@ -3,5 +3,17 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="${SCRIPT_DIR}/.."
-export PYTHONPATH="${ROOT_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
-exec python3 -m openfoam_driver "$@"
+
+# Each package keeps its sources under packages/<name>/src, so the repo root
+# alone puts nothing importable on the path -- that was the pre-migration
+# layout, where openfoam_driver/ sat at the root.
+SRC_DIRS="${ROOT_DIR}/packages/omnidriver/src"
+SRC_DIRS="${SRC_DIRS}:${ROOT_DIR}/packages/omnidriver-openfoam/src"
+SRC_DIRS="${SRC_DIRS}:${ROOT_DIR}/packages/omnidriver-cardiacfoam/src"
+export PYTHONPATH="${SRC_DIRS}${PYTHONPATH:+:${PYTHONPATH}}"
+# The installed console script is `omnidriver` (packages/omnidriver/
+# pyproject.toml). This wrapper kept the pre-migration name working and exec'd
+# `openfoam_driver`, a module that exists in no install, so it always failed.
+# Repointed rather than deleted: the old name costs one line to support, and
+# something outside this repo may still invoke it.
+exec python3 -m omnidriver "$@"

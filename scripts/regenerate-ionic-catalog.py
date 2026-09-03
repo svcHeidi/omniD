@@ -33,8 +33,8 @@ aliases, recommended_*, model_type, ...) are preserved untouched.
 Idempotent: running this twice produces zero diff.
 
 Usage:
-    python applications/scripts/driverFoam/scripts/regenerate-ionic-catalog.py
-    python applications/scripts/driverFoam/scripts/regenerate-ionic-catalog.py --check
+    python scripts/regenerate-ionic-catalog.py
+    python scripts/regenerate-ionic-catalog.py --check
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ from omnidriver.core.specs.paths import cardiacfoam_monorepo_root, repo_root_def
 REPO_ROOT = repo_root_default()
 CATALOG_PATH = (
     REPO_ROOT
-    / "packages" / "omnidriver-cardiacfoam" / "src" / "omnidriver" / "cardiac"
+    / "packages" / "omnidriver-cardiacfoam" / "src" / "omnidriver" / "cardiacfoam"
     / "ionic_model_catalog.py"
 )
 # The *_Names.H headers this script syncs against live in the C++ solver
@@ -167,7 +167,7 @@ def main() -> int:
     if args.check:
         print(
             "ionic_model_catalog.py is OUT OF SYNC with *_Names.H headers.\n"
-            "Run: python applications/scripts/driverFoam/scripts/"
+            "Run: python scripts/"
             "regenerate-ionic-catalog.py",
             file=sys.stderr,
         )
