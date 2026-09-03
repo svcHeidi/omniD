@@ -1,34 +1,10 @@
-#----------------------------------------------------------------------------#
-# License
-#     This file is part of cardiacFoam.
-#
-#     cardiacFoam is free software: you can redistribute it and/or modify it
-#     under the terms of the GNU General Public License as published by the
-#     Free Software Foundation, either version 3 of the License, or (at your
-#     option) any later version.
-#
-#     cardiacFoam is distributed in the hope that it will be useful, but
-#     WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#     General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Module
-#     test_mesh_geometry_contract
-#
-# Description
-#     Guard against drift between the Python detector thresholds and the
-#     checkMeshGeometry.C source-of-truth constants.
-#
-#     Parses the *named* C++ constants (mmLower/umLower/umUpper) rather than
-#     matching bare literals, which could match unrelated numbers anywhere in
-#     the source.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
+"""Guard against drift between the Python detector thresholds and the
+checkMeshGeometry.C source-of-truth constants.
+
+Parses the *named* C++ constants (mmLower/umLower/umUpper) rather than
+matching bare literals, which could match unrelated numbers anywhere in
+the source.
+"""
 
 from __future__ import annotations
 

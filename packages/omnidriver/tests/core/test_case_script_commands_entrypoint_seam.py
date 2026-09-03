@@ -1,43 +1,19 @@
-#----------------------------------------------------------------------------#
-# License
-#     This file is part of cardiacFoam.
-#
-#     cardiacFoam is free software: you can redistribute it and/or modify it
-#     under the terms of the GNU General Public License as published by the
-#     Free Software Foundation, either version 3 of the License, or (at your
-#     option) any later version.
-#
-#     cardiacFoam is distributed in the hope that it will be useful, but
-#     WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#     General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Module
-#     test_case_script_commands_entrypoint_seam
-#
-# Description
-#     A plugin's declared openfoam.entrypoint now resolves case-locally, not
-#     just the fixed Allrun-family names (Tier 4, entrypoint slice --
-#     future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md). Covers the
-#     core-side sites: workflow.py's allowlist and case_script_commands(),
-#     workflow_runner.py's command resolution and DYLD dot-source wrapper,
-#     provenance_inputs.py's fingerprinting mirror, and
-#     capability_manifest.py's advertisement. The sixth site
-#     (omnidriver-openfoam's environment_preflight._required_executables) is
-#     covered in that package's own test tree instead -- core's suite must
-#     never assume omnidriver-openfoam is installed (see
-#     plugins/neutral_environment_plugin.py's own docstring for why). These
-#     tests need no monorepo tutorials tree -- unlike
-#     test_trust_boundary_end_to_end.py, which exercises the same invariant
-#     for the fixed names through the full CLI but is entirely
-#     skip_without_monorepo-gated in a standalone checkout.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
+"""A plugin's declared openfoam.entrypoint now resolves case-locally, not
+just the fixed Allrun-family names (Tier 4, entrypoint slice --
+future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md). Covers the
+core-side sites: workflow.py's allowlist and case_script_commands(),
+workflow_runner.py's command resolution and DYLD dot-source wrapper,
+provenance_inputs.py's fingerprinting mirror, and
+capability_manifest.py's advertisement. The sixth site
+(omnidriver-openfoam's environment_preflight._required_executables) is
+covered in that package's own test tree instead -- core's suite must
+never assume omnidriver-openfoam is installed (see
+plugins/neutral_environment_plugin.py's own docstring for why). These
+tests need no monorepo tutorials tree -- unlike
+test_trust_boundary_end_to_end.py, which exercises the same invariant
+for the fixed names through the full CLI but is entirely
+skip_without_monorepo-gated in a standalone checkout.
+"""
 
 from __future__ import annotations
 

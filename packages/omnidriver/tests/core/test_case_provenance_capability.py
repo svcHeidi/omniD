@@ -1,32 +1,8 @@
-#----------------------------------------------------------------------------#
-# License
-#     This file is part of cardiacFoam.
-#
-#     cardiacFoam is free software: you can redistribute it and/or modify it
-#     under the terms of the GNU General Public License as published by the
-#     Free Software Foundation, either version 3 of the License, or (at your
-#     option) any later version.
-#
-#     cardiacFoam is distributed in the hope that it will be useful, but
-#     WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#     General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Module
-#     test_case_provenance_capability
-#
-# Description
-#     CaseProvenanceCapability is routed through the adapter exactly like
-#     every Phase 1 capability, with an empty fallback -- which under I1's
-#     precedence means "everything unknown is a required input", the safe
-#     default for a plugin (or plugin version) that declares nothing.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
+"""CaseProvenanceCapability is routed through the adapter exactly like
+every Phase 1 capability, with an empty fallback -- which under I1's
+precedence means "everything unknown is a required input", the safe
+default for a plugin (or plugin version) that declares nothing.
+"""
 
 from __future__ import annotations
 

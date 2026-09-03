@@ -1,34 +1,10 @@
-#----------------------------------------------------------------------------#
-# License
-#     This file is part of cardiacFoam.
-#
-#     cardiacFoam is free software: you can redistribute it and/or modify it
-#     under the terms of the GNU General Public License as published by the
-#     Free Software Foundation, either version 3 of the License, or (at your
-#     option) any later version.
-#
-#     cardiacFoam is distributed in the hope that it will be useful, but
-#     WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#     General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Module
-#     test_cli_environment_bashrc_flag
-#
-# Description
-#     --openfoam-bashrc was renamed to --environment-bashrc (Tier 3,
-#     future/ENVIRONMENT_CONTRACT.md #10) since the concept -- an
-#     environment-sourcing script -- applies to any plugin, not just
-#     OpenFOAM. The deprecated alias was removed outright rather than kept:
-#     this codebase has no external callers to protect yet, so
-#     pre-publication is the moment to drop it, not carry it forward.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
+"""--openfoam-bashrc was renamed to --environment-bashrc (Tier 3,
+future/ENVIRONMENT_CONTRACT.md #10) since the concept -- an
+environment-sourcing script -- applies to any plugin, not just
+OpenFOAM. The deprecated alias was removed outright rather than kept:
+this codebase has no external callers to protect yet, so
+pre-publication is the moment to drop it, not carry it forward.
+"""
 
 from __future__ import annotations
 

@@ -1,34 +1,10 @@
-#----------------------------------------------------------------------------#
-# License
-#     This file is part of cardiacFoam.
-#
-#     cardiacFoam is free software: you can redistribute it and/or modify it
-#     under the terms of the GNU General Public License as published by the
-#     Free Software Foundation, either version 3 of the License, or (at your
-#     option) any later version.
-#
-#     cardiacFoam is distributed in the hope that it will be useful, but
-#     WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#     General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Module
-#     test_provenance_inputs
-#
-# Description
-#     Canonical input enumeration (Task 2b): which on-disk files, case
-#     scripts, and runtime dependencies a workflow run actually consumes.
-#     Classification is by consumption, not authorship (I1) -- an
-#     unclassified file defaults to required_input, since a spurious refusal
-#     is recoverable and a silent stale replay is the incident this phase
-#     exists to prevent.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
+"""Canonical input enumeration (Task 2b): which on-disk files, case
+scripts, and runtime dependencies a workflow run actually consumes.
+Classification is by consumption, not authorship (I1) -- an
+unclassified file defaults to required_input, since a spurious refusal
+is recoverable and a silent stale replay is the incident this phase
+exists to prevent.
+"""
 
 from __future__ import annotations
 

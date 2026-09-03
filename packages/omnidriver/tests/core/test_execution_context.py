@@ -1,31 +1,7 @@
-#----------------------------------------------------------------------------#
-# License
-#     This file is part of cardiacFoam.
-#
-#     cardiacFoam is free software: you can redistribute it and/or modify it
-#     under the terms of the GNU General Public License as published by the
-#     Free Software Foundation, either version 3 of the License, or (at your
-#     option) any later version.
-#
-#     cardiacFoam is distributed in the hope that it will be useful, but
-#     WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#     General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Module
-#     test_execution_context
-#
-# Description
-#     Tests resolve_execution_context(), the neutral case_root/setup_root/
-#     output_dir/workflow_state_path resolver that replaces strict_plan's reuse of
-#     describe_launch("sim", ...) for path calculation.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
+"""Tests resolve_execution_context(), the neutral case_root/setup_root/
+output_dir/workflow_state_path resolver that replaces strict_plan's reuse of
+describe_launch("sim", ...) for path calculation.
+"""
 
 from __future__ import annotations
 

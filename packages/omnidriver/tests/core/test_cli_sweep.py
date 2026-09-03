@@ -1,39 +1,15 @@
-#----------------------------------------------------------------------------#
-# License
-#     This file is part of cardiacFoam.
-#
-#     cardiacFoam is free software: you can redistribute it and/or modify it
-#     under the terms of the GNU General Public License as published by the
-#     Free Software Foundation, either version 3 of the License, or (at your
-#     option) any later version.
-#
-#     cardiacFoam is distributed in the hope that it will be useful, but
-#     WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#     General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Module
-#     test_cli_sweep
-#
-# Description
-#     Tests CLI wiring for sweep-plan/sweep-run actions.
-#
-#     Phase 2 Task M2: every test mocks omnidriver.cli.sweep_plan/sweep_run
-#     and asserts CLI argument marshalling (kwargs, exit codes) -- nothing
-#     cardiac. Six of them failed core-only only because main() calls
-#     default_driver_context() (which requires omnidriver-cardiacfoam) when
-#     --plugin is omitted; they now patch default_driver_context to return
-#     generic_openfoam_context() instead. Assertions are unchanged. The
-#     "TNNP"/"BadModel" fixture strings were renamed to neutral placeholders
-#     since they are arbitrary labels inside a mocked return value, not
-#     assertions on cardiacFoam behaviour.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
+"""Tests CLI wiring for sweep-plan/sweep-run actions.
+
+Phase 2 Task M2: every test mocks omnidriver.cli.sweep_plan/sweep_run
+and asserts CLI argument marshalling (kwargs, exit codes) -- nothing
+cardiac. Six of them failed core-only only because main() calls
+default_driver_context() (which requires omnidriver-cardiacfoam) when
+--plugin is omitted; they now patch default_driver_context to return
+generic_openfoam_context() instead. Assertions are unchanged. The
+"TNNP"/"BadModel" fixture strings were renamed to neutral placeholders
+since they are arbitrary labels inside a mocked return value, not
+assertions on cardiacFoam behaviour.
+"""
 
 import json
 import unittest
