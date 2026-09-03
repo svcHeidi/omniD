@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from .core.contracts.dictionary import DictEntry, Phase, build_group
+from .core.contracts.dictionary import DictEntry, build_group
 if TYPE_CHECKING:
     from omnidriver.core.plugin_interface import DriverContext
 

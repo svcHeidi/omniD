@@ -238,13 +238,22 @@ def test_run_document_migrates_v1_explicitly():
     assert payload["workflowState"] is None
 
 
-def test_phase_literal_is_not_independently_redefined() -> None:
-    """core.contracts.dictionary.Phase must be the same object as
-    run_model.Phase, not a textually-identical but type-distinct redeclaration."""
-    from omnidriver.core.contracts.dictionary import Phase as ContractsPhase
-    from omnidriver.core.runtime.run_model import Phase as RunModelPhase
+def test_core_declares_no_phase_vocabulary() -> None:
+    """Neither module may spell a solver's editing phases.
 
-    assert ContractsPhase is RunModelPhase
+    This used to assert that ``contracts.dictionary.Phase`` and
+    ``run_model.Phase`` were the same object rather than two textually
+    identical declarations -- a guard against the vocabulary being duplicated.
+    It is now absent from both: a plugin declares its phases through
+    ``get_phases()`` and ``primary_phase()`` takes that order as a parameter,
+    so core names none of them. Guarding zero is the stronger version of
+    guarding one.
+    """
+    from omnidriver.core.contracts import dictionary
+    from omnidriver.core.runtime import run_model
+
+    assert not hasattr(dictionary, "Phase")
+    assert not hasattr(run_model, "Phase")
 
 
 def test_run_document_config_accepts_arbitrary_non_cardiac_keys() -> None:

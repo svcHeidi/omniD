@@ -44,7 +44,7 @@ def primary_phase(entry, phase_order: tuple[str, ...]) -> str | None:
     ``capabilities.dictionaries.phases()`` -- and returns the first phase the
     entry claims; every other declared phase is a read-only mirror.
 
-    The order is passed in rather than read from the core ``Phase`` literal
+    The order is passed in rather than read from a core-declared phase literal
     because that literal spells cardiacFoam's vocabulary. Reading it made every
     entry of a plugin with different phase words return ``None`` here, which the
     required-field and enum checks then treated as "skip".

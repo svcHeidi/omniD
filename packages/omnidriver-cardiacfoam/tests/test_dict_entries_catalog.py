@@ -8,13 +8,17 @@ from pathlib import Path
 from omnidriver.dict_entries import (
     get_electro_property_entry_groups,
     all_documented_driver_paths,
-    Phase,
 )
+from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.cardiacfoam.common_dict_entries import PHYSICS_PROPERTY_ENTRIES
 from omnidriver.cardiacfoam.overrides import apply_electro_property_overrides
 from conftest import assert_foam_entry
 
-VALID_PHASES = set(typing.get_args(Phase))
+# These four names are this plugin's, so they come from this plugin. They used
+# to be read out of core's ``Phase`` literal via typing.get_args -- core
+# spelling one solver's phases as a closed type, which is exactly what
+# get_phases() replaced.
+VALID_PHASES = set(CardiacFoamPlugin().get_phases())
 
 
 class TestDictEntryCatalog(unittest.TestCase):

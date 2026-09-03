@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-import typing
 import unittest
 
-from omnidriver.dict_entries import DictEntry, Phase
-
-VALID_PHASES = {"anatomy", "physics", "stimulus", "solver"}
+from omnidriver.dict_entries import DictEntry
 
 
 class TestDictEntryStructuredConstraints(unittest.TestCase):
@@ -117,6 +114,11 @@ def test_dict_entry_phases_default_is_empty_frozenset():
     assert entry.phases == frozenset()
 
 
-def test_phase_literal_values():
-    args = typing.get_args(Phase)
-    assert set(args) == VALID_PHASES
+def test_core_exports_no_phase_vocabulary():
+    """``omnidriver.dict_entries`` used to re-export a ``Phase`` literal
+    spelling cardiacFoam's four editing phases. A plugin declares its own
+    through ``get_phases()``; core naming them was the last solver noun in the
+    package."""
+    import omnidriver.dict_entries as dict_entries
+
+    assert not hasattr(dict_entries, "Phase")

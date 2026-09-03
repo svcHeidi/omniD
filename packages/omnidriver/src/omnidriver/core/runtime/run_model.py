@@ -14,7 +14,11 @@ from typing import Any, Literal
 
 import jsonschema
 
-Phase = Literal["anatomy", "physics", "stimulus", "solver"]
+# No ``Phase`` literal here any more. Core used to spell cardiacFoam's four
+# editing phases (anatomy/physics/stimulus/solver) as a closed type, which
+# put one solver's vocabulary in the solver-neutral package. A plugin
+# declares its own phases through ``get_phases()``; ``primary_phase()``
+# takes that order as a parameter. See test_phases_are_plugin_declared.py.
 Status = Literal["draft", "queued", "planning", "planned", "running", "completed", "failed"]
 
 _SCHEMA = json.loads(
