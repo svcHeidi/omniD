@@ -12,12 +12,20 @@ authors = [{ name = "Simao Nieto de Castro, UCD" }]
 dependencies = [
   "omnidriver~=0.1.0",
   "foamlib>=1.7.5,<2",
-  # Load-bearing for the *binary*, not the Python module: the wheel installs a
-  # `gmsh` executable, which cardiacFoam's manufactured_bath_bidomain and
-  # manufactured_eikonal_ecg tutorials invoke as a workflow command. It has
-  # zero Python imports, so an import scan reads it as unused -- it is not.
-  "gmsh>=4.15.2",
 ]
+
+[project.optional-dependencies]
+# The `gmsh` wheel is wanted for the *binary* it installs, not the Python
+# module -- nothing imports it. Tutorials that mesh from a .geo declare gmsh
+# through the RuntimeDependency seam (see cardiacfoam/runtime_evidence.py), so
+# a case that needs it says so and a missing binary is reported unavailable at
+# plan time rather than dying mid-run.
+#
+# It is an extra rather than a hard dependency because it is a ~100 MB wheel
+# that also pulls GUI shared libraries on Linux, and only four tutorials use
+# it. Most users already have gmsh from their system package manager, exactly
+# as they have OpenFOAM. Install with:  pip install "omnidriver-openfoam[mesh]"
+mesh = ["gmsh>=4.15.2"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

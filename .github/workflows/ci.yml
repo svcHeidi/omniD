@@ -46,13 +46,6 @@ jobs:
             packages/omnidriver/pyproject.toml
             packages/omnidriver-openfoam/pyproject.toml
 
-      # gmsh's Linux wheel links against GUI libs even for headless use.
-      - name: Install gmsh runtime libraries
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libglu1-mesa libxcursor1 libxinerama1 libxft2
-
       - name: Install omnidriver + omnidriver-openfoam
         run: pip install -e packages/omnidriver -e packages/omnidriver-openfoam
 
@@ -77,12 +70,6 @@ jobs:
             packages/omnidriver/pyproject.toml
             packages/omnidriver-openfoam/pyproject.toml
             packages/omnidriver-cardiacfoam/pyproject.toml
-
-      - name: Install gmsh runtime libraries
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libglu1-mesa libxcursor1 libxinerama1 libxft2
 
       - name: Install omnidriver + omnidriver-openfoam + omnidriver-cardiacfoam
         run: |

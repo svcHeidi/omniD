@@ -245,3 +245,54 @@ def test_declared_library_catalog_covers_every_make_files_library() -> None:
         f"does not cover: {sorted(missing)}. Add them to _LIBRARY_CATALOG in "
         "runtime_evidence.py so a rebuilt copy is fingerprinted."
     )
+
+
+def test_a_case_with_a_gmsh_geometry_declares_gmsh(tmp_path, monkeypatch):
+    """A case carrying a .geo cannot mesh without the gmsh binary, so it must
+    say so -- like the controlDict libs above, the case declares its own need.
+
+    Before this, gmsh was expressed only as a pip dependency of
+    omnidriver-openfoam (whose wheel ships a `gmsh` executable). Nothing
+    declared it, so a missing gmsh surfaced as a workflow step dying mid-run
+    instead of an unavailable dependency, and an import scan read the pip
+    dependency as unused because nothing imports the Python module.
+    """
+    case = tmp_path / "case"
+    (case / "system").mkdir(parents=True)
+    (case / "box.geo").write_text("SetFactory(\"OpenCASCADE\");\n")
+
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    (fake_bin / "gmsh").write_text("#!/bin/sh\n")
+    (fake_bin / "gmsh").chmod(0o755)
+
+    deps = {
+        d.name: d
+        for d in resolve_runtime_dependencies(case, env={"PATH": str(fake_bin)})
+    }
+    assert "gmsh" in deps
+    assert deps["gmsh"].required is True
+    assert deps["gmsh"].path == fake_bin / "gmsh"
+
+
+def test_a_case_without_a_geometry_does_not_declare_gmsh(tmp_path):
+    """The contrast is the point: declaring gmsh for every case would make the
+    assertion above true regardless of the .geo."""
+    case = tmp_path / "case"
+    (case / "system").mkdir(parents=True)
+
+    deps = {d.name: d for d in resolve_runtime_dependencies(case, env={"PATH": ""})}
+    assert "gmsh" not in deps
+
+
+def test_a_missing_gmsh_is_reported_unavailable_not_omitted(tmp_path):
+    """RuntimeDependency exists so "required and not found" is expressible.
+    Omitting it would read as "nothing to check"."""
+    case = tmp_path / "case"
+    (case / "system").mkdir(parents=True)
+    (case / "mesh" ).mkdir()
+    (case / "mesh" / "box.geo").write_text("")
+
+    deps = {d.name: d for d in resolve_runtime_dependencies(case, env={"PATH": ""})}
+    assert deps["gmsh"].required is True
+    assert deps["gmsh"].path is None

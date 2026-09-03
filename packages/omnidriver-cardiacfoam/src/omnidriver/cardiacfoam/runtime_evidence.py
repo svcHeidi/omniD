@@ -263,6 +263,25 @@ def resolve_runtime_dependencies(
             # on exactly this for libverificationModels).
             dependencies[name] = RuntimeDependency(name=name, path=resolved, required=True)
 
+    # A case carrying a gmsh geometry cannot mesh without the gmsh binary.
+    # Same case-local reasoning as the controlDict libs above: the case itself
+    # says what it needs, rather than a fixed list saying it for every case.
+    #
+    # This was previously expressed only as a pip dependency
+    # (omnidriver-openfoam declaring the `gmsh` wheel, which ships a `gmsh`
+    # executable). That made the binary happen to be on PATH without anything
+    # declaring it, so a missing gmsh surfaced as a workflow step dying
+    # mid-run rather than as an unavailable dependency at plan time -- and an
+    # import scan read the pip dependency as unused, because nothing imports
+    # the Python module.
+    if any(case_root.rglob("*.geo")):
+        gmsh_path = shutil.which("gmsh", path=environment.get("PATH"))
+        dependencies["gmsh"] = RuntimeDependency(
+            name="gmsh",
+            path=Path(gmsh_path) if gmsh_path else None,
+            required=True,
+        )
+
     return tuple(dependencies.values())
 
 
