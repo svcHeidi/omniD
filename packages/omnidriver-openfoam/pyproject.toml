@@ -12,6 +12,10 @@ authors = [{ name = "Simao Nieto de Castro, UCD" }]
 dependencies = [
   "omnidriver~=0.1.0",
   "foamlib>=1.7.5,<2",
+  # Load-bearing for the *binary*, not the Python module: the wheel installs a
+  # `gmsh` executable, which cardiacFoam's manufactured_bath_bidomain and
+  # manufactured_eikonal_ecg tutorials invoke as a workflow command. It has
+  # zero Python imports, so an import scan reads it as unused -- it is not.
   "gmsh>=4.15.2",
 ]
 

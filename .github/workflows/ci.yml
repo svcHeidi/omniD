@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
 
@@ -34,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
 
@@ -65,7 +65,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
 
@@ -93,8 +93,8 @@ jobs:
       - name: Run tests
         run: python -m pytest packages/omnidriver-cardiacfoam/tests -q
 
-  import-boundary-check:
-    name: import-boundary-check
+  static-gates:
+    name: static-gates
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -105,3 +105,45 @@ jobs:
 
       - name: Check core/openfoam/cardiac stay decoupled
         run: python3 scripts/check-import-boundaries.py
+
+      # The seam table in ARCHITECTURE.md is generated from the capability
+      # Protocol docstrings. It went stale silently before this gate existed.
+      - name: Install omnidriver (the generator imports it)
+        run: pip install -e packages/omnidriver
+
+      - name: Check ARCHITECTURE.md's capability-seam table is current
+        run: python3 scripts/export-capability-seams.py --check
+
+  test-wheel:
+    name: test-wheel (core artifact, py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Every other job installs editable, which leaves this repository on
+      # sys.path -- so a module reading repo-relative state at import time
+      # still works and the defect stays invisible. That bug shipped once
+      # (capability_seams.py called repo_root_default() at module scope,
+      # making it unimportable from a wheel while every test passed). This
+      # job is the only one that tests what actually ships.
+      - name: Build core sdist and wheel
+        run: |
+          pip install build
+          python -m build --outdir dist packages/omnidriver
+
+      - name: Install the built wheel into a clean environment
+        run: |
+          python -m venv /tmp/wheelenv
+          /tmp/wheelenv/bin/pip install --upgrade pip
+          /tmp/wheelenv/bin/pip install "$(ls dist/omnidriver-*.whl)[post]"
+
+      - name: Verify the installed artifact runs standalone
+        run: /tmp/wheelenv/bin/python scripts/check-wheel-artifact.py

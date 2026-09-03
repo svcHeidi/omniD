@@ -43,6 +43,29 @@ jobs:
       - name: Build sdist and wheel
         run: python -m build packages/${{ steps.pkg.outputs.name }}
 
+      # Nothing installed these before publishing them, so a wheel that
+      # cannot even be imported could reach a release. Blocks the release
+      # rather than reporting after the fact.
+      - name: Install the built wheel into a clean environment and smoke-test it
+        run: |
+          python -m venv /tmp/relenv
+          /tmp/relenv/bin/pip install --upgrade pip
+          /tmp/relenv/bin/pip install packages/${{ steps.pkg.outputs.name }}/dist/*.whl
+          /tmp/relenv/bin/python -c "
+          import importlib, pkgutil, sys
+          import omnidriver
+          bad = []
+          for m in pkgutil.walk_packages(omnidriver.__path__, 'omnidriver.'):
+              try: importlib.import_module(m.name)
+              except Exception as e: bad.append((m.name, type(e).__name__, str(e)[:80]))
+          print('imported', m.name.split('.')[1] if bad==[] else '', 'modules')
+          [print('FAIL', *b) for b in bad]
+          sys.exit(1 if bad else 0)"
+
+      - name: Verify the core artifact runs standalone
+        if: steps.pkg.outputs.name == 'omnidriver'
+        run: /tmp/relenv/bin/python scripts/check-wheel-artifact.py
+
       - name: Create GitHub release with build artifacts
         uses: softprops/action-gh-release@v2
         with:
