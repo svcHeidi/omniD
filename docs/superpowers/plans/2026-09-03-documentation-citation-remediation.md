@@ -2,6 +2,17 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **COMPLETE — all four phases executed 2026-09-03** (`b3deb3a`, `4e094d5`,
+> `d39a3d3`, `50598e0`). Every step below is checked because it was done, not
+> as a formality: this plan's own Phase 4 Step 9 exists because another plan's
+> boxes were left unchecked long after its work landed. The "Deferred" section
+> at the end is still open and is the only outstanding part.
+>
+> Two phases grew during execution, both recorded in their commits: Phase 1's
+> `bin/driverFoam` needed its PYTHONPATH fixed as well as its module name, and
+> Phase 2's closing sweep found seven more stale citations than the audit did,
+> two of them user-visible strings in JSON Schema output.
+
 **Goal:** Make every in-source citation and every status document in this
 repository agree with the code, and repair the two things the audit found that
 are broken rather than merely mis-described.
@@ -82,7 +93,7 @@ updated one place and not another.
   `GITHUB_MIGRATION.md` again, in different sections; make Phase 1's edits
   surgical so the two do not collide.
 
-- [ ] **Step 1: Prove the catalog script is broken**
+- [x] **Step 1: Prove the catalog script is broken**
 
 Run:
 ```bash
@@ -95,7 +106,7 @@ ls packages/omnidriver-cardiacfoam/src/omnidriver/cardiac/ionic_model_catalog.py
 Expected: `No such file or directory`. The real file is at
 `.../omnidriver/cardiacfoam/ionic_model_catalog.py`.
 
-- [ ] **Step 2: Fix the path segment**
+- [x] **Step 2: Fix the path segment**
 
 In `scripts/regenerate-ionic-catalog.py`, change:
 
@@ -118,7 +129,7 @@ CATALOG_PATH = (
 This is a survivor of the `omnidriver-cardiac` -> `omnidriver-cardiacfoam`
 rename; the directory `omnidriver/cardiac/` has never existed in this repo.
 
-- [ ] **Step 3: Verify the path now resolves**
+- [x] **Step 3: Verify the path now resolves**
 
 Run:
 ```bash
@@ -130,7 +141,7 @@ print('exists:', p.exists())"
 ```
 Expected: `exists: True`
 
-- [ ] **Step 4: Fix the broken bin/driverFoam stub**
+- [x] **Step 4: Fix the broken bin/driverFoam stub**
 
 `bin/driverFoam` ends in `exec python3 -m openfoam_driver "$@"`. That module
 exists in no install, so the script always fails. It is referenced nowhere
@@ -151,7 +162,7 @@ with:
 exec python3 -m omnidriver "$@"
 ```
 
-- [ ] **Step 5: Verify the stub runs**
+- [x] **Step 5: Verify the stub runs**
 
 Run:
 ```bash
@@ -160,7 +171,7 @@ Run:
 Expected: the `omnidriver` usage block, exit 0. Before this change it exited
 non-zero with `No module named openfoam_driver`.
 
-- [ ] **Step 6: Fix GITHUB_MIGRATION.md's self-contradicting intro**
+- [x] **Step 6: Fix GITHUB_MIGRATION.md's self-contradicting intro**
 
 Lines 12-16 still say the GPL header is the largest remaining blocker. The
 licensing row at line 181 — and the code — say it is gone. Replace:
@@ -184,7 +195,7 @@ summary was not updated with the row at §3) — then the CI matrix (still
 dependencies (`numpy`, `gmsh`).
 ```
 
-- [ ] **Step 7: Correct the two Part C date markers**
+- [x] **Step 7: Correct the two Part C date markers**
 
 `git log --format="%h %ad" --date=short` shows `129f820` and `0039753` landed
 **2026-09-03**, not 2026-09-02. In `GITHUB_MIGRATION.md`, change
@@ -194,7 +205,7 @@ and `**Closed 2026-09-02.**` in that row's body to `**Closed 2026-09-03.**`.
 Leave every other 2026-09-02 marker alone — they date measurements that were
 genuinely taken that day.
 
-- [ ] **Step 8: Refresh ARCHITECTURE.md's current-state table**
+- [x] **Step 8: Refresh ARCHITECTURE.md's current-state table**
 
 Lines 46-47 report the suite counts as of the last measurement. Re-measure and
 update:
@@ -209,7 +220,7 @@ Expected: 1546 / 679. Set the rows to:
 | core installed alone | **679 passed, 93 skipped, 0 failed** |
 ```
 
-- [ ] **Step 9: Correct ARCHITECTURE.md's org.cardiacfoam count**
+- [x] **Step 9: Correct ARCHITECTURE.md's org.cardiacfoam count**
 
 Line 51 claims two occurrences, at `plugin_capabilities.py:1361` and
 `capability_seams.py:160`. Verify:
@@ -224,7 +235,7 @@ cell with:
 | `"org.cardiacfoam"` in core | 1 occurrence, in a docstring explaining that the twenty gated fallbacks were deleted (`plugin_capabilities.py:1362`) — zero in executable logic. **Corrected 2026-09-03**: this said 2 occurrences and named `capability_seams.py:160`, whose copy went in `6a212dd`. |
 ```
 
-- [ ] **Step 10: Verify nothing regressed**
+- [x] **Step 10: Verify nothing regressed**
 
 Run:
 ```bash
@@ -234,7 +245,7 @@ Run:
 ```
 Expected: 1546 passed; `Import boundaries OK`; `up to date`.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add scripts/regenerate-ionic-catalog.py bin/driverFoam GITHUB_MIGRATION.md ARCHITECTURE.md
@@ -261,7 +272,7 @@ no behaviour changes, so the suite count must be identical before and after.
 - Consumes: nothing from Phase 1.
 - Produces: nothing. Pure prose.
 
-- [ ] **Step 1: Remove the dead `_resolve_entry` citation**
+- [x] **Step 1: Remove the dead `_resolve_entry` citation**
 
 `plugin_capabilities.py:304` says
 ``(see :func:`strict_planning._resolve_entry`'s call site for why they stay out
@@ -278,7 +289,7 @@ Expected: only the citation itself. Replace that parenthetical with:
 
 The reason survives; only the pointer to a function that no longer exists goes.
 
-- [ ] **Step 2: Fix the false `--openfoam-bashrc` claim**
+- [x] **Step 2: Fix the false `--openfoam-bashrc` claim**
 
 `plugin_capabilities.py:557` says ``--environment-bashrc``, with
 ``--openfoam-bashrc`` kept working as a deprecated alias. Verify that is false:
@@ -297,7 +308,7 @@ Replace with:
     alias still worked.
 ```
 
-- [ ] **Step 3: Fix utility_catalog.py's header, which documents a removed API**
+- [x] **Step 3: Fix utility_catalog.py's header, which documents a removed API**
 
 Verify neither symbol exists:
 ```bash
@@ -322,7 +333,7 @@ catalog and ``UTILITIES_ROOT`` were removed (future/
 UTILITY_CATALOG_STANDALONE_GAP.md, status resolved); only this header still
 described them.
 
-- [ ] **Step 4: Fix dict_builder.py's "still tracked" claim**
+- [x] **Step 4: Fix dict_builder.py's "still tracked" claim**
 
 `dict_builder.py:38` explains a historical bug and says it went unnoticed
 "because the retired `openfoam_driver/` tree is still tracked at the repo
@@ -339,7 +350,7 @@ Expected: `0` — deleted in `4a5fb48`. Change that clause to past tense:
     # resolved. That tree was deleted in `4a5fb48`.
 ```
 
-- [ ] **Step 5: Fix the drifted line citation in foam_backend.py**
+- [x] **Step 5: Fix the drifted line citation in foam_backend.py**
 
 `foam_backend.py:172` cites ``mutators.py:434`` for the tier-1 rejection.
 Verify where the rejection actually is:
@@ -363,7 +374,7 @@ to:
     without a scope there
 ```
 
-- [ ] **Step 6: Fix ionic_model_catalog.py's pre-migration path**
+- [x] **Step 6: Fix ionic_model_catalog.py's pre-migration path**
 
 Line 119 says ``SOLVER_COMPATIBILITY_RULES moved to
 openfoam_driver/solver_coupling.py``, while the import on the next line reads
@@ -376,7 +387,7 @@ Change the comment to name the real module:
 # it from this module. Prefer the new home for new imports.
 ```
 
-- [ ] **Step 7: Fix export-report-catalog.py's two dead paths**
+- [x] **Step 7: Fix export-report-catalog.py's two dead paths**
 
 Its docstring points backend authors at
 ``openfoam_driver/core/report_catalog.py`` and
@@ -395,7 +406,7 @@ ls packages/omnidriver/src/omnidriver/core/report_catalog.py \
    packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/reports.py
 ```
 
-- [ ] **Step 8: Confirm no citation was missed and nothing regressed**
+- [x] **Step 8: Confirm no citation was missed and nothing regressed**
 
 Run:
 ```bash
@@ -414,7 +425,7 @@ does not, `plugin_capabilities.py`'s edits touched a generator input, so run
 `scripts/export-capability-seams.py` and include the regenerated
 `ARCHITECTURE.md` in the commit.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add -A
@@ -446,7 +457,7 @@ external document.
 - Consumes: nothing from Phases 1-2.
 - Produces: nothing. Pure prose.
 
-- [ ] **Step 1: Confirm the documents really are absent**
+- [x] **Step 1: Confirm the documents really are absent**
 
 Run:
 ```bash
@@ -456,7 +467,7 @@ Expected: **no output**. If this prints a file, stop and read it — the
 citations resolve after all and this phase should be reduced to fixing only the
 ones that do not.
 
-- [ ] **Step 2: Replace "Phase 4"/"Phase 5" with what they actually mean**
+- [x] **Step 2: Replace "Phase 4"/"Phase 5" with what they actually mean**
 
 The two names refer to consumers of two capability hooks. Say so directly.
 
@@ -495,7 +506,7 @@ with:
     ``None`` must make that consumer
 ```
 
-- [ ] **Step 3: Replace "Task 2a"/"Task 2b" with what they actually mean**
+- [x] **Step 3: Replace "Task 2a"/"Task 2b" with what they actually mean**
 
 In `provenance_inputs.py:36`, replace
 `then fingerprinted through Task 2a's` with
@@ -517,7 +528,7 @@ with
 `"""Deferred: returns ``()`` until input enumeration lands. See the module
     docstring for why ``()`` is safe."""`
 
-- [ ] **Step 4: Verify every phantom citation is gone**
+- [x] **Step 4: Verify every phantom citation is gone**
 
 Run:
 ```bash
@@ -525,7 +536,7 @@ git grep -n "Phase 4\|Phase 5\|Task 2a\|Task 2b" -- packages/*/src scripts | gre
 ```
 Expected: **no output**.
 
-- [ ] **Step 5: Verify nothing regressed**
+- [x] **Step 5: Verify nothing regressed**
 
 Run:
 ```bash
@@ -533,7 +544,7 @@ Run:
 ```
 Expected: **1546 passed** — prose only.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A
@@ -564,7 +575,7 @@ the files a new reader or agent is pointed at first.
   `org.cardiacfoam` row, and `GITHUB_MIGRATION.md`'s intro. Do not redo those.
 - Produces: nothing.
 
-- [ ] **Step 1: Delete ARCHITECTURE.md's superseded paragraph**
+- [x] **Step 1: Delete ARCHITECTURE.md's superseded paragraph**
 
 Lines 53-59 say the core-only failure count "is now **zero**". Lines 61-71 are
 un-deleted older text saying "The remaining 140 are 129 from the implicit
@@ -589,7 +600,7 @@ here after the count reached zero. **Removed 2026-09-03**; the history is in
 `GITHUB_MIGRATION.md` §2 and the Phase 2 plan.)
 ```
 
-- [ ] **Step 2: Add a banner to KEY_FILES.md and fix its paths**
+- [x] **Step 2: Add a banner to KEY_FILES.md and fix its paths**
 
 Every path in it uses `applications/scripts/driverFoam/openfoam_driver/…`.
 Verify:
@@ -615,7 +626,7 @@ Also fix the claim that `ARCHITECTURE.md` is "~1400 lines". It is **191**
 (`wc -l < ARCHITECTURE.md`). Drop the size claim rather than replacing it with
 a new number that will rot the same way.
 
-- [ ] **Step 3: Add a supersession banner to AGENT_GUIDE.md**
+- [x] **Step 3: Add a supersession banner to AGENT_GUIDE.md**
 
 This file has ~47 `openfoam_driver.*` import paths and 14 CLI examples invoking
 `driverFoam`, which is not the installed console script. Verify:
@@ -641,7 +652,7 @@ banner immediately under the title that stops a reader acting on it:
 
 This matches the convention `MIGRATION_AUDIT_v2.md` already uses.
 
-- [ ] **Step 4: Fix CHANGELOG.md's false "Known open" item**
+- [x] **Step 4: Fix CHANGELOG.md's false "Known open" item**
 
 Line 199 says the `$ELECTRO_MODEL_COEFFS` sentinel is "still hardcoded in …
 `scripts/_dict_keys_scanner.py`". Verify:
@@ -657,7 +668,7 @@ Mark the item resolved in place rather than deleting it — this is a changelog:
   removed, not relocated. Noted 2026-09-03.)
 ```
 
-- [ ] **Step 5: Fix SECURITY.md's trust-boundary paths**
+- [x] **Step 5: Fix SECURITY.md's trust-boundary paths**
 
 It cites "the `openfoam_driver` package", `specs/apply_overrides.py`, and
 `plugins/cardiacfoam/dict_builder.py`. The security *logic* it describes is
@@ -670,7 +681,7 @@ ls packages/omnidriver-openfoam/src/omnidriver/openfoam/apply_overrides.py \
 Rewrite each path to its real location and add a dated correction note. Do not
 change any security claim — those were verified accurate.
 
-- [ ] **Step 6: Date and correct MIGRATION_AUDIT_v2.md's "still live" note**
+- [x] **Step 6: Date and correct MIGRATION_AUDIT_v2.md's "still live" note**
 
 Its top callout says `sweep_materialize.py::_materialize_case_legacy` "is dead
 code called from nowhere. It still exists." Verify:
@@ -688,7 +699,7 @@ Expected: no output. Replace the callout with:
 > Nothing in this document is still live.
 ```
 
-- [ ] **Step 7: Fix the duplicate section number in future/ENVIRONMENT_CONTRACT.md**
+- [x] **Step 7: Fix the duplicate section number in future/ENVIRONMENT_CONTRACT.md**
 
 Verify:
 ```bash
@@ -707,7 +718,7 @@ revealed") to `## 8b.`, leaving 9/10/11 untouched. This resolves the duplicate
 without shifting any number that code depends on. Move `## Related` to the end
 of the document, where its siblings put it.
 
-- [ ] **Step 8: Correct STRICT_PLANNING_FOAMLIB_COUPLING.md §6**
+- [x] **Step 8: Correct STRICT_PLANNING_FOAMLIB_COUPLING.md §6**
 
 It says `omnidriver/cli.py` "still has two direct `omnidriver.openfoam`
 imports". Verify:
@@ -724,7 +735,7 @@ They are gone: `cli.py` now reaches both through capabilities
 `scripts/check-import-boundaries.py` records the same fix.
 ```
 
-- [ ] **Step 9: Fix the Phase 2 plan's stale progress banner**
+- [x] **Step 9: Fix the Phase 2 plan's stale progress banner**
 
 Its top table marks Tasks 3, 6 and 7 "not started". All three are done. Verify
 each:
@@ -747,7 +758,7 @@ the code. Task 7 Step 2's instruction to leave `legacy_generic_case_mutation`
 2026-09-03.
 ```
 
-- [ ] **Step 10: Add a status banner to the monorepo migration plan**
+- [x] **Step 10: Add a status banner to the monorepo migration plan**
 
 `2026-08-25-monorepo-package-migration.md` uses `omnidriver-cardiac` /
 `omnidriver.cardiac` throughout for a package that shipped as
@@ -767,7 +778,7 @@ Add under the title:
 > 2026-09-03.
 ```
 
-- [ ] **Step 11: Verify nothing regressed and no new stale path was introduced**
+- [x] **Step 11: Verify nothing regressed and no new stale path was introduced**
 
 Run:
 ```bash
@@ -785,7 +796,7 @@ grep -oE 'packages/[A-Za-z0-9_./-]+\.(py|yaml|toml|md)' KEY_FILES.md SECURITY.md
 Expected: no `MISSING:` lines. A path audit that introduces new bad paths is
 worse than the problem it fixes.
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 ```bash
 git add -A
