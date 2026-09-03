@@ -33,7 +33,7 @@ provenance digest is never computed against a different binary than the one
 that actually runs. A bare command not found locally is looked up on
 ``PATH`` (via the same MPI-payload-unwrapping rule
 ``environment_preflight`` already uses) and folded into a
-:class:`RuntimeDependency`, then fingerprinted through Task 2a's
+:class:`RuntimeDependency`, then fingerprinted through
 ``component_for_runtime_dependency`` -- so a required-but-unresolved
 executable surfaces as ``unavailable``, never silently omitted, exactly like
 a plugin-declared library.
@@ -338,7 +338,7 @@ def enumerate_case_inputs(
                     driver_context=driver_context,
                 )
 
-    # -- plugin-declared runtime dependencies (Task 2a): the solver binary,
+    # -- plugin-declared runtime dependencies: the solver binary,
     # its libraries, and anything the case's own controlDict libs (...)
     # pulls in. Authoritative over the generic PATH-only resolution above --
     # it knows the library search directories and required/optional split a

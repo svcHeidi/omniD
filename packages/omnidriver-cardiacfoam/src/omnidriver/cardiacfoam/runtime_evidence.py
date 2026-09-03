@@ -47,7 +47,7 @@ _SOLVE_STEP_COMMANDS = frozenset({"cardiacFoam"})
 
 # OpenFOAM's runApplication redirects solver output to log.<app>, so a step
 # that runs an Allrun script produces no parseable driver-captured stdout.
-# Phase 4's telemetry collector uses these globs to find the real log.
+# The telemetry collector uses these globs to find the real log.
 _TELEMETRY_GLOBS: dict[str, tuple[str, ...]] = {
     "Allrun": ("log.cardiacFoam", "log.*"),
     "Allrun.pre": ("log.*",),
@@ -283,8 +283,9 @@ def extra_provenance_paths(
 def artifact_value_reader(artifact_format: str):
     """Reader for a solver-specific artifact format, or ``None``.
 
-    Empty today. Phase 5 registers readers here for cardiac formats such as
-    ECG traces and Purkinje time series. Returning ``None`` must make Phase 5
+    Empty today. Readers for cardiac formats such as ECG traces and Purkinje
+    time series register here when observable extraction lands. Returning
+    ``None`` must make that consumer
     report ``not_evaluated`` with a reason -- never an implicit pass."""
     del artifact_format
     return None

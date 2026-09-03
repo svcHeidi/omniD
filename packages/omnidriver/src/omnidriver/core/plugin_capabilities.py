@@ -608,8 +608,8 @@ class OverrideSchemaCapability(Protocol):
 class RuntimeEvidenceCapability(Protocol):
     """Where the plugin's runtime evidence lives.
 
-    Phase 4 (telemetry) consumes ``solve_step_commands`` and
-    ``telemetry_source_globs``; Phase 5 (observables) will consume
+    Telemetry collection consumes ``solve_step_commands`` and
+    ``telemetry_source_globs``; observable extraction will consume
     ``artifact_value_reader``; both remain declaration-only for now. Phase 2
     (provenance) now consumes ``extra_provenance_paths`` for real.
 

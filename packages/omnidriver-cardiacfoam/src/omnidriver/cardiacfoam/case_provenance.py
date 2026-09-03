@@ -32,7 +32,8 @@
 model-dependent resolution -- which ``0/`` fields are present depends on the
 configured solver and ionic model, and their *locations* resolve by a
 backward ``Time::findInstance`` search with a ``constant/`` fallback, so a
-field's canonical path is not knowable from its name alone -- is Task 2b's
+field's canonical path is not knowable from its name alone -- is the
+input-enumeration job's
 input-enumeration job, not this task's. Returning ``()`` here is still safe:
 the resolution precedence an unclassified file falls back to is
 ``required_input``, so nothing here can under-classify a file that turns out
@@ -71,7 +72,8 @@ def required_inputs(
     resolved_case: dict[str, Any],
     selected_start_time: str,
 ) -> tuple[ResolvedInput, ...]:
-    """Deferred to Task 2b. See the module docstring for why ``()`` is safe."""
+    """Deferred: returns ``()`` until input enumeration lands. See the module
+    docstring for why ``()`` is safe."""
     del case_root, resolved_case, selected_start_time
     return ()
 

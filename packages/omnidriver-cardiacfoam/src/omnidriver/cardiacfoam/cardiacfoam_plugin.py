@@ -189,7 +189,7 @@ class CardiacFoamPlugin:
         return config_schema(tutorial_name, make_spec_info)
 
     def get_solve_step_commands(self) -> frozenset:
-        """Commands that actually run the solver (Phase 4 telemetry)."""
+        """Commands that actually run the solver, for telemetry collection."""
         from omnidriver.cardiacfoam.runtime_evidence import (
             solve_step_commands,
         )
@@ -213,7 +213,7 @@ class CardiacFoamPlugin:
         return extra_provenance_paths(case_root)
 
     def get_artifact_value_reader(self, artifact_format: str):
-        """Reader for a cardiac artifact format, or None (Phase 5)."""
+        """Reader for a cardiac artifact format, or None if unsupported."""
         from omnidriver.cardiacfoam.runtime_evidence import (
             artifact_value_reader,
         )
