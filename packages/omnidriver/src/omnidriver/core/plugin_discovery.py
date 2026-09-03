@@ -24,10 +24,30 @@ Troubleshooting — plugin not found:
 
 from __future__ import annotations
 
+import functools
 from importlib.metadata import entry_points
 from typing import Any
 
 ENTRY_POINT_GROUP = "omnidriver.plugins"
+
+
+@functools.lru_cache(maxsize=1)
+def _scan_entry_points() -> tuple[Any, ...]:
+    """Read the entry-point group off disk, once per process.
+
+    ``importlib.metadata.entry_points()`` re-reads every installed
+    distribution's metadata on each call -- about 6 ms here. That was
+    invisible while discovery only ran when ``--plugin`` was passed, but
+    ``compatibility.legacy_default_driver_context`` now resolves the implicit
+    default through this group, and the public edge calls it once per sweep
+    case. Uncached, that took the test suite from 35 s to 13 min.
+
+    Installed distributions do not change inside a running process, so this is
+    a cache over something genuinely immutable, not a bet. Tests that need
+    synthetic entry points patch ``_entry_points`` below -- which replaces the
+    whole function object, cache and all -- so this does not weaken that seam.
+    """
+    return tuple(entry_points(group=ENTRY_POINT_GROUP))
 
 
 def _entry_points() -> tuple[Any, ...]:
@@ -38,7 +58,7 @@ def _entry_points() -> tuple[Any, ...]:
     All public discovery functions call this; none call ``entry_points()``
     directly.
     """
-    return tuple(entry_points(group=ENTRY_POINT_GROUP))
+    return _scan_entry_points()
 
 
 def ambiguous_plugin_names() -> dict[str, tuple[str, ...]]:
@@ -99,11 +119,104 @@ def load_discovered_plugin(name: str):
             f"No installed driverFOAM plugin named {name!r} in entry-point "
             f"group {ENTRY_POINT_GROUP!r}"
         )
+    plugin_class = entry_point.load()
+    return driver_context(plugin_class(), source=_entry_point_source(entry_point))
+
+
+def _entry_point_source(entry_point) -> str:
+    """Provenance for a context built from an entry point.
+
+    Records the installing distribution and version so a plan states which
+    package supplied the semantics it was built against. Shared by
+    :func:`load_discovered_plugin` and :func:`default_discovered_context` so
+    the two cannot drift into reporting the same plugin differently.
+    """
     dist = getattr(entry_point, "dist", None)
-    source = (
+    return (
         f"entry-point:{dist.name}={dist.version}"
         if dist is not None
-        else f"entry-point:{name}"
+        else f"entry-point:{entry_point.name}"
     )
-    plugin_class = entry_point.load()
+
+
+@functools.lru_cache(maxsize=8)
+def _default_selection(snapshot: tuple[Any, ...]) -> tuple[Any, str] | None:
+    """Which plugin answers when a public caller supplies no context.
+
+    Returns ``(plugin_class, source)``, or ``None`` meaning "nothing is
+    installed -- use the built-in generic context". Raises ``LookupError``
+    when there is no unique answer.
+
+    Cached per entry-point snapshot rather than recomputed. The public edge
+    resolves the implicit default once per sweep case, and each recomputation
+    reads every installed distribution's metadata; leaving this uncached took
+    the test suite from 35 s to 13 min. The cache key is the snapshot itself,
+    so a test that patches ``_entry_points`` to return synthetic entries gets a
+    different key and a fresh decision -- the seam still works.
+
+    The *context* is deliberately not cached. Core must not retain a
+    DriverContext in module state; only the decision about which plugin to
+    build one from is stable.
+    """
+    seen: dict[str, list[Any]] = {}
+    for entry_point in snapshot:
+        seen.setdefault(entry_point.name, []).append(entry_point)
+
+    unambiguous = {name: eps[0] for name, eps in seen.items() if len(eps) == 1}
+    ambiguous = sorted(name for name, eps in seen.items() if len(eps) > 1)
+
+    if len(unambiguous) == 1:
+        # One clean answer. An unrelated duplicated name alongside it does not
+        # make this one ambiguous -- that name fails loudly on its own if
+        # anybody selects it, which is what discover_plugins() excluding it is
+        # for.
+        entry_point = next(iter(unambiguous.values()))
+        return entry_point.load(), _entry_point_source(entry_point)
+
+    if not unambiguous and not ambiguous:
+        return None
+
+    if not unambiguous:
+        # Every installed name is contested. Falling through to the generic
+        # context here would be the worst outcome available: it answers a
+        # question about *which solver* with a context that has no solver
+        # semantics, and it does so silently.
+        conflicts = "; ".join(
+            f"{name} claimed by {', '.join(sorted(_origin(ep) for ep in seen[name]))}"
+            for name in ambiguous
+        )
+        raise LookupError(
+            f"No DriverContext was supplied, and every plugin name in the "
+            f"{ENTRY_POINT_GROUP!r} entry-point group is claimed by more than "
+            f"one installed distribution ({conflicts}), so there is no "
+            "unambiguous default. Uninstall one, or select a plugin with "
+            "--plugin or an explicit DriverContext."
+        )
+
+    raise LookupError(
+        f"No DriverContext was supplied, and {len(unambiguous)} plugins are "
+        f"installed in the {ENTRY_POINT_GROUP!r} entry-point group "
+        f"({', '.join(sorted(unambiguous))}), so there is no single default to "
+        "fall back on. Select one with --plugin or an explicit DriverContext."
+    )
+
+
+def _origin(entry_point) -> str:
+    dist = getattr(entry_point, "dist", None)
+    return f"{dist.name}={dist.version}" if dist is not None else "<unknown>"
+
+
+def default_discovered_context():
+    """Build a fresh context for the implicitly-selected default plugin.
+
+    See :func:`_default_selection` for the selection rule and
+    ``compatibility.legacy_default_driver_context`` for why the public edge
+    needs one at all.
+    """
+    from .plugin_interface import driver_context, generic_openfoam_context
+
+    selection = _default_selection(_entry_points())
+    if selection is None:
+        return generic_openfoam_context()
+    plugin_class, source = selection
     return driver_context(plugin_class(), source=source)

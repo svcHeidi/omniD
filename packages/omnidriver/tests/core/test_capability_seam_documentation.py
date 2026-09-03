@@ -155,13 +155,21 @@ def test_status_is_a_known_value(field: str) -> None:
     assert status in VALID_STATUSES, f"{name} :status: is {status!r}"
 
 
-def test_every_ungated_cardiac_fallback_is_accounted_for() -> None:
-    """No capability fallback may reach cardiac code without checking plugin_id.
+def test_no_fallback_reaches_cardiac_code_at_all() -> None:
+    """No capability fallback may reach cardiac code, gated or otherwise.
 
-    The import-level boundary test allows compatibility.py to import the
-    cardiac plugin; it cannot see whether a given fallback checks *which*
-    plugin it is answering for. Six fallbacks did not, so a non-cardiac plugin
-    silently inherited cardiac semantics. This test keeps that from returning.
+    This began as "no fallback may reach cardiac code *without checking
+    plugin_id*" -- six did not, so a non-cardiac plugin silently inherited
+    cardiac semantics -- and carried an allowlist of two that were permitted
+    to, legacy_default_driver_context and legacy_generic_case_mutation.
+
+    Both are gone: the default context now resolves through the
+    omnidriver.plugins entry-point group, and the cardiac case mutation moved
+    to the plugin that owns it. So the allowlist is gone too, rather than left
+    naming functions that no longer exist -- an allowance that matches nothing
+    makes a test pass for the wrong reason, which is the exact failure mode
+    scripts/check-import-boundaries.py refuses to permit in its own waiver
+    list.
     """
     source = Path(compatibility.__file__).read_text()
     tree = ast.parse(source)
@@ -169,19 +177,28 @@ def test_every_ungated_cardiac_fallback_is_accounted_for() -> None:
     for node in tree.body:
         if not isinstance(node, ast.FunctionDef):
             continue
-        segment = ast.get_source_segment(source, node) or ""
-        if "omnidriver.cardiacfoam" not in segment:
-            continue
-        if "org.cardiacfoam" in segment:
-            continue
-        offenders.append(node.name)
+        # Look at import statements, not at the function's text. Matching raw
+        # source cannot tell an import from a docstring that names the package
+        # -- and legacy_default_driver_context's docstring has to name it, to
+        # explain which cardiac import used to be there and why it no longer
+        # is. A guard that forces documentation to avoid a word in order to
+        # pass is measuring the wrong thing.
+        for child in ast.walk(node):
+            if isinstance(child, ast.ImportFrom) and (child.module or "").startswith(
+                "omnidriver.cardiacfoam"
+            ):
+                offenders.append(node.name)
+                break
+            if isinstance(child, ast.Import) and any(
+                alias.name.startswith("omnidriver.cardiacfoam") for alias in child.names
+            ):
+                offenders.append(node.name)
+                break
 
-    # legacy_default_driver_context selects the default plugin when none is
-    # given (a product decision, not a leak); legacy_generic_case_mutation
-    # serves direct callers of core make_spec and is a documented Plan-2 seam.
-    allowed = {"legacy_default_driver_context", "legacy_generic_case_mutation"}
-    assert set(offenders) <= allowed, (
-        f"ungated cardiac fallbacks: {sorted(set(offenders) - allowed)}"
+    assert offenders == [], (
+        f"fallbacks reaching cardiac code: {sorted(set(offenders))}. Core "
+        "imports no cardiac module any more; a fallback that needs one is a "
+        "hook the plugin should implement."
     )
 
 

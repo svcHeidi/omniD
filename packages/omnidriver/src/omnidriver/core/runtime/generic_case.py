@@ -172,6 +172,11 @@ def _workflow_dag_for(
     return {"steps": steps}
 
 
+def _no_solver_mutation(*_args, **_kwargs) -> None:
+    """What a case mutation is when no plugin supplies one: nothing."""
+    return None
+
+
 def make_spec(
     *,
     tutorials_root: Path | None = None,
@@ -195,13 +200,13 @@ def make_spec(
     if not str(case_dir_name).strip():
         raise ValueError("case_dir_name cannot be empty")
 
-    from omnidriver.core.compatibility import legacy_generic_case_dict_file_relpaths
-
-    resolved_relpaths_raw: dict[str, Any] = dict(
-        legacy_generic_case_dict_file_relpaths()
-        if dict_file_relpaths is None
-        else dict_file_relpaths
-    )
+    # No default. Core knows no solver's dictionary vocabulary, so a caller
+    # that declares no dictionary files gets none -- which
+    # generic-case detection below already defines as "the folder is generic".
+    # This used to default to cardiacFoam's constant/electroProperties and
+    # constant/physicsProperties; that pair now lives with the plugin that
+    # means them (cardiacfoam/tutorials/generic_case.py).
+    resolved_relpaths_raw: dict[str, Any] = dict(dict_file_relpaths or {})
     resolved_relpaths = {
         str(key): Path(value) for key, value in resolved_relpaths_raw.items()
     }
@@ -212,9 +217,11 @@ def make_spec(
     run_script_path = Path(run_script_relpath)
     normalized_pre_solve = tuple(pre_solve_commands or ())
     if _apply_case_mutation is None:
-        from omnidriver.core.compatibility import legacy_generic_case_mutation
-
-        _apply_case_mutation = legacy_generic_case_mutation
+        # Also no default. This used to reach into
+        # omnidriver.cardiacfoam.generic_case_mutation, the last runtime
+        # cardiac import left in core; a plugin that wants its dictionaries
+        # mutated passes its own callback, as cardiacFoam's wrapper does.
+        _apply_case_mutation = _no_solver_mutation
 
     case_root, setup_root, output_dir = resolve_spec_paths(
         tutorials_root=tutorials_root,
@@ -283,10 +290,11 @@ def make_spec(
 
 
 def make_generic_case_spec(**kwargs: Any) -> TutorialSpec:
-    """Solver-neutral alias used by registry case-folder discovery."""
+    """Solver-neutral alias used by registry case-folder discovery.
 
-    def _no_solver_mutation(*_args, **_kwargs) -> None:
-        return None
+    Its ``_apply_case_mutation`` setdefault is gone: make_spec's own default is
+    now the same no-op, so this alias no longer has to opt out of a cardiac
+    default that no longer exists.
+    """
 
-    kwargs.setdefault("_apply_case_mutation", _no_solver_mutation)
     return make_spec(**kwargs)

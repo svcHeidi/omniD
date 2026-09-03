@@ -247,21 +247,23 @@ def test_declaring_no_dict_files_leaves_the_case_generic(tmp_path: Path) -> None
     assert spec.metadata["generic_case"] is True
 
 
-def test_default_dict_files_come_from_the_named_compatibility_seam(
-    tmp_path: Path,
-) -> None:
-    """Core declares no dictionary files of its own; the historical defaults
-    arrive through core.compatibility so the vocabulary stays at that seam."""
-    from omnidriver.core import compatibility
+def test_core_declares_no_default_dict_files(tmp_path: Path) -> None:
+    """Omitting dict_file_relpaths entirely is not the same as core supplying
+    a default -- it means there are none.
 
-    with compatibility.track_fallback_calls() as calls:
-        spec = _spec(tmp_path)
+    This used to assert the opposite: that omitting the argument produced
+    cardiacFoam's constant/electroProperties and constant/physicsProperties
+    via compatibility.legacy_generic_case_dict_file_relpaths. Core defaulting
+    to two filenames from one solver's vocabulary was the point of that seam
+    and is exactly what got removed; the pair now lives in
+    cardiacfoam/tutorials/generic_case.py, whose own test asserts it. The
+    distinction from test_declaring_no_dict_files_leaves_the_case_generic
+    above is that this one passes no argument at all.
+    """
+    spec = _spec(tmp_path)
 
-    assert "legacy_generic_case_dict_file_relpaths" in calls
-    assert spec.metadata["dict_file_relpaths"] == {
-        "electro": "constant/electroProperties",
-        "physics": "constant/physicsProperties",
-    }
+    assert spec.metadata["dict_file_relpaths"] == {}
+    assert spec.metadata["generic_case"] is True
 
 
 def test_metadata_reports_dict_file_overrides_as_one_generic_flag(

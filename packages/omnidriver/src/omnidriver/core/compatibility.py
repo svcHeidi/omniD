@@ -45,23 +45,35 @@ def _instrumented(func):
 
 @_instrumented
 def legacy_default_driver_context() -> "DriverContext":
-    """Return the historical built-in cardiacFoam context.
+    """Resolve the plugin to use when a public caller supplies no context.
 
-    Why: public CLI and Python callers have always selected cardiacFoam when no
-    plugin/context is supplied.
+    Why: public CLI and Python callers have always been able to omit the
+    plugin/context entirely, and something has to answer. This used to import
+    ``CardiacFoamPlugin`` directly, which put a hard cardiac dependency in the
+    one package whose whole purpose is to know no cardiology -- touching the
+    public edge of a core-only install raised ``ModuleNotFoundError: No module
+    named 'omnidriver.cardiacfoam'``.
+
+    It now resolves through the same ``omnidriver.plugins`` entry-point group
+    that ``--plugin`` reads, so core names no solver at all. The selection rule
+    lives in :func:`plugin_discovery._default_selection`; in short, exactly one
+    installed plugin wins, none falls back to the built-in generic context, and
+    several refuse by name. Every real install today has exactly one
+    (``omnidriver-cardiacfoam`` registers the group; core declares it but
+    registers nothing, and ``omnidriver-openfoam`` registers nothing), so the
+    historical cardiacFoam default is preserved without core naming cardiacFoam.
+
+    The context is built fresh on each call, as it always has been -- core must
+    not retain one in module state.
+
     Activation: the public boundary receives no explicit plugin context.
     Preserved by: core plugin-context, CLI matrix, validation, and strict-plan
     tests.
-    Plan 2 seam: default selection or deprecation policy may change there.
     """
 
-    from .plugin_interface import driver_context
-    from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+    from .plugin_discovery import default_discovered_context
 
-    target = "omnidriver.cardiacfoam.cardiacfoam_plugin:CardiacFoamPlugin"
-    return driver_context(
-        CardiacFoamPlugin(), source=f"trusted-import:{target}",
-    )
+    return default_discovered_context()
 
 
 def resolve_public_driver_context(
@@ -70,46 +82,6 @@ def resolve_public_driver_context(
     """Resolve the unchanged optional-context public API convention once."""
 
     return driver_context if driver_context is not None else legacy_default_driver_context()
-
-
-@_instrumented
-def legacy_generic_case_mutation(*args, **kwargs) -> None:
-    """Preserve direct callers of the formerly cardiac-owned generic factory.
-
-    Why: the historical public ``make_spec`` mutated the cardiac electro and
-    physics dictionaries.  Activation: a caller imports core ``make_spec``
-    directly rather than the solver-neutral registry alias.  Tests in the
-    cardiac generic-case and template suites preserve it.  Plan 2 may replace
-    this with explicit generic dictionary mutations.
-    """
-
-    from omnidriver.cardiacfoam.generic_case_mutation import apply_case_mutation
-
-    apply_case_mutation(*args, **kwargs)
-
-
-# The dictionary files the historical generic-case factory addressed, keyed by
-# the generic ``dict_file_relpaths`` names.  Insertion order matters: the first
-# entry is the "primary" file whose presence marks a folder as non-generic, and
-# ``electroProperties`` has always been that marker.
-_LEGACY_GENERIC_CASE_DICT_FILES = (
-    ("electro", "constant/electroProperties"),
-    ("physics", "constant/physicsProperties"),
-)
-
-@_instrumented
-def legacy_generic_case_dict_file_relpaths() -> dict[str, str]:
-    """Return the dictionary files core ``make_spec`` has always defaulted to.
-
-    Why: the historical signature defaulted ``electro_properties_relpath`` and
-    ``physics_properties_relpath`` to fixed cardiac paths, and the generic-case
-    detection keyed off the first of them.  Activation: a caller of core
-    ``make_spec`` declares no ``dict_file_relpaths``.  Preserved by the core
-    generic-case and strict-plan suites.  Plan 2 seam: a plugin declaring its
-    own dictionary files makes this default unnecessary.
-    """
-
-    return dict(_LEGACY_GENERIC_CASE_DICT_FILES)
 
 
 @_instrumented

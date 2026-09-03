@@ -10,14 +10,11 @@ core/compatibility.py is exempt from the omnidriver.openfoam prefix only: its
 ungated environment fallbacks are a documented, overridable default (see
 future/ENVIRONMENT_CONTRACT.md §4) -- those imports are never reached unless a
 plugin declines to implement the corresponding capability hook.
-compatibility.py is NOT exempt from the omnidriver.cardiacfoam prefix any
-more: after Phase 2 Task 7 removed the twenty cardiac-gated fallbacks, the
-only remaining cardiac imports in the file
-(legacy_default_driver_context, legacy_generic_case_mutation) are the public
-compatibility edge Task 5 deliberately preserved, and are individually waived
-in KNOWN_VIOLATIONS below rather than blanket-exempted -- a new cardiac import
-anywhere else in the file now fails this gate. compatibility.py may still not
-import foamlib directly; it must go through omnidriver.openfoam.
+compatibility.py is NOT exempt from the omnidriver.cardiacfoam prefix, and no
+longer needs to be: it contains no cardiac import at all. Any cardiac import
+appearing anywhere in core now fails this gate outright, with no waiver to
+add it to. compatibility.py may still not import foamlib directly; it must go
+through omnidriver.openfoam.
 
 Imports inside ``if TYPE_CHECKING:`` blocks are never runtime imports, so
 they're exempt everywhere.
@@ -41,24 +38,24 @@ CORE_SRC = REPO_ROOT / "packages/omnidriver/src/omnidriver"
 OPENFOAM_SRC = REPO_ROOT / "packages/omnidriver-openfoam/src/omnidriver/openfoam"
 COMPATIBILITY_FILE = CORE_SRC / "core" / "compatibility.py"
 
-# Pre-existing violations, waived so widening the scope does not turn CI red on
-# work that predates it. This list may only SHRINK. A new violation fails the
-# gate; a waiver that no longer matches anything also fails it, so the list
-# cannot rot into a lie the way the old narrow scope did.
+# Waived pre-existing violations. This list may only SHRINK. A new violation
+# fails the gate; a waiver that no longer matches anything also fails it, so
+# the list cannot rot into a lie the way the old narrow scope did.
 #
-# Both entries are tracked in GITHUB_MIGRATION.md's round-2 scope.
-KNOWN_VIOLATIONS: frozenset[str] = frozenset({
-    # Permanent compatibility edge (not debt): the historical public API lets
-    # a caller omit a plugin/context entirely, and the only sane default has
-    # always been cardiacFoam. dict_entries.py, sweep_routing.py,
-    # sweep_materialize.py and cli.py all deliberately keep reaching this.
-    # Phase 2 Task 5a preserved it on purpose; Task 7 only removed the twenty
-    # gated fallbacks sitting alongside it.
-    "core/compatibility.py:59:omnidriver.cardiacfoam.cardiacfoam_plugin",
-    # Same permanent compatibility edge as above, for the historical public
-    # make_spec's cardiac dictionary mutation. Not debt.
-    "core/compatibility.py:86:omnidriver.cardiacfoam.generic_case_mutation",
-})
+# It is now EMPTY, which is the point: core contains no runtime cardiac import
+# at all, so this gate no longer records exceptions to its own rule -- it
+# asserts the rule outright.
+#
+# The last two entries were core/compatibility.py's
+# legacy_default_driver_context and legacy_generic_case_mutation, both of the
+# same shape: the historical public API lets a caller omit a plugin/context
+# entirely, and core answered by importing cardiacFoam. Both were described
+# here as "permanent compatibility edge (not debt)". They were not permanent.
+# The public no-argument API survives unchanged; what changed is that the
+# default now resolves through the omnidriver.plugins entry-point group, and
+# the cardiac dictionary vocabulary moved to the plugin that means it. See
+# docs/superpowers/specs/2026-09-02-neutral-default-context-design.md.
+KNOWN_VIOLATIONS: frozenset[str] = frozenset()
 # Removed once fixed: cli.py's two module-scope omnidriver.openfoam imports,
 # which made `import omnidriver.cli` fail in a core-only install. They now go
 # through EnvironmentPreflightCapability.load and OverrideScopeCapability.apply.

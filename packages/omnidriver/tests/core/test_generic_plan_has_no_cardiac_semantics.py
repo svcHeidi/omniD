@@ -143,9 +143,13 @@ def test_generic_spec_metadata_names_dict_files_generically(
     names (``electro_properties_relpath``/``physics_properties_relpath``) even
     under ``--plugin none``. It now carries a single generic
     ``dict_file_relpaths`` mapping whose *keys* are chosen by whoever declares
-    the dictionaries; the cardiac-shaped default values still arrive via the
-    named ``core.compatibility`` seam, so the paths are unchanged while the
-    core-owned vocabulary is not."""
+    the dictionaries.
+
+    Phase 2 left the cardiac-shaped default *values* arriving through the
+    named ``core.compatibility`` seam, so a plan under ``--plugin none`` still
+    reported ``{"electro", "physics"}`` -- cardiac vocabulary in a plan this
+    module's own name says has no cardiac semantics. That default is gone; the
+    generic plugin declares no dictionary files, so the mapping is empty."""
     monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
     monkeypatch.setenv("SKIP_MESH_DIAGNOSTICS", "1")
     case = _minimal_case(tmp_path)
@@ -160,4 +164,4 @@ def test_generic_spec_metadata_names_dict_files_generically(
     assert "has_default_electro_property_overrides" not in metadata
     assert "has_default_physics_property_overrides" not in metadata
     assert metadata["has_default_dict_file_overrides"] is False
-    assert set(metadata["dict_file_relpaths"]) == {"electro", "physics"}
+    assert metadata["dict_file_relpaths"] == {}
