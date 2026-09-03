@@ -28,9 +28,9 @@
 
 """Export the active plugin's report catalog to JSON.
 
-Backend authors report definitions against ``openfoam_driver/core/report_catalog.py``'s
+Backend authors report definitions against ``omnidriver/core/report_catalog.py``'s
 ``ReportDefinition`` record; each plugin owns its own catalog (the built-in
-cardiac plugin's lives at ``openfoam_driver/plugins/cardiacfoam/reports.py``)
+cardiac plugin's lives at ``omnidriver/cardiacfoam/reports.py``)
 and this script writes it to a stable JSON catalog for external consumers.
 Defaults to the built-in cardiacFoam plugin, matching v1 behavior, unless
 ``--plugin`` selects otherwise.

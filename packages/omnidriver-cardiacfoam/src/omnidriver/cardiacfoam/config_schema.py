@@ -50,7 +50,7 @@ CONFIG_SCHEMA: dict[str, Any] = {
             "type": "object",
             "description": (
                 "Physics-phase configuration as flat slot-keys. The complete "
-                "authoritative key catalogue is openfoam_driver.dict_entries."
+                "authoritative key catalogue is omnidriver.dict_entries."
             ),
             "properties": {
                 "myocardiumSolver": {

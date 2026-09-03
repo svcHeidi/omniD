@@ -169,7 +169,8 @@ def update_entry(
     """Set ``key`` within ``scope``, failing closed when the key is absent.
 
     ``add_if_missing`` with no ``scope`` is rejected here for the same
-    reason tier 1 rejects it at ``mutators.py:434``: without a scope there
+    reason tier 1 rejects it in ``mutators.py``'s ``update_foam_entry``:
+    without a scope there
     is no well-defined insertion point. Mirroring the guard keeps the two
     tiers agreeing on a case that tier 1's own ``raise ValueError`` already
     intercepts *before* any fallback to this module would ever run --

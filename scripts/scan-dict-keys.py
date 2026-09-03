@@ -35,8 +35,8 @@ Accuracy is ~80%; false positives/negatives are acceptable — this is an
 ad-hoc human-review tool, not a CI contract test.
 
 Usage:
-    python applications/scripts/driverFoam/scripts/scan-dict-keys.py
-    python applications/scripts/driverFoam/scripts/scan-dict-keys.py --limit 10
+    python scripts/scan-dict-keys.py
+    python scripts/scan-dict-keys.py --limit 10
 
 Exit code is always 0.
 """

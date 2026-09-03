@@ -92,7 +92,7 @@ def config_schema(
 
     return {
         "description": (
-            "Describes the --config JSON file format accepted by openfoam_driver. "
+            "Describes the --config JSON file format accepted by omnidriver. "
             "The config is a JSON object. It may be flat (applies to one tutorial) "
             "or wrapped in an entry-named key (multi-entry files where different "
             "sections apply to different entries)."

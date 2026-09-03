@@ -22,7 +22,7 @@
 # Description
 #     Renders the plugin capability seam table into ARCHITECTURE.md.
 #
-#     Thin CLI over openfoam_driver.core.capability_seams, which owns the
+#     Thin CLI over omnidriver.core.capability_seams, which owns the
 #     parsing and rendering: the conformance tests import that module
 #     directly, so there is exactly one parser.
 #

@@ -1,7 +1,9 @@
 """cardiacFoam-owned physicsProperties and controlDict catalog entries.
 
-The legacy ``openfoam_driver.dict_entries`` module re-exports these values so
-Plan 1 changes ownership without changing import paths or serialized catalogs.
+``omnidriver.dict_entries`` re-exports these values, so Plan 1 changed
+ownership without changing import paths or serialized catalogs. (That
+re-export was spelled ``openfoam_driver.dict_entries`` before the package
+split; no module of that name exists now.)
 """
 
 from __future__ import annotations

@@ -1,9 +1,11 @@
 """
 Utility Manifest Catalog
 
-A static, eagerly-loaded catalog of cardiacFoam utilities discovered from
-``utility.manifest.toml`` sidecar files placed next to each utility source
-directory under ``applications/utilities/<name>/``.
+Utility manifests loaded from ``utility.manifest.toml`` sidecar files placed
+next to each utility source directory. The roots are supplied by the selected
+plugin, not hardcoded -- core names no solver's utilities, and the eager
+module-level catalog this header used to describe is gone (see
+``future/UTILITY_CATALOG_STANDALONE_GAP.md``).
 
 Schema
 ------
@@ -62,7 +64,6 @@ Public API
     ProducesEntry          – frozen dataclass for a produces entry.
     UtilityManifest        – frozen dataclass for a parsed manifest.
     load_utility_manifests(utilities_root) -> dict[str, UtilityManifest]
-    UTILITY_CATALOG        – module-level dict populated at import time.
 """
 
 from __future__ import annotations

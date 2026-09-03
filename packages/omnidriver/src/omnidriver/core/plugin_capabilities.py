@@ -301,8 +301,12 @@ class DictDiagnosticsCapability(Protocol):
     OpenFOAM), which core has no business doing itself -- a FEniCS plugin's
     catalogue is checked against its own config format, not OpenFOAM syntax.
     Neither ever fails a plan; a false positive here is a question for a
-    human, not a defect (see :func:`strict_planning._resolve_entry`'s call
-    site for why they stay out of ``plan_diagnostics``).
+    human, not a defect -- which is why they land in ``all_diagnostics`` but
+    never in ``plan_diagnostics``. ``strict_planning.py``'s ``all_diagnostics``
+    assembly carries the reasoning. (This used to cite
+    ``strict_planning._resolve_entry``, which has never existed; the only
+    ``resolve_entry`` in the repo is ``core/runtime/registry.py``'s, and it is
+    not what the sentence meant.)
 
     :adapts: get_function_object_field_diagnostics, get_case_dict_key_diagnostics
     :consumed-by: omnidriver/core/strict_planning.py
@@ -555,8 +559,10 @@ class EnvironmentPreflightCapability(Protocol):
     ``diagnostics`` used to spell it ``openfoam_bashrc``, naming OpenFOAM
     specifically for a parameter every environment needs (future/
     ENVIRONMENT_CONTRACT.md §10, Tier 3). The CLI flag threading it in is
-    ``--environment-bashrc``, with ``--openfoam-bashrc`` kept working as a
-    deprecated alias.
+    ``--environment-bashrc``. ``--openfoam-bashrc`` was shipped as a deprecated
+    alias and then removed outright the same day, pre-publication -- this
+    sentence used to claim the alias still worked, which ``cli.py`` and
+    ``test_openfoam_bashrc_kwarg_is_no_longer_accepted`` both disprove.
 
     :adapts: get_environment_diagnostics, get_configured_environment, get_loaded_environment
     :consumed-by: omnidriver/core/strict_planning.py, omnidriver/core/runtime/sweep_runner.py, omnidriver/cli.py

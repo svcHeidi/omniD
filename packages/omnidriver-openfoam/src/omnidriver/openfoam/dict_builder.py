@@ -14,7 +14,7 @@ particular solver's vocabulary:
 The solver-specific builders that compose these primitives into concrete
 `constant/` dictionaries — together with whatever scope-sentinel convention
 their catalog uses — belong to the plugin that owns that vocabulary; for
-cardiacFoam they live in `openfoam_driver.plugins.cardiacfoam.dict_builder`.
+cardiacFoam they live in `omnidriver.cardiacfoam.dict_builder`.
 """
 from __future__ import annotations
 
@@ -35,8 +35,9 @@ if TYPE_CHECKING:
     # -- the pre-migration package name, which exists in no install. That made
     # `import omnidriver.openfoam.dict_builder` raise ModuleNotFoundError from
     # any cwd outside this repo, and it went unnoticed because the retired
-    # `openfoam_driver/` tree is still tracked at the repo root: running pytest
-    # from there puts cwd on sys.path and the stale package resolves.
+    # `openfoam_driver/` tree was still tracked at the repo root at the time:
+    # running pytest from there put cwd on sys.path and the stale package
+    # resolved. That tree was deleted in `4a5fb48`, so the cover is gone too.
     from omnidriver.core.contracts.dictionary import DictEntry
     from omnidriver.core.plugin_interface import DriverContext
 

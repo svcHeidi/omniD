@@ -164,7 +164,7 @@ def _workflow_dag_for(
         # explicit-path command as "./<Allrun-family case script>" -- an
         # arbitrary repo-relative script is refused on purpose, the same
         # command-injection boundary documented in
-        # applications/scripts/driverFoam/SECURITY.md. It is a read-only
+        # SECURITY.md. It is a read-only
         # analysis over writeCellCentres's already-written output, exactly
         # like aggregate_bulk_boundary.py / aggregate_gradient_verification.py
         # -- run manually after the sweep, not orchestrated by it (see
