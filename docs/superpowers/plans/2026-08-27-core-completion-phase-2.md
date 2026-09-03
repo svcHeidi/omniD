@@ -11,11 +11,23 @@
 > |---|---|
 > | 1 equivalence regression | ✅ `9df738b` |
 > | 2 relocate four modules | ✅ `1bde1a5`, corrected by `2e7ac99` |
-> | 3 `get_phases()` | not started |
+> | 3 `get_phases()` | ✅ landed |
 > | 4 neutral environment plugin | ✅ `4a96c18` |
 > | 5 explicit `DriverContext` | **rescoped — see below** |
-> | 6 openfoam context sites | not started |
-> | 7 delete the 20 gates | not started |
+> | 6 openfoam context sites | ✅ landed |
+> | 7 delete the 20 gates | ✅ landed |
+>
+> **Corrected 2026-09-03.** Tasks 3, 6 and 7 were marked "not started" in this
+> table long after they landed, and their step checkboxes below are likewise
+> still unchecked. Do not read an unchecked box here as outstanding work —
+> verify against the code. Evidence: `legacy_phases()` in `compatibility.py`
+> and `get_phases()` in `plugin_interface.py` (Task 3); `apply_overrides.py`
+> taking a required `driver_context` (Task 6); `grep -c 'org.cardiacfoam'
+> compatibility.py` returning 0, with `test_no_cardiac_gate_is_reached.py`
+> asserting the gated set is empty (Task 7). The core-only failure count in
+> this banner is also long superseded — it is now zero. Task 7 Step 2's
+> instruction to leave `legacy_generic_case_mutation` "permanent-for-now" is
+> superseded too: that function was deleted on 2026-09-03.
 >
 > **Merging 2 and 4 produced 3 failures neither had alone.** Both were cut from
 > the same base; Task 2 added `legacy_dict_key_scanner` afterwards, and

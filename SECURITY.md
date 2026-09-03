@@ -7,7 +7,8 @@ host.
 
 ## Trust boundaries
 
-- **Trusted:** the `openfoam_driver` package; binaries on `PATH` and under
+- **Trusted:** the `omnidriver`, `omnidriver-openfoam` and
+  `omnidriver-cardiacfoam` packages; binaries on `PATH` and under
   `$FOAM_APPBIN` / `$FOAM_USER_APPBIN`; the ambient process environment
   (including `PATH` and `$FOAM_*BIN`).
 - **Agent-provided (validated at ingestion):** the `RunDocument`. Validation
@@ -84,10 +85,10 @@ results directory — it is not forced under `caseRoot`.
   never reaches the runner except through validated ingestion.
 - The dict-regeneration/synthesis path is not screened for injection. When an
   override targets a selector key (e.g. `myocardiumSolver`),
-  `specs/apply_overrides.py` routes sibling `$TOKEN.`-scoped override values
+  `omnidriver/openfoam/apply_overrides.py` routes sibling `$TOKEN.`-scoped override values
   in the same call to `RegenerationScope.regenerate`, which serializes them
   via `specs/dict_builder._openfoam_value_token` /
-  `_serialize_block` in `plugins/cardiacfoam/dict_builder.py`. That path
+  `_serialize_block` in `omnidriver/cardiacfoam/dict_builder.py`. That path
   performs no injection screening at all — a `#codeStream` payload routed
   through it reaches the written dict file unrejected. Only
   `update_foam_entry`'s direct write path (both tiers, above) is guarded.

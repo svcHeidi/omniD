@@ -12,9 +12,13 @@
 > [`future/ENVIRONMENT_CONTRACT.md`](future/ENVIRONMENT_CONTRACT.md), and
 > `docs/superpowers/plans/2026-08-27-core-completion-phase-2.md`.
 >
-> One item here is still live and still uncorrected elsewhere: §3's note that
-> `sweep_materialize.py::_materialize_case_legacy` is dead code called from
-> nowhere. It still exists. Confirm it is still callerless before removing it.
+> **Corrected 2026-09-03.** This callout used to say one item was still live:
+> §3's note that `sweep_materialize.py::_materialize_case_legacy` is dead code
+> called from nowhere, to be confirmed callerless before removal. That function
+> no longer exists anywhere in the repository — `sweep_materialize.py` now
+> contains only `materialize_case()`, routed through the capability system.
+> Nothing in this document is still live. (The note was also undated, unlike
+> every sibling correction in `ARCHITECTURE.md` and `GITHUB_MIGRATION.md`.)
 
 **Status:** the v1 audit's *direction* is correct but its *problem statement is
 incomplete and its Task 2 targets code that doesn't have the bug it

@@ -1,8 +1,19 @@
 # driverFOAM Agent Guide
 
+> **Status: predates the package split — read for reasoning, not for locations
+> or commands (added 2026-09-03).** Every import path below names
+> `openfoam_driver.*`, and every CLI example invokes `driverFoam`. Neither
+> exists in any install: the packages are `omnidriver`, `omnidriver-openfoam`
+> and `omnidriver-cardiacfoam`, and the installed console script is
+> `omnidriver`. The behavioural explanations here are still broadly accurate;
+> the paths and commands are not. `ARCHITECTURE.md` and `KEY_FILES.md` carry
+> the current layout. Rewriting this guide is tracked as its own task — it was
+> out of scope for the 2026-09-03 documentation audit, which fixed the
+> documents that could be corrected surgically.
+
 This is the agent contract for planning, launching, polling, and inspecting
-cardiacFoam runs through the Python `openfoam_driver` package. Read this once
-before driving the orchestrator.
+cardiacFoam runs through the Python orchestrator. Read this once before
+driving it.
 
 ## What the agent can do
 

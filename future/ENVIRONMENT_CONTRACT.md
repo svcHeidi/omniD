@@ -223,13 +223,13 @@ through `primary_phase()`. Port that first and it becomes the template for
   `CaseFileRule.role`, `PluginProfile`, or an optional plugin hook — all three
   already shipped.
 
-## Related
 
-- `docs/superpowers/plans/2026-08-27-core-completion.md` — the executable plan
-- `GITHUB_MIGRATION.md` §3 — round-2 scope, corrected 2026-08-27
-- `SECURITY.md` — the existing command-boundary threat model that §5b must extend
+## 8b. What only running the code revealed
 
-## 8. What only running the code revealed
+*(Numbered 8b, not 9: this section was appended after §8 without
+renumbering, leaving two sections numbered 8. §9-§11 are cited by number from
+source comments, so they could not shift. Corrected 2026-09-03; matches the
+document's existing §5b.)*
 
 Static reading has now missed something four times. This section records what
 execution found that inspection did not — driven under three plugins in a
@@ -543,3 +543,9 @@ test — `x-fenics.mesh_file` loads via `load_plugin_profile`),
 `PluginProfile` with an escape-tier role directly, passes it through
 `driver_context(...)`, and confirms the rule comes back out of
 `capabilities.case_files.all_rules()`/`required_rules()` unchanged).
+
+## Related
+
+- `docs/superpowers/plans/2026-08-27-core-completion.md` — the executable plan
+- `GITHUB_MIGRATION.md` §3 — round-2 scope, corrected 2026-08-27
+- `SECURITY.md` — the existing command-boundary threat model that §5b must extend

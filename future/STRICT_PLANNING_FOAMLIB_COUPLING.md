@@ -196,7 +196,14 @@ place; `environment_preflight.py` now imports it back from core.
 
 **Deliberately left as-is, not part of this fix:**
 
-- `omnidriver/cli.py` still has two direct `omnidriver.openfoam` imports
+- ~~`omnidriver/cli.py` still has two direct `omnidriver.openfoam` imports~~
+  **Corrected 2026-09-03: fixed, not deliberate any more.** `cli.py` now reaches
+  both through capabilities (`environment_preflight.load`,
+  `override_scopes.apply`); it has zero module-scope `omnidriver.openfoam`
+  imports, and `scripts/check-import-boundaries.py` records the same fix. The
+  flag was also renamed `--environment-bashrc`. The original reasoning, which
+  this section recorded as a scope decision, is kept below for the record:
+- `omnidriver/cli.py` had two direct `omnidriver.openfoam` imports
   (`load_openfoam_environment` for bashrc sourcing, `apply_overrides`/
   `validate_overrides`/`OverrideError` for the `--apply` flag). Scope
   decision: `cli.py` is the leaf CLI entry point, not part of `omnidriver.core`

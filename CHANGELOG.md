@@ -200,3 +200,8 @@ half at the original path:
   and re-parsed by `specs/apply_overrides.py`. The plan's own exit-gate grep
   returns 12 hits, not zero. See the correction note at the end of
   `.superpowers/sdd/progress.md`'s Phase 2 section.
+  (**Partly resolved, noted 2026-09-03.** `scripts/_dict_keys_scanner.py` no
+  longer exists anywhere in the repository — it was removed outright, not
+  relocated, per `GITHUB_MIGRATION.md` §3. The other two paths named here are
+  pre-package-split locations; like every path in this changelog, read them as
+  the flat `openfoam_driver/` tree, not as current locations.)

@@ -1,7 +1,15 @@
-# driverFOAM — Key Files Reference
+# omniDriver — Key Files Reference
 
-Quick navigational map for every reader type. All paths are relative to
-`applications/scripts/driverFoam/`.
+Quick navigational map for every reader type. All paths are relative to the
+repository root.
+
+> **Corrected 2026-09-03.** Every path in this file named the pre-package-split
+> layout (`applications/scripts/driverFoam/openfoam_driver/…`), which exists
+> nowhere in this repository — following any of them failed immediately. They
+> now name real, verified locations under `packages/`. A navigational map with
+> stale paths is worse than no map, so this was the highest-severity item in
+> the 2026-09-03 documentation audit. Note `postprocess_phase.py` also *moved*,
+> from `postprocessing/` to `core/runtime/`; it was not merely renamed.
 
 ---
 
@@ -9,32 +17,32 @@ Quick navigational map for every reader type. All paths are relative to
 
 | File | Role |
 |---|---|
-| `openfoam_driver/core/plugin_interface.py` | **Start here.** Defines `SolverPlugin` (the single 27-member contract), `SolverPluginOptionalHooks`, `DriverContext`, and `validate_plugin()`. |
-| `openfoam_driver/core/plugin_capabilities.py` | 17 capability Protocol classes + adapter dataclasses + `adapt_plugin_capabilities()`. Every plugin capability seam is documented here. |
-| `openfoam_driver/core/compatibility.py` | Backward-compatibility shims for optional-hook capabilities: cardiac-shaped fallbacks for the built-in cardiac plugin, neutral fallbacks for every other plugin. |
+| `packages/omnidriver/src/omnidriver/core/plugin_interface.py` | **Start here.** Defines `SolverPlugin` (the single 27-member contract), `SolverPluginOptionalHooks`, `DriverContext`, and `validate_plugin()`. |
+| `packages/omnidriver/src/omnidriver/core/plugin_capabilities.py` | 17 capability Protocol classes + adapter dataclasses + `adapt_plugin_capabilities()`. Every plugin capability seam is documented here. |
+| `packages/omnidriver/src/omnidriver/core/compatibility.py` | Backward-compatibility shims for optional-hook capabilities: cardiac-shaped fallbacks for the built-in cardiac plugin, neutral fallbacks for every other plugin. |
 | `packages/omnidriver/src/omnidriver/core/plugin_discovery.py` | Entry-point discovery via `importlib.metadata`. Explains `omnidriver.plugins` group name, ambiguity handling, and `_entry_points()` test seam. |
-| `openfoam_driver/core/strict_planning.py` | The strict planner: `strict_plan()` / `driverFoam plan --strict`. Non-mutating; produces machine-readable JSON with readiness score, diagnostics, and launch command. |
-| `openfoam_driver/cli.py` | `driverFoam` / `driverFoam` CLI entry-point. All public subcommands are here. |
-| `ARCHITECTURE.md` | Deep architectural review: layer map, claim discipline, coupling analysis, runtime flow diagrams. ~1400 lines. Read §3 and §4.5 first. |
+| `packages/omnidriver/src/omnidriver/core/strict_planning.py` | The strict planner: `strict_plan()` / `driverFoam plan --strict`. Non-mutating; produces machine-readable JSON with readiness score, diagnostics, and launch command. |
+| `packages/omnidriver/src/omnidriver/cli.py` | `driverFoam` / `driverFoam` CLI entry-point. All public subcommands are here. |
+| `ARCHITECTURE.md` | Deep architectural review: layer map, claim discipline, coupling analysis, runtime flow diagrams. Read the package-independence rules and the capability-seam table first. |
 | `CHANGELOG.md` | History of contract changes per phase. |
 
 ---
 
 ## For Plugin Authors
 
-> **New to writing a plugin?** Follow `.agents/skills/driverfoam-plugin-builder/SKILL.md`
+> **New to writing a plugin?** Follow `.agents/skills/driverfoam-plugin-builder/SKILL.md` (**not present in this repository** — it lives in the cardiacFoam monorepo)
 > step by step — it contains the complete workflow, a contract cheat-sheet, and a worked example.
 
 | File | Role | Why you must read it |
 |---|---|---|
-| `openfoam_driver/core/generic_plugin.py` | **Canonical scaffold.** Copy this file as `my_solver_plugin.py`. | Shows every required method with minimal stubs. |
-| `openfoam_driver/core/generic-plugin.yaml` | Minimal `plugin.yaml` template. | Documents all valid `kind`, `role`, `required` values inline. |
-| `openfoam_driver/plugins/cardiacfoam/plugin.yaml` | Full `plugin.yaml` example. | Shows `cxx_mapping`, `reviewed_allowlist`, real dictionary list. |
-| `openfoam_driver/plugins/cardiacfoam_plugin.py` | Full plugin reference (428 lines). | Shows all method signatures, `@lru_cache`, `@staticmethod get_profile()`, catalog patterns. |
-| `openfoam_driver/core/contracts/dictionary.py` | `DictEntry` dataclass — the vocabulary unit. | Every dictionary key your solver reads must be a `DictEntry`. |
-| `openfoam_driver/core/contracts/dictionary_catalog.py` | `DictionaryCatalog` — immutable partitioned store. | Return from `get_dictionary_catalog()`; validates uniqueness at construction. |
+| `packages/omnidriver/src/omnidriver/core/generic_plugin.py` | **Canonical scaffold.** Copy this file as `my_solver_plugin.py`. | Shows every required method with minimal stubs. |
+| `packages/omnidriver/src/omnidriver/core/generic-plugin.yaml` | Minimal `plugin.yaml` template. | Documents all valid `kind`, `role`, `required` values inline. |
+| `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/plugin.yaml` | Full `plugin.yaml` example. | Shows `cxx_mapping`, `reviewed_allowlist`, real dictionary list. |
+| `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/cardiacfoam_plugin.py` | Full plugin reference (428 lines). | Shows all method signatures, `@lru_cache`, `@staticmethod get_profile()`, catalog patterns. |
+| `packages/omnidriver/src/omnidriver/core/contracts/dictionary.py` | `DictEntry` dataclass — the vocabulary unit. | Every dictionary key your solver reads must be a `DictEntry`. |
+| `packages/omnidriver/src/omnidriver/core/contracts/dictionary_catalog.py` | `DictionaryCatalog` — immutable partitioned store. | Return from `get_dictionary_catalog()`; validates uniqueness at construction. |
 | `pyproject.toml` | Entry-point registration. | You must add your plugin under `[project.entry-points."omnidriver.plugins"]`. |
-| `openfoam_driver/core/plugin_interface.py` | Full contract definition. | Read `SolverPlugin` and `SolverPluginOptionalHooks`. |
+| `packages/omnidriver/src/omnidriver/core/plugin_interface.py` | Full contract definition. | Read `SolverPlugin` and `SolverPluginOptionalHooks`. |
 
 ### Plugin Contract Quick Reference
 
@@ -92,8 +100,8 @@ Quick navigational map for every reader type. All paths are relative to
 | File | Role |
 |---|---|
 | `AGENT_GUIDE.md` | Full agent CLI reference: `driverFoam` commands, RunDocument, sweeps, post-processing, PLUGIN_GUIDE section. |
-| `.agents/skills/driverfoam-assistant/SKILL.md` | Agent workflow skill: case scaffolding, sweep generation, strict diagnostics loop, post-processing. |
-| `.agents/skills/driverfoam-plugin-builder/SKILL.md` | **Plugin builder skill:** complete step-by-step guide for integrating a new solver. |
+| `.agents/skills/driverfoam-assistant/SKILL.md` (**not present in this repository** — it lives in the cardiacFoam monorepo) | Agent workflow skill: case scaffolding, sweep generation, strict diagnostics loop, post-processing. |
+| `.agents/skills/driverfoam-plugin-builder/SKILL.md` (**not present in this repository** — it lives in the cardiacFoam monorepo) | **Plugin builder skill:** complete step-by-step guide for integrating a new solver. |
 
 ### Environment Variables
 
@@ -125,8 +133,8 @@ Each `DictEntry.driver_path` must be globally unique across your entire catalog.
 
 | File | Role |
 |---|---|
-| `openfoam_driver/postprocessing/__init__.py` | Public surface: `PostprocessingProtocol`, `PlotSpec`, `TraceSpec`, `build_line_traces`, `load_csv_folder`, `apply_plotly_layout`, `write_plotly_html`, `DEFAULT_PALETTE`. |
-| `openfoam_driver/postprocessing/postprocess_phase.py` | `build_sweep_context()` (brain) and `run_postprocessing_module()`. The brain is the single source of truth; the module never re-reads manifests. |
+| `packages/omnidriver/src/omnidriver/postprocessing/__init__.py` | Public surface: `PostprocessingProtocol`, `PlotSpec`, `TraceSpec`, `build_line_traces`, `load_csv_folder`, `apply_plotly_layout`, `write_plotly_html`, `DEFAULT_PALETTE`. |
+| `packages/omnidriver/src/omnidriver/core/runtime/postprocess_phase.py` | `build_sweep_context()` (brain) and `run_postprocessing_module()`. The brain is the single source of truth; the module never re-reads manifests. |
 | Tutorial `run_postprocessing` scripts | Expose `run_postprocessing(*, output_dir, setup_root=None, **kwargs) -> list[dict]`. Discovery is driven by the function's docstring. |
 
 See `AGENT_GUIDE.md §5 Post-Processing Phase` for the full protocol.

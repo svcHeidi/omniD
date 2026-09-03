@@ -58,17 +58,13 @@ today, not just in test-collection terms — the CLI, `describe`, and the full
 core-only suite all run clean from a wheel-equivalent install with nothing
 else on the path.
 
-The core-only failure count is the honest measure of how far core is from
-standing alone. It began at 160 across four distinct causes; Phase 2's first
-wave closed two of them entirely — the test-tree regression and every failure
-reaching `omnidriver.openfoam`. The remaining 140 are 129 from the implicit
-cardiac `DriverContext` and 11 subprocess failures in export scripts.
-
-Those 129 are **not** mostly a threading problem, which the Phase 2 plan
-originally assumed. Measured: only ~13% are in test files that already build a
-non-cardiac context; ~87% need a per-test decision about which plugin the test
-should run under, and some cannot pass under any plugin because they are written
-against cardiacFoam's tutorial catalogue. See that plan's "Task 5, remeasured".
+(**Corrected 2026-09-03.** Two paragraphs stood here describing 140 remaining
+failures — 129 from the implicit cardiac `DriverContext`, 11 from
+export-script subprocesses — and analysing how many were a threading problem.
+They were left un-deleted when the count reached zero, so this section stated
+its own headline metric two ways, in adjacent paragraphs, with no strikethrough
+or transition. The measurement history is preserved in `GITHUB_MIGRATION.md` §2
+and in the Phase 2 plan's "Task 5, remeasured".)
 
 **Two claims this section used to make, both withdrawn 2026-08-27:**
 

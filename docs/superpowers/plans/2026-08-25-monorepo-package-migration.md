@@ -1,5 +1,14 @@
 # Monorepo Package Migration Implementation Plan
 
+> **Status: executed, with one name changed in flight (noted 2026-09-03).**
+> This plan names the third package `omnidriver-cardiac` / `omnidriver.cardiac`
+> throughout. It shipped as `omnidriver-cardiacfoam` /
+> `omnidriver.cardiacfoam`; no `omnidriver.cardiac` module has ever existed
+> here. Read the package name in this document as the one that shipped. A
+> survivor of that rename was still breaking
+> `scripts/regenerate-ionic-catalog.py`, which built its target path through
+> `omnidriver/cardiac/`, until 2026-09-03.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Copy the actively-developed `openfoam_driver` package from
