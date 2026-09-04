@@ -2,6 +2,19 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **COMPLETE — all four tasks executed 2026-09-04** (`e332c41`, `1ff5937`,
+> `ed6f37b`, `749a181`). Goal met at Task 3, one task earlier than planned:
+> the core suite runs against an installed wheel with **544 passed, 0 failed**,
+> from 13 failures and 8 collection errors.
+>
+> Two of the plan's own expectations were wrong and are corrected in place
+> rather than left to rot. Task 1 Step 5 predicted wheel failures would fall;
+> they rose 13 → 16, because `resolve_entry` evaluates the ambient default
+> eagerly, eighteen lines above where the branch was placed. And Task 2 listed
+> three call sites where there were five — the two it missed live inside
+> `paths.py` itself, one of them the eager-append in `resolve_run_script_path`
+> that the spec had flagged as the likeliest surprise.
+
 **Goal:** Make `pytest packages/omnidriver/tests` pass against an installed
 wheel, by letting a case be identified by its path and removing core's ambient
 root resolution.
@@ -76,7 +89,7 @@ already recognises a case anywhere on disk; only the entry API refuses one.
   `case_dir_name` (its leaf name). Task 2 relies on this working without any
   ambient default.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `packages/omnidriver/tests/core/test_case_is_a_path.py`:
 
@@ -146,7 +159,7 @@ def test_a_directory_that_is_not_a_case_is_still_refused(tmp_path: Path) -> None
         resolve_entry(str(empty), entry_kind="case_folder", driver_context=ctx)
 ```
 
-- [ ] **Step 2: Run and confirm all three fail**
+- [x] **Step 2: Run and confirm all three fail**
 
 Run:
 ```bash
@@ -156,7 +169,7 @@ Expected: the first two FAIL with `KeyError: "Unknown entry ..."`; the third
 passes already (an unknown name is refused today for the wrong reason). Two
 failures is the correct starting state.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `registry.py`'s `resolve_entry`, insert immediately **before** the
 `matched_entry = _match_entry(...)` line:
@@ -204,7 +217,7 @@ In `registry.py`'s `resolve_entry`, insert immediately **before** the
 `CaseCompatibilityRequest` is already imported at the top of `resolve_entry`;
 `make_generic_case_spec` and `Path` are already module-level imports.
 
-- [ ] **Step 4: Run and confirm all three pass**
+- [x] **Step 4: Run and confirm all three pass**
 
 Run:
 ```bash
@@ -212,7 +225,7 @@ Run:
 ```
 Expected: `3 passed`.
 
-- [ ] **Step 5: Confirm the wheel failures drop**
+- [x] **Step 5: Confirm the wheel failures drop**
 
 Rebuild the wheel venv (see Global Constraints), then:
 ```bash
@@ -232,7 +245,7 @@ of the three new tests pass against the wheel; the third,
 through to the eager default. That is correct and expected — it is a new test
 exposing exactly what Task 2 removes, not a regression.
 
-- [ ] **Step 6: Full suite**
+- [x] **Step 6: Full suite**
 
 Run:
 ```bash
@@ -240,7 +253,7 @@ Run:
 ```
 Expected: **1554 passed** (1551 plus this task's three), 0 failed.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/omnidriver/src/omnidriver/core/runtime/registry.py packages/omnidriver/tests/core/test_case_is_a_path.py
@@ -264,7 +277,7 @@ git commit -m "feat: resolve a case by its path, not only by name under a root"
 - Produces: `cli.resolve_cases_root(explicit: str | Path | None) -> Path`,
   used by Task 3.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `packages/omnidriver/tests/core/test_case_is_a_path.py`:
 
@@ -286,7 +299,7 @@ def test_core_exposes_no_ambient_root_default() -> None:
     assert not hasattr(paths, "tutorials_root_default")
 ```
 
-- [ ] **Step 2: Run and confirm the second fails**
+- [x] **Step 2: Run and confirm the second fails**
 
 Run:
 ```bash
@@ -297,7 +310,7 @@ Expected: `test_core_exposes_no_ambient_root_default` FAILS
 checkout. Both must pass by Step 6, and the listing one is what the wheel run
 proves.
 
-- [ ] **Step 3: Make the base a required parameter in core**
+- [x] **Step 3: Make the base a required parameter in core**
 
 In `registry.py`, change all three sites so the caller supplies the base and
 core never invents one:
@@ -324,7 +337,7 @@ with
 Then delete the `from omnidriver.core.specs.common import tutorials_root_default`
 import at `registry.py:10`.
 
-- [ ] **Step 4: Delete the function and its re-export**
+- [x] **Step 4: Delete the function and its re-export**
 
 In `packages/omnidriver/src/omnidriver/core/specs/paths.py`, delete
 `tutorials_root_default()` entirely and put this in its place:
@@ -343,7 +356,7 @@ In `packages/omnidriver/src/omnidriver/core/specs/common.py`, remove
 `repo_root_default()` STAYS — `capability_seams.architecture_path()` and
 `scripts/` legitimately need a checkout. Do not delete it.
 
-- [ ] **Step 5: Add the resolution chain at the public edge**
+- [x] **Step 5: Add the resolution chain at the public edge**
 
 In `packages/omnidriver/src/omnidriver/cli.py`, add near the other helpers:
 
@@ -376,7 +389,7 @@ def resolve_cases_root(explicit: str | Path | None = None) -> Path:
 ```
 Keep the surrounding lines that set other overrides unchanged.
 
-- [ ] **Step 6: Pin the registered-tutorial guarantee**
+- [x] **Step 6: Pin the registered-tutorial guarantee**
 
 This is the constraint the whole design was checked against, and nothing above
 tests it. Create
@@ -453,7 +466,7 @@ def test_the_parallel_tutorials_still_ask_for_a_rank_count(name: str, tmp_path: 
         factory(tutorials_root=tmp_path)
 ```
 
-- [ ] **Step 7: Run the acceptance test**
+- [x] **Step 7: Run the acceptance test**
 
 Run:
 ```bash
@@ -463,7 +476,7 @@ Expected: `6 passed` (two builds plus four parametrized refusals). If a
 tutorial in the sweep fails, core's default removal broke it — fix the
 threading, not the test.
 
-- [ ] **Step 8: Run both suites**
+- [x] **Step 8: Run both suites**
 
 Run:
 ```bash
@@ -478,7 +491,7 @@ If a test fails because it relied on the repo-root default, fix the TEST to
 pass an explicit root — do not restore the default. That default is the
 defect.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add -A
@@ -499,7 +512,7 @@ git commit -m "refactor: core takes a cases base, it no longer invents one"
 - Produces: `paths.scratch_root(base: Path) -> Path` and
   `paths.default_sweep_output_dir(spec_path, *, base: Path) -> Path`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `packages/omnidriver/tests/core/test_case_is_a_path.py`:
 
@@ -523,7 +536,7 @@ def test_scratch_honours_the_environment_variable(tmp_path: Path, monkeypatch) -
     assert scratch_root(tmp_path) == tmp_path / "elsewhere"
 ```
 
-- [ ] **Step 2: Run and confirm both fail**
+- [x] **Step 2: Run and confirm both fail**
 
 Run:
 ```bash
@@ -531,7 +544,7 @@ Run:
 ```
 Expected: FAIL with `ImportError: cannot import name 'scratch_root'`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `paths.py`, replace `driverfoam_scratch_root()` and
 `default_sweep_output_dir()` with:
@@ -565,7 +578,7 @@ In `cli.py`, at line ~459 replace `driverfoam_scratch_root()` with
 Update `cli.py`'s import at line 21-22 to name `scratch_root` instead of
 `driverfoam_scratch_root`.
 
-- [ ] **Step 4: Run and confirm they pass**
+- [x] **Step 4: Run and confirm they pass**
 
 Run:
 ```bash
@@ -573,7 +586,7 @@ Run:
 ```
 Expected: **1562 passed**, 0 failed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -592,7 +605,7 @@ git commit -m "refactor: scratch and sweep output leave the repository"
 - Consumes: Tasks 1-3 complete.
 - Produces: nothing.
 
-- [ ] **Step 1: Extend the static guard**
+- [x] **Step 1: Extend the static guard**
 
 Append to `packages/omnidriver/tests/core/test_core_context_is_explicit.py`:
 
@@ -643,7 +656,7 @@ def test_core_never_invents_a_filesystem_root() -> None:
     )
 ```
 
-- [ ] **Step 2: Run the guard**
+- [x] **Step 2: Run the guard**
 
 Run:
 ```bash
@@ -652,7 +665,7 @@ Run:
 Expected: PASS. If it fails, it has found a real caller Tasks 2-3 missed —
 fix the caller, not the guard.
 
-- [ ] **Step 3: Confirm the whole point of the work**
+- [x] **Step 3: Confirm the whole point of the work**
 
 Rebuild the wheel venv (see Global Constraints), then:
 ```bash
@@ -662,7 +675,7 @@ Expected: **0 failed.** This is the plan's success criterion. If failures
 remain, stop and report them individually rather than skipping them — a skip
 here would hide exactly the defect this plan exists to remove.
 
-- [ ] **Step 4: Upgrade the CI wheel job to run the suite**
+- [x] **Step 4: Upgrade the CI wheel job to run the suite**
 
 In `.github/workflows/ci.yml`, in the `test-wheel` job, after the existing
 "Verify the installed artifact runs standalone" step, add:
@@ -677,7 +690,7 @@ In `.github/workflows/ci.yml`, in the `test-wheel` job, after the existing
 Keep the artifact-gate step: it checks things the suite does not, including
 that `python -m omnidriver --help` exits 0.
 
-- [ ] **Step 5: Full verification on both floors**
+- [x] **Step 5: Full verification on both floors**
 
 Run:
 ```bash
@@ -689,14 +702,14 @@ Run:
 ```
 Expected: **1564 passed** on 3.13 and 3.11; core-only **686 passed**; both gates green.
 
-- [ ] **Step 6: Update the record**
+- [x] **Step 6: Update the record**
 
 In `GITHUB_MIGRATION.md`, add to the CI row: the `test-wheel` job now runs
 core's suite against the installed wheel, not only the artifact gate. In
 `docs/superpowers/specs/2026-09-04-a-case-is-a-path-design.md`, mark the
 Success Criteria section as met, dated 2026-09-04, with the measured numbers.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -A
