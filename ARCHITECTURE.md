@@ -37,14 +37,20 @@ complete; Rule 1 as originally written is superseded — see
 
 **Re-measured 2026-09-02**, after `future/ENVIRONMENT_CONTRACT.md`'s Tier 3
 (closed) and Tier 4's entrypoint slice (done), against a **freshly built**
-core-only venv (`/opt/homebrew/bin/python3.13 -m venv`, per the recipe in
-`GITHUB_MIGRATION.md` §2 — not this repo's own `.venv`, which has all three
-packages installed):
+core-only venv (per the recipe in `CLAUDE.md` — not this repo's own `.venv`,
+which has all three packages installed).
+
+**Pass/fail, not totals.** This table used to quote exact test counts; they
+went stale twice in two days (1543 → 1546 → 1551 → 1566) and were corrected
+each time by someone who happened to notice. A count is a fact about the
+moment it was taken, and nothing regenerates it. `0 failed` is the durable
+claim; run the command for the number:
 
 | | state |
 |---|---|
-| all three packages installed | **1546 passed, 276 skipped, 40 subtests, 0 failed** |
-| core installed alone | **679 passed, 93 skipped, 0 failed** |
+| all three packages installed | ✅ **0 failed** — `pytest packages/ -q -m "not slow"` |
+| core installed alone | ✅ **0 failed** — `pytest packages/omnidriver/tests -q` in a core-only venv |
+| core's whole suite against a built wheel | ✅ **0 failed** since 2026-09-04 — `scripts/check-wheel-artifact.py` plus the suite; see `CLAUDE.md`. Before that day it could not even be *collected*: eight modules called `repo_root_default()` at import time and thirteen tests failed. |
 | core imported from a built wheel | ✅ guarded by `test_wheel_install_imports.py` |
 | plugin resolves by entry-point name | ✅ guarded by `test_entry_point_group_matches_packaging.py` |
 | core's CLI usable alone | ✅ `omnidriver --help` exits 0 in a core-only install |
