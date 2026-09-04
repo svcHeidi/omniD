@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 
@@ -78,14 +79,38 @@ def repo_root_default() -> Path:
 # §12 on supplied-versus-discovered.
 
 
-def driverfoam_scratch_root() -> Path:
-    """Return the repository-local root for disposable driverFOAM data."""
-    return repo_root_default() / ".tmp" / "driverfoam"
+def repo_root_or_none() -> Path | None:
+    """The repository root, or ``None`` when there is no checkout.
+
+    ``repo_root_default()`` raises rather than guessing, which is right when a
+    caller genuinely needs the repository. A caller asking "am I inside a
+    checkout at all?" wants an answer, not an exception -- and gets ``None``
+    from an installed wheel, where the honest answer is "no".
+    """
+    try:
+        return repo_root_default()
+    except RuntimeError:
+        return None
 
 
-def default_sweep_output_dir(spec_path: str | Path) -> Path:
+def scratch_root(base: Path) -> Path:
+    """Disposable working data, kept beside the workspace rather than inside
+    the installation.
+
+    ``OMNIDRIVER_SCRATCH_DIR`` overrides. Deliberately NOT the OS temp
+    directory: sweep outputs default under here, and somewhere the OS reaps
+    would be worse than the repository-local ``.tmp/driverfoam`` this replaces
+    -- which was both solver-branded and unwritable on a read-only install.
+    """
+    override = os.environ.get("OMNIDRIVER_SCRATCH_DIR")
+    if override:
+        return Path(override).expanduser()
+    return Path(base) / ".omnidriver"
+
+
+def default_sweep_output_dir(spec_path: str | Path, *, base: Path) -> Path:
     """Return the standard output location for a sweep specification."""
-    return driverfoam_scratch_root() / "sweeps" / Path(spec_path).stem
+    return scratch_root(base) / "sweeps" / Path(spec_path).stem
 
 
 def default_setup_dir_name(case_dir_name: str) -> str:

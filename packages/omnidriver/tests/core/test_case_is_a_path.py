@@ -78,3 +78,22 @@ def test_core_exposes_no_ambient_root_default() -> None:
     from omnidriver.core.specs import paths
 
     assert not hasattr(paths, "tutorials_root_default")
+
+
+def test_scratch_is_workspace_local_not_repository_local(tmp_path: Path) -> None:
+    """`.tmp/driverfoam` wrote inside the repository, which fails on a
+    read-only install and is solver-branded. It is workspace-local now --
+    deliberately NOT the OS temp directory, because sweep outputs default here
+    and having the OS reap them would be worse than the old behaviour."""
+    from omnidriver.core.specs.paths import default_sweep_output_dir, scratch_root
+
+    assert scratch_root(tmp_path) == tmp_path / ".omnidriver"
+    out = default_sweep_output_dir("study.json", base=tmp_path)
+    assert out == tmp_path / ".omnidriver" / "sweeps" / "study"
+
+
+def test_scratch_honours_the_environment_variable(tmp_path: Path, monkeypatch) -> None:
+    from omnidriver.core.specs.paths import scratch_root
+
+    monkeypatch.setenv("OMNIDRIVER_SCRATCH_DIR", str(tmp_path / "elsewhere"))
+    assert scratch_root(tmp_path) == tmp_path / "elsewhere"

@@ -20,8 +20,8 @@ from omnidriver.core.introspection import describe_entry
 from omnidriver.core.specs.common import default_setup_dir_name
 from omnidriver.core.specs.paths import (
     default_sweep_output_dir,
-    driverfoam_scratch_root,
-    repo_root_default,
+    repo_root_or_none,
+    scratch_root,
 )
 from omnidriver.core.strict_planning import (
     StrictDiagnostic,
@@ -452,12 +452,21 @@ def _context_from_entry(
     # temporary root. The repository-template protection applies to registered
     # cases in this checkout; generic external cases retain their explicit
     # launch root contract.
-    if stage_for_execution and source_case_root.is_relative_to(repo_root_default()):
+    # Staging protects this checkout's own tracked case content from being
+    # mutated by a run. Outside a checkout -- an installed wheel -- there is
+    # nothing of ours to protect, so nothing is staged; asking must not raise.
+    _repo_root = repo_root_or_none()
+    if (
+        stage_for_execution
+        and _repo_root is not None
+        and source_case_root.is_relative_to(_repo_root)
+    ):
         safe_entry = "".join(
             char if char.isalnum() or char in {"-", "_", "."} else "_"
             for char in selected_entry
         ).strip("._") or "entry"
-        staged_case_root = driverfoam_scratch_root() / "runs" / safe_entry
+        _base = Path((overrides or {}).get("tutorials_root") or Path.cwd())
+        staged_case_root = scratch_root(_base) / "runs" / safe_entry
         if fresh or not staged_case_root.exists():
             _stage_entry_case(source_case_root, staged_case_root, driver_context=driver_context)
         staged_overrides = dict(overrides or {})
@@ -970,7 +979,9 @@ def main(argv: list[str] | None = None) -> int:
         return _dispatch_context(args, context)
 
     if args.action == "sweep-plan":
-        output_dir = args.output_dir or default_sweep_output_dir(args.spec)
+        output_dir = args.output_dir or default_sweep_output_dir(
+            args.spec, base=resolve_cases_root(args.tutorials_root),
+        )
         result = sweep_plan(
             args.spec,
             output_dir=output_dir,
@@ -986,7 +997,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if any_failed else 0
 
     if args.action == "sweep-run":
-        output_dir = args.output_dir or default_sweep_output_dir(args.spec)
+        output_dir = args.output_dir or default_sweep_output_dir(
+            args.spec, base=resolve_cases_root(args.tutorials_root),
+        )
         result = sweep_run(
             args.spec,
             output_dir=output_dir,
