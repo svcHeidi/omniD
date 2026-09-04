@@ -544,8 +544,58 @@ test — `x-fenics.mesh_file` loads via `load_plugin_profile`),
 `driver_context(...)`, and confirms the rule comes back out of
 `capabilities.case_files.all_rules()`/`required_rules()` unchanged).
 
+## 12. Supplied versus discovered (added 2026-09-04)
+
+This document has been about *what* core may know. This section is about *how*
+it may come to know it, because two defects found on 2026-09-03 looked
+identical and are not.
+
+**The rule: discover only what genuinely exists ambiently, and declare where
+you look. Supply everything else.**
+
+The test is whether an ambient truth exists at all:
+
+| value | is there an ambient truth? | therefore |
+|---|---|---|
+| the case / repository root | **No.** Nothing on the machine knows which case you meant. | Must be **supplied**. Discovering it invents an answer. |
+| MPI ranks, OpenMP threads, GPU devices | **Yes.** A scheduler allocated them; `SLURM_NTASKS`, `OMP_NUM_THREADS`, `CUDA_VISIBLE_DEVICES` are facts about the environment you were given. | **Discovery is correct** — provided the place looked in is declared, not hardcoded. |
+
+`specs/paths.repo_root_default()` is the first kind and is a defect: it walks
+up from the installed module's `__file__` and raises outside a checkout, so
+core cannot plan a case from a wheel install. Fixed by
+`docs/superpowers/specs/2026-09-04-a-case-is-a-path-design.md`.
+
+`omnidriver-openfoam/parallel_execution.py`'s read of `numberOfSubdomains` is
+the second kind, and reading it is *right* — the case genuinely does say how
+it is decomposed, and `decomposePar` reads the same dictionary, so it is the
+one place the two commands agree. Its defect was narrower: it was the **only**
+way to obtain the count, and it happened at spec-construction time, so
+planning could not proceed without the case already on disk. Addressed
+2026-09-04 by adding an optional `num_subdomains` fallback for when no case
+exists, with the dictionary still authoritative whenever it does.
+
+**Deliberately not built:** a core vocabulary for execution resources
+(`ranks`/`threads`/`devices`). GPU appears in this codebase only as
+descriptions of C++ models — a solver-internal property, not a launch mode —
+and OpenMP appears nowhere, so there is nothing to plumb. Naming a closed set
+of one ecosystem's execution concepts in core for hardware that is not wired
+up is the same mistake as the `Phase` literal removed on 2026-09-03. When a
+real GPU or OpenMP launch path exists, it will show its own shape.
+
+When that day comes, note that the two kinds of parallelism differ in *kind*,
+not merely in units, and the seams for them already exist and are different:
+MPI ranks change the workflow DAG's **shape** (`decomposePar` /
+`mpirun -np N` / `reconstructPar`), and are built by the plugin's factory;
+threads and devices change only the **environment**, and would ride
+`configure_execution_environment(env)`. That hook is currently reached by a
+`getattr` probe in `omnidriver-openfoam/openfoam_environment.py`, **not** a
+core capability seam — which is the wrong shape for a mechanism a
+non-OpenFOAM plugin would need, and is the first thing to revisit.
+
 ## Related
 
+- `docs/superpowers/specs/2026-09-04-a-case-is-a-path-design.md` — §12's first
+  kind, and the wheel-install defect it causes
 - `docs/superpowers/plans/2026-08-27-core-completion.md` — the executable plan
 - `GITHUB_MIGRATION.md` §3 — round-2 scope, corrected 2026-08-27
 - `SECURITY.md` — the existing command-boundary threat model that §5b must extend

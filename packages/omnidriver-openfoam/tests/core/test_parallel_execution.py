@@ -72,6 +72,48 @@ class TestSolveSteps(unittest.TestCase):
                 depends_on=[], run_in_parallel=True, case_root=None,
             )
 
+    def test_an_explicit_rank_count_needs_no_case_on_disk(self) -> None:
+        """The rank count is a property of the run, not only of the case.
+
+        Reading it from the case's decomposeParDict is a legitimate way to
+        DISCOVER an ambient fact, but making it the only way couples planning
+        to the case already existing: four manufactured-solution tutorials
+        could not build a spec at all without a decomposeParDict on disk. An
+        explicit count is supplied, so no case is needed.
+        """
+        steps, last_id = solve_steps(
+            solve_id="solve",
+            solve_command="cardiacFoam",
+            depends_on=[],
+            run_in_parallel=True,
+            case_root=None,
+            num_subdomains=8,
+        )
+        assert [s["id"] for s in steps] == ["decomposePar", "solve", "reconstructPar"]
+        assert steps[1]["args"] == ["-np", "8", "cardiacFoam", "-parallel"]
+        assert last_id == "reconstructPar"
+
+    def test_the_case_dictionary_wins_over_an_explicit_count(self) -> None:
+        """Deliberately this way round, and the contrast is the point.
+
+        `decomposePar` reads the same decomposeParDict. If an explicit count
+        overrode it, decomposePar would create six processor directories while
+        the solve ran `mpirun -np 2` against them. The dictionary is the one
+        place both commands agree, so it wins whenever it exists; the explicit
+        count is only for when there is no case yet."""
+        with TemporaryDirectory() as tmp:
+            case_root = Path(tmp)
+            (case_root / "system").mkdir()
+            (case_root / "system" / "decomposeParDict").write_text(
+                "FoamFile { version 2.0; format ascii; class dictionary; "
+                "object decomposeParDict; }\nnumberOfSubdomains 6;\n"
+            )
+            steps, _ = solve_steps(
+                solve_id="solve", solve_command="cardiacFoam", depends_on=[],
+                run_in_parallel=True, case_root=case_root, num_subdomains=2,
+            )
+        assert steps[1]["args"] == ["-np", "6", "cardiacFoam", "-parallel"]
+
 
 if __name__ == "__main__":
     unittest.main()

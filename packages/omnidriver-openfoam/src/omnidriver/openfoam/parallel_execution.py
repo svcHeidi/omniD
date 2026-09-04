@@ -29,9 +29,14 @@ def solve_steps(
     depends_on: list[str],
     run_in_parallel: bool,
     case_root: Path | None,
+    num_subdomains: int | None = None,
     decompose_par_dict_relpath: Path = _DECOMPOSE_PAR_DICT_RELPATH,
 ) -> tuple[list[dict], str]:
     """Build the workflow_dag step(s) for a solve, serial or parallel.
+
+    ``num_subdomains`` supplies the MPI rank count directly; when it is
+    ``None`` the count is read from the case's own ``decomposeParDict``, which
+    requires ``case_root``.
 
     Returns ``(steps, final_step_id)`` — callers whose next workflow_dag
     step depends on the solve (e.g. bath's ``interfaceMetrics``, which needs
@@ -44,10 +49,34 @@ def solve_steps(
             solve_id,
         )
 
-    if case_root is None:
-        raise ValueError("case_root is required to build a parallel solve step")
-
-    n = read_number_of_subdomains(case_root, decompose_par_dict_relpath)
+    # The case's own decomposeParDict is AUTHORITATIVE whenever it exists, and
+    # num_subdomains is the fallback for when it does not -- deliberately that
+    # way round, not "explicit wins".
+    #
+    # `decomposePar` reads the same dictionary. If the dict says 6 and this
+    # built `mpirun -np 2`, decomposePar would create six processor
+    # directories and the solve would fail against them. A caller who wants a
+    # different rank count must change the dictionary, which is the single
+    # place both commands agree on.
+    #
+    # Reading it is a legitimate way to DISCOVER an ambient fact -- the case
+    # really does say how it is decomposed. Making it the *only* way is what
+    # coupled planning to the case already existing: four manufactured-solution
+    # tutorials default to run_in_parallel=True and so could not build a spec
+    # at all without a decomposeParDict on disk, which is why they cannot be
+    # planned from an installed wheel. See docs/superpowers/specs/
+    # 2026-09-04-a-case-is-a-path-design.md on supplied-versus-discovered.
+    dict_path = None if case_root is None else case_root / decompose_par_dict_relpath
+    if dict_path is not None and dict_path.is_file():
+        n = read_number_of_subdomains(case_root, decompose_par_dict_relpath)
+    elif num_subdomains is not None:
+        n = int(num_subdomains)
+    else:
+        raise ValueError(
+            "a parallel solve step needs either a case with "
+            f"{decompose_par_dict_relpath} on disk, or an explicit "
+            "num_subdomains"
+        )
     steps = [
         {
             "id": "decomposePar",

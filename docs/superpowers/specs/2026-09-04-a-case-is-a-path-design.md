@@ -218,17 +218,40 @@ tutorial/plugin factory. Environment mutation goes through the plugin's
 openfoam-mediated hook, **not** a core capability seam, which is itself worth
 revisiting.
 
-The direction to explore: a small, solver-neutral resource descriptor
-(ranks / threads / devices, each optional) that is **supplied** — factory
-argument, CLI flag, or environment — and interpreted by the plugin, with the
-`decomposeParDict` read demoted to a fallback for the MPI case only and
-staying in `omnidriver-openfoam` where it belongs.
+**Resolved 2026-09-04, by deciding not to build it.** GPU appears in this
+codebase only as descriptions of C++ models ("GPU batched implementation") —
+a property of the solver, not a launch mode, so omnidriver runs the same
+binary either way and has nothing to plumb. OpenMP appears nowhere. Giving
+core a `ranks`/`threads`/`devices` vocabulary for hardware that is not wired
+up would repeat the `Phase` literal removed on 2026-09-03: core naming a
+closed set of one ecosystem's concepts. When a real GPU or OpenMP launch path
+exists it will show its own shape, and there will be a concrete case instead
+of a guess.
 
-Immediate payoff if done: **all 26 catalog entries would build under any
-base**, so listing and planning would never depend on case content — and the
-broad `except Exception` in `registry._registered_tutorial_entry`, which
-exists so one unbuildable tutorial cannot crash the listing, could narrow to
-something meaningful.
+What the discussion did settle is a rule worth stating, recorded in
+`future/ENVIRONMENT_CONTRACT.md` §12: **discover only what genuinely exists
+ambiently, and declare where you look.** A case root has no ambient truth, so
+discovering one invents an answer — that is this document's defect. Execution
+resources do have ambient truth (a scheduler allocated them), so discovering
+them is correct; the defect there was discovering from a *hardcoded* place at
+spec-construction time.
+
+What was built instead, 2026-09-04: `solve_steps()` gained an optional
+`num_subdomains`, so a parallel solve step can be built without a case on
+disk. Precedence is **the case's `decomposeParDict` wins whenever it exists**,
+with `num_subdomains` as the fallback — deliberately that way round, because
+`decomposePar` reads the same dictionary: an explicit override would create
+six processor directories and then run `mpirun -np 2` against them. The
+dictionary is the one place both commands agree.
+
+Note this does **not** make all 26 catalog entries build with no arguments.
+The four parallel tutorials still need either their case on disk or an
+explicit count; what changed is that a route now exists and the error names
+both. Declaring a default rank count per tutorial was considered and rejected:
+it would duplicate a number that already lives in each shipped
+`decomposeParDict`, creating a second source of truth for no gain, and this
+repository has no `tutorials/` tree against which to check what those numbers
+are.
 
 ## Out of scope
 
