@@ -462,9 +462,26 @@ def _context_from_entry(
         staged_overrides = dict(overrides or {})
         staged_overrides["tutorials_root"] = str(staged_case_root.parent)
         staged_overrides["case_dir_name"] = staged_case_root.name
+        # Sanitisation above can flatten a name-bearing entry (e.g. one with
+        # "/" or other non alnum/-/_/. characters) into a different string,
+        # so `tutorials_root` now points at a flat staging directory that no
+        # longer contains whatever nested/named path `selected_entry`
+        # originally described. Re-resolving by that original name against
+        # the new root fails registry lookup entirely (KeyError: "Unknown
+        # entry"), even though the staged case is right there. Route through
+        # the registry's generic-alias resolution instead -- it resolves
+        # purely from the `case_dir_name` override above, bypassing
+        # name-based lookup -- but only when staging actually changed the
+        # name; an unflattened top-level entry still resolves by its own
+        # name and must keep doing so.
+        replan_entry = selected_entry
+        replan_entry_kind = entry_kind
+        if safe_entry != selected_entry:
+            replan_entry = "genericcase"
+            replan_entry_kind = "case_folder"
         report = strict_plan(
-            selected_entry,
-            entry_kind=entry_kind,
+            replan_entry,
+            entry_kind=replan_entry_kind,
             overrides=staged_overrides,
             config_path=config_path,
             explicit_bashrc=explicit_bashrc,
