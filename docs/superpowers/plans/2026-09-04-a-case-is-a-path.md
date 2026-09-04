@@ -218,8 +218,19 @@ Rebuild the wheel venv (see Global Constraints), then:
 ```bash
 /tmp/wheelenv/bin/python -m pytest packages/omnidriver/tests -q -p no:cacheprovider 2>&1 | tail -2
 ```
-Expected: fewer than 13 failures. Record the exact number in the commit
-message — it is the measure of this task.
+**Corrected during execution, 2026-09-04.** This originally said "fewer than
+13 failures", which was wrong: `resolve_entry` computes
+`tutorials_root_default()` **eagerly** near the top, so a path branch placed
+after it is unreachable from a wheel install and Task 1 alone cannot reduce
+the count. The branch is therefore inserted *before* that line — it does not
+use `tutorials_root` — which is what makes this task self-contained.
+
+Expected after that: **14 failed, 524 passed** (was 13 failed, 522 passed). Two
+of the three new tests pass against the wheel; the third,
+`test_a_directory_that_is_not_a_case_is_still_refused`, fails with
+`RuntimeError` instead of `KeyError` because a *non-matching* path still falls
+through to the eager default. That is correct and expected — it is a new test
+exposing exactly what Task 2 removes, not a regression.
 
 - [ ] **Step 6: Full suite**
 

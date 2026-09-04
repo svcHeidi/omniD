@@ -350,6 +350,44 @@ def resolve_entry(
         valid = ", ".join(ENTRY_KIND_VALUES)
         raise KeyError(f"Unknown entry_kind '{entry_kind}'. Valid values: {valid}")
 
+    # A case is identified by its path. _is_case_directory() already decides
+    # this from the directory's own contents via the plugin's declared marker
+    # or entrypoint contract, so a case anywhere on disk resolves -- no root
+    # required. See docs/superpowers/specs/2026-09-04-a-case-is-a-path-design.md.
+    if entry_kind in {None, "case_folder"}:
+        candidate = Path(key).expanduser()
+        if not candidate.is_absolute():
+            candidate = Path.cwd() / candidate
+        if candidate.is_dir() and _is_case_directory(candidate, driver_context):
+            case_overrides = dict(incoming_overrides)
+            case_overrides["tutorials_root"] = str(candidate.parent)
+            case_overrides["case_dir_name"] = candidate.name
+            plugin_factory = _get_plugin_tutorials(driver_context).get(
+                "make_generic_case_spec",
+            )
+            factory = (
+                plugin_factory
+                if plugin_factory is not None
+                and driver_context.capabilities.case_compatibility.has_case_marker(
+                    CaseCompatibilityRequest(candidate),
+                )
+                else make_generic_case_spec
+            )
+            return {
+                "resolution": "case_path",
+                "requested_name": key,
+                "requested_entry_kind": entry_kind,
+                "resolved_name": candidate.name,
+                "factory": factory,
+                "factory_overrides": case_overrides,
+                "entry_name": candidate.name,
+                "entry_kind": "case_folder",
+                "entry_path": str(candidate),
+                "is_runnable": True,
+                "source_type": "case_path",
+                "workflow_family": None,
+            }
+
     tutorials_root = Path(incoming_overrides.get("tutorials_root", tutorials_root_default()))
 
     if entry_kind in {None, "registered_tutorial"} and normalized_key in normalized_registry:
