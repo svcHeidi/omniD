@@ -174,3 +174,49 @@ def test_core_threads_its_context_through_the_public_edge() -> None:
         )
         + "\nPass driver_context=driver_context."
     )
+
+
+# Functions that invent a filesystem location rather than receiving one. Core
+# must call none of them: doing so is what made core unable to plan a case
+# from a wheel install. Written out explicitly, like
+# _CONTEXT_TAKING_PUBLIC_EDGE above, with a companion test that fails if a
+# name here stops existing -- a guard naming nothing guards nothing.
+_ROOT_INVENTING = {"repo_root_default", "cardiacfoam_monorepo_root"}
+
+# capability_seams.architecture_path() legitimately needs a checkout: it
+# points at ARCHITECTURE.md for the seam-table generator, which is dev
+# tooling, never a runtime path. paths.py is where these are defined.
+_ROOT_EXEMPT = {_CORE_ROOT / "capability_seams.py", _CORE_ROOT / "specs" / "paths.py"}
+
+
+def test_the_root_inventing_names_still_exist() -> None:
+    from omnidriver.core.specs import paths
+
+    for name in sorted(_ROOT_INVENTING):
+        assert hasattr(paths, name), (
+            f"{name} is named by _ROOT_INVENTING but no longer exists. Update "
+            "the set rather than letting this guard quietly cover nothing."
+        )
+
+
+def test_core_never_invents_a_filesystem_root() -> None:
+    offenders: dict[str, list[int]] = {}
+    for path in sorted(_CORE_ROOT.rglob("*.py")):
+        if path in _ROOT_EXEMPT or "__pycache__" in path.parts:
+            continue
+        tree = ast.parse(path.read_text(), filename=str(path))
+        hits = [
+            node.lineno
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and (getattr(node.func, "id", None) or getattr(node.func, "attr", None))
+            in _ROOT_INVENTING
+        ]
+        if hits:
+            offenders[str(path.relative_to(_CORE_ROOT))] = hits
+
+    assert offenders == {}, (
+        "core/ modules inventing a filesystem root:\n"
+        + "\n".join(f"  {f}: lines {ls}" for f, ls in sorted(offenders.items()))
+        + "\nTake the location as a parameter instead."
+    )

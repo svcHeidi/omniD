@@ -153,7 +153,14 @@ today.
 
 ## Success criteria
 
-Stated as things that are false today and must become true:
+> **All met 2026-09-04.** `pytest packages/omnidriver/tests` against an
+> installed wheel: **544 passed, 237 skipped, 0 failed** — from 13 failures and
+> 8 collection errors. Full suite **1566 passed** on 3.11 and 3.13, core-only
+> **688**, both static gates green, and CI's `test-wheel` job now runs the
+> suite rather than only the artifact gate. Implemented by
+> `docs/superpowers/plans/2026-09-04-a-case-is-a-path.md`.
+
+Stated as things that were false before, and are now true:
 
 1. `pytest packages/omnidriver/tests` **passes against an installed wheel**
    (13 failures today, all one cause), and CI's `test-wheel` job runs the suite

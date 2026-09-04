@@ -134,3 +134,14 @@ jobs:
 
       - name: Verify the installed artifact runs standalone
         run: /tmp/wheelenv/bin/python scripts/check-wheel-artifact.py
+
+      # The suite itself, against the wheel. Until 2026-09-04 this was
+      # impossible: core resolved a repository root by walking up from its own
+      # __file__, so eight modules could not even be collected outside a
+      # checkout and thirteen tests failed. Running it here is what stops that
+      # returning -- the artifact gate above cannot see it, because it
+      # deliberately does not import the test tree.
+      - name: Run core's suite against the installed wheel
+        run: |
+          /tmp/wheelenv/bin/pip install pytest
+          /tmp/wheelenv/bin/python -m pytest packages/omnidriver/tests -q
