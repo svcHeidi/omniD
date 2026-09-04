@@ -111,14 +111,31 @@ temporary directory as its base (2026-09-04, all three packages installed):
 - **8 entries (4 distinct tutorials — `manufacturedBathBidomain`,
   `manufacturedBidomain`, `manufacturedEikonalECG`,
   `manufacturedMonodomainPseudoECG`) fail with `ValueError: numberOfSubdomains
-  not found`.** They read pre-existing case content rather than generating it,
-  so they need the cardiacFoam monorepo `tutorials/` tree.
+  not found`.**
+
+  The dependency is exactly **one file and one key**, not "monorepo content"
+  generally. These four default to `RUN_IN_PARALLEL = True`, and a parallel
+  solve changes the workflow DAG's *shape* — `decomposePar`, then
+  `mpirun -np N solver -parallel`, then `reconstructPar`, instead of one plain
+  step. `N` is not something the factory can invent, so
+  `omnidriver-openfoam/parallel_execution.py:16` reads it off disk at
+  **spec-construction time** from `<case>/system/decomposeParDict`. Verified
+  2026-09-04: writing only that file (three lines,
+  `numberOfSubdomains 4;`) under an arbitrary empty base makes
+  `manufacturedBidomain` build. Nothing else from the monorepo is required.
+  The other nine tutorials are serial, never read it, and build anywhere.
 
   **These already fail today, identically.** This repository has no
   `tutorials/` directory, so `tutorials_root_default()` already returns the
   bare repository root and `manufacturedBidomain` raises the same error there
   right now. This design does not regress them; `skip_without_monorepo` is
   what already gates their tests.
+
+  This is **not** an agnosticity leak: `decomposeParDict` and
+  `numberOfSubdomains` are OpenFOAM vocabulary living in
+  `omnidriver-openfoam`, which is the correct package. It *is* a real coupling
+  — planning reads the case — and it is orthogonal to this design. See the
+  follow-up below.
 
 The acceptance test below pins both halves so a future change cannot quietly
 break the generative tutorials.
@@ -176,8 +193,44 @@ of three candidate roots. It must be rechecked when core's default disappears;
 it is not covered by the two directions above and is the most likely place for
 a surprise.
 
+## Follow-up, deliberately not designed here: execution resources
+
+Recorded because it is the same disease as this spec — a value that should be
+*supplied* is instead *discovered* — and because it generalises well beyond
+MPI. **Not designed in this document**; it needs its own brainstorm.
+
+Parallelism today is one boolean plus one MPI-specific read:
+`run_in_parallel: bool`, and if true, `numberOfSubdomains` from the case's
+`decomposeParDict`. That hardcodes a single parallel model. GPU and OpenMP
+need different knobs, and — this is the part that matters for the design —
+they differ in *kind*, not just in units:
+
+| model | knob | what it changes |
+|---|---|---|
+| MPI | ranks | the DAG's **shape**: decompose / `mpirun -np N` / reconstruct |
+| OpenMP | threads | only the **environment** (`OMP_NUM_THREADS`); same DAG |
+| GPU | devices | environment and/or solver flags; usually the same DAG |
+
+Two seams already exist to carry that split. DAG shape is built by the
+tutorial/plugin factory. Environment mutation goes through the plugin's
+`configure_execution_environment(env)`, reached by a `getattr` probe in
+`omnidriver-openfoam/openfoam_environment.py:234` — note that is an
+openfoam-mediated hook, **not** a core capability seam, which is itself worth
+revisiting.
+
+The direction to explore: a small, solver-neutral resource descriptor
+(ranks / threads / devices, each optional) that is **supplied** — factory
+argument, CLI flag, or environment — and interpreted by the plugin, with the
+`decomposeParDict` read demoted to a fallback for the MPI case only and
+staying in `omnidriver-openfoam` where it belongs.
+
+Immediate payoff if done: **all 26 catalog entries would build under any
+base**, so listing and planning would never depend on case content — and the
+broad `except Exception` in `registry._registered_tutorial_entry`, which
+exists so one unbuildable tutorial cannot crash the listing, could narrow to
+something meaningful.
+
 ## Out of scope
 
-The `numberOfSubdomains` dependency in the four manufactured-solution
-tutorials; promoting `driverfoam-runtime.yaml` to core; the AGENT_GUIDE
-rewrite; licensing.
+Promoting `driverfoam-runtime.yaml` to core; the AGENT_GUIDE rewrite;
+licensing.
