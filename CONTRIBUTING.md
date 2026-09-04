@@ -39,9 +39,29 @@ To suggest a feature:
 #### Step 2: Make Your Changes
 
 - Follow the existing Python code structure and organization.
-- We require Python >= 3.11.
-- Test your changes thoroughly. Run the existing test suite via `pytest`.
+- We require Python >= 3.11. CI matrixes 3.11, 3.12 and 3.13.
 - Ensure all structural and semantic contracts are preserved (e.g. `run-document.json` schemas).
+
+**Running `pytest` once is not enough.** The suites must pass in four different
+shapes, and each catches something the others cannot — an editable install
+leaves the repository on `sys.path`, so a module that reads repo-relative state
+at import time still works, and that class of defect is visible only from a
+built wheel. [`CLAUDE.md`](CLAUDE.md) has the recipe for building each
+environment; in short:
+
+| shape | catches |
+|---|---|
+| all three packages installed | ordinary regressions |
+| core installed alone | core reaching into a sibling package |
+| **core installed from a built wheel** | core reading repo-relative state at import time |
+| `scripts/check-import-boundaries.py`, `scripts/export-capability-seams.py --check` | import direction; a stale generated table |
+
+CI runs all four. The wheel shape is the one contributors skip and the one that
+has found the worst defects.
+
+If a guard test fails, fix the cause — do not weaken the guard and do not add a
+skip. `CLAUDE.md` lists each invariant and the test that protects it, and
+explains why a skip there hides exactly what the guard exists to find.
 
 #### Step 3: Commit and Push
 

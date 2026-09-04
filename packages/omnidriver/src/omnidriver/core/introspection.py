@@ -294,12 +294,3 @@ def describe_tutorial(
         driver_context=driver_context,
     )
 
-
-def describe_launch_matrix(
-    driver_context: "DriverContext | None" = None,
-) -> list[dict[str, Any]]:
-    """Return every registered entry. Alias kept for AGENT_GUIDE.md compatibility.
-
-    Equivalent to list_entries() from omnidriver.core.runtime.registry.
-    """
-    return list_entries(driver_context=driver_context)

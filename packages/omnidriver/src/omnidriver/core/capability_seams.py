@@ -35,7 +35,6 @@ def architecture_path() -> Path:
 BEGIN_MARKER = "<!-- BEGIN GENERATED: capability-seams -->"
 END_MARKER = "<!-- END GENERATED: capability-seams -->"
 
-FIELD_NAMES = ("adapts", "consumed-by", "fallback", "status")
 _FIELD_RE = re.compile(r"^\s*:(?P<name>[a-z-]+):\s*(?P<value>.+?)\s*$", re.MULTILINE)
 
 
