@@ -32,6 +32,91 @@ OpenFOAM environment is heavy, only the Python framework moves here, split into
 three decoupled packages so that projects other than cardiacFoam can drive their
 own solvers with it.
 
+## Next steps (written 2026-09-04)
+
+Two things remain, in this order. Everything else on this page is closed.
+
+### 1. Validate against a real cardiacFoam checkout — the only open unknown
+
+Nothing in this repository can answer whether the driver drives *cardiacFoam*
+correctly. There is no solver binary, no sourced OpenFOAM and no `tutorials/`
+tree here, so the suites that would prove it are `skip_without_monorepo`-gated
+— **258 tests skip**, and CI skips them too. Green CI means the orchestrator is
+sound, not that the solver integration is.
+
+What *is* verified, and does not need re-checking: the orchestrator plans,
+validates, executes and records. Driven end to end on 2026-09-04 against a real
+case folder — `plan --strict` returned `status: ok` with a real workflow DAG,
+`run --strict` executed the script (`exit_code: 0`, captured stdout), and
+`workflow_state.json` plus `workflow_logs/` were written to disk. All four test
+shapes pass on 3.11/3.12/3.13, and CI is green for the first time.
+
+In a fresh cardiacFoam monorepo:
+
+```bash
+pip install -e "packages/omnidriver[post]"             -e packages/omnidriver-openfoam             -e packages/omnidriver-cardiacfoam pytest
+
+# Registered tutorials join cases_root + their own case_dir_name, so point the
+# base at the tutorials tree. Core no longer discovers it -- see §12 of
+# future/ENVIRONMENT_CONTRACT.md for why that is deliberate.
+export OMNIDRIVER_CASES_ROOT=$PWD/tutorials
+
+python -m pytest packages/ -q -m "not slow"    # the 258 skips should now run
+
+# The regression-equivalence CLI lives in the cardiac tests tree, so it needs
+# that directory on the path -- it is not an installed module.
+export PYTHONPATH=packages/omnidriver-cardiacfoam/tests
+python -m regression_equivalence                # phase 1: solver-free
+python -m regression_equivalence --run-phase2   # phase 2: numeric, needs the solver
+```
+
+**That CLI was broken until 2026-09-04**, and was found by trying to write this
+instruction down rather than by any test. `staging.py` called
+`resolve_entry(case.entry_name)` without the `driver_context` that became
+required when core stopped resolving one implicitly, so it raised `TypeError`
+before reaching a single case. Untouched since `f1651b7`; the pytest tests
+around it pass because they do not exercise this entry point. Fixed by giving
+those three helpers the cardiac context. In this repository it now runs until
+it needs committed case content (`FileNotFoundError` on
+`electrophysiologyProtocols/singleCell/constant/electroProperties`), which is
+exactly the boundary a real checkout removes.
+
+**If it passes**, the solver integration is confirmed and licensing below is
+genuinely the last item before publication. **If it fails**, bring the concrete
+failure back — that is far more useful than more analysis from an environment
+that cannot run the solver.
+
+One behaviour change to expect, and it is intended: running from the monorepo
+*root* without `OMNIDRIVER_CASES_ROOT` resolves registered tutorials under the
+root rather than under `tutorials/`. That is not silent — `strict_plan` reports
+`status: failed` with `missing_physics_properties` / `missing_electro_properties`
+and blocked stages, and `run --strict` creates nothing. Verified 2026-09-04.
+
+### 2. Licensing — the publication blocker
+
+There is no `LICENSE` file and no `license` field in any of the three
+`pyproject.toml`, so `omnidriver` and `omnidriver-openfoam` ship with **no
+license declared at all** — more restrictive than any choice made deliberately.
+This needs a decision, not a cleanup. The cardiacFoam GPL header question is
+already settled: it is gone from both non-cardiac packages (src and tests) and
+retained in `omnidriver-cardiacfoam`, whose content genuinely is derived. Seven
+`scripts/` files and one `future/` document still carry it, and should be
+resolved by the same decision.
+
+### Deferred, with reasons rather than silence
+
+- `resolve_run_script_path`'s cwd fallback (`specs/paths.py`) — behaviour is
+  correct, but what a relative run-script path *should* be relative to has not
+  been decided.
+- A core vocabulary for execution resources (ranks / threads / devices) —
+  deliberately not built; see `future/ENVIRONMENT_CONTRACT.md` §12.
+- `omnidriver-openfoam` declares `gmsh` while its only consumers are cardiac
+  tutorials: right dependency, wrong package.
+- No wheel gate for `omnidriver-openfoam` / `omnidriver-cardiacfoam`; their
+  suites genuinely need a checkout.
+
+---
+
 ## 1. The architecture (built, not planned)
 
 | package | contains | rule |

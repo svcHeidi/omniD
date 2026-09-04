@@ -112,7 +112,7 @@ runtime, silently.
 - `future/ENVIRONMENT_CONTRACT.md` — what core owns and how. Supersedes
   `ARCHITECTURE.md`'s Rule 1. §12 is the supplied-vs-discovered rule.
 - `ARCHITECTURE.md` — layer map and the generated capability-seam table.
-- `GITHUB_MIGRATION.md` — what is done and what is open. Check it before
+- `GITHUB_MIGRATION.md` — what is done and what is open. **Start at its "Next steps" section**, which names the two things that actually remain. Check it before
   starting anything; several rows have been stale in the past, so verify a
   claim against the code before acting on it.
 - `docs/superpowers/specs/` and `plans/` — design reasoning and executed plans.
