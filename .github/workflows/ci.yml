@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# NOTE: the three test jobs below install `pytest` explicitly. They did not
+# until 2026-09-04, so every "Run tests" step died with `No module named
+# pytest` and CI had never actually run a test -- red continuously since at
+# least 2026-08-26 while looking like a normal failing build.
 jobs:
   test-core:
     name: test-core (py${{ matrix.python-version }})
@@ -23,7 +27,7 @@ jobs:
           cache-dependency-path: packages/omnidriver/pyproject.toml
 
       - name: Install omnidriver
-        run: pip install -e "packages/omnidriver[post]"
+        run: pip install -e "packages/omnidriver[post]" pytest
 
       - name: Run tests
         run: python -m pytest packages/omnidriver/tests -q
@@ -47,7 +51,7 @@ jobs:
             packages/omnidriver-openfoam/pyproject.toml
 
       - name: Install omnidriver + omnidriver-openfoam
-        run: pip install -e packages/omnidriver -e packages/omnidriver-openfoam
+        run: pip install -e packages/omnidriver -e packages/omnidriver-openfoam pytest
 
       - name: Run tests
         run: python -m pytest packages/omnidriver-openfoam/tests -q
@@ -75,7 +79,8 @@ jobs:
         run: |
           pip install -e packages/omnidriver \
                       -e packages/omnidriver-openfoam \
-                      -e packages/omnidriver-cardiacfoam
+                      -e packages/omnidriver-cardiacfoam \
+                      pytest
 
       - name: Run tests
         run: python -m pytest packages/omnidriver-cardiacfoam/tests -q
