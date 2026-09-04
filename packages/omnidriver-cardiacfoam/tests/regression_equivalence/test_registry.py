@@ -6,12 +6,12 @@ import pytest
 from conftest import skip_without_monorepo
 pytestmark = skip_without_monorepo
 
-from omnidriver.core.specs.common import tutorials_root_default
+from regression_equivalence.tutorials_tree import tutorials_root
 from regression_equivalence.registry import REGRESSION_CASES
 
 
 def _alltest_entries() -> list[str]:
-    script = tutorials_root_default() / "Alltest-regression"
+    script = tutorials_root() / "Alltest-regression"
     text = script.read_text()
     block = re.search(r"REGRESSION_TESTS=\((.*?)\)", text, re.DOTALL)
     assert block, "REGRESSION_TESTS array not found in Alltest-regression"
@@ -24,7 +24,7 @@ def test_registry_cases_are_a_curated_subset_of_alltest_regression():
 
 
 def test_every_case_dir_and_reference_exist_on_disk():
-    root = tutorials_root_default()
+    root = tutorials_root()
     for case in REGRESSION_CASES:
         assert (root / case.case_dir).is_dir(), case.case_dir
         assert (root / case.case_dir / case.reference_file).is_file(), (

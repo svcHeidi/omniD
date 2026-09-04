@@ -23,7 +23,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from omnidriver.core.specs.common import tutorials_root_default
+from regression_equivalence.tutorials_tree import tutorials_root
 from omnidriver.cardiacfoam.dict_builder import (
     build_electro_properties,
     parse_electro_properties,
@@ -49,7 +49,7 @@ def electro_build_parse_fixpoint(case: RegressionCase) -> tuple[str, str]:
 
     ``once == twice`` proves ``build ∘ parse`` is idempotent for this case.
     """
-    committed = tutorials_root_default() / case.case_dir / "constant/electroProperties"
+    committed = tutorials_root() / case.case_dir / "constant/electroProperties"
     once = _build_from_parse(committed)
     tmp = _write_temp(once)
     try:

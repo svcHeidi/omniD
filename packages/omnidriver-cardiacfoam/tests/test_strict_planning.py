@@ -436,10 +436,18 @@ def test_absent_stimulus_block_is_not_invented_from_defaults():
         build_electro_properties,
         parse_electro_properties,
     )
-    from omnidriver.core.specs.common import tutorials_root_default
+    from omnidriver.core.specs.paths import repo_root_default
+
+    # core's tutorials_root_default() was deleted 2026-09-04 (it invented a
+    # location for a caller's cases); this test reads THIS repository's own
+    # committed content and is skip_without_monorepo-gated.
+    def tutorials_root():
+        root = repo_root_default()
+        candidate = root / "tutorials"
+        return candidate if candidate.exists() else root
 
     committed = (
-        tutorials_root_default()
+        tutorials_root()
         / "electrophysiologyProtocols/singleCell/constant/electroProperties"
     )
     parsed = parse_electro_properties(committed)

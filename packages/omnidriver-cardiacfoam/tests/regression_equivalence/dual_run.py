@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import omnidriver
-from omnidriver.core.specs.common import tutorials_root_default
+from regression_equivalence.tutorials_tree import tutorials_root
 from regression_equivalence.registry import RegressionCase
 
 
@@ -280,7 +280,7 @@ def solver_available() -> bool:
 
 def _stage_tutorials_root(case: RegressionCase) -> tuple[Path, Path]:
     """Copy the case into a throwaway tutorials root; return (root, case_path)."""
-    src = tutorials_root_default() / case.case_dir
+    src = tutorials_root() / case.case_dir
     root = Path(tempfile.mkdtemp(prefix="regressioneq_")) / "tutorials"
     case_path = root / case.case_dir
     case_path.parent.mkdir(parents=True, exist_ok=True)

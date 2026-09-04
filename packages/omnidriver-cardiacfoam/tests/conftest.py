@@ -35,10 +35,7 @@ os.environ["SKIP_ENV_DIAGNOSTICS"] = "1"
 
 from omnidriver.core.specs.paths import cardiacfoam_monorepo_root
 
-#: The monorepo root resolved once at collection time.  ``None`` in standalone.
-#: Shared with shipped code (e.g. utility_catalog.py's UTILITIES_ROOT) via
-#: cardiacfoam_monorepo_root() rather than each conftest.py recomputing its
-#: own copy of the same walk-up search.
+
 monorepo_root: Path | None = cardiacfoam_monorepo_root()
 
 #: Apply this decorator to any test class/function that reads real tutorial

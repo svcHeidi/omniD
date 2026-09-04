@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -567,6 +568,26 @@ def _run_document_dispatch(args, driver_context) -> int:
     return _dispatch_context(args, context)
 
 
+def resolve_cases_root(explicit: str | Path | None = None) -> Path:
+    """Where to look for cases, resolved at the public edge only.
+
+    explicit -> OMNIDRIVER_CASES_ROOT -> current working directory.
+
+    Three steps, no fourth. The environment variable covers CI, containers and
+    HPC without a flag on every invocation; a config-file tier is deliberately
+    omitted until there is evidence one is needed
+    (future/ENVIRONMENT_CONTRACT.md §12). Core itself resolves nothing -- it
+    used to walk up from its own __file__ for repository markers and raise
+    outside a checkout, which is why it could not plan a case from a wheel.
+    """
+    if explicit is not None:
+        return Path(explicit).expanduser()
+    from_env = os.environ.get("OMNIDRIVER_CASES_ROOT")
+    if from_env:
+        return Path(from_env).expanduser()
+    return Path.cwd()
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Generic OpenFOAM tutorial automation driver")
     parser.add_argument(
@@ -868,10 +889,12 @@ def main(argv: list[str] | None = None) -> int:
     selected_entry = args.entry
 
     overrides = _load_spec_overrides(args.config, selected_entry) if args.config else None
-    if args.tutorials_root:
-        if overrides is None:
-            overrides = {}
-        overrides["tutorials_root"] = args.tutorials_root
+    # Unconditional: the chain always applies, so an unset --tutorials-root
+    # means OMNIDRIVER_CASES_ROOT or the working directory, never a location
+    # core invented.
+    if overrides is None:
+        overrides = {}
+    overrides["tutorials_root"] = str(resolve_cases_root(args.tutorials_root))
 
     if args.action == "describe":
         print(

@@ -71,12 +71,11 @@ def repo_root_default() -> Path:
     )
 
 
-def tutorials_root_default() -> Path:
-    repo_root = repo_root_default()
-    tutorials_root = repo_root / "tutorials"
-    if tutorials_root.exists():
-        return tutorials_root
-    return repo_root
+# No tutorials_root_default() here any more. It returned repo_root_default() /
+# "tutorials", so core invented a location for a caller's cases and raised
+# outside a checkout -- which is why core could not plan a case from an
+# installed wheel. A base is supplied now; see future/ENVIRONMENT_CONTRACT.md
+# §12 on supplied-versus-discovered.
 
 
 def driverfoam_scratch_root() -> Path:
@@ -105,8 +104,10 @@ def resolve_spec_paths(
     output_dir_name: str | Path | None = None,
     default_output_dir_name: str | Path | None = None,
 ) -> tuple[Path, Path, Path]:
+    # No ambient default: a caller who names no base gets the working
+    # directory, not a location core invented for them.
     resolved_tutorials_root = (
-        Path(tutorials_root) if tutorials_root is not None else tutorials_root_default()
+        Path(tutorials_root) if tutorials_root is not None else Path.cwd()
     )
     resolved_case_dir = case_dir_name.strip()
     if not resolved_case_dir:
@@ -130,11 +131,15 @@ def resolve_run_script_path(
     if run_script_relpath.is_absolute():
         return run_script_relpath
 
+    # A relative run-script path is relative to the workspace, not to a
+    # repository that may not exist. Both repo-root lookups are gone: they were
+    # appended EAGERLY, so this raised from a wheel install even when
+    # tutorials_root had been supplied and the script existed under it -- the
+    # candidate list was built before the loop that would have found it.
     candidate_roots: list[Path] = []
     if tutorials_root is not None:
         candidate_roots.append(Path(tutorials_root))
-    candidate_roots.append(repo_root_default())
-    candidate_roots.append(tutorials_root_default())
+    candidate_roots.append(Path.cwd())
 
     checked_paths: list[Path] = []
     seen: set[Path] = set()

@@ -3,13 +3,11 @@ from .paths import (
     repo_root_default,
     resolve_run_script_path,
     resolve_spec_paths,
-    tutorials_root_default,
 )
 from .utils import load_python_module
 
 __all__ = [
     "repo_root_default",
-    "tutorials_root_default",
     "default_setup_dir_name",
     "resolve_spec_paths",
     "resolve_run_script_path",

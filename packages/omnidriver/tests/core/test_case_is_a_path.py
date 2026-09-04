@@ -61,3 +61,20 @@ def test_a_directory_that_is_not_a_case_is_still_refused(tmp_path: Path) -> None
 
     with pytest.raises(KeyError):
         resolve_entry(str(empty), entry_kind="case_folder", driver_context=ctx)
+
+
+def test_listing_an_empty_directory_returns_nothing(tmp_path: Path) -> None:
+    """Zero results is a legitimate answer to "what cases are here", and must
+    not be a RuntimeError. Before this, core walked up from its own __file__
+    looking for repository markers and raised when it found none."""
+    from omnidriver.core.runtime.registry import list_case_directories
+
+    ctx = driver_context(NeutralEnvironmentPlugin(), source="test:case-path")
+    assert list_case_directories(tmp_path, driver_context=ctx) == []
+
+
+def test_core_exposes_no_ambient_root_default() -> None:
+    """core.specs.paths must not offer a function that invents a root."""
+    from omnidriver.core.specs import paths
+
+    assert not hasattr(paths, "tutorials_root_default")

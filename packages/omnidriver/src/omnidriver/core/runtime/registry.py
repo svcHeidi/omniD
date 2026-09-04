@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Callable
 
 from .models import TutorialSpec
 from .generic_case import make_generic_case_spec
-from omnidriver.core.specs.common import tutorials_root_default
 from omnidriver.core.plugin_profile import (
     DEFAULT_ENTRYPOINT_RELPATHS,
     decomposition_dirname_prefix,
@@ -197,7 +196,8 @@ def list_case_directories(
     *,
     driver_context: "DriverContext | None" = None,
 ) -> list[str]:
-    resolved_root = Path(tutorials_root) if tutorials_root is not None else tutorials_root_default()
+    # No ambient default: core does not know where a caller keeps cases.
+    resolved_root = Path.cwd() if tutorials_root is None else Path(tutorials_root)
     if not resolved_root.exists():
         return []
     return sorted(
@@ -229,7 +229,8 @@ def list_entries(
     *,
     driver_context: "DriverContext | None" = None,
 ) -> list[dict[str, object]]:
-    resolved_root = Path(tutorials_root) if tutorials_root is not None else tutorials_root_default()
+    # No ambient default: core does not know where a caller keeps cases.
+    resolved_root = Path.cwd() if tutorials_root is None else Path(tutorials_root)
     return _entry_catalog_for_root(resolved_root, driver_context)
 
 
@@ -388,7 +389,7 @@ def resolve_entry(
                 "workflow_family": None,
             }
 
-    tutorials_root = Path(incoming_overrides.get("tutorials_root", tutorials_root_default()))
+    tutorials_root = Path(incoming_overrides.get("tutorials_root", Path.cwd()))
 
     if entry_kind in {None, "registered_tutorial"} and normalized_key in normalized_registry:
         return {
