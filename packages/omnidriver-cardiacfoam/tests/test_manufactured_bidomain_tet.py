@@ -38,7 +38,7 @@ def test_mesh_family_tet_reaches_workflow_dag(tmp_path):
     (case_root / "system").mkdir(parents=True)
 
     spec = make_spec(
-        tutorials_root=tmp_path,
+        cases_root=tmp_path,
         case_dir_name="manufacturedSolutions/bidomain",
         dimensions=["3D"],
         number_cells=[10],
@@ -55,7 +55,7 @@ def test_hex_is_still_the_default(tmp_path):
     (tmp_path / "manufacturedSolutions" / "bidomain" / "system").mkdir(parents=True)
 
     spec = make_spec(
-        tutorials_root=tmp_path,
+        cases_root=tmp_path,
         case_dir_name="manufacturedSolutions/bidomain",
         dimensions=["3D"],
         number_cells=[10],
@@ -71,7 +71,7 @@ def test_convergence_axis_is_forwarded_to_the_shared_factory(tmp_path):
     (tmp_path / "manufacturedSolutions" / "bidomain" / "system").mkdir(parents=True)
 
     spec = make_spec(
-        tutorials_root=tmp_path,
+        cases_root=tmp_path,
         case_dir_name="manufacturedSolutions/bidomain",
         dimensions=["1D"],
         number_cells=[640],

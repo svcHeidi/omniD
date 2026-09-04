@@ -39,9 +39,9 @@ def _write_case(root: Path, *, allrun: str, steps: list[dict]) -> Path:
 
 def test_cli_step_executes_single_step_and_writes_state_and_logs() -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
+        cases_root = Path(temp_dir)
         case_root = _write_case(
-            tutorials_root,
+            cases_root,
             allrun="#!/bin/sh\nmkdir -p postProcessing 0.001\ntouch postProcessing/cliStepCase_1.txt 0.001/Vm 0.001/AV_Ta\nprintf 'step ok\\n'\n",
             steps=[{"id": "run", "command": "Allrun", "depends_on": []}],
         )
@@ -55,8 +55,8 @@ def test_cli_step_executes_single_step_and_writes_state_and_logs() -> None:
                 "cliStepCase",
                 "--step",
                 "run",
-                "--tutorials-root",
-                str(tutorials_root),
+                "--cases-root",
+                str(cases_root),
             ])
 
         payload = json.loads(out.getvalue())
@@ -73,9 +73,9 @@ def test_cli_step_executes_single_step_and_writes_state_and_logs() -> None:
 
 def test_cli_step_returns_nonzero_for_failing_step() -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
+        cases_root = Path(temp_dir)
         _write_case(
-            tutorials_root,
+            cases_root,
             allrun="#!/bin/sh\nmkdir -p postProcessing 0.001\ntouch postProcessing/cliStepCase_1.txt 0.001/Vm 0.001/AV_Ta\nprintf 'step failed\\n' >&2\nexit 7\n",
             steps=[{"id": "run", "command": "Allrun", "depends_on": []}],
         )
@@ -89,8 +89,8 @@ def test_cli_step_returns_nonzero_for_failing_step() -> None:
                 "cliStepCase",
                 "--step",
                 "run",
-                "--tutorials-root",
-                str(tutorials_root),
+                "--cases-root",
+                str(cases_root),
             ])
 
         payload = json.loads(out.getvalue())
@@ -104,9 +104,9 @@ def test_cli_step_returns_nonzero_for_failing_step() -> None:
 
 def test_cli_run_does_not_retry_failed_saved_state() -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
+        cases_root = Path(temp_dir)
         case_root = _write_case(
-            tutorials_root,
+            cases_root,
             allrun="#!/bin/sh\nmkdir -p postProcessing 0.001\ntouch postProcessing/cliStepCase_1.txt 0.001/Vm 0.001/AV_Ta\nexit 4\n",
             steps=[{"id": "run", "command": "Allrun", "depends_on": []}],
         )
@@ -118,8 +118,8 @@ def test_cli_run_does_not_retry_failed_saved_state() -> None:
                 "--strict",
                 "--entry",
                 "cliStepCase",
-                "--tutorials-root",
-                str(tutorials_root),
+                "--cases-root",
+                str(cases_root),
             ])
         assert first_code == 1
 
@@ -132,8 +132,8 @@ def test_cli_run_does_not_retry_failed_saved_state() -> None:
                 "--strict",
                 "--entry",
                 "cliStepCase",
-                "--tutorials-root",
-                str(tutorials_root),
+                "--cases-root",
+                str(cases_root),
             ])
 
         payload = json.loads(second_out.getvalue())
@@ -151,9 +151,9 @@ def test_cli_run_fresh_forces_real_rerun_and_wipes_output_dir() -> None:
     # must wipe the whole output_dir (postProcessing/), not just the state
     # file, proven with a stray marker file that only a whole-dir wipe removes.
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
+        cases_root = Path(temp_dir)
         case_root = _write_case(
-            tutorials_root,
+            cases_root,
             allrun=(
                 "#!/bin/sh\n"
                 "mkdir -p postProcessing 0.001\n"
@@ -172,7 +172,7 @@ def test_cli_run_fresh_forces_real_rerun_and_wipes_output_dir() -> None:
             with redirect_stdout(out):
                 code = main([
                     "run", "--strict", "--entry", "cliStepCase",
-                    "--tutorials-root", str(tutorials_root),
+                    "--cases-root", str(cases_root),
                     *extra_args,
                 ])
             return code, json.loads(out.getvalue())
@@ -267,9 +267,9 @@ def _failed_exit0_runner(
 
 def test_cli_step_attaches_failure_context_on_failure(monkeypatch) -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
+        cases_root = Path(temp_dir)
         _write_case(
-            tutorials_root,
+            cases_root,
             allrun="#!/bin/sh\nmkdir -p postProcessing 0.001\ntouch postProcessing/cliStepCase_1.txt 0.001/Vm 0.001/AV_Ta\nexit 0\n",
             steps=[{"id": "run", "command": "Allrun", "depends_on": []}],
         )
@@ -281,7 +281,7 @@ def test_cli_step_attaches_failure_context_on_failure(monkeypatch) -> None:
                 "step", "--strict",
                 "--entry", "cliStepCase",
                 "--step", "run",
-                "--tutorials-root", str(tutorials_root),
+                "--cases-root", str(cases_root),
             ])
 
         payload = json.loads(out.getvalue())
@@ -295,9 +295,9 @@ def test_cli_step_attaches_failure_context_on_failure(monkeypatch) -> None:
 
 def test_cli_run_attaches_failure_context_for_failed_step() -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
+        cases_root = Path(temp_dir)
         _write_case(
-            tutorials_root,
+            cases_root,
             allrun=(
                 "#!/bin/sh\n"
                 "mkdir -p postProcessing 0.001\n"
@@ -313,7 +313,7 @@ def test_cli_run_attaches_failure_context_for_failed_step() -> None:
             code = main([
                 "run", "--strict",
                 "--entry", "cliStepCase",
-                "--tutorials-root", str(tutorials_root),
+                "--cases-root", str(cases_root),
                 "--tail-lines", "50",
             ])
 
@@ -327,9 +327,9 @@ def test_cli_run_attaches_failure_context_for_failed_step() -> None:
 
 def test_cli_step_reports_failed_when_status_failed_with_exit_code_zero(monkeypatch) -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
+        cases_root = Path(temp_dir)
         _write_case(
-            tutorials_root,
+            cases_root,
             allrun="#!/bin/sh\nmkdir -p postProcessing 0.001\ntouch postProcessing/cliStepCase_1.txt 0.001/Vm 0.001/AV_Ta\nexit 0\n",
             steps=[{"id": "run", "command": "Allrun", "depends_on": []}],
         )
@@ -341,7 +341,7 @@ def test_cli_step_reports_failed_when_status_failed_with_exit_code_zero(monkeypa
                 "step", "--strict",
                 "--entry", "cliStepCase",
                 "--step", "run",
-                "--tutorials-root", str(tutorials_root),
+                "--cases-root", str(cases_root),
             ])
 
         payload = json.loads(out.getvalue())
@@ -353,20 +353,20 @@ def test_cli_step_reports_failed_when_status_failed_with_exit_code_zero(monkeypa
 
 def test_cli_step_apply_invalid_override_does_not_rerun() -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
+        cases_root = Path(temp_dir)
         _write_case(
-            tutorials_root,
+            cases_root,
             allrun="#!/bin/sh\nmkdir -p postProcessing 0.001\ntouch postProcessing/cliStepCase_1.txt 0.001/Vm 0.001/AV_Ta\nexit 0\n",
             steps=[{"id": "run", "command": "Allrun", "depends_on": []}],
         )
-        bad = tutorials_root / "ov.json"
+        bad = cases_root / "ov.json"
         bad.write_text('[{"driver_path": "notAKey", "value": "1"}]')
 
         out = StringIO()
         with redirect_stdout(out):
             code = main([
                 "step", "--strict", "--entry", "cliStepCase", "--step", "run",
-                "--tutorials-root", str(tutorials_root),
+                "--cases-root", str(cases_root),
                 "--apply", str(bad),
             ])
 
@@ -375,27 +375,27 @@ def test_cli_step_apply_invalid_override_does_not_rerun() -> None:
         assert payload["status"] == "failed"
         assert "notAKey" in payload["error"]
         # rejected before any rerun: no audit line written.
-        assert not (tutorials_root / "cliStepCase" / "postProcessing"
+        assert not (cases_root / "cliStepCase" / "postProcessing"
                     / "remediation_history.jsonl").exists()
 
 
 def test_cli_step_apply_valid_override_mutates_reruns_and_audits() -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
+        cases_root = Path(temp_dir)
         case_root = _write_case(
-            tutorials_root,
+            cases_root,
             allrun="#!/bin/sh\nmkdir -p postProcessing 0.001\ntouch postProcessing/cliStepCase_1.txt 0.001/Vm 0.001/AV_Ta\nexit 0\n",
             steps=[{"id": "run", "command": "Allrun", "depends_on": []}],
         )
         (case_root / "system" / "controlDict").write_text("deltaT    0.001;\nendTime    1;\n")
-        good = tutorials_root / "ov.json"
+        good = cases_root / "ov.json"
         good.write_text('[{"driver_path": "deltaT", "value": "0.0005"}]')
 
         out = StringIO()
         with redirect_stdout(out):
             code = main([
                 "step", "--strict", "--entry", "cliStepCase", "--step", "run",
-                "--tutorials-root", str(tutorials_root),
+                "--cases-root", str(cases_root),
                 "--apply", str(good),
             ])
 
@@ -419,9 +419,9 @@ def test_cli_step_apply_audits_rerun_error(monkeypatch) -> None:
     monkeypatch.setattr("omnidriver.cli.run_workflow_step", _boom)
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
+        cases_root = Path(temp_dir)
         case_root = _write_case(
-            tutorials_root,
+            cases_root,
             allrun="#!/bin/sh\nexit 0\n",
             steps=[{"id": "run", "command": "Allrun", "depends_on": []}],
         )
@@ -429,14 +429,14 @@ def test_cli_step_apply_audits_rerun_error(monkeypatch) -> None:
         # A real --apply is always a *rerun*, so the output dir already exists from the
         # prior attempt; the monkeypatched runner never creates it, so pre-create it here.
         (case_root / "postProcessing").mkdir()
-        good = tutorials_root / "ov.json"
+        good = cases_root / "ov.json"
         good.write_text('[{"driver_path": "deltaT", "value": "0.0005"}]')
 
         out = StringIO()
         with redirect_stdout(out):
             code = main([
                 "step", "--strict", "--entry", "cliStepCase", "--step", "run",
-                "--tutorials-root", str(tutorials_root),
+                "--cases-root", str(cases_root),
                 "--apply", str(good),
             ])
 

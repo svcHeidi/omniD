@@ -465,16 +465,16 @@ def _context_from_entry(
             char if char.isalnum() or char in {"-", "_", "."} else "_"
             for char in selected_entry
         ).strip("._") or "entry"
-        _base = Path((overrides or {}).get("tutorials_root") or Path.cwd())
+        _base = Path((overrides or {}).get("cases_root") or Path.cwd())
         staged_case_root = scratch_root(_base) / "runs" / safe_entry
         if fresh or not staged_case_root.exists():
             _stage_entry_case(source_case_root, staged_case_root, driver_context=driver_context)
         staged_overrides = dict(overrides or {})
-        staged_overrides["tutorials_root"] = str(staged_case_root.parent)
+        staged_overrides["cases_root"] = str(staged_case_root.parent)
         staged_overrides["case_dir_name"] = staged_case_root.name
         # Sanitisation above can flatten a name-bearing entry (e.g. one with
         # "/" or other non alnum/-/_/. characters) into a different string,
-        # so `tutorials_root` now points at a flat staging directory that no
+        # so `cases_root` now points at a flat staging directory that no
         # longer contains whatever nested/named path `selected_entry`
         # originally described. Re-resolving by that original name against
         # the new root fails registry lookup entirely (KeyError: "Unknown
@@ -701,7 +701,7 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
-        "--tutorials-root",
+        "--cases-root",
         help=(
             "Optional path to the tutorials folder. Defaults to '<repo>/tutorials' when present."
         ),
@@ -846,13 +846,13 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
         parser.error("--run-document is only valid with action=run or action=step")
     if args.run_document and args.entry:
         parser.error("--run-document and --entry are mutually exclusive")
-    if args.run_document and (args.config or args.entry_kind or args.tutorials_root):
-        parser.error("--config/--entry-kind/--tutorials-root are not valid with --run-document")
+    if args.run_document and (args.config or args.entry_kind or args.cases_root):
+        parser.error("--config/--entry-kind/--cases-root are not valid with --run-document")
     if args.action in {"sweep-plan", "sweep-run"}:
         if args.entry:
             parser.error(f"--entry is not valid with action={args.action}; use --spec")
-        if args.config or args.entry_kind or args.tutorials_root:
-            parser.error(f"--config/--entry-kind/--tutorials-root are not valid with action={args.action}")
+        if args.config or args.entry_kind or args.cases_root:
+            parser.error(f"--config/--entry-kind/--cases-root are not valid with action={args.action}")
         if args.strict or args.run_document or args.step or args.apply is not None:
             parser.error(f"--strict/--run-document/--step/--apply are not valid with action={args.action}")
     if args.action in {"sweep-plan", "sweep-run"} and not args.spec:
@@ -898,12 +898,12 @@ def main(argv: list[str] | None = None) -> int:
     selected_entry = args.entry
 
     overrides = _load_spec_overrides(args.config, selected_entry) if args.config else None
-    # Unconditional: the chain always applies, so an unset --tutorials-root
+    # Unconditional: the chain always applies, so an unset --cases-root
     # means OMNIDRIVER_CASES_ROOT or the working directory, never a location
     # core invented.
     if overrides is None:
         overrides = {}
-    overrides["tutorials_root"] = str(resolve_cases_root(args.tutorials_root))
+    overrides["cases_root"] = str(resolve_cases_root(args.cases_root))
 
     if args.action == "describe":
         print(
@@ -980,7 +980,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.action == "sweep-plan":
         output_dir = args.output_dir or default_sweep_output_dir(
-            args.spec, base=resolve_cases_root(args.tutorials_root),
+            args.spec, base=resolve_cases_root(args.cases_root),
         )
         result = sweep_plan(
             args.spec,
@@ -998,7 +998,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.action == "sweep-run":
         output_dir = args.output_dir or default_sweep_output_dir(
-            args.spec, base=resolve_cases_root(args.tutorials_root),
+            args.spec, base=resolve_cases_root(args.cases_root),
         )
         result = sweep_run(
             args.spec,

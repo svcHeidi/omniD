@@ -42,7 +42,7 @@ from conftest import monorepo_root, skip_without_monorepo
 class TestSingleCellIonicModelTissueOverride(unittest.TestCase):
     def test_single_pair_override_collapses_to_exactly_one_case(self) -> None:
         spec = make_spec(
-            tutorials_root=monorepo_root / "tutorials",  # type: ignore[operator]
+            cases_root=monorepo_root / "tutorials",  # type: ignore[operator]
             ionic_model="TNNP",
             tissue="epicardialCells",
         )
@@ -52,17 +52,17 @@ class TestSingleCellIonicModelTissueOverride(unittest.TestCase):
         self.assertEqual(cases[0].params, {"ionicModel": "TNNP", "tissue": "epicardialCells"})
 
     def test_default_ionic_models_still_produces_the_full_catalog_sweep(self) -> None:
-        spec = make_spec(tutorials_root=monorepo_root / "tutorials")  # type: ignore[operator]
+        spec = make_spec(cases_root=monorepo_root / "tutorials")  # type: ignore[operator]
         cases = spec.build_cases()
         self.assertGreater(len(cases), 1)
 
     def test_ionic_model_without_tissue_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
-            make_spec(tutorials_root=monorepo_root / "tutorials", ionic_model="TNNP")  # type: ignore[operator]
+            make_spec(cases_root=monorepo_root / "tutorials", ionic_model="TNNP")  # type: ignore[operator]
 
     def test_tissue_without_ionic_model_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
-            make_spec(tutorials_root=monorepo_root / "tutorials", tissue="epicardialCells")  # type: ignore[operator]
+            make_spec(cases_root=monorepo_root / "tutorials", tissue="epicardialCells")  # type: ignore[operator]
 
 
 if __name__ == "__main__":

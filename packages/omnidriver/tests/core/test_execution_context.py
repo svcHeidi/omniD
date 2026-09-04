@@ -18,8 +18,8 @@ from conftest import monorepo_root, skip_without_monorepo
 @skip_without_monorepo
 class TestResolveExecutionContext(unittest.TestCase):
     def test_reports_case_setup_output_and_workflow_state_paths(self) -> None:
-        tutorials_root = monorepo_root / "tutorials"  # type: ignore[operator]
-        spec = load_entry_spec("singleCell", overrides={"tutorials_root": str(tutorials_root)})
+        cases_root = monorepo_root / "tutorials"  # type: ignore[operator]
+        spec = load_entry_spec("singleCell", overrides={"cases_root": str(cases_root)})
 
         context = resolve_execution_context(spec)
 
@@ -35,8 +35,8 @@ class TestResolveExecutionContext(unittest.TestCase):
         """Takes an already-built spec directly -- no resolve_entry/factory call of
         its own, unlike describe_launch (which strict_plan used to call a second
         time on the same entry purely to get these four paths)."""
-        tutorials_root = monorepo_root / "tutorials"  # type: ignore[operator]
-        spec = load_entry_spec("singleCell", overrides={"tutorials_root": str(tutorials_root)})
+        cases_root = monorepo_root / "tutorials"  # type: ignore[operator]
+        spec = load_entry_spec("singleCell", overrides={"cases_root": str(cases_root)})
 
         context = resolve_execution_context(spec)
 

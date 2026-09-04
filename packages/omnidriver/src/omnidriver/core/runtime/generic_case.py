@@ -179,7 +179,7 @@ def _no_solver_mutation(*_args, **_kwargs) -> None:
 
 def make_spec(
     *,
-    tutorials_root: Path | None = None,
+    cases_root: Path | None = None,
     case_dir_name: str,
     setup_dir_name: str | None = None,
     output_dir_name: str | None = None,
@@ -224,7 +224,7 @@ def make_spec(
         _apply_case_mutation = _no_solver_mutation
 
     case_root, setup_root, output_dir = resolve_spec_paths(
-        tutorials_root=tutorials_root,
+        cases_root=cases_root,
         case_dir_name=case_dir_name,
         setup_dir_name=setup_dir_name,
         output_dir_name=output_dir_name,

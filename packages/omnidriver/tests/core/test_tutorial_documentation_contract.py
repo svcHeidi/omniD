@@ -45,7 +45,7 @@ def _runner_cases() -> set[str]:
 def _registered_case_paths() -> dict[str, str]:
     paths = {}
     for entry in list_tutorials():
-        spec = _normalized_registry()[entry.casefold()](tutorials_root=TUTORIALS_ROOT)
+        spec = _normalized_registry()[entry.casefold()](cases_root=TUTORIALS_ROOT)
         paths[entry] = str(Path(spec.case_root).relative_to(TUTORIALS_ROOT))
     return paths
 

@@ -112,7 +112,7 @@ def _apply_case(
 
 def make_spec(
     *,
-    tutorials_root: Path | None = None,
+    cases_root: Path | None = None,
     tutorial_name: str = "manufacturedMonodomain1D3D",
     case_dir_name: str = "manufacturedSolutions/monodomain1D3D",
     setup_dir_name: str = "setup",
@@ -125,7 +125,7 @@ def make_spec(
     postprocess_strict_artifacts: bool = False,
 ) -> TutorialSpec:
     case_root, setup_root, output_dir = resolve_spec_paths(
-        tutorials_root=tutorials_root,
+        cases_root=cases_root,
         case_dir_name=case_dir_name,
         setup_dir_name=setup_dir_name,
         output_dir_name=output_dir_name,

@@ -58,7 +58,7 @@ def test_unknown_variant_is_rejected(tmp_path):
     _write_case(tmp_path)
     with pytest.raises(ValueError, match="solver_variant"):
         make_spec(
-            tutorials_root=tmp_path,
+            cases_root=tmp_path,
             case_dir_name="heartSim3D-1D/eikonalHeart",
             solver_variant="not-a-real-variant",
         )
@@ -68,7 +68,7 @@ def test_unknown_variant_is_rejected(tmp_path):
 def test_apply_case_copies_the_matching_template(tmp_path, variant):
     case_root = _write_case(tmp_path)
     spec = make_spec(
-        tutorials_root=tmp_path,
+        cases_root=tmp_path,
         case_dir_name="heartSim3D-1D/eikonalHeart",
         solver_variant=variant,
     )
@@ -86,7 +86,7 @@ def test_apply_case_copies_the_matching_template(tmp_path, variant):
 def test_serial_workflow_dag_is_a_single_solve_step(tmp_path):
     _write_case(tmp_path)
     spec = make_spec(
-        tutorials_root=tmp_path,
+        cases_root=tmp_path,
         case_dir_name="heartSim3D-1D/eikonalHeart",
         solver_variant="eikonal",
         run_in_parallel=False,
@@ -98,7 +98,7 @@ def test_serial_workflow_dag_is_a_single_solve_step(tmp_path):
 def test_parallel_workflow_dag_wraps_decompose_reconstruct(tmp_path):
     _write_case(tmp_path)
     spec = make_spec(
-        tutorials_root=tmp_path,
+        cases_root=tmp_path,
         case_dir_name="heartSim3D-1D/eikonalHeart",
         solver_variant="bidomain",
         run_in_parallel=True,
@@ -113,7 +113,7 @@ def test_parallel_workflow_dag_wraps_decompose_reconstruct(tmp_path):
 def test_metadata_records_the_solver_variant(tmp_path):
     _write_case(tmp_path)
     spec = make_spec(
-        tutorials_root=tmp_path,
+        cases_root=tmp_path,
         case_dir_name="heartSim3D-1D/eikonalHeart",
         solver_variant="monodomain-eikonal",
     )

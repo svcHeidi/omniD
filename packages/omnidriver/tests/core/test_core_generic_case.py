@@ -14,7 +14,7 @@ def test_plain_allrun_case_plans_without_cardiac_dictionaries(tmp_path: Path) ->
 
     report = strict_plan(
         "plainOpenFoamCase",
-        overrides={"tutorials_root": str(tmp_path)},
+        overrides={"cases_root": str(tmp_path)},
         driver_context=driver_context(
             _GenericOpenFOAMPluginWithNeutralEnvironment(), source="test",
         ),
@@ -45,7 +45,7 @@ def test_plain_allrun_case_works_with_the_no_domain_context(tmp_path: Path) -> N
 
     report = strict_plan(
         "plainOpenFoamCase",
-        overrides={"tutorials_root": str(tmp_path)},
+        overrides={"cases_root": str(tmp_path)},
         driver_context=driver_context(
             _GenericOpenFOAMPluginWithNeutralEnvironment(), source="test",
         ),
@@ -92,7 +92,7 @@ class _MutationSpy:
 def _spec(tmp_path: Path, **kwargs):
     from omnidriver.core.runtime.generic_case import make_spec
 
-    return make_spec(tutorials_root=tmp_path, case_dir_name="aCase", **kwargs)
+    return make_spec(cases_root=tmp_path, case_dir_name="aCase", **kwargs)
 
 
 def test_generic_dict_file_overrides_reach_the_mutation_callback(tmp_path: Path) -> None:
@@ -289,7 +289,7 @@ def test_make_generic_case_spec_applies_no_solver_mutation(tmp_path: Path) -> No
     from omnidriver.core import compatibility
     from omnidriver.core.runtime.generic_case import make_generic_case_spec
 
-    spec = make_generic_case_spec(tutorials_root=tmp_path, case_dir_name="aCase")
+    spec = make_generic_case_spec(cases_root=tmp_path, case_dir_name="aCase")
     with compatibility.track_fallback_calls() as calls:
         spec.apply_case(spec.case_root, spec.build_cases()[0])
 

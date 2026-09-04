@@ -35,7 +35,7 @@ from omnidriver.cardiacfoam.tutorials.generic_case import make_spec
 
 def _make_spec(tmp_path, **overrides):
     kwargs = {
-        "tutorials_root": tmp_path,
+        "cases_root": tmp_path,
         "case_dir_name": "myCase",
         **overrides,
     }

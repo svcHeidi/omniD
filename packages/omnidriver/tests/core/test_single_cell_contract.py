@@ -14,7 +14,7 @@ class TestSingleCellContract(unittest.TestCase):
     def setUpClass(cls) -> None:
         spec = load_tutorial_spec(
             "singleCell",
-            overrides={"tutorials_root": monorepo_root / "tutorials"},  # type: ignore[operator]
+            overrides={"cases_root": monorepo_root / "tutorials"},  # type: ignore[operator]
         )
         cls.module_path = spec.setup_root / "singleCellinteractivePlots.py"
         cls.tree = ast.parse(cls.module_path.read_text())

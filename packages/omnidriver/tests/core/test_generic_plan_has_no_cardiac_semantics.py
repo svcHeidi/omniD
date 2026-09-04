@@ -63,7 +63,7 @@ def _generic_plan(tmp_path: Path) -> dict:
     case = _minimal_case(tmp_path)
     return strict_plan(
         str(case.relative_to(tmp_path)),
-        overrides={"tutorials_root": str(tmp_path)},
+        overrides={"cases_root": str(tmp_path)},
         driver_context=driver_context(NeutralEnvironmentPlugin(), source="test"),
     ).to_json()
 
@@ -98,7 +98,7 @@ def test_generic_describe_override_surface_has_no_cardiac_semantics(
     case = _minimal_case(tmp_path)
     payload = describe_entry(
         str(case.relative_to(tmp_path)),
-        overrides={"tutorials_root": str(tmp_path)},
+        overrides={"cases_root": str(tmp_path)},
         driver_context=generic_openfoam_context(),
     )
     override_surface = {
@@ -131,7 +131,7 @@ def test_generic_spec_metadata_names_dict_files_generically(
     case = _minimal_case(tmp_path)
     payload = describe_entry(
         str(case.relative_to(tmp_path)),
-        overrides={"tutorials_root": str(tmp_path)},
+        overrides={"cases_root": str(tmp_path)},
         driver_context=generic_openfoam_context(),
     )
     metadata = payload["spec"]["metadata"]

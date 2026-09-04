@@ -185,24 +185,3 @@ ACTIVE_TENSION_MODEL_CATALOG: Final[dict[str, ActiveTensionModelEntry]] = {
         notes="Verification-only model used by the total-Lagrangian electromechanics MMS.",
     ),
 }
-
-
-def get_active_tension_entry(name: str) -> ActiveTensionModelEntry:
-    """
-    Return the catalog entry for the named active tension model.
-
-    Args:
-        name: The active tension model name (e.g. 'GoktepeKuhl').
-
-    Returns:
-        The ActiveTensionModelEntry for that model.
-
-    Raises:
-        KeyError: If the model is not in the catalog.
-    """
-    if name not in ACTIVE_TENSION_MODEL_CATALOG:
-        raise KeyError(
-            f"Unknown active tension model '{name}'. "
-            f"Available models: {', '.join(ACTIVE_TENSION_MODEL_CATALOG.keys())}"
-        )
-    return ACTIVE_TENSION_MODEL_CATALOG[name]

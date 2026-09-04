@@ -415,71 +415,9 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
 }
 
 
-def get_ionic_model_entry(name: str) -> IonicModelEntry:
-    """
-    Return the catalog entry for the named ionic model.
-
-    Args:
-        name: The ionic model name (e.g. 'TNNP', 'BuenoOrovio').
-
-    Returns:
-        The IonicModelEntry for that model.
-
-    Raises:
-        KeyError: If the model is not in the catalog.
-    """
-    if name not in IONIC_MODEL_CATALOG:
-        raise KeyError(
-            f"Unknown ionic model '{name}'. "
-            f"Available models: {', '.join(IONIC_MODEL_CATALOG.keys())}"
-        )
-    return IONIC_MODEL_CATALOG[name]
-
-
-def list_compatible_ionic_models(
-    solver: str, tissue: str | None = None
-) -> list[str]:
-    """
-    Return ionic model names compatible with the given myocardium solver and optional tissue.
-
-    Args:
-        solver: The myocardium solver name (e.g. 'monodomainSolver', 'bidomainSolver', 'singleCellSolver').
-        tissue: Optional tissue type filter (e.g. 'epicardialCells', 'myocyte').
-
-    Returns:
-        List of compatible model names.
-    """
-    compatible = []
-    for model_name, entry in IONIC_MODEL_CATALOG.items():
-        if solver not in entry.compatible_solvers:
-            continue
-        if tissue is not None and tissue not in entry.compatible_tissues:
-            continue
-        compatible.append(model_name)
-    return compatible
-
-
 def planning_tissues(entry: IonicModelEntry) -> tuple[str, ...]:
     """Return the tissue labels to enumerate by default in planning workflows."""
     return entry.native_tissue_labels or entry.compatible_tissues
-
-
-def list_models_by_region(cardiac_region: str) -> list[str]:
-    """Return ionic model names whose cardiac_region tuple contains the given region."""
-    return [
-        name
-        for name, entry in IONIC_MODEL_CATALOG.items()
-        if cardiac_region in entry.cardiac_region
-    ]
-
-
-def list_models_by_species(species: str) -> list[str]:
-    """Return ionic model names whose species tuple contains the given species."""
-    return [
-        name
-        for name, entry in IONIC_MODEL_CATALOG.items()
-        if species in entry.species
-    ]
 
 
 BATCHED_MODELS = [

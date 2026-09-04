@@ -969,7 +969,7 @@ def build_and_launch(
     from omnidriver.core.runtime.workflow_state import initial_workflow_state
 
     spec = make_spec(
-        tutorials_root=case_dir.parent,
+        cases_root=case_dir.parent,
         case_dir_name=case_dir.name,
         solver_command="cardiacFoam",
         pre_solve_commands=list(pre_solve_commands or ()),

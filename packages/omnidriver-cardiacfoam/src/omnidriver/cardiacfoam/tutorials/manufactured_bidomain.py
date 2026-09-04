@@ -36,7 +36,7 @@ from .manufactured_monodomain_pseudo_ecg import make_spec as make_base_spec
 
 def make_spec(
     *,
-    tutorials_root: Path | None = None,
+    cases_root: Path | None = None,
     tutorial_name: str = defaults.TUTORIAL_NAME,
     case_dir_name: str = defaults.CASE_DIR_NAME,
     setup_dir_name: str | None = defaults.SETUP_DIR_NAME,
@@ -75,7 +75,7 @@ def make_spec(
     control_dict_overrides: Sequence[Mapping[str, object]] | None = None,
 ):
     return make_base_spec(
-        tutorials_root=tutorials_root,
+        cases_root=cases_root,
         tutorial_name=tutorial_name,
         case_dir_name=case_dir_name,
         setup_dir_name=setup_dir_name,

@@ -27,12 +27,12 @@ class TestIntrospection(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.repo_root = monorepo_root
-        cls.tutorials_root = monorepo_root / "tutorials"  # type: ignore[operator]
+        cls.cases_root = monorepo_root / "tutorials"  # type: ignore[operator]
 
     def test_describe_tutorial_reports_registered_spec_schema(self) -> None:
         payload = describe_tutorial(
             "singleCell",
-            overrides={"tutorials_root": self.tutorials_root},
+            overrides={"cases_root": self.cases_root},
         )
 
         self.assertEqual(payload["resolution"], "registered")
@@ -94,7 +94,7 @@ class TestIntrospection(unittest.TestCase):
     def test_describe_tutorial_ionic_model_catalog_present_and_complete(self) -> None:
         payload = describe_tutorial(
             "singleCell",
-            overrides={"tutorials_root": self.tutorials_root},
+            overrides={"cases_root": self.cases_root},
         )
 
         # P2.5/P2.6: the two cardiac-named catalogs now live nested under the
@@ -146,8 +146,8 @@ class TestIntrospection(unittest.TestCase):
         from omnidriver.core.introspection import describe_entry
 
         with _tempfile.TemporaryDirectory() as temp_dir:
-            tutorials_root = Path(temp_dir)
-            case_root = tutorials_root / "minimalCase"
+            cases_root = Path(temp_dir)
+            case_root = cases_root / "minimalCase"
             (case_root / "system").mkdir(parents=True)
             (case_root / "constant").mkdir(parents=True)
             (case_root / "system" / "controlDict").write_text(
@@ -162,7 +162,7 @@ class TestIntrospection(unittest.TestCase):
             allrun.chmod(allrun.stat().st_mode | stat.S_IEXEC)
             payload = describe_entry(
                 "minimalCase",
-                overrides={"tutorials_root": str(tutorials_root)},
+                overrides={"cases_root": str(cases_root)},
                 driver_context=generic_openfoam_context(),
             )
 
@@ -173,8 +173,8 @@ class TestIntrospection(unittest.TestCase):
 
     def test_describe_tutorial_reports_generic_case_folder_resolution(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            tutorials_root = Path(temp_dir)
-            case_root = tutorials_root / "randomCase"
+            cases_root = Path(temp_dir)
+            case_root = cases_root / "randomCase"
             (case_root / "constant").mkdir(parents=True, exist_ok=True)
             (case_root / "constant" / "electroProperties").write_text(
                 "\n".join(
@@ -193,7 +193,7 @@ class TestIntrospection(unittest.TestCase):
 
             payload = describe_tutorial(
                 "randomCase",
-                overrides={"tutorials_root": tutorials_root},
+                overrides={"cases_root": cases_root},
             )
 
             self.assertEqual(payload["resolution"], "case_folder")
@@ -225,8 +225,8 @@ class TestIntrospection(unittest.TestCase):
         # anything out, and the assertions use assertEqual (not assertIn)
         # so a reordering fails this test.
         with tempfile.TemporaryDirectory() as temp_dir:
-            tutorials_root = Path(temp_dir)
-            case_root = tutorials_root / "orderedCase"
+            cases_root = Path(temp_dir)
+            case_root = cases_root / "orderedCase"
             (case_root / "constant").mkdir(parents=True, exist_ok=True)
             (case_root / "system").mkdir(parents=True, exist_ok=True)
 
@@ -262,7 +262,7 @@ class TestIntrospection(unittest.TestCase):
 
             payload = describe_tutorial(
                 "orderedCase",
-                overrides={"tutorials_root": tutorials_root},
+                overrides={"cases_root": cases_root},
             )
 
             contract = payload["tutorial_contract"]
@@ -294,8 +294,8 @@ class TestIntrospection(unittest.TestCase):
                     "describe",
                     "--entry",
                     "singleCell",
-                    "--tutorials-root",
-                    str(self.tutorials_root),
+                    "--cases-root",
+                    str(self.cases_root),
                 ]
             )
 
@@ -310,7 +310,7 @@ class TestIntrospection(unittest.TestCase):
         stream = io.StringIO()
         with self.assertRaises(SystemExit):
             with redirect_stdout(stream):
-                main(["describe", "--tutorials-root", str(self.tutorials_root)])
+                main(["describe", "--cases-root", str(self.cases_root)])
 
 if __name__ == "__main__":
     unittest.main()

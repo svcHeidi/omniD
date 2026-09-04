@@ -33,7 +33,7 @@ def _factories():
 
 
 def test_niederer2012_builds_under_any_base(tmp_path: Path) -> None:
-    spec = _factories()["niederer2012"](tutorials_root=tmp_path)
+    spec = _factories()["niederer2012"](cases_root=tmp_path)
     assert Path(spec.case_root).is_relative_to(tmp_path)
 
 
@@ -49,7 +49,7 @@ def test_every_serial_tutorial_builds_under_any_base(tmp_path: Path) -> None:
         base = tmp_path / f"case{index}"
         base.mkdir()
         try:
-            factory(tutorials_root=base)
+            factory(cases_root=base)
             built += 1
         except Exception as exc:  # noqa: BLE001 -- report, do not mask
             failed.append(f"{name}: {type(exc).__name__}: {exc}")
@@ -65,4 +65,4 @@ def test_the_parallel_tutorials_still_ask_for_a_rank_count(name: str, tmp_path: 
     if every tutorial had silently become content-dependent."""
     factory = {k.casefold(): v for k, v in _factories().items()}[name]
     with pytest.raises(ValueError, match="num_subdomains"):
-        factory(tutorials_root=tmp_path)
+        factory(cases_root=tmp_path)

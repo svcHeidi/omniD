@@ -63,7 +63,7 @@ def _case_parameter_contract(spec: TutorialSpec) -> dict[str, list[Any]]:
     }
 
 
-def _find_tutorials_root(case_root: Path) -> Path:
+def _find_cases_root(case_root: Path) -> Path:
     for candidate in (case_root.parent, *case_root.parents):
         if (candidate / "regressionTests").exists():
             return candidate
@@ -77,14 +77,14 @@ def describe_tutorial_contract(
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
     case_root = spec.case_root
-    tutorials_root = _find_tutorials_root(case_root)
-    regression_root = tutorials_root / "regressionTests" / spec.name
+    cases_root = _find_cases_root(case_root)
+    regression_root = cases_root / "regressionTests" / spec.name
 
     block_mesh_variants = _glob_relpaths(case_root / "system", "blockMeshDict*")
     reference_cases = []
     if regression_root.exists():
         reference_cases.append(
-            str(regression_root.relative_to(tutorials_root))
+            str(regression_root.relative_to(cases_root))
         )
 
     # Split on the profile's own ``role``, not on a path prefix: the prefix

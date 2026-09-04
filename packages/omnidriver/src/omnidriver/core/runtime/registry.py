@@ -85,15 +85,15 @@ def _case_is_runnable(
 
 
 def _iter_case_directories_recursive(
-    tutorials_root: Path,
+    cases_root: Path,
     driver_context: "DriverContext | None" = None,
 ) -> list[Path]:
-    if not tutorials_root.exists():
+    if not cases_root.exists():
         return []
 
     discovered: list[Path] = []
     decomposition_prefix = decomposition_dirname_prefix(driver_context)
-    for current_root, dirnames, _filenames in os.walk(tutorials_root):
+    for current_root, dirnames, _filenames in os.walk(cases_root):
         path = Path(current_root)
         dirnames[:] = [
             dirname
@@ -111,14 +111,14 @@ def _iter_case_directories_recursive(
 
 def _registered_tutorial_entry(
     tutorial: str,
-    tutorials_root: Path,
+    cases_root: Path,
     driver_context: "DriverContext | None" = None,
 ) -> dict[str, object]:
     factory = _normalized_registry(driver_context)[tutorial.casefold()]
     try:
-        spec = factory(tutorials_root=tutorials_root)
+        spec = factory(cases_root=cases_root)
     except Exception:
-        # Cataloging is best-effort: describe_entry() derives tutorials_root
+        # Cataloging is best-effort: describe_entry() derives cases_root
         # from the *queried* entry's own case_root parent (see introspection.
         # describe_entry), which does not necessarily hold every other
         # registered tutorial's case directory -- e.g. singleCell nests one
@@ -136,7 +136,7 @@ def _registered_tutorial_entry(
         }
     case_root = Path(spec.case_root)
     try:
-        entry_path = str(case_root.relative_to(tutorials_root))
+        entry_path = str(case_root.relative_to(cases_root))
     except ValueError:
         entry_path = case_root.name
     return {
@@ -151,10 +151,10 @@ def _registered_tutorial_entry(
 
 def _classify_case_entry(
     case_root: Path,
-    tutorials_root: Path,
+    cases_root: Path,
     driver_context: "DriverContext | None" = None,
 ) -> dict[str, object]:
-    relative_path = str(case_root.relative_to(tutorials_root))
+    relative_path = str(case_root.relative_to(cases_root))
     return {
         "entry_name": case_root.name,
         "entry_kind": "case_folder",
@@ -166,16 +166,16 @@ def _classify_case_entry(
 
 
 def _entry_catalog_for_root(
-    tutorials_root: Path,
+    cases_root: Path,
     driver_context: "DriverContext",
 ) -> list[dict[str, object]]:
     entries: list[dict[str, object]] = [
-        _registered_tutorial_entry(tutorial, tutorials_root, driver_context)
+        _registered_tutorial_entry(tutorial, cases_root, driver_context)
         for tutorial in list_tutorials(driver_context)
     ]
     known_registered = {tutorial.casefold() for tutorial in list_tutorials(driver_context)}
-    for case_root in _iter_case_directories_recursive(tutorials_root, driver_context):
-        classified = _classify_case_entry(case_root, tutorials_root, driver_context)
+    for case_root in _iter_case_directories_recursive(cases_root, driver_context):
+        classified = _classify_case_entry(case_root, cases_root, driver_context)
         entries.append(classified)
 
     return sorted(
@@ -192,12 +192,12 @@ def _entry_catalog_for_root(
 
 
 def list_case_directories(
-    tutorials_root: Path | None = None,
+    cases_root: Path | None = None,
     *,
     driver_context: "DriverContext | None" = None,
 ) -> list[str]:
     # No ambient default: core does not know where a caller keeps cases.
-    resolved_root = Path.cwd() if tutorials_root is None else Path(tutorials_root)
+    resolved_root = Path.cwd() if cases_root is None else Path(cases_root)
     if not resolved_root.exists():
         return []
     return sorted(
@@ -208,14 +208,14 @@ def list_case_directories(
 
 
 def list_available_tutorials(
-    tutorials_root: Path | None = None,
+    cases_root: Path | None = None,
     *,
     driver_context: "DriverContext | None" = None,
 ) -> list[str]:
     available = list_tutorials(driver_context)
     known = {name.casefold() for name in available}
     for case_dir in list_case_directories(
-        tutorials_root, driver_context=driver_context,
+        cases_root, driver_context=driver_context,
     ):
         if case_dir.casefold() in known:
             continue
@@ -225,12 +225,12 @@ def list_available_tutorials(
 
 
 def list_entries(
-    tutorials_root: Path | None = None,
+    cases_root: Path | None = None,
     *,
     driver_context: "DriverContext | None" = None,
 ) -> list[dict[str, object]]:
     # No ambient default: core does not know where a caller keeps cases.
-    resolved_root = Path.cwd() if tutorials_root is None else Path(tutorials_root)
+    resolved_root = Path.cwd() if cases_root is None else Path(cases_root)
     return _entry_catalog_for_root(resolved_root, driver_context)
 
 
@@ -298,13 +298,13 @@ def _with_entry_metadata(
 def _match_entry(
     name: str,
     entry_kind: str | None,
-    tutorials_root: Path,
+    cases_root: Path,
     driver_context: "DriverContext | None" = None,
 ) -> dict[str, object] | None:
     normalized_name = name.strip().casefold()
     matches = [
         entry
-        for entry in list_entries(tutorials_root, driver_context=driver_context)
+        for entry in list_entries(cases_root, driver_context=driver_context)
         if (
             normalized_name in {
                 str(entry["entry_name"]).casefold(),
@@ -361,7 +361,7 @@ def resolve_entry(
             candidate = Path.cwd() / candidate
         if candidate.is_dir() and _is_case_directory(candidate, driver_context):
             case_overrides = dict(incoming_overrides)
-            case_overrides["tutorials_root"] = str(candidate.parent)
+            case_overrides["cases_root"] = str(candidate.parent)
             case_overrides["case_dir_name"] = candidate.name
             plugin_factory = _get_plugin_tutorials(driver_context).get(
                 "make_generic_case_spec",
@@ -389,7 +389,7 @@ def resolve_entry(
                 "workflow_family": None,
             }
 
-    tutorials_root = Path(incoming_overrides.get("tutorials_root", Path.cwd()))
+    cases_root = Path(incoming_overrides.get("cases_root", Path.cwd()))
 
     if entry_kind in {None, "registered_tutorial"} and normalized_key in normalized_registry:
         return {
@@ -401,17 +401,17 @@ def resolve_entry(
             "factory_overrides": incoming_overrides,
             "entry_name": key,
             "entry_kind": "registered_tutorial",
-            "entry_path": _registered_tutorial_entry(key, tutorials_root, driver_context)["entry_path"],
+            "entry_path": _registered_tutorial_entry(key, cases_root, driver_context)["entry_path"],
             "is_runnable": True,
             "source_type": "spec_factory",
             "workflow_family": None,
         }
 
-    matched_entry = _match_entry(key, entry_kind, tutorials_root, driver_context)
+    matched_entry = _match_entry(key, entry_kind, cases_root, driver_context)
     if matched_entry is not None:
         generic_overrides = dict(incoming_overrides)
         generic_overrides.setdefault("case_dir_name", str(matched_entry["entry_path"]))
-        matched_case_root = tutorials_root / str(matched_entry["entry_path"])
+        matched_case_root = cases_root / str(matched_entry["entry_path"])
         # Keep existing cardiac case-folder semantics while moving truly
         # solver-neutral folders to the core implementation.  The marker is
         # deliberately narrow: an electroProperties file belongs to the

@@ -123,7 +123,7 @@ def default_setup_dir_name(case_dir_name: str) -> str:
 
 def resolve_spec_paths(
     *,
-    tutorials_root: Path | None,
+    cases_root: Path | None,
     case_dir_name: str,
     setup_dir_name: str | None = None,
     output_dir_name: str | Path | None = None,
@@ -131,8 +131,8 @@ def resolve_spec_paths(
 ) -> tuple[Path, Path, Path]:
     # No ambient default: a caller who names no base gets the working
     # directory, not a location core invented for them.
-    resolved_tutorials_root = (
-        Path(tutorials_root) if tutorials_root is not None else Path.cwd()
+    resolved_cases_root = (
+        Path(cases_root) if cases_root is not None else Path.cwd()
     )
     resolved_case_dir = case_dir_name.strip()
     if not resolved_case_dir:
@@ -142,7 +142,7 @@ def resolve_spec_paths(
     if resolved_output_dir is None:
         raise ValueError("output_dir_name or default_output_dir_name must be provided")
 
-    case_root = resolved_tutorials_root / resolved_case_dir
+    case_root = resolved_cases_root / resolved_case_dir
     setup_root = case_root / resolved_setup_dir
     output_dir = case_root / Path(resolved_output_dir)
     return case_root, setup_root, output_dir
@@ -150,7 +150,7 @@ def resolve_spec_paths(
 
 def resolve_run_script_path(
     *,
-    tutorials_root: Path | None,
+    cases_root: Path | None,
     run_script_relpath: Path,
 ) -> Path:
     if run_script_relpath.is_absolute():
@@ -159,11 +159,11 @@ def resolve_run_script_path(
     # A relative run-script path is relative to the workspace, not to a
     # repository that may not exist. Both repo-root lookups are gone: they were
     # appended EAGERLY, so this raised from a wheel install even when
-    # tutorials_root had been supplied and the script existed under it -- the
+    # cases_root had been supplied and the script existed under it -- the
     # candidate list was built before the loop that would have found it.
     candidate_roots: list[Path] = []
-    if tutorials_root is not None:
-        candidate_roots.append(Path(tutorials_root))
+    if cases_root is not None:
+        candidate_roots.append(Path(cases_root))
     candidate_roots.append(Path.cwd())
 
     checked_paths: list[Path] = []

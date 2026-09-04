@@ -97,7 +97,7 @@ def _apply_case(
 
 def make_spec(
     *,
-    tutorials_root: Path | None = None,
+    cases_root: Path | None = None,
     case_dir_name: str = defaults.CASE_DIR_NAME,
     setup_dir_name: str | None = defaults.SETUP_DIR_NAME,
     output_dir_name: str | None = None,
@@ -143,7 +143,7 @@ def make_spec(
 
     default_output_dir_name = defaults.OUTPUT_DIR_NAME
     case_root, setup_root, output_dir = resolve_spec_paths(
-        tutorials_root=tutorials_root,
+        cases_root=cases_root,
         case_dir_name=case_dir_name,
         setup_dir_name=setup_dir_name,
         output_dir_name=output_dir_name,

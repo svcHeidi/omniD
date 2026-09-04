@@ -61,7 +61,7 @@ skip_without_monorepo = pytest.mark.skipif(
     monorepo_root is None,
     reason=(
         "Requires the full cardiacFoam monorepo tree (tutorials/ + applications/). "
-        "Clone the full repository or run with --tutorials-root to enable this test."
+        "Clone the full repository or run with --cases-root to enable this test."
     ),
 )
 

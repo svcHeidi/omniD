@@ -43,13 +43,13 @@ def _write_case(root: Path, *, allrun: str, steps: list[dict]) -> Path:
     return case_root
 
 
-def _plan_to_file(tutorials_root: Path, doc_path: Path) -> dict:
+def _plan_to_file(cases_root: Path, doc_path: Path) -> dict:
     """Run `plan --strict` and write its run_document to doc_path."""
     out = StringIO()
     with redirect_stdout(out):
         code = main([
             "plan", "--strict", "--entry", "runDocCase",
-            "--tutorials-root", str(tutorials_root),
+            "--cases-root", str(cases_root),
         ])
     report = json.loads(out.getvalue())
     assert code == 0, report
@@ -61,14 +61,14 @@ def _plan_to_file(tutorials_root: Path, doc_path: Path) -> dict:
 
 def test_plan_then_run_document_round_trip_executes() -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
+        cases_root = Path(temp_dir)
         _write_case(
-            tutorials_root,
+            cases_root,
             allrun="#!/bin/sh\nmkdir -p postProcessing 0.001\ntouch postProcessing/runDocCase_1.txt 0.001/Vm 0.001/AV_Ta\nprintf 'ran\\n'\n",
             steps=[{"id": "run", "command": "Allrun", "depends_on": []}],
         )
-        doc_path = tutorials_root / "run.json"
-        _plan_to_file(tutorials_root, doc_path)
+        doc_path = cases_root / "run.json"
+        _plan_to_file(cases_root, doc_path)
 
         out = StringIO()
         with redirect_stdout(out):
@@ -96,14 +96,14 @@ def test_plan_then_run_document_round_trip_executes() -> None:
 
 def test_step_via_run_document_executes_named_step() -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
+        cases_root = Path(temp_dir)
         _write_case(
-            tutorials_root,
+            cases_root,
             allrun="#!/bin/sh\nmkdir -p postProcessing 0.001\ntouch postProcessing/runDocCase_1.txt 0.001/Vm 0.001/AV_Ta\nprintf 'ran\\n'\n",
             steps=[{"id": "run", "command": "Allrun", "depends_on": []}],
         )
-        doc_path = tutorials_root / "run.json"
-        _plan_to_file(tutorials_root, doc_path)
+        doc_path = cases_root / "run.json"
+        _plan_to_file(cases_root, doc_path)
 
         out = StringIO()
         with redirect_stdout(out):
@@ -199,17 +199,17 @@ def test_run_document_only_valid_for_run_and_step() -> None:
 
 def test_run_document_respects_allowed_runs_root() -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
+        cases_root = Path(temp_dir)
         _write_case(
-            tutorials_root,
+            cases_root,
             allrun="#!/bin/sh\nmkdir -p postProcessing 0.001\ntouch postProcessing/runDocCase_1.txt 0.001/Vm 0.001/AV_Ta\nprintf 'ran\\n'\n",
             steps=[{"id": "run", "command": "Allrun", "depends_on": []}],
         )
-        doc_path = tutorials_root / "run.json"
-        _plan_to_file(tutorials_root, doc_path)
+        doc_path = cases_root / "run.json"
+        _plan_to_file(cases_root, doc_path)
 
         # Allowed root that does NOT contain the case -> rejected before running.
-        other_root = tutorials_root / "somewhere-else"
+        other_root = cases_root / "somewhere-else"
         other_root.mkdir()
         out = StringIO()
         with redirect_stdout(out), mock.patch.dict(
@@ -224,7 +224,7 @@ def test_run_document_respects_allowed_runs_root() -> None:
         # Allowed root that DOES contain the case -> runs to completion.
         out = StringIO()
         with redirect_stdout(out), mock.patch.dict(
-            os.environ, {"DRIVERFOAM_ALLOWED_RUNS_ROOT": str(tutorials_root)}
+            os.environ, {"DRIVERFOAM_ALLOWED_RUNS_ROOT": str(cases_root)}
         ):
             code = main(["run", "--run-document", str(doc_path)])
         payload = json.loads(out.getvalue())
@@ -234,16 +234,16 @@ def test_run_document_respects_allowed_runs_root() -> None:
 
 def test_step_via_run_document_apply_mutates_reruns_and_audits() -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
+        cases_root = Path(temp_dir)
         case_root = _write_case(
-            tutorials_root,
+            cases_root,
             allrun="#!/bin/sh\nmkdir -p postProcessing 0.001\ntouch postProcessing/runDocCase_1.txt 0.001/Vm 0.001/AV_Ta\nexit 0\n",
             steps=[{"id": "run", "command": "Allrun", "depends_on": []}],
         )
         (case_root / "system" / "controlDict").write_text("deltaT    0.001;\nendTime    1;\n")
-        doc_path = tutorials_root / "run.json"
-        _plan_to_file(tutorials_root, doc_path)
-        good = tutorials_root / "ov.json"
+        doc_path = cases_root / "run.json"
+        _plan_to_file(cases_root, doc_path)
+        good = cases_root / "ov.json"
         good.write_text('[{"driver_path": "deltaT", "value": "0.0005"}]')
 
         out = StringIO()

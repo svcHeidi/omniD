@@ -36,7 +36,7 @@ from typing import Any
 # Excluded from the worked example so the schema advertises physics knobs.
 _INFRASTRUCTURE_SPEC_KEYS = frozenset(
     {
-        "tutorials_root",
+        "cases_root",
         "case_dir_name",
         "setup_dir_name",
         "output_dir_name",

@@ -148,8 +148,8 @@ type electroModel;
 _GEO_TEMPLATE = "lc = __LC__; // __LC__ in comment should be ignored\n"
 
 
-def _write_case(tutorials_root: Path) -> Path:
-    case_root = tutorials_root / "manufacturedSolutions" / "bathBidomain"
+def _write_case(cases_root: Path) -> Path:
+    case_root = cases_root / "manufacturedSolutions" / "bathBidomain"
     (case_root / "constant").mkdir(parents=True)
     (case_root / "system").mkdir(parents=True)
     (case_root / "setup" / "mesh" / "tet").mkdir(parents=True)
@@ -173,7 +173,7 @@ def _write_case(tutorials_root: Path) -> Path:
 def _make_spec(tmp_path, **overrides):
     _write_case(tmp_path)
     kwargs = {
-        "tutorials_root": tmp_path,
+        "cases_root": tmp_path,
         "case_dir_name": "manufacturedSolutions/bathBidomain",
         "dimensions": ["3D"],
         "number_cells": [10],
@@ -255,7 +255,7 @@ def test_hex_workflow_dag_is_still_blockmesh_toposet_pipeline(tmp_path):
 def test_tet_rejects_unsupported_options(tmp_path):
     _write_case(tmp_path)
     base = {
-        "tutorials_root": tmp_path,
+        "cases_root": tmp_path,
         "case_dir_name": "manufacturedSolutions/bathBidomain",
         "dimensions": ["3D"],
         "number_cells": [10],

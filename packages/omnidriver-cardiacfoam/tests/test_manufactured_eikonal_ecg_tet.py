@@ -83,8 +83,8 @@ solvers
 """
 
 
-def _write_case(tutorials_root: Path) -> Path:
-    case_root = tutorials_root / "manufacturedSolutions" / "eikonalECG"
+def _write_case(cases_root: Path) -> Path:
+    case_root = cases_root / "manufacturedSolutions" / "eikonalECG"
     (case_root / "constant").mkdir(parents=True, exist_ok=True)
     (case_root / "system").mkdir(parents=True, exist_ok=True)
     (case_root / "setup" / "studies" / "tetConvergence").mkdir(parents=True, exist_ok=True)
@@ -106,7 +106,7 @@ def _write_case(tutorials_root: Path) -> Path:
 def _make_spec(tmp_path, **overrides):
     _write_case(tmp_path)
     kwargs = {
-        "tutorials_root": tmp_path,
+        "cases_root": tmp_path,
         "case_dir_name": "manufacturedSolutions/eikonalECG",
         "dimensions": ["3D"],
         "number_cells": [10],
@@ -184,7 +184,7 @@ def test_tet_workflow_dag_appends_write_cell_centres_after_solve(tmp_path):
 def test_tet_apply_case_renders_geo_installs_overlay_and_grad_scheme(tmp_path):
     case_root = _write_case(tmp_path)
     spec = make_spec(
-        tutorials_root=tmp_path,
+        cases_root=tmp_path,
         case_dir_name="manufacturedSolutions/eikonalECG",
         dimensions=["3D"],
         number_cells=[10],
@@ -207,7 +207,7 @@ def test_tet_apply_case_forwards_conductivity_and_advection_approach(tmp_path):
     case_root = _write_case(tmp_path)
     conductivity = "[ -1 -3 3 0 0 2 0 ] (0.111 0 0 0.122 0 0.030)"
     spec = make_spec(
-        tutorials_root=tmp_path,
+        cases_root=tmp_path,
         case_dir_name="manufacturedSolutions/eikonalECG",
         dimensions=["3D"],
         number_cells=[10],

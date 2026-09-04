@@ -31,8 +31,8 @@ _SINGLE_CELL = (
 
 
 def _case_without_solver_selector(tmp_path: Path) -> Path:
-    tutorials_root = tmp_path / "tutorials"
-    case = tutorials_root / "case"
+    cases_root = tmp_path / "tutorials"
+    case = cases_root / "case"
     shutil.copytree(_SINGLE_CELL, case)
     ep = case / "constant" / "electroProperties"
     ep.write_text(
@@ -40,7 +40,7 @@ def _case_without_solver_selector(tmp_path: Path) -> Path:
             "myocardiumSolver singleCellSolver;", "myocardiumSolvr singleCellSolver;"
         )
     )
-    return tutorials_root
+    return cases_root
 
 
 @skip_without_monorepo
@@ -48,11 +48,11 @@ def test_unresolvable_solver_selector_is_reported_as_a_diagnostic(tmp_path):
     from omnidriver.core.plugin_interface import default_driver_context
     from omnidriver.core.strict_planning import strict_plan
 
-    tutorials_root = _case_without_solver_selector(tmp_path)
+    cases_root = _case_without_solver_selector(tmp_path)
     payload = strict_plan(
         "case",
         entry_kind="case_folder",
-        overrides={"tutorials_root": str(tutorials_root)},
+        overrides={"cases_root": str(cases_root)},
         explicit_bashrc="/no/such/openfoam/bashrc",
         driver_context=default_driver_context(),
     ).to_json()
@@ -75,11 +75,11 @@ def test_unresolvable_solver_selector_is_reported_as_a_diagnostic(tmp_path):
 @skip_without_monorepo
 def test_the_cli_still_emits_parseable_json(tmp_path):
     """The end-to-end shape an agent actually consumes."""
-    tutorials_root = _case_without_solver_selector(tmp_path)
+    cases_root = _case_without_solver_selector(tmp_path)
     result = subprocess.run(
         [
             sys.executable, "-m", "omnidriver", "plan", "--strict",
-            "--tutorials-root", str(tutorials_root),
+            "--cases-root", str(cases_root),
             "--entry", "case", "--entry-kind", "case_folder",
             "--environment-bashrc", "/no/such/openfoam/bashrc",
         ],

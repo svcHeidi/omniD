@@ -27,8 +27,8 @@ _CTX = _driver_context(
 class TestVariantElectroPropertiesCase(unittest.TestCase):
     def test_variant_electro_properties_case_is_discoverable_and_runnable(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            tutorials_root = Path(temp_dir)
-            case_root = tutorials_root / "variantCase"
+            cases_root = Path(temp_dir)
+            case_root = cases_root / "variantCase"
             (case_root / "constant").mkdir(parents=True, exist_ok=True)
             (case_root / "system").mkdir(parents=True, exist_ok=True)
             (case_root / "constant" / "electroProperties.monodomain").write_text(
@@ -40,7 +40,7 @@ class TestVariantElectroPropertiesCase(unittest.TestCase):
 
             resolution = resolve_entry(
                 "variantCase",
-                overrides={"tutorials_root": tutorials_root},
+                overrides={"cases_root": cases_root},
                 driver_context=_CTX,)
 
             self.assertEqual(resolution["resolution"], "case_folder")

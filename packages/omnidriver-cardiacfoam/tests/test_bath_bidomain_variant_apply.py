@@ -56,8 +56,8 @@ class TestBathBidomainVariantApply(unittest.TestCase):
         )
         if not source.is_dir():
             self.skipTest(f"tracked bathBidomain case not found at {source}")
-        self.tutorials_root = Path(self.enterContext(tempfile.TemporaryDirectory()))
-        destination = self.tutorials_root / "manufacturedSolutions" / "bathBidomain"
+        self.cases_root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        destination = self.cases_root / "manufacturedSolutions" / "bathBidomain"
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(source, destination)
         self.case_root = destination
@@ -65,14 +65,14 @@ class TestBathBidomainVariantApply(unittest.TestCase):
 
     def _apply(self, variant: str) -> str:
         spec = tutorial.make_spec(
-            tutorials_root=self.tutorials_root, fda_bath_variant=variant
+            cases_root=self.cases_root, fda_bath_variant=variant
         )
         spec.apply_case(spec.case_root, spec.build_cases()[0])
         return self.electro.read_text()
 
     def test_default_variant_applies_to_the_tracked_case(self) -> None:
         """The regression: make_spec() defaults, pristine tracked case."""
-        spec = tutorial.make_spec(tutorials_root=self.tutorials_root)
+        spec = tutorial.make_spec(cases_root=self.cases_root)
         spec.apply_case(spec.case_root, spec.build_cases()[0])
 
     def test_ground_electrode_removes_the_electrode_pair_patch(self) -> None:

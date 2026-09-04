@@ -298,7 +298,7 @@ class TestMakeSpecDirectRun(unittest.TestCase):
             case_dir = Path(d) / "mycase"
             case_dir.mkdir()
             spec = make_spec(
-                tutorials_root=Path(d),
+                cases_root=Path(d),
                 case_dir_name="mycase",
                 solver_command="cardiacFoam",
             )
@@ -311,7 +311,7 @@ class TestMakeSpecDirectRun(unittest.TestCase):
             case_dir = Path(d) / "mycase"
             case_dir.mkdir()
             spec = make_spec(
-                tutorials_root=Path(d),
+                cases_root=Path(d),
                 case_dir_name="mycase",
                 solver_command="cardiacFoam",
                 pre_solve_commands=["vtkUnstructuredToFoam", "setTorsoOrganConductivityField"],
@@ -325,7 +325,7 @@ class TestMakeSpecDirectRun(unittest.TestCase):
             case_dir = Path(d) / "mycase"
             case_dir.mkdir()
             spec = make_spec(
-                tutorials_root=Path(d),
+                cases_root=Path(d),
                 case_dir_name="mycase",
                 solver_command="cardiacFoam",
                 pre_solve_commands=["vtkUnstructuredToFoam"],

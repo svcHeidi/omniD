@@ -117,10 +117,13 @@ runtime, silently.
   claim against the code before acting on it.
 - `docs/superpowers/specs/` and `plans/` — design reasoning and executed plans.
 
-**Read for reasoning, not for locations:** `AGENT_GUIDE.md` (every import path
-and CLI example predates the package split), `CHANGELOG.md` and
-`MIGRATION_AUDIT_v2.md` (both describe the retired flat `openfoam_driver/`
-tree). Each carries a banner saying so.
+- `AGENT_GUIDE.md` — the domain guide: planning, sweeping, post-processing,
+  and authoring a plugin or a tutorial. Its paths and commands were corrected
+  2026-09-04 and every module path in it is import-checked.
+
+**Read for reasoning, not for locations:** `CHANGELOG.md` and
+`MIGRATION_AUDIT_v2.md`, which describe the retired flat `openfoam_driver/`
+tree. Both carry a banner saying so.
 
 ## House style
 

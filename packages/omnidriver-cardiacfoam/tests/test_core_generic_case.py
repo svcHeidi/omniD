@@ -47,7 +47,7 @@ from pathlib import Path
 def _spec(tmp_path: Path, **kwargs):
     from omnidriver.cardiacfoam.tutorials.generic_case import make_spec
 
-    return make_spec(tutorials_root=tmp_path, case_dir_name="aCase", **kwargs)
+    return make_spec(cases_root=tmp_path, case_dir_name="aCase", **kwargs)
 
 
 def test_bare_make_spec_still_applies_the_cardiac_mutation(tmp_path: Path) -> None:

@@ -31,7 +31,7 @@ def test_generic_plugin_executes_plain_allrun_case(tmp_path: Path) -> None:
         "--plugin",
         "plugins.neutral_environment_plugin:_GenericOpenFOAMPluginWithNeutralEnvironment",
         "--entry", "plainOpenFoamCase",
-        "--tutorials-root", str(tmp_path),
+        "--cases-root", str(tmp_path),
     ])
 
     assert exit_code == 0
@@ -58,7 +58,7 @@ def test_trusted_minimal_plugin_executes_plain_allrun_case(
         "--plugin",
         "plugins.neutral_environment_plugin:NeutralEnvironmentPlugin",
         "--entry", "plainOpenFoamCase",
-        "--tutorials-root", str(tmp_path),
+        "--cases-root", str(tmp_path),
     ])
 
     assert exit_code == 0

@@ -126,16 +126,16 @@ def _materialize_entry_case(
         source_case_root = Path(spec.case_root).resolve()
         staged_case_root = Path(staging_root).resolve()
         _stage_entry_case(source_case_root, staged_case_root, driver_context=driver_context)
-        # ``make_spec`` resolves case_root as tutorials_root/case_dir_name.
-        # Redirect both values together; changing only tutorials_root would
+        # ``make_spec`` resolves case_root as cases_root/case_dir_name.
+        # Redirect both values together; changing only cases_root would
         # leave a nested original case_dir_name and recreate the source tree
         # below the scratch directory.
-        effective_routed["tutorials_root"] = str(staged_case_root.parent)
+        effective_routed["cases_root"] = str(staged_case_root.parent)
         effective_routed["case_dir_name"] = staged_case_root.name
         staged_spec = load_entry_spec(
             entry, overrides=effective_routed, driver_context=driver_context,
         )
-        # A real registered factory consumes tutorials_root/case_dir_name and
+        # A real registered factory consumes cases_root/case_dir_name and
         # therefore returns the staged path.  Keep compatibility with test
         # doubles and third-party factories that intentionally return their
         # own fixed spec regardless of overrides.
@@ -299,7 +299,7 @@ def sweep_plan(
             report = strict_plan(
                 case.case_id,
                 entry_kind="case_folder",
-                overrides={"tutorials_root": str(output_dir)},
+                overrides={"cases_root": str(output_dir)},
                 driver_context=driver_context,
             )
         report_payload = report.to_json()
@@ -458,7 +458,7 @@ def sweep_run(
                     report = strict_plan(
                         case.case_id,
                         entry_kind="case_folder",
-                        overrides={"tutorials_root": str(output_dir)},
+                        overrides={"cases_root": str(output_dir)},
                         driver_context=driver_context,
                     )
                 payload = report.to_json()

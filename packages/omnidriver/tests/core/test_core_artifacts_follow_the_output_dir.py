@@ -32,7 +32,7 @@ from omnidriver.core.runtime.generic_case import make_spec
 
 def _spec(root: Path, **kwargs):
     (root / "myCase").mkdir(parents=True, exist_ok=True)
-    return make_spec(tutorials_root=root, case_dir_name="myCase", **kwargs)
+    return make_spec(cases_root=root, case_dir_name="myCase", **kwargs)
 
 
 @pytest.mark.parametrize("output_dir_name", [None, "results", "driverOutput"])

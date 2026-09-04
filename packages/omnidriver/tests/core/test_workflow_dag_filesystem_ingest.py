@@ -76,14 +76,14 @@ class TestFilesystemCaseWorkflowOwnership(unittest.TestCase):
 
     def test_filesystem_case_with_allrun_uses_allrun_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            tutorials_root = Path(temp_dir)
-            case_root = tutorials_root / "myCase"
+            cases_root = Path(temp_dir)
+            case_root = cases_root / "myCase"
             self._write_case_files(case_root)
             (case_root / "Allrun").write_text("#!/bin/sh\n")
 
             spec = load_tutorial_spec(
                 "myCase",
-                overrides={"tutorials_root": tutorials_root},
+                overrides={"cases_root": cases_root},
                 driver_context=_CTX,)
 
             dag = spec.metadata.get("workflow_dag")
@@ -94,13 +94,13 @@ class TestFilesystemCaseWorkflowOwnership(unittest.TestCase):
 
     def test_filesystem_case_without_allrun_has_no_workflow_dag(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            tutorials_root = Path(temp_dir)
-            case_root = tutorials_root / "bareCase"
+            cases_root = Path(temp_dir)
+            case_root = cases_root / "bareCase"
             self._write_case_files(case_root)
 
             spec = load_tutorial_spec(
                 "bareCase",
-                overrides={"tutorials_root": tutorials_root},
+                overrides={"cases_root": cases_root},
                 driver_context=_CTX,)
 
             dag = spec.metadata.get("workflow_dag")

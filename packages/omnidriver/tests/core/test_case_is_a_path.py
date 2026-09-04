@@ -35,7 +35,7 @@ def test_an_absolute_path_resolves_as_a_case(tmp_path: Path) -> None:
 
     assert resolution["resolution"] == "case_path"
     assert resolution["entry_name"] == "mycase"
-    assert Path(resolution["factory_overrides"]["tutorials_root"]) == tmp_path
+    assert Path(resolution["factory_overrides"]["cases_root"]) == tmp_path
     assert resolution["factory_overrides"]["case_dir_name"] == "mycase"
 
 

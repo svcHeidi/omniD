@@ -165,7 +165,7 @@ def _run_state_schema() -> dict[str, Any]:
 
 
 def _workflow_catalog(
-    tutorials_root: Path,
+    cases_root: Path,
     entry_catalog: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     families: dict[str, dict[str, Any]] = {}
@@ -214,11 +214,11 @@ def describe_entry(
         driver_context=driver_context,
     )
     spec = resolution["factory"](**resolution["factory_overrides"])
-    tutorials_root = Path(
-        resolution["factory_overrides"].get("tutorials_root", spec.case_root.parent)
+    cases_root = Path(
+        resolution["factory_overrides"].get("cases_root", spec.case_root.parent)
     )
-    entry_catalog = list_entries(tutorials_root, driver_context=driver_context)
-    workflow_catalog = _workflow_catalog(tutorials_root, entry_catalog)
+    entry_catalog = list_entries(cases_root, driver_context=driver_context)
+    workflow_catalog = _workflow_catalog(cases_root, entry_catalog)
 
     make_spec_info = _describe_factory(resolution["factory"])
     return {
@@ -243,10 +243,10 @@ def describe_entry(
         "registered_tutorials": list_tutorials(driver_context),
         "special_tutorial_aliases": list(SPECIAL_TUTORIAL_ALIASES),
         "available_tutorials": list_available_tutorials(
-            tutorials_root, driver_context=driver_context,
+            cases_root, driver_context=driver_context,
         ),
         "case_directories": list_case_directories(
-            tutorials_root, driver_context=driver_context,
+            cases_root, driver_context=driver_context,
         ),
         "common_override_keys": list(COMMON_OVERRIDE_KEYS),
         "make_spec": make_spec_info,

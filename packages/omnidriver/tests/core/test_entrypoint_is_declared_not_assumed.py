@@ -170,7 +170,7 @@ def test_an_escape_role_is_reported_as_the_environment_s_file(tmp_path) -> None:
             )
 
     context = driver_context(_ForeignEnvironmentPlugin(), source="test:foreign")
-    spec = make_spec(tutorials_root=tmp_path, case_dir_name="myCase")
+    spec = make_spec(cases_root=tmp_path, case_dir_name="myCase")
     contract = describe_tutorial_contract(
         spec, resolution="test", driver_context=context,
     )

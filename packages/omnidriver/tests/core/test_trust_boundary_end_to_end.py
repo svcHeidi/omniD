@@ -106,11 +106,11 @@ def _cli(argv: list[str]) -> tuple[int, dict]:
     return code, json.loads(out.getvalue())
 
 
-def _plan_to_file(tutorials_root: Path, doc_path: Path) -> dict:
+def _plan_to_file(cases_root: Path, doc_path: Path) -> dict:
     """`plan --strict --entry` and persist the emitted RunDocument."""
     code, report = _cli([
         "plan", "--strict", "--entry", CASE_NAME,
-        "--tutorials-root", str(tutorials_root),
+        "--cases-root", str(cases_root),
     ])
     assert code == 0, report
     run_document = report["run_document"]
@@ -120,7 +120,7 @@ def _plan_to_file(tutorials_root: Path, doc_path: Path) -> dict:
 
 
 def _tampered_document(
-    tutorials_root: Path,
+    cases_root: Path,
     doc_path: Path,
     *,
     steps: list[dict] | None = None,
@@ -136,7 +136,7 @@ def _tampered_document(
     attributable to the tampered field alone, instead of drowning in unrelated
     config-validation errors.
     """
-    document = _plan_to_file(tutorials_root, doc_path)
+    document = _plan_to_file(cases_root, doc_path)
     if steps is not None:
         document["workflowDag"]["steps"] = steps
     if launch is not None:
@@ -227,12 +227,12 @@ def _plan_codes(report: dict) -> set[str]:
 def test_case_root_outside_allowed_runs_root_is_rejected_before_execution() -> None:
     """SECURITY.md: "opt-in DRIVERFOAM_ALLOWED_RUNS_ROOT containment"."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
-        case_root = _write_case(tutorials_root)
-        doc_path = tutorials_root / "run.json"
-        _plan_to_file(tutorials_root, doc_path)
+        cases_root = Path(temp_dir)
+        case_root = _write_case(cases_root)
+        doc_path = cases_root / "run.json"
+        _plan_to_file(cases_root, doc_path)
 
-        elsewhere = tutorials_root / "allowed-elsewhere"
+        elsewhere = cases_root / "allowed-elsewhere"
         elsewhere.mkdir()
         with mock.patch.dict(
             os.environ, {"DRIVERFOAM_ALLOWED_RUNS_ROOT": str(elsewhere)}
@@ -307,13 +307,13 @@ def test_allowed_runs_root_permits_a_contained_case() -> None:
     that refused everything.
     """
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
-        case_root = _write_case(tutorials_root)
-        doc_path = tutorials_root / "run.json"
-        _plan_to_file(tutorials_root, doc_path)
+        cases_root = Path(temp_dir)
+        case_root = _write_case(cases_root)
+        doc_path = cases_root / "run.json"
+        _plan_to_file(cases_root, doc_path)
 
         with mock.patch.dict(
-            os.environ, {"DRIVERFOAM_ALLOWED_RUNS_ROOT": str(tutorials_root)}
+            os.environ, {"DRIVERFOAM_ALLOWED_RUNS_ROOT": str(cases_root)}
         ):
             code, payload = _cli(["run", "--run-document", str(doc_path)])
 
@@ -330,22 +330,22 @@ def test_allowed_runs_root_permits_a_contained_case() -> None:
 def test_case_root_must_be_an_existing_runnable_openfoam_case() -> None:
     """SECURITY.md: "caseRoot must be a runnable OpenFOAM case"."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
-        _write_case(tutorials_root)
+        cases_root = Path(temp_dir)
+        _write_case(cases_root)
 
-        not_a_case = tutorials_root / "just-a-directory"
+        not_a_case = cases_root / "just-a-directory"
         not_a_case.mkdir()
         doc_path = _tampered_document(
-            tutorials_root, tutorials_root / "run.json",
+            cases_root, cases_root / "run.json",
             launch={"caseRoot": str(not_a_case), "outputDir": str(not_a_case / "out")},
         )
         code, payload = _cli(["run", "--run-document", str(doc_path)])
         assert code != 0, payload
         assert "case_root_not_a_runnable_case" in _codes(payload), payload
 
-        missing = tutorials_root / "does-not-exist"
+        missing = cases_root / "does-not-exist"
         doc_path = _tampered_document(
-            tutorials_root, tutorials_root / "run2.json",
+            cases_root, cases_root / "run2.json",
             launch={"caseRoot": str(missing), "outputDir": str(missing / "out")},
         )
         code, payload = _cli(["run", "--run-document", str(doc_path)])
@@ -361,11 +361,11 @@ def test_command_authorization_rejects_an_unauthorized_bare_command() -> None:
     """SECURITY.md: only "a known OpenFOAM/driver command, an Allrun-family
     case script, a registered utility, or an installed OpenFOAM app"."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
-        case_root = _write_case(tutorials_root)
-        sentinel = tutorials_root / "PWNED"
+        cases_root = Path(temp_dir)
+        case_root = _write_case(cases_root)
+        sentinel = cases_root / "PWNED"
         doc_path = _tampered_document(
-            tutorials_root, tutorials_root / "run.json",
+            cases_root, cases_root / "run.json",
             steps=[_step("touch", args=[str(sentinel)])],
         )
         code, payload = _cli(["run", "--run-document", str(doc_path)])
@@ -379,11 +379,11 @@ def test_command_authorization_rejects_an_unauthorized_bare_command() -> None:
 def test_command_authorization_rejects_an_absolute_path_command() -> None:
     """SECURITY.md: "Absolute-path ... commands are rejected"."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
-        _write_case(tutorials_root)
-        sentinel = tutorials_root / "PWNED"
+        cases_root = Path(temp_dir)
+        _write_case(cases_root)
+        sentinel = cases_root / "PWNED"
         doc_path = _tampered_document(
-            tutorials_root, tutorials_root / "run.json",
+            cases_root, cases_root / "run.json",
             steps=[_step("/usr/bin/touch", args=[str(sentinel)])],
         )
         code, payload = _cli(["run", "--run-document", str(doc_path)])
@@ -402,15 +402,15 @@ def test_command_authorization_rejects_an_arbitrary_relative_script() -> None:
     """SECURITY.md: "arbitrary ./script commands are rejected" -- only
     ./Allrun-family case scripts may be given in path form."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
-        case_root = _write_case(tutorials_root)
-        sentinel = tutorials_root / "PWNED"
+        cases_root = Path(temp_dir)
+        case_root = _write_case(cases_root)
+        sentinel = cases_root / "PWNED"
         pwn = case_root / "pwn.sh"
         pwn.write_text(f"#!/bin/sh\ntouch {sentinel}\n")
         os.chmod(pwn, 0o755)
 
         doc_path = _tampered_document(
-            tutorials_root, tutorials_root / "run.json",
+            cases_root, cases_root / "run.json",
             steps=[_step("./pwn.sh")],
         )
         code, payload = _cli(["run", "--run-document", str(doc_path)])
@@ -421,7 +421,7 @@ def test_command_authorization_rejects_an_arbitrary_relative_script() -> None:
 
         # ...while the documented exception (./Allrun-family) is accepted.
         doc_path = _tampered_document(
-            tutorials_root, tutorials_root / "run_allrun.json",
+            cases_root, cases_root / "run_allrun.json",
             steps=[_step("./Allrun", id="run", produces=[])],
         )
         code, payload = _cli(["run", "--run-document", str(doc_path)])
@@ -450,7 +450,7 @@ def test_command_allowlist_has_one_owner_shared_by_both_producers() -> None:
 
             plan_report = strict_plan(
                 CASE_NAME,
-                overrides={"tutorials_root": str(planner_root)},
+                overrides={"cases_root": str(planner_root)},
                 driver_context=default_driver_context(),
             ).to_json()
         assert "unknown_workflow_command" in _plan_codes(plan_report), plan_report
@@ -476,12 +476,12 @@ def test_command_allowlist_has_one_owner_shared_by_both_producers() -> None:
 def test_case_directory_cannot_shadow_a_trusted_path_binary() -> None:
     """SECURITY.md: "No command shadowing"."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
+        cases_root = Path(temp_dir)
         case_root = _write_case(
-            tutorials_root,
+            cases_root,
             steps=[{"id": "mesh", "command": "blockMesh", "depends_on": []}],
         )
-        sentinel = tutorials_root / "PWNED"
+        sentinel = cases_root / "PWNED"
         shadow = case_root / "blockMesh"
         shadow.write_text(f"#!/bin/sh\ntouch {sentinel}\n")
         os.chmod(shadow, 0o755)
@@ -494,7 +494,7 @@ def test_case_directory_cannot_shadow_a_trusted_path_binary() -> None:
         # End-to-end: running the step never executes the case-local shadow,
         # whether or not a real blockMesh exists on this machine's PATH.
         doc_path = _hand_authored_document(
-            tutorials_root / "run.json",
+            cases_root / "run.json",
             case_root=case_root,
             steps=[_step("blockMesh", id="mesh")],
         )
@@ -565,12 +565,12 @@ def test_workflow_cwd_cannot_escape_case_root() -> None:
     either.
     """
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
-        case_root = _write_case(tutorials_root)
+        cases_root = Path(temp_dir)
+        case_root = _write_case(cases_root)
 
         # Layer 1 -- ingestion, via the real CLI run path.
         doc_path = _hand_authored_document(
-            tutorials_root / "run.json",
+            cases_root / "run.json",
             case_root=case_root,
             steps=[_step("Allrun", cwd="../..")],
         )
@@ -582,7 +582,7 @@ def test_workflow_cwd_cannot_escape_case_root() -> None:
         with pytest.raises(ValueError, match="escapes case root"):
             _resolve_case_cwd(case_root, "../..")
 
-        outside = tutorials_root / "outside"
+        outside = cases_root / "outside"
         outside.mkdir()
         (case_root / "escape").symlink_to(outside)
         with pytest.raises(ValueError, match="escapes case root"):
@@ -596,11 +596,11 @@ def test_workflow_cwd_cannot_escape_case_root() -> None:
 def test_steps_run_argv_style_so_arguments_are_not_shell_interpreted() -> None:
     """SECURITY.md: "Steps run argv-style (no shell)"."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
-        sentinel = tutorials_root / "PWNED"
+        cases_root = Path(temp_dir)
+        sentinel = cases_root / "PWNED"
         recorded = "args.txt"
         case_root = _write_case(
-            tutorials_root,
+            cases_root,
             allrun=(
                 "#!/bin/sh\n"
                 f"printf '%s' \"$1\" > {recorded}\n"
@@ -610,7 +610,7 @@ def test_steps_run_argv_style_so_arguments_are_not_shell_interpreted() -> None:
             ),
         )
         doc_path = _hand_authored_document(
-            tutorials_root / "run.json",
+            cases_root / "run.json",
             case_root=case_root,
             steps=[_step("Allrun", args=[f"; touch {sentinel}"])],
         )
@@ -637,10 +637,10 @@ def test_invalid_config_blocks_execution_at_ingestion() -> None:
     semantics) as its own regression gate.
     """
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
-        case_root = _write_case(tutorials_root)
+        cases_root = Path(temp_dir)
+        case_root = _write_case(cases_root)
         doc_path = _hand_authored_document(
-            tutorials_root / "run.json",
+            cases_root / "run.json",
             case_root=case_root,
             steps=[_step("Allrun")],
             config={
@@ -673,10 +673,10 @@ def test_non_mapping_config_phase_blocks_execution_at_ingestion() -> None:
     fix: the CLI must exit non-zero with a parseable JSON payload.
     """
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
-        case_root = _write_case(tutorials_root)
+        cases_root = Path(temp_dir)
+        case_root = _write_case(cases_root)
         doc_path = _hand_authored_document(
-            tutorials_root / "run.json",
+            cases_root / "run.json",
             case_root=case_root,
             steps=[_step("Allrun")],
             config={
@@ -716,11 +716,11 @@ def test_case_script_caveat_is_still_documented_and_still_true() -> None:
     assert "Arbitrary code inside an invoked `Allrun`" in text
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
+        cases_root = Path(temp_dir)
         # The Allrun writes *outside* its own case root: nothing confines it.
-        escaped = tutorials_root / "written-by-allrun.txt"
+        escaped = cases_root / "written-by-allrun.txt"
         _write_case(
-            tutorials_root,
+            cases_root,
             allrun=(
                 "#!/bin/sh\n"
                 f"printf 'allrun ran unsandboxed' > {escaped}\n"
@@ -729,8 +729,8 @@ def test_case_script_caveat_is_still_documented_and_still_true() -> None:
                 "exit 0\n"
             ),
         )
-        doc_path = tutorials_root / "run.json"
-        _plan_to_file(tutorials_root, doc_path)
+        doc_path = cases_root / "run.json"
+        _plan_to_file(cases_root, doc_path)
         code, payload = _cli(["run", "--run-document", str(doc_path)])
 
         assert code == 0, payload
@@ -791,15 +791,15 @@ def test_override_values_containing_a_coded_entry_are_rejected() -> None:
     <overrides.json>`, which routes through specs.apply_overrides.
     """
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
-        case_root = _write_case(tutorials_root)
+        cases_root = Path(temp_dir)
+        case_root = _write_case(cases_root)
         control_dict = case_root / "system" / "controlDict"
         control_dict.write_text("deltaT    0.001;\nendTime    1;\n")
-        doc_path = tutorials_root / "run.json"
-        _plan_to_file(tutorials_root, doc_path)
+        doc_path = cases_root / "run.json"
+        _plan_to_file(cases_root, doc_path)
 
         payload = '#codeStream { code #{ os << 0.001; #}; }'
-        overrides = tutorials_root / "ov.json"
+        overrides = cases_root / "ov.json"
         overrides.write_text(json.dumps([{"driver_path": "deltaT", "value": payload}]))
 
         code, report = _cli([

@@ -199,8 +199,8 @@ method scotch;
 """
 
 
-def _write_case(tutorials_root: Path, *, case_dir_name: str = "manufacturedSolutions/bidomain") -> Path:
-    case_root = tutorials_root / case_dir_name
+def _write_case(cases_root: Path, *, case_dir_name: str = "manufacturedSolutions/bidomain") -> Path:
+    case_root = cases_root / case_dir_name
     (case_root / "constant").mkdir(parents=True)
     (case_root / "system").mkdir(parents=True)
     (case_root / "setup" / "studies" / "tetConvergence").mkdir(parents=True)
@@ -220,7 +220,7 @@ def _write_case(tutorials_root: Path, *, case_dir_name: str = "manufacturedSolut
 
 def _call_make_spec(tmp_path, **overrides):
     kwargs = {
-        "tutorials_root": tmp_path,
+        "cases_root": tmp_path,
         "case_dir_name": "manufacturedSolutions/bidomain",
         "dimensions": ["3D"],
         "number_cells": [10],

@@ -205,8 +205,8 @@ def test_cli_run_strict_refuses_environment_errors_before_execution(monkeypatch)
 
 def test_strict_plan_fails_on_unknown_workflow_command() -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
-        case_root = tutorials_root / "badCase"
+        cases_root = Path(temp_dir)
+        case_root = cases_root / "badCase"
         (case_root / "constant").mkdir(parents=True)
         (case_root / "system").mkdir()
         (case_root / "constant" / "physicsProperties").write_text("type electroModel;\n")
@@ -231,7 +231,7 @@ def test_strict_plan_fails_on_unknown_workflow_command() -> None:
         ):
             report = strict_plan(
                 "badCase",
-                overrides={"tutorials_root": str(tutorials_root)}, driver_context=_CTX,)
+                overrides={"cases_root": str(cases_root)}, driver_context=_CTX,)
 
     payload = report.to_json()
     assert payload["status"] == "failed"
@@ -243,8 +243,8 @@ def test_strict_plan_fails_on_unknown_workflow_command() -> None:
 
 def test_strict_plan_fails_on_unknown_workflow_dependency() -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
-        case_root = tutorials_root / "badDependency"
+        cases_root = Path(temp_dir)
+        case_root = cases_root / "badDependency"
         (case_root / "constant").mkdir(parents=True)
         (case_root / "system").mkdir()
         (case_root / "constant" / "physicsProperties").write_text("type electroModel;\n")
@@ -269,7 +269,7 @@ def test_strict_plan_fails_on_unknown_workflow_dependency() -> None:
         ):
             report = strict_plan(
                 "badDependency",
-                overrides={"tutorials_root": str(tutorials_root)}, driver_context=_CTX,)
+                overrides={"cases_root": str(cases_root)}, driver_context=_CTX,)
 
     payload = report.to_json()
     assert payload["status"] == "failed"
@@ -290,8 +290,8 @@ def test_strict_plan_fails_on_unknown_workflow_dependency() -> None:
 
 def test_strict_plan_fails_when_artifact_prediction_is_empty() -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
-        tutorials_root = Path(temp_dir)
-        case_root = tutorials_root / "missingArtifacts"
+        cases_root = Path(temp_dir)
+        case_root = cases_root / "missingArtifacts"
         (case_root / "constant").mkdir(parents=True)
         (case_root / "system").mkdir()
         (case_root / "constant" / "physicsProperties").write_text("type electroModel;\n")
@@ -307,7 +307,7 @@ def test_strict_plan_fails_when_artifact_prediction_is_empty() -> None:
 
         report = strict_plan(
             "missingArtifacts",
-            overrides={"tutorials_root": str(tutorials_root)}, driver_context=_CTX,)
+            overrides={"cases_root": str(cases_root)}, driver_context=_CTX,)
 
     payload = report.to_json()
     assert payload["status"] == "failed"
