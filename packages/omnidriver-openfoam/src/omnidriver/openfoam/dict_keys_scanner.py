@@ -52,8 +52,13 @@ _LINE_COMMENT = re.compile(r"//[^\n]*")
 
 
 def _strip_comments(text: str) -> str:
-    text = _BLOCK_COMMENT.sub("", text)
-    text = _LINE_COMMENT.sub("", text)
+    # Preserve offsets/lines so a source reference points to the original
+    # file, and a comment cannot concatenate two otherwise separate tokens.
+    def mask(match: re.Match[str]) -> str:
+        return "".join(c if c in "\r\n" else " " for c in match.group())
+
+    text = _BLOCK_COMMENT.sub(mask, text)
+    text = _LINE_COMMENT.sub(mask, text)
     return text
 
 

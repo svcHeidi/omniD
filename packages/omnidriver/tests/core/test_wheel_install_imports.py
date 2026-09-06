@@ -62,6 +62,79 @@ if not RUN_CASE_SCRIPT_RELPATH.is_file():
     print(f"bundled data file missing from the wheel: {RUN_CASE_SCRIPT_RELPATH}")
     sys.exit(1)
 print("bundled data files present")
+
+# A RunDocument can carry a previous workflow state instead of relying on an
+# adjacent workflow_state.json. That state must be checked as resume evidence,
+# not treated as an unconditional completed result. This is deliberately a
+# core-only, shell-only workflow: it exercises the public CLI from the wheel
+# without requiring an OpenFOAM or cardiacFOAM installation.
+import json, os, subprocess, tempfile
+from pathlib import Path
+from omnidriver.core.runtime.workflow_state import initial_workflow_state
+
+with tempfile.TemporaryDirectory() as raw:
+    root = Path(raw)
+    plugin_path = Path.cwd() / "wheel_neutral_plugin.py"
+    plugin_path.write_text(
+        "import os\\n"
+        "from omnidriver.core.generic_plugin import GenericOpenFOAMPlugin\\n\\n"
+        "class WheelNeutralPlugin(GenericOpenFOAMPlugin):\\n"
+        "    def get_selected_start_time(self, case_root, resolved_case):\\n"
+        "        return '0'\\n\\n"
+        "    def get_environment_diagnostics(self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None):\\n"
+        "        return ()\\n\\n"
+        "    def get_loaded_environment(self, *, explicit_bashrc=None, driver_context=None):\\n"
+        "        return dict(os.environ)\\n"
+    )
+    case_root = root / "case"
+    (case_root / "system").mkdir(parents=True)
+    (case_root / "constant").mkdir()
+    control_dict = case_root / "system" / "controlDict"
+    control_dict.write_text("value 1;\\n")
+    allrun = case_root / "Allrun"
+    allrun.write_text("#!/bin/sh\\nexit 0\\n")
+    os.chmod(allrun, 0o755)
+    dag = {
+        "schema_version": "1",
+        "step_status_values": ["pending", "running", "completed", "failed", "skipped"],
+        "steps": [{
+            "id": "run", "command": "Allrun", "args": [], "cwd": ".",
+            "depends_on": [], "produces": [], "consumes": [],
+            "retry_policy": {"max_attempts": 1}, "command_display": "Allrun",
+        }],
+    }
+    initial = initial_workflow_state(dag)
+    document = {
+        "version": "3", "id": "wheel-resume", "name": "wheel-resume",
+        "createdAt": "", "lastModified": "", "status": "planned", "config": {},
+        "resolvedEntry": None, "workflowDag": dag, "workflowState": initial.to_json(),
+        "launch": {"caseRoot": str(case_root), "outputDir": "output"},
+        "expectedArtifacts": [], "validation": {},
+        "terminalStatusValues": ["completed", "failed"],
+    }
+    document_path = root / "run.json"
+    document_path.write_text(json.dumps(document))
+    command = [sys.executable, "-m", "omnidriver", "run",
+               "--plugin", "wheel_neutral_plugin:WheelNeutralPlugin",
+               "--run-document", str(document_path)]
+    first = subprocess.run(command, capture_output=True, text=True)
+    if first.returncode:
+        print(first.stdout + first.stderr)
+        sys.exit(first.returncode)
+    checkpoint = Path(json.loads(first.stdout)["workflow_state_path"])
+    document["workflowState"] = json.loads(checkpoint.read_text())
+    document_path.write_text(json.dumps(document))
+    checkpoint.unlink()
+    control_dict.write_text("value 2;\\n")
+    resumed = subprocess.run(command, capture_output=True, text=True)
+    if resumed.returncode != 1:
+        print(resumed.stdout + resumed.stderr)
+        sys.exit(1)
+    diagnostics = json.loads(resumed.stdout).get("diagnostics", [])
+    if "workflow_state_resume_rejected" not in {item.get("code") for item in diagnostics}:
+        print(resumed.stdout + resumed.stderr)
+        sys.exit(1)
+print("embedded RunDocument resume evidence rejected after input drift")
 """
 
 

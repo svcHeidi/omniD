@@ -1,6 +1,9 @@
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+import pytest
 
 from omnidriver.core.runtime.workflow_orchestrator import (
     backoff_delay,
@@ -10,6 +13,7 @@ from omnidriver.core.runtime.workflow_state import (
     WorkflowRunState,
     WorkflowStepState,
     replace_step_state,
+    initial_workflow_state,
 )
 
 
@@ -233,3 +237,79 @@ def test_persisted_state_is_resumable_between_retries(tmp_path):
     assert outcome.state.status == "completed"
     assert captured["during_backoff"]["status"] == "pending"
     assert captured["during_backoff"]["current_step_id"] == "solve"
+
+
+@pytest.mark.parametrize("budget, executed", [(0, 0), (1, 1), (2, 2), (None, 2)])
+def test_total_budget_is_checked_before_every_successful_dispatch(tmp_path, budget, executed):
+    dag = {"steps": [
+        {
+            "id": name, "command": sys.executable,
+            "args": ["-c", f"from pathlib import Path; Path('{name}').write_text('ran')"],
+            "cwd": ".", "depends_on": [] if index == 0 else ["first"],
+        }
+        for index, name in enumerate(("first", "second"))
+    ]}
+    state = initial_workflow_state(dag)
+    outcome = run_workflow(
+        dag, state, case_root=tmp_path, output_dir=tmp_path / "output",
+        max_total_attempts=budget,
+    )
+    assert (tmp_path / "first").exists() is (executed >= 1)
+    assert (tmp_path / "second").exists() is (executed >= 2)
+    assert sum(step.attempt for step in outcome.state.steps) == executed
+    assert outcome.state.status == ("completed" if executed == 2 else "pending")
+    saved = json.loads((tmp_path / "output" / "workflow_state.json").read_text())
+    assert saved == outcome.state.to_json()
+
+
+def test_explicit_context_reaches_each_runner_attempt(tmp_path):
+    context = object()
+    delegate, calls = _make_runner([
+        ("failed", 1, ["workflow_step_timeout"]),
+        ("completed", 0, []),
+    ])
+    received = []
+
+    def runner(*args, driver_context, **kwargs):
+        received.append(driver_context)
+        return delegate(*args, **kwargs)
+
+    outcome = run_workflow(
+        _dag(retry_policy={"max_attempts": 2}), _initial_state(),
+        case_root=tmp_path, output_dir=tmp_path, runner=runner,
+        driver_context=context, sleep=lambda _: None,
+    )
+    assert outcome.state.status == "completed"
+    assert calls["n"] == 2
+    assert all(value is context for value in received)
+
+
+def test_negative_budget_rejected_before_dispatch(tmp_path):
+    def runner(*args, **kwargs):
+        pytest.fail("negative budgets must not dispatch")
+
+    with pytest.raises(ValueError, match="non-negative"):
+        run_workflow(
+            _dag(), _initial_state(), case_root=tmp_path, output_dir=tmp_path,
+            runner=runner, max_total_attempts=-1,
+        )
+    assert not (tmp_path / "workflow_state.json").exists()
+
+
+def test_resumed_invocation_gets_a_fresh_total_budget(tmp_path):
+    dag = {"steps": [
+        {"id": name, "command": sys.executable, "args": ["-c", "pass"],
+         "cwd": ".", "depends_on": [] if name == "first" else ["first"]}
+        for name in ("first", "second")
+    ]}
+    first = run_workflow(
+        dag, initial_workflow_state(dag), case_root=tmp_path,
+        output_dir=tmp_path, max_total_attempts=1,
+    )
+    assert first.state.status == "pending"
+    resumed = run_workflow(
+        dag, first.state, case_root=tmp_path, output_dir=tmp_path,
+        max_total_attempts=1,
+    )
+    assert resumed.state.status == "completed"
+    assert [step.attempt for step in resumed.state.steps] == [1, 1]

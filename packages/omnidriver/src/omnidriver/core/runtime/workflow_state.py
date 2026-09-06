@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -58,15 +60,28 @@ class WorkflowRunState:
     completed_steps: tuple[str, ...]
     failed_step_id: str | None
     steps: tuple[WorkflowStepState, ...] = field(default_factory=tuple)
+    workflow_digest: str | None = None
+    resume_snapshot: dict[str, Any] | None = None
 
     def to_json(self) -> dict[str, Any]:
-        return {
+        payload = {
             "status": self.status,
             "current_step_id": self.current_step_id,
             "completed_steps": list(self.completed_steps),
             "failed_step_id": self.failed_step_id,
             "steps": [step.to_json() for step in self.steps],
         }
+        if self.workflow_digest is not None:
+            payload["workflow_digest"] = self.workflow_digest
+        if self.resume_snapshot is not None:
+            payload["resume_snapshot"] = self.resume_snapshot
+        return payload
+
+
+def workflow_digest(workflow_dag: dict[str, Any]) -> str:
+    """Identify the whole normalized DAG, including dependencies and policies."""
+    encoded = json.dumps(workflow_dag, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return "sha256:" + hashlib.sha256(encoded.encode()).hexdigest()
 
 
 def workflow_state_from_json(data: dict[str, Any]) -> WorkflowRunState:
@@ -79,6 +94,8 @@ def workflow_state_from_json(data: dict[str, Any]) -> WorkflowRunState:
             workflow_step_state_from_json(step)
             for step in data.get("steps", ())
         ),
+        workflow_digest=data.get("workflow_digest"),
+        resume_snapshot=data.get("resume_snapshot"),
     )
 
 
@@ -100,6 +117,8 @@ def replace_step_state(
             updated_step if step.step_id == updated_step.step_id else step
             for step in state.steps
         ),
+        workflow_digest=state.workflow_digest,
+        resume_snapshot=state.resume_snapshot,
     )
 
 
@@ -136,4 +155,5 @@ def initial_workflow_state(workflow_dag: dict[str, Any] | None) -> WorkflowRunSt
         completed_steps=(),
         failed_step_id=None,
         steps=tuple(step_states),
+        workflow_digest=workflow_digest(workflow_dag),
     )

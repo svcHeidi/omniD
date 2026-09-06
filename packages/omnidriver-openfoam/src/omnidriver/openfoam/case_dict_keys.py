@@ -99,8 +99,8 @@ def case_dict_key_diagnostics(
     names cannot tell them apart, and would warn on every case that names an
     ECG domain.
 
-    Degrades to silence on any parse or IO failure: a parser limitation must
-    never surface as a spurious key warning. Honors ``SKIP_ENV_VAR``.
+    Reports unavailable inspection on parse or IO failure, without emitting
+    potentially spurious key warnings for that file. Honors ``SKIP_ENV_VAR``.
     """
     if os.environ.get(SKIP_ENV_VAR):
         return ()
@@ -111,14 +111,23 @@ def case_dict_key_diagnostics(
 
     for relpath in dict_relpaths:
         path = root / relpath
-        if not path.is_file():
-            continue
         try:
+            if not path.is_file():
+                continue
             from foamlib import FoamFile
 
             parsed = FoamFile(path)
             unmatched = _unmatched(parsed, known)
-        except Exception:
+        except Exception as exc:
+            diagnostics.append(
+                diagnostic(
+                    "warning",
+                    "case_dict_inspection_unavailable",
+                    f"{relpath}: dictionary key inspection unavailable: "
+                    f"{type(exc).__name__}: {exc}",
+                    source=relpath,
+                )
+            )
             continue
         for trail in unmatched:
             where = ".".join(trail)
@@ -152,10 +161,7 @@ def _unmatched(
     """
     found: list[tuple[str, ...]] = []
     for key in node:
-        try:
-            value = node[key]
-        except Exception:
-            continue
+        value = node[key]
         full = trail + (str(key),)
         if not _matches(_scope_relative(full), known) and not str(key).endswith(
             _RTS_COEFFS_SUFFIX

@@ -162,7 +162,7 @@ def load_openfoam_environment(
 
     script = (
         'set +e +u\n'
-        'source "$_DRIVER_OPENFOAM_BASHRC" >/dev/null\n'
+        'source "$_DRIVER_OPENFOAM_BASHRC" >/dev/null || exit $?\n'
         'export -p > "$_DRIVER_ENV_FILE"'
     )
     env_file = tempfile.NamedTemporaryFile(delete=False)

@@ -16,7 +16,7 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Mapping
 
 from .models import DataArtifact, data_artifact_from_json
 # _case_is_runnable is a private helper reused as-is: the plan treats this as
@@ -115,6 +115,7 @@ def build_execution_inputs(
     *,
     utility_produces: dict[str, tuple[str, ...]] | None = None,
     driver_context: "DriverContext",
+    execution_env: Mapping[str, str] | None = None,
 ) -> tuple[RunDocumentExecutionInputs | None, tuple[dict[str, Any], ...]]:
     """Adapt ``run_doc`` into executor inputs.
 
@@ -305,6 +306,36 @@ def build_execution_inputs(
         # Computed regardless of earlier errors so all diagnostics are gathered
         # before the single blocked check below.
         workflow_state = initial_workflow_state(dag) if dag is not None else None
+
+    # An embedded non-initial state is resumable evidence just like the
+    # adjacent workflow_state.json checkpoint.  Without this gate a completed
+    # state copied into a RunDocument could suppress execution after its case
+    # inputs changed, because only on-disk checkpoints reached the CLI resume
+    # validation path.  validate_resume deliberately permits a fresh,
+    # zero-attempt pending state without a snapshot.
+    if (
+        run_doc.workflowState is not None
+        and workflow_state is not None
+        and dag is not None
+        and resolved_case_root is not None
+    ):
+        from .resume import validate_resume
+
+        try:
+            validate_resume(
+                workflow_state,
+                dag,
+                case_root=resolved_case_root,
+                driver_context=driver_context,
+                env=execution_env,
+            )
+        except Exception as exc:
+            diagnostics.append(_diag(
+                "error",
+                "workflow_state_resume_rejected",
+                f"Run document workflowState cannot be resumed: {exc}",
+                "workflowState",
+            ))
 
     blocked = (
         any(d["level"] == "error" for d in diagnostics)

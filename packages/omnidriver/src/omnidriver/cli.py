@@ -5,6 +5,7 @@ import json
 import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .core.runtime.failure_context import build_failure_context
 from .core.runtime.launch_readiness import is_execution_successful, is_launchable
@@ -32,6 +33,10 @@ from .core.runtime.run_document_exec import build_execution_inputs, load_run_doc
 from .core.runtime.fresh import ensure_fresh_output_dir
 
 
+if TYPE_CHECKING:
+    from .core.plugin_interface import DriverContext
+
+
 @dataclass(frozen=True)
 class _ExecutionContext:
     entry_label: str
@@ -46,7 +51,7 @@ class _ExecutionContext:
     source_path: str | None = None
     # Carried so _dispatch_context can reach plugin capabilities without
     # importing a sibling package. Both construction sites already hold one.
-    driver_context: object | None = None
+    driver_context: DriverContext | None = None
 
 
 def _step_payload(
@@ -139,7 +144,7 @@ def _execute_step(
     tail_lines: int,
     execution_env: dict[str, str] | None = None,
     apply_overrides_path: str | None = None,
-    driver_context: object | None = None,
+    driver_context: DriverContext | None = None,
 ) -> int:
     """Run one workflow step, print the JSON payload, return the exit code.
 
@@ -151,6 +156,10 @@ def _execute_step(
     if state_path.exists():
         try:
             workflow_state = workflow_state_from_json(json.loads(state_path.read_text()))
+            from .core.runtime.resume import validate_resume
+
+            validate_resume(workflow_state, workflow_dag, case_root=case_root,
+                            driver_context=driver_context, env=execution_env)
         except Exception as exc:
             print(json.dumps({
                 "status": "failed",
@@ -261,6 +270,7 @@ def _execute_run(
     setup_root: Path | None = None,
     execution_env: dict[str, str] | None = None,
     max_total_attempts: int | None = None,
+    driver_context: DriverContext | None = None,
 ) -> int:
     """Run a workflow to completion, print the JSON payload, return the exit code.
 
@@ -272,6 +282,10 @@ def _execute_run(
     if state_path.exists():
         try:
             workflow_state = workflow_state_from_json(json.loads(state_path.read_text()))
+            from .core.runtime.resume import validate_resume
+
+            validate_resume(workflow_state, workflow_dag, case_root=case_root,
+                            driver_context=driver_context, env=execution_env)
         except Exception as exc:
             print(json.dumps({
                 "status": "failed",
@@ -299,6 +313,7 @@ def _execute_run(
             state_path=state_path,
             env=execution_env,
             max_total_attempts=max_total_attempts,
+            driver_context=driver_context,
         )
     except Exception as exc:
         try:
@@ -326,6 +341,8 @@ def _execute_run(
     }
     if workflow_state.status == "pending" and workflow_state.current_step_id is None:
         payload["error"] = "workflow_state is pending but has no current_step_id"
+    elif workflow_state.status == "pending" and max_total_attempts is not None:
+        payload["error"] = "maximum total step attempts reached; workflow remains incomplete"
     payload["artifact_reconciliation"] = _reconciliation_payload(
         case_root, expected_artifacts
     )
@@ -379,10 +396,15 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
                 "selected_plugin": selected,
             }, indent=2))
             return None
+    execution_env = driver_context.capabilities.environment_preflight.load(
+        explicit_bashrc=args.environment_bashrc,
+        driver_context=driver_context,
+    )
     inputs, diagnostics = build_execution_inputs(
         run_doc,
         utility_produces=_utility_produces_by_command(driver_context),
         driver_context=driver_context,
+        execution_env=execution_env,
     )
     if inputs is None:
         print(json.dumps({
@@ -391,10 +413,6 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
             "diagnostics": list(diagnostics),
         }, indent=2))
         return None
-    execution_env = driver_context.capabilities.environment_preflight.load(
-        explicit_bashrc=args.environment_bashrc,
-        driver_context=driver_context,
-    )
     setup_root_raw = (run_doc.launch or {}).get("setupRoot")
     return _ExecutionContext(
         entry_label=run_doc.name,
@@ -566,6 +584,7 @@ def _dispatch_context(args, context: _ExecutionContext) -> int:
         tail_lines=args.tail_lines,
         execution_env=context.execution_env,
         max_total_attempts=args.max_total_attempts,
+        driver_context=context.driver_context,
     )
 
 

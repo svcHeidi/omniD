@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Any, Callable, Iterable
@@ -166,6 +167,8 @@ def validate_overrides(overrides: Any, *, driver_context: "DriverContext") -> No
                 f"each override must be an object with 'driver_path' and 'value' (got {ov!r})"
             )
         dp = ov["driver_path"]
+        if not isinstance(dp, str) or not dp:
+            raise OverrideError("override driver_path must be a non-empty string")
         if ":" in dp:
             file_path, _, entry_path = dp.partition(":")
             if not _is_safe_system_path(file_path):
@@ -235,11 +238,13 @@ def apply_overrides(
     case_root: Path,
     driver_context: "DriverContext",
 ) -> None:
-    """Apply validated overrides to the case dicts.
+    """Apply overrides with in-process rollback of every declared target file.
 
-    Raises OverrideError on any mutator failure (caught at the CLI boundary). Not
-    transactional: a mid-list failure can leave earlier overrides applied.
+    Validate routing before any writes. A mutator failure restores the original
+    dictionary bytes; this is not a crash-recovery or concurrent-writer lock.
+    Plugin regenerators must restrict writes to their declared file_relpath.
     """
+    validate_overrides(overrides, driver_context=driver_context)
     scope_by_token = {
         scope.token: scope
         for scope in driver_context.capabilities.override_scopes.scopes()
@@ -249,6 +254,54 @@ def apply_overrides(
         for regen_scope in driver_context.capabilities.dict_regeneration.scopes()
         for key in regen_scope.selector_keys
     }
+    paths: set[Path] = set()
+    for ov in overrides:
+        dp = ov["driver_path"]
+        if ":" in dp:
+            relpath = dp.partition(":")[0]
+        elif dp in regen_scope_by_key:
+            relpath = regen_scope_by_key[dp].file_relpath
+        elif dp.startswith("$"):
+            relpath = scope_by_token[_scope_token(dp)].file_relpath
+        else:
+            relpath = "system/controlDict"
+        target = (case_root / relpath).resolve()
+        if not target.is_relative_to(case_root.resolve()):
+            raise OverrideError(f"override target is outside the case: {relpath}")
+        paths.add(target)
+    with _restore_on_failure(paths):
+        _apply_validated_overrides(overrides, case_root, scope_by_token, regen_scope_by_key)
+
+
+@contextmanager
+def _restore_on_failure(paths: set[Path]):
+    try:
+        originals = {path: path.read_bytes() if path.exists() else None for path in paths}
+    except OSError as exc:
+        raise OverrideError(f"cannot snapshot override targets: {exc}") from exc
+    try:
+        yield
+    except BaseException as error:
+        failures = []
+        for path, original in originals.items():
+            try:
+                if original is None:
+                    path.unlink(missing_ok=True)
+                elif not path.exists() or path.read_bytes() != original:
+                    path.write_bytes(original)
+            except OSError as exc:
+                failures.append(f"{path}: {exc}")
+        if failures:
+            raise OverrideError(f"override failed ({error}); rollback failed: {'; '.join(failures)}") from error
+        raise
+
+
+def _apply_validated_overrides(
+    overrides: list[dict[str, Any]],
+    case_root: Path,
+    scope_by_token: dict[str, OverrideScope],
+    regen_scope_by_key: dict[str, RegenerationScope],
+) -> None:
     for ov in overrides:
         dp, value = ov["driver_path"], ov["value"]
         try:

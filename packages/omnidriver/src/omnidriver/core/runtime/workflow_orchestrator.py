@@ -3,11 +3,15 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from .failure_classification import classify_failure
 from .workflow_runner import _atomic_write_json, _step_by_id, _step_state_by_id, run_workflow_step
 from .workflow_state import WorkflowRunState, WorkflowStepState, replace_step_state
+
+
+if TYPE_CHECKING:
+    from ..plugin_interface import DriverContext
 
 
 @dataclass(frozen=True)
@@ -43,6 +47,7 @@ def run_workflow(
     sleep: Callable[[float], None] = time.sleep,
     state_path: Path | None = None,
     env: dict[str, str] | None = None,
+    driver_context: DriverContext | None = None,
 ) -> WorkflowRunOutcome:
     """Run pending steps to completion, retrying retryable failures.
 
@@ -51,17 +56,26 @@ def run_workflow(
     immediately before the re-run. This path performs no remediation.
 
     ``max_total_attempts`` caps the number of step executions across the whole
-    run (retry-storm ceiling). ``None`` disables the ceiling, leaving only the
+    invocation, including successes and retries; resumed calls get a fresh budget.
+    Zero executes no steps. ``None`` disables the ceiling, leaving only the
     per-step ``max_attempts`` bound in force.
     """
+    if max_total_attempts is not None and max_total_attempts < 0:
+        raise ValueError("max_total_attempts must be non-negative")
     resolved_state_path = state_path or (output_dir / "workflow_state.json")
     log_dir = output_dir / "workflow_logs"
     summaries: dict[str, dict[str, Any]] = {}
     total_attempts = 0
 
     while workflow_state.current_step_id is not None and workflow_state.status == "pending":
+        if max_total_attempts is not None and total_attempts >= max_total_attempts:
+            # A zero budget must never dispatch, and a successful step must not
+            # bypass the ceiling when another step becomes ready.
+            _atomic_write_json(resolved_state_path, workflow_state.to_json())
+            break
         step_id = workflow_state.current_step_id
         total_attempts += 1
+        context_kwargs = {} if driver_context is None else {"driver_context": driver_context}
         result = runner(
             workflow_dag,
             workflow_state,
@@ -71,6 +85,7 @@ def run_workflow(
             state_path=resolved_state_path,
             expected_artifacts=expected_artifacts,
             env=env,
+            **context_kwargs,
         )
         workflow_state = result.state
         step_state = _step_state_by_id(workflow_state, step_id)

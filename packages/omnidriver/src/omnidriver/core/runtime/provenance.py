@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
-SCHEMA_VERSION = "2.0-sha256-256mib"
+SCHEMA_VERSION = "2.1-sha256-256mib"
 """Encodes the hashing policy (algorithm + degrade threshold), not just the
 field layout of the model. Bump this whenever CONTENT_HASH_MAX_BYTES or the
 hashing algorithm changes -- a snapshot computed under a different policy is
@@ -197,9 +197,11 @@ def component_for_path(
 
 
 def _component_digest_payload(component: ProvenanceComponent) -> dict[str, Any]:
-    """Fields that participate in identity -- everything except ``mtime_ns``,
-    which is diagnostic only (see module docstring: a checkout or rsync
-    changes mtime without changing content)."""
+    """Content identity ignores mtime; weak metadata identity must include it.
+
+    Metadata remains insufficient evidence of unchanged bytes even when size
+    and timestamp agree. It must not produce a complete content snapshot.
+    """
     return {
         "kind": component.kind,
         "path": component.path,
@@ -209,6 +211,7 @@ def _component_digest_payload(component: ProvenanceComponent) -> dict[str, Any]:
         "strength": component.strength,
         "digest": component.digest,
         "size": component.size,
+        "mtime_ns": component.mtime_ns if component.strength == "metadata" else None,
         "link_target": component.link_target,
     }
 
@@ -235,7 +238,7 @@ def snapshot_from_components(
     construction order.
     """
     components = tuple(components)
-    is_complete = all(component.strength != "unavailable" for component in components)
+    is_complete = all(component.strength == "content" for component in components)
     aggregate_digest = _compute_aggregate_digest(components, workflow_digest, plugin_identity)
     return ProvenanceSnapshot(
         schema_version=SCHEMA_VERSION,
@@ -291,8 +294,8 @@ def compare(
     for the non-file scalars so the aggregate digest can never move without
     ``compare()`` reporting something an agent can act on.
 
-    File components are matched by ``(kind, path)``. Identity ignores raw
-    mtime (see module docstring). Order follows ``after.components`` for
+    File components are matched by ``(kind, path)``. Content identity ignores
+    mtime; metadata identity includes it. Order follows ``after.components`` for
     added/modified, then ``before.components`` for removed, then the two
     synthetic scalar diffs -- source order throughout, never sorted.
     """

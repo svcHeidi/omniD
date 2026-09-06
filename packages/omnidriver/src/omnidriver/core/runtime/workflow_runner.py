@@ -5,7 +5,7 @@ import os
 import re
 import shlex
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
@@ -171,6 +171,39 @@ def _resolve_case_cwd(case_root: Path, cwd: str) -> Path:
     return resolved
 
 
+def _artifact_snapshot(
+    case_root: Path, artifact: DataArtifact, driver_context: Any | None,
+) -> dict[Path, tuple[int, int, int, int]]:
+    """Record matched outputs and directory contents for step attribution.
+
+    Stat changes establish filesystem activity only, not scientific validity.
+    Time-indexed contracts accept both serial and decomposed locations.
+    """
+    import glob
+
+    expanded = artifact.path_pattern.format(case_id=case_root.name, time="*")
+    patterns = [str(case_root / expanded)]
+    if artifact.time_indexed:
+        prefix = decomposition_dirname_prefix(driver_context)
+        patterns.append(str(case_root / f"{prefix}*" / expanded))
+    snapshot = {}
+    for pattern in patterns:
+        for match in glob.glob(pattern):
+            path = Path(match)
+            paths = [path]
+            if path.is_dir():
+                paths.extend(path.rglob("*"))
+            for entry in paths:
+                try:
+                    stat = entry.stat()
+                except FileNotFoundError:
+                    continue
+                snapshot[entry] = (
+                    stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size, stat.st_ino,
+                )
+    return snapshot
+
+
 def run_workflow_step(
     workflow_dag: dict[str, Any],
     workflow_state: WorkflowRunState,
@@ -188,6 +221,18 @@ def run_workflow_step(
     This intentionally does not implement resume, retry loops, or multi-step
     orchestration. It only performs one subprocess transition and records logs.
     """
+    from .workflow_state import workflow_digest
+
+    digest = workflow_digest(workflow_dag)
+    if workflow_state.workflow_digest is not None and workflow_state.workflow_digest != digest:
+        raise ValueError("Workflow state belongs to a different DAG")
+    workflow_state = replace(workflow_state, workflow_digest=digest)
+    if driver_context is not None:
+        from .resume import checkpoint_snapshot
+
+        workflow_state = replace(workflow_state, resume_snapshot=checkpoint_snapshot(
+            case_root, workflow_dag, driver_context, env
+        ))
     step = _step_by_id(workflow_dag, step_id)
     previous_step_state = _step_state_by_id(workflow_state, step_id)
     if previous_step_state.status not in {"pending", "failed"}:
@@ -242,6 +287,15 @@ def run_workflow_step(
     if state_path is not None:
         _atomic_write_json(Path(state_path), running_state.to_json())
 
+    required_artifacts = tuple(
+        artifact for artifact in expected_artifacts
+        if not artifact.optional and artifact.artifact_id in step.get("produces", ())
+    )
+    artifacts_before = tuple(
+        _artifact_snapshot(Path(case_root), artifact, driver_context)
+        for artifact in required_artifacts
+    )
+
     exit_code: int | None = None
     diagnostics: tuple[dict[str, Any], ...] = ()
     try:
@@ -275,38 +329,28 @@ def run_workflow_step(
     status = "completed" if exit_code == 0 and not diagnostics else "failed"
     produced_artifacts = tuple(str(item) for item in step.get("produces", ())) if status == "completed" else ()
 
-    if status == "completed" and produced_artifacts:
-        import glob
+    if status == "completed" and required_artifacts:
         missing_artifacts = []
-        for artifact_id in produced_artifacts:
-            for artifact in expected_artifacts:
-                if artifact.artifact_id == artifact_id:
-                    if artifact.optional:
-                        continue
-                    expanded = artifact.path_pattern.format(case_id=case_root.name, time="*")
-                    # Serial/reconstructed outputs live at caseRoot/<time>/<field>; a
-                    # parallel run that has not yet been reconstructed writes
-                    # caseRoot/<decomposition-prefix><N>/<time>/<field> (OpenFOAM:
-                    # processor<N>). Accept either for time-indexed artifacts so a
-                    # decomposed run does not false-fail. postProcessing/config
-                    # artifacts stay caseRoot-relative.
-                    candidate_patterns = [str(case_root / expanded)]
-                    if artifact.time_indexed:
-                        decomposition_prefix = decomposition_dirname_prefix(driver_context)
-                        candidate_patterns.append(
-                            str(case_root / f"{decomposition_prefix}*" / expanded)
-                        )
-                    if not any(glob.glob(p) for p in candidate_patterns):
-                        missing_artifacts.append(artifact_id)
-        if missing_artifacts:
-            status = "failed"
-            produced_artifacts = ()
-            diagnostics = (*diagnostics, {
-                "level": "error",
-                "code": "missing_artifacts",
-                "message": f"Step {step_id!r} completed successfully but missing expected artifacts: {', '.join(missing_artifacts)}",
-                "field": step_id,
-            })
+        stale_artifacts = []
+        for artifact, before in zip(required_artifacts, artifacts_before):
+            after = _artifact_snapshot(Path(case_root), artifact, driver_context)
+            if not after:
+                missing_artifacts.append(artifact.artifact_id)
+            elif not any(before.get(path) != signature for path, signature in after.items()):
+                stale_artifacts.append(artifact.artifact_id)
+        for code, artifact_ids, detail in (
+            ("missing_artifacts", missing_artifacts, "missing expected artifacts"),
+            ("stale_artifacts", stale_artifacts, "unchanged expected artifacts"),
+        ):
+            if artifact_ids:
+                status = "failed"
+                produced_artifacts = ()
+                diagnostics = (*diagnostics, {
+                    "level": "error",
+                    "code": code,
+                    "message": f"Step {step_id!r} exited successfully but has {detail}: {', '.join(artifact_ids)}",
+                    "field": step_id,
+                })
 
     final_step = WorkflowStepState(
         step_id=step_id,
@@ -350,6 +394,10 @@ def run_workflow_step(
     else:
         final_state = provisional_state
 
+    if driver_context is not None:
+        final_state = replace(final_state, resume_snapshot=checkpoint_snapshot(
+            case_root, workflow_dag, driver_context, env
+        ))
     if state_path is not None:
         _atomic_write_json(Path(state_path), final_state.to_json())
 

@@ -33,7 +33,62 @@ def _format_value(value: Any) -> str:
 
 
 def _strip_inline_comment(line: str) -> str:
-    return line.split("//", 1)[0]
+    # Whole-file block comments are handled before line scanning. Preserve
+    # comment-like text inside strings (for example a URL).
+    quoted = False
+    escaped = False
+    for index, char in enumerate(line):
+        if escaped:
+            escaped = False
+        elif quoted and char == "\\":
+            escaped = True
+        elif char == '"':
+            quoted = not quoted
+        elif not quoted and line.startswith("//", index):
+            return line[:index]
+    return line
+
+
+def _mask_comments(text: str) -> str:
+    """Hide comments without moving source positions or altering quoted values.
+
+    This is lexical inspection only: includes and directives are not evaluated.
+    Keeping newlines and character offsets permits the existing scope scanner
+    to ignore commented entries while preserving the original file on writes.
+    """
+    result = list(text)
+    index = 0
+    quoted = False
+    while index < len(text):
+        if quoted:
+            if text[index] == "\\":
+                index += 2
+                continue
+            if text[index] == '"':
+                quoted = False
+        elif text[index] == '"':
+            quoted = True
+        elif text.startswith("//", index) or text.startswith("/*", index):
+            block = text.startswith("/*", index)
+            end = text.find("*/" if block else "\n", index + 2)
+            if end < 0:
+                if block:
+                    raise ValueError("Unterminated block comment in dictionary")
+                end = len(text)
+            elif block:
+                end += 2
+            for position in range(index, end):
+                if text[position] not in "\r\n":
+                    result[position] = " "
+            index = end
+            continue
+        index += 1
+    return "".join(result)
+
+
+def _structural_text(line: str) -> str:
+    """Only unquoted braces and separators participate in scope discovery."""
+    return re.sub(r'"(?:\\.|[^"\\])*"', lambda m: " " * len(m.group()), _strip_inline_comment(line))
 
 
 def _normalize_scope(scope: str | list[str] | tuple[str, ...] | None) -> list[str]:
@@ -68,20 +123,31 @@ def _explode_inline_blocks_with_spans(
     exploded: list[tuple[str, int, int, int]] = []
     for index, line in enumerate(lines):
         code = _strip_inline_comment(line)
-        if ("{" not in code and "}" not in code) or code.strip() in ("{", "}"):
+        if not any(char in _structural_text(code) for char in "{};"):
             exploded.append((line, index, 0, len(line)))
             continue
 
         buffer = ""
         start = 0
+        quoted = False
+        escaped = False
         for position, char in enumerate(code):
-            if char in "{}":
+            if escaped:
+                buffer += char
+                escaped = False
+            elif quoted and char == "\\":
+                buffer += char
+                escaped = True
+            elif char == '"':
+                buffer += char
+                quoted = not quoted
+            elif not quoted and char in "{}":
                 if buffer.strip():
                     exploded.append((buffer.strip() + "\n", index, start, position))
                 exploded.append((char + "\n", index, position, position + 1))
                 buffer = ""
                 start = position + 1
-            elif char == ";":
+            elif not quoted and char == ";":
                 buffer += char
                 exploded.append((buffer.strip() + "\n", index, start, position + 1))
                 buffer = ""
@@ -112,7 +178,7 @@ def _iter_direct_child_lines(lines: list[str], start: int, end: int):
         # its closing brace both count as part of the nested block.
         if depth == 0:
             yield idx
-        for ch in _strip_inline_comment(lines[idx]):
+        for ch in _structural_text(lines[idx]):
             if ch == "{":
                 depth += 1
             elif ch == "}":
@@ -198,7 +264,7 @@ def _find_dict_block_bounds(
         # or
         #   someDict {
         open_line = i
-        while open_line < end and "{" not in _strip_inline_comment(lines[open_line]):
+        while open_line < end and "{" not in _structural_text(lines[open_line]):
             open_line += 1
 
         if open_line >= end:
@@ -208,7 +274,7 @@ def _find_dict_block_bounds(
         saw_open = False
         close_line: int | None = None
         for j in range(open_line, end):
-            text = _strip_inline_comment(lines[j])
+            text = _structural_text(lines[j])
             for ch in text:
                 if ch == "{":
                     depth += 1
@@ -274,8 +340,8 @@ def read_foam_entry(
     if not file_path.exists():
         return None
 
-    key_pattern = re.compile(rf"^\s*{re.escape(key)}\b")
-    lines = _explode_inline_blocks(file_path.read_text().splitlines(keepends=True))
+    key_pattern = re.compile(rf"^\s*{re.escape(key)}(?=\s|;|$)")
+    lines = _explode_inline_blocks(_mask_comments(file_path.read_text()).splitlines(keepends=True))
     try:
         search_start, search_end = _resolve_search_region(lines, scope)
     except KeyError:
@@ -288,7 +354,19 @@ def read_foam_entry(
             continue
         if not key_pattern.match(line):
             continue
-        value_part = stripped[len(key):].strip().rstrip(";").strip()
+        value_part = stripped[len(key):].strip()
+        if not value_part.endswith(";"):
+            # A legal scalar/list entry can span lines. Never report just the
+            # key's first line as its value, or swallow a sub-dictionary.
+            for continuation in lines[idx + 1:search_end]:
+                if "{" in _structural_text(continuation) or "}" in _structural_text(continuation):
+                    return None
+                value_part += " " + continuation.strip()
+                if value_part.rstrip().endswith(";"):
+                    break
+            else:
+                return None
+        value_part = value_part.strip().removesuffix(";").strip()
         return value_part if value_part else None
 
     return None
@@ -354,8 +432,15 @@ def update_foam_entry(
     if not file_path.exists():
         raise FileNotFoundError(f"Dictionary file not found: {file_path}")
 
-    key_pattern = re.compile(rf"^\s*{re.escape(key)}\b")
-    lines = file_path.read_text().splitlines(keepends=True)
+    key_pattern = re.compile(rf"^\s*{re.escape(key)}(?=\s|;|$)")
+    source = file_path.read_text()
+    if "/*" in source:
+        # The line writer cannot safely splice entries whose source spans
+        # cross comments. Use the structured editor; it never evaluates code.
+        return foam_backend.update_entry(
+            file_path, key, value, scope=scope, add_if_missing=add_if_missing
+        )
+    lines = source.splitlines(keepends=True)
     virtual = _explode_inline_blocks_with_spans(lines)
     try:
         search_start, search_end = _resolve_search_region(
@@ -375,6 +460,12 @@ def update_foam_entry(
         text, line_index, start, end = virtual[idx]
         if text.strip().startswith("//") or not key_pattern.match(text):
             continue
+        if not _strip_inline_comment(text).rstrip().endswith(";"):
+            # Replacing only the header of a multiline entry leaves the old
+            # value behind as an extra statement.
+            return foam_backend.update_entry(
+                file_path, key, value, scope=scope, add_if_missing=add_if_missing
+            )
         target = (line_index, start, end)
         break
 
@@ -389,9 +480,9 @@ def update_foam_entry(
         else:
             # Inline block: splice in place so the rest of the line -- sibling
             # entries, closing braces, any trailing comment -- is preserved.
-            lines[line_index] = (
-                line[:start] + f"{key}    {_format_value(value)};" + line[end:]
-            )
+            fragment = line[start:end]
+            indent = fragment[:len(fragment) - len(fragment.lstrip())]
+            lines[line_index] = line[:start] + indent + f"{key}    {_format_value(value)};" + line[end:]
         file_path.write_text("".join(lines))
 
     if not replaced:

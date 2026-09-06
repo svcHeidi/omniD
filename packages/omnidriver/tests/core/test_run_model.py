@@ -17,6 +17,7 @@ import jsonschema
 import pytest
 
 from omnidriver.core.runtime.run_model import RunDocument
+from omnidriver.core.runtime.workflow_state import workflow_state_from_json
 from conftest import NO_REPO_ROOT, repo_root, skip_without_repo
 
 pytestmark = skip_without_repo
@@ -69,6 +70,11 @@ def test_packaged_schema_resource_matches_fixture_schema(schema):
 
 
 def test_packaged_schema_is_reproducible_from_the_generator() -> None:
+    packaged_path = (
+        (repo_root or NO_REPO_ROOT)
+        / "packages/omnidriver/src/omnidriver/schemas/run-document.json"
+    )
+    before = packaged_path.read_bytes()
     result = subprocess.run(
         [sys.executable, "schemas/generate_run_document_schema.py"],
         cwd=repo_root or NO_REPO_ROOT,
@@ -76,21 +82,9 @@ def test_packaged_schema_is_reproducible_from_the_generator() -> None:
         text=True,
     )
     assert result.returncode == 0, result.stderr
-    diff = subprocess.run(
-        [
-            "git",
-            "diff",
-            "--stat",
-            "--",
-            "packages/omnidriver/src/omnidriver/schemas/run-document.json",
-        ],
-        cwd=repo_root or NO_REPO_ROOT,
-        capture_output=True,
-        text=True,
-    )
-    assert diff.stdout.strip() == "", (
-        "generator produced a diff in the packaged schema copy:\n"
-        f"{diff.stdout}"
+    assert packaged_path.read_bytes() == before, (
+        "generator changed the packaged schema copy; run "
+        "schemas/generate_run_document_schema.py and include its output"
     )
 
 
@@ -193,6 +187,70 @@ def test_schema_accepts_initial_workflow_state(schema):
         ],
     }
     jsonschema.validate(doc, schema)  # does not raise
+
+
+def test_schema_accepts_serialized_workflow_identity_and_resume_evidence(schema):
+    doc = _valid_run_dict()
+    doc["workflowState"] = {
+        "status": "completed",
+        "current_step_id": None,
+        "completed_steps": [],
+        "failed_step_id": None,
+        "steps": [],
+        "workflow_digest": "sha256:" + "a" * 64,
+        "resume_snapshot": {
+            "schema_version": "2.1-sha256-256mib",
+            "components": [{
+                "kind": "file",
+                "path": "system/controlDict",
+                "role": "required_input",
+                "origin": "case",
+                "method": "sha256",
+                "strength": "content",
+                "digest": "sha256:" + "e" * 64,
+                "size": 1,
+                "mtime_ns": 0,
+                "link_target": None,
+            }],
+            "workflow_digest": "sha256:" + "a" * 64,
+            "plugin_identity": {
+                "id": "org.example.test",
+                "version": "1",
+                "api_version": "1",
+                "source": "test",
+                "capability_digest": "sha256:" + "b" * 64,
+                "environment_digest": "c" * 64,
+            },
+            "aggregate_digest": "sha256:" + "d" * 64,
+            "is_complete": True,
+        },
+    }
+
+    jsonschema.validate(doc, schema)
+    assert workflow_state_from_json(doc["workflowState"]).to_json() == doc["workflowState"]
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("workflow_digest", "not-a-digest"),
+        ("resume_snapshot", {"unexpected": "shape"}),
+        ("unexpected", True),
+    ],
+)
+def test_schema_rejects_malformed_workflow_identity_evidence(schema, field, value):
+    doc = _valid_run_dict()
+    doc["workflowState"] = {
+        "status": "pending",
+        "current_step_id": None,
+        "completed_steps": [],
+        "failed_step_id": None,
+        "steps": [],
+        field: value,
+    }
+
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(doc, schema)
 
 
 def test_schema_rejects_unknown_workflow_state_status(schema):

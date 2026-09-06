@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from omnidriver.openfoam.case_dict_keys import case_dict_key_diagnostics
 from omnidriver.core.specs.paths import repo_root_default
 from conftest import monorepo_root, skip_without_monorepo
@@ -42,6 +44,62 @@ def _write(case_root: Path, body: str) -> None:
     d = case_root / "constant"
     d.mkdir(parents=True, exist_ok=True)
     (d / "electroProperties").write_text(_HEADER + body)
+
+
+@pytest.mark.parametrize("error", [ValueError("invalid dictionary"), OSError("read denied")])
+def test_inspection_failure_reports_reason(tmp_path, monkeypatch, error):
+    _write(tmp_path, "known 1;")
+
+    def fail(path):
+        raise error
+
+    monkeypatch.setattr("foamlib.FoamFile", fail)
+    diags = case_dict_key_diagnostics(
+        tmp_path, catalogued_paths=("known",),
+        dict_relpaths=("constant/electroProperties",),
+    )
+    assert len(diags) == 1
+    assert diags[0].level == "warning"
+    assert diags[0].code == "case_dict_inspection_unavailable"
+    assert diags[0].source == "constant/electroProperties"
+    assert str(error) in diags[0].message
+
+
+def test_node_read_failure_discards_partial_key_warnings(tmp_path, monkeypatch):
+    _write(tmp_path, "known 1;")
+
+    class UnreadableNode(dict):
+        def __getitem__(self, key):
+            raise OSError("node read failed")
+
+    monkeypatch.setattr(
+        "foamlib.FoamFile",
+        lambda path: {"typo": 1, "known": UnreadableNode(leaf=2)},
+    )
+    diags = case_dict_key_diagnostics(
+        tmp_path, catalogued_paths=("known.leaf",),
+        dict_relpaths=("constant/electroProperties",),
+    )
+    assert [d.code for d in diags] == ["case_dict_inspection_unavailable"]
+    assert "node read failed" in diags[0].message
+
+
+@pytest.mark.parametrize("skip", [False, True])
+def test_missing_or_explicitly_skipped_file_is_silent(tmp_path, monkeypatch, skip):
+    if skip:
+        _write(tmp_path, "malformed {")
+        monkeypatch.setenv("SKIP_CASE_DICT_KEY_DIAGNOSTICS", "1")
+    else:
+        monkeypatch.delenv("SKIP_CASE_DICT_KEY_DIAGNOSTICS", raising=False)
+
+    def unexpected_read(path):
+        pytest.fail("missing or skipped dictionaries must not be read")
+
+    monkeypatch.setattr("foamlib.FoamFile", unexpected_read)
+    assert case_dict_key_diagnostics(
+        tmp_path, catalogued_paths=(),
+        dict_relpaths=("constant/electroProperties",),
+    ) == ()
 
 
 def test_misspelled_key_is_reported(tmp_path):

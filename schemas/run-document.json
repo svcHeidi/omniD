@@ -139,6 +139,12 @@
           "items": {"type": "string"}
         },
         "failed_step_id": {"type": ["string", "null"]},
+        "workflow_digest": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "resume_snapshot": {
+          "$ref": "#/$defs/provenanceSnapshot"
+        },
         "steps": {
           "type": "array",
           "items": {
@@ -253,6 +259,86 @@
   "$defs": {
     "workflowStepStatus": {
       "enum": ["pending", "running", "completed", "failed", "skipped"]
+    },
+    "sha256Digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "provenanceComponent": {
+      "type": "object",
+      "required": [
+        "kind",
+        "path",
+        "role",
+        "origin",
+        "method",
+        "strength",
+        "digest",
+        "size",
+        "mtime_ns",
+        "link_target"
+      ],
+      "properties": {
+        "kind": {"type": "string", "minLength": 1},
+        "path": {"type": "string"},
+        "role": {"type": "string", "minLength": 1},
+        "origin": {"type": ["string", "null"]},
+        "method": {"enum": ["sha256", "metadata", "unavailable"]},
+        "strength": {"enum": ["content", "metadata", "unavailable"]},
+        "digest": {
+          "anyOf": [
+            {"$ref": "#/$defs/sha256Digest"},
+            {"type": "null"}
+          ]
+        },
+        "size": {"type": ["integer", "null"], "minimum": 0},
+        "mtime_ns": {"type": ["integer", "null"], "minimum": 0},
+        "link_target": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "provenanceSnapshot": {
+      "type": "object",
+      "description": "Resume evidence emitted by the current provenance hashing policy.",
+      "required": [
+        "schema_version",
+        "components",
+        "workflow_digest",
+        "plugin_identity",
+        "aggregate_digest",
+        "is_complete"
+      ],
+      "properties": {
+        "schema_version": {"const": "2.1-sha256-256mib"},
+        "components": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/provenanceComponent"}
+        },
+        "workflow_digest": {"$ref": "#/$defs/sha256Digest"},
+        "plugin_identity": {
+          "type": "object",
+          "required": [
+            "id",
+            "version",
+            "api_version",
+            "source",
+            "capability_digest",
+            "environment_digest"
+          ],
+          "properties": {
+            "id": {"type": "string", "minLength": 1},
+            "version": {"type": "string", "minLength": 1},
+            "api_version": {"type": "string", "minLength": 1},
+            "source": {"type": "string", "minLength": 1},
+            "capability_digest": {"$ref": "#/$defs/sha256Digest"},
+            "environment_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          },
+          "additionalProperties": false
+        },
+        "aggregate_digest": {"$ref": "#/$defs/sha256Digest"},
+        "is_complete": {"type": "boolean"}
+      },
+      "additionalProperties": false
     },
     "diagnostic": {
       "type": "object",
