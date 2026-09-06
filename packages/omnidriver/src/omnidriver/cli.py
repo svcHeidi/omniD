@@ -159,7 +159,8 @@ def _execute_step(
             from .core.runtime.resume import validate_resume
 
             validate_resume(workflow_state, workflow_dag, case_root=case_root,
-                            driver_context=driver_context, env=execution_env)
+                            driver_context=driver_context, env=execution_env,
+                            expected_artifacts=tuple(expected_artifacts or ()))
         except Exception as exc:
             print(json.dumps({
                 "status": "failed",
@@ -285,7 +286,8 @@ def _execute_run(
             from .core.runtime.resume import validate_resume
 
             validate_resume(workflow_state, workflow_dag, case_root=case_root,
-                            driver_context=driver_context, env=execution_env)
+                            driver_context=driver_context, env=execution_env,
+                            expected_artifacts=tuple(expected_artifacts or ()))
         except Exception as exc:
             print(json.dumps({
                 "status": "failed",

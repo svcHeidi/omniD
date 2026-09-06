@@ -1,15 +1,21 @@
 import json
 import subprocess
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 import pytest
 
 from omnidriver.core.runtime.sweep_runner import (
+    _completed_case_is_reusable,
     _stage_entry_case,
     sweep_plan,
     sweep_run,
 )
+from omnidriver.core.runtime.workflow_runner import run_workflow_step
+from omnidriver.core.runtime.workflow_state import initial_workflow_state
+from omnidriver.core.runtime.sweep_manifest import CaseManifestEntry, compute_override_hash
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError
 
 # Phase 2 Task 5b / test-ownership split: this file used to require
@@ -80,6 +86,58 @@ def _write_placeholder_spec(path: Path, values=("x",)):
     }
     path.write_text(json.dumps(spec))
     return spec
+
+
+def test_completed_sweep_reuse_checks_input_identity_and_required_outputs(tmp_path, monkeypatch):
+    """The manifest's completed bit alone can never skip a changed case."""
+    case_root = tmp_path / "case"
+    (case_root / "system").mkdir(parents=True)
+    (case_root / "constant").mkdir()
+    settings = case_root / "system" / "settings"
+    settings.write_text("value 1;\n")
+    dag = {"steps": [{
+        "id": "solve", "command": sys.executable,
+        "args": ["-c", "from pathlib import Path; Path('result.txt').write_text('done')"],
+        "cwd": ".", "depends_on": [], "produces": [], "consumes": [],
+        "retry_policy": {"max_attempts": 1},
+    }]}
+    state = initial_workflow_state(dag)
+    assert state is not None
+    output_dir = tmp_path / "out"
+    state_path = output_dir / "x" / "workflow_state.json"
+    result = run_workflow_step(
+        dag, state, "solve", case_root=case_root, log_dir=output_dir / "logs",
+        state_path=state_path, env={}, driver_context=_CTX,
+    )
+    assert result.state.status == "completed"
+    prior_entry = CaseManifestEntry(
+        case_id="x", resolved_axis_values={}, override_hash=compute_override_hash({}),
+        run_document_path="x/run_document.json", workflow_state_path="x/workflow_state.json",
+        status="completed", outcome="fresh", started_at="t0", updated_at="t0",
+    )
+    document = SimpleNamespace(
+        workflowDag=dag,
+        launch={"caseRoot": str(case_root)},
+        expectedArtifacts=[{"artifact_id": "result", "path_pattern": "result.txt", "format": "text"}],
+    )
+    monkeypatch.setattr("omnidriver.core.runtime.sweep_runner.load_run_document", lambda _: document)
+    assert _completed_case_is_reusable(
+        prior_entry, output_dir=output_dir, routed={}, driver_context=_CTX,
+        execution_environment={},
+    ) == (True, None)
+    settings.write_text("value 2;\n")
+    reusable, error = _completed_case_is_reusable(
+        prior_entry, output_dir=output_dir, routed={}, driver_context=_CTX,
+        execution_environment={},
+    )
+    assert not reusable and "input evidence changed" in error
+    settings.write_text("value 1;\n")
+    (case_root / "result.txt").unlink()
+    reusable, error = _completed_case_is_reusable(
+        prior_entry, output_dir=output_dir, routed={}, driver_context=_CTX,
+        execution_environment={},
+    )
+    assert not reusable and "required outputs are missing" in error
 
 
 def test_entry_case_staging_keeps_authored_case_clean(tmp_path):
@@ -455,6 +513,7 @@ def test_resume_skips_terminal_completed_case(tmp_path):
     # bookkeeping, not routing. Mocked because nothing below asserts on what
     # `routed` contains.
     with mock.patch("omnidriver.core.runtime.sweep_runner.route_case_values", return_value={}), \
+         mock.patch("omnidriver.core.runtime.sweep_runner._completed_case_is_reusable", return_value=(True, None)), \
          mock.patch("omnidriver.core.runtime.sweep_runner.materialize_case") as mock_materialize, \
          mock.patch("omnidriver.core.runtime.sweep_runner.subprocess.run") as mock_run:
         from omnidriver.core.runtime.sweep_runner import sweep_run
@@ -511,6 +570,7 @@ def test_fresh_reruns_case_reported_as_completed_and_wipes_stray_files(tmp_path)
         return mock.Mock(returncode=0, stdout="", stderr="")
 
     with mock.patch("omnidriver.core.runtime.sweep_runner.route_case_values", return_value={}), \
+         mock.patch("omnidriver.core.runtime.sweep_runner._completed_case_is_reusable", return_value=(True, None)), \
          mock.patch("omnidriver.core.runtime.sweep_runner.materialize_case") as mock_materialize, \
          mock.patch("omnidriver.core.runtime.sweep_runner.strict_plan", return_value=fake_report), \
          mock.patch("omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run) as mock_run:
@@ -556,6 +616,7 @@ def test_fresh_defaults_to_false_and_preserves_resume_behavior(tmp_path):
     write_manifest(output_dir / "sweep_manifest.json", manifest)
 
     with mock.patch("omnidriver.core.runtime.sweep_runner.route_case_values", return_value={}), \
+         mock.patch("omnidriver.core.runtime.sweep_runner._completed_case_is_reusable", return_value=(True, None)), \
          mock.patch("omnidriver.core.runtime.sweep_runner.materialize_case") as mock_materialize, \
          mock.patch("omnidriver.core.runtime.sweep_runner.subprocess.run") as mock_run:
         from omnidriver.core.runtime.sweep_runner import sweep_run

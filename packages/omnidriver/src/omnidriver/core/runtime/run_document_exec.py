@@ -328,6 +328,7 @@ def build_execution_inputs(
                 case_root=resolved_case_root,
                 driver_context=driver_context,
                 env=execution_env,
+                expected_artifacts=tuple(expected_artifacts),
             )
         except Exception as exc:
             diagnostics.append(_diag(

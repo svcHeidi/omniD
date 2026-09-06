@@ -26,9 +26,20 @@ def test_absent_retry_policy_normalizes_to_empty_dict():
 
 
 def test_valid_retry_policy_preserved():
-    dag, diagnostics = _normalize({"max_attempts": 3, "backoff_seconds": 2})
-    assert dag["steps"][0]["retry_policy"] == {"max_attempts": 3, "backoff_seconds": 2}
+    dag, diagnostics = _normalize({"max_attempts": 3, "backoff_seconds": 2, "safe_to_retry": True})
+    assert dag["steps"][0]["retry_policy"] == {"max_attempts": 3, "backoff_seconds": 2, "safe_to_retry": True}
     assert "invalid_workflow_field" not in _codes(diagnostics)
+
+
+def test_multi_attempt_retry_requires_step_specific_safety_declaration():
+    _, diagnostics = _normalize({"max_attempts": 2})
+    assert "unsafe_retry_policy" in _codes(diagnostics)
+
+
+def test_bad_retry_safety_declaration_is_rejected():
+    dag, diagnostics = _normalize({"safe_to_retry": "yes"})
+    assert "safe_to_retry" not in dag["steps"][0]["retry_policy"]
+    assert "invalid_workflow_field" in _codes(diagnostics)
 
 
 def test_non_dict_retry_policy_is_error_and_resets():

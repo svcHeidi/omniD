@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from .failure_classification import classify_failure
+from .attempt_lease import acquire_attempt_lease
 from .workflow_runner import _atomic_write_json, _step_by_id, _step_state_by_id, run_workflow_step
 from .workflow_state import WorkflowRunState, WorkflowStepState, replace_step_state
 
@@ -25,15 +26,44 @@ def backoff_delay(attempt: int, backoff_seconds: float, *, cap_seconds: float = 
     return min(backoff_seconds * (2 ** (attempt - 1)), cap_seconds)
 
 
-def _resolve_policy(step: dict[str, Any], default_max_attempts: int) -> tuple[int, float]:
+def _resolve_policy(step: dict[str, Any], default_max_attempts: int) -> tuple[int, float, bool]:
     policy = step.get("retry_policy") or {}
+    safe_to_retry = policy.get("safe_to_retry") is True
     return (
-        policy.get("max_attempts", default_max_attempts),
+        policy.get("max_attempts", default_max_attempts if safe_to_retry else 1),
         policy.get("backoff_seconds", 0),
+        safe_to_retry,
     )
 
 
 def run_workflow(
+    workflow_dag: dict[str, Any],
+    workflow_state: WorkflowRunState,
+    *,
+    case_root: Path,
+    output_dir: Path,
+    expected_artifacts: tuple = (),
+    default_max_attempts: int = 1,
+    max_total_attempts: int | None = None,
+    classification_overrides: dict[str, str] | None = None,
+    runner: Callable[..., Any] = run_workflow_step,
+    sleep: Callable[[float], None] = time.sleep,
+    state_path: Path | None = None,
+    env: dict[str, str] | None = None,
+    driver_context: DriverContext | None = None,
+) -> WorkflowRunOutcome:
+    """Run one workflow while exclusively owning its output directory."""
+    with acquire_attempt_lease(output_dir):
+        return _run_workflow_locked(
+            workflow_dag, workflow_state, case_root=case_root, output_dir=output_dir,
+            expected_artifacts=expected_artifacts, default_max_attempts=default_max_attempts,
+            max_total_attempts=max_total_attempts,
+            classification_overrides=classification_overrides, runner=runner,
+            sleep=sleep, state_path=state_path, env=env, driver_context=driver_context,
+        )
+
+
+def _run_workflow_locked(
     workflow_dag: dict[str, Any],
     workflow_state: WorkflowRunState,
     *,
@@ -76,6 +106,8 @@ def run_workflow(
         step_id = workflow_state.current_step_id
         total_attempts += 1
         context_kwargs = {} if driver_context is None else {"driver_context": driver_context}
+        if runner is run_workflow_step:
+            context_kwargs["lease_held"] = True
         result = runner(
             workflow_dag,
             workflow_state,
@@ -101,11 +133,16 @@ def run_workflow(
             continue
 
         classification = classify_failure(step_state, overrides=classification_overrides)
-        max_attempts, backoff_seconds = _resolve_policy(
+        max_attempts, backoff_seconds, safe_to_retry = _resolve_policy(
             _step_by_id(workflow_dag, step_id), default_max_attempts
         )
         budget_available = max_total_attempts is None or total_attempts < max_total_attempts
-        if classification == "retryable" and step_state.attempt < max_attempts and budget_available:
+        if (
+            classification == "retryable"
+            and safe_to_retry
+            and step_state.attempt < max_attempts
+            and budget_available
+        ):
             # Persist a resumable state so a crash during backoff resumes into a
             # retry rather than a refused "failed" state.
             resumable = replace_step_state(

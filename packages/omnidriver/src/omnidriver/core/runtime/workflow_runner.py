@@ -4,14 +4,17 @@ import json
 import os
 import re
 import shlex
+import signal
 import subprocess
+import time
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from ..plugin_profile import decomposition_dirname_prefix
 from .workflow import case_script_commands
+from .attempt_lease import acquire_attempt_lease, attempt_lease_is_held
 from .workflow_state import (
     WorkflowRunState,
     WorkflowStepState,
@@ -204,6 +207,72 @@ def _artifact_snapshot(
     return snapshot
 
 
+def _terminate_process_group(process: subprocess.Popen[Any]) -> None:
+    """Terminate a step and descendants that share its owned process group.
+
+    Every step starts a fresh session below, making its PID a group leader.
+    This deliberately owns ordinary descendants of a workflow command; a
+    descendant that deliberately creates a new session is outside this local
+    process contract and must be managed by the invoked program itself.
+    """
+    if os.name != "posix":
+        process.kill()
+        process.wait()
+        return
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    try:
+        process.wait(timeout=1)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait()
+
+
+def _has_live_group_members(process: subprocess.Popen[Any]) -> bool:
+    """Whether descendants remain after their direct workflow parent exits."""
+    if os.name != "posix":
+        return False
+    try:
+        os.killpg(process.pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def _wait_for_step_process(
+    process: subprocess.Popen[Any],
+    *,
+    timeout_s: int | None,
+    cancellation_requested: Callable[[], bool] | None,
+) -> tuple[int | None, str | None]:
+    """Wait for one owned process group, returning an explicit stop reason."""
+    deadline = None if timeout_s is None else time.monotonic() + timeout_s
+    while True:
+        if cancellation_requested is not None and cancellation_requested():
+            _terminate_process_group(process)
+            return None, "cancelled"
+        remaining = None if deadline is None else deadline - time.monotonic()
+        if remaining is not None and remaining <= 0:
+            _terminate_process_group(process)
+            return None, "timeout"
+        # Poll only when a cancellation hook is supplied; otherwise preserve
+        # subprocess' normal blocking wait without a needless wake-up loop.
+        wait_timeout = (
+            0.1 if remaining is None else min(0.1, remaining)
+        ) if cancellation_requested is not None else remaining
+        try:
+            return process.wait(timeout=wait_timeout), None
+        except subprocess.TimeoutExpired:
+            if cancellation_requested is None:
+                _terminate_process_group(process)
+                return None, "timeout"
+
+
 def run_workflow_step(
     workflow_dag: dict[str, Any],
     workflow_state: WorkflowRunState,
@@ -215,12 +284,24 @@ def run_workflow_step(
     env: Mapping[str, str] | None = None,
     expected_artifacts: tuple[DataArtifact, ...] = (),
     driver_context: Any | None = None,
+    cancellation_requested: Callable[[], bool] | None = None,
+    lease_held: bool = False,
 ) -> WorkflowStepRunResult:
     """Execute one normalized workflow step and return the updated state.
 
     This intentionally does not implement resume, retry loops, or multi-step
     orchestration. It only performs one subprocess transition and records logs.
     """
+    lease_dir = Path(state_path).parent if state_path is not None else Path(log_dir).parent
+    if not lease_held and not attempt_lease_is_held(lease_dir):
+        with acquire_attempt_lease(lease_dir):
+            return run_workflow_step(
+                workflow_dag, workflow_state, step_id,
+                case_root=case_root, log_dir=log_dir, state_path=state_path, env=env,
+                expected_artifacts=expected_artifacts, driver_context=driver_context,
+                cancellation_requested=cancellation_requested, lease_held=True,
+            )
+
     from .workflow_state import workflow_digest
 
     digest = workflow_digest(workflow_dag)
@@ -300,18 +381,48 @@ def run_workflow_step(
     diagnostics: tuple[dict[str, Any], ...] = ()
     try:
         with stdout_log.open("w") as stdout_handle, stderr_log.open("w") as stderr_handle:
-            completed = subprocess.run(
+            process = subprocess.Popen(
                 _argv_for_execution(command, executable, args, env, driver_context),
                 cwd=resolved_cwd,
                 stdout=stdout_handle,
                 stderr=stderr_handle,
                 env=dict(env) if env is not None else None,
                 text=True,
-                timeout=step.get("timeout_s"),
-                check=False,
+                start_new_session=(os.name == "posix"),
             )
-        exit_code = completed.returncode
+            exit_code, stop_reason = _wait_for_step_process(
+                process,
+                timeout_s=step.get("timeout_s"),
+                cancellation_requested=cancellation_requested,
+            )
+        if stop_reason == "timeout":
+            diagnostics = ({
+                "level": "error",
+                "code": "workflow_step_timeout",
+                "message": f"Workflow step {step_id!r} timed out after {step.get('timeout_s')} seconds.",
+                "field": step_id,
+            },)
+        elif stop_reason == "cancelled":
+            diagnostics = ({
+                "level": "error",
+                "code": "workflow_step_cancelled",
+                "message": f"Workflow step {step_id!r} was cancelled by its caller.",
+                "field": step_id,
+            },)
+        elif _has_live_group_members(process):
+            # A zero-exit launcher that backgrounds work is not a completed
+            # workflow step.  Stop the residual owned group rather than
+            # allowing it to race a retry or a later attempt.
+            _terminate_process_group(process)
+            diagnostics = ({
+                "level": "error",
+                "code": "workflow_step_orphaned_descendants",
+                "message": f"Workflow step {step_id!r} exited while owned descendants were still running.",
+                "field": step_id,
+            },)
     except subprocess.TimeoutExpired as exc:
+        # Kept for defensive compatibility with alternate Popen-like test
+        # doubles; the owned wait helper normally handles timeouts itself.
         diagnostics = ({
             "level": "error",
             "code": "workflow_step_timeout",

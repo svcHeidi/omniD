@@ -96,7 +96,7 @@ def test_timeout_retries_then_completes(tmp_path):
     ])
     sleeps = []
     outcome = run_workflow(
-        _dag(retry_policy={"max_attempts": 2, "backoff_seconds": 1}),
+        _dag(retry_policy={"max_attempts": 2, "backoff_seconds": 1, "safe_to_retry": True}),
         _initial_state(),
         case_root=tmp_path, output_dir=tmp_path,
         runner=runner, sleep=sleeps.append,
@@ -114,7 +114,7 @@ def test_retryable_exhausts_attempts(tmp_path):
         ("failed", 1, ["workflow_step_timeout"]),
     ])
     outcome = run_workflow(
-        _dag(retry_policy={"max_attempts": 2}),
+        _dag(retry_policy={"max_attempts": 2, "safe_to_retry": True}),
         _initial_state(),
         case_root=tmp_path, output_dir=tmp_path,
         runner=runner, sleep=lambda s: None,
@@ -140,7 +140,7 @@ def test_fatal_failure_does_not_retry(tmp_path):
     assert outcome.steps[0]["attempts"] == 1
 
 
-def test_default_max_attempts_knob_enables_retry(tmp_path):
+def test_default_max_attempts_cannot_enable_retry_without_step_safety_policy(tmp_path):
     runner, _ = _make_runner([
         ("failed", 1, ["workflow_step_timeout"]),
         ("completed", 0, []),
@@ -152,8 +152,8 @@ def test_default_max_attempts_knob_enables_retry(tmp_path):
         default_max_attempts=2,
         runner=runner, sleep=lambda s: None,
     )
-    assert outcome.state.status == "completed"
-    assert outcome.steps[0]["attempts"] == 2
+    assert outcome.state.status == "failed"
+    assert outcome.steps[0]["attempts"] == 1
 
 
 def test_max_attempts_one_bails_on_first_failure(tmp_path):
@@ -179,7 +179,7 @@ def test_max_total_attempts_caps_retries_below_per_step_budget(tmp_path):
         ("failed", 1, ["workflow_step_timeout"]),
     ])
     outcome = run_workflow(
-        _dag(retry_policy={"max_attempts": 5}),
+        _dag(retry_policy={"max_attempts": 5, "safe_to_retry": True}),
         _initial_state(),
         case_root=tmp_path, output_dir=tmp_path,
         max_total_attempts=2,
@@ -197,7 +197,7 @@ def test_max_total_attempts_none_preserves_per_step_behavior(tmp_path):
         ("completed", 0, []),
     ])
     outcome = run_workflow(
-        _dag(retry_policy={"max_attempts": 2, "backoff_seconds": 1}),
+        _dag(retry_policy={"max_attempts": 2, "backoff_seconds": 1, "safe_to_retry": True}),
         _initial_state(),
         case_root=tmp_path, output_dir=tmp_path,
         max_total_attempts=None,
@@ -228,7 +228,7 @@ def test_persisted_state_is_resumable_between_retries(tmp_path):
         captured["during_backoff"] = json.loads(state_path.read_text())
 
     outcome = run_workflow(
-        _dag(retry_policy={"max_attempts": 2, "backoff_seconds": 1}),
+        _dag(retry_policy={"max_attempts": 2, "backoff_seconds": 1, "safe_to_retry": True}),
         _initial_state(),
         case_root=tmp_path, output_dir=tmp_path,
         state_path=state_path,
@@ -275,7 +275,7 @@ def test_explicit_context_reaches_each_runner_attempt(tmp_path):
         return delegate(*args, **kwargs)
 
     outcome = run_workflow(
-        _dag(retry_policy={"max_attempts": 2}), _initial_state(),
+        _dag(retry_policy={"max_attempts": 2, "safe_to_retry": True}), _initial_state(),
         case_root=tmp_path, output_dir=tmp_path, runner=runner,
         driver_context=context, sleep=lambda _: None,
     )

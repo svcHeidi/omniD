@@ -316,39 +316,16 @@ def test_case_script_step_preserves_dyld_vars_through_shell_hop() -> None:
 
 def test_case_script_invocation_embeds_dyld_vars_literally_in_argv() -> None:
     # Mechanism-level check independent of macOS SIP actually being active:
-    # for a CASE_SCRIPT_COMMANDS-family step, the argv passed to
-    # subprocess.run must carry DYLD_* values as literal text (surviving even
+    # for a CASE_SCRIPT_COMMANDS-family step, the argv passed to the child
+    # process must carry DYLD_* values as literal text (surviving even
     # if the OS strips them from the *inherited* environment of the shell
     # that's about to exec them), not rely solely on `env=`.
-    import subprocess as subprocess_module
+    # Process ownership now uses Popen, so retain this as the pure argv
+    # boundary rather than replacing Popen with a test double.
+    from omnidriver.core.runtime.workflow_runner import _argv_for_execution
 
-    captured: dict[str, object] = {}
-    real_run = subprocess_module.run
-
-    def fake_run(argv, **kwargs):
-        captured["argv"] = argv
-        return real_run((sys.executable, "-c", "pass"), **{k: v for k, v in kwargs.items() if k != "timeout"})
-
-    with tempfile.TemporaryDirectory() as temp_dir:
-        root = Path(temp_dir)
-        allrun = root / "Allrun"
-        allrun.write_text("#!/bin/sh\ntrue\n")
-        allrun.chmod(0o755)
-
-        dag = _dag("Allrun", [])
-        state = initial_workflow_state(dag)
-        assert state is not None
-
-        import omnidriver.core.runtime.workflow_runner as workflow_runner_module
-        original = workflow_runner_module.subprocess.run
-        workflow_runner_module.subprocess.run = fake_run
-        try:
-            run_workflow_step(
-                dag, state, "run", case_root=root, log_dir=root / "logs",
-                env={"PATH": __import__("os").environ.get("PATH", ""), "DYLD_LIBRARY_PATH": "/marker/xyz"},
-            )
-        finally:
-            workflow_runner_module.subprocess.run = original
-
-        argv = captured["argv"]
-        assert any("/marker/xyz" in str(part) for part in argv), argv
+    argv = _argv_for_execution(
+        "Allrun", "/case/Allrun", (),
+        {"PATH": __import__("os").environ.get("PATH", ""), "DYLD_LIBRARY_PATH": "/marker/xyz"},
+    )
+    assert any("/marker/xyz" in str(part) for part in argv), argv

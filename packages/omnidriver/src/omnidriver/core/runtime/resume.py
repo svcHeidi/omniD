@@ -14,7 +14,9 @@ from typing import TYPE_CHECKING, Mapping
 
 from .provenance import ProvenanceSnapshot, compare, snapshot_from_components
 from .provenance_inputs import enumerate_case_inputs
+from .reconciler import reconcile_artifacts
 from .workflow_state import WorkflowRunState, workflow_digest
+from .models import DataArtifact
 
 if TYPE_CHECKING:
     from ..plugin_interface import DriverContext
@@ -35,7 +37,16 @@ def checkpoint_snapshot(case_root: Path, workflow_dag: dict, driver_context: Dri
 
 
 def validate_resume(state: WorkflowRunState, workflow_dag: dict, *, case_root: Path,
-                    driver_context: DriverContext | None, env: Mapping[str, str] | None) -> None:
+                    driver_context: DriverContext | None, env: Mapping[str, str] | None,
+                    expected_artifacts: tuple[DataArtifact, ...] = ()) -> None:
+    """Refuse reuse unless checkpoint identity and completed outputs still hold.
+
+    A terminal state is an assertion about a particular attempt, not a cache
+    key.  Input provenance establishes that the saved attempt describes the
+    current request; required artifacts establish that its completion claim
+    remains observable.  Artifact freshness is enforced at execution time,
+    while this resume gate intentionally checks only continued presence.
+    """
     if state.workflow_digest != workflow_digest(workflow_dag):
         raise ValueError("Saved workflow identity is missing or changed; create a fresh run instead of reusing this state")
     expected = {str(step["id"]): step for step in workflow_dag["steps"]}
@@ -70,3 +81,15 @@ def validate_resume(state: WorkflowRunState, workflow_dag: dict, *, case_root: P
     if before.schema_version != after.schema_version or differences:
         paths = ", ".join(diff.path for diff in differences)
         raise ValueError(f"Saved workflow input evidence changed ({paths or 'fingerprint policy'}); create a fresh run")
+    if state.status == "completed":
+        report = reconcile_artifacts(case_root, expected_artifacts)
+        missing = [
+            entry["artifact_id"]
+            for entry in report.artifacts
+            if not entry["optional"] and entry["status"] != "matched"
+        ]
+        if missing:
+            raise ValueError(
+                "Saved workflow required outputs are missing "
+                f"({', '.join(missing)}); create a fresh run instead of reusing this state"
+            )

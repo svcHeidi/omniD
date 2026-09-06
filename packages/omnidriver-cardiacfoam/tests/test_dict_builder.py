@@ -704,15 +704,23 @@ class TestBuildAndLaunchDirectRun(unittest.TestCase):
         from pathlib import Path
         from unittest.mock import patch
         from omnidriver.cardiacfoam.dict_builder import build_and_launch
+        from omnidriver.core.runtime.workflow_orchestrator import WorkflowRunOutcome
         electro, physics = self._base_selectors()
+        captured = {}
+
+        def capture_workflow(workflow_dag, workflow_state, **_kwargs):
+            captured["workflow_dag"] = workflow_dag
+            return WorkflowRunOutcome(state=workflow_state, steps=())
+
         with tempfile.TemporaryDirectory() as d:
             case_dir = Path(d) / "case"
-            with patch("subprocess.run") as mock_run:
-                # capture_output=True, text=True always yields str stdout/stderr;
-                # CompletedProcess defaults them to None, which is not a
-                # shape subprocess.run can actually return. The global patch
-                # is intentional (the test observes calls from several
-                # modules), so the mock must be faithful instead.
+            with (
+                patch("subprocess.run") as mock_run,
+                patch(
+                    "omnidriver.core.runtime.workflow_orchestrator.run_workflow",
+                    side_effect=capture_workflow,
+                ),
+            ):
                 mock_run.return_value = subprocess.CompletedProcess(
                     [], 0, stdout="", stderr=""
                 )
@@ -722,15 +730,8 @@ class TestBuildAndLaunchDirectRun(unittest.TestCase):
                     case_dir=case_dir,
                     pre_solve_commands=["vtkUnstructuredToFoam"],
                 )
-            calls = mock_run.call_args_list
-            # calls[0] is now the strict path's own environment load (sources
-            # the OpenFOAM bashrc to capture env vars, same as every other
-            # run --strict invocation does) -- find the actual step calls by
-            # content rather than a fixed index.
-            self.assertGreaterEqual(len(calls), 2)
-            pre_solve_index = next(i for i, c in enumerate(calls) if "vtkUnstructuredToFoam" in c.args[0])
-            solver_index = next(i for i, c in enumerate(calls) if "cardiacFoam" in c.args[0])
-            self.assertLess(pre_solve_index, solver_index)
+            commands = [step["command"] for step in captured["workflow_dag"]["steps"]]
+            self.assertEqual(commands, ["vtkUnstructuredToFoam", "cardiacFoam"])
 
     def test_no_pre_solve_calls_only_solver(self) -> None:
         import subprocess
@@ -738,15 +739,23 @@ class TestBuildAndLaunchDirectRun(unittest.TestCase):
         from pathlib import Path
         from unittest.mock import patch
         from omnidriver.cardiacfoam.dict_builder import build_and_launch
+        from omnidriver.core.runtime.workflow_orchestrator import WorkflowRunOutcome
         electro, physics = self._base_selectors()
+        captured = {}
+
+        def capture_workflow(workflow_dag, workflow_state, **_kwargs):
+            captured["workflow_dag"] = workflow_dag
+            return WorkflowRunOutcome(state=workflow_state, steps=())
+
         with tempfile.TemporaryDirectory() as d:
             case_dir = Path(d) / "case"
-            with patch("subprocess.run") as mock_run:
-                # capture_output=True, text=True always yields str stdout/stderr;
-                # CompletedProcess defaults them to None, which is not a
-                # shape subprocess.run can actually return. The global patch
-                # is intentional (the test observes calls from several
-                # modules), so the mock must be faithful instead.
+            with (
+                patch("subprocess.run") as mock_run,
+                patch(
+                    "omnidriver.core.runtime.workflow_orchestrator.run_workflow",
+                    side_effect=capture_workflow,
+                ),
+            ):
                 mock_run.return_value = subprocess.CompletedProcess(
                     [], 0, stdout="", stderr=""
                 )
@@ -755,9 +764,8 @@ class TestBuildAndLaunchDirectRun(unittest.TestCase):
                     physics_selectors=physics,
                     case_dir=case_dir,
                 )
-            calls = mock_run.call_args_list
-            self.assertGreaterEqual(len(calls), 1)
-            self.assertIn("cardiacFoam", calls[-1].args[0])
+            commands = [step["command"] for step in captured["workflow_dag"]["steps"]]
+            self.assertEqual(commands, ["cardiacFoam"])
 
 
 class TestParseElectroProperties(unittest.TestCase):

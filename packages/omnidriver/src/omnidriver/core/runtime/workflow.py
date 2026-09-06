@@ -312,6 +312,25 @@ def normalize_workflow_dag(
                     field="retry_policy.backoff_seconds",
                 ))
                 del retry_policy["backoff_seconds"]
+            safe_to_retry = retry_policy.get("safe_to_retry")
+            if safe_to_retry is not None and not isinstance(safe_to_retry, bool):
+                diagnostics.append(WorkflowDiagnostic(
+                    level="error",
+                    code="invalid_workflow_field",
+                    message="Workflow field 'retry_policy.safe_to_retry' must be a boolean.",
+                    field="retry_policy.safe_to_retry",
+                ))
+                del retry_policy["safe_to_retry"]
+            if retry_policy.get("max_attempts", 1) > 1 and safe_to_retry is not True:
+                diagnostics.append(WorkflowDiagnostic(
+                    level="error",
+                    code="unsafe_retry_policy",
+                    message=(
+                        "Workflow retries require retry_policy.safe_to_retry: true "
+                        "on the affected step."
+                    ),
+                    field="retry_policy.safe_to_retry",
+                ))
 
         timeout_s = raw_step.get("timeout_s")
         if timeout_s is not None and (

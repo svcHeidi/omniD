@@ -16,10 +16,13 @@ from omnidriver.core.sweep.sweep_expansion import SweepValidationError, check_ca
 from omnidriver.sweep_materialize import materialize_case
 from omnidriver.sweep_routing import route_case_values, route_entry_case_values
 from .fresh import ensure_fresh_output_dir
+from .models import data_artifact_from_json
 from .output_collection import collect_new_outputs, snapshot_postprocessing
 from .postprocess_phase import build_sweep_context, run_postprocessing_module
 from .registry import load_entry_spec
-from .run_document_exec import _allowed_runs_root
+from .run_document_exec import _allowed_runs_root, load_run_document
+from .resume import validate_resume
+from .workflow_state import workflow_state_from_json
 from .sweep_manifest import (
     CaseManifestEntry,
     SweepManifest,
@@ -327,6 +330,47 @@ def _workflow_state_path_from_run_document(run_document: dict[str, Any]) -> Path
     return Path(output_dir) / "workflow_state.json"
 
 
+def _completed_case_is_reusable(
+    prior_entry: CaseManifestEntry | None,
+    *,
+    output_dir: Path,
+    routed: dict[str, Any],
+    driver_context: "DriverContext",
+    execution_environment: dict[str, str],
+) -> tuple[bool, str | None]:
+    """Validate a completed sweep case before its manifest may skip it.
+
+    The manifest is a sweep index, not provenance.  It is insufficient to
+    establish that the case still has the same inputs or its required outputs.
+    Those claims remain owned by the saved workflow checkpoint and document.
+    """
+    if prior_entry is None:
+        return False, "completed manifest entry is absent"
+    if prior_entry.override_hash != compute_override_hash(routed):
+        return False, "resolved sweep overrides changed"
+    try:
+        run_document_path = output_dir / prior_entry.run_document_path
+        state_path = output_dir / prior_entry.workflow_state_path
+        run_document = load_run_document(run_document_path)
+        state = workflow_state_from_json(json.loads(state_path.read_text()))
+        if state.status != "completed":
+            return False, f"saved workflow state is {state.status!r}, not 'completed'"
+        artifacts = tuple(
+            data_artifact_from_json(raw) for raw in run_document.expectedArtifacts
+        )
+        validate_resume(
+            state,
+            run_document.workflowDag,
+            case_root=Path(run_document.launch["caseRoot"]),
+            driver_context=driver_context,
+            env=execution_environment,
+            expected_artifacts=artifacts,
+        )
+    except (KeyError, OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+        return False, str(exc)
+    return True, None
+
+
 def sweep_run(
     spec_path: str | Path,
     *,
@@ -400,6 +444,7 @@ def sweep_run(
         materialization_error = None
         plan_error = None
         timeout_error = None
+        reuse_error = None
 
         routing_error: str | None = None
         try:
@@ -423,13 +468,72 @@ def sweep_run(
             materialization_error = routing_error
             failed_count += 1
         elif prior_status == "completed":
-            outcome = "skipped"
-            skipped_count += 1
-            completed_count += 1
-            status = "completed"
-            if prior_entry is not None:
+            reusable, reuse_error = _completed_case_is_reusable(
+                prior_entry,
+                output_dir=output_dir,
+                routed=routed,
+                driver_context=driver_context,
+                execution_environment=execution_environment,
+            )
+            if reusable:
+                outcome = "skipped"
+                skipped_count += 1
+                completed_count += 1
+                status = "completed"
                 workflow_state_path = output_dir / prior_entry.workflow_state_path
                 run_document_path = output_dir / prior_entry.run_document_path
+            else:
+                # Fall through to a new plan and attempt.  The old manifest
+                # remains useful evidence in the summary, but never grants a
+                # success claim by itself.
+                outcome = "invalidated"
+                status = "failed"
+                try:
+                    if entry is not None:
+                        routed = _materialize_entry_case(
+                            entry,
+                            routed,
+                            staging_root=output_dir / "cases" / case.case_id,
+                            driver_context=driver_context,
+                        )
+                        report = strict_plan(entry, overrides=routed, driver_context=driver_context)
+                    else:
+                        materialize_case(case_dir=case_dir, routed=routed, driver_context=driver_context)
+                        report = strict_plan(
+                            case.case_id, entry_kind="case_folder",
+                            overrides={"cases_root": str(output_dir)}, driver_context=driver_context,
+                        )
+                    payload = report.to_json()
+                    if report.status != "ok":
+                        plan_error = "strict_plan reported failed status"
+                    else:
+                        run_document = payload["run_document"]
+                        workflow_state_path = _workflow_state_path_from_run_document(run_document)
+                        run_document_path.parent.mkdir(parents=True, exist_ok=True)
+                        run_document_path.write_text(json.dumps(run_document, indent=2))
+                        if workflow_state_path.exists():
+                            workflow_state_path.unlink()
+                        result = subprocess.run(
+                            [sys.executable, "-m", "omnidriver", "run", "--run-document", str(run_document_path)],
+                            capture_output=True, text=True, env=execution_environment,
+                            timeout=case_timeout_s,
+                        )
+                        if workflow_state_path.exists():
+                            status = json.loads(workflow_state_path.read_text()).get("status", "pending")
+                        elif result.returncode != 0:
+                            status = "failed"
+                        else:
+                            status = "pending"
+                except subprocess.TimeoutExpired as exc:
+                    timeout_error = f"case exceeded timeout of {case_timeout_s}s and was terminated: {exc}"
+                except (OSError, ValueError) as exc:
+                    materialization_error = str(exc)
+                except Exception as exc:
+                    plan_error = str(exc)
+                if status == "completed":
+                    completed_count += 1
+                else:
+                    failed_count += 1
         elif prior_status == "failed" and not retry_failed:
             status = "failed"
             failed_count += 1
@@ -547,6 +651,8 @@ def sweep_run(
             case_summary["plan_error"] = plan_error
         if timeout_error is not None:
             case_summary["timeout_error"] = timeout_error
+        if reuse_error is not None:
+            case_summary["reuse_error"] = reuse_error
         case_summaries.append(case_summary)
 
         manifest.cases.append(

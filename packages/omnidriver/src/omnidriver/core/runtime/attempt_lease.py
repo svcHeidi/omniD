@@ -1,0 +1,125 @@
+"""A small, local ownership lease for workflow output directories.
+
+The lease is deliberately host-local.  A lock from another host or a malformed
+record is not reclaimed: without shared ownership semantics, treating it as
+stale could corrupt a live remote attempt.
+"""
+from __future__ import annotations
+
+import json
+import os
+import socket
+import threading
+import uuid
+from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Iterator
+
+
+_LOCAL_LEASES: dict[Path, tuple[str, int]] = {}
+
+
+class AttemptLeaseError(RuntimeError):
+    """The output directory is already or ambiguously owned."""
+
+
+@dataclass(frozen=True)
+class AttemptLease:
+    path: Path
+    token: str
+
+
+def attempt_lease_is_held(output_dir: Path) -> bool:
+    """Whether this thread already owns the local lease for ``output_dir``."""
+    path = Path(output_dir) / ".omnidriver-attempt.lock"
+    owner = _LOCAL_LEASES.get(path)
+    return owner is not None and owner[1] == threading.get_ident()
+
+
+def _pid_is_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _read_record(path: Path) -> dict[str, object] | None:
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _reclaimable_local_record(record: dict[str, object], hostname: str) -> bool:
+    pid = record.get("pid")
+    return (
+        record.get("hostname") == hostname
+        and isinstance(pid, int)
+        and not isinstance(pid, bool)
+        and not _pid_is_alive(pid)
+    )
+
+
+@contextmanager
+def acquire_attempt_lease(output_dir: Path) -> Iterator[AttemptLease]:
+    """Exclusively own ``output_dir`` until the context exits.
+
+    A dead same-host owner is reclaimed atomically by removing its record and
+    retrying exclusive creation.  Remote or malformed records fail closed.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / ".omnidriver-attempt.lock"
+    hostname = socket.gethostname()
+    token = str(uuid.uuid4())
+    record = {
+        "schema_version": 1,
+        "hostname": hostname,
+        "pid": os.getpid(),
+        "token": token,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+    }
+    while True:
+        try:
+            descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            existing = _read_record(path)
+            if existing is not None and _reclaimable_local_record(existing, hostname):
+                try:
+                    path.unlink()
+                except FileNotFoundError:
+                    pass
+                continue
+            owner = "an unreadable or remote owner" if existing is None else (
+                f"pid {existing.get('pid')!r} on host {existing.get('hostname')!r}"
+            )
+            raise AttemptLeaseError(
+                f"output directory is already owned by {owner}: {path}"
+            )
+        else:
+            with os.fdopen(descriptor, "w") as handle:
+                json.dump(record, handle, sort_keys=True)
+                handle.write("\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            break
+    lease = AttemptLease(path=path, token=token)
+    _LOCAL_LEASES[path] = (token, threading.get_ident())
+    try:
+        yield lease
+    finally:
+        try:
+            current = _read_record(path)
+            if current is not None and current.get("token") == token:
+                path.unlink(missing_ok=True)
+        finally:
+            if _LOCAL_LEASES.get(path) == (token, threading.get_ident()):
+                _LOCAL_LEASES.pop(path, None)

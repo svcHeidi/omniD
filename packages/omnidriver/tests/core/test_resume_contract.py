@@ -12,6 +12,7 @@ import pytest
 
 from omnidriver import cli
 from omnidriver.core.plugin_interface import driver_context
+from omnidriver.core.runtime.models import DataArtifact
 from omnidriver.core.runtime.resume import validate_resume
 from omnidriver.core.runtime.workflow_runner import run_workflow_step
 from omnidriver.core.runtime.workflow_state import initial_workflow_state, workflow_state_from_json
@@ -80,6 +81,32 @@ def test_cli_step_rejects_stale_inputs_too(tmp_path, capsys):
     assert "input evidence changed" in json.loads(capsys.readouterr().out)["error"]
 
 
+def test_completed_checkpoint_requires_its_required_output_on_resume(tmp_path, capsys):
+    """A completed state cannot turn a deleted required result into success."""
+    dag, context, output, _ = _completed(tmp_path)
+    expected = (DataArtifact(
+        artifact_id="result", path_pattern="result.txt", format="text",
+    ),)
+    saved = workflow_state_from_json(json.loads((output / "workflow_state.json").read_text()))
+    validate_resume(
+        saved, dag, case_root=tmp_path, driver_context=context, env={},
+        expected_artifacts=expected,
+    )
+    (tmp_path / "result.txt").unlink()
+    with pytest.raises(ValueError, match="required outputs are missing.*result"):
+        validate_resume(
+            saved, dag, case_root=tmp_path, driver_context=context, env={},
+            expected_artifacts=expected,
+        )
+    assert cli._execute_run(
+        entry_label="test", workflow_dag=dag, planned_state=initial_workflow_state(dag),
+        case_root=tmp_path, output_dir=output, expected_artifacts=expected,
+        tail_lines=5, driver_context=context, execution_env={},
+    ) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert "required outputs are missing" in payload["error"]
+
+
 def test_run_document_embedded_completed_state_refuses_changed_inputs(tmp_path) -> None:
     """A RunDocument state is resumable evidence, not a success override.
 
@@ -133,7 +160,10 @@ def test_run_document_embedded_completed_state_refuses_changed_inputs(tmp_path) 
 
     first_out = StringIO()
     with redirect_stdout(first_out):
-        first_code = cli.main(["run", "--plugin", "none", "--run-document", str(doc_path)])
+        first_code = cli.main([
+            "run", "--plugin", "plugins.neutral_environment_plugin:NeutralEnvironmentPlugin",
+            "--run-document", str(doc_path),
+        ])
     first = json.loads(first_out.getvalue())
     assert first_code == 0, first
 
@@ -147,7 +177,10 @@ def test_run_document_embedded_completed_state_refuses_changed_inputs(tmp_path) 
 
     resumed_out = StringIO()
     with redirect_stdout(resumed_out):
-        resumed_code = cli.main(["run", "--plugin", "none", "--run-document", str(doc_path)])
+        resumed_code = cli.main([
+            "run", "--plugin", "plugins.neutral_environment_plugin:NeutralEnvironmentPlugin",
+            "--run-document", str(doc_path),
+        ])
     resumed = json.loads(resumed_out.getvalue())
     assert resumed_code == 1, resumed
     assert resumed["status"] == "failed"
