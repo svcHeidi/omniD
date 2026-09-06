@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import socket
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -31,6 +33,70 @@ def test_dead_same_host_owner_is_recovered(monkeypatch, tmp_path: Path) -> None:
         assert lease.path == path
         assert json.loads(path.read_text())["token"] == lease.token
     assert not path.exists()
+
+
+def test_stale_recovery_cannot_delete_an_interleaved_live_owner(
+    monkeypatch, tmp_path: Path,
+) -> None:
+    """A second contender cannot acquire between stale inspection and unlink."""
+    import omnidriver.core.runtime.attempt_lease as lease_module
+
+    path = tmp_path / ".omnidriver-attempt.lock"
+    path.write_text(json.dumps({
+        "hostname": socket.gethostname(), "pid": 12345, "token": "dead",
+    }))
+    monkeypatch.setattr(
+        lease_module, "_pid_is_alive", lambda pid: pid != 12345,
+    )
+    original_read = lease_module._read_record
+    stale_was_read = threading.Event()
+    continue_recovery = threading.Event()
+    first_read = True
+
+    def paused_read(record_path: Path):
+        nonlocal first_read
+        record = original_read(record_path)
+        if threading.current_thread().name == "recoverer" and first_read:
+            first_read = False
+            stale_was_read.set()
+            assert continue_recovery.wait(timeout=2)
+        return record
+
+    monkeypatch.setattr(lease_module, "_read_record", paused_read)
+    owner_acquired = threading.Event()
+    release_owner = threading.Event()
+    contender_result: list[str] = []
+
+    def recoverer() -> None:
+        with acquire_attempt_lease(tmp_path):
+            owner_acquired.set()
+            assert release_owner.wait(timeout=2)
+
+    def contender() -> None:
+        try:
+            with acquire_attempt_lease(tmp_path):
+                contender_result.append("acquired")
+        except AttemptLeaseError:
+            contender_result.append("blocked")
+
+    owner = threading.Thread(target=recoverer, name="recoverer")
+    owner.start()
+    assert stale_was_read.wait(timeout=2)
+    challenger = threading.Thread(target=contender, name="contender")
+    challenger.start()
+    time.sleep(0.05)
+    assert contender_result == [], "contender bypassed in-progress stale recovery"
+    continue_recovery.set()
+    assert owner_acquired.wait(timeout=2)
+    challenger.join(timeout=2)
+    try:
+        assert contender_result == ["blocked"]
+        assert json.loads(path.read_text())["token"] != "dead"
+    finally:
+        release_owner.set()
+        owner.join(timeout=2)
+    assert not owner.is_alive()
+    assert not challenger.is_alive()
 
 
 def test_remote_or_malformed_owner_fails_closed(tmp_path: Path) -> None:

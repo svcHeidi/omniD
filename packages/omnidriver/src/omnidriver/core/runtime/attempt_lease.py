@@ -10,12 +10,18 @@ import json
 import os
 import socket
 import threading
+import time
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
+
+if os.name == "posix":
+    import fcntl
+elif os.name == "nt":
+    import msvcrt
 
 
 _LOCAL_LEASES: dict[Path, tuple[str, int]] = {}
@@ -69,6 +75,43 @@ def _reclaimable_local_record(record: dict[str, object], hostname: str) -> bool:
 
 
 @contextmanager
+def _lease_record_guard(path: Path) -> Iterator[None]:
+    """Serialize inspection and replacement of the host-local lease record.
+
+    The guard file is intentionally stable rather than deleted after use.
+    Removing a lock file allows different contenders to lock different inodes,
+    recreating the same read/unlink race this guard closes.
+    """
+    if os.name not in {"posix", "nt"}:
+        raise AttemptLeaseError(
+            "attempt leases require host-local advisory locking for safe recovery"
+        )
+    guard_path = path.with_name(f"{path.name}.guard")
+    descriptor = os.open(guard_path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        if os.name == "posix":
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+        else:
+            if os.fstat(descriptor).st_size == 0:
+                os.write(descriptor, b"\0")
+            while True:
+                try:
+                    os.lseek(descriptor, 0, os.SEEK_SET)
+                    msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+                    break
+                except OSError:
+                    time.sleep(0.05)
+        yield
+    finally:
+        if os.name == "posix":
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+        else:
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+        os.close(descriptor)
+
+
+@contextmanager
 def acquire_attempt_lease(output_dir: Path) -> Iterator[AttemptLease]:
     """Exclusively own ``output_dir`` until the context exits.
 
@@ -87,30 +130,31 @@ def acquire_attempt_lease(output_dir: Path) -> Iterator[AttemptLease]:
         "token": token,
         "started_at": datetime.now(timezone.utc).isoformat(),
     }
-    while True:
-        try:
-            descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        except FileExistsError:
-            existing = _read_record(path)
-            if existing is not None and _reclaimable_local_record(existing, hostname):
-                try:
-                    path.unlink()
-                except FileNotFoundError:
-                    pass
-                continue
-            owner = "an unreadable or remote owner" if existing is None else (
-                f"pid {existing.get('pid')!r} on host {existing.get('hostname')!r}"
-            )
-            raise AttemptLeaseError(
-                f"output directory is already owned by {owner}: {path}"
-            )
-        else:
-            with os.fdopen(descriptor, "w") as handle:
-                json.dump(record, handle, sort_keys=True)
-                handle.write("\n")
-                handle.flush()
-                os.fsync(handle.fileno())
-            break
+    with _lease_record_guard(path):
+        while True:
+            try:
+                descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            except FileExistsError:
+                existing = _read_record(path)
+                if existing is not None and _reclaimable_local_record(existing, hostname):
+                    try:
+                        path.unlink()
+                    except FileNotFoundError:
+                        pass
+                    continue
+                owner = "an unreadable or remote owner" if existing is None else (
+                    f"pid {existing.get('pid')!r} on host {existing.get('hostname')!r}"
+                )
+                raise AttemptLeaseError(
+                    f"output directory is already owned by {owner}: {path}"
+                )
+            else:
+                with os.fdopen(descriptor, "w") as handle:
+                    json.dump(record, handle, sort_keys=True)
+                    handle.write("\n")
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                break
     lease = AttemptLease(path=path, token=token)
     _LOCAL_LEASES[path] = (token, threading.get_ident())
     try:

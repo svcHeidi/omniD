@@ -222,15 +222,26 @@ def _terminate_process_group(process: subprocess.Popen[Any]) -> None:
     try:
         os.killpg(process.pid, signal.SIGTERM)
     except ProcessLookupError:
+        process.wait()
         return
-    try:
-        process.wait(timeout=1)
-    except subprocess.TimeoutExpired:
+
+    # Waiting only for the direct parent is insufficient: it may accept TERM
+    # and exit while a child in the same owned group ignores the signal. Keep
+    # observing the group itself for the whole grace period, then escalate the
+    # still-owned group even if the direct parent has already been reaped.
+    deadline = time.monotonic() + 1
+    while _has_live_group_members(process) and time.monotonic() < deadline:
+        try:
+            process.wait(timeout=0)
+        except subprocess.TimeoutExpired:
+            pass
+        time.sleep(0.02)
+    if _has_live_group_members(process):
         try:
             os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
+        except (ProcessLookupError, PermissionError):
             pass
-        process.wait()
+    process.wait()
 
 
 def _has_live_group_members(process: subprocess.Popen[Any]) -> bool:
@@ -239,7 +250,7 @@ def _has_live_group_members(process: subprocess.Popen[Any]) -> bool:
         return False
     try:
         os.killpg(process.pid, 0)
-    except ProcessLookupError:
+    except (ProcessLookupError, PermissionError):
         return False
     return True
 

@@ -87,6 +87,46 @@ def test_timeout_records_retryable_diagnostic_and_does_not_leave_descendant(
             os.kill(child_pid, signal.SIGKILL)
 
 
+@pytest.mark.skipif(os.name != "posix", reason="process-group ownership is POSIX-only")
+def test_timeout_escalates_after_parent_exits_but_term_ignoring_child_survives(
+    tmp_path: Path,
+) -> None:
+    """SIGKILL escalation is based on the group, not direct-parent liveness."""
+    pid_file = tmp_path / "term-ignoring-child.pid"
+    child_code = (
+        "import os, pathlib, signal, time; "
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+        f"pathlib.Path({str(pid_file)!r}).write_text(str(os.getpid())); "
+        "time.sleep(30)"
+    )
+    parent_code = (
+        "import subprocess, sys, time; "
+        f"subprocess.Popen([sys.executable, '-c', {child_code!r}]); "
+        "time.sleep(30)"
+    )
+    dag = _dag(["-c", parent_code], timeout_s=1)
+    state = initial_workflow_state(dag)
+    assert state is not None
+
+    result = run_workflow_step(
+        dag, state, "run", case_root=tmp_path, log_dir=tmp_path / "logs"
+    )
+    assert any(
+        diagnostic["code"] == "workflow_step_timeout"
+        for diagnostic in result.state.steps[0].diagnostics
+    )
+    assert pid_file.exists(), "fixture child did not install its SIGTERM handler"
+    child_pid = int(pid_file.read_text())
+    deadline = time.monotonic() + 2
+    try:
+        while time.monotonic() < deadline and _pid_exists(child_pid):
+            time.sleep(0.02)
+        assert not _pid_exists(child_pid), "SIGTERM-ignoring descendant survived cleanup"
+    finally:
+        if _pid_exists(child_pid):
+            os.kill(child_pid, signal.SIGKILL)
+
+
 def test_completed_step_cannot_be_replayed_without_new_owned_state(tmp_path: Path) -> None:
     dag = _dag(["-c", "pass"])
     state = initial_workflow_state(dag)

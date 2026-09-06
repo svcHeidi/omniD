@@ -4,7 +4,8 @@ Updated: 2026-09-06
 
 ## Committed baseline
 
-`080cc88 Harden core workflow and OpenFOAM evidence` was the starting commit.
+`7e6ba4c Harden workflow lifecycle and OpenFOAM resolution` is the committed
+baseline for this follow-up.
 The pre-existing uncommitted changes under `packages/omnidriver-cardiacfoam/`
 were intentionally left untouched.
 
@@ -42,16 +43,23 @@ were intentionally left untouched.
   preserves optional-include and declaration-order semantics. It reports
   runtime-dependent include forms or executable directives instead of treating
   them as ordinary parsing.
+- The post-commit adversarial audit exposed and closed two local races missed
+  by the earlier process/lease tests. Process-group escalation now observes
+  the owned group after the direct parent exits, so a child that ignores
+  `SIGTERM` is still sent `SIGKILL`. Stale-record inspection and replacement
+  are serialized by a stable host-local advisory guard, so a recovering
+  contender cannot unlink a newer live owner's record.
 
 ## Verification evidence
 
 | Check | Result |
 | --- | --- |
 | Focused lifecycle/process/retry/sweep/lease tests | `72 passed` |
+| Adversarial process/lease regression probes added after `7e6ba4c` | `11 passed` |
 | Explicit native v2412 conformance/effective-resolution + directive-inertness + rollback | `17 passed` |
 | OpenFOAM adapter suite | `189 passed, 72 skipped` |
-| Core alone, excluding the slow self-building wheel test | `711 passed, 86 skipped, 1 deselected` |
-| Fresh core wheel | `uv build --wheel` succeeded; `check-wheel-artifact.py` and the core suite in a fresh temporary venv succeeded |
+| Core checkout, excluding the slow self-building wheel test | `738 passed, 90 skipped, 1 deselected` |
+| Fresh core wheel | `uv build --wheel` and `check-wheel-artifact.py` succeeded; fresh Python 3.11 wheel suite: `588 passed, 240 skipped, 1 deselected` |
 | Neutral Python-only plugin without adapters | passed in the fresh core-wheel workflow check; it runs a shell-only case and validates resume/input drift without importing an adapter |
 | Import boundaries | passed |
 | Capability seam export | passed |
@@ -70,7 +78,15 @@ other OpenFOAM releases, forks, platforms, or parser versions.
 - The lease is deliberately host-local. Remote-host and malformed lock files
   fail closed rather than guessing that another owner is stale; coordinated
   multi-host recovery needs a durable shared-lock service or an explicit
-  operator-mediated recovery protocol.
+  operator-mediated recovery protocol. That protocol is deferred while local
+  ownership and planning transactions remain incomplete.
+- Sweep case timeouts still use the convenience subprocess timeout path rather
+  than the workflow runner's owned-group cleanup. Two runs can also mutate the
+  same case through different output directories because the current attempt
+  lease is keyed only by output directory.
+- `step --apply` still mutates after resume validation and outside the attempt
+  lease, without resolving the effective dictionaries and replanning under the
+  same ownership transaction.
 - Dictionary effective resolution is native v2412 evidence, not a replacement
   for a versioned full evaluator. Unsupported include search paths, generated
   entries, environment-dependent substitutions, instance/time selection, and
@@ -82,11 +98,11 @@ other OpenFOAM releases, forks, platforms, or parser versions.
 
 ## Next three priorities
 
-1. Add v2412 fixtures for the remaining explicit effective-resolution limits
-   (include search paths, generated entries, and time/instance selection),
-   keeping executable directives opt-in.
-2. Design a deliberate multi-host lease/recovery protocol; retain the current
-   fail-closed behavior until that ownership authority exists.
+1. Give sweep case subprocesses the same owned process-group timeout cleanup
+   as workflow steps, and add case-root ownership so different output
+   directories cannot concurrently mutate one case.
+2. Put mutation, native effective-dictionary resolution, validated replanning,
+   and dispatch under one lease; make `step --apply` use that transaction.
 3. Begin cardiacFOAM integration only with a separately approved native
    runtime/build plan, then validate its solver-specific contract without
    changing scientific defaults or compatibility rules.
