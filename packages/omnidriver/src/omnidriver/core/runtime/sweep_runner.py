@@ -23,6 +23,7 @@ from .registry import load_entry_spec
 from .run_document_exec import _allowed_runs_root, load_run_document
 from .resume import validate_resume
 from .workflow_state import workflow_state_from_json
+from .workflow_runner import _terminate_process_group
 from .sweep_manifest import (
     CaseManifestEntry,
     SweepManifest,
@@ -34,6 +35,34 @@ from .sweep_manifest import (
 
 if TYPE_CHECKING:
     from ..plugin_interface import DriverContext
+
+
+def _run_case_process(
+    command: list[str],
+    *,
+    env: dict[str, str],
+    timeout: float | None,
+) -> subprocess.CompletedProcess[str]:
+    """Run one sweep case, owning its POSIX process group on timeout."""
+    if timeout is None:
+        return subprocess.run(command, capture_output=True, text=True, env=env)
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+        start_new_session=(os.name == "posix"),
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        _terminate_process_group(process)
+        stdout, stderr = process.communicate()
+        raise subprocess.TimeoutExpired(
+            command, exc.timeout, output=stdout, stderr=stderr,
+        ) from exc
+    return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
 
 
 def _load_spec(spec_path: str | Path) -> dict[str, Any]:
@@ -513,9 +542,9 @@ def sweep_run(
                         run_document_path.write_text(json.dumps(run_document, indent=2))
                         if workflow_state_path.exists():
                             workflow_state_path.unlink()
-                        result = subprocess.run(
+                        result = _run_case_process(
                             [sys.executable, "-m", "omnidriver", "run", "--run-document", str(run_document_path)],
-                            capture_output=True, text=True, env=execution_environment,
+                            env=execution_environment,
                             timeout=case_timeout_s,
                         )
                         if workflow_state_path.exists():
@@ -604,9 +633,8 @@ def sweep_run(
                     try:
                         if workflow_state_path.exists():
                             workflow_state_path.unlink()
-                        result = subprocess.run(
+                        result = _run_case_process(
                             [sys.executable, "-m", "omnidriver", "run", "--run-document", str(run_document_path)],
-                            capture_output=True, text=True,
                             env=execution_environment,
                             timeout=case_timeout_s,
                         )

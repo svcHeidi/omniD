@@ -112,15 +112,19 @@ def _lease_record_guard(path: Path) -> Iterator[None]:
 
 
 @contextmanager
-def acquire_attempt_lease(output_dir: Path) -> Iterator[AttemptLease]:
-    """Exclusively own ``output_dir`` until the context exits.
-
-    A dead same-host owner is reclaimed atomically by removing its record and
-    retrying exclusive creation.  Remote or malformed records fail closed.
-    """
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    path = output_dir / ".omnidriver-attempt.lock"
+def _acquire_local_lease(
+    directory: Path,
+    *,
+    filename: str,
+    resource_label: str,
+    create_directory: bool,
+) -> Iterator[AttemptLease]:
+    directory = Path(directory)
+    if create_directory:
+        directory.mkdir(parents=True, exist_ok=True)
+    elif not directory.is_dir():
+        raise AttemptLeaseError(f"{resource_label} does not exist: {directory}")
+    path = directory / filename
     hostname = socket.gethostname()
     token = str(uuid.uuid4())
     record = {
@@ -146,7 +150,7 @@ def acquire_attempt_lease(output_dir: Path) -> Iterator[AttemptLease]:
                     f"pid {existing.get('pid')!r} on host {existing.get('hostname')!r}"
                 )
                 raise AttemptLeaseError(
-                    f"output directory is already owned by {owner}: {path}"
+                    f"{resource_label} is already owned by {owner}: {path}"
                 )
             else:
                 with os.fdopen(descriptor, "w") as handle:
@@ -167,3 +171,31 @@ def acquire_attempt_lease(output_dir: Path) -> Iterator[AttemptLease]:
         finally:
             if _LOCAL_LEASES.get(path) == (token, threading.get_ident()):
                 _LOCAL_LEASES.pop(path, None)
+
+
+@contextmanager
+def acquire_attempt_lease(output_dir: Path) -> Iterator[AttemptLease]:
+    """Exclusively own ``output_dir`` until the context exits.
+
+    A dead same-host owner is reclaimed atomically by removing its record and
+    retrying exclusive creation. Remote or malformed records fail closed.
+    """
+    with _acquire_local_lease(
+        output_dir,
+        filename=".omnidriver-attempt.lock",
+        resource_label="output directory",
+        create_directory=True,
+    ) as lease:
+        yield lease
+
+
+@contextmanager
+def acquire_case_lease(case_root: Path) -> Iterator[AttemptLease]:
+    """Exclusively own a mutable case independently of its output path."""
+    with _acquire_local_lease(
+        case_root,
+        filename=".omnidriver-case.lock",
+        resource_label="case root",
+        create_directory=False,
+    ) as lease:
+        yield lease

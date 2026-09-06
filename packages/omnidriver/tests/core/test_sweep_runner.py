@@ -1,6 +1,9 @@
 import json
+import os
+import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -9,6 +12,7 @@ import pytest
 
 from omnidriver.core.runtime.sweep_runner import (
     _completed_case_is_reusable,
+    _run_case_process,
     _stage_entry_case,
     sweep_plan,
     sweep_run,
@@ -721,7 +725,7 @@ def test_resume_retries_terminal_failed_case_with_retry_flag(tmp_path):
 def test_sweep_run_case_timeout_marks_failed_and_continues(tmp_path):
     # A case whose run subprocess exceeds case_timeout_s must be recorded as a
     # per-case failure (not crash the whole sweep), and the timeout must be
-    # passed through to subprocess.run.
+    # passed through to the owned case-process launcher.
     spec_path = tmp_path / "sweep.json"
     _write_placeholder_spec(spec_path)
     output_dir = tmp_path / "out"
@@ -745,14 +749,14 @@ def test_sweep_run_case_timeout_marks_failed_and_continues(tmp_path):
 
     seen_kwargs = {}
 
-    def fake_subprocess_run(cmd, **kwargs):
+    def fake_case_process(cmd, **kwargs):
         seen_kwargs.update(kwargs)
         raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout"))
 
     with mock.patch("omnidriver.core.runtime.sweep_runner.route_case_values", return_value={}), \
          mock.patch("omnidriver.core.runtime.sweep_runner.materialize_case", side_effect=fake_materialize), \
          mock.patch("omnidriver.core.runtime.sweep_runner.strict_plan", return_value=fake_report), \
-         mock.patch("omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run):
+         mock.patch("omnidriver.core.runtime.sweep_runner._run_case_process", side_effect=fake_case_process):
         from omnidriver.core.runtime.sweep_runner import sweep_run
         result = sweep_run(spec_path, output_dir=output_dir, case_timeout_s=0.01, driver_context=_CTX)
 
@@ -764,6 +768,50 @@ def test_sweep_run_case_timeout_marks_failed_and_continues(tmp_path):
     assert "timeout" in by_id["x"]["timeout_error"].lower()
     # sweep stayed resumable: manifest was still written
     assert (output_dir / "sweep_manifest.json").exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="process-group ownership is POSIX-only")
+def test_sweep_case_timeout_kills_term_ignoring_descendant(tmp_path):
+    pid_file = tmp_path / "sweep-child.pid"
+    child_code = (
+        "import os, pathlib, signal, time; "
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+        f"pathlib.Path({str(pid_file)!r}).write_text(str(os.getpid())); "
+        "time.sleep(30)"
+    )
+    parent_code = (
+        "import subprocess, sys, time; "
+        f"subprocess.Popen([sys.executable, '-c', {child_code!r}]); "
+        "time.sleep(30)"
+    )
+
+    with pytest.raises(subprocess.TimeoutExpired):
+        _run_case_process(
+            [sys.executable, "-c", parent_code],
+            env=dict(os.environ),
+            timeout=1,
+        )
+
+    assert pid_file.exists(), "fixture child did not install its SIGTERM handler"
+    child_pid = int(pid_file.read_text())
+    deadline = time.monotonic() + 2
+
+    def pid_exists() -> bool:
+        try:
+            os.kill(child_pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        return True
+
+    try:
+        while time.monotonic() < deadline and pid_exists():
+            time.sleep(0.02)
+        assert not pid_exists(), "timed-out sweep descendant survived cleanup"
+    finally:
+        if pid_exists():
+            os.kill(child_pid, signal.SIGKILL)
 
 
 def test_spec_hash_mismatch_is_refused(tmp_path):

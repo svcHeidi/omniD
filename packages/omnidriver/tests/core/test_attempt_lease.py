@@ -12,6 +12,7 @@ import pytest
 from omnidriver.core.runtime.attempt_lease import (
     AttemptLeaseError,
     acquire_attempt_lease,
+    acquire_case_lease,
 )
 from omnidriver.core.runtime.workflow_orchestrator import run_workflow
 from omnidriver.core.runtime.workflow_state import initial_workflow_state
@@ -135,3 +136,36 @@ def test_run_workflow_holds_lease_for_the_whole_attempt(tmp_path: Path) -> None:
     )
     assert outcome.state.status == "completed"
     assert not (tmp_path / "output" / ".omnidriver-attempt.lock").exists()
+
+
+def test_case_owner_blocks_run_through_a_different_output_directory(
+    tmp_path: Path,
+) -> None:
+    dag = {
+        "steps": [{
+            "id": "run", "command": "ignored", "args": [], "cwd": ".",
+            "depends_on": [],
+        }],
+    }
+    state = initial_workflow_state(dag)
+    assert state is not None
+    case_root = tmp_path / "case"
+    case_root.mkdir()
+
+    with acquire_case_lease(case_root):
+        with pytest.raises(AttemptLeaseError, match="case root is already owned"):
+            run_workflow(
+                dag,
+                state,
+                case_root=case_root,
+                output_dir=tmp_path / "other-output",
+            )
+    assert not (tmp_path / "other-output" / ".omnidriver-attempt.lock").exists()
+
+
+def test_case_lease_does_not_invent_a_missing_case_root(tmp_path: Path) -> None:
+    case_root = tmp_path / "missing-case"
+    with pytest.raises(AttemptLeaseError, match="case root does not exist"):
+        with acquire_case_lease(case_root):
+            pass
+    assert not case_root.exists()

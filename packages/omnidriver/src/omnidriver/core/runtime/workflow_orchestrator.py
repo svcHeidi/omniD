@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from .failure_classification import classify_failure
-from .attempt_lease import acquire_attempt_lease
+from .attempt_lease import acquire_attempt_lease, acquire_case_lease
 from .workflow_runner import _atomic_write_json, _step_by_id, _step_state_by_id, run_workflow_step
 from .workflow_state import WorkflowRunState, WorkflowStepState, replace_step_state
 
@@ -52,15 +52,16 @@ def run_workflow(
     env: dict[str, str] | None = None,
     driver_context: DriverContext | None = None,
 ) -> WorkflowRunOutcome:
-    """Run one workflow while exclusively owning its output directory."""
-    with acquire_attempt_lease(output_dir):
-        return _run_workflow_locked(
-            workflow_dag, workflow_state, case_root=case_root, output_dir=output_dir,
-            expected_artifacts=expected_artifacts, default_max_attempts=default_max_attempts,
-            max_total_attempts=max_total_attempts,
-            classification_overrides=classification_overrides, runner=runner,
-            sleep=sleep, state_path=state_path, env=env, driver_context=driver_context,
-        )
+    """Run one workflow while exclusively owning its case and output."""
+    with acquire_case_lease(case_root):
+        with acquire_attempt_lease(output_dir):
+            return _run_workflow_locked(
+                workflow_dag, workflow_state, case_root=case_root, output_dir=output_dir,
+                expected_artifacts=expected_artifacts, default_max_attempts=default_max_attempts,
+                max_total_attempts=max_total_attempts,
+                classification_overrides=classification_overrides, runner=runner,
+                sleep=sleep, state_path=state_path, env=env, driver_context=driver_context,
+            )
 
 
 def _run_workflow_locked(
