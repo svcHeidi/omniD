@@ -4,9 +4,11 @@ Updated: 2026-09-07
 
 ## Committed baseline
 
-`d9d947e Own case roots and sweep process groups` is the latest committed
-baseline for this follow-up, after `cf097b3 Close local lease and process
-cleanup races` and `7e6ba4c Harden workflow lifecycle and OpenFOAM resolution`.
+`067ebde Resolve selected runtime include dependencies` is the latest committed
+baseline for this follow-up, after `d96655c Own mutation planning and dispatch
+transaction`, `d9d947e Own case roots and sweep process groups`, `cf097b3 Close
+local lease and process cleanup races`, and `7e6ba4c Harden workflow lifecycle
+and OpenFOAM resolution`.
 The pre-existing uncommitted changes under `packages/omnidriver-cardiacfoam/`
 were intentionally left untouched.
 
@@ -70,23 +72,40 @@ were intentionally left untouched.
   environment key, and has a native v2412 fixture proving the resolved value.
   A separate native `#calc` fixture proves executable evaluation remains gated
   unless the caller explicitly opts in; `#includeFunc` still reports unresolved.
+- Agent-proposed edits now create a case-local atomic remediation journal before
+  mutation. Its states distinguish `applying`, `accepted`, `rejected`, and
+  `rolled_back`; an interrupted transaction always blocks reuse, and a rejected
+  candidate requires a new explicit repair. Rejected candidates copy their
+  inspected case files into a transaction-specific output archive, while every
+  transaction retains a durable record under the output directory. Journal
+  transitions flush and `fsync` their file before atomic replacement and also
+  `fsync` the containing directory on POSIX.
+- The apply document may now carry a hypothesis alongside its override list.
+  Transaction records bind that hypothesis and proposal digest to the new plan,
+  parent transaction, execution attempt, and outcome, and flag an unchanged
+  proposal repeated after failure. This records an agent repair loop without
+  changing automatic retry policy or imposing a new experiment limit.
+- External files observed by accepted effective-resolution evidence are now
+  required provenance inputs. Modifying or removing a selected runtime include
+  therefore invalidates resume evidence just like changing an in-case input.
 
 ## Verification evidence
 
 | Check | Result |
 | --- | --- |
 | Focused transaction/fresh/process/lease/effective-resolution tests | `71 passed` |
+| Focused remediation-journal, agent-loop, and external-provenance tests | `54 passed` |
 | Adversarial process/lease regression probes added after `7e6ba4c` | `11 passed` |
 | Focused case/sweep ownership tests | `41 passed` |
 | Explicit native v2412 conformance/effective-resolution + directive-inertness + rollback | `17 passed` |
 | OpenFOAM adapter suite | `196 passed, 72 skipped` |
-| Core checkout, excluding the slow self-building wheel test | `748 passed, 90 skipped, 1 deselected` |
-| Fresh core wheel | `uv build --wheel` and `check-wheel-artifact.py` succeeded; fresh Python 3.11 wheel suite: `598 passed, 240 skipped, 1 deselected` |
+| Core checkout, excluding the slow self-building wheel test | `755 passed, 90 skipped, 1 deselected` |
+| Fresh core wheel | `uv build --wheel` and `check-wheel-artifact.py` succeeded; fresh Python 3.11 wheel suite: `605 passed, 240 skipped, 1 deselected` |
 | Neutral Python-only plugin without adapters | passed in the fresh core-wheel workflow check; it runs a shell-only case and validates resume/input drift without importing an adapter |
 | Import boundaries | passed |
 | Capability seam export | passed |
 | CardiacFOAM workflow-planning test seam | `3 passed`; the tests now inspect the planned workflow commands, rather than assuming all launches use `subprocess.run`. No solver was launched. |
-| Current checkout package suites, run separately | `1711 passed, 263 skipped, 1 deselected, 40 subtests passed` |
+| Current checkout package suites, run separately | `1718 passed, 263 skipped, 1 deselected, 40 subtests passed` |
 
 The native evidence above is specifically from `/Volumes/OpenFOAM-v2412`
 using its `foamDictionary` after sourcing `etc/bashrc`. It is not a claim for
@@ -103,16 +122,18 @@ other OpenFOAM releases, forks, platforms, or parser versions.
   operator-mediated recovery protocol. That protocol is deferred while local
   ownership and planning transactions remain incomplete.
 - The case/output lease transaction is host-local and prevents concurrent
-  writers, but it is not yet a crash-recoverable multi-file patch transaction.
-  A mutation failure rolls back its target files; a later native-resolution or
-  replanning refusal is audited but can leave the already-applied edit in the
-  isolated execution case for operator inspection.
+  writers. Ordinary mutation exceptions roll back target files; a crash or a
+  later native-resolution/replanning refusal intentionally leaves the candidate
+  in its disposable staged case, clearly marked interrupted/rejected and blocked
+  from silent reuse. There is not yet a dedicated recovery command for an
+  arbitrary caller-owned external case; it must be restored or restaged by the
+  operator before an interrupted marker can be cleared safely.
 - Dictionary effective resolution is native v2412 evidence, not a replacement
   for a versioned full evaluator. Function-object include search, generated
   entries, instance/time selection, and executable directives remain explicit
-  unresolved/runtime operations. The
-  post-mutation evidence records inspected dependencies, but dependencies
-  outside the case are not yet promoted into the resumable provenance snapshot.
+  unresolved/runtime operations. External dependencies are promoted to resume
+  evidence after an accepted apply transaction; ordinary non-mutating planning
+  does not yet produce the same effective-configuration dependency set.
 - The completed cardiacFOAM test-seam adjustment validates the planned
   pre-solve/solver command sequence before generic execution. It is not
   cardiacFOAM runtime evidence: no cardiacFOAM source, build, scientific
@@ -120,12 +141,15 @@ other OpenFOAM releases, forks, platforms, or parser versions.
 
 ## Next three priorities
 
-1. Turn the owned apply sequence into a journaled or staged patch commit so a
-   native-resolution/replanning refusal and a crash cannot leave a partially
-   accepted case; promote inspected external dependencies into resume evidence.
+1. Add an explicit restore/restage operation for interrupted caller-owned cases,
+   and ensure every mutable execution path can opt into a disposable candidate
+   case rather than requiring manual recovery.
 2. Add v2412 fixtures for remaining explicit effective-resolution limits,
    including function-object includes, generated entries, and time/instance
    selection, while keeping executable directives opt-in.
-3. Begin cardiacFOAM integration only with a separately approved native
-   runtime/build plan, then validate its solver-specific contract without
-   changing scientific defaults or compatibility rules.
+3. Build the active agent repair orchestrator on the transaction records:
+   compare evidence between hypotheses, apply configurable execution/time
+   budgets, and stop repeated unchanged failures without conflating that policy
+   with automatic process retry. Then begin cardiacFOAM integration only with a
+   separately approved native runtime/build plan, validating its solver-specific
+   contract without changing scientific defaults or compatibility rules.

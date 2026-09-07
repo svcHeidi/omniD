@@ -18,6 +18,10 @@ from omnidriver.core.plugin_capabilities import ResolvedInput, RuntimeDependency
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.plugin_profile import PluginProfile
 from omnidriver.core.runtime.provenance_inputs import enumerate_case_inputs
+from omnidriver.core.runtime.remediation_transaction import (
+    begin_remediation_transaction,
+    finish_remediation_transaction,
+)
 from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
 
 
@@ -382,6 +386,42 @@ def test_optional_required_input_that_is_absent_is_not_added(tmp_path: Path) -> 
     )
 
     assert "Optional" not in _paths(components)
+
+
+def test_accepted_external_effective_dependency_is_fingerprinted(
+    tmp_path: Path,
+) -> None:
+    case_root = tmp_path / "case"
+    case_root.mkdir()
+    _write_control_dict(case_root, start_from="startTime", start_time="0")
+    external = tmp_path / "runtime" / "included.cfg"
+    external.parent.mkdir()
+    external.write_text("value 1;\n")
+    transaction = begin_remediation_transaction(
+        case_root,
+        output_dir=tmp_path / "output",
+        step_id="solve",
+        overrides=[{"driver_path": "value", "value": "1"}],
+        hypothesis="use the runtime-provided value",
+    )
+    finish_remediation_transaction(
+        case_root,
+        transaction,
+        status="accepted",
+        effective_resolution=({"inspected_files": [str(external)]},),
+    )
+    context = driver_context(_FakePlugin(), source="test")
+
+    before = enumerate_case_inputs(
+        case_root, workflow_dag={"steps": []}, driver_context=context,
+    )
+    external.write_text("value 2;\n")
+    after = enumerate_case_inputs(
+        case_root, workflow_dag={"steps": []}, driver_context=context,
+    )
+
+    dependency_name = f"effective_config:{external.resolve()}"
+    assert _by_path(before, dependency_name).digest != _by_path(after, dependency_name).digest
 
 
 def test_processor_selected_time_is_included_other_processor_times_excluded(tmp_path: Path) -> None:

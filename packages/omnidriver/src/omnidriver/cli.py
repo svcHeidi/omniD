@@ -145,6 +145,27 @@ def _attach_failure_context(payload: dict, state, step_id: str | None, *, tail_l
         payload["failure_context"] = fc
 
 
+def _remediation_transaction_payload(transaction: dict | None) -> dict | None:
+    if transaction is None:
+        return None
+    return {
+        key: transaction.get(key)
+        for key in (
+            "transaction_id",
+            "status",
+            "hypothesis",
+            "proposal_digest",
+            "plan_digest",
+            "parent_transaction_id",
+            "repeats_failed_proposal",
+            "candidate_archive",
+            "execution_status",
+            "execution_attempt",
+        )
+        if key in transaction
+    }
+
+
 def _execute_step(
     *,
     entry_label: str,
@@ -165,6 +186,26 @@ def _execute_step(
     Shared by the --entry (strict_plan) path and the --run-document path.
     Resumes from an existing workflow_state.json under output_dir when present.
     """
+    from .core.runtime.remediation_transaction import (
+        RemediationTransactionError,
+        begin_remediation_transaction,
+        finish_remediation_transaction,
+        record_remediation_outcome,
+        require_reusable_case,
+    )
+
+    try:
+        require_reusable_case(
+            case_root, explicit_repair=apply_overrides_path is not None,
+        )
+    except RemediationTransactionError as exc:
+        print(json.dumps({
+            "status": "failed",
+            "entry": entry_label,
+            "step": step_id,
+            "error": str(exc),
+        }, indent=2))
+        return 1
     state_path = output_dir / "workflow_state.json"
     workflow_state = planned_state
     if state_path.exists():
@@ -185,11 +226,25 @@ def _execute_step(
             }, indent=2))
             return 1
     overrides = None
+    hypothesis = None
+    remediation_transaction = None
     effective_resolution: tuple[dict, ...] = ()
     mutation_applied = False
     if apply_overrides_path is not None:
         try:
-            overrides = json.loads(Path(apply_overrides_path).read_text())
+            proposal = json.loads(Path(apply_overrides_path).read_text())
+            if isinstance(proposal, dict):
+                overrides = proposal.get("overrides")
+                hypothesis = proposal.get("hypothesis")
+                if hypothesis is not None and not isinstance(hypothesis, str):
+                    raise ValueError("--apply hypothesis must be a string")
+            else:
+                overrides = proposal
+            if not isinstance(overrides, list):
+                raise ValueError(
+                    "--apply must be an override list or an object containing "
+                    "an overrides list and optional hypothesis"
+                )
             if driver_context is None:
                 raise ValueError(
                     "--apply needs a driver context to resolve the plugin's "
@@ -197,6 +252,13 @@ def _execute_step(
                 )
             # OverrideError subclasses ValueError, so ValueError covers it and
             # core needs no import of the exception type.
+            remediation_transaction = begin_remediation_transaction(
+                case_root,
+                output_dir=output_dir,
+                step_id=step_id,
+                overrides=overrides,
+                hypothesis=hypothesis,
+            )
             effective_resolution = driver_context.capabilities.override_scopes.apply(
                 overrides,
                 case_root=case_root,
@@ -230,7 +292,22 @@ def _execute_step(
             expected_artifacts = replanned.expected_artifacts
             if not state_path.exists():
                 workflow_state = replanned.planned_state
+            remediation_transaction = finish_remediation_transaction(
+                case_root,
+                remediation_transaction,
+                status="accepted",
+                effective_resolution=effective_resolution,
+                plan_digest=workflow_digest(workflow_dag),
+            )
         except (OSError, ValueError) as exc:
+            if remediation_transaction is not None:
+                remediation_transaction = finish_remediation_transaction(
+                    case_root,
+                    remediation_transaction,
+                    status="rejected" if mutation_applied else "rolled_back",
+                    effective_resolution=effective_resolution,
+                    error=str(exc),
+                )
             if mutation_applied and overrides is not None:
                 append_remediation_record(
                     output_dir,
@@ -240,12 +317,18 @@ def _execute_step(
                     resulting_status="replan_error",
                     effective_resolution=effective_resolution,
                 )
-            print(json.dumps({
+            failure_payload = {
                 "status": "failed",
                 "entry": entry_label,
                 "step": step_id,
                 "error": f"--apply rejected: {exc}",
-            }, indent=2))
+            }
+            transaction_payload = _remediation_transaction_payload(
+                remediation_transaction,
+            )
+            if transaction_payload is not None:
+                failure_payload["remediation_transaction"] = transaction_payload
+            print(json.dumps(failure_payload, indent=2))
             return 1
     try:
         result = run_workflow_step(
@@ -261,6 +344,13 @@ def _execute_step(
             leases_held=True,
         )
     except Exception as exc:
+        if remediation_transaction is not None:
+            remediation_transaction = record_remediation_outcome(
+                case_root,
+                remediation_transaction,
+                execution_status="error",
+                attempt=_step_state_by_id(workflow_state, step_id).attempt,
+            )
         if overrides is not None:
             try:
                 _attempt = _step_state_by_id(workflow_state, step_id).attempt
@@ -271,13 +361,19 @@ def _execute_step(
                 applied_overrides=overrides, resulting_status="rerun_error",
                 effective_resolution=effective_resolution,
             )
-        print(json.dumps({
+        failure_payload = {
             "status": "failed",
             "entry": entry_label,
             "step": step_id,
             "error": str(exc),
             "workflow_state": workflow_state.to_json(),
-        }, indent=2))
+        }
+        transaction_payload = _remediation_transaction_payload(
+            remediation_transaction,
+        )
+        if transaction_payload is not None:
+            failure_payload["remediation_transaction"] = transaction_payload
+        print(json.dumps(failure_payload, indent=2))
         return 1
     step_state = _step_state_by_id(result.state, step_id)
     status = _terminal_status_label(step_state.status)
@@ -293,6 +389,13 @@ def _execute_step(
     )
     _attach_failure_context(payload, result.state, step_id, tail_lines=tail_lines)
     if overrides is not None:
+        if remediation_transaction is not None:
+            remediation_transaction = record_remediation_outcome(
+                case_root,
+                remediation_transaction,
+                execution_status=status,
+                attempt=step_state.attempt,
+            )
         append_remediation_record(
             output_dir,
             step_id=step_id,
@@ -302,6 +405,9 @@ def _execute_step(
             effective_resolution=effective_resolution,
         )
         payload["effective_dictionary_resolution"] = list(effective_resolution)
+        payload["remediation_transaction"] = _remediation_transaction_payload(
+            remediation_transaction,
+        )
     print(json.dumps(payload, indent=2))
     return 0 if status == "ok" else 1
 
@@ -849,8 +955,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--apply",
         metavar="OVERRIDES_JSON",
-        help="action=step only: apply an override set (JSON list of "
-             "{driver_path, value}) to the case, then rerun the step.",
+        help=(
+            "action=step only: apply an override set (JSON list of "
+            "{driver_path, value}, or {hypothesis, overrides}) to the case, "
+            "validate a new plan, then rerun the step."
+        ),
     )
     parser.add_argument(
         "--continue-on-error",

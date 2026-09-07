@@ -15,6 +15,10 @@ from omnidriver.core.runtime.attempt_lease import (
 )
 from omnidriver.core.runtime.workflow_runner import WorkflowStepRunResult
 from omnidriver.core.runtime.workflow_state import initial_workflow_state
+from omnidriver.core.runtime.remediation_transaction import (
+    begin_remediation_transaction,
+    read_remediation_transaction,
+)
 
 
 def _dag(command: str = "ignored") -> dict:
@@ -49,7 +53,10 @@ def test_apply_replan_and_dispatch_share_case_and_output_ownership(
     case_root.mkdir()
     output_dir = tmp_path / "output"
     apply_path = tmp_path / "overrides.json"
-    apply_path.write_text('[{"driver_path": "value", "value": "2"}]')
+    apply_path.write_text(json.dumps({
+        "hypothesis": "the proposed value removes the observed instability",
+        "overrides": [{"driver_path": "value", "value": "2"}],
+    }))
     dag = _dag()
     state = initial_workflow_state(dag)
     assert state is not None
@@ -100,6 +107,13 @@ def test_apply_replan_and_dispatch_share_case_and_output_ownership(
 
     assert cli._dispatch_context(_args(apply_path), context) == 0
     assert events == ["apply", "replan", "dispatch"]
+    transaction = read_remediation_transaction(case_root)
+    assert transaction["status"] == "accepted"
+    assert transaction["hypothesis"] == (
+        "the proposed value removes the observed instability"
+    )
+    assert transaction["execution_status"] == "ok"
+    assert transaction["execution_attempt"] == 1
 
 
 def test_changed_replanned_workflow_is_refused_before_dispatch(
@@ -250,3 +264,43 @@ def test_fresh_refuses_live_output_owner_before_deleting_contents(
     assert sentinel.read_text() == "owned"
     payload = json.loads(capsys.readouterr().out)
     assert "output directory is already owned" in payload["error"]
+
+
+def test_interrupted_configuration_blocks_cli_dispatch(
+    monkeypatch, capsys, tmp_path: Path,
+) -> None:
+    case_root = tmp_path / "case"
+    case_root.mkdir()
+    output_dir = tmp_path / "output"
+    begin_remediation_transaction(
+        case_root,
+        output_dir=output_dir,
+        step_id="run",
+        overrides=[{"driver_path": "value", "value": "2"}],
+        hypothesis="candidate interrupted before validation",
+    )
+    dag = _dag()
+    state = initial_workflow_state(dag)
+    assert state is not None
+    context = cli._ExecutionContext(
+        entry_label="case",
+        workflow_dag=dag,
+        planned_state=state,
+        case_root=case_root,
+        output_dir=output_dir,
+        expected_artifacts=(),
+    )
+    args = _args(tmp_path / "unused.json")
+    args.apply = None
+    monkeypatch.setattr(
+        cli,
+        "run_workflow_step",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("interrupted candidate must not dispatch")
+        ),
+    )
+
+    assert cli._dispatch_context(args, context) == 1
+
+    payload = json.loads(capsys.readouterr().out)
+    assert "was interrupted" in payload["error"]

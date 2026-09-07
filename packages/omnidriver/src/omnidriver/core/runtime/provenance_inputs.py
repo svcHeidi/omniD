@@ -346,6 +346,17 @@ def enumerate_case_inputs(
     for dependency in capabilities.runtime_evidence.extra_provenance_paths(case_root):
         dependencies[dependency.name] = dependency
 
+    # An accepted agent repair may resolve configuration through files outside
+    # the case (for example a selected runtime's shared include directory).
+    # Promote those observed dependencies into the ordinary resume snapshot so
+    # a later external edit invalidates reuse instead of silently changing the
+    # effective configuration.
+    from .remediation_transaction import accepted_external_dependencies
+
+    for path in accepted_external_dependencies(case_root):
+        name = f"effective_config:{path}"
+        dependencies[name] = RuntimeDependency(name=name, path=path, required=True)
+
     for dependency in dependencies.values():
         add(component_for_runtime_dependency(dependency))
 
