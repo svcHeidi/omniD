@@ -189,6 +189,7 @@ def _execute_step(
     from .core.runtime.remediation_transaction import (
         RemediationTransactionError,
         begin_remediation_transaction,
+        baseline_is_restored,
         finish_remediation_transaction,
         record_remediation_outcome,
         require_reusable_case,
@@ -258,6 +259,11 @@ def _execute_step(
                 step_id=step_id,
                 overrides=overrides,
                 hypothesis=hypothesis,
+                target_paths=driver_context.capabilities.override_scopes.target_paths(
+                    overrides,
+                    case_root=case_root,
+                    driver_context=driver_context,
+                ),
             )
             effective_resolution = driver_context.capabilities.override_scopes.apply(
                 overrides,
@@ -301,10 +307,15 @@ def _execute_step(
             )
         except (OSError, ValueError) as exc:
             if remediation_transaction is not None:
+                restored = baseline_is_restored(
+                    case_root,
+                    remediation_transaction,
+                    output_dir=output_dir,
+                )
                 remediation_transaction = finish_remediation_transaction(
                     case_root,
                     remediation_transaction,
-                    status="rejected" if mutation_applied else "rolled_back",
+                    status="rolled_back" if restored else "rejected",
                     effective_resolution=effective_resolution,
                     error=str(exc),
                 )
@@ -813,6 +824,24 @@ def _dispatch_context_owned(args, context: _ExecutionContext) -> int:
                     "error": fresh_error,
                 }, indent=2))
                 return 1
+        from .core.runtime.remediation_transaction import (
+            RemediationTransactionError,
+            require_reusable_case,
+        )
+
+        try:
+            require_reusable_case(
+                context.case_root,
+                explicit_repair=args.action == "step" and args.apply is not None,
+            )
+        except RemediationTransactionError as exc:
+            print(json.dumps({
+                "status": "failed",
+                "entry": context.entry_label,
+                "action": args.action,
+                "error": str(exc),
+            }, indent=2))
+            return 1
         if args.action == "step":
             return _execute_step(
                 entry_label=context.entry_label,
@@ -851,6 +880,43 @@ def _run_document_dispatch(args, driver_context) -> int:
     return _dispatch_context(args, context)
 
 
+def _recover_remediation(args) -> int:
+    """Restore one interrupted/rejected transaction without planning or running."""
+    from .core.runtime.remediation_transaction import (
+        RemediationTransactionError,
+        restore_remediation_transaction,
+    )
+
+    case_root = Path(args.case_root).resolve()
+    output_dir = Path(args.output_dir).resolve()
+    try:
+        with acquire_case_lease(case_root):
+            with acquire_attempt_lease(output_dir):
+                restored = restore_remediation_transaction(
+                    case_root,
+                    output_dir=output_dir,
+                    transaction_id=args.transaction_id,
+                )
+    except (AttemptLeaseError, RemediationTransactionError, OSError) as exc:
+        print(json.dumps({
+            "status": "failed",
+            "action": "recover",
+            "case_root": str(case_root),
+            "output_dir": str(output_dir),
+            "error": str(exc),
+        }, indent=2))
+        return 1
+    print(json.dumps({
+        "status": "ok",
+        "action": "recover",
+        "case_root": str(case_root),
+        "output_dir": str(output_dir),
+        "transaction": _remediation_transaction_payload(restored),
+        "restored_targets": restored.get("restored_targets", []),
+    }, indent=2))
+    return 0
+
+
 def resolve_cases_root(explicit: str | Path | None = None) -> Path:
     """Where to look for cases, resolved at the public edge only.
 
@@ -876,7 +942,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "action",
         choices=[
-            "describe", "plan", "step", "run", "sweep-plan", "sweep-run",
+            "describe", "plan", "step", "run", "recover", "sweep-plan", "sweep-run",
         ],
         help="Pipeline stage to execute",
     )
@@ -981,6 +1047,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--cases-root",
         help=(
             "Optional path to the tutorials folder. Defaults to '<repo>/tutorials' when present."
+        ),
+    )
+    parser.add_argument(
+        "--case-root",
+        help=(
+            "For action=recover: exact case directory carrying the current "
+            "remediation transaction marker."
+        ),
+    )
+    parser.add_argument(
+        "--transaction-id",
+        help=(
+            "For action=recover: optional expected current transaction id; "
+            "a mismatch fails without restoring anything."
         ),
     )
     parser.add_argument(
@@ -1143,10 +1223,20 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
         parser.error("--fresh and --retry-failed are mutually exclusive")
     if args.max_cases != 200 and args.action not in {"sweep-plan", "sweep-run"}:
         parser.error("--max-cases is only valid with action=sweep-plan or action=sweep-run")
-    if args.action not in {"sweep-plan", "sweep-run"} and (args.spec or args.output_dir):
+    if args.action not in {"sweep-plan", "sweep-run", "recover"} and (args.spec or args.output_dir):
         parser.error("--spec/--output-dir are only valid with action=sweep-plan or action=sweep-run")
+    if args.action == "recover":
+        if not args.case_root or not args.output_dir:
+            parser.error("action=recover requires --case-root and --output-dir")
+        if any((args.entry, args.run_document, args.config, args.cases_root, args.spec)):
+            parser.error(
+                "--entry/--run-document/--config/--cases-root/--spec are not valid "
+                "with action=recover"
+            )
+    elif args.case_root or args.transaction_id:
+        parser.error("--case-root/--transaction-id are only valid with action=recover")
     if not args.run_document and not args.entry and args.action not in {
-        "sweep-plan", "sweep-run"
+        "recover", "sweep-plan", "sweep-run"
     }:
         parser.error("--entry is required (or use --run-document with action=run/step)")
 
@@ -1155,6 +1245,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     _validate_args(parser, args)
+
+    if args.action == "recover":
+        return _recover_remediation(args)
 
     from .core.plugin_interface import (
         default_driver_context,

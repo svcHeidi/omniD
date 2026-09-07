@@ -24,6 +24,7 @@ context were still missing we would get ``TypeError`` instead.
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -91,3 +92,32 @@ def test_the_fallback_refuses_cleanly_when_openfoam_is_not_installed(monkeypatch
         context.capabilities.override_scopes.apply(
             [], case_root="/tmp", driver_context=context,
         )
+
+
+def test_custom_mutator_must_declare_its_complete_target_set(tmp_path: Path) -> None:
+    class CustomMutator(minimal_plugin.MinimalOpenFOAMPlugin):
+        def apply_overrides(self, overrides, *, case_root):
+            del overrides, case_root
+
+    context = driver_context(CustomMutator(), source="test:custom-mutator")
+
+    with pytest.raises(ValueError, match="get_override_target_paths"):
+        context.capabilities.override_scopes.target_paths(
+            [], case_root=tmp_path, driver_context=context,
+        )
+
+
+def test_custom_target_declaration_is_exposed_without_mutating(tmp_path: Path) -> None:
+    class DeclaredMutator(minimal_plugin.MinimalOpenFOAMPlugin):
+        def apply_overrides(self, overrides, *, case_root):
+            del overrides, case_root
+
+        def get_override_target_paths(self, overrides, *, case_root):
+            del overrides
+            return (case_root / "system" / "fvSchemes",)
+
+    context = driver_context(DeclaredMutator(), source="test:declared-mutator")
+
+    assert context.capabilities.override_scopes.target_paths(
+        [], case_root=tmp_path, driver_context=context,
+    ) == (tmp_path / "system" / "fvSchemes",)

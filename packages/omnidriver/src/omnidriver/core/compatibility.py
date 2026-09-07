@@ -252,6 +252,21 @@ def legacy_apply_overrides(
 
 
 @_instrumented
+def legacy_override_target_paths(overrides, *, case_root, driver_context) -> tuple:
+    """Resolve the OpenFOAM-shaped fallback's complete mutation target set."""
+    try:
+        from omnidriver.openfoam.apply_overrides import override_target_paths
+    except ImportError as exc:
+        raise ValueError(
+            f"plugin {driver_context.identity.id!r} cannot prepare crash-safe "
+            "override targets because omnidriver-openfoam is not installed"
+        ) from exc
+    return override_target_paths(
+        overrides, case_root=case_root, driver_context=driver_context,
+    )
+
+
+@_instrumented
 def legacy_function_object_field_diagnostics(case_root, *, samplable) -> tuple:
     """Plugins predating get_function_object_field_diagnostics().
     strict_planning.py has always warned about controlDict function objects

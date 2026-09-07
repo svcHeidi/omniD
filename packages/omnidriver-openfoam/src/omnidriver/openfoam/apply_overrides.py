@@ -255,21 +255,9 @@ def apply_overrides(
         for regen_scope in driver_context.capabilities.dict_regeneration.scopes()
         for key in regen_scope.selector_keys
     }
-    paths: set[Path] = set()
-    for ov in overrides:
-        dp = ov["driver_path"]
-        if ":" in dp:
-            relpath = dp.partition(":")[0]
-        elif dp in regen_scope_by_key:
-            relpath = regen_scope_by_key[dp].file_relpath
-        elif dp.startswith("$"):
-            relpath = scope_by_token[_scope_token(dp)].file_relpath
-        else:
-            relpath = "system/controlDict"
-        target = (case_root / relpath).resolve()
-        if not target.is_relative_to(case_root.resolve()):
-            raise OverrideError(f"override target is outside the case: {relpath}")
-        paths.add(target)
+    paths = set(override_target_paths(
+        overrides, case_root=case_root, driver_context=driver_context,
+    ))
     with _restore_on_failure(paths):
         _apply_validated_overrides(overrides, case_root, scope_by_token, regen_scope_by_key)
     if execution_env is None:
@@ -309,6 +297,49 @@ def apply_overrides(
             **asdict(result),
         })
     return tuple(evidence)
+
+
+def override_target_paths(
+    overrides: list[dict[str, Any]],
+    *,
+    case_root: Path,
+    driver_context: "DriverContext",
+) -> tuple[Path, ...]:
+    """Resolve the complete finite mutation target set without writing."""
+    validate_overrides(overrides, driver_context=driver_context)
+    scope_by_token = {
+        scope.token: scope
+        for scope in driver_context.capabilities.override_scopes.scopes()
+    }
+    regen_scope_by_key: dict[str, RegenerationScope] = {
+        key: regen_scope
+        for regen_scope in driver_context.capabilities.dict_regeneration.scopes()
+        for key in regen_scope.selector_keys
+    }
+    paths: set[Path] = set()
+    for ov in overrides:
+        dp = ov["driver_path"]
+        if ":" in dp:
+            relpath = dp.partition(":")[0]
+        elif dp in regen_scope_by_key:
+            relpath = regen_scope_by_key[dp].file_relpath
+        elif dp.startswith("$"):
+            relpath = scope_by_token[_scope_token(dp)].file_relpath
+        else:
+            relpath = "system/controlDict"
+        target = case_root / relpath
+        resolved_root = case_root.resolve()
+        if (
+            not target.parent.resolve().is_relative_to(resolved_root)
+            or not target.resolve().is_relative_to(resolved_root)
+        ):
+            raise OverrideError(f"override target is outside the case: {relpath}")
+        if target.is_symlink():
+            raise OverrideError(
+                f"override target may not be a symlink: {relpath}"
+            )
+        paths.add(target)
+    return tuple(sorted(paths))
 
 
 def _effective_value_text(value: Any) -> str:

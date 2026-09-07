@@ -732,13 +732,17 @@ class OverrideScopeCapability(Protocol):
     else, matching the pattern already used by
     :class:`ReportCatalogCapability`/:class:`NamedCatalogsCapability`.
 
-    :adapts: get_override_scopes, apply_overrides
+    :adapts: get_override_scopes, get_override_target_paths, apply_overrides
     :consumed-by: omnidriver/openfoam/apply_overrides.py, omnidriver/cli.py
-    :fallback: legacy_override_scopes, legacy_apply_overrides
+    :fallback: legacy_override_scopes, legacy_override_target_paths, legacy_apply_overrides
     :status: optional
     """
 
     def scopes(self) -> tuple["OverrideScope", ...]: ...
+
+    def target_paths(
+        self, overrides: Any, *, case_root: Any, driver_context: Any,
+    ) -> tuple[Path, ...]: ...
 
     def apply(
         self, overrides: Any, *, case_root: Any, driver_context: Any,
@@ -1318,6 +1322,24 @@ class _OverrideScopeAdapter:
         return legacy_apply_overrides(
             overrides, case_root=case_root, driver_context=driver_context,
             execution_env=execution_env,
+        )
+
+    def target_paths(
+        self, overrides: Any, *, case_root: Any, driver_context: Any,
+    ) -> tuple[Path, ...]:
+        hook = getattr(self.plugin, "get_override_target_paths", None)
+        if callable(hook):
+            return tuple(Path(path) for path in hook(overrides, case_root=case_root))
+        if callable(getattr(self.plugin, "apply_overrides", None)):
+            raise ValueError(
+                f"plugin {self.plugin.plugin_id!r} implements apply_overrides() "
+                "but does not declare get_override_target_paths(); crash-safe "
+                "--apply is unavailable"
+            )
+        from .compatibility import legacy_override_target_paths
+
+        return legacy_override_target_paths(
+            overrides, case_root=case_root, driver_context=driver_context,
         )
 
 

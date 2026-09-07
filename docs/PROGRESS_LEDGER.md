@@ -4,8 +4,9 @@ Updated: 2026-09-07
 
 ## Committed baseline
 
-`067ebde Resolve selected runtime include dependencies` is the latest committed
-baseline for this follow-up, after `d96655c Own mutation planning and dispatch
+`0f50720 Journal agent repairs and bind external inputs` is the latest committed
+baseline for this follow-up, after `067ebde Resolve selected runtime include
+dependencies`, `d96655c Own mutation planning and dispatch
 transaction`, `d9d947e Own case roots and sweep process groups`, `cf097b3 Close
 local lease and process cleanup races`, and `7e6ba4c Harden workflow lifecycle
 and OpenFOAM resolution`.
@@ -88,6 +89,20 @@ were intentionally left untouched.
 - External files observed by accepted effective-resolution evidence are now
   required provenance inputs. Modifying or removing a selected runtime include
   therefore invalidates resume evidence just like changing an in-case input.
+- Before publishing an `applying` transaction, core now requires the plugin to
+  declare the complete finite mutation target set and stores byte-for-byte,
+  mode-preserving before-images in the transaction output. A plugin with a
+  custom mutator but no target-declaration hook fails closed.
+- `recover --case-root ... --output-dir ...` restores those exact before-images
+  while owning both case and output leases, removes targets that were originally
+  absent, and archives the interrupted/rejected candidate first. Backup paths,
+  hashes, target confinement, symlinks, transaction identity, and output
+  identity are validated before any restoration write occurs.
+- The journal reuse gate now covers full workflow runs as well as individual
+  steps. A mutator that writes and then raises is recorded as `rejected` unless
+  every target still exactly matches its durable baseline; it can no longer be
+  mislabeled `rolled_back`. Sequential accepted repairs conservatively retain
+  all prior external effective-resolution dependencies.
 
 ## Verification evidence
 
@@ -95,17 +110,18 @@ were intentionally left untouched.
 | --- | --- |
 | Focused transaction/fresh/process/lease/effective-resolution tests | `71 passed` |
 | Focused remediation-journal, agent-loop, and external-provenance tests | `54 passed` |
+| Durable before-image/recovery, dispatch-gate, provenance, and OpenFOAM target tests | `46 passed` |
 | Adversarial process/lease regression probes added after `7e6ba4c` | `11 passed` |
 | Focused case/sweep ownership tests | `41 passed` |
 | Explicit native v2412 conformance/effective-resolution + directive-inertness + rollback | `17 passed` |
-| OpenFOAM adapter suite | `196 passed, 72 skipped` |
-| Core checkout, excluding the slow self-building wheel test | `755 passed, 90 skipped, 1 deselected` |
-| Fresh core wheel | `uv build --wheel` and `check-wheel-artifact.py` succeeded; fresh Python 3.11 wheel suite: `605 passed, 240 skipped, 1 deselected` |
+| OpenFOAM adapter suite | `197 passed, 72 skipped` |
+| Core checkout, excluding the slow self-building wheel test | `764 passed, 90 skipped` |
+| Fresh core wheel | `uv build --wheel` and `check-wheel-artifact.py` succeeded; all `74/74` core modules imported; fresh Python 3.11 wheel suite: `614 passed, 240 skipped` |
 | Neutral Python-only plugin without adapters | passed in the fresh core-wheel workflow check; it runs a shell-only case and validates resume/input drift without importing an adapter |
 | Import boundaries | passed |
 | Capability seam export | passed |
 | CardiacFOAM workflow-planning test seam | `3 passed`; the tests now inspect the planned workflow commands, rather than assuming all launches use `subprocess.run`. No solver was launched. |
-| Current checkout package suites, run separately | `1718 passed, 263 skipped, 1 deselected, 40 subtests passed` |
+| Current checkout package suites, run separately | `1728 passed, 263 skipped, 40 subtests passed` |
 
 The native evidence above is specifically from `/Volumes/OpenFOAM-v2412`
 using its `foamDictionary` after sourcing `etc/bashrc`. It is not a claim for
@@ -123,11 +139,11 @@ other OpenFOAM releases, forks, platforms, or parser versions.
   ownership and planning transactions remain incomplete.
 - The case/output lease transaction is host-local and prevents concurrent
   writers. Ordinary mutation exceptions roll back target files; a crash or a
-  later native-resolution/replanning refusal intentionally leaves the candidate
-  in its disposable staged case, clearly marked interrupted/rejected and blocked
-  from silent reuse. There is not yet a dedicated recovery command for an
-  arbitrary caller-owned external case; it must be restored or restaged by the
-  operator before an interrupted marker can be cleared safely.
+  later native-resolution/replanning refusal leaves the candidate clearly
+  marked and blocked from reuse until the explicit recovery command restores
+  its durable before-images. Recovery covers declared target files, not arbitrary
+  undeclared plugin side effects; custom mutators therefore fail closed unless
+  they declare their full finite target set.
 - Dictionary effective resolution is native v2412 evidence, not a replacement
   for a versioned full evaluator. Function-object include search, generated
   entries, instance/time selection, and executable directives remain explicit
@@ -141,13 +157,13 @@ other OpenFOAM releases, forks, platforms, or parser versions.
 
 ## Next three priorities
 
-1. Add an explicit restore/restage operation for interrupted caller-owned cases,
-   and ensure every mutable execution path can opt into a disposable candidate
-   case rather than requiring manual recovery.
+1. Add a stable sibling staging lock and transactional replace protocol for
+   managed disposable cases, so crash recovery can safely restage a candidate
+   without deleting a live or newly acquired case owner.
 2. Add v2412 fixtures for remaining explicit effective-resolution limits,
    including function-object includes, generated entries, and time/instance
    selection, while keeping executable directives opt-in.
-3. Build the active agent repair orchestrator on the transaction records:
+3. Build the active agent repair orchestrator above the mechanical retry layer:
    compare evidence between hypotheses, apply configurable execution/time
    budgets, and stop repeated unchanged failures without conflating that policy
    with automatic process retry. Then begin cardiacFOAM integration only with a

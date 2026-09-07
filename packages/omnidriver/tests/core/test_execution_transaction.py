@@ -91,7 +91,10 @@ def test_apply_replan_and_dispatch_share_case_and_output_ownership(
     monkeypatch.setattr(cli, "run_workflow_step", runner)
     driver_context = SimpleNamespace(
         capabilities=SimpleNamespace(
-            override_scopes=SimpleNamespace(apply=apply),
+            override_scopes=SimpleNamespace(
+                apply=apply,
+                target_paths=lambda *args, **kwargs: (case_root / "config",),
+            ),
         ),
     )
     context = cli._ExecutionContext(
@@ -137,7 +140,10 @@ def test_changed_replanned_workflow_is_refused_before_dispatch(
     monkeypatch.setattr(cli, "run_workflow_step", unexpected_runner)
     driver_context = SimpleNamespace(
         capabilities=SimpleNamespace(
-            override_scopes=SimpleNamespace(apply=lambda *args, **kwargs: None),
+            override_scopes=SimpleNamespace(
+                apply=lambda *args, **kwargs: None,
+                target_paths=lambda *args, **kwargs: (case_root / "config",),
+            ),
         ),
     )
     context = cli._ExecutionContext(
@@ -189,7 +195,10 @@ def test_unresolved_effective_value_is_audited_and_blocks_dispatch(
     )
     driver_context = SimpleNamespace(
         capabilities=SimpleNamespace(
-            override_scopes=SimpleNamespace(apply=lambda *args, **kwargs: evidence),
+            override_scopes=SimpleNamespace(
+                apply=lambda *args, **kwargs: evidence,
+                target_paths=lambda *args, **kwargs: (case_root / "config",),
+            ),
         ),
     )
     context = cli._ExecutionContext(
@@ -209,6 +218,59 @@ def test_unresolved_effective_value_is_audited_and_blocks_dispatch(
     audit = json.loads((output_dir / "remediation_history.jsonl").read_text())
     assert audit["resulting_status"] == "replan_error"
     assert audit["effective_dictionary_resolution"] == list(evidence)
+
+
+def test_mutator_that_writes_then_raises_is_rejected_not_rolled_back(
+    monkeypatch, capsys, tmp_path: Path,
+) -> None:
+    case_root = tmp_path / "case"
+    case_root.mkdir()
+    target = case_root / "config"
+    target.write_text("baseline\n")
+    output_dir = tmp_path / "output"
+    apply_path = tmp_path / "overrides.json"
+    apply_path.write_text('[{"driver_path": "value", "value": "2"}]')
+    dag = _dag()
+    state = initial_workflow_state(dag)
+    assert state is not None
+
+    def partial_apply(*args, **kwargs):
+        del args, kwargs
+        target.write_text("candidate\n")
+        raise ValueError("resolver crashed after the write")
+
+    driver_context = SimpleNamespace(
+        capabilities=SimpleNamespace(
+            override_scopes=SimpleNamespace(
+                apply=partial_apply,
+                target_paths=lambda *args, **kwargs: (target,),
+            ),
+        ),
+    )
+    context = cli._ExecutionContext(
+        entry_label="case",
+        workflow_dag=dag,
+        planned_state=state,
+        case_root=case_root,
+        output_dir=output_dir,
+        expected_artifacts=(),
+        driver_context=driver_context,
+        replan_after_mutation=lambda: cli._ReplannedExecution(dag, state, ()),
+    )
+
+    assert cli._dispatch_context(_args(apply_path), context) == 1
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["remediation_transaction"]["status"] == "rejected"
+    transaction = read_remediation_transaction(case_root)
+    assert transaction["status"] == "rejected"
+    assert target.read_text() == "candidate\n"
+    assert Path(transaction["candidate_archive"], "config").read_text() == "candidate\n"
+
+    args = _args(apply_path)
+    args.apply = None
+    assert cli._dispatch_context(args, context) == 1
+    assert "was rejected" in json.loads(capsys.readouterr().out)["error"]
 
 
 def test_cli_reports_case_ownership_conflict_without_a_traceback(
@@ -278,6 +340,7 @@ def test_interrupted_configuration_blocks_cli_dispatch(
         step_id="run",
         overrides=[{"driver_path": "value", "value": "2"}],
         hypothesis="candidate interrupted before validation",
+        target_paths=(case_root / "config",),
     )
     dag = _dag()
     state = initial_workflow_state(dag)
@@ -297,6 +360,48 @@ def test_interrupted_configuration_blocks_cli_dispatch(
         "run_workflow_step",
         lambda *args, **kwargs: (_ for _ in ()).throw(
             AssertionError("interrupted candidate must not dispatch")
+        ),
+    )
+
+    assert cli._dispatch_context(args, context) == 1
+
+    payload = json.loads(capsys.readouterr().out)
+    assert "was interrupted" in payload["error"]
+
+
+def test_interrupted_configuration_blocks_full_run_dispatch(
+    monkeypatch, capsys, tmp_path: Path,
+) -> None:
+    case_root = tmp_path / "case"
+    case_root.mkdir()
+    output_dir = tmp_path / "output"
+    begin_remediation_transaction(
+        case_root,
+        output_dir=output_dir,
+        step_id="run",
+        overrides=[{"driver_path": "value", "value": "2"}],
+        hypothesis="candidate interrupted before validation",
+        target_paths=(case_root / "config",),
+    )
+    dag = _dag()
+    state = initial_workflow_state(dag)
+    assert state is not None
+    context = cli._ExecutionContext(
+        entry_label="case",
+        workflow_dag=dag,
+        planned_state=state,
+        case_root=case_root,
+        output_dir=output_dir,
+        expected_artifacts=(),
+    )
+    args = _args(tmp_path / "unused.json")
+    args.action = "run"
+    args.apply = None
+    monkeypatch.setattr(
+        cli,
+        "run_workflow",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("interrupted candidate must not dispatch a full run")
         ),
     )
 

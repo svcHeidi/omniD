@@ -403,6 +403,7 @@ def test_accepted_external_effective_dependency_is_fingerprinted(
         step_id="solve",
         overrides=[{"driver_path": "value", "value": "1"}],
         hypothesis="use the runtime-provided value",
+        target_paths=(case_root / "system" / "controlDict",),
     )
     finish_remediation_transaction(
         case_root,
@@ -422,6 +423,61 @@ def test_accepted_external_effective_dependency_is_fingerprinted(
 
     dependency_name = f"effective_config:{external.resolve()}"
     assert _by_path(before, dependency_name).digest != _by_path(after, dependency_name).digest
+
+
+def test_sequential_repairs_conservatively_retain_prior_external_dependencies(
+    tmp_path: Path,
+) -> None:
+    case_root = tmp_path / "case"
+    case_root.mkdir()
+    _write_control_dict(case_root, start_from="startTime", start_time="0")
+    external_a = tmp_path / "runtime" / "a.cfg"
+    external_b = tmp_path / "runtime" / "b.cfg"
+    external_a.parent.mkdir()
+    external_a.write_text("a 1;\n")
+    external_b.write_text("b 2;\n")
+    output_dir = tmp_path / "output"
+    first = begin_remediation_transaction(
+        case_root,
+        output_dir=output_dir,
+        step_id="solve",
+        overrides=[{"driver_path": "a", "value": "1"}],
+        hypothesis="first repair",
+        target_paths=(case_root / "system" / "controlDict",),
+    )
+    finish_remediation_transaction(
+        case_root,
+        first,
+        status="accepted",
+        effective_resolution=({"inspected_files": [str(external_a)]},),
+    )
+    second = begin_remediation_transaction(
+        case_root,
+        output_dir=output_dir,
+        step_id="solve",
+        overrides=[{"driver_path": "b", "value": "2"}],
+        hypothesis="second repair",
+        target_paths=(case_root / "system" / "controlDict",),
+    )
+    finish_remediation_transaction(
+        case_root,
+        second,
+        status="accepted",
+        effective_resolution=({"inspected_files": [str(external_b)]},),
+    )
+
+    components = enumerate_case_inputs(
+        case_root,
+        workflow_dag={"steps": []},
+        driver_context=driver_context(_FakePlugin(), source="test"),
+    )
+
+    assert f"effective_config:{external_a.resolve()}" in _paths(
+        components, kind="runtime_dependency",
+    )
+    assert f"effective_config:{external_b.resolve()}" in _paths(
+        components, kind="runtime_dependency",
+    )
 
 
 def test_processor_selected_time_is_included_other_processor_times_excluded(tmp_path: Path) -> None:

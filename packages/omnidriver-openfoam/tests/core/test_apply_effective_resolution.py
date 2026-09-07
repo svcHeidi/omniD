@@ -5,7 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from omnidriver.core.contracts.dictionary import DictEntry
-from omnidriver.openfoam.apply_overrides import apply_overrides
+from omnidriver.openfoam.apply_overrides import apply_overrides, override_target_paths
 from omnidriver.openfoam.effective_dictionary import EffectiveDictionaryResult
 
 
@@ -95,3 +95,31 @@ def test_apply_reports_when_native_effective_value_differs_from_request(
     )
 
     assert evidence[0]["matches_requested"] is False
+
+
+def test_override_target_paths_declares_all_files_before_mutation(
+    tmp_path: Path,
+) -> None:
+    system = tmp_path / "system"
+    system.mkdir()
+    context = SimpleNamespace(
+        capabilities=SimpleNamespace(
+            dictionaries=SimpleNamespace(catalog=lambda: _Catalog()),
+            override_scopes=SimpleNamespace(scopes=lambda: ()),
+            dict_regeneration=SimpleNamespace(scopes=lambda: ()),
+        ),
+    )
+
+    targets = override_target_paths(
+        [
+            {"driver_path": "deltaT", "value": "0.0005"},
+            {"driver_path": "system/fvSchemes:ddtSchemes/default", "value": "Euler"},
+        ],
+        case_root=tmp_path,
+        driver_context=context,
+    )
+
+    assert targets == (
+        system / "controlDict",
+        system / "fvSchemes",
+    )

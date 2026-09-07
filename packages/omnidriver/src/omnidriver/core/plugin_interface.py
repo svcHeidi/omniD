@@ -462,6 +462,15 @@ class SolverPluginOptionalHooks(Protocol):
         fallback runs with a configured execution environment."""
         ...
 
+    def get_override_target_paths(
+        self, overrides: Any, *, case_root: "Path",
+    ) -> tuple["Path", ...]:
+        """Return every file ``apply_overrides`` may mutate, without writing.
+
+        Required when a plugin supplies its own mutator so core can persist
+        exact before-images before publishing an applying transaction."""
+        ...
+
     # -- ReportCatalogCapability ---------------------------------------------
     def get_report_catalog(self) -> tuple["ReportDefinition", ...]:
         """Post-run reports this plugin offers. Core owns the machinery; the
