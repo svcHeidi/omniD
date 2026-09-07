@@ -103,6 +103,15 @@ were intentionally left untouched.
   every target still exactly matches its durable baseline; it can no longer be
   mislabeled `rolled_back`. Sequential accepted repairs conservatively retain
   all prior external effective-resolution dependencies.
+- A separate repair-loop coordinator now models agent experimentation above the
+  workflow retry layer. Each candidate binds a hypothesis and override proposal
+  to the exact observation digest that motivated it, reserves its execution slot
+  durably before dispatch, and records the resulting observation and remediation
+  transaction identity in a loop-specific journal.
+- Repair execution count and elapsed-time budgets are explicit and independent
+  of `max_total_attempts`. Repeated unchanged failures stop the loop early,
+  changed evidence resets that counter, stale proposals fail before execution,
+  and agent reasoning is not itself assigned an arbitrary idea limit.
 
 ## Verification evidence
 
@@ -111,17 +120,18 @@ were intentionally left untouched.
 | Focused transaction/fresh/process/lease/effective-resolution tests | `71 passed` |
 | Focused remediation-journal, agent-loop, and external-provenance tests | `54 passed` |
 | Durable before-image/recovery, dispatch-gate, provenance, and OpenFOAM target tests | `46 passed` |
+| Agent repair-loop budget, evidence-lineage, unchanged-failure, and durability tests | `9 passed` |
 | Adversarial process/lease regression probes added after `7e6ba4c` | `11 passed` |
 | Focused case/sweep ownership tests | `41 passed` |
 | Explicit native v2412 conformance/effective-resolution + directive-inertness + rollback | `17 passed` |
 | OpenFOAM adapter suite | `197 passed, 72 skipped` |
-| Core checkout, excluding the slow self-building wheel test | `764 passed, 90 skipped` |
-| Fresh core wheel | `uv build --wheel` and `check-wheel-artifact.py` succeeded; all `74/74` core modules imported; fresh Python 3.11 wheel suite: `614 passed, 240 skipped` |
+| Core checkout, excluding the slow self-building wheel test | `773 passed, 90 skipped` |
+| Fresh core wheel | `uv build --wheel` and `check-wheel-artifact.py` succeeded; all `75/75` core modules imported; fresh Python 3.11 wheel suite: `623 passed, 240 skipped` |
 | Neutral Python-only plugin without adapters | passed in the fresh core-wheel workflow check; it runs a shell-only case and validates resume/input drift without importing an adapter |
 | Import boundaries | passed |
 | Capability seam export | passed |
 | CardiacFOAM workflow-planning test seam | `3 passed`; the tests now inspect the planned workflow commands, rather than assuming all launches use `subprocess.run`. No solver was launched. |
-| Current checkout package suites, run separately | `1728 passed, 263 skipped, 40 subtests passed` |
+| Current checkout package suites, run separately | `1737 passed, 263 skipped, 40 subtests passed` |
 
 The native evidence above is specifically from `/Volumes/OpenFOAM-v2412`
 using its `foamDictionary` after sourcing `etc/bashrc`. It is not a claim for
@@ -163,9 +173,9 @@ other OpenFOAM releases, forks, platforms, or parser versions.
 2. Add v2412 fixtures for remaining explicit effective-resolution limits,
    including function-object includes, generated entries, and time/instance
    selection, while keeping executable directives opt-in.
-3. Build the active agent repair orchestrator above the mechanical retry layer:
-   compare evidence between hypotheses, apply configurable execution/time
-   budgets, and stop repeated unchanged failures without conflating that policy
-   with automatic process retry. Then begin cardiacFOAM integration only with a
-   separately approved native runtime/build plan, validating its solver-specific
-   contract without changing scientific defaults or compatibility rules.
+3. Connect the repair-loop coordinator to an agent-facing command/API whose
+   candidate executor reacquires case/output leases and invokes the existing
+   mutation -> effective resolution -> replan -> dispatch transaction. Then
+   begin cardiacFOAM integration only with a separately approved native
+   runtime/build plan, validating its solver-specific contract without changing
+   scientific defaults or compatibility rules.
