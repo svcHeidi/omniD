@@ -98,7 +98,7 @@ def read_remediation_transaction(case_root: Path) -> dict[str, Any] | None:
             f"remediation transaction marker is unreadable: {path}"
         ) from exc
     if not isinstance(payload, dict) or payload.get("status") not in {
-        "applying", "accepted", "rejected", "rolled_back",
+        "applying", "validated", "dispatching", "accepted", "rejected", "rolled_back",
     }:
         raise RemediationTransactionError(
             f"remediation transaction marker is malformed: {path}"
@@ -116,7 +116,7 @@ def require_reusable_case(case_root: Path, *, explicit_repair: bool) -> None:
         transaction.get("baseline_status") if status == "rolled_back" else status
     )
     transaction_id = transaction.get("transaction_id", "unknown")
-    if status == "applying":
+    if status in {"applying", "validated", "dispatching"}:
         raise RemediationTransactionError(
             f"configuration transaction {transaction_id} was interrupted; "
             "restore/restage the case before execution"
@@ -137,8 +137,13 @@ def begin_remediation_transaction(
     hypothesis: str | None,
     target_paths: tuple[Path, ...],
 ) -> dict[str, Any]:
-    previous = read_remediation_transaction(case_root)
-    if previous is not None and previous["status"] == "applying":
+    root = Path(case_root).resolve()
+    output = Path(output_dir).resolve()
+    _require_transaction_ownership(root, output)
+    previous = read_remediation_transaction(root)
+    if previous is not None and previous["status"] in {
+        "applying", "validated", "dispatching",
+    }:
         require_reusable_case(case_root, explicit_repair=True)
     proposal_payload = {"hypothesis": hypothesis, "overrides": overrides}
     proposal_digest = "sha256:" + hashlib.sha256(
@@ -148,12 +153,13 @@ def begin_remediation_transaction(
     if baseline_status == "rolled_back":
         baseline_status = previous.get("baseline_status")
     transaction = {
-        "schema_version": 1,
+        "schema_version": 2,
+        "revision": 1,
         "transaction_id": str(uuid.uuid4()),
         "status": "applying",
         "started_at": _now(),
         "step_id": step_id,
-        "output_dir": str(Path(output_dir).resolve()),
+        "output_dir": str(output),
         "hypothesis": hypothesis,
         "overrides": overrides,
         "proposal_digest": proposal_digest,
@@ -171,9 +177,9 @@ def begin_remediation_transaction(
         ),
     }
     transaction["target_manifest"] = _snapshot_targets(
-        case_root, transaction, target_paths,
+        root, transaction, target_paths,
     )
-    _persist(case_root, transaction)
+    _persist(root, transaction)
     return transaction
 
 
@@ -181,7 +187,9 @@ def restore_remediation_transaction(
     case_root: Path,
     *,
     output_dir: Path,
-    transaction_id: str | None = None,
+    transaction_id: str,
+    expected_revision: int,
+    expected_status: str,
 ) -> dict[str, Any]:
     """Restore exact before-images for the current interrupted/rejected edit."""
     from .attempt_lease import attempt_lease_is_held, case_lease_is_held
@@ -196,9 +204,13 @@ def restore_remediation_transaction(
     if transaction is None:
         raise RemediationTransactionError("case has no remediation transaction to restore")
     current_id = str(transaction.get("transaction_id", ""))
-    if transaction_id is not None and transaction_id != current_id:
+    if (
+        transaction_id != current_id
+        or expected_revision != int(transaction.get("revision", 0))
+        or expected_status != transaction.get("status")
+    ):
         raise RemediationTransactionError(
-            f"transaction id {transaction_id!r} is not the current transaction {current_id!r}"
+            "remediation restore compare-and-swap conflict"
         )
     if Path(str(transaction.get("output_dir", ""))).resolve() != output:
         raise RemediationTransactionError(
@@ -206,7 +218,7 @@ def restore_remediation_transaction(
         )
     if transaction["status"] == "rolled_back" and transaction.get("recovered_at"):
         return transaction
-    if transaction["status"] not in {"applying", "rejected"}:
+    if transaction["status"] not in {"applying", "validated", "dispatching", "rejected"}:
         raise RemediationTransactionError(
             f"transaction {current_id} has status {transaction['status']!r}, not recoverable"
         )
@@ -234,6 +246,7 @@ def restore_remediation_transaction(
 
     restored = {
         **transaction,
+        "revision": int(transaction.get("revision", 0)) + 1,
         "status": "rolled_back",
         "finished_at": _now(),
         "recovered_at": _now(),
@@ -282,21 +295,49 @@ def finish_remediation_transaction(
     plan_digest: str | None = None,
     error: str | None = None,
 ) -> dict[str, Any]:
-    if status not in {"accepted", "rejected", "rolled_back"}:
+    if status not in {"validated", "rejected", "rolled_back"}:
         raise ValueError(f"invalid remediation transaction status: {status}")
+    root, _output, current = _current_transition(
+        case_root, transaction, expected_statuses={"applying"},
+    )
+    if status == "rolled_back" and not baseline_is_restored(
+        root, current, output_dir=Path(str(current["output_dir"])),
+    ):
+        raise RemediationTransactionError(
+            "transaction cannot be marked rolled_back until its exact baseline is restored"
+        )
     updated = {
-        **transaction,
+        **current,
+        "revision": int(current["revision"]) + 1,
         "status": status,
-        "finished_at": _now(),
+        "validated_at": _now() if status == "validated" else None,
+        "finished_at": _now() if status != "validated" else None,
         "effective_resolution": list(effective_resolution),
         "plan_digest": plan_digest,
         "error": error,
     }
     if status == "rejected":
-        archive = _archive_candidate_files(case_root, updated)
+        archive = _archive_candidate_files(root, updated)
         if archive is not None:
             updated["candidate_archive"] = str(archive)
-    _persist(case_root, updated)
+    _persist(root, updated)
+    return updated
+
+
+def mark_remediation_dispatching(
+    case_root: Path, transaction: dict[str, Any],
+) -> dict[str, Any]:
+    """Record dispatch admission; the candidate is still not reusable."""
+    root, _output, current = _current_transition(
+        case_root, transaction, expected_statuses={"validated"},
+    )
+    updated = {
+        **current,
+        "revision": int(current["revision"]) + 1,
+        "status": "dispatching",
+        "dispatch_started_at": _now(),
+    }
+    _persist(root, updated)
     return updated
 
 
@@ -307,14 +348,63 @@ def record_remediation_outcome(
     execution_status: str,
     attempt: int,
 ) -> dict[str, Any]:
+    root, _output, current = _current_transition(
+        case_root, transaction, expected_statuses={"dispatching"},
+    )
+    terminal_status = "accepted" if execution_status == "ok" else "rejected"
     updated = {
-        **transaction,
+        **current,
+        "revision": int(current["revision"]) + 1,
+        "status": terminal_status,
+        "finished_at": _now(),
         "execution_status": execution_status,
         "execution_attempt": attempt,
         "execution_finished_at": _now(),
     }
-    _persist(case_root, updated)
+    if terminal_status == "rejected":
+        archive = _archive_candidate_files(root, updated)
+        if archive is not None:
+            updated["candidate_archive"] = str(archive)
+    _persist(root, updated)
     return updated
+
+
+def _require_transaction_ownership(root: Path, output: Path) -> None:
+    from .attempt_lease import attempt_lease_is_held, case_lease_is_held
+
+    if not case_lease_is_held(root) or not attempt_lease_is_held(output):
+        raise RemediationTransactionError(
+            "remediation transaction mutation requires owned case and output leases"
+        )
+
+
+def _current_transition(
+    case_root: Path,
+    expected: dict[str, Any],
+    *,
+    expected_statuses: set[str],
+) -> tuple[Path, Path, dict[str, Any]]:
+    root = Path(case_root).resolve()
+    output = Path(str(expected.get("output_dir", ""))).resolve()
+    _require_transaction_ownership(root, output)
+    current = read_remediation_transaction(root)
+    if current is None:
+        raise RemediationTransactionError("remediation transaction head is missing")
+    if (
+        current.get("transaction_id") != expected.get("transaction_id")
+        or current.get("revision") != expected.get("revision")
+        or current.get("status") != expected.get("status")
+    ):
+        raise RemediationTransactionError(
+            "remediation transaction compare-and-swap conflict"
+        )
+    if current.get("status") not in expected_statuses:
+        raise RemediationTransactionError(
+            f"remediation transaction status {current.get('status')!r} cannot transition"
+        )
+    if Path(str(current.get("output_dir", ""))).resolve() != output:
+        raise RemediationTransactionError("remediation transaction output identity changed")
+    return root, output, current
 
 
 def accepted_external_dependencies(case_root: Path) -> tuple[Path, ...]:

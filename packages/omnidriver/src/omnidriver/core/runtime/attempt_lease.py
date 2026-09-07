@@ -39,14 +39,14 @@ class AttemptLease:
 
 def attempt_lease_is_held(output_dir: Path) -> bool:
     """Whether this thread already owns the local lease for ``output_dir``."""
-    path = Path(output_dir) / ".omnidriver-attempt.lock"
+    path = Path(output_dir).resolve() / ".omnidriver-attempt.lock"
     owner = _LOCAL_LEASES.get(path)
     return owner is not None and owner[1] == threading.get_ident()
 
 
 def case_lease_is_held(case_root: Path) -> bool:
     """Whether this thread already owns the local lease for ``case_root``."""
-    path = Path(case_root) / ".omnidriver-case.lock"
+    path = Path(case_root).resolve() / ".omnidriver-case.lock"
     owner = _LOCAL_LEASES.get(path)
     return owner is not None and owner[1] == threading.get_ident()
 
@@ -126,7 +126,9 @@ def _acquire_local_lease(
     resource_label: str,
     create_directory: bool,
 ) -> Iterator[AttemptLease]:
-    directory = Path(directory)
+    # One physical directory must have one in-process ownership identity,
+    # independent of relative spelling or a symlink alias.
+    directory = Path(directory).resolve()
     if create_directory:
         directory.mkdir(parents=True, exist_ok=True)
     elif not directory.is_dir():

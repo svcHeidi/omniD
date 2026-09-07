@@ -11,13 +11,15 @@ import json
 import os
 import time
 import uuid
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
 
-JOURNAL_DIR = "repair_loops"
+CONTROL_DIR = ".omnidriver-repair-control"
+LEGACY_JOURNAL_DIR = "repair_loops"
 
 
 @dataclass(frozen=True)
@@ -117,7 +119,34 @@ def run_repair_loop(
     callback, so a crash cannot silently reuse an execution budget slot.
     """
     loop_id = _validated_loop_id(loop_id or str(uuid.uuid4()))
-    path = Path(output_dir) / JOURNAL_DIR / f"{loop_id}.json"
+    control_dir = _control_dir(Path(output_dir))
+    lock_path = control_dir / f"{loop_id}.lock"
+    with _acquire_loop_lock(lock_path):
+        return _run_repair_loop_locked(
+            initial_observation,
+            output_dir=output_dir,
+            budgets=budgets,
+            propose=propose,
+            execute_candidate=execute_candidate,
+            monotonic=monotonic,
+            loop_id=loop_id,
+        )
+
+
+def _run_repair_loop_locked(
+    initial_observation: RepairObservation,
+    *,
+    output_dir: Path,
+    budgets: RepairBudgets,
+    propose: Callable[[RepairObservation], RepairProposal | None],
+    execute_candidate: Callable[[RepairProposal], RepairExperimentResult],
+    monotonic: Callable[[], float],
+    loop_id: str,
+) -> RepairLoopOutcome:
+    path = _control_dir(Path(output_dir)) / f"{loop_id}.json"
+    legacy_path = Path(output_dir) / LEGACY_JOURNAL_DIR / f"{loop_id}.json"
+    if not path.exists() and legacy_path.exists():
+        _atomic_write(path, _load_journal(legacy_path))
     started = monotonic()
     observation = initial_observation
     executions = 0
@@ -263,6 +292,30 @@ def _validated_loop_id(value: str) -> str:
     if str(parsed) != value:
         raise ValueError("repair loop_id must use canonical UUID text")
     return value
+
+
+def _control_dir(output_dir: Path) -> Path:
+    output = output_dir.resolve()
+    identity = hashlib.sha256(str(output).encode()).hexdigest()
+    return output.parent / CONTROL_DIR / identity
+
+
+@contextmanager
+def _acquire_loop_lock(path: Path):
+    if os.name != "posix":
+        raise RuntimeError("repair-loop ownership requires POSIX advisory locking")
+    import fcntl
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle = path.open("a+")
+    try:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise RuntimeError(f"repair loop is already owned: {path.stem}") from exc
+        yield
+    finally:
+        handle.close()
 
 
 def _load_journal(path: Path) -> dict[str, Any]:

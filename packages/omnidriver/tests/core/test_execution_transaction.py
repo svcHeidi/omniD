@@ -334,14 +334,14 @@ def test_interrupted_configuration_blocks_cli_dispatch(
     case_root = tmp_path / "case"
     case_root.mkdir()
     output_dir = tmp_path / "output"
-    begin_remediation_transaction(
-        case_root,
-        output_dir=output_dir,
-        step_id="run",
-        overrides=[{"driver_path": "value", "value": "2"}],
-        hypothesis="candidate interrupted before validation",
-        target_paths=(case_root / "config",),
-    )
+    with acquire_case_lease(case_root):
+        with acquire_attempt_lease(output_dir):
+            begin_remediation_transaction(
+                case_root, output_dir=output_dir, step_id="run",
+                overrides=[{"driver_path": "value", "value": "2"}],
+                hypothesis="candidate interrupted before validation",
+                target_paths=(case_root / "config",),
+            )
     dag = _dag()
     state = initial_workflow_state(dag)
     assert state is not None
@@ -375,14 +375,14 @@ def test_interrupted_configuration_blocks_full_run_dispatch(
     case_root = tmp_path / "case"
     case_root.mkdir()
     output_dir = tmp_path / "output"
-    begin_remediation_transaction(
-        case_root,
-        output_dir=output_dir,
-        step_id="run",
-        overrides=[{"driver_path": "value", "value": "2"}],
-        hypothesis="candidate interrupted before validation",
-        target_paths=(case_root / "config",),
-    )
+    with acquire_case_lease(case_root):
+        with acquire_attempt_lease(output_dir):
+            begin_remediation_transaction(
+                case_root, output_dir=output_dir, step_id="run",
+                overrides=[{"driver_path": "value", "value": "2"}],
+                hypothesis="candidate interrupted before validation",
+                target_paths=(case_root / "config",),
+            )
     dag = _dag()
     state = initial_workflow_state(dag)
     assert state is not None

@@ -191,6 +191,7 @@ def _execute_step(
         begin_remediation_transaction,
         baseline_is_restored,
         finish_remediation_transaction,
+        mark_remediation_dispatching,
         record_remediation_outcome,
         require_reusable_case,
     )
@@ -301,7 +302,7 @@ def _execute_step(
             remediation_transaction = finish_remediation_transaction(
                 case_root,
                 remediation_transaction,
-                status="accepted",
+                status="validated",
                 effective_resolution=effective_resolution,
                 plan_digest=workflow_digest(workflow_dag),
             )
@@ -341,6 +342,10 @@ def _execute_step(
                 failure_payload["remediation_transaction"] = transaction_payload
             print(json.dumps(failure_payload, indent=2))
             return 1
+    if remediation_transaction is not None:
+        remediation_transaction = mark_remediation_dispatching(
+            case_root, remediation_transaction,
+        )
     try:
         result = run_workflow_step(
             workflow_dag,
@@ -884,6 +889,7 @@ def _recover_remediation(args) -> int:
     """Restore one interrupted/rejected transaction without planning or running."""
     from .core.runtime.remediation_transaction import (
         RemediationTransactionError,
+        read_remediation_transaction,
         restore_remediation_transaction,
     )
 
@@ -892,10 +898,17 @@ def _recover_remediation(args) -> int:
     try:
         with acquire_case_lease(case_root):
             with acquire_attempt_lease(output_dir):
+                current = read_remediation_transaction(case_root)
+                if current is None:
+                    raise RemediationTransactionError(
+                        "case has no remediation transaction to restore"
+                    )
                 restored = restore_remediation_transaction(
                     case_root,
                     output_dir=output_dir,
-                    transaction_id=args.transaction_id,
+                    transaction_id=args.transaction_id or str(current["transaction_id"]),
+                    expected_revision=int(current.get("revision", 0)),
+                    expected_status=str(current["status"]),
                 )
     except (AttemptLeaseError, RemediationTransactionError, OSError) as exc:
         print(json.dumps({

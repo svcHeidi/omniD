@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import shutil
+import threading
 import uuid
 
 import pytest
@@ -99,14 +101,18 @@ def test_slow_proposal_cannot_start_candidate_after_elapsed_budget(tmp_path):
 
 
 def test_stale_proposal_is_rejected_before_execution(tmp_path):
+    loop_id = str(uuid.uuid4())
     with pytest.raises(ValueError, match="stale observation"):
         run_repair_loop(
             RepairObservation({"code": "new"}), output_dir=tmp_path,
             budgets=RepairBudgets(1),
             propose=lambda observation: RepairProposal("idea", (), "sha256:stale"),
             execute_candidate=lambda proposal: pytest.fail("candidate should not run"),
+            loop_id=loop_id,
         )
-    record = json.loads(next((tmp_path / "repair_loops").iterdir()).read_text())
+    matches = list((tmp_path.parent / ".omnidriver-repair-control").rglob(f"{loop_id}.json"))
+    assert len(matches) == 1
+    record = json.loads(matches[0].read_text())
     assert (record["status"], record["reason"]) == (
         "failed", "proposer_contract_error",
     )
@@ -222,3 +228,71 @@ def test_finished_loop_id_is_idempotent(tmp_path):
     )
 
     assert second == first
+
+
+def test_same_loop_cannot_be_reopened_concurrently(tmp_path):
+    loop_id = str(uuid.uuid4())
+    initial = RepairObservation({"code": "failed"})
+    entered = threading.Event()
+    release = threading.Event()
+
+    def execute(proposal):
+        entered.set()
+        assert release.wait(timeout=2)
+        return RepairExperimentResult("succeeded", RepairObservation({"code": "ok"}))
+
+    thread = threading.Thread(target=lambda: run_repair_loop(
+        initial, output_dir=tmp_path, budgets=RepairBudgets(1),
+        propose=_proposal, execute_candidate=execute, loop_id=loop_id,
+    ))
+    thread.start()
+    assert entered.wait(timeout=2)
+    try:
+        with pytest.raises(RuntimeError, match="already owned"):
+            run_repair_loop(
+                initial, output_dir=tmp_path, budgets=RepairBudgets(1),
+                propose=_proposal,
+                execute_candidate=lambda proposal: pytest.fail("must not execute"),
+                loop_id=loop_id,
+            )
+    finally:
+        release.set()
+        thread.join(timeout=2)
+    assert not thread.is_alive()
+
+
+def test_journal_control_path_is_outside_fresh_cleaned_output(tmp_path):
+    output_dir = tmp_path / "output"
+    outcome = run_repair_loop(
+        RepairObservation({"code": "failed"}), output_dir=output_dir,
+        budgets=RepairBudgets(1), propose=lambda observation: None,
+        execute_candidate=lambda proposal: pytest.fail("must not execute"),
+    )
+
+    assert not outcome.journal_path.is_relative_to(output_dir)
+    assert outcome.journal_path.is_relative_to(output_dir.parent)
+
+
+def test_legacy_output_journal_is_migrated_without_resetting_loop(tmp_path):
+    output_dir = tmp_path / "output"
+    loop_id = str(uuid.uuid4())
+    initial = RepairObservation({"code": "failed"})
+    first = run_repair_loop(
+        initial, output_dir=output_dir, budgets=RepairBudgets(1),
+        propose=lambda observation: None,
+        execute_candidate=lambda proposal: pytest.fail("must not execute"),
+        loop_id=loop_id,
+    )
+    legacy = output_dir / "repair_loops" / f"{loop_id}.json"
+    legacy.parent.mkdir(parents=True)
+    shutil.move(first.journal_path, legacy)
+
+    second = run_repair_loop(
+        initial, output_dir=output_dir, budgets=RepairBudgets(1),
+        propose=lambda observation: pytest.fail("completed loop must not restart"),
+        execute_candidate=lambda proposal: pytest.fail("must not execute"),
+        loop_id=loop_id,
+    )
+
+    assert second.reason == "proposer_stopped"
+    assert second.journal_path.exists()

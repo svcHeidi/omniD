@@ -18,9 +18,12 @@ from omnidriver.core.plugin_capabilities import ResolvedInput, RuntimeDependency
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.plugin_profile import PluginProfile
 from omnidriver.core.runtime.provenance_inputs import enumerate_case_inputs
+from omnidriver.core.runtime.attempt_lease import acquire_attempt_lease, acquire_case_lease
 from omnidriver.core.runtime.remediation_transaction import (
     begin_remediation_transaction,
     finish_remediation_transaction,
+    mark_remediation_dispatching,
+    record_remediation_outcome,
 )
 from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
 
@@ -33,6 +36,23 @@ def _by_path(components, path: str):
     matches = [c for c in components if c.path == path]
     assert len(matches) == 1, f"expected exactly one component for {path!r}, got {matches}"
     return matches[0]
+
+
+def _record_accepted_transaction(case_root: Path, output_dir: Path, **kwargs):
+    effective_resolution = kwargs.pop("effective_resolution", ())
+    with acquire_case_lease(case_root):
+        with acquire_attempt_lease(output_dir):
+            transaction = begin_remediation_transaction(
+                case_root, output_dir=output_dir, **kwargs,
+            )
+            validated = finish_remediation_transaction(
+                case_root, transaction, status="validated",
+                effective_resolution=effective_resolution,
+            )
+            dispatching = mark_remediation_dispatching(case_root, validated)
+            return record_remediation_outcome(
+                case_root, dispatching, execution_status="ok", attempt=1,
+            )
 
 
 def _write_control_dict(case_root: Path, *, start_from: str, start_time: str = "0") -> None:
@@ -397,18 +417,12 @@ def test_accepted_external_effective_dependency_is_fingerprinted(
     external = tmp_path / "runtime" / "included.cfg"
     external.parent.mkdir()
     external.write_text("value 1;\n")
-    transaction = begin_remediation_transaction(
-        case_root,
-        output_dir=tmp_path / "output",
+    _record_accepted_transaction(
+        case_root, tmp_path / "output",
         step_id="solve",
         overrides=[{"driver_path": "value", "value": "1"}],
         hypothesis="use the runtime-provided value",
         target_paths=(case_root / "system" / "controlDict",),
-    )
-    finish_remediation_transaction(
-        case_root,
-        transaction,
-        status="accepted",
         effective_resolution=({"inspected_files": [str(external)]},),
     )
     context = driver_context(_FakePlugin(), source="test")
@@ -437,32 +451,20 @@ def test_sequential_repairs_conservatively_retain_prior_external_dependencies(
     external_a.write_text("a 1;\n")
     external_b.write_text("b 2;\n")
     output_dir = tmp_path / "output"
-    first = begin_remediation_transaction(
-        case_root,
-        output_dir=output_dir,
+    first = _record_accepted_transaction(
+        case_root, output_dir,
         step_id="solve",
         overrides=[{"driver_path": "a", "value": "1"}],
         hypothesis="first repair",
         target_paths=(case_root / "system" / "controlDict",),
-    )
-    finish_remediation_transaction(
-        case_root,
-        first,
-        status="accepted",
         effective_resolution=({"inspected_files": [str(external_a)]},),
     )
-    second = begin_remediation_transaction(
-        case_root,
-        output_dir=output_dir,
+    second = _record_accepted_transaction(
+        case_root, output_dir,
         step_id="solve",
         overrides=[{"driver_path": "b", "value": "2"}],
         hypothesis="second repair",
         target_paths=(case_root / "system" / "controlDict",),
-    )
-    finish_remediation_transaction(
-        case_root,
-        second,
-        status="accepted",
         effective_resolution=({"inspected_files": [str(external_b)]},),
     )
 
