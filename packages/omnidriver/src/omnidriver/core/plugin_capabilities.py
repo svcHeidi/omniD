@@ -740,7 +740,10 @@ class OverrideScopeCapability(Protocol):
 
     def scopes(self) -> tuple["OverrideScope", ...]: ...
 
-    def apply(self, overrides: Any, *, case_root: Any, driver_context: Any) -> None: ...
+    def apply(
+        self, overrides: Any, *, case_root: Any, driver_context: Any,
+        execution_env: Any | None = None,
+    ) -> tuple[dict[str, Any], ...]: ...
 
 
 class DictRegenerationCapability(Protocol):
@@ -1289,7 +1292,10 @@ class _OverrideScopeAdapter:
 
         return legacy_override_scopes(self.plugin)
 
-    def apply(self, overrides: Any, *, case_root: Any, driver_context: Any) -> None:
+    def apply(
+        self, overrides: Any, *, case_root: Any, driver_context: Any,
+        execution_env: Any | None = None,
+    ) -> tuple[dict[str, Any], ...]:
         """``driver_context`` is threaded through because the fallback needs it.
 
         ``legacy_apply_overrides`` delegates to the OpenFOAM mutators, and
@@ -1306,11 +1312,12 @@ class _OverrideScopeAdapter:
         hook = getattr(self.plugin, "apply_overrides", None)
         if callable(hook):
             hook(overrides, case_root=case_root)
-            return
+            return ()
         from .compatibility import legacy_apply_overrides
 
-        legacy_apply_overrides(
+        return legacy_apply_overrides(
             overrides, case_root=case_root, driver_context=driver_context,
+            execution_env=execution_env,
         )
 
 

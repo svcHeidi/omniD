@@ -44,6 +44,13 @@ def attempt_lease_is_held(output_dir: Path) -> bool:
     return owner is not None and owner[1] == threading.get_ident()
 
 
+def case_lease_is_held(case_root: Path) -> bool:
+    """Whether this thread already owns the local lease for ``case_root``."""
+    path = Path(case_root) / ".omnidriver-case.lock"
+    owner = _LOCAL_LEASES.get(path)
+    return owner is not None and owner[1] == threading.get_ident()
+
+
 def _pid_is_alive(pid: int) -> bool:
     if pid <= 0:
         return False

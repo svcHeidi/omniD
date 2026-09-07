@@ -209,7 +209,9 @@ def legacy_load_environment(*, explicit_bashrc, driver_context) -> dict:
 
 
 @_instrumented
-def legacy_apply_overrides(overrides, *, case_root, driver_context) -> None:
+def legacy_apply_overrides(
+    overrides, *, case_root, driver_context, execution_env=None,
+) -> tuple[dict, ...]:
     """Plugins predating apply_overrides(). The ``step --strict --apply`` path
     has always validated and applied overrides through the OpenFOAM dictionary
     mutators, for every plugin.
@@ -241,7 +243,12 @@ def legacy_apply_overrides(overrides, *, case_root, driver_context) -> None:
         ) from exc
 
     validate_overrides(overrides, driver_context=driver_context)
-    apply_overrides(overrides, case_root=case_root, driver_context=driver_context)
+    return apply_overrides(
+        overrides,
+        case_root=case_root,
+        driver_context=driver_context,
+        execution_env=execution_env,
+    )
 
 
 @_instrumented

@@ -60,7 +60,11 @@ def check_fresh_deletion_allowed(output_dir: Path, *, allowed_root: Path | None)
 
 
 def ensure_fresh_output_dir(
-    output_dir: Path, *, fresh: bool, allowed_root: Path | None = None
+    output_dir: Path,
+    *,
+    fresh: bool,
+    allowed_root: Path | None = None,
+    preserve_names: frozenset[str] = frozenset(),
 ) -> str | None:
     """Delete output_dir when fresh=True and the safety guards allow it.
 
@@ -78,5 +82,14 @@ def ensure_fresh_output_dir(
     resolved = output_dir.resolve()
     if resolved.exists():
         print(f"--fresh: deleting {resolved}", file=sys.stderr)
-        shutil.rmtree(resolved)
+        if preserve_names:
+            for child in resolved.iterdir():
+                if child.name in preserve_names:
+                    continue
+                if child.is_dir() and not child.is_symlink():
+                    shutil.rmtree(child)
+                else:
+                    child.unlink()
+        else:
+            shutil.rmtree(resolved)
     return None

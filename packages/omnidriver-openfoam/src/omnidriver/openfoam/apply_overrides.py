@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import re
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path, PurePath
-from typing import TYPE_CHECKING, Any, Callable, Iterable
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Mapping
 
 from .mutators import update_foam_entry
 
@@ -237,7 +237,8 @@ def apply_overrides(
     *,
     case_root: Path,
     driver_context: "DriverContext",
-) -> None:
+    execution_env: Mapping[str, str] | None = None,
+) -> tuple[dict[str, Any], ...]:
     """Apply overrides with in-process rollback of every declared target file.
 
     Validate routing before any writes. A mutator failure restores the original
@@ -271,6 +272,50 @@ def apply_overrides(
         paths.add(target)
     with _restore_on_failure(paths):
         _apply_validated_overrides(overrides, case_root, scope_by_token, regen_scope_by_key)
+    if execution_env is None:
+        return ()
+
+    from .effective_dictionary import resolve_effective_foam_entry
+
+    evidence: list[dict[str, Any]] = []
+    for override in overrides:
+        driver_path = override["driver_path"]
+        if ":" in driver_path:
+            relpath, _, entry_path = driver_path.partition(":")
+        elif driver_path in regen_scope_by_key:
+            relpath = regen_scope_by_key[driver_path].file_relpath
+            entry_path = driver_path
+        elif driver_path.startswith("$"):
+            scope = scope_by_token[_scope_token(driver_path)]
+            scope_path, key = scope.resolve_entry(driver_path, case_root)
+            relpath = scope.file_relpath
+            entry_path = "/".join((*(scope_path or ()), key))
+        else:
+            relpath = "system/controlDict"
+            entry_path = driver_path
+        result = resolve_effective_foam_entry(
+            case_root / relpath,
+            entry_path,
+            bashrc=None,
+            env=execution_env,
+        )
+        evidence.append({
+            "driver_path": driver_path,
+            "requested_value": override["value"],
+            "matches_requested": (
+                result.status == "resolved"
+                and result.value == _effective_value_text(override["value"])
+            ),
+            **asdict(result),
+        })
+    return tuple(evidence)
+
+
+def _effective_value_text(value: Any) -> str:
+    """Render an override as the scalar text the native query must observe."""
+    from .mutators import _format_value
+
+    return _format_value(value).strip()
 
 
 @contextmanager

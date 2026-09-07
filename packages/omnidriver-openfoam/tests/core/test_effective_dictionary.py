@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,40 @@ def test_missing_runtime_is_explicit_not_a_lexical_fallback(tmp_path: Path) -> N
     assert result.status == "runtime_unavailable"
     assert result.value is None
     assert result.parser == "foamDictionary"
+
+
+def test_configured_execution_environment_runs_native_parser_without_resourcing(
+    monkeypatch, tmp_path: Path,
+) -> None:
+    path = tmp_path / "d"
+    path.write_text(HEADER + "value 1;\n")
+    executable = tmp_path / "foamDictionary"
+    executable.write_text("")
+    seen: dict = {}
+
+    monkeypatch.setattr(
+        "omnidriver.openfoam.effective_dictionary.shutil.which",
+        lambda name, path: str(executable),
+    )
+
+    def fake_run(command, **kwargs):
+        seen["command"] = command
+        seen["env"] = kwargs["env"]
+        return subprocess.CompletedProcess(command, 0, stdout="7\n", stderr="")
+
+    monkeypatch.setattr(
+        "omnidriver.openfoam.effective_dictionary.subprocess.run", fake_run,
+    )
+    result = resolve_effective_foam_entry(
+        path,
+        "value",
+        bashrc=None,
+        env={"PATH": str(tmp_path), "WM_PROJECT_DIR": "/runtime/openfoam"},
+    )
+
+    assert (result.status, result.value) == ("resolved", "7")
+    assert seen["command"] == (str(executable), str(path), "-entry", "value", "-value")
+    assert result.runtime == "/runtime/openfoam"
 
 
 @native

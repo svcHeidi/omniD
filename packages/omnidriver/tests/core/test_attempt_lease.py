@@ -169,3 +169,24 @@ def test_case_lease_does_not_invent_a_missing_case_root(tmp_path: Path) -> None:
         with acquire_case_lease(case_root):
             pass
     assert not case_root.exists()
+
+
+def test_claimed_preheld_leases_are_verified(tmp_path: Path) -> None:
+    case_root = tmp_path / "case"
+    case_root.mkdir()
+    dag = {
+        "steps": [{
+            "id": "run", "command": "ignored", "args": [], "cwd": ".",
+            "depends_on": [],
+        }],
+    }
+    state = initial_workflow_state(dag)
+    assert state is not None
+    with pytest.raises(AttemptLeaseError, match="without owned"):
+        run_workflow(
+            dag,
+            state,
+            case_root=case_root,
+            output_dir=tmp_path / "output",
+            leases_held=True,
+        )

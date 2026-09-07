@@ -5,7 +5,7 @@ import json
 import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from .core.runtime.failure_context import build_failure_context
 from .core.runtime.launch_readiness import is_execution_successful, is_launchable
@@ -31,6 +31,11 @@ from omnidriver.core.strict_planning import (
 )
 from .core.runtime.run_document_exec import build_execution_inputs, load_run_document, _allowed_runs_root
 from .core.runtime.fresh import ensure_fresh_output_dir
+from .core.runtime.attempt_lease import (
+    AttemptLeaseError,
+    acquire_attempt_lease,
+    acquire_case_lease,
+)
 
 
 if TYPE_CHECKING:
@@ -52,6 +57,14 @@ class _ExecutionContext:
     # Carried so _dispatch_context can reach plugin capabilities without
     # importing a sibling package. Both construction sites already hold one.
     driver_context: DriverContext | None = None
+    replan_after_mutation: Callable[[], "_ReplannedExecution"] | None = None
+
+
+@dataclass(frozen=True)
+class _ReplannedExecution:
+    workflow_dag: dict
+    planned_state: object
+    expected_artifacts: tuple
 
 
 def _step_payload(
@@ -145,6 +158,7 @@ def _execute_step(
     execution_env: dict[str, str] | None = None,
     apply_overrides_path: str | None = None,
     driver_context: DriverContext | None = None,
+    replan_after_mutation: Callable[[], _ReplannedExecution] | None = None,
 ) -> int:
     """Run one workflow step, print the JSON payload, return the exit code.
 
@@ -171,6 +185,8 @@ def _execute_step(
             }, indent=2))
             return 1
     overrides = None
+    effective_resolution: tuple[dict, ...] = ()
+    mutation_applied = False
     if apply_overrides_path is not None:
         try:
             overrides = json.loads(Path(apply_overrides_path).read_text())
@@ -181,10 +197,49 @@ def _execute_step(
                 )
             # OverrideError subclasses ValueError, so ValueError covers it and
             # core needs no import of the exception type.
-            driver_context.capabilities.override_scopes.apply(
-                overrides, case_root=case_root, driver_context=driver_context,
+            effective_resolution = driver_context.capabilities.override_scopes.apply(
+                overrides,
+                case_root=case_root,
+                driver_context=driver_context,
+                execution_env=execution_env,
+            ) or ()
+            mutation_applied = True
+            unresolved = tuple(
+                item for item in effective_resolution
+                if item.get("status") != "resolved"
+                or item.get("matches_requested") is False
             )
+            if unresolved:
+                detail = "; ".join(
+                    f"{item.get('driver_path')}: "
+                    f"{item.get('message') or ('effective value differs from request' if item.get('matches_requested') is False else item.get('status'))}"
+                    for item in unresolved
+                )
+                raise ValueError(f"effective dictionary resolution failed: {detail}")
+            if replan_after_mutation is None:
+                raise ValueError("--apply has no plan reconstruction contract")
+            replanned = replan_after_mutation()
+            from .core.runtime.workflow_state import workflow_digest
+
+            if workflow_digest(replanned.workflow_dag) != workflow_digest(workflow_dag):
+                raise ValueError(
+                    "applied overrides changed the workflow plan; start a fresh run "
+                    "from the replanned entry/document instead of rerunning one step"
+                )
+            workflow_dag = replanned.workflow_dag
+            expected_artifacts = replanned.expected_artifacts
+            if not state_path.exists():
+                workflow_state = replanned.planned_state
         except (OSError, ValueError) as exc:
+            if mutation_applied and overrides is not None:
+                append_remediation_record(
+                    output_dir,
+                    step_id=step_id,
+                    attempt=_step_state_by_id(workflow_state, step_id).attempt,
+                    applied_overrides=overrides,
+                    resulting_status="replan_error",
+                    effective_resolution=effective_resolution,
+                )
             print(json.dumps({
                 "status": "failed",
                 "entry": entry_label,
@@ -203,6 +258,7 @@ def _execute_step(
             expected_artifacts=expected_artifacts,
             env=execution_env,
             driver_context=driver_context,
+            leases_held=True,
         )
     except Exception as exc:
         if overrides is not None:
@@ -213,6 +269,7 @@ def _execute_step(
             append_remediation_record(
                 output_dir, step_id=step_id, attempt=_attempt,
                 applied_overrides=overrides, resulting_status="rerun_error",
+                effective_resolution=effective_resolution,
             )
         print(json.dumps({
             "status": "failed",
@@ -242,7 +299,9 @@ def _execute_step(
             attempt=step_state.attempt,
             applied_overrides=overrides,
             resulting_status=status,
+            effective_resolution=effective_resolution,
         )
+        payload["effective_dictionary_resolution"] = list(effective_resolution)
     print(json.dumps(payload, indent=2))
     return 0 if status == "ok" else 1
 
@@ -316,6 +375,7 @@ def _execute_run(
             env=execution_env,
             max_total_attempts=max_total_attempts,
             driver_context=driver_context,
+            leases_held=True,
         )
     except Exception as exc:
         try:
@@ -416,6 +476,31 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
         }, indent=2))
         return None
     setup_root_raw = (run_doc.launch or {}).get("setupRoot")
+
+    def replan_after_mutation() -> _ReplannedExecution:
+        current_document = load_run_document(args.run_document)
+        current_inputs, current_diagnostics = build_execution_inputs(
+            current_document,
+            utility_produces=_utility_produces_by_command(driver_context),
+            driver_context=driver_context,
+            execution_env=execution_env,
+        )
+        if current_inputs is None:
+            raise ValueError(
+                "replanned RunDocument is invalid: "
+                + json.dumps(list(current_diagnostics), sort_keys=True)
+            )
+        if (
+            current_inputs.case_root.resolve() != inputs.case_root.resolve()
+            or current_inputs.output_dir.resolve() != inputs.output_dir.resolve()
+        ):
+            raise ValueError("replanned RunDocument changed its case or output identity")
+        return _ReplannedExecution(
+            workflow_dag=current_inputs.workflow_dag,
+            planned_state=current_inputs.workflow_state,
+            expected_artifacts=current_inputs.expected_artifacts,
+        )
+
     return _ExecutionContext(
         entry_label=run_doc.name,
         workflow_dag=inputs.workflow_dag,
@@ -432,6 +517,7 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
         execution_env=execution_env,
         driver_context=driver_context,
         source_path=args.run_document,
+        replan_after_mutation=replan_after_mutation,
     )
 
 
@@ -446,6 +532,9 @@ def _context_from_entry(
     stage_for_execution: bool = False,
     fresh: bool = False,
 ) -> tuple[_ExecutionContext | None, int]:
+    replan_entry = selected_entry
+    replan_entry_kind = entry_kind
+    replan_overrides = dict(overrides or {})
     report = strict_plan(
         selected_entry,
         entry_kind=entry_kind,
@@ -504,11 +593,10 @@ def _context_from_entry(
         # name-based lookup -- but only when staging actually changed the
         # name; an unflattened top-level entry still resolves by its own
         # name and must keep doing so.
-        replan_entry = selected_entry
-        replan_entry_kind = entry_kind
         if safe_entry != selected_entry:
             replan_entry = "genericcase"
             replan_entry_kind = "case_folder"
+        replan_overrides = staged_overrides
         report = strict_plan(
             replan_entry,
             entry_kind=replan_entry_kind,
@@ -528,6 +616,41 @@ def _context_from_entry(
         explicit_bashrc=explicit_bashrc,
         driver_context=driver_context,
     )
+
+    planned_case_root = Path(report.launch["case_root"]).resolve()
+    planned_output_dir = Path(report.launch["output_dir"]).resolve()
+
+    def replan_after_mutation() -> _ReplannedExecution:
+        replanned_report = strict_plan(
+            replan_entry,
+            entry_kind=replan_entry_kind,
+            overrides=replan_overrides,
+            config_path=config_path,
+            explicit_bashrc=explicit_bashrc,
+            driver_context=driver_context,
+        )
+        replanned_readiness = is_launchable(
+            plan_status=replanned_report.status,
+            environment_diagnostics=replanned_report.environment_diagnostics,
+        )
+        if not replanned_readiness.structural_ok:
+            raise ValueError(
+                "replanned entry is invalid: "
+                + json.dumps(replanned_report.to_json(), sort_keys=True)
+            )
+        if replanned_report.workflow_dag is None or replanned_report.workflow_state is None:
+            raise ValueError("replanned entry did not produce an executable workflow")
+        if (
+            Path(replanned_report.launch["case_root"]).resolve() != planned_case_root
+            or Path(replanned_report.launch["output_dir"]).resolve() != planned_output_dir
+        ):
+            raise ValueError("replanned entry changed its case or output identity")
+        return _ReplannedExecution(
+            workflow_dag=replanned_report.workflow_dag,
+            planned_state=replanned_report.workflow_state,
+            expected_artifacts=replanned_report.expected_artifacts,
+        )
+
     return (
         _ExecutionContext(
             entry_label=selected_entry,
@@ -540,6 +663,7 @@ def _context_from_entry(
             environment_diagnostics=report.environment_diagnostics,
             execution_env=execution_env,
             driver_context=driver_context,
+            replan_after_mutation=replan_after_mutation,
         ),
         0,
     )
@@ -549,45 +673,68 @@ def _dispatch_context(args, context: _ExecutionContext) -> int:
     blocked = _refuse_environment_errors(context, action=args.action)
     if blocked is not None:
         return blocked
-    if args.fresh:
-        fresh_error = ensure_fresh_output_dir(
-            context.output_dir, fresh=True, allowed_root=_allowed_runs_root(),
-        )
-        if fresh_error is not None:
-            print(json.dumps({
-                "status": "failed",
-                "entry": context.entry_label,
-                "action": args.action,
-                "error": fresh_error,
-            }, indent=2))
-            return 1
-    if args.action == "step":
-        return _execute_step(
+    try:
+        with acquire_case_lease(context.case_root):
+            return _dispatch_context_owned(args, context)
+    except AttemptLeaseError as exc:
+        print(json.dumps({
+            "status": "failed",
+            "entry": context.entry_label,
+            "action": args.action,
+            "error": str(exc),
+        }, indent=2))
+        return 1
+
+
+def _dispatch_context_owned(args, context: _ExecutionContext) -> int:
+    output_existed = context.output_dir.exists()
+    with acquire_attempt_lease(context.output_dir):
+        if args.fresh and output_existed:
+            fresh_error = ensure_fresh_output_dir(
+                context.output_dir,
+                fresh=True,
+                allowed_root=_allowed_runs_root(),
+                preserve_names=frozenset({
+                    ".omnidriver-attempt.lock",
+                    ".omnidriver-attempt.lock.guard",
+                }),
+            )
+            if fresh_error is not None:
+                print(json.dumps({
+                    "status": "failed",
+                    "entry": context.entry_label,
+                    "action": args.action,
+                    "error": fresh_error,
+                }, indent=2))
+                return 1
+        if args.action == "step":
+            return _execute_step(
+                entry_label=context.entry_label,
+                step_id=args.step,
+                workflow_dag=context.workflow_dag,
+                planned_state=context.planned_state,
+                case_root=context.case_root,
+                output_dir=context.output_dir,
+                expected_artifacts=context.expected_artifacts,
+                tail_lines=args.tail_lines,
+                execution_env=context.execution_env,
+                apply_overrides_path=args.apply,
+                driver_context=context.driver_context,
+                replan_after_mutation=context.replan_after_mutation,
+            )
+        return _execute_run(
             entry_label=context.entry_label,
-            step_id=args.step,
             workflow_dag=context.workflow_dag,
             planned_state=context.planned_state,
             case_root=context.case_root,
             output_dir=context.output_dir,
             expected_artifacts=context.expected_artifacts,
+            setup_root=context.setup_root,
             tail_lines=args.tail_lines,
             execution_env=context.execution_env,
-            apply_overrides_path=args.apply,
+            max_total_attempts=args.max_total_attempts,
             driver_context=context.driver_context,
         )
-    return _execute_run(
-        entry_label=context.entry_label,
-        workflow_dag=context.workflow_dag,
-        planned_state=context.planned_state,
-        case_root=context.case_root,
-        output_dir=context.output_dir,
-        expected_artifacts=context.expected_artifacts,
-        setup_root=context.setup_root,
-        tail_lines=args.tail_lines,
-        execution_env=context.execution_env,
-        max_total_attempts=args.max_total_attempts,
-        driver_context=context.driver_context,
-    )
 
 
 def _run_document_dispatch(args, driver_context) -> int:

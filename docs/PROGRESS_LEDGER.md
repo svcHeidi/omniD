@@ -4,8 +4,9 @@ Updated: 2026-09-07
 
 ## Committed baseline
 
-`7e6ba4c Harden workflow lifecycle and OpenFOAM resolution` is the committed
-baseline for this follow-up.
+`d9d947e Own case roots and sweep process groups` is the latest committed
+baseline for this follow-up, after `cf097b3 Close local lease and process
+cleanup races` and `7e6ba4c Harden workflow lifecycle and OpenFOAM resolution`.
 The pre-existing uncommitted changes under `packages/omnidriver-cardiacfoam/`
 were intentionally left untouched.
 
@@ -54,23 +55,33 @@ were intentionally left untouched.
   ownership. Sweep case timeouts launch a fresh POSIX session and reuse the
   workflow runner's group-aware `SIGTERM`/`SIGKILL` cleanup rather than
   terminating only the CLI parent.
+- CLI resume validation, `step --apply` mutation, native effective-value
+  resolution, strict replanning, and dispatch now execute while the same case
+  and output leases are held. A changed workflow identity or a native value
+  that is unresolved or differs from the requested value blocks dispatch, and
+  the resolution evidence is retained in the remediation history.
+- `--fresh` now obtains output ownership before clearing an existing output
+  directory and preserves its live lease records while clearing contents. A
+  different case cannot erase a live owner's output by selecting the same
+  output path. Direct step execution also verifies claimed pre-held leases and
+  safely acquires whichever of the case/output pair is not already held.
 
 ## Verification evidence
 
 | Check | Result |
 | --- | --- |
-| Focused lifecycle/process/retry/sweep/lease tests | `72 passed` |
+| Focused transaction/fresh/process/lease/effective-resolution tests | `71 passed` |
 | Adversarial process/lease regression probes added after `7e6ba4c` | `11 passed` |
 | Focused case/sweep ownership tests | `41 passed` |
 | Explicit native v2412 conformance/effective-resolution + directive-inertness + rollback | `17 passed` |
-| OpenFOAM adapter suite | `189 passed, 72 skipped` |
-| Core checkout, excluding the slow self-building wheel test | `741 passed, 90 skipped, 1 deselected` |
-| Fresh core wheel | `uv build --wheel` and `check-wheel-artifact.py` succeeded; fresh Python 3.11 wheel suite: `591 passed, 240 skipped, 1 deselected` |
+| OpenFOAM adapter suite | `192 passed, 72 skipped` |
+| Core checkout, excluding the slow self-building wheel test | `748 passed, 90 skipped, 1 deselected` |
+| Fresh core wheel | `uv build --wheel` and `check-wheel-artifact.py` succeeded; fresh Python 3.11 wheel suite: `598 passed, 240 skipped, 1 deselected` |
 | Neutral Python-only plugin without adapters | passed in the fresh core-wheel workflow check; it runs a shell-only case and validates resume/input drift without importing an adapter |
 | Import boundaries | passed |
 | Capability seam export | passed |
 | CardiacFOAM workflow-planning test seam | `3 passed`; the tests now inspect the planned workflow commands, rather than assuming all launches use `subprocess.run`. No solver was launched. |
-| Current checkout package suites, run separately | `1697 passed, 263 skipped, 1 deselected, 40 subtests passed` |
+| Current checkout package suites, run separately | `1707 passed, 263 skipped, 1 deselected, 40 subtests passed` |
 
 The native evidence above is specifically from `/Volumes/OpenFOAM-v2412`
 using its `foamDictionary` after sourcing `etc/bashrc`. It is not a claim for
@@ -86,13 +97,17 @@ other OpenFOAM releases, forks, platforms, or parser versions.
   multi-host recovery needs a durable shared-lock service or an explicit
   operator-mediated recovery protocol. That protocol is deferred while local
   ownership and planning transactions remain incomplete.
-- Case ownership currently begins at workflow dispatch. Resume validation and
-  `step --apply` mutation still happen before that boundary, without resolving
-  the effective dictionaries and replanning under the same transaction.
+- The case/output lease transaction is host-local and prevents concurrent
+  writers, but it is not yet a crash-recoverable multi-file patch transaction.
+  A mutation failure rolls back its target files; a later native-resolution or
+  replanning refusal is audited but can leave the already-applied edit in the
+  isolated execution case for operator inspection.
 - Dictionary effective resolution is native v2412 evidence, not a replacement
   for a versioned full evaluator. Unsupported include search paths, generated
   entries, environment-dependent substitutions, instance/time selection, and
-  executable directives remain explicit unresolved/runtime operations.
+  executable directives remain explicit unresolved/runtime operations. The
+  post-mutation evidence records inspected dependencies, but dependencies
+  outside the case are not yet promoted into the resumable provenance snapshot.
 - The completed cardiacFOAM test-seam adjustment validates the planned
   pre-solve/solver command sequence before generic execution. It is not
   cardiacFOAM runtime evidence: no cardiacFOAM source, build, scientific
@@ -100,9 +115,9 @@ other OpenFOAM releases, forks, platforms, or parser versions.
 
 ## Next three priorities
 
-1. Put resume validation, mutation, native effective-dictionary resolution,
-   validated replanning, and dispatch under one case lease; make `step --apply`
-   use that transaction.
+1. Turn the owned apply sequence into a journaled or staged patch commit so a
+   native-resolution/replanning refusal and a crash cannot leave a partially
+   accepted case; promote inspected external dependencies into resume evidence.
 2. Add v2412 fixtures for remaining explicit effective-resolution limits,
    including include search paths, generated entries, and time/instance
    selection, while keeping executable directives opt-in.

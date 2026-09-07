@@ -457,7 +457,9 @@ class SolverPluginOptionalHooks(Protocol):
         One call, not two: core has only ever validated and applied together,
         and separating them would let a caller apply without validating. Raise
         a ``ValueError`` subclass to reject. Absent ->
-        ``legacy_apply_overrides`` uses the OpenFOAM dictionary mutators."""
+        ``legacy_apply_overrides`` uses the OpenFOAM dictionary mutators. The
+        adapter additionally records effective-resolution evidence when the
+        fallback runs with a configured execution environment."""
         ...
 
     # -- ReportCatalogCapability ---------------------------------------------

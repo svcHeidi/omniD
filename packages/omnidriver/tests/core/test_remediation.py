@@ -98,10 +98,31 @@ def test_append_is_additive(tmp_path):
     assert len(path.read_text().splitlines()) == 3
 
 
+def test_append_persists_effective_dictionary_resolution(tmp_path):
+    evidence = ({
+        "driver_path": "deltaT",
+        "requested_value": "0.0001",
+        "status": "resolved",
+        "value": "0.0001",
+        "parser": "foamDictionary",
+        "runtime": "/opt/openfoam",
+        "inspected_files": ["/case/system/controlDict"],
+    },)
+    append_remediation_record(
+        tmp_path,
+        step_id="solve",
+        attempt=2,
+        applied_overrides=[{"driver_path": "deltaT", "value": "0.0001"}],
+        resulting_status="ok",
+        effective_resolution=evidence,
+    )
+    record = json.loads((tmp_path / "remediation_history.jsonl").read_text())
+    assert record["effective_dictionary_resolution"] == list(evidence)
+
+
 def test_append_never_raises_on_bad_dir(tmp_path):
     # A non-existent nested output dir must not crash the rerun.
     append_remediation_record(
         tmp_path / "does" / "not" / "exist", step_id="s", attempt=1,
         applied_overrides=[], resulting_status="ok",
     )  # should silently no-op, not raise
-

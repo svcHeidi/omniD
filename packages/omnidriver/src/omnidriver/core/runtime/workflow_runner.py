@@ -7,6 +7,7 @@ import shlex
 import signal
 import subprocess
 import time
+from contextlib import ExitStack
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,7 +15,13 @@ from typing import Any, Callable, Mapping
 
 from ..plugin_profile import decomposition_dirname_prefix
 from .workflow import case_script_commands
-from .attempt_lease import acquire_attempt_lease, attempt_lease_is_held
+from .attempt_lease import (
+    AttemptLeaseError,
+    acquire_attempt_lease,
+    acquire_case_lease,
+    attempt_lease_is_held,
+    case_lease_is_held,
+)
 from .workflow_state import (
     WorkflowRunState,
     WorkflowStepState,
@@ -296,7 +303,7 @@ def run_workflow_step(
     expected_artifacts: tuple[DataArtifact, ...] = (),
     driver_context: Any | None = None,
     cancellation_requested: Callable[[], bool] | None = None,
-    lease_held: bool = False,
+    leases_held: bool = False,
 ) -> WorkflowStepRunResult:
     """Execute one normalized workflow step and return the updated state.
 
@@ -304,13 +311,22 @@ def run_workflow_step(
     orchestration. It only performs one subprocess transition and records logs.
     """
     lease_dir = Path(state_path).parent if state_path is not None else Path(log_dir).parent
-    if not lease_held and not attempt_lease_is_held(lease_dir):
-        with acquire_attempt_lease(lease_dir):
+    owns_both = (
+        case_lease_is_held(case_root) and attempt_lease_is_held(lease_dir)
+    )
+    if leases_held and not owns_both:
+        raise AttemptLeaseError("leases_held=True without owned case and output leases")
+    if not leases_held and not owns_both:
+        with ExitStack() as stack:
+            if not case_lease_is_held(case_root):
+                stack.enter_context(acquire_case_lease(case_root))
+            if not attempt_lease_is_held(lease_dir):
+                stack.enter_context(acquire_attempt_lease(lease_dir))
             return run_workflow_step(
                 workflow_dag, workflow_state, step_id,
                 case_root=case_root, log_dir=log_dir, state_path=state_path, env=env,
                 expected_artifacts=expected_artifacts, driver_context=driver_context,
-                cancellation_requested=cancellation_requested, lease_held=True,
+                cancellation_requested=cancellation_requested, leases_held=True,
             )
 
     from .workflow_state import workflow_digest

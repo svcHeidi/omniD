@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -115,7 +116,7 @@ def resolve_effective_foam_entry(
     path: str | Path,
     entry: str,
     *,
-    bashrc: str | Path = "/Volumes/OpenFOAM-v2412/etc/bashrc",
+    bashrc: str | Path | None = "/Volumes/OpenFOAM-v2412/etc/bashrc",
     allow_executable_directives: bool = False,
     env: Mapping[str, str] | None = None,
     timeout_s: float = 10.0,
@@ -130,18 +131,23 @@ def resolve_effective_foam_entry(
     runtime concern and is reported only by the native command's outcome.
     """
     dictionary = Path(path)
-    runtime = Path(bashrc)
+    runtime = Path(bashrc) if bashrc is not None else None
     if not dictionary.is_file():
         return EffectiveDictionaryResult(
             status="unresolved", value=None, parser="foamDictionary",
-            runtime=str(runtime), message=f"dictionary does not exist: {dictionary}",
+            runtime=str(runtime) if runtime is not None else None,
+            message=f"dictionary does not exist: {dictionary}",
         )
-    if not runtime.is_file():
+    if runtime is not None and not runtime.is_file():
         return EffectiveDictionaryResult(
             status="runtime_unavailable", value=None, parser="foamDictionary",
             runtime=str(runtime), message=f"OpenFOAM bashrc does not exist: {runtime}",
         )
     source_environment = dict(os.environ) if env is None else dict(env)
+    runtime_label = (
+        str(runtime) if runtime is not None
+        else source_environment.get("WM_PROJECT_DIR")
+    )
     inspected, environment_keys, gate_error = _inspect_source_closure(
         dictionary, source_environment,
     )
@@ -149,44 +155,58 @@ def resolve_effective_foam_entry(
         status = "execution_required" if "executable dictionary directive" in gate_error else "unresolved"
         if status != "execution_required" or not allow_executable_directives:
             return EffectiveDictionaryResult(
-                status=status, value=None, parser="foamDictionary", runtime=str(runtime),
+                status=status, value=None, parser="foamDictionary", runtime=runtime_label,
                 message=gate_error, inspected_files=tuple(str(item) for item in inspected),
                 environment_keys=environment_keys,
             )
-    script = 'source "$OMNIDRIVER_FOAM_BASHRC" >/dev/null && foamDictionary "$OMNIDRIVER_DICT" -entry "$OMNIDRIVER_ENTRY" -value'
-    command_env = {
-        **source_environment,
-        "OMNIDRIVER_FOAM_BASHRC": str(runtime),
-        "OMNIDRIVER_DICT": str(dictionary),
-        "OMNIDRIVER_ENTRY": entry,
-    }
+    if runtime is None:
+        executable = shutil.which("foamDictionary", path=source_environment.get("PATH", ""))
+        if executable is None:
+            return EffectiveDictionaryResult(
+                status="runtime_unavailable", value=None, parser="foamDictionary",
+                runtime=source_environment.get("WM_PROJECT_DIR"),
+                message="foamDictionary is not available in the execution environment",
+                inspected_files=tuple(str(item) for item in inspected),
+                environment_keys=environment_keys,
+            )
+        command = (executable, str(dictionary), "-entry", entry, "-value")
+        command_env = source_environment
+    else:
+        script = 'source "$OMNIDRIVER_FOAM_BASHRC" >/dev/null && foamDictionary "$OMNIDRIVER_DICT" -entry "$OMNIDRIVER_ENTRY" -value'
+        command = ("bash", "-lc", script)
+        command_env = {
+            **source_environment,
+            "OMNIDRIVER_FOAM_BASHRC": str(runtime),
+            "OMNIDRIVER_DICT": str(dictionary),
+            "OMNIDRIVER_ENTRY": entry,
+        }
     try:
         completed = subprocess.run(
-            ("bash", "-lc", script), env=command_env, text=True,
+            command, env=command_env, text=True,
             capture_output=True, timeout=timeout_s, check=False,
         )
     except subprocess.TimeoutExpired:
         return EffectiveDictionaryResult(
-            status="unresolved", value=None, parser="foamDictionary", runtime=str(runtime),
+            status="unresolved", value=None, parser="foamDictionary", runtime=runtime_label,
             message=f"foamDictionary timed out after {timeout_s:g} seconds",
             inspected_files=tuple(str(item) for item in inspected),
             environment_keys=environment_keys,
         )
     except OSError as exc:
         return EffectiveDictionaryResult(
-            status="runtime_unavailable", value=None, parser="foamDictionary", runtime=str(runtime),
+            status="runtime_unavailable", value=None, parser="foamDictionary", runtime=runtime_label,
             message=str(exc), inspected_files=tuple(str(item) for item in inspected),
             environment_keys=environment_keys,
         )
     if completed.returncode != 0:
         return EffectiveDictionaryResult(
-            status="unresolved", value=None, parser="foamDictionary", runtime=str(runtime),
+            status="unresolved", value=None, parser="foamDictionary", runtime=runtime_label,
             message=completed.stderr.strip() or f"foamDictionary exited with {completed.returncode}",
             inspected_files=tuple(str(item) for item in inspected),
             environment_keys=environment_keys,
         )
     return EffectiveDictionaryResult(
         status="resolved", value=completed.stdout.strip(), parser="foamDictionary",
-        runtime=str(runtime), inspected_files=tuple(str(item) for item in inspected),
+        runtime=runtime_label, inspected_files=tuple(str(item) for item in inspected),
         environment_keys=environment_keys,
     )

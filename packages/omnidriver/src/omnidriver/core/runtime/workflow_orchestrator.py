@@ -6,7 +6,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from .failure_classification import classify_failure
-from .attempt_lease import acquire_attempt_lease, acquire_case_lease
+from .attempt_lease import (
+    AttemptLeaseError,
+    acquire_attempt_lease,
+    acquire_case_lease,
+    attempt_lease_is_held,
+    case_lease_is_held,
+)
 from .workflow_runner import _atomic_write_json, _step_by_id, _step_state_by_id, run_workflow_step
 from .workflow_state import WorkflowRunState, WorkflowStepState, replace_step_state
 
@@ -51,8 +57,23 @@ def run_workflow(
     state_path: Path | None = None,
     env: dict[str, str] | None = None,
     driver_context: DriverContext | None = None,
+    leases_held: bool = False,
 ) -> WorkflowRunOutcome:
     """Run one workflow while exclusively owning its case and output."""
+    if leases_held:
+        if not (
+            case_lease_is_held(case_root) and attempt_lease_is_held(output_dir)
+        ):
+            raise AttemptLeaseError(
+                "leases_held=True without owned case and output leases"
+            )
+        return _run_workflow_locked(
+            workflow_dag, workflow_state, case_root=case_root, output_dir=output_dir,
+            expected_artifacts=expected_artifacts, default_max_attempts=default_max_attempts,
+            max_total_attempts=max_total_attempts,
+            classification_overrides=classification_overrides, runner=runner,
+            sleep=sleep, state_path=state_path, env=env, driver_context=driver_context,
+        )
     with acquire_case_lease(case_root):
         with acquire_attempt_lease(output_dir):
             return _run_workflow_locked(
@@ -108,7 +129,7 @@ def _run_workflow_locked(
         total_attempts += 1
         context_kwargs = {} if driver_context is None else {"driver_context": driver_context}
         if runner is run_workflow_step:
-            context_kwargs["lease_held"] = True
+            context_kwargs["leases_held"] = True
         result = runner(
             workflow_dag,
             workflow_state,

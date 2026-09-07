@@ -13,6 +13,7 @@ def append_remediation_record(
     attempt: int,
     applied_overrides: list[dict[str, Any]],
     resulting_status: str,
+    effective_resolution: tuple[dict[str, Any], ...] = (),
 ) -> None:
     """Append one audit line. Best-effort: never raises (must not crash a rerun)."""
     record = {
@@ -22,6 +23,8 @@ def append_remediation_record(
         "applied_overrides": applied_overrides,
         "resulting_status": resulting_status,
     }
+    if effective_resolution:
+        record["effective_dictionary_resolution"] = list(effective_resolution)
     try:
         path = Path(output_dir) / "remediation_history.jsonl"
         with path.open("a", encoding="utf-8") as handle:
