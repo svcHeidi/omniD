@@ -65,6 +65,11 @@ were intentionally left untouched.
   different case cannot erase a live owner's output by selecting the same
   output path. Direct step execution also verifies claimed pre-held leases and
   safely acquires whichever of the case/output pair is not already held.
+- Effective resolution now follows quoted `#includeEtc` through the selected
+  runtime's explicit `FOAM_ETC`, records that external dependency and
+  environment key, and has a native v2412 fixture proving the resolved value.
+  A separate native `#calc` fixture proves executable evaluation remains gated
+  unless the caller explicitly opts in; `#includeFunc` still reports unresolved.
 
 ## Verification evidence
 
@@ -74,14 +79,14 @@ were intentionally left untouched.
 | Adversarial process/lease regression probes added after `7e6ba4c` | `11 passed` |
 | Focused case/sweep ownership tests | `41 passed` |
 | Explicit native v2412 conformance/effective-resolution + directive-inertness + rollback | `17 passed` |
-| OpenFOAM adapter suite | `192 passed, 72 skipped` |
+| OpenFOAM adapter suite | `196 passed, 72 skipped` |
 | Core checkout, excluding the slow self-building wheel test | `748 passed, 90 skipped, 1 deselected` |
 | Fresh core wheel | `uv build --wheel` and `check-wheel-artifact.py` succeeded; fresh Python 3.11 wheel suite: `598 passed, 240 skipped, 1 deselected` |
 | Neutral Python-only plugin without adapters | passed in the fresh core-wheel workflow check; it runs a shell-only case and validates resume/input drift without importing an adapter |
 | Import boundaries | passed |
 | Capability seam export | passed |
 | CardiacFOAM workflow-planning test seam | `3 passed`; the tests now inspect the planned workflow commands, rather than assuming all launches use `subprocess.run`. No solver was launched. |
-| Current checkout package suites, run separately | `1707 passed, 263 skipped, 1 deselected, 40 subtests passed` |
+| Current checkout package suites, run separately | `1711 passed, 263 skipped, 1 deselected, 40 subtests passed` |
 
 The native evidence above is specifically from `/Volumes/OpenFOAM-v2412`
 using its `foamDictionary` after sourcing `etc/bashrc`. It is not a claim for
@@ -103,9 +108,9 @@ other OpenFOAM releases, forks, platforms, or parser versions.
   replanning refusal is audited but can leave the already-applied edit in the
   isolated execution case for operator inspection.
 - Dictionary effective resolution is native v2412 evidence, not a replacement
-  for a versioned full evaluator. Unsupported include search paths, generated
-  entries, environment-dependent substitutions, instance/time selection, and
-  executable directives remain explicit unresolved/runtime operations. The
+  for a versioned full evaluator. Function-object include search, generated
+  entries, instance/time selection, and executable directives remain explicit
+  unresolved/runtime operations. The
   post-mutation evidence records inspected dependencies, but dependencies
   outside the case are not yet promoted into the resumable provenance snapshot.
 - The completed cardiacFOAM test-seam adjustment validates the planned
@@ -119,7 +124,7 @@ other OpenFOAM releases, forks, platforms, or parser versions.
    native-resolution/replanning refusal and a crash cannot leave a partially
    accepted case; promote inspected external dependencies into resume evidence.
 2. Add v2412 fixtures for remaining explicit effective-resolution limits,
-   including include search paths, generated entries, and time/instance
+   including function-object includes, generated entries, and time/instance
    selection, while keeping executable directives opt-in.
 3. Begin cardiacFOAM integration only with a separately approved native
    runtime/build plan, then validate its solver-specific contract without

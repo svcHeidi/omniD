@@ -90,10 +90,70 @@ def test_executable_directive_requires_explicit_capability_without_running(tmp_p
 
 def test_runtime_dependent_include_is_explicitly_unresolved(tmp_path: Path) -> None:
     path = tmp_path / "d"
-    path.write_text(HEADER + "#includeEtc \"caseDicts/setConstraintTypes\"\n")
+    path.write_text(HEADER + "#includeFunc residuals\n")
     result = resolve_effective_foam_entry(path, "anything")
     assert result.status == "unresolved"
     assert "runtime-dependent include" in result.message
+
+
+def test_include_etc_requires_explicit_root_without_running(tmp_path: Path) -> None:
+    path = tmp_path / "d"
+    path.write_text(HEADER + '#includeEtc "caseDicts/example"\n')
+
+    result = resolve_effective_foam_entry(path, "anything", bashrc=None, env={})
+
+    assert result.status == "unresolved"
+    assert result.environment_keys == ("FOAM_ETC",)
+    assert "FOAM_ETC" in result.message
+
+
+def test_include_etc_dependency_is_inspected_from_configured_root(
+    monkeypatch, tmp_path: Path,
+) -> None:
+    etc_root = tmp_path / "etc"
+    included = etc_root / "caseDicts" / "example"
+    included.parent.mkdir(parents=True)
+    included.write_text("fromEtc 23;\n")
+    path = tmp_path / "d"
+    path.write_text(HEADER + '#includeEtc "caseDicts/example"\n')
+    executable = tmp_path / "foamDictionary"
+    executable.write_text("")
+    monkeypatch.setattr(
+        "omnidriver.openfoam.effective_dictionary.shutil.which",
+        lambda name, path: str(executable),
+    )
+    monkeypatch.setattr(
+        "omnidriver.openfoam.effective_dictionary.subprocess.run",
+        lambda command, **kwargs: subprocess.CompletedProcess(
+            command, 0, stdout="23\n", stderr="",
+        ),
+    )
+
+    result = resolve_effective_foam_entry(
+        path,
+        "fromEtc",
+        bashrc=None,
+        env={"PATH": str(tmp_path), "FOAM_ETC": str(etc_root)},
+    )
+
+    assert (result.status, result.value) == ("resolved", "23")
+    assert result.environment_keys == ("FOAM_ETC",)
+    assert set(result.inspected_files) == {str(path.resolve()), str(included.resolve())}
+
+
+@native
+def test_v2412_resolves_include_etc_and_records_runtime_dependency(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "d"
+    path.write_text(HEADER + '#includeEtc "caseDicts/profiling/parallel.cfg"\n')
+
+    result = resolve_effective_foam_entry(path, "type")
+
+    dependency = V2412_BASHRC.parent / "caseDicts" / "profiling" / "parallel.cfg"
+    assert (result.status, result.value) == ("resolved", "parProfiling")
+    assert result.environment_keys == ("FOAM_ETC",)
+    assert str(dependency.resolve()) in result.inspected_files
 
 
 @native
@@ -118,6 +178,20 @@ def test_environment_include_without_the_required_value_is_unresolved(tmp_path: 
     assert result.status == "unresolved"
     assert result.environment_keys == ("OMNIDRIVER_TEST_INCLUDE",)
     assert "unset environment variable" in result.message
+
+
+@native
+def test_v2412_executes_calc_only_with_explicit_opt_in(tmp_path: Path) -> None:
+    path = tmp_path / "d"
+    path.write_text(HEADER + 'answer #calc "6 * 7";\n')
+
+    gated = resolve_effective_foam_entry(path, "answer")
+    resolved = resolve_effective_foam_entry(
+        path, "answer", allow_executable_directives=True,
+    )
+
+    assert gated.status == "execution_required"
+    assert (resolved.status, resolved.value) == ("resolved", "42")
 
 
 @native

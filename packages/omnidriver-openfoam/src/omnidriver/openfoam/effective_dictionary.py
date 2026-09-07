@@ -19,7 +19,8 @@ from .mutators import _mask_comments
 
 _EXECUTABLE_DIRECTIVE = re.compile(r"#(?:calc|codeStream|eval)\b")
 _QUOTED_INCLUDE = re.compile(r'^\s*#include(?P<optional>IfPresent)?\s+"(?P<path>[^"]+)"', re.MULTILINE)
-_OTHER_INCLUDE = re.compile(r"^\s*#include(?:Etc|Func)\b|^\s*#include(?!IfPresent\s+\")(?!\s+\")", re.MULTILINE)
+_ETC_INCLUDE = re.compile(r'^\s*#includeEtc\s+"(?P<path>[^"]+)"', re.MULTILINE)
+_OTHER_INCLUDE = re.compile(r"^\s*#includeFunc\b|^\s*#include(?!Etc\s+\")(?!IfPresent\s+\")(?!\s+\")", re.MULTILINE)
 _ENV_REFERENCE = re.compile(r"\$(?:\{(?P<braced>[A-Za-z_][A-Za-z0-9_]*)\}|(?P<bare>[A-Za-z_][A-Za-z0-9_]*))")
 
 
@@ -93,6 +94,25 @@ def _inspect_source_closure(
                 f"runtime-dependent include found in {current}; "
                 "effective resolution is unresolved without its explicit dependency closure"
             )
+        for match in _ETC_INCLUDE.finditer(lexical_text):
+            environment_keys.add("FOAM_ETC")
+            etc_root = environment.get("FOAM_ETC")
+            if not etc_root:
+                return tuple(inspected), tuple(sorted(environment_keys)), (
+                    "#includeEtc requires unset environment variable 'FOAM_ETC'"
+                )
+            include_name = match.group("path")
+            expanded, keys, error = _expand_include(include_name, environment)
+            environment_keys.update(keys)
+            if error is not None:
+                return tuple(inspected), tuple(sorted(environment_keys)), error
+            assert expanded is not None
+            candidate = (Path(etc_root) / expanded).resolve()
+            if not candidate.is_file():
+                return tuple(inspected), tuple(sorted(environment_keys)), (
+                    f"#includeEtc dependency is missing: {candidate}"
+                )
+            pending.append(candidate)
         for match in _QUOTED_INCLUDE.finditer(lexical_text):
             include_name = match.group("path")
             expanded, keys, error = _expand_include(include_name, environment)
@@ -144,6 +164,12 @@ def resolve_effective_foam_entry(
             runtime=str(runtime), message=f"OpenFOAM bashrc does not exist: {runtime}",
         )
     source_environment = dict(os.environ) if env is None else dict(env)
+    if runtime is not None:
+        # Supported OpenFOAM layouts place ``bashrc`` directly in the etc
+        # directory it exports as FOAM_ETC. Resolution inspects dependencies
+        # before starting the native process, so make that selected-runtime
+        # fact available to the inert closure walk as well.
+        source_environment.setdefault("FOAM_ETC", str(runtime.parent))
     runtime_label = (
         str(runtime) if runtime is not None
         else source_environment.get("WM_PROJECT_DIR")
