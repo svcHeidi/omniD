@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 
 import pytest
 
@@ -9,6 +10,7 @@ from omnidriver.core.runtime.repair_loop import (
     RepairExperimentResult,
     RepairObservation,
     RepairProposal,
+    observation_from_failure_context,
     run_repair_loop,
 )
 
@@ -29,6 +31,8 @@ def test_success_records_hypothesis_evidence_and_transaction(tmp_path):
     record = json.loads(outcome.journal_path.read_text())
     assert (outcome.status, outcome.executions) == ("succeeded", 1)
     assert record["experiments"][0]["observation_digest"] == initial.digest
+    assert record["initial_observation"] == {"code": "diverged", "residual": 10}
+    assert record["experiments"][0]["resulting_observation"] == {"code": "ok"}
     assert record["experiments"][0]["transaction_id"] == "tx-1"
 
 
@@ -135,3 +139,86 @@ def test_separate_loops_keep_separate_durable_histories(tmp_path):
 
     assert first.journal_path != second.journal_path
     assert first.journal_path.exists() and second.journal_path.exists()
+
+
+def test_observation_and_proposal_are_deep_copied_at_the_boundary():
+    evidence = {"diagnostics": [{"code": "diverged"}]}
+    overrides = ({"value": {"nested": [1]}},)
+    observation = RepairObservation(evidence)
+    proposal = RepairProposal("idea", overrides, observation.digest)
+
+    evidence["diagnostics"][0]["code"] = "mutated"
+    overrides[0]["value"]["nested"].append(2)
+
+    assert observation.evidence == {"diagnostics": [{"code": "diverged"}]}
+    assert proposal.overrides == ({"value": {"nested": [1]}},)
+
+
+def test_non_json_evidence_and_non_finite_numbers_are_rejected():
+    with pytest.raises(ValueError, match="strict JSON"):
+        RepairObservation({"bad": object()})
+    with pytest.raises(ValueError, match="strict JSON"):
+        RepairObservation({"bad": float("nan")})
+
+
+def test_failure_observation_ignores_attempt_and_log_locations():
+    base = {
+        "step_id": "solve", "exit_code": 1,
+        "diagnostics": [{"code": "diverged"}],
+        "stdout_tail": "same", "stderr_tail": "same",
+        "stdout_truncated": False, "stderr_truncated": False,
+    }
+    first = observation_from_failure_context({
+        **base, "attempt": 1, "stdout_log": "/run/1.out", "stderr_log": "/run/1.err",
+    })
+    second = observation_from_failure_context({
+        **base, "attempt": 9, "stdout_log": "/run/9.out", "stderr_log": "/run/9.err",
+    })
+
+    assert first.digest == second.digest
+    assert "attempt" not in first.evidence
+
+
+def test_restart_same_loop_id_accounts_for_crashed_reserved_candidate(tmp_path):
+    loop_id = str(uuid.uuid4())
+    initial = RepairObservation({"code": "failed"})
+
+    with pytest.raises(KeyboardInterrupt):
+        run_repair_loop(
+            initial, output_dir=tmp_path, budgets=RepairBudgets(3),
+            propose=_proposal,
+            execute_candidate=lambda proposal: (_ for _ in ()).throw(KeyboardInterrupt()),
+            loop_id=loop_id,
+        )
+
+    outcome = run_repair_loop(
+        initial, output_dir=tmp_path, budgets=RepairBudgets(3),
+        propose=lambda observation: pytest.fail("must recover before proposing again"),
+        execute_candidate=lambda proposal: pytest.fail("must not execute again"),
+        loop_id=loop_id,
+    )
+
+    assert (outcome.status, outcome.reason, outcome.executions) == (
+        "failed", "interrupted_candidate_requires_recovery", 1,
+    )
+    record = json.loads(outcome.journal_path.read_text())
+    assert record["experiments"][0]["status"] == "interrupted"
+
+
+def test_finished_loop_id_is_idempotent(tmp_path):
+    loop_id = str(uuid.uuid4())
+    initial = RepairObservation({"code": "failed"})
+    first = run_repair_loop(
+        initial, output_dir=tmp_path, budgets=RepairBudgets(1),
+        propose=lambda observation: None,
+        execute_candidate=lambda proposal: pytest.fail("must not execute"),
+        loop_id=loop_id,
+    )
+    second = run_repair_loop(
+        initial, output_dir=tmp_path, budgets=RepairBudgets(1),
+        propose=lambda observation: pytest.fail("finished loop must not propose"),
+        execute_candidate=lambda proposal: pytest.fail("finished loop must not execute"),
+        loop_id=loop_id,
+    )
+
+    assert second == first
