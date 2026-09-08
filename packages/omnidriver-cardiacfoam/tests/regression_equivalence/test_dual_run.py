@@ -4,8 +4,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from conftest import skip_without_monorepo
-pytestmark = skip_without_monorepo
 
 from regression_equivalence.registry import REGRESSION_CASES, RegressionCase
 from regression_equivalence import dual_run
@@ -17,6 +15,44 @@ from regression_equivalence.dual_run import (
     values_agree,
     verify_reproduction,
 )
+
+
+@pytest.mark.parametrize("driver", ["strict", "generic"])
+def test_driver_invokes_installed_namespace_without_source_path_injection(monkeypatch, tmp_path, driver):
+    import omnidriver
+
+    monkeypatch.setattr(omnidriver, "__file__", None)
+    monkeypatch.setenv("PYTHONPATH", "existing-user-path")
+    case = RegressionCase("synthetic/case", "syntheticEntry", (), "regression/reference.txt")
+    calls = []
+
+    def run(argv, **kwargs):
+        calls.append((argv, kwargs))
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(dual_run.subprocess, "run", run)
+    result = dual_run._drive_agent(case, driver, tmp_path)
+    assert result.returncode == 0
+    argv, kwargs = calls.pop()
+    assert argv[:5] == [dual_run.sys.executable, "-m", "omnidriver", "run", "--strict"]
+    expected_entry = ["--entry", "syntheticEntry"] if driver == "strict" else [
+        "--entry", "synthetic/case", "--entry-kind", "case_folder",
+    ]
+    assert argv[5:] == expected_entry + ["--cases-root", str(tmp_path)]
+    assert kwargs == {"capture_output": True, "text": True}
+    assert not calls
+
+
+def test_installed_cli_rejects_missing_case_without_solver(monkeypatch, tmp_path):
+    """Exercise the actual child interpreter; the absent case cannot launch a solver."""
+    monkeypatch.delenv("PYTHONPATH", raising=False)
+    monkeypatch.delenv("WM_PROJECT_DIR", raising=False)
+    monkeypatch.setenv("PATH", "")
+    monkeypatch.chdir(tmp_path)
+    case = RegressionCase("absent/case", None, (), "regression/reference.txt")
+    result = dual_run._drive_agent(case, "generic", tmp_path / "absent-tutorials")
+    assert result.returncode != 0
+    assert "Unknown entry" in result.stdout + result.stderr
 
 SINGLECELL_REF = """\
 # file                     time       variable  expected     tolerance

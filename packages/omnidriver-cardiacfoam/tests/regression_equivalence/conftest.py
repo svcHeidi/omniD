@@ -1,18 +1,7 @@
-"""Module-level skip: all regression-equivalence tests require the full
-cardiacFoam monorepo tree (tutorials/ + applications/) to find the real case
-directories, Alltest-regression script, and reference files.
+"""Skip fixture-dependent tests at their module or function boundary.
 
-In a standalone driverFOAM clone these files are absent; pytest will skip
-the entire test_*.py collection in this package.
+The dual-run unit helpers and registry metadata checks need neither a solver
+nor the cardiacFoam tutorial tree. Tests reading real tutorial files retain
+their explicit ``skip_without_monorepo`` markers. A ``pytestmark`` in conftest
+does not propagate to test modules and must not be relied upon as a gate.
 """
-import pytest
-
-from conftest import monorepo_root
-
-pytestmark = pytest.mark.skipif(
-    monorepo_root is None,
-    reason=(
-        "Requires the full cardiacFoam monorepo tree (tutorials/ + applications/). "
-        "Clone the full repository to enable regression-equivalence tests."
-    ),
-)

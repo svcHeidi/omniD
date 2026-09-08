@@ -124,8 +124,13 @@ def configure_runtime_environment(env: Mapping[str, str]) -> tuple[dict[str, str
         )
 
     manifest_path = Path(os.path.expandvars(str(manifest_value))).expanduser().resolve()
-
-    regeneration_error = _ensure_build_manifest(manifest_path, configured_env, contract, solids_root)
+    selected_solver = shutil.which("cardiacFoam", path=configured_env.get("PATH", ""))
+    if selected_solver is None:
+        return configured_env, "cardiacFoam is unavailable on the configured PATH"
+    solver_path = Path(selected_solver).resolve()
+    regeneration_error = _ensure_build_manifest(
+        manifest_path, configured_env, contract, solids_root, solver_path=solver_path
+    )
     if regeneration_error:
         return configured_env, regeneration_error
 
@@ -137,6 +142,8 @@ def configure_runtime_environment(env: Mapping[str, str]) -> tuple[dict[str, str
         solids_root=solids_root,
         required_libraries=tuple(option.get("required_libraries", ())),
         forbidden_libraries=tuple(option.get("forbidden_libraries", ())),
+        common_libraries=tuple(contract.get("common_libraries", ())),
+        solver_path=solver_path,
     )
     if error:
         return configured_env, error
@@ -220,14 +227,14 @@ def _ensure_build_manifest(
     env: Mapping[str, str],
     contract: Mapping[str, Any],
     solids_root_hint: Path | None,
+    *,
+    solver_path: Path,
 ) -> str | None:
-    """Regenerate `cardiacFoam.build.json` from the compiled artifacts.
+    """Record runtime inspection when the manifest is absent or solver newer.
 
-    Runs only when the manifest is missing or older than the compiled
-    solver, so a fresh (re)build is always reflected without any build-time
-    hook. The backend is inferred from what the solver actually links
-    against, not asserted by the caller, so the manifest can never disagree
-    with reality — it IS the inspection of reality.
+    Environment/source observations describe the current installation, not
+    historical build provenance. The validator still checks every artifact;
+    a library-only change invalidates this record even if the solver is older.
 
     Returns an error string if regeneration was attempted and failed.
     Returns None if regeneration succeeded, was unnecessary (already
@@ -235,10 +242,7 @@ def _ensure_build_manifest(
     in the last case the existing missing/stale manifest is reported by the
     caller's own validation step.
     """
-    user_appbin = env.get("FOAM_USER_APPBIN")
-    if not user_appbin:
-        return None
-    solver = Path(user_appbin) / "cardiacFoam"
+    solver = solver_path
     if not solver.is_file():
         return None
 
@@ -289,6 +293,7 @@ def _ensure_build_manifest(
     payload = {
         "schema_version": 1,
         "plugin": _PLUGIN_ID,
+        "evidence_kind": "runtime_inspection",
         "backend": backend,
         "openfoam": {
             "root": str(Path(env["WM_PROJECT_DIR"]).resolve()) if env.get("WM_PROJECT_DIR") else None,
@@ -322,6 +327,8 @@ def _validate_build_manifest(
     solids_root: Path | None,
     required_libraries: tuple[str, ...],
     forbidden_libraries: tuple[str, ...],
+    common_libraries: tuple[str, ...] = (),
+    solver_path: Path | None = None,
 ) -> str | None:
     if not path.is_file():
         return f"CardiacFoam build manifest does not exist: {path}"
@@ -329,29 +336,68 @@ def _validate_build_manifest(
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         return f"Invalid cardiacFoam build manifest {path}: {exc}"
+    if not isinstance(payload, dict):
+        return "CardiacFoam build manifest must be a JSON object"
+    if type(payload.get("schema_version")) is not int or payload["schema_version"] != 1:
+        return "Unsupported or missing cardiacFoam build manifest schema_version"
+    if payload.get("plugin") != _PLUGIN_ID:
+        return "Build manifest plugin does not match org.cardiacfoam"
     if payload.get("backend") != backend:
         return f"Build manifest backend is {payload.get('backend')!r}, requested {backend!r}"
-    manifest_openfoam = payload.get("openfoam", {}).get("root")
-    if openfoam_root is not None and manifest_openfoam and Path(manifest_openfoam).resolve() != openfoam_root:
-        return f"Build manifest OpenFOAM root does not match {openfoam_root}"
-    manifest_solids = payload.get("solids4foam", {}).get("root")
-    if solids_root is not None and manifest_solids and Path(manifest_solids).resolve() != solids_root:
-        return f"Build manifest solids4foam root does not match {solids_root}"
+    for label, expected_root in (("openfoam", openfoam_root), ("solids4foam", solids_root)):
+        metadata = payload.get(label, {})
+        if not isinstance(metadata, dict):
+            return f"Build manifest {label} must be an object"
+        root = metadata.get("root")
+        if expected_root is not None and (
+            not isinstance(root, str) or not root
+            or Path(root).resolve() != expected_root.resolve()
+        ):
+            return f"Build manifest {label} root is missing or does not match {expected_root}"
 
-    linked = set(payload.get("linked_libraries", ()))
+    linked = payload.get("linked_libraries")
+    if not isinstance(linked, list) or not all(isinstance(item, str) for item in linked):
+        return "Build manifest linked_libraries must be a list of names"
+    def links(library: str) -> bool:
+        return any(Path(item).name == library or Path(item).name.startswith(library + ".") for item in linked)
+
     for library in required_libraries:
-        if not any(library in item for item in linked):
+        if not links(library):
             return f"Build manifest is missing required linked library {library}"
     for library in forbidden_libraries:
-        if any(library in item for item in linked):
+        if links(library):
             return f"Build manifest links forbidden library {library}"
 
-    for artifact in payload.get("artifacts", ()):
-        artifact_path = Path(artifact.get("path", ""))
+    artifacts = payload.get("artifacts")
+    if not isinstance(artifacts, list) or not artifacts:
+        return "Build manifest must contain a non-empty artifacts list"
+    by_name: dict[str, dict[str, Any]] = {}
+    for artifact in artifacts:
+        if not isinstance(artifact, dict) or not isinstance(artifact.get("name"), str) or not artifact["name"]:
+            return "Build manifest artifacts require non-empty names"
+        name = artifact["name"]
+        if name in by_name:
+            return f"Build manifest contains duplicate artifact {name!r}"
+        by_name[name] = artifact
+    for name in ("cardiacFoam", *common_libraries, *required_libraries):
+        if name not in by_name:
+            return f"Build manifest is missing required artifact {name}"
+
+    for artifact in artifacts:
+        raw_path = artifact.get("path")
+        if not isinstance(raw_path, str) or not raw_path or not Path(raw_path).is_absolute():
+            return f"Build manifest artifact requires an absolute path: {artifact['name']}"
+        artifact_path = Path(raw_path)
         expected = artifact.get("sha256")
+        if artifact["name"] == "cardiacFoam" and solver_path is not None and artifact_path.resolve() != solver_path.resolve():
+            return f"Build manifest solver does not match configured PATH executable {solver_path}"
         if not artifact_path.is_file() or not expected:
             return f"Build manifest artifact is unavailable: {artifact_path}"
-        digest = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+        try:
+            with artifact_path.open("rb") as handle:
+                digest = hashlib.file_digest(handle, "sha256").hexdigest()
+        except OSError as exc:
+            return f"Build manifest artifact is unreadable: {artifact_path}: {exc}"
         if digest != expected:
             return f"Build artifact changed since manifest creation: {artifact_path}"
     return None

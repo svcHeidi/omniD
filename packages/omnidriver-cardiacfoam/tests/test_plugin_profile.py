@@ -64,24 +64,14 @@ def test_cardiac_runtime_exports_one_validated_solids4foam_root(tmp_path: Path) 
     header.write_text("// source header\n")
     ln_include.write_text("// generated include\n")
     manifest = tmp_path / "cardiacFoam.build.json"
-    manifest.write_text(
-        json.dumps({
-            "backend": "full",
-            "openfoam": {"root": str(tmp_path)},
-            "solids4foam": {"root": str(root)},
-            "linked_libraries": [
-                "libsolids4FoamModels.dylib",
-                "libelectroMechanicalModels.dylib",
-            ],
-            "artifacts": [],
-        })
-    )
+    solver = _write_complete_full_manifest(manifest, tmp_path, root)
 
     env, error = CardiacFoamPlugin().configure_execution_environment({
         "DRIVERFOAM_CARDIACFOAM_BACKEND": "full",
         "DRIVERFOAM_CARDIACFOAM_SOLIDS4FOAM_ROOT": str(root),
         "DRIVERFOAM_CARDIACFOAM_BUILD_MANIFEST": str(manifest),
         "WM_PROJECT_DIR": str(tmp_path),
+        "PATH": str(solver.parent),
     })
 
     assert error is None
@@ -120,8 +110,35 @@ def _write_fake_lightweight_build(appbin: Path, libbin: Path, *, solver_content:
     appbin.mkdir(parents=True, exist_ok=True)
     solver = appbin / "cardiacFoam"
     solver.write_bytes(solver_content)
+    solver.chmod(0o755)
     for bare_name in ("electroModels", "ionicModels", "genericWriter", "activeTensionModels", "physicsModel"):
         _write_fake_library(libbin, bare_name, f"fake-{bare_name}".encode())
+    return solver
+
+
+def _write_complete_full_manifest(manifest: Path, foam_root: Path, solids_root: Path) -> Path:
+    solver = foam_root / "appbin/cardiacFoam"
+    solver.parent.mkdir(parents=True)
+    solver.write_bytes(b"fake-solver")
+    solver.chmod(0o755)
+    names = ("electroModels", "ionicModels", "genericWriter", "activeTensionModels",
+             "solids4FoamModels", "electroMechanicalModels")
+    paths = [("cardiacFoam", solver)] + [
+        (f"lib{name}", _write_fake_library(foam_root / "libbin", name, name.encode()))
+        for name in names
+    ]
+    manifest.write_text(json.dumps({
+        "schema_version": 1,
+        "plugin": "org.cardiacfoam",
+        "backend": "full",
+        "openfoam": {"root": str(foam_root)},
+        "solids4foam": {"root": str(solids_root)},
+        "linked_libraries": ["libsolids4FoamModels.dylib", "libelectroMechanicalModels.dylib"],
+        "artifacts": [
+            {"name": name, "path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+            for name, path in paths
+        ],
+    }))
     return solver
 
 
@@ -130,7 +147,7 @@ def test_build_manifest_self_generates_from_compiled_artifacts(
 ) -> None:
     appbin = tmp_path / "appbin"
     libbin = tmp_path / "libbin"
-    _write_fake_lightweight_build(appbin, libbin, solver_content=b"fake-solver")
+    solver = _write_fake_lightweight_build(appbin, libbin, solver_content=b"fake-solver")
     monkeypatch.setattr(runtime_profile, "_linked_library_names", lambda binary: ("libphysicsModel.dylib",))
 
     manifest = tmp_path / "cardiacFoam.build.json"
@@ -140,6 +157,7 @@ def test_build_manifest_self_generates_from_compiled_artifacts(
         "DRIVERFOAM_CARDIACFOAM_BACKEND": "lightweight",
         "DRIVERFOAM_CARDIACFOAM_BUILD_MANIFEST": str(manifest),
         "WM_PROJECT_DIR": str(tmp_path),
+        "PATH": str(solver.parent),
         "FOAM_USER_APPBIN": str(appbin),
         "FOAM_USER_LIBBIN": str(libbin),
     })
@@ -180,6 +198,7 @@ def test_build_manifest_self_heals_when_stale(tmp_path: Path, monkeypatch: pytes
         "DRIVERFOAM_CARDIACFOAM_BACKEND": "lightweight",
         "DRIVERFOAM_CARDIACFOAM_BUILD_MANIFEST": str(manifest),
         "WM_PROJECT_DIR": str(tmp_path),
+        "PATH": str(solver.parent),
         "FOAM_USER_APPBIN": str(appbin),
         "FOAM_USER_LIBBIN": str(libbin),
     })
@@ -200,13 +219,7 @@ def test_cardiac_runtime_file_selects_backend_and_bashrc(tmp_path: Path) -> None
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("// header\n")
     manifest = tmp_path / "cardiacFoam.build.json"
-    manifest.write_text(json.dumps({
-        "backend": "full",
-        "openfoam": {"root": str(tmp_path)},
-        "solids4foam": {"root": str(root)},
-        "linked_libraries": ["libsolids4FoamModels.dylib", "libelectroMechanicalModels.dylib"],
-        "artifacts": [],
-    }))
+    solver = _write_complete_full_manifest(manifest, tmp_path, root)
     config = tmp_path / "driverfoam-runtime.yaml"
     config.write_text(
         "openfoam:\n  bashrc: /tmp/openfoam/etc/bashrc\n"
@@ -218,6 +231,7 @@ def test_cardiac_runtime_file_selects_backend_and_bashrc(tmp_path: Path) -> None
     env, error = CardiacFoamPlugin().configure_execution_environment({
         "DRIVERFOAM_RUNTIME_CONFIG": str(config),
         "WM_PROJECT_DIR": str(tmp_path),
+        "PATH": str(solver.parent),
     })
 
     assert error is None

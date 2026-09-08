@@ -2,6 +2,8 @@
 
 Updated: 2026-09-08
 
+**Roadmap review:** [September 8 reassessment](roadmap-audit-2026-09-08.md) audits HEAD `bea21d4` and supersedes the priority order below. The baseline paragraph below identifies the start of the latest implementation batch, not current HEAD.
+
 ## Committed baseline
 
 `39c4873 Enforce remediation transaction transitions` is the latest committed

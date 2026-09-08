@@ -2,9 +2,7 @@
 from __future__ import annotations
 
 import re
-import pytest
 from conftest import skip_without_monorepo
-pytestmark = skip_without_monorepo
 
 from regression_equivalence.tutorials_tree import tutorials_root
 from regression_equivalence.registry import REGRESSION_CASES
@@ -18,11 +16,13 @@ def _alltest_entries() -> list[str]:
     return re.findall(r'"([^"]+)"', block.group(1))
 
 
+@skip_without_monorepo
 def test_registry_cases_are_a_curated_subset_of_alltest_regression():
     registry_paths = {case.case_dir for case in REGRESSION_CASES}
     assert registry_paths <= set(_alltest_entries())
 
 
+@skip_without_monorepo
 def test_every_case_dir_and_reference_exist_on_disk():
     root = tutorials_root()
     for case in REGRESSION_CASES:

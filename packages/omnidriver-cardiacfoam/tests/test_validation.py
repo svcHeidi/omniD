@@ -548,6 +548,98 @@ def test_solver_coupling_flags_wrong_coupler_for_valid_pair():
     )
 
 
+def _named_coupling_context():
+    return {
+        "myocardiumSolver": "monodomainSolver",
+        "conductionNetworkDomains.a.purkinjeGraphModelCoeffs.conductionSystemSolver": "monodomain1DSolver",
+        "conductionNetworkDomains.b.purkinjeGraphModelCoeffs.conductionSystemSolver": "eikonalSolver1D",
+        "domainCouplings.left.conductionNetworkDomain": "a",
+        "domainCouplings.left.electroDomainCoupler": "reactionDiffusionPvjCoupler",
+        "domainCouplings.right.conductionNetworkDomain": "b",
+        "domainCouplings.right.electroDomainCoupler": "eikonalMonodomainPvjCoupler",
+    }
+
+
+def test_solver_coupling_resolves_each_named_network_independent_of_order():
+    from omnidriver.cardiacfoam.validation import _evaluate_solver_coupling
+
+    context = _named_coupling_context()
+    assert _evaluate_solver_coupling(context) == []
+    assert _evaluate_solver_coupling(dict(reversed(list(context.items())))) == []
+
+
+def test_solver_coupling_attributes_only_wrong_named_edge_independent_of_order():
+    from omnidriver.cardiacfoam.validation import _evaluate_solver_coupling
+
+    context = _named_coupling_context()
+    context["domainCouplings.right.electroDomainCoupler"] = "reactionDiffusionPvjCoupler"
+    errors = _evaluate_solver_coupling(context)
+    assert errors == _evaluate_solver_coupling(dict(reversed(list(context.items()))))
+    assert len(errors) == 1
+    assert errors[0].field == "domainCouplings.right.electroDomainCoupler"
+    assert errors[0].level == "error"
+    assert "eikonalMonodomainPvjCoupler" in errors[0].message
+
+
+def test_solver_coupling_uncovered_pair_is_explicit_warning_through_validate_run():
+    run = _coupling_run(
+        "monodomainSolver", purkinje="unreviewedNetworkSolver",
+        coupler="reactionDiffusionPvjCoupler",
+    )
+    warnings = [
+        item for item in validate_run(run, entries=[], driver_context=_CTX)
+        if "compatibility is unknown" in item.message
+    ]
+    assert len(warnings) == 1
+    assert warnings[0].level == "warning"
+    assert warnings[0].field == "domainCouplings.lvCoupling.electroDomainCoupler"
+    assert "unreviewedNetworkSolver" in warnings[0].message
+
+
+def test_solver_coupling_missing_target_solver_does_not_borrow_sibling():
+    from omnidriver.cardiacfoam.validation import _evaluate_solver_coupling
+
+    context = _named_coupling_context()
+    del context["conductionNetworkDomains.b.purkinjeGraphModelCoeffs.conductionSystemSolver"]
+    context["conductionNetworkDomains.b.conductionSystemDomain"] = "purkinjeGraphModel"
+    errors = _evaluate_solver_coupling(context)
+    assert len(errors) == 1
+    assert errors[0].field == "domainCouplings.right.electroDomainCoupler"
+    assert errors[0].level == "warning"
+    assert "compatibility is unknown" in errors[0].message
+
+
+def test_solver_coupling_missing_selector_is_scoped_to_its_coupling():
+    from omnidriver.cardiacfoam.validation import _evaluate_solver_coupling
+
+    context = _named_coupling_context()
+    del context["domainCouplings.right.electroDomainCoupler"]
+    errors = _evaluate_solver_coupling(context)
+    assert len(errors) == 1
+    assert errors[0].field == "domainCouplings.right.electroDomainCoupler"
+    assert "required" in errors[0].message
+
+
+def test_solver_coupling_does_not_invent_edges_for_uncoupled_networks():
+    from omnidriver.cardiacfoam.validation import _evaluate_solver_coupling
+
+    context = _named_coupling_context()
+    context = {key: value for key, value in context.items() if not key.startswith("domainCouplings.")}
+    assert _evaluate_solver_coupling(context) == []
+
+
+def test_solver_coupling_does_not_infer_missing_or_dangling_network_reference():
+    from omnidriver.cardiacfoam.validation import _evaluate_solver_coupling
+
+    for target in (None, "ghost"):
+        context = _named_coupling_context()
+        if target is None:
+            del context["domainCouplings.right.conductionNetworkDomain"]
+        else:
+            context["domainCouplings.right.conductionNetworkDomain"] = target
+        assert _evaluate_solver_coupling(context) == []
+
+
 # -------- Block-reference evaluator --------
 
 

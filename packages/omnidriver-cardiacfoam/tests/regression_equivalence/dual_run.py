@@ -33,7 +33,6 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-import omnidriver
 from regression_equivalence.tutorials_tree import tutorials_root
 from regression_equivalence.registry import RegressionCase
 
@@ -295,10 +294,12 @@ def _stage_tutorials_root(case: RegressionCase) -> tuple[Path, Path]:
 
 
 def _drive_agent(case: RegressionCase, driver: str, cases_root: Path) -> subprocess.CompletedProcess:
-    """Invoke `driverFoam run --strict` through the agent CLI on the staged case."""
-    pkg_parent = str(Path(omnidriver.__file__).resolve().parent.parent)
-    env = os.environ.copy()
-    env["PYTHONPATH"] = pkg_parent + os.pathsep + env.get("PYTHONPATH", "")
+    """Invoke the CLI using this interpreter's installed namespace packages.
+
+    Editable installs and wheels both register their packages with the same
+    interpreter. Injecting one source directory would bypass that installation
+    and cannot represent a namespace split across three distributions.
+    """
     if driver == "strict":
         entry_args = ["--entry", case.entry_name]
     else:
@@ -307,7 +308,7 @@ def _drive_agent(case: RegressionCase, driver: str, cases_root: Path) -> subproc
         sys.executable, "-m", "omnidriver", "run", "--strict",
         *entry_args, "--cases-root", str(cases_root),
     ]
-    return subprocess.run(argv, env=env, capture_output=True, text=True)
+    return subprocess.run(argv, capture_output=True, text=True)
 
 
 def _run_regression_script(case: RegressionCase, case_path: Path) -> subprocess.CompletedProcess:

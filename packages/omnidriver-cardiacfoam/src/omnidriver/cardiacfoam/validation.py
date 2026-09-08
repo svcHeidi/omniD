@@ -29,55 +29,71 @@ def _is_template_slot_key(key: str) -> bool:
     return "<" in key or ">" in key
 
 
-def _find_conduction_system_solver(context: dict[str, Any]) -> str | None:
-    for key, val in context.items():
-        if _is_template_slot_key(key):
-            continue
-        if (
-            key.startswith(_CONDUCTION_NET_PREFIX)
-            and key.endswith(_CONDUCTION_SOLVER_SUFFIX)
-        ):
-            return str(val)
-    return None
-
-
-def _find_declared_couplers(context: dict[str, Any]) -> list[str]:
-    return [
-        str(val) for key, val in context.items()
-        if not _is_template_slot_key(key)
-        and key.startswith(_DOMAIN_COUPLINGS_PREFIX)
-        and key.endswith(_COUPLER_SUFFIX)
-    ]
-
-
 def _evaluate_solver_coupling(context: dict[str, Any]) -> list[ValidationError]:
+    """Validate each explicit coupling against its referenced network.
+
+    Network creation alone does not imply a coupling. Match the C++ system
+    builder's conductionNetworkDomain lookup rather than borrowing whichever
+    network selector happens to appear first in the flattened context.
+    """
     errors: list[ValidationError] = []
     myocardium = context.get("myocardiumSolver")
     if myocardium is None:
         return errors
 
-    purkinje = _find_conduction_system_solver(context)
-    declared_couplers = _find_declared_couplers(context)
-
-    purkinje_for_rule_match = purkinje if purkinje is not None else None
-
-    for rule in SOLVER_COMPATIBILITY_RULES:
-        if rule["myocardium_solver"] != myocardium:
+    coupling_blocks = sorted({
+        key.rsplit(".", 1)[0]
+        for key in context
+        if not _is_template_slot_key(key)
+        and key.startswith(_DOMAIN_COUPLINGS_PREFIX)
+        and key.endswith((_NETWORK_REF_SUFFIX, _COUPLER_SUFFIX))
+    })
+    declared_networks = _declared_conduction_networks(context)
+    for block in coupling_blocks:
+        reference_key = block + _NETWORK_REF_SUFFIX
+        network = context.get(reference_key)
+        if network is None or str(network) not in declared_networks:
+            # Required-field and block-reference checks own these errors.
+            # Never substitute another declared network for an absent target.
             continue
-        rule_purkinje = rule["purkinje_solver"]
-        if rule_purkinje == "*":
-            if purkinje_for_rule_match is None:
-                continue
-        elif rule_purkinje != purkinje_for_rule_match:
+
+        solver_key = (
+            _CONDUCTION_NET_PREFIX + str(network) + _CONDUCTION_SOLVER_SUFFIX
+        )
+        purkinje = context.get(solver_key)
+        coupler_key = block + _COUPLER_SUFFIX
+        actual = context.get(coupler_key)
+        rule = next((
+            candidate for candidate in SOLVER_COMPATIBILITY_RULES
+            if candidate["myocardium_solver"] == myocardium
+            and purkinje is not None
+            and candidate["purkinje_solver"] in (purkinje, "*")
+        ), None)
+
+        if rule is None:
+            errors.append(ValidationError(
+                phase="physics",
+                field=coupler_key,
+                message=(
+                    f"Solver coupling compatibility is unknown for {block}: "
+                    f"myocardiumSolver={myocardium}, "
+                    f"conductionNetworkDomain={network!r}, "
+                    f"conductionSystemSolver={purkinje!r}. "
+                    "No applicable compatibility rule is available."
+                ),
+                level="warning",
+            ))
             continue
 
         if not rule["valid"]:
             errors.append(ValidationError(
                 phase="physics",
-                field="myocardiumSolver/conductionSystemSolver",
+                field=coupler_key,
                 message=(
-                    f"Incompatible solver pair: myocardiumSolver={myocardium} "
-                    f"with conductionSystemSolver={purkinje_for_rule_match}. "
+                    f"Incompatible solver pair for {block} "
+                    f"(conductionNetworkDomain={network!r}): "
+                    f"myocardiumSolver={myocardium} "
+                    f"with conductionSystemSolver={purkinje}. "
                     f"{rule.get('reason', '')}"
                 ).strip(),
                 level="error",
@@ -87,33 +103,31 @@ def _evaluate_solver_coupling(context: dict[str, Any]) -> list[ValidationError]:
         required = rule.get("required_coupler")
         if required is None:
             continue
-        if not declared_couplers:
+        if actual is None:
             errors.append(ValidationError(
                 phase="physics",
-                field="electroDomainCoupler",
+                field=coupler_key,
                 message=(
-                    f"electroDomainCoupler is required for myocardiumSolver="
+                    f"electroDomainCoupler is required for {block} "
+                    f"(conductionNetworkDomain={network!r}): myocardiumSolver="
                     f"{myocardium} + conductionSystemSolver={purkinje}; "
                     f"expected {required}."
                 ),
                 level="error",
             ))
-        else:
-            for actual in declared_couplers:
-                if actual != required:
-                    errors.append(ValidationError(
-                        phase="physics",
-                        field="electroDomainCoupler",
-                        message=(
-                            f"electroDomainCoupler={actual!r} is incompatible "
-                            f"with myocardiumSolver={myocardium} + "
-                            f"conductionSystemSolver={purkinje}; "
-                            f"expected {required}."
-                        ),
-                        level="error",
-                    ))
-
-        break
+        elif actual != required:
+            errors.append(ValidationError(
+                phase="physics",
+                field=coupler_key,
+                message=(
+                    f"electroDomainCoupler={actual!r} is incompatible for "
+                    f"{block} (conductionNetworkDomain={network!r}) "
+                    f"with myocardiumSolver={myocardium} + "
+                    f"conductionSystemSolver={purkinje}; "
+                    f"expected {required}."
+                ),
+                level="error",
+            ))
 
     return errors
 

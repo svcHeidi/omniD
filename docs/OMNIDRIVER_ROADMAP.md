@@ -1,5 +1,7 @@
 # omniD: roadmap for an agent-ready simulation framework
 
+**Current implementation review:** [September 8 reassessment](roadmap-audit-2026-09-08.md) records completed lifecycle/repair work and the remaining core/OpenFOAM acceptance gates at `bea21d4`. The audit findings below describe the September 5 baseline.
+
 **Proposed roadmap, 2026-09-05.** Audited against `d19ea1543f1c7be7ce10084f06a2434c0901a011`. This document starts from the requested product and challenges the existing implementation; it does not declare the implementation complete. Supporting evidence lives in [the audit baseline and comparison](roadmap-audit-2026-09-05/baseline-and-prior-art.md), [the core team report](roadmap-audit-2026-09-05/core-team.md), [the simulation team report](roadmap-audit-2026-09-05/simulation-team.md), [the cardiac expert report](roadmap-audit-2026-09-05/cardiac-expert.md), and [the verification/publication report](roadmap-audit-2026-09-05/release-team.md).
 
 ## 1. The product to build
