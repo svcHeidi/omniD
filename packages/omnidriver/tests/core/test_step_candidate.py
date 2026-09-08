@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import os
+import stat
 import uuid
 from dataclasses import replace
 from pathlib import Path
@@ -196,6 +198,50 @@ def test_success_binds_reservation_proposal_and_transaction(tmp_path):
         / f"{result.transaction_id}.json"
     )
     assert durable.is_file()
+
+
+def test_neutral_utility_workflow_repairs_and_dispatches_a_real_allrun(tmp_path):
+    """One solver-neutral vertical slice: observe -> reserve -> repair -> run.
+
+    ``Allrun`` is deliberately utility-only: it verifies the repaired case
+    input and writes a report, without invoking a solver or cardiacFOAM.
+    """
+    context, target, events, state, observation, proposal, reservation = _fixture(tmp_path)
+    allrun = context.case_root / "Allrun"
+    allrun.write_text(
+        "#!/bin/sh\n"
+        "set -eu\n"
+        "test \"$(tr -d '\\n' < config)\" = 2\n"
+        "mkdir -p postProcessing\n"
+        "printf repaired > postProcessing/utility-report.txt\n"
+    )
+    allrun.chmod(allrun.stat().st_mode | stat.S_IXUSR)
+    dag = _dag("Allrun")
+    utility_state = initial_workflow_state(dag)
+    assert utility_state is not None
+    context = replace(
+        context,
+        workflow_dag=dag,
+        planned_state=utility_state,
+        replan_after_mutation=lambda: _replan(
+            context.case_root, context.output_dir, events, dag, utility_state,
+        ),
+    )
+    repaired = RepairObservation({"step_id": "run", "utility_report": "repaired"})
+    result = execute_repair_candidate(
+        context,
+        step_id="run",
+        proposal=proposal,
+        reservation=reservation,
+        reobserve=lambda: observation if not events else repaired,
+    )
+
+    transaction = read_remediation_transaction(context.case_root)
+    assert result.status == "succeeded"
+    assert result.dispatched is True
+    assert (context.case_root / "postProcessing" / "utility-report.txt").read_text() == "repaired"
+    assert events == ["targets", "apply", "replan"]
+    assert transaction["status"] == "accepted"
 
 
 def test_repair_loop_and_transaction_share_one_execution_identity(tmp_path):
