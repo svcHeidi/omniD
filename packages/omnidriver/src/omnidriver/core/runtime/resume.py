@@ -22,11 +22,28 @@ if TYPE_CHECKING:
     from ..plugin_interface import DriverContext
 
 
+# ``load_openfoam_environment`` uses this path only to communicate a sourced
+# environment from a helper shell back to Python.  A fresh temporary filename
+# is created every load, and it is never inherited by the workflow command as
+# a solver setting.  Hashing it made an unchanged public CLI invocation
+# spuriously non-resumable.
+_VOLATILE_ENVIRONMENT_KEYS = frozenset({"_DRIVER_ENV_FILE"})
+
+
+def _environment_identity(environment: Mapping[str, str]) -> dict[str, str]:
+    """Return execution-relevant environment values for checkpoint identity."""
+    return {
+        key: value for key, value in environment.items()
+        if key not in _VOLATILE_ENVIRONMENT_KEYS
+    }
+
+
 def checkpoint_snapshot(case_root: Path, workflow_dag: dict, driver_context: DriverContext,
                         env: Mapping[str, str] | None) -> dict:
     environment = dict(os.environ if env is None else env)
     # Store only the digest, not potentially secret environment values.
-    env_digest = hashlib.sha256(json.dumps(environment, sort_keys=True).encode()).hexdigest()
+    stable_environment = _environment_identity(environment)
+    env_digest = hashlib.sha256(json.dumps(stable_environment, sort_keys=True).encode()).hexdigest()
     identity = {**driver_context.identity.to_json(), "environment_digest": env_digest}
     snapshot = snapshot_from_components(
         enumerate_case_inputs(case_root, workflow_dag=workflow_dag,

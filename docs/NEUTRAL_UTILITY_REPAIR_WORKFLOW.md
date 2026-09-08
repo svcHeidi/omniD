@@ -20,6 +20,17 @@ mkdir -p postProcessing
 printf repaired > postProcessing/utility-report.txt
 ```
 
+Normal planning requires every declared configuration record to be
+`inspected`. `unresolved`, `execution_required`, and `runtime_unavailable`
+records fail the plan and therefore block dispatch. An operator can request
+`--allow-unresolved-configuration` (or
+`allow_unresolved_configuration=True`) only for an explicitly exploratory
+run; the report and its RunDocument intent then carry the `exploratory`
+policy and the affected dictionary paths. Unknown evidence statuses always
+block. A verified absent `#includeIfPresent` is complete resume evidence:
+unchanged absence can resume, while the file appearing invalidates the
+checkpoint.
+
 For a native OpenFOAM utility case, replace the check with the declared
 utility invocation (for example `foamDictionary system/controlDict -entry
 endTime -value`). Keep it in the normal workflow DAG; do not shell out from

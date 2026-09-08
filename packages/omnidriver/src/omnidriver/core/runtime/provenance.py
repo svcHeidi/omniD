@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
-SCHEMA_VERSION = "2.3-sha256-streaming-256mib-verified-absence"
+SCHEMA_VERSION = "2.4-sha256-streaming-256mib-verified-absence-stable-env"
 """Encodes the hashing and read policy, not just the field layout.
 
 Large required inputs use the same SHA-256 content identity as small inputs,

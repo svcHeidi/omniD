@@ -309,7 +309,7 @@
         "is_complete"
       ],
       "properties": {
-        "schema_version": {"const": "2.3-sha256-streaming-256mib-verified-absence"},
+        "schema_version": {"const": "2.4-sha256-streaming-256mib-verified-absence-stable-env"},
         "components": {
           "type": "array",
           "items": {"$ref": "#/$defs/provenanceComponent"}

@@ -65,6 +65,23 @@ def test_unchanged_optional_include_absence_resumes_but_appearance_refuses(tmp_p
         validate_resume(saved, dag, case_root=tmp_path, driver_context=context, env={})
 
 
+def test_internal_environment_transport_path_does_not_invalidate_resume(tmp_path):
+    dag, context, output, _state = _completed(tmp_path)
+    result = run_workflow_step(
+        dag, initial_workflow_state(dag), "solve", case_root=tmp_path,
+        log_dir=output / "transport-logs", state_path=output / "transport-state.json",
+        env={"_DRIVER_ENV_FILE": "/private/tmp/first"}, driver_context=context,
+    )
+    saved = workflow_state_from_json(
+        json.loads((output / "transport-state.json").read_text())
+    )
+    assert saved == result.state
+    validate_resume(
+        saved, dag, case_root=tmp_path, driver_context=context,
+        env={"_DRIVER_ENV_FILE": "/private/tmp/second"},
+    )
+
+
 @pytest.mark.parametrize("change", ["input", "dag", "environment", "legacy", "inconsistent"])
 def test_checkpoint_refuses_drift_or_unbound_state(tmp_path, change):
     dag, context, output, state = _completed(tmp_path)

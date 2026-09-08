@@ -199,7 +199,7 @@ def test_schema_accepts_serialized_workflow_identity_and_resume_evidence(schema)
         "steps": [],
         "workflow_digest": "sha256:" + "a" * 64,
         "resume_snapshot": {
-                "schema_version": "2.3-sha256-streaming-256mib-verified-absence",
+                "schema_version": "2.4-sha256-streaming-256mib-verified-absence-stable-env",
             "components": [{
                 "kind": "file",
                 "path": "system/controlDict",
