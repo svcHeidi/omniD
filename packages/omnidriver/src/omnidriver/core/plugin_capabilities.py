@@ -733,7 +733,7 @@ class OverrideScopeCapability(Protocol):
     :class:`ReportCatalogCapability`/:class:`NamedCatalogsCapability`.
 
     :adapts: get_override_scopes, get_override_target_paths, apply_overrides
-    :consumed-by: omnidriver/openfoam/apply_overrides.py, omnidriver/cli.py
+    :consumed-by: omnidriver/openfoam/apply_overrides.py, omnidriver/core/runtime/step_candidate.py
     :fallback: legacy_override_scopes, legacy_override_target_paths, legacy_apply_overrides
     :status: optional
     """

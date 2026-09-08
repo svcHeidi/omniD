@@ -8,7 +8,7 @@ import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 
 MARKER_NAME = ".omnidriver-remediation-transaction.json"
@@ -136,6 +136,7 @@ def begin_remediation_transaction(
     overrides: list[dict[str, Any]],
     hypothesis: str | None,
     target_paths: tuple[Path, ...],
+    repair_binding: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     root = Path(case_root).resolve()
     output = Path(output_dir).resolve()
@@ -146,9 +147,30 @@ def begin_remediation_transaction(
     }:
         require_reusable_case(case_root, explicit_repair=True)
     proposal_payload = {"hypothesis": hypothesis, "overrides": overrides}
-    proposal_digest = "sha256:" + hashlib.sha256(
-        json.dumps(proposal_payload, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
+    try:
+        proposal_json = json.dumps(
+            proposal_payload, sort_keys=True, separators=(",", ":"), allow_nan=False,
+        )
+    except (TypeError, ValueError) as exc:
+        raise RemediationTransactionError(
+            "remediation proposal must contain strict JSON values"
+        ) from exc
+    proposal_digest = "sha256:" + hashlib.sha256(proposal_json.encode()).hexdigest()
+    binding = _validated_repair_binding(repair_binding, proposal_digest)
+    previous_binding = previous.get("repair_binding") if previous else None
+    previous_execution = (
+        previous_binding.get("execution") if isinstance(previous_binding, dict) else None
+    )
+    if (
+        binding is not None
+        and isinstance(previous_binding, dict)
+        and previous_binding.get("loop_id") == binding["loop_id"]
+        and isinstance(previous_execution, int)
+        and previous_execution >= binding["execution"]
+    ):
+        raise RemediationTransactionError(
+            "repair reservation is duplicate or older than the current transaction"
+        )
     baseline_status = previous.get("status") if previous else None
     if baseline_status == "rolled_back":
         baseline_status = previous.get("baseline_status")
@@ -156,6 +178,7 @@ def begin_remediation_transaction(
         "schema_version": 2,
         "revision": 1,
         "transaction_id": str(uuid.uuid4()),
+        "origin": "repair_loop" if binding is not None else "manual",
         "status": "applying",
         "started_at": _now(),
         "step_id": step_id,
@@ -176,11 +199,50 @@ def begin_remediation_transaction(
             and previous.get("execution_status") in {"failed", "error"}
         ),
     }
+    if binding is not None:
+        transaction["repair_binding"] = binding
     transaction["target_manifest"] = _snapshot_targets(
         root, transaction, target_paths,
     )
     _persist(root, transaction)
     return transaction
+
+
+def _validated_repair_binding(
+    binding: Mapping[str, Any] | None,
+    proposal_digest: str,
+) -> dict[str, Any] | None:
+    if binding is None:
+        return None
+    expected_keys = {
+        "loop_id", "execution", "reservation_id",
+        "observation_digest", "proposal_digest",
+    }
+    if set(binding) != expected_keys:
+        raise RemediationTransactionError("repair reservation binding is malformed")
+    try:
+        loop_id = str(uuid.UUID(str(binding["loop_id"])))
+        reservation_id = str(uuid.UUID(str(binding["reservation_id"])))
+    except (ValueError, AttributeError) as exc:
+        raise RemediationTransactionError("repair reservation binding is malformed") from exc
+    execution = binding["execution"]
+    if isinstance(execution, bool) or not isinstance(execution, int) or execution < 1:
+        raise RemediationTransactionError("repair reservation execution must be positive")
+    observation_digest = binding["observation_digest"]
+    bound_proposal_digest = binding["proposal_digest"]
+    if not isinstance(observation_digest, str) or not observation_digest.startswith("sha256:"):
+        raise RemediationTransactionError("repair observation digest is malformed")
+    if bound_proposal_digest != proposal_digest:
+        raise RemediationTransactionError(
+            "repair reservation proposal digest does not match the transaction proposal"
+        )
+    return {
+        "loop_id": loop_id,
+        "execution": execution,
+        "reservation_id": reservation_id,
+        "observation_digest": observation_digest,
+        "proposal_digest": bound_proposal_digest,
+    }
 
 
 def restore_remediation_transaction(
@@ -294,6 +356,7 @@ def finish_remediation_transaction(
     effective_resolution: tuple[dict[str, Any], ...] = (),
     plan_digest: str | None = None,
     error: str | None = None,
+    repair_result: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     if status not in {"validated", "rejected", "rolled_back"}:
         raise ValueError(f"invalid remediation transaction status: {status}")
@@ -316,10 +379,29 @@ def finish_remediation_transaction(
         "plan_digest": plan_digest,
         "error": error,
     }
+    if repair_result is not None:
+        if status == "validated":
+            raise RemediationTransactionError(
+                "a validated transaction cannot carry a terminal repair result"
+            )
+        validated_result = _validated_terminal_repair_result(repair_result)
+        if validated_result["status"] != "rejected":
+            raise RemediationTransactionError(
+                "a pre-dispatch terminal transaction requires a rejected repair result"
+            )
+        updated["repair_result"] = validated_result
+    elif current.get("repair_binding") is not None and status != "validated":
+        raise RemediationTransactionError(
+            "a terminal repair transaction requires its resulting observation"
+        )
     if status == "rejected":
         archive = _archive_candidate_files(root, updated)
         if archive is not None:
             updated["candidate_archive"] = str(archive)
+    if updated.get("repair_binding") is not None and status != "validated":
+        from .repair_loop import commit_repair_transaction_witness
+
+        commit_repair_transaction_witness(_output, updated)
     _persist(root, updated)
     return updated
 
@@ -347,6 +429,7 @@ def record_remediation_outcome(
     *,
     execution_status: str,
     attempt: int,
+    repair_result: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     root, _output, current = _current_transition(
         case_root, transaction, expected_statuses={"dispatching"},
@@ -361,12 +444,152 @@ def record_remediation_outcome(
         "execution_attempt": attempt,
         "execution_finished_at": _now(),
     }
+    if repair_result is not None:
+        validated_result = _validated_terminal_repair_result(repair_result)
+        expected_result = "succeeded" if execution_status == "ok" else "failed"
+        if validated_result["status"] != expected_result:
+            raise RemediationTransactionError(
+                "repair result status does not match the execution outcome"
+            )
+        updated["repair_result"] = validated_result
+    elif current.get("repair_binding") is not None:
+        raise RemediationTransactionError(
+            "a terminal repair transaction requires its resulting observation"
+        )
     if terminal_status == "rejected":
         archive = _archive_candidate_files(root, updated)
         if archive is not None:
             updated["candidate_archive"] = str(archive)
+    if updated.get("repair_binding") is not None:
+        from .repair_loop import commit_repair_transaction_witness
+
+        commit_repair_transaction_witness(_output, updated)
     _persist(root, updated)
     return updated
+
+
+def _validated_terminal_repair_result(
+    result: Mapping[str, Any],
+) -> dict[str, Any]:
+    if set(result) != {"status", "observation", "observation_digest"}:
+        raise RemediationTransactionError("terminal repair result is malformed")
+    if result["status"] not in {"succeeded", "failed", "rejected"}:
+        raise RemediationTransactionError("terminal repair result status is invalid")
+    if not isinstance(result["observation"], dict):
+        raise RemediationTransactionError("terminal repair observation is malformed")
+    try:
+        canonical = json.dumps(
+            result["observation"], sort_keys=True, separators=(",", ":"),
+            allow_nan=False,
+        )
+    except (TypeError, ValueError) as exc:
+        raise RemediationTransactionError(
+            "terminal repair observation must contain strict JSON values"
+        ) from exc
+    digest = "sha256:" + hashlib.sha256(canonical.encode()).hexdigest()
+    if result["observation_digest"] != digest:
+        raise RemediationTransactionError("terminal repair observation digest mismatch")
+    return {
+        "status": result["status"],
+        "observation": result["observation"],
+        "observation_digest": digest,
+    }
+
+
+def reconcile_terminal_remediation_record(
+    case_root: Path,
+    *,
+    output_dir: Path,
+    repair_binding: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    """Repair a torn output mirror from the authoritative terminal case head."""
+    root = Path(case_root).resolve()
+    output = Path(output_dir).resolve()
+    _require_transaction_ownership(root, output)
+    transaction = read_remediation_transaction(root)
+    if transaction is None or transaction.get("repair_binding") != dict(repair_binding):
+        return None
+    if Path(str(transaction.get("output_dir", ""))).resolve() != output:
+        raise RemediationTransactionError(
+            "terminal remediation output identity does not match its reservation"
+        )
+    status = transaction.get("status")
+    result = transaction.get("repair_result")
+    if status not in {"accepted", "rejected", "rolled_back"} or not isinstance(result, dict):
+        return None
+    validated_result = _validated_terminal_repair_result(result)
+    expected = {
+        "accepted": "succeeded",
+        "rejected": "failed" if "execution_status" in transaction else "rejected",
+        "rolled_back": "rejected",
+    }[status]
+    if validated_result["status"] != expected:
+        raise RemediationTransactionError(
+            "terminal remediation result contradicts the case head status"
+        )
+    record = output / "remediation_transactions" / f"{transaction['transaction_id']}.json"
+    try:
+        mirrored = json.loads(record.read_text())
+    except (OSError, json.JSONDecodeError):
+        mirrored = None
+    if mirrored != transaction:
+        _atomic_write(record, transaction)
+    return transaction
+
+
+def reconcile_committed_repair_transaction(
+    case_root: Path,
+    *,
+    output_dir: Path,
+    transaction: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Materialize a stable terminal witness after any torn journal write."""
+    root = Path(case_root).resolve()
+    output = Path(output_dir).resolve()
+    _require_transaction_ownership(root, output)
+    committed = dict(transaction)
+    if Path(str(committed.get("output_dir", ""))).resolve() != output:
+        raise RemediationTransactionError("committed repair output identity mismatch")
+    if not isinstance(committed.get("repair_binding"), dict):
+        raise RemediationTransactionError("committed repair binding is missing")
+    result = committed.get("repair_result")
+    if not isinstance(result, dict):
+        raise RemediationTransactionError("committed repair result is missing")
+    validated_result = _validated_terminal_repair_result(result)
+    status = committed.get("status")
+    expected_result = {
+        "accepted": "succeeded",
+        "rejected": "failed" if "execution_status" in committed else "rejected",
+        "rolled_back": "rejected",
+    }.get(status)
+    if expected_result is None or validated_result["status"] != expected_result:
+        raise RemediationTransactionError("committed repair terminal status is inconsistent")
+
+    current = read_remediation_transaction(root)
+    if current is None:
+        raise RemediationTransactionError("committed repair case head is missing")
+    if current.get("transaction_id") == committed.get("transaction_id"):
+        if current == committed:
+            pass
+        elif (
+            int(current.get("revision", 0)) + 1 == int(committed.get("revision", 0))
+            and current.get("status")
+            == ("dispatching" if status in {"accepted", "rejected"} and "execution_status" in committed else "applying")
+        ):
+            _persist(root, committed)
+            return committed
+        else:
+            raise RemediationTransactionError(
+                "committed repair witness conflicts with its case head"
+            )
+    record = output / "remediation_transactions" / f"{committed['transaction_id']}.json"
+    try:
+        mirrored = json.loads(record.read_text())
+    except (OSError, json.JSONDecodeError):
+        mirrored = None
+    if mirrored != committed:
+        _atomic_write(record, committed)
+    return committed
 
 
 def _require_transaction_ownership(root: Path, output: Path) -> None:

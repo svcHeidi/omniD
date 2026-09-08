@@ -13,6 +13,7 @@ import pytest
 from omnidriver import cli
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime.models import DataArtifact
+from omnidriver.core.runtime.attempt_lease import acquire_attempt_lease, acquire_case_lease
 from omnidriver.core.runtime.resume import validate_resume
 from omnidriver.core.runtime.workflow_runner import run_workflow_step
 from omnidriver.core.runtime.workflow_state import initial_workflow_state, workflow_state_from_json
@@ -75,10 +76,33 @@ def test_cli_does_not_report_stale_completed_state_as_success(tmp_path, capsys):
 def test_cli_step_rejects_stale_inputs_too(tmp_path, capsys):
     dag, context, output, state = _completed(tmp_path)
     (tmp_path / "system/settings").write_text("value 2;\n")
-    assert cli._execute_step(entry_label="test", step_id="solve", workflow_dag=dag,
-        planned_state=initial_workflow_state(dag), case_root=tmp_path, output_dir=output,
-        expected_artifacts=(), tail_lines=5, driver_context=context, execution_env={}) == 1
+    with acquire_case_lease(tmp_path):
+        with acquire_attempt_lease(output):
+            assert cli._execute_step(entry_label="test", step_id="solve", workflow_dag=dag,
+                planned_state=initial_workflow_state(dag), case_root=tmp_path, output_dir=output,
+                expected_artifacts=(), tail_lines=5, driver_context=context, execution_env={}) == 1
     assert "input evidence changed" in json.loads(capsys.readouterr().out)["error"]
+
+
+def test_cli_step_reports_malformed_saved_state_as_json(tmp_path, capsys):
+    dag = {"steps": [{
+        "id": "solve", "command": sys.executable, "args": ["-c", "pass"],
+        "cwd": ".", "depends_on": [],
+    }]}
+    state = initial_workflow_state(dag)
+    output = tmp_path / "output"
+    output.mkdir()
+    (output / "workflow_state.json").write_text("{}")
+    with acquire_case_lease(tmp_path):
+        with acquire_attempt_lease(output):
+            assert cli._execute_step(
+                entry_label="test", step_id="solve", workflow_dag=dag,
+                planned_state=state, case_root=tmp_path, output_dir=output,
+                expected_artifacts=(), tail_lines=5,
+            ) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "failed"
+    assert payload["workflow_state_path"] == str(output / "workflow_state.json")
 
 
 def test_completed_checkpoint_requires_its_required_output_on_resume(tmp_path, capsys):

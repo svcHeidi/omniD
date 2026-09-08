@@ -1,15 +1,14 @@
 # Generic core and OpenFOAM adapter progress ledger
 
-Updated: 2026-09-07
+Updated: 2026-09-08
 
 ## Committed baseline
 
-`0f50720 Journal agent repairs and bind external inputs` is the latest committed
-baseline for this follow-up, after `067ebde Resolve selected runtime include
-dependencies`, `d96655c Own mutation planning and dispatch
-transaction`, `d9d947e Own case roots and sweep process groups`, `cf097b3 Close
-local lease and process cleanup races`, and `7e6ba4c Harden workflow lifecycle
-and OpenFOAM resolution`.
+`39c4873 Enforce remediation transaction transitions` is the latest committed
+baseline for this follow-up, after `751a117 Harden repair loop evidence and
+restart`, `c3298d7 Add bounded agent repair loop`, `16757c5 Recover interrupted
+remediation transactions`, `0f50720 Journal agent repairs and bind external
+inputs`, and the earlier local ownership and effective-resolution batches.
 The pre-existing uncommitted changes under `packages/omnidriver-cardiacfoam/`
 were intentionally left untouched.
 
@@ -136,6 +135,30 @@ were intentionally left untouched.
   advisory locks live in a stable sibling control directory outside `--fresh`
   cleanup; journals from the earlier output-local location migrate without
   resetting their budgets.
+- The CLI-private single-step mutation path is now a structured core executor.
+  It acquires case then output ownership, re-observes failure evidence under
+  both leases, rejects a stale proposal before snapshot or mutation, applies
+  the candidate, resolves its effective configuration, replans, dispatches,
+  and records the outcome as one operation. CLI `step --apply` is a JSON/file
+  adapter over that executor rather than a second implementation.
+- Each repair-loop execution now has a durable UUID reservation. Loop ID,
+  execution ordinal, reservation ID, motivating observation digest, proposal
+  digest, and remediation transaction ID are checked across the loop journal,
+  executor result, case marker, and durable transaction record. Duplicate or
+  older callbacks from the same loop fail before replacing the current case
+  transaction.
+- Candidate result states now have explicit semantics: `succeeded` requires an
+  accepted dispatched transaction, `failed` requires a dispatched rejected
+  transaction, and `rejected` denotes a pre-dispatch refusal. An unexpected
+  executor crash after dispatch admission deliberately leaves the transaction
+  in `dispatching`, so restart recovery can identify the interrupted candidate
+  instead of treating it as solver evidence.
+- One-shot reservation claims live beside the repair-loop journal, outside
+  disposable output cleanup. A bound terminal transaction first commits its
+  full result and observation to that stable witness, then publishes the case
+  head and output mirror. Restart reconciliation reacquires case then output
+  ownership and can repair either torn journal copy without overwriting a newer
+  transaction, including when another repair loop replaced the case head.
 
 ## Verification evidence
 
@@ -146,17 +169,19 @@ were intentionally left untouched.
 | Durable before-image/recovery, dispatch-gate, provenance, and OpenFOAM target tests | `46 passed` |
 | Agent repair-loop budget, evidence-lineage, restart, unchanged-failure, and durability tests | `17 passed` |
 | Focused lifecycle/CAS/lease-alias/repair-loop/workflow adversarial matrix | `71 passed`; independent re-review `79 passed` |
+| Structured executor/reservation/transaction/CLI adversarial matrix | `97 passed`; independent blocker-only re-review found no remaining blocker |
 | Adversarial process/lease regression probes added after `7e6ba4c` | `11 passed` |
 | Focused case/sweep ownership tests | `41 passed` |
 | Explicit native v2412 conformance/effective-resolution + directive-inertness + rollback | `17 passed` |
 | OpenFOAM adapter suite | `197 passed, 72 skipped` |
-| Core checkout, excluding the slow self-building wheel test | `790 passed, 90 skipped` |
+| Core checkout, excluding the slow self-building wheel test | `814 passed, 90 skipped` |
+| Isolated core wheel install/import test for this batch | `1 passed` |
 | Fresh core wheel | `uv build --wheel` and `check-wheel-artifact.py` succeeded; all `75/75` core modules imported; fresh Python 3.11 wheel suite: `640 passed, 240 skipped` |
 | Neutral Python-only plugin without adapters | passed in the fresh core-wheel workflow check; it runs a shell-only case and validates resume/input drift without importing an adapter |
 | Import boundaries | passed |
 | Capability seam export | passed |
 | CardiacFOAM workflow-planning test seam | `3 passed`; the tests now inspect the planned workflow commands, rather than assuming all launches use `subprocess.run`. No solver was launched. |
-| Current checkout package suites, run separately | `1754 passed, 263 skipped, 40 subtests passed` |
+| Current checkout package suites, run separately | `1778 passed, 263 skipped, 40 subtests passed` |
 
 The native evidence above is specifically from `/Volumes/OpenFOAM-v2412`
 using its `foamDictionary` after sourcing `etc/bashrc`. It is not a claim for

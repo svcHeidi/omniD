@@ -20,6 +20,7 @@ from typing import Any, Callable, Mapping
 
 CONTROL_DIR = ".omnidriver-repair-control"
 LEGACY_JOURNAL_DIR = "repair_loops"
+RESERVATION_DIR = "repair_reservations"
 
 
 @dataclass(frozen=True)
@@ -81,9 +82,43 @@ class RepairProposal:
 
 
 @dataclass(frozen=True)
+class RepairReservation:
+    loop_id: str
+    execution: int
+    reservation_id: str
+    observation_digest: str
+    proposal_digest: str
+
+    def __post_init__(self) -> None:
+        for name in ("loop_id", "reservation_id"):
+            value = getattr(self, name)
+            try:
+                canonical = str(uuid.UUID(value))
+            except (ValueError, AttributeError) as exc:
+                raise ValueError(f"repair {name} must be a UUID") from exc
+            if canonical != value:
+                raise ValueError(f"repair {name} must use canonical UUID text")
+        if (
+            isinstance(self.execution, bool)
+            or not isinstance(self.execution, int)
+            or self.execution < 1
+        ):
+            raise ValueError("repair execution must be positive")
+        for name in ("observation_digest", "proposal_digest"):
+            value = getattr(self, name)
+            if not _is_sha256_digest(value):
+                raise ValueError(f"repair {name} must be a sha256 digest")
+
+
+@dataclass(frozen=True)
 class RepairExperimentResult:
     status: str
     observation: RepairObservation
+    loop_id: str
+    execution: int
+    reservation_id: str
+    observation_digest: str
+    proposal_digest: str
     transaction_id: str | None = None
 
     def __post_init__(self) -> None:
@@ -107,7 +142,9 @@ def run_repair_loop(
     output_dir: Path,
     budgets: RepairBudgets,
     propose: Callable[[RepairObservation], RepairProposal | None],
-    execute_candidate: Callable[[RepairProposal], RepairExperimentResult],
+    execute_candidate: Callable[
+        [RepairProposal, RepairReservation], RepairExperimentResult
+    ],
     monotonic: Callable[[], float] = time.monotonic,
     loop_id: str | None = None,
 ) -> RepairLoopOutcome:
@@ -139,7 +176,9 @@ def _run_repair_loop_locked(
     output_dir: Path,
     budgets: RepairBudgets,
     propose: Callable[[RepairObservation], RepairProposal | None],
-    execute_candidate: Callable[[RepairProposal], RepairExperimentResult],
+    execute_candidate: Callable[
+        [RepairProposal, RepairReservation], RepairExperimentResult
+    ],
     monotonic: Callable[[], float],
     loop_id: str,
 ) -> RepairLoopOutcome:
@@ -168,11 +207,29 @@ def _run_repair_loop_locked(
                 int(journal.get("unchanged_failures", 0)), final, path,
             )
         if experiments and experiments[-1].get("status") == "reserved":
-            experiments[-1].update(status="interrupted", finished_at=_now())
-            return _finish(
-                path, journal, "failed", "interrupted_candidate_requires_recovery",
-                executions, 0, initial_observation,
+            recovered = _recover_reserved_result(
+                Path(output_dir), experiments[-1], loop_id,
             )
+            if recovered is None:
+                experiments[-1].update(status="interrupted", finished_at=_now())
+                return _finish(
+                    path, journal, "failed", "interrupted_candidate_requires_recovery",
+                    executions, 0, initial_observation,
+                )
+            experiments[-1].update(
+                status=recovered.status,
+                finished_at=_now(),
+                resulting_observation_digest=recovered.observation.digest,
+                resulting_observation=recovered.observation.evidence,
+                transaction_id=recovered.transaction_id,
+                recovered_from_reservation=True,
+            )
+            _atomic_write(path, journal)
+            if recovered.status == "succeeded":
+                return _finish(
+                    path, journal, "succeeded", "candidate_succeeded",
+                    executions, 0, recovered.observation,
+                )
         if experiments:
             observation = RepairObservation(experiments[-1]["resulting_observation"])
             unchanged = _trailing_unchanged_failures(experiments)
@@ -207,7 +264,9 @@ def _continue_loop(
     started: float,
     budgets: RepairBudgets,
     propose: Callable[[RepairObservation], RepairProposal | None],
-    execute_candidate: Callable[[RepairProposal], RepairExperimentResult],
+    execute_candidate: Callable[
+        [RepairProposal, RepairReservation], RepairExperimentResult
+    ],
     monotonic: Callable[[], float],
 ) -> RepairLoopOutcome:
 
@@ -245,25 +304,44 @@ def _continue_loop(
                            executions, unchanged, observation)
 
         executions += 1
+        reservation = RepairReservation(
+            loop_id=str(journal["loop_id"]),
+            execution=executions,
+            reservation_id=str(uuid.uuid4()),
+            observation_digest=observation.digest,
+            proposal_digest=proposal.digest,
+        )
         experiment = {
             "execution": executions,
+            "reservation_id": reservation.reservation_id,
             "status": "reserved",
             "reserved_at": _now(),
-            "observation_digest": observation.digest,
+            "observation_digest": reservation.observation_digest,
             "observation": observation.evidence,
             "hypothesis": proposal.hypothesis,
             "overrides": [dict(item) for item in proposal.overrides],
-            "proposal_digest": proposal.digest,
+            "proposal_digest": reservation.proposal_digest,
         }
         journal["experiments"].append(experiment)
         _atomic_write(path, journal)
 
         try:
-            result = execute_candidate(proposal)
+            result = execute_candidate(proposal, reservation)
         except Exception as exc:
             experiment.update(status="error", finished_at=_now(), error=str(exc))
             return _finish(path, journal, "failed", "candidate_executor_error",
                            executions, unchanged, observation)
+
+        mismatches = _result_binding_mismatches(result, reservation)
+        if mismatches:
+            message = (
+                "repair candidate result binding does not match reservation: "
+                + ", ".join(mismatches)
+            )
+            experiment.update(status="error", finished_at=_now(), error=message)
+            _finish(path, journal, "failed", "candidate_result_contract_error",
+                    executions, unchanged, observation)
+            raise ValueError(message)
 
         next_observation = result.observation
         experiment.update(
@@ -284,6 +362,163 @@ def _continue_loop(
                            executions, unchanged, observation)
 
 
+def _result_binding_mismatches(
+    result: RepairExperimentResult,
+    reservation: RepairReservation,
+) -> tuple[str, ...]:
+    if not isinstance(result, RepairExperimentResult):
+        return ("result_type",)
+    expected = {
+        "loop_id": reservation.loop_id,
+        "execution": reservation.execution,
+        "reservation_id": reservation.reservation_id,
+        "observation_digest": reservation.observation_digest,
+        "proposal_digest": reservation.proposal_digest,
+    }
+    return tuple(
+        field_name
+        for field_name, expected_value in expected.items()
+        if getattr(result, field_name) != expected_value
+    )
+
+
+def _recover_reserved_result(
+    output_dir: Path,
+    experiment: Mapping[str, Any],
+    loop_id: str,
+) -> RepairExperimentResult | None:
+    try:
+        reservation = RepairReservation(
+            loop_id=loop_id,
+            execution=int(experiment["execution"]),
+            reservation_id=str(experiment["reservation_id"]),
+            observation_digest=str(experiment["observation_digest"]),
+            proposal_digest=str(experiment["proposal_digest"]),
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("reserved repair experiment binding is malformed") from exc
+    claim_path = _reservation_path(output_dir, loop_id, reservation.execution)
+    if not claim_path.exists():
+        return None
+    claim = _load_reservation_claim(claim_path)
+    if any(claim.get(name) != value for name, value in asdict(reservation).items()):
+        raise ValueError("repair reservation claim does not match the loop journal")
+    if claim.get("status") == "transaction_committed":
+        terminal = claim.get("terminal_transaction")
+        if not isinstance(terminal, dict):
+            raise ValueError("committed repair reservation omitted its transaction")
+        from .attempt_lease import acquire_attempt_lease, acquire_case_lease
+        from .remediation_transaction import reconcile_committed_repair_transaction
+
+        case_root = claim.get("case_root")
+        if not isinstance(case_root, str):
+            raise ValueError("repair reservation claim omitted its case identity")
+        with acquire_case_lease(Path(case_root)):
+            with acquire_attempt_lease(output_dir):
+                reconciled = reconcile_committed_repair_transaction(
+                    Path(case_root), output_dir=output_dir, transaction=terminal,
+                )
+        recovered = _experiment_result_from_transaction(reconciled, reservation)
+        if recovered is None:
+            raise ValueError("committed repair witness is not terminal")
+        complete_repair_reservation(
+            output_dir, reservation, status=recovered.status,
+            observation=recovered.observation,
+            transaction_id=recovered.transaction_id,
+        )
+        return recovered
+    if claim.get("status") == "claimed":
+        recovered = _terminal_transaction_result(
+            output_dir, reservation, case_root=claim.get("case_root"),
+        )
+        if recovered is None:
+            return None
+        complete_repair_reservation(
+            output_dir,
+            reservation,
+            status=recovered.status,
+            observation=recovered.observation,
+            transaction_id=recovered.transaction_id,
+        )
+        return recovered
+    if claim.get("status") != "terminal":
+        raise ValueError("repair reservation claim has an invalid status")
+    evidence = claim.get("resulting_observation")
+    if not isinstance(evidence, dict):
+        raise ValueError("terminal repair reservation omitted its observation")
+    observation = RepairObservation(evidence)
+    if observation.digest != claim.get("resulting_observation_digest"):
+        raise ValueError("terminal repair reservation observation digest mismatch")
+    return RepairExperimentResult(
+        str(claim.get("result_status")),
+        observation,
+        **asdict(reservation),
+        transaction_id=claim.get("transaction_id"),
+    )
+
+
+def _terminal_transaction_result(
+    output_dir: Path,
+    reservation: RepairReservation,
+    *,
+    case_root: object,
+) -> RepairExperimentResult | None:
+    if not isinstance(case_root, str):
+        raise ValueError("repair reservation claim omitted its case identity")
+    from .attempt_lease import acquire_attempt_lease, acquire_case_lease
+    from .remediation_transaction import reconcile_terminal_remediation_record
+
+    with acquire_case_lease(Path(case_root)):
+        with acquire_attempt_lease(output_dir):
+            head = reconcile_terminal_remediation_record(
+                Path(case_root),
+                output_dir=output_dir,
+                repair_binding=asdict(reservation),
+            )
+    if head is not None:
+        return _experiment_result_from_transaction(head, reservation)
+    records = Path(output_dir).resolve() / "remediation_transactions"
+    for path in sorted(records.glob("*.json")):
+        try:
+            transaction = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(transaction, dict):
+            continue
+        if transaction.get("repair_binding") != asdict(reservation):
+            continue
+        return _experiment_result_from_transaction(transaction, reservation)
+    return None
+
+
+def _experiment_result_from_transaction(
+    transaction: Mapping[str, Any], reservation: RepairReservation,
+) -> RepairExperimentResult | None:
+    result = transaction.get("repair_result")
+    if transaction.get("status") not in {"accepted", "rejected", "rolled_back"}:
+        return None
+    if not isinstance(result, dict) or not isinstance(result.get("observation"), dict):
+        return None
+    observation = RepairObservation(result["observation"])
+    if observation.digest != result.get("observation_digest"):
+        raise ValueError("terminal remediation observation digest mismatch")
+    expected_transaction_statuses = {
+        "succeeded": {"accepted"},
+        "failed": {"rejected"},
+        "rejected": {"rejected", "rolled_back"},
+    }
+    if transaction["status"] not in expected_transaction_statuses.get(
+        result.get("status"), set(),
+    ):
+        raise ValueError("terminal remediation result status is inconsistent")
+    return RepairExperimentResult(
+        str(result.get("status")),
+        observation,
+        **asdict(reservation),
+        transaction_id=str(transaction["transaction_id"]),
+    )
+
+
 def _validated_loop_id(value: str) -> str:
     try:
         parsed = uuid.UUID(value)
@@ -298,6 +533,103 @@ def _control_dir(output_dir: Path) -> Path:
     output = output_dir.resolve()
     identity = hashlib.sha256(str(output).encode()).hexdigest()
     return output.parent / CONTROL_DIR / identity
+
+
+def claim_repair_reservation(
+    output_dir: Path, reservation: RepairReservation, *, case_root: Path,
+) -> Path:
+    """Durably consume a repair slot exactly once while output ownership is held."""
+    path = _reservation_path(output_dir, reservation.loop_id, reservation.execution)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema_version": 1,
+        "status": "claimed",
+        "claimed_at": _now(),
+        "case_root": str(Path(case_root).resolve()),
+        **asdict(reservation),
+    }
+    encoded = (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode()
+    try:
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError as exc:
+        raise RuntimeError(
+            "repair reservation was already claimed or its execution slot was reused"
+        ) from exc
+    with os.fdopen(descriptor, "wb") as handle:
+        handle.write(encoded)
+        handle.flush()
+        os.fsync(handle.fileno())
+    if os.name == "posix":
+        directory = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    return path
+
+
+def complete_repair_reservation(
+    output_dir: Path,
+    reservation: RepairReservation,
+    *,
+    status: str,
+    observation: RepairObservation,
+    transaction_id: str | None,
+) -> None:
+    if status not in {"succeeded", "failed", "rejected"}:
+        raise ValueError(f"invalid repair reservation result status: {status}")
+    path = _reservation_path(output_dir, reservation.loop_id, reservation.execution)
+    claim = _load_reservation_claim(path)
+    if claim.get("status") not in {"claimed", "transaction_committed"} or any(
+        claim.get(name) != value for name, value in asdict(reservation).items()
+    ):
+        raise RuntimeError("repair reservation completion does not match its claim")
+    _atomic_write(path, {
+        **claim,
+        "status": "terminal",
+        "finished_at": _now(),
+        "result_status": status,
+        "resulting_observation": observation.evidence,
+        "resulting_observation_digest": observation.digest,
+        "transaction_id": transaction_id,
+    })
+
+
+def commit_repair_transaction_witness(
+    output_dir: Path, transaction: Mapping[str, Any],
+) -> None:
+    """Commit a bound terminal result before exposing a reusable case head."""
+    binding = transaction.get("repair_binding")
+    result = transaction.get("repair_result")
+    if not isinstance(binding, dict) or not isinstance(result, dict):
+        raise RuntimeError("terminal repair transaction omitted its durable binding")
+    reservation = RepairReservation(**binding)
+    path = _reservation_path(output_dir, reservation.loop_id, reservation.execution)
+    claim = _load_reservation_claim(path)
+    if claim.get("status") != "claimed" or any(
+        claim.get(name) != value for name, value in binding.items()
+    ):
+        raise RuntimeError("terminal repair transaction does not match its claim")
+    _atomic_write(path, {
+        **claim,
+        "status": "transaction_committed",
+        "transaction_committed_at": _now(),
+        "terminal_transaction": dict(transaction),
+    })
+
+
+def _reservation_path(output_dir: Path, loop_id: str, execution: int) -> Path:
+    return _control_dir(Path(output_dir)) / RESERVATION_DIR / loop_id / f"{execution}.json"
+
+
+def _load_reservation_claim(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"repair reservation claim is unreadable: {path}") from exc
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+        raise RuntimeError(f"repair reservation claim is malformed: {path}")
+    return payload
 
 
 @contextmanager
@@ -366,6 +698,13 @@ def _canonical_json(value: Any) -> str:
 
 def _digest_json(payload: str) -> str:
     return "sha256:" + hashlib.sha256(payload.encode()).hexdigest()
+
+
+def _is_sha256_digest(value: object) -> bool:
+    if not isinstance(value, str) or not value.startswith("sha256:"):
+        return False
+    suffix = value.removeprefix("sha256:")
+    return len(suffix) == 64 and all(char in "0123456789abcdef" for char in suffix)
 
 
 def observation_from_failure_context(

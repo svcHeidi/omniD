@@ -3,14 +3,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
 from .core.runtime.failure_context import build_failure_context
 from .core.runtime.launch_readiness import is_execution_successful, is_launchable
 from .core.runtime.remediation import build_candidate_remediations
-from .core.runtime.remediation_audit import append_remediation_record
 from .core.runtime.workflow_runner import run_workflow_step, _step_state_by_id
 from .core.runtime.workflow_orchestrator import run_workflow
 from .core.runtime.workflow_state import workflow_state_from_json
@@ -24,11 +23,7 @@ from omnidriver.core.specs.paths import (
     repo_root_or_none,
     scratch_root,
 )
-from omnidriver.core.strict_planning import (
-    StrictDiagnostic,
-    _utility_produces_by_command,
-    strict_plan,
-)
+from omnidriver.core.strict_planning import _utility_produces_by_command, strict_plan
 from .core.runtime.run_document_exec import build_execution_inputs, load_run_document, _allowed_runs_root
 from .core.runtime.fresh import ensure_fresh_output_dir
 from .core.runtime.attempt_lease import (
@@ -36,35 +31,14 @@ from .core.runtime.attempt_lease import (
     acquire_attempt_lease,
     acquire_case_lease,
 )
+from .core.runtime.execution_context import (
+    ReplannedExecution as _ReplannedExecution,
+    StepExecutionContext as _ExecutionContext,
+)
 
 
 if TYPE_CHECKING:
     from .core.plugin_interface import DriverContext
-
-
-@dataclass(frozen=True)
-class _ExecutionContext:
-    entry_label: str
-    workflow_dag: dict
-    planned_state: object
-    case_root: Path
-    output_dir: Path
-    expected_artifacts: tuple
-    setup_root: Path | None = None
-    environment_diagnostics: tuple[StrictDiagnostic, ...] = ()
-    execution_env: dict[str, str] | None = None
-    source_path: str | None = None
-    # Carried so _dispatch_context can reach plugin capabilities without
-    # importing a sibling package. Both construction sites already hold one.
-    driver_context: DriverContext | None = None
-    replan_after_mutation: Callable[[], "_ReplannedExecution"] | None = None
-
-
-@dataclass(frozen=True)
-class _ReplannedExecution:
-    workflow_dag: dict
-    planned_state: object
-    expected_artifacts: tuple
 
 
 def _step_payload(
@@ -152,6 +126,7 @@ def _remediation_transaction_payload(transaction: dict | None) -> dict | None:
         key: transaction.get(key)
         for key in (
             "transaction_id",
+            "origin",
             "status",
             "hypothesis",
             "proposal_digest",
@@ -181,251 +156,70 @@ def _execute_step(
     driver_context: DriverContext | None = None,
     replan_after_mutation: Callable[[], _ReplannedExecution] | None = None,
 ) -> int:
-    """Run one workflow step, print the JSON payload, return the exit code.
+    """CLI JSON adapter over the structured core step executor."""
+    from .core.runtime.step_candidate import execute_step_candidate_owned
 
-    Shared by the --entry (strict_plan) path and the --run-document path.
-    Resumes from an existing workflow_state.json under output_dir when present.
-    """
-    from .core.runtime.remediation_transaction import (
-        RemediationTransactionError,
-        begin_remediation_transaction,
-        baseline_is_restored,
-        finish_remediation_transaction,
-        mark_remediation_dispatching,
-        record_remediation_outcome,
-        require_reusable_case,
-    )
-
-    try:
-        require_reusable_case(
-            case_root, explicit_repair=apply_overrides_path is not None,
-        )
-    except RemediationTransactionError as exc:
-        print(json.dumps({
-            "status": "failed",
-            "entry": entry_label,
-            "step": step_id,
-            "error": str(exc),
-        }, indent=2))
-        return 1
-    state_path = output_dir / "workflow_state.json"
-    workflow_state = planned_state
-    if state_path.exists():
-        try:
-            workflow_state = workflow_state_from_json(json.loads(state_path.read_text()))
-            from .core.runtime.resume import validate_resume
-
-            validate_resume(workflow_state, workflow_dag, case_root=case_root,
-                            driver_context=driver_context, env=execution_env,
-                            expected_artifacts=tuple(expected_artifacts or ()))
-        except Exception as exc:
-            print(json.dumps({
-                "status": "failed",
-                "entry": entry_label,
-                "step": step_id,
-                "error": f"Could not read existing workflow state: {exc}",
-                "workflow_state_path": str(state_path),
-            }, indent=2))
-            return 1
     overrides = None
     hypothesis = None
-    remediation_transaction = None
-    effective_resolution: tuple[dict, ...] = ()
-    mutation_applied = False
     if apply_overrides_path is not None:
         try:
-            proposal = json.loads(Path(apply_overrides_path).read_text())
-            if isinstance(proposal, dict):
-                overrides = proposal.get("overrides")
-                hypothesis = proposal.get("hypothesis")
+            raw = json.loads(Path(apply_overrides_path).read_text())
+            if isinstance(raw, dict):
+                overrides = raw.get("overrides")
+                hypothesis = raw.get("hypothesis")
                 if hypothesis is not None and not isinstance(hypothesis, str):
                     raise ValueError("--apply hypothesis must be a string")
             else:
-                overrides = proposal
+                overrides = raw
             if not isinstance(overrides, list):
                 raise ValueError(
                     "--apply must be an override list or an object containing "
                     "an overrides list and optional hypothesis"
                 )
-            if driver_context is None:
-                raise ValueError(
-                    "--apply needs a driver context to resolve the plugin's "
-                    "override scopes; none was threaded to this step"
-                )
-            # OverrideError subclasses ValueError, so ValueError covers it and
-            # core needs no import of the exception type.
-            remediation_transaction = begin_remediation_transaction(
-                case_root,
-                output_dir=output_dir,
-                step_id=step_id,
-                overrides=overrides,
-                hypothesis=hypothesis,
-                target_paths=driver_context.capabilities.override_scopes.target_paths(
-                    overrides,
-                    case_root=case_root,
-                    driver_context=driver_context,
-                ),
-            )
-            effective_resolution = driver_context.capabilities.override_scopes.apply(
-                overrides,
-                case_root=case_root,
-                driver_context=driver_context,
-                execution_env=execution_env,
-            ) or ()
-            mutation_applied = True
-            unresolved = tuple(
-                item for item in effective_resolution
-                if item.get("status") != "resolved"
-                or item.get("matches_requested") is False
-            )
-            if unresolved:
-                detail = "; ".join(
-                    f"{item.get('driver_path')}: "
-                    f"{item.get('message') or ('effective value differs from request' if item.get('matches_requested') is False else item.get('status'))}"
-                    for item in unresolved
-                )
-                raise ValueError(f"effective dictionary resolution failed: {detail}")
-            if replan_after_mutation is None:
-                raise ValueError("--apply has no plan reconstruction contract")
-            replanned = replan_after_mutation()
-            from .core.runtime.workflow_state import workflow_digest
-
-            if workflow_digest(replanned.workflow_dag) != workflow_digest(workflow_dag):
-                raise ValueError(
-                    "applied overrides changed the workflow plan; start a fresh run "
-                    "from the replanned entry/document instead of rerunning one step"
-                )
-            workflow_dag = replanned.workflow_dag
-            expected_artifacts = replanned.expected_artifacts
-            if not state_path.exists():
-                workflow_state = replanned.planned_state
-            remediation_transaction = finish_remediation_transaction(
-                case_root,
-                remediation_transaction,
-                status="validated",
-                effective_resolution=effective_resolution,
-                plan_digest=workflow_digest(workflow_dag),
-            )
         except (OSError, ValueError) as exc:
-            if remediation_transaction is not None:
-                restored = baseline_is_restored(
-                    case_root,
-                    remediation_transaction,
-                    output_dir=output_dir,
-                )
-                remediation_transaction = finish_remediation_transaction(
-                    case_root,
-                    remediation_transaction,
-                    status="rolled_back" if restored else "rejected",
-                    effective_resolution=effective_resolution,
-                    error=str(exc),
-                )
-            if mutation_applied and overrides is not None:
-                append_remediation_record(
-                    output_dir,
-                    step_id=step_id,
-                    attempt=_step_state_by_id(workflow_state, step_id).attempt,
-                    applied_overrides=overrides,
-                    resulting_status="replan_error",
-                    effective_resolution=effective_resolution,
-                )
-            failure_payload = {
+            print(json.dumps({
                 "status": "failed",
                 "entry": entry_label,
                 "step": step_id,
                 "error": f"--apply rejected: {exc}",
-            }
-            transaction_payload = _remediation_transaction_payload(
-                remediation_transaction,
-            )
-            if transaction_payload is not None:
-                failure_payload["remediation_transaction"] = transaction_payload
-            print(json.dumps(failure_payload, indent=2))
+            }, indent=2))
             return 1
-    if remediation_transaction is not None:
-        remediation_transaction = mark_remediation_dispatching(
-            case_root, remediation_transaction,
-        )
+
+    context = _ExecutionContext(
+        entry_label=entry_label,
+        workflow_dag=workflow_dag,
+        planned_state=planned_state,
+        case_root=case_root,
+        output_dir=output_dir,
+        expected_artifacts=tuple(expected_artifacts or ()),
+        execution_env=execution_env,
+        driver_context=driver_context,
+        replan_after_mutation=replan_after_mutation,
+    )
     try:
-        result = run_workflow_step(
-            workflow_dag,
-            workflow_state,
-            step_id,
-            case_root=case_root,
-            log_dir=output_dir / "workflow_logs",
-            state_path=state_path,
-            expected_artifacts=expected_artifacts,
-            env=execution_env,
-            driver_context=driver_context,
-            leases_held=True,
+        result = execute_step_candidate_owned(
+            context,
+            step_id=step_id,
+            overrides=overrides,
+            hypothesis=hypothesis,
+            tail_lines=tail_lines,
+            run_step=run_workflow_step,
         )
     except Exception as exc:
-        if remediation_transaction is not None:
-            remediation_transaction = record_remediation_outcome(
-                case_root,
-                remediation_transaction,
-                execution_status="error",
-                attempt=_step_state_by_id(workflow_state, step_id).attempt,
-            )
-        if overrides is not None:
-            try:
-                _attempt = _step_state_by_id(workflow_state, step_id).attempt
-            except Exception:
-                _attempt = 0
-            append_remediation_record(
-                output_dir, step_id=step_id, attempt=_attempt,
-                applied_overrides=overrides, resulting_status="rerun_error",
-                effective_resolution=effective_resolution,
-            )
-        failure_payload = {
+        prefix = "--apply rejected: " if apply_overrides_path is not None else ""
+        payload = {
             "status": "failed",
             "entry": entry_label,
             "step": step_id,
-            "error": str(exc),
-            "workflow_state": workflow_state.to_json(),
+            "error": f"{prefix}{exc}",
         }
-        transaction_payload = _remediation_transaction_payload(
-            remediation_transaction,
-        )
-        if transaction_payload is not None:
-            failure_payload["remediation_transaction"] = transaction_payload
-        print(json.dumps(failure_payload, indent=2))
+        state_path = output_dir / "workflow_state.json"
+        if state_path.exists():
+            payload["workflow_state_path"] = str(state_path)
+        print(json.dumps(payload, indent=2))
         return 1
-    step_state = _step_state_by_id(result.state, step_id)
-    status = _terminal_status_label(step_state.status)
-    payload = _step_payload(
-        status=status,
-        entry=entry_label,
-        step=step_id,
-        workflow_state_path=state_path,
-        workflow_state=result.state.to_json(),
-        exit_code=result.exit_code,
-        stdout_log=result.stdout_log,
-        stderr_log=result.stderr_log,
-    )
-    _attach_failure_context(payload, result.state, step_id, tail_lines=tail_lines)
-    if overrides is not None:
-        if remediation_transaction is not None:
-            remediation_transaction = record_remediation_outcome(
-                case_root,
-                remediation_transaction,
-                execution_status=status,
-                attempt=step_state.attempt,
-            )
-        append_remediation_record(
-            output_dir,
-            step_id=step_id,
-            attempt=step_state.attempt,
-            applied_overrides=overrides,
-            resulting_status=status,
-            effective_resolution=effective_resolution,
-        )
-        payload["effective_dictionary_resolution"] = list(effective_resolution)
-        payload["remediation_transaction"] = _remediation_transaction_payload(
-            remediation_transaction,
-        )
-    print(json.dumps(payload, indent=2))
-    return 0 if status == "ok" else 1
+    print(json.dumps(dict(result.payload), indent=2))
+    return 0 if result.status == "succeeded" else 1
 
 
 def _reconciliation_payload(case_root: Path, expected_artifacts) -> dict:
