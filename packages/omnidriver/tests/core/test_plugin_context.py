@@ -176,3 +176,17 @@ def test_driver_context_rejects_duplicate_catalog_paths() -> None:
 
     with pytest.raises(TypeError, match="duplicate paths: shared"):
         driver_context(plugin, source="test")
+
+
+def test_context_identity_binds_resolved_manifest_and_dictionary_vocabulary() -> None:
+    plugin = _Plugin("example.identity", "identity")
+    baseline = driver_context(plugin, source="test").identity.capability_digest
+
+    plugin.get_capabilities = lambda: {"accepted": ["utilityA"]}
+    manifest_changed = driver_context(plugin, source="test").identity.capability_digest
+    plugin.get_dict_entries = lambda: (
+        DictEntry(driver_path="system/controlDict:endTime", description="end time"),
+    )
+    vocabulary_changed = driver_context(plugin, source="test").identity.capability_digest
+
+    assert baseline != manifest_changed != vocabulary_changed

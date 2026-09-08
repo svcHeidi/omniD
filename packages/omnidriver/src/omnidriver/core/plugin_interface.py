@@ -28,7 +28,10 @@ To build a new plugin start from ``core/generic_plugin.py`` and follow
 # virtualenv shows a green suite while CI cannot collect a single test.
 from __future__ import annotations
 
+import hashlib
+import json
 import re
+from dataclasses import asdict, is_dataclass
 from dataclasses import dataclass
 from functools import cached_property
 from importlib import import_module
@@ -631,6 +634,12 @@ def driver_context(plugin: SolverPlugin, *, source: str) -> DriverContext:
             "SolverPlugin dictionary catalog has duplicate paths: "
             + ", ".join(duplicates)
         )
+    manifest = checked.get_capabilities()
+    capability_digest = _resolved_capability_digest(
+        profile_digest=profile.digest,
+        dictionary_entries=entries,
+        manifest=manifest,
+    )
     return DriverContext(
         plugin=checked,
         identity=PluginIdentity(
@@ -638,9 +647,40 @@ def driver_context(plugin: SolverPlugin, *, source: str) -> DriverContext:
             version=checked.plugin_version,
             api_version=checked.plugin_api_version,
             source=source,
-            capability_digest=profile.digest,
+            capability_digest=capability_digest,
         ),
     )
+
+
+def _identity_jsonable(value: Any) -> Any:
+    """Convert declarative capability data into deterministic digest input."""
+    if is_dataclass(value):
+        return _identity_jsonable(asdict(value))
+    if isinstance(value, dict):
+        return {str(key): _identity_jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_identity_jsonable(item) for item in value]
+    if isinstance(value, (set, frozenset)):
+        return sorted(_identity_jsonable(item) for item in value)
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    raise TypeError(
+        "Plugin capability data must be deterministically serializable; got "
+        f"{type(value).__name__}"
+    )
+
+
+def _resolved_capability_digest(
+    *, profile_digest: str, dictionary_entries: tuple[Any, ...], manifest: Any,
+) -> str:
+    """Bind the profile, accepted dictionary vocabulary and manifest together."""
+    payload = _identity_jsonable({
+        "profile_digest": profile_digest,
+        "dictionary_entries": dictionary_entries,
+        "manifest": manifest,
+    })
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
 def load_plugin_context(target: str) -> DriverContext:
