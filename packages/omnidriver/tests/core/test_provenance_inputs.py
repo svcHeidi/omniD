@@ -439,6 +439,58 @@ def test_accepted_external_effective_dependency_is_fingerprinted(
     assert _by_path(before, dependency_name).digest != _by_path(after, dependency_name).digest
 
 
+def test_ordinary_external_include_is_fingerprinted_without_repair(tmp_path: Path) -> None:
+    case_root = tmp_path / "case"
+    case_root.mkdir()
+    external = tmp_path / "runtime" / "included.cfg"
+    external.parent.mkdir()
+    external.write_text("endTime 1;\n")
+    system = case_root / "system"
+    system.mkdir()
+    (system / "controlDict").write_text(
+        f'#include "{external}"\n'
+        "startFrom startTime;\nstartTime 0;\n"
+    )
+    context = driver_context(_FakePlugin(), source="test")
+
+    before = enumerate_case_inputs(
+        case_root, workflow_dag={"steps": []}, driver_context=context,
+    )
+    external.write_text("endTime 2;\n")
+    after = enumerate_case_inputs(
+        case_root, workflow_dag={"steps": []}, driver_context=context,
+    )
+
+    dependency_name = f"effective_config:{external.resolve()}"
+    assert _by_path(before, dependency_name).digest != _by_path(after, dependency_name).digest
+
+
+def test_external_optional_include_appearance_changes_input_identity(tmp_path: Path) -> None:
+    case_root = tmp_path / "case"
+    case_root.mkdir()
+    external = tmp_path / "runtime" / "optional.cfg"
+    system = case_root / "system"
+    system.mkdir()
+    (system / "controlDict").write_text(
+        f'#includeIfPresent "{external}"\n'
+        "startFrom startTime;\nstartTime 0;\n"
+    )
+    context = driver_context(_FakePlugin(), source="test")
+
+    absent = enumerate_case_inputs(
+        case_root, workflow_dag={"steps": []}, driver_context=context,
+    )
+    external.parent.mkdir()
+    external.write_text("endTime 2;\n")
+    present = enumerate_case_inputs(
+        case_root, workflow_dag={"steps": []}, driver_context=context,
+    )
+
+    base = f"effective_config:{external.resolve()}"
+    assert f"{base}:optional-absent" in _paths(absent, kind="runtime_dependency")
+    assert base in _paths(present, kind="runtime_dependency")
+
+
 def test_sequential_repairs_conservatively_retain_prior_external_dependencies(
     tmp_path: Path,
 ) -> None:

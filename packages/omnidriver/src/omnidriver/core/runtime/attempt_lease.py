@@ -44,9 +44,22 @@ def attempt_lease_is_held(output_dir: Path) -> bool:
     return owner is not None and owner[1] == threading.get_ident()
 
 
+def _case_lease_path(case_root: Path) -> Path:
+    """Stable ownership record for one mutable case directory.
+
+    A case can be transactionally replaced by staging.  Its lock therefore
+    cannot live *in* that directory: a rename would otherwise replace the
+    lock inode while a workflow still holds it.  Keep the record as a named
+    sibling, which is stable across replacement and also lets staging acquire
+    ownership before the case exists for the first time.
+    """
+    root = Path(case_root).resolve()
+    return root.parent / f".{root.name}.omnidriver-case.lock"
+
+
 def case_lease_is_held(case_root: Path) -> bool:
     """Whether this thread already owns the local lease for ``case_root``."""
-    path = Path(case_root).resolve() / ".omnidriver-case.lock"
+    path = _case_lease_path(case_root)
     owner = _LOCAL_LEASES.get(path)
     return owner is not None and owner[1] == threading.get_ident()
 
@@ -200,11 +213,36 @@ def acquire_attempt_lease(output_dir: Path) -> Iterator[AttemptLease]:
 
 @contextmanager
 def acquire_case_lease(case_root: Path) -> Iterator[AttemptLease]:
-    """Exclusively own a mutable case independently of its output path."""
+    """Exclusively own an existing mutable case independently of its output path.
+
+    The lease record is a stable sibling of the case, not content that may be
+    copied or renamed with it.
+    """
+    root = Path(case_root).resolve()
+    if not root.is_dir():
+        raise AttemptLeaseError(f"case root does not exist: {root}")
     with _acquire_local_lease(
-        case_root,
-        filename=".omnidriver-case.lock",
+        root.parent,
+        filename=_case_lease_path(root).name,
         resource_label="case root",
         create_directory=False,
+    ) as lease:
+        yield lease
+
+
+@contextmanager
+def acquire_case_staging_lease(case_root: Path) -> Iterator[AttemptLease]:
+    """Own a case's stable lease while creating or replacing it.
+
+    This deliberately uses the same sibling record as :func:`acquire_case_lease`.
+    It is the only lease appropriate before a new staged case directory has
+    been promoted into place.
+    """
+    root = Path(case_root).resolve()
+    with _acquire_local_lease(
+        root.parent,
+        filename=_case_lease_path(root).name,
+        resource_label="case root",
+        create_directory=True,
     ) as lease:
         yield lease

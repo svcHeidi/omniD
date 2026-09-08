@@ -732,9 +732,9 @@ class OverrideScopeCapability(Protocol):
     else, matching the pattern already used by
     :class:`ReportCatalogCapability`/:class:`NamedCatalogsCapability`.
 
-    :adapts: get_override_scopes, get_override_target_paths, apply_overrides
-    :consumed-by: omnidriver/openfoam/apply_overrides.py, omnidriver/core/runtime/step_candidate.py
-    :fallback: legacy_override_scopes, legacy_override_target_paths, legacy_apply_overrides
+    :adapts: get_override_scopes, get_override_target_paths, apply_overrides, inspect_effective_configuration
+    :consumed-by: omnidriver/openfoam/apply_overrides.py, omnidriver/core/runtime/provenance_inputs.py, omnidriver/core/runtime/step_candidate.py, omnidriver/core/strict_planning.py
+    :fallback: legacy_override_scopes, legacy_override_target_paths, legacy_apply_overrides, legacy_inspect_effective_configuration
     :status: optional
     """
 
@@ -746,6 +746,11 @@ class OverrideScopeCapability(Protocol):
 
     def apply(
         self, overrides: Any, *, case_root: Any, driver_context: Any,
+        execution_env: Any | None = None,
+    ) -> tuple[dict[str, Any], ...]: ...
+
+    def inspect(
+        self, *, case_root: Any, driver_context: Any,
         execution_env: Any | None = None,
     ) -> tuple[dict[str, Any], ...]: ...
 
@@ -1340,6 +1345,21 @@ class _OverrideScopeAdapter:
 
         return legacy_override_target_paths(
             overrides, case_root=case_root, driver_context=driver_context,
+        )
+
+    def inspect(
+        self, *, case_root: Any, driver_context: Any,
+        execution_env: Any | None = None,
+    ) -> tuple[dict[str, Any], ...]:
+        hook = getattr(self.plugin, "inspect_effective_configuration", None)
+        if callable(hook):
+            return tuple(hook(case_root=case_root, execution_env=execution_env))
+        from .compatibility import legacy_inspect_effective_configuration
+
+        return legacy_inspect_effective_configuration(
+            case_root=case_root,
+            driver_context=driver_context,
+            execution_env=execution_env,
         )
 
 

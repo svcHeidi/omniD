@@ -471,6 +471,17 @@ class SolverPluginOptionalHooks(Protocol):
         exact before-images before publishing an applying transaction."""
         ...
 
+    def inspect_effective_configuration(
+        self, *, case_root: "Path", execution_env: dict[str, str] | None = None,
+    ) -> tuple[dict[str, Any], ...]:
+        """Read declared configuration dependencies without modifying a case.
+
+        Records inspected and absent optional files, or explicitly reports an
+        unresolved closure. Absent -> the OpenFOAM source-closure inspector
+        for OpenFOAM-shaped profiles, and no evidence for foreign profiles.
+        """
+        ...
+
     # -- ReportCatalogCapability ---------------------------------------------
     def get_report_catalog(self) -> tuple["ReportDefinition", ...]:
         """Post-run reports this plugin offers. Core owns the machinery; the

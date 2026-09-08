@@ -59,6 +59,7 @@ class StrictPlanReport:
     capability_manifest: dict[str, Any] = field(default_factory=dict)
     function_object_diagnostics: tuple[StrictDiagnostic, ...] = ()
     case_dict_key_diagnostics: tuple[StrictDiagnostic, ...] = ()
+    configuration_evidence: tuple[dict[str, Any], ...] = ()
     plugin: dict[str, str] = field(default_factory=dict)
 
     def to_json(self) -> dict[str, Any]:
@@ -88,6 +89,7 @@ class StrictPlanReport:
             "case_dict_key_diagnostics": [
                 asdict(d) for d in self.case_dict_key_diagnostics
             ],
+            "configuration_evidence": list(self.configuration_evidence),
             "plugin": self.plugin,
         }
 
@@ -444,6 +446,11 @@ def strict_plan(
         ),
         dict_relpaths=_owned_dict_relpaths(spec, driver_context),
     )
+    configuration_evidence = driver_context.capabilities.override_scopes.inspect(
+        case_root=Path(spec.case_root),
+        driver_context=driver_context,
+        execution_env=dict(os.environ),
+    )
     # Field and case-key diagnostics are warn-only: reported (in
     # all_diagnostics) but never part of plan_diagnostics, so neither a
     # sampled-field nor an uncatalogued-key warning can fail a plan. The
@@ -487,5 +494,6 @@ def strict_plan(
         capability_manifest=capability_manifest,
         function_object_diagnostics=function_object_diagnostics,
         case_dict_key_diagnostics=case_dict_key_diagnostics,
+        configuration_evidence=configuration_evidence,
         plugin=driver_context.identity.to_json(),
     )

@@ -357,6 +357,56 @@ def enumerate_case_inputs(
         name = f"effective_config:{path}"
         dependencies[name] = RuntimeDependency(name=name, path=path, required=True)
 
+    # Planning has its own read-only configuration closure.  Do not make
+    # ordinary resume correctness depend on a repair having happened first:
+    # an external #include or #includeEtc file is an input even for an
+    # untouched case.  Unsupported directive forms become an unavailable
+    # witness so a later checkpoint cannot be silently reused as complete.
+    inspection = capabilities.override_scopes.inspect(
+        case_root=case_root,
+        driver_context=driver_context,
+        execution_env=environment,
+    )
+    root_resolved = case_root.resolve()
+    for record in inspection:
+        dictionary = str(record.get("dictionary", "<unknown>"))
+        evaluator = record.get("evaluator")
+        if isinstance(evaluator, Mapping):
+            evaluator_name = evaluator.get("name")
+            evaluator_path = evaluator.get("path")
+            if isinstance(evaluator_name, str) and isinstance(evaluator_path, str):
+                name = f"effective_config_evaluator:{evaluator_name}"
+                dependencies[name] = RuntimeDependency(
+                    name=name, path=Path(evaluator_path), required=True,
+                )
+        if record.get("status") != "inspected":
+            name = f"effective_config:unresolved:{dictionary}"
+            dependencies[name] = RuntimeDependency(name=name, path=None, required=True)
+        for field, absent in (
+            ("inspected_files", False),
+            ("absent_optional_files", True),
+        ):
+            for raw_path in record.get(field, ()):
+                if not isinstance(raw_path, str):
+                    continue
+                path = Path(raw_path)
+                try:
+                    path.resolve().relative_to(root_resolved)
+                except OSError:
+                    # An unreadable path belongs in the dependency set; its
+                    # fingerprint will be unavailable rather than omitted.
+                    pass
+                except ValueError:
+                    pass
+                else:
+                    # Case-local files are already fingerprinted by the main
+                    # case walk (and an appearing optional local include will
+                    # therefore add a normal case-file component).
+                    continue
+                suffix = ":optional-absent" if absent else ""
+                name = f"effective_config:{path.resolve()}{suffix}"
+                dependencies[name] = RuntimeDependency(name=name, path=path, required=True)
+
     for dependency in dependencies.values():
         add(component_for_runtime_dependency(dependency))
 

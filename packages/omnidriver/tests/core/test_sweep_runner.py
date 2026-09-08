@@ -18,6 +18,7 @@ from omnidriver.core.runtime.sweep_runner import (
     sweep_run,
 )
 from omnidriver.core.runtime.workflow_runner import run_workflow_step
+from omnidriver.core.runtime.attempt_lease import AttemptLeaseError, acquire_case_lease
 from omnidriver.core.runtime.workflow_state import initial_workflow_state
 from omnidriver.core.runtime.sweep_manifest import CaseManifestEntry, compute_override_hash
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError
@@ -174,6 +175,83 @@ def test_entry_case_staging_keeps_authored_case_clean(tmp_path):
     assert not (staged / "workflow_state.json").exists()
     assert not (staged / generated_case.name).exists()
     assert (source / "postProcessing" / "old.dat").exists()
+
+
+def test_entry_case_staging_refuses_to_replace_a_live_case(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "system").mkdir()
+    (source / "system" / "controlDict").write_text("new\n")
+    staged = tmp_path / "scratch" / "case"
+    staged.mkdir(parents=True)
+    (staged / "live-result").write_text("must survive")
+
+    with acquire_case_lease(staged):
+        with pytest.raises(AttemptLeaseError, match="already owned"):
+            _stage_entry_case(source, staged)
+
+    assert (staged / "live-result").read_text() == "must survive"
+    _stage_entry_case(source, staged)
+    assert not (staged / "live-result").exists()
+    assert (staged / "system" / "controlDict").read_text() == "new\n"
+
+
+def test_entry_case_staging_copy_failure_leaves_existing_case_untouched(tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    source.mkdir()
+    staged = tmp_path / "scratch" / "case"
+    staged.mkdir(parents=True)
+    (staged / "live-result").write_text("must survive")
+
+    def fail_copy(*_args, **_kwargs):
+        raise OSError("simulated copy failure")
+
+    monkeypatch.setattr("omnidriver.core.runtime.sweep_runner.shutil.copytree", fail_copy)
+    with pytest.raises(OSError, match="simulated copy failure"):
+        _stage_entry_case(source, staged)
+
+    assert (staged / "live-result").read_text() == "must survive"
+
+
+def test_entry_case_staging_recovers_prior_case_after_interrupted_promotion(tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "system").mkdir()
+    (source / "system" / "controlDict").write_text("new\n")
+    staged = tmp_path / "scratch" / "case"
+    staged.mkdir(parents=True)
+    (staged / "system").mkdir()
+    (staged / "system" / "controlDict").write_text("old\n")
+
+    real_replace = os.replace
+    failed = False
+
+    def interrupt_candidate_promotion(source_path, destination_path):
+        nonlocal failed
+        source_name = Path(source_path).name
+        if (
+            not failed
+            and ".omnidriver-candidate-" in source_name
+            and Path(destination_path) == staged
+        ):
+            failed = True
+            raise OSError("simulated interruption during promotion")
+        return real_replace(source_path, destination_path)
+
+    monkeypatch.setattr("omnidriver.core.runtime.sweep_runner.os.replace", interrupt_candidate_promotion)
+    with pytest.raises(OSError, match="simulated interruption"):
+        _stage_entry_case(source, staged)
+
+    # The target is absent only while the durable journal and old sibling are
+    # present. A later holder restores the prior tree before restaging.
+    assert not staged.exists()
+    _stage_entry_case(source, staged)
+    assert (staged / "system" / "controlDict").read_text() == "new\n"
+    leftovers = [
+        path for path in staged.parent.glob(".case.omnidriver-*")
+        if "candidate" in path.name or "backup" in path.name or "staging" in path.name
+    ]
+    assert not leftovers
 
 
 def test_sweep_plan_entry_mode_materializes_via_apply_case_and_audits(tmp_path):

@@ -6,17 +6,18 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
-SCHEMA_VERSION = "2.1-sha256-256mib"
-"""Encodes the hashing policy (algorithm + degrade threshold), not just the
-field layout of the model. Bump this whenever CONTENT_HASH_MAX_BYTES or the
-hashing algorithm changes -- a snapshot computed under a different policy is
-unrecorded, not a differently-valued observation of the same thing."""
+SCHEMA_VERSION = "2.2-sha256-streaming-256mib"
+"""Encodes the hashing and read policy, not just the field layout.
+
+Large required inputs use the same SHA-256 content identity as small inputs,
+but switch to streaming reads at ``CONTENT_HASH_MAX_BYTES``. An older
+metadata-only snapshot is not equivalent evidence.
+"""
 
 CONTENT_HASH_MAX_BYTES = 256 * 1024 * 1024
-"""Files at or under this size are fingerprinted by sha256 content hash.
-Larger files degrade to a metadata (size + mtime) fingerprint instead of
-paying for a hash of a file that large. See the module docstring for the
-throughput measurement behind the 256 MiB figure."""
+"""Above this size SHA-256 reads in bounded chunks rather than all at once."""
+
+_STREAMING_HASH_CHUNK_BYTES = 4 * 1024 * 1024
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -27,8 +28,8 @@ class ProvenanceComponent:
     ``role`` drives severity and defaults to ``"required_input"``. ``origin``
     is diagnostic only. ``strength`` is honest about how much the fingerprint
     actually proves: ``"content"`` (sha256 of the bytes), ``"metadata"``
-    (size + mtime only, file too large to hash), or ``"unavailable"`` (could
-    not be stat'd or read at all).
+    (legacy weak evidence), or ``"unavailable"`` (could not be stat'd or
+    read at all).
     """
 
     kind: str
@@ -110,8 +111,9 @@ def component_for_path(
     role: str = "required_input",
     origin: str | None = None,
 ) -> ProvenanceComponent:
-    """Fingerprint a single filesystem entry, stat'ing (and reading, if small
-    enough) it exactly once. Never raises on a missing or unreadable path --
+    """Fingerprint a single filesystem entry, stat'ing and hashing it once.
+
+    Large files use bounded streaming reads. Never raises on a missing or unreadable path --
     that degrades to an ``"unavailable"`` component instead.
 
     A symlink whose resolved target falls outside ``relative_to`` is
@@ -185,15 +187,18 @@ def component_for_path(
             link_target=link_target,
         )
 
-    if size > CONTENT_HASH_MAX_BYTES:
-        return _build("metadata", "metadata", None)
-
     try:
-        content = path.read_bytes()
+        digest = hashlib.sha256()
+        if size > CONTENT_HASH_MAX_BYTES:
+            with path.open("rb") as handle:
+                while chunk := handle.read(_STREAMING_HASH_CHUNK_BYTES):
+                    digest.update(chunk)
+        else:
+            digest.update(path.read_bytes())
     except OSError:
         return _build("unavailable", "unavailable", None)
 
-    return _build("sha256", "content", "sha256:" + hashlib.sha256(content).hexdigest())
+    return _build("sha256", "content", "sha256:" + digest.hexdigest())
 
 
 def _component_digest_payload(component: ProvenanceComponent) -> dict[str, Any]:

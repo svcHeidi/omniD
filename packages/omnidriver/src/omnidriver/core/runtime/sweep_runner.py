@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import sys
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -16,6 +17,7 @@ from omnidriver.core.sweep.sweep_expansion import SweepValidationError, check_ca
 from omnidriver.sweep_materialize import materialize_case
 from omnidriver.sweep_routing import route_case_values, route_entry_case_values
 from .fresh import ensure_fresh_output_dir
+from .attempt_lease import acquire_case_staging_lease
 from .models import data_artifact_from_json
 from .output_collection import collect_new_outputs, snapshot_postprocessing
 from .postprocess_phase import build_sweep_context, run_postprocessing_module
@@ -199,9 +201,6 @@ def _stage_entry_case(
     and conservative: keep authored inputs (including ``0/``) and omit only
     known derived artifacts.
     """
-    if staged_case_root.exists():
-        shutil.rmtree(staged_case_root)
-
     decomposition_prefix = decomposition_dirname_prefix(driver_context)
     generated_dir_names = {
         "postProcessing", "logs", "workflow_logs", "cachedCasePostProcessing",
@@ -252,15 +251,158 @@ def _stage_entry_case(
                     ignored.add(name)
         return ignored
 
+    source_case_root = Path(source_case_root).resolve()
+    staged_case_root = Path(staged_case_root).resolve()
     if not source_case_root.is_dir():
         raise FileNotFoundError(f"Registered case root does not exist: {source_case_root}")
-    staged_case_root.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(
-        source_case_root,
-        staged_case_root,
-        ignore=ignore_generated,
-        symlinks=True,
+    with acquire_case_staging_lease(staged_case_root):
+        _recover_interrupted_case_staging(staged_case_root)
+        _copy_and_promote_staged_case(
+            source_case_root,
+            staged_case_root,
+            ignore=ignore_generated,
+        )
+
+
+def _staging_journal_path(case_root: Path) -> Path:
+    return case_root.parent / f".{case_root.name}.omnidriver-staging.json"
+
+
+def _staging_path(case_root: Path, token: str, role: str) -> Path:
+    return case_root.parent / f".{case_root.name}.omnidriver-{role}-{token}"
+
+
+def _fsync_directory(directory: Path) -> None:
+    """Make rename metadata durable where the host filesystem supports it."""
+    if os.name != "posix":
+        return
+    descriptor = os.open(directory, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _write_staging_journal(path: Path, payload: dict[str, Any]) -> None:
+    """Atomically publish enough state to recover a promotion after a crash."""
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "w") as handle:
+            json.dump(payload, handle, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        _fsync_directory(path.parent)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _load_staging_journal(case_root: Path) -> dict[str, Any] | None:
+    path = _staging_journal_path(case_root)
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(
+            f"staging recovery is required but its journal is unreadable: {path}"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"staging recovery journal is malformed: {path}")
+    return payload
+
+
+def _journal_case_path(case_root: Path, payload: dict[str, Any], key: str) -> Path:
+    raw = payload.get(key)
+    if not isinstance(raw, str):
+        raise RuntimeError(f"staging recovery journal omitted {key!r}")
+    path = Path(raw)
+    if path.parent != case_root.parent or path.name == case_root.name:
+        raise RuntimeError(f"staging recovery journal has an unsafe {key!r} path")
+    return path
+
+
+def _recover_interrupted_case_staging(case_root: Path) -> None:
+    """Restore a coherent case after a failed sibling-directory promotion.
+
+    The normal promotion never exposes a partial copy: the candidate is copied
+    under a private sibling and renamed only once complete.  If a process dies
+    between the two renames, preserving the prior live case is safer than
+    guessing that the candidate should run, so an existing case is restored
+    from its backup.  A brand-new case has no prior case to restore and may
+    promote its fully copied candidate.
+    """
+    payload = _load_staging_journal(case_root)
+    if payload is None:
+        return
+    if payload.get("version") != 1 or payload.get("case_root") != str(case_root):
+        raise RuntimeError(f"staging recovery journal is incompatible: {_staging_journal_path(case_root)}")
+    candidate = _journal_case_path(case_root, payload, "candidate")
+    backup = _journal_case_path(case_root, payload, "backup")
+    original_exists = payload.get("original_exists")
+    if not isinstance(original_exists, bool):
+        raise RuntimeError("staging recovery journal omitted original_exists")
+
+    if case_root.exists():
+        # Either no rename occurred, or the candidate was already promoted.
+        # In both states this path is complete; discard only private siblings.
+        if candidate.exists():
+            shutil.rmtree(candidate)
+        if backup.exists():
+            shutil.rmtree(backup)
+    elif original_exists:
+        if not backup.is_dir():
+            raise RuntimeError(
+                "staging recovery cannot restore the prior case; manual intervention is required"
+            )
+        os.replace(backup, case_root)
+        if candidate.exists():
+            shutil.rmtree(candidate)
+    else:
+        if not candidate.is_dir():
+            raise RuntimeError(
+                "staging recovery cannot promote the initial staged case; manual intervention is required"
+            )
+        os.replace(candidate, case_root)
+    _staging_journal_path(case_root).unlink()
+    _fsync_directory(case_root.parent)
+
+
+def _copy_and_promote_staged_case(
+    source_case_root: Path,
+    staged_case_root: Path,
+    *,
+    ignore: Any,
+) -> None:
+    """Copy to a private sibling, then replace a staged case under its lease."""
+    token = uuid.uuid4().hex
+    candidate = _staging_path(staged_case_root, token, "candidate")
+    backup = _staging_path(staged_case_root, token, "backup")
+    original_exists = staged_case_root.exists()
+    shutil.copytree(source_case_root, candidate, ignore=ignore, symlinks=True)
+    # From here on the journal deliberately remains after any failure. The
+    # next holder restores a coherent tree before it considers replacement.
+    _write_staging_journal(
+        _staging_journal_path(staged_case_root),
+        {
+            "version": 1,
+            "case_root": str(staged_case_root),
+            "candidate": str(candidate),
+            "backup": str(backup),
+            "original_exists": original_exists,
+        },
     )
+    if original_exists:
+        os.replace(staged_case_root, backup)
+        _fsync_directory(staged_case_root.parent)
+    os.replace(candidate, staged_case_root)
+    _fsync_directory(staged_case_root.parent)
+    if backup.exists():
+        shutil.rmtree(backup)
+    _staging_journal_path(staged_case_root).unlink()
+    _fsync_directory(staged_case_root.parent)
 
 
 def sweep_plan(

@@ -41,6 +41,7 @@ class EffectiveDictionaryResult:
     runtime: str | None
     message: str | None = None
     inspected_files: tuple[str, ...] = ()
+    absent_optional_files: tuple[str, ...] = ()
     environment_keys: tuple[str, ...] = ()
 
 
@@ -62,10 +63,11 @@ def _expand_include(value: str, environment: Mapping[str, str]) -> tuple[str | N
 
 def _inspect_source_closure(
     path: Path, environment: Mapping[str, str],
-) -> tuple[tuple[Path, ...], tuple[str, ...], str | None]:
+) -> tuple[tuple[Path, ...], tuple[Path, ...], tuple[str, ...], str | None]:
     """Return safe local includes, or the explicit reason resolution is gated."""
     pending = [path.resolve()]
     inspected: list[Path] = []
+    absent_optional: list[Path] = []
     seen: set[Path] = set()
     environment_keys: set[str] = set()
     while pending:
@@ -76,21 +78,21 @@ def _inspect_source_closure(
         try:
             text = current.read_text()
         except OSError as exc:
-            return tuple(inspected), tuple(sorted(environment_keys)), f"cannot inspect dictionary dependency {current}: {exc}"
+            return tuple(inspected), tuple(absent_optional), tuple(sorted(environment_keys)), f"cannot inspect dictionary dependency {current}: {exc}"
         inspected.append(current)
         try:
             lexical_text = _mask_comments(text)
         except ValueError as exc:
-            return tuple(inspected), tuple(sorted(environment_keys)), (
+            return tuple(inspected), tuple(absent_optional), tuple(sorted(environment_keys)), (
                 f"cannot lexically inspect dictionary dependency {current}: {exc}"
             )
         if _EXECUTABLE_DIRECTIVE.search(_mask_quoted_strings(lexical_text)):
-            return tuple(inspected), tuple(sorted(environment_keys)), (
+            return tuple(inspected), tuple(absent_optional), tuple(sorted(environment_keys)), (
                 f"executable dictionary directive found in {current}; "
                 "pass allow_executable_directives=True to request execution"
             )
         if _OTHER_INCLUDE.search(lexical_text):
-            return tuple(inspected), tuple(sorted(environment_keys)), (
+            return tuple(inspected), tuple(absent_optional), tuple(sorted(environment_keys)), (
                 f"runtime-dependent include found in {current}; "
                 "effective resolution is unresolved without its explicit dependency closure"
             )
@@ -98,18 +100,18 @@ def _inspect_source_closure(
             environment_keys.add("FOAM_ETC")
             etc_root = environment.get("FOAM_ETC")
             if not etc_root:
-                return tuple(inspected), tuple(sorted(environment_keys)), (
+                return tuple(inspected), tuple(absent_optional), tuple(sorted(environment_keys)), (
                     "#includeEtc requires unset environment variable 'FOAM_ETC'"
                 )
             include_name = match.group("path")
             expanded, keys, error = _expand_include(include_name, environment)
             environment_keys.update(keys)
             if error is not None:
-                return tuple(inspected), tuple(sorted(environment_keys)), error
+                return tuple(inspected), tuple(absent_optional), tuple(sorted(environment_keys)), error
             assert expanded is not None
             candidate = (Path(etc_root) / expanded).resolve()
             if not candidate.is_file():
-                return tuple(inspected), tuple(sorted(environment_keys)), (
+                return tuple(inspected), tuple(absent_optional), tuple(sorted(environment_keys)), (
                     f"#includeEtc dependency is missing: {candidate}"
                 )
             pending.append(candidate)
@@ -118,7 +120,7 @@ def _inspect_source_closure(
             expanded, keys, error = _expand_include(include_name, environment)
             environment_keys.update(keys)
             if error is not None:
-                return tuple(inspected), tuple(sorted(environment_keys)), error
+                return tuple(inspected), tuple(absent_optional), tuple(sorted(environment_keys)), error
             assert expanded is not None
             candidate = Path(expanded)
             if not candidate.is_absolute():
@@ -126,10 +128,11 @@ def _inspect_source_closure(
             candidate = candidate.resolve()
             if not candidate.is_file():
                 if match.group("optional"):
+                    absent_optional.append(candidate)
                     continue
-                return tuple(inspected), tuple(sorted(environment_keys)), f"local include is missing: {candidate}"
+                return tuple(inspected), tuple(absent_optional), tuple(sorted(environment_keys)), f"local include is missing: {candidate}"
             pending.append(candidate)
-    return tuple(inspected), tuple(sorted(environment_keys)), None
+    return tuple(inspected), tuple(absent_optional), tuple(sorted(environment_keys)), None
 
 
 def resolve_effective_foam_entry(
@@ -174,7 +177,7 @@ def resolve_effective_foam_entry(
         str(runtime) if runtime is not None
         else source_environment.get("WM_PROJECT_DIR")
     )
-    inspected, environment_keys, gate_error = _inspect_source_closure(
+    inspected, absent_optional, environment_keys, gate_error = _inspect_source_closure(
         dictionary, source_environment,
     )
     if gate_error is not None:
@@ -183,6 +186,7 @@ def resolve_effective_foam_entry(
             return EffectiveDictionaryResult(
                 status=status, value=None, parser="foamDictionary", runtime=runtime_label,
                 message=gate_error, inspected_files=tuple(str(item) for item in inspected),
+                absent_optional_files=tuple(str(item) for item in absent_optional),
                 environment_keys=environment_keys,
             )
     if runtime is None:
@@ -193,6 +197,7 @@ def resolve_effective_foam_entry(
                 runtime=source_environment.get("WM_PROJECT_DIR"),
                 message="foamDictionary is not available in the execution environment",
                 inspected_files=tuple(str(item) for item in inspected),
+                absent_optional_files=tuple(str(item) for item in absent_optional),
                 environment_keys=environment_keys,
             )
         command = (executable, str(dictionary), "-entry", entry, "-value")
@@ -216,12 +221,14 @@ def resolve_effective_foam_entry(
             status="unresolved", value=None, parser="foamDictionary", runtime=runtime_label,
             message=f"foamDictionary timed out after {timeout_s:g} seconds",
             inspected_files=tuple(str(item) for item in inspected),
+            absent_optional_files=tuple(str(item) for item in absent_optional),
             environment_keys=environment_keys,
         )
     except OSError as exc:
         return EffectiveDictionaryResult(
             status="runtime_unavailable", value=None, parser="foamDictionary", runtime=runtime_label,
             message=str(exc), inspected_files=tuple(str(item) for item in inspected),
+            absent_optional_files=tuple(str(item) for item in absent_optional),
             environment_keys=environment_keys,
         )
     if completed.returncode != 0:
@@ -229,10 +236,52 @@ def resolve_effective_foam_entry(
             status="unresolved", value=None, parser="foamDictionary", runtime=runtime_label,
             message=completed.stderr.strip() or f"foamDictionary exited with {completed.returncode}",
             inspected_files=tuple(str(item) for item in inspected),
+            absent_optional_files=tuple(str(item) for item in absent_optional),
             environment_keys=environment_keys,
         )
     return EffectiveDictionaryResult(
         status="resolved", value=completed.stdout.strip(), parser="foamDictionary",
         runtime=runtime_label, inspected_files=tuple(str(item) for item in inspected),
+        absent_optional_files=tuple(str(item) for item in absent_optional),
         environment_keys=environment_keys,
     )
+
+
+def inspect_effective_foam_configuration(
+    case_root: str | Path,
+    dictionary_relpaths: tuple[str, ...],
+    *,
+    env: Mapping[str, str] | None = None,
+) -> tuple[dict[str, object], ...]:
+    """Read the safe source closure of each declared OpenFOAM dictionary.
+
+    This is intentionally inspection, not evaluation: planning must not run
+    ``#codeStream`` or arbitrary directives merely to discover dependencies.
+    It gives core a uniform, read-only dependency contract; native entry
+    evaluation remains the explicit apply-time operation.
+    """
+    root = Path(case_root).resolve()
+    environment = dict(os.environ) if env is None else dict(env)
+    evaluator = shutil.which("foamDictionary", path=environment.get("PATH", ""))
+    evidence: list[dict[str, object]] = []
+    for relpath in sorted(set(dictionary_relpaths)):
+        dictionary = root / relpath
+        if not dictionary.is_file():
+            continue
+        inspected, absent_optional, environment_keys, message = _inspect_source_closure(
+            dictionary, environment,
+        )
+        evidence.append({
+            "dictionary": relpath,
+            "status": "inspected" if message is None else "unresolved",
+            "parser": "openfoam_source_closure",
+            "evaluator": {
+                "name": "foamDictionary",
+                "path": evaluator,
+            },
+            "message": message,
+            "inspected_files": [str(item) for item in inspected],
+            "absent_optional_files": [str(item) for item in absent_optional],
+            "environment_keys": list(environment_keys),
+        })
+    return tuple(evidence)

@@ -57,6 +57,35 @@ def test_plain_allrun_case_works_with_the_no_domain_context(tmp_path: Path) -> N
     assert report.run_document.plugin == report.plugin
 
 
+def test_plan_reports_external_configuration_closure_without_mutating_case(tmp_path: Path) -> None:
+    case_root = tmp_path / "plainOpenFoamCase"
+    case_root.mkdir()
+    external = tmp_path / "runtime" / "limits.cfg"
+    external.parent.mkdir()
+    external.write_text("endTime 1;\n")
+    control_dict = case_root / "system" / "controlDict"
+    control_dict.parent.mkdir()
+    control_dict.write_text(f'#include "{external}"\nstartFrom startTime;\n')
+    authored_bytes = control_dict.read_bytes()
+    (case_root / "Allrun").write_text("#!/bin/sh\nexit 0\n")
+
+    report = strict_plan(
+        "plainOpenFoamCase",
+        overrides={"cases_root": str(tmp_path)},
+        driver_context=driver_context(
+            _GenericOpenFOAMPluginWithNeutralEnvironment(), source="test",
+        ),
+    )
+
+    assert report.status == "ok"
+    assert control_dict.read_bytes() == authored_bytes
+    evidence = next(
+        item for item in report.configuration_evidence
+        if item["dictionary"] == "system/controlDict"
+    )
+    assert str(external.resolve()) in evidence["inspected_files"]
+
+
 def test_make_spec_accepts_generic_path_addressed_overrides_not_cardiac_kwargs() -> None:
     """make_spec's public signature must not require electro/physics-named
     keyword arguments -- a non-cardiac caller should be able to pass generic,
@@ -294,5 +323,4 @@ def test_make_generic_case_spec_applies_no_solver_mutation(tmp_path: Path) -> No
         spec.apply_case(spec.case_root, spec.build_cases()[0])
 
     assert calls == []
-
 

@@ -267,6 +267,34 @@ def legacy_override_target_paths(overrides, *, case_root, driver_context) -> tup
 
 
 @_instrumented
+def legacy_inspect_effective_configuration(
+    *, case_root, driver_context, execution_env=None,
+) -> tuple[dict, ...]:
+    """Inspect declared OpenFOAM dictionaries without evaluating directives.
+
+    A foreign plugin has no ``openfoam_dictionary`` rules and therefore gets
+    no fabricated evidence.  The import remains lazy so a core-only install
+    can still plan a foreign case; it simply cannot claim OpenFOAM evidence.
+    """
+    relpaths = tuple(
+        rule.path
+        for rule in driver_context.capabilities.case_files.all_rules()
+        if rule.kind == "openfoam_dictionary"
+    )
+    if not relpaths:
+        return ()
+    try:
+        from omnidriver.openfoam.effective_dictionary import (
+            inspect_effective_foam_configuration,
+        )
+    except ImportError:
+        return ()
+    return inspect_effective_foam_configuration(
+        case_root, relpaths, env=execution_env,
+    )
+
+
+@_instrumented
 def legacy_function_object_field_diagnostics(case_root, *, samplable) -> tuple:
     """Plugins predating get_function_object_field_diagnostics().
     strict_planning.py has always warned about controlDict function objects

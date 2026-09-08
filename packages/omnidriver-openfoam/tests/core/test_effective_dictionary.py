@@ -7,7 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from omnidriver.openfoam.effective_dictionary import resolve_effective_foam_entry
+from omnidriver.openfoam.effective_dictionary import (
+    inspect_effective_foam_configuration,
+    resolve_effective_foam_entry,
+)
 
 
 HEADER = "FoamFile { version 2.0; format ascii; class dictionary; object d; }\n"
@@ -178,6 +181,45 @@ def test_environment_include_without_the_required_value_is_unresolved(tmp_path: 
     assert result.status == "unresolved"
     assert result.environment_keys == ("OMNIDRIVER_TEST_INCLUDE",)
     assert "unset environment variable" in result.message
+
+
+def test_missing_optional_include_is_recorded_as_absence_evidence(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    path = tmp_path / "d"
+    missing = tmp_path / "runtime" / "optional.cfg"
+    path.write_text(HEADER + f'#includeIfPresent "{missing}"\nvalue 3;\n')
+
+    monkeypatch.setattr(
+        "omnidriver.openfoam.effective_dictionary.shutil.which",
+        lambda _name, path: None,
+    )
+    result = resolve_effective_foam_entry(path, "value", bashrc=None, env={})
+
+    assert result.status == "runtime_unavailable"
+    assert result.absent_optional_files == (str(missing.resolve()),)
+
+
+def test_configuration_inspection_identifies_the_selected_evaluator(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    dictionary = tmp_path / "system" / "controlDict"
+    dictionary.parent.mkdir()
+    dictionary.write_text(HEADER + "value 3;\n")
+    evaluator = tmp_path / "foamDictionary"
+    evaluator.write_text("")
+    monkeypatch.setattr(
+        "omnidriver.openfoam.effective_dictionary.shutil.which",
+        lambda _name, path: str(evaluator),
+    )
+
+    evidence = inspect_effective_foam_configuration(
+        tmp_path, ("system/controlDict",), env={"PATH": str(tmp_path)},
+    )
+
+    assert evidence[0]["evaluator"] == {
+        "name": "foamDictionary", "path": str(evaluator),
+    }
 
 
 @native

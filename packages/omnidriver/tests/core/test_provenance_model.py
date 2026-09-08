@@ -112,15 +112,19 @@ def test_a_changed_plugin_identity_produces_an_actionable_diff(tmp_path: Path) -
     ]
 
 
-def test_a_file_over_the_threshold_degrades_and_says_so(tmp_path: Path, monkeypatch) -> None:
+def test_a_file_over_the_threshold_is_streamed_and_content_hashed(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
         "omnidriver.core.runtime.provenance.CONTENT_HASH_MAX_BYTES", 4
     )
     big = tmp_path / "mesh"; big.write_bytes(b"0123456789")
+    monkeypatch.setattr(
+        Path, "read_bytes",
+        lambda _path: (_ for _ in ()).throw(AssertionError("large file was read eagerly")),
+    )
     component = _component(big, tmp_path)
-    assert component.method == "metadata"
-    assert component.strength == "metadata"
-    assert component.digest is None
+    assert component.method == "sha256"
+    assert component.strength == "content"
+    assert component.digest is not None
     assert component.size == 10 and component.mtime_ns is not None
 
 
@@ -208,8 +212,8 @@ def test_the_three_component_outcomes_share_one_construction_site(tmp_path, monk
         component_for_path(p, kind="case_file", relative_to=tmp_path)
         for p in (small, big, missing)
     ]
-    assert [c.method for c in built] == ["sha256", "metadata", "unavailable"]
-    assert [c.strength for c in built] == ["content", "metadata", "unavailable"]
+    assert [c.method for c in built] == ["sha256", "sha256", "unavailable"]
+    assert [c.strength for c in built] == ["content", "content", "unavailable"]
     # Every branch populates the identity fields, not just the varying three.
     for component in built:
         assert component.kind == "case_file"
