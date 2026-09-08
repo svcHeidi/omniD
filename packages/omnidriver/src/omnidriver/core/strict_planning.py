@@ -368,7 +368,7 @@ def _run_launch_description(
     *,
     entry_kind: str | None,
     config_path: str | Path | None,
-    allow_unresolved_configuration: bool,
+    allow_unresolved_configuration: bool = False,
 ) -> dict[str, Any]:
     """Describe the modern `run --strict --entry` invocation for this plan.
 
