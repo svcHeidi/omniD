@@ -283,8 +283,8 @@
         "path": {"type": "string"},
         "role": {"type": "string", "minLength": 1},
         "origin": {"type": ["string", "null"]},
-        "method": {"enum": ["sha256", "metadata", "unavailable"]},
-        "strength": {"enum": ["content", "metadata", "unavailable"]},
+        "method": {"enum": ["sha256", "metadata", "verified_absence", "unavailable"]},
+        "strength": {"enum": ["content", "metadata", "absence", "unavailable"]},
         "digest": {
           "anyOf": [
             {"$ref": "#/$defs/sha256Digest"},
@@ -309,7 +309,7 @@
         "is_complete"
       ],
       "properties": {
-        "schema_version": {"const": "2.2-sha256-streaming-256mib"},
+        "schema_version": {"const": "2.3-sha256-streaming-256mib-verified-absence"},
         "components": {
           "type": "array",
           "items": {"$ref": "#/$defs/provenanceComponent"}

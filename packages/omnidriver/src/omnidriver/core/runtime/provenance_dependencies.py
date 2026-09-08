@@ -20,12 +20,16 @@ unavailable *optional* dependency (e.g. libelectroMechanicalModels absent in
 the maintainer's lightweight default build) is not an error, but it still
 shows up and still makes any snapshot built from it partial per I5 -- "the
 honest outcome" the plan calls for. What a resume does with that partiality
-is a later task's resume-policy question, not this module's.
+is a later task's resume-policy question, not this module's.  A declared
+``#includeIfPresent`` is different: its absence is itself a known state, not
+a failed lookup. ``component_for_verified_absence`` records that state as a
+complete witness, and rechecks it at fingerprint time to avoid a race.
 """
 
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 
 from ..plugin_capabilities import RuntimeDependency
 from .provenance import ProvenanceComponent, component_for_path
@@ -47,3 +51,49 @@ def component_for_runtime_dependency(dependency: RuntimeDependency) -> Provenanc
         relative_to=dependency.path.parent,
     )
     return replace(component, path=dependency.name)
+
+
+def component_for_verified_absence(dependency: RuntimeDependency) -> ProvenanceComponent:
+    """Fingerprint a declared optional path that inspection observed absent.
+
+    If the path appeared after closure inspection, return its ordinary content
+    component instead.  That makes the snapshot differ rather than blessing a
+    stale absence.  Any failure to verify the filesystem state remains
+    unavailable and therefore non-resumable.
+    """
+    if dependency.path is None:
+        return ProvenanceComponent(
+            kind="runtime_dependency",
+            path=dependency.name,
+            role="optional_input",
+            method="unavailable",
+            strength="unavailable",
+        )
+    path = Path(dependency.path)
+    try:
+        exists = path.exists()
+    except OSError:
+        exists = None
+    if exists is True:
+        return replace(
+            component_for_runtime_dependency(dependency), role="optional_input",
+        )
+    if exists is False:
+        return ProvenanceComponent(
+            kind="runtime_dependency",
+            path=dependency.name,
+            role="optional_input",
+            method="verified_absence",
+            strength="absence",
+            digest=None,
+            size=None,
+            mtime_ns=None,
+            link_target=None,
+        )
+    return ProvenanceComponent(
+        kind="runtime_dependency",
+        path=dependency.name,
+        role="optional_input",
+        method="unavailable",
+        strength="unavailable",
+    )

@@ -12,6 +12,8 @@ from omnidriver.core.runtime.provenance import (
     component_for_path,
     snapshot_from_components,
 )
+from omnidriver.core.runtime.provenance_dependencies import component_for_verified_absence
+from omnidriver.core.plugin_capabilities import RuntimeDependency
 
 
 def _component(path: Path, root: Path, **kw):
@@ -152,6 +154,30 @@ def test_an_unavailable_component_makes_the_snapshot_partial(tmp_path: Path) -> 
     assert snapshot_from_components(
         (_component(present, tmp_path),), workflow_digest="w", plugin_identity={},
     ).is_complete is True
+
+
+def test_verified_optional_absence_is_complete_but_appearance_changes_identity(tmp_path: Path) -> None:
+    optional = tmp_path / "runtime" / "optional.cfg"
+    dependency = RuntimeDependency(
+        name=f"effective_config:{optional}", path=optional, required=True,
+    )
+    absent = component_for_verified_absence(dependency)
+    before = snapshot_from_components(
+        (absent,), workflow_digest="w", plugin_identity={},
+    )
+    assert (absent.method, absent.strength, before.is_complete) == (
+        "verified_absence", "absence", True,
+    )
+    optional.parent.mkdir()
+    optional.write_text("value 2;\n")
+    appeared = component_for_verified_absence(dependency)
+    after = snapshot_from_components(
+        (appeared,), workflow_digest="w", plugin_identity={},
+    )
+    assert after.is_complete is True
+    assert [(diff.path, diff.change) for diff in compare(before, after)] == [
+        (dependency.name, "modified"),
+    ]
 
 
 def test_an_external_symlink_records_the_target_it_fingerprinted(tmp_path: Path) -> None:

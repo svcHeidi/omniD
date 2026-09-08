@@ -445,6 +445,7 @@ def _context_from_entry(
     config_path: str | None,
     explicit_bashrc: str | None,
     driver_context,
+    allow_unresolved_configuration: bool = False,
     stage_for_execution: bool = False,
     fresh: bool = False,
 ) -> tuple[_ExecutionContext | None, int]:
@@ -457,6 +458,7 @@ def _context_from_entry(
         overrides=overrides,
         config_path=config_path,
         explicit_bashrc=explicit_bashrc,
+        allow_unresolved_configuration=allow_unresolved_configuration,
         driver_context=driver_context,
     )
     readiness = is_launchable(
@@ -519,6 +521,7 @@ def _context_from_entry(
             overrides=staged_overrides,
             config_path=config_path,
             explicit_bashrc=explicit_bashrc,
+            allow_unresolved_configuration=allow_unresolved_configuration,
             driver_context=driver_context,
         )
         readiness = is_launchable(
@@ -543,6 +546,7 @@ def _context_from_entry(
             overrides=replan_overrides,
             config_path=config_path,
             explicit_bashrc=explicit_bashrc,
+            allow_unresolved_configuration=allow_unresolved_configuration,
             driver_context=driver_context,
         )
         replanned_readiness = is_launchable(
@@ -806,6 +810,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="For action=plan/step/run, fail on incomplete machine-readable coverage.",
     )
     parser.add_argument(
+        "--allow-unresolved-configuration",
+        action="store_true",
+        help=(
+            "Permit only an explicitly exploratory strict plan/run when declared "
+            "configuration closure is unresolved, execution-required, or its "
+            "evaluator is unavailable. Unknown evidence states still fail."
+        ),
+    )
+    parser.add_argument(
         "--environment-bashrc",
         dest="environment_bashrc",
         default=None,
@@ -996,6 +1009,10 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
             parser.error(message)
     if args.action not in {"plan", "step", "run"} and args.strict:
         parser.error("--strict is only valid with action=plan, action=step, or action=run")
+    if args.allow_unresolved_configuration and args.action not in {"plan", "step", "run"}:
+        parser.error(
+            "--allow-unresolved-configuration is only valid with action=plan, action=step, or action=run"
+        )
     if args.environment_bashrc and args.action not in {"plan", "step", "run"}:
         parser.error(
             "--environment-bashrc is only valid with action=plan, action=step, or action=run"
@@ -1012,6 +1029,8 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
         parser.error("--run-document and --entry are mutually exclusive")
     if args.run_document and (args.config or args.entry_kind or args.cases_root):
         parser.error("--config/--entry-kind/--cases-root are not valid with --run-document")
+    if args.run_document and args.allow_unresolved_configuration:
+        parser.error("--allow-unresolved-configuration requires --entry, not --run-document")
     if args.action in {"sweep-plan", "sweep-run"}:
         if args.entry:
             parser.error(f"--entry is not valid with action={args.action}; use --spec")
@@ -1106,6 +1125,7 @@ def main(argv: list[str] | None = None) -> int:
             overrides=overrides,
             config_path=args.config,
             explicit_bashrc=args.environment_bashrc,
+            allow_unresolved_configuration=args.allow_unresolved_configuration,
             driver_context=driver_context,
         )
         print(json.dumps(report.to_json(), indent=2))
@@ -1129,6 +1149,7 @@ def main(argv: list[str] | None = None) -> int:
             config_path=args.config,
             explicit_bashrc=args.environment_bashrc,
             driver_context=driver_context,
+            allow_unresolved_configuration=args.allow_unresolved_configuration,
             stage_for_execution=True,
             fresh=args.fresh,
         )
@@ -1148,6 +1169,7 @@ def main(argv: list[str] | None = None) -> int:
             config_path=args.config,
             explicit_bashrc=args.environment_bashrc,
             driver_context=driver_context,
+            allow_unresolved_configuration=args.allow_unresolved_configuration,
             stage_for_execution=True,
             fresh=args.fresh,
         )

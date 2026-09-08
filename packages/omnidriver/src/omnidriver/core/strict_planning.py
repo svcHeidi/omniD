@@ -60,6 +60,8 @@ class StrictPlanReport:
     function_object_diagnostics: tuple[StrictDiagnostic, ...] = ()
     case_dict_key_diagnostics: tuple[StrictDiagnostic, ...] = ()
     configuration_evidence: tuple[dict[str, Any], ...] = ()
+    configuration_evidence_policy: str = "strict"
+    configuration_diagnostics: tuple[StrictDiagnostic, ...] = ()
     plugin: dict[str, str] = field(default_factory=dict)
 
     def to_json(self) -> dict[str, Any]:
@@ -90,6 +92,10 @@ class StrictPlanReport:
                 asdict(d) for d in self.case_dict_key_diagnostics
             ],
             "configuration_evidence": list(self.configuration_evidence),
+            "configuration_evidence_policy": self.configuration_evidence_policy,
+            "configuration_diagnostics": [
+                asdict(diagnostic) for diagnostic in self.configuration_diagnostics
+            ],
             "plugin": self.plugin,
         }
 
@@ -310,12 +316,59 @@ def _has_error(diagnostics: tuple[StrictDiagnostic, ...]) -> bool:
     return any(diagnostic.level == "error" for diagnostic in diagnostics)
 
 
+_EXPLORABLE_CONFIGURATION_STATUSES = frozenset({
+    "unresolved", "execution_required", "runtime_unavailable",
+})
+
+
+def _configuration_evidence_diagnostics(
+    evidence: tuple[dict[str, Any], ...], *, allow_unresolved_configuration: bool,
+) -> tuple[StrictDiagnostic, ...]:
+    """Turn declared configuration-closure limits into an explicit policy.
+
+    ``inspected`` is the normal, launchable state.  The three declared
+    unresolved states are errors for a normal plan.  An operator may opt into
+    an exploratory run with ``allow_unresolved_configuration``; those exact
+    known states then remain visible as warnings and are recorded in the run
+    intent.  Unknown status strings are never made launchable by the flag:
+    that would turn a future plugin contract into an implicit bypass.
+    """
+    diagnostics: list[StrictDiagnostic] = []
+    for record in evidence:
+        dictionary = str(record.get("dictionary", "<unknown>"))
+        status = record.get("status")
+        if status == "inspected":
+            continue
+        message = str(record.get("message") or "no inspection detail was supplied")
+        if status in _EXPLORABLE_CONFIGURATION_STATUSES:
+            level = "warning" if allow_unresolved_configuration else "error"
+            suffix = (
+                "; allowed only because this plan explicitly requests an exploratory run"
+                if allow_unresolved_configuration else
+                "; use --allow-unresolved-configuration only for an explicitly exploratory run"
+            )
+            code = f"configuration_{status}"
+        else:
+            level = "error"
+            suffix = "; the plugin returned an unknown configuration evidence status"
+            code = "configuration_unknown_status"
+        diagnostics.append(_diagnostic(
+            level,
+            code,
+            f"{dictionary}: {message}{suffix}",
+            source="configuration_evidence",
+            field=dictionary,
+        ))
+    return tuple(diagnostics)
+
+
 def _run_launch_description(
     entry: str,
     context,
     *,
     entry_kind: str | None,
     config_path: str | Path | None,
+    allow_unresolved_configuration: bool,
 ) -> dict[str, Any]:
     """Describe the modern `run --strict --entry` invocation for this plan.
 
@@ -332,6 +385,8 @@ def _run_launch_description(
         command.extend(["--entry-kind", entry_kind])
     if config_path is not None:
         command.extend(["--config", str(config_path)])
+    if allow_unresolved_configuration:
+        command.append("--allow-unresolved-configuration")
     return {
         "action": "run",
         "command": command,
@@ -350,6 +405,7 @@ def strict_plan(
     overrides: dict[str, Any] | None = None,
     config_path: str | Path | None = None,
     explicit_bashrc: str | Path | None = None,
+    allow_unresolved_configuration: bool = False,
     driver_context: "DriverContext",
 ) -> StrictPlanReport:
     """Build a non-mutating strict simulation plan report."""
@@ -361,7 +417,11 @@ def strict_plan(
     )
     execution_context = resolve_execution_context(spec)
     launch = _run_launch_description(
-        entry, execution_context, entry_kind=entry_kind, config_path=config_path,
+        entry,
+        execution_context,
+        entry_kind=entry_kind,
+        config_path=config_path,
+        allow_unresolved_configuration=allow_unresolved_configuration,
     )
     artifacts = tuple(
         predict_data_artifacts(
@@ -405,6 +465,18 @@ def strict_plan(
         ),
         driver_context=driver_context,
     )
+    configuration_evidence = driver_context.capabilities.override_scopes.inspect(
+        case_root=Path(spec.case_root),
+        driver_context=driver_context,
+        execution_env=dict(os.environ),
+    )
+    configuration_diagnostics = _configuration_evidence_diagnostics(
+        configuration_evidence,
+        allow_unresolved_configuration=allow_unresolved_configuration,
+    )
+    configuration_evidence_policy = (
+        "exploratory" if allow_unresolved_configuration else "strict"
+    )
     simulation_audit, generation_diagnostics, readiness_score = _build_simulation_audit(
         spec=spec,
         driver_context=driver_context,
@@ -428,6 +500,7 @@ def strict_plan(
         + catalog_diagnostics
         + artifact_diagnostics
         + mesh_diagnostics
+        + configuration_diagnostics
     )
     # The plugin owns solver capabilities and model-specific field exposure.
     # Keep the established payload shape for cardiacFoam compatibility while
@@ -446,11 +519,6 @@ def strict_plan(
         ),
         dict_relpaths=_owned_dict_relpaths(spec, driver_context),
     )
-    configuration_evidence = driver_context.capabilities.override_scopes.inspect(
-        case_root=Path(spec.case_root),
-        driver_context=driver_context,
-        execution_env=dict(os.environ),
-    )
     # Field and case-key diagnostics are warn-only: reported (in
     # all_diagnostics) but never part of plan_diagnostics, so neither a
     # sampled-field nor an uncatalogued-key warning can fail a plan. The
@@ -468,6 +536,14 @@ def strict_plan(
         "status": "failed" if failed else "ok",
         "diagnostics": [asdict(diagnostic) for diagnostic in all_diagnostics],
     }
+    run_document.intent["configuration_evidence_policy"] = configuration_evidence_policy
+    unresolved_dictionaries = [
+        str(record.get("dictionary", "<unknown>"))
+        for record in configuration_evidence
+        if record.get("status") != "inspected"
+    ]
+    if unresolved_dictionaries:
+        run_document.intent["unresolved_configuration_dictionaries"] = unresolved_dictionaries
     return StrictPlanReport(
         status="failed" if failed else "ok",
         entry=entry,
@@ -495,5 +571,7 @@ def strict_plan(
         function_object_diagnostics=function_object_diagnostics,
         case_dict_key_diagnostics=case_dict_key_diagnostics,
         configuration_evidence=configuration_evidence,
+        configuration_evidence_policy=configuration_evidence_policy,
+        configuration_diagnostics=configuration_diagnostics,
         plugin=driver_context.identity.to_json(),
     )

@@ -7,6 +7,18 @@ from omnidriver.core.strict_planning import strict_plan
 from plugins.neutral_environment_plugin import _GenericOpenFOAMPluginWithNeutralEnvironment
 
 
+class _UnresolvedConfigurationPlugin(_GenericOpenFOAMPluginWithNeutralEnvironment):
+    def inspect_effective_configuration(self, *, case_root, execution_env=None):
+        del case_root, execution_env
+        return ({
+            "dictionary": "system/controlDict",
+            "status": "unresolved",
+            "message": "unsupported #includeFunc requires a runtime closure",
+            "inspected_files": [],
+            "absent_optional_files": [],
+        },)
+
+
 def test_plain_allrun_case_plans_without_cardiac_dictionaries(tmp_path: Path) -> None:
     case_root = tmp_path / "plainOpenFoamCase"
     case_root.mkdir()
@@ -84,6 +96,40 @@ def test_plan_reports_external_configuration_closure_without_mutating_case(tmp_p
         if item["dictionary"] == "system/controlDict"
     )
     assert str(external.resolve()) in evidence["inspected_files"]
+
+
+def test_unresolved_configuration_blocks_normal_plan_but_is_explicitly_explorable(
+    tmp_path: Path,
+) -> None:
+    case_root = tmp_path / "plainOpenFoamCase"
+    case_root.mkdir()
+    (case_root / "Allrun").write_text("#!/bin/sh\nexit 0\n")
+    context = driver_context(_UnresolvedConfigurationPlugin(), source="test")
+
+    blocked = strict_plan(
+        "plainOpenFoamCase", overrides={"cases_root": str(tmp_path)},
+        driver_context=context,
+    )
+    assert blocked.status == "failed"
+    assert blocked.configuration_evidence_policy == "strict"
+    assert [item.code for item in blocked.configuration_diagnostics] == [
+        "configuration_unresolved",
+    ]
+
+    exploratory = strict_plan(
+        "plainOpenFoamCase", overrides={"cases_root": str(tmp_path)},
+        allow_unresolved_configuration=True, driver_context=context,
+    )
+    assert exploratory.status == "ok"
+    assert exploratory.configuration_evidence_policy == "exploratory"
+    assert exploratory.configuration_diagnostics[0].level == "warning"
+    assert "--allow-unresolved-configuration" in exploratory.launch["command"]
+    assert exploratory.run_document is not None
+    assert exploratory.run_document.intent == {
+        "source": "strict_plan",
+        "configuration_evidence_policy": "exploratory",
+        "unresolved_configuration_dictionaries": ["system/controlDict"],
+    }
 
 
 def test_make_spec_accepts_generic_path_addressed_overrides_not_cardiac_kwargs() -> None:
@@ -323,4 +369,3 @@ def test_make_generic_case_spec_applies_no_solver_mutation(tmp_path: Path) -> No
         spec.apply_case(spec.case_root, spec.build_cases()[0])
 
     assert calls == []
-

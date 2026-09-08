@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
-SCHEMA_VERSION = "2.2-sha256-streaming-256mib"
+SCHEMA_VERSION = "2.3-sha256-streaming-256mib-verified-absence"
 """Encodes the hashing and read policy, not just the field layout.
 
 Large required inputs use the same SHA-256 content identity as small inputs,
@@ -28,8 +28,10 @@ class ProvenanceComponent:
     ``role`` drives severity and defaults to ``"required_input"``. ``origin``
     is diagnostic only. ``strength`` is honest about how much the fingerprint
     actually proves: ``"content"`` (sha256 of the bytes), ``"metadata"``
-    (legacy weak evidence), or ``"unavailable"`` (could not be stat'd or
-    read at all).
+    (legacy weak evidence), ``"verified_absence"`` (a declared optional
+    input was observed absent), or ``"unavailable"`` (could not be stat'd
+    or read at all).  A verified absence is complete identity evidence: a
+    later appearance changes that component and invalidates resume.
     """
 
     kind: str
@@ -243,7 +245,13 @@ def snapshot_from_components(
     construction order.
     """
     components = tuple(components)
-    is_complete = all(component.strength == "content" for component in components)
+    # An optional path that was successfully observed *absent* is as complete
+    # an identity witness as a content hash.  It is intentionally not folded
+    # into ``unavailable``: unchanged absence can resume, while a later file
+    # appearance changes the same component from absence to content.
+    is_complete = all(
+        component.strength in {"content", "absence"} for component in components
+    )
     aggregate_digest = _compute_aggregate_digest(components, workflow_digest, plugin_identity)
     return ProvenanceSnapshot(
         schema_version=SCHEMA_VERSION,

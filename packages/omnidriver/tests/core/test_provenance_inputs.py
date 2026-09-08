@@ -487,7 +487,11 @@ def test_external_optional_include_appearance_changes_input_identity(tmp_path: P
     )
 
     base = f"effective_config:{external.resolve()}"
-    assert f"{base}:optional-absent" in _paths(absent, kind="runtime_dependency")
+    absent_witness = _by_path(absent, base)
+    assert (absent_witness.method, absent_witness.strength, absent_witness.role) == (
+        "verified_absence", "absence", "optional_input",
+    )
+    assert _by_path(present, base).strength == "content"
     assert base in _paths(present, kind="runtime_dependency")
 
 

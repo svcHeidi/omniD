@@ -52,7 +52,10 @@ from typing import Any, Iterable, Mapping, TYPE_CHECKING
 from ..plugin_capabilities import ResolvedInput, RuntimeDependency
 from ..plugin_profile import decomposition_dirname_prefix
 from .provenance import ProvenanceComponent, component_for_path
-from .provenance_dependencies import component_for_runtime_dependency
+from .provenance_dependencies import (
+    component_for_runtime_dependency,
+    component_for_verified_absence,
+)
 from .workflow import _MPI_LAUNCHERS, _unwrap_mpi_program, case_script_commands
 from .workflow_runner import _resolve_case_cwd, _resolve_command
 
@@ -368,6 +371,7 @@ def enumerate_case_inputs(
         execution_env=environment,
     )
     root_resolved = case_root.resolve()
+    verified_optional_absences: set[str] = set()
     for record in inspection:
         dictionary = str(record.get("dictionary", "<unknown>"))
         evaluator = record.get("evaluator")
@@ -400,14 +404,20 @@ def enumerate_case_inputs(
                     pass
                 else:
                     # Case-local files are already fingerprinted by the main
-                    # case walk (and an appearing optional local include will
-                    # therefore add a normal case-file component).
-                    continue
-                suffix = ":optional-absent" if absent else ""
-                name = f"effective_config:{path.resolve()}{suffix}"
+                    # case walk.  An absent optional is the exception: it
+                    # needs its own stable witness so a later local file
+                    # appearance cannot look like an unrelated addition.
+                    if not absent:
+                        continue
+                name = f"effective_config:{path.resolve()}"
                 dependencies[name] = RuntimeDependency(name=name, path=path, required=True)
+                if absent:
+                    verified_optional_absences.add(name)
 
     for dependency in dependencies.values():
-        add(component_for_runtime_dependency(dependency))
+        if dependency.name in verified_optional_absences:
+            add(component_for_verified_absence(dependency))
+        else:
+            add(component_for_runtime_dependency(dependency))
 
     return tuple(sorted(components.values(), key=lambda component: (component.kind, component.path)))
