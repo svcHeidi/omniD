@@ -19,6 +19,8 @@ from selected_cardiacfoam_fixture import (
     REGRESSION_SCOPE_ENV,
     SOURCE_REVISION_ENV,
     SOURCE_ROOT_ENV,
+    load_case_input_manifest,
+    materialize_case_inputs,
     selected_runtime_from_environment,
     selected_source_from_environment,
 )
@@ -36,6 +38,9 @@ def _selected_checkout(tmp_path: Path) -> tuple[Path, str]:
     (root / "tutorials").mkdir()
     (root / "src" / "model.C").write_text("// selected source\n")
     (root / "tutorials" / "case.foam").write_text("// selected tutorial\n")
+    unmarked = root / "tutorials" / "unmarkedCase" / "system" / "controlDict"
+    unmarked.parent.mkdir(parents=True)
+    unmarked.write_text("endTime 1;\n")
     _git(root.parent, "init", str(root))
     _git(root, "config", "user.email", "fixtures@example.invalid")
     _git(root, "config", "user.name", "Fixture test")
@@ -183,3 +188,46 @@ def test_native_fixture_accepts_only_prevalidated_explicit_locations(tmp_path: P
     assert dict(selected.openfoam_identity)["WM_PROJECT_VERSION"] == "v2412"
     assert selected.build_manifest_digest.startswith("sha256:")
     assert selected.regression_scope == "single-cell-smoke"
+
+
+def test_committed_manifest_stages_an_unmarked_case_without_source_mutation(
+    tmp_path: Path,
+) -> None:
+    root, revision = _selected_checkout(tmp_path)
+    committed = (root / "tutorials" / "unmarkedCase" / "system" / "controlDict").read_bytes()
+    source = selected_source_from_environment(_source_environment(root, revision))
+    # The selected worktree may evolve, but committed mode must read the
+    # named revision rather than silently treating it as a new baseline.
+    (root / "tutorials" / "unmarkedCase" / "system" / "controlDict").write_text(
+        "endTime 99;\n"
+    )
+    bashrc, manifest, case_manifest, output_root = _native_inputs(tmp_path)
+    case_manifest.write_text(json.dumps({
+        "schema_version": 1,
+        "case_id": "unmarked-single-cell",
+        "inputs": [{
+            "source": "tutorials/unmarkedCase/system/controlDict",
+            "destination": "case/system/controlDict",
+            "sha256": hashlib.sha256(committed).hexdigest(),
+        }],
+    }))
+    runtime = selected_runtime_from_environment(
+        source,
+        repository_root=tmp_path / "omnidriver",
+        environment={
+            OPENFOAM_BASHRC_ENV: str(bashrc),
+            BACKEND_ENV: "lightweight",
+            BUILD_MANIFEST_ENV: str(manifest),
+            OUTPUT_ROOT_ENV: str(output_root),
+            CASE_MANIFEST_ENV: str(case_manifest),
+            REGRESSION_SCOPE_ENV: "single-cell-smoke",
+        },
+    )
+
+    staged = materialize_case_inputs(runtime, load_case_input_manifest(runtime))
+
+    assert staged.root.parent == output_root
+    assert staged.input_policy == "committed"
+    assert staged.input_digest.startswith("sha256:")
+    assert (staged.root / "case/system/controlDict").read_bytes() == committed
+    assert (root / "tutorials" / "unmarkedCase" / "system" / "controlDict").read_text() == "endTime 99;\n"

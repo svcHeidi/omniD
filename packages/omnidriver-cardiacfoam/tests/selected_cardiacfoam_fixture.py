@@ -9,11 +9,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import json
 import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
+import tempfile
 from typing import Mapping
 
 
@@ -27,6 +29,8 @@ CASE_MANIFEST_ENV = "OMNIDRIVER_CARDIACFOAM_CASE_MANIFEST"
 REGRESSION_SCOPE_ENV = "OMNIDRIVER_CARDIACFOAM_REGRESSION_SCOPE"
 
 _REVISION = re.compile(r"[0-9a-f]{40}")
+_SHA256 = re.compile(r"[0-9a-f]{64}")
+_CASE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 _NATIVE_INPUTS = (
     OPENFOAM_BASHRC_ENV,
     BACKEND_ENV,
@@ -62,6 +66,29 @@ class SelectedRuntime:
     output_root: Path
     case_manifest: Path
     regression_scope: str
+
+
+@dataclass(frozen=True)
+class CaseInput:
+    source: Path
+    destination: Path
+    sha256: str
+
+
+@dataclass(frozen=True)
+class CaseInputManifest:
+    case_id: str
+    input_policy: str
+    inputs: tuple[CaseInput, ...]
+
+
+@dataclass(frozen=True)
+class StagedInputs:
+    root: Path
+    case_id: str
+    input_policy: str
+    input_digest: str
+    files: tuple[tuple[str, str], ...]
 
 
 def selected_source_from_environment(
@@ -195,6 +222,91 @@ def selected_runtime_from_environment(
     )
 
 
+def load_case_input_manifest(runtime: SelectedRuntime) -> CaseInputManifest:
+    """Read a named input manifest without consulting tutorial markers."""
+    try:
+        payload = json.loads(runtime.case_manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise FixtureInputError(f"Invalid case input manifest {runtime.case_manifest}: {exc}") from exc
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+        raise FixtureInputError("Case input manifest requires schema_version 1")
+    case_id = payload.get("case_id")
+    if not isinstance(case_id, str) or not _CASE_ID.fullmatch(case_id):
+        raise FixtureInputError("Case input manifest requires a safe case_id")
+    input_policy = payload.get("input_policy", "committed")
+    if input_policy not in {"committed", "candidate"}:
+        raise FixtureInputError("Case input manifest input_policy must be committed or candidate")
+    raw_inputs = payload.get("inputs")
+    if not isinstance(raw_inputs, list) or not raw_inputs:
+        raise FixtureInputError("Case input manifest requires a non-empty inputs list")
+
+    inputs: list[CaseInput] = []
+    destinations: set[Path] = set()
+    for index, item in enumerate(raw_inputs):
+        if not isinstance(item, dict):
+            raise FixtureInputError(f"Case input {index} must be an object")
+        source = _relative_manifest_path(item.get("source"), f"inputs[{index}].source")
+        destination = _relative_manifest_path(
+            item.get("destination"), f"inputs[{index}].destination"
+        )
+        digest = item.get("sha256")
+        if not isinstance(digest, str) or not _SHA256.fullmatch(digest):
+            raise FixtureInputError(f"Case input {index} requires a sha256 digest")
+        if destination in destinations:
+            raise FixtureInputError(f"Case input manifest repeats destination {destination}")
+        destinations.add(destination)
+        inputs.append(CaseInput(source=source, destination=destination, sha256=digest))
+    return CaseInputManifest(case_id=case_id, input_policy=input_policy, inputs=tuple(inputs))
+
+
+def materialize_case_inputs(
+    runtime: SelectedRuntime, manifest: CaseInputManifest
+) -> StagedInputs:
+    """Materialize declared bytes into one unique child of the output root.
+
+    Committed mode reads bytes with git show at the selected revision.
+    Candidate mode is explicit in the named manifest and stages only declared
+    current-worktree files.  Neither mode discovers tutorials or writes source.
+    """
+    stage_root = Path(
+        tempfile.mkdtemp(prefix=f"omnidriver-{manifest.case_id}-", dir=runtime.output_root)
+    )
+    files: list[tuple[str, str]] = []
+    for item in manifest.inputs:
+        if manifest.input_policy == "committed":
+            content = _git_bytes(
+                runtime.source.root,
+                "show",
+                f"{runtime.source.revision}:{item.source.as_posix()}",
+            )
+        else:
+            candidate = runtime.source.root / item.source
+            if not candidate.is_file():
+                raise FixtureInputError(f"Candidate input does not exist: {item.source}")
+            content = candidate.read_bytes()
+        actual_digest = hashlib.sha256(content).hexdigest()
+        if actual_digest != item.sha256:
+            raise FixtureInputError(
+                f"Declared digest for {item.source} does not match selected {manifest.input_policy} bytes"
+            )
+        target = stage_root / item.destination
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
+        files.append((item.destination.as_posix(), "sha256:" + actual_digest))
+    digest_payload = json.dumps(
+        {"case_id": manifest.case_id, "input_policy": manifest.input_policy, "files": files},
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    return StagedInputs(
+        root=stage_root,
+        case_id=manifest.case_id,
+        input_policy=manifest.input_policy,
+        input_digest="sha256:" + hashlib.sha256(digest_payload).hexdigest(),
+        files=tuple(files),
+    )
+
+
 def _absolute_existing_directory(name: str, value: str) -> Path:
     path = Path(value).expanduser()
     if not path.is_absolute() or not path.is_dir():
@@ -207,6 +319,15 @@ def _absolute_existing_file(name: str, value: str) -> Path:
     if not path.is_absolute() or not path.is_file():
         raise FixtureInputError(f"{name} must be an existing absolute file: {value!r}")
     return path.resolve()
+
+
+def _relative_manifest_path(value: object, label: str) -> Path:
+    if not isinstance(value, str) or not value or "\\" in value:
+        raise FixtureInputError(f"{label} must be a non-empty forward-slash relative path")
+    path = Path(value)
+    if path.is_absolute() or path == Path(".") or ".." in path.parts:
+        raise FixtureInputError(f"{label} must stay below the selected fixture root: {value!r}")
+    return path
 
 
 def _git(root: Path, *args: str) -> str:
@@ -222,6 +343,15 @@ def _git_exit_code(root: Path, *args: str) -> int:
     return subprocess.run(
         ["git", "-C", str(root), *args], capture_output=True, text=True
     ).returncode
+
+
+def _git_bytes(root: Path, *args: str) -> bytes:
+    result = subprocess.run(["git", "-C", str(root), *args], capture_output=True)
+    if result.returncode:
+        raise FixtureInputError(
+            result.stderr.decode(errors="replace").strip() or f"git {' '.join(args)} failed"
+        )
+    return result.stdout
 
 
 def _source_openfoam_environment(bashrc: Path) -> dict[str, str]:
