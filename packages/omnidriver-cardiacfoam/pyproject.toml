@@ -32,6 +32,7 @@ post = [
 # reads the root. A marker registered in only one place warns in the other.
 markers = [
     "integration: tests requiring a real cardiacFoam binary (skipped by default in CI)",
+    "slow: builds all three wheels in a throwaway venv; minutes, not seconds",
 ]
 testpaths = ["tests"]
 pythonpath = ["tests"]

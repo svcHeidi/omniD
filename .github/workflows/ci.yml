@@ -83,7 +83,32 @@ jobs:
                       pytest
 
       - name: Run tests
-        run: python -m pytest packages/omnidriver-cardiacfoam/tests -q
+        run: python -m pytest packages/omnidriver-cardiacfoam/tests -m "not slow" -q
+
+  test-all-package-wheels:
+    name: test-all-package-wheels (py3.11)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            packages/omnidriver/pyproject.toml
+            packages/omnidriver-openfoam/pyproject.toml
+            packages/omnidriver-cardiacfoam/pyproject.toml
+
+      - name: Install test collection dependencies
+        run: |
+          pip install -e packages/omnidriver \
+                      -e packages/omnidriver-openfoam \
+                      -e packages/omnidriver-cardiacfoam \
+                      pytest
+
+      - name: Build, install, and invoke all package wheels
+        run: python -m pytest packages/omnidriver-cardiacfoam/tests/test_all_packages_wheel_install.py -q
 
   static-gates:
     name: static-gates
