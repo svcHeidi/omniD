@@ -160,6 +160,7 @@ monodomainSolverCoeffs
                 type manufacturedPseudoECGVerifier;
                 enabled false;
                 dimension "3D";
+                anisotropic no;
                 referenceQuadratureOrder 1;
                 checkQuadratureOrders (1);
             }

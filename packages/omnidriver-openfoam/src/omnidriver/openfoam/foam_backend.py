@@ -33,31 +33,32 @@ def coerce_value(value: Any) -> Any:
 
     Override values arrive from ``sweep.json`` and the CLI as strings, but
     foamlib is type-strict on write: it refuses a ``str`` that would be read
-    back as something else (``"1e-6"``, ``"0.0"``, ``"uniform 0"`` all raise
-    ``ValueError``). Anything that is not clearly numeric or boolean is left as
-    a string and allowed to fail loudly in foamlib -- that refusal is a feature,
-    because it is what rejects an injected ``"1e-6;  rogue  1"``.
+    back as something else. Two classes of this, both measured directly
+    against 1.7.5:
 
-    One class was left unhandled by the above: an OpenFOAM dimensioned
-    literal (``"[-1 -3 3 0 0 2 0] (0.1 ... )"`` for a dimensioned tensor like
-    ``conductivity``, or ``"[0 -1 0 0 0 0 0] 3"`` for a dimensioned scalar
-    like ``chi``/``cm``) or a bare vector/list (``"(0.001 0.002 0.006)"``).
+    - A dimensioned literal (``"[-1 -3 3 0 0 2 0] (0.1 ... )"`` for a
+      dimensioned tensor like ``conductivity``, ``"[0 -1 0 0 0 0 0] 3"`` for
+      a dimensioned scalar like ``chi``/``cm``) or a bare vector/list
+      (``"(0.001 0.002 0.006)"``).
+    - A bare multi-word scheme spec (``"Gauss linear"``, ``"cellLimited
+      Gauss linear 1"``) -- ordinary, unquoted OpenFOAM syntax for
+      ``gradSchemes``/``divSchemes``/etc., which foamlib parses via
+      ``loads`` into a tuple of tokens rather than a single value.
+
     Left as a plain string, foamlib parses the string's *content*, recognises
-    it would read back as a ``Dimensioned``/array, and refuses to store a
-    ``str`` there -- the same type-strictness described above, just with no
-    branch here to satisfy it. Measured directly against 1.7.5.
+    it would read back as something structured, and refuses to store a
+    ``str`` there.
 
-    Only tokens that start with ``[`` (a dimension set) or ``(`` (a bare
-    vector/list) are attempted here, via ``FoamFile.loads``, foamlib's own
-    deserializer -- so the exact grammar this project already depends on
-    elsewhere is what decides the type, not a hand-rolled parser that could
-    disagree with it on an edge case. Deliberately scoped to that leading-
-    character check rather than "try loads() on anything left over": a
-    bare-word token like ``"uniform 0"`` also parses via ``loads()`` (to
-    ``0.0``), which would silently change today's documented "fails loudly"
-    behaviour for that shape. Restricting to `[`/`(` leaves every other
-    unhandled string exactly as before -- this only ever adds a type for the
-    dimensioned-literal/bare-list shapes that previously had none.
+    Everything that reaches this point (not int/float/bool) is attempted via
+    ``FoamFile.loads``, foamlib's own deserializer -- so the exact grammar
+    this project already depends on elsewhere decides the type, not a
+    hand-rolled parser that could disagree with it on an edge case. A token
+    that fails to parse, or parses back to a plain ``str`` (an ordinary bare
+    word like ``"PCG"`` or a path like ``"constant/purkinjeGraph"``), is
+    returned unchanged -- this only ever adds a type for a value class that
+    previously had none, mirroring the rejection of a genuinely malformed
+    override (``"1e-6;  rogue  1"``) that already happens for any value
+    type, before this function is even reached.
     """
     if not isinstance(value, str):
         return value
@@ -78,13 +79,12 @@ def coerce_value(value: Any) -> Any:
     except ValueError:
         pass
 
-    if token.startswith("[") or token.startswith("("):
-        try:
-            parsed = FoamFile.loads(token)
-        except Exception:
-            return token
-        if not isinstance(parsed, str):
-            return parsed
+    try:
+        parsed = FoamFile.loads(token)
+    except Exception:
+        return token
+    if not isinstance(parsed, str):
+        return parsed
 
     return token
 

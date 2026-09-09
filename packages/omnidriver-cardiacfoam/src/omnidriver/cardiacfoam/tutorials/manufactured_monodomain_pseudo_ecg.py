@@ -259,6 +259,10 @@ def _apply_case(
                 f"{ecg_scope}.ecgSolver": "pseudoECG",
                 f"{ecg_scope}.verificationModel.enabled": True,
                 f"{ecg_scope}.verificationModel.dimension": f'"{dimension}"',
+                f"{ecg_scope}.verificationModel.anisotropic": (
+                    verification_model_type
+                    == "manufacturedAnisotropicMonodomainVerifier"
+                ),
                 f"{ecg_scope}.verificationModel.referenceQuadratureOrder": int(
                     ecg_reference_quadrature_order
                 ),

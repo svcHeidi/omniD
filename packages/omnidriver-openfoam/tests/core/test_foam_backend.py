@@ -60,12 +60,17 @@ def test_coerce_value_parses_bare_vector():
     assert list(result) == pytest.approx([0.001, 0.002, 0.006])
 
 
-def test_coerce_value_scoped_to_bracket_and_paren_leading_tokens():
-    # "uniform 0" also parses via FoamFile.loads (to 0.0), but it does not
-    # start with '[' or '(', so it must stay untouched -- this is the
-    # documented "fails loudly in foamlib" case the docstring calls out,
-    # deliberately left unchanged by the [ / ( scoping.
-    assert foam_backend.coerce_value("uniform 0") == "uniform 0"
+def test_coerce_value_parses_bare_multiword_scheme_spec():
+    result = foam_backend.coerce_value("Gauss linear")
+    assert result == ("Gauss", "linear")
+
+
+def test_coerce_value_parses_uniform_field_shorthand():
+    # foamlib recognises "uniform <value>" as OpenFOAM's field-uniform-value
+    # shorthand and collapses it straight to the scalar -- a deliberate,
+    # accepted behaviour change once coerce_value stopped scoping to a
+    # leading '['/'(' check (see module docstring).
+    assert foam_backend.coerce_value("uniform 0") == 0.0
 
 
 def test_coerce_value_falls_back_to_string_on_unparseable_bracket_token():
@@ -109,6 +114,22 @@ def test_update_entry_still_uses_foamlib_for_dimensioned_scalar(tmp_path):
         path, "chi", "[0 -1 0 0 0 0 0] 5", scope=["monodomainSolverCoeffs"]
     )
     assert "chi    [0 -1 0 0 0 0 0] 5.0;" in path.read_text()
+
+
+def test_update_entry_writes_bare_multiword_scheme_spec(tmp_path):
+    # Regression test for a real materialization failure across every
+    # gauss_linear sweep case: "cannot write value 'Gauss linear' to
+    # 'default': invalid string: 'Gauss linear'". Confirmed directly against
+    # the real solver before this fix: writes clean, foamDictionary reads it
+    # back as the same two tokens.
+    path = _dict(
+        tmp_path,
+        "gradSchemes\n{\n    default leastSquares;\n}\n",
+    )
+    foam_backend.update_entry(
+        path, "default", "Gauss linear", scope=["gradSchemes"]
+    )
+    assert "default    Gauss linear;" in path.read_text()
 
 
 def test_update_entry_raises_when_multicomponent_dimensioned_key_missing(tmp_path):
