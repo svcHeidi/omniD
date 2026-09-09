@@ -4,6 +4,12 @@ Updated: 2026-09-08
 
 **Roadmap review:** [September 8 reassessment](roadmap-audit-2026-09-08.md) audits HEAD `bea21d4` and supersedes the priority order below. The baseline paragraph below identifies the start of the latest implementation batch, not current HEAD.
 
+## Current cardiac reconciliation scope — 2026-09-09
+
+The historical implementation log below is not the current cardiac task list. See [the reconciliation plan](CARDIACFOAM_RECONCILIATION_PLAN.md): T0 and T2–T5 complete; T1 partial with T1b pending; H1 installation-harness prerequisite pending; T6 contract drafted but fixture pending; T7 reproducible integration pending. Next: T1b + H1, then T6, then T7. This documentation update does not claim those implementation tasks are done.
+
+Driver tests establish configuration/execution/reporting correctness. Solver regressions retain scientific assertions and are reused by integration tests; broad tutorial-content snapshots do not belong in ordinary Core tests. Preserve manual solver evidence separately from driver-native acceptance.
+
 ## Committed baseline
 
 `39c4873 Enforce remediation transaction transitions` is the latest committed

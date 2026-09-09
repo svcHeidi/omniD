@@ -92,3 +92,12 @@ Core retains raw process-evidence capture and generic artifact matching, freshne
 5. **Reconcile catalogs in parallel where ownership is clear.** Do not block confirmed cardiac catalog fixes on completing every mixed-hook extraction. Every incoming record must retain source evidence, verification/support status, activation conditions and owning adapter; distinguish compiled defaults, examples and recommendations. Defer only changes that depend on an unresolved contract boundary.
 
 The standing structural gates are `test_plugin_dependency_boundary.py` (no cardiac import from Core and no direct plugin bypass), `test_capability_seam_documentation.py` (declared hooks and actual consumers), and `scripts/check-import-boundaries.py`. The next extraction must add a fixture-level gate for the OpenFOAM staging declaration and retain the existing transaction and staging regressions above.
+
+
+## Test ownership clarification — 2026-09-09
+
+DriverFOAM owns orchestration and adapter-contract tests. It integrates and reports solver-owned scientific regressions; it does not define a second numerical oracle or freeze evolving tutorial content. Tutorial defaults/descriptions are authored solver content to expose and preserve unless an explicit operation requests a change. A declared adapter default or compatibility rule can still have a focused test against evidence from its supported source revision.
+
+Classify tests by assertion owner and required resources independently. Core tests use neutral fixtures; OpenFOAM tests prove format/runtime behavior; cardiac adapter tests prove catalog and configuration semantics. Source checks use an explicit checkout. Native driver integration verifies effective inputs/commands and invokes the solver's existing regression checker. Scientific metrics/tolerances and study baselines retain their solver/study owners even if Python runs the checker.
+
+The immediate implementation order and T1b snapshot replacements are recorded in [the reconciliation plan](CARDIACFOAM_RECONCILIATION_PLAN.md) and [test ownership map](HISTORICAL_TEST_OWNERSHIP_MAP_2026-09-09.md).

@@ -4,7 +4,7 @@
 
 ## Reference identities
 
-- Current omniD: `01a1e24018b0e054656c395d3b261b1f1f87ee15`.
+- Reconciliation baseline: `01a1e24018b0e054656c395d3b261b1f1f87ee15`. Test-scope reassessment inspected HEAD `178f42a` (2026-09-09).
 - User-selected solver reference: `/Users/simaocastro/noFrontendCardiacFoam_minor_errors`, current gold `HEAD` at `c3a852e957d23077ce1b2712331dfe45489c4386`.
 - Historical driver reference: commit `3c6b5e1640ef0f22e1099bf91bca1fbce2b94c92`, path `applications/scripts/driverFoam/` in that repository. Its child `aa47e7d2` removed driverFOAM as an external add-on. Current solver HEAD therefore cannot supply that directory directly.
 - The solver checkout has a modified solids4foam submodule and untracked files. Record these separately; a parent commit does not identify that entire working tree. The older sibling `cardiacFoam` is not the selected migration reference.
@@ -22,7 +22,9 @@ task below. A task may not broaden its scope without a new row in the delta
 audit. Core mechanics (transactions, evidence, execution policy) are not in
 scope for catalog tasks.
 
-**Progress:** T0–T5 are complete. T6–T7 remain pending.
+**Progress (scope correction, 2026-09-09):** T0 and T2–T5 are complete. T1 has an initial map but needs T1b below; it is not complete. T6 has a contract draft, not an implemented fixture. T7 reproducible driver/native acceptance remains pending; manual solver evidence does not close it.
+
+**Test scope:** driverFOAM owns orchestration and adapter-contract tests. It integrates and reports solver-owned scientific regressions; it does not independently define scientific correctness or freeze evolving tutorial content. Studies own their experimental protocols and paper baselines. Exact effective inputs and commands must be verified separately from numerical regression outcomes: passing a metric tolerance does not prove every requested override was applied.
 
 | ID | Owner | Work and bounded output | Depends on | Acceptance gate |
 | --- | --- | --- | --- | --- |
@@ -32,15 +34,15 @@ scope for catalog tasks.
 | T3 | Cardiac adapter | Add the `personalizedTemplates` subcatalog, fixture, and tests for valid configuration and manufactured-ECG incompatibility. | T0 | All nested keys map to selected source reads; invalid manufactured combination is rejected before execution. |
 | T4 | Cardiac adapter | Audit `batchedIntegrator` per active-tension model, including Rush--Larsen support; update applicability only for verified models. | T0 | Runtime-selection/build evidence and a model-specific applicability test justify every allowed combination. |
 | T5 | Cardiac adapter | Decide and document whether legacy ECG `verificationModel.*` is supported as an alias or intentionally rejected; test that decision. Preserve the existing bath/bidomain path correction. | T0 | One explicit compatibility policy; no restoration of broad `verificationModel.alpha/k` predicates without source evidence. |
-| T6 | Core + OpenFOAM boundary | Define the explicit selected-source/build fixture contract: revision, submodule state, backend, environment, isolated inputs and output root. | T1–T5 | Required integration test fails clearly when inputs are unavailable; it never silently discovers another checkout. |
-| T7 | Cardiac acceptance | Run a disposable short single-cell case and small tissue case using the selected solver's committed scripts. Record solver and driver evidence separately. | T6 | Report applicability/skips, output size, bounded diagnostics, solver result, and driver equivalence. |
+| T1b | Test owners across packages | Classify assertions by owner and required resources. Replace broad tutorial-characterization hashes in Core with neutral structural tests and small adapter configuration fixtures; reclassify manufactured-tet tests by actual behavior. | T1, T2–T5 | Each removed snapshot assertion has a behavioral replacement or an explicit retirement rationale; legitimate tutorial edits do not fail unrelated Core tests. |
+| H1 | Packaging / test harness | Choose explicit installation of the three distributions or a declared uv workspace; reconcile the stale lock deliberately. | None; parallel with T1b | A fresh environment imports and invokes the intended installed packages without accidental checkout imports; retain separate core-only and wheel gates. |
+| T6 | Cardiac integration harness using Core/OpenFOAM contracts | Implement separate selected-source and selected-runtime fixtures with explicit revision, inputs, build identity and disposable output. | T1b, H1, T2–T5 | Source-only checks require no solver. Explicitly requested native checks fail on missing/invalid prerequisites; no host checkout discovery or source mutation. |
+| T7 | Driver integration; solver owns numerical oracle | Run a disposable short single-cell and small tissue case through the driver using the selected solver scripts and regression checker. Compare direct/reference and driven execution where applicable. | T6 | Prove intended effective inputs/commands and truthful result reporting separately from the solver regression result. Record applicability, storage and bounded diagnostics. Do not duplicate numerical tolerances in driver tests. |
 
 T1 evidence: [historical test ownership map](HISTORICAL_TEST_OWNERSHIP_MAP_2026-09-09.md).
 
 T6 contract draft: [selected-source/build fixture contract](SELECTED_SOURCE_BUILD_FIXTURE_CONTRACT.md).
-The current local `HEAD` is the gold solver identity; its source tree is clean
-and permitted tutorial/characterization drift is recorded separately. Native
-acceptance remains pending only the explicit fixture implementation.
+The source/build document records a previously inspected solver selection, not a moving HEAD guarantee. T6 must revalidate it at use time. Native acceptance also depends on T1b and H1; neither manual execution nor a fixture contract alone completes T7.
 
 T4 decision (revised 2026-09-09): `batchedIntegrator` is an ionic-model key
 and places no constraint on `activeTensionModel`. Batched active tension
@@ -80,8 +82,7 @@ source-compatible ECG verifier surface. Its `type` takes precedence over
 dimension, and quadrature settings. `alpha` and `k` remain on their
 model-specific paths, preserving the bath/bidomain correction.
 
-Tasks T1–T5 may proceed in parallel after T0 because they own disjoint records.
-T6 starts only after their catalog decisions are merged; T7 is last.
+Next sequence: T1b and H1 in parallel, then implement T6, then T7. Catalog decisions T2–T5 remain closed unless new source evidence contradicts them. No broader architectural rewrite or second scientific regression suite is part of this sequence.
 
 ## Scope rules
 
