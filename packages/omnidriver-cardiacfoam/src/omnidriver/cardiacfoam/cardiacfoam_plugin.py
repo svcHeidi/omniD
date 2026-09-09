@@ -379,6 +379,7 @@ class CardiacFoamPlugin:
             _evaluate_block_references,
             _evaluate_dynamic_required_fields,
             _evaluate_heterogeneity,
+            _evaluate_personalized_templates,
             _evaluate_solver_coupling,
             _evaluate_tissue_compatibility,
         )
@@ -388,6 +389,7 @@ class CardiacFoamPlugin:
             + _evaluate_block_references(context)
             + _evaluate_dynamic_required_fields(context)
             + _evaluate_heterogeneity(context)
+            + _evaluate_personalized_templates(context)
             + _evaluate_tissue_compatibility(context)
         )
 

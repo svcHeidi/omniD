@@ -257,21 +257,16 @@ def _apply_case(
         case_overrides.update(
             {
                 f"{ecg_scope}.ecgSolver": "pseudoECG",
-                f"{ecg_scope}.manufactured.enabled": True,
-                f"{ecg_scope}.manufactured.dimension": f'"{dimension}"',
-                f"{ecg_scope}.manufactured.referenceQuadratureOrder": int(
+                f"{ecg_scope}.verificationModel.enabled": True,
+                f"{ecg_scope}.verificationModel.dimension": f'"{dimension}"',
+                f"{ecg_scope}.verificationModel.referenceQuadratureOrder": int(
                     ecg_reference_quadrature_order
                 ),
-                f"{ecg_scope}.manufactured.checkQuadratureOrders": "("
+                f"{ecg_scope}.verificationModel.checkQuadratureOrders": "("
                 + " ".join(str(int(value)) for value in ecg_check_quadrature_orders)
                 + ")",
             }
         )
-        for electrode_name, electrode_position in electrodes.items():
-            case_overrides[
-                f"{ecg_scope}.electrodePositions.{electrode_name}"
-            ] = electrode_position
-
     if mesh_family == "tet":
         # Render-only: substitutes __LC__ and writes overlay files. gmsh/
         # gmshToFoam/checkMesh are workflow_dag steps, not run here -- see
@@ -342,6 +337,27 @@ def _apply_case(
         )
 
     apply_electro_property_overrides(electro_properties, case_overrides)
+    if ecg_enabled:
+        # Electrode names are data owned by this cardiac case, and the
+        # selected tutorial's distance-shell study expands that named set.
+        # The generic override path quite properly refuses to invent an
+        # unknown dictionary entry.  Here the cardiac adapter explicitly
+        # declares the dynamic mutation target, so a compact reusable case
+        # template and the full tutorial both receive the same positions.
+        electrode_scope = (
+            electro_properties_scope,
+            "ecgDomains",
+            "ECG",
+            "electrodePositions",
+        )
+        for electrode_name, electrode_position in electrodes.items():
+            update_foam_entry(
+                electro_properties,
+                electrode_name,
+                electrode_position,
+                scope=electrode_scope,
+                add_if_missing=True,
+            )
     if not ecg_enabled:
         # Entry sweeps reuse one physical tutorial directory. Remove an ECG
         # block left by a preceding ECG-enabled case: the system builder does

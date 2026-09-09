@@ -404,6 +404,72 @@ def update_control_dict(
             update_foam_entry(control_dict_path, key, value)
 
 
+def splice_raw_entry_text(
+    file_path: Path,
+    key: str,
+    raw_text: str,
+    *,
+    scope: str | list[str] | tuple[str, ...] | None = None,
+) -> bool:
+    """Replace ``key``'s value with ``raw_text``, written in verbatim.
+
+    The same line-location machinery ``update_foam_entry`` uses below
+    (``_explode_inline_blocks_with_spans`` / ``_resolve_search_region`` /
+    ``_iter_direct_child_lines``), factored out so it is reachable without
+    the ``"/*" in source`` gate that normally routes every real dict file
+    (they all carry the license banner) straight to ``foam_backend`` before
+    this logic ever runs. Needed by ``foam_backend.update_entry`` for a
+    value class that must never be reserialised by foamlib -- see its
+    docstring for why.
+
+    Returns ``True`` if an existing single-line scalar entry was found and
+    replaced, ``False`` if the scope could not be resolved, the key was not
+    found, or the matched entry spans multiple lines. Deliberately never
+    calls into ``foam_backend`` itself (unlike ``update_foam_entry``'s own
+    fallbacks) -- the two tiers must not call each other, or a value that
+    reaches here because tier 2 needs it would recurse.
+    """
+    if not file_path.exists():
+        raise FileNotFoundError(f"Dictionary file not found: {file_path}")
+
+    key_pattern = re.compile(rf"^\s*{re.escape(key)}(?=\s|;|$)")
+    lines = file_path.read_text().splitlines(keepends=True)
+    virtual = _explode_inline_blocks_with_spans(lines)
+    try:
+        search_start, search_end = _resolve_search_region(
+            [t for t, _, _, _ in virtual], scope
+        )
+    except KeyError:
+        return False
+
+    direct = _iter_direct_child_lines([t for t, _, _, _ in virtual], search_start, search_end)
+
+    target: tuple[int, int, int] | None = None
+    for idx in direct:
+        text, line_index, start, end = virtual[idx]
+        if text.strip().startswith("//") or not key_pattern.match(text):
+            continue
+        if not _strip_inline_comment(text).rstrip().endswith(";"):
+            return False
+        target = (line_index, start, end)
+        break
+
+    if target is None:
+        return False
+
+    line_index, start, end = target
+    line = lines[line_index]
+    if start == 0 and end >= len(line.rstrip("\n")):
+        indent = line[: len(line) - len(line.lstrip())]
+        lines[line_index] = f"{indent}{key}    {raw_text};\n"
+    else:
+        fragment = line[start:end]
+        indent = fragment[: len(fragment) - len(fragment.lstrip())]
+        lines[line_index] = line[:start] + indent + f"{key}    {raw_text};" + line[end:]
+    file_path.write_text("".join(lines))
+    return True
+
+
 def update_foam_entry(
     file_path: Path,
     key: str,

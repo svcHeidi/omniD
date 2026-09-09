@@ -555,6 +555,94 @@ def _evaluate_tissue_compatibility(context: dict[str, Any]) -> list[ValidationEr
     return errors
 
 
+_ECG_DOMAIN_PREFIX = "ecgDomains."
+_PERSONALIZED_TEMPLATES_SUFFIX = ".personalizedTemplates."
+
+
+def _evaluate_personalized_templates(context: dict[str, Any]) -> list[ValidationError]:
+    """Validate an explicitly selected eikonalECG template-generation block.
+
+    The block is intentionally optional: eikonalECG otherwise uses compiled
+    templates.  Its all-or-nothing contents and its relationship to a
+    manufactured verifier are solver science, not generic dictionary rules.
+    This mirrors constructor checks in ``eikonalECG.C`` before a run starts.
+    """
+    errors: list[ValidationError] = []
+    domains = {
+        key[len(_ECG_DOMAIN_PREFIX):].split(".", 1)[0]
+        for key in context
+        if key.startswith(_ECG_DOMAIN_PREFIX)
+        and _PERSONALIZED_TEMPLATES_SUFFIX in key
+        and not _is_template_slot_key(key)
+    }
+    for domain in sorted(domains):
+        prefix = f"{_ECG_DOMAIN_PREFIX}{domain}."
+        template_prefix = prefix + "personalizedTemplates."
+        field = prefix + "personalizedTemplates"
+        if context.get(prefix + "ecgSolver") != "eikonalECG":
+            errors.append(ValidationError(
+                phase="physics", field=field,
+                message="personalizedTemplates is supported only by ecgSolver=eikonalECG.",
+                level="error",
+            ))
+            continue
+
+        manufactured = (
+            any(key.startswith(prefix + "manufacturedEikonalECG.") for key in context)
+            or context.get(prefix + "ecgVerificationModel") == "manufacturedEikonalECGVerifier"
+            or context.get(prefix + "verificationModel.type") == "manufacturedEikonalECGVerifier"
+        )
+        if manufactured:
+            errors.append(ValidationError(
+                phase="physics", field=field,
+                message=("personalizedTemplates cannot be combined with a manufactured "
+                         "eikonal ECG verification configuration."),
+                level="error",
+            ))
+
+        required = (
+            "ionicModelConfig.ionicModel", "nBeats", "duration", "dt",
+            "ionicModelConfig.singleCellStimulus.stim_start",
+            "ionicModelConfig.singleCellStimulus.stim_period_S1",
+            "ionicModelConfig.singleCellStimulus.stim_duration",
+            "ionicModelConfig.singleCellStimulus.stim_amplitude",
+        )
+        for suffix in required:
+            key = template_prefix + suffix
+            if context.get(key) in (None, ""):
+                errors.append(ValidationError(
+                    phase="physics", field=key,
+                    message=f"{key} is required when personalizedTemplates is configured.",
+                    level="error",
+                ))
+
+        def number(suffix: str) -> float | None:
+            try:
+                return float(context[template_prefix + suffix])
+            except (KeyError, TypeError, ValueError):
+                return None
+
+        n_beats = number("nBeats")
+        duration = number("duration")
+        dt = number("dt")
+        period = number("ionicModelConfig.singleCellStimulus.stim_period_S1")
+        nstim2 = number("ionicModelConfig.singleCellStimulus.nstim2")
+        if n_beats is not None and n_beats < 1:
+            errors.append(ValidationError("physics", template_prefix + "nBeats", "personalizedTemplates.nBeats must be at least 1.", "error"))
+        if duration is not None and duration <= 0:
+            errors.append(ValidationError("physics", template_prefix + "duration", "personalizedTemplates.duration must be positive.", "error"))
+        if dt is not None and dt <= 0:
+            errors.append(ValidationError("physics", template_prefix + "dt", "personalizedTemplates.dt must be positive.", "error"))
+        if duration is not None and period is not None and duration > 1e-3 * period:
+            errors.append(ValidationError("physics", template_prefix + "duration", "personalizedTemplates.duration must not exceed one S1 period.", "error"))
+        if nstim2 is not None and nstim2 != 0:
+            errors.append(ValidationError("physics", template_prefix + "ionicModelConfig.singleCellStimulus.nstim2", "personalizedTemplates does not support non-zero nstim2.", "error"))
+        if not any(key.startswith("ionicHeterogeneity.") for key in context):
+            errors.append(ValidationError("physics", "ionicHeterogeneity", "personalizedTemplates requires an ionicHeterogeneity block.", "error"))
+
+    return errors
+
+
 _RPVJ_COUPLER = "reactionDiffusionPvjCoupler"
 
 

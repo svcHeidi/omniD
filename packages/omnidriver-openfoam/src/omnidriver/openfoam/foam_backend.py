@@ -6,7 +6,7 @@ import warnings
 from pathlib import Path
 from typing import Any
 
-from foamlib import FoamFile
+from foamlib import Dimensioned, FoamFile
 
 ScopeArg = str | list[str] | tuple[str, ...] | None
 
@@ -37,6 +37,27 @@ def coerce_value(value: Any) -> Any:
     ``ValueError``). Anything that is not clearly numeric or boolean is left as
     a string and allowed to fail loudly in foamlib -- that refusal is a feature,
     because it is what rejects an injected ``"1e-6;  rogue  1"``.
+
+    One class was left unhandled by the above: an OpenFOAM dimensioned
+    literal (``"[-1 -3 3 0 0 2 0] (0.1 ... )"`` for a dimensioned tensor like
+    ``conductivity``, or ``"[0 -1 0 0 0 0 0] 3"`` for a dimensioned scalar
+    like ``chi``/``cm``) or a bare vector/list (``"(0.001 0.002 0.006)"``).
+    Left as a plain string, foamlib parses the string's *content*, recognises
+    it would read back as a ``Dimensioned``/array, and refuses to store a
+    ``str`` there -- the same type-strictness described above, just with no
+    branch here to satisfy it. Measured directly against 1.7.5.
+
+    Only tokens that start with ``[`` (a dimension set) or ``(`` (a bare
+    vector/list) are attempted here, via ``FoamFile.loads``, foamlib's own
+    deserializer -- so the exact grammar this project already depends on
+    elsewhere is what decides the type, not a hand-rolled parser that could
+    disagree with it on an edge case. Deliberately scoped to that leading-
+    character check rather than "try loads() on anything left over": a
+    bare-word token like ``"uniform 0"`` also parses via ``loads()`` (to
+    ``0.0``), which would silently change today's documented "fails loudly"
+    behaviour for that shape. Restricting to `[`/`(` leaves every other
+    unhandled string exactly as before -- this only ever adds a type for the
+    dimensioned-literal/bare-list shapes that previously had none.
     """
     if not isinstance(value, str):
         return value
@@ -57,7 +78,26 @@ def coerce_value(value: Any) -> Any:
     except ValueError:
         pass
 
+    if token.startswith("[") or token.startswith("("):
+        try:
+            parsed = FoamFile.loads(token)
+        except Exception:
+            return token
+        if not isinstance(parsed, str):
+            return parsed
+
     return token
+
+
+def _dimensioned_component_count(value: Dimensioned) -> int:
+    """Number of raw components a ``Dimensioned``'s value carries.
+
+    1 for a dimensioned scalar (a plain Python number); ``len(...)`` for a
+    dimensioned vector/tensor/symmTensor (a numpy array). Used to route the
+    latter around foamlib's writer entirely -- see ``update_entry``.
+    """
+    raw = value.value
+    return len(raw) if hasattr(raw, "__len__") else 1
 
 
 _ENTRY_SEPARATOR_RE = re.compile(r'(?<![\w"])([A-Za-z_]\w*)( )([^\s{};"][^{};]*;)')
@@ -183,6 +223,45 @@ def update_entry(
     _reject_directive_shaped(value)
     path = tuple(_normalize_scope(scope)) + (key,)
 
+    coerced = coerce_value(value)
+    if isinstance(coerced, Dimensioned) and _dimensioned_component_count(coerced) > 1:
+        # foamlib has no fixed-arity vector/tensor writer -- only
+        # `Dimensioned`, whose value always goes through foamlib's generic
+        # sized-list serialiser once it has more than one component (a
+        # 6-component symmTensor becomes "6(...)", but so does a
+        # 3-component vector -- confirmed directly, it is not about
+        # length). OpenFOAM's actual reader for these fields is the
+        # fixed-arity VectorSpace parser, which does not accept a leading
+        # count and rejects it outright. Measured directly against a real
+        # solve: writing `conductivity` this way and then running
+        # cardiacFoam produced
+        #   FOAM FATAL IO ERROR: Expected a '(' while reading VectorSpace,
+        #   found ... label 6
+        # A dimensioned *scalar* (chi, cm, ...) has nothing to size-prefix
+        # and is unaffected -- only this multi-component case is rerouted.
+        #
+        # The original override string is already valid OpenFOAM syntax --
+        # that is how it was recognised as dimensioned in coerce_value at
+        # all -- so splice it in verbatim instead of asking foamlib to
+        # reserialise it. Local import: mutators imports this module at its
+        # own top level, so importing mutators from here at module load
+        # time would cycle; deferring to call time resolves it, since by
+        # then both modules have finished loading.
+        if add_if_missing:
+            raise NotImplementedError(
+                "add_if_missing is not supported for a multi-component "
+                "dimensioned override; the entry must already exist"
+            )
+        from omnidriver.openfoam.mutators import splice_raw_entry_text
+
+        if not splice_raw_entry_text(file_path, key, str(value).strip(), scope=scope):
+            raise ValueError(
+                f"cannot write multi-component dimensioned value {value!r} to "
+                f"{key!r}: not found as a single-line scalar entry in "
+                f"{file_path} (scope={scope!r})"
+            )
+        return
+
     before = file_path.read_text()
     foam_file = FoamFile(file_path)
 
@@ -198,7 +277,7 @@ def update_entry(
                         if scope is not None
                         else f"Key '{key}' not found in {file_path}"
                     ) from exc
-            foam_file[path] = coerce_value(value)
+            foam_file[path] = coerced
         except KeyError:
             raise
         except (TypeError, ValueError) as exc:

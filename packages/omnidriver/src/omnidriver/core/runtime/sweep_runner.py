@@ -166,6 +166,18 @@ def _materialize_entry_case(
         # below the scratch directory.
         effective_routed["cases_root"] = str(staged_case_root.parent)
         effective_routed["case_dir_name"] = staged_case_root.name
+        # Staging already isolates this one case at staged_case_root, so
+        # whatever output_dir_name the sweep spec's own "dependent" template
+        # derived (typically the case id again, e.g. for per-case archiving
+        # under a *shared* case_root) has nothing left to distinguish here --
+        # every sweep case already gets its own staged_case_root. Leaving it
+        # in place double-nests output_dir under
+        # staged_case_root/<that same case id>/, a directory the solve step
+        # never writes into (it writes postProcessing/ etc. straight into
+        # staged_case_root, matching OpenFOAM's own convention), which then
+        # makes the workflow's artifact check report real, present output as
+        # missing. "." tells resolve_spec_paths there is nothing to append.
+        effective_routed["output_dir_name"] = "."
         staged_spec = load_entry_spec(
             entry, overrides=effective_routed, driver_context=driver_context,
         )

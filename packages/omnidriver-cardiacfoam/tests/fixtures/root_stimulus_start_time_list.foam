@@ -1,0 +1,13 @@
+// Source-backed fixture: cardiacFOAM 724a08f9,
+// tutorials/NiedererEtAl2011/purkinjeNiedererEtAl2011/
+// constant/electroProperties.monodomain (rootStimulus block).
+purkinjeGraphModelCoeffs
+{
+    rootStimulus
+    {
+        node          0;
+        startTimeList (0.01 0.3);
+        duration      0.002;
+        intensity     500000.0;
+    }
+}

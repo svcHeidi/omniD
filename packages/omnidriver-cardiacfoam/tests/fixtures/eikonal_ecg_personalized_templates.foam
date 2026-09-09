@@ -1,0 +1,51 @@
+myocardiumSolver eikonalSolver;
+
+eikonalSolverCoeffs
+{
+    ionicHeterogeneity
+    {
+        mode transmuralBands;
+    }
+
+    ecgDomains
+    {
+        ECG
+        {
+            ecgSolver eikonalECG;
+
+            sampling
+            {
+                start 0;
+                end 0.6;
+                deltaT 1e-4;
+            }
+
+            personalizedTemplates
+            {
+                ionicModelConfig
+                {
+                    ionicModel TWorldcompactBatched;
+                    tissue endocardialCells;
+                    solver RKF45;
+                    absTol 1e-6;
+                    relTol 1e-4;
+                    batchedSubsteps 100;
+
+                    singleCellStimulus
+                    {
+                        stim_start 20;
+                        stim_period_S1 1000;
+                        stim_duration 1;
+                        stim_amplitude 60.0;
+                        nstim1 10;
+                        nstim2 0;
+                    }
+                }
+
+                nBeats 10;
+                duration 0.60;
+                dt 1e-4;
+            }
+        }
+    }
+}

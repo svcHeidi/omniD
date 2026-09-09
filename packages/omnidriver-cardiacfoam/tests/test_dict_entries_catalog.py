@@ -10,6 +10,7 @@ from omnidriver.dict_entries import (
     all_documented_driver_paths,
 )
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+from omnidriver.cardiacfoam.active_tension_catalog import ACTIVE_TENSION_MODEL_CATALOG
 from omnidriver.cardiacfoam.common_dict_entries import PHYSICS_PROPERTY_ENTRIES
 from omnidriver.cardiacfoam.overrides import apply_electro_property_overrides
 from conftest import assert_foam_entry
@@ -98,6 +99,27 @@ class TestDictEntryCatalog(unittest.TestCase):
             ecg_entries[
                 "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.electrodePositions.<electrode>"
             ].dynamic_path
+        )
+
+        active_tension = {
+            entry.driver_path: entry
+            for entry in get_electro_property_entry_groups()["active_tension"]
+        }
+        self.assertIn(
+            "LandNiedererTWorld",
+            active_tension["$ELECTRO_MODEL_COEFFS.activeTensionModel"].enum_values,
+        )
+        self.assertIn(
+            "LandNiedererTWorldBatched",
+            active_tension["$ELECTRO_MODEL_COEFFS.activeTensionModel"].enum_values,
+        )
+        self.assertEqual(
+            set(active_tension["$ELECTRO_MODEL_COEFFS.activeTensionModel"].enum_values),
+            set(ACTIVE_TENSION_MODEL_CATALOG),
+        )
+        self.assertEqual(
+            active_tension["$ELECTRO_MODEL_COEFFS.couplingSignal"].enum_values,
+            ("Vm", "vm"),
         )
 
 
@@ -199,7 +221,7 @@ class TestConductionSystemSchemaContract(unittest.TestCase):
         )
 
     def test_root_stimulus_sub_entries_documented(self):
-        for sub in ("startTime", "duration", "intensity", "node"):
+        for sub in ("startTime", "startTimeList", "duration", "intensity", "node"):
             matching = [
                 p
                 for p in self.entries
@@ -209,6 +231,93 @@ class TestConductionSystemSchemaContract(unittest.TestCase):
                 len(matching) >= 1,
                 f"rootStimulus.{sub} not documented"
             )
+
+    def test_root_stimulus_start_time_list_matches_solver_fallback_semantics(self):
+        prefix = (
+            "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>."
+            "purkinjeGraphModelCoeffs.rootStimulus."
+        )
+        start_time = self.entries[prefix + "startTime"]
+        start_time_list = self.entries[prefix + "startTimeList"]
+
+        self.assertEqual(start_time.value_kind, "scalar")
+        self.assertEqual(start_time_list.value_kind, "scalar_list")
+        self.assertEqual(start_time.unit, "s")
+        self.assertEqual(start_time_list.unit, "s")
+        self.assertIn(
+            "src/electroModels/electroDomains/conductionSystemDomain/"
+            "conductionSystemDomain.C",
+            start_time_list.source_refs,
+        )
+        self.assertIn("fallback", start_time.notes)
+        self.assertIn("takes precedence", start_time_list.description)
+
+    def test_root_stimulus_start_time_list_source_fixture_parses(self):
+        fixture = Path(__file__).with_name("fixtures") / "root_stimulus_start_time_list.foam"
+        assert_foam_entry(
+            fixture,
+            "startTimeList",
+            "(0.01 0.3)",
+            scope=("purkinjeGraphModelCoeffs", "rootStimulus"),
+        )
+
+    def test_personalized_templates_schema_and_source_fixture(self):
+        ecg_entries = {
+            entry.driver_path: entry
+            for entry in get_electro_property_entry_groups()["ecg"]
+        }
+        prefix = (
+            "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates."
+        )
+        expected = {
+            "ionicModelConfig.ionicModel",
+            "ionicModelConfig.tissue",
+            "ionicModelConfig.solver",
+            "ionicModelConfig.absTol",
+            "ionicModelConfig.relTol",
+            "ionicModelConfig.batchedSubsteps",
+            "ionicModelConfig.singleCellStimulus.stim_start",
+            "ionicModelConfig.singleCellStimulus.stim_period_S1",
+            "ionicModelConfig.singleCellStimulus.stim_duration",
+            "ionicModelConfig.singleCellStimulus.stim_amplitude",
+            "ionicModelConfig.singleCellStimulus.nstim1",
+            "ionicModelConfig.singleCellStimulus.nstim2",
+            "nBeats", "duration", "dt",
+        }
+        self.assertTrue({prefix + leaf for leaf in expected}.issubset(ecg_entries))
+        self.assertEqual(ecg_entries[prefix + "duration"].unit, "s")
+        self.assertEqual(
+            ecg_entries[prefix + "ionicModelConfig.singleCellStimulus.stim_period_S1"].unit,
+            "ms",
+        )
+        fixture = Path(__file__).with_name("fixtures") / "eikonal_ecg_personalized_templates.foam"
+        assert_foam_entry(
+            fixture, "ionicModel", "TWorldcompactBatched",
+            scope=("eikonalSolverCoeffs", "ecgDomains", "ECG", "personalizedTemplates", "ionicModelConfig"),
+        )
+        assert_foam_entry(
+            fixture, "nBeats", "10",
+            scope=("eikonalSolverCoeffs", "ecgDomains", "ECG", "personalizedTemplates"),
+        )
+
+    def test_nested_ecg_verification_model_is_a_supported_source_alias(self):
+        entries = {
+            entry.driver_path: entry
+            for entry in get_electro_property_entry_groups()["ecg"]
+        }
+        prefix = "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel."
+        for leaf in ("type", "enabled", "dimension", "referenceQuadratureOrder", "checkQuadratureOrders"):
+            self.assertIn(prefix + leaf, entries)
+        self.assertEqual(
+            entries[prefix + "type"].enum_values,
+            (
+                "manufacturedPseudoECGVerifier",
+                "manufacturedEikonalECGVerifier",
+                "manufacturedBathBidomainECGVerifier",
+            ),
+        )
+        self.assertNotIn(prefix + "alpha", entries)
+        self.assertNotIn(prefix + "k", entries)
 
     def test_purkinjeGraphModelCoeffs_chi_and_cm_documented(self):
         chi_keys = [p for p in self.entries if p.endswith(".purkinjeGraphModelCoeffs.chi")]

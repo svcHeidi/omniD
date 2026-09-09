@@ -157,6 +157,66 @@ def test_valid_minimal_run_has_no_errors():
     assert errors == [], f"expected no errors, got: {errors}"
 
 
+def test_personalized_templates_valid_contract_is_accepted():
+    from omnidriver.cardiacfoam.validation import _evaluate_personalized_templates
+
+    prefix = "ecgDomains.ECG."
+    template = prefix + "personalizedTemplates."
+    context = {
+        prefix + "ecgSolver": "eikonalECG",
+        "ionicHeterogeneity.mode": "transmuralBands",
+        template + "ionicModelConfig.ionicModel": "TWorldcompactBatched",
+        template + "ionicModelConfig.singleCellStimulus.stim_start": 20,
+        template + "ionicModelConfig.singleCellStimulus.stim_period_S1": 1000,
+        template + "ionicModelConfig.singleCellStimulus.stim_duration": 1,
+        template + "ionicModelConfig.singleCellStimulus.stim_amplitude": 60,
+        template + "nBeats": 10,
+        template + "duration": 0.6,
+        template + "dt": 1e-4,
+        template + "ionicModelConfig.singleCellStimulus.nstim2": 0,
+    }
+    assert _evaluate_personalized_templates(context) == []
+
+
+def test_personalized_templates_rejects_manufactured_ecg_before_execution():
+    from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+    from omnidriver.cardiacfoam.validation import _evaluate_personalized_templates
+
+    prefix = "ecgDomains.ECG."
+    context = {
+        prefix + "ecgSolver": "eikonalECG",
+        prefix + "personalizedTemplates.nBeats": 1,
+        prefix + "manufacturedEikonalECG.enabled": True,
+    }
+    errors = _evaluate_personalized_templates(context)
+    assert any("cannot be combined" in error.message for error in errors)
+    diagnostics = CardiacFoamPlugin().validate_run_semantics(context)
+    assert any("cannot be combined" in error.message for error in diagnostics)
+
+
+def test_batched_integrator_does_not_constrain_active_tension_model():
+    """``batchedIntegrator`` is an ionic-model key only.
+
+    Batched active-tension models always integrate with explicit Euler and do
+    not read the key at all (``advanceSubstep`` in src/activeTensionModels/
+    activeTensionModel/batchedActiveTensionModel.H), so no pairing of it with
+    an ``activeTensionModel`` is invalid.  This previously rejected the two
+    Land variants on the strength of a constructor flag that no longer exists.
+    """
+    from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+
+    for model in (
+        "LandNiedererBatched",
+        "LandNiedererTWorldBatched",
+        "NashPanfilovBatched",
+    ):
+        diagnostics = CardiacFoamPlugin().validate_run_semantics({
+            "activeTensionModel": model,
+            "batchedIntegrator": "rushLarsen",
+        })
+        assert not [d for d in diagnostics if d.field == "batchedIntegrator"]
+
+
 def test_constraint_violation_is_flagged():
     # eikonalSolver disallows an explicit ionicModel.
     run = _filled_run(config={

@@ -144,7 +144,24 @@ def resolve_spec_paths(
 
     case_root = resolved_cases_root / resolved_case_dir
     setup_root = case_root / resolved_setup_dir
-    output_dir = case_root / Path(resolved_output_dir)
+    output_dir_path = Path(resolved_output_dir)
+    # A caller that has already isolated this case at case_root (staged
+    # sweep cases; see sweep_runner._materialize_entry_case) has nothing
+    # left for output_dir_name to distinguish, and passes "." to say so
+    # explicitly. Collapse to case_root itself rather than case_root/".":
+    # OpenFOAM's own convention is that postProcessing/, constant/, system/,
+    # 0/ all sit directly under the case directory -- there is exactly one
+    # real location a solve writes into, and output_dir must name that one
+    # location, not a second path nothing ever populates. Confirmed
+    # directly: a real cardiacFoam solve wrote postProcessing/ under
+    # case_root, while the workflow's own artifact check looked for it
+    # under case_root/case_root's-own-output-dir-name and reported the
+    # (present, correct) artifacts as missing.
+    output_dir = (
+        case_root
+        if output_dir_path == Path(".")
+        else case_root / output_dir_path
+    )
     return case_root, setup_root, output_dir
 
 

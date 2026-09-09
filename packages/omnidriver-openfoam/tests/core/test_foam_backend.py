@@ -33,6 +33,93 @@ def test_coerce_value_passes_non_strings_through():
     assert foam_backend.coerce_value(True) is True
 
 
+def test_coerce_value_parses_dimensioned_tensor():
+    from foamlib import Dimensioned
+
+    raw = "[-1 -3 3 0 0 2 0] (0.106875 -0.0084931 -0.022561 0.116682 -0.0130256 0.0398782)"
+    result = foam_backend.coerce_value(raw)
+    assert isinstance(result, Dimensioned)
+    assert list(result.value) == pytest.approx(
+        [0.106875, -0.0084931, -0.022561, 0.116682, -0.0130256, 0.0398782]
+    )
+
+
+def test_coerce_value_parses_dimensioned_scalar():
+    from foamlib import Dimensioned
+
+    result = foam_backend.coerce_value("[0 -1 0 0 0 0 0] 3")
+    assert isinstance(result, Dimensioned)
+    assert result.value == pytest.approx(3.0)
+
+
+def test_coerce_value_parses_bare_vector():
+    import numpy as np
+
+    result = foam_backend.coerce_value("(0.001 0.002 0.006)")
+    assert isinstance(result, np.ndarray)
+    assert list(result) == pytest.approx([0.001, 0.002, 0.006])
+
+
+def test_coerce_value_scoped_to_bracket_and_paren_leading_tokens():
+    # "uniform 0" also parses via FoamFile.loads (to 0.0), but it does not
+    # start with '[' or '(', so it must stay untouched -- this is the
+    # documented "fails loudly in foamlib" case the docstring calls out,
+    # deliberately left unchanged by the [ / ( scoping.
+    assert foam_backend.coerce_value("uniform 0") == "uniform 0"
+
+
+def test_coerce_value_falls_back_to_string_on_unparseable_bracket_token():
+    # Looks like a dimensioned literal (leading '[') but isn't one -- must
+    # fall back to the plain-string behaviour, not raise.
+    assert foam_backend.coerce_value("[not a real dimension set") == (
+        "[not a real dimension set"
+    )
+
+
+def test_update_entry_splices_multicomponent_dimensioned_tensor_verbatim(tmp_path):
+    # Regression test for a real cardiacFoam FATAL IO ERROR: writing a
+    # multi-component Dimensioned through foamlib's normal path produces
+    # "conductivity [...] 6(...)" (a generic sized-list), but the actual
+    # solver reads conductivity as a fixed-arity symmTensor VectorSpace,
+    # which rejects the leading count outright. Confirmed directly against
+    # the real solver before this fix existed.
+    raw = "[-1 -3 3 0 0 2 0] (0.106875 -0.0084931 -0.022561 0.116682 -0.0130256 0.0398782)"
+    path = _dict(
+        tmp_path,
+        "monodomainSolverCoeffs\n{\n"
+        "    conductivity [-1 -3 3 0 0 2 0] (0.1 0 0 0.1 0 0.1);\n"
+        "}\n",
+    )
+    foam_backend.update_entry(
+        path, "conductivity", raw, scope=["monodomainSolverCoeffs"]
+    )
+    text = path.read_text()
+    assert f"conductivity    {raw};" in text
+    assert "6(" not in text
+
+
+def test_update_entry_still_uses_foamlib_for_dimensioned_scalar(tmp_path):
+    # The unaffected case: a dimensioned scalar has nothing to size-prefix,
+    # so it keeps going through foamlib's normal (verified-safe) path.
+    path = _dict(
+        tmp_path,
+        "monodomainSolverCoeffs\n{\n    chi [0 -1 0 0 0 0 0] 3;\n}\n",
+    )
+    foam_backend.update_entry(
+        path, "chi", "[0 -1 0 0 0 0 0] 5", scope=["monodomainSolverCoeffs"]
+    )
+    assert "chi    [0 -1 0 0 0 0 0] 5.0;" in path.read_text()
+
+
+def test_update_entry_raises_when_multicomponent_dimensioned_key_missing(tmp_path):
+    path = _dict(tmp_path, "monodomainSolverCoeffs\n{\n}\n")
+    raw = "[-1 -3 3 0 0 2 0] (0.1 0 0 0.1 0 0.1)"
+    with pytest.raises(ValueError, match="not found"):
+        foam_backend.update_entry(
+            path, "conductivity", raw, scope=["monodomainSolverCoeffs"]
+        )
+
+
 def test_update_entry_writes_four_space_separator(tmp_path):
     path = _dict(tmp_path, "solvers\n{\n    Vm { tolerance 1e-11; }\n}\n")
     foam_backend.update_entry(path, "tolerance", "1e-12", scope=["solvers", "Vm"])

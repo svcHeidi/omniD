@@ -81,24 +81,6 @@ class ActiveTensionModelEntry:
 
 
 ACTIVE_TENSION_MODEL_CATALOG: Final[dict[str, ActiveTensionModelEntry]] = {
-    "GoktepeKuhl": ActiveTensionModelEntry(
-        states=("Ta",),
-        algebraic=("AV_e", "AV_Vm", "AV_u"),
-        constants=("AC_Vr", "AC_eInfty", "AC_e0", "AC_eXi", "AC_Vshift", "AC_kTa"),
-        rates=("Ta",),
-        recommended_exports=("Ta",),
-        description="Goktepe-Kuhl active tension model (2004).",
-        aliases=("Goktepe-Kuhl", "active stress model"),
-    ),
-    "GoktepeKuhlBatched": ActiveTensionModelEntry(
-        states=("Ta",),
-        algebraic=("AV_e", "AV_Vm", "AV_u"),
-        constants=("AC_Vr", "AC_eInfty", "AC_e0", "AC_eXi", "AC_Vshift", "AC_kTa"),
-        rates=("Ta",),
-        recommended_exports=("Ta",),
-        description="Goktepe-Kuhl active tension model (2004) - GPU batched implementation.",
-        aliases=("Goktepe-Kuhl GPU",),
-    ),
     "NashPanfilov": ActiveTensionModelEntry(
         states=("Ta",),
         algebraic=("AV_u", "AV_e"),
@@ -174,6 +156,60 @@ ACTIVE_TENSION_MODEL_CATALOG: Final[dict[str, ActiveTensionModelEntry]] = {
             "also accepts 'preconditioningTime' (default 1000 ms)."
         ),
         aliases=("Land-Niederer GPU", "Land2017 GPU"),
+    ),
+    "LandNiedererTWorld": ActiveTensionModelEntry(
+        states=("Ca_TRPN", "TmBlocked", "XW", "XS", "ZETAS", "ZETAW"),
+        algebraic=(
+            "AV_XU", "AV_gamma_rate", "AV_gamma_rate_w", "AV_xb_uw", "AV_xb_ws",
+            "AV_xb_su", "AV_xb_wu", "AV_xb_su_gamma", "AV_xb_wu_gamma", "AV_Ta",
+            "AV_d_Ca_TRPN", "AV_Cai", "AV_lambda", "AV_lambda_rate", "AV_Lfac",
+            "AV_ca50",
+        ),
+        constants=(
+            "AC_TOT_A", "AC_TRPN_n", "AC_Tref", "AC_beta_0", "AC_beta_1", "AC_dr",
+            "AC_fracTnIpo", "AC_contraction_gamma", "AC_gamma_wu", "AC_koff",
+            "AC_ktm_unblock", "AC_lambda_max", "AC_lambda_min", "AC_mu", "AC_nperm",
+            "AC_nu", "AC_perm50", "AC_phi", "AC_wfrac", "AC_fMyBPC_PKA", "AC_fTnI_PKA",
+        ),
+        rates=("Ca_TRPN", "TmBlocked", "XW", "XS", "ZETAS", "ZETAW"),
+        recommended_exports=("Ta",),
+        description=(
+            "T-World 2025 six-state Land-style contraction subsystem, driven by "
+            "intracellular calcium and sarcomere stretch."
+        ),
+        notes=(
+            "The source exposes the same 21 user-facing constants and six state "
+            "variables as LandNiederer. Twelve derived constants are deliberately "
+            "omitted because the constructor recomputes them after overrides. "
+            "Requires Cai and lambda; preconditioningTime defaults to 1000 ms."
+        ),
+        aliases=("Land-Niederer TWorld", "TWorld contraction subsystem"),
+    ),
+    "LandNiedererTWorldBatched": ActiveTensionModelEntry(
+        states=("Ca_TRPN", "TmBlocked", "XW", "XS", "ZETAS", "ZETAW"),
+        algebraic=(
+            "AV_XU", "AV_gamma_rate", "AV_gamma_rate_w", "AV_xb_uw", "AV_xb_ws",
+            "AV_xb_su", "AV_xb_wu", "AV_xb_su_gamma", "AV_xb_wu_gamma", "AV_Ta",
+            "AV_d_Ca_TRPN", "AV_Cai", "AV_lambda", "AV_lambda_rate", "AV_Lfac",
+            "AV_ca50",
+        ),
+        constants=(
+            "AC_TOT_A", "AC_TRPN_n", "AC_Tref", "AC_beta_0", "AC_beta_1", "AC_dr",
+            "AC_fracTnIpo", "AC_contraction_gamma", "AC_gamma_wu", "AC_koff",
+            "AC_ktm_unblock", "AC_lambda_max", "AC_lambda_min", "AC_mu", "AC_nperm",
+            "AC_nu", "AC_perm50", "AC_phi", "AC_wfrac", "AC_fMyBPC_PKA", "AC_fTnI_PKA",
+        ),
+        rates=("Ca_TRPN", "TmBlocked", "XW", "XS", "ZETAS", "ZETAW"),
+        recommended_exports=("Ta",),
+        description=(
+            "GPU-batched T-World 2025 six-state Land-style contraction subsystem."
+        ),
+        notes=(
+            "Same state and user-facing constant contract as LandNiedererTWorld. "
+            "The batched constructor accepts couplingSignal Cai (or cai) and "
+            "preconditioningTime defaults to 1000 ms."
+        ),
+        aliases=("Land-Niederer TWorld GPU", "TWorld contraction subsystem GPU"),
     ),
     "ManufacturedElectromechanics": ActiveTensionModelEntry(
         states=("Ta",),
