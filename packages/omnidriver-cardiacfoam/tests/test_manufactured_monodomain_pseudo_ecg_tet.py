@@ -478,17 +478,17 @@ def test_non_positive_phi_tolerance_is_rejected(tmp_path):
 # --- ECG + tet interaction ---------------------------------------------------
 
 def test_tet_mesh_family_works_with_ecg_enabled(tmp_path):
-    # monodomainPseudoECG's real tet study runs with ECG active (it reports
-    # ecg_L2/ecg_Linf alongside mono_L2/mono_Linf for every case, confirmed
-    # from run_mono_tet.sh) -- ECG_ENABLED defaults to True in this shared
-    # module, so mesh_family="tet" must not implicitly assume ECG is off.
-    # ECG overrides touch electroProperties; mesh_family/grad_scheme/
-    # phi_tolerance touch fvSchemes/fvSolution/controlDict -- disjoint files,
-    # but verified here rather than assumed.
+    # This is an adapter contract, not a paper-result test. The synthetic
+    # probe deliberately differs from any tutorial electrode location: it
+    # proves the adapter may declare and create a named dynamic target while
+    # the generic dictionary writer remains fail-closed for unknown keys.
     case_root = _write_case(tmp_path)
     spec = _call_make_spec(
         tmp_path, mesh_family="tet", numerics_profile="monodomain_tet",
         grad_scheme="least_squares", ecg_enabled=True,
+        ecg_electrodes_by_dimension={
+            "3D": {"adapterProbe": "(1.25 0.50 0.50)"},
+        },
     )
     cases = spec.build_cases()
     spec.apply_case(spec.case_root, cases[0])
@@ -498,12 +498,9 @@ def test_tet_mesh_family_works_with_ecg_enabled(tmp_path):
     assert_foam_entry(electro, "ecgSolver", "pseudoECG", scope=ecg)
     assert_foam_entry(electro, "enabled", "yes", scope=ecg + ("verificationModel",))
     assert_foam_entry(
-        electro, "E3", "(1.2 0.23 0.61)", scope=ecg + ("electrodePositions",)
-    )
-    assert_foam_entry(
         electro,
-        "S1_XP",
-        "(1.050000 0.500000 0.500000)",
+        "adapterProbe",
+        "(1.25 0.50 0.50)",
         scope=ecg + ("electrodePositions",),
     )
     scheme_text = (case_root / "system" / "fvSchemes").read_text()
