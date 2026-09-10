@@ -356,8 +356,17 @@ def _git_bytes(root: Path, *args: str) -> bytes:
 
 def _source_openfoam_environment(bashrc: Path) -> dict[str, str]:
     """Source only the selected bashrc and capture the child environment."""
+    # OpenFOAM's bashrc forwards positional arguments to its setup script.
+    # Keep the selected path in a local variable, then clear ``$@`` before
+    # sourcing so the bashrc is not recursively interpreted as a config file.
     result = subprocess.run(
-        ["bash", "-c", 'source "$1" && env -0', "omnidriver-selected-runtime", str(bashrc)],
+        [
+            "bash",
+            "-c",
+            'bashrc=$1; shift; source "$bashrc" && exec /usr/bin/env -0',
+            "omnidriver-selected-runtime",
+            str(bashrc),
+        ],
         capture_output=True,
     )
     if result.returncode:

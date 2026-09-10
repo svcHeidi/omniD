@@ -3,19 +3,24 @@
   "case_id": "single-cell-tworld-reference",
   "input_policy": "committed",
   "reference": {
-    "source_revision": "98afac41a8c3e3de1ef1067b7e5f1d5ca4349cb0",
+    "source_revision": "3aa4b48fa5fd896933b3758f5a084e265f9ba9de",
     "source_case_root": "tutorials/electrophysiologyProtocols/singleCell",
     "checker": {
-      "availability": "pending-solver-check-only-interface",
+      "availability": "available",
       "path": "regression/regressionTest.sh",
       "reference_data": "regression/singleCell.reference",
       "mode": "check-only",
       "report_path": "regression/comparison-report.json"
     }
   },
+  "integration": {
+    "driver_command": ["{python}", "-m", "omnidriver", "run", "--strict", "--entry", "case", "--cases-root", "{stage_root}", "--environment-bashrc", "{openfoam_bashrc}"],
+    "solver_checker_command": ["bash", "regression/regressionTest.sh", "--check-only", "--report", "regression/comparison-report.json"],
+    "timeout_s": 3600
+  },
   "inputs": [
     {"source": "tutorials/electrophysiologyProtocols/singleCell/Allrun", "destination": "case/Allrun", "sha256": "ed6818580acd5912121ed2a398d7c33095c8bf8b06d14b8769c48e33d2d848b0"},
-    {"source": "tutorials/electrophysiologyProtocols/singleCell/regression/regressionTest.sh", "destination": "case/regression/regressionTest.sh", "sha256": "03195bd71a119ee92bd68e1c53347134b168e1331cbe118eae40ace53ee01c97"},
+    {"source": "tutorials/electrophysiologyProtocols/singleCell/regression/regressionTest.sh", "destination": "case/regression/regressionTest.sh", "sha256": "02d3e70cd7cc5c24aab8e31b9610a62b3edc2f8c9dbd7906b04d284b31cc0d15"},
     {"source": "tutorials/electrophysiologyProtocols/singleCell/regression/singleCell.reference", "destination": "case/regression/singleCell.reference", "sha256": "42f355ef631f60923dd413afb7b2b59cc3e67852fe45362f00d0c0ff7e4a3350"},
     {"source": "tutorials/electrophysiologyProtocols/singleCell/system/controlDict", "destination": "case/system/controlDict", "sha256": "b1cb92b3b3322a13dad1f7f14cef367f91bad240bcb19ff21d93da199c5815db"},
     {"source": "tutorials/electrophysiologyProtocols/singleCell/system/blockMeshDict", "destination": "case/system/blockMeshDict", "sha256": "8a75c779b0a154c1daa78bfe8dc50455da206be52c5d02c45b24c1e517af83ae"},

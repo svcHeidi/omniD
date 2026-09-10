@@ -3,19 +3,24 @@
   "case_id": "niederer-tissue-reference",
   "input_policy": "committed",
   "reference": {
-    "source_revision": "98afac41a8c3e3de1ef1067b7e5f1d5ca4349cb0",
+    "source_revision": "3aa4b48fa5fd896933b3758f5a084e265f9ba9de",
     "source_case_root": "tutorials/NiedererEtAl2011/NiedererEtAl2011verification",
     "checker": {
-      "availability": "pending-solver-check-only-interface",
+      "availability": "available",
       "path": "regression/regressionTest.sh",
       "reference_data": "regression/NiedererEtAl2011.reference",
       "mode": "check-only",
       "report_path": "regression/comparison-report.json"
     }
   },
+  "integration": {
+    "driver_command": ["{python}", "-m", "omnidriver", "run", "--strict", "--entry", "case", "--cases-root", "{stage_root}", "--environment-bashrc", "{openfoam_bashrc}"],
+    "solver_checker_command": ["bash", "regression/regressionTest.sh", "--check-only", "--report", "regression/comparison-report.json"],
+    "timeout_s": 3600
+  },
   "inputs": [
     {"source": "tutorials/NiedererEtAl2011/NiedererEtAl2011verification/Allrun", "destination": "case/Allrun", "sha256": "267e368d9133324a36aa89382998b67a7ed0359bdeb958881d5f727ef4b26d29"},
-    {"source": "tutorials/NiedererEtAl2011/NiedererEtAl2011verification/regression/regressionTest.sh", "destination": "case/regression/regressionTest.sh", "sha256": "daffd2bc75b07c99da9a08b51b8d90c0f8c05c2ce07fa0f8d58f49d285ba86cf"},
+    {"source": "tutorials/NiedererEtAl2011/NiedererEtAl2011verification/regression/regressionTest.sh", "destination": "case/regression/regressionTest.sh", "sha256": "480b209a4435374b0d71c7f3fdb956658207488d92343c5f42982eee750df20d"},
     {"source": "tutorials/NiedererEtAl2011/NiedererEtAl2011verification/regression/NiedererEtAl2011.reference", "destination": "case/regression/NiedererEtAl2011.reference", "sha256": "9c6ced171ad247db523bfb7eecc6c9575ad69079440916446cf66e1922441618"},
     {"source": "tutorials/NiedererEtAl2011/NiedererEtAl2011verification/system/controlDict", "destination": "case/system/controlDict", "sha256": "7fa8a8c58fe88cde9a6ff3e5368981cad349ddaa37227aac0a40094725c00560"},
     {"source": "tutorials/NiedererEtAl2011/NiedererEtAl2011verification/system/blockMeshDict", "destination": "case/system/blockMeshDict", "sha256": "1e2bf992d43bce48b16ab49f4240d4ff955b20b2d62ebd019c60f3c242e74b7e"},

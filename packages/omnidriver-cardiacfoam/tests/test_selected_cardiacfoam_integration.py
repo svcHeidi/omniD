@@ -124,7 +124,9 @@ def test_driver_and_solver_checker_evidence_are_recorded_separately(tmp_path: Pa
     assert evidence.driver.returncode == 0
     assert evidence.solver_checker.returncode == 0
     assert evidence.driver.log_path != evidence.solver_checker.log_path
+    assert evidence.case_root == evidence.stage_root / "case"
     payload = json.loads(evidence.evidence_path.read_text())
+    assert payload["case_root"] == str(evidence.case_root)
     assert payload["driver"]["returncode"] == 0
     assert payload["solver_checker"]["returncode"] == 0
     assert (evidence.stage_root / "case/system/controlDict").is_file()

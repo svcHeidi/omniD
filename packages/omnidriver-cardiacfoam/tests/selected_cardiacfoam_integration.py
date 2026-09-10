@@ -36,6 +36,7 @@ class CommandEvidence:
 @dataclass(frozen=True)
 class IntegrationEvidence:
     stage_root: Path
+    case_root: Path
     input_digest: str
     driver: CommandEvidence
     solver_checker: CommandEvidence
@@ -72,15 +73,18 @@ def run_selected_integration(
     command/RunDocument.  The outer timeout protects the test host only.
     """
     staged = materialize_case_inputs(runtime, load_case_input_manifest(runtime))
+    case_root = staged.root / "case"
+    if not case_root.is_dir():
+        raise FixtureInputError("Selected case inputs must materialize below case/")
     driver = _run_command(
-        _render(commands.driver, staged.root),
-        cwd=staged.root,
+        _render(commands.driver, staged.root, runtime),
+        cwd=case_root,
         log_name="driver-command.log",
         timeout_s=commands.timeout_s,
     )
     checker = _run_command(
-        _render(commands.solver_checker, staged.root),
-        cwd=staged.root,
+        _render(commands.solver_checker, staged.root, runtime),
+        cwd=case_root,
         log_name="solver-checker.log",
         timeout_s=commands.timeout_s,
     )
@@ -88,6 +92,7 @@ def run_selected_integration(
     payload = {
         "schema_version": 1,
         "stage_root": str(staged.root),
+        "case_root": str(case_root),
         "input_digest": staged.input_digest,
         "driver": asdict(driver),
         "solver_checker": asdict(checker),
@@ -95,6 +100,7 @@ def run_selected_integration(
     evidence_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
     return IntegrationEvidence(
         stage_root=staged.root,
+        case_root=case_root,
         input_digest=staged.input_digest,
         driver=driver,
         solver_checker=checker,
@@ -108,8 +114,14 @@ def _command(value: object, name: str) -> tuple[str, ...]:
     return tuple(value)
 
 
-def _render(command: tuple[str, ...], stage_root: Path) -> tuple[str, ...]:
-    values = {"{stage_root}": str(stage_root), "{python}": sys.executable}
+def _render(
+    command: tuple[str, ...], stage_root: Path, runtime: SelectedRuntime
+) -> tuple[str, ...]:
+    values = {
+        "{stage_root}": str(stage_root),
+        "{python}": sys.executable,
+        "{openfoam_bashrc}": str(runtime.openfoam_bashrc),
+    }
     rendered = []
     for argument in command:
         for token, replacement in values.items():

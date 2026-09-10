@@ -9,7 +9,7 @@ import pytest
 
 
 _FIXTURES = Path(__file__).parent / "fixtures" / "reference_experiments"
-_SOURCE_REVISION = "98afac41a8c3e3de1ef1067b7e5f1d5ca4349cb0"
+_SOURCE_REVISION = "3aa4b48fa5fd896933b3758f5a084e265f9ba9de"
 
 
 @pytest.mark.parametrize(
@@ -32,11 +32,22 @@ def test_reference_fixture_declares_inputs_and_solver_owned_checker(
     assert payload["reference"]["source_revision"] == _SOURCE_REVISION
     assert payload["reference"]["source_case_root"] == expected_case
     checker = payload["reference"]["checker"]
-    assert checker["availability"] == "pending-solver-check-only-interface"
+    assert checker["availability"] == "available"
     assert checker["mode"] == "check-only"
     assert checker["path"] == "regression/regressionTest.sh"
     assert checker["reference_data"].startswith("regression/")
     assert checker["report_path"].startswith("regression/")
+    integration = payload["integration"]
+    assert integration["driver_command"][:4] == ["{python}", "-m", "omnidriver", "run"]
+    assert integration["driver_command"][-2:] == ["--environment-bashrc", "{openfoam_bashrc}"]
+    assert integration["solver_checker_command"] == [
+        "bash",
+        "regression/regressionTest.sh",
+        "--check-only",
+        "--report",
+        checker["report_path"],
+    ]
+    assert integration["timeout_s"] == 3600
     assert payload["inputs"]
     assert all(item["source"].startswith(expected_case + "/") for item in payload["inputs"])
     assert all(item["destination"].startswith("case/") for item in payload["inputs"])
