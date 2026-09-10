@@ -408,6 +408,22 @@ def legacy_auxiliary_commands(plugin) -> frozenset[str]:
 
 
 @_instrumented
+def legacy_environment_commands(plugin) -> frozenset[str]:
+    """Plugins without an environment declaration authorize no such commands."""
+
+    del plugin
+    return frozenset()
+
+
+@_instrumented
+def legacy_is_installed_environment_command(plugin, command: str) -> bool:
+    """A missing environment declaration cannot authorize dynamic commands."""
+
+    del plugin, command
+    return False
+
+
+@_instrumented
 def legacy_utility_manifests(plugin) -> dict:
     """v1 plugins predate get_utility_manifests(). A plugin that does not
     implement the hook gets no utility catalog."""

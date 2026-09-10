@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import shlex
-import shutil
 from dataclasses import asdict, dataclass, field
 from pathlib import Path, PurePath
 from typing import Any, Iterable
@@ -16,23 +15,15 @@ STEP_STATUS_VALUES = ("pending", "running", "completed", "failed", "skipped")
 
 # Single owner of the command allowlist, shared by strict_planning and the
 # run-document adapter (see threat model in the RunDocument execution plan).
-# Solver-NEUTRAL OpenFOAM and driver binaries, always allowed, resolved via
-# PATH. Solver binaries (e.g. cardiacFoam) are plugin-owned and arrive through
-# the CommandAuthorizationCapability; core must not name any solver here.
+# Core-only process commands, always allowed and resolved via PATH. Solver and
+# environment commands arrive through CommandAuthorizationCapability; Core
+# must not name either kind here.
 # Case-local scripts (Allrun-family) live in CASE_SCRIPT_COMMANDS instead.
 CORE_NEUTRAL_COMMANDS = frozenset(
     {
-        "blockMesh",
-        "checkMesh",
-        "decomposePar",
-        "gmsh",
-        "gmshToFoam",
         "mpirun",
-        "postProcess",
-        "reconstructPar",
-        "setExprFields",
-        "topoSet",
-        "vtkUnstructuredToFoam",
+        "mpiexec",
+        "orterun",
     }
 )
 
@@ -487,27 +478,6 @@ def workflow_output_artifacts(
     return tuple(artifact for artifact in artifacts if artifact.produced_by != "driverFOAM")
 
 
-def _is_installed_openfoam_app(command: str) -> bool:
-    """True when ``command`` resolves to an executable installed under
-    ``$FOAM_APPBIN`` or ``$FOAM_USER_APPBIN`` — i.e. a real OpenFOAM
-    application (core or user-compiled). When neither env var is set
-    (OpenFOAM not sourced, e.g. the test suite) this returns ``False``, so
-    the allowlist falls back to the always-on core set + utilities.
-    """
-    roots = []
-    for var in ("FOAM_APPBIN", "FOAM_USER_APPBIN"):
-        value = os.environ.get(var)
-        if value:
-            roots.append(Path(value).resolve())
-    if not roots:
-        return False
-    resolved = shutil.which(command)
-    if not resolved:
-        return False
-    resolved_path = Path(resolved).resolve()
-    return any(resolved_path.is_relative_to(root) for root in roots)
-
-
 def validate_workflow_commands(
     workflow_dag: dict[str, Any] | None,
     *,
@@ -520,10 +490,9 @@ def validate_workflow_commands(
     ``CommandAuthorizationCapability``, :func:`case_script_commands` (the
     Allrun-family fixed names plus the active plugin's own declared
     entrypoint), that context's utility manifests that declare ``produces``,
-    and executables installed under ``$FOAM_APPBIN`` / ``$FOAM_USER_APPBIN``
-    (see :func:`_is_installed_openfoam_app`). Without a ``driver_context`` no
-    plugin command and no utility is authorized, leaving only the
-    core-neutral commands, case scripts, and installed OpenFOAM apps. An
+    and applications the active environment recognizes at runtime. Without a
+    ``driver_context`` no environment, plugin command, or utility is
+    authorized, leaving only core-neutral commands and case scripts. An
     explicit path form (``command`` containing ``/``) is allowed only as
     ``./<name>`` where ``<name>`` is a case script — this keeps the gate in
     parity with ``_resolve_command`` (which lets ``./Allrun`` through) while
@@ -540,9 +509,11 @@ def validate_workflow_commands(
         plugin_commands = (
             authorization.solver_commands() | authorization.auxiliary_commands()
         )
+        environment_commands = authorization.environment_commands()
         utilities = authorization.utility_manifests()
     else:
         plugin_commands = frozenset()
+        environment_commands = frozenset()
         utilities = {}
 
     diagnostics: list[WorkflowDiagnostic] = []
@@ -575,6 +546,7 @@ def validate_workflow_commands(
             continue
         if (
             command in CORE_NEUTRAL_COMMANDS
+            or command in environment_commands
             or command in plugin_commands
             or command in case_scripts
         ):
@@ -590,14 +562,17 @@ def validate_workflow_commands(
                 field=step_id,
             ))
             continue
-        if _is_installed_openfoam_app(command):
+        if (
+            driver_context is not None
+            and authorization.is_installed_environment_command(command)
+        ):
             continue
         diagnostics.append(WorkflowDiagnostic(
             level="error",
             code="unknown_workflow_command",
             message=(
-                f"Workflow command {command!r} is not a known OpenFOAM command, "
-                "case script, registered utility, or installed OpenFOAM application."
+                f"Workflow command {command!r} is not a declared core, environment, "
+                "plugin, case-script, or utility command."
             ),
             field=step_id,
         ))

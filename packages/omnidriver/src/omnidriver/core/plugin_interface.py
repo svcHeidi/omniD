@@ -96,6 +96,19 @@ class SolverPlugin(Protocol):
         own -- meshers, decomposers, reconstructors."""
         ...
 
+    def get_environment_commands(self) -> frozenset[str]:
+        """Optional static commands supplied by the execution environment.
+
+        For example, an OpenFOAM adapter declares its meshing and
+        reconstruction tools here.  Core does not provide environment command
+        names itself.
+        """
+        ...
+
+    def is_installed_environment_command(self, command: str) -> bool:
+        """Optional runtime lookup for an environment-provided application."""
+        ...
+
     def get_utility_manifests(self) -> dict[str, Any]:
         """Per-utility declarations of what each pre/post-solve utility
         consumes and produces, so workflow steps can be checked before they

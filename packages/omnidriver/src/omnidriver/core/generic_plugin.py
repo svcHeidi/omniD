@@ -77,7 +77,12 @@ class GenericOpenFOAMPlugin:
         from omnidriver.core.runtime.workflow import CASE_SCRIPT_COMMANDS
 
         return build_capability_manifest(
-            plugin_commands=self.get_solver_commands() | self.get_auxiliary_commands(),
+            environment_commands=self.get_environment_commands(),
+            plugin_commands=(
+                self.get_solver_commands()
+                | self.get_auxiliary_commands()
+                | self.get_environment_commands()
+            ),
             utility_manifests=self.get_utility_manifests(),
             samplable_fields=self.get_samplable_fields({}),
             case_script_commands=CASE_SCRIPT_COMMANDS
@@ -106,6 +111,16 @@ class GenericOpenFOAMPlugin:
     def get_auxiliary_commands(self) -> frozenset[str]:
         """No solver semantics means no plugin-specific helpers either."""
         return frozenset()
+
+    def get_environment_commands(self) -> frozenset[str]:
+        from omnidriver.openfoam.command_authorization import openfoam_runtime_commands
+
+        return openfoam_runtime_commands()
+
+    def is_installed_environment_command(self, command: str) -> bool:
+        from omnidriver.openfoam.command_authorization import is_installed_openfoam_application
+
+        return is_installed_openfoam_application(command)
 
     def get_utility_manifests(self) -> dict:
         return {}

@@ -7,6 +7,8 @@ from omnidriver.core.runtime.workflow import (
     CORE_NEUTRAL_COMMANDS,
     validate_workflow_commands,
 )
+from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+from omnidriver.core.plugin_interface import driver_context
 def _dag(command: str) -> dict:
     return {"steps": [{"id": "s", "command": command, "depends_on": []}]}
 
@@ -14,20 +16,19 @@ def _dag(command: str) -> dict:
 def test_core_neutral_commands_contain_no_solver_names() -> None:
     assert "cardiacFoam" not in CORE_NEUTRAL_COMMANDS
     assert "bathBidomainInterfaceMetrics" not in CORE_NEUTRAL_COMMANDS
-    # Solver-neutral OpenFOAM tooling stays in core.
-    assert "blockMesh" in CORE_NEUTRAL_COMMANDS
-    assert "decomposePar" in CORE_NEUTRAL_COMMANDS
+    # OpenFOAM tooling is declared by its adapter, not Core.
+    assert "blockMesh" not in CORE_NEUTRAL_COMMANDS
+    assert "decomposePar" not in CORE_NEUTRAL_COMMANDS
     assert "mpirun" in CORE_NEUTRAL_COMMANDS
 
 
 def _without_installed_openfoam_apps(monkeypatch) -> None:
-    """Isolate the PLUGIN authorization rule from the $FOAM_APPBIN rule.
+    """Isolate plugin authorization from the OpenFOAM runtime declaration.
 
-    The allowlist deliberately accepts any executable installed under
-    $FOAM_APPBIN / $FOAM_USER_APPBIN, so that a user's own compiled utility
-    runs without being catalogued. With OpenFOAM sourced, cardiacFoam IS such
-    an executable -- so it is accepted by that rule regardless of which plugin
-    is active.
+    The OpenFOAM adapter deliberately accepts any executable installed under
+    its app roots, so a user's compiled utility can run without a catalog
+    entry. With OpenFOAM sourced, cardiacFoam may be such an executable -- so
+    it is accepted by that declaration regardless of solver semantics.
 
     These two tests originally asserted outright rejection and passed only
     because OpenFOAM happened not to be sourced in the authoring environment:
@@ -36,7 +37,7 @@ def _without_installed_openfoam_apps(monkeypatch) -> None:
     plugin does not authorize cardiacFoam *as a plugin command*.
     """
     monkeypatch.setattr(
-        "omnidriver.core.runtime.workflow._is_installed_openfoam_app",
+        "omnidriver.openfoam.command_authorization.is_installed_openfoam_application",
         lambda command: False,
     )
 
@@ -52,10 +53,30 @@ def test_generic_plugin_does_not_authorize_the_cardiac_solver(monkeypatch) -> No
     assert "unknown_workflow_command" in codes
 
 
-def test_no_context_accepts_only_core_neutral_commands(monkeypatch) -> None:
+def test_no_context_accepts_only_core_commands(monkeypatch) -> None:
     _without_installed_openfoam_apps(monkeypatch)
-    assert validate_workflow_commands(_dag("blockMesh")) == ()
+    codes = {d.code for d in validate_workflow_commands(_dag("blockMesh"))}
+    assert "unknown_workflow_command" in codes
     codes = {d.code for d in validate_workflow_commands(_dag("cardiacFoam"))}
+    assert "unknown_workflow_command" in codes
+
+
+def test_generic_openfoam_environment_authorizes_its_declared_commands() -> None:
+    assert validate_workflow_commands(
+        _dag("blockMesh"), driver_context=generic_openfoam_context(),
+    ) == ()
+
+
+def test_neutral_environment_does_not_authorize_openfoam_commands() -> None:
+    context = driver_context(NeutralEnvironmentPlugin(), source="test:commands")
+
+    codes = {
+        diagnostic.code
+        for diagnostic in validate_workflow_commands(
+            _dag("blockMesh"), driver_context=context,
+        )
+    }
+
     assert "unknown_workflow_command" in codes
 
 
@@ -69,7 +90,7 @@ def test_an_installed_openfoam_app_is_authorized_whatever_the_plugin(monkeypatch
     exercise.
     """
     monkeypatch.setattr(
-        "omnidriver.core.runtime.workflow._is_installed_openfoam_app",
+        "omnidriver.openfoam.command_authorization.is_installed_openfoam_application",
         lambda command: command == "someInstalledApp",
     )
     context = generic_openfoam_context()

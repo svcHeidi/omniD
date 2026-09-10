@@ -443,14 +443,21 @@ class CommandAuthorizationCapability(Protocol):
     only ``solver_commands`` names binaries that produce a run's artifacts;
     core's artifact-producer heuristic must consult that one alone.
 
-    :adapts: get_auxiliary_commands, get_solver_commands, get_utility_manifests, get_utility_roots
+    ``environment_commands`` is a declaration from the execution environment,
+    not from solver semantics.  ``is_installed_environment_command`` permits
+    the adapter to recognize runtime-discovered applications without exposing
+    its environment variables to Core.
+
+    :adapts: get_auxiliary_commands, get_environment_commands, get_solver_commands, get_utility_manifests, get_utility_roots, is_installed_environment_command
     :consumed-by: omnidriver/core/runtime/artifacts.py, omnidriver/core/runtime/workflow.py, omnidriver/core/strict_planning.py
-    :fallback: legacy_auxiliary_commands, legacy_solver_commands, legacy_utility_manifests, legacy_utility_roots
+    :fallback: legacy_auxiliary_commands, legacy_environment_commands, legacy_is_installed_environment_command, legacy_solver_commands, legacy_utility_manifests, legacy_utility_roots
     :status: optional
     """
 
     def solver_commands(self) -> frozenset[str]: ...
     def auxiliary_commands(self) -> frozenset[str]: ...
+    def environment_commands(self) -> frozenset[str]: ...
+    def is_installed_environment_command(self, command: str) -> bool: ...
     def utility_manifests(self) -> dict[str, Any]: ...
     def utility_roots(self) -> tuple[Path, ...]: ...
 
@@ -1068,6 +1075,22 @@ class _CommandAuthorizationAdapter:
         from .compatibility import legacy_auxiliary_commands
 
         return legacy_auxiliary_commands(self.plugin)
+
+    def environment_commands(self) -> frozenset[str]:
+        hook = getattr(self.plugin, "get_environment_commands", None)
+        if callable(hook):
+            return frozenset(hook())
+        from .compatibility import legacy_environment_commands
+
+        return legacy_environment_commands(self.plugin)
+
+    def is_installed_environment_command(self, command: str) -> bool:
+        hook = getattr(self.plugin, "is_installed_environment_command", None)
+        if callable(hook):
+            return bool(hook(command))
+        from .compatibility import legacy_is_installed_environment_command
+
+        return legacy_is_installed_environment_command(self.plugin, command)
 
     def utility_manifests(self) -> dict[str, Any]:
         hook = getattr(self.plugin, "get_utility_manifests", None)

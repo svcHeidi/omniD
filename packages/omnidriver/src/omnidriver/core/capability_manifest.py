@@ -38,6 +38,7 @@ def _utility_commands(utility_manifests: dict[str, Any]) -> dict[str, list[str]]
 
 def build_capability_manifest(
     *,
+    environment_commands: Iterable[str] = (),
     plugin_commands: Iterable[str] = (),
     utility_manifests: dict[str, Any] | None = None,
     samplable_fields: dict[str, tuple[str, ...]] | None = None,
@@ -45,11 +46,12 @@ def build_capability_manifest(
 ) -> dict[str, Any]:
     """Return the driver's accept-surface as a plain JSON-able dict.
 
-    ``plugin_commands``, ``utility_manifests``, ``samplable_fields``, and
-    ``case_script_commands`` are all supplied by the calling plugin so that
-    core names no solver here; together with :data:`CORE_NEUTRAL_COMMANDS`
-    the commands reproduce exactly what ``validate_workflow_commands``
-    accepts for that plugin. ``case_script_commands`` defaults to the fixed
+    ``environment_commands``, ``plugin_commands``, ``utility_manifests``,
+    ``samplable_fields``, and ``case_script_commands`` are supplied by the
+    active adapter so Core names neither an environment nor a solver here.
+    Together with :data:`CORE_NEUTRAL_COMMANDS` the commands reproduce exactly
+    what ``validate_workflow_commands`` accepts for that plugin.
+    ``case_script_commands`` defaults to the fixed
     Allrun-family set; a plugin whose entrypoint has its own declared name
     passes ``runtime.workflow.case_script_commands(driver_context)`` instead
     (its ``get_capabilities()`` has no ``DriverContext`` to read one from,
@@ -68,22 +70,21 @@ def build_capability_manifest(
 
     return {
         "allowed_commands": {
-            "core": sorted(set(CORE_NEUTRAL_COMMANDS) | set(plugin_commands)),
+            "core": sorted(CORE_NEUTRAL_COMMANDS),
+            "environment": sorted(environment_commands),
+            "plugin": sorted(plugin_commands),
             "case_scripts": sorted(case_script_commands),
             "utilities": _utility_commands(utility_manifests or {}),
-            "installed_openfoam_apps_note": (
-                "When OpenFOAM is sourced, any executable under $FOAM_APPBIN or "
-                "$FOAM_USER_APPBIN is also accepted (core apps + your compiled "
-                "utilities). Unsourced, only core + case_scripts + utilities apply."
+            "environment_runtime_note": (
+                "The active environment may also authorize discovered runtime "
+                "applications through its command contract."
             ),
         },
         "samplable_fields": {
             **{region: sorted(names) for region, names in fields.items()},
             "note": (
-                "Function objects are OpenFOAM's; these are the field NAMES this "
-                "solver exposes. Sampling a name not listed here is silently "
-                "dropped by the solver (strict planning emits unknown_sampled_field "
-                "warnings for such names)."
+                "These are field names the active adapter reports as sampleable "
+                "for the resolved model."
             ),
         },
     }

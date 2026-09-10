@@ -11,6 +11,7 @@ from omnidriver.cardiacfoam.command_authorization import (
     CARDIAC_SOLVER_COMMANDS,
     utility_manifests,
 )
+from omnidriver.openfoam.command_authorization import openfoam_runtime_commands
 import functools
 
 # The manifest advertises the accept-surface, which is the union of both kinds
@@ -19,6 +20,7 @@ CARDIAC_AUTHORIZED_COMMANDS = CARDIAC_SOLVER_COMMANDS | CARDIAC_AUXILIARY_COMMAN
 
 build_capability_manifest = functools.partial(
     build_capability_manifest,
+    environment_commands=openfoam_runtime_commands(),
     plugin_commands=CARDIAC_AUTHORIZED_COMMANDS,
     utility_manifests=dict(utility_manifests()),
 )
@@ -49,10 +51,12 @@ from omnidriver.core.runtime.workflow import (
 
 def test_core_commands_match_enforcer():
     manifest = build_capability_manifest()
-    # The enforcer accepts the core-neutral set plus whatever the active
-    # plugin authorizes; the manifest must advertise exactly that union.
-    assert set(manifest["allowed_commands"]["core"]) == (
-        set(CORE_NEUTRAL_COMMANDS) | set(CARDIAC_AUTHORIZED_COMMANDS)
+    assert set(manifest["allowed_commands"]["core"]) == set(CORE_NEUTRAL_COMMANDS)
+    assert set(manifest["allowed_commands"]["environment"]) == set(
+        openfoam_runtime_commands(),
+    )
+    assert set(manifest["allowed_commands"]["plugin"]) == set(
+        CARDIAC_AUTHORIZED_COMMANDS,
     )
     assert set(manifest["allowed_commands"]["case_scripts"]) == set(CASE_SCRIPT_COMMANDS)
 
@@ -134,7 +138,7 @@ def test_describe_entry_includes_capability_manifest():
 
     payload = describe_entry("singleCell", driver_context=default_driver_context())
     manifest = payload["capability_manifest"]
-    assert "cardiacFoam" in manifest["allowed_commands"]["core"]
+    assert "cardiacFoam" in manifest["allowed_commands"]["plugin"]
     assert "electro" in manifest["samplable_fields"]
 
 
@@ -145,4 +149,4 @@ def test_strict_plan_carries_capability_manifest(monkeypatch):
     report = strict_plan(
         "singleCell", driver_context=default_driver_context(),
     ).to_json()
-    assert "cardiacFoam" in report["capability_manifest"]["allowed_commands"]["core"]
+    assert "cardiacFoam" in report["capability_manifest"]["allowed_commands"]["plugin"]

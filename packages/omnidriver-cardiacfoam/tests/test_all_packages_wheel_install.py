@@ -93,9 +93,11 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
         assert generic_openfoam_context().capabilities.case_runtime_conventions.conventions().output_collection_relpath == "postProcessing"
         assert generic_openfoam_context().capabilities.case_runtime_conventions.conventions().time_directory_name_pattern
         assert generic_openfoam_context().capabilities.case_runtime_conventions.conventions().case_discovery_ignored_directory_names == ("postProcessing", "logs")
+        assert "blockMesh" in generic_openfoam_context().capabilities.command_authorization.environment_commands()
         assert load_plugin_context("cardiacfoam").capabilities.case_runtime_conventions.conventions().output_collection_relpath == "postProcessing"
         assert load_plugin_context("cardiacfoam").capabilities.case_runtime_conventions.conventions().time_directory_name_pattern
         assert load_plugin_context("cardiacfoam").capabilities.case_runtime_conventions.conventions().case_discovery_ignored_directory_names == ("postProcessing", "logs")
+        assert "blockMesh" in load_plugin_context("cardiacfoam").capabilities.command_authorization.environment_commands()
         assert files("omnidriver.cardiacfoam").joinpath(
             "fixtures/template/constant/electroProperties"
         ).is_file()

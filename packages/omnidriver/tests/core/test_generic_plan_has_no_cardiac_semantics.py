@@ -83,7 +83,7 @@ def test_generic_plan_still_produces_a_usable_contract(tmp_path, monkeypatch) ->
     payload = _generic_plan(tmp_path)
     assert payload["workflow_dag"]["steps"], "generic plan must have runnable steps"
     assert payload["capability_manifest"]["allowed_commands"]["utilities"] == {}
-    assert "cardiacFoam" not in payload["capability_manifest"]["allowed_commands"]["core"]
+    assert "cardiacFoam" not in payload["capability_manifest"]["allowed_commands"]["plugin"]
 
 
 def test_generic_describe_override_surface_has_no_cardiac_semantics(
