@@ -110,7 +110,10 @@ class TestTimeIndexedReconciliation(unittest.TestCase):
                 format="openfoam_time_dirs",
                 time_indexed=True,
             )
-            report = reconcile_artifacts(case_root, (artifact,))
+            report = reconcile_artifacts(
+                case_root, (artifact,),
+                time_directory_names=("0", "0.001", "0.002"),
+            )
             entry = report.artifacts[0]
             self.assertEqual(entry["status"], "matched")
             self.assertEqual(len(entry["matched_files"]), 3)
@@ -132,6 +135,23 @@ class TestTimeIndexedReconciliation(unittest.TestCase):
                 time_indexed=True,
             )
             report = reconcile_artifacts(case_root, (artifact,))
+            self.assertEqual(report.artifacts[0]["status"], "missing")
+
+    def test_numeric_directories_are_not_times_without_a_declaration(self) -> None:
+        from omnidriver.core.runtime.reconciler import reconcile_artifacts
+        with tempfile.TemporaryDirectory() as temp:
+            case_root = Path(temp)
+            (case_root / "1").mkdir()
+            (case_root / "1" / "result.dat").write_bytes(b"output")
+            artifact = _make_artifact(
+                artifact_id="series",
+                path_pattern="{time}/result.dat",
+                format="environment_series",
+                time_indexed=True,
+            )
+
+            report = reconcile_artifacts(case_root, (artifact,))
+
             self.assertEqual(report.artifacts[0]["status"], "missing")
 
 
@@ -181,7 +201,10 @@ class TestRealPredictorOutputShapes(unittest.TestCase):
                 format="openfoam_time_dirs",
                 time_indexed=True,
             )
-            report = reconcile_artifacts(case_root, (artifact,))
+            report = reconcile_artifacts(
+                case_root, (artifact,),
+                time_directory_names=("0", "0.001", "0.002"),
+            )
             entry = report.artifacts[0]
             self.assertEqual(entry["status"], "matched")
             self.assertEqual(len(entry["matched_files"]), 3)

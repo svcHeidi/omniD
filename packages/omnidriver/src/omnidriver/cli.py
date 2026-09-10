@@ -222,16 +222,22 @@ def _execute_step(
     return 0 if result.status == "succeeded" else 1
 
 
-def _reconciliation_payload(case_root: Path, expected_artifacts) -> dict:
+def _reconciliation_payload(case_root: Path, expected_artifacts, *, driver_context=None) -> dict:
     """Reconcile predicted artifacts against what actually landed on disk.
 
     Describes only: which predicted artifacts resolved to which files, their
     size and sha256. It makes no judgement about the values inside them --
     interpretation is the caller's job.
     """
-    from .core.runtime.reconciler import reconcile_artifacts
+    from .core.runtime.reconciler import declared_time_directory_names, reconcile_artifacts
 
-    return reconcile_artifacts(case_root, expected_artifacts or ()).to_json()
+    return reconcile_artifacts(
+        case_root,
+        expected_artifacts or (),
+        time_directory_names=declared_time_directory_names(
+            case_root, driver_context=driver_context,
+        ),
+    ).to_json()
 
 
 def _execute_run(
@@ -322,7 +328,7 @@ def _execute_run(
     elif workflow_state.status == "pending" and max_total_attempts is not None:
         payload["error"] = "maximum total step attempts reached; workflow remains incomplete"
     payload["artifact_reconciliation"] = _reconciliation_payload(
-        case_root, expected_artifacts
+        case_root, expected_artifacts, driver_context=driver_context,
     )
     if status == "ok":
         payload["postprocess"] = run_postprocess_phase(

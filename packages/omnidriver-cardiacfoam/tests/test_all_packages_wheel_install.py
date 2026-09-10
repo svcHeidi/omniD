@@ -91,7 +91,9 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
         assert "cardiacfoam" in discover_plugins()
         assert load_plugin_context("cardiacfoam").identity.id == "org.cardiacfoam"
         assert generic_openfoam_context().capabilities.case_runtime_conventions.conventions().output_collection_relpath == "postProcessing"
+        assert generic_openfoam_context().capabilities.case_runtime_conventions.conventions().time_directory_name_pattern
         assert load_plugin_context("cardiacfoam").capabilities.case_runtime_conventions.conventions().output_collection_relpath == "postProcessing"
+        assert load_plugin_context("cardiacfoam").capabilities.case_runtime_conventions.conventions().time_directory_name_pattern
         assert files("omnidriver.cardiacfoam").joinpath(
             "fixtures/template/constant/electroProperties"
         ).is_file()

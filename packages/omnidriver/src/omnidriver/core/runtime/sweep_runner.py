@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -93,42 +94,29 @@ def _relative_or_absolute(path: Path, base: Path) -> str:
         return str(path)
 
 
-def _is_stale_time_dir_name(name: str) -> bool:
-    """True for an OpenFOAM time-directory name other than the literal '0'.
-
-    '0' is a real, on-disk initial condition for some tutorials and must
-    never be touched here. Every other numeric name (e.g. '0.0982143',
-    written by a prior case's reconstructPar) is always solve *output*,
-    never an input -- safe to clear before the next case reuses this
-    case_root.
-    """
-    if name == "0":
-        return False
-    try:
-        float(name)
-    except ValueError:
-        return False
-    return True
+def _is_declared_generated_time_directory(name: str, conventions) -> bool:
+    """Apply the environment's declared time-directory rule without naming it."""
+    pattern = conventions.time_directory_name_pattern
+    return (
+        pattern is not None
+        and name not in conventions.preserved_time_directory_names
+        and re.match(pattern, name) is not None
+    )
 
 
 def _clean_stale_time_directories(case_root: Path, *, conventions) -> None:
     """Remove prior generated time directories when the environment declares them.
 
     Entry-based sweeps reuse one shared case_root across cases (see
-    _materialize_entry_case's docstring). decomposePar's -force flag already
-    clears stale processor*/ dirs, but a case with no real 0/ (e.g. a
-    manufactured-solution verifier, whose IC the solver computes rather than
-    reads from disk) has nothing to anchor OpenFOAM's -time selector to --
-    "-time <value>" matches the *nearest* existing time, not an exact one
-    (confirmed via timeSelector.C), so a leftover time directory from the
-    previous case would silently get decomposed onto this case's new mesh
-    instead. Clearing them here, before the case that would otherwise read
-    them, is the fix.
+    _materialize_entry_case's docstring). A case with no authored initial
+    directory can otherwise consume a prior run's generated time directory.
+    Clearing declared generated directories before materialization prevents
+    that stale-state reuse.
     """
-    if not conventions.nonzero_numeric_directories_are_generated or not case_root.is_dir():
+    if conventions.time_directory_name_pattern is None or not case_root.is_dir():
         return
     for child in case_root.iterdir():
-        if child.is_dir() and _is_stale_time_dir_name(child.name):
+        if child.is_dir() and _is_declared_generated_time_directory(child.name, conventions):
             shutil.rmtree(child)
 
 
@@ -236,7 +224,7 @@ def _stage_entry_case(
             candidate = Path(_directory) / name
             # A previous driverFOAM case can have a descriptive directory name
             # (for example ``gauss_linear_40_*``) rather than a numeric
-            # OpenFOAM time name. Its workflow markers are the reliable
+            # generated numeric-time name. Its workflow markers are the reliable
             # boundary between authored tutorial content and generated case
             # content, so omit the whole directory when they are present.
             if candidate.is_dir() and any(
@@ -270,13 +258,8 @@ def _stage_entry_case(
                 ignored.add(name)
                 continue
             path = Path(name)
-            if conventions.nonzero_numeric_directories_are_generated and path.name != "0":
-                try:
-                    float(path.name)
-                except ValueError:
-                    pass
-                else:
-                    ignored.add(name)
+            if _is_declared_generated_time_directory(path.name, conventions):
+                ignored.add(name)
         return ignored
 
     source_case_root = Path(source_case_root).resolve()

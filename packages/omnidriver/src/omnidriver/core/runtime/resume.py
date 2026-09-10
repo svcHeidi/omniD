@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Mapping
 
 from .provenance import ProvenanceSnapshot, compare, snapshot_from_components
 from .provenance_inputs import enumerate_case_inputs
-from .reconciler import reconcile_artifacts
+from .reconciler import declared_time_directory_names, reconcile_artifacts
 from .workflow_state import WorkflowRunState, workflow_digest
 from .models import DataArtifact
 
@@ -99,7 +99,13 @@ def validate_resume(state: WorkflowRunState, workflow_dag: dict, *, case_root: P
         paths = ", ".join(diff.path for diff in differences)
         raise ValueError(f"Saved workflow input evidence changed ({paths or 'fingerprint policy'}); create a fresh run")
     if state.status == "completed":
-        report = reconcile_artifacts(case_root, expected_artifacts)
+        report = reconcile_artifacts(
+            case_root,
+            expected_artifacts,
+            time_directory_names=declared_time_directory_names(
+                case_root, driver_context=driver_context,
+            ),
+        )
         missing = [
             entry["artifact_id"]
             for entry in report.artifacts

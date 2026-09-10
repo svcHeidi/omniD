@@ -122,7 +122,8 @@ class CaseRuntimeConventions:
     generated_file_suffixes: tuple[str, ...] = ()
     preserved_file_suffixes: tuple[str, ...] = ()
     generated_case_markers: tuple[str, ...] = ()
-    nonzero_numeric_directories_are_generated: bool = False
+    time_directory_name_pattern: str | None = None
+    preserved_time_directory_names: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
