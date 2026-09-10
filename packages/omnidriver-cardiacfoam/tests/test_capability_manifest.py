@@ -12,6 +12,7 @@ from omnidriver.cardiacfoam.command_authorization import (
     utility_manifests,
 )
 from omnidriver.openfoam.command_authorization import openfoam_runtime_commands
+from omnidriver.openfoam.case_runtime_conventions import openfoam_case_runtime_conventions
 import functools
 
 # The manifest advertises the accept-surface, which is the union of both kinds
@@ -23,6 +24,9 @@ build_capability_manifest = functools.partial(
     environment_commands=openfoam_runtime_commands(),
     plugin_commands=CARDIAC_AUTHORIZED_COMMANDS,
     utility_manifests=dict(utility_manifests()),
+    case_script_commands=frozenset(
+        openfoam_case_runtime_conventions().case_script_commands
+    ),
 )
 
 
@@ -44,7 +48,6 @@ def _resolved(
 from omnidriver.core.plugin_interface import default_driver_context
 from omnidriver.core.runtime.workflow import (
     CORE_NEUTRAL_COMMANDS,
-    CASE_SCRIPT_COMMANDS,
     validate_workflow_commands,
 )
 
@@ -58,7 +61,9 @@ def test_core_commands_match_enforcer():
     assert set(manifest["allowed_commands"]["plugin"]) == set(
         CARDIAC_AUTHORIZED_COMMANDS,
     )
-    assert set(manifest["allowed_commands"]["case_scripts"]) == set(CASE_SCRIPT_COMMANDS)
+    assert set(manifest["allowed_commands"]["case_scripts"]) == set(
+        openfoam_case_runtime_conventions().case_script_commands
+    )
 
 
 def test_manifest_utilities_are_accepted_by_validator():

@@ -122,6 +122,7 @@ class CaseRuntimeConventions:
     generated_file_suffixes: tuple[str, ...] = ()
     preserved_file_suffixes: tuple[str, ...] = ()
     generated_case_markers: tuple[str, ...] = ()
+    case_script_commands: tuple[str, ...] = ()
     case_discovery_ignored_directory_names: tuple[str, ...] = ()
     decomposition_directory_prefix: str | None = None
     time_directory_name_pattern: str | None = None

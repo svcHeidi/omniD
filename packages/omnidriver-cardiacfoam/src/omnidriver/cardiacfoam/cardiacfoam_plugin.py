@@ -43,7 +43,6 @@ from omnidriver.cardiacfoam.active_tension_catalog import ACTIVE_TENSION_MODEL_C
 from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG
 from omnidriver.core.capability_manifest import build_capability_manifest
 from omnidriver.core.plugin_profile import entrypoint_relpaths_from_profile
-from omnidriver.core.runtime.workflow import CASE_SCRIPT_COMMANDS
 from omnidriver.cardiacfoam.solver_coupling import SOLVER_COMPATIBILITY_RULES
 from omnidriver.core.runtime.registry import list_tutorials
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
@@ -169,7 +168,9 @@ class CardiacFoamPlugin:
             # get_capabilities() runs before any DriverContext necessarily
             # wraps the plugin (future/
             # CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md §5).
-            case_script_commands=CASE_SCRIPT_COMMANDS
+            case_script_commands=frozenset(
+                self.get_case_runtime_conventions().case_script_commands
+            )
             | frozenset(entrypoint_relpaths_from_profile(self.get_profile())),
         )
         manifest["heterogeneity_models"] = HETEROGENEITY_MODELS

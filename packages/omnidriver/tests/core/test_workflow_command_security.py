@@ -137,6 +137,9 @@ class TestValidateWorkflowCommandsFoamApp(unittest.TestCase):
 
 
 class TestResolveCommandShadowing(unittest.TestCase):
+    def setUp(self) -> None:
+        self.context = openfoam_environment_context()
+
     def test_bare_binary_name_is_never_resolved_to_case_local_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             cwd = Path(temp)
@@ -147,11 +150,15 @@ class TestResolveCommandShadowing(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             cwd = Path(temp)
             _make_executable(cwd / "Allrun")
-            self.assertEqual(_resolve_command("Allrun", cwd), str(cwd / "Allrun"))
+            self.assertEqual(
+                _resolve_command("Allrun", cwd, self.context), str(cwd / "Allrun")
+            )
 
     def test_case_script_falls_through_when_absent(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
-            self.assertEqual(_resolve_command("Allrun", Path(temp)), "Allrun")
+            self.assertEqual(
+                _resolve_command("Allrun", Path(temp), self.context), "Allrun"
+            )
 
     def test_explicit_relative_path_passes_through(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

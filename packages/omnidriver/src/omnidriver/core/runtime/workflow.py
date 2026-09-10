@@ -18,7 +18,6 @@ STEP_STATUS_VALUES = ("pending", "running", "completed", "failed", "skipped")
 # Core-only process commands, always allowed and resolved via PATH. Solver and
 # environment commands arrive through CommandAuthorizationCapability; Core
 # must not name either kind here.
-# Case-local scripts (Allrun-family) live in CASE_SCRIPT_COMMANDS instead.
 CORE_NEUTRAL_COMMANDS = frozenset(
     {
         "mpirun",
@@ -27,24 +26,17 @@ CORE_NEUTRAL_COMMANDS = frozenset(
     }
 )
 
-# Bare command names that may resolve to a case-LOCAL executable. Every other
-# bare name resolves via PATH only, so a case dir cannot shadow a trusted
-# binary. Imported by workflow_runner for _resolve_command.
-CASE_SCRIPT_COMMANDS = frozenset({"Allrun", "Allclean", "Allrun.pre", "Allrun.post"})
-
+# Compatibility name for older callers. Core itself declares no case-local
+# command names; adapters provide them through runtime conventions.
+CASE_SCRIPT_COMMANDS = frozenset()
 
 def case_script_commands(driver_context: Any | None) -> frozenset[str]:
     """Bare command names that may resolve to a case-LOCAL executable, for
     the active plugin.
 
-    :data:`CASE_SCRIPT_COMMANDS` (the Allrun-family fixed names) always
-    qualify -- OpenFOAM's own convention, and every shipped plugin's
-    default -- unioned with the active plugin's declared entrypoint
-    path(s), so a plugin naming its entrypoint anything else still gets
-    case-local resolution for that exact name. ``Allclean``/``Allrun.pre``/
-    ``Allrun.post`` stay fixed: no role exists yet for a plugin to name its
-    own cleanup/pre/post scripts (see
-    future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md §3).
+    The active adapter supplies case-local command names through its runtime
+    convention declaration. Core adds only the adapter's declared entrypoint
+    paths; with no context the set is empty.
 
     The value flowing in here is set in the plugin's own static profile,
     never touched by an agent-authored ``RunDocument`` or case-folder
@@ -52,7 +44,12 @@ def case_script_commands(driver_context: Any | None) -> frozenset[str]:
     distrusts (see the threat model doc above) -- so widening this set to
     a plugin's own declared name does not change who can shadow PATH.
     """
-    return CASE_SCRIPT_COMMANDS | frozenset(entrypoint_relpaths(driver_context))
+    if driver_context is None:
+        return frozenset()
+    conventions = driver_context.capabilities.case_runtime_conventions.conventions()
+    return frozenset(conventions.case_script_commands) | frozenset(
+        entrypoint_relpaths(driver_context)
+    )
 
 
 # MPI launcher recognition: generic to any parallel workflow step (OpenMPI,
@@ -418,8 +415,8 @@ def normalize_workflow_dag(
     if unclaimed_artifacts:
         # Only run-style steps may be credited with producing artifacts: the
         # case run script plus whatever solver binaries the context authorizes.
-        # The rest of CASE_SCRIPT_COMMANDS is deliberately excluded -- Allclean
-        # deletes output rather than producing it. Note solver_commands() only,
+        # Cleanup and other adapter-declared scripts are deliberately excluded
+        # from artifact credit. Note solver_commands() only,
         # NOT the full authorized set: auxiliary_commands() are authorized to
         # run but are post-processing, and ``produces`` is enforced per-step
         # (workflow_runner's missing_artifacts check), so crediting one would

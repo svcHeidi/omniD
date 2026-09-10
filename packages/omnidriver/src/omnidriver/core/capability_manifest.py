@@ -2,10 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-from .runtime.workflow import (
-    CASE_SCRIPT_COMMANDS,
-    CORE_NEUTRAL_COMMANDS,
-)
+from .runtime.workflow import CORE_NEUTRAL_COMMANDS
 
 
 def utility_produces(
@@ -42,7 +39,7 @@ def build_capability_manifest(
     plugin_commands: Iterable[str] = (),
     utility_manifests: dict[str, Any] | None = None,
     samplable_fields: dict[str, tuple[str, ...]] | None = None,
-    case_script_commands: frozenset[str] = CASE_SCRIPT_COMMANDS,
+    case_script_commands: frozenset[str] = frozenset(),
 ) -> dict[str, Any]:
     """Return the driver's accept-surface as a plain JSON-able dict.
 
@@ -51,9 +48,8 @@ def build_capability_manifest(
     active adapter so Core names neither an environment nor a solver here.
     Together with :data:`CORE_NEUTRAL_COMMANDS` the commands reproduce exactly
     what ``validate_workflow_commands`` accepts for that plugin.
-    ``case_script_commands`` defaults to the fixed
-    Allrun-family set; a plugin whose entrypoint has its own declared name
-    passes ``runtime.workflow.case_script_commands(driver_context)`` instead
+    ``case_script_commands`` defaults to an empty set; adapters declare their
+    case-local command names explicitly
     (its ``get_capabilities()`` has no ``DriverContext`` to read one from,
     but does have its own ``get_profile()`` -- see
     future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md §5).

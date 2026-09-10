@@ -21,6 +21,7 @@ from pathlib import Path
 
 from omnidriver.core.capability_manifest import build_capability_manifest
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
+from omnidriver.openfoam.case_runtime_conventions import openfoam_case_runtime_conventions
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile
 from omnidriver.core.runtime.provenance_inputs import _is_case_local_script
@@ -71,7 +72,8 @@ def test_shipped_plugins_advertise_only_the_fixed_set() -> None:
     """Zero behavior change for either shipped plugin: both declare their
     entrypoint as exactly "Allrun", already in CASE_SCRIPT_COMMANDS."""
     manifest = OpenFOAMEnvironmentPlugin().get_capabilities()
-    assert manifest["allowed_commands"]["case_scripts"] == sorted(CASE_SCRIPT_COMMANDS)
+    expected = sorted(openfoam_case_runtime_conventions().case_script_commands)
+    assert manifest["allowed_commands"]["case_scripts"] == expected
 
 
 def test_a_foreign_plugins_declared_entrypoint_is_included(tmp_path: Path) -> None:

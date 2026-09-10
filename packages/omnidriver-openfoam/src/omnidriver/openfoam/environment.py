@@ -9,7 +9,6 @@ from omnidriver.core.capability_manifest import build_capability_manifest
 from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 from omnidriver.core.plugin_interface import driver_context as make_driver_context
 from omnidriver.core.plugin_profile import entrypoint_relpaths_from_profile, load_plugin_profile
-from omnidriver.core.runtime.workflow import CASE_SCRIPT_COMMANDS
 
 from .case_runtime_conventions import openfoam_case_runtime_conventions
 from .command_authorization import is_installed_openfoam_application, openfoam_runtime_commands
@@ -54,7 +53,9 @@ class OpenFOAMEnvironmentPlugin:
             plugin_commands=self.get_solver_commands() | self.get_auxiliary_commands(),
             utility_manifests=self.get_utility_manifests(),
             samplable_fields=self.get_samplable_fields({}),
-            case_script_commands=CASE_SCRIPT_COMMANDS
+            case_script_commands=frozenset(
+                self.get_case_runtime_conventions().case_script_commands
+            )
             | frozenset(entrypoint_relpaths_from_profile(self.get_profile())),
         )
 
