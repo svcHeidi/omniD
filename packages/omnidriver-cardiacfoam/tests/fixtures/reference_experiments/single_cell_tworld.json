@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "case_id": "single-cell-tworld-reference",
+  "input_policy": "committed",
+  "reference": {
+    "source_revision": "98afac41a8c3e3de1ef1067b7e5f1d5ca4349cb0",
+    "source_case_root": "tutorials/electrophysiologyProtocols/singleCell",
+    "checker": {
+      "availability": "pending-solver-check-only-interface",
+      "path": "regression/regressionTest.sh",
+      "reference_data": "regression/singleCell.reference",
+      "mode": "check-only",
+      "report_path": "regression/comparison-report.json"
+    }
+  },
+  "inputs": [
+    {"source": "tutorials/electrophysiologyProtocols/singleCell/Allrun", "destination": "case/Allrun", "sha256": "ed6818580acd5912121ed2a398d7c33095c8bf8b06d14b8769c48e33d2d848b0"},
+    {"source": "tutorials/electrophysiologyProtocols/singleCell/regression/regressionTest.sh", "destination": "case/regression/regressionTest.sh", "sha256": "03195bd71a119ee92bd68e1c53347134b168e1331cbe118eae40ace53ee01c97"},
+    {"source": "tutorials/electrophysiologyProtocols/singleCell/regression/singleCell.reference", "destination": "case/regression/singleCell.reference", "sha256": "42f355ef631f60923dd413afb7b2b59cc3e67852fe45362f00d0c0ff7e4a3350"},
+    {"source": "tutorials/electrophysiologyProtocols/singleCell/system/controlDict", "destination": "case/system/controlDict", "sha256": "b1cb92b3b3322a13dad1f7f14cef367f91bad240bcb19ff21d93da199c5815db"},
+    {"source": "tutorials/electrophysiologyProtocols/singleCell/system/blockMeshDict", "destination": "case/system/blockMeshDict", "sha256": "8a75c779b0a154c1daa78bfe8dc50455da206be52c5d02c45b24c1e517af83ae"},
+    {"source": "tutorials/electrophysiologyProtocols/singleCell/system/fvSolution", "destination": "case/system/fvSolution", "sha256": "ff29b53b83d510ef15808d646c44bc8b87d60d9e66e8da8bd93a67d0c1228fb1"},
+    {"source": "tutorials/electrophysiologyProtocols/singleCell/system/fvSchemes", "destination": "case/system/fvSchemes", "sha256": "b4430fa848c149e1816ab250b2f25b82361453b457648985e4e766fde9fff8b9"},
+    {"source": "tutorials/electrophysiologyProtocols/singleCell/system/decomposeParDict", "destination": "case/system/decomposeParDict", "sha256": "81a8128009633002542a073d4d0e45f430861bd76b9bbdcd4d9494ee365f66c3"},
+    {"source": "tutorials/electrophysiologyProtocols/singleCell/constant/sweepCurrents", "destination": "case/constant/sweepCurrents", "sha256": "e285e874b75a23c780457b185f140535fe8014c4e8d1d277484c7436cc169ba2"},
+    {"source": "tutorials/electrophysiologyProtocols/singleCell/constant/electroProperties", "destination": "case/constant/electroProperties", "sha256": "31bd8f204f5e5a73d0bc2f58c875c83609c3fa0d93d848c94cb67edb5476eb24"},
+    {"source": "tutorials/electrophysiologyProtocols/singleCell/constant/physicsProperties", "destination": "case/constant/physicsProperties", "sha256": "194464e167ed498e6c1620369f86eee0bdef559d2650a668321f9380f168ce70"}
+  ]
+}
