@@ -627,6 +627,31 @@ class TestEmptyExportListIsKnownEmpty(unittest.TestCase):
             IONIC_MODEL_CATALOG["AlievPanfilov"].recommended_exports,
         )
 
+    def test_predictor_filters_export_names_not_supported_by_selected_model(self) -> None:
+        """Mirror cardiacFOAM's effective exportedFieldNames() filtering."""
+        from omnidriver.cardiacfoam.artifacts_predictor import (
+            _exported_ionic_variables,
+        )
+
+        # Jsi is a BuenoOrovio algebraic variable, not a TNNP one.  The
+        # Niederer reference declares it, but the solver correctly does not
+        # create a Jsi OpenFOAM time field.
+        case_root = self._case_root(
+            "myocardiumSolver monodomainSolver;\n"
+            "monodomainSolverCoeffs\n{\n"
+            "    ionicModel TNNP;\n"
+            "    outputVariables\n    {\n"
+            "        ionic\n        { export ( Vm Jsi ); }\n"
+            "    }\n"
+            "}\n"
+        )
+        self.assertEqual(_exported_ionic_variables(case_root, "TNNP"), ("Vm",))
+
+        from omnidriver.cardiacfoam.artifacts_predictor import _predict_monodomain
+
+        predicted = _predict_monodomain(case_root, None, "TNNP")
+        self.assertEqual([artifact.artifact_id for artifact in predicted], ["monodomain_vm_series"])
+
 
 class TestControlDictEntries(unittest.TestCase):
     """CONTROL_DICT_ENTRIES catalog shape contract."""

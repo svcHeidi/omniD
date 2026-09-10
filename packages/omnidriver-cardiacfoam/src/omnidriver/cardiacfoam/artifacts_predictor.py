@@ -19,13 +19,20 @@ SolverHandler = Callable[[Path, TutorialSpec, "str | None"], tuple[DataArtifact,
 
 def _exported_ionic_variables(case_root: Path, ionic_model: str | None) -> tuple[str, ...]:
     properties = case_root / "constant" / "electroProperties"
+    entry = IONIC_MODEL_CATALOG.get(ionic_model) if ionic_model is not None else None
     if properties.exists():
         declared = detect_ionic_export_list(properties)
         if declared is not None:
-            return declared
-    if ionic_model is None:
-        return ()
-    entry = IONIC_MODEL_CATALOG.get(ionic_model)
+            if entry is None:
+                return ()
+            # The solver filters the requested list before allocating
+            # AUTO_WRITE fields (ionicModelIO::exportedFieldNamesRef).  A raw
+            # dictionary token is therefore not output evidence: for example,
+            # the Niederer TNNP case requests Jsi, which belongs to
+            # BuenoOrovio, and cardiacFOAM deliberately omits it.  Predict
+            # only canonical names the selected model can actually export.
+            accepted = {"Vm", *entry.states, *entry.algebraic}
+            return tuple(name for name in declared if name in accepted)
     if entry is None:
         return ()
     return entry.recommended_exports
@@ -90,6 +97,8 @@ def _predict_monodomain(case_root: Path, spec: TutorialSpec, ionic_model: str | 
         description=f"Membrane voltage Vm (monodomainSolver, ionicModel={ionic_model})",
     ))
     for var in _exported_ionic_variables(case_root, ionic_model):
+        if var == "Vm":
+            continue
         artifacts.append(_time_indexed_field_artifact(
             solver="monodomain",
             field_name=var,
@@ -114,6 +123,8 @@ def _predict_bidomain(case_root: Path, spec: TutorialSpec, ionic_model: str | No
             description=description,
         ))
     for var in _exported_ionic_variables(case_root, ionic_model):
+        if var == "Vm":
+            continue
         artifacts.append(_time_indexed_field_artifact(
             solver="bidomain",
             field_name=var,
