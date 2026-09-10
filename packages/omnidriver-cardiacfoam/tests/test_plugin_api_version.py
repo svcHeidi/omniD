@@ -4,7 +4,7 @@ Moved from packages/omnidriver/tests/core/test_plugin_api_version.py: each
 of these was one half of a test that checked cardiac AND generic together
 (test_builtin_plugins_are_v2, test_both_builtin_plugins_satisfy_the_full_
 protocol). The generic half of each stayed in core, using
-generic_openfoam_context() / GenericOpenFOAMPlugin(), which already passed
+openfoam_environment_context() / OpenFOAMEnvironmentPlugin(), which already passed
 without cardiacfoam installed.
 """
 

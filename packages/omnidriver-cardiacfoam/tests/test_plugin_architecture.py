@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from omnidriver.openfoam.generic_plugin import GenericOpenFOAMPlugin
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.core.plugin_interface import (
     SolverPlugin,
     driver_context,
@@ -28,10 +28,10 @@ def test_cardiacfoam_plugin_satisfies_runtime_contract() -> None:
 
 
 def test_generic_openfoam_plugin_satisfies_runtime_contract() -> None:
-    plugin = validate_plugin(GenericOpenFOAMPlugin())
+    plugin = validate_plugin(OpenFOAMEnvironmentPlugin())
     ctx = driver_context(plugin, source="test")
 
-    assert ctx.identity.id == "org.driverfoam.generic-openfoam"
+    assert ctx.identity.id == "org.omnidriver.openfoam.environment"
     assert plugin.get_dict_entries() == ()
     assert plugin.get_tutorial_catalog() == {"registered_tutorials": (), "spec_factories": {}}
 

@@ -7,7 +7,7 @@ cardiacFoam's own has_case_marker/is_runnable_without_workflow (an
 electroProperties file marks a folder as a cardiacFoam case), not core's
 generic entrypoint-based discovery. The two rows that test only core's own
 mechanism (an empty folder, and a bare Allrun) stayed in core, run under
-generic_openfoam_context().
+openfoam_environment_context().
 """
 
 from __future__ import annotations

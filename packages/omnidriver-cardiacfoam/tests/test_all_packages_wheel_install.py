@@ -80,7 +80,8 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
         from importlib.resources import files
 
         from omnidriver.core.plugin_discovery import discover_plugins
-        from omnidriver.core.plugin_interface import generic_openfoam_context, load_plugin_context
+        from omnidriver.openfoam.environment import openfoam_environment_context
+        from omnidriver.core.plugin_interface import load_plugin_context
         from omnidriver.core.runtime.sweep_runner import _stage_entry_case
 
         repository = Path({str(_REPOSITORY_ROOT)!r}).resolve()
@@ -90,10 +91,10 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
 
         assert "cardiacfoam" in discover_plugins()
         assert load_plugin_context("cardiacfoam").identity.id == "org.cardiacfoam"
-        assert generic_openfoam_context().capabilities.case_runtime_conventions.conventions().output_collection_relpath == "postProcessing"
-        assert generic_openfoam_context().capabilities.case_runtime_conventions.conventions().time_directory_name_pattern
-        assert generic_openfoam_context().capabilities.case_runtime_conventions.conventions().case_discovery_ignored_directory_names == ("postProcessing", "logs")
-        assert "blockMesh" in generic_openfoam_context().capabilities.command_authorization.environment_commands()
+        assert openfoam_environment_context().capabilities.case_runtime_conventions.conventions().output_collection_relpath == "postProcessing"
+        assert openfoam_environment_context().capabilities.case_runtime_conventions.conventions().time_directory_name_pattern
+        assert openfoam_environment_context().capabilities.case_runtime_conventions.conventions().case_discovery_ignored_directory_names == ("postProcessing", "logs")
+        assert "blockMesh" in openfoam_environment_context().capabilities.command_authorization.environment_commands()
         assert load_plugin_context("cardiacfoam").capabilities.case_runtime_conventions.conventions().output_collection_relpath == "postProcessing"
         assert load_plugin_context("cardiacfoam").capabilities.case_runtime_conventions.conventions().time_directory_name_pattern
         assert load_plugin_context("cardiacfoam").capabilities.case_runtime_conventions.conventions().case_discovery_ignored_directory_names == ("postProcessing", "logs")

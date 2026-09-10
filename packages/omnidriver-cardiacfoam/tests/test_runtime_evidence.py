@@ -13,7 +13,7 @@ implementation yet, so moving them would not have been a meaningful split
 either. A later pass (Phase 2, Milestone 4 test-ownership split) needed
 core-only to be genuinely green and found those two still calling
 ``default_driver_context()`` (which unconditionally imports cardiacfoam)
-instead of ``generic_openfoam_context()`` like their neighbors in the same
+instead of ``openfoam_environment_context()`` like their neighbors in the same
 file; that was a leftover inconsistency, not a deliberate cardiac
 dependency, so it was corrected in place there rather than moved here.
 """

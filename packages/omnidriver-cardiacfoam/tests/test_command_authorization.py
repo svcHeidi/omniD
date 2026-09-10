@@ -14,9 +14,9 @@ from __future__ import annotations
 import pytest
 
 from omnidriver.core.plugin_interface import (
-    default_driver_context,
-    generic_openfoam_context,
+    default_driver_context
 )
+from omnidriver.openfoam.environment import openfoam_environment_context
 from omnidriver.core.runtime.workflow import validate_workflow_commands
 
 
@@ -52,7 +52,7 @@ def test_cardiac_utilities_come_from_the_plugin() -> None:
     context = default_driver_context()
     manifests = context.capabilities.command_authorization.utility_manifests()
     assert "listCellModelsVariables" in manifests
-    generic = generic_openfoam_context()
+    generic = openfoam_environment_context()
     assert generic.capabilities.command_authorization.utility_manifests() == {}
 
 

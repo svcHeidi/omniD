@@ -9,7 +9,7 @@ reached -- ``CardiacFoamPlugin`` now implements every hook directly, so
 dispatch decision; it now asserts only cardiacFoam's own hook
 implementations (``has_case_marker`` / ``is_runnable_without_workflow``).
 Its generic counterpart, ``TestGenericPluginDoesNotInheritCardiacSemantics``,
-stays in core: ``GenericOpenFOAMPlugin`` implements none of the corresponding
+stays in core: ``OpenFOAMEnvironmentPlugin`` implements none of the corresponding
 hooks, so those four tests still exercise core's now-unconditional (ungated)
 fallback refusals.
 """
