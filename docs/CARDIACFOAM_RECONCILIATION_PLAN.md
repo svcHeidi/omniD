@@ -22,7 +22,7 @@ task below. A task may not broaden its scope without a new row in the delta
 audit. Core mechanics (transactions, evidence, execution policy) are not in
 scope for catalog tasks.
 
-**Progress (2026-09-10):** T0 and T2–T5 are complete. T1 has an initial map but needs T1b below; it is not complete. T6 is implemented with explicit source/runtime selection, committed-input staging and disposable outputs. T7 has passed both the single-cell and Niederer tissue reference experiments through OmniD, including solver-owned check-only comparisons; one small derived sweep remains.
+**Progress (2026-09-10):** T0–T6, T1b, and H1 are complete. T7 has passed both the single-cell and Niederer tissue reference experiments through OmniD, including solver-owned check-only comparisons; one small derived sweep remains.
 
 **Test scope:** driverFOAM owns orchestration and adapter-contract tests. It integrates and reports solver-owned scientific regressions; it does not independently define scientific correctness or freeze evolving tutorial content. Studies own their experimental protocols and paper baselines. Exact effective inputs and commands must be verified separately from numerical regression outcomes: passing a metric tolerance does not prove every requested override was applied.
 
@@ -35,14 +35,14 @@ scope for catalog tasks.
 | T4 | Cardiac adapter | Audit `batchedIntegrator` per active-tension model, including Rush--Larsen support; update applicability only for verified models. | T0 | Runtime-selection/build evidence and a model-specific applicability test justify every allowed combination. |
 | T5 | Cardiac adapter | Decide and document whether legacy ECG `verificationModel.*` is supported as an alias or intentionally rejected; test that decision. Preserve the existing bath/bidomain path correction. | T0 | One explicit compatibility policy; no restoration of broad `verificationModel.alpha/k` predicates without source evidence. |
 | T1b | Test owners across packages | Classify assertions by owner and required resources. Replace broad tutorial-characterization hashes in Core with neutral structural tests and small adapter configuration fixtures; reclassify manufactured-tet tests by actual behavior. | T1, T2–T5 | Each removed snapshot assertion has a behavioral replacement or an explicit retirement rationale; legitimate tutorial edits do not fail unrelated Core tests. |
-| H1 | Packaging / test harness | Choose explicit installation of the three distributions or a declared uv workspace; reconcile the stale lock deliberately. | None; parallel with T1b | A fresh environment imports and invokes the intended installed packages without accidental checkout imports; retain separate core-only and wheel gates. |
+| H1 | Packaging / test harness | **Complete:** use an explicit three-wheel installation gate. `test_all_packages_wheel_install.py` builds copied package sources and installs the resulting wheels into a fresh virtual environment; `uv.lock` remains a separately owned regeneration decision. | None; parallel with T1b | A fresh environment imports and invokes the intended installed packages without accidental checkout imports; retain separate core-only and wheel gates. |
 | T6 | Cardiac integration harness using Core/OpenFOAM contracts | Implement separate selected-source and selected-runtime fixtures with explicit revision, inputs, build identity and disposable output. | T1b, H1, T2–T5 | Source-only checks require no solver. Explicitly requested native checks fail on missing/invalid prerequisites; no host checkout discovery or source mutation. |
 | T7 | Driver integration; solver owns numerical oracle | Run a disposable short single-cell and small tissue case through the driver using the selected solver scripts and regression checker. Compare direct/reference and driven execution where applicable. | T6 | Prove intended effective inputs/commands and truthful result reporting separately from the solver regression result. Record applicability, storage and bounded diagnostics. Do not duplicate numerical tolerances in driver tests. |
 
 T1 evidence: [historical test ownership map](HISTORICAL_TEST_OWNERSHIP_MAP_2026-09-09.md).
 
 T6 contract: [selected-source/build fixture contract](SELECTED_SOURCE_BUILD_FIXTURE_CONTRACT.md).
-The source/build document records a previously inspected solver selection, not a moving HEAD guarantee. T6 revalidates it at use time. Native acceptance also depends on T1b and H1; the two passed reference experiments do not complete the remaining sweep part of T7.
+The source/build document records a previously inspected solver selection, not a moving HEAD guarantee. T6 revalidates it at use time. T1b and H1 have independent completed evidence; the two passed reference experiments do not complete the remaining sweep part of T7.
 
 T4 decision (revised 2026-09-09): `batchedIntegrator` is an ionic-model key
 and places no constraint on `activeTensionModel`. Batched active tension

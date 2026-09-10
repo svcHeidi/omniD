@@ -36,4 +36,21 @@ Ordinary tests read committed minimal fixtures and write only temporary director
 
 ## Result
 
-T1 remains partial until this follow-up is implemented. T6 supplies explicit source/runtime fixtures; T7 invokes existing solver regressions and verifies driver execution separately. The driver must not grow a duplicate scientific test suite. Existing scientific assertions without a selected solver checker remain deferred for solver-owner review, not invented as driver-owned thresholds.
+### T1b completion record (2026-09-10)
+
+The follow-up classification is complete. The remaining potentially ambiguous
+historical assertions have the following explicit disposition:
+
+| Historical assertion family | Executable replacement or disposition | Owner and resources |
+| --- | --- | --- |
+| Broad Core tutorial-characterization hashes | Retired. Core retains neutral plugin registration, plan and dependency assertions in `packages/omnidriver/tests/core/test_plugin_capabilities.py` and `test_plugin_dependency_boundary.py`; cardiac declarations use `test_capability_manifest.py`, `test_generic_case.py`, and `test_registered_tutorials_need_no_repository.py`. | Core lifecycle / cardiac declaration; synthetic fixtures only. No authored tutorial bytes are a Core contract. |
+| Four manufactured tetrahedron tests | Retained as the four `test_manufactured_*_tet.py` files. They write synthetic dictionaries, exercise `make_spec` / `apply_case` / DAG configuration, and do not launch a solver or assert numerical output. | Cardiac configuration; synthetic fixtures only. |
+| Personalized-template runtime comparisons | Deferred to solver-owner review until an identified solver checker/reference exists. The adapter keeps catalog and incompatibility validation; OmniD must not recreate its finite-output or derivative thresholds. | Solver science / study protocol; selected source, compiled solver and reference data when the solver exposes the checker. |
+| Package split/import behavior | `test_all_packages_wheel_install.py` builds the three distributions in a temporary copy, installs their wheels into a new virtual environment, and invokes plugin discovery and `describe`. Passed on 2026-09-10. | Packaging; temporary build and virtual environment only. |
+| Selected-source/native references | `test_selected_cardiacfoam_fixture.py` and the selected native integration fixture declare their exact source/runtime inputs, stage only named committed files, and report driver evidence separately from the solver check-only report. | Core/OpenFOAM execution mechanics plus solver-owned numerical oracle; explicit source/runtime only. |
+
+T1 and T1b are complete. T6 supplies explicit source/runtime fixtures; T7
+invokes existing solver regressions and verifies driver execution separately.
+The driver must not grow a duplicate scientific test suite. Existing scientific
+assertions without a selected solver checker remain deferred for solver-owner
+review, not invented as driver-owned thresholds.
