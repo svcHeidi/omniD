@@ -563,6 +563,20 @@ def legacy_decomposition_dirname_prefix() -> str:
 
 
 @_instrumented
+def legacy_case_runtime_conventions():
+    """Neutral fallback for plugins that declare no generated case paths.
+
+    A foreign environment must not lose an authored ``data`` or
+    ``postProcessing`` directory merely because an OpenFOAM sweep once used
+    those names for generated output.
+    """
+
+    from .plugin_capabilities import CaseRuntimeConventions
+
+    return CaseRuntimeConventions()
+
+
+@_instrumented
 def legacy_config_value_reader(path, key: str) -> str | None:
     """Preserve the historical direct-foamlib read for plugins that don't
     implement get_config_value_reader.

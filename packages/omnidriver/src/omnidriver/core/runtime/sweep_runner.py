@@ -19,7 +19,7 @@ from omnidriver.sweep_routing import route_case_values, route_entry_case_values
 from .fresh import ensure_fresh_output_dir
 from .attempt_lease import acquire_case_staging_lease
 from .models import data_artifact_from_json
-from .output_collection import collect_new_outputs, snapshot_postprocessing
+from .output_collection import collect_new_output_tree, snapshot_output_tree
 from .postprocess_phase import build_sweep_context, run_postprocessing_module
 from .registry import load_entry_spec
 from .run_document_exec import _allowed_runs_root, load_run_document
@@ -111,8 +111,8 @@ def _is_stale_time_dir_name(name: str) -> bool:
     return True
 
 
-def _clean_stale_time_directories(case_root: Path) -> None:
-    """Remove a prior case's leftover reconstructed time directories.
+def _clean_stale_time_directories(case_root: Path, *, conventions) -> None:
+    """Remove prior generated time directories when the environment declares them.
 
     Entry-based sweeps reuse one shared case_root across cases (see
     _materialize_entry_case's docstring). decomposePar's -force flag already
@@ -125,7 +125,7 @@ def _clean_stale_time_directories(case_root: Path) -> None:
     instead. Clearing them here, before the case that would otherwise read
     them, is the fix.
     """
-    if not case_root.is_dir():
+    if not conventions.nonzero_numeric_directories_are_generated or not case_root.is_dir():
         return
     for child in case_root.iterdir():
         if child.is_dir() and _is_stale_time_dir_name(child.name):
@@ -173,8 +173,8 @@ def _materialize_entry_case(
         # every sweep case already gets its own staged_case_root. Leaving it
         # in place double-nests output_dir under
         # staged_case_root/<that same case id>/, a directory the solve step
-        # never writes into (it writes postProcessing/ etc. straight into
-        # staged_case_root, matching OpenFOAM's own convention), which then
+        # never writes into (it writes generated output straight into
+        # staged_case_root under its environment convention), which then
         # makes the workflow's artifact check report real, present output as
         # missing. "." tells resolve_spec_paths there is nothing to append.
         effective_routed["output_dir_name"] = "."
@@ -196,7 +196,13 @@ def _materialize_entry_case(
             f"for entry '{entry}'; expected exactly 1 -- add enough constraining "
             "overrides (e.g. 'solvers') to collapse this combination to a single case"
         )
-    _clean_stale_time_directories(spec.case_root)
+    from ..plugin_capabilities import CaseRuntimeConventions
+
+    conventions = (
+        driver_context.capabilities.case_runtime_conventions.conventions()
+        if driver_context is not None else CaseRuntimeConventions()
+    )
+    _clean_stale_time_directories(spec.case_root, conventions=conventions)
     spec.apply_case(spec.case_root, cases[0])
     return effective_routed
 
@@ -213,14 +219,16 @@ def _stage_entry_case(
     and conservative: keep authored inputs (including ``0/``) and omit only
     known derived artifacts.
     """
-    decomposition_prefix = decomposition_dirname_prefix(driver_context)
-    generated_dir_names = {
-        "postProcessing", "logs", "workflow_logs", "cachedCasePostProcessing",
-        "polyMesh", "archivedPostProcessing", "results", "data",
-    }
-    generated_file_names = {
-        "workflow_state.json", "run_document.json", "sweep_manifest.json",
-    }
+    from ..plugin_capabilities import CaseRuntimeConventions
+
+    conventions = (
+        driver_context.capabilities.case_runtime_conventions.conventions()
+        if driver_context is not None else CaseRuntimeConventions()
+    )
+    decomposition_prefix = (
+        decomposition_dirname_prefix(driver_context)
+        if driver_context is not None else None
+    )
 
     def ignore_generated(_directory: str, names: list[str]) -> set[str]:
         ignored: set[str] = set()
@@ -233,28 +241,36 @@ def _stage_entry_case(
             # content, so omit the whole directory when they are present.
             if candidate.is_dir() and any(
                 (candidate / marker).exists()
-                for marker in ("workflow_state.json", "workflow_logs", "run_document.json")
+                for marker in conventions.generated_case_markers
             ):
                 ignored.add(name)
                 continue
-            if name in generated_dir_names or name in generated_file_names:
-                ignored.add(name)
-                continue
-            if name.startswith(decomposition_prefix) or name.startswith("driverPostProcessingArchive"):
+            if name in conventions.generated_directory_names or name in conventions.generated_file_names:
                 ignored.add(name)
                 continue
             if (
-                name.startswith("log.")
-                or name.endswith(".foam")
-                or name.endswith(".msh")
-                or (name.endswith(".geo") and not name.endswith(".geo.template"))
+                candidate.is_dir()
+                and (
+                    (decomposition_prefix is not None and name.startswith(decomposition_prefix))
+                    or any(name.startswith(prefix) for prefix in conventions.generated_directory_prefixes)
+                )
+            ):
+                ignored.add(name)
+                continue
+            if (
+                any(name.startswith(prefix) for prefix in conventions.generated_file_prefixes)
+                or (
+                    any(name.endswith(suffix) for suffix in conventions.generated_file_suffixes)
+                    and not any(
+                        name.endswith(suffix)
+                        for suffix in conventions.preserved_file_suffixes
+                    )
+                )
             ):
                 ignored.add(name)
                 continue
             path = Path(name)
-            # Numeric OpenFOAM time directories are generated output.  Keep
-            # the authored initial-condition directory ``0``.
-            if path.name != "0":
+            if conventions.nonzero_numeric_directories_are_generated and path.name != "0":
                 try:
                     float(path.name)
                 except ValueError:
@@ -618,7 +634,7 @@ def sweep_run(
     for case in resolved_cases:
         case_dir = output_dir / case.case_id
         run_document_path = case_dir / "run_document.json"
-        workflow_state_path = case_dir / "postProcessing" / "workflow_state.json"
+        workflow_state_path = case_dir / "workflow_state.json"
         case_record_path = case_dir / "case_record.json"
 
         prior_status = existing_status_by_case.get(case.case_id)
@@ -767,23 +783,21 @@ def sweep_run(
                 plan_error = str(exc)
             else:
                 if plan_error is None:
-                    # Entry-mode cases share one case_root, so OpenFOAM's own
-                    # output (mesh, solved field time-dirs, postProcessing/)
-                    # all lands in that one shared case_root/postProcessing/
-                    # -- overwritten by each subsequent case, since OpenFOAM
-                    # itself has no notion of driverFOAM's per-case
-                    # output_dir_name. Snapshot it now so collect_new_outputs
-                    # below (called once this case's own output_dir is known)
-                    # can tell this case's own new/changed output apart from
-                    # anything left over, and archive it into that same
-                    # case's own output_dir_name folder -- the same directory
-                    # workflow_state.json lives in -- so nothing needs a
-                    # separate cache location to find it later.
-                    archive_dir_name = (base.get("archive_dir_name") or "collectedOutput") if entry is not None else None
+                    # Entry-mode cases can share a case root. The environment
+                    # declaration identifies a generated output tree to
+                    # snapshot so each case retains only its own changes.
+                    conventions = driver_context.capabilities.case_runtime_conventions.conventions()
+                    output_relpath = conventions.output_collection_relpath
+                    archive_dir_name = (
+                        (base.get("archive_dir_name") or "collectedOutput")
+                        if entry is not None and output_relpath is not None
+                        else None
+                    )
                     pp_before: dict[str, tuple[float, int]] = {}
                     if archive_dir_name:
                         case_root_for_archive = Path(run_document["launch"]["caseRoot"])
-                        pp_before = snapshot_postprocessing(case_root_for_archive)
+                        output_root_for_archive = case_root_for_archive / output_relpath
+                        pp_before = snapshot_output_tree(output_root_for_archive)
                     try:
                         if workflow_state_path.exists():
                             workflow_state_path.unlink()
@@ -809,8 +823,8 @@ def sweep_run(
                         else:
                             status = "pending"
                         if archive_dir_name and workflow_state_path.exists():
-                            collect_new_outputs(
-                                case_root_for_archive,
+                            collect_new_output_tree(
+                                output_root_for_archive,
                                 pp_before,
                                 workflow_state_path.parent / archive_dir_name,
                                 label=case.case_id,

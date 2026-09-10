@@ -360,6 +360,14 @@ class SolverPluginOptionalHooks(Protocol):
         (see legacy_decomposition_dirname_prefix)."""
         ...
 
+    # -- CaseRuntimeConventionsCapability ------------------------------------
+    def get_case_runtime_conventions(self):
+        """Declare generated case paths and an optional output collection
+        root for this execution environment. Absent -> a neutral declaration
+        that preserves authored paths and collects no convention-specific
+        output."""
+        ...
+
     # -- ConfigValueCapability ------------------------------------------------
     def get_config_value_reader(self):
         """Return a ``(path, key) -> str | None`` callable that reads a single

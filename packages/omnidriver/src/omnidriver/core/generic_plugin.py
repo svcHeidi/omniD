@@ -156,6 +156,14 @@ class GenericOpenFOAMPlugin:
         """No solver semantics means no $TOKEN. override scopes to declare."""
         return ()
 
+    def get_case_runtime_conventions(self):
+        """Generic OpenFOAM cases use the OpenFOAM path declaration."""
+        from omnidriver.openfoam.case_runtime_conventions import (
+            openfoam_case_runtime_conventions,
+        )
+
+        return openfoam_case_runtime_conventions()
+
     def build_run_document_config(self, spec):
         del spec
         # Return an empty config — the generic plugin imposes no key structure.

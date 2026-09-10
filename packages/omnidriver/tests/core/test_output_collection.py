@@ -1,7 +1,4 @@
-"""Tests the generic snapshot/diff output-collection mechanism used by
-entry-mode sweeps to archive each case's postProcessing/ output into a
-destination directory the caller chooses.
-"""
+"""Tests Core's convention-free snapshot/diff output collector."""
 
 from __future__ import annotations
 
@@ -12,135 +9,79 @@ from pathlib import Path
 
 from omnidriver.core.runtime.output_collection import (
     OutputCollisionError,
-    collect_new_outputs,
-    snapshot_postprocessing,
+    collect_new_output_tree,
+    snapshot_output_tree,
 )
 
 
 class TestSnapshotAndCollect(unittest.TestCase):
-    def test_new_file_after_snapshot_is_collected_into_destination(self) -> None:
+    def test_new_file_after_snapshot_is_collected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            case_root = Path(tmp) / "case"
-            (case_root / "postProcessing").mkdir(parents=True)
-            destination = Path(tmp) / "sweepCases" / "10"
+            root = Path(tmp) / "case" / "generated-output"
+            root.mkdir(parents=True)
+            destination = Path(tmp) / "sweep-cases" / "10"
+            before = snapshot_output_tree(root)
+            (root / "result.dat").write_text("case A data")
 
-            before = snapshot_postprocessing(case_root)
-            (case_root / "postProcessing" / "1D_10_cells_implicit.dat").write_text("case A data")
+            collected = collect_new_output_tree(root, before, destination, label="10")
 
-            collected = collect_new_outputs(case_root, before, destination, label="10")
+            self.assertEqual([path.name for path in collected], ["result.dat"])
+            self.assertEqual((destination / "result.dat").read_text(), "case A data")
 
-            self.assertEqual(
-                [p.name for p in collected], ["1D_10_cells_implicit.dat"]
-            )
-            self.assertEqual(
-                (destination / "1D_10_cells_implicit.dat").read_text(), "case A data"
-            )
-
-    def test_preexisting_unchanged_file_is_not_recollected(self) -> None:
-        """A leftover file from an earlier, unrelated run that this case's
-        solve doesn't touch is not "this case's output" and must not be
-        copied again -- only new-or-changed-since-snapshot counts."""
+    def test_unchanged_file_is_not_recollected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            case_root = Path(tmp) / "case"
-            (case_root / "postProcessing").mkdir(parents=True)
-            (case_root / "postProcessing" / "stale.dat").write_text("old leftover")
-            destination = Path(tmp) / "sweepCases" / "10"
+            root = Path(tmp) / "case" / "generated-output"
+            root.mkdir(parents=True)
+            (root / "stale.dat").write_text("old")
+            destination = Path(tmp) / "sweep-cases" / "10"
 
-            before = snapshot_postprocessing(case_root)
-            # Nothing changes this "run" -- stale.dat is untouched.
-            collected = collect_new_outputs(case_root, before, destination, label="10")
-
-            self.assertEqual(collected, [])
+            self.assertEqual(collect_new_output_tree(root, snapshot_output_tree(root), destination), [])
             self.assertFalse((destination / "stale.dat").exists())
 
-    def test_two_sequential_cases_land_in_their_own_destination(self) -> None:
-        """The real scenario: case_root is shared and reused sequentially
-        (apply_case mutates it in place between cases). Each case's
-        postProcessing/ output lands wherever the caller points it -- callers
-        pass a destination already unique to that case (e.g. its own
-        output_dir_name folder) so which case produced what is always
-        unambiguous, regardless of whether filenames happen to be
-        case-parameter-qualified."""
+    def test_sequential_cases_keep_separate_destinations(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            case_root = Path(tmp) / "case"
-            (case_root / "postProcessing").mkdir(parents=True)
-            sweep_cases = Path(tmp) / "sweepCases"
+            root = Path(tmp) / "case" / "generated-output"
+            root.mkdir(parents=True)
+            destination = Path(tmp) / "sweep-cases"
 
-            before_1 = snapshot_postprocessing(case_root)
-            (case_root / "postProcessing" / "1D_10_cells_implicit.dat").write_text("N=10 result")
-            collect_new_outputs(case_root, before_1, sweep_cases / "10", label="10")
+            first = snapshot_output_tree(root)
+            (root / "result.dat").write_text("first")
+            collect_new_output_tree(root, first, destination / "first", label="first")
+            second = snapshot_output_tree(root)
+            (root / "result.dat").write_text("second")
+            collect_new_output_tree(root, second, destination / "second", label="second")
 
-            before_2 = snapshot_postprocessing(case_root)
-            (case_root / "postProcessing" / "1D_20_cells_implicit.dat").write_text("N=20 result")
-            collect_new_outputs(case_root, before_2, sweep_cases / "20", label="20")
+            self.assertEqual((destination / "first" / "result.dat").read_text(), "first")
+            self.assertEqual((destination / "second" / "result.dat").read_text(), "second")
 
-            self.assertEqual(
-                (sweep_cases / "10" / "1D_10_cells_implicit.dat").read_text(), "N=10 result"
-            )
-            self.assertEqual(
-                (sweep_cases / "20" / "1D_20_cells_implicit.dat").read_text(), "N=20 result"
-            )
-            # Per-case destinations make a cross-case name collision
-            # structurally impossible even for a non-case-qualified
-            # functionObject name.
-            self.assertEqual(sorted(p.name for p in sweep_cases.iterdir()), ["10", "20"])
-
-    def test_rerunning_the_same_destination_with_different_content_raises(self) -> None:
-        """A retry that produces genuinely different content at the same
-        relative path under the SAME destination is suspicious -- e.g. a
-        concurrent/partial retry -- and must not be silently overwritten."""
+    def test_different_retry_content_refuses_overwrite(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            case_root = Path(tmp) / "case"
-            (case_root / "postProcessing").mkdir(parents=True)
-            destination = Path(tmp) / "sweepCases" / "10"
-
-            before_1 = snapshot_postprocessing(case_root)
-            (case_root / "postProcessing" / "result.dat").write_text("first attempt")
-            collect_new_outputs(case_root, before_1, destination, label="10")
-
+            root = Path(tmp) / "case" / "generated-output"
+            root.mkdir(parents=True)
+            destination = Path(tmp) / "sweep-cases" / "10"
+            first = snapshot_output_tree(root)
+            (root / "result.dat").write_text("first")
+            collect_new_output_tree(root, first, destination, label="10")
             time.sleep(0.01)
-            before_2 = snapshot_postprocessing(case_root)
-            (case_root / "postProcessing" / "result.dat").write_text("second attempt")
+            second = snapshot_output_tree(root)
+            (root / "result.dat").write_text("second")
             with self.assertRaises(OutputCollisionError):
-                collect_new_outputs(case_root, before_2, destination, label="10")
+                collect_new_output_tree(root, second, destination, label="10")
 
-    def test_identical_rerun_content_is_not_a_collision(self) -> None:
+    def test_nested_paths_are_preserved(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            case_root = Path(tmp) / "case"
-            (case_root / "postProcessing").mkdir(parents=True)
-            destination = Path(tmp) / "sweepCases" / "10"
+            root = Path(tmp) / "case" / "generated-output"
+            (root / "probe" / "10").mkdir(parents=True)
+            before = snapshot_output_tree(root)
+            (root / "probe" / "10" / "data.xy").write_text("xy")
 
-            before_1 = snapshot_postprocessing(case_root)
-            (case_root / "postProcessing" / "result.dat").write_text("same content")
-            collect_new_outputs(case_root, before_1, destination, label="10")
+            collect_new_output_tree(root, before, Path(tmp) / "archive", label="case")
 
-            time.sleep(0.01)
-            before_2 = snapshot_postprocessing(case_root)
-            (case_root / "postProcessing" / "result.dat").write_text("same content")
-            collected = collect_new_outputs(case_root, before_2, destination, label="10")
-            self.assertEqual(collected, [])
+            self.assertTrue((Path(tmp) / "archive" / "probe" / "10" / "data.xy").exists())
 
-    def test_nested_functionobject_directories_preserve_relative_structure(self) -> None:
+    def test_missing_declared_output_root_snapshots_empty(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            case_root = Path(tmp) / "case"
-            (case_root / "postProcessing" / "Niedererpoints" / "10").mkdir(parents=True)
-            destination = Path(tmp) / "sweepCases" / "dx0.5"
-
-            before = snapshot_postprocessing(case_root)
-            (case_root / "postProcessing" / "Niedererpoints" / "10" / "data.xy").write_text("xy")
-            collected = collect_new_outputs(case_root, before, destination, label="dx0.5")
-
-            self.assertEqual(len(collected), 1)
-            self.assertTrue(
-                (destination / "Niedererpoints" / "10" / "data.xy").exists()
-            )
-
-    def test_missing_postprocessing_directory_snapshots_as_empty(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            case_root = Path(tmp) / "case"
-            case_root.mkdir()
-            before = snapshot_postprocessing(case_root)
-            self.assertEqual(before, {})
+            self.assertEqual(snapshot_output_tree(Path(tmp) / "absent"), {})
 
 
 if __name__ == "__main__":

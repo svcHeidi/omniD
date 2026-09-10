@@ -105,6 +105,27 @@ class ResolvedInput:
 
 
 @dataclass(frozen=True)
+class CaseRuntimeConventions:
+    """Environment-declared paths that are generated during a case run.
+
+    Core supplies copying, snapshotting, collision detection, and recovery.
+    It does not supply names such as ``postProcessing`` or rules for numeric
+    time directories. A missing declaration is deliberately neutral: no
+    authored path is silently removed from a staged case.
+    """
+
+    output_collection_relpath: str | None = None
+    generated_directory_names: tuple[str, ...] = ()
+    generated_file_names: tuple[str, ...] = ()
+    generated_directory_prefixes: tuple[str, ...] = ()
+    generated_file_prefixes: tuple[str, ...] = ()
+    generated_file_suffixes: tuple[str, ...] = ()
+    preserved_file_suffixes: tuple[str, ...] = ()
+    generated_case_markers: tuple[str, ...] = ()
+    nonzero_numeric_directories_are_generated: bool = False
+
+
+@dataclass(frozen=True)
 class RuntimeDependency:
     """One thing the workflow's *executable* consumes at run time, outside
     the case tree: the solver binary itself, a library it links or loads,
@@ -522,6 +543,25 @@ class CaseFileContractCapability(Protocol):
     def all_rules(self) -> tuple["CaseFileRule", ...]: ...
     def describe_config_resolution(self) -> str: ...
     def decomposition_dirname_prefix(self) -> str: ...
+
+
+class CaseRuntimeConventionsCapability(Protocol):
+    """Generated-path and output-root declarations for one environment.
+
+    A staging transaction needs to distinguish reusable authored inputs from
+    derived output, and an entry-mode sweep may need to snapshot one shared
+    output tree between cases. Those are Core mechanisms. The path names are
+    environment conventions, so this capability supplies them as data. A
+    plugin without the optional hook receives an empty declaration: Core
+    preserves every path and does not collect a convention-specific tree.
+
+    :adapts: get_case_runtime_conventions
+    :consumed-by: omnidriver/core/runtime/sweep_runner.py
+    :fallback: legacy_case_runtime_conventions
+    :status: optional
+    """
+
+    def conventions(self) -> CaseRuntimeConventions: ...
 
 
 class ConfigValueCapability(Protocol):
@@ -1131,6 +1171,25 @@ class _CaseFileContractAdapter:
 
 
 @dataclass(frozen=True)
+class _CaseRuntimeConventionsAdapter:
+    plugin: "SolverPlugin"
+
+    def conventions(self) -> CaseRuntimeConventions:
+        hook = getattr(self.plugin, "get_case_runtime_conventions", None)
+        if callable(hook):
+            result = hook()
+            if not isinstance(result, CaseRuntimeConventions):
+                raise TypeError(
+                    f"{self.plugin.plugin_id}.get_case_runtime_conventions() must "
+                    f"return CaseRuntimeConventions, got {result!r}"
+                )
+            return result
+        from .compatibility import legacy_case_runtime_conventions
+
+        return legacy_case_runtime_conventions()
+
+
+@dataclass(frozen=True)
 class _ConfigValueAdapter:
     plugin: "SolverPlugin"
 
@@ -1437,6 +1496,7 @@ class PluginCapabilities:
     command_authorization: CommandAuthorizationCapability
     case_introspection: CaseIntrospectionCapability
     case_files: CaseFileContractCapability
+    case_runtime_conventions: CaseRuntimeConventionsCapability
     config_values: ConfigValueCapability
     environment_preflight: EnvironmentPreflightCapability
     dict_diagnostics: DictDiagnosticsCapability
@@ -1474,6 +1534,7 @@ def adapt_plugin_capabilities(plugin: "SolverPlugin") -> PluginCapabilities:
         command_authorization=_CommandAuthorizationAdapter(plugin),
         case_introspection=_CaseIntrospectionAdapter(plugin),
         case_files=_CaseFileContractAdapter(plugin),
+        case_runtime_conventions=_CaseRuntimeConventionsAdapter(plugin),
         config_values=_ConfigValueAdapter(plugin),
         environment_preflight=_EnvironmentPreflightAdapter(plugin),
         dict_diagnostics=_DictDiagnosticsAdapter(plugin),

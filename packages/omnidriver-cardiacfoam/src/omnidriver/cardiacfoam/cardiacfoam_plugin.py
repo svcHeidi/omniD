@@ -89,6 +89,14 @@ class CardiacFoamPlugin:
 
         return openfoam_config_value_reader()
 
+    def get_case_runtime_conventions(self):
+        """Reuse OpenFOAM's generated-path conventions without owning them."""
+        from omnidriver.openfoam.case_runtime_conventions import (
+            openfoam_case_runtime_conventions,
+        )
+
+        return openfoam_case_runtime_conventions()
+
     def configure_execution_environment(self, env: dict[str, str]):
         """Apply the plugin's declared backend and build-manifest contract."""
         from omnidriver.cardiacfoam.runtime_profile import (

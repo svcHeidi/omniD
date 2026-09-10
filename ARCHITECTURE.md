@@ -177,6 +177,7 @@ refuse by hook name.
 | `command_authorization` | `CommandAuthorizationCapability` | `get_auxiliary_commands`, `get_solver_commands`, `get_utility_manifests`, `get_utility_roots` | `omnidriver/core/runtime/artifacts.py`, `omnidriver/core/runtime/workflow.py`, `omnidriver/core/strict_planning.py` | `legacy_auxiliary_commands`, `legacy_solver_commands`, `legacy_utility_manifests`, `legacy_utility_roots` | optional |
 | `case_introspection` | `CaseIntrospectionCapability` | `get_samplable_fields`, `get_selected_start_time`, `resolve_case_models` | `omnidriver/core/runtime/provenance_inputs.py` | `legacy_resolve_case_models`, `legacy_samplable_fields`, `legacy_selected_start_time` | optional |
 | `case_files` | `CaseFileContractCapability` | `get_profile`, `get_config_resolution_description`, `get_decomposition_dirname_prefix` | `omnidriver/core/runtime/strict_audit.py`, `omnidriver/core/tutorial_contracts.py`, `omnidriver/core/runtime/provenance_inputs.py` | `legacy_describe_config_resolution`, `legacy_decomposition_dirname_prefix` | mixed |
+| `case_runtime_conventions` | `CaseRuntimeConventionsCapability` | `get_case_runtime_conventions` | `omnidriver/core/runtime/sweep_runner.py` | `legacy_case_runtime_conventions` | optional |
 | `config_values` | `ConfigValueCapability` | `get_config_value_reader` | `omnidriver/core/compatibility.py` | `legacy_config_value_reader` | optional |
 | `environment_preflight` | `EnvironmentPreflightCapability` | `get_environment_diagnostics`, `get_configured_environment`, `get_loaded_environment` | `omnidriver/core/strict_planning.py`, `omnidriver/core/runtime/sweep_runner.py`, `omnidriver/cli.py` | `legacy_environment_diagnostics`, `legacy_configured_environment`, `legacy_load_environment` | optional |
 | `dict_diagnostics` | `DictDiagnosticsCapability` | `get_function_object_field_diagnostics`, `get_case_dict_key_diagnostics` | `omnidriver/core/strict_planning.py` | `legacy_function_object_field_diagnostics`, `legacy_case_dict_key_diagnostics` | optional |
@@ -188,6 +189,6 @@ refuse by hook name.
 | `override_scopes` | `OverrideScopeCapability` | `get_override_scopes`, `get_override_target_paths`, `apply_overrides`, `inspect_effective_configuration` | `omnidriver/openfoam/apply_overrides.py`, `omnidriver/core/runtime/provenance_inputs.py`, `omnidriver/core/runtime/step_candidate.py`, `omnidriver/core/strict_planning.py` | `legacy_override_scopes`, `legacy_override_target_paths`, `legacy_apply_overrides`, `legacy_inspect_effective_configuration` | optional |
 | `dict_regeneration` | `DictRegenerationCapability` | `get_regeneration_scopes` | `omnidriver/openfoam/apply_overrides.py` | `legacy_dict_regeneration_scopes` | optional |
 
-24 capability seams.
+25 capability seams.
 
 <!-- END GENERATED: capability-seams -->

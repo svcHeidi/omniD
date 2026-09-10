@@ -80,7 +80,8 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
         from importlib.resources import files
 
         from omnidriver.core.plugin_discovery import discover_plugins
-        from omnidriver.core.plugin_interface import load_plugin_context
+        from omnidriver.core.plugin_interface import generic_openfoam_context, load_plugin_context
+        from omnidriver.core.runtime.sweep_runner import _stage_entry_case
 
         repository = Path({str(_REPOSITORY_ROOT)!r}).resolve()
         for distribution_name in {list(_PACKAGES)!r}:
@@ -89,9 +90,24 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
 
         assert "cardiacfoam" in discover_plugins()
         assert load_plugin_context("cardiacfoam").identity.id == "org.cardiacfoam"
+        assert generic_openfoam_context().capabilities.case_runtime_conventions.conventions().output_collection_relpath == "postProcessing"
+        assert load_plugin_context("cardiacfoam").capabilities.case_runtime_conventions.conventions().output_collection_relpath == "postProcessing"
         assert files("omnidriver.cardiacfoam").joinpath(
             "fixtures/template/constant/electroProperties"
         ).is_file()
+
+        # Core has no path-name default. In a neutral staging call, these are
+        # authored inputs, even though the OpenFOAM adapter declares one of
+        # the same names as a generated output root.
+        source = Path("neutral-source")
+        (source / "data").mkdir(parents=True)
+        (source / "data" / "protocol.json").write_text("authored")
+        (source / "postProcessing").mkdir()
+        (source / "postProcessing" / "notes.txt").write_text("authored")
+        staged = Path("neutral-staged")
+        _stage_entry_case(source, staged)
+        assert (staged / "data" / "protocol.json").read_text() == "authored"
+        assert (staged / "postProcessing" / "notes.txt").read_text() == "authored"
         """
     )
     _run([str(python), "-c", probe], cwd=probe_root, env=clean_environment)

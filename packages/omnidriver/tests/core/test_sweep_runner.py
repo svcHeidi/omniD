@@ -37,11 +37,13 @@ from omnidriver.core.sweep.sweep_expansion import SweepValidationError
 # cardiac one, to prove core's own sweep bookkeeping (resume/fresh/retry/
 # timeout/archive) still works.
 from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.core.plugin_interface import generic_openfoam_context
 from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
 
 _CTX = _driver_context(
     NeutralEnvironmentPlugin(), source="test:sweep_runner",
 )
+_OPENFOAM_CTX = generic_openfoam_context()
 
 
 def _write_spec(path: Path, models=("TNNP", "BuenoOrovio")):
@@ -165,7 +167,7 @@ def test_entry_case_staging_keeps_authored_case_clean(tmp_path):
     (generated_case / "system" / "controlDict").write_text("generated")
 
     staged = tmp_path / "scratch" / "case_0001"
-    _stage_entry_case(source, staged)
+    _stage_entry_case(source, staged, driver_context=_OPENFOAM_CTX)
 
     assert (staged / "system" / "controlDict").read_text() == "endTime 0.2;\n"
     assert (staged / "0" / "Vm").exists()
@@ -175,6 +177,22 @@ def test_entry_case_staging_keeps_authored_case_clean(tmp_path):
     assert not (staged / "workflow_state.json").exists()
     assert not (staged / generated_case.name).exists()
     assert (source / "postProcessing" / "old.dat").exists()
+
+
+def test_neutral_staging_preserves_authored_paths_named_like_openfoam_outputs(tmp_path):
+    """Only an environment declaration may classify these names as generated."""
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "data").mkdir()
+    (source / "data" / "protocol.json").write_text("authored")
+    (source / "postProcessing").mkdir()
+    (source / "postProcessing" / "notes.txt").write_text("also authored")
+    staged = tmp_path / "staged"
+
+    _stage_entry_case(source, staged, driver_context=_CTX)
+
+    assert (staged / "data" / "protocol.json").read_text() == "authored"
+    assert (staged / "postProcessing" / "notes.txt").read_text() == "also authored"
 
 
 def test_entry_case_staging_refuses_to_replace_a_live_case(tmp_path):
@@ -425,7 +443,7 @@ def test_sweep_run_archives_each_case_postprocessing_output_when_configured(tmp_
     with mock.patch("omnidriver.core.runtime.sweep_runner.load_entry_spec", return_value=fake_spec), \
          mock.patch("omnidriver.core.runtime.sweep_runner.strict_plan", return_value=fake_report), \
          mock.patch("omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run):
-        result = sweep_run(spec_path, output_dir=output_dir, driver_context=_CTX)
+        result = sweep_run(spec_path, output_dir=output_dir, driver_context=_OPENFOAM_CTX)
 
     assert result["completed_count"] == 2
     # Each case's archived output lands inside that case's own output_dir --
@@ -486,7 +504,7 @@ def test_sweep_run_archives_each_case_postprocessing_output_by_default(tmp_path)
     with mock.patch("omnidriver.core.runtime.sweep_runner.load_entry_spec", return_value=fake_spec), \
          mock.patch("omnidriver.core.runtime.sweep_runner.strict_plan", return_value=fake_report), \
          mock.patch("omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run):
-        result = sweep_run(spec_path, output_dir=output_dir, driver_context=_CTX)
+        result = sweep_run(spec_path, output_dir=output_dir, driver_context=_OPENFOAM_CTX)
 
     assert result["completed_count"] == 2
     assert (case_output_dirs[1] / "collectedOutput" / "case_1.dat").read_text() == "result 1"
