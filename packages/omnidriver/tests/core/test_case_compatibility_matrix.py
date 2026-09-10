@@ -19,8 +19,10 @@ from pathlib import Path
 
 import pytest
 
-from omnidriver.core.plugin_interface import generic_openfoam_context
+from omnidriver.core.plugin_interface import driver_context, generic_openfoam_context
 from omnidriver.core.runtime.registry import list_entries
+
+from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
 
 _CTX = generic_openfoam_context()
 
@@ -56,6 +58,38 @@ def test_existing_case_discovery_and_runnability_matrix(
     assert bool(matches) is discovered
     if discovered:
         assert matches[0]["is_runnable"] is runnable
+
+
+@pytest.mark.parametrize("authored_directory", ("postProcessing", "logs"))
+def test_neutral_environment_does_not_hide_authored_directory_names(
+    tmp_path: Path,
+    authored_directory: str,
+) -> None:
+    """Only an environment may declare which generated roots discovery skips."""
+    case_root = tmp_path / authored_directory / "nestedCase"
+    case_root.mkdir(parents=True)
+    _touch(case_root, "Allrun")
+    context = driver_context(
+        NeutralEnvironmentPlugin(), source="test:neutral-discovery",
+    )
+
+    entries = list_entries(tmp_path, driver_context=context)
+
+    assert [entry["entry_path"] for entry in entries] == [
+        f"{authored_directory}/nestedCase",
+    ]
+
+
+@pytest.mark.parametrize("generated_directory", ("postProcessing", "logs"))
+def test_openfoam_environment_hides_its_declared_generated_roots(
+    tmp_path: Path,
+    generated_directory: str,
+) -> None:
+    case_root = tmp_path / generated_directory / "nestedCase"
+    case_root.mkdir(parents=True)
+    _touch(case_root, "Allrun")
+
+    assert list_entries(tmp_path, driver_context=_CTX) == []
 
 
 def test_legacy_resolve_case_models_neutral_shape_has_no_cardiac_keys() -> None:

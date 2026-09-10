@@ -122,6 +122,7 @@ class CaseRuntimeConventions:
     generated_file_suffixes: tuple[str, ...] = ()
     preserved_file_suffixes: tuple[str, ...] = ()
     generated_case_markers: tuple[str, ...] = ()
+    case_discovery_ignored_directory_names: tuple[str, ...] = ()
     time_directory_name_pattern: str | None = None
     preserved_time_directory_names: tuple[str, ...] = ()
 
@@ -557,7 +558,7 @@ class CaseRuntimeConventionsCapability(Protocol):
     preserves every path and does not collect a convention-specific tree.
 
     :adapts: get_case_runtime_conventions
-    :consumed-by: omnidriver/core/runtime/sweep_runner.py
+    :consumed-by: omnidriver/core/runtime/registry.py, omnidriver/core/runtime/sweep_runner.py
     :fallback: legacy_case_runtime_conventions
     :status: optional
     """

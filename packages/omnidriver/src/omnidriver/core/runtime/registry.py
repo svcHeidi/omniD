@@ -93,6 +93,14 @@ def _iter_case_directories_recursive(
 
     discovered: list[Path] = []
     decomposition_prefix = decomposition_dirname_prefix(driver_context)
+    ignored_directory_names = (
+        frozenset(
+            driver_context.capabilities.case_runtime_conventions.conventions()
+            .case_discovery_ignored_directory_names,
+        )
+        if driver_context is not None
+        else frozenset()
+    )
     for current_root, dirnames, _filenames in os.walk(cases_root):
         path = Path(current_root)
         dirnames[:] = [
@@ -101,7 +109,7 @@ def _iter_case_directories_recursive(
             if not dirname.startswith(".")
             and dirname != "__pycache__"
             and not dirname.startswith(decomposition_prefix)
-            and dirname not in {"postProcessing", "logs"}
+            and dirname not in ignored_directory_names
         ]
         if _is_case_directory(path, driver_context):
             discovered.append(path)
