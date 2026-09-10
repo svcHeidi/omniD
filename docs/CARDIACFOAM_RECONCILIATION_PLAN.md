@@ -22,7 +22,7 @@ task below. A task may not broaden its scope without a new row in the delta
 audit. Core mechanics (transactions, evidence, execution policy) are not in
 scope for catalog tasks.
 
-**Progress (2026-09-10):** T0–T6, T1b, and H1 are complete. T7 has passed both the single-cell and Niederer tissue reference experiments through OmniD, including solver-owned check-only comparisons; one small derived sweep remains.
+**Progress (2026-09-10):** T0–T7, T1b, and H1 are complete. T7 passed the single-cell and Niederer tissue reference experiments through OmniD, including solver-owned check-only comparisons, and a two-case catalog-backed exploratory single-cell sweep.
 
 **Test scope:** driverFOAM owns orchestration and adapter-contract tests. It integrates and reports solver-owned scientific regressions; it does not independently define scientific correctness or freeze evolving tutorial content. Studies own their experimental protocols and paper baselines. Exact effective inputs and commands must be verified separately from numerical regression outcomes: passing a metric tolerance does not prove every requested override was applied.
 
@@ -42,7 +42,7 @@ scope for catalog tasks.
 T1 evidence: [historical test ownership map](HISTORICAL_TEST_OWNERSHIP_MAP_2026-09-09.md).
 
 T6 contract: [selected-source/build fixture contract](SELECTED_SOURCE_BUILD_FIXTURE_CONTRACT.md).
-The source/build document records a previously inspected solver selection, not a moving HEAD guarantee. T6 revalidates it at use time. T1b and H1 have independent completed evidence; the two passed reference experiments do not complete the remaining sweep part of T7.
+The source/build document records a previously inspected solver selection, not a moving HEAD guarantee. T6 revalidates it at use time. T1b and H1 have independent completed evidence. T7 is complete: its two reference experiments retain separate driver and solver-checker outcomes, and its two-case exploratory sweep records resolved parameters, workflow state, trace artifacts and output hashes without inventing a scientific acceptance threshold.
 
 T4 decision (revised 2026-09-09): `batchedIntegrator` is an ionic-model key
 and places no constraint on `activeTensionModel`. Batched active tension
@@ -82,7 +82,7 @@ source-compatible ECG verifier surface. Its `type` takes precedence over
 dimension, and quadrature settings. `alpha` and `k` remain on their
 model-specific paths, preserving the bath/bidomain correction.
 
-Next sequence: T1b and H1 in parallel, then run one small catalog-backed derived sweep under T7. Catalog decisions T2–T5 remain closed unless new source evidence contradicts them. No broader architectural rewrite or second scientific regression suite is part of this sequence.
+This reconciliation sequence is complete. Follow-on work may add selected solver checkers, derived metrics or experiment-analysis capabilities, but must retain the same split: driver execution evidence is not a solver scientific oracle. Catalog decisions T2–T5 remain closed unless new source evidence contradicts them. No broader architectural rewrite or second scientific regression suite is part of this sequence.
 
 ## Scope rules
 

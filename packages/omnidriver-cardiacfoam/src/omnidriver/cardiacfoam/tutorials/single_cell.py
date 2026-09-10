@@ -174,7 +174,12 @@ def make_spec(
             "notes": "Single-cell sweep on ionic model and tissue types.",
             "workflow_dag": {
                 "steps": [
-                    {"id": "solve", "command": "cardiacFoam", "depends_on": []},
+                    # The selected single-cell tutorial's authored Allrun
+                    # creates its one-cell mesh before launching the solver.
+                    # This is an OpenFOAM execution convention declared by
+                    # the cardiac tutorial, not a Core sequencing rule.
+                    {"id": "mesh", "command": "blockMesh", "depends_on": []},
+                    {"id": "solve", "command": "cardiacFoam", "depends_on": ["mesh"]},
                 ]
             },
             "ionic_models": ionic_models_list,

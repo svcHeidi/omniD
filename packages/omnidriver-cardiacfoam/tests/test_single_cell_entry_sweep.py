@@ -65,5 +65,18 @@ class TestSingleCellIonicModelTissueOverride(unittest.TestCase):
             make_spec(cases_root=monorepo_root / "tutorials", tissue="epicardialCells")  # type: ignore[operator]
 
 
+def test_workflow_declares_the_tutorial_mesh_prerequisite(tmp_path: Path) -> None:
+    """This declaration must not depend on a monorepo tutorial checkout."""
+    spec = make_spec(
+        cases_root=tmp_path,
+        ionic_model="TNNP",
+        tissue="epicardialCells",
+    )
+    assert spec.metadata["workflow_dag"]["steps"] == [
+        {"id": "mesh", "command": "blockMesh", "depends_on": []},
+        {"id": "solve", "command": "cardiacFoam", "depends_on": ["mesh"]},
+    ]
+
+
 if __name__ == "__main__":
     unittest.main()
