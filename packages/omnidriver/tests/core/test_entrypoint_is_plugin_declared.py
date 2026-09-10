@@ -11,7 +11,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from omnidriver.core.plugin_interface import driver_context, generic_openfoam_context
+from omnidriver.core.plugin_interface import driver_context
+from omnidriver.openfoam.environment import openfoam_environment_context
 from omnidriver.core.runtime import registry
 
 import plugins.minimal_plugin as minimal_plugin
@@ -23,8 +24,8 @@ def test_generic_plugin_still_finds_an_allrun_case(tmp_path) -> None:
     case = tmp_path / "aCase"
     case.mkdir()
     (case / "Allrun").write_text("#!/bin/sh\n")
-    assert registry._is_case_directory(case, generic_openfoam_context()) is True
-    assert registry._case_is_runnable(case, driver_context=generic_openfoam_context()) is True
+    assert registry._is_case_directory(case, openfoam_environment_context()) is True
+    assert registry._case_is_runnable(case, driver_context=openfoam_environment_context()) is True
 
 
 def test_a_plugin_declaring_another_entrypoint_finds_it(tmp_path) -> None:

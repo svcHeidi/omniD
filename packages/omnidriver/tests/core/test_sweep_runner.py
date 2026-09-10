@@ -37,13 +37,13 @@ from omnidriver.core.sweep.sweep_expansion import SweepValidationError
 # cardiac one, to prove core's own sweep bookkeeping (resume/fresh/retry/
 # timeout/archive) still works.
 from omnidriver.core.plugin_interface import driver_context as _driver_context
-from omnidriver.core.plugin_interface import generic_openfoam_context
+from omnidriver.openfoam.environment import openfoam_environment_context
 from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
 
 _CTX = _driver_context(
     NeutralEnvironmentPlugin(), source="test:sweep_runner",
 )
-_OPENFOAM_CTX = generic_openfoam_context()
+_OPENFOAM_CTX = openfoam_environment_context()
 
 
 def _write_spec(path: Path, models=("TNNP", "BuenoOrovio")):

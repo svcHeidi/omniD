@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 from omnidriver.core.introspection import _run_state_schema, describe_entry
-from omnidriver.core.plugin_interface import generic_openfoam_context
+from omnidriver.openfoam.environment import openfoam_environment_context
 
 
 def test_run_state_schema_does_not_advertise_unwritten_action_events_file() -> None:
@@ -37,7 +37,7 @@ def test_neutral_describe_payload_has_no_domain_catalog_vocabulary() -> None:
         payload = describe_entry(
             "minimalCase",
             overrides={"cases_root": str(cases_root)},
-            driver_context=generic_openfoam_context(),
+            driver_context=openfoam_environment_context(),
         )
 
     assert payload["plugin_catalogs"] == {}

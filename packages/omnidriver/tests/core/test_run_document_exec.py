@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from omnidriver.core.plugin_interface import generic_openfoam_context
+from omnidriver.openfoam.environment import openfoam_environment_context
 from omnidriver.core.runtime.run_document_exec import (
     build_execution_inputs,
     load_run_document,
@@ -27,7 +27,7 @@ from omnidriver.core.runtime.run_model import RunDocument
 # mandatory parameter now (see test_core_context_is_explicit.py); this is
 # the built-in generic binding, not a judgement about which real plugin
 # owns this test.
-_CTX = generic_openfoam_context()
+_CTX = openfoam_environment_context()
 
 
 def _empty_config() -> dict:

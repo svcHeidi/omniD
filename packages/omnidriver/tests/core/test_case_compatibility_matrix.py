@@ -7,7 +7,7 @@ packages/omnidriver-cardiacfoam/tests/test_case_compatibility_matrix.py. The
 two rows kept here -- an empty folder, and a bare Allrun -- exercise only
 core's own entrypoint-based discovery/runnability
 (_has_entrypoint/_is_case_directory in registry.py), which is meaningful
-under the plugin-neutral generic_openfoam_context(): GenericOpenFOAMPlugin
+under the plugin-neutral openfoam_environment_context(): OpenFOAMEnvironmentPlugin
 declares no has_case_marker hook at all (always False), so these two rows
 are driven purely by Allrun's presence, independent of any plugin
 vocabulary.
@@ -19,12 +19,13 @@ from pathlib import Path
 
 import pytest
 
-from omnidriver.core.plugin_interface import driver_context, generic_openfoam_context
+from omnidriver.core.plugin_interface import driver_context
+from omnidriver.openfoam.environment import openfoam_environment_context
 from omnidriver.core.runtime.registry import list_entries
 
 from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
 
-_CTX = generic_openfoam_context()
+_CTX = openfoam_environment_context()
 
 
 def _touch(case_root: Path, relative: str) -> None:

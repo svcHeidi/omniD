@@ -150,9 +150,8 @@ def legacy_base_mesh_geometry_diagnostics(case_root) -> tuple:
     get_base_mesh_geometry_diagnostics itself (returning ``()`` is valid) or
     override this default."""
 
-    from omnidriver.openfoam.mesh_geometry import mesh_geometry_diagnostics
-
-    return mesh_geometry_diagnostics(case_root)
+    del case_root
+    return ()
 
 
 @_instrumented
@@ -167,12 +166,15 @@ def legacy_environment_diagnostics(
     as legacy_base_mesh_geometry_diagnostics. Preserved as-is; a non-OpenFOAM
     plugin implements get_environment_diagnostics itself."""
 
-    from omnidriver.openfoam.environment_preflight import _environment_diagnostics
+    del workflow_dag, env, explicit_bashrc, driver_context
+    from .planning_types import diagnostic
 
-    return _environment_diagnostics(
-        workflow_dag, env=env, explicit_bashrc=explicit_bashrc,
-        driver_context=driver_context,
-    )
+    return (diagnostic(
+        "error",
+        "environment_capability_unavailable",
+        "The selected adapter does not declare environment validation.",
+        source="adapter",
+    ),)
 
 
 @_instrumented
@@ -182,9 +184,8 @@ def legacy_configured_environment(env, driver_context) -> dict:
     same historical-behavior-preserved reasoning as the other environment
     fallbacks above."""
 
-    from omnidriver.openfoam.openfoam_environment import configure_plugin_environment
-
-    return configure_plugin_environment(env, driver_context).env
+    del driver_context
+    return dict(env)
 
 
 @_instrumented
@@ -194,18 +195,12 @@ def legacy_load_environment(*, explicit_bashrc, driver_context) -> dict:
     plugin -- same historical-behavior-preserved reasoning as the other
     environment fallbacks above.
 
-    This exists so cli.py does not import omnidriver.openfoam at module scope.
-    It did, on two lines, which made ``import omnidriver.cli`` raise
-    ModuleNotFoundError in a core-only install and took the entire CLI surface
-    with it."""
+    This keeps a legacy caller usable in a core-only installation."""
 
-    from omnidriver.openfoam.openfoam_environment import load_openfoam_environment
+    del explicit_bashrc, driver_context
+    import os
 
-    return dict(
-        load_openfoam_environment(
-            explicit_bashrc=explicit_bashrc, driver_context=driver_context,
-        ).env
-    )
+    return dict(os.environ)
 
 
 @_instrumented
@@ -232,37 +227,20 @@ def legacy_apply_overrides(
     uncaught -- cli.py's ``except (OSError, ValueError)`` around this call
     does not catch it, so it reached the terminal as a raw traceback."""
 
-    try:
-        from omnidriver.openfoam.apply_overrides import apply_overrides, validate_overrides
-    except ImportError as exc:
-        raise ValueError(
-            f"plugin {driver_context.identity.id!r} has no apply_overrides() "
-            "of its own, and omnidriver-openfoam (core's OpenFOAM-shaped default "
-            "for this operation) is not installed -- step --strict --apply is not "
-            "supported for this plugin"
-        ) from exc
-
-    validate_overrides(overrides, driver_context=driver_context)
-    return apply_overrides(
-        overrides,
-        case_root=case_root,
-        driver_context=driver_context,
-        execution_env=execution_env,
+    del overrides, case_root, driver_context, execution_env
+    raise ValueError(
+        "the selected adapter does not implement apply_overrides(); "
+        "strict applying is not supported for this plugin"
     )
 
 
 @_instrumented
 def legacy_override_target_paths(overrides, *, case_root, driver_context) -> tuple:
-    """Resolve the OpenFOAM-shaped fallback's complete mutation target set."""
-    try:
-        from omnidriver.openfoam.apply_overrides import override_target_paths
-    except ImportError as exc:
-        raise ValueError(
-            f"plugin {driver_context.identity.id!r} cannot prepare crash-safe "
-            "override targets because omnidriver-openfoam is not installed"
-        ) from exc
-    return override_target_paths(
-        overrides, case_root=case_root, driver_context=driver_context,
+    """An adapter without a mutator cannot declare mutation targets."""
+
+    del overrides, case_root, driver_context
+    raise ValueError(
+        "the selected adapter does not implement override target declaration"
     )
 
 
@@ -276,22 +254,8 @@ def legacy_inspect_effective_configuration(
     no fabricated evidence.  The import remains lazy so a core-only install
     can still plan a foreign case; it simply cannot claim OpenFOAM evidence.
     """
-    relpaths = tuple(
-        rule.path
-        for rule in driver_context.capabilities.case_files.all_rules()
-        if rule.kind == "openfoam_dictionary"
-    )
-    if not relpaths:
-        return ()
-    try:
-        from omnidriver.openfoam.effective_dictionary import (
-            inspect_effective_foam_configuration,
-        )
-    except ImportError:
-        return ()
-    return inspect_effective_foam_configuration(
-        case_root, relpaths, env=execution_env,
-    )
+    del case_root, driver_context, execution_env
+    return ()
 
 
 @_instrumented
@@ -303,9 +267,8 @@ def legacy_function_object_field_diagnostics(case_root, *, samplable) -> tuple:
     was-never-actually-solver-neutral situation as the other diagnostics
     fallbacks in this file."""
 
-    from omnidriver.openfoam.function_object_fields import function_object_field_diagnostics
-
-    return function_object_field_diagnostics(case_root, samplable=samplable)
+    del case_root, samplable
+    return ()
 
 
 @_instrumented
@@ -314,11 +277,8 @@ def legacy_case_dict_key_diagnostics(case_root, *, catalogued_paths, dict_relpat
     legacy_function_object_field_diagnostics: preserved as-is, parses
     OpenFOAM dict files via foamlib."""
 
-    from omnidriver.openfoam.case_dict_keys import case_dict_key_diagnostics
-
-    return case_dict_key_diagnostics(
-        case_root, catalogued_paths=catalogued_paths, dict_relpaths=dict_relpaths,
-    )
+    del case_root, catalogued_paths, dict_relpaths
+    return ()
 
 
 @_instrumented
@@ -336,9 +296,20 @@ def legacy_dict_key_scanner():
     at that point fires even for a plugin that implements
     get_case_dict_key_diagnostics and would never reach the fallback."""
 
-    from omnidriver.openfoam.dict_keys_scanner import strict_dict_key_report
+    class _EmptyReport:
+        def to_json(self):
+            return {
+                "unmatched_cxx_reads": [],
+                "stale_paths": [],
+                "unmatched_subdicts": [],
+                "unused_allowlist": [],
+            }
 
-    return strict_dict_key_report
+    def _report(*args, **kwargs):
+        del args, kwargs
+        return _EmptyReport()
+
+    return _report
 
 
 @_instrumented
@@ -374,7 +345,7 @@ def legacy_materialize_sweep_case(plugin, *, case_dir, routed) -> None:
     This is the fallback with real teeth. The cardiac materializer writes an
     ``Allrun`` containing a hardcoded ``cardiacFoam`` command, so ungated it
     generated a case invoking the cardiacFoam binary under whichever plugin
-    was loaded (reproduced against GenericOpenFOAMPlugin, 2026-08-19)."""
+    was loaded (reproduced against OpenFOAMEnvironmentPlugin, 2026-08-19)."""
 
     del case_dir, routed
     from omnidriver.core.sweep.sweep_expansion import SweepValidationError
@@ -599,9 +570,8 @@ def legacy_config_value_reader(path, key: str) -> str | None:
     plugin must implement the hook explicitly -- this fallback assumes
     OpenFOAM syntax and is not a safe default for other environments."""
 
-    from omnidriver.openfoam.mutators import read_foam_entry
-
-    return read_foam_entry(path, key)
+    del path, key
+    return None
 
 
 @_instrumented

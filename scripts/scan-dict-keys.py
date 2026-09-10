@@ -69,13 +69,9 @@ def _plugin_scan_inputs(plugin: str | None):
     """
     from omnidriver.core.plugin_interface import (
         default_driver_context,
-        generic_openfoam_context,
         load_plugin_context,
     )
-
-    if plugin == "none":
-        context = generic_openfoam_context()
-    elif plugin:
+    if plugin:
         context = load_plugin_context(plugin)
     else:
         context = default_driver_context()

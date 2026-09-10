@@ -14,15 +14,15 @@ need it composed onto two different identities:
   mixin plus ``MinimalOpenFOAMPlugin``) is enough.
 - a few tests (e.g. ``test_core_generic_case.py``'s
   ``test_plain_allrun_case_works_with_the_no_domain_context``) assert on the
-  built-in ``GenericOpenFOAMPlugin``'s identity
-  (``report.plugin["id"] == "org.driverfoam.generic-openfoam"``) directly --
+  built-in ``OpenFOAMEnvironmentPlugin``'s identity
+  (``report.plugin["id"] == "org.omnidriver.openfoam.environment"``) directly --
   swapping in ``NeutralEnvironmentPlugin`` there would change what the test
   measures, not just how it runs. Those tests instead compose the mixin onto
-  ``GenericOpenFOAMPlugin`` locally, keeping the identity assertion intact
+  ``OpenFOAMEnvironmentPlugin`` locally, keeping the identity assertion intact
   while still avoiding the omnidriver.openfoam import.
 
 ``NeutralEnvironmentPlugin`` also declares the same three case-file rules the
-built-in ``GenericOpenFOAMPlugin`` declares (``system/controlDict`` ->
+built-in ``OpenFOAMEnvironmentPlugin`` declares (``system/controlDict`` ->
 ``openfoam.control_dict``, ``constant`` -> ``openfoam.case_directory``,
 ``Allrun`` -> ``openfoam.entrypoint``). Those role bindings are core's own
 declarative vocabulary (ENVIRONMENT_CONTRACT.md §4) -- plain data read by
@@ -37,7 +37,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from omnidriver.core.generic_plugin import GenericOpenFOAMPlugin
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile
 from plugins.minimal_plugin import MinimalOpenFOAMPlugin
 
@@ -52,7 +52,7 @@ class _EnvironmentNeutralHooks:
 
     def get_capabilities(self):
         """A real, if empty, accept-surface -- built through the same
-        assembler ``GenericOpenFOAMPlugin`` uses (``core.capability_manifest``,
+        assembler ``OpenFOAMEnvironmentPlugin`` uses (``core.capability_manifest``,
         no ``omnidriver.openfoam`` involved), rather than
         ``MinimalOpenFOAMPlugin``'s bare ``{}``. A caller inspecting
         ``allowed_commands`` (as ``strict_plan``'s capability manifest does)
@@ -190,17 +190,17 @@ class NeutralEnvironmentPlugin(_EnvironmentNeutralHooks, MinimalOpenFOAMPlugin):
         )
 
 
-class _GenericOpenFOAMPluginWithNeutralEnvironment(_EnvironmentNeutralHooks, GenericOpenFOAMPlugin):
-    """``GenericOpenFOAMPlugin`` -- same identity, same declared case files,
+class _OpenFOAMEnvironmentPluginWithNeutralEnvironment(_EnvironmentNeutralHooks, OpenFOAMEnvironmentPlugin):
+    """``OpenFOAMEnvironmentPlugin`` -- same identity, same declared case files,
     same capability manifest -- plus the neutral answers to the hooks whose
     core.compatibility fallback imports omnidriver.openfoam unconditionally.
 
     Needed here specifically (rather than swapping in
     ``NeutralEnvironmentPlugin``) whenever a test pins the built-in generic
     plugin's own identity (``report.plugin["id"] ==
-    "org.driverfoam.generic-openfoam"``) or needs it reachable by trusted
+    "org.omnidriver.openfoam.environment"``) or needs it reachable by trusted
     ``module:Class`` import (e.g. ``--plugin
-    plugins.neutral_environment_plugin:_GenericOpenFOAMPluginWithNeutralEnvironment``)
+    plugins.neutral_environment_plugin:_OpenFOAMEnvironmentPluginWithNeutralEnvironment``)
     -- "some plugin" is not enough, so the double must keep that identity
     intact.
 

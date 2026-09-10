@@ -73,15 +73,14 @@ if help_result.returncode:
     sys.exit(help_result.returncode)
 print("core-only CLI help works")
 
-# Core exposes a lazy compatibility alias but cannot provide an OpenFOAM
-# adapter by itself. Importing the alias must therefore fail only when the
-# caller selects it, not during the module walk above.
+# Core has no environment adapter.  Selecting one is an installation concern,
+# not a compatibility fallback supplied by the Core wheel.
 try:
-    from omnidriver.core.generic_plugin import GenericOpenFOAMPlugin
+    from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 except ModuleNotFoundError:
     pass
 else:
-    print("Core wheel unexpectedly provides the OpenFOAM generic plugin")
+    print("Core wheel unexpectedly provides the OpenFOAM environment adapter")
     sys.exit(1)
 
 # A RunDocument can carry a previous workflow state instead of relying on an

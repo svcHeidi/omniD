@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from omnidriver.core.plugin_interface import generic_openfoam_context
+from omnidriver.openfoam.environment import openfoam_environment_context
 from omnidriver.core.runtime.workflow import validate_workflow_commands
 from omnidriver.core.runtime.workflow_runner import (
     _resolve_case_cwd,
@@ -29,7 +29,7 @@ class TestValidateWorkflowCommands(unittest.TestCase):
         # is sufficient and keeps this file plugin-agnostic. The two cases
         # that genuinely assert cardiac-authorized commands moved to
         # omnidriver-cardiacfoam's tests/test_workflow_command_security.py.
-        self.context = generic_openfoam_context()
+        self.context = openfoam_environment_context()
 
     def test_case_script_command_is_allowed(self) -> None:
         dag = {"steps": [{"id": "s", "command": "Allrun"}]}
@@ -101,7 +101,7 @@ class TestValidateWorkflowCommands(unittest.TestCase):
 
 class TestValidateWorkflowCommandsFoamApp(unittest.TestCase):
     def setUp(self) -> None:
-        self.context = generic_openfoam_context()
+        self.context = openfoam_environment_context()
 
     def test_installed_openfoam_app_is_allowed(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

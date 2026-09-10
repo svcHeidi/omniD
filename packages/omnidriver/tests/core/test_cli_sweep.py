@@ -5,7 +5,7 @@ and asserts CLI argument marshalling (kwargs, exit codes) -- nothing
 cardiac. Six of them failed core-only only because main() calls
 default_driver_context() (which requires omnidriver-cardiacfoam) when
 --plugin is omitted; they now patch default_driver_context to return
-generic_openfoam_context() instead. Assertions are unchanged. The
+openfoam_environment_context() instead. Assertions are unchanged. The
 "TNNP"/"BadModel" fixture strings were renamed to neutral placeholders
 since they are arbitrary labels inside a mocked return value, not
 assertions on cardiacFoam behaviour.
@@ -17,7 +17,7 @@ from pathlib import Path
 from unittest import mock
 
 from omnidriver.cli import main
-from omnidriver.core.plugin_interface import generic_openfoam_context
+from omnidriver.openfoam.environment import openfoam_environment_context
 
 
 def _patch_default_driver_context():
@@ -26,7 +26,7 @@ def _patch_default_driver_context():
     # attribute to patch -- patch it at its defining module instead.
     return mock.patch(
         "omnidriver.core.plugin_interface.default_driver_context",
-        side_effect=generic_openfoam_context,
+        side_effect=openfoam_environment_context,
     )
 
 

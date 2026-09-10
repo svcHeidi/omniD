@@ -8,20 +8,20 @@ from omnidriver.core.plugin_interface import load_plugin_context
 
 class _FakeEntryPoint:
     name = "fakeplugin"
-    value = "omnidriver.openfoam.generic_plugin:GenericOpenFOAMPlugin"
+    value = "omnidriver.openfoam.environment:OpenFOAMEnvironmentPlugin"
     dist = type("D", (), {"name": "fake-dist", "version": "9.9"})()
 
     def load(self):
-        from omnidriver.openfoam.generic_plugin import GenericOpenFOAMPlugin
+        from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
-        return GenericOpenFOAMPlugin
+        return OpenFOAMEnvironmentPlugin
 
 
 def test_a_colon_still_means_a_trusted_local_import() -> None:
     context = load_plugin_context(
-        "omnidriver.openfoam.generic_plugin:GenericOpenFOAMPlugin"
+        "omnidriver.openfoam.environment:OpenFOAMEnvironmentPlugin"
     )
-    assert context.identity.id == "org.driverfoam.generic-openfoam"
+    assert context.identity.id == "org.omnidriver.openfoam.environment"
     assert context.identity.source.startswith("trusted-import:")
 
 
@@ -47,7 +47,7 @@ def test_a_discovered_id_wins_only_when_there_is_no_colon(monkeypatch) -> None:
     )
     # A colon always means the trusted import form, never discovery.
     context = load_plugin_context(
-        "omnidriver.openfoam.generic_plugin:GenericOpenFOAMPlugin"
+        "omnidriver.openfoam.environment:OpenFOAMEnvironmentPlugin"
     )
     assert context.identity.source.startswith("trusted-import:")
 
@@ -55,6 +55,14 @@ def test_a_discovered_id_wins_only_when_there_is_no_colon(monkeypatch) -> None:
 def test_discovery_is_empty_by_default_and_does_not_raise() -> None:
     # No third-party plugin is installed in this repository's environment.
     assert isinstance(plugin_discovery.discover_plugins(), dict)
+
+
+def test_no_installed_adapter_never_creates_an_environment_fallback(monkeypatch) -> None:
+    monkeypatch.setattr(plugin_discovery, "_entry_points", lambda: ())
+    plugin_discovery._default_selection.cache_clear()
+
+    with pytest.raises(LookupError, match="no adapter is installed"):
+        plugin_discovery.default_discovered_context()
 
 
 class _RivalEntryPoint(_FakeEntryPoint):

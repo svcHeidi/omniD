@@ -26,7 +26,7 @@ from omnidriver.core.plugin_profile import (
 from omnidriver.core.runtime.generic_case import _workflow_dag_for
 
 import plugins.minimal_plugin as minimal_plugin
-from omnidriver.core.plugin_interface import generic_openfoam_context
+from omnidriver.openfoam.environment import openfoam_environment_context
 
 
 def _context(entrypoint):
@@ -47,7 +47,7 @@ def test_a_plugin_declaring_no_entrypoint_has_no_entrypoint() -> None:
 
 
 def test_openfoam_context_explicitly_declares_allrun() -> None:
-    assert entrypoint_relpaths(generic_openfoam_context()) == ("Allrun",)
+    assert entrypoint_relpaths(openfoam_environment_context()) == ("Allrun",)
 
 
 def test_a_declared_entrypoint_wins_over_the_default() -> None:

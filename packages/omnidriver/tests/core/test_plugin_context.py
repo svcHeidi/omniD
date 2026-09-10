@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 from pathlib import Path
 
-from omnidriver.core.generic_plugin import GenericOpenFOAMPlugin
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.core.plugin_interface import (
     driver_context,
     validate_plugin,
@@ -138,7 +138,7 @@ def test_plugin_contexts_remain_isolated_sequentially_and_concurrently() -> None
     contexts = (
         driver_context(_Plugin("example.alpha", "alpha"), source="test"),
         driver_context(_Plugin("example.beta", "beta"), source="test"),
-        driver_context(GenericOpenFOAMPlugin(), source="test"),
+        driver_context(OpenFOAMEnvironmentPlugin(), source="test"),
         # Any distinct, non-cardiac fourth context works here: `expected` is
         # computed from `contexts[-1]` below, so the isolation property this
         # test checks does not depend on which plugin occupies this slot.

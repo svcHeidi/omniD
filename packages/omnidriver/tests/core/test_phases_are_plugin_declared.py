@@ -9,7 +9,8 @@ the compatibility set.
 """
 from __future__ import annotations
 
-from omnidriver.core.plugin_interface import driver_context, generic_openfoam_context
+from omnidriver.core.plugin_interface import driver_context
+from omnidriver.openfoam.environment import openfoam_environment_context
 from omnidriver.core.specs.validation import primary_phase
 
 
@@ -32,7 +33,7 @@ def test_an_entry_claiming_no_declared_phase_returns_none() -> None:
 def test_the_generic_plugin_declares_the_phases_its_entries_use() -> None:
     """It has no entries, so it declares no phases -- and must not inherit
     cardiacFoam's four."""
-    phases = generic_openfoam_context().capabilities.dictionaries.phases()
+    phases = openfoam_environment_context().capabilities.dictionaries.phases()
     assert phases == ()
 
 

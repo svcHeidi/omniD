@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from omnidriver.core.plugin_interface import generic_openfoam_context
+from omnidriver.openfoam.environment import openfoam_environment_context
 from omnidriver.core.strict_planning import _mesh_geometry_diagnostics
 
 _FOAM_HEADER = (
@@ -36,7 +36,7 @@ def test_mesh_adapter_flags_non_si(tmp_path: Path) -> None:
     pm.joinpath("points").write_text(
         _FOAM_HEADER + "\n2\n(\n(0 0 0)\n(50 50 50)\n)\n"
     )
-    diags = _mesh_geometry_diagnostics(tmp_path, driver_context=generic_openfoam_context())
+    diags = _mesh_geometry_diagnostics(tmp_path, driver_context=openfoam_environment_context())
     codes = {d.code for d in diags}
     assert "mesh_not_si" in codes
     assert all(d.source == "mesh_geometry" for d in diags)
@@ -45,6 +45,6 @@ def test_mesh_adapter_flags_non_si(tmp_path: Path) -> None:
 def test_exempt_short_circuits_unit_domain(tmp_path: Path) -> None:
     # A [0,1] mesh would classify "mm", but an exempt case must not be flagged.
     _write_unit_mesh(tmp_path)
-    context = generic_openfoam_context()
+    context = openfoam_environment_context()
     assert _mesh_geometry_diagnostics(tmp_path, exempt=False, driver_context=context) != ()  # baseline
     assert _mesh_geometry_diagnostics(tmp_path, exempt=True, driver_context=context) == ()

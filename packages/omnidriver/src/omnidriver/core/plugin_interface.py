@@ -11,10 +11,10 @@ Two Protocol classes define what a solver plugin must implement:
 
 Use :func:`driver_context` or :func:`load_plugin_context` to create a
 validated, immutable :class:`DriverContext` for each public operation.
-Use :func:`generic_openfoam_context` for the OpenFOAM adapter's no-domain stub and
+Adapters may provide their own context factories for convenience, and
 :func:`default_driver_context` only at compatibility boundaries.
 
-To build an OpenFOAM plugin start from ``omnidriver.openfoam.generic_plugin``;
+To build an OpenFOAM plugin start from ``omnidriver.openfoam.environment``;
 other environments implement this contract directly. Follow
 ``.agents/skills/driverfoam-plugin-builder/SKILL.md``.
 """
@@ -740,11 +740,3 @@ def default_driver_context() -> DriverContext:
     from .compatibility import legacy_default_driver_context
 
     return legacy_default_driver_context()
-
-
-def generic_openfoam_context() -> DriverContext:
-    """Return the OpenFOAM adapter context with no solver-specific semantics."""
-
-    from omnidriver.openfoam.generic_plugin import GenericOpenFOAMPlugin
-
-    return driver_context(GenericOpenFOAMPlugin(), source="built-in:generic-openfoam")

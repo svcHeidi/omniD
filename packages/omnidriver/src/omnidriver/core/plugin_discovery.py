@@ -143,9 +143,9 @@ def _entry_point_source(entry_point) -> str:
 def _default_selection(snapshot: tuple[Any, ...]) -> tuple[Any, str] | None:
     """Which plugin answers when a public caller supplies no context.
 
-    Returns ``(plugin_class, source)``, or ``None`` meaning "nothing is
-    installed -- use the built-in generic context". Raises ``LookupError``
-    when there is no unique answer.
+    Returns ``(plugin_class, source)`` when exactly one adapter is installed.
+    Raises ``LookupError`` when no adapter is installed or there is no unique
+    answer.  Core never manufactures an environment-specific fallback.
 
     Cached per entry-point snapshot rather than recomputed. The public edge
     resolves the implicit default once per sweep case, and each recomputation
@@ -174,7 +174,11 @@ def _default_selection(snapshot: tuple[Any, ...]) -> tuple[Any, str] | None:
         return entry_point.load(), _entry_point_source(entry_point)
 
     if not unambiguous and not ambiguous:
-        return None
+        raise LookupError(
+            f"No DriverContext was supplied and no adapter is installed in the "
+            f"{ENTRY_POINT_GROUP!r} entry-point group. Select an installed "
+            "adapter with --plugin or supply an explicit DriverContext."
+        )
 
     if not unambiguous:
         # Every installed name is contested. Falling through to the generic
@@ -213,10 +217,8 @@ def default_discovered_context():
     ``compatibility.legacy_default_driver_context`` for why the public edge
     needs one at all.
     """
-    from .plugin_interface import driver_context, generic_openfoam_context
+    from .plugin_interface import driver_context
 
     selection = _default_selection(_entry_points())
-    if selection is None:
-        return generic_openfoam_context()
     plugin_class, source = selection
     return driver_context(plugin_class(), source=source)

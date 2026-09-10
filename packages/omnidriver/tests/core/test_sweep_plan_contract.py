@@ -19,7 +19,7 @@ on that: the two malformed-spec tests never reach ``_SPEC``'s content at all
 (spec loading fails before expansion), and the valid-spec test only checks
 the absence of ``spec_error``, not what happened to any case. ``_SPEC`` was
 trimmed to a trivially generic single-axis sweep and
-``generic_openfoam_context()`` satisfies ``sweep_plan``'s now-mandatory
+``openfoam_environment_context()`` satisfies ``sweep_plan``'s now-mandatory
 ``driver_context`` -- no cardiac fixture data needed.
 """
 
@@ -30,9 +30,9 @@ from pathlib import Path
 
 from omnidriver.core.runtime.sweep_runner import sweep_plan
 from conftest import NO_REPO_ROOT, repo_root, skip_without_repo
-from omnidriver.core.plugin_interface import generic_openfoam_context
+from omnidriver.openfoam.environment import openfoam_environment_context
 
-_CTX = generic_openfoam_context()
+_CTX = openfoam_environment_context()
 
 _SPEC = {
     "base": {},
@@ -77,7 +77,7 @@ def test_a_malformed_spec_still_exits_non_zero(tmp_path):
     result = subprocess.run(
         [
             sys.executable, "-m", "omnidriver", "sweep-plan",
-            # --plugin none selects generic_openfoam_context() the same way
+            # --plugin none selects openfoam_environment_context() the same way
             # _CTX does above, so this subprocess doesn't need
             # omnidriver-cardiacfoam installed to reach the spec-loading
             # guard this test targets.

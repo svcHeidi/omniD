@@ -14,7 +14,8 @@ from __future__ import annotations
 import json
 
 from omnidriver.core import compatibility
-from omnidriver.core.plugin_interface import driver_context, generic_openfoam_context
+from omnidriver.core.plugin_interface import driver_context
+from omnidriver.openfoam.environment import openfoam_environment_context
 from omnidriver.core.runtime.sweep_runner import sweep_plan
 
 import plugins.minimal_plugin as minimal_plugin
@@ -32,7 +33,7 @@ def assert_no_default_context_fallback(operation) -> None:
 
 
 def test_capability_reads_under_an_explicit_generic_context_use_no_default() -> None:
-    ctx = generic_openfoam_context()
+    ctx = openfoam_environment_context()
 
     def op() -> None:
         caps = ctx.capabilities
@@ -58,7 +59,7 @@ def test_capability_reads_under_an_explicit_minimal_context_use_no_default() -> 
 class _SweepablePlugin(NeutralEnvironmentPlugin):
     """A non-cardiac plugin implementing both sweep hooks.
 
-    Two base classes were ruled out. ``GenericOpenFOAMPlugin`` implements
+    Two base classes were ruled out. ``OpenFOAMEnvironmentPlugin`` implements
     neither sweep hook, so routing refuses by name (see test_sweep_routing.py)
     before materialization is ever reached -- and materialization is the step
     this test exists to watch. ``MinimalOpenFOAMPlugin`` gets as far as

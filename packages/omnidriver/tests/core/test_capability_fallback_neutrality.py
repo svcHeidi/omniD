@@ -9,7 +9,7 @@ route every caller into cardiac code.
 
 Historically, thirteen fallbacks reachable through a capability adapter gated
 on ``plugin_id == "org.cardiacfoam"`` and handed a neutral value to everyone
-else; six did not gate at all, so the shipped ``GenericOpenFOAMPlugin`` --
+else; six did not gate at all, so the shipped ``OpenFOAMEnvironmentPlugin`` --
 which implements only one of the six hooks -- answered cardiac questions about
 non-cardiac cases. The worst of them wrote an ``Allrun`` invoking the
 ``cardiacFoam`` binary for a sweep under a plugin that is not cardiacFoam.
@@ -36,7 +36,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from omnidriver.core.generic_plugin import GenericOpenFOAMPlugin
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.core.plugin_capabilities import (
     CaseCompatibilityRequest,
     SweepMaterializationRequest,
@@ -48,7 +48,7 @@ from omnidriver.core.sweep.sweep_expansion import SweepValidationError
 
 def _generic_capabilities():
     context = driver_context(
-        GenericOpenFOAMPlugin(), source="test:generic-openfoam",
+        OpenFOAMEnvironmentPlugin(), source="test:openfoam-environment",
     )
     return context.capabilities
 

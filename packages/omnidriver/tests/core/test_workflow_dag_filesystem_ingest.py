@@ -11,11 +11,11 @@ packages/omnidriver-cardiacfoam/tests/test_workflow_dag_filesystem_ingest.py
 two tests kept here assert core's own DAG-synthesis rule (Allrun present ->
 single-step DAG; Allrun absent -> None), independent of what marks a folder
 a case at all, so ``_write_case_files`` now writes ``system/controlDict`` +
-``constant/`` -- the two filesystem entries GenericOpenFOAMPlugin's own
+``constant/`` -- the two filesystem entries OpenFOAMEnvironmentPlugin's own
 profile declares (role ``openfoam.control_dict`` / ``openfoam.case_directory``,
 see generic-plugin.yaml) -- instead of cardiacFoam's electroProperties/
 physicsProperties. A local ``_NeutralFilesystemMarkerPlugin`` declares those
-two paths as its ``has_case_marker`` (GenericOpenFOAMPlugin itself declares
+two paths as its ``has_case_marker`` (OpenFOAMEnvironmentPlugin itself declares
 none, so a bare folder with no Allrun would otherwise not be discoverable at
 all) and wires ``make_generic_case_spec`` into its tutorial catalog -- the
 same core-owned factory ``resolve_entry`` already falls back to when no
@@ -28,13 +28,13 @@ import unittest
 from pathlib import Path
 import tempfile
 
-from omnidriver.core.generic_plugin import GenericOpenFOAMPlugin
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.core.runtime.generic_case import make_generic_case_spec
 from omnidriver.core.runtime.registry import load_tutorial_spec, resolve_entry
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 
 
-class _NeutralFilesystemMarkerPlugin(GenericOpenFOAMPlugin):
+class _NeutralFilesystemMarkerPlugin(OpenFOAMEnvironmentPlugin):
     """A case marker built only from filesystem entries core itself owns.
 
     ``system/controlDict`` + a ``constant/`` directory are true of every

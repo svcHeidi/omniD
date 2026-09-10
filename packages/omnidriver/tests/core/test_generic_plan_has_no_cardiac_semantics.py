@@ -9,7 +9,8 @@ import json
 import stat
 from pathlib import Path
 
-from omnidriver.core.plugin_interface import driver_context, generic_openfoam_context
+from omnidriver.core.plugin_interface import driver_context
+from omnidriver.openfoam.environment import openfoam_environment_context
 from omnidriver.core.introspection import describe_entry
 from omnidriver.core.strict_planning import strict_plan
 from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
@@ -50,14 +51,14 @@ def _minimal_case(root: Path) -> Path:
 
 def _generic_plan(tmp_path: Path) -> dict:
     """Plans against ``NeutralEnvironmentPlugin`` rather than
-    ``generic_openfoam_context()`` (Task 4): ``GenericOpenFOAMPlugin`` has no
+    ``openfoam_environment_context()`` (Task 4): ``OpenFOAMEnvironmentPlugin`` has no
     ``get_environment_diagnostics`` hook of its own, so ``strict_plan`` falls
     through to ``core.compatibility``'s ungated default, which imports
     ``omnidriver.openfoam`` unconditionally -- making this architecture guard
     unable to run in a core-only install, which defeats its own point.
     ``NeutralEnvironmentPlugin`` answers the hook itself and declares the same
     ``system/controlDict`` / ``constant`` / ``Allrun`` case-file rules
-    ``GenericOpenFOAMPlugin`` does, so the plan produced is equivalent for
+    ``OpenFOAMEnvironmentPlugin`` does, so the plan produced is equivalent for
     every assertion below -- none of which pins the built-in plugin's
     identity, only the absence of cardiac semantics."""
     case = _minimal_case(tmp_path)
@@ -99,7 +100,7 @@ def test_generic_describe_override_surface_has_no_cardiac_semantics(
     payload = describe_entry(
         str(case.relative_to(tmp_path)),
         overrides={"cases_root": str(tmp_path)},
-        driver_context=generic_openfoam_context(),
+        driver_context=openfoam_environment_context(),
     )
     override_surface = {
         "config_schema": payload["config_schema"],
@@ -132,7 +133,7 @@ def test_generic_spec_metadata_names_dict_files_generically(
     payload = describe_entry(
         str(case.relative_to(tmp_path)),
         overrides={"cases_root": str(tmp_path)},
-        driver_context=generic_openfoam_context(),
+        driver_context=openfoam_environment_context(),
     )
     metadata = payload["spec"]["metadata"]
     assert "electro_properties_relpath" not in metadata

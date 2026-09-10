@@ -293,9 +293,9 @@ def test_apply_rejects_an_unknown_scope_token_before_any_write(tmp_path):
 
 
 def test_generic_plugin_declares_zero_override_scopes():
-    from omnidriver.core.plugin_interface import generic_openfoam_context
+    from omnidriver.openfoam.environment import openfoam_environment_context
 
-    context = generic_openfoam_context()
+    context = openfoam_environment_context()
     assert context.capabilities.override_scopes.scopes() == ()
 
 
@@ -339,9 +339,9 @@ PURKINJE_NIEDERER = REPO_ROOT / "tutorials" / "NiedererEtAl2011" / "purkinjeNied
 
 
 def test_generic_plugin_declares_zero_regeneration_scopes():
-    from omnidriver.core.plugin_interface import generic_openfoam_context
+    from omnidriver.openfoam.environment import openfoam_environment_context
 
-    context = generic_openfoam_context()
+    context = openfoam_environment_context()
     assert context.capabilities.dict_regeneration.scopes() == ()
 
 

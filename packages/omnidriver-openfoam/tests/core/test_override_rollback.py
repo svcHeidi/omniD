@@ -1,6 +1,6 @@
 import pytest
 
-from omnidriver.core.plugin_interface import generic_openfoam_context
+from omnidriver.openfoam.environment import openfoam_environment_context
 from omnidriver.openfoam.apply_overrides import OverrideError, apply_overrides
 
 
@@ -20,7 +20,7 @@ def test_later_missing_key_restores_all_prior_dictionary_edits(tmp_path):
             {"driver_path": "system/controlDict:deltaT", "value": "0.02"},
             {"driver_path": "system/fvSolution:solvers/V/tolerance", "value": "1e-8"},
             {"driver_path": "system/controlDict:missingKey", "value": "1"},
-        ], case_root=case, driver_context=generic_openfoam_context())
+        ], case_root=case, driver_context=openfoam_environment_context())
     assert {path: path.read_bytes() for path in originals} == originals
 
 
@@ -29,7 +29,7 @@ def test_successful_multi_file_override_is_retained(tmp_path):
     apply_overrides([
         {"driver_path": "system/controlDict:deltaT", "value": "0.02"},
         {"driver_path": "system/fvSolution:solvers/V/tolerance", "value": "1e-8"},
-    ], case_root=case, driver_context=generic_openfoam_context())
+    ], case_root=case, driver_context=openfoam_environment_context())
     assert "0.02" in (case / "system/controlDict").read_text()
     assert "1e-8" in (case / "system/fvSolution").read_text()
 
@@ -43,6 +43,6 @@ def test_external_symlink_target_is_rejected_before_any_edit(tmp_path):
         apply_overrides([
             {"driver_path": "system/controlDict:deltaT", "value": "0.02"},
             {"driver_path": "system/shared:value", "value": "2"},
-        ], case_root=case, driver_context=generic_openfoam_context())
+        ], case_root=case, driver_context=openfoam_environment_context())
     assert (case / "system/controlDict").read_text() == "deltaT 0.01;\n"
     assert outside.read_text() == "value 1;\n"

@@ -4,10 +4,10 @@ from pathlib import Path
 
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.strict_planning import strict_plan
-from plugins.neutral_environment_plugin import _GenericOpenFOAMPluginWithNeutralEnvironment
+from plugins.neutral_environment_plugin import _OpenFOAMEnvironmentPluginWithNeutralEnvironment
 
 
-class _UnresolvedConfigurationPlugin(_GenericOpenFOAMPluginWithNeutralEnvironment):
+class _UnresolvedConfigurationPlugin(_OpenFOAMEnvironmentPluginWithNeutralEnvironment):
     def inspect_effective_configuration(self, *, case_root, execution_env=None):
         del case_root, execution_env
         return ({
@@ -28,7 +28,7 @@ def test_plain_allrun_case_plans_without_cardiac_dictionaries(tmp_path: Path) ->
         "plainOpenFoamCase",
         overrides={"cases_root": str(tmp_path)},
         driver_context=driver_context(
-            _GenericOpenFOAMPluginWithNeutralEnvironment(), source="test",
+            _OpenFOAMEnvironmentPluginWithNeutralEnvironment(), source="test",
         ),
     )
 
@@ -59,12 +59,12 @@ def test_plain_allrun_case_works_with_the_no_domain_context(tmp_path: Path) -> N
         "plainOpenFoamCase",
         overrides={"cases_root": str(tmp_path)},
         driver_context=driver_context(
-            _GenericOpenFOAMPluginWithNeutralEnvironment(), source="test",
+            _OpenFOAMEnvironmentPluginWithNeutralEnvironment(), source="test",
         ),
     )
 
     assert report.status == "ok"
-    assert report.plugin["id"] == "org.driverfoam.generic-openfoam"
+    assert report.plugin["id"] == "org.omnidriver.openfoam.environment"
     assert report.run_document is not None
     assert report.run_document.plugin == report.plugin
 
@@ -85,7 +85,7 @@ def test_plan_reports_external_configuration_closure_without_mutating_case(tmp_p
         "plainOpenFoamCase",
         overrides={"cases_root": str(tmp_path)},
         driver_context=driver_context(
-            _GenericOpenFOAMPluginWithNeutralEnvironment(), source="test",
+            _OpenFOAMEnvironmentPluginWithNeutralEnvironment(), source="test",
         ),
     )
 

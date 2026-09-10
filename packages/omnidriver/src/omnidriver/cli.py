@@ -755,7 +755,7 @@ def resolve_cases_root(explicit: str | Path | None = None) -> Path:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Generic OpenFOAM tutorial automation driver")
+    parser = argparse.ArgumentParser(description="Simulation experiment automation driver")
     parser.add_argument(
         "action",
         choices=[
@@ -768,30 +768,19 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Plugin to drive: an installed plugin id from the "
             "'omnidriver.plugins' entry-point group, a trusted "
-            "local-development import target (module.path:PluginClass), or "
-            "'none' for generic OpenFOAM. Defaults to built-in cardiacFoam. "
+            "local-development import target (module.path:PluginClass). "
+            "Defaults to the single installed adapter; explicit selection is "
+            "required when none or several are installed. "
             "A colon always selects the import form. Either form executes "
             "the plugin's Python code."
         ),
     )
-    # No --plugin has been parsed yet at this point in parser construction.
-    # Help must therefore stay available from a Core-only installation rather
-    # than loading an OpenFOAM adapter merely to enumerate its empty tutorial
-    # catalog.
-    generic_entries = "genericCase"
-    try:
-        from .core.plugin_interface import generic_openfoam_context
-
-        generic_entries = ", ".join(list_tutorials(generic_openfoam_context()))
-    except ModuleNotFoundError as exc:
-        if exc.name != "omnidriver.openfoam":
-            raise
     parser.add_argument(
         "--entry",
         required=False,
         help=(
-            "Entry name or relative workflow/case path to run "
-            f"({generic_entries}, genericCase)"
+            "Entry name or relative workflow/case path to run. "
+            "Available entry names are declared by the selected adapter."
         ),
     )
     parser.add_argument(
@@ -1084,15 +1073,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.action == "recover":
         return _recover_remediation(args)
 
-    from .core.plugin_interface import (
-        default_driver_context,
-        generic_openfoam_context,
-        load_plugin_context,
-    )
+    from .core.plugin_interface import default_driver_context, load_plugin_context
     try:
-        if args.plugin == "none":
-            driver_context = generic_openfoam_context()
-        elif args.plugin:
+        if args.plugin:
             driver_context = load_plugin_context(args.plugin)
         else:
             driver_context = default_driver_context()

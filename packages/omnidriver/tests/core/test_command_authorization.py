@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from omnidriver.core.plugin_interface import generic_openfoam_context
+from omnidriver.openfoam.environment import openfoam_environment_context
 from omnidriver.core.runtime.workflow import (
     CORE_NEUTRAL_COMMANDS,
     validate_workflow_commands,
@@ -44,7 +44,7 @@ def _without_installed_openfoam_apps(monkeypatch) -> None:
 
 def test_generic_plugin_does_not_authorize_the_cardiac_solver(monkeypatch) -> None:
     _without_installed_openfoam_apps(monkeypatch)
-    context = generic_openfoam_context()
+    context = openfoam_environment_context()
     codes = {
         d.code for d in validate_workflow_commands(
             _dag("cardiacFoam"), driver_context=context
@@ -63,7 +63,7 @@ def test_no_context_accepts_only_core_commands(monkeypatch) -> None:
 
 def test_generic_openfoam_environment_authorizes_its_declared_commands() -> None:
     assert validate_workflow_commands(
-        _dag("blockMesh"), driver_context=generic_openfoam_context(),
+        _dag("blockMesh"), driver_context=openfoam_environment_context(),
     ) == ()
 
 
@@ -93,7 +93,7 @@ def test_an_installed_openfoam_app_is_authorized_whatever_the_plugin(monkeypatch
         "omnidriver.openfoam.command_authorization.is_installed_openfoam_application",
         lambda command: command == "someInstalledApp",
     )
-    context = generic_openfoam_context()
+    context = openfoam_environment_context()
     errors = [
         d for d in validate_workflow_commands(
             _dag("someInstalledApp"), driver_context=context
@@ -104,12 +104,12 @@ def test_an_installed_openfoam_app_is_authorized_whatever_the_plugin(monkeypatch
 
 
 def test_case_scripts_remain_core_owned() -> None:
-    context = generic_openfoam_context()
+    context = openfoam_environment_context()
     assert validate_workflow_commands(_dag("Allrun"), driver_context=context) == ()
     assert validate_workflow_commands(_dag("./Allrun"), driver_context=context) == ()
 
 
 def test_generic_plugin_authorizes_neither_kind_of_command() -> None:
-    auth = generic_openfoam_context().capabilities.command_authorization
+    auth = openfoam_environment_context().capabilities.command_authorization
     assert auth.solver_commands() == frozenset()
     assert auth.auxiliary_commands() == frozenset()

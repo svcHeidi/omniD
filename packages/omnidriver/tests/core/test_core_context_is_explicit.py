@@ -27,8 +27,7 @@ from conftest import skip_without_repo
 
 _CORE_ROOT = pathlib.Path(omnidriver.core.__file__).resolve().parent
 
-# compatibility.py defines the function; it is allowed to mention its own name.
-_EXEMPT = {_CORE_ROOT / "compatibility.py"}
+_EXEMPT: set[pathlib.Path] = set()
 
 # omnidriver.openfoam is not importable in a core-only venv, so this is
 # resolved from the repo layout rather than by importing the package.

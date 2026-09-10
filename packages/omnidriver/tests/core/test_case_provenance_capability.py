@@ -9,19 +9,19 @@ from __future__ import annotations
 from pathlib import Path
 
 from omnidriver.core.plugin_interface import (
-    driver_context,
-    generic_openfoam_context,
+    driver_context
 )
+from omnidriver.openfoam.environment import openfoam_environment_context
 from plugins.minimal_plugin import MinimalOpenFOAMPlugin
 
 
 def test_generic_plugin_declares_no_required_inputs(tmp_path: Path) -> None:
-    generic = generic_openfoam_context().capabilities.case_provenance
+    generic = openfoam_environment_context().capabilities.case_provenance
     assert generic.required_inputs(tmp_path, {}, "0") == ()
 
 
 def test_generic_plugin_declares_no_generated_outputs(tmp_path: Path) -> None:
-    generic = generic_openfoam_context().capabilities.case_provenance
+    generic = openfoam_environment_context().capabilities.case_provenance
     assert generic.generated_output_globs(tmp_path, {}, "0") == ()
 
 

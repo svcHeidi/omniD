@@ -13,7 +13,7 @@ from plugins.minimal_plugin import MinimalOpenFOAMPlugin
 
 
 def test_generic_plugin_executes_plain_allrun_case(tmp_path: Path) -> None:
-    # ``--plugin none`` resolves to the built-in GenericOpenFOAMPlugin, whose
+    # ``--plugin none`` resolves to the built-in OpenFOAMEnvironmentPlugin, whose
     # legacy_environment_diagnostics fallback reaches omnidriver.openfoam
     # unconditionally (an ungated core default, not cardiac-specific -- see
     # ENVIRONMENT_CONTRACT.md sec.4). Swapped to a trusted-import plugin that
@@ -29,7 +29,7 @@ def test_generic_plugin_executes_plain_allrun_case(tmp_path: Path) -> None:
         "run",
         "--strict",
         "--plugin",
-        "plugins.neutral_environment_plugin:_GenericOpenFOAMPluginWithNeutralEnvironment",
+        "plugins.neutral_environment_plugin:_OpenFOAMEnvironmentPluginWithNeutralEnvironment",
         "--entry", "plainOpenFoamCase",
         "--cases-root", str(tmp_path),
     ])
@@ -74,7 +74,9 @@ def test_run_document_validation_uses_the_selected_plugin(tmp_path: Path) -> Non
     allrun.write_text("#!/bin/sh\nexit 0\n")
     allrun.chmod(allrun.stat().st_mode | stat.S_IXUSR)
 
-    context = driver_context(MinimalOpenFOAMPlugin(), source="test")
+    context = driver_context(
+        MinimalOpenFOAMPlugin(entrypoint="Allrun"), source="test"
+    )
     run_doc = RunDocument(
         id="minimal-plugin-document",
         name="plainOpenFoamCase",
@@ -105,7 +107,9 @@ def test_run_document_rejects_a_mismatched_supplied_plugin(tmp_path: Path) -> No
     allrun.write_text("#!/bin/sh\nexit 0\n")
     allrun.chmod(allrun.stat().st_mode | stat.S_IXUSR)
 
-    context = driver_context(MinimalOpenFOAMPlugin(), source="test")
+    context = driver_context(
+        MinimalOpenFOAMPlugin(entrypoint="Allrun"), source="test"
+    )
     planned_plugin = context.identity.to_json() | {"capability_digest": "sha256:wrong"}
     run_doc = RunDocument(
         id="mismatched-plugin-document",

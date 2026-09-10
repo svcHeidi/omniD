@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from omnidriver.core.generic_plugin import GenericOpenFOAMPlugin
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.core.plugin_profile import (
     ESCAPE_ROLE_PREFIX,
     KNOWN_ROLES,
@@ -21,9 +21,9 @@ def test_generic_profile_declares_no_solver_specific_files() -> None:
     provenance-walk roots, startFrom/startTime resolution, and entrypoint
     discovery without a plugin present -- but declares nothing solver-specific
     (no plugin.* role, e.g. no electroProperties-style constant/* file)."""
-    profile = GenericOpenFOAMPlugin().get_profile()
+    profile = OpenFOAMEnvironmentPlugin().get_profile()
 
-    assert profile.plugin_id == "org.driverfoam.generic-openfoam"
+    assert profile.plugin_id == "org.omnidriver.openfoam.environment"
     assert {rule.path for rule in profile.case_files} == {
         "system/controlDict",
         "constant",
@@ -109,9 +109,9 @@ def test_a_known_role_loads(tmp_path) -> None:
 
 
 def test_the_generic_profile_uses_only_known_roles() -> None:
-    from omnidriver.core.generic_plugin import GenericOpenFOAMPlugin
+    from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
-    for rule in GenericOpenFOAMPlugin.get_profile().case_files:
+    for rule in OpenFOAMEnvironmentPlugin.get_profile().case_files:
         assert rule.role in KNOWN_ROLES, rule
 
 

@@ -13,8 +13,6 @@ _PACKAGE_ROOT = _CORE_ROOT.parent  # .../src/omnidriver -- the shipped package, 
 def test_core_imports_cardiac_implementation_only_at_compatibility_boundary() -> None:
     offenders: list[str] = []
     for path in _CORE_ROOT.rglob("*.py"):
-        if path.name == "compatibility.py":
-            continue
         tree = ast.parse(path.read_text(), filename=str(path))
         for node in ast.walk(tree):
             module = ""

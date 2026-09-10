@@ -14,6 +14,9 @@ dependencies = [
   "foamlib>=1.7.5,<2",
 ]
 
+[project.entry-points."omnidriver.plugins"]
+openfoam-environment = "omnidriver.openfoam.environment:OpenFOAMEnvironmentPlugin"
+
 [project.optional-dependencies]
 # The `gmsh` wheel is wanted for the *binary* it installs, not the Python
 # module -- nothing imports it. Tutorials that mesh from a .geo declare gmsh
@@ -37,4 +40,4 @@ where = ["src"]
 include = ["omnidriver*"]
 
 [tool.setuptools.package-data]
-"omnidriver.openfoam" = ["generic-plugin.yaml"]
+"omnidriver.openfoam" = ["openfoam-environment.yaml"]

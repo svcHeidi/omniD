@@ -113,13 +113,9 @@ def _relativize(path: Path, roots: tuple[Path, ...]) -> Path:
 def build_catalog(plugin: str | None) -> dict:
     from omnidriver.core.plugin_interface import (
         default_driver_context,
-        generic_openfoam_context,
         load_plugin_context,
     )
-
-    if plugin == "none":
-        context = generic_openfoam_context()
-    elif plugin:
+    if plugin:
         context = load_plugin_context(plugin)
     else:
         context = default_driver_context()
@@ -144,8 +140,7 @@ def main() -> None:
         help=(
             "Plugin whose utility catalog to export: an installed plugin id, "
             "a trusted local-development import target "
-            "(module.path:PluginClass), or 'none' for generic OpenFOAM. "
-            "Defaults to built-in cardiacFoam."
+            "(module.path:PluginClass). Defaults to the single installed adapter."
         ),
     )
     args = parser.parse_args()
