@@ -4,8 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import signal
+import subprocess
 import sys
+import time
 from pathlib import Path
+from unittest import mock
 
 from selected_cardiacfoam_fixture import (
     BACKEND_ENV,
@@ -20,6 +25,7 @@ from selected_cardiacfoam_fixture import (
     selected_source_from_environment,
 )
 from selected_cardiacfoam_integration import (
+    _run_command,
     load_integration_commands,
     run_selected_integration,
 )
@@ -130,3 +136,68 @@ def test_driver_and_solver_checker_evidence_are_recorded_separately(tmp_path: Pa
     assert payload["driver"]["returncode"] == 0
     assert payload["solver_checker"]["returncode"] == 0
     assert (evidence.stage_root / "case/system/controlDict").is_file()
+
+
+def _pid_exists(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def test_timeout_kills_harness_owned_descendant_and_records_evidence(tmp_path: Path) -> None:
+    """The outer native-test timeout owns the complete command process group."""
+    pid_file = tmp_path / "child.pid"
+    child_code = (
+        "import pathlib, time; "
+        f"pathlib.Path({str(pid_file)!r}).write_text(__import__('os').getpid().__str__()); "
+        "time.sleep(30)"
+    )
+    parent_code = (
+        "import subprocess, sys, time; "
+        f"subprocess.Popen([sys.executable, '-c', {child_code!r}]); "
+        "time.sleep(30)"
+    )
+
+    evidence = _run_command(
+        (sys.executable, "-c", parent_code),
+        cwd=tmp_path,
+        log_name="timeout.log",
+        timeout_s=1,
+    )
+
+    assert evidence.timed_out
+    assert evidence.termination_error is None
+    assert Path(evidence.log_path).is_file()
+    assert pid_file.exists(), "fixture child did not start"
+    child_pid = int(pid_file.read_text())
+    deadline = time.monotonic() + 2
+    try:
+        while time.monotonic() < deadline and _pid_exists(child_pid):
+            time.sleep(0.02)
+        assert not _pid_exists(child_pid), "timeout left a harness descendant running"
+    finally:
+        if _pid_exists(child_pid):
+            os.kill(child_pid, signal.SIGKILL)
+
+
+def test_timeout_writes_evidence_when_cleanup_helper_raises(tmp_path: Path) -> None:
+    """A cleanup failure must not hide the original timeout from the record."""
+    with mock.patch(
+        "selected_cardiacfoam_integration._terminate_process_group",
+        side_effect=subprocess.TimeoutExpired([sys.executable], 1),
+    ):
+        evidence = _run_command(
+            (sys.executable, "-c", "import time; time.sleep(30)"),
+            cwd=tmp_path,
+            log_name="cleanup-failure.log",
+            timeout_s=1,
+        )
+
+    assert evidence.timed_out
+    assert evidence.termination_error is not None
+    assert "process-group cleanup failed" in evidence.termination_error
+    assert Path(evidence.log_path).is_file()

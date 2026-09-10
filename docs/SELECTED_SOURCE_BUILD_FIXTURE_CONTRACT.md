@@ -59,11 +59,19 @@ consumes only the declared capability and evidence.
    failure is solver evidence, not an adapter crash; a driver transaction or
    provenance failure is adapter evidence even if the solver itself succeeds.
 
-## Previously inspected selection (revalidate before use)
+## Previously inspected selection and recorded acceptance (revalidate before use)
 
 The previously inspected gold-standard checkout is
 `/Users/simaocastro/noFrontendCardiacFoam_minor_errors` at
 `c3a852e957d23077ce1b2712331dfe45489c4386`. Its `src/` tree is clean. Its
 permitted drift is confined to monodomain pseudo-ECG tutorial/characterization
 inputs, plus `modules/solids4foam` at
-`d28c6527fca934b39271ca61531110aeee0f80ed`. This records an earlier inspection, not permission to trust a moving checkout. Revalidate the identities, build-affecting drift and input-selection policy before use. T6 implementation and T7 reproducible acceptance remain pending.
+`d28c6527fca934b39271ca61531110aeee0f80ed`. This records an earlier inspection, not permission to trust a moving checkout.
+
+T6 and T7 were subsequently accepted against source revision
+`3aa4b48fa5fd896933b3758f5a084e265f9ba9de`: the selected source/runtime
+fixture, single-cell and Niederer reference runs with solver-owned check-only
+reports, and a catalog-derived single-cell sweep all recorded their evidence.
+Those records do not make a moving checkout trustworthy. Revalidate the source
+identity, build-affecting drift, input-selection policy, and declared runtime
+before each native run.

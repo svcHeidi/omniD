@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
 from typing import Any
+
+from omnidriver.core.runtime.workflow_runner import _terminate_process_group
 
 from selected_cardiacfoam_fixture import (
     FixtureInputError,
@@ -31,6 +34,7 @@ class CommandEvidence:
     timed_out: bool
     log_path: str
     tail: str
+    termination_error: str | None
 
 
 @dataclass(frozen=True)
@@ -136,17 +140,44 @@ def _run_command(
     command: tuple[str, ...], *, cwd: Path, log_name: str, timeout_s: int
 ) -> CommandEvidence:
     log_path = cwd / log_name
+    termination_error = None
     try:
         with log_path.open("wb") as log:
-            process = subprocess.Popen(command, cwd=cwd, stdout=log, stderr=subprocess.STDOUT)
+            process = subprocess.Popen(
+                command,
+                cwd=cwd,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                # Reuse Core's process-group cleanup contract. The test
+                # harness has a host-level timeout, but it must not leave a
+                # solver/checker descendant running after that timeout.
+                start_new_session=(os.name == "posix"),
+            )
             try:
                 returncode = process.wait(timeout=timeout_s)
                 timed_out = False
             except subprocess.TimeoutExpired:
-                process.terminate()
-                process.wait(timeout=10)
-                returncode = process.returncode
                 timed_out = True
+                try:
+                    _terminate_process_group(process)
+                except (OSError, subprocess.TimeoutExpired) as exc:
+                    # Timeout evidence must survive even if the normal
+                    # cleanup helper cannot reap the direct process. Kill is
+                    # the last local fallback; its outcome is made visible
+                    # in the durable integration evidence instead of
+                    # replacing the original timeout with a harness error.
+                    termination_error = f"process-group cleanup failed: {type(exc).__name__}: {exc}"
+                    try:
+                        process.kill()
+                    except ProcessLookupError:
+                        pass
+                    try:
+                        process.wait(timeout=10)
+                    except subprocess.TimeoutExpired as wait_exc:
+                        termination_error += (
+                            f"; direct-process fallback did not finish: {type(wait_exc).__name__}: {wait_exc}"
+                        )
+                returncode = process.returncode
     except OSError as exc:
         log_path.write_text(f"{type(exc).__name__}: {exc}\n")
         returncode = None
@@ -157,6 +188,7 @@ def _run_command(
         timed_out=timed_out,
         log_path=str(log_path),
         tail=_tail(log_path),
+        termination_error=termination_error,
     )
 
 
