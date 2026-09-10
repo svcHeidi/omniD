@@ -19,7 +19,7 @@ The implementation must provide an explicit test selection/opt-in mechanism. Nat
 | `OMNIDRIVER_CARDIACFOAM_SOURCE_ROOT` | Solver checkout containing `src/`, `tutorials/`, and its Git metadata | Absolute existing path; `git rev-parse HEAD` matches `OMNIDRIVER_CARDIACFOAM_SOURCE_REVISION`. |
 | `OMNIDRIVER_CARDIACFOAM_SOURCE_REVISION` | Accepted solver commit | Full 40-character commit ID. The fixture requires a clean `src/` diff against this commit. Tutorial/characterization drift is permitted, but its complete status and diff digest are recorded. |
 | `OPENFOAM_BASHRC` | OpenFOAM environment entrypoint | Existing absolute `etc/bashrc`; the child process reports `WM_PROJECT_DIR`, `WM_PROJECT_VERSION`, and `WM_OPTIONS`. |
-| `DRIVERFOAM_CARDIACFOAM_BACKEND` | Chosen cardiac backend | Validated against the cardiac runtime profile and build manifest. |
+| `DRIVERFOAM_CARDIACFOAM_BACKEND` | Declared compiled capability | Validated against the cardiac runtime profile and the selected solver/build evidence. |
 | `DRIVERFOAM_CARDIACFOAM_BUILD_MANIFEST` | Solver-library evidence | Existing manifest accepted by `CardiacFoamPlugin.configure_execution_environment`. |
 | `OMNIDRIVER_NATIVE_OUTPUT_ROOT` | Disposable output parent | Existing explicit directory outside both source and OmniDriver checkouts; each test creates a unique child. |
 
@@ -29,15 +29,32 @@ Default to named committed inputs read from the selected revision. Working-tree 
 
 Build identity must cover relevant solver applications, build scripts/configuration and submodules, not only a clean `src/` directory. Record or reject build-affecting drift according to the selected build contract. A source revision and runtime inspection manifest alone do not prove historical build provenance.
 
+## Compile-time optional components
+
+cardiacFOAM has two compiled capabilities: **electro-only** and
+**electromechanics-enabled**. The latter is built when solids4foam is
+available; the former is a valid cardiacFOAM build when it is not. This is a
+compile-time property of the selected solver binary, not a requirement of each
+case and not something OmniD infers from a checkout's `modules/` directory.
+
+The adapter records a semantic capability and verifies it from the selected
+binary/build-manifest libraries. A source root or submodule revision may be
+recorded as additional build provenance when available, but a packaged solver
+must remain usable without that source tree. The mechanism that supplies the
+evidence is environment-specific: a macOS installation, Linux module, HPC
+container, or CI package may expose different paths and inspection tools.
+Those conventions belong to the environment/OpenFOAM adapter contract; Core
+consumes only the declared capability and evidence.
+
 ## Fixture behavior
 
 1. Apply the mode-specific selection and fail/skip rules above.
 2. Validate every required input and build/case identity before staging.
 3. Copy only the declared input manifest using the selected committed or explicit-candidate policy into a unique output child. Exclude historical solver output and never write below the selected source root.
 4. The fixture records source revision, `src/` diff status, permitted
-   tutorial/characterization diff digest, submodule status, OpenFOAM identity,
-   backend, manifest digest, staged input digest, command results, bounded
-   diagnostics, and output artifact digests.
+   tutorial/characterization diff digest, optional submodule provenance,
+   OpenFOAM identity, compiled capability, manifest digest, staged input
+   digest, command results, bounded diagnostics, and output artifact digests.
 5. Solver success and OmniDriver success are separate assertions. A solver
    failure is solver evidence, not an adapter crash; a driver transaction or
    provenance failure is adapter evidence even if the solver itself succeeds.

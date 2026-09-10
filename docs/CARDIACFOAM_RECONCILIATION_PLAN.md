@@ -22,7 +22,7 @@ task below. A task may not broaden its scope without a new row in the delta
 audit. Core mechanics (transactions, evidence, execution policy) are not in
 scope for catalog tasks.
 
-**Progress (scope correction, 2026-09-09):** T0 and T2–T5 are complete. T1 has an initial map but needs T1b below; it is not complete. T6 has a contract draft, not an implemented fixture. T7 reproducible driver/native acceptance remains pending; manual solver evidence does not close it.
+**Progress (2026-09-10):** T0 and T2–T5 are complete. T1 has an initial map but needs T1b below; it is not complete. T6 is implemented with explicit source/runtime selection, committed-input staging and disposable outputs. T7 has passed one complete single-cell reference experiment through OmniD and the solver-owned check-only comparison; the Niederer tissue fixture and a small sweep remain.
 
 **Test scope:** driverFOAM owns orchestration and adapter-contract tests. It integrates and reports solver-owned scientific regressions; it does not independently define scientific correctness or freeze evolving tutorial content. Studies own their experimental protocols and paper baselines. Exact effective inputs and commands must be verified separately from numerical regression outcomes: passing a metric tolerance does not prove every requested override was applied.
 
@@ -41,8 +41,8 @@ scope for catalog tasks.
 
 T1 evidence: [historical test ownership map](HISTORICAL_TEST_OWNERSHIP_MAP_2026-09-09.md).
 
-T6 contract draft: [selected-source/build fixture contract](SELECTED_SOURCE_BUILD_FIXTURE_CONTRACT.md).
-The source/build document records a previously inspected solver selection, not a moving HEAD guarantee. T6 must revalidate it at use time. Native acceptance also depends on T1b and H1; neither manual execution nor a fixture contract alone completes T7.
+T6 contract: [selected-source/build fixture contract](SELECTED_SOURCE_BUILD_FIXTURE_CONTRACT.md).
+The source/build document records a previously inspected solver selection, not a moving HEAD guarantee. T6 revalidates it at use time. Native acceptance also depends on T1b and H1; one passed single-cell experiment does not complete the remaining tissue/sweep part of T7.
 
 T4 decision (revised 2026-09-09): `batchedIntegrator` is an ionic-model key
 and places no constraint on `activeTensionModel`. Batched active tension
@@ -94,6 +94,11 @@ Next sequence: T1b and H1 in parallel, then implement T6, then T7. Catalog decis
 - Defaults, dimensions, admissibility ranges, numerical tolerances, and source
   references are scientific decisions: a task must present source evidence and
   a focused test before changing them.
+- The selected binary's compile-time capability is the runtime fact: an
+  electro-only build is valid without solids4foam, while an
+  electromechanics-enabled build records solids4foam only as optional build
+  provenance. Do not infer either capability from source checkout layout or
+  operating-system-specific library inspection.
 - `named_catalogs.py` is byte-identical to the historical driver and is out of
   scope unless new source evidence changes that conclusion.
 
