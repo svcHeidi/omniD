@@ -6,7 +6,7 @@ Updated: 2026-09-08
 
 ## Current cardiac reconciliation scope — 2026-09-09
 
-The historical implementation log below is not the current cardiac task list. See [the reconciliation plan](CARDIACFOAM_RECONCILIATION_PLAN.md): T0–T7, T1b, and H1 are complete with recorded source-only, installed-package, reference-run, and exploratory-sweep evidence. The remaining work is a bounded public experiment interface and incremental extraction of OpenFOAM conventions behind adapter contracts. This does not claim that every package boundary is finished.
+The historical implementation log below is not the current cardiac task list. See [the reconciliation plan](CARDIACFOAM_RECONCILIATION_PLAN.md): T0–T7, T1b, and H1 are complete with recorded source-only, installed-package, reference-run, and exploratory-sweep evidence. The first public experiment interface is complete: it reuses the established sweep runner and exposes inspectable execution, output, and optional checker-report evidence. Generated-output/staging path conventions are now adapter declarations. Remaining work is incremental extraction of other OpenFOAM interpretation, including reconciliation time directories; this does not claim that every package boundary is finished.
 
 Driver tests establish configuration/execution/reporting correctness. Solver regressions retain scientific assertions and are reused by integration tests; broad tutorial-content snapshots do not belong in ordinary Core tests. Preserve manual solver evidence separately from driver-native acceptance.
 

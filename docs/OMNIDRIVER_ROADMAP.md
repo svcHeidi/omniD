@@ -1,6 +1,6 @@
 # omniD: roadmap for an agent-ready simulation framework
 
-**Test-scope update, 2026-09-10:** [Cardiac reconciliation plan](CARDIACFOAM_RECONCILIATION_PLAN.md) records T1b, H1, T6, and T7 as complete. DriverFOAM owns orchestration and adapter-contract tests and reuses solver-owned scientific regressions; tutorial/paper content is not frozen by ordinary Core tests. The next work is a small installed experiment interface and incremental adapter-owned OpenFOAM convention extraction.
+**Test-scope update, 2026-09-10:** [Cardiac reconciliation plan](CARDIACFOAM_RECONCILIATION_PLAN.md) records T1b, H1, T6, and T7 as complete. DriverFOAM owns orchestration and adapter-contract tests and reuses solver-owned scientific regressions; tutorial/paper content is not frozen by ordinary Core tests. The first installed experiment interface and adapter-owned staging/output convention extraction are complete. Continue incrementally with remaining OpenFOAM interpretation rather than reopening the architecture.
 
 **Current implementation review:** [September 8 reassessment](roadmap-audit-2026-09-08.md) records completed lifecycle/repair work and the remaining core/OpenFOAM acceptance gates at `bea21d4`. The audit findings below describe the September 5 baseline.
 
