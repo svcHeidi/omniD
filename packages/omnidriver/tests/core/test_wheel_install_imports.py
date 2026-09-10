@@ -63,6 +63,27 @@ if not RUN_CASE_SCRIPT_RELPATH.is_file():
     sys.exit(1)
 print("bundled data files present")
 
+help_result = subprocess.run(
+    [sys.executable, "-m", "omnidriver", "--help"],
+    capture_output=True,
+    text=True,
+)
+if help_result.returncode:
+    print(help_result.stdout + help_result.stderr)
+    sys.exit(help_result.returncode)
+print("core-only CLI help works")
+
+# Core exposes a lazy compatibility alias but cannot provide an OpenFOAM
+# adapter by itself. Importing the alias must therefore fail only when the
+# caller selects it, not during the module walk above.
+try:
+    from omnidriver.core.generic_plugin import GenericOpenFOAMPlugin
+except ModuleNotFoundError:
+    pass
+else:
+    print("Core wheel unexpectedly provides the OpenFOAM generic plugin")
+    sys.exit(1)
+
 # A RunDocument can carry a previous workflow state instead of relying on an
 # adjacent workflow_state.json. That state must be checked as resume evidence,
 # not treated as an unconditional completed result. This is deliberately a
@@ -77,8 +98,38 @@ with tempfile.TemporaryDirectory() as raw:
     plugin_path = Path.cwd() / "wheel_neutral_plugin.py"
     plugin_path.write_text(
         "import os\\n"
-        "from omnidriver.core.generic_plugin import GenericOpenFOAMPlugin\\n\\n"
-        "class WheelNeutralPlugin(GenericOpenFOAMPlugin):\\n"
+        "from pathlib import Path\\n"
+        "from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog\\n"
+        "from omnidriver.core.plugin_profile import PluginProfile\\n\\n"
+        "class WheelNeutralPlugin:\\n"
+        "    plugin_name = 'wheel-neutral'\\n"
+        "    plugin_id = 'org.omnidriver.wheel-neutral'\\n"
+        "    plugin_version = '1'\\n"
+        "    plugin_api_version = '2'\\n"
+        "    def get_profile(self):\\n"
+        "        return PluginProfile(Path(__file__), self.plugin_id, self.plugin_api_version, (), None, {})\\n"
+        "    def get_dict_entries(self): return ()\\n"
+        "    def get_dictionary_catalog(self): return DictionaryCatalog({})\\n"
+        "    def get_dict_groups(self): return {}\\n"
+        "    def get_capabilities(self): return {}\\n"
+        "    def get_tutorial_catalog(self): return {'registered_tutorials': (), 'spec_factories': {}}\\n"
+        "    def get_tutorial_displays(self): return ()\\n"
+        "    def validate_configuration(self, spec): return ()\\n"
+        "    def validate_run_semantics(self, context): return ()\\n"
+        "    def predict_data_artifacts(self, case_root, spec): return ()\\n"
+        "    def get_solver_commands(self): return frozenset()\\n"
+        "    def get_auxiliary_commands(self): return frozenset()\\n"
+        "    def get_utility_manifests(self): return {}\\n"
+        "    def get_utility_roots(self): return ()\\n"
+        "    def resolve_case_models(self, case_root): return {}\\n"
+        "    def get_samplable_fields(self, resolved): return {}\\n"
+        "    def get_override_schema(self, tutorial_name, make_spec_info): return {}\\n"
+        "    def get_run_document_config_schema(self): return {'type': 'object', 'additionalProperties': True}\\n"
+        "    def get_dict_entry_catalog(self): return {}\\n"
+        "    def get_solve_step_commands(self): return frozenset()\\n"
+        "    def get_telemetry_source_globs(self, command): return ()\\n"
+        "    def get_extra_provenance_paths(self, case_root): return ()\\n"
+        "    def get_artifact_value_reader(self, artifact_format): return None\\n\\n"
         "    def get_selected_start_time(self, case_root, resolved_case):\\n"
         "        return '0'\\n\\n"
         "    def get_environment_diagnostics(self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None):\\n"

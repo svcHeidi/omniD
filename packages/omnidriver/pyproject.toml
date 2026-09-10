@@ -46,7 +46,6 @@ where = ["src"]
 include = ["omnidriver*"]
 
 [tool.setuptools.package-data]
-"omnidriver.core" = ["generic-plugin.yaml"]
 "omnidriver.schemas" = ["run-document.json"]
 # run_case.sh is data, not a module: setuptools ships the package but not
 # the .sh unless it is declared here. Without this line

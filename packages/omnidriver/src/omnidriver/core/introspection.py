@@ -213,7 +213,9 @@ def describe_entry(
         overrides=overrides,
         driver_context=driver_context,
     )
-    spec = resolution["factory"](**resolution["factory_overrides"])
+    from .runtime.registry import _materialize_resolved_entry
+
+    spec = _materialize_resolved_entry(resolution, driver_context=driver_context)
     cases_root = Path(
         resolution["factory_overrides"].get("cases_root", spec.case_root.parent)
     )
@@ -293,4 +295,3 @@ def describe_tutorial(
         config_path=config_path,
         driver_context=driver_context,
     )
-

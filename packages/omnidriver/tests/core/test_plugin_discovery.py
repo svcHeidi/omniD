@@ -8,18 +8,18 @@ from omnidriver.core.plugin_interface import load_plugin_context
 
 class _FakeEntryPoint:
     name = "fakeplugin"
-    value = "omnidriver.core.generic_plugin:GenericOpenFOAMPlugin"
+    value = "omnidriver.openfoam.generic_plugin:GenericOpenFOAMPlugin"
     dist = type("D", (), {"name": "fake-dist", "version": "9.9"})()
 
     def load(self):
-        from omnidriver.core.generic_plugin import GenericOpenFOAMPlugin
+        from omnidriver.openfoam.generic_plugin import GenericOpenFOAMPlugin
 
         return GenericOpenFOAMPlugin
 
 
 def test_a_colon_still_means_a_trusted_local_import() -> None:
     context = load_plugin_context(
-        "omnidriver.core.generic_plugin:GenericOpenFOAMPlugin"
+        "omnidriver.openfoam.generic_plugin:GenericOpenFOAMPlugin"
     )
     assert context.identity.id == "org.driverfoam.generic-openfoam"
     assert context.identity.source.startswith("trusted-import:")
@@ -47,7 +47,7 @@ def test_a_discovered_id_wins_only_when_there_is_no_colon(monkeypatch) -> None:
     )
     # A colon always means the trusted import form, never discovery.
     context = load_plugin_context(
-        "omnidriver.core.generic_plugin:GenericOpenFOAMPlugin"
+        "omnidriver.openfoam.generic_plugin:GenericOpenFOAMPlugin"
     )
     assert context.identity.source.startswith("trusted-import:")
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from omnidriver.core.generic_plugin import GenericOpenFOAMPlugin
+from omnidriver.openfoam.generic_plugin import GenericOpenFOAMPlugin
 from omnidriver.core.plugin_interface import (
     SolverPlugin,
     driver_context,

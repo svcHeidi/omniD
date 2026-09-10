@@ -75,7 +75,7 @@ def _mapping_error(path: Path, message: str) -> ValueError:
 #: ``ESCAPE_ROLE_PREFIX`` tier below instead of adding to this frozenset.
 #:
 #: Adding a role here is a contract change: document it in
-#: core/generic-plugin.yaml's role reference in the same edit.
+#: the active environment adapter's profile reference in the same edit.
 KNOWN_ROLES: frozenset[str] = frozenset({
     "openfoam.control_dict",
     "openfoam.discretisation",

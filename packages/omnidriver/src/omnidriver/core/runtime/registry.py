@@ -251,7 +251,7 @@ def load_tutorial_spec(
     driver_context: "DriverContext | None" = None,
 ) -> TutorialSpec:
     resolution = resolve_tutorial(name, overrides=overrides, driver_context=driver_context)
-    spec = resolution["factory"](**resolution["factory_overrides"])
+    spec = _materialize_resolved_entry(resolution, driver_context=driver_context)
     return _with_entry_metadata(spec, resolution, driver_context=driver_context)
 
 
@@ -268,8 +268,25 @@ def load_entry_spec(
         overrides=overrides,
         driver_context=driver_context,
     )
-    spec = resolution["factory"](**resolution["factory_overrides"])
+    spec = _materialize_resolved_entry(resolution, driver_context=driver_context)
     return _with_entry_metadata(spec, resolution, driver_context=driver_context)
+
+
+def _materialize_resolved_entry(
+    resolution: dict[str, object],
+    *,
+    driver_context: "DriverContext | None",
+) -> TutorialSpec:
+    """Build a resolved entry while preserving its environment declaration."""
+
+    factory_overrides = dict(resolution["factory_overrides"])
+    if resolution["entry_kind"] == "case_folder":
+        # A generic case factory builds the execution DAG from the active
+        # environment's entrypoint declaration.  Passing the context here is
+        # what keeps that operation declaration-led instead of restoring an
+        # ``Allrun`` default in Core.
+        factory_overrides["driver_context"] = driver_context
+    return resolution["factory"](**factory_overrides)
 
 
 def _with_entry_metadata(
@@ -289,8 +306,8 @@ def _with_entry_metadata(
             "resolution": resolution["resolution"],
         }
     )
-    # Plain case folders are owned by their on-disk entrypoint (the plugin's
-    # declared openfoam.entrypoint, Allrun by default). If a discovered
+    # Plain case folders are owned by their on-disk entrypoint declared by the
+    # active environment. If a discovered
     # folder has no entrypoint, do not preserve the generic-spec placeholder DAG.
     if (
         resolution["resolution"] == "case_folder"

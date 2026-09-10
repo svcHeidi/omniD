@@ -774,21 +774,24 @@ def build_parser() -> argparse.ArgumentParser:
             "the plugin's Python code."
         ),
     )
-    from .core.plugin_interface import generic_openfoam_context
+    # No --plugin has been parsed yet at this point in parser construction.
+    # Help must therefore stay available from a Core-only installation rather
+    # than loading an OpenFOAM adapter merely to enumerate its empty tutorial
+    # catalog.
+    generic_entries = "genericCase"
+    try:
+        from .core.plugin_interface import generic_openfoam_context
 
-    # No --plugin has been parsed yet at this point in parser construction,
-    # so this can only ever be the built-in neutral binding -- never the
-    # plugin the invocation will actually select. list_tutorials() now
-    # requires an explicit DriverContext (registry.py no longer resolves an
-    # implicit cardiac default); generic_openfoam_context() is a core-owned
-    # context that needs no plugin package installed, so --help works in a
-    # core-only install (G4).
+        generic_entries = ", ".join(list_tutorials(generic_openfoam_context()))
+    except ModuleNotFoundError as exc:
+        if exc.name != "omnidriver.openfoam":
+            raise
     parser.add_argument(
         "--entry",
         required=False,
         help=(
             "Entry name or relative workflow/case path to run "
-            f"({', '.join(list_tutorials(generic_openfoam_context()))}, genericCase)"
+            f"({generic_entries}, genericCase)"
         ),
     )
     parser.add_argument(
