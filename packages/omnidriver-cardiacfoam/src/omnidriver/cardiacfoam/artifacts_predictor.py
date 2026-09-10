@@ -26,11 +26,9 @@ def _exported_ionic_variables(case_root: Path, ionic_model: str | None) -> tuple
             if entry is None:
                 return ()
             # The solver filters the requested list before allocating
-            # AUTO_WRITE fields (ionicModelIO::exportedFieldNamesRef).  A raw
-            # dictionary token is therefore not output evidence: for example,
-            # the Niederer TNNP case requests Jsi, which belongs to
-            # BuenoOrovio, and cardiacFOAM deliberately omits it.  Predict
-            # only canonical names the selected model can actually export.
+            # AUTO_WRITE fields (ionicModelIO::exportedFieldNamesRef). A raw
+            # dictionary token is therefore not output evidence. Predict only
+            # canonical names the selected model can actually export.
             accepted = {"Vm", *entry.states, *entry.algebraic}
             return tuple(name for name in declared if name in accepted)
     if entry is None:

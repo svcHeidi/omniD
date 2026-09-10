@@ -548,7 +548,13 @@ class TestEmptyExportListIsKnownEmpty(unittest.TestCase):
         (constant / "electroProperties").write_text(text)
         return case_root
 
-    def _electro_properties(self, *, ionic_export: str, at_export: str | None = None) -> str:
+    def _electro_properties(
+        self,
+        *,
+        ionic_export: str,
+        ionic_model: str = "AlievPanfilov",
+        at_export: str | None = None,
+    ) -> str:
         at_block = ""
         if at_export is not None:
             at_block = (
@@ -559,7 +565,7 @@ class TestEmptyExportListIsKnownEmpty(unittest.TestCase):
         return (
             "myocardiumSolver monodomainSolver;\n"
             "monodomainSolverCoeffs\n{\n"
-            "    ionicModel AlievPanfilov;\n"
+            f"    ionicModel {ionic_model};\n"
             "    outputVariables\n    {\n"
             "        ionic\n        {\n"
             f"            export ( {ionic_export} );\n"
@@ -627,30 +633,38 @@ class TestEmptyExportListIsKnownEmpty(unittest.TestCase):
             IONIC_MODEL_CATALOG["AlievPanfilov"].recommended_exports,
         )
 
-    def test_predictor_filters_export_names_not_supported_by_selected_model(self) -> None:
-        """Mirror cardiacFOAM's effective exportedFieldNames() filtering."""
+    def test_predictor_export_filter_matches_every_ionic_catalog_entry(self) -> None:
+        """The catalog, not a tutorial result, defines exportable field names."""
         from omnidriver.cardiacfoam.artifacts_predictor import (
             _exported_ionic_variables,
+            _predict_monodomain,
+        )
+        from omnidriver.cardiacfoam.ionic_model_catalog import (
+            IONIC_MODEL_CATALOG,
         )
 
-        # Jsi is a BuenoOrovio algebraic variable, not a TNNP one.  The
-        # Niederer reference declares it, but the solver correctly does not
-        # create a Jsi OpenFOAM time field.
-        case_root = self._case_root(
-            "myocardiumSolver monodomainSolver;\n"
-            "monodomainSolverCoeffs\n{\n"
-            "    ionicModel TNNP;\n"
-            "    outputVariables\n    {\n"
-            "        ionic\n        { export ( Vm Jsi ); }\n"
-            "    }\n"
-            "}\n"
-        )
-        self.assertEqual(_exported_ionic_variables(case_root, "TNNP"), ("Vm",))
+        unsupported = "notAnIonicCatalogSymbol"
+        for model_name, entry in IONIC_MODEL_CATALOG.items():
+            supported = next(iter(entry.states + entry.algebraic))
+            self.assertNotIn(unsupported, entry.states + entry.algebraic)
+            case_root = self._case_root(
+                self._electro_properties(
+                    ionic_model=model_name,
+                    ionic_export=f"Vm {supported} {unsupported}",
+                )
+            )
 
-        from omnidriver.cardiacfoam.artifacts_predictor import _predict_monodomain
-
-        predicted = _predict_monodomain(case_root, None, "TNNP")
-        self.assertEqual([artifact.artifact_id for artifact in predicted], ["monodomain_vm_series"])
+            self.assertEqual(
+                _exported_ionic_variables(case_root, model_name),
+                ("Vm", supported),
+                model_name,
+            )
+            predicted = _predict_monodomain(case_root, None, model_name)
+            self.assertEqual(
+                [artifact.artifact_id for artifact in predicted],
+                ["monodomain_vm_series", f"monodomain_{supported.lower()}_series"],
+                model_name,
+            )
 
 
 class TestControlDictEntries(unittest.TestCase):
