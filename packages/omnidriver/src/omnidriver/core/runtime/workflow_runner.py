@@ -195,7 +195,8 @@ def _artifact_snapshot(
     patterns = [str(case_root / expanded)]
     if artifact.time_indexed:
         prefix = decomposition_dirname_prefix(driver_context)
-        patterns.append(str(case_root / f"{prefix}*" / expanded))
+        if prefix is not None:
+            patterns.append(str(case_root / f"{prefix}*" / expanded))
     snapshot = {}
     for pattern in patterns:
         for match in glob.glob(pattern):

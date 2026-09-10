@@ -568,14 +568,10 @@ def legacy_describe_config_resolution(plugin) -> str:
 
 
 @_instrumented
-def legacy_decomposition_dirname_prefix() -> str:
-    """Plugins predating get_decomposition_dirname_prefix(). Every OpenFOAM
-    decomposition tool (decomposePar, reconstructPar, and every solver run
-    in parallel) has always named per-rank output ``processorN`` -- the
-    historical default every core call site assumed directly before this
-    hook existed (Tier 3, future/ENVIRONMENT_CONTRACT.md §10)."""
+def legacy_decomposition_dirname_prefix() -> None:
+    """A plugin without a declaration has no parallel-output convention."""
 
-    return "processor"
+    return None
 
 
 @_instrumented

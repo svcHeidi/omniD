@@ -483,6 +483,15 @@ class CardiacFoamPlugin:
 
         return is_installed_openfoam_application(command)
 
+    def get_decomposition_dirname_prefix(self) -> str:
+        from omnidriver.openfoam.case_runtime_conventions import (
+            openfoam_case_runtime_conventions,
+        )
+
+        prefix = openfoam_case_runtime_conventions().decomposition_directory_prefix
+        assert prefix is not None
+        return prefix
+
     def get_utility_manifests(self) -> dict:
         """This plugin's ``utility.manifest.toml`` sidecars, by command name."""
         from omnidriver.cardiacfoam.command_authorization import (

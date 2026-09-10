@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from omnidriver.core.plugin_interface import generic_openfoam_context
 from omnidriver.core.runtime.models import DataArtifact
 from omnidriver.core.runtime.workflow_runner import run_workflow_step
 from omnidriver.core.runtime.workflow_state import initial_workflow_state
@@ -116,6 +117,7 @@ def test_run_workflow_step_allows_missing_optional_artifacts() -> None:
                     optional=True,
                 ),
             ),
+            driver_context=generic_openfoam_context(),
         )
 
         payload = result.state.to_json()
@@ -148,6 +150,7 @@ def test_run_workflow_step_accepts_decomposed_time_artifact() -> None:
                     time_indexed=True,
                 ),
             ),
+            driver_context=generic_openfoam_context(),
         )
 
         payload = result.state.to_json()

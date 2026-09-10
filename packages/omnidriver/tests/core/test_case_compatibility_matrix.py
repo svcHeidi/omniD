@@ -92,6 +92,29 @@ def test_openfoam_environment_hides_its_declared_generated_roots(
     assert list_entries(tmp_path, driver_context=_CTX) == []
 
 
+def test_neutral_environment_does_not_assume_a_parallel_output_prefix(
+    tmp_path: Path,
+) -> None:
+    case_root = tmp_path / "processor0" / "nestedCase"
+    case_root.mkdir(parents=True)
+    _touch(case_root, "Allrun")
+    context = driver_context(
+        NeutralEnvironmentPlugin(), source="test:neutral-decomposition",
+    )
+
+    assert [entry["entry_path"] for entry in list_entries(tmp_path, driver_context=context)] == [
+        "processor0/nestedCase",
+    ]
+
+
+def test_openfoam_environment_hides_its_parallel_output_prefix(tmp_path: Path) -> None:
+    case_root = tmp_path / "processor0" / "nestedCase"
+    case_root.mkdir(parents=True)
+    _touch(case_root, "Allrun")
+
+    assert list_entries(tmp_path, driver_context=_CTX) == []
+
+
 def test_legacy_resolve_case_models_neutral_shape_has_no_cardiac_keys() -> None:
     from omnidriver.core.compatibility import legacy_resolve_case_models
 

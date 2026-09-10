@@ -19,7 +19,6 @@ import pytest
 
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.plugin_profile import (
-    DEFAULT_ENTRYPOINT_RELPATHS,
     entrypoint_command,
     entrypoint_relpaths,
     is_environment_role,
@@ -27,6 +26,7 @@ from omnidriver.core.plugin_profile import (
 from omnidriver.core.runtime.generic_case import _workflow_dag_for
 
 import plugins.minimal_plugin as minimal_plugin
+from omnidriver.core.plugin_interface import generic_openfoam_context
 
 
 def _context(entrypoint):
@@ -36,14 +36,18 @@ def _context(entrypoint):
     )
 
 
-def test_no_context_falls_back_to_the_documented_default() -> None:
-    assert entrypoint_relpaths(None) == DEFAULT_ENTRYPOINT_RELPATHS
-    assert entrypoint_command(None) == "Allrun"
+def test_no_context_has_no_environment_entrypoint_default() -> None:
+    assert entrypoint_relpaths(None) == ()
+    with pytest.raises(ValueError, match="entrypoint"):
+        entrypoint_command(None)
 
 
-def test_a_plugin_declaring_no_entrypoint_gets_the_default() -> None:
-    """Declaring nothing is not the same as declaring something odd."""
-    assert entrypoint_relpaths(_context(None)) == DEFAULT_ENTRYPOINT_RELPATHS
+def test_a_plugin_declaring_no_entrypoint_has_no_entrypoint() -> None:
+    assert entrypoint_relpaths(_context(None)) == ()
+
+
+def test_openfoam_context_explicitly_declares_allrun() -> None:
+    assert entrypoint_relpaths(generic_openfoam_context()) == ("Allrun",)
 
 
 def test_a_declared_entrypoint_wins_over_the_default() -> None:
@@ -60,8 +64,8 @@ def test_the_generic_dag_invokes_the_declared_entrypoint() -> None:
     )
     assert [step["command"] for step in dag["steps"]] == ["RunCase.sh"]
 
-    default = _workflow_dag_for(solver_command=None, pre_solve_commands=())
-    assert [step["command"] for step in default["steps"]] == ["Allrun"]
+    with pytest.raises(ValueError, match="entrypoint"):
+        _workflow_dag_for(solver_command=None, pre_solve_commands=())
 
 
 def test_the_declared_entrypoint_can_produce_artifacts() -> None:
@@ -170,7 +174,11 @@ def test_an_escape_role_is_reported_as_the_environment_s_file(tmp_path) -> None:
             )
 
     context = driver_context(_ForeignEnvironmentPlugin(), source="test:foreign")
-    spec = make_spec(cases_root=tmp_path, case_dir_name="myCase")
+    spec = make_spec(
+        cases_root=tmp_path,
+        case_dir_name="myCase",
+        solver_command="foreign-runner",
+    )
     contract = describe_tutorial_contract(
         spec, resolution="test", driver_context=context,
     )

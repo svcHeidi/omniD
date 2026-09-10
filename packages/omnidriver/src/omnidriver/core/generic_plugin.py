@@ -179,6 +179,11 @@ class GenericOpenFOAMPlugin:
 
         return openfoam_case_runtime_conventions()
 
+    def get_decomposition_dirname_prefix(self) -> str:
+        conventions = self.get_case_runtime_conventions()
+        assert conventions.decomposition_directory_prefix is not None
+        return conventions.decomposition_directory_prefix
+
     def build_run_document_config(self, spec):
         del spec
         # Return an empty config — the generic plugin imposes no key structure.

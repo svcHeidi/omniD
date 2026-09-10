@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Callable
 from .models import TutorialSpec
 from .generic_case import make_generic_case_spec
 from omnidriver.core.plugin_profile import (
-    DEFAULT_ENTRYPOINT_RELPATHS,
     decomposition_dirname_prefix,
     entrypoint_relpaths,
 )
@@ -39,11 +38,6 @@ ENTRY_KIND_VALUES = (
     "case_folder",
 )
 
-#: Re-exported for the tests and callers that referenced these here first.
-#: The definitions moved to ``core.plugin_profile`` once three other sites
-#: turned out to need the same answer and had each hardcoded ``"Allrun"``
-#: instead. See future/ENVIRONMENT_CONTRACT.md §4.
-_DEFAULT_ENTRYPOINT_RELPATHS = DEFAULT_ENTRYPOINT_RELPATHS
 _entrypoint_relpaths = entrypoint_relpaths
 
 
@@ -108,7 +102,10 @@ def _iter_case_directories_recursive(
             for dirname in dirnames
             if not dirname.startswith(".")
             and dirname != "__pycache__"
-            and not dirname.startswith(decomposition_prefix)
+            and (
+                decomposition_prefix is None
+                or not dirname.startswith(decomposition_prefix)
+            )
             and dirname not in ignored_directory_names
         ]
         if _is_case_directory(path, driver_context):

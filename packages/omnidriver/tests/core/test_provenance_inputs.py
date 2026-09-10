@@ -96,6 +96,9 @@ class _FakePlugin(NeutralEnvironmentPlugin):
     def get_extra_provenance_paths(self, case_root):
         return self._extra_provenance_paths
 
+    def get_decomposition_dirname_prefix(self) -> str:
+        return "processor"
+
 
 def test_selected_start_time_directory_is_included_others_excluded(tmp_path: Path) -> None:
     _write_control_dict(tmp_path, start_from="startTime", start_time="0")

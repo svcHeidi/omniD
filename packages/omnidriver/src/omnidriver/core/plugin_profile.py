@@ -140,11 +140,6 @@ def _is_valid_escape_role(role: str) -> bool:
 #: hardcoded ``"Allrun"`` while a fourth resolved it properly from the role.
 ENTRYPOINT_ROLE = "openfoam.entrypoint"
 
-#: Used when no plugin declares an entrypoint. This is a documented default a
-#: plugin can override -- not a hardcoded binding -- which is what Rule 1
-#: requires of a concrete environment name in core.
-DEFAULT_ENTRYPOINT_RELPATHS: tuple[str, ...] = ("Allrun",)
-
 #: Namespaces whose files belong to the plugin or the case rather than to the
 #: simulation environment. Everything else -- ``openfoam.*`` and any ``x-``
 #: escape for a foreign environment -- is environment-owned.
@@ -173,8 +168,7 @@ def is_environment_role(role: str) -> bool:
 
 
 def _entrypoint_relpaths_from_rules(rules: Iterable[CaseFileRule]) -> tuple[str, ...]:
-    declared = tuple(rule.path for rule in rules if rule.role == ENTRYPOINT_ROLE)
-    return declared or DEFAULT_ENTRYPOINT_RELPATHS
+    return tuple(rule.path for rule in rules if rule.role == ENTRYPOINT_ROLE)
 
 
 def entrypoint_relpaths(driver_context: Any | None) -> tuple[str, ...]:
@@ -185,7 +179,7 @@ def entrypoint_relpaths(driver_context: Any | None) -> tuple[str, ...]:
     ``required_rules()`` filters to ``required == "always"``.
     """
     if driver_context is None:
-        return DEFAULT_ENTRYPOINT_RELPATHS
+        return ()
     return _entrypoint_relpaths_from_rules(driver_context.capabilities.case_files.all_rules())
 
 
@@ -209,26 +203,21 @@ def entrypoint_command(driver_context: Any | None) -> str:
     several. The first declared wins, which matches what ``_has_entrypoint``
     already treats as sufficient for case detection.
     """
-    return entrypoint_relpaths(driver_context)[0]
+    paths = entrypoint_relpaths(driver_context)
+    if not paths:
+        raise ValueError("The active environment did not declare a case entrypoint.")
+    return paths[0]
 
 
-#: Documented default for :func:`decomposition_dirname_prefix` -- OpenFOAM's
-#: own domain-decomposition convention, not a hardcoded binding: a plugin
-#: overrides it via ``get_decomposition_dirname_prefix()``. See
-#: future/ENVIRONMENT_CONTRACT.md §10, Tier 3.
-DEFAULT_DECOMPOSITION_DIRNAME_PREFIX = "processor"
-
-
-def decomposition_dirname_prefix(driver_context: Any | None) -> str:
+def decomposition_dirname_prefix(driver_context: Any | None) -> str | None:
     """Dirname prefix a parallel run's per-rank output directories share
     (``processor0``, ``processor1``, ... for OpenFOAM). Not a ``CaseFileRule``
     role -- a role names one static path, and this names a wildcard family --
-    so it is a bare optional hook via ``CaseFileContractCapability``, with
-    ``driver_context=None`` (no active plugin) using the documented default
-    directly, same as :func:`entrypoint_relpaths`.
+    so it is a bare optional hook via ``CaseFileContractCapability``. Without
+    an active declaration Core makes no assumption about parallel output.
     """
     if driver_context is None:
-        return DEFAULT_DECOMPOSITION_DIRNAME_PREFIX
+        return None
     return driver_context.capabilities.case_files.decomposition_dirname_prefix()
 
 

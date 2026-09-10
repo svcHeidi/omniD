@@ -123,6 +123,7 @@ class CaseRuntimeConventions:
     preserved_file_suffixes: tuple[str, ...] = ()
     generated_case_markers: tuple[str, ...] = ()
     case_discovery_ignored_directory_names: tuple[str, ...] = ()
+    decomposition_directory_prefix: str | None = None
     time_directory_name_pattern: str | None = None
     preserved_time_directory_names: tuple[str, ...] = ()
 
@@ -531,8 +532,8 @@ class CaseFileContractCapability(Protocol):
     names them ``processor0``, ``processor1``, ...). It can't be expressed
     as a ``CaseFileRule`` -- a role names one static path, and this names a
     wildcard family -- so it is a bare optional hook instead, following the
-    same shape as ``get_phases()``: no per-case arguments, a documented
-    default (``"processor"``) a plugin overrides outright. Reached only
+    same shape as ``get_phases()``: no per-case arguments and no Core default.
+    Reached only
     through ``plugin_profile.decomposition_dirname_prefix(driver_context)``,
     never called on this capability directly -- the same indirection
     ``entrypoint_relpaths()`` already uses for ``ENTRYPOINT_ROLE``, which is
@@ -551,7 +552,7 @@ class CaseFileContractCapability(Protocol):
     def required_rules(self) -> tuple["CaseFileRule", ...]: ...
     def all_rules(self) -> tuple["CaseFileRule", ...]: ...
     def describe_config_resolution(self) -> str: ...
-    def decomposition_dirname_prefix(self) -> str: ...
+    def decomposition_dirname_prefix(self) -> str | None: ...
 
 
 class CaseRuntimeConventionsCapability(Protocol):
@@ -1180,14 +1181,14 @@ class _CaseFileContractAdapter:
 
         return legacy_describe_config_resolution(self.plugin)
 
-    def decomposition_dirname_prefix(self) -> str:
+    def decomposition_dirname_prefix(self) -> str | None:
         hook = getattr(self.plugin, "get_decomposition_dirname_prefix", None)
         if callable(hook):
             result = hook()
-            if not isinstance(result, str) or not result:
+            if result is not None and (not isinstance(result, str) or not result):
                 raise TypeError(
                     f"{self.plugin.plugin_id}.get_decomposition_dirname_prefix() must "
-                    f"return a non-empty string, got {result!r}"
+                    f"return a non-empty string or None, got {result!r}"
                 )
             return result
         from .compatibility import legacy_decomposition_dirname_prefix

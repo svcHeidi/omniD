@@ -280,9 +280,10 @@ def enumerate_case_inputs(
     walk_roots = [case_root / d for d in _case_root_dirnames(driver_context)]
     walk_roots.append(case_root / selected_start_time)
     decomposition_prefix = decomposition_dirname_prefix(driver_context)
-    for processor_dir in sorted(case_root.glob(f"{decomposition_prefix}*")):
-        if processor_dir.is_dir():
-            walk_roots.append(processor_dir / selected_start_time)
+    if decomposition_prefix is not None:
+        for processor_dir in sorted(case_root.glob(f"{decomposition_prefix}*")):
+            if processor_dir.is_dir():
+                walk_roots.append(processor_dir / selected_start_time)
 
     for root in walk_roots:
         for path in _walk_files(root):

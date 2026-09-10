@@ -37,7 +37,7 @@ def _empty_config() -> dict:
 def _make_runnable_case(root: Path) -> Path:
     """Create a minimal but _case_is_runnable-passing OpenFOAM case dir.
 
-    Includes an ``Allrun`` entrypoint (``registry._DEFAULT_ENTRYPOINT_RELPATHS``)
+    Includes an ``Allrun`` entrypoint declared by the test's OpenFOAM context.
     so the directory reads as runnable under any plugin's case-compatibility
     hook, not only a cardiac one -- these tests exercise path/allowed-root
     resolution, not plugin-specific case semantics, and now take an explicit

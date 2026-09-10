@@ -36,6 +36,7 @@ def openfoam_case_runtime_conventions() -> CaseRuntimeConventions:
         preserved_file_suffixes=(".geo.template",),
         generated_case_markers=("workflow_state.json", "workflow_logs", "run_document.json"),
         case_discovery_ignored_directory_names=("postProcessing", "logs"),
+        decomposition_directory_prefix="processor",
         time_directory_name_pattern=r"^-?\d+(\.\d+)?(e[+\-]?\d+)?$",
         preserved_time_directory_names=("0",),
     )

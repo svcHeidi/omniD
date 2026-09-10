@@ -367,10 +367,9 @@ class SolverPluginOptionalHooks(Protocol):
         RunDocument config. Absent -> a plugin-neutral sentence."""
         ...
 
-    def get_decomposition_dirname_prefix(self) -> str:
+    def get_decomposition_dirname_prefix(self) -> str | None:
         """Dirname prefix a parallel run's per-rank output directories share.
-        Absent -> ``"processor"``, OpenFOAM's own decomposition convention
-        (see legacy_decomposition_dirname_prefix)."""
+        Absent -> ``None``; Core makes no parallel-output assumption."""
         ...
 
     # -- CaseRuntimeConventionsCapability ------------------------------------

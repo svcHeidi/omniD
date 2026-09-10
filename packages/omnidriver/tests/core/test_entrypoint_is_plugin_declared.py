@@ -54,11 +54,10 @@ def test_that_plugin_does_not_claim_an_allrun_case(tmp_path) -> None:
     assert registry._is_case_directory(case, context) is False
 
 
-def test_no_declaration_falls_back_to_allrun(tmp_path) -> None:
-    """Documented default, not a hidden one: a plugin declaring no entrypoint
-    keeps the historical Allrun answer rather than becoming un-runnable."""
+def test_no_declaration_does_not_invent_an_entrypoint(tmp_path) -> None:
+    """A plugin must declare its environment's case-script spelling."""
     context = driver_context(
         minimal_plugin.MinimalOpenFOAMPlugin(entrypoint=None),
         source="test:no-entrypoint",
     )
-    assert registry._entrypoint_relpaths(context) == ("Allrun",)
+    assert registry._entrypoint_relpaths(context) == ()
