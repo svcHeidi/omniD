@@ -6,15 +6,10 @@ Rules (see ARCHITECTURE.md "Architectural Rules"):
      and must never import foamlib directly.
   2. omnidriver.openfoam must not import omnidriver.cardiacfoam.
 
-core/compatibility.py is exempt from the omnidriver.openfoam prefix only: its
-ungated environment fallbacks are a documented, overridable default (see
-future/ENVIRONMENT_CONTRACT.md §4) -- those imports are never reached unless a
-plugin declines to implement the corresponding capability hook.
-compatibility.py is NOT exempt from the omnidriver.cardiacfoam prefix, and no
-longer needs to be: it contains no cardiac import at all. Any cardiac import
-appearing anywhere in core now fails this gate outright, with no waiver to
-add it to. compatibility.py may still not import foamlib directly; it must go
-through omnidriver.openfoam.
+Every Core module, including ``core/compatibility.py``, must remain independent
+of OpenFOAM, cardiacFOAM, and foamlib at runtime. Compatibility behavior is
+neutral or explicitly refuses unsupported operations; it must not recover a
+solver dependency through an import waiver.
 
 Imports inside ``if TYPE_CHECKING:`` blocks are never runtime imports, so
 they're exempt everywhere.
@@ -36,7 +31,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # claims to verify. This gate reported "boundaries OK" throughout.
 CORE_SRC = REPO_ROOT / "packages/omnidriver/src/omnidriver"
 OPENFOAM_SRC = REPO_ROOT / "packages/omnidriver-openfoam/src/omnidriver/openfoam"
-COMPATIBILITY_FILE = CORE_SRC / "core" / "compatibility.py"
 
 # Waived pre-existing violations. This list may only SHRINK. A new violation
 # fails the gate; a waiver that no longer matches anything also fails it, so
@@ -116,17 +110,11 @@ def main() -> int:
     found: list[tuple[str, str]] = []
 
     for path in CORE_SRC.rglob("*.py"):
-        if path == COMPATIBILITY_FILE:
-            # Still exempt for omnidriver.openfoam: the ungated environment
-            # fallbacks are a documented, overridable default
-            # (future/ENVIRONMENT_CONTRACT.md §4). NOT exempt for
-            # omnidriver.cardiacfoam any more -- after Task 7 the only cardiac
-            # imports left serve the public compatibility edge, and any new one
-            # is a regression.
-            forbidden = ("foamlib", "omnidriver.cardiacfoam")
-        else:
-            forbidden = ("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam")
-        found.extend(_check_file(path, forbidden, CORE_SRC))
+        found.extend(_check_file(
+            path,
+            ("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam"),
+            CORE_SRC,
+        ))
 
     for path in OPENFOAM_SRC.rglob("*.py"):
         found.extend(_check_file(path, ("omnidriver.cardiacfoam",), OPENFOAM_SRC))
@@ -160,10 +148,7 @@ def main() -> int:
             print(f"  {v}")
         print(
             "\nomnidriver.core must not import foamlib or omnidriver.cardiacfoam at "
-            "runtime, and must not import omnidriver.openfoam except inside "
-            "core/compatibility.py's ungated environment fallbacks (a documented, "
-            "overridable default -- see future/ENVIRONMENT_CONTRACT.md §4). "
-            "omnidriver.openfoam must not import omnidriver.cardiacfoam. "
+            "runtime. omnidriver.openfoam must not import omnidriver.cardiacfoam. "
             "See ARCHITECTURE.md's Architectural Rules."
         )
         return 1

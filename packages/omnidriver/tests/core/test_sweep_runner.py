@@ -382,7 +382,7 @@ def test_sweep_run_entry_mode_executes_run_document_sequentially(tmp_path):
     assert call_order == ["apply_case", "run", "apply_case", "run"]
     assert result["completed_count"] == 2
     assert result["failed_count"] == 0
-    assert result["postprocess"]["status"] == "stub"
+    assert result["postprocess"]["status"] == "not_configured"
 
 
 def test_sweep_run_archives_each_case_postprocessing_output_when_configured(tmp_path):

@@ -6,7 +6,7 @@ asking an agent to reconstruct a simulation from directories and log files.
 
 The boundary is deliberate:
 
-* Core reports what was requested, planned, executed, and retained.
+* Core reports what was requested, planned, and executed.
 * A plugin or solver-owned checker supplies scientific comparison evidence.
 * Core records a checker's stated status and its declared metrics, but never
   decides whether a numerical difference is scientifically acceptable.
@@ -54,8 +54,9 @@ class ComparisonOutcome:
     """An optional, solver-supplied result comparison.
 
     ``metrics`` is only a pass-through of a report's declared ``metrics``
-    list.  Its names, units, definitions, and values belong to the checker or
-    analysis adapter.  ``details`` preserves other bounded report fields for
+    list.
+    Its names, units, definitions, and values belong to the checker or
+    analysis adapter.  ``details`` preserves other report fields for
     inspection without giving Core their scientific meaning.
     """
 
@@ -97,7 +98,6 @@ class ExperimentCase:
     input_provenance: dict[str, Any] | None
     expected_artifacts: tuple[dict[str, Any], ...]
     output_status: str
-    output_files: tuple[str, ...]
     output_directory: str | None
     comparison: ComparisonOutcome
 
@@ -114,7 +114,6 @@ class ExperimentCase:
             "outputs": {
                 "status": self.output_status,
                 "directory": self.output_directory,
-                "files": list(self.output_files),
                 "expected_artifacts": [dict(artifact) for artifact in self.expected_artifacts],
             },
             "comparison": self.comparison.to_json(),
@@ -166,10 +165,9 @@ def inspect_sweep_experiment(
 ) -> Experiment:
     """Read one sweep's durable evidence and optional comparison reports.
 
-    Output ``complete`` means the recorded workflow completed, whose Core
-    execution contract had already checked required artifacts.  ``files`` is
-    a fresh listing of the retained output directory, so a caller can see
-    later drift without mistaking it for a new scientific judgment.
+    Core reports its durable execution evidence and opaque output locations.
+    It does not inspect solver output trees. An adapter may later attach a
+    declared output inspection or analysis result.
     """
 
     output_dir = Path(output_dir)
@@ -258,7 +256,6 @@ def _inspect_case(
         input_provenance=input_provenance,
         expected_artifacts=expected_artifacts,
         output_status=_output_status(record, execution_status),
-        output_files=record.output_files,
         output_directory=record.case_output_dir,
         comparison=comparison,
     )
@@ -277,15 +274,10 @@ def _expected_artifacts(context: SweepContext, record: CaseRecord) -> tuple[dict
 
 
 def _output_status(record: CaseRecord, execution_status: str) -> str:
-    if execution_status == "completed":
-        # Required artifacts were verified by Core before this terminal state
-        # was persisted.  The file listing is deliberately separate because
-        # a later user cleanup is a provenance/drift observation, not a
-        # reason to rewrite the completed historical outcome.
-        return "complete"
+    del execution_status
     if record.case_output_dir is None:
         return "unavailable"
-    return "incomplete"
+    return "not_inspected"
 
 
 def _read_comparison(context: SweepContext, request: ComparisonRequest | None) -> ComparisonOutcome:

@@ -75,17 +75,17 @@ def test_inspect_experiment_separates_execution_outputs_and_optional_comparison(
     assert payload["summary"] == {
         "case_count": 2,
         "execution": {"completed": 1, "failed": 1},
-        "outputs": {"complete": 1, "incomplete": 1},
+        "outputs": {"not_inspected": 2},
         "comparisons": {"not_requested": 2},
     }
     completed, failed = experiment.cases
     assert completed.requested_parameters == {"stimulus_amplitude": 55}
     assert completed.plan_identity == "sha256:plan-a"
     assert completed.input_provenance == {"aggregate_digest": "sha256:inputs-a"}
-    assert completed.output_status == "complete"
+    assert completed.output_status == "not_inspected"
     assert completed.comparison.status == "not_requested"
     assert failed.execution_status == "failed"
-    assert failed.output_status == "incomplete"
+    assert failed.output_status == "not_inspected"
 
 
 def test_inspect_experiment_records_but_does_not_interpret_checker_metrics(tmp_path: Path) -> None:
