@@ -13,21 +13,16 @@ still a mandatory input. The resolution precedence, first match wins:
    refusal (recoverable); the reverse is the silent stale replay this whole
    phase exists to prevent.
 
-Concretely: ``system/**``, ``constant/**``, the **selected** start-time
-directory (as answered by the active plugin's
-``CaseIntrospectionCapability.selected_start_time`` -- OpenFOAM's
-``system/controlDict`` ``startFrom``/``startTime`` by default, not always
-``0/``), and each parallel-decomposition directory's ``<selected-time>/**``
-during a decomposed restart (I9, dirname prefix from
-``CaseFileContractCapability.decomposition_dirname_prefix`` -- ``processor*``
-by default) are walked and classified by that precedence. The exact
-Allrun-family scripts named by the DAG are added directly. Other time
-directories, ``postProcessing/`` (which holds ``workflow_logs/``), and
-state/manifest files are never walked, so they are excluded by construction
-rather than by an exclusion rule that could be gotten wrong.
+Concretely, the top-level roots declared by the active adapter, the
+**selected** start-time directory (as answered by its
+``CaseIntrospectionCapability.selected_start_time``), and each declared
+parallel-decomposition directory's ``<selected-time>/**`` during a
+decomposed restart are walked and classified by that precedence. The exact
+case scripts named by the DAG are added directly. Adapter-declared generated
+directories and state/manifest files are excluded by construction rather than
+by a Core-owned naming rule.
 
-Step executables -- including an MPI launcher's payload
-(``mpirun -np 4 cardiacFoam`` -> both) -- are resolved through
+Step executables -- including an MPI launcher's payload -- are resolved through
 ``workflow_runner._resolve_command``, the executor's own resolution, so a
 provenance digest is never computed against a different binary than the one
 that actually runs. A bare command not found locally is looked up on
@@ -271,16 +266,17 @@ def enumerate_case_inputs(
     add = _ComponentAdder(components)
 
     # -- every top-level directory the active plugin declares a case file
-    # under (e.g. system/**, constant/** for OpenFOAM), the selected
+    # under the adapter-declared case roots, the selected
     # start-time dir, and <decomposition-prefix>*/<selected-time>/** (I9)
     # -- classified by precedence steps 1 (consumes), 3 (generated_output_globs), 4 (fallback
     # required). Step 2 (plugin required_inputs) is applied uniformly below
     # instead, since a resolved input's path need not fall under any of
     # these directories.
     walk_roots = [case_root / d for d in _case_root_dirnames(driver_context)]
-    walk_roots.append(case_root / selected_start_time)
+    if selected_start_time is not None:
+        walk_roots.append(case_root / selected_start_time)
     decomposition_prefix = decomposition_dirname_prefix(driver_context)
-    if decomposition_prefix is not None:
+    if decomposition_prefix is not None and selected_start_time is not None:
         for processor_dir in sorted(case_root.glob(f"{decomposition_prefix}*")):
             if processor_dir.is_dir():
                 walk_roots.append(processor_dir / selected_start_time)
@@ -343,7 +339,7 @@ def enumerate_case_inputs(
                 )
 
     # -- plugin-declared runtime dependencies: the solver binary,
-    # its libraries, and anything the case's own controlDict libs (...)
+    # its libraries, and any additional runtime inputs the adapter declares
     # pulls in. Authoritative over the generic PATH-only resolution above --
     # it knows the library search directories and required/optional split a
     # bare PATH lookup cannot.

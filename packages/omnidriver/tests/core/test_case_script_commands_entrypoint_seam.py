@@ -22,6 +22,7 @@ from pathlib import Path
 from omnidriver.core.capability_manifest import build_capability_manifest
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.openfoam.case_runtime_conventions import openfoam_case_runtime_conventions
+from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile
 from omnidriver.core.runtime.provenance_inputs import _is_case_local_script
@@ -56,6 +57,13 @@ class _ForeignEntrypointPlugin(NeutralEnvironmentPlugin):
                 "plugin": {"id": self.plugin_id, "api_version": self.plugin_api_version},
                 "case_profile": {"dictionaries": []},
             },
+        )
+
+    def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
+        return CaseRuntimeConventions(
+            output_collection_relpath="outputs",
+            case_entrypoints=("run.sh",),
+            case_script_commands=("run.sh",),
         )
 
 

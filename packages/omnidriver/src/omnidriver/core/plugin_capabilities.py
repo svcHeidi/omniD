@@ -23,7 +23,6 @@ if TYPE_CHECKING:
     from .runtime.models import DataArtifact, TutorialSpec
     from omnidriver.core.planning_types import StrictDiagnostic
     from omnidriver.core.report_catalog import ReportDefinition
-    from omnidriver.openfoam.apply_overrides import OverrideScope, RegenerationScope
 
 
 @dataclass(frozen=True)
@@ -90,11 +89,10 @@ class ResolvedInput:
     """One field-level input a solver plugin's case model resolves to an
     actual on-disk path -- or fails to.
 
-    Globs are insufficient here: field *names* are dictionary-configurable
-    (``fieldName``, ``ionicHeterogeneity/field``, ``bathConductivityField``)
-    and field *locations* resolve by a backward ``Time::findInstance``
-    search with a ``constant/`` fallback, so a field's canonical path is not
-    knowable from its name alone. ``consumer`` records which model/domain
+    Globs are insufficient here: field *names* are adapter-configurable and
+    field *locations* may resolve through a runtime-specific search, so a
+    field's canonical path is not knowable from its name alone. ``consumer``
+    records which model/domain
     resolved it, for diagnostics -- never for severity.
     """
 
@@ -122,6 +120,7 @@ class CaseRuntimeConventions:
     generated_file_suffixes: tuple[str, ...] = ()
     preserved_file_suffixes: tuple[str, ...] = ()
     generated_case_markers: tuple[str, ...] = ()
+    case_entrypoints: tuple[str, ...] = ()
     case_script_commands: tuple[str, ...] = ()
     case_discovery_ignored_directory_names: tuple[str, ...] = ()
     decomposition_directory_prefix: str | None = None
@@ -141,9 +140,9 @@ class RuntimeDependency:
     check". ``path is None`` on a ``required=True`` dependency must surface
     as ``unavailable`` rather than silently vanishing from the list.
 
-    Most cases run through an ``Allrun`` script, so a workflow step's
-    command fingerprints the script, never the solver binary the script
-    invokes -- the exact gap that let a rebuilt solver replay a resumed
+    A workflow step may run through a case-local entrypoint, so its command
+    fingerprints that entrypoint, never an unobserved binary it invokes --
+    the exact gap that let a rebuilt solver replay a resumed
     run's previous numbers as fresh. Declaring dependencies this way, apart
     from however a step happens to be launched, is the fix.
     """
@@ -283,10 +282,8 @@ class RunDocumentConfigurationCapability(Protocol):
     against dynamically, turning a plugin's own rules into structured
     diagnostics an agent can act on.
 
-    The fallback returns an empty config for a non-cardiac plugin. It used to
-    return the cardiac phase vocabulary
-    (``anatomy``/``physics``/``stimulus``/``solver``) to every plugin --
-    exactly the fixed phases RunDocument v3 removed from core.
+    The fallback returns an empty config. It must not invent a phase or
+    configuration vocabulary for an adapter that did not declare one.
 
     :adapts: build_run_document_config, get_run_document_config_schema
     :consumed-by: omnidriver/core/runtime/run_document_adapter.py, omnidriver/core/runtime/run_document_exec.py
@@ -355,17 +352,12 @@ class DictDiagnosticsCapability(Protocol):
 class MeshDiagnosticPolicyCapability(Protocol):
     """Plugin-owned exemptions from, and additions to, core's mesh diagnostics.
 
-    Core classifies the physical scale of every polyMesh region and warns when
-    it looks wrong. Two plugin-specific escapes exist: a case may be
-    deliberately non-dimensional (a manufactured-solution verifier, a
-    single-cell model) and should not be judged against SI expectations at
-    all; and a plugin may own point sets that are not polyMesh regions and
-    that core therefore cannot check (cardiacFoam's ``constant/purkinjeGraph*``
-    conduction trees).
+    Core applies the generic mesh-diagnostics lifecycle. The active adapter
+    supplies the geometry interpretation, non-dimensional exemptions, and
+    any additional geometry that is not part of the base environment format.
 
-    ``is_nondimensional`` falls back to ``False`` for a non-cardiac plugin,
-    which keeps the diagnostics on -- the conservative direction, since the
-    failure mode of a wrong exemption is silence.
+    ``is_nondimensional`` falls back to ``False``, which keeps diagnostics on
+    when an adapter has not declared an exemption.
 
     ``base_geometry_diagnostics`` is the classification itself -- despite the
     class docstring above, it was never actually core's own logic; it's
@@ -388,15 +380,9 @@ class CaseCompatibilityCapability(Protocol):
     can run without driver-owned workflow metadata.
 
     Both questions are answered from filesystem evidence alone, before any
-    dictionary is parsed, so both are necessarily plugin-specific: cardiacFoam
-    recognises its own cases by ``constant/electroProperties*``, which means
-    nothing to any other solver.
-
-    Consulted only when core cannot answer from plugin-neutral evidence first
-    (an executable ``Allrun``). The fallback returns ``False`` for a
-    non-cardiac plugin. Before it was gated it returned the *cardiac* answer
-    whichever plugin was loaded, so a case carrying an ``electroProperties``
-    file was claimed by a plugin that had never heard of it.
+    dictionary is parsed, so the adapter owns the case markers and the
+    no-workflow run policy. Core first checks an adapter-declared entrypoint;
+    the fallback returns ``False``.
 
     :adapts: has_case_marker, is_case_runnable_without_workflow
     :consumed-by: omnidriver/core/runtime/registry.py
@@ -424,9 +410,8 @@ class SweepMaterializerCapability(Protocol):
 
     Uniquely among these capabilities, the fallback cannot be neutral. An
     empty routing would silently yield a case that is not the one the sweep
-    asked for, so a plugin without these hooks is refused by name instead.
-    Before it was gated, the cardiac materializer ran for any plugin --
-    writing an ``Allrun`` invoking the ``cardiacFoam`` binary.
+    asked for, so an adapter without these hooks is refused by name instead.
+    This prevents one adapter's materializer from running for another.
 
     :adapts: materialize_sweep_case, route_sweep_case_values
     :consumed-by: omnidriver/sweep_materialize.py, omnidriver/sweep_routing.py
@@ -473,21 +458,14 @@ class CaseIntrospectionCapability(Protocol):
     plugin with no solver semantics (the generic plugin) resolves nothing and
     exposes no fields.
 
-    ``selected_start_time`` answers which on-disk time directory a run
-    resumes from -- the one place core previously reached for the
-    ``openfoam.control_dict`` role directly (``provenance_inputs.py``,
-    Tier 3, ``future/ENVIRONMENT_CONTRACT.md`` §10). That role has exactly
-    one consumer, so rather than generalise the role lookup this hook lets a
-    plugin answer the question outright; the fallback preserves the
-    historical OpenFOAM ``startFrom``/``startTime``/``latestTime``/
-    ``firstTime`` behaviour exactly. ``driver_context`` is threaded through
-    for the same reason :class:`OverrideScopeCapability`'s ``apply`` takes
-    it: the adapter holds only ``self.plugin``, and the fallback needs
-    ``case_files``/``config_values`` to do the OpenFOAM-shaped lookup.
+    ``selected_start_time`` answers which on-disk state directory a run
+    resumes from. It is an environment interpretation, not a Core path rule:
+    an adapter that has no such convention returns ``None`` and Core does not
+    invent a directory to fingerprint.
 
     :adapts: get_samplable_fields, get_selected_start_time, resolve_case_models
     :consumed-by: omnidriver/core/runtime/provenance_inputs.py
-    :fallback: legacy_resolve_case_models, legacy_samplable_fields, legacy_selected_start_time
+    :fallback: legacy_resolve_case_models, legacy_samplable_fields
     :status: optional
     """
 
@@ -495,7 +473,7 @@ class CaseIntrospectionCapability(Protocol):
     def samplable_fields(self, resolved: dict[str, Any]) -> dict[str, tuple[str, ...]]: ...
     def selected_start_time(
         self, case_root: Path, resolved_case: dict[str, Any], *, driver_context: Any,
-    ) -> str: ...
+    ) -> str | None: ...
 
 
 class CaseFileContractCapability(Protocol):
@@ -506,45 +484,24 @@ class CaseFileContractCapability(Protocol):
     lists the rest. ``required_rules`` returns the same required rules with
     their ``role`` intact.
 
-    **Roles are namespaced and the prefix is load-bearing.** ``openfoam.*``
-    marks a file the OpenFOAM runtime itself requires (``openfoam.control_dict``,
-    ``openfoam.discretisation``, ...); ``plugin.*`` marks one the solver plugin
-    requires (``plugin.configuration``). Consumers split on that prefix -- a
-    rule written as ``control_dict`` rather than ``openfoam.control_dict`` will
-    be silently classified as plugin-owned. The profile loader does not yet
-    validate the namespace. ``get_profile()`` is a required v1 plugin member and
-    ``case_files`` is already part of ``PluginProfile``, so every plugin
-    already carries this data -- no compatibility fallback is needed.
+    **Roles are namespaced and the prefix is load-bearing.** Core owns only
+    its documented namespaces; every other namespace belongs to the adapter.
+    For example, the OpenFOAM adapter uses ``openfoam.*`` and the solver may
+    use ``plugin.*``. Consumers classify ownership from the namespace, not
+    from a hard-coded file path. ``get_profile()`` is a required v1 member, so
+    every adapter carries this data and no compatibility fallback is needed.
 
     ``describe_config_resolution`` is different: it is a human-readable
-    sentence, not derived from ``case_files`` data, so it *does* need a
-    compatibility fallback (``legacy_describe_config_resolution``) for v1
-    plugins and plugins that never authored one -- cardiac-shaped only for
-    the built-in cardiac plugin, plugin-neutral for everyone else.
+    sentence, not derived from ``case_files`` data, so it uses the
+    compatibility fallback only when an adapter has not authored one.
 
     ``all_rules`` returns every declared rule regardless of ``required``
-    status -- a role-lookup consumer (e.g. finding the file whose role is
-    ``openfoam.control_dict``) must search the full set, since a control
-    file can legitimately be declared ``conditional``, not just ``always``.
+    status, since a file can legitimately be conditional rather than always
+    required.
 
-    ``decomposition_dirname_prefix`` is different again: not a file at all,
-    but the dirname prefix a parallel run's per-rank output directories
-    share (OpenFOAM's ``decomposePar``/every solver running in parallel
-    names them ``processor0``, ``processor1``, ...). It can't be expressed
-    as a ``CaseFileRule`` -- a role names one static path, and this names a
-    wildcard family -- so it is a bare optional hook instead, following the
-    same shape as ``get_phases()``: no per-case arguments and no Core default.
-    Reached only
-    through ``plugin_profile.decomposition_dirname_prefix(driver_context)``,
-    never called on this capability directly -- the same indirection
-    ``entrypoint_relpaths()`` already uses for ``ENTRYPOINT_ROLE``, which is
-    why ``registry.py``/``sweep_runner.py``/``workflow_runner.py`` (its real
-    callers) aren't listed below. See future/ENVIRONMENT_CONTRACT.md §10,
-    Tier 3.
-
-    :adapts: get_profile, get_config_resolution_description, get_decomposition_dirname_prefix
+    :adapts: get_profile, get_config_resolution_description
     :consumed-by: omnidriver/core/runtime/strict_audit.py, omnidriver/core/tutorial_contracts.py, omnidriver/core/runtime/provenance_inputs.py
-    :fallback: legacy_describe_config_resolution, legacy_decomposition_dirname_prefix
+    :fallback: legacy_describe_config_resolution
     :status: mixed
     """
 
@@ -553,9 +510,6 @@ class CaseFileContractCapability(Protocol):
     def required_rules(self) -> tuple["CaseFileRule", ...]: ...
     def all_rules(self) -> tuple["CaseFileRule", ...]: ...
     def describe_config_resolution(self) -> str: ...
-    def decomposition_dirname_prefix(self) -> str | None: ...
-
-
 class CaseRuntimeConventionsCapability(Protocol):
     """Generated-path and output-root declarations for one environment.
 
@@ -573,24 +527,6 @@ class CaseRuntimeConventionsCapability(Protocol):
     """
 
     def conventions(self) -> CaseRuntimeConventions: ...
-
-
-class ConfigValueCapability(Protocol):
-    """Read a single key out of a plugin-format configuration file.
-
-    core resolves *which* file by role (``CaseFileContractCapability``);
-    this capability resolves the *value* inside it, so core never needs to
-    know the file's syntax. The OpenFOAM plugin implements this over
-    ``foamlib``; a FEniCS plugin would implement it over its own XML/JSON
-    reader.
-
-    :adapts: get_config_value_reader
-    :consumed-by: omnidriver/core/compatibility.py
-    :fallback: legacy_config_value_reader
-    :status: optional
-    """
-
-    def read(self, path: Path, key: str) -> str | None: ...
 
 
 class EnvironmentPreflightCapability(Protocol):
@@ -684,9 +620,8 @@ class CaseProvenanceCapability(Protocol):
     """Solver-declared case classification for the provenance snapshot.
 
     ``required_inputs`` returns already-*resolved* paths, not patterns --
-    field names are dictionary-configurable and field locations resolve by
-    a backward ``Time::findInstance`` search with a ``constant/`` fallback,
-    so a field's canonical path is not knowable from its name alone.
+    field names and locations are adapter-configurable, so a field's
+    canonical path is not knowable from its name alone.
     ``generated_output_globs`` may stay globs: generated diagnostic outputs
     have fixed names.
 
@@ -732,12 +667,9 @@ class ReportCatalogCapability(Protocol):
     solver-neutral machinery -- ``ReportDefinition``, the ``applicable_when``
     predicate evaluator, the JSON record shape -- but the *catalog itself*
     (which reports exist, e.g. "Vm field" or "activation map") is
-    solver-specific data. Not a mandatory ``SolverPlugin`` member, so
+    adapter-specific data. Not a mandatory ``SolverPlugin`` member, so
     existing v2 third-party plugins keep loading; the fallback
-    (``legacy_report_catalog``) is cardiac-shaped only for the built-in
-    cardiac plugin and empty for everyone else -- the honest answer for a
-    plugin that declares no reports, matching the pattern already used by
-    :class:`CaseProvenanceCapability`.
+    (``legacy_report_catalog``) is empty until an adapter declares reports.
 
     :adapts: get_report_catalog
     :consumed-by: scripts/export-report-catalog.py
@@ -757,9 +689,8 @@ class NamedCatalogsCapability(Protocol):
     key set, it only namespaces the whole mapping under
     ``describe_entry``'s ``plugin_catalogs`` key and serializes it. Not a
     mandatory ``SolverPlugin`` member, so existing v2 third-party plugins
-    keep loading; the fallback (``legacy_named_catalogs``) is cardiac-shaped
-    only for the built-in cardiac plugin and empty for everyone else,
-    matching the pattern already used by :class:`ReportCatalogCapability`.
+    keep loading; the fallback (``legacy_named_catalogs``) is empty until an
+    adapter declares its own catalogs.
 
     :adapts: get_named_catalogs
     :consumed-by: omnidriver/core/introspection.py
@@ -772,16 +703,13 @@ class NamedCatalogsCapability(Protocol):
 
 class OverrideScopeCapability(Protocol):
     """Plugin-declared ``$TOKEN.`` override scopes for the agent-facing
-    ``step --strict --apply`` path (:mod:`omnidriver.openfoam.apply_overrides`).
+    ``step --strict --apply`` path.
 
-    Generalizes what was previously a single hardcoded cardiac scope
-    (``$ELECTRO_MODEL_COEFFS`` -> ``constant/electroProperties``): core no
-    longer assumes there is exactly one scope, or that it lives at that one
-    path. Not a mandatory ``SolverPlugin`` member, so existing v2
-    third-party plugins keep loading; the fallback (``legacy_override_scopes``)
-    declares the cardiac plugin's one scope and an empty tuple for everyone
-    else, matching the pattern already used by
-    :class:`ReportCatalogCapability`/:class:`NamedCatalogsCapability`.
+    Generalizes adapter-defined scope tokens without assuming a particular
+    token count or path. Not a mandatory ``SolverPlugin`` member, so existing
+    v2 third-party plugins keep loading; the fallback
+    (``legacy_override_scopes``) returns no scopes until an adapter declares
+    them.
 
     :adapts: get_override_scopes, get_override_target_paths, apply_overrides, inspect_effective_configuration
     :consumed-by: omnidriver/openfoam/apply_overrides.py, omnidriver/core/runtime/provenance_inputs.py, omnidriver/core/runtime/step_candidate.py, omnidriver/core/strict_planning.py
@@ -789,7 +717,7 @@ class OverrideScopeCapability(Protocol):
     :status: optional
     """
 
-    def scopes(self) -> tuple["OverrideScope", ...]: ...
+    def scopes(self) -> tuple[Any, ...]: ...
 
     def target_paths(
         self, overrides: Any, *, case_root: Any, driver_context: Any,
@@ -809,7 +737,7 @@ class OverrideScopeCapability(Protocol):
 class DictRegenerationCapability(Protocol):
     """Plugin-declared bare "selector" overrides that must REGENERATE a
     dict file rather than key-patch it, for the agent-facing
-    ``step --strict --apply`` path (:mod:`omnidriver.openfoam.apply_overrides`).
+    ``step --strict --apply`` path.
 
     A sibling of :class:`OverrideScopeCapability`: that one covers
     ``$TOKEN.``-scoped leaves that patch in place; this one covers bare
@@ -827,7 +755,7 @@ class DictRegenerationCapability(Protocol):
     :status: optional
     """
 
-    def scopes(self) -> tuple["RegenerationScope", ...]: ...
+    def scopes(self) -> tuple[Any, ...]: ...
 
 
 @dataclass(frozen=True)
@@ -907,8 +835,7 @@ class _RunDocumentConfigurationAdapter:
         hook = getattr(self.plugin, "build_run_document_config", None)
         if callable(hook):
             return hook(request.spec)
-        # Existing plugins were interpreted through the cardiac-shaped v2
-        # adapter.  Preserve that fallback until Plan 2 changes the document.
+        # Older plugins receive the neutral compatibility configuration.
         from .compatibility import legacy_run_document_config
 
         return legacy_run_document_config(self.plugin, request.spec)
@@ -978,10 +905,9 @@ class _MeshDiagnosticPolicyAdapter:
     def extra_geometry_diagnostics(self, case_root: Path) -> tuple[Any, ...]:
         """Plugin-owned plan-time geometry checks core cannot express.
 
-        Core classifies the scale of every polyMesh region; a plugin may own
-        further point sets in the case that are not mesh regions (cardiacFoam's
-        ``constant/purkinjeGraph*`` conduction trees, for example). A plugin
-        that declares no such check contributes nothing -- there is no legacy
+        Core may provide generic geometry checks; an adapter may own further
+        domain-specific point sets that are not mesh regions. A plugin that
+        declares no such check contributes nothing -- there is no legacy
         fallback here, because "no extra checks" is the correct answer for a
         plugin that never had any.
         """
@@ -991,9 +917,11 @@ class _MeshDiagnosticPolicyAdapter:
         return ()
 
     def base_geometry_diagnostics(self, case_root: Path) -> tuple[Any, ...]:
-        """The polyMesh scale classification itself -- OpenFOAM-specific, so
-        core never calls the parser directly; every plugin routes it through
-        this hook or the OpenFOAM-shaped legacy fallback."""
+        """Return adapter-owned base-geometry diagnostics, if supported.
+
+        Core does not parse a solver's mesh format directly. An absent hook
+        yields the neutral compatibility result.
+        """
         hook = getattr(self.plugin, "get_base_mesh_geometry_diagnostics", None)
         if callable(hook):
             return tuple(hook(case_root))
@@ -1035,8 +963,9 @@ class _SweepMaterializerAdapter:
                 resolved_axis_values=request.resolved_axis_values,
                 driver_context=driver_context,
             )
-        # Compatibility bridge for existing third-party-style plugins.  Plan 1
-        # preserves the historical cardiac-shaped generic sweep fallback.
+        # Compatibility bridge for existing third-party-style plugins. A
+        # missing adapter route remains a refusal rather than another
+        # adapter's materializer.
         from .compatibility import legacy_route_sweep_case
 
         return legacy_route_sweep_case(
@@ -1133,7 +1062,7 @@ class _CaseIntrospectionAdapter:
 
     def selected_start_time(
         self, case_root: Path, resolved_case: dict[str, Any], *, driver_context: Any,
-    ) -> str:
+    ) -> str | None:
         hook = getattr(self.plugin, "get_selected_start_time", None)
         if callable(hook):
             result = hook(case_root, resolved_case)
@@ -1148,9 +1077,7 @@ class _CaseIntrospectionAdapter:
                     f"a non-empty string, got {result!r}"
                 )
             return result
-        from .compatibility import legacy_selected_start_time
-
-        return legacy_selected_start_time(case_root, resolved_case, driver_context=driver_context)
+        return None
 
 
 @dataclass(frozen=True)
@@ -1182,21 +1109,6 @@ class _CaseFileContractAdapter:
 
         return legacy_describe_config_resolution(self.plugin)
 
-    def decomposition_dirname_prefix(self) -> str | None:
-        hook = getattr(self.plugin, "get_decomposition_dirname_prefix", None)
-        if callable(hook):
-            result = hook()
-            if result is not None and (not isinstance(result, str) or not result):
-                raise TypeError(
-                    f"{self.plugin.plugin_id}.get_decomposition_dirname_prefix() must "
-                    f"return a non-empty string or None, got {result!r}"
-                )
-            return result
-        from .compatibility import legacy_decomposition_dirname_prefix
-
-        return legacy_decomposition_dirname_prefix()
-
-
 @dataclass(frozen=True)
 class _CaseRuntimeConventionsAdapter:
     plugin: "SolverPlugin"
@@ -1214,20 +1126,6 @@ class _CaseRuntimeConventionsAdapter:
         from .compatibility import legacy_case_runtime_conventions
 
         return legacy_case_runtime_conventions()
-
-
-@dataclass(frozen=True)
-class _ConfigValueAdapter:
-    plugin: "SolverPlugin"
-
-    def read(self, path: Path, key: str) -> str | None:
-        hook = getattr(self.plugin, "get_config_value_reader", None)
-        if callable(hook):
-            reader = hook()
-            return reader(path, key)
-        from .compatibility import legacy_config_value_reader
-
-        return legacy_config_value_reader(path, key)
 
 
 @dataclass(frozen=True)
@@ -1391,18 +1289,11 @@ class _OverrideScopeAdapter:
         self, overrides: Any, *, case_root: Any, driver_context: Any,
         execution_env: Any | None = None,
     ) -> tuple[dict[str, Any], ...]:
-        """``driver_context`` is threaded through because the fallback needs it.
+        """Apply adapter-owned overrides, or leave them unsupported.
 
-        ``legacy_apply_overrides`` delegates to the OpenFOAM mutators, and
-        those now require an explicit context (Phase 2 Task 6, so that
-        ``omnidriver-openfoam`` stops silently resolving the cardiac default).
-        The adapter holds only ``self.plugin``, so without this parameter the
-        fallback had no context to pass and raised ``TypeError`` on the
-        ``step --strict --apply`` path -- invisible here because every test
-        covering it is ``skip_without_monorepo``.
-
-        Same shape as :meth:`SweepMaterializerCapability.route` and the
-        environment-preflight methods, which already take the context this way.
+        The context is passed so an adapter can resolve its own transaction
+        and provenance requirements. Core does not delegate to a solver-
+        specific mutator when the hook is absent.
         """
         hook = getattr(self.plugin, "apply_overrides", None)
         if callable(hook):
@@ -1501,10 +1392,8 @@ class PluginCapabilities:
     **What a missing optional hook means.** The named fallback runs. No
     fallback branches on plugin identity any more -- Phase 2 Task 7 deleted the
     twenty ``plugin_id == "org.cardiacfoam"`` branches -- so a given fallback
-    returns the same answer for every plugin. Several of those answers are
-    still OpenFOAM-shaped defaults that delegate to ``omnidriver.openfoam``
-    (see ``future/ENVIRONMENT_CONTRACT.md`` §4); a plugin displaces one by
-    implementing the hook. Two fallbacks cannot be neutral at all: a plugin
+    returns the same answer for every plugin. Two fallbacks cannot be neutral:
+    a plugin
     without the sweep hooks is refused by name rather than swept by another
     plugin's writer.
     """
@@ -1524,7 +1413,6 @@ class PluginCapabilities:
     case_introspection: CaseIntrospectionCapability
     case_files: CaseFileContractCapability
     case_runtime_conventions: CaseRuntimeConventionsCapability
-    config_values: ConfigValueCapability
     environment_preflight: EnvironmentPreflightCapability
     dict_diagnostics: DictDiagnosticsCapability
     override_schema: OverrideSchemaCapability
@@ -1562,7 +1450,6 @@ def adapt_plugin_capabilities(plugin: "SolverPlugin") -> PluginCapabilities:
         case_introspection=_CaseIntrospectionAdapter(plugin),
         case_files=_CaseFileContractAdapter(plugin),
         case_runtime_conventions=_CaseRuntimeConventionsAdapter(plugin),
-        config_values=_ConfigValueAdapter(plugin),
         environment_preflight=_EnvironmentPreflightAdapter(plugin),
         dict_diagnostics=_DictDiagnosticsAdapter(plugin),
         override_schema=_OverrideSchemaAdapter(plugin),

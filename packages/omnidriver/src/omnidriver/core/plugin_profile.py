@@ -11,7 +11,7 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import yaml
 
@@ -62,29 +62,9 @@ def _mapping_error(path: Path, message: str) -> ValueError:
     return ValueError(f"Invalid plugin profile {path}: {message}")
 
 
-#: Case-file roles core recognises. The prefix is load-bearing: ``openfoam.*``
-#: marks a file the OpenFOAM runtime itself requires, ``plugin.*`` one the
-#: solver plugin requires, ``case.*`` one that belongs to the case as a
-#: document rather than to either. Consumers split on that prefix
-#: (tutorial_contracts.py) and look up specific roles by exact string
-#: (provenance_inputs.py, registry.py), so an unvalidated typo silently
-#: reclassifies a file instead of failing. See future/ENVIRONMENT_CONTRACT.md.
-#:
-#: This set is closed and stays closed -- it is NOT the vocabulary a
-#: non-OpenFOAM plugin uses. That plugin declares roles via the
-#: ``ESCAPE_ROLE_PREFIX`` tier below instead of adding to this frozenset.
-#:
-#: Adding a role here is a contract change: document it in
-#: the active environment adapter's profile reference in the same edit.
+#: Roles whose meaning belongs to Core. Environment role names are adapter
+#: data: Core validates their shape and ownership, never their vocabulary.
 KNOWN_ROLES: frozenset[str] = frozenset({
-    "openfoam.control_dict",
-    "openfoam.discretisation",
-    "openfoam.solver_settings",
-    "openfoam.decomposition",
-    "openfoam.mesh_generation",
-    "openfoam.case_directory",
-    "openfoam.entrypoint",
-    "openfoam.cleanup",
     "plugin.configuration",
     "case.documentation",
     "case.regression_test",
@@ -95,105 +75,56 @@ KNOWN_ROLES: frozenset[str] = frozenset({
 #: them is never eligible for the escape tier below, even if the exact
 #: string is not in ``KNOWN_ROLES`` -- that is precisely the typo case the
 #: escape tier must NOT swallow.
-_RESERVED_ROLE_NAMESPACES: frozenset[str] = frozenset({"openfoam", "plugin", "case"})
+_RESERVED_ROLE_NAMESPACES: frozenset[str] = frozenset({"plugin", "case"})
 
-#: Escape marker for a case-file role naming an environment core has no
-#: vocabulary for at all (FEniCS, deal.II, SU2, ...). A role of the exact
-#: shape ``x-<namespace>.<leaf>`` bypasses the closed ``KNOWN_ROLES`` enum;
-#: neither ``<namespace>`` nor ``<leaf>`` is checked against a vocabulary,
-#: because core does not and should not own one for a foreign environment.
-#:
-#: What this does NOT do: it does not touch the three reserved namespaces.
-#: ``openfoam.controldict``, ``openfoam.control_dickt``, or bare
-#: ``control_dict`` still raise -- none of them carry the ``x-`` marker, so
-#: they are checked against ``KNOWN_ROLES`` exactly as before and fail. The
-#: marker is deliberately a prefix a typo of a reserved namespace cannot
-#: land on by accident (``openfoam.*`` -> ``x-openfoam.*`` is not a
-#: plausible fat-finger slip), which is the property a bare "unknown
-#: namespace passes" rule would not have had: it would have silently
-#: accepted ``opnefoam.control_dict`` as if it were a new environment's
-#: namespace. See future/ENVIRONMENT_CONTRACT.md §11.
+#: Compatibility marker for existing foreign-environment profiles. New
+#: adapters may declare their own namespace directly (``fenics.mesh_file``);
+#: their adapter validates its vocabulary.
 ESCAPE_ROLE_PREFIX = "x-"
 
 
-def _is_valid_escape_role(role: str) -> bool:
-    """True if ``role`` has the escape shape ``x-<namespace>.<leaf>``.
-
-    Both segments must be non-empty, and ``<namespace>`` must not be one of
-    the three reserved words -- otherwise a role could dodge the closed-enum
-    check by spelling e.g. ``x-openfoam.control_dict``, which would look
-    like a genuine core-owned role to any consumer splitting on
-    ``role.startswith("openfoam.")`` while never having been validated
-    against ``KNOWN_ROLES``.
-    """
-    if not role.startswith(ESCAPE_ROLE_PREFIX):
+def _is_valid_environment_role(role: str) -> bool:
+    """True for an adapter-owned ``namespace.leaf`` role name."""
+    namespace, separator, leaf = role.partition(".")
+    if not separator or not namespace or not leaf:
         return False
-    rest = role[len(ESCAPE_ROLE_PREFIX):]
-    namespace, sep, leaf = rest.partition(".")
-    if not sep or not namespace or not leaf:
+    effective_namespace = namespace[len(ESCAPE_ROLE_PREFIX):] if namespace.startswith(ESCAPE_ROLE_PREFIX) else namespace
+    if not effective_namespace or effective_namespace in _RESERVED_ROLE_NAMESPACES:
         return False
-    return namespace not in _RESERVED_ROLE_NAMESPACES
+    return all(part.replace("_", "").replace("-", "").isalnum() for part in (namespace, leaf))
 
-
-#: The role naming a case's executable entrypoint. Named here rather than
-#: spelled as a literal at each use: before this, three sites independently
-#: hardcoded ``"Allrun"`` while a fourth resolved it properly from the role.
-ENTRYPOINT_ROLE = "openfoam.entrypoint"
 
 #: Namespaces whose files belong to the plugin or the case rather than to the
-#: simulation environment. Everything else -- ``openfoam.*`` and any ``x-``
-#: escape for a foreign environment -- is environment-owned.
+#: simulation environment. Every other validated namespace is adapter-owned.
 _NON_ENVIRONMENT_NAMESPACES: frozenset[str] = frozenset({"plugin", "case"})
 
 
 def is_environment_role(role: str) -> bool:
     """True when ``role`` names a file the simulation environment owns.
 
-    Callers used to ask this as ``role.startswith("openfoam.")``, which was
-    right while ``openfoam`` was the only environment namespace and became
-    wrong the moment the escape tier admitted others: a FEniCS plugin's
-    ``x-fenics.mesh_file`` is as environment-owned as ``openfoam.control_dict``
-    is, and a prefix test files it under core's own inputs instead.
-
-    Asking it the other way round -- is this namespace one of the two that are
-    NOT an environment -- stays correct as environments are added, because
-    ``plugin`` and ``case`` are core's own vocabulary and closed.
+    Core owns only the ``plugin`` and ``case`` namespaces. An adapter owns
+    every other validated namespace, including a legacy ``x-`` namespace.
     """
     namespace, separator, _ = role.partition(".")
     if not separator:
         return False
-    if namespace.startswith(ESCAPE_ROLE_PREFIX):
-        return True
     return namespace not in _NON_ENVIRONMENT_NAMESPACES
 
 
-def _entrypoint_relpaths_from_rules(rules: Iterable[CaseFileRule]) -> tuple[str, ...]:
-    return tuple(rule.path for rule in rules if rule.role == ENTRYPOINT_ROLE)
-
-
 def entrypoint_relpaths(driver_context: Any | None) -> tuple[str, ...]:
-    """Case-relative paths the active plugin declares as its entrypoint.
+    """Case-relative executable paths declared by the active environment.
 
-    Searches every declared rule, not just ``required_rules()``: an entrypoint
-    is legitimately ``conditional`` (both shipped profiles declare it so), and
-    ``required_rules()`` filters to ``required == "always"``.
+    An entrypoint is an execution convention, rather than a file-role that
+    Core interprets.  The adapter therefore supplies it through
+    :class:`CaseRuntimeConventions`; Core only uses the declared path for case
+    discovery, generated workflows, and case-local command authorization.
     """
     if driver_context is None:
         return ()
-    return _entrypoint_relpaths_from_rules(driver_context.capabilities.case_files.all_rules())
-
-
-def entrypoint_relpaths_from_profile(profile: PluginProfile) -> tuple[str, ...]:
-    """Same rule as :func:`entrypoint_relpaths`, but reading a
-    :class:`PluginProfile` directly rather than through a ``DriverContext``.
-
-    For a plugin's own ``get_capabilities()``, which runs before any
-    ``DriverContext`` necessarily wraps it -- a ``DriverContext`` is
-    constructed *from* a validated plugin, not the reverse -- but which
-    already has its own profile via ``self.get_profile()``. See
-    future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md §5.
-    """
-    return _entrypoint_relpaths_from_rules(profile.case_files)
+    return tuple(
+        driver_context.capabilities.case_runtime_conventions.conventions()
+        .case_entrypoints
+    )
 
 
 def entrypoint_command(driver_context: Any | None) -> str:
@@ -210,15 +141,13 @@ def entrypoint_command(driver_context: Any | None) -> str:
 
 
 def decomposition_dirname_prefix(driver_context: Any | None) -> str | None:
-    """Dirname prefix a parallel run's per-rank output directories share
-    (``processor0``, ``processor1``, ... for OpenFOAM). Not a ``CaseFileRule``
-    role -- a role names one static path, and this names a wildcard family --
-    so it is a bare optional hook via ``CaseFileContractCapability``. Without
-    an active declaration Core makes no assumption about parallel output.
-    """
+    """Parallel-output prefix declared by the active environment."""
     if driver_context is None:
         return None
-    return driver_context.capabilities.case_files.decomposition_dirname_prefix()
+    return (
+        driver_context.capabilities.case_runtime_conventions.conventions()
+        .decomposition_directory_prefix
+    )
 
 
 def load_plugin_profile(path: str | Path) -> PluginProfile:
@@ -270,15 +199,12 @@ def load_plugin_profile(path: str | Path) -> PluginProfile:
                 profile_path,
                 "required currently supports only 'always', 'never', or 'conditional'",
             )
-        if values["role"] not in KNOWN_ROLES and not _is_valid_escape_role(values["role"]):
+        if values["role"] not in KNOWN_ROLES and not _is_valid_environment_role(values["role"]):
             raise _mapping_error(
                 profile_path,
-                f"unknown case-file role {values['role']!r}; known roles are "
+                f"invalid case-file role {values['role']!r}; Core roles are "
                 + ", ".join(sorted(KNOWN_ROLES))
-                + f", or an escape role of the form {ESCAPE_ROLE_PREFIX}<namespace>.<leaf> "
-                + "for an environment core has no vocabulary for, e.g. "
-                + f"{ESCAPE_ROLE_PREFIX}fenics.mesh_file "
-                + "(see future/ENVIRONMENT_CONTRACT.md)",
+                + "; an environment role must have the form namespace.leaf",
             )
         rules.append(CaseFileRule(**values))
 

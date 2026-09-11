@@ -9,8 +9,10 @@ import pytest
 
 from omnidriver.openfoam.environment import openfoam_environment_context
 from omnidriver.core.runtime.models import DataArtifact
+from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime.workflow_runner import run_workflow_step
 from omnidriver.core.runtime.workflow_state import initial_workflow_state
+from plugins.minimal_plugin import MinimalOpenFOAMPlugin
 
 
 def _dag(command: str, args: list[str], *, produces: list[str] | None = None) -> dict:
@@ -286,7 +288,7 @@ def test_case_script_step_preserves_dyld_vars_through_shell_hop() -> None:
     # On macOS, /bin/sh is SIP-protected: the OS silently strips inherited
     # DYLD_* env vars before a shebang-interpreted script's own body runs,
     # even though `env=` correctly carried them into the subprocess call.
-    # A case-local Allrun-family script is exactly such a shebang script, so
+    # A case-local script is exactly such a shebang script, so
     # invoking it directly with env=execution_env used to lose
     # DYLD_LIBRARY_PATH silently, crashing cardiacFoam with "Library not
     # loaded" deep inside the script. This test proves the value the real
@@ -295,22 +297,27 @@ def test_case_script_step_preserves_dyld_vars_through_shell_hop() -> None:
     # only be observed by actually running on macOS (verified manually).
     with tempfile.TemporaryDirectory() as temp_dir:
         root = Path(temp_dir)
-        allrun = root / "Allrun"
-        allrun.write_text("#!/bin/sh\necho \"$DYLD_LIBRARY_PATH\"\n")
-        allrun.chmod(0o755)
+        script = root / "run-case"
+        script.write_text("#!/bin/sh\necho \"$DYLD_LIBRARY_PATH\"\n")
+        script.chmod(0o755)
 
-        dag = _dag("Allrun", [])
+        dag = _dag("run-case", [])
         state = initial_workflow_state(dag)
         assert state is not None
+        context = driver_context(
+            MinimalOpenFOAMPlugin(entrypoint="run-case"),
+            source="test:workflow-runner",
+        )
 
         marker = "/marker/path/for/regression/test"
         result = run_workflow_step(
             dag,
             state,
             "run",
-            case_root=root,
+            case_root=root.resolve(),
             log_dir=root / "logs",
             env={"PATH": __import__("os").environ.get("PATH", ""), "DYLD_LIBRARY_PATH": marker},
+            driver_context=context,
         )
 
         assert result.state.to_json()["steps"][0]["exit_code"] == 0
@@ -328,7 +335,11 @@ def test_case_script_invocation_embeds_dyld_vars_literally_in_argv() -> None:
     from omnidriver.core.runtime.workflow_runner import _argv_for_execution
 
     argv = _argv_for_execution(
-        "Allrun", "/case/Allrun", (),
+        "run-case", "/case/run-case", (),
         {"PATH": __import__("os").environ.get("PATH", ""), "DYLD_LIBRARY_PATH": "/marker/xyz"},
+        driver_context(
+            MinimalOpenFOAMPlugin(entrypoint="run-case"),
+            source="test:workflow-runner",
+        ),
     )
     assert any("/marker/xyz" in str(part) for part in argv), argv

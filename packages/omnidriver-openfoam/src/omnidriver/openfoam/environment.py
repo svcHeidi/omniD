@@ -8,10 +8,10 @@ from pathlib import Path
 from omnidriver.core.capability_manifest import build_capability_manifest
 from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 from omnidriver.core.plugin_interface import driver_context as make_driver_context
-from omnidriver.core.plugin_profile import entrypoint_relpaths_from_profile, load_plugin_profile
 
 from .case_runtime_conventions import openfoam_case_runtime_conventions
 from .command_authorization import is_installed_openfoam_application, openfoam_runtime_commands
+from .profile import load_openfoam_profile
 
 
 class OpenFOAMEnvironmentPlugin:
@@ -36,7 +36,7 @@ class OpenFOAMEnvironmentPlugin:
     @staticmethod
     @lru_cache(maxsize=1)
     def get_profile():
-        return load_plugin_profile(Path(__file__).with_name("openfoam-environment.yaml"))
+        return load_openfoam_profile(Path(__file__).with_name("openfoam-environment.yaml"))
 
     def get_dict_entries(self):
         return ()
@@ -56,7 +56,7 @@ class OpenFOAMEnvironmentPlugin:
             case_script_commands=frozenset(
                 self.get_case_runtime_conventions().case_script_commands
             )
-            | frozenset(entrypoint_relpaths_from_profile(self.get_profile())),
+            | frozenset(self.get_case_runtime_conventions().case_entrypoints),
         )
 
     def get_tutorial_catalog(self):
@@ -116,6 +116,22 @@ class OpenFOAMEnvironmentPlugin:
         from .mutators import read_foam_entry
 
         return read_foam_entry
+
+    def get_selected_start_time(self, case_root, resolved_case) -> str:
+        del resolved_case
+        from .mutators import read_foam_entry
+        from .time_selection import selected_start_time
+
+        control_dict = next(
+            rule.path
+            for rule in self.get_profile().case_files
+            if rule.role == "openfoam.control_dict"
+        )
+        return selected_start_time(
+            case_root,
+            control_dict_relpath=control_dict,
+            read_value=read_foam_entry,
+        )
 
     def get_function_object_field_diagnostics(self, case_root, *, samplable):
         from .function_object_fields import function_object_field_diagnostics
@@ -219,11 +235,6 @@ class OpenFOAMEnvironmentPlugin:
 
     def get_case_runtime_conventions(self):
         return openfoam_case_runtime_conventions()
-
-    def get_decomposition_dirname_prefix(self) -> str:
-        prefix = self.get_case_runtime_conventions().decomposition_directory_prefix
-        assert prefix is not None
-        return prefix
 
     def build_run_document_config(self, spec):
         del spec

@@ -12,57 +12,27 @@ from omnidriver.core.runtime.run_model import RunDocument
 from plugins.minimal_plugin import MinimalOpenFOAMPlugin
 
 
-def test_generic_plugin_executes_plain_allrun_case(tmp_path: Path) -> None:
-    # ``--plugin none`` resolves to the built-in OpenFOAMEnvironmentPlugin, whose
-    # legacy_environment_diagnostics fallback reaches omnidriver.openfoam
-    # unconditionally (an ungated core default, not cardiac-specific -- see
-    # ENVIRONMENT_CONTRACT.md sec.4). Swapped to a trusted-import plugin that
-    # answers the environment hooks itself so this exercises the CLI
-    # execution path without needing omnidriver.openfoam installed.
-    case_root = tmp_path / "plainOpenFoamCase"
-    case_root.mkdir()
-    allrun = case_root / "Allrun"
-    allrun.write_text("#!/bin/sh\nprintf complete > generic-proof.txt\n")
-    allrun.chmod(allrun.stat().st_mode | stat.S_IXUSR)
-
-    exit_code = main([
-        "run",
-        "--strict",
-        "--plugin",
-        "plugins.neutral_environment_plugin:_OpenFOAMEnvironmentPluginWithNeutralEnvironment",
-        "--entry", "plainOpenFoamCase",
-        "--cases-root", str(tmp_path),
-    ])
-
-    assert exit_code == 0
-    assert (case_root / "generic-proof.txt").read_text() == "complete"
-    assert (case_root / "postProcessing" / "workflow_state.json").is_file()
-
-
-def test_trusted_minimal_plugin_executes_plain_allrun_case(
+def test_trusted_neutral_plugin_executes_its_declared_case_script(
     tmp_path: Path,
     capsys,
 ) -> None:
-    # MinimalOpenFOAMPlugin's environment-diagnostics fallback also reaches
-    # omnidriver.openfoam unconditionally; swapped to NeutralEnvironmentPlugin,
-    # which answers get_environment_diagnostics() -> () itself.
-    case_root = tmp_path / "plainOpenFoamCase"
+    case_root = tmp_path / "plainCase"
     case_root.mkdir()
-    allrun = case_root / "Allrun"
-    allrun.write_text("#!/bin/sh\nprintf minimal > minimal-proof.txt\n")
-    allrun.chmod(allrun.stat().st_mode | stat.S_IXUSR)
+    script = case_root / "run-case"
+    script.write_text("#!/bin/sh\nprintf neutral > neutral-proof.txt\n")
+    script.chmod(script.stat().st_mode | stat.S_IXUSR)
 
     exit_code = main([
         "run",
         "--strict",
         "--plugin",
         "plugins.neutral_environment_plugin:NeutralEnvironmentPlugin",
-        "--entry", "plainOpenFoamCase",
+        "--entry", "plainCase",
         "--cases-root", str(tmp_path),
     ])
 
     assert exit_code == 0
-    assert (case_root / "minimal-proof.txt").read_text() == "minimal"
+    assert (case_root / "neutral-proof.txt").read_text() == "neutral"
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "ok"
 

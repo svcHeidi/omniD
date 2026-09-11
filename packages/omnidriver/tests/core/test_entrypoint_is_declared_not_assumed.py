@@ -178,6 +178,7 @@ def test_an_escape_role_is_reported_as_the_environment_s_file(tmp_path) -> None:
         cases_root=tmp_path,
         case_dir_name="myCase",
         solver_command="foreign-runner",
+        driver_context=context,
     )
     contract = describe_tutorial_contract(
         spec, resolution="test", driver_context=context,

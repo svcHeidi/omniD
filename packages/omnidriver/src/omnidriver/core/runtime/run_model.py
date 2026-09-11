@@ -1,4 +1,4 @@
-"""Python model for the cardiacFoam Run document.
+"""Python model for the adapter-neutral Run document.
 
 Its shape is defined in ``schemas/run-document.json`` (the single source
 of truth); this module provides a Python dataclass for code that wants

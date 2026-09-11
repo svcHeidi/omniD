@@ -1,10 +1,9 @@
-"""A plugin that answers the environment hooks itself, with no OpenFOAM.
+"""Neutral adapter fixture used to prove Core works without sibling adapters.
 
-core's compatibility fallbacks for these hooks import omnidriver.openfoam
-unconditionally -- a documented default (future/ENVIRONMENT_CONTRACT.md §4),
-not a defect. But it means a core test that omits them is not testing core, it
-is testing core-plus-OpenFOAM. This double is what lets core's own suite prove
-core runs without a sibling package installed.
+It supplies explicit environment, diagnostics, and case-file declarations so
+tests exercise Core contracts without relying on installed adapter packages.
+The fixture deliberately uses a few OpenFOAM-shaped declarations where a test
+needs to characterize an adapter contract; its runtime convention is neutral.
 
 ``_EnvironmentNeutralHooks`` is split out as a mixin, separate from
 ``NeutralEnvironmentPlugin`` itself, because two different kinds of core test
@@ -37,18 +36,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
+from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile
 from plugins.minimal_plugin import MinimalOpenFOAMPlugin
 
 
 class _EnvironmentNeutralHooks:
-    """Mixin implementing every hook whose fallback reaches
-    ``omnidriver.openfoam`` when a plugin exercises the full ``strict_plan``/
-    ``describe_entry`` pipeline: config-value reads, environment preflight,
-    function-object field warnings, and case dict-key drift warnings. Each
-    answer is a genuine "nothing to report" for a plugin with no OpenFOAM
-    vocabulary of its own, not a stub standing in for unwritten behaviour."""
+    """Explicit neutral answers for optional environment and diagnostics hooks.
+
+    The fixture keeps these answers local so Core tests do not depend on an
+    installed solver adapter or on compatibility behavior from another
+    package.
+    """
 
     def get_capabilities(self):
         """A real, if empty, accept-surface -- built through the same
@@ -90,53 +89,32 @@ class _EnvironmentNeutralHooks:
         return ()
 
     def get_loaded_environment(self, *, explicit_bashrc=None, driver_context=None) -> dict:
-        """No OpenFOAM bashrc to source: the current process environment is
-        already everything this plugin's steps need to run. Same ungated-
-        fallback reasoning as the hook above -- ``legacy_load_environment``
-        also imports ``omnidriver.openfoam`` unconditionally when a plugin
-        omits this, which is what lets ``cli.py``'s ``run --strict`` execute
-        a plain ``Allrun`` end to end without ``omnidriver.openfoam``
-        installed."""
+        """Use the current process environment; this fixture has no shell profile."""
         del explicit_bashrc, driver_context
         import os
 
         return dict(os.environ)
 
     def get_configured_environment(self, env, driver_context) -> dict:
-        """No environment contract to apply: this plugin's steps run with
-        whatever environment mapping they are handed, unchanged. Same
-        ungated-fallback reasoning as the hooks above --
-        ``legacy_configured_environment`` also imports
-        ``omnidriver.openfoam`` unconditionally when a plugin omits this,
-        which is what lets ``sweep_runner.py``'s ``sweep_run`` (it calls
-        ``environment_preflight.configure`` before anything else) execute
-        without ``omnidriver.openfoam`` installed."""
+        """Preserve the supplied environment mapping unchanged."""
         del driver_context
         return dict(env)
 
     def get_function_object_field_diagnostics(self, case_root, *, samplable) -> tuple:
-        """No function-object/samplable-field vocabulary of its own, so no
-        warnings to raise. Same ungated-fallback reasoning as the hook
-        above -- ``legacy_function_object_field_diagnostics`` also imports
-        ``omnidriver.openfoam`` unconditionally when a plugin omits this."""
+        """This fixture declares no function-object field vocabulary."""
         del case_root, samplable
         return ()
 
     def get_case_dict_key_diagnostics(
         self, case_root, *, catalogued_paths, dict_relpaths,
     ) -> tuple:
-        """No dict catalogue of its own, so no key drift to detect. Same
-        ungated-fallback reasoning: ``legacy_case_dict_key_diagnostics`` also
-        imports ``omnidriver.openfoam`` unconditionally when absent."""
+        """This fixture declares no dictionary catalogue, so no drift is reported."""
         del case_root, catalogued_paths, dict_relpaths
         return ()
 
 
 class NeutralEnvironmentPlugin(_EnvironmentNeutralHooks, MinimalOpenFOAMPlugin):
-    """``MinimalOpenFOAMPlugin`` plus every hook whose fallback reaches
-    ``omnidriver.openfoam``, and the case-file rules a bare OpenFOAM-shaped
-    case needs those hooks to actually be exercised against (see module
-    docstring)."""
+    """Neutral fixture plus explicit case-file declarations for Core tests."""
 
     @property
     def plugin_id(self) -> str:
@@ -189,22 +167,10 @@ class NeutralEnvironmentPlugin(_EnvironmentNeutralHooks, MinimalOpenFOAMPlugin):
             },
         )
 
-
-class _OpenFOAMEnvironmentPluginWithNeutralEnvironment(_EnvironmentNeutralHooks, OpenFOAMEnvironmentPlugin):
-    """``OpenFOAMEnvironmentPlugin`` -- same identity, same declared case files,
-    same capability manifest -- plus the neutral answers to the hooks whose
-    core.compatibility fallback imports omnidriver.openfoam unconditionally.
-
-    Needed here specifically (rather than swapping in
-    ``NeutralEnvironmentPlugin``) whenever a test pins the built-in generic
-    plugin's own identity (``report.plugin["id"] ==
-    "org.omnidriver.openfoam.environment"``) or needs it reachable by trusted
-    ``module:Class`` import (e.g. ``--plugin
-    plugins.neutral_environment_plugin:_OpenFOAMEnvironmentPluginWithNeutralEnvironment``)
-    -- "some plugin" is not enough, so the double must keep that identity
-    intact.
-
-    Lifted out of ``tests/core/test_core_generic_case.py`` (Phase 2,
-    Milestone 3) so both that file and
-    ``tests/core/test_generic_plugin_execution.py`` can import one
-    definition instead of duplicating it within core's own test tree."""
+    def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
+        """A deliberately non-OpenFOAM execution contract for Core tests."""
+        return CaseRuntimeConventions(
+            output_collection_relpath="outputs",
+            case_entrypoints=("run-case",),
+            case_script_commands=("run-case",),
+        )

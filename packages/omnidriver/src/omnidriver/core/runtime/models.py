@@ -55,15 +55,14 @@ class DataArtifact:
 
     produced_by: str = ""
     """Solver or utility name that writes this artifact. Empty means
-    engine-implicit (e.g., OpenFOAM time directories produced by cardiacFoam)."""
+    engine-implicit output whose producer is defined by the adapter."""
 
     optional: bool = False
-    """True when the artifact appears only under specific configurations
-    (e.g., a probe CSV that requires probes to be enabled in ``controlDict``)."""
+    """True when the artifact appears only under specific configurations."""
 
     time_indexed: bool = False
-    """True for OpenFOAM time-directory style outputs that produce one file
-    per write interval. ``path_pattern`` will typically contain ``{time}``."""
+    """True for time-indexed outputs that produce one file per write interval.
+    ``path_pattern`` will typically contain ``{time}``."""
 
     def __post_init__(self) -> None:
         # Catch typos like {caseId} or {run_id} at construction so they never

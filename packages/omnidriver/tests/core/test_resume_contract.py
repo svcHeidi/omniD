@@ -17,6 +17,7 @@ from omnidriver.core.runtime.attempt_lease import acquire_attempt_lease, acquire
 from omnidriver.core.runtime.resume import validate_resume
 from omnidriver.core.runtime.workflow_runner import run_workflow_step
 from omnidriver.core.runtime.workflow_state import initial_workflow_state, workflow_state_from_json
+from omnidriver.openfoam.environment import openfoam_environment_context
 from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
 
 
@@ -44,6 +45,7 @@ def test_unchanged_checkpoint_roundtrips_and_resumes(tmp_path):
 
 def test_unchanged_optional_include_absence_resumes_but_appearance_refuses(tmp_path):
     dag, context, output, _state = _completed(tmp_path)
+    context = openfoam_environment_context()
     optional = tmp_path / "runtime" / "optional.cfg"
     control_dict = tmp_path / "system" / "controlDict"
     control_dict.write_text(f'#includeIfPresent "{optional}"\nstartTime 0;\n')
@@ -182,23 +184,23 @@ def test_run_document_embedded_completed_state_refuses_changed_inputs(tmp_path) 
     (case_root / "constant").mkdir()
     control_dict = case_root / "system" / "controlDict"
     control_dict.write_text("value 1;\n")
-    allrun = case_root / "Allrun"
-    allrun.write_text("#!/bin/sh\nexit 0\n")
-    os.chmod(allrun, 0o755)
+    script = case_root / "run-case"
+    script.write_text("#!/bin/sh\nexit 0\n")
+    os.chmod(script, 0o755)
 
     workflow_dag = {
         "schema_version": "1",
         "step_status_values": ["pending", "running", "completed", "failed", "skipped"],
         "steps": [{
             "id": "run",
-            "command": "Allrun",
+                "command": "run-case",
             "args": [],
             "cwd": ".",
             "depends_on": [],
             "produces": [],
             "consumes": [],
             "retry_policy": {"max_attempts": 1},
-            "command_display": "Allrun",
+                "command_display": "run-case",
         }],
     }
     state = initial_workflow_state(workflow_dag)

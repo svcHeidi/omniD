@@ -42,7 +42,6 @@ from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 from omnidriver.cardiacfoam.active_tension_catalog import ACTIVE_TENSION_MODEL_CATALOG
 from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG
 from omnidriver.core.capability_manifest import build_capability_manifest
-from omnidriver.core.plugin_profile import entrypoint_relpaths_from_profile
 from omnidriver.cardiacfoam.solver_coupling import SOLVER_COMPATIBILITY_RULES
 from omnidriver.core.runtime.registry import list_tutorials
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
@@ -79,14 +78,29 @@ class CardiacFoamPlugin:
     @staticmethod
     @lru_cache(maxsize=1)
     def get_profile():
-        from omnidriver.core.plugin_profile import load_plugin_profile
+        from omnidriver.openfoam.profile import load_openfoam_profile
 
-        return load_plugin_profile(Path(__file__).parent / "plugin.yaml")
+        return load_openfoam_profile(Path(__file__).parent / "plugin.yaml")
 
     def get_config_value_reader(self):
         from omnidriver.openfoam.config_values import openfoam_config_value_reader
 
         return openfoam_config_value_reader()
+
+    def get_selected_start_time(self, case_root, resolved_case) -> str:
+        del resolved_case
+        from omnidriver.openfoam.time_selection import selected_start_time
+
+        control_dict = next(
+            rule.path
+            for rule in self.get_profile().case_files
+            if rule.role == "openfoam.control_dict"
+        )
+        return selected_start_time(
+            case_root,
+            control_dict_relpath=control_dict,
+            read_value=self.get_config_value_reader(),
+        )
 
     def get_case_runtime_conventions(self):
         """Reuse OpenFOAM's generated-path conventions without owning them."""
@@ -171,7 +185,7 @@ class CardiacFoamPlugin:
             case_script_commands=frozenset(
                 self.get_case_runtime_conventions().case_script_commands
             )
-            | frozenset(entrypoint_relpaths_from_profile(self.get_profile())),
+            | frozenset(self.get_case_runtime_conventions().case_entrypoints),
         )
         manifest["heterogeneity_models"] = HETEROGENEITY_MODELS
         manifest["ionic_models"] = IONIC_MODEL_CATALOG
@@ -313,7 +327,9 @@ class CardiacFoamPlugin:
 
     def get_tutorial_catalog(self) -> dict:
         from omnidriver.cardiacfoam.tutorials.registry import SPEC_FACTORIES, REGISTERED_TUTORIALS
-        from omnidriver.core.runtime.generic_case import make_spec as make_generic_case_spec
+        from omnidriver.cardiacfoam.tutorials.generic_case import (
+            make_generic_case_spec,
+        )
         return {
             "spec_factories": SPEC_FACTORIES,
             "registered_tutorials": REGISTERED_TUTORIALS,
@@ -483,15 +499,6 @@ class CardiacFoamPlugin:
         from omnidriver.openfoam.command_authorization import is_installed_openfoam_application
 
         return is_installed_openfoam_application(command)
-
-    def get_decomposition_dirname_prefix(self) -> str:
-        from omnidriver.openfoam.case_runtime_conventions import (
-            openfoam_case_runtime_conventions,
-        )
-
-        prefix = openfoam_case_runtime_conventions().decomposition_directory_prefix
-        assert prefix is not None
-        return prefix
 
     def get_utility_manifests(self) -> dict:
         """This plugin's ``utility.manifest.toml`` sidecars, by command name."""

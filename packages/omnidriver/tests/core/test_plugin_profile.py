@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.core.plugin_profile import (
     ESCAPE_ROLE_PREFIX,
     KNOWN_ROLES,
@@ -12,25 +11,6 @@ from omnidriver.core.plugin_profile import (
     PluginProfile,
     load_plugin_profile,
 )
-
-
-def test_generic_profile_declares_no_solver_specific_files() -> None:
-    """The generic stub declares the structural facts true of any OpenFOAM
-    case (system/controlDict, the constant/ directory, and its Allrun
-    entrypoint -- see future/ENVIRONMENT_CONTRACT.md) so core can derive
-    provenance-walk roots, startFrom/startTime resolution, and entrypoint
-    discovery without a plugin present -- but declares nothing solver-specific
-    (no plugin.* role, e.g. no electroProperties-style constant/* file)."""
-    profile = OpenFOAMEnvironmentPlugin().get_profile()
-
-    assert profile.plugin_id == "org.omnidriver.openfoam.environment"
-    assert {rule.path for rule in profile.case_files} == {
-        "system/controlDict",
-        "constant",
-        "Allrun",
-    }
-    assert all(rule.role.startswith("openfoam.") for rule in profile.case_files)
-    assert profile.cxx_mapping is None
 
 
 def test_profile_rejects_case_path_escape(tmp_path: Path) -> None:
@@ -86,11 +66,11 @@ def test_an_unknown_role_is_rejected_at_load(tmp_path) -> None:
         "      role: control_dict\n"           # missing the openfoam. namespace
         "      required: always\n"
     )
-    with pytest.raises(ValueError, match="unknown case-file role 'control_dict'"):
+    with pytest.raises(ValueError, match="invalid case-file role 'control_dict'"):
         load_plugin_profile(profile)
 
 
-def test_a_known_role_loads(tmp_path) -> None:
+def test_a_core_role_loads(tmp_path) -> None:
     profile = tmp_path / "plugin.yaml"
     profile.write_text(
         "schema_version: 1\n"
@@ -101,35 +81,11 @@ def test_a_known_role_loads(tmp_path) -> None:
         "  dictionaries:\n"
         "    - path: system/controlDict\n"
         "      kind: openfoam_dictionary\n"
-        "      role: openfoam.control_dict\n"
+        "      role: plugin.configuration\n"
         "      required: always\n"
     )
     loaded = load_plugin_profile(profile)
-    assert loaded.case_files[0].role == "openfoam.control_dict"
-
-
-def test_the_generic_profile_uses_only_known_roles() -> None:
-    from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
-
-    for rule in OpenFOAMEnvironmentPlugin.get_profile().case_files:
-        assert rule.role in KNOWN_ROLES, rule
-
-
-def test_the_cardiac_profile_uses_only_known_roles() -> None:
-    """Skipped in the core-only CI job, which installs no plugin package.
-
-    Worth asserting anyway: cardiacFoam's profile declares nine of the eleven
-    roles, so it is the real drift risk. Core's own declares two.
-    """
-    cardiacfoam_plugin = pytest.importorskip(
-        "omnidriver.cardiacfoam.cardiacfoam_plugin",
-        reason="omnidriver-cardiacfoam is not installed",
-    )
-
-    rules = cardiacfoam_plugin.CardiacFoamPlugin().get_profile().case_files
-    assert rules, "cardiacFoam declares case files; an empty profile is a defect"
-    for rule in rules:
-        assert rule.role in KNOWN_ROLES, rule
+    assert loaded.case_files[0].role == "plugin.configuration"
 
 
 # --- Escape tier: a role for an environment core has no vocabulary for ---
@@ -164,18 +120,15 @@ def test_an_escape_role_for_a_foreign_environment_loads(tmp_path) -> None:
 @pytest.mark.parametrize(
     "bad_role",
     [
-        "openfoam.controldict",   # wrong case / missing underscore
-        "openfoam.control_dickt",  # misspelled leaf
+        "plugin.configuraton",     # misspelled Core-owned role
+        "case.regression",         # unknown Core-owned role
         "control_dict",            # missing the namespace entirely
     ],
 )
 def test_a_typo_in_a_known_namespace_still_raises_under_the_escape_tier(
     tmp_path, bad_role: str,
 ) -> None:
-    """The escape tier must not weaken the original Phase 1 Task 2 guarantee:
-    a typo against one of the three namespaces core actually validates
-    (openfoam./plugin./case.) is still a load-time ValueError, because none
-    of these carry the `x-` escape marker."""
+    """Core-owned role namespaces remain closed at load time."""
     profile = tmp_path / "plugin.yaml"
     profile.write_text(
         "schema_version: 1\n"
@@ -189,14 +142,13 @@ def test_a_typo_in_a_known_namespace_still_raises_under_the_escape_tier(
         f"      role: {bad_role}\n"
         "      required: always\n"
     )
-    with pytest.raises(ValueError, match="unknown case-file role"):
+    with pytest.raises(ValueError, match="invalid case-file role"):
         load_plugin_profile(profile)
 
 
 @pytest.mark.parametrize(
     "bad_escape_role",
     [
-        "x-openfoam.control_dict",  # shadows a reserved namespace
         "x-plugin.configuration",   # shadows a reserved namespace
         "x-case.documentation",     # shadows a reserved namespace
         "x-fenics",                 # no leaf segment at all
@@ -207,10 +159,7 @@ def test_a_typo_in_a_known_namespace_still_raises_under_the_escape_tier(
 def test_a_malformed_or_shadowing_escape_role_still_raises(
     tmp_path, bad_escape_role: str,
 ) -> None:
-    """The `x-` marker is not a blanket bypass: it still requires the
-    `x-<namespace>.<leaf>` shape, and a namespace equal to one of the three
-    reserved words is refused so the escape hatch cannot be used to dodge
-    the closed-enum check on a role that looks like it should be core's."""
+    """The legacy `x-` marker cannot shadow a Core-owned namespace."""
     profile = tmp_path / "plugin.yaml"
     profile.write_text(
         "schema_version: 1\n"
@@ -224,7 +173,7 @@ def test_a_malformed_or_shadowing_escape_role_still_raises(
         f"      role: {bad_escape_role}\n"
         "      required: always\n"
     )
-    with pytest.raises(ValueError, match="unknown case-file role"):
+    with pytest.raises(ValueError, match="invalid case-file role"):
         load_plugin_profile(profile)
 
 

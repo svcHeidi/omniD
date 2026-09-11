@@ -24,6 +24,15 @@ CARDIAC_DICT_FILE_RELPATHS = {
 
 
 def make_spec(**kwargs):
+    # This adapter-owned wrapper is the public cardiacFOAM convenience entry
+    # point.  Supply the selected plugin context here so Core can obtain the
+    # adapter's declared entrypoint and output convention without inventing
+    # OpenFOAM behavior itself.  Callers that need a different explicit
+    # environment may still pass ``driver_context``.
+    if kwargs.get("driver_context") is None:
+        from omnidriver.core.plugin_interface import default_driver_context
+
+        kwargs["driver_context"] = default_driver_context()
     kwargs.setdefault("_apply_case_mutation", apply_case_mutation)
     kwargs.setdefault("dict_file_relpaths", dict(CARDIAC_DICT_FILE_RELPATHS))
     return _core_make_spec(**kwargs)

@@ -57,11 +57,9 @@ def legacy_default_driver_context() -> "DriverContext":
     It now resolves through the same ``omnidriver.plugins`` entry-point group
     that ``--plugin`` reads, so core names no solver at all. The selection rule
     lives in :func:`plugin_discovery._default_selection`; in short, exactly one
-    installed plugin wins, none falls back to the built-in generic context, and
-    several refuse by name. Every real install today has exactly one
-    (``omnidriver-cardiacfoam`` registers the group; core declares it but
-    registers nothing, and ``omnidriver-openfoam`` registers nothing), so the
-    historical cardiacFoam default is preserved without core naming cardiacFoam.
+    installed adapter wins, no adapter is an error, and several adapters
+    require explicit selection. Core does not manufacture a solver context
+    when no adapter is installed.
 
     The context is built fresh on each call, as it always has been -- core must
     not retain one in module state.
@@ -96,8 +94,8 @@ def legacy_case_marker(plugin, case_root) -> bool:
 @_instrumented
 def legacy_case_runnable_without_workflow(plugin, case_root) -> bool:
     """Plugins predating is_case_runnable_without_workflow(). A plugin that
-    does not implement the hook gets ``False`` -- core then falls back to an
-    executable ``Allrun``, which is plugin-neutral filesystem evidence."""
+    does not implement the hook gets ``False``. Adapter-declared entrypoints
+    are checked separately by the registry."""
 
     del plugin, case_root
     return False
@@ -139,16 +137,9 @@ def legacy_nondimensional_case(plugin, spec) -> bool:
 def legacy_base_mesh_geometry_diagnostics(case_root) -> tuple:
     """Plugins predating get_base_mesh_geometry_diagnostics().
 
-    Why: strict_planning.py has always run the OpenFOAM polyMesh scale
-    classifier unconditionally, for every plugin, without checking which one
-    was active -- the classifier isn't actually solver-neutral (it parses
-    OpenFOAM's polyMesh format), that was just never visible while core and
-    the OpenFOAM environment were one package. Preserved as-is here rather
-    than narrowed to cardiac-only, since narrowing it would change observable
-    behavior for any other plugin (there wasn't one before this migration).
-    Plan 2 seam: a genuinely non-OpenFOAM plugin should implement
-    get_base_mesh_geometry_diagnostics itself (returning ``()`` is valid) or
-    override this default."""
+    A plugin that predates the mesh-diagnostics hook contributes no base
+    geometry evidence. Format-specific mesh interpretation belongs to the
+    selected adapter."""
 
     del case_root
     return ()
@@ -160,11 +151,9 @@ def legacy_environment_diagnostics(
 ) -> tuple:
     """Plugins predating get_environment_diagnostics().
 
-    Why: strict_planning.py has always preflighted every plan against the
-    OpenFOAM runtime environment (WM_PROJECT_DIR, bashrc sourcing, PATH)
-    unconditionally, the same "was never actually solver-neutral" situation
-    as legacy_base_mesh_geometry_diagnostics. Preserved as-is; a non-OpenFOAM
-    plugin implements get_environment_diagnostics itself."""
+    A plugin that predates the environment-diagnostics hook contributes an
+    explicit unsupported-capability diagnostic. Core does not infer a runtime
+    or source a shell profile on its behalf."""
 
     del workflow_dag, env, explicit_bashrc, driver_context
     from .planning_types import diagnostic
@@ -180,9 +169,8 @@ def legacy_environment_diagnostics(
 @_instrumented
 def legacy_configured_environment(env, driver_context) -> dict:
     """Plugins predating get_configured_environment(). sweep_runner.py has
-    always applied the OpenFOAM plugin environment contract unconditionally,
-    same historical-behavior-preserved reasoning as the other environment
-    fallbacks above."""
+    no adapter-specific environment contract to apply, so the mapping is
+    preserved unchanged."""
 
     del driver_context
     return dict(env)
@@ -190,12 +178,9 @@ def legacy_configured_environment(env, driver_context) -> dict:
 
 @_instrumented
 def legacy_load_environment(*, explicit_bashrc, driver_context) -> dict:
-    """Plugins predating get_loaded_environment(). cli.py has always sourced an
-    OpenFOAM bashrc before executing a workflow, unconditionally and for every
-    plugin -- same historical-behavior-preserved reasoning as the other
-    environment fallbacks above.
-
-    This keeps a legacy caller usable in a core-only installation."""
+    """Plugins predating get_loaded_environment() use the current process
+    environment unchanged. This keeps legacy callers usable in a core-only
+    installation without assuming a shell-profile format."""
 
     del explicit_bashrc, driver_context
     import os
@@ -207,9 +192,8 @@ def legacy_load_environment(*, explicit_bashrc, driver_context) -> dict:
 def legacy_apply_overrides(
     overrides, *, case_root, driver_context, execution_env=None,
 ) -> tuple[dict, ...]:
-    """Plugins predating apply_overrides(). The ``step --strict --apply`` path
-    has always validated and applied overrides through the OpenFOAM dictionary
-    mutators, for every plugin.
+    """Plugins predating apply_overrides() cannot apply format-specific
+    overrides.
 
     Validation and application are one call because core has only ever used
     them together, and splitting them would let a caller apply without
@@ -218,10 +202,9 @@ def legacy_apply_overrides(
 
     There is no neutral default here the way there is for e.g. environment
     diagnostics: applying an override means writing bytes into a dict file
-    whose syntax only ``omnidriver-openfoam``'s mutators understand, so a
-    plugin with neither that package installed nor its own ``apply_overrides()``
-    hook genuinely cannot be swept into this path (future/ENVIRONMENT_CONTRACT.md
-    §10, Tier 3) -- same shape as ``route_sweep_case_values``/
+    whose syntax only the selected adapter's mutators understand, so a
+    plugin with no own ``apply_overrides()`` hook genuinely cannot be swept
+    into this path (future/ENVIRONMENT_CONTRACT.md §10, Tier 3) -- same shape as ``route_sweep_case_values``/
     ``materialize_sweep_case`` refusing by name rather than pretending to be
     neutral. Without this catch, the import raised ModuleNotFoundError
     uncaught -- cli.py's ``except (OSError, ValueError)`` around this call
@@ -248,24 +231,15 @@ def legacy_override_target_paths(overrides, *, case_root, driver_context) -> tup
 def legacy_inspect_effective_configuration(
     *, case_root, driver_context, execution_env=None,
 ) -> tuple[dict, ...]:
-    """Inspect declared OpenFOAM dictionaries without evaluating directives.
-
-    A foreign plugin has no ``openfoam_dictionary`` rules and therefore gets
-    no fabricated evidence.  The import remains lazy so a core-only install
-    can still plan a foreign case; it simply cannot claim OpenFOAM evidence.
-    """
+    """A plugin without an inspection hook contributes no fabricated evidence."""
     del case_root, driver_context, execution_env
     return ()
 
 
 @_instrumented
 def legacy_function_object_field_diagnostics(case_root, *, samplable) -> tuple:
-    """Plugins predating get_function_object_field_diagnostics().
-    strict_planning.py has always warned about controlDict function objects
-    sampling fields absent from the capability manifest, by parsing the
-    OpenFOAM controlDict directly via foamlib -- same
-    was-never-actually-solver-neutral situation as the other diagnostics
-    fallbacks in this file."""
+    """Plugins predating the function-object hook emit no format-specific
+    diagnostics."""
 
     del case_root, samplable
     return ()
@@ -273,9 +247,8 @@ def legacy_function_object_field_diagnostics(case_root, *, samplable) -> tuple:
 
 @_instrumented
 def legacy_case_dict_key_diagnostics(case_root, *, catalogued_paths, dict_relpaths) -> tuple:
-    """Plugins predating get_case_dict_key_diagnostics(). Same reasoning as
-    legacy_function_object_field_diagnostics: preserved as-is, parses
-    OpenFOAM dict files via foamlib."""
+    """Plugins predating the dictionary-key hook emit no format-specific
+    diagnostics."""
 
     del case_root, catalogued_paths, dict_relpaths
     return ()
@@ -283,18 +256,15 @@ def legacy_case_dict_key_diagnostics(case_root, *, catalogued_paths, dict_relpat
 
 @_instrumented
 def legacy_dict_key_scanner():
-    """Plugins predating a C++ dict-key scanner hook. strict_planning has
-    always scanned OpenFOAM C++ sources for dictionary-read call sites, for
-    every plugin -- the same was-never-actually-solver-neutral situation as
-    legacy_case_dict_key_diagnostics, which parses the dicts themselves.
-    Preserved as-is; a non-OpenFOAM plugin implements this itself.
+    """Plugins predating a C++ dictionary-key scanner hook emit an empty
+    report. Format-specific source scanning belongs to the adapter.
 
     Returns only the C++ REPORT. The catalogue-path vocabulary that used to
     come back alongside it is core's own (see
     core/contracts/catalogue_paths.py) and must not be routed through here:
-    strict_plan calls it eagerly to build an argument, so an openfoam import
-    at that point fires even for a plugin that implements
-    get_case_dict_key_diagnostics and would never reach the fallback."""
+    strict planning calls it eagerly to build an argument, so format-specific
+    parsing must remain in the adapter even when the adapter implements
+    get_case_dict_key_diagnostics and never reaches this fallback."""
 
     class _EmptyReport:
         def to_json(self):
@@ -322,9 +292,9 @@ def legacy_route_sweep_case(plugin, *, base, resolved_axis_values, driver_contex
     The honest neutral is to refuse, naming the hook the plugin must
     implement.
 
-    The cardiac router validates axes against ``electroProperties``/
-    ``physicsProperties`` vocabulary, so ungated it rejected a non-cardiac
-    plugin's axes in cardiac terms -- or, worse, accepted them."""
+    Historical note: an earlier implementation routed against one solver's
+    dictionary vocabulary. That behavior is no longer active; routing now
+    refuses unless the selected adapter declares the operation."""
 
     del base, resolved_axis_values, driver_context
     from omnidriver.core.sweep.sweep_expansion import SweepValidationError
@@ -342,10 +312,10 @@ def legacy_materialize_sweep_case(plugin, *, case_dir, routed) -> None:
     """Plugins predating materialize_sweep_case(). Refuses for the same
     reason as :func:`legacy_route_sweep_case`.
 
-    This is the fallback with real teeth. The cardiac materializer writes an
-    ``Allrun`` containing a hardcoded ``cardiacFoam`` command, so ungated it
-    generated a case invoking the cardiacFoam binary under whichever plugin
-    was loaded (reproduced against OpenFOAMEnvironmentPlugin, 2026-08-19)."""
+    This refusal is intentional. A missing materializer cannot be replaced by
+    another adapter's writer. The historical defect that motivated this seam
+    involved one solver's generated script, but that behavior is no longer
+    active."""
 
     del case_dir, routed
     from omnidriver.core.sweep.sweep_expansion import SweepValidationError
@@ -432,61 +402,6 @@ def legacy_samplable_fields(plugin, resolved) -> dict:
     return {}
 
 
-def _list_time_dir_names(case_root) -> list[str]:
-    names: list[str] = []
-    try:
-        children = list(case_root.iterdir())
-    except OSError:
-        return names
-    for child in children:
-        if not child.is_dir():
-            continue
-        try:
-            float(child.name)
-        except ValueError:
-            continue
-        names.append(child.name)
-    return names
-
-
-@_instrumented
-def legacy_selected_start_time(case_root, resolved_case, *, driver_context) -> str:
-    """Plugins predating get_selected_start_time(). provenance_inputs.py has
-    always found the case's control file by the ``openfoam.control_dict``
-    role and read ``startFrom``/``startTime`` from it -- the OpenFOAM-shaped
-    default a plugin overrides by implementing the hook itself (Tier 3,
-    future/ENVIRONMENT_CONTRACT.md §10). Needs no ``omnidriver.openfoam``
-    import, unlike most fallbacks here: the OpenFOAM-ness is only in the
-    literal key names passed to the already plugin-neutral
-    ``config_values.read()``, not in any parsing code.
-
-    ``resolved_case`` is unused by this default -- the historical behaviour
-    never looked at it -- but is accepted so the signature matches the hook
-    a plugin implements."""
-
-    del resolved_case
-    default_start_time = "0"
-    rules = driver_context.capabilities.case_files.all_rules()
-    control_dict = next(
-        (case_root / rule.path for rule in rules if rule.role == "openfoam.control_dict"), None,
-    )
-    if control_dict is None:
-        return default_start_time
-
-    read = driver_context.capabilities.config_values.read
-    start_from = (read(control_dict, "startFrom") or "startTime").strip()
-
-    if start_from in ("latestTime", "firstTime"):
-        candidates = _list_time_dir_names(case_root)
-        if not candidates:
-            return default_start_time
-        selector = max if start_from == "latestTime" else min
-        return selector(candidates, key=float)
-
-    start_time = read(control_dict, "startTime")
-    return start_time.strip() if start_time is not None else default_start_time
-
-
 @_instrumented
 def legacy_override_schema(plugin, tutorial_name: str, make_spec_info: dict) -> dict:
     """v1 plugins predate get_override_schema(). A plugin that does not
@@ -517,8 +432,8 @@ def legacy_phases(plugin) -> tuple[str, ...]:
     ``primary_phase()`` returns the first phase in it that an entry claims. A
     plugin with multi-phase entries should implement ``get_phases()`` rather
     than accept an alphabetical guess. What this must never do is hand back
-    cardiacFoam's four to a plugin that never declared them: that was the
-    silent defect this replaces.
+    phases from another adapter to a plugin that never declared them: that
+    was the silent defect this replaces.
 
     Ungated -- no ``plugin_id`` check. It derives from the plugin's own
     ``DictEntry`` values, so it is correct for every plugin."""
@@ -539,13 +454,6 @@ def legacy_describe_config_resolution(plugin) -> str:
 
 
 @_instrumented
-def legacy_decomposition_dirname_prefix() -> None:
-    """A plugin without a declaration has no parallel-output convention."""
-
-    return None
-
-
-@_instrumented
 def legacy_case_runtime_conventions():
     """Neutral fallback for plugins that declare no generated case paths.
 
@@ -557,21 +465,6 @@ def legacy_case_runtime_conventions():
     from .plugin_capabilities import CaseRuntimeConventions
 
     return CaseRuntimeConventions()
-
-
-@_instrumented
-def legacy_config_value_reader(path, key: str) -> str | None:
-    """Preserve the historical direct-foamlib read for plugins that don't
-    implement get_config_value_reader.
-
-    Why: every existing plugin call site read entries via
-    mutators.read_foam_entry before this capability existed. Activation: a
-    plugin has no get_config_value_reader hook. Plan 2 seam: a non-OpenFOAM
-    plugin must implement the hook explicitly -- this fallback assumes
-    OpenFOAM syntax and is not a safe default for other environments."""
-
-    del path, key
-    return None
 
 
 @_instrumented

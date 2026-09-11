@@ -26,16 +26,6 @@ def _existing_relpaths(case_root: Path, candidates: tuple[str, ...]) -> list[str
     return existing
 
 
-def _glob_relpaths(root: Path, pattern: str) -> list[str]:
-    if not root.exists():
-        return []
-    return sorted(
-        str(path.relative_to(root))
-        for path in root.glob(pattern)
-        if not path.name.startswith(".")
-    )
-
-
 def _unique_case_param_values(spec: TutorialSpec, key: str) -> list[Any]:
     values = []
     seen: set[str] = set()
@@ -63,13 +53,6 @@ def _case_parameter_contract(spec: TutorialSpec) -> dict[str, list[Any]]:
     }
 
 
-def _find_cases_root(case_root: Path) -> Path:
-    for candidate in (case_root.parent, *case_root.parents):
-        if (candidate / "regressionTests").exists():
-            return candidate
-    return case_root.parent
-
-
 def describe_tutorial_contract(
     spec: TutorialSpec,
     *,
@@ -77,16 +60,6 @@ def describe_tutorial_contract(
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
     case_root = spec.case_root
-    cases_root = _find_cases_root(case_root)
-    regression_root = cases_root / "regressionTests" / spec.name
-
-    block_mesh_variants = _glob_relpaths(case_root / "system", "blockMeshDict*")
-    reference_cases = []
-    if regression_root.exists():
-        reference_cases.append(
-            str(regression_root.relative_to(cases_root))
-        )
-
     # Split on the profile's own ``role``, not on a path prefix: the prefix
     # would make core re-derive plugin semantics from a string, and would
     # misfile a plugin-owned dictionary that happens to live under system/
@@ -107,6 +80,9 @@ def describe_tutorial_contract(
     conditional_files = tuple(
         driver_context.capabilities.case_files.conditional_files()
     )
+    declared_files = tuple(
+        rule.path for rule in driver_context.capabilities.case_files.all_rules()
+    )
 
     return {
         "name": spec.name,
@@ -117,11 +93,16 @@ def describe_tutorial_contract(
         "core_required_files": _existing_relpaths(case_root, core_required_files),
         "solver_required_files": _existing_relpaths(case_root, solver_required_files),
         "conditional_files": _existing_relpaths(case_root, conditional_files),
-        "mesh_files": block_mesh_variants,
-        "constant_files": _glob_relpaths(case_root / "constant", "*"),
-        "system_files": _glob_relpaths(case_root / "system", "*"),
-        "reference_cases": reference_cases,
-        "postprocess_modules": _glob_relpaths(case_root, "post_processing*.py"),
+        "declared_files": _existing_relpaths(case_root, declared_files),
+        # These legacy fields remain for API compatibility. Their former
+        # values were OpenFOAM-specific discovery; adapters that own mesh,
+        # reference, or post-processing semantics must report them through a
+        # dedicated adapter capability rather than Core guessing by filename.
+        "mesh_files": [],
+        "constant_files": [],
+        "system_files": [],
+        "reference_cases": [],
+        "postprocess_modules": [],
         "case_parameters": _case_parameter_contract(spec),
         "metadata": spec.metadata,
     }

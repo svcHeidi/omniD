@@ -12,8 +12,8 @@ class LaunchReadiness:
     ``structural_ok`` and ``environment_ok`` are exposed individually, not
     just folded into ``launchable``, because some CLI call sites only ever
     need one half: ``action=plan`` reports readiness without requiring the
-    execution environment to be available (planning must work on a machine
-    without OpenFOAM installed), while the environment gate only applies
+    execution environment to be available (planning must work without the
+    selected runtime installed), while the environment gate only applies
     once a run is actually about to be dispatched -- and by that point
     structural validity has already been established separately. Route both
     kinds of call sites through this same predicate; just read the field
@@ -41,7 +41,8 @@ def is_launchable(
     environment warning can never fail a plan.
 
     ``environment_diagnostics`` is the plan's execution-readiness diagnostics
-    (e.g. missing OpenFOAM/MPI/solver binary). Only ``level == "error"``
+    (for example, missing runtime, launcher, or solver executable). Only
+    ``level == "error"``
     entries block launch; ``level == "warning"`` entries are surfaced via
     ``has_warnings`` but never block.
     """

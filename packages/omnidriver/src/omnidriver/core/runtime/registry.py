@@ -282,9 +282,9 @@ def _materialize_resolved_entry(
     factory_overrides = dict(resolution["factory_overrides"])
     if resolution["entry_kind"] == "case_folder":
         # A generic case factory builds the execution DAG from the active
-        # environment's entrypoint declaration.  Passing the context here is
-        # what keeps that operation declaration-led instead of restoring an
-        # ``Allrun`` default in Core.
+        # environment's entrypoint declaration. Passing the context here
+        # keeps that operation declaration-led rather than inventing a
+        # case-script default in Core.
         factory_overrides["driver_context"] = driver_context
     return resolution["factory"](**factory_overrides)
 
@@ -434,10 +434,8 @@ def resolve_entry(
         generic_overrides = dict(incoming_overrides)
         generic_overrides.setdefault("case_dir_name", str(matched_entry["entry_path"]))
         matched_case_root = cases_root / str(matched_entry["entry_path"])
-        # Keep existing cardiac case-folder semantics while moving truly
-        # solver-neutral folders to the core implementation.  The marker is
-        # deliberately narrow: an electroProperties file belongs to the
-        # cardiac plugin; its absence must not prevent generic OpenFOAM use.
+        # Let the selected adapter decide whether the folder has a domain
+        # marker. Otherwise use Core's generic case-folder factory.
         generic_factory = (
             _get_plugin_tutorials(driver_context).get("make_generic_case_spec")
             if driver_context.capabilities.case_compatibility.has_case_marker(

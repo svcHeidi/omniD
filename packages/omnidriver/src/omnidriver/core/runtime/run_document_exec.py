@@ -224,10 +224,10 @@ def build_execution_inputs(
             "launch.outputDir",
         ))
 
-    # 5b) Validate + canonicalize launch paths against the OpenFOAM layout.
-    #     caseRoot is the OpenFOAM/solver output base and must be a runnable
-    #     case. Resolve (follow symlinks) so all downstream checks and the
-    #     artifact gate operate on one canonical absolute path.
+    # 5b) Validate + canonicalize launch paths against the selected adapter's
+    # case contract. caseRoot is the solver/environment output base and must
+    # be runnable according to that adapter. Resolve (follow symlinks) so all
+    # downstream checks and the artifact gate use one canonical absolute path.
     resolved_case_root: Path | None = None
     if case_root_raw:
         resolved_case_root = Path(case_root_raw).resolve()
@@ -250,8 +250,8 @@ def build_execution_inputs(
         ):
             diagnostics.append(_diag(
                 "error", "case_root_not_a_runnable_case",
-                f"Run document launch.caseRoot is not a runnable OpenFOAM case "
-                f"(missing required constant/ or system/ files): {case_root_raw}.",
+                f"Run document launch.caseRoot is not runnable according to the "
+                f"selected adapter: {case_root_raw}.",
                 "launch.caseRoot",
             ))
             resolved_case_root = None

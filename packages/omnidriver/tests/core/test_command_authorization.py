@@ -37,7 +37,7 @@ def _without_installed_openfoam_apps(monkeypatch) -> None:
     plugin does not authorize cardiacFoam *as a plugin command*.
     """
     monkeypatch.setattr(
-        "omnidriver.openfoam.command_authorization.is_installed_openfoam_application",
+        "omnidriver.openfoam.environment.is_installed_openfoam_application",
         lambda command: False,
     )
 
@@ -90,7 +90,7 @@ def test_an_installed_openfoam_app_is_authorized_whatever_the_plugin(monkeypatch
     exercise.
     """
     monkeypatch.setattr(
-        "omnidriver.openfoam.command_authorization.is_installed_openfoam_application",
+        "omnidriver.openfoam.environment.is_installed_openfoam_application",
         lambda command: command == "someInstalledApp",
     )
     context = openfoam_environment_context()

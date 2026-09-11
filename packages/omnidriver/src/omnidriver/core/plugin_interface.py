@@ -14,8 +14,7 @@ validated, immutable :class:`DriverContext` for each public operation.
 Adapters may provide their own context factories for convenience, and
 :func:`default_driver_context` only at compatibility boundaries.
 
-To build an OpenFOAM plugin start from ``omnidriver.openfoam.environment``;
-other environments implement this contract directly. Follow
+Environment and solver adapters implement this contract directly. Follow
 ``.agents/skills/driverfoam-plugin-builder/SKILL.md``.
 """
 
@@ -46,7 +45,6 @@ if TYPE_CHECKING:
     from omnidriver.core.tutorials_display import TutorialDisplay
     from omnidriver.core.plugin_capabilities import ResolvedInput
     from omnidriver.core.report_catalog import ReportDefinition
-    from omnidriver.openfoam.apply_overrides import OverrideScope, RegenerationScope
     from pathlib import Path
 
 
@@ -58,17 +56,16 @@ class CapabilityManifest(Protocol):
 
 @runtime_checkable
 class SolverPlugin(Protocol):
-    """
-    The strict contract that any OpenFOAM solver must implement 
-    to be orchestrated by driverFOAM. 
-    
-    This interface creates a clean boundary between the generic OpenFOAM execution 
-    engine and the domain-specific solver logic (e.g., cardiacFoam, fireFoam).
+    """Strict contract implemented by an environment or solver adapter.
+
+    Core owns workflow mechanics; the adapter owns runtime conventions and
+    domain vocabulary. OpenFOAM and cardiacFOAM are concrete implementations,
+    not requirements of this protocol.
     """
     
     @property
     def plugin_name(self) -> str:
-        """Name of the solver plugin (e.g., 'cardiacFoam')."""
+        """Display name of the adapter or solver plugin."""
         ...
 
     @property
@@ -100,9 +97,8 @@ class SolverPlugin(Protocol):
     def get_environment_commands(self) -> frozenset[str]:
         """Optional static commands supplied by the execution environment.
 
-        For example, an OpenFOAM adapter declares its meshing and
-        reconstruction tools here.  Core does not provide environment command
-        names itself.
+        An environment adapter declares its meshing, reconstruction, or other
+        runtime tools here. Core does not provide environment command names.
         """
         ...
 
@@ -292,12 +288,11 @@ class SolverPluginOptionalHooks(Protocol):
     implementing one silently routed them into a compatibility fallback.
 
     **Not implementing a hook is a real choice, not a no-op.** When the hook
-    is absent, the adapter falls back to
-    :mod:`omnidriver.core.compatibility`, whose ``legacy_*`` functions
-    return cardiac data for the built-in cardiac plugin and a neutral value
-    for everyone else. Two of them cannot be neutral and refuse instead:
-    a plugin that does not implement ``route_sweep_case_values`` and
-    ``materialize_sweep_case`` cannot be swept, and will be told so by name.
+    is absent, the adapter uses the named compatibility behavior documented in
+    :mod:`omnidriver.core.compatibility`. These fallbacks are neutral or
+    explicitly refuse unsupported operations; they do not infer a solver's
+    vocabulary. A plugin that does not implement ``route_sweep_case_values``
+    and ``materialize_sweep_case`` cannot be swept and is told so by name.
 
     Hooks are grouped by the capability they back; see that capability's
     docstring in ``plugin_capabilities.py`` for the full contract.
@@ -306,14 +301,14 @@ class SolverPluginOptionalHooks(Protocol):
     # -- CaseCompatibilityCapability -----------------------------------------
     def has_case_marker(self, case_root: "Path") -> bool:
         """Whether this case folder belongs to this plugin, by filesystem
-        evidence alone. Absent -> ``False`` for non-cardiac plugins."""
+        evidence alone. Absent -> ``False``."""
         ...
 
     def is_case_runnable_without_workflow(self, case_root: "Path") -> bool:
-        """Whether a case with no driver-owned workflow metadata and no
-        ``Allrun`` is still runnable.
+        """Whether a case without driver-owned workflow metadata is runnable.
 
-        Absent -> ``False``; core then relies on an executable ``Allrun``.
+        Absent -> ``False``; an adapter-declared entrypoint is checked
+        separately by Core.
         """
         ...
 
@@ -339,9 +334,10 @@ class SolverPluginOptionalHooks(Protocol):
         ...
 
     def get_base_mesh_geometry_diagnostics(self, case_root: "Path") -> tuple[Any, ...]:
-        """The polyMesh scale classification itself. Absent -> the OpenFOAM
-        polyMesh classifier runs unconditionally (the historical behavior,
-        preserved as a Plan 2 seam -- see legacy_base_mesh_geometry_diagnostics)."""
+        """Base mesh-geometry classification supplied by the adapter.
+
+        Absent -> no base geometry evidence is claimed.
+        """
         ...
 
     # -- SweepMaterializerCapability -----------------------------------------
@@ -368,11 +364,6 @@ class SolverPluginOptionalHooks(Protocol):
         RunDocument config. Absent -> a plugin-neutral sentence."""
         ...
 
-    def get_decomposition_dirname_prefix(self) -> str | None:
-        """Dirname prefix a parallel run's per-rank output directories share.
-        Absent -> ``None``; Core makes no parallel-output assumption."""
-        ...
-
     # -- CaseRuntimeConventionsCapability ------------------------------------
     def get_case_runtime_conventions(self):
         """Declare generated case paths and an optional output collection
@@ -383,10 +374,8 @@ class SolverPluginOptionalHooks(Protocol):
 
     # -- ConfigValueCapability ------------------------------------------------
     def get_config_value_reader(self):
-        """Return a ``(path, key) -> str | None`` callable that reads a single
-        entry out of this plugin's configuration file format. Absent -> a
-        foamlib-based OpenFOAM reader (not a safe default for other
-        environments -- a non-OpenFOAM plugin must implement this)."""
+        """Return a ``(path, key) -> str | None`` reader for this adapter's
+        configuration format. Absent -> no format-specific reader."""
         ...
 
     # -- EnvironmentPreflightCapability -----------------------------------------
@@ -394,35 +383,31 @@ class SolverPluginOptionalHooks(Protocol):
         self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None,
     ) -> tuple[Any, ...]:
         """Preflight the runtime environment a plan's workflow_dag will run
-        in. Absent -> the OpenFOAM environment preflight runs unconditionally
-        (the historical behavior, preserved as a Plan 2 seam -- see
-        legacy_environment_diagnostics). ``explicit_bashrc`` -- not
+        in. Absent -> no adapter-specific environment evidence is claimed.
+        ``explicit_bashrc`` -- not
         ``openfoam_bashrc`` -- matches ``get_loaded_environment``'s own
         parameter for the same concept (Tier 3,
         future/ENVIRONMENT_CONTRACT.md §10)."""
         ...
 
     def get_configured_environment(self, env, driver_context) -> dict[str, str]:
-        """Apply this plugin's environment contract to an already-sourced
-        environment mapping. Absent -> the OpenFOAM plugin environment
-        contract applies unconditionally (see legacy_configured_environment)."""
+        """Apply this adapter's environment contract to an already-sourced
+        environment mapping. Absent -> the mapping is preserved unchanged."""
         ...
 
     # -- DictDiagnosticsCapability ---------------------------------------------
     def get_function_object_field_diagnostics(
         self, case_root: "Path", *, samplable: dict[str, Any],
     ) -> tuple[Any, ...]:
-        """Warn about controlDict function objects sampling fields absent
-        from ``samplable``. Absent -> the OpenFOAM/foamlib-based check runs
-        unconditionally (see legacy_function_object_field_diagnostics)."""
+        """Warn about adapter-defined function objects sampling fields absent
+        from ``samplable``. Absent -> no such diagnostics are emitted."""
         ...
 
     def get_case_dict_key_diagnostics(
         self, case_root: "Path", *, catalogued_paths, dict_relpaths: tuple[str, ...],
     ) -> tuple[Any, ...]:
-        """Warn about dict keys absent from the plugin's catalogue. Absent ->
-        the OpenFOAM/foamlib-based check runs unconditionally (see
-        legacy_case_dict_key_diagnostics)."""
+        """Warn about dictionary keys absent from the plugin's catalogue.
+        Absent -> no format-specific key diagnostics are emitted."""
         ...
 
     # -- CaseProvenanceCapability --------------------------------------------
@@ -453,13 +438,8 @@ class SolverPluginOptionalHooks(Protocol):
     def get_selected_start_time(
         self, case_root: "Path", resolved_case: dict[str, Any],
     ) -> str:
-        """Which on-disk time directory a run resumes from. Absent -> the file
-        whose declared role is ``openfoam.control_dict``, read for
-        ``startFrom``/``startTime``/``latestTime``/``firstTime`` (see
-        legacy_selected_start_time). Exists so a plugin declaring no
-        ``openfoam.control_dict`` role -- a foreign environment using the
-        role-vocabulary escape tier -- can still answer this question in its
-        own terms (future/ENVIRONMENT_CONTRACT.md §10, Tier 3)."""
+        """Which adapter-defined state directory a run resumes from.
+        Absent -> no selected state directory is added to provenance."""
         ...
 
     # -- EnvironmentPreflightCapability --------------------------------------
@@ -470,8 +450,7 @@ class SolverPluginOptionalHooks(Protocol):
         shell profile. Distinct from ``get_configured_environment``, which
         overlays a plugin contract onto an environment that already exists.
 
-        Absent -> ``legacy_load_environment`` sources an OpenFOAM bashrc, which
-        is what the CLI has always done for every plugin."""
+        Absent -> the current process environment is used unchanged."""
         ...
 
     # -- OverrideScopeCapability ---------------------------------------------
@@ -480,10 +459,8 @@ class SolverPluginOptionalHooks(Protocol):
 
         One call, not two: core has only ever validated and applied together,
         and separating them would let a caller apply without validating. Raise
-        a ``ValueError`` subclass to reject. Absent ->
-        ``legacy_apply_overrides`` uses the OpenFOAM dictionary mutators. The
-        adapter additionally records effective-resolution evidence when the
-        fallback runs with a configured execution environment."""
+        a ``ValueError`` subclass to reject. Absent -> applying overrides is
+        unsupported for this adapter."""
         ...
 
     def get_override_target_paths(
@@ -501,8 +478,8 @@ class SolverPluginOptionalHooks(Protocol):
         """Read declared configuration dependencies without modifying a case.
 
         Records inspected and absent optional files, or explicitly reports an
-        unresolved closure. Absent -> the OpenFOAM source-closure inspector
-        for OpenFOAM-shaped profiles, and no evidence for foreign profiles.
+        unresolved closure. Absent -> no format-specific configuration
+        evidence is claimed.
         """
         ...
 
@@ -519,12 +496,12 @@ class SolverPluginOptionalHooks(Protocol):
         ...
 
     # -- OverrideScopeCapability / DictRegenerationCapability ----------------
-    def get_override_scopes(self) -> tuple["OverrideScope", ...]:
+    def get_override_scopes(self) -> tuple[Any, ...]:
         """``$TOKEN.``-scoped override targets that patch a dict in place.
         Absent -> ``()``."""
         ...
 
-    def get_regeneration_scopes(self) -> tuple["RegenerationScope", ...]:
+    def get_regeneration_scopes(self) -> tuple[Any, ...]:
         """Bare selector overrides whose value change REGENERATES a dict file
         rather than patching it -- renaming sub-blocks or changing which
         sibling keys are legal. Absent -> ``()``."""
@@ -730,11 +707,12 @@ def load_plugin_context(target: str) -> DriverContext:
 
 
 def default_driver_context() -> DriverContext:
-    """Return a fresh compatibility context for the built-in cardiac plugin.
+    """Return a fresh compatibility context for the installed adapter set.
 
-    This function exists at public compatibility boundaries only.  Core
+    This function exists at public compatibility boundaries only. Core
     internals must receive a :class:`DriverContext` explicitly and must not
-    retain it in module state.
+    retain it in module state. With no adapter, or with multiple adapters,
+    context creation raises rather than inventing a solver context.
     """
 
     from .compatibility import legacy_default_driver_context

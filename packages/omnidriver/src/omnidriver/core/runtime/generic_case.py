@@ -1,9 +1,8 @@
 """Solver-neutral generic case spec implementation.
 
-This module owns the default case-folder execution contract used by the
-registry for arbitrary OpenFOAM folders. Plugins may still call the same
-factory for richer flows such as build-and-launch, but the implementation
-itself lives in core.
+This module owns the default case-folder execution contract. Environment
+adapters declare the case entrypoint and output convention; plugins may still
+call this factory for richer flows such as build-and-launch.
 """
 
 from __future__ import annotations
@@ -22,13 +21,11 @@ from omnidriver.core.specs.common import (
 from .models import CaseConfig, TutorialSpec
 from omnidriver.core.plugin_profile import entrypoint_command
 
-OUTPUT_DIR_NAME = "postProcessing"
 # ``run_case.sh`` ships inside the installed package (``omnidriver/scripts/``),
 # not at any path relative to a repo checkout -- the pre-migration monorepo
 # layout this used to point at (``applications/scripts/driverFoam/...``) no
 # longer exists. Resolve it relative to this file, the same way
-# The OpenFOAM adapter's generic plugin locates its own bundled profile; this
-# core script likewise resolves from its installed package rather than a repo
+# This core script resolves from its installed package rather than a repo
 # checkout.
 # The result is already absolute, so ``resolve_run_script_path`` returns it
 # unchanged instead of hunting for it under a repo root.
@@ -133,14 +130,8 @@ def _workflow_dag_for(
 
     With no ``solver_command`` the whole run is one step invoking the case's
     entrypoint. That entrypoint is the plugin's declared
-    ``openfoam.entrypoint`` rule, not the literal ``"Allrun"`` this used to
-    emit -- a plugin naming its entrypoint anything else got a DAG whose one
-    step invoked a script its case does not contain.
-
-    ``driver_context`` is optional because ``make_spec`` is called from places
-    that legitimately have none; the fallback is the same documented default
-    (``Allrun``) that ``registry.py`` uses for case detection, so the two agree
-    by construction rather than by coincidence.
+    environment's declared entrypoint, not a hardcoded script name. A plugin
+    naming its entrypoint anything else therefore gets a matching DAG.
     """
     if solver_command is None:
         entrypoint = entrypoint_command(driver_context)
@@ -201,12 +192,8 @@ def make_spec(
     if not str(case_dir_name).strip():
         raise ValueError("case_dir_name cannot be empty")
 
-    # No default. Core knows no solver's dictionary vocabulary, so a caller
-    # that declares no dictionary files gets none -- which
-    # generic-case detection below already defines as "the folder is generic".
-    # This used to default to cardiacFoam's constant/electroProperties and
-    # constant/physicsProperties; that pair now lives with the plugin that
-    # means them (cardiacfoam/tutorials/generic_case.py).
+    # Configuration files are supplied by the selected adapter. Core does not
+    # invent dictionary names for a generic case.
     resolved_relpaths_raw: dict[str, Any] = dict(dict_file_relpaths or {})
     resolved_relpaths = {
         str(key): Path(value) for key, value in resolved_relpaths_raw.items()
@@ -218,18 +205,28 @@ def make_spec(
     run_script_path = Path(run_script_relpath)
     normalized_pre_solve = tuple(pre_solve_commands or ())
     if _apply_case_mutation is None:
-        # Also no default. This used to reach into
-        # omnidriver.cardiacfoam.generic_case_mutation, the last runtime
-        # cardiac import left in core; a plugin that wants its dictionaries
-        # mutated passes its own callback, as cardiacFoam's wrapper does.
+        # The adapter that owns configuration mutation supplies its own
+        # callback and transaction targets.
         _apply_case_mutation = _no_solver_mutation
 
+    workflow_dag = _workflow_dag_for(
+        solver_command=solver_command,
+        pre_solve_commands=normalized_pre_solve,
+        driver_context=driver_context,
+    )
+
+    output_convention = (
+        driver_context.capabilities.case_runtime_conventions.conventions()
+        .output_collection_relpath
+        if driver_context is not None
+        else None
+    )
     case_root, setup_root, output_dir = resolve_spec_paths(
         cases_root=cases_root,
         case_dir_name=case_dir_name,
         setup_dir_name=setup_dir_name,
         output_dir_name=output_dir_name,
-        default_output_dir_name=OUTPUT_DIR_NAME,
+        default_output_dir_name=output_convention,
     )
 
     normalized_cases = _normalize_case_specs(
@@ -271,11 +268,7 @@ def make_spec(
         ),
         metadata={
             "notes": "Core generic case runner for arbitrary tutorial folders.",
-            "workflow_dag": _workflow_dag_for(
-                solver_command=solver_command,
-                pre_solve_commands=normalized_pre_solve,
-                driver_context=driver_context,
-            ),
+            "workflow_dag": workflow_dag,
             "dict_file_relpaths": {
                 key: str(value) for key, value in resolved_relpaths.items()
             },

@@ -17,7 +17,7 @@ class DictEntry:
     description: str
     source_refs: tuple[str, ...] = ()
     notes: str = ""
-    value_kind: str = "openfoam_literal"
+    value_kind: str = "literal"
     enum_values: tuple[str, ...] = ()
     examples: tuple[str, ...] = ()
     dynamic_path: bool = False

@@ -8,10 +8,18 @@ import pytest
 from omnidriver.core.runtime.models import DataArtifact
 from omnidriver.core.runtime.workflow_runner import run_workflow_step
 from omnidriver.core.runtime.workflow_state import initial_workflow_state
+from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
+from omnidriver.core.plugin_interface import driver_context
+from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+
+
+class _ParallelEnvironment(NeutralEnvironmentPlugin):
+    def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
+        return CaseRuntimeConventions(decomposition_directory_prefix="processor")
 
 
 def _run(root: Path, code: str, *, pattern: str = "result", optional: bool = False,
-         time_indexed: bool = False) -> dict:
+         time_indexed: bool = False, driver_context=None) -> dict:
     dag = {
         "schema_version": "1",
         "steps": [{"id": "run", "command": sys.executable, "args": ["-c", code],
@@ -25,6 +33,7 @@ def _run(root: Path, code: str, *, pattern: str = "result", optional: bool = Fal
         expected_artifacts=(DataArtifact(artifact_id="output", path_pattern=pattern,
                                         format="text", optional=optional,
                                         time_indexed=time_indexed),),
+        driver_context=driver_context,
     ).state.to_json()
 
 
@@ -68,6 +77,13 @@ def test_unchanged_time_output_is_stale_in_both_locations(tmp_path: Path, locati
     directory = tmp_path / location
     directory.mkdir(parents=True)
     (directory / "field").write_text("old")
-    result = _run(tmp_path, "pass", pattern="{time}/field", time_indexed=True)
+    context = (
+        driver_context(_ParallelEnvironment(), source="test:parallel")
+        if location.startswith("processor") else None
+    )
+    result = _run(
+        tmp_path, "pass", pattern="{time}/field", time_indexed=True,
+        driver_context=context,
+    )
     assert result["status"] == "failed"
     assert result["steps"][0]["diagnostics"][0]["code"] == "stale_artifacts"

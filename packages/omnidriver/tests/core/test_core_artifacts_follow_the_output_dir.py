@@ -28,11 +28,18 @@ import pytest
 from omnidriver.core.runtime.artifacts import _core_generic_artifacts
 from omnidriver.core.runtime.execution_context import resolve_execution_context
 from omnidriver.core.runtime.generic_case import make_spec
+from omnidriver.core.plugin_interface import driver_context
+from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
 
 
 def _spec(root: Path, **kwargs):
     (root / "myCase").mkdir(parents=True, exist_ok=True)
-    return make_spec(cases_root=root, case_dir_name="myCase", **kwargs)
+    return make_spec(
+        cases_root=root,
+        case_dir_name="myCase",
+        driver_context=driver_context(NeutralEnvironmentPlugin(), source="test:artifacts"),
+        **kwargs,
+    )
 
 
 @pytest.mark.parametrize("output_dir_name", [None, "results", "driverOutput"])
@@ -59,8 +66,8 @@ def test_a_non_default_output_dir_actually_moves_the_prediction(tmp_path) -> Non
     moved = _core_generic_artifacts(_spec(tmp_path / "b", output_dir_name="results"))
 
     assert [a.path_pattern for a in default] == [
-        "postProcessing/workflow_state.json",
-        "postProcessing/workflow_logs",
+        "outputs/workflow_state.json",
+        "outputs/workflow_logs",
     ]
     assert [a.path_pattern for a in moved] == [
         "results/workflow_state.json",

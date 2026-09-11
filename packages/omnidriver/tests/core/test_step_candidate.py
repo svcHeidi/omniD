@@ -48,7 +48,7 @@ def _dag(command: str = "neutral") -> dict:
 
 class _NeutralMutator(MinimalOpenFOAMPlugin):
     def __init__(self, target: Path, events: list[str]) -> None:
-        super().__init__()
+        super().__init__(entrypoint="run-case")
         self.target = target
         self.events = events
 
@@ -200,23 +200,23 @@ def test_success_binds_reservation_proposal_and_transaction(tmp_path):
     assert durable.is_file()
 
 
-def test_neutral_utility_workflow_repairs_and_dispatches_a_real_allrun(tmp_path):
+def test_neutral_utility_workflow_repairs_and_dispatches_a_declared_case_script(tmp_path):
     """One solver-neutral vertical slice: observe -> reserve -> repair -> run.
 
-    ``Allrun`` is deliberately utility-only: it verifies the repaired case
+    The declared case script is deliberately utility-only: it verifies the repaired case
     input and writes a report, without invoking a solver or cardiacFOAM.
     """
     context, target, events, state, observation, proposal, reservation = _fixture(tmp_path)
-    allrun = context.case_root / "Allrun"
-    allrun.write_text(
+    script = context.case_root / "run-case"
+    script.write_text(
         "#!/bin/sh\n"
         "set -eu\n"
         "test \"$(tr -d '\\n' < config)\" = 2\n"
         "mkdir -p postProcessing\n"
         "printf repaired > postProcessing/utility-report.txt\n"
     )
-    allrun.chmod(allrun.stat().st_mode | stat.S_IXUSR)
-    dag = _dag("Allrun")
+    script.chmod(script.stat().st_mode | stat.S_IXUSR)
+    dag = _dag("run-case")
     utility_state = initial_workflow_state(dag)
     assert utility_state is not None
     context = replace(

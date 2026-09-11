@@ -77,11 +77,9 @@ def test_a_malformed_spec_still_exits_non_zero(tmp_path):
     result = subprocess.run(
         [
             sys.executable, "-m", "omnidriver", "sweep-plan",
-            # --plugin none selects openfoam_environment_context() the same way
-            # _CTX does above, so this subprocess doesn't need
-            # omnidriver-cardiacfoam installed to reach the spec-loading
-            # guard this test targets.
-            "--plugin", "none",
+                # This adapter-specific contract selects the environment
+                # explicitly; Core no longer manufactures a fallback adapter.
+                "--plugin", "omnidriver.openfoam.environment:OpenFOAMEnvironmentPlugin",
             "--spec", str(spec_path), "--output-dir", str(tmp_path / "out"),
         ],
         cwd=driver_root, capture_output=True, text=True,

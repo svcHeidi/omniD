@@ -7,17 +7,10 @@ exploring a case ahead of a real run.
 
 Design discipline (plan v2 section 3):
 
-* **Compose, do not branch.** Solver-aware logic SHOULD live in existing
-  catalogs; the predictor reads them rather than reimplementing branching.
-  Today the predictor actively consumes
-  ``ionic_model_catalog.IONIC_MODEL_CATALOG`` (state + algebraic variables),
-  ``omnidriver.cardiacfoam.detection.detect_ionic_export_list`` (user-declared
-  exports),
-  ``active_tension_catalog.ACTIVE_TENSION_MODEL_CATALOG`` (AT state variables,
-  fired when ``activeTensionModel`` block is present), and
-  the active plugin's utility manifests via the command-authorization
-  capability (``produces`` of pre/post-solve utilities declared in
-  ``workflow_dag`` steps).
+* **Compose, do not branch.** Solver-aware logic is supplied by the active
+  adapter's artifact capability. Core reads those declarations rather than
+  reimplementing solver-specific branching; utility artifacts may likewise be
+  declared through command-authorization manifests.
 
 * **Never raise on shape divergence.** Agents may call the predictor before
   ``apply_case`` has run, or against a partly-mutated case. Missing files,
@@ -28,9 +21,8 @@ Design discipline (plan v2 section 3):
   solution) declares it via ``spec.metadata['expected_artifacts']``; on
   ``artifact_id`` collision the static entry replaces the derived one.
 
-Adding a new solver means: write a ``_predict_<solver>`` handler and register
-it in :data:`_SOLVER_HANDLERS`. Nothing else in this module branches on the
-solver name.
+Adding a new solver means implementing the adapter artifact capability. Core
+does not add solver-specific handlers or branch on solver names.
 """
 from __future__ import annotations
 
@@ -76,8 +68,8 @@ def _predict_from_workflow_utilities(
     `produces` entries as DataArtifacts.
 
     Returns ``()`` when the spec has no workflow_dag, no steps, or no
-    matching utility commands. Unknown command names (e.g. OpenFOAM
-    built-ins like ``blockMesh``) are silently skipped.
+    matching adapter utility commands. Unknown command names are silently
+    skipped.
     """
     dag = spec.metadata.get("workflow_dag") if spec.metadata else None
     if not dag:
@@ -165,8 +157,7 @@ def predict_data_artifacts(
     Composes:
 
     * the static ``spec.metadata['expected_artifacts']`` override (if any),
-    * solver-specific derivations driven by ``constant/electroProperties``,
-      sourced from the ionic-model and active-tension catalogs.
+    * solver-specific derivations returned by the active adapter.
 
     Never raises. Returns ``()`` when nothing can be derived and no static
     override is supplied.

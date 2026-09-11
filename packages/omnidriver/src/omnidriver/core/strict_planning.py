@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import fnmatch
 import os
 import shlex
 import sys
 from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -202,17 +204,24 @@ def _owned_dict_relpaths(spec, driver_context: "DriverContext") -> tuple[str, ..
     Only dictionaries the catalogue covers may be swept: warning about keys in
     a file the catalogue never claimed to describe would be pure noise.
 
-    The spec's own metadata is authoritative when present. Registered
-    tutorials declare it; a bare case folder does not, so we fall back to the
-    plugin's document names from ``override_schema.dict_entry_catalog()`` --
-    core does not know ``electroProperties`` is a thing, the plugin does -- and
-    locate each one in the conventional OpenFOAM directories. That split is
-    the right one: the plugin owns the names, core owns the case layout.
+    The spec's own generic ``dict_file_relpaths`` metadata is authoritative
+    when present. Older adapters may still expose ``*_relpath`` metadata; the
+    suffix-based compatibility read keeps that surface generic. A bare case
+    folder has no metadata, so the plugin's document names are matched against
+    the adapter's declared case-file rules. Core never supplies a directory
+    layout or document vocabulary.
     """
     metadata = getattr(spec, "metadata", None) or {}
     relpaths: list[str] = []
-    for key in ("electro_properties_relpath", "physics_properties_relpath"):
-        value = metadata.get(key)
+    configured = metadata.get("dict_file_relpaths")
+    if isinstance(configured, dict):
+        values = configured.values()
+    else:
+        values = (
+            value for key, value in metadata.items()
+            if str(key).endswith("_relpath")
+        )
+    for value in values:
         if value and str(value) not in relpaths:
             relpaths.append(str(value))
     if relpaths:
@@ -220,11 +229,28 @@ def _owned_dict_relpaths(spec, driver_context: "DriverContext") -> tuple[str, ..
 
     case_root = Path(spec.case_root)
     documents = driver_context.capabilities.override_schema.dict_entry_catalog()
+    rules = driver_context.capabilities.case_files.all_rules()
     for document in documents:
-        for parent in ("constant", "system"):
-            candidate = f"{parent}/{document}"
-            if (case_root / candidate).is_file() and candidate not in relpaths:
-                relpaths.append(candidate)
+        for rule in rules:
+            pattern = str(rule.path)
+            if Path(pattern).is_absolute():
+                continue
+            basename = PurePosixPath(pattern).name
+            if not (
+                fnmatch.fnmatch(basename, str(document))
+                or fnmatch.fnmatch(str(document), basename)
+            ):
+                continue
+            candidates = (
+                case_root.glob(pattern)
+                if any(char in pattern for char in "*?[")
+                else (case_root / pattern,)
+            )
+            for candidate_path in candidates:
+                if candidate_path.is_file():
+                    candidate = candidate_path.relative_to(case_root).as_posix()
+                    if candidate not in relpaths:
+                        relpaths.append(candidate)
     return tuple(relpaths)
 
 

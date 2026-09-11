@@ -83,7 +83,7 @@ class _SweepablePlugin(NeutralEnvironmentPlugin):
         (case_dir / "constant").mkdir(parents=True, exist_ok=True)
         (case_dir / "system").mkdir(parents=True, exist_ok=True)
         (case_dir / "system" / "controlDict").write_text("")
-        (case_dir / "Allrun").write_text("#!/bin/sh\n")
+        (case_dir / "run-case").write_text("#!/bin/sh\n")
 
 
 def test_a_generic_sweep_plan_under_an_explicit_context_uses_no_default(tmp_path):

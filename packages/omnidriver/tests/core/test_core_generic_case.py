@@ -4,14 +4,14 @@ from pathlib import Path
 
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.strict_planning import strict_plan
-from plugins.neutral_environment_plugin import _OpenFOAMEnvironmentPluginWithNeutralEnvironment
+from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
 
 
-class _UnresolvedConfigurationPlugin(_OpenFOAMEnvironmentPluginWithNeutralEnvironment):
+class _UnresolvedConfigurationPlugin(NeutralEnvironmentPlugin):
     def inspect_effective_configuration(self, *, case_root, execution_env=None):
         del case_root, execution_env
         return ({
-            "dictionary": "system/controlDict",
+            "dictionary": "test.config",
             "status": "unresolved",
             "message": "unsupported #includeFunc requires a runtime closure",
             "inspected_files": [],
@@ -19,17 +19,15 @@ class _UnresolvedConfigurationPlugin(_OpenFOAMEnvironmentPluginWithNeutralEnviro
         },)
 
 
-def test_plain_allrun_case_plans_without_cardiac_dictionaries(tmp_path: Path) -> None:
-    case_root = tmp_path / "plainOpenFoamCase"
+def test_plain_case_plans_with_declared_neutral_environment(tmp_path: Path) -> None:
+    case_root = tmp_path / "plainCase"
     case_root.mkdir()
-    (case_root / "Allrun").write_text("#!/bin/sh\nexit 0\n")
+    (case_root / "run-case").write_text("#!/bin/sh\nexit 0\n")
 
     report = strict_plan(
-        "plainOpenFoamCase",
+        "plainCase",
         overrides={"cases_root": str(tmp_path)},
-        driver_context=driver_context(
-            _OpenFOAMEnvironmentPluginWithNeutralEnvironment(), source="test",
-        ),
+        driver_context=driver_context(NeutralEnvironmentPlugin(), source="test"),
     )
 
     assert report.status == "ok"
@@ -44,70 +42,39 @@ def test_plain_allrun_case_plans_without_cardiac_dictionaries(tmp_path: Path) ->
         artifact.artifact_id: artifact.path_pattern
         for artifact in report.expected_artifacts
     } == {
-        "core.workflow_state": "postProcessing/workflow_state.json",
-        "core.workflow_logs": "postProcessing/workflow_logs",
+        "core.workflow_state": "outputs/workflow_state.json",
+        "core.workflow_logs": "outputs/workflow_logs",
     }
     assert report.workflow_dag["steps"][0]["produces"] == []
 
 
-def test_plain_allrun_case_works_with_the_no_domain_context(tmp_path: Path) -> None:
-    case_root = tmp_path / "plainOpenFoamCase"
+def test_plain_case_uses_the_selected_neutral_context(tmp_path: Path) -> None:
+    case_root = tmp_path / "plainCase"
     case_root.mkdir()
-    (case_root / "Allrun").write_text("#!/bin/sh\nexit 0\n")
+    (case_root / "run-case").write_text("#!/bin/sh\nexit 0\n")
 
     report = strict_plan(
-        "plainOpenFoamCase",
+        "plainCase",
         overrides={"cases_root": str(tmp_path)},
-        driver_context=driver_context(
-            _OpenFOAMEnvironmentPluginWithNeutralEnvironment(), source="test",
-        ),
+        driver_context=driver_context(NeutralEnvironmentPlugin(), source="test"),
     )
 
     assert report.status == "ok"
-    assert report.plugin["id"] == "org.omnidriver.openfoam.environment"
+    assert report.plugin["id"] == "org.driverfoam.test-neutral-environment"
     assert report.run_document is not None
     assert report.run_document.plugin == report.plugin
-
-
-def test_plan_reports_external_configuration_closure_without_mutating_case(tmp_path: Path) -> None:
-    case_root = tmp_path / "plainOpenFoamCase"
-    case_root.mkdir()
-    external = tmp_path / "runtime" / "limits.cfg"
-    external.parent.mkdir()
-    external.write_text("endTime 1;\n")
-    control_dict = case_root / "system" / "controlDict"
-    control_dict.parent.mkdir()
-    control_dict.write_text(f'#include "{external}"\nstartFrom startTime;\n')
-    authored_bytes = control_dict.read_bytes()
-    (case_root / "Allrun").write_text("#!/bin/sh\nexit 0\n")
-
-    report = strict_plan(
-        "plainOpenFoamCase",
-        overrides={"cases_root": str(tmp_path)},
-        driver_context=driver_context(
-            _OpenFOAMEnvironmentPluginWithNeutralEnvironment(), source="test",
-        ),
-    )
-
-    assert report.status == "ok"
-    assert control_dict.read_bytes() == authored_bytes
-    evidence = next(
-        item for item in report.configuration_evidence
-        if item["dictionary"] == "system/controlDict"
-    )
-    assert str(external.resolve()) in evidence["inspected_files"]
 
 
 def test_unresolved_configuration_blocks_normal_plan_but_is_explicitly_explorable(
     tmp_path: Path,
 ) -> None:
-    case_root = tmp_path / "plainOpenFoamCase"
+    case_root = tmp_path / "plainCase"
     case_root.mkdir()
-    (case_root / "Allrun").write_text("#!/bin/sh\nexit 0\n")
+    (case_root / "run-case").write_text("#!/bin/sh\nexit 0\n")
     context = driver_context(_UnresolvedConfigurationPlugin(), source="test")
 
     blocked = strict_plan(
-        "plainOpenFoamCase", overrides={"cases_root": str(tmp_path)},
+        "plainCase", overrides={"cases_root": str(tmp_path)},
         driver_context=context,
     )
     assert blocked.status == "failed"
@@ -117,7 +84,7 @@ def test_unresolved_configuration_blocks_normal_plan_but_is_explicitly_explorabl
     ]
 
     exploratory = strict_plan(
-        "plainOpenFoamCase", overrides={"cases_root": str(tmp_path)},
+        "plainCase", overrides={"cases_root": str(tmp_path)},
         allow_unresolved_configuration=True, driver_context=context,
     )
     assert exploratory.status == "ok"
@@ -128,7 +95,7 @@ def test_unresolved_configuration_blocks_normal_plan_but_is_explicitly_explorabl
     assert exploratory.run_document.intent == {
         "source": "strict_plan",
         "configuration_evidence_policy": "exploratory",
-        "unresolved_configuration_dictionaries": ["system/controlDict"],
+        "unresolved_configuration_dictionaries": ["test.config"],
     }
 
 
@@ -167,7 +134,12 @@ class _MutationSpy:
 def _spec(tmp_path: Path, **kwargs):
     from omnidriver.core.runtime.generic_case import make_spec
 
-    return make_spec(cases_root=tmp_path, case_dir_name="aCase", **kwargs)
+    return make_spec(
+        cases_root=tmp_path,
+        case_dir_name="aCase",
+        driver_context=driver_context(NeutralEnvironmentPlugin(), source="test:generic-case"),
+        **kwargs,
+    )
 
 
 def test_generic_dict_file_overrides_reach_the_mutation_callback(tmp_path: Path) -> None:
@@ -364,7 +336,11 @@ def test_make_generic_case_spec_applies_no_solver_mutation(tmp_path: Path) -> No
     from omnidriver.core import compatibility
     from omnidriver.core.runtime.generic_case import make_generic_case_spec
 
-    spec = make_generic_case_spec(cases_root=tmp_path, case_dir_name="aCase")
+    spec = make_generic_case_spec(
+        cases_root=tmp_path,
+        case_dir_name="aCase",
+        driver_context=driver_context(NeutralEnvironmentPlugin(), source="test:generic-case"),
+    )
     with compatibility.track_fallback_calls() as calls:
         spec.apply_case(spec.case_root, spec.build_cases()[0])
 

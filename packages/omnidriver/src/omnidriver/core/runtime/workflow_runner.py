@@ -99,10 +99,9 @@ def _dependencies_completed(
 def _resolve_command(command: str, cwd: Path, driver_context: Any | None = None) -> str:
     """Resolve a step command to what subprocess should execute.
 
-    - Explicit paths (containing ``/``, e.g. ``./Allrun`` or an absolute
-      path) are used verbatim — the author opted in.
-    - A recognized case-script name (``Allrun``-family, plus the active
-      plugin's own declared entrypoint) resolves to the case-local
+    - Explicit paths (containing ``/`` or an absolute path) are used verbatim
+      — the author opted in.
+    - A recognized adapter-declared case-script name resolves to the case-local
       executable when present, else falls through to PATH.
     - Any other bare name resolves via PATH only (subprocess does not search
       cwd), so a case directory cannot shadow a trusted binary.
@@ -134,7 +133,7 @@ def _argv_for_execution(
 ) -> tuple[str, ...]:
     """Build the argv subprocess should exec for one workflow step.
 
-    Case-local scripts (Allrun-family) are shebang-interpreted by `/bin/sh`,
+    Case-local adapter scripts are shebang-interpreted by `/bin/sh`,
     which is SIP-protected on macOS: the OS silently strips inherited
     `DYLD_*` environment variables before the script's own body runs, even
     though `env=` correctly carries them into the subprocess call. Values a
@@ -146,15 +145,15 @@ def _argv_for_execution(
     shebang exec of `/bin/sh`, which re-triggers SIP stripping on the *new*
     process and wipes the just-exported values again; `.` runs the script's
     commands inside the already-running (and now-exported) shell process, so
-    no further exec boundary is crossed before `cardiacFoam` itself forks.
+    no further exec boundary is crossed before the solver process itself forks.
     This is a no-op wrapper (falls through to plain argv) whenever the
     command isn't a case script or there are no DYLD_* values to preserve.
 
-    Dot-sourcing on its own breaks the Allrun/Allclean-family idiom
+    Dot-sourcing on its own breaks common self-locating case-script idioms
     `cd "${0%/*}"` (self-locate via one's own path): dot-sourcing does not
     update `$0`, which would otherwise remain `/bin/sh`'s own `$0` --
     `${0%/*}` on that resolves to `/bin`, so the script silently `cd`s away
-    from the case directory before its real body (e.g. `rm -rf processor*`)
+    from the case directory before its real body.
     runs, no-op'ing case-script cleanup with no error. `sh -c cmd name arg...`
     binds `name` to `$0` for the duration of `cmd`, so passing the resolved
     script path as that extra argv element (and the rest of `args` after it,

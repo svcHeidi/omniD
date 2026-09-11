@@ -14,7 +14,11 @@ from pathlib import Path
 
 import pytest
 
-from omnidriver.core.plugin_capabilities import ResolvedInput, RuntimeDependency
+from omnidriver.core.plugin_capabilities import (
+    CaseRuntimeConventions,
+    ResolvedInput,
+    RuntimeDependency,
+)
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.plugin_profile import PluginProfile
 from omnidriver.core.runtime.provenance_inputs import enumerate_case_inputs
@@ -96,8 +100,12 @@ class _FakePlugin(NeutralEnvironmentPlugin):
     def get_extra_provenance_paths(self, case_root):
         return self._extra_provenance_paths
 
-    def get_decomposition_dirname_prefix(self) -> str:
-        return "processor"
+    def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
+        return CaseRuntimeConventions(
+            decomposition_directory_prefix="processor",
+            case_entrypoints=("run-case",),
+            case_script_commands=("run-case",),
+        )
 
 
 def test_selected_start_time_directory_is_included_others_excluded(tmp_path: Path) -> None:
@@ -117,31 +125,8 @@ def test_selected_start_time_directory_is_included_others_excluded(tmp_path: Pat
     assert "1/Vm" not in included
 
 
-def test_latest_time_selects_the_latest_written_time_directory(tmp_path: Path) -> None:
-    """startFrom latestTime selects the latest written time, not 0 -- 0/
-    still holds initial/boundary conditions but is not itself the input."""
-    _write_control_dict(tmp_path, start_from="latestTime", start_time="0")
-    for time_name in ("0", "0.5"):
-        time_dir = tmp_path / time_name
-        time_dir.mkdir()
-        (time_dir / "Vm").write_text(f"field-at-{time_name}")
-
-    components = enumerate_case_inputs(
-        tmp_path, workflow_dag={"steps": []}, driver_context=driver_context(_FakePlugin(), source="test"),
-    )
-    included = _paths(components, kind="case_file")
-
-    assert "0.5/Vm" in included
-    assert "0/Vm" not in included
-
-
 class _ForeignEnvironmentPlugin(NeutralEnvironmentPlugin):
-    """A plugin that answers ``get_selected_start_time``/
-    ``get_decomposition_dirname_prefix`` itself and declares no case-file
-    roles at all -- proves each hook is a genuine escape from OpenFOAM's
-    default (``openfoam.control_dict``, the ``processor`` prefix), not just
-    a different path to the same lookup (future/ENVIRONMENT_CONTRACT.md §10,
-    Tier 3)."""
+    """A plugin that declares runtime conventions without case-file roles."""
 
     def __init__(self, *, chosen_start_time: str, decomposition_prefix: str = "processor") -> None:
         self._chosen_start_time = chosen_start_time
@@ -164,8 +149,10 @@ class _ForeignEnvironmentPlugin(NeutralEnvironmentPlugin):
     def get_selected_start_time(self, case_root, resolved_case) -> str:
         return self._chosen_start_time
 
-    def get_decomposition_dirname_prefix(self) -> str:
-        return self._decomposition_prefix
+    def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
+        return CaseRuntimeConventions(
+            decomposition_directory_prefix=self._decomposition_prefix,
+        )
 
 
 def test_plugin_implemented_start_time_hook_overrides_the_openfoam_default(
@@ -266,18 +253,18 @@ def test_generic_plugin_still_requires_unknown_files(tmp_path: Path) -> None:
     assert "constant/C" in _paths(components, kind="case_file")
 
 
-def test_an_allrun_named_by_the_dag_is_included(tmp_path: Path) -> None:
+def test_a_declared_case_script_named_by_the_dag_is_included(tmp_path: Path) -> None:
     _write_control_dict(tmp_path, start_from="startTime", start_time="0")
-    _make_executable(tmp_path / "Allrun", b"#!/bin/sh\ncardiacFoam\n")
+    _make_executable(tmp_path / "run-case", b"#!/bin/sh\nrunner\n")
 
-    workflow_dag = {"steps": [{"id": "solve", "command": "Allrun", "depends_on": []}]}
+    workflow_dag = {"steps": [{"id": "solve", "command": "run-case", "depends_on": []}]}
     components = enumerate_case_inputs(
         tmp_path, workflow_dag=workflow_dag, driver_context=driver_context(_FakePlugin(), source="test"),
     )
 
-    allrun = _by_path(components, "Allrun")
-    assert allrun.kind == "case_file"
-    assert allrun.strength == "content"
+    script = _by_path(components, "run-case")
+    assert script.kind == "case_file"
+    assert script.strength == "content"
 
 
 def test_a_parallel_step_includes_both_mpirun_and_its_payload(tmp_path: Path) -> None:
@@ -440,62 +427,6 @@ def test_accepted_external_effective_dependency_is_fingerprinted(
 
     dependency_name = f"effective_config:{external.resolve()}"
     assert _by_path(before, dependency_name).digest != _by_path(after, dependency_name).digest
-
-
-def test_ordinary_external_include_is_fingerprinted_without_repair(tmp_path: Path) -> None:
-    case_root = tmp_path / "case"
-    case_root.mkdir()
-    external = tmp_path / "runtime" / "included.cfg"
-    external.parent.mkdir()
-    external.write_text("endTime 1;\n")
-    system = case_root / "system"
-    system.mkdir()
-    (system / "controlDict").write_text(
-        f'#include "{external}"\n'
-        "startFrom startTime;\nstartTime 0;\n"
-    )
-    context = driver_context(_FakePlugin(), source="test")
-
-    before = enumerate_case_inputs(
-        case_root, workflow_dag={"steps": []}, driver_context=context,
-    )
-    external.write_text("endTime 2;\n")
-    after = enumerate_case_inputs(
-        case_root, workflow_dag={"steps": []}, driver_context=context,
-    )
-
-    dependency_name = f"effective_config:{external.resolve()}"
-    assert _by_path(before, dependency_name).digest != _by_path(after, dependency_name).digest
-
-
-def test_external_optional_include_appearance_changes_input_identity(tmp_path: Path) -> None:
-    case_root = tmp_path / "case"
-    case_root.mkdir()
-    external = tmp_path / "runtime" / "optional.cfg"
-    system = case_root / "system"
-    system.mkdir()
-    (system / "controlDict").write_text(
-        f'#includeIfPresent "{external}"\n'
-        "startFrom startTime;\nstartTime 0;\n"
-    )
-    context = driver_context(_FakePlugin(), source="test")
-
-    absent = enumerate_case_inputs(
-        case_root, workflow_dag={"steps": []}, driver_context=context,
-    )
-    external.parent.mkdir()
-    external.write_text("endTime 2;\n")
-    present = enumerate_case_inputs(
-        case_root, workflow_dag={"steps": []}, driver_context=context,
-    )
-
-    base = f"effective_config:{external.resolve()}"
-    absent_witness = _by_path(absent, base)
-    assert (absent_witness.method, absent_witness.strength, absent_witness.role) == (
-        "verified_absence", "absence", "optional_input",
-    )
-    assert _by_path(present, base).strength == "content"
-    assert base in _paths(present, kind="runtime_dependency")
 
 
 def test_sequential_repairs_conservatively_retain_prior_external_dependencies(

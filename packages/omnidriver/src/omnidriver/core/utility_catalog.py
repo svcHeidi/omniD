@@ -211,7 +211,7 @@ class ProducesEntry:
 
 @dataclass(frozen=True)
 class UtilityManifest:
-    """Parsed metadata for a single cardiacFoam utility."""
+    """Parsed metadata for a single adapter utility."""
 
     name: str
     """Utility name; matches the parent directory name."""
@@ -226,10 +226,10 @@ class UtilityManifest:
     """Case-relative paths the utility reads. May be empty."""
 
     requires_mesh: bool
-    """True when the utility needs a meshed OpenFOAM case."""
+    """True when the utility needs a mesh or equivalent spatial input."""
 
     flags: tuple[UtilityFlag, ...]
-    """CLI flags the utility registers beyond the OpenFOAM defaults."""
+    """CLI flags the utility registers beyond the environment defaults."""
 
     example: str
     """Representative command-line invocation. May be empty."""

@@ -1,1 +1,1 @@
-"""Tutorial specs implemented for the shared OpenFOAM driver."""
+"""Tutorial-spec support shared by adapter-backed workflows."""

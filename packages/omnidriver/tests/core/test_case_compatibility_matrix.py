@@ -69,7 +69,7 @@ def test_neutral_environment_does_not_hide_authored_directory_names(
     """Only an environment may declare which generated roots discovery skips."""
     case_root = tmp_path / authored_directory / "nestedCase"
     case_root.mkdir(parents=True)
-    _touch(case_root, "Allrun")
+    _touch(case_root, "run-case")
     context = driver_context(
         NeutralEnvironmentPlugin(), source="test:neutral-discovery",
     )
@@ -98,7 +98,7 @@ def test_neutral_environment_does_not_assume_a_parallel_output_prefix(
 ) -> None:
     case_root = tmp_path / "processor0" / "nestedCase"
     case_root.mkdir(parents=True)
-    _touch(case_root, "Allrun")
+    _touch(case_root, "run-case")
     context = driver_context(
         NeutralEnvironmentPlugin(), source="test:neutral-decomposition",
     )

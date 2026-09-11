@@ -48,7 +48,7 @@ STATIC_REMEDIATION_HINTS: dict[str, tuple[RemediationHint, ...]] = {
             change="",
             rationale=(
                 "The step command could not be launched. Check the executable is on PATH "
-                "and the OpenFOAM environment is sourced."
+                "and the selected execution environment is available."
             ),
             source="static",
             confidence="low",

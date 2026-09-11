@@ -1,16 +1,11 @@
-"""Display metadata for exported tutorial catalogs.
+"""Display metadata for exported adapter tutorial catalogs.
 
-The hardcoded backend tutorials live in
-``omnidriver.cardiacfoam.tutorials.registry.REGISTERED_TUTORIALS``
-(factory identifiers used to build a ``TutorialSpec``). Those identifiers are
-fine for the CLI but unhelpful for an end-user reading a catalog. They need a
-title, a one-line summary, a thumbnail, some tags, and a preset that walks the
-new run into the right configuration.
+Tutorial factories and their domain meanings belong to an adapter. This
+module is the thin display layer around the selected adapter's registry: it
+adds titles, summaries, thumbnails, tags, and presets for human-facing
+catalogs without adding solver behavior or new tutorials.
 
-This module is the thin display layer around the backend's factory registry.
-It does NOT add new tutorials; it just decorates the existing ones for human
-display.
-The exporter cross-checks one-to-one against ``REGISTERED_TUTORIALS``
+The exporter cross-checks display entries against the active adapter registry
 so a developer cannot ship a card without a backend factory or omit a
 registered tutorial from the home page.
 

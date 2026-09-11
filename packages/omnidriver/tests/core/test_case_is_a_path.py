@@ -23,7 +23,7 @@ def _case(tmp_path: Path, name: str = "mycase") -> Path:
     (case / "system").mkdir(parents=True)
     (case / "constant").mkdir()
     (case / "system" / "controlDict").write_text("")
-    (case / "Allrun").write_text("#!/bin/sh\nexit 0\n")
+    (case / "run-case").write_text("#!/bin/sh\nexit 0\n")
     return case
 
 

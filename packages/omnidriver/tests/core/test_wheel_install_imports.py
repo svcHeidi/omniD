@@ -24,7 +24,7 @@ from conftest import skip_without_repo
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 
 _WALK = """
-import importlib, pkgutil, sys
+import importlib, pkgutil, sys, subprocess
 import omnidriver
 bad = []
 for module in pkgutil.walk_packages(omnidriver.__path__, "omnidriver."):
@@ -99,14 +99,19 @@ with tempfile.TemporaryDirectory() as raw:
         "import os\\n"
         "from pathlib import Path\\n"
         "from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog\\n"
-        "from omnidriver.core.plugin_profile import PluginProfile\\n\\n"
+        "from omnidriver.core.plugin_capabilities import CaseRuntimeConventions\\n"
+        "from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile\\n\\n"
         "class WheelNeutralPlugin:\\n"
         "    plugin_name = 'wheel-neutral'\\n"
         "    plugin_id = 'org.omnidriver.wheel-neutral'\\n"
         "    plugin_version = '1'\\n"
         "    plugin_api_version = '2'\\n"
         "    def get_profile(self):\\n"
-        "        return PluginProfile(Path(__file__), self.plugin_id, self.plugin_api_version, (), None, {})\\n"
+        "        return PluginProfile(\\n"
+        "            Path(__file__), self.plugin_id, self.plugin_api_version,\\n"
+        "            (CaseFileRule('inputs/config.txt', 'text', 'x-test.input', 'conditional'),),\\n"
+        "            None, {},\\n"
+        "        )\\n"
         "    def get_dict_entries(self): return ()\\n"
         "    def get_dictionary_catalog(self): return DictionaryCatalog({})\\n"
         "    def get_dict_groups(self): return {}\\n"
@@ -129,6 +134,8 @@ with tempfile.TemporaryDirectory() as raw:
         "    def get_telemetry_source_globs(self, command): return ()\\n"
         "    def get_extra_provenance_paths(self, case_root): return ()\\n"
         "    def get_artifact_value_reader(self, artifact_format): return None\\n\\n"
+        "    def get_case_runtime_conventions(self):\\n"
+        "        return CaseRuntimeConventions(output_collection_relpath='output', case_entrypoints=('Allrun',), case_script_commands=('Allrun',))\\n\\n"
         "    def get_selected_start_time(self, case_root, resolved_case):\\n"
         "        return '0'\\n\\n"
         "    def get_environment_diagnostics(self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None):\\n"
@@ -137,10 +144,10 @@ with tempfile.TemporaryDirectory() as raw:
         "        return dict(os.environ)\\n"
     )
     case_root = root / "case"
-    (case_root / "system").mkdir(parents=True)
+    (case_root / "inputs").mkdir(parents=True)
     (case_root / "constant").mkdir()
-    control_dict = case_root / "system" / "controlDict"
-    control_dict.write_text("value 1;\\n")
+    config_file = case_root / "inputs" / "config.txt"
+    config_file.write_text("value 1;\\n")
     allrun = case_root / "Allrun"
     allrun.write_text("#!/bin/sh\\nexit 0\\n")
     os.chmod(allrun, 0o755)
@@ -175,7 +182,7 @@ with tempfile.TemporaryDirectory() as raw:
     document["workflowState"] = json.loads(checkpoint.read_text())
     document_path.write_text(json.dumps(document))
     checkpoint.unlink()
-    control_dict.write_text("value 2;\\n")
+    config_file.write_text("value 2;\\n")
     resumed = subprocess.run(command, capture_output=True, text=True)
     if resumed.returncode != 1:
         print(resumed.stdout + resumed.stderr)

@@ -14,10 +14,9 @@ The validator reports three kinds of issue:
    ``forbidden_when={"myocardiumSolver": "eikonalSolver"}`` on the
    ``ionicModel`` entry and evaluated programmatically here.
 
-The *primary* phase is the first phase in workflow order
-(``anatomy → physics → stimulus → solver``) that the entry claims.
-Multi-phase entries are validated there; the other phases do not duplicate
-validation errors.
+The *primary* phase is the first phase in the adapter-declared workflow order
+that the entry claims. Multi-phase entries are validated there; the other
+phases do not duplicate validation errors.
 """
 
 from __future__ import annotations
@@ -203,7 +202,7 @@ def _value_matches(actual: Any, expected: str | tuple[str, ...]) -> bool:
 
 
 def _normalise_word(value: Any) -> Any:
-    """Strip one balanced OpenFOAM word/string quote pair for comparisons."""
+    """Strip one balanced quote pair for catalog comparisons."""
     if not isinstance(value, str) or len(value) < 2:
         return value
     if (value[0], value[-1]) in {('"', '"'), ("'", "'")}:

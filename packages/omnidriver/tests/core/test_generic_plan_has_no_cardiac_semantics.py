@@ -43,9 +43,9 @@ def _minimal_case(root: Path) -> Path:
         "stopAt endTime;\nendTime 1;\ndeltaT 0.1;\nwriteControl timeStep;\n"
         "writeInterval 10;\n"
     )
-    allrun = case / "Allrun"
-    allrun.write_text("#!/bin/sh\necho generic-allrun-ran\n")
-    allrun.chmod(allrun.stat().st_mode | stat.S_IEXEC)
+    script = case / "run-case"
+    script.write_text("#!/bin/sh\necho generic-case-ran\n")
+    script.chmod(script.stat().st_mode | stat.S_IEXEC)
     return case
 
 
@@ -97,6 +97,7 @@ def test_generic_describe_override_surface_has_no_cardiac_semantics(
     monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
     monkeypatch.setenv("SKIP_MESH_DIAGNOSTICS", "1")
     case = _minimal_case(tmp_path)
+    (case / "Allrun").write_text("#!/bin/sh\necho adapter-case-ran\n")
     payload = describe_entry(
         str(case.relative_to(tmp_path)),
         overrides={"cases_root": str(tmp_path)},
@@ -130,6 +131,7 @@ def test_generic_spec_metadata_names_dict_files_generically(
     monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
     monkeypatch.setenv("SKIP_MESH_DIAGNOSTICS", "1")
     case = _minimal_case(tmp_path)
+    (case / "Allrun").write_text("#!/bin/sh\necho adapter-case-ran\n")
     payload = describe_entry(
         str(case.relative_to(tmp_path)),
         overrides={"cases_root": str(tmp_path)},

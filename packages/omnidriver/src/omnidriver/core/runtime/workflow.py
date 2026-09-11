@@ -190,7 +190,7 @@ def normalize_workflow_dag(
                 code="missing_workflow_dag",
                 message=(
                     "Strict planning requires a workflow_dag with steps. A case "
-                    "folder needs an executable Allrun."
+                    "folder needs an executable entrypoint declared by its adapter."
                 ),
                 field="workflow_dag",
             ),
@@ -423,9 +423,8 @@ def normalize_workflow_dag(
         # make a silent solver fail the wrong step.
         # The entrypoint comes from the plugin's declared role, not a literal:
         # registry.py already resolved it that way for case detection, so
-        # hardcoding "Allrun" here meant a plugin whose entrypoint is named
-        # anything else had its run step silently omitted from the producer
-        # set, and its unclaimed artifacts credited to no step at all.
+        # Resolving the entrypoint from adapter declarations keeps a plugin
+        # whose entrypoint has another name in the producer set.
         producer_commands = set(entrypoint_relpaths(driver_context))
         if driver_context is not None:
             producer_commands |= (
@@ -485,14 +484,14 @@ def validate_workflow_commands(
     The allowlist is the union of :data:`CORE_NEUTRAL_COMMANDS`, the commands
     ``driver_context`` authorizes through its
     ``CommandAuthorizationCapability``, :func:`case_script_commands` (the
-    Allrun-family fixed names plus the active plugin's own declared
-    entrypoint), that context's utility manifests that declare ``produces``,
+    active adapter's declared case scripts and entrypoints), that context's
+    utility manifests that declare ``produces``,
     and applications the active environment recognizes at runtime. Without a
     ``driver_context`` no environment, plugin command, or utility is
     authorized, leaving only core-neutral commands and case scripts. An
     explicit path form (``command`` containing ``/``) is allowed only as
-    ``./<name>`` where ``<name>`` is a case script — this keeps the gate in
-    parity with ``_resolve_command`` (which lets ``./Allrun`` through) while
+    ``./<name>`` where ``<name>`` is an adapter-declared case script — this
+    keeps the gate in parity with ``_resolve_command`` while
     still refusing arbitrary ``./script`` and absolute paths. This is the one
     owner of the command allowlist; both ``strict_plan`` and the run-document
     adapter call it so neither can drift. Runs on the *normalized* DAG, where
@@ -536,7 +535,7 @@ def validate_workflow_commands(
                 code="unknown_workflow_command",
                 message=(
                     f"Workflow command {command!r} is an explicit path; only "
-                    "./Allrun-family case scripts may be given as a path."
+                    "adapter-declared case scripts may be given as a path."
                 ),
                 field=step_id,
             ))

@@ -151,15 +151,15 @@ def _case_preparation_files_audit(
     if not missing:
         status = "passed"
         points = max_points
-        summary = "The case root already contains the required OpenFOAM dictionaries."
+        summary = "The case root already contains the required adapter files."
     elif existing:
         status = "warning"
         points = int(max_points * len(existing) / len(required_files))
-        summary = "Some required OpenFOAM dictionaries are missing before execution."
+        summary = "Some required adapter files are missing before execution."
     else:
         status = "blocked"
         points = 0
-        summary = "The case root does not contain required OpenFOAM dictionaries."
+        summary = "The case root does not contain required adapter files."
     return SimulationAuditItem(
         stage="case_preparation_files",
         status=status,
@@ -247,7 +247,7 @@ def _build_simulation_audit(
             diagnostics=environment_diagnostics,
             success_summary="The current environment satisfies the commands declared by the workflow.",
             warning_summary="The environment can be used, but preflight emitted warnings.",
-            error_summary="The current environment is missing executables or OpenFOAM setup needed to run.",
+            error_summary="The current environment is missing executables or runtime setup needed to run.",
             evidence={
                 "skipped": "SKIP_ENV_DIAGNOSTICS" in os.environ,
                 "diagnostic_count": len(environment_diagnostics),

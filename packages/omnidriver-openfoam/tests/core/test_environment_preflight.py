@@ -8,6 +8,7 @@ import pytest
 
 from omnidriver.core import strict_planning
 from omnidriver.openfoam.openfoam_environment import load_openfoam_environment
+from omnidriver.openfoam.environment import openfoam_environment_context
 from omnidriver.openfoam.environment_preflight import (
     _environment_diagnostics,
     _required_executables,
@@ -39,10 +40,12 @@ def _which_factory(present):
     return fake_which
 
 
-def _diags(workflow_dag):
+def _diags(workflow_dag, driver_context=None):
     import os
 
-    return _environment_diagnostics(workflow_dag, env=dict(os.environ))
+    return _environment_diagnostics(
+        workflow_dag, env=dict(os.environ), driver_context=driver_context,
+    )
 
 
 def test_required_executables_collects_step_commands():
@@ -210,31 +213,32 @@ def test_present_executables_have_no_error(clean_env):
 
 
 def test_case_script_commands_are_not_path_checked(clean_env):
-    # Allrun/Allclean/etc are case-local scripts (CASE_SCRIPT_COMMANDS in
-    # workflow.py), resolved relative to caseRoot at execution time -- they
+    # OpenFOAM's Allrun/Allclean/etc are case-local scripts declared by the
+    # adapter, resolved relative to caseRoot at execution time -- they
     # are never on PATH by design, so shutil.which() must never be asked
     # about them. Previously this produced a false-positive
     # "missing_executable" for every Allrun-routed plan (e.g. every
     # sweep-run case), even with OpenFOAM fully sourced.
     clean_env.setattr(strict_planning.shutil, "which", _which_factory(set()))
-    diags = _diags(_dag("Allrun"))
+    diags = _diags(_dag("Allrun"), openfoam_environment_context())
     assert "missing_executable" not in {d.code for d in diags}
 
 
 def _fake_context_declaring_entrypoint(relpath: str):
-    """A minimal stand-in exposing only what case_script_commands() reads
-    (driver_context.capabilities.case_files.all_rules()) -- this package's
-    tests have no existing fixture for constructing a full SolverPlugin, and
-    _required_executables only needs this one call to answer correctly."""
+    """A minimal stand-in exposing only the runtime convention declaration."""
     from types import SimpleNamespace
 
-    from omnidriver.core.plugin_profile import CaseFileRule
+    from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 
-    rule = CaseFileRule(
-        path=relpath, kind="case_script", role="openfoam.entrypoint", required="conditional",
+    conventions = CaseRuntimeConventions(
+        case_entrypoints=(relpath,), case_script_commands=(relpath,),
     )
     return SimpleNamespace(
-        capabilities=SimpleNamespace(case_files=SimpleNamespace(all_rules=lambda: (rule,)))
+        capabilities=SimpleNamespace(
+            case_runtime_conventions=SimpleNamespace(
+                conventions=lambda: conventions,
+            ),
+        ),
     )
 
 

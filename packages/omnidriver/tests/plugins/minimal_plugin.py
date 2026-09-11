@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile
 from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 
@@ -35,7 +36,7 @@ class MinimalOpenFOAMPlugin:
     ) -> None:
         """Declare just enough for a test to be non-vacuous.
 
-        `entrypoint` declares an ``openfoam.entrypoint`` case-file rule.
+        `entrypoint` declares the environment's executable case entrypoint.
 
         `solver_commands` and `telemetry_globs` exist because a plugin that
         declares NOTHING makes several core assertions trivially true. Asking
@@ -80,14 +81,14 @@ class MinimalOpenFOAMPlugin:
                 CaseFileRule(
                     path=self._entrypoint,
                     kind="case_script",
-                    role="openfoam.entrypoint",
+                    role="x-test.case_script",
                     required="conditional",
                 ),
             )
             dictionaries = [{
                 "path": self._entrypoint,
                 "kind": "case_script",
-                "role": "openfoam.entrypoint",
+                "role": "x-test.case_script",
                 "required": "conditional",
             }]
         return PluginProfile(
@@ -121,6 +122,14 @@ class MinimalOpenFOAMPlugin:
     def get_tutorial_catalog(self):
         return {"registered_tutorials": (), "spec_factories": {}}
 
+    def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
+        entrypoints = () if self._entrypoint is None else (self._entrypoint,)
+        return CaseRuntimeConventions(
+            output_collection_relpath="outputs",
+            case_entrypoints=entrypoints,
+            case_script_commands=entrypoints,
+        )
+
     def get_tutorial_displays(self):
         return ()
 
@@ -152,6 +161,11 @@ class MinimalOpenFOAMPlugin:
     def get_samplable_fields(self, resolved):
         del resolved
         return {}
+
+    def get_selected_start_time(self, case_root, resolved_case) -> str:
+        """This test environment explicitly fingerprints its ``0`` state."""
+        del case_root, resolved_case
+        return "0"
 
     def get_override_schema(self, tutorial_name, make_spec_info):
         del tutorial_name, make_spec_info
