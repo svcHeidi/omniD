@@ -139,8 +139,10 @@ def test_missing_explicit_path_does_not_use_ambient_path(complete_manifest, monk
 def test_wrong_solids4foam_root(complete_manifest, tmp_path):
     payload, _, env = complete_manifest
     solids = tmp_path / "solids4foam"
-    for relative in ("src/solids4FoamModels/physicsModel/physicsModel.H",
-                     "src/solids4FoamModels/lnInclude/physicsModel.H"):
+    for relative in (
+        "src/solids4FoamModels/solidModels/solidModel/solidModel.H",
+        "src/solids4FoamModels/lnInclude/solidModel.H",
+    ):
         header = solids / relative
         header.parent.mkdir(parents=True, exist_ok=True)
         header.write_text("// fake header\n")

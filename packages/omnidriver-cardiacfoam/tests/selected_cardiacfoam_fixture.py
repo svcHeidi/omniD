@@ -33,7 +33,6 @@ _SHA256 = re.compile(r"[0-9a-f]{64}")
 _CASE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 _NATIVE_INPUTS = (
     OPENFOAM_BASHRC_ENV,
-    BACKEND_ENV,
     BUILD_MANIFEST_ENV,
     OUTPUT_ROOT_ENV,
     CASE_MANIFEST_ENV,
@@ -184,9 +183,6 @@ def selected_runtime_from_environment(
 
     from omnidriver.cardiacfoam.runtime_profile import _profile_contract
 
-    backend = env[BACKEND_ENV]
-    if backend not in _profile_contract()["options"]:
-        raise FixtureInputError(f"{BACKEND_ENV} is not a declared cardiacFoam backend: {backend!r}")
     scope = env[REGRESSION_SCOPE_ENV].strip()
     if not scope:
         raise FixtureInputError(f"{REGRESSION_SCOPE_ENV} must not be empty")
@@ -203,12 +199,17 @@ def selected_runtime_from_environment(
         )
     from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
-    _, configuration_error = CardiacFoamPlugin().configure_execution_environment(configured_input)
+    configured_runtime, configuration_error = CardiacFoamPlugin().configure_execution_environment(
+        configured_input
+    )
     if configuration_error:
         raise FixtureInputError(
             "Selected build manifest was not accepted by the cardiac adapter: "
             + configuration_error
         )
+    backend = configured_runtime.get(BACKEND_ENV)
+    if backend not in _profile_contract()["options"]:
+        raise FixtureInputError("Cardiac adapter did not resolve a declared runtime backend")
     return SelectedRuntime(
         source=source,
         openfoam_bashrc=bashrc,

@@ -38,7 +38,9 @@ def test_reference_fixture_declares_inputs_and_solver_owned_checker(
     assert checker["reference_data"].startswith("regression/")
     assert checker["report_path"].startswith("regression/")
     integration = payload["integration"]
-    assert integration["driver_command"][:4] == ["{python}", "-m", "omnidriver", "run"]
+    assert integration["driver_command"][:6] == [
+        "{python}", "-m", "omnidriver", "run", "--plugin", "cardiacfoam",
+    ]
     assert integration["driver_command"][-2:] == ["--environment-bashrc", "{openfoam_bashrc}"]
     assert integration["solver_checker_command"] == [
         "bash",

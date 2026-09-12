@@ -46,19 +46,19 @@ def test_cardiac_catalog_partitions_entries_by_document() -> None:
     assert {entry.driver_path for entry in catalog.entries_for("controlDict")} >= {"deltaT", "endTime"}
 
 
-def test_cardiac_runtime_requires_explicit_solids4foam_root(tmp_path: Path) -> None:
+def test_cardiac_runtime_requires_a_discoverable_solver(tmp_path: Path) -> None:
     del tmp_path
     env, error = CardiacFoamPlugin().configure_execution_environment({})
 
     assert env == {}
     assert error is not None
-    assert "DRIVERFOAM_CARDIACFOAM_BACKEND" in error
+    assert "cardiacFoam is unavailable" in error
 
 
 def test_cardiac_runtime_exports_one_validated_solids4foam_root(tmp_path: Path) -> None:
     root = tmp_path / "solids4foam"
-    header = root / "src/solids4FoamModels/physicsModel/physicsModel.H"
-    ln_include = root / "src/solids4FoamModels/lnInclude/physicsModel.H"
+    header = root / "src/solids4FoamModels/solidModels/solidModel/solidModel.H"
+    ln_include = root / "src/solids4FoamModels/lnInclude/solidModel.H"
     header.parent.mkdir(parents=True)
     ln_include.parent.mkdir(parents=True)
     header.write_text("// source header\n")
@@ -99,6 +99,28 @@ def test_infer_backend_from_linked_libraries() -> None:
     assert runtime_profile._infer_backend((), options) is None
 
 
+def test_full_runtime_does_not_require_solids4foam_source_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest = tmp_path / "cardiacFoam.build.json"
+    solver = _write_complete_full_manifest(manifest, tmp_path, None)
+    monkeypatch.setattr(
+        runtime_profile,
+        "_linked_library_names",
+        lambda _solver: ("libsolids4FoamModels.dylib", "libelectroMechanicalModels.dylib"),
+    )
+
+    env, error = configure_runtime_environment({
+        "DRIVERFOAM_CARDIACFOAM_BUILD_MANIFEST": str(manifest),
+        "WM_PROJECT_DIR": str(tmp_path),
+        "PATH": str(solver.parent),
+    })
+
+    assert error is None
+    assert env["DRIVERFOAM_CARDIACFOAM_BACKEND"] == "full"
+    assert "SOLIDS4FOAM_INST_DIR" not in env
+
+
 def _write_fake_library(directory: Path, bare_name: str, content: bytes) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"lib{bare_name}.dylib"
@@ -116,7 +138,9 @@ def _write_fake_lightweight_build(appbin: Path, libbin: Path, *, solver_content:
     return solver
 
 
-def _write_complete_full_manifest(manifest: Path, foam_root: Path, solids_root: Path) -> Path:
+def _write_complete_full_manifest(
+    manifest: Path, foam_root: Path, solids_root: Path | None,
+) -> Path:
     solver = foam_root / "appbin/cardiacFoam"
     solver.parent.mkdir(parents=True)
     solver.write_bytes(b"fake-solver")
@@ -132,7 +156,7 @@ def _write_complete_full_manifest(manifest: Path, foam_root: Path, solids_root: 
         "plugin": "org.cardiacfoam",
         "backend": "full",
         "openfoam": {"root": str(foam_root)},
-        "solids4foam": {"root": str(solids_root)},
+        "solids4foam": {"root": str(solids_root) if solids_root else None},
         "linked_libraries": ["libsolids4FoamModels.dylib", "libelectroMechanicalModels.dylib"],
         "artifacts": [
             {"name": name, "path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
@@ -212,8 +236,8 @@ def test_build_manifest_self_heals_when_stale(tmp_path: Path, monkeypatch: pytes
 def test_cardiac_runtime_file_selects_backend_and_bashrc(tmp_path: Path) -> None:
     root = tmp_path / "solids4foam"
     for relative in (
-        "src/solids4FoamModels/physicsModel/physicsModel.H",
-        "src/solids4FoamModels/lnInclude/physicsModel.H",
+        "src/solids4FoamModels/solidModels/solidModel/solidModel.H",
+        "src/solids4FoamModels/lnInclude/solidModel.H",
     ):
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)

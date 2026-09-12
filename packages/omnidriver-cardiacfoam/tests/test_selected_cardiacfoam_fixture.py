@@ -141,7 +141,7 @@ def test_native_fixture_requires_all_explicit_inputs(tmp_path: Path) -> None:
         selected_runtime_from_environment(
             source,
             repository_root=tmp_path / "omnidriver",
-            environment={BACKEND_ENV: "lightweight"},
+            environment={OPENFOAM_BASHRC_ENV: "/missing/etc/bashrc"},
         )
 
 

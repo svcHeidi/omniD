@@ -80,12 +80,32 @@ def configure_runtime_environment(env: Mapping[str, str]) -> tuple[dict[str, str
     except (OSError, ValueError, yaml.YAMLError) as exc:
         return configured_env, str(exc)
 
-    backend = selection.get("backend") or configured_env.get(_BACKEND_ENV)
     options = contract["options"]
-    if not isinstance(backend, str) or backend not in options:
+    selected_solver = shutil.which("cardiacFoam", path=configured_env.get("PATH", ""))
+    if selected_solver is None:
+        return configured_env, "cardiacFoam is unavailable on the configured PATH"
+    solver_path = Path(selected_solver).resolve()
+
+    declared_backend = selection.get("backend") or configured_env.get(_BACKEND_ENV)
+    linked = _linked_library_names(solver_path)
+    inferred_backend = _infer_backend(linked, options)
+    if declared_backend is not None:
+        if not isinstance(declared_backend, str) or declared_backend not in options:
+            return configured_env, (
+                f"{_BACKEND_ENV} must select one of: {', '.join(sorted(options))}."
+            )
+        backend = declared_backend
+        if inferred_backend is not None and inferred_backend != backend:
+            return configured_env, (
+                f"Declared cardiacFoam backend {backend!r} does not match linked "
+                f"runtime libraries ({inferred_backend!r})."
+            )
+    elif inferred_backend is not None:
+        backend = inferred_backend
+    else:
         return configured_env, (
-            f"{_BACKEND_ENV} must select one of: {', '.join(sorted(options))}. "
-            "Set it directly or provide DRIVERFOAM_RUNTIME_CONFIG."
+            "Could not infer the cardiacFoam backend from linked libraries. "
+            f"Set {_BACKEND_ENV} explicitly with a validated build manifest."
         )
 
     option = options[backend]
@@ -94,15 +114,10 @@ def configure_runtime_environment(env: Mapping[str, str]) -> tuple[dict[str, str
 
     solids_root_value = selection.get("solids4foam_root") or configured_env.get(_SOLIDS_ROOT_ENV)
     solids_root: Path | None = None
-    if backend == "full":
-        if not solids_root_value:
-            return configured_env, (
-                f"Full cardiacFoam backend requires {_SOLIDS_ROOT_ENV} or "
-                "plugins.org.cardiacfoam.solids4foam_root."
-            )
+    if solids_root_value:
         solids_root = Path(os.path.expandvars(str(solids_root_value))).expanduser().resolve()
-        source_header = solids_root / "src/solids4FoamModels/physicsModel/physicsModel.H"
-        ln_include = solids_root / "src/solids4FoamModels/lnInclude/physicsModel.H"
+        source_header = solids_root / "src/solids4FoamModels/solidModels/solidModel/solidModel.H"
+        ln_include = solids_root / "src/solids4FoamModels/lnInclude/solidModel.H"
         if not solids_root.is_dir() or not source_header.is_file():
             return configured_env, f"Invalid solids4foam source root: {solids_root}"
         if not ln_include.is_file():
@@ -124,10 +139,6 @@ def configure_runtime_environment(env: Mapping[str, str]) -> tuple[dict[str, str
         )
 
     manifest_path = Path(os.path.expandvars(str(manifest_value))).expanduser().resolve()
-    selected_solver = shutil.which("cardiacFoam", path=configured_env.get("PATH", ""))
-    if selected_solver is None:
-        return configured_env, "cardiacFoam is unavailable on the configured PATH"
-    solver_path = Path(selected_solver).resolve()
     regeneration_error = _ensure_build_manifest(
         manifest_path, configured_env, contract, solids_root, solver_path=solver_path
     )
