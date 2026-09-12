@@ -31,6 +31,28 @@ _COMPARISON_STATUSES = frozenset({"passed", "failed", "unavailable", "not_reques
 
 
 @dataclass(frozen=True)
+class ComparisonReportLimits:
+    """Structural limits for a checker report envelope, not solver data."""
+
+    max_bytes: int = 1_048_576
+    max_metrics: int = 100
+    max_detail_fields: int = 32
+    max_nested_items: int = 20
+    max_string_chars: int = 512
+    max_depth: int = 4
+
+    def __post_init__(self) -> None:
+        if any(value < 1 for value in (
+            self.max_bytes, self.max_metrics, self.max_detail_fields,
+            self.max_nested_items, self.max_string_chars, self.max_depth,
+        )):
+            raise ValueError("comparison report limits must be positive")
+
+
+DEFAULT_COMPARISON_REPORT_LIMITS = ComparisonReportLimits()
+
+
+@dataclass(frozen=True)
 class ComparisonRequest:
     """Identity and location of one already-produced checker report.
 
@@ -38,7 +60,10 @@ class ComparisonRequest:
     checker is an adapter/test concern; this public Core interface only
     preserves its resulting evidence alongside the experiment it describes.
     ``report_path`` may be absolute, or relative to the experiment output
-    directory.
+    directory. A report may declare ``run_evidence`` containing ``case_id``,
+    ``workflow_digest``, and ``input_provenance_digest``. Core checks those
+    identifiers against its durable run record; missing or mismatched evidence
+    is reported as an unverified association, not a scientific failure.
     """
 
     case_id: str
@@ -57,7 +82,9 @@ class ComparisonOutcome:
     list.
     Its names, units, definitions, and values belong to the checker or
     analysis adapter.  ``details`` preserves other report fields for
-    inspection without giving Core their scientific meaning.
+    inspection without giving Core their scientific meaning. Core exposes a
+    bounded summary only; ``report_path`` remains the reference to full
+    checker-owned evidence.
     """
 
     status: str
@@ -69,6 +96,8 @@ class ComparisonOutcome:
     report_digest: str | None = None
     metrics: tuple[dict[str, Any], ...] = ()
     details: dict[str, Any] | None = None
+    details_truncated: bool = False
+    association_status: str = "not_requested"
     reason: str | None = None
 
     def to_json(self) -> dict[str, Any]:
@@ -83,6 +112,9 @@ class ComparisonOutcome:
             value = getattr(self, key)
             if value is not None:
                 payload[key] = value
+        if self.details_truncated:
+            payload["details_truncated"] = True
+        payload["association_status"] = self.association_status
         return payload
 
 
@@ -162,6 +194,7 @@ def inspect_sweep_experiment(
     output_dir: str | Path,
     *,
     comparisons: Iterable[ComparisonRequest] = (),
+    comparison_limits: ComparisonReportLimits = DEFAULT_COMPARISON_REPORT_LIMITS,
 ) -> Experiment:
     """Read one sweep's durable evidence and optional comparison reports.
 
@@ -174,7 +207,10 @@ def inspect_sweep_experiment(
     context = build_sweep_context(output_dir)
     requested = _comparison_requests_by_case(comparisons, context)
     cases = tuple(
-        _inspect_case(context, case, requested.get(case.case_id))
+        _inspect_case(
+            context, case, requested.get(case.case_id),
+            comparison_limits=comparison_limits,
+        )
         for case in context.cases
     )
     return Experiment(
@@ -234,7 +270,11 @@ def _comparison_requests_by_case(
 
 
 def _inspect_case(
-    context: SweepContext, record: CaseRecord, request: ComparisonRequest | None,
+    context: SweepContext,
+    record: CaseRecord,
+    request: ComparisonRequest | None,
+    *,
+    comparison_limits: ComparisonReportLimits,
 ) -> ExperimentCase:
     state = _read_json_object(Path(record.workflow_state_path))
     execution_status = str(state.get("status", record.status)) if state else record.status
@@ -246,7 +286,9 @@ def _inspect_case(
     input_provenance = dict(resume_snapshot) if isinstance(resume_snapshot, dict) else None
     workflow_digest = state.get("workflow_digest") if state else None
     expected_artifacts = _expected_artifacts(context, record)
-    comparison = _read_comparison(context, request)
+    comparison = _read_comparison(
+        context, record, state, request, limits=comparison_limits,
+    )
     return ExperimentCase(
         case_id=record.case_id,
         requested_parameters=dict(record.resolved_axis_values),
@@ -280,13 +322,35 @@ def _output_status(record: CaseRecord, execution_status: str) -> str:
     return "not_inspected"
 
 
-def _read_comparison(context: SweepContext, request: ComparisonRequest | None) -> ComparisonOutcome:
+def _read_comparison(
+    context: SweepContext,
+    record: CaseRecord,
+    state: Mapping[str, Any],
+    request: ComparisonRequest | None,
+    *,
+    limits: ComparisonReportLimits,
+) -> ComparisonOutcome:
     if request is None:
         return ComparisonOutcome(status="not_requested")
     report_path = Path(request.report_path)
     if not report_path.is_absolute():
         report_path = Path(context.output_dir) / report_path
     try:
+        size = report_path.stat().st_size
+        if size > limits.max_bytes:
+            return ComparisonOutcome(
+                status="unavailable",
+                checker_id=request.checker_id,
+                checker_version=request.checker_version,
+                reference_id=request.reference_id,
+                reference_version=request.reference_version,
+                report_path=str(report_path),
+                association_status="unverified",
+                reason=(
+                    f"checker report exceeds configured envelope limit "
+                    f"({size} > {limits.max_bytes} bytes)"
+                ),
+            )
         raw_bytes = report_path.read_bytes()
         report = json.loads(raw_bytes)
     except (OSError, json.JSONDecodeError) as exc:
@@ -297,6 +361,7 @@ def _read_comparison(context: SweepContext, request: ComparisonRequest | None) -
             reference_id=request.reference_id,
             reference_version=request.reference_version,
             report_path=str(report_path),
+            association_status="unverified",
             reason=f"checker report unavailable: {type(exc).__name__}: {exc}",
         )
     if not isinstance(report, dict):
@@ -307,16 +372,13 @@ def _read_comparison(context: SweepContext, request: ComparisonRequest | None) -
             reference_id=request.reference_id,
             reference_version=request.reference_version,
             report_path=str(report_path),
+            association_status="unverified",
             reason="checker report must contain a JSON object",
         )
     stated_status = report.get("status")
     status = stated_status if isinstance(stated_status, str) and stated_status in _COMPARISON_STATUSES else "unknown"
-    metrics = report.get("metrics", ())
-    metric_values = tuple(dict(item) for item in metrics if isinstance(item, dict)) if isinstance(metrics, list) else ()
-    details = {
-        key: value for key, value in report.items()
-        if key not in {"status", "metrics"}
-    }
+    metric_values, metric_truncated = _bounded_metrics(report.get("metrics"), limits)
+    details, detail_truncated = _bounded_details(report, limits)
     return ComparisonOutcome(
         status=status,
         checker_id=request.checker_id,
@@ -327,7 +389,91 @@ def _read_comparison(context: SweepContext, request: ComparisonRequest | None) -
         report_digest="sha256:" + hashlib.sha256(raw_bytes).hexdigest(),
         metrics=metric_values,
         details=details,
+        details_truncated=metric_truncated or detail_truncated,
+        association_status=_association_status(report, record, state),
     )
+
+
+def _association_status(
+    report: Mapping[str, Any], record: CaseRecord, state: Mapping[str, Any],
+) -> str:
+    """Verify a declared run identity; Core never verifies solver outputs."""
+    evidence = report.get("run_evidence")
+    snapshot = state.get("resume_snapshot")
+    expected = {
+        "case_id": record.case_id,
+        "workflow_digest": state.get("workflow_digest"),
+        "input_provenance_digest": (
+            snapshot.get("aggregate_digest") if isinstance(snapshot, Mapping) else None
+        ),
+    }
+    if not isinstance(evidence, Mapping) or any(not isinstance(value, str) for value in expected.values()):
+        return "unverified"
+    return "run_verified" if all(evidence.get(key) == value for key, value in expected.items()) else "unverified"
+
+
+def _bounded_metrics(
+    raw_metrics: Any, limits: ComparisonReportLimits,
+) -> tuple[tuple[dict[str, Any], ...], bool]:
+    if not isinstance(raw_metrics, list):
+        return (), raw_metrics is not None
+    truncated = len(raw_metrics) > limits.max_metrics
+    metrics: list[dict[str, Any]] = []
+    for item in raw_metrics[:limits.max_metrics]:
+        if not isinstance(item, Mapping):
+            truncated = True
+            continue
+        summary, item_truncated = _bounded_json(item, limits=limits)
+        metrics.append(dict(summary))
+        truncated = truncated or item_truncated
+    return tuple(metrics), truncated
+
+
+def _bounded_details(
+    report: Mapping[str, Any], limits: ComparisonReportLimits,
+) -> tuple[dict[str, Any], bool]:
+    items = [
+        (key, value) for key, value in report.items()
+        if key not in {"status", "metrics", "run_evidence"}
+    ]
+    truncated = len(items) > limits.max_detail_fields
+    details: dict[str, Any] = {}
+    for key, value in items[:limits.max_detail_fields]:
+        summary, value_truncated = _bounded_json(value, limits=limits)
+        details[str(key)] = summary
+        truncated = truncated or value_truncated
+    return details, truncated
+
+
+def _bounded_json(
+    value: Any, *, limits: ComparisonReportLimits, depth: int = 0,
+) -> tuple[Any, bool]:
+    if value is None or isinstance(value, (bool, int, float)):
+        return value, False
+    if isinstance(value, str):
+        if len(value) <= limits.max_string_chars:
+            return value, False
+        return value[:limits.max_string_chars] + "…", True
+    if depth >= limits.max_depth:
+        return "<nested value omitted>", True
+    if isinstance(value, Mapping):
+        items = list(value.items())
+        result: dict[str, Any] = {}
+        truncated = len(items) > limits.max_nested_items
+        for key, child in items[:limits.max_nested_items]:
+            summary, child_truncated = _bounded_json(child, limits=limits, depth=depth + 1)
+            result[str(key)] = summary
+            truncated = truncated or child_truncated
+        return result, truncated
+    if isinstance(value, list):
+        result: list[Any] = []
+        truncated = len(value) > limits.max_nested_items
+        for child in value[:limits.max_nested_items]:
+            summary, child_truncated = _bounded_json(child, limits=limits, depth=depth + 1)
+            result.append(summary)
+            truncated = truncated or child_truncated
+        return result, truncated
+    return "<unsupported JSON value>", True
 
 
 def _read_json_object(path: Path) -> dict[str, Any]:

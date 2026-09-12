@@ -135,8 +135,17 @@ def _run_document_field(raw_path: str, field: str, *, output_dir: Path) -> str |
     return str(value) if value else None
 
 
-def build_sweep_context(output_dir: Path) -> SweepContext:
-    """Read a sweep's durable Core records without inspecting solver outputs."""
+def build_sweep_context(
+    output_dir: Path,
+    *,
+    persist_case_records: bool = False,
+) -> SweepContext:
+    """Read a sweep's durable Core records without inspecting solver outputs.
+
+    Inspection is read-only by default, including for archived results.  The
+    sweep executor opts into persistence once it has finished updating its
+    own manifest; a later reader must never rewrite that evidence.
+    """
     output_dir = Path(output_dir)
     manifest = read_manifest(output_dir / "sweep_manifest.json")
     records: list[CaseRecord] = []
@@ -157,7 +166,7 @@ def build_sweep_context(output_dir: Path) -> SweepContext:
             started_at=entry.started_at,
             updated_at=entry.updated_at,
         )
-        if entry.case_record_path:
+        if persist_case_records and entry.case_record_path:
             write_case_record(output_dir / entry.case_record_path, record)
         records.append(record)
     return SweepContext(

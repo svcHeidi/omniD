@@ -7,6 +7,7 @@ import pytest
 
 from omnidriver.core.experiments import (
     ComparisonRequest,
+    ComparisonReportLimits,
     inspect_sweep_experiment,
     load_comparison_requests,
 )
@@ -127,6 +128,118 @@ def test_inspect_experiment_records_but_does_not_interpret_checker_metrics(tmp_p
         "results": [{"status": "passed", "difference": 0.1}],
     }
     assert comparison.report_digest and comparison.report_digest.startswith("sha256:")
+    assert comparison.association_status == "unverified"
+
+
+def test_inspection_does_not_rewrite_existing_case_record(tmp_path: Path) -> None:
+    _manifest(tmp_path, [_case(tmp_path, "a", status="completed")])
+    record = tmp_path / "a" / "case_record.json"
+    record.write_text('{"preserved": true}\n')
+    before = record.stat().st_mtime_ns, record.read_bytes()
+
+    inspect_sweep_experiment(tmp_path)
+
+    assert (record.stat().st_mtime_ns, record.read_bytes()) == before
+
+
+def test_inspection_keeps_execution_evidence_when_retained_output_changes(tmp_path: Path) -> None:
+    _manifest(tmp_path, [_case(tmp_path, "a", status="completed")])
+    before = inspect_sweep_experiment(tmp_path).cases[0]
+    (tmp_path / "a" / "outputs" / "result.txt").unlink()
+    after = inspect_sweep_experiment(tmp_path).cases[0]
+
+    assert before.execution_status == after.execution_status == "completed"
+    assert before.output_status == after.output_status == "not_inspected"
+
+
+def test_comparison_reports_whether_the_run_association_is_verified(tmp_path: Path) -> None:
+    _manifest(tmp_path, [_case(tmp_path, "a", status="completed")])
+    report = tmp_path / "reports" / "checker.json"
+    report.parent.mkdir()
+    report.write_text(json.dumps({
+        "status": "passed",
+        "run_evidence": {
+            "case_id": "a",
+            "workflow_digest": "sha256:plan-a",
+            "input_provenance_digest": "sha256:inputs-a",
+        },
+    }))
+
+    experiment = inspect_sweep_experiment(tmp_path, comparisons=[ComparisonRequest(
+        case_id="a", checker_id="checker", checker_version="1",
+        reference_id="reference", reference_version="1", report_path="reports/checker.json",
+    )])
+
+    assert experiment.cases[0].comparison.status == "passed"
+    assert experiment.cases[0].comparison.association_status == "run_verified"
+
+
+def test_mismatched_comparison_run_evidence_is_explicitly_unverified(tmp_path: Path) -> None:
+    _manifest(tmp_path, [_case(tmp_path, "a", status="completed")])
+    report = tmp_path / "reports" / "checker.json"
+    report.parent.mkdir()
+    report.write_text(json.dumps({
+        "status": "passed",
+        "run_evidence": {
+            "case_id": "a",
+            "workflow_digest": "sha256:another-plan",
+            "input_provenance_digest": "sha256:inputs-a",
+        },
+    }))
+
+    experiment = inspect_sweep_experiment(tmp_path, comparisons=[ComparisonRequest(
+        case_id="a", checker_id="checker", checker_version="1",
+        reference_id="reference", reference_version="1", report_path="reports/checker.json",
+    )])
+
+    comparison = experiment.cases[0].comparison
+    assert comparison.status == "passed"
+    assert comparison.association_status == "unverified"
+
+
+def test_comparison_summary_is_bounded_but_full_report_remains_addressable(tmp_path: Path) -> None:
+    _manifest(tmp_path, [_case(tmp_path, "a", status="completed")])
+    report = tmp_path / "reports" / "checker.json"
+    report.parent.mkdir()
+    report.write_text(json.dumps({
+        "status": "passed",
+        "metrics": [{"id": "first", "long": "abcdef"}, {"id": "second"}],
+        "first_detail": [1, 2],
+        "second_detail": "discarded from summary",
+    }))
+    limits = ComparisonReportLimits(
+        max_bytes=10_000, max_metrics=1, max_detail_fields=1,
+        max_nested_items=1, max_string_chars=5, max_depth=1,
+    )
+
+    experiment = inspect_sweep_experiment(tmp_path, comparisons=[ComparisonRequest(
+        case_id="a", checker_id="checker", checker_version="1",
+        reference_id="reference", reference_version="1", report_path="reports/checker.json",
+    )], comparison_limits=limits)
+
+    comparison = experiment.cases[0].comparison
+    assert comparison.details_truncated
+    assert comparison.metrics == ({"id": "first"},)
+    assert comparison.details == {"first_detail": [1]}
+    assert comparison.report_path == str(report)
+    assert report.read_text()
+
+
+def test_oversized_comparison_report_is_not_read(tmp_path: Path) -> None:
+    _manifest(tmp_path, [_case(tmp_path, "a", status="completed")])
+    report = tmp_path / "reports" / "checker.json"
+    report.parent.mkdir()
+    report.write_bytes(b"{" + b" " * 32)
+
+    experiment = inspect_sweep_experiment(tmp_path, comparisons=[ComparisonRequest(
+        case_id="a", checker_id="checker", checker_version="1",
+        reference_id="reference", reference_version="1", report_path="reports/checker.json",
+    )], comparison_limits=ComparisonReportLimits(max_bytes=8))
+
+    comparison = experiment.cases[0].comparison
+    assert comparison.status == "unavailable"
+    assert comparison.association_status == "unverified"
+    assert "envelope limit" in comparison.reason
 
 
 def test_comparison_manifest_requires_explicit_checker_and_reference_identity(tmp_path: Path) -> None:

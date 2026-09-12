@@ -46,6 +46,13 @@ def test_context_records_execution_without_scanning_solver_output(tmp_path: Path
     assert case.case_output_dir == str(case_dir)
     assert case.case_root == "/case"
     assert "output_files" not in case.to_json()
+    assert not (tmp_path / "case-a" / "case_record.json").exists()
+
+
+def test_executor_can_explicitly_persist_case_records(tmp_path: Path) -> None:
+    _manifest(tmp_path)
+    context = build_sweep_context(tmp_path, persist_case_records=True)
+    assert context.cases[0].status == "completed"
     assert json.loads((tmp_path / "case-a" / "case_record.json").read_text())["status"] == "completed"
 
 

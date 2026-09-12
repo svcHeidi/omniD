@@ -851,7 +851,7 @@ def sweep_run(
         manifest.updated_at = _now()
         write_manifest(manifest_path, manifest)
 
-    context = build_sweep_context(output_dir)
+    context = build_sweep_context(output_dir, persist_case_records=True)
     if failed_count == 0:
         postprocess = run_postprocessing_module(context, task=task).to_json()
     else:
