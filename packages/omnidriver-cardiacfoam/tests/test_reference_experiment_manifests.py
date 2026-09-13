@@ -9,7 +9,7 @@ import pytest
 
 
 _FIXTURES = Path(__file__).parent / "fixtures" / "reference_experiments"
-_SOURCE_REVISION = "3aa4b48fa5fd896933b3758f5a084e265f9ba9de"
+_SOURCE_REVISION = "6515739bd1b1c6cf7ef21fe1d4e25830352ed4d2"
 
 
 @pytest.mark.parametrize(

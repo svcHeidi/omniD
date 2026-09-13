@@ -59,14 +59,26 @@ consumes only the declared capability and evidence.
    failure is solver evidence, not an adapter crash; a driver transaction or
    provenance failure is adapter evidence even if the solver itself succeeds.
 
-## Previously inspected selection and recorded acceptance (revalidate before use)
+## Current selected selection and recorded acceptance (revalidate before use)
 
-The previously inspected gold-standard checkout is
-`/Users/simaocastro/noFrontendCardiacFoam_minor_errors` at
-`c3a852e957d23077ce1b2712331dfe45489c4386`. Its `src/` tree is clean. Its
-permitted drift is confined to monodomain pseudo-ECG tutorial/characterization
-inputs, plus `modules/solids4foam` at
-`d28c6527fca934b39271ca61531110aeee0f80ed`. This records an earlier inspection, not permission to trust a moving checkout.
+2026-09-13 selected `/Users/simaocastro/noFrontendCardiacFoam_minor_errors`
+at `6515739bd1b1c6cf7ef21fe1d4e25830352ed4d2` (`main`). Its `src/` tree is
+clean. The parent records `modules/solids4foam` at
+`0bd882172db292c29bf41c4233d61cfa5f116168`, while the actual checked-out,
+modified submodule is `d28c6527fca934b39271ca61531110aeee0f80ed` on
+`electromechanical-coupling-wip` (with pre-existing untracked tutorial files).
+The complete permitted non-`src/` drift digest is
+`sha256:9182e774f7a344ad6abeff352e5bd6ba02ec4042b786dcaae3ebf67877204205`.
+This is build provenance, not an instruction to reset or a claim that the
+runtime binary was historically built from these exact bytes.
+
+The runtime-inspection manifest used for this selection is
+`/Users/simaocastro/OpenFOAM/simaocastro-v2412/platforms/darwin64ClangDPInt32Opt/lib/cardiacFoam.build.json`
+(`sha256:895b65e2b8546c1e505c8e7a9269bcf369c60b2e01ce20cadb064b5d1f9daf37`):
+OpenFOAM `/Volumes/OpenFOAM-v2412`, `v2412`,
+`darwin64ClangDPInt32Opt`, full/electromechanics backend. It records the
+actual submodule revision above. It is runtime inspection, not immutable build
+attestation.
 
 T6 and T7 were subsequently accepted against source revision
 `3aa4b48fa5fd896933b3758f5a084e265f9ba9de`: the selected source/runtime

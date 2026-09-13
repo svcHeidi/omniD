@@ -2,6 +2,31 @@
 
 2026-09-09. Scope: preserve solver knowledge and meaningful test coverage while retaining omniD's solver-neutral architecture. No solver execution or scientific change is authorized by this planning document.
 
+## Targeted refresh — 2026-09-13
+
+- The selected source is now `6515739bd1b1c6cf7ef21fe1d4e25830352ed4d2`
+  (`main`) at `/Users/simaocastro/noFrontendCardiacFoam_minor_errors`; `src/`
+  is clean. Its actual solids4foam checkout is the pre-existing dirty
+  `d28c6527fca934b39271ca61531110aeee0f80ed`, not the parent-recorded
+  `0bd882172db292c29bf41c4233d61cfa5f116168`. See the selected-source/build
+  contract for the complete drift and runtime-manifest identities.
+- Both reference manifests now name this commit. All declared inputs were
+  compared with the previous reference: only the two `regressionTest.sh`
+  digests changed, for the solver's BSD-sed-safe JSON reporting fix. The
+  Niederer deleted historical CSV is outside the declared closure. No numerical
+  default, tolerance, or reference-data digest changed.
+- `Gaur_2021.H` identifies a pig ventricular model. The catalog description
+  and aliases now say `Gaur 2021` / `pig ventricular model`; species and all
+  numerical recommendations are unchanged.
+- Native results are recorded separately below and in their disposable output
+  roots. They are current verification, unlike the historical T7 records.
+  Single-cell passed its explicit-plugin driver run and solver-owned checker
+  in `/private/tmp/omnidriver-native-refresh.fxyPjT/omnidriver-single-cell-tworld-reference-sphhwheh`.
+  Niederer passed likewise in
+  `/private/tmp/omnidriver-native-refresh.dYfQ1n/omnidriver-niederer-tissue-reference-87qm_stf`
+  (its checker JSON reports 6 passed, 0 failed). Both source cases were read
+  only through their committed declared closures.
+
 ## Reference identities
 
 - Reconciliation baseline: `01a1e24018b0e054656c395d3b261b1f1f87ee15`. Test-scope reassessment inspected HEAD `178f42a` (2026-09-09).

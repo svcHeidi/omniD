@@ -60,6 +60,15 @@ _REGEN_HINT = (
 )
 
 
+def test_gaur_metadata_matches_selected_source_identity() -> None:
+    """Gaur_2021.H calls this a pig ventricular model, not guinea-pig/Rudy."""
+    gaur = IONIC_MODEL_CATALOG["Gaur"]
+    assert gaur.species == ("pig",)
+    assert gaur.cardiac_region == ("ventricle",)
+    assert gaur.description.startswith("Pig ventricular ionic model (Gaur 2021).")
+    assert gaur.aliases == ("Gaur 2021", "pig ventricular model")
+
+
 def _models_to_check() -> list[str]:
     return [
         name

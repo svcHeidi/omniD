@@ -3,7 +3,7 @@
   "case_id": "niederer-tissue-reference",
   "input_policy": "committed",
   "reference": {
-    "source_revision": "3aa4b48fa5fd896933b3758f5a084e265f9ba9de",
+    "source_revision": "6515739bd1b1c6cf7ef21fe1d4e25830352ed4d2",
     "source_case_root": "tutorials/NiedererEtAl2011/NiedererEtAl2011verification",
     "checker": {
       "availability": "available",
@@ -20,7 +20,7 @@
   },
   "inputs": [
     {"source": "tutorials/NiedererEtAl2011/NiedererEtAl2011verification/Allrun", "destination": "case/Allrun", "sha256": "267e368d9133324a36aa89382998b67a7ed0359bdeb958881d5f727ef4b26d29"},
-    {"source": "tutorials/NiedererEtAl2011/NiedererEtAl2011verification/regression/regressionTest.sh", "destination": "case/regression/regressionTest.sh", "sha256": "480b209a4435374b0d71c7f3fdb956658207488d92343c5f42982eee750df20d"},
+    {"source": "tutorials/NiedererEtAl2011/NiedererEtAl2011verification/regression/regressionTest.sh", "destination": "case/regression/regressionTest.sh", "sha256": "56a2b1c6e988e62a88cf15e76ddbfda93805e7c1c2378ec17ae6bcc6d5ce14dd"},
     {"source": "tutorials/NiedererEtAl2011/NiedererEtAl2011verification/regression/NiedererEtAl2011.reference", "destination": "case/regression/NiedererEtAl2011.reference", "sha256": "9c6ced171ad247db523bfb7eecc6c9575ad69079440916446cf66e1922441618"},
     {"source": "tutorials/NiedererEtAl2011/NiedererEtAl2011verification/system/controlDict", "destination": "case/system/controlDict", "sha256": "7fa8a8c58fe88cde9a6ff3e5368981cad349ddaa37227aac0a40094725c00560"},
     {"source": "tutorials/NiedererEtAl2011/NiedererEtAl2011verification/system/blockMeshDict", "destination": "case/system/blockMeshDict", "sha256": "1e2bf992d43bce48b16ab49f4240d4ff955b20b2d62ebd019c60f3c242e74b7e"},

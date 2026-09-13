@@ -2,6 +2,49 @@
 
 Updated: 2026-09-08
 
+## Targeted cardiacFOAM refresh — 2026-09-13
+
+Current selected-source evidence: `/Users/simaocastro/noFrontendCardiacFoam_minor_errors`
+at `6515739bd1b1c6cf7ef21fe1d4e25830352ed4d2` (`main`), clean `src/`;
+permitted non-`src/` drift digest
+`sha256:9182e774f7a344ad6abeff352e5bd6ba02ec4042b786dcaae3ebf67877204205`.
+Parent submodule identity is `0bd882172db292c29bf41c4233d61cfa5f116168`; the
+actual, preserved dirty solids4foam checkout is
+`d28c6527fca934b39271ca61531110aeee0f80ed` on
+`electromechanical-coupling-wip`. Runtime evidence is OpenFOAM
+`/Volumes/OpenFOAM-v2412` (`v2412`, `darwin64ClangDPInt32Opt`), full backend,
+manifest `cardiacFoam.build.json` digest
+`sha256:895b65e2b8546c1e505c8e7a9269bcf369c60b2e01ce20cadb064b5d1f9daf37`.
+This is an actual-runtime inspection, not historical build attestation.
+
+Completed this refresh: updated both committed reference manifests and their
+two changed checker-script hashes; corrected the source-backed Gaur 2021 pig
+metadata without changing defaults; restored cardiacFOAM's delegation to the
+generic OpenFOAM environment preflight so explicit `--plugin cardiacfoam`
+runs can source and validate the selected environment. Focused checks:
+`uv run pytest packages/omnidriver-cardiacfoam/tests/test_reference_experiment_manifests.py packages/omnidriver-cardiacfoam/tests/test_ionic_catalog_contract.py packages/omnidriver-cardiacfoam/tests/test_selected_cardiacfoam_fixture.py packages/omnidriver-cardiacfoam/tests/test_selected_cardiacfoam_integration.py packages/omnidriver-cardiacfoam/tests/test_plugin_api_version.py packages/omnidriver-cardiacfoam/tests/test_plugin_architecture.py -q`
+returned `23 passed, 4 skipped, 40 subtests passed`.
+
+New single-cell native evidence: staged committed closure under
+`/private/tmp/omnidriver-native-refresh.fxyPjT/omnidriver-single-cell-tworld-reference-sphhwheh`;
+driver command explicitly used `--plugin cardiacfoam` and returned 0; checker
+`bash regression/regressionTest.sh --check-only --report regression/comparison-report.json`
+returned 0. Evidence: `integration-evidence.json`, checker report, workflow
+state, and two matched outputs under that staged `case/postProcessing/`.
+Source inputs remained unchanged. The report's largest displayed difference
+was `0.000543` for `AV_Ta` at 1.5; the solver-owned checker passed it, and no
+driver tolerance was added or changed.
+
+New Niederer native evidence: staged committed closure under
+`/private/tmp/omnidriver-native-refresh.dYfQ1n/omnidriver-niederer-tissue-reference-87qm_stf`;
+input digest `sha256:c787c9cae4541864daf7918084925f9837b4cd47db2e649b764050fe7a6edc36`.
+The explicit-plugin driver returned 0 and the solver-owned check-only report
+at `case/regression/comparison-report.json` returned 0: 6 checks passed, 0
+failures (all displayed differences zero). Generated activation/postprocessing
+outputs and workflow evidence are within the staged `case/` directory; source
+inputs remained unchanged. The earlier duplicate disposable run was stopped
+and is not counted as verification.
+
 **Roadmap review:** [September 8 reassessment](roadmap-audit-2026-09-08.md) audits HEAD `bea21d4` and supersedes the priority order below. The baseline paragraph below identifies the start of the latest implementation batch, not current HEAD.
 
 ## Current cardiac reconciliation scope — 2026-09-09

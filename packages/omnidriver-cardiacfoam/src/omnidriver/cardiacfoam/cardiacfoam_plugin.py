@@ -125,6 +125,34 @@ class CardiacFoamPlugin:
 
         return configured_openfoam_bashrc(env)
 
+    def get_environment_diagnostics(
+        self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None,
+    ):
+        """Use OpenFOAM's preflight before applying this solver's runtime profile."""
+        from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
+
+        return OpenFOAMEnvironmentPlugin().get_environment_diagnostics(
+            workflow_dag,
+            env=env,
+            explicit_bashrc=explicit_bashrc,
+            driver_context=driver_context,
+        )
+
+    def get_configured_environment(self, env, driver_context):
+        """Preserve generic OpenFOAM setup and apply cardiacFoam build validation."""
+        from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
+
+        return OpenFOAMEnvironmentPlugin().get_configured_environment(env, driver_context)
+
+    def get_loaded_environment(self, *, explicit_bashrc=None, driver_context=None):
+        """Load the explicit OpenFOAM profile, then this plugin's runtime contract."""
+        from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
+
+        return OpenFOAMEnvironmentPlugin().get_loaded_environment(
+            explicit_bashrc=explicit_bashrc,
+            driver_context=driver_context,
+        )
+
     def get_phases(self) -> tuple[str, ...]:
         """This plugin's four editing phases, in the order the RunDocument
         config and the validation slices use."""
