@@ -1,0 +1,34 @@
+schema_version: 1
+plugin:
+  id: org.omnidriver.cardiaccore
+  api_version: "2"
+case_profile:
+  dictionaries:
+    - path: Allrun
+      kind: case_script
+      role: cardiaccore.entrypoint
+      required: conditional
+    - path: system/controlDict
+      kind: openfoam_dictionary
+      role: openfoam.control_dict
+      required: always
+    - path: constant
+      kind: openfoam_dictionary
+      role: openfoam.case_directory
+      required: always
+    - path: system/setCardiacConductivityDict
+      kind: openfoam_dictionary
+      role: cardiaccore.conductivity_dictionary
+      required: conditional
+    - path: system/setCardiacAnatomyDict
+      kind: openfoam_dictionary
+      role: cardiaccore.anatomy_dictionary
+      required: conditional
+    - path: system/setPurkinjeSlabDict
+      kind: openfoam_dictionary
+      role: cardiaccore.purkinje_slab_dictionary
+      required: conditional
+    - path: system/setPurkinjeMorphometryDict
+      kind: openfoam_dictionary
+      role: cardiaccore.purkinje_morphometry_dictionary
+      required: conditional

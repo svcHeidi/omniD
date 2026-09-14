@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "omnidriver-cardiaccore"
+version = "0.1.0"
+description = "Source-backed cardiacCore preprocessing plugin for OmniD cases."
+requires-python = ">=3.11"
+dependencies = ["omnidriver>=0.1.0", "omnidriver-openfoam>=0.1.0"]
+
+[project.entry-points."omnidriver.plugins"]
+cardiaccore = "omnidriver.cardiaccore.plugin:CardiacCorePlugin"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"omnidriver.cardiaccore" = ["plugin.yaml"]

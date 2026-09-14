@@ -15,7 +15,12 @@ from .core.runtime.workflow_orchestrator import run_workflow
 from .core.runtime.workflow_state import workflow_state_from_json
 from .core.runtime.postprocess_phase import build_standalone_case_record, run_postprocess_phase, write_case_record
 from .core.runtime.registry import ENTRY_KIND_VALUES, list_tutorials
-from .core.runtime.sweep_runner import _stage_entry_case, sweep_plan, sweep_run
+from .core.runtime.sweep_runner import (
+    _materialize_entry_case,
+    _stage_entry_case,
+    sweep_plan,
+    sweep_run,
+)
 from omnidriver.core.introspection import describe_entry
 from omnidriver.core.specs.common import default_setup_dir_name
 from omnidriver.core.specs.paths import (
@@ -537,6 +542,36 @@ def _context_from_entry(
         if not readiness.structural_ok:
             print(json.dumps(report.to_json(), indent=2))
             return None, 1
+    if stage_for_execution and config_path is not None:
+        try:
+            replan_overrides = _materialize_entry_case(
+                replan_entry,
+                replan_overrides,
+                driver_context=driver_context,
+            )
+            report = strict_plan(
+                replan_entry,
+                entry_kind=replan_entry_kind,
+                overrides=replan_overrides,
+                config_path=config_path,
+                explicit_bashrc=explicit_bashrc,
+                allow_unresolved_configuration=allow_unresolved_configuration,
+                driver_context=driver_context,
+            )
+        except (OSError, ValueError) as exc:
+            print(json.dumps({
+                "status": "failed",
+                "entry": selected_entry,
+                "error": f"Could not materialize entry case: {exc}",
+            }, indent=2))
+            return None, 1
+        readiness = is_launchable(
+            plan_status=report.status,
+            environment_diagnostics=report.environment_diagnostics,
+        )
+        if not readiness.structural_ok:
+            print(json.dumps(report.to_json(), indent=2))
+            return None, 1
     execution_env = driver_context.capabilities.environment_preflight.load(
         explicit_bashrc=explicit_bashrc,
         driver_context=driver_context,
@@ -943,7 +978,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _load_spec_overrides(config_path: str, entry: str) -> dict:
+def _load_spec_overrides(config_path: str, entry: str, *, driver_context) -> dict:
     payload = json.loads(Path(config_path).read_text())
     if not isinstance(payload, dict):
         raise ValueError("Config file must contain a JSON object")
@@ -956,7 +991,7 @@ def _load_spec_overrides(config_path: str, entry: str) -> dict:
             return _normalize_spec_overrides(value)
 
     known_tutorial_keys = {
-        *(name.casefold() for name in list_tutorials()),
+        *(name.casefold() for name in list_tutorials(driver_context)),
         "genericcase",
         "randomcase",
     }
@@ -1085,7 +1120,15 @@ def main(argv: list[str] | None = None) -> int:
 
     selected_entry = args.entry
 
-    overrides = _load_spec_overrides(args.config, selected_entry) if args.config else None
+    overrides = (
+        _load_spec_overrides(
+            args.config,
+            selected_entry,
+            driver_context=driver_context,
+        )
+        if args.config
+        else None
+    )
     # Unconditional: the chain always applies, so an unset --cases-root
     # means OMNIDRIVER_CASES_ROOT or the working directory, never a location
     # core invented.
