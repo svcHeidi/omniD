@@ -35,7 +35,7 @@ def repo_root_default() -> Path:
     Tier 1 (monorepo): ancestor directory that has both ``tutorials/`` and
         ``src/`` siblings — the full cardiacFoam checkout.
     Tier 2 (standalone-with-tutorials): ancestor directory that has a
-        ``tutorials/`` sibling but no ``src/`` — driverFOAM cloned with a
+        ``tutorials/`` sibling but no ``src/`` — omnidriver cloned with a
         companion tutorials tree.
     Tier 3 (fully standalone): the ancestor directory that has both
         ``packages/`` and ``ARCHITECTURE.md`` — the omnidriver monorepo

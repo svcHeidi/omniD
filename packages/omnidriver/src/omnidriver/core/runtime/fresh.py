@@ -4,23 +4,25 @@ import shutil
 import sys
 from pathlib import Path
 
-_DRIVERFOAM_MARKER_NAMES = ("workflow_state.json", "sweep_manifest.json", "run_document.json")
+from .run_document_exec import ALLOWED_RUNS_ROOT_ENV
+
+_OMNIDRIVER_MARKER_NAMES = ("workflow_state.json", "sweep_manifest.json", "run_document.json")
 
 
-def _has_driverfoam_marker(output_dir: Path) -> bool:
-    """True if output_dir contains a recognizable driverFOAM artifact.
+def _has_omnidriver_marker(output_dir: Path) -> bool:
+    """True if output_dir contains a recognizable omnidriver artifact.
 
     Bounded to the top level and one level of subdirectories -- markers
     always live at a case root or a sweep's per-case root, and an unbounded
     walk would be slow across large mesh trees.
     """
-    for name in _DRIVERFOAM_MARKER_NAMES:
+    for name in _OMNIDRIVER_MARKER_NAMES:
         if (output_dir / name).exists():
             return True
     for child in output_dir.iterdir():
         if not child.is_dir():
             continue
-        for name in _DRIVERFOAM_MARKER_NAMES:
+        for name in _OMNIDRIVER_MARKER_NAMES:
             if (child / name).exists():
                 return True
     return False
@@ -47,12 +49,12 @@ def check_fresh_deletion_allowed(output_dir: Path, *, allowed_root: Path | None)
     if allowed_root is not None and not resolved.is_relative_to(allowed_root):
         return (
             f"--fresh refuses to delete {resolved}: outside "
-            f"DRIVERFOAM_ALLOWED_RUNS_ROOT ({allowed_root})."
+            f"{ALLOWED_RUNS_ROOT_ENV} ({allowed_root})."
         )
-    if resolved.exists() and not _has_driverfoam_marker(resolved):
+    if resolved.exists() and not _has_omnidriver_marker(resolved):
         return (
             f"--fresh refuses to delete {resolved}: directory exists but contains "
-            "no recognizable driverFOAM artifact (workflow_state.json, "
+            "no recognizable omnidriver artifact (workflow_state.json, "
             "sweep_manifest.json, or run_document.json) at its top level or one "
             "level of subdirectories. Check --output-dir for a typo."
         )

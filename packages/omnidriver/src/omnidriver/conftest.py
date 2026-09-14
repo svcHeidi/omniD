@@ -1,6 +1,6 @@
 """Pytest session bootstrap.
 
-The driverFOAM postprocessing chain imports `matplotlib.pyplot` at module
+The omnidriver postprocessing chain imports `matplotlib.pyplot` at module
 load time (`tutorials/.../post_processing_manufactured.py`). On macOS
 without a display server — and in any headless CI/SSH/Docker environment
 — matplotlib's default backend (`MacOSX` or `TkAgg`) attempts a Cocoa /

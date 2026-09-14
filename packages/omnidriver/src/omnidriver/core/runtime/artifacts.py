@@ -26,6 +26,14 @@ does not add solver-specific handlers or branch on solver names.
 """
 from __future__ import annotations
 
+#: ``produced_by`` for files the executor writes around a step, rather than the
+#: solver command. ``LEGACY_DRIVER_PRODUCED_BY`` is the value this carried
+#: before 2026-09-14; run documents written then still hold it, so readers must
+#: accept both or they would credit driver bookkeeping to the solver step.
+DRIVER_PRODUCED_BY = "omnidriver"
+LEGACY_DRIVER_PRODUCED_BY = "driverFOAM"
+DRIVER_PRODUCED_BY_VALUES = (DRIVER_PRODUCED_BY, LEGACY_DRIVER_PRODUCED_BY)
+
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Iterable
 
@@ -132,15 +140,15 @@ def _core_generic_artifacts(spec: TutorialSpec) -> tuple[DataArtifact, ...]:
             artifact_id="core.workflow_state",
             path_pattern=f"{prefix}/workflow_state.json",
             format="json_summary",
-            description="Persistent state of the normalized driverFOAM workflow.",
-            produced_by="driverFOAM",
+            description="Persistent state of the normalized omnidriver workflow.",
+            produced_by=DRIVER_PRODUCED_BY,
         ),
         DataArtifact(
             artifact_id="core.workflow_logs",
             path_pattern=f"{prefix}/workflow_logs",
             format="log",
-            description="Per-step stdout and stderr logs written by driverFOAM.",
-            produced_by="driverFOAM",
+            description="Per-step stdout and stderr logs written by omnidriver.",
+            produced_by=DRIVER_PRODUCED_BY,
             optional=True,
         ),
     )
