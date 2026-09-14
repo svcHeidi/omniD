@@ -69,15 +69,24 @@ def _diag(level: str, code: str, message: str, field: str = "") -> dict[str, Any
     return {"level": level, "code": code, "message": message, "field": field}
 
 
+#: Environment variable naming the only tree run outputs may be written to or
+#: deleted from. ``LEGACY_ALLOWED_RUNS_ROOT_ENV`` is the name this carried
+#: before 2026-09-14; it is still read, because silently ignoring an operator's
+#: existing setting would turn a configured safety boundary off without saying
+#: so. The current name wins when both are set.
+ALLOWED_RUNS_ROOT_ENV = "OMNIDRIVER_ALLOWED_RUNS_ROOT"
+LEGACY_ALLOWED_RUNS_ROOT_ENV = "DRIVERFOAM_ALLOWED_RUNS_ROOT"
+
+
 def _allowed_runs_root(env: dict[str, str] | None = None) -> Path | None:
-    """Resolved DRIVERFOAM_ALLOWED_RUNS_ROOT, or None when unset/empty.
+    """Resolved allowed-runs root, or None when unset/empty.
 
     Accepts an explicit ``env`` mapping so callers (including future tests)
     can inject the value without mutating ``os.environ``; the current tests
     use ``mock.patch.dict`` on real ``os.environ`` instead.
     """
     source = env if env is not None else os.environ
-    value = source.get("DRIVERFOAM_ALLOWED_RUNS_ROOT")
+    value = source.get(ALLOWED_RUNS_ROOT_ENV) or source.get(LEGACY_ALLOWED_RUNS_ROOT_ENV)
     if not value:
         return None
     return Path(value).resolve()
@@ -272,7 +281,7 @@ def build_execution_inputs(
             # execution — computed only so every branch yields a value.
             resolved_output_dir = candidate.resolve()
 
-    # Opt-in hard boundary: when DRIVERFOAM_ALLOWED_RUNS_ROOT is set, both
+    # Opt-in hard boundary: when the allowed-runs-root variable is set, both
     # resolved paths must sit under it. Runs on resolved paths, so a symlink or
     # an absolute output_dir cannot escape. Unset -> skipped (no behavior change).
     allowed_root = _allowed_runs_root()
@@ -280,14 +289,14 @@ def build_execution_inputs(
         if resolved_case_root is not None and not resolved_case_root.is_relative_to(allowed_root):
             diagnostics.append(_diag(
                 "error", "case_root_outside_allowed_root",
-                f"launch.caseRoot resolves outside DRIVERFOAM_ALLOWED_RUNS_ROOT "
+                f"launch.caseRoot resolves outside {ALLOWED_RUNS_ROOT_ENV} "
                 f"({allowed_root}): {resolved_case_root}.",
                 "launch.caseRoot",
             ))
         if resolved_output_dir is not None and not resolved_output_dir.is_relative_to(allowed_root):
             diagnostics.append(_diag(
                 "error", "output_dir_outside_allowed_root",
-                f"launch.outputDir resolves outside DRIVERFOAM_ALLOWED_RUNS_ROOT "
+                f"launch.outputDir resolves outside {ALLOWED_RUNS_ROOT_ENV} "
                 f"({allowed_root}): {resolved_output_dir}.",
                 "launch.outputDir",
             ))

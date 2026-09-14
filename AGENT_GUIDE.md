@@ -884,7 +884,7 @@ Once registered, drive it exclusively through `driverFoam`
 
 ---
 
-## Plugin Guide — Adding a New Solver to driverFOAM
+## Plugin Guide — Adding a New Solver to omnidriver
 
 This section is for **plugin authors** — developers or AI agents who need to
 add support for a new OpenFOAM solver to driverFOAM. End-users running existing

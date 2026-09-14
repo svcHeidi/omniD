@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "RunDocument",
-  "description": "driverFOAM Run document v3. Version 3 is the canonical agent-authored planning contract with an open, plugin-schema-validated config object; version 1 and 2 documents must be migrated explicitly before emission.",
+  "description": "omnidriver Run document v3. Version 3 is the canonical agent-authored planning contract with an open, plugin-schema-validated config object; version 1 and 2 documents must be migrated explicitly before emission.",
   "type": "object",
   "required": ["version", "id", "name", "status", "config"],
   "properties": {
