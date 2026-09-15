@@ -114,7 +114,7 @@ def _apply_case(
     }
 
     # controlDict: endTime = (S1*n_S1 + S2*n_S2) / 1000 + buffer
-    end_time = (s1_interval_ms * n_s1 + s2_interval_ms * n_s2) / 1000.0 + end_time_buffer_s
+    end_time = (s1_interval_ms * (n_s1 - 1) + s2_interval_ms * n_s2) / 1000.0 + end_time_buffer_s
     set_end_time(control_dict_file, end_time)
     apply_electro_property_overrides(electro_properties_file, case_overrides)
     apply_electro_property_overrides(electro_properties_file, electro_property_overrides)
@@ -165,7 +165,7 @@ def make_spec(
     run_script_path = Path(run_script_relpath)
 
     # write_after_time: start writing 2 s before the end of the S1 phase
-    write_after_time_s = (s1_interval_ms * n_s1) / 1000.0 - 2.0
+    write_after_time_s = (s1_interval_ms * (n_s1 - 1)) / 1000.0 - 2.0
 
     case_root, setup_root, output_dir = resolve_spec_paths(
         cases_root=cases_root,
