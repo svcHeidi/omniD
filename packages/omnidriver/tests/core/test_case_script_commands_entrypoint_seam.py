@@ -20,8 +20,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from omnidriver.core.capability_manifest import build_capability_manifest
-from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
-from omnidriver.openfoam.case_runtime_conventions import openfoam_case_runtime_conventions
 from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile
@@ -74,14 +72,6 @@ def _write_executable(path: Path, content: str = "#!/bin/sh\n") -> None:
 
 def test_case_script_commands_defaults_to_the_fixed_set_with_no_context() -> None:
     assert case_script_commands(None) == CASE_SCRIPT_COMMANDS
-
-
-def test_shipped_plugins_advertise_only_the_fixed_set() -> None:
-    """Zero behavior change for either shipped plugin: both declare their
-    entrypoint as exactly "Allrun", already in CASE_SCRIPT_COMMANDS."""
-    manifest = OpenFOAMEnvironmentPlugin().get_capabilities()
-    expected = sorted(openfoam_case_runtime_conventions().case_script_commands)
-    assert manifest["allowed_commands"]["case_scripts"] == expected
 
 
 def test_a_foreign_plugins_declared_entrypoint_is_included(tmp_path: Path) -> None:

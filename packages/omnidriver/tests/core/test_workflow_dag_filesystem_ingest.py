@@ -1,15 +1,15 @@
 """Tests for filesystem case workflow ownership.
 
-Plain case folders are owned by their on-disk Allrun. Registry discovery may
+Plain case folders are owned by their plugin-declared case script. Registry discovery may
 still find a non-runnable marked folder, but it must not invent a
-workflow_dag unless Allrun exists.
+workflow_dag unless that script exists.
 
 Phase 2 Task M2: ``test_variant_electro_properties_case_is_discoverable_and_runnable``
 moved to
 packages/omnidriver-cardiacfoam/tests/test_workflow_dag_filesystem_ingest.py
 -- it asserts cardiacFoam's own electroProperties-variant case marker. The
-two tests kept here assert core's own DAG-synthesis rule (Allrun present ->
-single-step DAG; Allrun absent -> None), independent of what marks a folder
+two tests kept here assert core's own DAG-synthesis rule (a declared script
+present -> single-step DAG; absent -> None), independent of what marks a folder
 a case at all, so ``_write_case_files`` now writes ``system/controlDict`` +
 ``constant/`` -- the two filesystem entries OpenFOAMEnvironmentPlugin's own
 profile declares (role ``openfoam.control_dict`` / ``openfoam.case_directory``,
@@ -28,19 +28,17 @@ import unittest
 from pathlib import Path
 import tempfile
 
-from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.core.runtime.generic_case import make_generic_case_spec
 from omnidriver.core.runtime.registry import load_tutorial_spec, resolve_entry
 from omnidriver.core.plugin_interface import driver_context as _driver_context
+from plugins.minimal_plugin import MinimalOpenFOAMPlugin
 
 
-class _NeutralFilesystemMarkerPlugin(OpenFOAMEnvironmentPlugin):
+class _NeutralFilesystemMarkerPlugin(MinimalOpenFOAMPlugin):
     """A case marker built only from filesystem entries core itself owns.
 
-    ``system/controlDict`` + a ``constant/`` directory are true of every
-    OpenFOAM case regardless of solver (see generic-plugin.yaml's own
-    case_profile.dictionaries) -- carrying no cardiac vocabulary, unlike
-    cardiacFoam's electroProperties marker.
+    The marker is deliberately plain filesystem evidence; it carries no
+    solver vocabulary.
     """
 
     def has_case_marker(self, case_root: Path) -> bool:
@@ -61,25 +59,25 @@ class _NeutralFilesystemMarkerPlugin(OpenFOAMEnvironmentPlugin):
 
 
 _CTX = _driver_context(
-    _NeutralFilesystemMarkerPlugin(),
+    _NeutralFilesystemMarkerPlugin(entrypoint="run-case"),
     source="test:workflow_dag_filesystem_ingest",
 )
 
 
 class TestFilesystemCaseWorkflowOwnership(unittest.TestCase):
-    """Filesystem case folders own their run definition through Allrun."""
+    """Filesystem case folders own their run definition through a declaration."""
 
     def _write_case_files(self, case_root: Path) -> None:
         (case_root / "constant").mkdir(parents=True, exist_ok=True)
         (case_root / "system").mkdir(parents=True, exist_ok=True)
         (case_root / "system" / "controlDict").write_text("")
 
-    def test_filesystem_case_with_allrun_uses_allrun_fallback(self) -> None:
+    def test_filesystem_case_with_declared_script_uses_that_script(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             cases_root = Path(temp_dir)
             case_root = cases_root / "myCase"
             self._write_case_files(case_root)
-            (case_root / "Allrun").write_text("#!/bin/sh\n")
+            (case_root / "run-case").write_text("#!/bin/sh\n")
 
             spec = load_tutorial_spec(
                 "myCase",
@@ -89,10 +87,10 @@ class TestFilesystemCaseWorkflowOwnership(unittest.TestCase):
             dag = spec.metadata.get("workflow_dag")
             self.assertEqual(
                 dag,
-                {"steps": [{"id": "run", "command": "Allrun", "depends_on": []}]},
+                {"steps": [{"id": "run", "command": "run-case", "depends_on": []}]},
             )
 
-    def test_filesystem_case_without_allrun_has_no_workflow_dag(self) -> None:
+    def test_filesystem_case_without_declared_script_has_no_workflow_dag(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             cases_root = Path(temp_dir)
             case_root = cases_root / "bareCase"
@@ -104,7 +102,7 @@ class TestFilesystemCaseWorkflowOwnership(unittest.TestCase):
                 driver_context=_CTX,)
 
             dag = spec.metadata.get("workflow_dag")
-            self.assertIsNone(dag, "workflow_dag must be None when Allrun is absent")
+            self.assertIsNone(dag, "workflow_dag must be None when the declared script is absent")
 
 
 if __name__ == "__main__":
