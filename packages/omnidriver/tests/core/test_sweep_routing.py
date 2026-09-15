@@ -14,7 +14,8 @@ import pytest
 
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError
 from omnidriver.sweep_routing import route_case_values
-from omnidriver.openfoam.environment import openfoam_environment_context
+from omnidriver.core.plugin_interface import driver_context
+from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
 
 
 def test_routing_uses_the_selected_plugin_catalog():
@@ -32,5 +33,7 @@ def test_routing_uses_the_selected_plugin_catalog():
         route_case_values(
             base={},
             resolved_axis_values={"type": "electroModel"},
-            driver_context=openfoam_environment_context(),
+            driver_context=driver_context(
+                NeutralEnvironmentPlugin(), source="test:sweep-routing",
+            ),
         )
