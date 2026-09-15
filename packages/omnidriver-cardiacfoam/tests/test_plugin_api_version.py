@@ -11,6 +11,7 @@ without cardiacfoam installed.
 from __future__ import annotations
 
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+from omnidriver.core.plugin_interface import driver_context
 
 
 def test_cardiacfoam_plugin_is_v2() -> None:
@@ -30,3 +31,10 @@ def test_cardiacfoam_plugin_satisfies_the_full_protocol() -> None:
     from omnidriver.core.plugin_interface import SolverPlugin
 
     assert isinstance(CardiacFoamPlugin(), SolverPlugin)
+
+
+def test_cardiacfoam_declares_its_phases_in_order() -> None:
+    context = driver_context(CardiacFoamPlugin(), source="test:phases")
+    assert context.capabilities.dictionaries.phases() == (
+        "anatomy", "physics", "stimulus", "solver",
+    )
