@@ -9,6 +9,10 @@ description = "Source-backed cardiacCore preprocessing plugin for OmniD cases."
 requires-python = ">=3.11"
 dependencies = ["numpy>=1.24", "omnidriver>=0.1.0", "omnidriver-openfoam>=0.1.0"]
 
+[project.optional-dependencies]
+# Only the VTU selection reader uses this; array methods require no VTK runtime.
+vtk = ["pyvista"]
+
 [project.entry-points."omnidriver.plugins"]
 cardiaccore = "omnidriver.cardiaccore.plugin:CardiacCorePlugin"
 
@@ -16,4 +20,4 @@ cardiaccore = "omnidriver.cardiaccore.plugin:CardiacCorePlugin"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"omnidriver.cardiaccore" = ["plugin.yaml"]
+"omnidriver.cardiaccore" = ["plugin.yaml", "agent_guidance/*.md", "agent_guidance/*.yaml"]

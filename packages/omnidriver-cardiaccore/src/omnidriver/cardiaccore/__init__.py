@@ -1,4 +1,4 @@
-"""Out-of-tree OmniD adapter for cardiacCore, initially without semantics."""
+"""OmniD adapter for declared cardiacCore preprocessing and array methods."""
 
 from .plugin import CardiacCorePlugin
 

@@ -1,9 +1,4 @@
-"""Validated user-requested changes for the supported cardiacCore inputs.
-
-The Python adapter owns the mapping from stable user paths to native OpenFOAM
-dictionaries. A run or sweep JSON only supplies values for those paths; it
-never edits the checked-in tutorial defaults.
-"""
+"""Validated user-requested changes for supported cardiacCore inputs."""
 
 from __future__ import annotations
 
@@ -15,7 +10,7 @@ from typing import Any
 
 from omnidriver.openfoam.mutators import update_foam_entry
 
-from .input_catalog import CATALOG
+from ..catalogs.inputs import CATALOG
 
 
 @dataclass(frozen=True)
@@ -44,17 +39,11 @@ _TARGETS: dict[str, InputTarget] = {
 _ENTRIES = {entry.driver_path: entry for entry in CATALOG.entries}
 
 
-def validate_input_overrides(
-    overrides: Mapping[str, Any] | None,
-    *,
-    allowed_paths: tuple[str, ...] | None = None,
-) -> dict[str, Any]:
-    """Return a safe, reviewed override map or fail before writing a case."""
+def validate_input_overrides(overrides: Mapping[str, Any] | None, *, allowed_paths: tuple[str, ...] | None = None) -> dict[str, Any]:
     if overrides is None:
         return {}
     if not isinstance(overrides, Mapping):
         raise TypeError("input_overrides must be a JSON object mapping reviewed paths to values")
-
     validated: dict[str, Any] = {}
     for driver_path, value in overrides.items():
         if not isinstance(driver_path, str) or driver_path not in _TARGETS:
@@ -79,46 +68,28 @@ def validate_input_overrides(
         else:
             raise ValueError(f"input override {driver_path!r} has unsupported value kind {entry.value_kind!r}")
         if entry.enum_values and value not in entry.enum_values:
-            raise ValueError(
-                f"input override {driver_path!r} value {value!r} not in enum {entry.enum_values}"
-            )
+            raise ValueError(f"input override {driver_path!r} value {value!r} not in enum {entry.enum_values}")
         validated[driver_path] = value
-
     _validate_supported_combinations(validated)
     return validated
 
 
 def _validate_supported_combinations(overrides: Mapping[str, Any]) -> None:
-    """Reject modes whose required conditional inputs are not yet owned here."""
-    manual_paths = (
-        "$CARDIAC_ANATOMY.grooveMode",
-        "$PURKINJE_MORPHOMETRY.grooveMode",
-    )
+    manual_paths = ("$CARDIAC_ANATOMY.grooveMode", "$PURKINJE_MORPHOMETRY.grooveMode")
     if any(overrides.get(path) == "manual" for path in manual_paths):
         raise ValueError(
-            "grooveMode='manual' requires the conditional anteriorGroove and "
-            "posteriorGroove inputs. Those inputs are documented but not yet part "
-            "of this selected auto-mode bivCase workflow."
+            "grooveMode='manual' requires the conditional anteriorGroove and posteriorGroove inputs. "
+            "Those inputs are documented but not yet part of this selected auto-mode bivCase workflow."
         )
 
 
 def apply_input_overrides(case_root: Path, overrides: Mapping[str, Any] | None) -> None:
-    """Apply reviewed values to a disposable materialized case only."""
     for driver_path, value in validate_input_overrides(overrides).items():
         target = _TARGETS[driver_path]
         update_foam_entry(case_root / target.file_relpath, target.key, value)
 
 
-def read_input_values(
-    case_root: Path, *, paths: tuple[str, ...] | None = None,
-) -> dict[str, Any]:
-    """Read the current selected-case values using the same reviewed mapping."""
+def read_input_values(case_root: Path, *, paths: tuple[str, ...] | None = None) -> dict[str, Any]:
     from omnidriver.openfoam.mutators import read_foam_entry
-
     selected_paths = tuple(_TARGETS) if paths is None else paths
-    return {
-        driver_path: read_foam_entry(
-            case_root / _TARGETS[driver_path].file_relpath, _TARGETS[driver_path].key
-        )
-        for driver_path in selected_paths
-    }
+    return {driver_path: read_foam_entry(case_root / _TARGETS[driver_path].file_relpath, _TARGETS[driver_path].key) for driver_path in selected_paths}

@@ -1,4 +1,4 @@
-"""Source-backed tutorial declarations for cardiacCore."""
+"""Source-backed tutorial declarations for cardiacCore workflows."""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ def _apply_case(
     input_overrides: Mapping[str, Any] | None,
 ) -> None:
     del case
-    from .input_overrides import apply_input_overrides
+    from .overrides import apply_input_overrides
 
     apply_input_overrides(case_root, input_overrides)
 

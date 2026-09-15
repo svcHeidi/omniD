@@ -5,7 +5,7 @@ import pytest
 from omnidriver.core.plugin_interface import driver_context
 
 from omnidriver.cardiaccore.plugin import CardiacCorePlugin
-from omnidriver.cardiaccore.tutorials import (
+from omnidriver.cardiaccore.workflows.preprocessing import (
     HUMAN_TREE_INPUT_PATHS,
     HUMAN_TREE_TUTORIAL_NAME,
     PIG_MORPHOMETRIC_TREE_INPUT_PATHS,

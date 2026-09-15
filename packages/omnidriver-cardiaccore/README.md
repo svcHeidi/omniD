@@ -1,50 +1,113 @@
-# OmniD cardiacCore adapter experiment
+# OmniD cardiacCore adapter
 
-This source-backed onboarding slice owns three deliberately distinct native
-workflows: the four-stage `bivCase` preprocessing wrapper, a human
-endocardial explicit-tree workflow, and a pig morphometric/transmural-tree
-workflow. Each declares its reviewed dictionary inputs and generated
-artifacts. A user supplies a normal run request through `--config`:
+This package exposes the declared cardiacCore preprocessing workflows and
+Python operations through the `cardiaccore` plugin. Native cardiacCore remains
+the owner of its executables, dictionaries and case assets.
 
-```json
-{
-  "input_overrides": {
-    "$PURKINJE_SLAB.thickness": 0.05
-  }
-}
+## Start from the installed package
+
+```python
+from omnidriver.cardiaccore import CardiacCorePlugin
+from omnidriver.cardiaccore.agent_guidance import read_guidance
+
+print(read_guidance("runner"))
+catalogs = CardiacCorePlugin().get_named_catalogs()
+operation = catalogs["cardiaccore_operations"]["cardiaccore.cobiveco.normalize.v1"]
+print(operation["preconditions"])
+print(operation["entrypoints"])
 ```
 
-The adapter validates each path and value, writes only a disposable
-materialized case, and records the effective values in the RunDocument's
-`preprocessing` phase. It does not change the checked-in tutorial defaults.
+The guide and its manifest are package resources: this works without a source
+checkout. The manifest identifies required catalogs for each role. It does
+not itself inject instructions into an agent; provider integration remains
+outside this adapter.
 
-The explicit-tree workflows deliberately keep their tree seeds, growth, and
-terminal-selection dictionaries fixed until their complete validation rules
-are published. The human path needs the shared conductivity/anatomy inputs;
-the pig path additionally runs morphometry and declares its two generated
-terminal-weight fields as tree inputs. `generatePurkinjeTree` must run with
-the staged case as its working directory because its VTK outputs are relative
-to that directory.
+An operation has an exact primary `module:function` reference and separate
+`entrypoints` for preparation, calculation or writing. Read each entrypoint's
+arguments and side effects before calling it. Array availability, native-file
+reading and workflow integration are separate status fields. An available
+array method does not imply that an arbitrary native case can be processed.
 
-The committed source fixture alone is not a complete runnable case: it lacks
-`constant/polyMesh` and the initial `0/` fibre/UVC field bundle. A user must
-supply the canonical asset bundle or a declared native generator before a
-clean-clone run can be claimed. Manual-AHA and bidomain tensor branches remain
-explicitly unsupported. Pig morphometry is supported only by the named pig
-tree workflow; a user-facing tree-parameter sweep, coverage acceptance
-criterion, and graph hand-off remain later increments.
+For CObiveco, read the selected target convention before calculation:
 
-## Canonical tree-validation contract
+```python
+from pathlib import Path
+from omnidriver.cardiaccore.operations.cobiveco import (
+    normalize_cobiveco_coordinates,
+    read_cobiveco_target_convention,
+)
 
-For an OmniD agent, the sole adapter-owned contract is
-`omnidriver.cardiaccore.tree_validation` and the
-`cardiaccore_tree_validation` named catalog exposed by the plugin. It defines
-the basal-septal LV root criterion (AHA segments 2/3), the generator-specific
-recovered-RV-septal UVC criterion, and the default coverage policy: occupied
-mid/apical sectors where endocardium exists; basal gaps recorded as warnings.
-Node/terminal counts and surface-distance measures are observations for later
-ECG-driven optimisation, never universal acceptance thresholds.
+# case_root and aligned tv/tm/ab arrays are supplied by the caller.
+target = read_cobiveco_target_convention(Path(case_root))
+fields = normalize_cobiveco_coordinates(tv, tm, ab, target_convention=target)
+```
 
-The standalone `agent/` Python files, tutorial notes, and old run logs are
-external provenance only. They are not separate instructions for an OmniD
-agent.
+Do not invent missing fields, reinterpret coordinates, or silently use a
+different method after an error. Distinguish invalid input, an unavailable
+reader, and unresolved scientific interpretation. Read the operation record
+for its limits and correct the identified prerequisite first.
+
+## Ownership within the package
+
+| Location | Responsibility |
+| --- | --- |
+| `plugin.py` / `plugin.yaml` | Compose capabilities and expose public catalogs |
+| `catalogs/inputs.py` | Reviewed input descriptions and conditional inputs |
+| `catalogs/utilities.py` | Native commands and their input/output contracts |
+| `catalogs/operations.py` | Canonical callable usage contracts |
+| `catalogs/purkinje.py` | Shared method constants and named baseline categories |
+| `catalogs/support_boundary.py` | Field context and workflow support boundary |
+| `workflows/` | Workflow order, allowed overrides and RunDocument configuration |
+| `operations/` | Python transformations, proposals and observations |
+| `agent_guidance/` | Packaged role manifest and short usage guidance |
+
+`cardiaccore_python_utilities` remains a convenience index, derived from
+`cardiaccore_operations`; it is not another maintained set of claims.
+Catalog results are independent snapshots so caller annotations cannot change
+what another agent sees.
+
+Native source and historical scripts explain the origin of a method. They
+are not fallback imports or instructions to bypass the supported adapter.
+Reference geometry, meshes, fibre/UVC fields and other required assets remain
+explicit inputs; moving code does not make those assets optional.
+
+## Supported workflows and limits
+
+The plugin advertises the preprocessing wrapper, human endocardial tree, and
+pig morphometric tree workflows. Query the tutorial and support catalogs for
+the current list. Reviewed inputs are passed through `input_overrides` in
+the normal run configuration, for example:
+
+```json
+{"input_overrides": {"$PURKINJE_SLAB.thickness": 0.05}}
+```
+
+This is a request example, not a new default or scientific recommendation.
+The workflow permits only its declared inputs and mutates a staged case.
+The tree workflows retain fixed native seed/growth dictionaries; array seed
+proposals are not automatically applied. Coverage reports retain the named
+baseline's categories, but do not return scientific acceptance.
+
+A runnable native case requires the explicitly supplied mesh and initial
+field bundle. Clean-clone asset distribution, native surface/field sampling,
+reviewed seed writing, and graph hand-off remain separate pending work.
+The VTU selection reader supports ASCII data with base dependencies; encoded
+or multi-piece data requires the optional `omnidriver-cardiaccore[vtk]` extra.
+Installing that extra does not implement the other pending VTK readers.
+
+## Maintenance and verification
+
+Preserve operation IDs, named catalog IDs and the plugin entry point.
+The in-progress flat-module reorganization intentionally uses the callable
+paths now advertised by the catalog; no old-module forwarding layer is added.
+This is an import-path migration, not a claim that previous direct imports
+continue working. Existing callers must select the advertised paths.
+
+Tests exercise plugin composition, workflows, operation behavior, and
+catalog-driven invocation. After changing package resources or imports, build
+a fresh wheel and run these tests outside the checkout as well. Do not infer
+native or scientific acceptance from synthetic array tests.
+
+Shared OmniD rules belong in its role guidance. This guide explains only this
+adapter; it is the model for organizing another adapter, not a shared source
+of cardiacFOAM solver semantics.
