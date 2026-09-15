@@ -19,6 +19,7 @@ from omnidriver.core.plugin_profile import load_plugin_profile
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
 from .input_catalog import CATALOG, CONDITIONAL_INPUTS, DOCUMENTS
+from .tree_validation import TREE_VALIDATION_CONTRACT
 from .tutorials import (
     HUMAN_TREE_TUTORIAL_NAME,
     PIG_MORPHOMETRIC_TREE_TUTORIAL_NAME,
@@ -186,6 +187,7 @@ class CardiacCorePlugin:
     def get_named_catalogs(self) -> dict[str, Any]:
         return {
             "cardiaccore_conditional_inputs": CONDITIONAL_INPUTS,
+            "cardiaccore_tree_validation": TREE_VALIDATION_CONTRACT,
         }
 
     def get_solve_step_commands(self) -> frozenset[str]:

@@ -33,3 +33,18 @@ clean-clone run can be claimed. Manual-AHA and bidomain tensor branches remain
 explicitly unsupported. Pig morphometry is supported only by the named pig
 tree workflow; a user-facing tree-parameter sweep, coverage acceptance
 criterion, and graph hand-off remain later increments.
+
+## Canonical tree-validation contract
+
+For an OmniD agent, the sole adapter-owned contract is
+`omnidriver.cardiaccore.tree_validation` and the
+`cardiaccore_tree_validation` named catalog exposed by the plugin. It defines
+the basal-septal LV root criterion (AHA segments 2/3), the generator-specific
+recovered-RV-septal UVC criterion, and the default coverage policy: occupied
+mid/apical sectors where endocardium exists; basal gaps recorded as warnings.
+Node/terminal counts and surface-distance measures are observations for later
+ECG-driven optimisation, never universal acceptance thresholds.
+
+The standalone `agent/` Python files, tutorial notes, and old run logs are
+external provenance only. They are not separate instructions for an OmniD
+agent.
