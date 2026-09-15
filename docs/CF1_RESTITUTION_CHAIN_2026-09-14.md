@@ -659,3 +659,121 @@ The open choice is where the recipe is declared: in the sweep JSON through the
 existing `case_id_template` derivation (recipe as data, uniform across plugins),
 or routed from adapter code (existing sweep specs unchanged). The first is the
 better fit for a generality claim.
+
+## Mesh convergence, and a falsified hypothesis
+
+The coarse screening run sat roughly 15% below the retained CV table read on
+its shifted axis, and the gap shrank as DI lengthened (15% / 4% / 1.2% at
+DI90 ~ 100 / 200 / 400 ms). That pattern was read here as axial
+under-resolution: a coarse mesh most penalises the slow, depressed upstroke of
+a premature beat and converges at full recovery. A three-point mesh ladder at
+fixed `deltaT = 1e-5 s`, requested DI90 100 ms, was run to test it.
+
+| dx [mm] | CV [m/s] | change | measured DI90 [ms] | S2 APD90 [ms] |
+| ---: | ---: | ---: | ---: | ---: |
+| 0.2 | 2.4992 | -- | 101.43 | 283.96 |
+| 0.1 | 2.5075 | +0.33% | 101.25 | 284.13 |
+| 0.05 | 2.5112 | +0.15% | 101.15 | 284.22 |
+
+Successive differences of 0.0083 then 0.0037 give a ratio near 2.2, so
+convergence is roughly first order and Richardson extrapolation puts the
+mesh-converged value at approximately **2.514 m/s**. APD90 moves 0.26 ms and
+measured DI90 moves 0.28 ms across a fourfold refinement.
+
+**The hypothesis is false.** Conduction velocity at this point is already
+mesh-converged at 0.2 mm, and refinement moves it toward 2.51, not toward the
+2.95 the retained table implies. The discrepancy is not spatial.
+
+Three explanations remain, in the order they should be tested:
+
+1. time step -- both ladder runs used `deltaT = 1e-5 s`, while the retained
+   protocol used `1e-6 s`; operator-splitting error on a depressed upstroke is
+   the one plausible mechanism left;
+2. the shifted-axis mapping is wrong, so these points are not comparable to
+   those table entries at all;
+3. the retained ordinates are not reproducible.
+
+This bears directly on the reconciliation plan's working interpretation, which
+holds that the retained CV ordinates "are provisionally credible measurements
+and must not be discarded merely because their axis label was wrong". Two
+independent mesh-converged measurements now sit 15% below them. That assumption
+is no longer supported by the available evidence, though it is not yet refuted
+either: the time-step leg has to be run before the retained values can be
+replaced rather than reconciled.
+
+Note that the refinement earned its keep by **falsifying** the explanation it
+was run to confirm. Had it been skipped, a mesh-resolution story would have
+been carried into the calibration as though it were established.
+
+## F13 — the driver refused to run against a changed binary
+
+Severity: **not a defect. A third instance of the property behind F1 and F9.**
+
+The time-step ladder was launched immediately after `libelectroModels.dylib`
+was rebuilt with new scientific constants. Every case failed before launching a
+solver:
+
+```text
+openfoam_env_source_failed: Build artifact changed since manifest creation:
+  .../platforms/darwin64ClangDPInt32Opt/lib/libelectroModels.dylib
+```
+
+The run would have been perfectly *executable*. What it would not have been is
+**attributable**: its provenance record was created against a different binary,
+and the evidence it produced would have carried a build identity that no longer
+described the code that produced it. OmniD declined on that basis alone.
+
+The remedy is not to weaken the check. `_ensure_build_manifest` regenerates the
+record only when the **solver executable** is newer than the manifest, and its
+docstring is explicit that "a library-only change invalidates this record even
+if the solver is older" -- so a rebuilt library with an unchanged application
+is exactly the case it refuses to paper over. Rebuilding the application
+refreshes the record honestly.
+
+For the paper this is the strongest of the three, because it is the one a
+human would be least likely to catch. F1 and F9 concern outputs that are
+missing or wrong; F13 concerns output that would have been *numerically
+correct* and provenance-wrong. A shell workflow has no mechanism to notice.
+
+## Constants updated in cardiacFOAM
+
+Applied to `restitutionTemplates.H` and the solver constructor, and built
+clean. These are `restitutionEikonalSolver1D` defaults; no tutorial overrides
+them.
+
+| constant | was | now | basis |
+| --- | ---: | ---: | --- |
+| `purkinjeAPDnominal` | 0.290 | 0.303037 | measured conditioned APD90; reproduced to 0.34 ms at 0.2 mm / 1e-5 s |
+| `purkinjeEscapeInterval` | 1.1 | 1.202470 | measured proximal automaticity cycle |
+| `purkinjeMinimumDI90` | did not exist | 0.050 | bracketed: no capture at DI90 25 ms, capture at 52.85 ms |
+
+The third could not be a constant edit. `minBeatInterval_` was
+`apdNominal_ + restitutionPtr_->diMin()` -- the capture boundary derived from
+the CV table's lower endpoint, which is precisely the coupling the plan
+forbids. Raising `apdNominal` alone would have pushed the acceptance threshold
+from 0.620 s to 0.633 s and made the primary defect worse. It is now
+`apdNominal_ + minimumDI90_`, dict-configurable as `minimumDI90`, and the
+threshold falls to **0.353 s** -- which admits the 0.404 s and 0.504 s
+activation intervals the reference monodomain captures and propagates.
+
+The CV table was replaced once the time-step leg (1e-5 / 5e-6 / 2e-6 s) left
+the ordinates unchanged: seven measured points, DI90 0.06224-0.40106 s,
+CV 1.4042-3.3280 m/s. The retained ordinates are replaced, not reconciled.
+
+### What currently verifies any of this: almost nothing
+
+`electroHeart`'s hybrid variant is the only tutorial selecting this solver, and
+`injection.hybrid.reference` is its only regression. That case runs 40 ms --
+one beat from rest. `lastActTime_` initialises to `-GREAT` and every beat
+interval is guarded `lastActTime_[x] < 0 ? GREAT : ...`, so on a first
+activation the interval is `GREAT`, acceptance always passes, and
+`DI = GREAT - apdNominal` clamps to the table maximum.
+
+That reference therefore pins exactly one number: the fully recovered CV,
+3.37 m/s. `apdNominal`, `minBeatInterval` and `escapeInterval` have no effect
+on it. **No case anywhere exercises a second beat on this solver.** The
+multi-beat, S1--S2 and structural-block behaviour was validated interactively
+and never became a regression, so the constants above are currently not merely
+untested but unverifiable by anything in the repository. A multi-beat
+regression case is the missing piece, and it is a prerequisite for anyone
+changing these values with confidence.
