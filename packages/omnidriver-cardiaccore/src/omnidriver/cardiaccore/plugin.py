@@ -1,14 +1,9 @@
-"""Source-backed cardiacCore adapter.
-
-The supported vertical slice is deliberately small: the four preprocessing
-utilities invoked by ``cases/bivCase/Allrun``. Reviewed x values can be
-supplied through ``input_overrides`` in a run or sweep JSON; no extra solver
-or utility is claimed until it has equivalent source evidence.
-"""
+"""Compose the declared cardiacCore workflows, catalogs and OpenFOAM capabilities."""
 
 from __future__ import annotations
 
 import os
+from copy import deepcopy
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -18,9 +13,12 @@ from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 from omnidriver.core.plugin_profile import load_plugin_profile
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
-from .input_catalog import CATALOG, CONDITIONAL_INPUTS, DOCUMENTS
-from .tree_validation import TREE_VALIDATION_CONTRACT
-from .tutorials import (
+from .catalogs.inputs import CATALOG, CONDITIONAL_INPUTS, DOCUMENTS
+from .agent_guidance import describe_guidance
+from .catalogs.support_boundary import FIELD_CONVENTIONS, SUPPORT_BOUNDARY
+from .catalogs.operations import OPERATIONS, utility_index
+from .catalogs.purkinje import TREE_VALIDATION_CONTRACT
+from .workflows.preprocessing import (
     HUMAN_TREE_TUTORIAL_NAME,
     PIG_MORPHOMETRIC_TREE_TUTORIAL_NAME,
     TUTORIAL_NAME,
@@ -28,7 +26,7 @@ from .tutorials import (
     make_human_endocardial_tree_spec,
     make_pig_morphometric_tree_spec,
 )
-from .utility_manifests import UTILITY_MANIFESTS
+from .catalogs.utilities import UTILITY_MANIFESTS
 
 
 class CardiacCorePlugin:
@@ -142,7 +140,7 @@ class CardiacCorePlugin:
             HUMAN_TREE_TUTORIAL_NAME,
             PIG_MORPHOMETRIC_TREE_TUTORIAL_NAME,
         }:
-            from .tutorials import (
+            from .workflows.preprocessing import (
                 HUMAN_TREE_INPUT_PATHS,
                 PIG_MORPHOMETRIC_TREE_INPUT_PATHS,
             )
@@ -177,7 +175,7 @@ class CardiacCorePlugin:
         }
 
     def build_run_document_config(self, spec):
-        from .run_document_config import build_config
+        from .workflows.run_config import build_config
 
         return build_config(spec)
 
@@ -185,10 +183,16 @@ class CardiacCorePlugin:
         return {name: list(entries) for name, entries in DOCUMENTS.items()}
 
     def get_named_catalogs(self) -> dict[str, Any]:
-        return {
+        # Caller annotations must not mutate declarations seen by later agents.
+        return deepcopy({
             "cardiaccore_conditional_inputs": CONDITIONAL_INPUTS,
             "cardiaccore_tree_validation": TREE_VALIDATION_CONTRACT,
-        }
+            "cardiaccore_field_conventions": FIELD_CONVENTIONS,
+            "cardiaccore_python_utilities": utility_index(),
+            "cardiaccore_support_boundary": SUPPORT_BOUNDARY,
+            "cardiaccore_operations": OPERATIONS,
+            "cardiaccore_agent_guidance": describe_guidance(),
+        })
 
     def get_solve_step_commands(self) -> frozenset[str]:
         return frozenset()

@@ -1,0 +1,15 @@
+version: 1
+discovery: plugin_named_catalogs
+roles:
+  runner:
+    resource: runner.md
+    required_catalogs:
+      - cardiaccore_operations
+      - cardiaccore_field_conventions
+      - cardiaccore_support_boundary
+  builder:
+    resource: builder.md
+    required_catalogs:
+      - cardiaccore_operations
+      - cardiaccore_python_utilities
+      - cardiaccore_conditional_inputs
