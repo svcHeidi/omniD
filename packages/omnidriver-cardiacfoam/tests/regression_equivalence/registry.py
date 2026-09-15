@@ -71,12 +71,6 @@ _KNOWN_CASES: tuple[RegressionCase, ...] = (
         "NiedererEtAl2011/electroMechanicalNiedererEtAl2011", None,
         (), "regression/electroMechHeterogeneity.reference",
     ),
-    # purkinje ships two reference files (eikonalSlab.reference,
-    # purkinjeSlab.reference); reference_file records the representative one.
-    RegressionCase(
-        "NiedererEtAl2011/purkinjeNiedererEtAl2011", None,
-        (), "regression/purkinjeSlab.reference",
-    ),
     RegressionCase(
         "electrophysiologyProtocols/rotorInstability", None,
         (), "regression/rotorInstability.reference",
