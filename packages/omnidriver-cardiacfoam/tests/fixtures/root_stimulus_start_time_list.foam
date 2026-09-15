@@ -1,5 +1,5 @@
-// Source-backed fixture: cardiacFOAM 724a08f9,
-// tutorials/NiedererEtAl2011/purkinjeNiedererEtAl2011/
+// Source-backed fixture: cardiacFOAM
+// tutorials/electrophysiologyProtocols/purkinjeRestitution2D/
 // constant/electroProperties.monodomain (rootStimulus block).
 purkinjeGraphModelCoeffs
 {

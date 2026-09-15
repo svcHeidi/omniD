@@ -45,9 +45,11 @@ SINGLE_CELL_ELECTRO_PROPERTIES = (
     REPO_ROOT / "tutorials" / "electrophysiologyProtocols" / "singleCell"
     / "constant" / "electroProperties"
 )
-PURKINJE_NIEDERER = REPO_ROOT / "tutorials" / "NiedererEtAl2011" / "purkinjeNiedererEtAl2011"
+PURKINJE_RESTITUTION_2D = (
+    REPO_ROOT / "tutorials" / "electrophysiologyProtocols" / "purkinjeRestitution2D"
+)
 PURKINJE_ELECTRO_PROPERTIES_MONODOMAIN = (
-    PURKINJE_NIEDERER / "constant" / "electroProperties.monodomain"
+    PURKINJE_RESTITUTION_2D / "constant" / "electroProperties.monodomain"
 )
 
 
@@ -1518,16 +1520,16 @@ class TestRegenerateElectroProperties(unittest.TestCase):
                 "monodomainSolver",
             )
 
-    def test_purkinje_niederer_monodomain_to_eikonal_end_to_end(self) -> None:
+    def test_purkinje_monodomain_to_eikonal_end_to_end(self) -> None:
         """Acceptance scenario, on a throwaway copy of the real
-        purkinjeNiedererEtAl2011 tutorial's monodomain fixture: a bare
+        purkinjeRestitution2D tutorial's monodomain fixture: a bare
         myocardiumSolver switch to eikonalSolver, carrying the existing
         Purkinje network (conductionSystemSolver=monodomain1DSolver,
         electroDomainCoupler=reactionDiffusionPvjCoupler) forward verbatim,
         must now be REJECTED.
 
         This is not a hypothetical: the real, hand-authored, committed
-        electroProperties.eikonal fixture for this same tutorial does NOT
+        electroProperties.eikonal fixture of idealizedHeart/electroHeart does NOT
         carry that Purkinje network forward -- it uses a different, physically
         compatible pairing instead (conductionSystemSolver=eikonalSolver1D,
         electroDomainCoupler=eikonalPvjCoupler; see

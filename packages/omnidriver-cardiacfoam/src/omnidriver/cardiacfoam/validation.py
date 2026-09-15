@@ -749,7 +749,7 @@ def _evaluate_pvj_resistance_requirement(
         # dict.get<scalar>("rPvj") on the dictionary it was constructed
         # with, which is the coupler dict, confirmed against the catalog
         # entry ($ELECTRO_MODEL_COEFFS.domainCouplings.<name>.rPvj) and the
-        # real purkinjeNiedererEtAl2011/monodomain1D3D tutorial fixtures.
+        # real purkinjeRestitution2D/monodomain1D3D tutorial fixtures.
         rpvj_key = f"$ELECTRO_MODEL_COEFFS.{_DOMAIN_COUPLINGS_PREFIX}{coupling_name}.rPvj"
         if rpvj_key in overrides:
             continue

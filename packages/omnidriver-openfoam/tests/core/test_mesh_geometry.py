@@ -224,27 +224,28 @@ class TestMeshGeometryDiagnostics(unittest.TestCase):
 
 
 def test_read_bounding_box_matches_real_repo_points_file():
-    """Cross-check against a real ASCII points file already committed to this repo.
+    """Cross-check against a real ASCII points file committed to the repo.
 
-    This is not a synthetic fixture: it is the same value both the old
-    hand-rolled scanner and foamlib were measured against directly before
-    this migration, confirmed to match bit-for-bit.
+    The idealized-heart mesh is stored in Git LFS; a checkout without LFS
+    holds a pointer file instead, and the test skips.
     """
     repo_root = monorepo_root or repo_root_default()
     points_path = (
         repo_root
         / "tutorials"
-        / "NiedererEtAl2011"
-        / "purkinjeNiedererEtAl2011"
+        / "idealizedHeart"
+        / "mesh"
         / "constant"
         / "polyMesh"
         / "points"
     )
     if not points_path.is_file():
         pytest.skip("tutorial corpus not present in this checkout")
+    if b"git-lfs" in points_path.read_bytes()[:200]:
+        pytest.skip("idealized-heart mesh is an LFS pointer in this checkout")
     bbox = read_bounding_box(points_path)
-    assert bbox.min_pt == pytest.approx((0.0, 0.0, 0.0))
-    assert bbox.max_pt == pytest.approx((0.02, 0.003, 0.007))
+    assert bbox.min_pt == pytest.approx((0.0, -0.0399945136, -0.04))
+    assert bbox.max_pt == pytest.approx((0.07997507634, 0.0599884472, 0.04))
 
 
 def test_read_bounding_box_raises_on_zero_points(tmp_path):
