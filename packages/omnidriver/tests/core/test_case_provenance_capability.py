@@ -11,17 +11,21 @@ from pathlib import Path
 from omnidriver.core.plugin_interface import (
     driver_context
 )
-from omnidriver.openfoam.environment import openfoam_environment_context
 from plugins.minimal_plugin import MinimalOpenFOAMPlugin
+from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
 
 
-def test_generic_plugin_declares_no_required_inputs(tmp_path: Path) -> None:
-    generic = openfoam_environment_context().capabilities.case_provenance
+def test_neutral_plugin_declares_no_required_inputs(tmp_path: Path) -> None:
+    generic = driver_context(
+        NeutralEnvironmentPlugin(), source="test:neutral-provenance",
+    ).capabilities.case_provenance
     assert generic.required_inputs(tmp_path, {}, "0") == ()
 
 
-def test_generic_plugin_declares_no_generated_outputs(tmp_path: Path) -> None:
-    generic = openfoam_environment_context().capabilities.case_provenance
+def test_neutral_plugin_declares_no_generated_outputs(tmp_path: Path) -> None:
+    generic = driver_context(
+        NeutralEnvironmentPlugin(), source="test:neutral-provenance",
+    ).capabilities.case_provenance
     assert generic.generated_output_globs(tmp_path, {}, "0") == ()
 
 

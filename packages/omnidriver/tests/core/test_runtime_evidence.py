@@ -7,13 +7,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from omnidriver.core.plugin_interface import driver_context
-from omnidriver.openfoam.environment import openfoam_environment_context
 
 from plugins.minimal_plugin import MinimalOpenFOAMPlugin
+from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
 
 
 def test_generic_declares_no_solve_steps() -> None:
-    evidence = openfoam_environment_context().capabilities.runtime_evidence
+    evidence = driver_context(NeutralEnvironmentPlugin(), source="test:evidence").capabilities.runtime_evidence
     assert evidence.solve_step_commands() == frozenset()
 
 
@@ -35,7 +35,7 @@ def test_a_command_with_no_declared_globs_returns_empty() -> None:
 
 
 def test_extra_provenance_paths_default_to_empty(tmp_path: Path) -> None:
-    generic = openfoam_environment_context().capabilities.runtime_evidence
+    generic = driver_context(NeutralEnvironmentPlugin(), source="test:evidence").capabilities.runtime_evidence
     assert generic.extra_provenance_paths(tmp_path) == ()
 
 
@@ -49,10 +49,10 @@ def test_an_unknown_artifact_format_has_no_reader() -> None:
     behaviour. When Phase 5 lands a real reader, rewrite this to assert the
     known format resolves and an unrelated string does not.
     """
-    evidence = openfoam_environment_context().capabilities.runtime_evidence
+    evidence = driver_context(NeutralEnvironmentPlugin(), source="test:evidence").capabilities.runtime_evidence
     assert evidence.artifact_value_reader("not_a_real_format") is None
 
 
 def test_generic_plugin_provides_no_artifact_readers() -> None:
-    evidence = openfoam_environment_context().capabilities.runtime_evidence
+    evidence = driver_context(NeutralEnvironmentPlugin(), source="test:evidence").capabilities.runtime_evidence
     assert evidence.artifact_value_reader("openfoam_log") is None

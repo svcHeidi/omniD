@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import json
 
-from omnidriver.openfoam.environment import openfoam_environment_context
+from omnidriver.core.plugin_interface import driver_context
+from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
 
 # Every token that would betray cardiac vocabulary leaking into a generic
 # plugin's machine-readable schema.
@@ -25,7 +26,7 @@ _MAKE_SPEC_INFO = {"parameters": {"ionic_models": {"default": ["TNNP"]}}}
 
 
 def test_generic_config_schema_mentions_no_cardiac_tokens() -> None:
-    schema = openfoam_environment_context().capabilities.override_schema.config_schema(
+    schema = driver_context(NeutralEnvironmentPlugin(), source="test:override-schema").capabilities.override_schema.config_schema(
         "someTutorial", _MAKE_SPEC_INFO
     )
     blob = json.dumps(schema)
@@ -37,7 +38,7 @@ def test_generic_dict_entry_catalog_names_no_cardiac_document() -> None:
     """The previous version of this test asserted only on ``.values()``, so a
     cardiac leak in the *keys* (``physicsProperties``/``electroProperties``)
     was invisible to it. Scan the whole structure."""
-    catalog = openfoam_environment_context().capabilities.override_schema.dict_entry_catalog()
+    catalog = driver_context(NeutralEnvironmentPlugin(), source="test:override-schema").capabilities.override_schema.dict_entry_catalog()
     blob = json.dumps(catalog)
     leaked = [token for token in _CARDIAC_TOKENS if token in blob]
     assert leaked == [], f"generic dict entry catalog leaked: {leaked}"

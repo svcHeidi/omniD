@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from omnidriver.core.plugin_interface import driver_context
-from omnidriver.openfoam.environment import openfoam_environment_context
 from plugins.minimal_plugin import MinimalOpenFOAMPlugin
+from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
 
 
-def test_generic_plugin_requires_no_solver_dictionaries() -> None:
-    contract = openfoam_environment_context().capabilities.case_files
+def test_neutral_plugin_requires_no_solver_dictionaries() -> None:
+    contract = driver_context(
+        NeutralEnvironmentPlugin(), source="test:neutral-case-files",
+    ).capabilities.case_files
     required = contract.required_files()
     assert "constant/electroProperties" not in required
     assert "constant/physicsProperties" not in required
