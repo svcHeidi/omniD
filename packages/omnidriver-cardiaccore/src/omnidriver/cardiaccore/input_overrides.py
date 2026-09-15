@@ -44,7 +44,11 @@ _TARGETS: dict[str, InputTarget] = {
 _ENTRIES = {entry.driver_path: entry for entry in CATALOG.entries}
 
 
-def validate_input_overrides(overrides: Mapping[str, Any] | None) -> dict[str, Any]:
+def validate_input_overrides(
+    overrides: Mapping[str, Any] | None,
+    *,
+    allowed_paths: tuple[str, ...] | None = None,
+) -> dict[str, Any]:
     """Return a safe, reviewed override map or fail before writing a case."""
     if overrides is None:
         return {}
@@ -58,6 +62,12 @@ def validate_input_overrides(overrides: Mapping[str, Any] | None) -> dict[str, A
             raise ValueError(
                 f"input override {driver_path!r} is not supported by the selected bivCase workflow. "
                 f"Known paths: {known}"
+            )
+        if allowed_paths is not None and driver_path not in allowed_paths:
+            known = ", ".join(allowed_paths)
+            raise ValueError(
+                f"input override {driver_path!r} is not supported by this selected workflow. "
+                f"Allowed paths: {known}"
             )
         entry = _ENTRIES[driver_path]
         if entry.value_kind == "scalar":
@@ -99,11 +109,16 @@ def apply_input_overrides(case_root: Path, overrides: Mapping[str, Any] | None) 
         update_foam_entry(case_root / target.file_relpath, target.key, value)
 
 
-def read_input_values(case_root: Path) -> dict[str, Any]:
+def read_input_values(
+    case_root: Path, *, paths: tuple[str, ...] | None = None,
+) -> dict[str, Any]:
     """Read the current selected-case values using the same reviewed mapping."""
     from omnidriver.openfoam.mutators import read_foam_entry
 
+    selected_paths = tuple(_TARGETS) if paths is None else paths
     return {
-        driver_path: read_foam_entry(case_root / target.file_relpath, target.key)
-        for driver_path, target in _TARGETS.items()
+        driver_path: read_foam_entry(
+            case_root / _TARGETS[driver_path].file_relpath, _TARGETS[driver_path].key
+        )
+        for driver_path in selected_paths
     }

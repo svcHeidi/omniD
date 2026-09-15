@@ -17,6 +17,8 @@ def test_plugin_has_a_valid_context() -> None:
     assert context.capabilities.dictionaries.phases() == ("preprocessing",)
     assert context.capabilities.tutorials.catalog()["registered_tutorials"] == (
         "cardiaccore-biv-preprocessing",
+        "cardiaccore-human-endocardial-tree",
+        "cardiaccore-pig-morphometric-tree",
     )
     assert context.capabilities.case_runtime_conventions.conventions().case_entrypoints == ("Allrun",)
 

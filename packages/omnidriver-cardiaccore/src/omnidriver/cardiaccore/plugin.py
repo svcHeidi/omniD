@@ -19,7 +19,14 @@ from omnidriver.core.plugin_profile import load_plugin_profile
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
 from .input_catalog import CATALOG, CONDITIONAL_INPUTS, DOCUMENTS
-from .tutorials import TUTORIAL_NAME, make_biv_preprocessing_spec
+from .tutorials import (
+    HUMAN_TREE_TUTORIAL_NAME,
+    PIG_MORPHOMETRIC_TREE_TUTORIAL_NAME,
+    TUTORIAL_NAME,
+    make_biv_preprocessing_spec,
+    make_human_endocardial_tree_spec,
+    make_pig_morphometric_tree_spec,
+)
 from .utility_manifests import UTILITY_MANIFESTS
 
 
@@ -75,8 +82,16 @@ class CardiacCorePlugin:
 
     def get_tutorial_catalog(self) -> dict[str, Any]:
         return {
-            "registered_tutorials": (TUTORIAL_NAME,),
-            "spec_factories": {TUTORIAL_NAME: make_biv_preprocessing_spec},
+            "registered_tutorials": (
+                TUTORIAL_NAME,
+                HUMAN_TREE_TUTORIAL_NAME,
+                PIG_MORPHOMETRIC_TREE_TUTORIAL_NAME,
+            ),
+            "spec_factories": {
+                TUTORIAL_NAME: make_biv_preprocessing_spec,
+                HUMAN_TREE_TUTORIAL_NAME: make_human_endocardial_tree_spec,
+                PIG_MORPHOMETRIC_TREE_TUTORIAL_NAME: make_pig_morphometric_tree_spec,
+            },
         }
 
     def get_tutorial_displays(self) -> tuple[Any, ...]:
@@ -122,6 +137,27 @@ class CardiacCorePlugin:
 
     def get_override_schema(self, tutorial_name: str, make_spec_info: dict[str, Any]) -> dict[str, Any]:
         del make_spec_info
+        if tutorial_name in {
+            HUMAN_TREE_TUTORIAL_NAME,
+            PIG_MORPHOMETRIC_TREE_TUTORIAL_NAME,
+        }:
+            from .tutorials import (
+                HUMAN_TREE_INPUT_PATHS,
+                PIG_MORPHOMETRIC_TREE_INPUT_PATHS,
+            )
+
+            paths = (
+                HUMAN_TREE_INPUT_PATHS
+                if tutorial_name == HUMAN_TREE_TUTORIAL_NAME
+                else PIG_MORPHOMETRIC_TREE_INPUT_PATHS
+            )
+
+            return {
+                "input_overrides": {
+                    "description": "JSON object mapping reviewed cardiacCore inputs to values. The tree dictionary is fixed in this workflow.",
+                    "paths": paths,
+                },
+            }
         if tutorial_name != TUTORIAL_NAME:
             return {}
         return {
