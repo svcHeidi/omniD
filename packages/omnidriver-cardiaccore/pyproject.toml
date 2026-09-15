@@ -7,7 +7,7 @@ name = "omnidriver-cardiaccore"
 version = "0.1.0"
 description = "Source-backed cardiacCore preprocessing plugin for OmniD cases."
 requires-python = ">=3.11"
-dependencies = ["omnidriver>=0.1.0", "omnidriver-openfoam>=0.1.0"]
+dependencies = ["numpy>=1.24", "omnidriver>=0.1.0", "omnidriver-openfoam>=0.1.0"]
 
 [project.entry-points."omnidriver.plugins"]
 cardiaccore = "omnidriver.cardiaccore.plugin:CardiacCorePlugin"

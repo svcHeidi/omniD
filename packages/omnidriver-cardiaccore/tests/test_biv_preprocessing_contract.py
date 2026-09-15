@@ -121,6 +121,11 @@ def test_initial_input_catalog_is_scoped_to_the_selected_bivcase_workflow():
     assert conditional["setCardiacConductivityDict"][0]["when"] == (
         "bidomain tensor preprocessing is selected"
     )
+    tree_contract = context.capabilities.named_catalogs.catalogs()[
+        "cardiaccore_tree_validation"
+    ]
+    assert tree_contract["seed_placement"]["lv"]["aha_segments"] == (2, 3)
+    assert tree_contract["baseline_coverage"]["required_if_endocardium_exists"]["lv"] == tuple(range(7, 18))
 
 
 def _write_biv_dictionaries(case_root: Path) -> None:
