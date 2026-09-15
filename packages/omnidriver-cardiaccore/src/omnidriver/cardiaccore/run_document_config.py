@@ -14,7 +14,11 @@ def build_config(spec):
     """Read the selected case, overlay requested x values, and retain evidence."""
     config = {"preprocessing": {}}
     try:
-        values = read_input_values(Path(spec.case_root))
+        active_paths = (spec.metadata or {}).get("active_input_paths")
+        values = read_input_values(
+            Path(spec.case_root),
+            paths=None if active_paths is None else tuple(active_paths),
+        )
     except (FileNotFoundError, KeyError, ValueError, RuntimeError) as exc:
         return config, (
             diagnostic(
@@ -27,7 +31,12 @@ def build_config(spec):
 
     requested = (spec.metadata or {}).get("input_overrides", {})
     try:
-        values.update(validate_input_overrides(requested))
+        values.update(
+            validate_input_overrides(
+                requested,
+                allowed_paths=None if active_paths is None else tuple(active_paths),
+            )
+        )
     except (TypeError, ValueError) as exc:
         return config, (diagnostic("error", "invalid_input_overrides", str(exc)),)
 

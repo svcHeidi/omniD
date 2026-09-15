@@ -109,14 +109,16 @@ SLAB_ENTRIES: Final[tuple[DictEntry, ...]] = (
         source_refs=("cases/bivCase/system/setPurkinjeSlabDict", _SLAB_SOURCE),
         value_kind="scalar",
         constraints=("Must lie between zero and the configured transmural-coordinate range.",),
-        required=True,
+        # This utility is optional at the adapter level: a selected workflow
+        # must read this dictionary before it becomes a required case input.
+        required=False,
     ),
     DictEntry(
         driver_path="$PURKINJE_SLAB.multiplier",
         description="Conductivity multiplier applied within the Purkinje slab.",
         source_refs=("cases/bivCase/system/setPurkinjeSlabDict", _SLAB_SOURCE),
         value_kind="scalar",
-        required=True,
+        required=False,
     ),
 )
 
@@ -127,7 +129,9 @@ MORPHOMETRY_ENTRIES: Final[tuple[DictEntry, ...]] = (
         source_refs=("cases/bivCase/system/setPurkinjeMorphometryDict", _MORPHOMETRY_SOURCE),
         value_kind="enum",
         enum_values=("auto", "manual"),
-        required=True,
+        # Morphometry is the pig-specific branch, not a prerequisite of each
+        # cardiacCore preprocessing workflow.
+        required=False,
     ),
 )
 

@@ -12,8 +12,8 @@ comparison, not a claim that either representation should replace the other.
 | Fibre/sheet conductivity | `setCardiacConductivity`; fibre and sheet are configurable inputs | Implemented and executed; `fiberField`/`sheetField` and `df`/`ds`/`dn` are reviewed x values | Retain |
 | AHA segmentation | `setCardiacAnatomy` produces `AHA_Segment` and `aha_angle` | Implemented and executed; both are declared artifacts | Retain |
 | Field-based Purkinje slab | `setPurkinjeSlab` | Implemented and executed; thickness/multiplier are reviewed x values | Retain as one representation |
-| Pig/morphometric terminal weighting | `setPurkinjeMorphometry` produces regional and terminal-weight fields | Implemented and executed, but no explicit tree currently consumes those fields | Retain and connect to tree workflow |
-| Explicit Purkinje tree | `generatePurkinjeTree`, tree VTKs, endocardial face sets | Not yet declared or executed | **Next priority** |
+| Pig/morphometric terminal weighting | `setPurkinjeMorphometry` produces regional and terminal-weight fields | Implemented and executed as an explicit dependency of the named pig tree workflow | Retain |
+| Explicit Purkinje tree | `generatePurkinjeTree`, tree VTKs, endocardial face sets | Human endocardial and pig morphometric/transmural contracts are declared and executed | Retain as two distinct workflow representations |
 | Anatomy-portable seed deduction | `deduce_purkinje_seeds.py`, based on AHA/UVC surface data | Not yet staged, invoked, or recorded as evidence | Add as a conditional preparation/validation step for new anatomies |
 | Density comparability and coverage | `terminalCount` convention; `check_purkinje_coverage.py` and `check_seed_distances.py` | No result metric/checker declaration | Add after native tree generation is running |
 | Graph hand-off | `1DgraphToFoam` turns generated VTK into `constant/purkinjeGraph` | Not yet declared or executed | Add after the tree vertical slice |
@@ -29,24 +29,21 @@ outputs:
 - `AHA_Segment` and `aha_angle` are generated and tracked outputs;
 - morphometric Purkinje weight fields are generated and tracked outputs.
 
-What is absent is the **explicit-tree representation** that uses those
-products to make a density-controlled Purkinje network. Therefore calling the
-current four-step workflow “cardiacCore support” would be too broad. It is
-accurately a tested field-preprocessing adapter.
+The adapter now includes the **explicit-tree representation**: a human
+endocardial path and a pig morphometric/transmural path. The latter produces
+and consumes the terminal-weight fields rather than merely cataloguing them.
+It remains a bounded preprocessing/tree-generation adapter, not a complete
+cardiacCore or cardiacFoam interface.
 
 ## Recommended next vertical slice
 
-Add one explicit-tree workflow rather than every historical tool at once:
+Add result interpretation rather than another broad workflow:
 
-1. select a named existing tree case and its asset bundle;
-2. stage its native `generatePurkinjeTreeDict` plus required UVC/AHA and,
-   for morphometric mode, weight fields;
-3. declare the `generatePurkinjeTree` utility, face-set and VTK artifacts;
-4. validate a native run and then declare the exact `terminalCount` / model
-   inputs that the chosen mode actually reads;
-5. run the existing seed-distance and coverage checks as result interpretation
-   evidence, not as generic Core behavior;
-6. only then add `1DgraphToFoam` as the explicit cardiacFoam hand-off.
+1. define explicit acceptance criteria for the existing seed-distance and
+   coverage checkers;
+2. publish a complete validation contract before exposing tree seed/growth or
+   terminal-count settings as sweep axes;
+3. only then add `1DgraphToFoam` as the explicit cardiacFoam hand-off.
 
 The slab and explicit-tree branches must be selected deliberately. The
 existing preflight records them as mutually exclusive for this milestone; the

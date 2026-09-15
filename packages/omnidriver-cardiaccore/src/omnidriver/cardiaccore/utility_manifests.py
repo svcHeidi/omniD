@@ -70,4 +70,25 @@ UTILITY_MANIFESTS = {
             ProducesEntry("purkinje_terminal_weight_intramural", "0/PurkinjeTerminalWeightIntramural", "openfoam_field", "Intramural terminal weights", "setPurkinjeMorphometry"),
         ),
     ),
+    "generatePurkinjeTree": _manifest(
+        "generatePurkinjeTree",
+        "Generate explicit LV/RV endocardial Purkinje trees and inspection VTKs.",
+        (
+            "system/generatePurkinjeTreeDict",
+            "system/uvcConventionDict",
+            "0/uvc_transmural",
+            "0/uvc_intraventricular",
+            "0/uvc_longitudinal",
+        ),
+        (
+            ProducesEntry("lv_endo_faces", "constant/polyMesh/sets/LVEndoFaces", "openfoam_face_set", "Generated LV endocardial face set", "generatePurkinjeTree"),
+            ProducesEntry("rv_endo_faces", "constant/polyMesh/sets/RVEndoFaces", "openfoam_face_set", "Generated RV endocardial face set", "generatePurkinjeTree"),
+            ProducesEntry("epi_faces", "constant/polyMesh/sets/EpiFaces", "openfoam_face_set", "Generated epicardial face set", "generatePurkinjeTree"),
+            ProducesEntry("rv_septal_endo_faces", "constant/polyMesh/sets/RVSeptalEndoFaces", "openfoam_face_set", "Generated RV septal-recovery face set", "generatePurkinjeTree"),
+            ProducesEntry("purkinje_vtk", "postProcessing/generatePurkinjeTree/purkinje.vtk", "vtk_polydata", "Glued solver-facing Purkinje tree", "generatePurkinjeTree"),
+            ProducesEntry("lv_purkinje_vtk", "postProcessing/generatePurkinjeTree/lv-purkinje.vtk", "vtk_polydata", "LV inspection tree", "generatePurkinjeTree"),
+            ProducesEntry("rv_purkinje_vtk", "postProcessing/generatePurkinjeTree/rv-purkinje.vtk", "vtk_polydata", "RV inspection tree", "generatePurkinjeTree"),
+            ProducesEntry("purkinje_generation_parameters", "postProcessing/generatePurkinjeTree/generation_params.txt", "text", "Effective native tree-generation parameters", "generatePurkinjeTree"),
+        ),
+    ),
 }
