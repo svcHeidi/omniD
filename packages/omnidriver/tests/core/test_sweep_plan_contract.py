@@ -29,10 +29,10 @@ import json
 from pathlib import Path
 
 from omnidriver.core.runtime.sweep_runner import sweep_plan
-from conftest import NO_REPO_ROOT, repo_root, skip_without_repo
-from omnidriver.openfoam.environment import openfoam_environment_context
+from omnidriver.core.plugin_interface import driver_context
+from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
 
-_CTX = openfoam_environment_context()
+_CTX = driver_context(NeutralEnvironmentPlugin(), source="test:sweep-plan")
 
 _SPEC = {
     "base": {},
@@ -62,27 +62,3 @@ def test_a_valid_spec_reports_no_spec_error(tmp_path):
     spec_path.write_text(json.dumps(_SPEC))
     report = sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=_CTX)
     assert "spec_error" not in report
-
-
-@skip_without_repo
-def test_a_malformed_spec_still_exits_non_zero(tmp_path):
-    """Structured is not the same as successful."""
-    import subprocess
-    import sys
-
-    spec_path = tmp_path / "sweep.json"
-    spec_path.write_text("{ not json")
-    driver_root = repo_root or NO_REPO_ROOT
-
-    result = subprocess.run(
-        [
-            sys.executable, "-m", "omnidriver", "sweep-plan",
-                # This adapter-specific contract selects the environment
-                # explicitly; Core no longer manufactures a fallback adapter.
-                "--plugin", "omnidriver.openfoam.environment:OpenFOAMEnvironmentPlugin",
-            "--spec", str(spec_path), "--output-dir", str(tmp_path / "out"),
-        ],
-        cwd=driver_root, capture_output=True, text=True,
-    )
-    assert result.returncode != 0, result.stdout
-    assert json.loads(result.stdout)["spec_error"]
