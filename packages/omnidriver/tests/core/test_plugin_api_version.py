@@ -6,7 +6,7 @@ from omnidriver.core.plugin_interface import (
     SUPPORTED_PLUGIN_API_VERSIONS,
     driver_context
 )
-from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+from plugins.minimal_plugin import MinimalTestPlugin
 
 
 def test_supported_version_is_two() -> None:
@@ -15,12 +15,12 @@ def test_supported_version_is_two() -> None:
 
 def test_neutral_plugin_is_v2() -> None:
     assert driver_context(
-        NeutralEnvironmentPlugin(), source="test:plugin-api",
+        MinimalTestPlugin(), source="test:plugin-api",
     ).identity.api_version == "2"
 
 
 def test_unsupported_version_is_rejected_before_any_catalog_runs() -> None:
-    class FuturePlugin(NeutralEnvironmentPlugin):
+    class FuturePlugin(MinimalTestPlugin):
         @property
         def plugin_api_version(self) -> str:
             return "99"
@@ -41,7 +41,7 @@ def test_declaring_the_contract_without_implementing_it_is_rejected() -> None:
     member would fail only much later, deep inside whichever core module
     first called the missing method."""
 
-    class HalfMigratedPlugin(NeutralEnvironmentPlugin):
+    class HalfMigratedPlugin(MinimalTestPlugin):
         # Drops one required member.
         get_artifact_value_reader = None
 
@@ -50,7 +50,7 @@ def test_declaring_the_contract_without_implementing_it_is_rejected() -> None:
 
 
 def test_the_shape_check_names_what_is_missing() -> None:
-    class MissingTwo(NeutralEnvironmentPlugin):
+    class MissingTwo(MinimalTestPlugin):
         get_solve_step_commands = None
         get_utility_roots = None
 
@@ -62,5 +62,5 @@ def test_the_shape_check_names_what_is_missing() -> None:
 
 
 def test_neutral_plugin_builds_an_explicit_context() -> None:
-    context = driver_context(NeutralEnvironmentPlugin(), source="test:plugin-api")
-    assert context.identity.id == "org.driverfoam.test-neutral-environment"
+    context = driver_context(MinimalTestPlugin(), source="test:plugin-api")
+    assert context.identity.id == "org.driverfoam.test-minimal"

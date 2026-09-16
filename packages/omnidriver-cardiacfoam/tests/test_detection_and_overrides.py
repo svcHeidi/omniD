@@ -48,7 +48,7 @@ from omnidriver.cardiacfoam.overrides import (
     normalize_entry_overrides,
     remove_electro_property_dict,
 )
-from conftest import assert_foam_entry
+from cardiacfoam_assertions import assert_foam_entry
 
 
 class TestCardiacPropertyOverrides(unittest.TestCase):

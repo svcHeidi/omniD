@@ -513,12 +513,12 @@ def test_a_plugins_declared_entrypoint_resolves_case_locally_but_blockmesh_still
     monorepo dependency lives in
     test_case_script_commands_entrypoint_seam.py.
     """
-    from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+    from plugins.minimal_plugin import MinimalTestPlugin
 
     from omnidriver.core.plugin_interface import driver_context as _driver_context
     from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile
 
-    class _ForeignEntrypointPlugin(NeutralEnvironmentPlugin):
+    class _ForeignEntrypointPlugin(MinimalTestPlugin):
         def get_profile(self) -> PluginProfile:
             return PluginProfile(
                 path=Path(__file__),

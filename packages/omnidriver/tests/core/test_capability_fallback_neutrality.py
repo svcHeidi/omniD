@@ -43,12 +43,12 @@ from omnidriver.core.plugin_capabilities import (
 )
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError
-from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+from plugins.minimal_plugin import MinimalTestPlugin
 
 
 def _generic_capabilities():
     context = driver_context(
-        NeutralEnvironmentPlugin(), source="test:neutral-environment",
+        MinimalTestPlugin(), source="test:neutral-environment",
     )
     return context.capabilities
 

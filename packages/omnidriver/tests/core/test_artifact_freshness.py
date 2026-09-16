@@ -10,10 +10,10 @@ from omnidriver.core.runtime.workflow_runner import run_workflow_step
 from omnidriver.core.runtime.workflow_state import initial_workflow_state
 from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context
-from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+from plugins.minimal_plugin import MinimalTestPlugin
 
 
-class _ParallelEnvironment(NeutralEnvironmentPlugin):
+class _ParallelEnvironment(MinimalTestPlugin):
     def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
         return CaseRuntimeConventions(decomposition_directory_prefix="processor")
 

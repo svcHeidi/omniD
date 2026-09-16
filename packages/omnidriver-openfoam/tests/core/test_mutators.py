@@ -14,7 +14,7 @@ from omnidriver.openfoam.mutators import (
     update_control_dict,
     update_foam_entry,
 )
-from conftest import assert_foam_entry
+from openfoam_assertions import assert_foam_entry
 
 
 def assert_entry_present(testcase: unittest.TestCase, text: str, key: str, value: str) -> None:

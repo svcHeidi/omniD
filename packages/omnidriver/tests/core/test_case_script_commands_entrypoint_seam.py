@@ -30,11 +30,11 @@ from omnidriver.core.runtime.workflow import (
     validate_workflow_commands,
 )
 from omnidriver.core.runtime.workflow_runner import _argv_for_execution, _resolve_command
-from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+from plugins.minimal_plugin import MinimalTestPlugin
 
 
-class _ForeignEntrypointPlugin(NeutralEnvironmentPlugin):
-    """Declares its entrypoint as "run.sh", not "Allrun" -- proves the seam
+class _ForeignEntrypointPlugin(MinimalTestPlugin):
+    """Declares its entrypoint as "run.sh" -- proves the seam
     is a genuine escape from the fixed name, not just a coincidence of
     every shipped plugin happening to use "Allrun" today."""
 
@@ -46,7 +46,7 @@ class _ForeignEntrypointPlugin(NeutralEnvironmentPlugin):
             case_files=(
                 CaseFileRule(
                     path="run.sh", kind="case_script",
-                    role="openfoam.entrypoint", required="conditional",
+                    role="x-test.case_script", required="conditional",
                 ),
             ),
             cxx_mapping=None,

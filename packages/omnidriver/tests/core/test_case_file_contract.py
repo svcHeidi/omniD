@@ -1,31 +1,35 @@
-"""Required case files come from the plugin profile, not a core constant."""
+"""Case-file declarations are consumed generically by Core."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context
-from plugins.minimal_plugin import MinimalOpenFOAMPlugin
-from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+from plugins.minimal_plugin import MinimalTestPlugin
 
 
-def test_neutral_plugin_requires_no_solver_dictionaries() -> None:
-    contract = driver_context(
-        NeutralEnvironmentPlugin(), source="test:neutral-case-files",
-    ).capabilities.case_files
-    required = contract.required_files()
-    assert "constant/electroProperties" not in required
-    assert "constant/physicsProperties" not in required
+def test_minimal_plugin_declares_no_case_files() -> None:
+    context = driver_context(
+        MinimalTestPlugin(), source="test:minimal-case-files",
+    )
+    contract = context.capabilities.case_files
+    assert contract.required_files() == ()
+    assert contract.conditional_files() == ()
+    assert context.capabilities.case_runtime_conventions.conventions() == CaseRuntimeConventions()
+    assert context.capabilities.case_introspection.selected_start_time(
+        Path("case"), {}, driver_context=context,
+    ) is None
 
 
 def test_conditional_files_are_separated_from_required() -> None:
     """Exercises `_CaseFileContractAdapter`'s always/conditional split -- core
-    mechanics, not cardiac vocabulary. `MinimalOpenFOAMPlugin(entrypoint=...)`
-    is the smallest available fixture that declares a `required="conditional"`
-    case-file rule, so the string here is "Allrun" (what that fixture
-    declares) rather than the cardiac plugin's "blockMeshDict"; the mechanic
-    under test -- conditional files excluded from required_files() -- is the
-    same either way."""
+    mechanics, not solver vocabulary. ``MinimalTestPlugin(entrypoint=...)``
+    makes the test-only ``run-test-case`` entrypoint explicit; the mechanic
+    under test is that conditional files are excluded from ``required_files``.
+    """
     contract = driver_context(
-        MinimalOpenFOAMPlugin(entrypoint="Allrun"), source="test"
+        MinimalTestPlugin(entrypoint="run-test-case"), source="test"
     ).capabilities.case_files
-    assert "Allrun" in contract.conditional_files()
-    assert "Allrun" not in contract.required_files()
+    assert "run-test-case" in contract.conditional_files()
+    assert "run-test-case" not in contract.required_files()

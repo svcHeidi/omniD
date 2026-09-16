@@ -18,7 +18,7 @@ from unittest import mock
 
 from omnidriver.cli import main
 from omnidriver.core.plugin_interface import driver_context
-from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+from plugins.minimal_plugin import MinimalTestPlugin
 
 
 def _patch_default_driver_context():
@@ -28,7 +28,7 @@ def _patch_default_driver_context():
     return mock.patch(
         "omnidriver.core.plugin_interface.default_driver_context",
         side_effect=lambda: driver_context(
-            NeutralEnvironmentPlugin(), source="test:cli-sweep",
+            MinimalTestPlugin(), source="test:cli-sweep",
         ),
     )
 

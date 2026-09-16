@@ -20,10 +20,9 @@ import pytest
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime.registry import list_entries
 
-from plugins.minimal_plugin import MinimalOpenFOAMPlugin
-from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+from plugins.minimal_plugin import MinimalTestPlugin
 
-_CTX = driver_context(MinimalOpenFOAMPlugin(entrypoint="run-case"), source="test:case-compatibility")
+_CTX = driver_context(MinimalTestPlugin(entrypoint="run-case"), source="test:case-compatibility")
 
 
 def _touch(case_root: Path, relative: str) -> None:
@@ -68,9 +67,7 @@ def test_neutral_environment_does_not_hide_authored_directory_names(
     case_root = tmp_path / authored_directory / "nestedCase"
     case_root.mkdir(parents=True)
     _touch(case_root, "run-case")
-    context = driver_context(
-        NeutralEnvironmentPlugin(), source="test:neutral-discovery",
-    )
+    context = driver_context(MinimalTestPlugin(entrypoint="run-case"), source="test:neutral-discovery")
 
     entries = list_entries(tmp_path, driver_context=context)
 
@@ -86,7 +83,7 @@ def test_neutral_environment_does_not_assume_a_parallel_output_prefix(
     case_root.mkdir(parents=True)
     _touch(case_root, "run-case")
     context = driver_context(
-        NeutralEnvironmentPlugin(), source="test:neutral-decomposition",
+        MinimalTestPlugin(entrypoint="run-case"), source="test:neutral-decomposition",
     )
 
     assert [entry["entry_path"] for entry in list_entries(tmp_path, driver_context=context)] == [

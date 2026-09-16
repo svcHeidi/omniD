@@ -184,7 +184,7 @@ def test_a_non_openfoam_role_survives_driver_context_end_to_end() -> None:
     and the rule must come back out of capabilities.case_files intact --
     proving the seam works all the way through, not just at parse time."""
     from omnidriver.core.plugin_interface import driver_context
-    from plugins.minimal_plugin import MinimalOpenFOAMPlugin
+    from plugins.minimal_plugin import MinimalTestPlugin
 
     fenics_rule = CaseFileRule(
         path="mesh.xml",
@@ -193,7 +193,7 @@ def test_a_non_openfoam_role_survives_driver_context_end_to_end() -> None:
         required="always",
     )
 
-    class _FenicsLikePlugin(MinimalOpenFOAMPlugin):
+    class _FenicsLikePlugin(MinimalTestPlugin):
         @property
         def plugin_id(self) -> str:
             return "org.example.fenics-e2e"

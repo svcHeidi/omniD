@@ -1,6 +1,6 @@
 """Every site that needs the case entrypoint must ask the plugin for it.
 
-Phase 1 gave `registry.py` a declared `openfoam.entrypoint` role and used it
+Phase 1 gave `registry.py` a declared entrypoint and used it
 for case detection. Three other sites kept the literal `"Allrun"`, so a plugin
 naming its entrypoint anything else got:
 
@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import pytest
 
+from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.plugin_profile import (
     entrypoint_command,
@@ -26,12 +27,11 @@ from omnidriver.core.plugin_profile import (
 from omnidriver.core.runtime.generic_case import _workflow_dag_for
 
 import plugins.minimal_plugin as minimal_plugin
-from omnidriver.openfoam.environment import openfoam_environment_context
 
 
 def _context(entrypoint):
     return driver_context(
-        minimal_plugin.MinimalOpenFOAMPlugin(entrypoint=entrypoint),
+        minimal_plugin.MinimalTestPlugin(entrypoint=entrypoint),
         source="test:entrypoint",
     )
 
@@ -44,10 +44,6 @@ def test_no_context_has_no_environment_entrypoint_default() -> None:
 
 def test_a_plugin_declaring_no_entrypoint_has_no_entrypoint() -> None:
     assert entrypoint_relpaths(_context(None)) == ()
-
-
-def test_openfoam_context_explicitly_declares_allrun() -> None:
-    assert entrypoint_relpaths(openfoam_environment_context()) == ("Allrun",)
 
 
 def test_a_declared_entrypoint_wins_over_the_default() -> None:
@@ -147,7 +143,10 @@ def test_an_escape_role_is_reported_as_the_environment_s_file(tmp_path) -> None:
     (case_root / "domain.xdmf").write_text("mesh")
     (case_root / "plugin.cfg").write_text("cfg")
 
-    class _ForeignEnvironmentPlugin(minimal_plugin.MinimalOpenFOAMPlugin):
+    class _ForeignEnvironmentPlugin(minimal_plugin.MinimalTestPlugin):
+        def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
+            return CaseRuntimeConventions(output_collection_relpath="test-output")
+
         def get_profile(self):
             rules = (
                 CaseFileRule(
