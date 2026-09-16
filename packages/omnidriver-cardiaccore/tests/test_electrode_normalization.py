@@ -40,3 +40,49 @@ def test_reference_offsets_are_explicit_not_a_default_case_configuration():
     reconstructed = apply_reference_offsets(frame)
     assert set(reconstructed) == set(REFERENCE_LOCAL_OFFSETS)
     assert all(len(value) == 3 for value in reconstructed.values())
+
+
+def test_native_file_bridge_preserves_explicit_units_and_dimensionless_offsets(tmp_path):
+    pv = pytest.importorskip("pyvista")
+    from omnidriver.cardiaccore.operations.electrodes import (
+        apply_offset_bundle_to_native_file,
+        derive_reference_offset_bundle,
+        read_reference_offset_bundle,
+        write_electrode_positions,
+        write_reference_offset_bundle,
+    )
+
+    points, chamber, longitudinal = _cloud()
+    mesh = pv.PolyData(points)
+    mesh.point_data["uvc_intraventricular"] = chamber
+    mesh.point_data["uvc_longitudinal"] = longitudinal
+    heart = tmp_path / "heart.vtp"
+    mesh.save(heart)
+    reference = {"V1": [1.0, 2.0, 3.0], "V2": [2.0, 3.0, 4.0]}
+
+    bundle = derive_reference_offset_bundle(heart, reference, coordinate_unit="mm")
+    bundle_path = tmp_path / "offsets.json"
+    write_reference_offset_bundle(bundle_path, bundle)
+    loaded = read_reference_offset_bundle(bundle_path)
+    positions = apply_offset_bundle_to_native_file(
+        heart, loaded, target_coordinate_unit="mm"
+    )
+    output_path = tmp_path / "electrodes.json"
+    write_electrode_positions(output_path, positions)
+
+    assert positions["target_coordinate_unit"] == "mm"
+    for name, reference_position in reference.items():
+        assert positions["electrodes"][name] == pytest.approx(reference_position)
+    assert "normalized_offsets" in bundle
+    assert output_path.exists()
+
+
+def test_native_file_bridge_requires_explicit_unit_labels(tmp_path):
+    from omnidriver.cardiaccore.operations.electrodes import (
+        derive_reference_offset_bundle,
+    )
+
+    with pytest.raises(ValueError, match="coordinate_unit"):
+        derive_reference_offset_bundle(
+            tmp_path / "reference.vtp", {"V1": [0, 0, 0]}, coordinate_unit=""
+        )

@@ -8,7 +8,11 @@ electrode configuration.
 
 from __future__ import annotations
 
+import json
+from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -24,6 +28,8 @@ REFERENCE_LOCAL_OFFSETS: dict[str, list[float]] = {
     "V5": [-0.7457586101211467, -0.6790317373202257, -0.08798427038899685],
     "V6": [-0.6925276529190797, -0.8104441341181372, -0.40296292163474073],
 }
+
+ELECTRODE_OFFSET_BUNDLE_SCHEMA_VERSION = 1
 
 
 @dataclass(frozen=True)
@@ -101,3 +107,189 @@ def apply_reference_offsets(frame: LVFrame, *, axial_shift: float = 0.0) -> dict
         name: decode_from_local(np.asarray(offset), frame, axial_shift).tolist()
         for name, offset in REFERENCE_LOCAL_OFFSETS.items()
     }
+
+
+def read_native_electrode_fields(
+    heart_vtk: Path,
+    *,
+    intraventricular_field: str = "uvc_intraventricular",
+    longitudinal_field: str = "uvc_longitudinal",
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Read the point-aligned UVC arrays needed to construct an LV frame.
+
+    Native ``foamToVTK`` exports can carry UVC arrays as cell data.  They are
+    converted to point data before reading, exactly as required by the
+    point-sampled :func:`compute_lv_frame` contract.  This function does not
+    infer a physical coordinate unit: its caller records that unit alongside
+    any resulting JSON artifact.
+    """
+    try:
+        import pyvista as pv
+    except ImportError as exc:
+        raise ValueError(
+            "native electrode-file operations require omnidriver-cardiaccore[vtk]"
+        ) from exc
+
+    mesh = pv.read(str(heart_vtk))
+    if mesh.n_points == 0:
+        raise ValueError(f"{heart_vtk}: native VTK mesh has no points")
+    if (
+        intraventricular_field not in mesh.point_data
+        or longitudinal_field not in mesh.point_data
+    ):
+        mesh = mesh.cell_data_to_point_data()
+    missing = [
+        name for name in (intraventricular_field, longitudinal_field)
+        if name not in mesh.point_data
+    ]
+    if missing:
+        raise ValueError(f"{heart_vtk}: native VTK point data is missing {missing}")
+    intraventricular = np.asarray(mesh.point_data[intraventricular_field])
+    longitudinal = np.asarray(mesh.point_data[longitudinal_field])
+    if len(intraventricular) != mesh.n_points or len(longitudinal) != mesh.n_points:
+        raise ValueError(f"{heart_vtk}: UVC fields are not point-aligned")
+    return np.asarray(mesh.points), intraventricular, longitudinal
+
+
+def _coordinate_unit(value: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("coordinate_unit must be a non-empty caller-declared string")
+    return value.strip()
+
+
+def _offset_mapping(value: Mapping[str, Any]) -> dict[str, list[float]]:
+    if not isinstance(value, Mapping) or not value:
+        raise ValueError("normalized_offsets must be a non-empty mapping")
+    offsets: dict[str, list[float]] = {}
+    for name, offset in value.items():
+        if not isinstance(name, str) or not name:
+            raise ValueError("each electrode name must be a non-empty string")
+        vector = np.asarray(offset, dtype=float)
+        if vector.shape != (3,) or not np.all(np.isfinite(vector)):
+            raise ValueError(f"normalized offset {name!r} must be a finite length-3 coordinate")
+        offsets[name] = vector.tolist()
+    return offsets
+
+
+def derive_reference_offset_bundle(
+    reference_heart_vtk: Path,
+    reference_electrodes: Mapping[str, Any],
+    *,
+    coordinate_unit: str,
+) -> dict[str, Any]:
+    """Encode supplied reference electrodes into a portable, dimensionless bundle.
+
+    ``reference_electrodes`` and ``reference_heart_vtk`` must use the same
+    caller-declared coordinate unit.  No metre-to-millimetre assumption is
+    made.  The output offsets are dimensionless; the unit is provenance for
+    the source reference, not a conversion instruction for a target case.
+    """
+    unit = _coordinate_unit(coordinate_unit)
+    points, chamber, longitudinal = read_native_electrode_fields(reference_heart_vtk)
+    frame = compute_lv_frame(points, chamber, longitudinal)
+    electrodes = _offset_mapping(reference_electrodes)
+    return {
+        "schema_version": ELECTRODE_OFFSET_BUNDLE_SCHEMA_VERSION,
+        "source_heart_vtk": str(reference_heart_vtk),
+        "source_coordinate_unit": unit,
+        "normalized_offsets": {
+            name: encode_to_local(np.asarray(position), frame).tolist()
+            for name, position in electrodes.items()
+        },
+    }
+
+
+def read_reference_offset_bundle(path: Path) -> dict[str, Any]:
+    """Load and validate an explicitly unit-labelled offset bundle."""
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"could not read electrode offset bundle {path}: {exc}") from exc
+    if not isinstance(payload, Mapping):
+        raise ValueError(f"{path}: electrode offset bundle must be a JSON object")
+    if payload.get("schema_version") != ELECTRODE_OFFSET_BUNDLE_SCHEMA_VERSION:
+        raise ValueError(
+            f"{path}: unsupported electrode offset bundle schema "
+            f"{payload.get('schema_version')!r}"
+        )
+    unit = _coordinate_unit(payload.get("source_coordinate_unit"))
+    offsets = _offset_mapping(payload.get("normalized_offsets"))
+    source = payload.get("source_heart_vtk")
+    if not isinstance(source, str) or not source:
+        raise ValueError(f"{path}: source_heart_vtk must be a non-empty string")
+    return {
+        "schema_version": ELECTRODE_OFFSET_BUNDLE_SCHEMA_VERSION,
+        "source_heart_vtk": source,
+        "source_coordinate_unit": unit,
+        "normalized_offsets": offsets,
+    }
+
+
+def write_reference_offset_bundle(path: Path, bundle: Mapping[str, Any]) -> None:
+    """Validate and write one portable electrode-offset bundle as JSON."""
+    validated = {
+        "schema_version": ELECTRODE_OFFSET_BUNDLE_SCHEMA_VERSION,
+        "source_heart_vtk": bundle.get("source_heart_vtk"),
+        "source_coordinate_unit": bundle.get("source_coordinate_unit"),
+        "normalized_offsets": bundle.get("normalized_offsets"),
+    }
+    # Reuse the public reader's validation rather than let writers emit a
+    # payload this package would later refuse.
+    source = validated["source_heart_vtk"]
+    if not isinstance(source, str) or not source:
+        raise ValueError("source_heart_vtk must be a non-empty string")
+    validated["source_coordinate_unit"] = _coordinate_unit(
+        validated["source_coordinate_unit"]
+    )
+    validated["normalized_offsets"] = _offset_mapping(validated["normalized_offsets"])
+    path.write_text(json.dumps(validated, indent=2, sort_keys=True) + "\n")
+
+
+def apply_offset_bundle_to_native_file(
+    heart_vtk: Path,
+    bundle: Mapping[str, Any],
+    *,
+    target_coordinate_unit: str,
+    axial_shift: float = 0.0,
+) -> dict[str, Any]:
+    """Decode a validated bundle on a target VTK anatomy without unit conversion."""
+    unit = _coordinate_unit(target_coordinate_unit)
+    source = bundle.get("source_heart_vtk")
+    if not isinstance(source, str) or not source:
+        raise ValueError("source_heart_vtk must be a non-empty string")
+    if bundle.get("schema_version") != ELECTRODE_OFFSET_BUNDLE_SCHEMA_VERSION:
+        raise ValueError("unsupported electrode offset bundle schema")
+    _coordinate_unit(bundle.get("source_coordinate_unit"))
+    offsets = _offset_mapping(bundle.get("normalized_offsets"))
+    points, chamber, longitudinal = read_native_electrode_fields(heart_vtk)
+    frame = compute_lv_frame(points, chamber, longitudinal)
+    return {
+        "schema_version": ELECTRODE_OFFSET_BUNDLE_SCHEMA_VERSION,
+        "target_heart_vtk": str(heart_vtk),
+        "target_coordinate_unit": unit,
+        "source_offset_bundle": {
+            "source_heart_vtk": source,
+            "source_coordinate_unit": bundle["source_coordinate_unit"],
+        },
+        "electrodes": {
+            name: decode_from_local(np.asarray(offset), frame, axial_shift=axial_shift).tolist()
+            for name, offset in offsets.items()
+        },
+    }
+
+
+def write_electrode_positions(path: Path, positions: Mapping[str, Any]) -> None:
+    """Write the explicit, unit-labelled target positions returned by the file bridge."""
+    required = {"schema_version", "target_heart_vtk", "target_coordinate_unit", "electrodes"}
+    missing = required.difference(positions)
+    if missing:
+        raise ValueError("electrode position payload is missing " + ", ".join(sorted(missing)))
+    if positions.get("schema_version") != ELECTRODE_OFFSET_BUNDLE_SCHEMA_VERSION:
+        raise ValueError("unsupported electrode position payload schema")
+    target = positions.get("target_heart_vtk")
+    if not isinstance(target, str) or not target:
+        raise ValueError("target_heart_vtk must be a non-empty string")
+    payload = dict(positions)
+    payload["target_coordinate_unit"] = _coordinate_unit(payload["target_coordinate_unit"])
+    payload["electrodes"] = _offset_mapping(payload["electrodes"])
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
