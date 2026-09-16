@@ -20,7 +20,7 @@ from omnidriver.core.plugin_capabilities import (
     RuntimeDependency,
 )
 from omnidriver.core.plugin_interface import driver_context
-from omnidriver.core.plugin_profile import PluginProfile
+from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile
 from omnidriver.core.runtime.provenance_inputs import enumerate_case_inputs
 from omnidriver.core.runtime.attempt_lease import acquire_attempt_lease, acquire_case_lease
 from omnidriver.core.runtime.remediation_transaction import (
@@ -29,7 +29,7 @@ from omnidriver.core.runtime.remediation_transaction import (
     mark_remediation_dispatching,
     record_remediation_outcome,
 )
-from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+from plugins.minimal_plugin import MinimalTestPlugin
 
 
 def _paths(components, *, kind: str | None = None) -> set[str]:
@@ -74,17 +74,12 @@ def _make_executable(path: Path, content: bytes) -> None:
     path.chmod(path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
 
-class _FakePlugin(NeutralEnvironmentPlugin):
+class _FakePlugin(MinimalTestPlugin):
     """A v1 plugin that declares CaseProvenanceCapability / RuntimeEvidence
     hooks inline, so precedence can be exercised without a tutorial.
 
-    Base class changed from ``MinimalOpenFOAMPlugin`` to
-    ``NeutralEnvironmentPlugin`` (Task 4): the latter answers
-    ``get_config_value_reader``/``get_environment_diagnostics`` itself and
-    declares the canonical ``system/controlDict`` / ``constant`` / ``Allrun``
-    case-file rules, which is what lets every test in this module run without
-    ``omnidriver.openfoam`` installed. ``NeutralEnvironmentPlugin`` is itself a
-    ``MinimalOpenFOAMPlugin`` subclass, so this remains a v1 plugin."""
+    Its selected-time convention is supplied below, because Core does not
+    infer a restart directory from case-file syntax."""
 
     def __init__(self, *, required_inputs=(), generated_output_globs=(), extra_provenance_paths=()):
         self._required_inputs = required_inputs
@@ -99,6 +94,34 @@ class _FakePlugin(NeutralEnvironmentPlugin):
 
     def get_extra_provenance_paths(self, case_root):
         return self._extra_provenance_paths
+
+    def get_selected_start_time(self, case_root, resolved_case) -> str:
+        del case_root, resolved_case
+        return "0"
+
+    def get_profile(self) -> PluginProfile:
+        rules = (
+            CaseFileRule(
+                path="system/controlDict", kind="test_configuration",
+                role="x-test.configuration", required="always",
+            ),
+            CaseFileRule(
+                path="constant", kind="test_input_directory",
+                role="x-test.input_directory", required="always",
+            ),
+        )
+        return PluginProfile(
+            path=Path(__file__), plugin_id=self.plugin_id,
+            api_version=self.plugin_api_version, case_files=rules, cxx_mapping=None,
+            payload={
+                "schema_version": 1,
+                "plugin": {"id": self.plugin_id, "api_version": self.plugin_api_version},
+                "case_profile": {"dictionaries": [{
+                    "path": rule.path, "kind": rule.kind, "role": rule.role,
+                    "required": rule.required,
+                } for rule in rules]},
+            },
+        )
 
     def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
         return CaseRuntimeConventions(
@@ -125,7 +148,7 @@ def test_selected_start_time_directory_is_included_others_excluded(tmp_path: Pat
     assert "1/Vm" not in included
 
 
-class _ForeignEnvironmentPlugin(NeutralEnvironmentPlugin):
+class _ForeignEnvironmentPlugin(MinimalTestPlugin):
     """A plugin that declares runtime conventions without case-file roles."""
 
     def __init__(self, *, chosen_start_time: str, decomposition_prefix: str = "processor") -> None:

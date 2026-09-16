@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from omnidriver.core.plugin_interface import driver_context
-from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+from plugins.minimal_plugin import MinimalTestPlugin
 
 
 def _cardiac_case(root: Path) -> Path:
@@ -18,7 +18,7 @@ def _cardiac_case(root: Path) -> Path:
 
 def test_generic_plugin_exposes_no_cardiac_fields(tmp_path: Path) -> None:
     introspection = driver_context(
-        NeutralEnvironmentPlugin(), source="test:neutral-introspection",
+        MinimalTestPlugin(), source="test:neutral-introspection",
     ).capabilities.case_introspection
     resolved = introspection.resolve_case_models(_cardiac_case(tmp_path))
     fields = introspection.samplable_fields(resolved)

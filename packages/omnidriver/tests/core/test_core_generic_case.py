@@ -4,10 +4,10 @@ from pathlib import Path
 
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.strict_planning import strict_plan
-from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+from plugins.declared_case_plugin import DeclaredCasePlugin
 
 
-class _UnresolvedConfigurationPlugin(NeutralEnvironmentPlugin):
+class _UnresolvedConfigurationPlugin(DeclaredCasePlugin):
     def inspect_effective_configuration(self, *, case_root, execution_env=None):
         del case_root, execution_env
         return ({
@@ -22,12 +22,12 @@ class _UnresolvedConfigurationPlugin(NeutralEnvironmentPlugin):
 def test_plain_case_plans_with_declared_neutral_environment(tmp_path: Path) -> None:
     case_root = tmp_path / "plainCase"
     case_root.mkdir()
-    (case_root / "run-case").write_text("#!/bin/sh\nexit 0\n")
+    (case_root / "run-test-case").write_text("#!/bin/sh\nexit 0\n")
 
     report = strict_plan(
         "plainCase",
         overrides={"cases_root": str(tmp_path)},
-        driver_context=driver_context(NeutralEnvironmentPlugin(), source="test"),
+        driver_context=driver_context(DeclaredCasePlugin(), source="test"),
     )
 
     assert report.status == "ok"
@@ -48,19 +48,19 @@ def test_plain_case_plans_with_declared_neutral_environment(tmp_path: Path) -> N
     assert report.workflow_dag["steps"][0]["produces"] == []
 
 
-def test_plain_case_uses_the_selected_neutral_context(tmp_path: Path) -> None:
+def test_plain_case_uses_the_selected_declared_context(tmp_path: Path) -> None:
     case_root = tmp_path / "plainCase"
     case_root.mkdir()
-    (case_root / "run-case").write_text("#!/bin/sh\nexit 0\n")
+    (case_root / "run-test-case").write_text("#!/bin/sh\nexit 0\n")
 
     report = strict_plan(
         "plainCase",
         overrides={"cases_root": str(tmp_path)},
-        driver_context=driver_context(NeutralEnvironmentPlugin(), source="test"),
+        driver_context=driver_context(DeclaredCasePlugin(), source="test"),
     )
 
     assert report.status == "ok"
-    assert report.plugin["id"] == "org.driverfoam.test-neutral-environment"
+    assert report.plugin["id"] == "org.driverfoam.test-minimal"
     assert report.run_document is not None
     assert report.run_document.plugin == report.plugin
 
@@ -70,7 +70,7 @@ def test_unresolved_configuration_blocks_normal_plan_but_is_explicitly_explorabl
 ) -> None:
     case_root = tmp_path / "plainCase"
     case_root.mkdir()
-    (case_root / "run-case").write_text("#!/bin/sh\nexit 0\n")
+    (case_root / "run-test-case").write_text("#!/bin/sh\nexit 0\n")
     context = driver_context(_UnresolvedConfigurationPlugin(), source="test")
 
     blocked = strict_plan(
@@ -137,7 +137,7 @@ def _spec(tmp_path: Path, **kwargs):
     return make_spec(
         cases_root=tmp_path,
         case_dir_name="aCase",
-        driver_context=driver_context(NeutralEnvironmentPlugin(), source="test:generic-case"),
+        driver_context=driver_context(DeclaredCasePlugin(), source="test:generic-case"),
         **kwargs,
     )
 
@@ -339,7 +339,7 @@ def test_make_generic_case_spec_applies_no_solver_mutation(tmp_path: Path) -> No
     spec = make_generic_case_spec(
         cases_root=tmp_path,
         case_dir_name="aCase",
-        driver_context=driver_context(NeutralEnvironmentPlugin(), source="test:generic-case"),
+        driver_context=driver_context(DeclaredCasePlugin(), source="test:generic-case"),
     )
     with compatibility.track_fallback_calls() as calls:
         spec.apply_case(spec.case_root, spec.build_cases()[0])

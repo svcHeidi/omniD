@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.specs.validation import primary_phase
-from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+from plugins.minimal_plugin import MinimalTestPlugin
 
 
 class _Entry:
@@ -34,6 +34,6 @@ def test_the_generic_plugin_declares_the_phases_its_entries_use() -> None:
     """It has no entries, so it declares no phases -- and must not inherit
     cardiacFoam's four."""
     phases = driver_context(
-        NeutralEnvironmentPlugin(), source="test:neutral-phases",
+        MinimalTestPlugin(), source="test:neutral-phases",
     ).capabilities.dictionaries.phases()
     assert phases == ()

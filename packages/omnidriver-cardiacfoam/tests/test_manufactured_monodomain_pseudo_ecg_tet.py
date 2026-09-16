@@ -34,7 +34,7 @@ from unittest import mock
 import pytest
 
 from omnidriver.core.runtime.models import CaseConfig
-from conftest import assert_foam_entry
+from cardiacfoam_assertions import assert_foam_entry
 from omnidriver.cardiacfoam.tutorials.manufactured_monodomain_pseudo_ecg import (
     make_spec,
 )

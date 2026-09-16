@@ -13,7 +13,7 @@ from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.cardiacfoam.active_tension_catalog import ACTIVE_TENSION_MODEL_CATALOG
 from omnidriver.cardiacfoam.common_dict_entries import PHYSICS_PROPERTY_ENTRIES
 from omnidriver.cardiacfoam.overrides import apply_electro_property_overrides
-from conftest import assert_foam_entry
+from cardiacfoam_assertions import assert_foam_entry
 
 # These four names are this plugin's, so they come from this plugin. They used
 # to be read out of core's ``Phase`` literal via typing.get_args -- core

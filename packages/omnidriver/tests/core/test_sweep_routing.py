@@ -15,7 +15,7 @@ import pytest
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError
 from omnidriver.sweep_routing import route_case_values
 from omnidriver.core.plugin_interface import driver_context
-from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+from plugins.minimal_plugin import MinimalTestPlugin
 
 
 def test_routing_uses_the_selected_plugin_catalog():
@@ -34,6 +34,6 @@ def test_routing_uses_the_selected_plugin_catalog():
             base={},
             resolved_axis_values={"type": "electroModel"},
             driver_context=driver_context(
-                NeutralEnvironmentPlugin(), source="test:sweep-routing",
+                MinimalTestPlugin(), source="test:sweep-routing",
             ),
         )

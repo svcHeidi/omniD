@@ -17,17 +17,16 @@ from omnidriver.core.runtime.attempt_lease import acquire_attempt_lease, acquire
 from omnidriver.core.runtime.resume import validate_resume
 from omnidriver.core.runtime.workflow_runner import run_workflow_step
 from omnidriver.core.runtime.workflow_state import initial_workflow_state, workflow_state_from_json
-from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+from plugins.resume_test_plugin import ResumeTestPlugin
 
 
 def _completed(tmp_path):
     (tmp_path / "system").mkdir()
-    (tmp_path / "system/controlDict").write_text("startTime 0;\n")
     (tmp_path / "system/settings").write_text("value 1;\n")
     dag = {"steps": [{"id": "solve", "command": sys.executable,
         "args": ["-c", "from pathlib import Path; Path('result.txt').write_text('done')"],
         "cwd": ".", "depends_on": []}]}
-    context = driver_context(NeutralEnvironmentPlugin(), source="test:resume")
+    context = driver_context(ResumeTestPlugin(), source="test:resume")
     output = tmp_path / "output"
     result = run_workflow_step(dag, initial_workflow_state(dag), "solve", case_root=tmp_path,
         log_dir=output / "logs", state_path=output / "workflow_state.json", env={}, driver_context=context)
@@ -151,15 +150,14 @@ def test_completed_checkpoint_requires_its_required_output_on_resume(tmp_path, c
 def test_run_document_embedded_completed_state_refuses_changed_inputs(tmp_path) -> None:
     """A RunDocument state is resumable evidence, not a success override.
 
-    This uses the core-owned generic plugin and a shell-only ``Allrun`` so it
+    This uses the core-owned test plugin and a shell-only declared entrypoint so it
     proves the public CLI contract without any cardiacFOAM dependency.
     """
     case_root = tmp_path / "case"
     (case_root / "system").mkdir(parents=True)
-    (case_root / "constant").mkdir()
-    control_dict = case_root / "system" / "controlDict"
-    control_dict.write_text("value 1;\n")
-    script = case_root / "run-case"
+    settings = case_root / "system" / "settings"
+    settings.write_text("value 1;\n")
+    script = case_root / "run-test-case"
     script.write_text("#!/bin/sh\nexit 0\n")
     os.chmod(script, 0o755)
 
@@ -168,14 +166,14 @@ def test_run_document_embedded_completed_state_refuses_changed_inputs(tmp_path) 
         "step_status_values": ["pending", "running", "completed", "failed", "skipped"],
         "steps": [{
             "id": "run",
-                "command": "run-case",
+                "command": "run-test-case",
             "args": [],
             "cwd": ".",
             "depends_on": [],
             "produces": [],
             "consumes": [],
             "retry_policy": {"max_attempts": 1},
-                "command_display": "run-case",
+                "command_display": "run-test-case",
         }],
     }
     state = initial_workflow_state(workflow_dag)
@@ -202,7 +200,7 @@ def test_run_document_embedded_completed_state_refuses_changed_inputs(tmp_path) 
     first_out = StringIO()
     with redirect_stdout(first_out):
         first_code = cli.main([
-            "run", "--plugin", "plugins.neutral_environment_plugin:NeutralEnvironmentPlugin",
+            "run", "--plugin", "plugins.resume_test_plugin:ResumeTestPlugin",
             "--run-document", str(doc_path),
         ])
     first = json.loads(first_out.getvalue())
@@ -214,12 +212,12 @@ def test_run_document_embedded_completed_state_refuses_changed_inputs(tmp_path) 
     doc["workflowState"] = json.loads(saved_state_path.read_text())
     doc_path.write_text(json.dumps(doc))
     saved_state_path.unlink()
-    control_dict.write_text("value 2;\n")
+    settings.write_text("value 2;\n")
 
     resumed_out = StringIO()
     with redirect_stdout(resumed_out):
         resumed_code = cli.main([
-            "run", "--plugin", "plugins.neutral_environment_plugin:NeutralEnvironmentPlugin",
+            "run", "--plugin", "plugins.resume_test_plugin:ResumeTestPlugin",
             "--run-document", str(doc_path),
         ])
     resumed = json.loads(resumed_out.getvalue())

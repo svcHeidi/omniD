@@ -1,4 +1,10 @@
-"""A genuine no-domain plugin used by the cross-plugin contract tests."""
+"""A minimal, no-domain plugin used by Core contract tests.
+
+The defaults are deliberately empty.  A test that needs a case file,
+entrypoint, command, output location, or provenance convention declares it
+where that behaviour is exercised instead of inheriting a solver-shaped test
+environment.
+"""
 
 from __future__ import annotations
 
@@ -9,7 +15,7 @@ from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile
 from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 
 
-class MinimalOpenFOAMPlugin:
+class MinimalTestPlugin:
     """Implements only the required plugin contract; adds no solver meaning."""
 
     #: Declared as a CLASS attribute, not only assigned in ``__init__``.
@@ -59,7 +65,7 @@ class MinimalOpenFOAMPlugin:
 
     @property
     def plugin_name(self) -> str:
-        return "minimal OpenFOAM test plugin"
+        return "minimal test plugin"
 
     @property
     def plugin_id(self) -> str:
@@ -125,7 +131,6 @@ class MinimalOpenFOAMPlugin:
     def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
         entrypoints = () if self._entrypoint is None else (self._entrypoint,)
         return CaseRuntimeConventions(
-            output_collection_relpath="outputs",
             case_entrypoints=entrypoints,
             case_script_commands=entrypoints,
         )
@@ -162,11 +167,6 @@ class MinimalOpenFOAMPlugin:
         del resolved
         return {}
 
-    def get_selected_start_time(self, case_root, resolved_case) -> str:
-        """This test environment explicitly fingerprints its ``0`` state."""
-        del case_root, resolved_case
-        return "0"
-
     def get_override_schema(self, tutorial_name, make_spec_info):
         del tutorial_name, make_spec_info
         return {}
@@ -191,3 +191,9 @@ class MinimalOpenFOAMPlugin:
     def get_run_document_config_schema(self) -> dict:
         """No solver semantics means no constraint on the config shape."""
         return {"type": "object", "additionalProperties": True}
+
+
+# Compatibility alias for Core tests that have not yet been migrated.  New
+# tests must import ``MinimalTestPlugin`` so their fixture does not encode an
+# OpenFOAM identity by name.
+MinimalOpenFOAMPlugin = MinimalTestPlugin

@@ -30,9 +30,9 @@ from pathlib import Path
 
 from omnidriver.core.runtime.sweep_runner import sweep_plan
 from omnidriver.core.plugin_interface import driver_context
-from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+from plugins.minimal_plugin import MinimalTestPlugin
 
-_CTX = driver_context(NeutralEnvironmentPlugin(), source="test:sweep-plan")
+_CTX = driver_context(MinimalTestPlugin(), source="test:sweep-plan")
 
 _SPEC = {
     "base": {},

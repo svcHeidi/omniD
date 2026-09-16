@@ -1,6 +1,7 @@
 import pytest
 from pathlib import Path
-from conftest import assert_foam_entry, monorepo_root, skip_without_monorepo
+from conftest import monorepo_root, skip_without_monorepo
+from openfoam_assertions import assert_foam_entry
 pytestmark = skip_without_monorepo
 
 from omnidriver.openfoam.apply_overrides import (

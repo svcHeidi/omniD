@@ -7,12 +7,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from omnidriver.openfoam.environment import openfoam_environment_context
+from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime.workflow import validate_workflow_commands
 from omnidriver.core.runtime.workflow_runner import (
     _resolve_case_cwd,
     _resolve_command,
 )
+from plugins.minimal_plugin import MinimalTestPlugin
 
 
 def _make_executable(path: Path) -> None:
@@ -29,11 +30,10 @@ class TestValidateWorkflowCommands(unittest.TestCase):
         # is sufficient and keeps this file plugin-agnostic. The two cases
         # that genuinely assert cardiac-authorized commands moved to
         # omnidriver-cardiacfoam's tests/test_workflow_command_security.py.
-        self.context = openfoam_environment_context()
-
-    def test_case_script_command_is_allowed(self) -> None:
-        dag = {"steps": [{"id": "s", "command": "Allrun"}]}
-        self.assertEqual(validate_workflow_commands(dag, driver_context=self.context), ())
+        self.context = driver_context(
+            MinimalTestPlugin(solver_commands={"gmsh", "gmshToFoam", "checkMesh"}),
+            source="test:commands",
+        )
 
     def test_gmsh_is_allowed(self) -> None:
         # Tet-mesh sweep workflows (mesh_family="tet") run gmsh/gmshToFoam/
@@ -69,22 +69,6 @@ class TestValidateWorkflowCommands(unittest.TestCase):
         codes = {d.code for d in validate_workflow_commands(dag, driver_context=self.context)}
         self.assertIn("workflow_step_without_command", codes)
 
-    def test_case_script_allclean_is_allowed(self) -> None:
-        dag = {"steps": [{"id": "s", "command": "Allclean"}]}
-        self.assertEqual(validate_workflow_commands(dag, driver_context=self.context), ())
-
-    def test_explicit_relative_case_script_is_allowed(self) -> None:
-        dag = {"steps": [{"id": "s", "command": "./Allrun"}]}
-        self.assertEqual(validate_workflow_commands(dag, driver_context=self.context), ())
-
-    def test_dotted_case_script_is_allowed(self) -> None:
-        dag = {"steps": [{"id": "s", "command": "Allrun.pre"}]}
-        self.assertEqual(validate_workflow_commands(dag, driver_context=self.context), ())
-
-    def test_explicit_relative_dotted_case_script_is_allowed(self) -> None:
-        dag = {"steps": [{"id": "s", "command": "./Allrun.post"}]}
-        self.assertEqual(validate_workflow_commands(dag, driver_context=self.context), ())
-
     def test_explicit_relative_non_case_script_is_rejected(self) -> None:
         dag = {"steps": [{"id": "s", "command": "./notAllrun"}]}
         codes = {d.code for d in validate_workflow_commands(dag, driver_context=self.context)}
@@ -99,60 +83,17 @@ class TestValidateWorkflowCommands(unittest.TestCase):
         self.assertEqual(validate_workflow_commands(None, driver_context=self.context), ())
 
 
-class TestValidateWorkflowCommandsFoamApp(unittest.TestCase):
-    def setUp(self) -> None:
-        self.context = openfoam_environment_context()
-
-    def test_installed_openfoam_app_is_allowed(self) -> None:
-        with tempfile.TemporaryDirectory() as temp:
-            appbin = Path(temp) / "bin"
-            appbin.mkdir()
-            _make_executable(appbin / "checkMeshFake")
-            old_path = os.environ.get("PATH", "")
-            old_appbin = os.environ.get("FOAM_APPBIN")
-            os.environ["PATH"] = f"{appbin}{os.pathsep}{old_path}"
-            os.environ["FOAM_APPBIN"] = str(appbin)
-            try:
-                dag = {"steps": [{"id": "s", "command": "checkMeshFake"}]}
-                self.assertEqual(validate_workflow_commands(dag, driver_context=self.context), ())
-            finally:
-                os.environ["PATH"] = old_path
-                if old_appbin is None:
-                    os.environ.pop("FOAM_APPBIN", None)
-                else:
-                    os.environ["FOAM_APPBIN"] = old_appbin
-
-    def test_command_outside_foam_bins_is_rejected(self) -> None:
-        old_appbin = os.environ.pop("FOAM_APPBIN", None)
-        old_userbin = os.environ.pop("FOAM_USER_APPBIN", None)
-        try:
-            dag = {"steps": [{"id": "s", "command": "definitelyNotAFoamApp"}]}
-            codes = {d.code for d in validate_workflow_commands(dag, driver_context=self.context)}
-            self.assertIn("unknown_workflow_command", codes)
-        finally:
-            if old_appbin is not None:
-                os.environ["FOAM_APPBIN"] = old_appbin
-            if old_userbin is not None:
-                os.environ["FOAM_USER_APPBIN"] = old_userbin
-
-
 class TestResolveCommandShadowing(unittest.TestCase):
     def setUp(self) -> None:
-        self.context = openfoam_environment_context()
+        self.context = driver_context(
+            MinimalTestPlugin(entrypoint="run-test-case"), source="test:commands",
+        )
 
     def test_bare_binary_name_is_never_resolved_to_case_local_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             cwd = Path(temp)
             _make_executable(cwd / "cardiacFoam")
             self.assertEqual(_resolve_command("cardiacFoam", cwd), "cardiacFoam")
-
-    def test_recognized_case_script_resolves_locally_when_present(self) -> None:
-        with tempfile.TemporaryDirectory() as temp:
-            cwd = Path(temp)
-            _make_executable(cwd / "Allrun")
-            self.assertEqual(
-                _resolve_command("Allrun", cwd, self.context), str(cwd / "Allrun")
-            )
 
     def test_case_script_falls_through_when_absent(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

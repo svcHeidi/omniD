@@ -28,16 +28,29 @@ import pytest
 from omnidriver.core.runtime.artifacts import _core_generic_artifacts
 from omnidriver.core.runtime.execution_context import resolve_execution_context
 from omnidriver.core.runtime.generic_case import make_spec
+from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context
-from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+from plugins.minimal_plugin import MinimalTestPlugin
+
+
+class _OutputConventionPlugin(MinimalTestPlugin):
+    """Declares only the output root this test needs to exercise."""
+
+    def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
+        return CaseRuntimeConventions(
+            output_collection_relpath="outputs",
+            case_entrypoints=("run-case",),
+            case_script_commands=("run-case",),
+        )
 
 
 def _spec(root: Path, **kwargs):
     (root / "myCase").mkdir(parents=True, exist_ok=True)
+    (root / "myCase" / "run-case").write_text("#!/bin/sh\n")
     return make_spec(
         cases_root=root,
         case_dir_name="myCase",
-        driver_context=driver_context(NeutralEnvironmentPlugin(), source="test:artifacts"),
+        driver_context=driver_context(_OutputConventionPlugin(), source="test:artifacts"),
         **kwargs,
     )
 

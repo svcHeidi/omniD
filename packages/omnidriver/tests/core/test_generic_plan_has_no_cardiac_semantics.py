@@ -6,14 +6,12 @@ semantics. Reading the code is not evidence -- this runs it.
 from __future__ import annotations
 
 import json
-import stat
 from pathlib import Path
 
 from omnidriver.core.plugin_interface import driver_context
-from omnidriver.openfoam.environment import openfoam_environment_context
 from omnidriver.core.introspection import describe_entry
 from omnidriver.core.strict_planning import strict_plan
-from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+from plugins.declared_case_plugin import DeclaredCasePlugin
 
 # Every token that would betray a cardiac assumption leaking into a plan
 # produced for a non-cardiac solver.
@@ -32,40 +30,21 @@ _CARDIAC_TOKENS = (
 
 
 def _minimal_case(root: Path) -> Path:
-    """A plain OpenFOAM case with an Allrun and no cardiac dictionaries."""
+    """A plain case with this test's explicit entrypoint and no solver files."""
     case = root / "case"
-    (case / "system").mkdir(parents=True)
-    (case / "constant").mkdir(parents=True)
-    (case / "system" / "controlDict").write_text(
-        "FoamFile{version 2.0; format ascii; class dictionary; "
-        "object controlDict;}\n"
-        "application myGenericSolver;\nstartFrom startTime;\nstartTime 0;\n"
-        "stopAt endTime;\nendTime 1;\ndeltaT 0.1;\nwriteControl timeStep;\n"
-        "writeInterval 10;\n"
-    )
-    script = case / "run-case"
+    case.mkdir()
+    script = case / "run-test-case"
     script.write_text("#!/bin/sh\necho generic-case-ran\n")
-    script.chmod(script.stat().st_mode | stat.S_IEXEC)
     return case
 
 
 def _generic_plan(tmp_path: Path) -> dict:
-    """Plans against ``NeutralEnvironmentPlugin`` rather than
-    ``openfoam_environment_context()`` (Task 4): ``OpenFOAMEnvironmentPlugin`` has no
-    ``get_environment_diagnostics`` hook of its own, so ``strict_plan`` falls
-    through to ``core.compatibility``'s ungated default, which imports
-    ``omnidriver.openfoam`` unconditionally -- making this architecture guard
-    unable to run in a core-only install, which defeats its own point.
-    ``NeutralEnvironmentPlugin`` answers the hook itself and declares the same
-    ``system/controlDict`` / ``constant`` / ``Allrun`` case-file rules
-    ``OpenFOAMEnvironmentPlugin`` does, so the plan produced is equivalent for
-    every assertion below -- none of which pins the built-in plugin's
-    identity, only the absence of cardiac semantics."""
+    """Plan under a test-local, explicitly declared no-domain environment."""
     case = _minimal_case(tmp_path)
     return strict_plan(
         str(case.relative_to(tmp_path)),
         overrides={"cases_root": str(tmp_path)},
-        driver_context=driver_context(NeutralEnvironmentPlugin(), source="test"),
+        driver_context=driver_context(DeclaredCasePlugin(), source="test"),
     ).to_json()
 
 
@@ -97,11 +76,10 @@ def test_generic_describe_override_surface_has_no_cardiac_semantics(
     monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
     monkeypatch.setenv("SKIP_MESH_DIAGNOSTICS", "1")
     case = _minimal_case(tmp_path)
-    (case / "Allrun").write_text("#!/bin/sh\necho adapter-case-ran\n")
     payload = describe_entry(
         str(case.relative_to(tmp_path)),
         overrides={"cases_root": str(tmp_path)},
-        driver_context=openfoam_environment_context(),
+        driver_context=driver_context(DeclaredCasePlugin(), source="test"),
     )
     override_surface = {
         "config_schema": payload["config_schema"],
@@ -131,11 +109,10 @@ def test_generic_spec_metadata_names_dict_files_generically(
     monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
     monkeypatch.setenv("SKIP_MESH_DIAGNOSTICS", "1")
     case = _minimal_case(tmp_path)
-    (case / "Allrun").write_text("#!/bin/sh\necho adapter-case-ran\n")
     payload = describe_entry(
         str(case.relative_to(tmp_path)),
         overrides={"cases_root": str(tmp_path)},
-        driver_context=openfoam_environment_context(),
+        driver_context=driver_context(DeclaredCasePlugin(), source="test"),
     )
     metadata = payload["spec"]["metadata"]
     assert "electro_properties_relpath" not in metadata

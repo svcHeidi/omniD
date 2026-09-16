@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
 from types import SimpleNamespace
 
-from omnidriver.openfoam.environment import openfoam_environment_context
 from omnidriver.core.strict_planning import (
     StrictPlanReport,
-    _is_nondimensional_entry,
-    _mesh_geometry_diagnostics,
 )
 
 
@@ -20,31 +16,6 @@ def test_report_has_mesh_geometry_field() -> None:
     assert payload["simulation_audit"] == []
 
 
-def test_mesh_gate_skipped_by_env(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setenv("SKIP_MESH_DIAGNOSTICS", "1")
-    assert _mesh_geometry_diagnostics(
-        tmp_path, driver_context=openfoam_environment_context(),
-    ) == ()
-
-
-def test_manufactured_entry_is_nondimensional(tmp_path: Path) -> None:
-    spec = SimpleNamespace(
-        case_root=str(tmp_path),
-        metadata={"entry_name": "manufacturedBidomain"},
-    )
-    assert _is_nondimensional_entry(
-        spec, driver_context=openfoam_environment_context(),
-    ) is True
-
-
-def test_plain_entry_is_dimensional(tmp_path: Path) -> None:
-    spec = SimpleNamespace(
-        case_root=str(tmp_path),
-        metadata={"entry_name": "singleCell", "workflow_family": "tutorial"},
-    )
-    assert _is_nondimensional_entry(spec, driver_context=openfoam_environment_context()) is False
-
-
 def test_dictionary_resolution_audit_text_is_plugin_neutral_for_non_cardiac_plugin(
     tmp_path: Path,
 ) -> None:
@@ -54,9 +25,9 @@ def test_dictionary_resolution_audit_text_is_plugin_neutral_for_non_cardiac_plug
     in its own audit text."""
     from omnidriver.core.runtime.strict_audit import _build_simulation_audit
     from omnidriver.core.plugin_interface import driver_context
-    from plugins.minimal_plugin import MinimalOpenFOAMPlugin
+    from plugins.minimal_plugin import MinimalTestPlugin
 
-    context = driver_context(MinimalOpenFOAMPlugin(), source="test:minimal")
+    context = driver_context(MinimalTestPlugin(), source="test:minimal")
     spec = SimpleNamespace(
         case_root=tmp_path,
         metadata={},  # not a generic_case, exercises the plugin-sourced branch
