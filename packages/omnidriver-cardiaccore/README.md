@@ -88,6 +88,34 @@ The tree workflows retain fixed native seed/growth dictionaries; array seed
 proposals are not automatically applied. Coverage reports retain the named
 baseline's categories, but do not return scientific acceptance.
 
+The native generator owns endocardial-surface definition. It uses named LV/RV
+endocardial patches when those are available; otherwise it uses the selected
+UVC convention and natively recovers the RV-facing septum. Python operations
+do not re-create that UVC/endoseptal logic. After `setCardiacAnatomy`, each
+chamber has its own `aha_angle` frame: do not compare raw LV and RV angles.
+
+`cardiaccore.coordinates.ring_closure.v1` is the upstream geometry
+check for a VTK volume or boundary mesh. It expects declared binary LV/RV
+intraventricular values, a varying longitudinal coordinate, and a transmural
+coordinate with a declared endocardial boundary value. It extracts each
+candidate endocardial boundary, contours it at requested longitudinal values,
+and reports whether every contour is a single closed loop. It needs no
+pre-exported face sets and does not use AHA angles. A failed coordinate
+contract or open ring is a prerequisite to investigate, not permission to
+change the native UVC/CObiveco implementation or a Purkinje parameter.
+When the caller has not declared coordinate fields, it assesses scalar-field
+behaviour and ring topology rather than field names: it reports any unique,
+topology-supported two-chamber candidate, ambiguity, or the missing numerical
+prerequisite. The generic result does not invent which numeric chamber is LV
+or RV; callers declare that mapping only when it is needed downstream.
+
+For a selected tree study, keep this audit chain explicit: coordinate-ring
+closure → native face-set construction → `setCardiacAnatomy` AHA fields → seed
+proposal from native face sets plus AHA segments → native tree generation →
+terminal coverage/density observation. The adapter does not yet schedule that
+chain automatically, and it does not expose seed, growth, or density controls
+as sweep axes without separately selected and validated acceptance criteria.
+
 A runnable native case requires the explicitly supplied mesh and initial
 field bundle. Clean-clone asset distribution, native surface/field sampling,
 reviewed seed writing, and graph hand-off remain separate pending work.
