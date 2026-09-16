@@ -32,9 +32,7 @@ class TestResolveExecutionContext(unittest.TestCase):
         )
 
     def test_never_re_resolves_the_entry(self) -> None:
-        """Takes an already-built spec directly -- no resolve_entry/factory call of
-        its own, unlike describe_launch (which strict_plan used to call a second
-        time on the same entry purely to get these four paths)."""
+        """An already-built spec requires no entry or factory lookup."""
         cases_root = monorepo_root / "tutorials"  # type: ignore[operator]
         spec = load_entry_spec("singleCell", overrides={"cases_root": str(cases_root)})
 

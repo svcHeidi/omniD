@@ -185,10 +185,6 @@ class TestScopedMutators(unittest.TestCase):
     def test_remove_foam_dict_missing_ok_tolerates_absent_scope(
         self,
     ) -> None:
-        # _resolve_search_region(lines, scope) previously raised
-        # KeyError("Scope '<name>' not found") before missing_ok was ever
-        # consulted -- missing_ok only guarded the "dict_name not found
-        # inside an existing scope" case, not "scope itself absent".
         text = "\n".join(
             [
                 "outer",
@@ -416,10 +412,7 @@ class TestReadFoamEntryIsEnvironmentIndependent(unittest.TestCase):
             )
 
     def test_resolves_a_scope_written_as_an_inline_block(self) -> None:
-        # `solvers { V { tolerance 1e-5; } }` is legal OpenFOAM and appears in
-        # 10 tracked tutorial dicts. The scope machinery works on whole lines,
-        # so an inline block used to resolve to a degenerate range and read as
-        # None -- previously masked because foamDictionary parsed these.
+        # Inline blocks are legal OpenFOAM dictionary syntax.
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "fvSolution"
             path.write_text(
@@ -501,13 +494,7 @@ def test_update_foam_entry_falls_back_for_brace_in_quoted_string(tmp_path):
 
 
 def test_remove_foam_dict_falls_back_for_brace_in_quoted_string(tmp_path):
-    """Same defeats-the-scanner fixture as the update_foam_entry test above,
-
-    but for remove_foam_dict's own early _resolve_search_region call. Before
-    this fix, remove_foam_dict raised the same KeyError update_foam_entry
-    used to raise here, with no fallback -- a real regression versus the old
-    foamDictionary-first behaviour in a sourced environment.
-    """
+    """Quoted braces do not interfere with dictionary removal."""
     path = tmp_path / "d"
     path.write_text(
         "FoamFile { version 2.0; class dictionary; object d; }\n"
@@ -566,14 +553,7 @@ def test_remove_foam_dict_missing_ok_still_uses_fallback(tmp_path):
 
 
 def test_scope_resolution_does_not_treat_a_scalar_entry_as_a_block(tmp_path):
-    """A scalar entry sharing a scope name must not be silently treated as
-
-    a block by walking forward into an unrelated sibling's braces.
-    Reproduced directly: scope=["outer", "Vm"] against a scalar "Vm 5;"
-    line followed by an unrelated "unrelatedBlock { tolerance 1e-9; }"
-    previously returned unrelatedBlock's tolerance as if it belonged to
-    Vm's scope -- a silent wrong answer, not even a KeyError.
-    """
+    """A scalar entry sharing a scope name is not treated as a block."""
     path = tmp_path / "d"
     path.write_text(
         "FoamFile { version 2.0; class dictionary; object d; }\n"

@@ -17,7 +17,7 @@ restitution, and the 1D cable S1--S2 restitution that measures CV and APD90.
 | cardiacFOAM | `6515739bd1b1c6cf7ef21fe1d4e25830352ed4d2` (`main`) |
 | OmniD | `87febff4b3cabfa5ffbad571822c2f7feb3db58f`, dirty (`cli.py`, two untracked docs, one untracked test) |
 | OpenFOAM | `/Volumes/OpenFOAM-v2412`, v2412, `darwin64ClangDPInt32Opt` |
-| Plugin | `org.cardiacfoam` 0.1.0, API v2, `sha256:de4650f505af15ac4a2d1b0bd6e56651152bcbed7cca9f88a5762e83e2ad3c3e` |
+| Plugin | `org.cardiacfoam` 0.1.0, plugin API, `sha256:de4650f505af15ac4a2d1b0bd6e56651152bcbed7cca9f88a5762e83e2ad3c3e` |
 | Backend | full (`solids4foam` present) |
 | Evidence root | `/private/tmp/omnidriver-experiments/restitution-chain-2026-09-14/` |
 

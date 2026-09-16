@@ -88,13 +88,7 @@ def test_a_core_role_loads(tmp_path) -> None:
     assert loaded.case_files[0].role == "plugin.configuration"
 
 
-# --- Escape tier: a role for an environment core has no vocabulary for ---
-#
-# The hard block this closes: get_profile() is a required SolverPlugin
-# member, so a plugin whose profile YAML declares e.g. `fenics.mesh_file`
-# used to fail at load with `ValueError: unknown case-file role
-# 'fenics.mesh_file'` -- nothing about a non-OpenFOAM plugin could even be
-# attempted. See future/ENVIRONMENT_CONTRACT.md §10.
+# --- Extension role for an environment-specific input ----------------------
 
 
 def test_an_escape_role_for_a_foreign_environment_loads(tmp_path) -> None:

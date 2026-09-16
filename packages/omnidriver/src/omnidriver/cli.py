@@ -770,17 +770,7 @@ def _recover_remediation(args) -> int:
 
 
 def resolve_cases_root(explicit: str | Path | None = None) -> Path:
-    """Where to look for cases, resolved at the public edge only.
-
-    explicit -> OMNIDRIVER_CASES_ROOT -> current working directory.
-
-    Three steps, no fourth. The environment variable covers CI, containers and
-    HPC without a flag on every invocation; a config-file tier is deliberately
-    omitted until there is evidence one is needed
-    (future/ENVIRONMENT_CONTRACT.md §12). Core itself resolves nothing -- it
-    used to walk up from its own __file__ for repository markers and raise
-    outside a checkout, which is why it could not plan a case from a wheel.
-    """
+    """Resolve cases from an argument, environment variable, or current directory."""
     if explicit is not None:
         return Path(explicit).expanduser()
     from_env = os.environ.get("OMNIDRIVER_CASES_ROOT")

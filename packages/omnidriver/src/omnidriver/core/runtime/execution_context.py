@@ -1,13 +1,4 @@
-"""Neutral path resolver for strict_plan().
-
-strict_plan() used to call describe_launch("sim", entry, ...) purely to get
-these four paths -- that re-resolved the entry (resolve_entry + factory) a
-second time (strict_plan already has the spec from load_entry_spec) and,
-worse, coupled the strict/workflow-DAG execution path (which never runs the
-legacy sim/post/all CLI) to describe_launch's VALID_DRIVER_ACTIONS vocabulary.
-This module takes the already-built TutorialSpec directly: no re-resolution,
-no action string, no dependency on which CLI actions happen to exist.
-"""
+"""Resolve execution paths from an already constructed ``TutorialSpec``."""
 
 from __future__ import annotations
 

@@ -1143,9 +1143,9 @@ Create `packages/omnidriver-cardiacfoam/tests/test_no_cardiac_gate_is_reached.py
 """No compatibility fallback may answer in cardiac terms for the cardiac plugin.
 
 core/compatibility.py has twenty branches gated on
-plugin_id == "org.cardiacfoam". Each exists only for plugins predating an
-optional hook. Once CardiacFoamPlugin implements the hook, the adapter calls it
-directly and the gate is dead code.
+plugin_id == "org.cardiacfoam". Each handles an absent optional hook. Once
+CardiacFoamPlugin implements the hook, the adapter calls it directly and the
+gate is dead code.
 
 This asserts that directly: run an operation under an explicit cardiac context
 and assert no gated fallback fired. Phase 2 deletes the branches; this is the

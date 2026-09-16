@@ -116,9 +116,7 @@ def test_make_spec_accepts_generic_path_addressed_overrides_not_cardiac_kwargs()
     )
 
 
-# --------------------------------------------------------------------------
-# P2.6: generic, path-addressed dictionary overrides
-# --------------------------------------------------------------------------
+# Generic path-addressed dictionary overrides
 
 
 class _MutationSpy:
@@ -295,18 +293,7 @@ def test_declaring_no_dict_files_leaves_the_case_generic(tmp_path: Path) -> None
 
 
 def test_core_declares_no_default_dict_files(tmp_path: Path) -> None:
-    """Omitting dict_file_relpaths entirely is not the same as core supplying
-    a default -- it means there are none.
-
-    This used to assert the opposite: that omitting the argument produced
-    cardiacFoam's constant/electroProperties and constant/physicsProperties
-    via compatibility.legacy_generic_case_dict_file_relpaths. Core defaulting
-    to two filenames from one solver's vocabulary was the point of that seam
-    and is exactly what got removed; the pair now lives in
-    cardiacfoam/tutorials/generic_case.py, whose own test asserts it. The
-    distinction from test_declaring_no_dict_files_leaves_the_case_generic
-    above is that this one passes no argument at all.
-    """
+    """Omitting ``dict_file_relpaths`` declares no dictionary files."""
     spec = _spec(tmp_path)
 
     assert spec.metadata["dict_file_relpaths"] == {}

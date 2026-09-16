@@ -190,10 +190,8 @@ def _quoted_pattern_headers(
 ) -> list[tuple[str, str]]:
     """Return ``(regex_source, on_disk_name)`` for quoted block headers.
 
-    OpenFOAM lets a sub-dictionary be keyed by a quoted regex, e.g.
-    ``"Vm|VmFinal|u|uFinal"``, which matches the field ``Vm``. Both this
-    module's line scanner and foamlib match block names literally, so such a
-    block was previously unreachable by member name.
+    OpenFOAM permits quoted regex block names such as
+    ``"Vm|VmFinal|u|uFinal"``. This returns both the regex and literal header.
     """
     headers: list[tuple[str, str]] = []
     for index in _iter_direct_child_lines(lines, start, end):
@@ -413,21 +411,10 @@ def splice_raw_entry_text(
 ) -> bool:
     """Replace ``key``'s value with ``raw_text``, written in verbatim.
 
-    The same line-location machinery ``update_foam_entry`` uses below
-    (``_explode_inline_blocks_with_spans`` / ``_resolve_search_region`` /
-    ``_iter_direct_child_lines``), factored out so it is reachable without
-    the ``"/*" in source`` gate that normally routes every real dict file
-    (they all carry the license banner) straight to ``foam_backend`` before
-    this logic ever runs. Needed by ``foam_backend.update_entry`` for a
-    value class that must never be reserialised by foamlib -- see its
-    docstring for why.
-
     Returns ``True`` if an existing single-line scalar entry was found and
     replaced, ``False`` if the scope could not be resolved, the key was not
-    found, or the matched entry spans multiple lines. Deliberately never
-    calls into ``foam_backend`` itself (unlike ``update_foam_entry``'s own
-    fallbacks) -- the two tiers must not call each other, or a value that
-    reaches here because tier 2 needs it would recurse.
+    found, or the matched entry spans multiple lines. This raw writer never
+    delegates to ``foam_backend``.
     """
     if not file_path.exists():
         raise FileNotFoundError(f"Dictionary file not found: {file_path}")
@@ -731,26 +718,7 @@ def read_foam_dict_block(
     *,
     scope: str | list[str] | tuple[str, ...] | None = None,
 ) -> str | None:
-    """Read the raw text of a named sub-dictionary block -- header line,
-    braces, and body verbatim -- from an OpenFOAM dictionary-like text
-    file, or ``None`` if the file, its scope, or the block itself is
-    absent.
-
-    Block-location logic is the read-only twin of :func:`remove_foam_dict`'s
-    fallback scan (same header pattern, same brace-depth bookkeeping),
-    deliberately operating on raw, unexploded lines rather than
-    :func:`read_foam_entry`'s exploded ones: the goal here is to hand back
-    exactly what is on disk so it can be replayed verbatim via
-    :func:`ensure_foam_dict`'s ``block_text`` parameter elsewhere (e.g. a
-    dict regenerator carrying a ``conductionNetworkDomains`` block forward
-    unmodified across a top-level solver switch it has no way to
-    reconstruct from the catalog alone), not to reformat or reason about
-    individual leaf entries.
-
-    Deliberately text-based, not foamDictionary-based, for the same reason
-    as :func:`read_foam_entry`: foamDictionary re-serialises and evaluates
-    the file it reads, which is not an acceptable side effect of a read.
-    """
+    """Return a named sub-dictionary block verbatim, or ``None`` if absent."""
     if not file_path.exists():
         return None
 
@@ -792,10 +760,6 @@ def read_foam_dict_block(
     return None
 
 
-# No foamlib fallback here, deliberately. block_text is inserted verbatim to
-# preserve comments and formatting for the dynamic-container carry-forward
-# in plugins/cardiacfoam/dict_builder.py; routing it through a parser would
-# re-serialise exactly what this path exists to keep intact.
 def ensure_foam_dict(
     file_path: Path,
     dict_name: str,
@@ -803,7 +767,7 @@ def ensure_foam_dict(
     *,
     scope: str | list[str] | tuple[str, ...] | None = None,
 ) -> bool:
-    """Insert a dictionary block if it is missing from the selected scope."""
+    """Insert a verbatim dictionary block if absent from the selected scope."""
     if not file_path.exists():
         raise FileNotFoundError(f"Dictionary file not found: {file_path}")
 

@@ -1,10 +1,4 @@
-"""Turning a declared RuntimeDependency into a fingerprinted
-ProvenanceComponent, reusing Task 1's provenance model rather than a
-parallel one. This is the acceptance test for the incident Phase 2
-exists to prevent: an Allrun-driven step's command never names the
-cardiacFoam binary, so only this composition -- resolve, then
-fingerprint by content -- makes a rebuilt solver visible.
-"""
+"""Resolution and fingerprinting of declared runtime dependencies."""
 
 from __future__ import annotations
 
@@ -91,10 +85,7 @@ def test_a_timestamp_only_touch_leaves_the_fingerprint_unchanged(tmp_path: Path)
 
 
 def test_a_missing_required_dependency_makes_a_snapshot_built_from_it_partial() -> None:
-    """The other half of the acceptance criterion: a missing required
-    library yields unavailable, and folding that into a snapshot the normal
-    way (Task 1's snapshot_from_components, unmodified) makes the whole
-    snapshot partial -- never a silent pass."""
+    """A missing required dependency makes the snapshot partial."""
     missing = component_for_runtime_dependency(
         RuntimeDependency(name="libelectroModels", path=None, required=True)
     )

@@ -1,6 +1,4 @@
-"""Declaration surface consumed by Phase 2 (provenance), Phase 4 (telemetry),
-and Phase 5 (observables). Nothing in Phase 1 reads these yet -- they exist so
-those phases need not reopen the plugin contract mid-flight."""
+"""Runtime-evidence declarations exposed through plugin capabilities."""
 
 from __future__ import annotations
 
@@ -36,20 +34,6 @@ def test_a_command_with_no_declared_globs_returns_empty() -> None:
 def test_extra_provenance_paths_default_to_empty(tmp_path: Path) -> None:
     generic = driver_context(MinimalTestPlugin(), source="test:evidence").capabilities.runtime_evidence
     assert generic.extra_provenance_paths(tmp_path) == ()
-
-
-def test_an_unknown_artifact_format_has_no_reader() -> None:
-    """Kept deliberately weak, and labelled as such.
-
-    ``get_artifact_value_reader`` returns None for EVERY format in every
-    shipped plugin today -- runtime_evidence.py records that readers arrive in
-    Phase 5 -- so this cannot yet assert a contrast the way its sibling above
-    does. It is a placeholder guarding the adapter's plumbing, not the
-    behaviour. When Phase 5 lands a real reader, rewrite this to assert the
-    known format resolves and an unrelated string does not.
-    """
-    evidence = driver_context(MinimalTestPlugin(), source="test:evidence").capabilities.runtime_evidence
-    assert evidence.artifact_value_reader("not_a_real_format") is None
 
 
 def test_generic_plugin_provides_no_artifact_readers() -> None:

@@ -1,5 +1,4 @@
-"""v2 -> v3 RunDocument migration (P2.3): archived cardiac v2 documents must
-migrate deterministically into the open-config v3 shape."""
+"""Deterministic migration of archived v2 RunDocuments to v3."""
 from __future__ import annotations
 
 from omnidriver.core.runtime.run_model import RunDocument

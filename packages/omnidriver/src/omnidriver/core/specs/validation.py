@@ -93,18 +93,8 @@ def _slice_value(run, phase: str, driver_path: str):
 def _non_mapping_phase_errors(run, phase_order: tuple[str, ...]) -> list[ValidationError]:
     """Reject any ``run.config`` phase slice that is not a mapping.
 
-    ``RunDocument.config`` is plugin-defined and the core JSON Schema only
-    constrains it to be an object -- per-phase values are unconstrained
-    (P2.2). Both :func:`_flatten_context` (``slice_.items()``) and
-    :func:`_slice_value` (``slice_.get(...)``) assume every slice is
-    dict-shaped, so an agent-authored document such as
-    ``config={"anatomy": "not-an-object"}`` would otherwise raise an
-    uncaught ``AttributeError`` instead of producing a diagnostic. This
-    single guard protects both; ``validate_run`` returns early when it
-    fires, so neither helper ever sees a non-mapping slice.
-
-    ``None`` and other falsy values are tolerated: both helpers already
-    coerce them to an empty slice.
+    ``RunDocument.config`` is plugin-defined, while validation helpers require
+    mapping-shaped slices. Falsy slices are treated as empty mappings.
     """
     errors: list[ValidationError] = []
     for phase, slice_ in (run.config or {}).items():
@@ -325,10 +315,7 @@ def validate_run(
             continue
         ph = primary_phase(e, phase_order)
         if ph is None:
-            # Previously a silent `continue`, which skipped this check
-            # entirely for any entry whose phases fall outside the active
-            # plugin's declared order. Report it instead: an unvalidatable
-            # entry is a catalog defect, not a pass.
+            # An entry outside the declared phase order cannot be validated.
             errors.append(ValidationError(
                 phase=phase_order[0] if phase_order else "",
                 field=e.driver_path,
@@ -358,10 +345,7 @@ def validate_run(
             continue
         ph = primary_phase(e, phase_order)
         if ph is None:
-            # Previously a silent `continue`, which skipped this check
-            # entirely for any entry whose phases fall outside the active
-            # plugin's declared order. Report it instead: an unvalidatable
-            # entry is a catalog defect, not a pass.
+            # An entry outside the declared phase order cannot be validated.
             errors.append(ValidationError(
                 phase=phase_order[0] if phase_order else "",
                 field=e.driver_path,

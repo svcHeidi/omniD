@@ -2,20 +2,8 @@
 
 Core owns ``DictEntry``, so it owns the parsing of a ``driver_path`` into its
 scope-stripped, wildcard-aware form. Nothing here reads a file, parses C++, or
-knows an OpenFOAM dictionary: it is string work over a core type.
-
-This lived in the OpenFOAM C++ dict-key scanner until Phase 2 Task 2 moved that
-scanner out of core -- which took these helpers with it, and broke
-``strict_planning``. That module calls ``catalogued_paths`` EAGERLY to build an
-argument for ``DictDiagnosticsCapability.case_dict_keys``, so the call happens
-before the capability can dispatch to a plugin's own hook: a plugin that
-implements ``get_case_dict_key_diagnostics`` still could not avoid importing
-``omnidriver.openfoam``. Splitting the vocabulary from the scanning fixes that
-at the root rather than making the argument lazy, which would have changed a
-Protocol every plugin author implements.
-
-``omnidriver.openfoam.dict_keys_scanner`` re-exports these for its own use and
-for the C++ drift direction, which is the legal direction.
+knows an OpenFOAM dictionary. Format-specific scanners consume this vocabulary
+from their adapter packages.
 """
 
 from __future__ import annotations
@@ -43,10 +31,7 @@ class CataloguePath:
 
 
 _WILDCARD_RE = re.compile(r"<[^>]+>")
-# Any plugin-declared override scope token, not just the built-in cardiac
-# plugin's $ELECTRO_MODEL_COEFFS -- this is a syntactic "$TOKEN." shape,
-# never resolved to a file or scope path here, so no plugin lookup is
-# needed to recognize and strip it.
+# A syntactic plugin scope prefix; resolution remains adapter-owned.
 _SCOPE_TOKEN_PREFIX_RE = re.compile(r"^\$[A-Z][A-Z0-9_]*\.")
 
 
@@ -96,4 +81,3 @@ def catalogued_paths(entries: Iterable["DictEntry"]) -> tuple[str, ...]:
     ``<placeholder>`` from a real misspelling.
     """
     return tuple(path.normalised for path in _as_paths(entries))
-

@@ -111,9 +111,7 @@ def _build_staleness_diagnostics(
     src_root: Path | str | None,
     driver_context: Any | None = None,
 ) -> tuple[StrictDiagnostic, ...]:
-    """Warn (never block) when a user-compiled utility the plan invokes is older
-    than the newest C++/CUDA source under ``src_root`` -- i.e. the binary was
-    not rebuilt after the source changed (the classic stale-``libso`` footgun).
+    """Warn when an invoked user utility is older than its source tree.
 
     Only executables that resolve under ``$FOAM_USER_APPBIN`` are policed; core
     OpenFOAM apps and system binaries are never flagged.

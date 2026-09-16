@@ -1,9 +1,7 @@
-"""Canonical input enumeration (Task 2b): which on-disk files, case
-scripts, and runtime dependencies a workflow run actually consumes.
-Classification is by consumption, not authorship (I1) -- an
-unclassified file defaults to required_input, since a spurious refusal
-is recoverable and a silent stale replay is the incident this phase
-exists to prevent.
+"""Enumerate the files and runtime dependencies a workflow consumes.
+
+Classification follows consumption. Unclassified files are required inputs so
+they cannot silently disappear from provenance.
 """
 
 from __future__ import annotations
@@ -75,8 +73,9 @@ def _make_executable(path: Path, content: bytes) -> None:
 
 
 class _FakePlugin(MinimalTestPlugin):
-    """A v1 plugin that declares CaseProvenanceCapability / RuntimeEvidence
-    hooks inline, so precedence can be exercised without a tutorial.
+    """A plugin declaring provenance and runtime-evidence hooks inline.
+
+    This lets precedence be exercised without a tutorial.
 
     Its selected-time convention is supplied below, because Core does not
     infer a restart directory from case-file syntax."""

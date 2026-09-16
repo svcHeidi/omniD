@@ -19,10 +19,7 @@ def test_report_has_mesh_geometry_field() -> None:
 def test_dictionary_resolution_audit_text_is_plugin_neutral_for_non_cardiac_plugin(
     tmp_path: Path,
 ) -> None:
-    """P2.7: the dictionary_resolution audit stage's success text must come
-    from the active plugin, not a core-hardcoded cardiac sentence. A
-    non-cardiac plugin must not see "electroProperties"/"physicsProperties"
-    in its own audit text."""
+    """Dictionary-resolution audit text comes from the active plugin."""
     from omnidriver.core.runtime.strict_audit import _build_simulation_audit
     from omnidriver.core.plugin_interface import driver_context
     from plugins.minimal_plugin import MinimalTestPlugin

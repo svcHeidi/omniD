@@ -52,13 +52,8 @@ def test_context_exposes_focused_adapters_without_replacing_public_plugin(
     config, diagnostics = context.capabilities.run_document_configuration.build(
         RunDocumentConfigurationRequest(spec),
     )
-    # A non-cardiac plugin with no build_run_document_config() hook now gets
-    # an empty config rather than the cardiac phase vocabulary. Those four
-    # phase names are exactly what RunDocument v3 removed from core, where
-    # `config` is an open object with no fixed phases (schemas/run-document.json),
-    # so handing them to a plugin that never declared them contradicted the
-    # schema. Matches legacy_run_document_config_schema, which already handed
-    # non-cardiac plugins a fully open schema.
+    # The optional builder has a neutral empty result; the required plugin
+    # schema decides whether that result is valid.
     assert config == {}
     assert diagnostics == ()
 
@@ -73,19 +68,7 @@ def test_context_exposes_focused_adapters_without_replacing_public_plugin(
 def test_non_cardiac_plugin_does_not_inherit_cardiac_case_evidence(
     tmp_path: Path,
 ) -> None:
-    """Same rule as :func:`test_report_catalog_is_empty_for_non_cardiac_plugin`,
-    applied to case compatibility.
-
-    This test previously asserted the opposite, under the name
-    ``test_legacy_plugin_case_evidence_preserves_pre_capability_behavior``: a
-    non-cardiac plugin DID claim a case carrying ``electroProperties*``,
-    because legacy_case_marker/legacy_case_runnable_without_workflow called
-    the cardiac implementation without checking plugin_id -- unlike the
-    thirteen sibling fallbacks, which all gate on ``org.cardiacfoam``.
-
-    Preserving that behaviour was never the intent; it was the Plan-1
-    fallback's unexamined default, and it meant a third-party plugin was
-    silently judged by cardiac filesystem evidence."""
+    """Case-compatibility defaults contain no solver-specific evidence."""
     plugin = MinimalTestPlugin()
     context = driver_context(plugin, source="test")
     case_root = tmp_path / "case"
@@ -108,9 +91,7 @@ def test_non_cardiac_plugin_does_not_inherit_cardiac_case_evidence(
 
 
 def test_report_catalog_is_empty_for_non_cardiac_plugin() -> None:
-    """P2.7: report_catalog.py's former REPORTS tuple was cardiac-specific
-    data consumed unconditionally. A non-cardiac v1 plugin must get an empty
-    report catalog, not the built-in "Vm field"/"activation map" reports."""
+    """A plugin without the optional hook has an empty report catalog."""
     plugin = MinimalTestPlugin()
     context = driver_context(plugin, source="test")
 

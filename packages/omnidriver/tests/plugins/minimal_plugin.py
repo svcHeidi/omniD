@@ -191,9 +191,3 @@ class MinimalTestPlugin:
     def get_run_document_config_schema(self) -> dict:
         """No solver semantics means no constraint on the config shape."""
         return {"type": "object", "additionalProperties": True}
-
-
-# Compatibility alias for Core tests that have not yet been migrated.  New
-# tests must import ``MinimalTestPlugin`` so their fixture does not encode an
-# OpenFOAM identity by name.
-MinimalOpenFOAMPlugin = MinimalTestPlugin

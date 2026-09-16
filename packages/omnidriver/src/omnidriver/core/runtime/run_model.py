@@ -14,11 +14,7 @@ from typing import Any, Literal
 
 import jsonschema
 
-# No ``Phase`` literal here any more. Core used to spell cardiacFoam's four
-# editing phases (anatomy/physics/stimulus/solver) as a closed type, which
-# put one solver's vocabulary in the solver-neutral package. A plugin
-# declares its own phases through ``get_phases()``; ``primary_phase()``
-# takes that order as a parameter. See test_phases_are_plugin_declared.py.
+# Editing phases are plugin-declared strings.
 Status = Literal["draft", "queued", "planning", "planned", "running", "completed", "failed"]
 
 _SCHEMA = json.loads(
@@ -39,11 +35,7 @@ class RunDocument:
     id: str
     name: str
     status: Status
-    # Plugin-defined: the core schema constrains ``config`` to an object but
-    # imposes no shape on the per-phase values (P2.2). Annotating the values
-    # as ``dict`` would assert a guarantee the schema no longer makes;
-    # ``specs.validation.validate_run`` enforces the mapping shape and
-    # reports violations as diagnostics.
+    # Plugin-defined object; plugin validation owns the values' shape.
     config: dict[str, Any]
     version: str = "3"
     createdAt: str = ""

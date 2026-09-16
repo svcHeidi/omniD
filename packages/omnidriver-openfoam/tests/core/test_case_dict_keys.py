@@ -20,12 +20,12 @@ from pathlib import Path
 import pytest
 
 from omnidriver.openfoam.case_dict_keys import case_dict_key_diagnostics
-from omnidriver.core.specs.paths import repo_root_default
 from conftest import monorepo_root, skip_without_monorepo
 
 _SINGLE_CELL = (
-    (monorepo_root or repo_root_default())
-    / "tutorials" / "electrophysiologyProtocols" / "singleCell"
+    monorepo_root / "tutorials" / "electrophysiologyProtocols" / "singleCell"
+    if monorepo_root is not None
+    else None
 )
 
 _HEADER = """\
@@ -181,6 +181,7 @@ def test_strict_plan_reports_a_misspelled_key_without_failing(tmp_path):
     from omnidriver.core.plugin_interface import default_driver_context
     from omnidriver.core.strict_planning import strict_plan
 
+    assert _SINGLE_CELL is not None
     cases_root = tmp_path / "tutorials"
     case = cases_root / "case"
     shutil.copytree(_SINGLE_CELL, case)
@@ -330,6 +331,7 @@ def test_a_misspelled_key_is_silently_replaced_by_the_catalogue_default(tmp_path
     from omnidriver.core.plugin_interface import default_driver_context
     from omnidriver.core.strict_planning import strict_plan
 
+    assert _SINGLE_CELL is not None
     cases_root = tmp_path / "tutorials"
     case = cases_root / "case"
     shutil.copytree(_SINGLE_CELL, case)

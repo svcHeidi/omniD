@@ -24,19 +24,7 @@ from omnidriver.core.runtime.sweep_manifest import CaseManifestEntry, compute_ov
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError
 from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 
-# Phase 2 Task 5b / test-ownership split: this file used to require
-# omnidriver-cardiacfoam (its specs were cardiac vocabulary throughout --
-# niederer2012, ionic models, electro/physics selectors) and was hidden
-# from core's collection behind an importorskip. The 11 tests that genuinely
-# exercise real cardiac routing/materialization moved to
-# packages/omnidriver-cardiacfoam/tests/test_sweep_runner.py, where they run
-# against the real plugin. What remains here either never reaches routing at
-# all (entry-mode tests mock load_entry_spec; the over-cap/hash-mismatch
-# tests raise before any per-case work), or mocks
-# omnidriver.core.runtime.sweep_runner.route_case_values directly and uses
-# content-free axis vocabulary -- so it needs only *a* plugin, not the
-# cardiac one, to prove core's own sweep bookkeeping (resume/fresh/retry/
-# timeout/archive) still works.
+# Core sweep orchestration uses neutral fixtures or mocked routing.
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from plugins.declared_case_plugin import DeclaredCasePlugin
 from plugins.resume_test_plugin import ResumeTestPlugin

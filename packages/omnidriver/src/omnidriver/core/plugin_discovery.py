@@ -33,41 +33,17 @@ ENTRY_POINT_GROUP = "omnidriver.plugins"
 
 @functools.lru_cache(maxsize=1)
 def _scan_entry_points() -> tuple[Any, ...]:
-    """Read the entry-point group off disk, once per process.
-
-    ``importlib.metadata.entry_points()`` re-reads every installed
-    distribution's metadata on each call -- about 6 ms here. That was
-    invisible while discovery only ran when ``--plugin`` was passed, but
-    ``compatibility.legacy_default_driver_context`` now resolves the implicit
-    default through this group, and the public edge calls it once per sweep
-    case. Uncached, that took the test suite from 35 s to 13 min.
-
-    Installed distributions do not change inside a running process, so this is
-    a cache over something genuinely immutable, not a bet. Tests that need
-    synthetic entry points patch ``_entry_points`` below -- which replaces the
-    whole function object, cache and all -- so this does not weaken that seam.
-    """
+    """Read and cache the installed plugin entry points for this process."""
     return tuple(entry_points(group=ENTRY_POINT_GROUP))
 
 
 def _entry_points() -> tuple[Any, ...]:
-    """Indirection seam so tests can inject entry points without installing.
-
-    Tests monkeypatch this function to return synthetic entry-point objects,
-    avoiding the need for a real ``pip install`` of the plugin under test.
-    All public discovery functions call this; none call ``entry_points()``
-    directly.
-    """
+    """Return entry points through an injectable discovery seam."""
     return _scan_entry_points()
 
 
 def ambiguous_plugin_names() -> dict[str, tuple[str, ...]]:
-    """Entry-point names claimed by more than one installed distribution.
-
-    Two distributions exporting the same name is a packaging conflict, not
-    something to resolve by dictionary insertion order -- which distribution
-    won would depend on installation order and be invisible in the plan.
-    """
+    """Return entry-point names claimed by multiple distributions."""
     seen: dict[str, list[str]] = {}
     for entry_point in _entry_points():
         dist = getattr(entry_point, "dist", None)

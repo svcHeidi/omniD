@@ -48,16 +48,8 @@ def _parse_columnar_reference(text: str) -> list[_ReferencePoint]:
     (e.g. the bidomain `kind key metric ...` metric style), signalling the
     caller to fall back to the case's own regressionTest.sh as the gate.
 
-    Duplicated (not imported) from
-    ``regression_equivalence.dual_run.parse_columnar_reference`` in
-    cardiacfoam's test tree: that module imports
-    ``regression_equivalence.registry``, a sibling module that lives only in
-    cardiacfoam's own tests directory, so importing it from core's test suite
-    would pull a cardiacfoam-only test package into a core-only install (the
-    regression this duplication fixes, see
-    docs/superpowers/plans/2026-08-27-core-completion-phase-2.md, Task 1).
-    This function itself is generic -- no cardiac knowledge -- so copying it
-    is safe and cheaper than relocating this whole module.
+    This parser is kept local so the Core-only test suite does not import the
+    cardiacFOAM test package.
     """
     points: list[_ReferencePoint] = []
     for raw in text.splitlines():

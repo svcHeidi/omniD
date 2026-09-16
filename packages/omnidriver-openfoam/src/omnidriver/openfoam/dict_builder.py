@@ -29,15 +29,7 @@ from omnidriver.core.specs.validation import (
 )
 
 if TYPE_CHECKING:
-    # DictEntry appears only in annotations here, and this module has
-    # `from __future__ import annotations`, so it is never needed at runtime.
-    # It used to be imported at MODULE SCOPE from `openfoam_driver.dict_entries`
-    # -- the pre-migration package name, which exists in no install. That made
-    # `import omnidriver.openfoam.dict_builder` raise ModuleNotFoundError from
-    # any cwd outside this repo, and it went unnoticed because the retired
-    # `openfoam_driver/` tree was still tracked at the repo root at the time:
-    # running pytest from there put cwd on sys.path and the stale package
-    # resolved. That tree was deleted in `4a5fb48`, so the cover is gone too.
+    # These types are used only by deferred annotations.
     from omnidriver.core.contracts.dictionary import DictEntry
     from omnidriver.core.plugin_interface import DriverContext
 

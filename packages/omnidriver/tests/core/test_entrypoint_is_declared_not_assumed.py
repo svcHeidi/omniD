@@ -1,18 +1,4 @@
-"""Every site that needs the case entrypoint must ask the plugin for it.
-
-Phase 1 gave `registry.py` a declared entrypoint and used it
-for case detection. Three other sites kept the literal `"Allrun"`, so a plugin
-naming its entrypoint anything else got:
-
-* `workflow.py`'s `producer_commands` missing its own run step, which credits
-  unclaimed artifacts to no step at all, and
-* `generic_case.py`'s one-step DAG invoking a script the case does not contain.
-
-Both were invisible because every shipped plugin does call it `Allrun` --
-two constants agreeing by coincidence, which is the same shape as the
-`output_dir_name` defect. So these tests assert the CONTRAST: a plugin
-declaring a different entrypoint must move every one of those answers.
-"""
+"""Every case-entrypoint consumer uses the plugin declaration."""
 from __future__ import annotations
 
 import pytest

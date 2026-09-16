@@ -1,13 +1,9 @@
-"""An explicitly-contexted operation must never fall back to the cardiac default.
+"""Explicitly-contexted operations never resolve a default plugin.
 
 The static guard in test_core_context_is_explicit.py proves core contains no
 implicit resolution syntactically. This proves the runtime consequence: an
 operation driven by a named plugin fires legacy_default_driver_context zero
 times.
-
-Note: `caps.dictionaries.phases()` from the plan's Task 5 Step 4 template is
-omitted here. That method does not exist yet -- it ships with Task 3
-(`get_phases()`), which has not landed on this branch.
 """
 from __future__ import annotations
 
@@ -26,7 +22,7 @@ def assert_no_default_context_fallback(operation) -> None:
         operation()
         fired = [n for n in calls if n == "legacy_default_driver_context"]
     assert fired == [], (
-        f"operation resolved the built-in cardiac context {len(fired)} time(s); "
+        f"operation resolved a default plugin context {len(fired)} time(s); "
         "it should use the DriverContext it was given"
     )
 

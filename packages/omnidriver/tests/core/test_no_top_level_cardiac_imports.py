@@ -1,5 +1,4 @@
-"""P2.5: modules outside the cardiac package and core/compatibility.py must
-not import cardiac plugin internals at module scope."""
+"""Core modules do not import cardiac plugin internals at module scope."""
 from __future__ import annotations
 
 import ast

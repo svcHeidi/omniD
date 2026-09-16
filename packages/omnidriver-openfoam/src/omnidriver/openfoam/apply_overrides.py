@@ -40,46 +40,16 @@ class OverrideScope:
 
 @dataclass(frozen=True)
 class RegenerationScope:
-    """One bare (non-``$``-prefixed) "selector" override a plugin declares
-    for `step --strict --apply` that must REGENERATE a dict file rather
-    than key-patch it, because changing the value restructures the file --
-    renames a sub-block, changes which sibling keys are legal -- instead of
-    changing one leaf in place. The motivating case is cardiacFoam's
-    ``myocardiumSolver``: switching it renames ``<oldSolver>Coeffs`` to
-    ``<newSolver>Coeffs`` and flips which keys the catalog's
-    ``applicable_when``/``required_when``/``forbidden_when`` predicates
-    allow, none of which ``update_foam_entry`` (a single key/value/scope
-    patch) can express.
+    """A selector override that regenerates an entire dictionary file.
 
-    selector_keys: the bare ``driver_path`` names this scope owns (e.g.
-        ``{"myocardiumSolver"}`` for the cardiac plugin). Deliberately a
-        small, explicit set: a selector only belongs here if changing it
-        actually restructures the file. Plain leaf selectors that only
-        change a value in place (e.g. cardiacFoam's ``ionicModel``,
-        ``tissue``) stay on the ordinary ``$TOKEN.`` :class:`OverrideScope`
-        path instead -- routing them through regeneration too would be a
-        capability the catalog does not need yet.
+    selector_keys: bare ``driver_path`` names whose values change the file's
+        structure rather than one existing leaf.
     file_relpath: the case-relative dict file this scope regenerates (e.g.
         ``"constant/electroProperties"``).
     catalog_group: the dictionary-catalog group name used to validate enum
-        values for these selector keys (mirrors
-        :attr:`OverrideScope.catalog_group`).
-    regenerate: given the on-disk file path, the full ``driver_path``, the
-        new value, and any OTHER ``$TOKEN.``-scoped overrides from the same
-        `step --strict --apply` call that target this same
-        ``file_relpath`` (``{driver_path: value}``, empty if none),
-        rewrite the file in place from its current content with that one
-        selector changed. The extra-overrides map exists because
-        ``update_foam_entry`` can only patch a key that already exists --
-        a solver switch can make a *new* key required with no catalog
-        default (e.g. eikonalSolver's ``stimulusLocationMin``, absent from
-        a monodomain source and un-defaultable, case-specific geometry),
-        and there would otherwise be no way for such a value to reach the
-        file: too late to key-patch it in afterward (nothing to patch),
-        and the rebuild has no default to fall back on. Plugin-owned: how
-        to decompose the existing file into selectors/overrides, rebuild
-        it, and preserve whatever the rebuild pipeline cannot itself
-        round-trip is catalog-specific, not something core can infer.
+        values for these selectors.
+    regenerate: plugin-owned callback receiving the file, selected value, and
+        same-file scoped overrides needed during reconstruction.
     """
 
     selector_keys: frozenset[str]
@@ -393,11 +363,7 @@ def _apply_validated_overrides(
                 )
             elif not dp.startswith("$") and dp in regen_scope_by_key:
                 regen_scope = regen_scope_by_key[dp]
-                # Other $TOKEN. overrides in this same call that target the
-                # scope's file: the rebuild needs to see these (not just
-                # the selector) because update_foam_entry can only patch a
-                # key that already exists, and the new solver may require
-                # a key the old file never had (see RegenerationScope.regenerate).
+                # Forward same-file scoped values needed by the regenerator.
                 extra_overrides = {
                     other["driver_path"]: other["value"]
                     for other in overrides

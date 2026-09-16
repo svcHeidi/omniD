@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import re
 import json
+from bisect import bisect_right
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -45,7 +46,7 @@ if TYPE_CHECKING:
 
 
 # ---------------------------------------------------------------------------
-# Comment stripping  (identical pattern to rtst_scanner.py)
+# Comment stripping
 
 _BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
 _LINE_COMMENT = re.compile(r"//[^\n]*")
@@ -65,14 +66,14 @@ def _strip_comments(text: str) -> str:
 # ---------------------------------------------------------------------------
 # Patterns for dictionary key reads
 #
-# Strategy: one combined regex with named groups.  The receiver identifier is
-# captured but not used for path reconstruction (see module docstring).
+# Strategy: focused regexes with named groups.  The receiver is captured to
+# recover the read's sub-dictionary scope (``DictRead.scope``).
 #
 # The string literal is always a double-quoted token without embedded quotes.
 # We allow arbitrary whitespace (including newlines) between the method name,
 # the opening paren, and the first argument.
 
-_STRING_LIT = r'"([^"]+)"'
+_STRING_LIT = r'"(?P<name>[^"]+)"'
 
 # Methods that read a *key* from a dictionary.
 _KEY_METHOD = (
@@ -92,27 +93,40 @@ _SUBDICT_METHOD = r"(?:subDict|subOrEmptyDict|optionalSubDict)"
 # readScalar/readLabel/readBool wrapping a .lookup("key")
 _WRAP_FUNC = r"(?:readScalar|readLabel|readBool)"
 
-# Rather than one combined regex (hard to maintain), use three focused ones.
-# Each captures the string literal as the *last* group in the pattern.
+# A receiver is a dotted name optionally followed by chained sub-dictionary
+# opens, e.g. ``dict.subDict("inner")`` in
+# ``dict.subDict("inner").getOrDefault<vector>(...)``. The chained
+# opens are part of the read's scope, so they are captured, not skipped.
+_SUBDICT_CALL = r"\s*\.\s*" + _SUBDICT_METHOD + r"\s*\(\s*[^()]*?\s*\)"
+_DOTTED = r"[A-Za-z_]\w*(?:\s*\.\s*[A-Za-z_]\w*)*"
+_RECEIVER = r"(?P<base>" + _DOTTED + r")(?P<chain>(?:" + _SUBDICT_CALL + r")*)"
 
 _KEY_RE = re.compile(
-    r"[A-Za-z_]\w*(?:\s*\.\s*[A-Za-z_]\w*)*"
-    r"\s*\.\s*" + _KEY_METHOD + r"\s*\(\s*" + _STRING_LIT,
+    _RECEIVER + r"\s*\.\s*(?P<meth>" + _KEY_METHOD + r")\s*\(\s*" + _STRING_LIT,
     re.DOTALL,
 )
 
 _WRAP_RE = re.compile(
     r"(?:" + _WRAP_FUNC + r")\s*\(\s*"
-    r"[A-Za-z_]\w*(?:\s*\.\s*[A-Za-z_]\w*)*"
-    r"\s*\.\s*lookup\s*\(\s*" + _STRING_LIT,
+    + _RECEIVER + r"\s*\.\s*(?P<meth>lookup)\s*\(\s*" + _STRING_LIT,
     re.DOTALL,
 )
 
 _SUB_RE = re.compile(
-    r"[A-Za-z_]\w*(?:\s*\.\s*[A-Za-z_]\w*)*"
-    r"\s*\.\s*(?P<meth>" + _SUBDICT_METHOD + r")\s*\(\s*" + _STRING_LIT,
+    _RECEIVER + r"\s*\.\s*(?P<meth>" + _SUBDICT_METHOD + r")\s*\(\s*" + _STRING_LIT,
     re.DOTALL,
 )
+
+# ``dictionary& name = <receiver>.subDict(arg)`` or the constructor form
+# ``dictionary& name(<receiver>.subDict(arg))``: binds a local name to a scope.
+_BIND_RE = re.compile(
+    r"\bdictionary\s*&?\s*(?P<var>[A-Za-z_]\w*)\s*(?:=|\()\s*"
+    r"(?P<base>" + _DOTTED + r")(?P<chain>(?:" + _SUBDICT_CALL + r")+)",
+    re.DOTALL,
+)
+
+_CHAIN_ARG_RE = re.compile(r"\.\s*" + _SUBDICT_METHOD + r"\s*\(\s*(?P<arg>[^()]*?)\s*\)")
+_IDENTIFIER_RE = re.compile(r"[A-Za-z_]\w*")
 
 
 # ---------------------------------------------------------------------------
@@ -124,6 +138,16 @@ class DictRead:
     name: str       # the string literal
     source_file: Path
     line: int       # 1-based
+    # Enclosing sub-dictionary names, outermost first. A sub-dictionary opened
+    # with a runtime name (``subDict(blockName)``) appears as ``<blockName>``, the
+    # same placeholder shape catalogue paths use. Resolved per file from local
+    # ``dictionary&`` bindings; a read through a function parameter or an
+    # unbound name gets ``()``, meaning "not recovered", not "top level".
+    scope: tuple[str, ...] = ()
+    method: str = ""  # e.g. "getOrDefault", "subDict" (template argument dropped)
+    # Match start in the comment-masked source. Offsets are preserved by
+    # ``_strip_comments`` and disambiguate repeated same-name reads on a line.
+    offset: int = -1
 
 
 # ---------------------------------------------------------------------------
@@ -149,6 +173,105 @@ def _line_of(text: str, pos: int) -> int:
     return text.count("\n", 0, pos) + 1
 
 
+def _chain_segments(chain: str) -> tuple[str, ...]:
+    segments = []
+    for match in _CHAIN_ARG_RE.finditer(chain):
+        arg = match.group("arg")
+        if len(arg) >= 2 and arg[0] == arg[-1] == '"':
+            segments.append(arg[1:-1])
+        elif _IDENTIFIER_RE.fullmatch(arg):
+            segments.append(f"<{arg}>")
+        else:
+            segments.append("<name>")
+    return tuple(segments)
+
+
+def _block_scope_resolver(text: str):
+    """Return the lexical brace path at a source offset.
+
+    This is deliberately a small C++ lexer, not a parser. Braces inside quoted
+    string/character literals are ignored; each real opening brace receives a
+    stable id so a binding is visible only inside its declaring block and
+    descendants.
+    """
+    offsets = [0]
+    paths: list[tuple[int, ...]] = [()]
+    stack: list[int] = []
+    next_block = 0
+    quote: str | None = None
+    escaped = False
+
+    for index, char in enumerate(text):
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                quote = None
+            continue
+        if char in {'"', "'"}:
+            quote = char
+        elif char == "{":
+            next_block += 1
+            stack.append(next_block)
+            offsets.append(index + 1)
+            paths.append(tuple(stack))
+        elif char == "}" and stack:
+            stack.pop()
+            offsets.append(index + 1)
+            paths.append(tuple(stack))
+
+    def block_scope(pos: int) -> tuple[int, ...]:
+        return paths[bisect_right(offsets, pos) - 1]
+
+    return block_scope
+
+
+def _scope_resolver(text: str):
+    """Return ``scope(base, chain, pos)`` using bindings made before ``pos``.
+
+    Bindings are matched by name and lexical C++ brace scope. The latest
+    earlier binding visible from the read site wins.
+    """
+    block_scope = _block_scope_resolver(text)
+    bindings: list[tuple[int, str, tuple[str, ...], tuple[int, ...]]] = []
+
+    def scope(base: str, chain: str, pos: int) -> tuple[str, ...]:
+        name = re.sub(r"\s+", "", base)
+        outer: tuple[str, ...] = ()
+        current_block = block_scope(pos)
+        for bound_at, var, bound_scope, bound_block in reversed(bindings):
+            visible = bound_block == current_block[:len(bound_block)]
+            if bound_at < pos and var == name and visible:
+                outer = bound_scope
+                break
+        return outer + _chain_segments(chain)
+
+    for m in _BIND_RE.finditer(text):
+        bindings.append((
+            m.start(),
+            m.group("var"),
+            scope(m.group("base"), m.group("chain"), m.start()),
+            block_scope(m.start()),
+        ))
+    return scope
+
+
+def _method_name(raw: str) -> str:
+    return raw.split("<", 1)[0].strip()
+
+
+def _read_matches(text: str):
+    """Yield ``(kind, match)`` for every read site in comment-stripped *text*."""
+    for m in _KEY_RE.finditer(text):
+        yield "key", m
+    for m in _WRAP_RE.finditer(text):
+        yield "key", m
+    for m in _SUB_RE.finditer(text):
+        yield "subdict", m
+
+
 def scan_dict_reads(src_root: Path) -> list[DictRead]:
     """Return all dictionary-read sites found under *src_root*.
 
@@ -160,56 +283,116 @@ def scan_dict_reads(src_root: Path) -> list[DictRead]:
     for source in _iter_src_files(src_root):
         raw = source.read_text(encoding="utf-8", errors="replace")
         text = _strip_comments(raw)
+        scope = _scope_resolver(text)
+        # One record per string literal: a chained open such as
+        # a.subDict("x").get<T>("k") is also found on its own by _SUB_RE.
+        seen: set[tuple[str, int]] = set()
 
-        # Key reads
-        for m in _KEY_RE.finditer(text):
-            key = m.group(m.lastindex)   # last capture group = the string literal
+        for kind, m in _read_matches(text):
+            for segment in _CHAIN_ARG_RE.finditer(m.group("chain")):
+                arg = segment.group("arg")
+                offset = m.start("chain") + segment.start("arg")
+                if len(arg) >= 2 and arg[0] == arg[-1] == '"' and ("subdict", offset) not in seen:
+                    seen.add(("subdict", offset))
+                    results.append(
+                        DictRead(
+                            kind="subdict",
+                            name=arg[1:-1],
+                            source_file=source,
+                            line=_line_of(text, m.start()),
+                            scope=scope(m.group("base"), m.group("chain")[: segment.start()], m.start()),
+                            method=_method_name(segment.group().split("(", 1)[0].lstrip(".")),
+                            offset=m.start(),
+                        )
+                    )
+            literal_at = m.start("name") - 1
+            if (kind, literal_at) in seen:
+                continue
+            seen.add((kind, literal_at))
             results.append(
                 DictRead(
-                    kind="key",
-                    name=key,
+                    kind=kind,
+                    name=m.group("name"),
                     source_file=source,
                     line=_line_of(text, m.start()),
-                )
-            )
-
-        # Wrapped reads: readScalar/readLabel/readBool(recv.lookup("key"))
-        for m in _WRAP_RE.finditer(text):
-            key = m.group(m.lastindex)
-            results.append(
-                DictRead(
-                    kind="key",
-                    name=key,
-                    source_file=source,
-                    line=_line_of(text, m.start()),
-                )
-            )
-
-        # Sub-dict opens
-        for m in _SUB_RE.finditer(text):
-            key = m.group(m.lastindex)
-            results.append(
-                DictRead(
-                    kind="subdict",
-                    name=key,
-                    source_file=source,
-                    line=_line_of(text, m.start()),
+                    scope=scope(m.group("base"), m.group("chain"), m.start()),
+                    method=_method_name(m.group("meth")),
+                    offset=m.start(),
                 )
             )
 
     return results
 
 
-# ---------------------------------------------------------------------------
-# Catalogue-side helper
+_DEFAULT_METHODS = frozenset({"lookupOrDefault", "getOrDefault"})
+_CLOSERS = {")": "(", "]": "[", "}": "{"}
+
+
+def _default_expression(text: str, start: int) -> str | None:
+    """Read one C++ argument without interpreting its expression."""
+    stack: list[str] = []
+    quote: str | None = None
+    escaped = False
+
+    for index in range(start, len(text)):
+        char = text[index]
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                quote = None
+            continue
+        if char in {'"', "'"}:
+            quote = char
+        elif char in "([{":
+            stack.append(char)
+        elif char in _CLOSERS:
+            if not stack:
+                return text[start:index].strip()
+            if stack[-1] != _CLOSERS[char]:
+                return None
+            stack.pop()
+        elif char == "," and not stack:
+            return text[start:index].strip()
+    return None
+
+
+def dict_read_default(read: DictRead) -> str | None:
+    """Return the C++ default expression of an ``*OrDefault`` read, verbatim.
+
+    The text is the source argument (``vector(0.30, 0.05, 0.05)``,
+    ``defaultValue``), not an evaluated value: a named variable or
+    computed expression still needs a human or the source to interpret it.
+    Returns ``None`` for reads without a default.
+    """
+    if read.method not in _DEFAULT_METHODS:
+        return None
+    text = _strip_comments(read.source_file.read_text(encoding="utf-8", errors="replace"))
+    for kind, m in _read_matches(text):
+        same_site = read.offset >= 0 and m.start() == read.offset
+        line_site = (
+            read.offset < 0
+            and m.group("name") == read.name
+            and _line_of(text, m.start()) == read.line
+        )
+        if kind != read.kind or not (same_site or line_site):
+            continue
+        pos = m.end("name") + 1  # past the closing quote
+        while pos < len(text) and text[pos].isspace():
+            pos += 1
+        if pos >= len(text) or text[pos] != ",":
+            return None
+        return _default_expression(text, pos + 1)
+    return None
+
 
 # ---------------------------------------------------------------------------
 # Catalogue-side vocabulary -- owned by core, re-exported here.
 #
-# CataloguePath and friends parse core's own DictEntry.driver_path; they read
-# no file and know no C++. They lived here until core's strict_planning could
-# no longer import them without pulling in omnidriver.openfoam. Re-exported so
-# this module's own drift checks (and its tests) keep their existing names.
+# These helpers parse ``DictEntry.driver_path`` and are re-exported for the
+# adapter's drift checks.
 from omnidriver.core.contracts.catalogue_paths import (  # noqa: F401
     _WILDCARD_RE,
     CataloguePath,
@@ -222,28 +405,11 @@ from omnidriver.core.contracts.catalogue_paths import (  # noqa: F401
 
 @dataclass(frozen=True)
 class DictKeyStrictReport:
-    """Allowlist-backed catalogue drift report used by strict planning.
+    """Allowlist-backed comparison of C++ reads and catalogue entries.
 
-    ``unmatched_cxx_reads`` is deliberately NOT called "absent keys". A name
-    lands there because the scanner could not match a C++ string literal to
-    the catalogue, and there are four quite different reasons for that --
-    only the first is a catalogue bug:
-
-    1. **A genuinely uncatalogued key.** Someone added a read in C++ and did
-       not add the ``driver_path``. This is the signal the check exists for.
-    2. **Not this catalogue's key.** The read belongs to another dictionary
-       file (``electroMechanicalProperties``, a generated
-       ``constant/purkinjeGraph``) that this catalogue does not address.
-    3. **Upstream OpenFOAM's key.** e.g. ``nNonOrthogonalCorrectors``, read
-       from a ``pimpleDict``. OpenFOAM owns it; documenting it here would be
-       claiming someone else's contract.
-    4. **Not a dictionary key at all.** The regex matched a field name in a
-       string comparison (``var == "Vm"``) or a value rather than a key.
-
-    Because 2-4 are permanent and expected, the set is only meaningful
-    against the plugin's reviewed allowlist -- which is why the strict report
-    subtracts it, and why ``unused_allowlist`` exists to catch waivers whose
-    underlying read has since disappeared.
+    ``unmatched_cxx_reads`` contains scanned literals not represented by the
+    catalogue or allowlist. ``unused_allowlist`` identifies exceptions with no
+    corresponding scanned read.
     """
 
     status: str
@@ -309,13 +475,7 @@ def catalogued_names(entries: Iterable["DictEntry"]) -> set[str]:
       * :func:`compute_dict_key_drift` -- C++ reads with no catalogue match
       * ``core/specs/case_dict_keys.py`` -- case-file keys with no match
 
-    They must not keep separate copies. A second, subtly different set is
-    exactly what produced the 71% false-positive rate the ``absent_keys`` ->
-    ``unmatched_cxx_reads`` rename fixed.
-
-    Note this is deliberately NOT ``cat_leaves``, which is concrete-only
-    because it also feeds ``stale_paths``, where excluding wildcard paths is
-    correct.
+    This differs from the concrete-only leaf set used for ``stale_paths``.
     """
     names: set[str] = set()
     for path in _as_paths(entries):
@@ -344,24 +504,8 @@ def compute_dict_key_drift(
             subdict_reads[read.name].append(read)
 
     code_keys_set: set[str] = set(key_reads.keys())
-    # Two different questions need two different views of the catalogue.
-    #
-    #   cat_leaves         -- leaves of CONCRETE paths only. Used by
-    #                         stale_paths: you cannot expect the C++ to read a
-    #                         literal "<name>", so wildcard paths must be
-    #                         excluded from "is anyone reading this?".
-    #   catalogued_names   -- every name the catalogue knows anywhere: leaves
-    #                         of concrete AND wildcard paths, plus every
-    #                         non-wildcard parent segment. Used by
-    #                         unmatched_cxx_reads: the C++ really does read
-    #                         "sigmaExtracellular" (catalogued under
-    #                         ecgDomains.<name>.sigmaExtracellular) and really
-    #                         does read the container name "outputVariables",
-    #                         so both must count as known.
-    #
-    # Sharing one set between them was the historical defect: 71% of the
-    # reported drift was catalogued all along, just invisible to a
-    # concrete-leaf-only comparison.
+    # Stale-path checks use concrete leaves; unmatched-read checks also need
+    # wildcard leaves and non-wildcard container names.
     cat_leaves: set[str] = set()
     cat_parent_segs: set[str] = set()
     for path in cat_paths:

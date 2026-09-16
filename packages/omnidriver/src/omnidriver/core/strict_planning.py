@@ -36,7 +36,6 @@ from omnidriver.core.planning_types import (
     artifact_to_json as _artifact_to_json,
     diagnostic as _diagnostic,
 )
-from .compatibility import legacy_dict_key_scanner
 from .contracts.catalogue_paths import catalogued_paths as _catalogued_paths
 
 
@@ -254,40 +253,6 @@ def _owned_dict_relpaths(spec, driver_context: "DriverContext") -> tuple[str, ..
     return tuple(relpaths)
 
 
-def _catalog_diagnostics(driver_context: "DriverContext") -> tuple[StrictDiagnostic, ...]:
-    """Run only the active plugin's reviewed C++↔Python mapping checks."""
-
-    mapping = driver_context.capabilities.cxx_mapping.profile().cxx_mapping
-    if mapping is None:
-        return ()
-    strict_dict_key_report = legacy_dict_key_scanner()
-    diagnostics: list[StrictDiagnostic] = []
-    for source_root in mapping.source_roots:
-        if not source_root.is_dir():
-            diagnostics.append(_diagnostic(
-                "warning",
-                "plugin_cxx_source_unavailable",
-                f"Plugin C++ source root is unavailable: {source_root}",
-                source=driver_context.identity.id,
-            ))
-            continue
-        report = strict_dict_key_report(
-            source_root,
-            allowlist_path=mapping.allowlist_path,
-            entries=driver_context.capabilities.dictionaries.entries(),
-        )
-        payload = report.to_json()
-        for key in ("unmatched_cxx_reads", "stale_paths", "unmatched_subdicts", "unused_allowlist"):
-            for item in payload[key]:
-                diagnostics.append(_diagnostic(
-                    "error",
-                    f"plugin_dict_key_{key}",
-                    f"Plugin C++/catalog scanner reported {key}: {item}",
-                    source=f"{driver_context.identity.id}:{source_root}",
-                ))
-    return tuple(diagnostics)
-
-
 def _is_nondimensional_entry(spec, driver_context: "DriverContext") -> bool:
     """Return True when the SI mesh-scale gate is not meaningful."""
     entry_name = ""
@@ -396,16 +361,7 @@ def _run_launch_description(
     config_path: str | Path | None,
     allow_unresolved_configuration: bool = False,
 ) -> dict[str, Any]:
-    """Describe the modern `run --strict --entry` invocation for this plan.
-
-    Replaces strict_plan's former reuse of describe_launch("sim", ...):
-    that call re-resolved the entry a second time (strict_plan already has
-    `spec` from load_entry_spec) purely to read these four paths off it, and
-    tied the strict/workflow-DAG path -- which never runs the legacy
-    sim/post/all CLI at all -- to describe_launch's action vocabulary.
-    `run --strict --entry` is the command that actually executes this exact
-    plan today.
-    """
+    """Describe the ``run --strict --entry`` invocation for this plan."""
     command = [sys.executable, "-m", "omnidriver", "run", "--strict", "--entry", entry]
     if entry_kind is not None:
         command.extend(["--entry-kind", entry_kind])
@@ -474,7 +430,10 @@ def strict_plan(
         expected_artifacts=artifacts,
         driver_context=driver_context,
     )
-    catalog_diagnostics = _catalog_diagnostics(driver_context)
+    # Kept as a stable report field. Source/catalogue drift is an offline,
+    # format-specific adapter audit; Core cannot execute it through an empty
+    # fallback and must not pretend that an empty report is evidence.
+    catalog_diagnostics: tuple[StrictDiagnostic, ...] = ()
     artifact_diagnostics = _artifact_diagnostics(
         spec, artifacts, workflow_dag, driver_context,
     )

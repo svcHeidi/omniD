@@ -1,9 +1,11 @@
-"""Named Plan-1 compatibility boundaries.
+"""Named defaults for optional plugin capabilities.
 
-These adapters intentionally preserve observable behavior.  They produce no
-warnings and make no policy changes.  Keeping them named and documented stops
-legacy decisions from being rediscovered deep inside solver-neutral code and
-gives Plan 2 explicit seams at which behaviour may later change.
+Required plugin API members are validated before a :class:`DriverContext`
+exists, so functions in this module do not make missing required members work.
+They define one of three live behaviors: the supported public no-context
+convention, a neutral default for an optional hook, or an explicit refusal
+when no neutral behavior exists. Keeping those decisions named makes absence
+semantics observable.
 """
 
 from __future__ import annotations
@@ -24,8 +26,7 @@ _fallback_call_log: contextvars.ContextVar[list[str] | None] = contextvars.Conte
 @contextmanager
 def track_fallback_calls():
     """Yield a list that fills with the name of every legacy_* fallback
-    invoked inside the ``with`` block, in call order. Empty means none fired
-    -- the P2.4 assertion an explicit non-cardiac v2 context should satisfy."""
+    invoked inside the ``with`` block, in call order."""
     token = _fallback_call_log.set([])
     try:
         yield _fallback_call_log.get()
@@ -47,26 +48,9 @@ def _instrumented(func):
 def legacy_default_driver_context() -> "DriverContext":
     """Resolve the plugin to use when a public caller supplies no context.
 
-    Why: public CLI and Python callers have always been able to omit the
-    plugin/context entirely, and something has to answer. This used to import
-    ``CardiacFoamPlugin`` directly, which put a hard cardiac dependency in the
-    one package whose whole purpose is to know no cardiology -- touching the
-    public edge of a core-only install raised ``ModuleNotFoundError: No module
-    named 'omnidriver.cardiacfoam'``.
-
-    It now resolves through the same ``omnidriver.plugins`` entry-point group
-    that ``--plugin`` reads, so core names no solver at all. The selection rule
-    lives in :func:`plugin_discovery._default_selection`; in short, exactly one
-    installed adapter wins, no adapter is an error, and several adapters
-    require explicit selection. Core does not manufacture a solver context
-    when no adapter is installed.
-
-    The context is built fresh on each call, as it always has been -- core must
-    not retain one in module state.
-
-    Activation: the public boundary receives no explicit plugin context.
-    Preserved by: core plugin-context, CLI matrix, validation, and strict-plan
-    tests.
+    Resolution uses the ``omnidriver.plugins`` entry-point group. Exactly one
+    installed adapter is selected; zero or multiple adapters require an
+    explicit choice. A fresh context is returned on every call.
     """
 
     from .plugin_discovery import default_discovered_context
@@ -84,8 +68,10 @@ def resolve_public_driver_context(
 
 @_instrumented
 def legacy_case_marker(plugin, case_root) -> bool:
-    """Plugins predating has_case_marker(). A plugin that does not implement
-    the hook gets ``False`` and must declare its own filesystem marker."""
+    """Without the optional ``has_case_marker()`` hook, return ``False``.
+
+    A plugin must declare its own filesystem marker to return ``True``.
+    """
 
     del plugin, case_root
     return False
@@ -93,9 +79,10 @@ def legacy_case_marker(plugin, case_root) -> bool:
 
 @_instrumented
 def legacy_case_runnable_without_workflow(plugin, case_root) -> bool:
-    """Plugins predating is_case_runnable_without_workflow(). A plugin that
-    does not implement the hook gets ``False``. Adapter-declared entrypoints
-    are checked separately by the registry."""
+    """Without this optional hook, return ``False``.
+
+    Adapter-declared entrypoints are checked separately by the registry.
+    """
 
     del plugin, case_root
     return False
@@ -103,31 +90,23 @@ def legacy_case_runnable_without_workflow(plugin, case_root) -> bool:
 
 @_instrumented
 def legacy_run_document_config(plugin, spec):
-    """Plugins predating build_run_document_config(). A plugin that does not
-    implement the hook gets an empty config and no diagnostics -- it
-    constrains nothing, exactly as :func:`legacy_run_document_config_schema`
-    hands it a fully open schema."""
+    """Without the optional build hook, return no generated config.
+
+    Their required ``get_run_document_config_schema()`` still decides whether
+    that empty object is valid; Core does not invent a second schema route.
+    """
 
     del plugin, spec
     return {}, ()
 
 
 @_instrumented
-def legacy_run_document_config_schema(plugin) -> dict:
-    """v1 plugins predate get_run_document_config_schema(). A plugin that does
-    not implement the hook gets a fully open schema (no constraint) and must
-    declare its own by migrating to v2."""
-
-    del plugin
-    return {"type": "object", "additionalProperties": True}
-
-
-@_instrumented
 def legacy_nondimensional_case(plugin, spec) -> bool:
-    """Plugins predating is_nondimensional_case(). A plugin that does not
-    implement the hook gets ``False``: its meshes are dimensional until it
-    says otherwise, which is the conservative answer -- it keeps mesh-scale
-    diagnostics ON rather than silently exempting a case from them."""
+    """Without this optional hook, treat the mesh as dimensional.
+
+    This conservative answer keeps mesh-scale diagnostics on rather than
+    silently exempting a case from them.
+    """
 
     del plugin, spec
     return False
@@ -135,11 +114,10 @@ def legacy_nondimensional_case(plugin, spec) -> bool:
 
 @_instrumented
 def legacy_base_mesh_geometry_diagnostics(case_root) -> tuple:
-    """Plugins predating get_base_mesh_geometry_diagnostics().
+    """Without this optional hook, contribute no base geometry evidence.
 
-    A plugin that predates the mesh-diagnostics hook contributes no base
-    geometry evidence. Format-specific mesh interpretation belongs to the
-    selected adapter."""
+    Format-specific mesh interpretation belongs to the selected adapter.
+    """
 
     del case_root
     return ()
@@ -149,11 +127,11 @@ def legacy_base_mesh_geometry_diagnostics(case_root) -> tuple:
 def legacy_environment_diagnostics(
     workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None,
 ) -> tuple:
-    """Plugins predating get_environment_diagnostics().
+    """Without this optional hook, report an unsupported capability.
 
-    A plugin that predates the environment-diagnostics hook contributes an
-    explicit unsupported-capability diagnostic. Core does not infer a runtime
-    or source a shell profile on its behalf."""
+    Core does not infer a runtime or source a shell profile on the plugin's
+    behalf.
+    """
 
     del workflow_dag, env, explicit_bashrc, driver_context
     from .planning_types import diagnostic
@@ -168,9 +146,10 @@ def legacy_environment_diagnostics(
 
 @_instrumented
 def legacy_configured_environment(env, driver_context) -> dict:
-    """Plugins predating get_configured_environment(). sweep_runner.py has
-    no adapter-specific environment contract to apply, so the mapping is
-    preserved unchanged."""
+    """Without this optional hook, preserve the environment unchanged.
+
+    ``sweep_runner.py`` has no adapter-specific environment contract to apply.
+    """
 
     del driver_context
     return dict(env)
@@ -178,9 +157,11 @@ def legacy_configured_environment(env, driver_context) -> dict:
 
 @_instrumented
 def legacy_load_environment(*, explicit_bashrc, driver_context) -> dict:
-    """Plugins predating get_loaded_environment() use the current process
-    environment unchanged. This keeps legacy callers usable in a core-only
-    installation without assuming a shell-profile format."""
+    """Without this optional hook, use the current process environment.
+
+    This supports a core-only installation without assuming a shell-profile
+    format.
+    """
 
     del explicit_bashrc, driver_context
     import os
@@ -192,23 +173,11 @@ def legacy_load_environment(*, explicit_bashrc, driver_context) -> dict:
 def legacy_apply_overrides(
     overrides, *, case_root, driver_context, execution_env=None,
 ) -> tuple[dict, ...]:
-    """Plugins predating apply_overrides() cannot apply format-specific
-    overrides.
+    """Refuse format-specific overrides when the adapter has no mutator.
 
-    Validation and application are one call because core has only ever used
-    them together, and splitting them would let a caller apply without
-    validating. Raises OverrideError, a ValueError subclass, so core catches
-    ValueError and needs no import of the exception type.
-
-    There is no neutral default here the way there is for e.g. environment
-    diagnostics: applying an override means writing bytes into a dict file
-    whose syntax only the selected adapter's mutators understand, so a
-    plugin with no own ``apply_overrides()`` hook genuinely cannot be swept
-    into this path (future/ENVIRONMENT_CONTRACT.md §10, Tier 3) -- same shape as ``route_sweep_case_values``/
-    ``materialize_sweep_case`` refusing by name rather than pretending to be
-    neutral. Without this catch, the import raised ModuleNotFoundError
-    uncaught -- cli.py's ``except (OSError, ValueError)`` around this call
-    does not catch it, so it reached the terminal as a raw traceback."""
+    The selected adapter owns validation and serialization of its format, so
+    Core has no neutral implementation.
+    """
 
     del overrides, case_root, driver_context, execution_env
     raise ValueError(
@@ -238,8 +207,7 @@ def legacy_inspect_effective_configuration(
 
 @_instrumented
 def legacy_function_object_field_diagnostics(case_root, *, samplable) -> tuple:
-    """Plugins predating the function-object hook emit no format-specific
-    diagnostics."""
+    """Without this optional hook, emit no format-specific diagnostics."""
 
     del case_root, samplable
     return ()
@@ -247,54 +215,19 @@ def legacy_function_object_field_diagnostics(case_root, *, samplable) -> tuple:
 
 @_instrumented
 def legacy_case_dict_key_diagnostics(case_root, *, catalogued_paths, dict_relpaths) -> tuple:
-    """Plugins predating the dictionary-key hook emit no format-specific
-    diagnostics."""
+    """Without this optional hook, emit no format-specific diagnostics."""
 
     del case_root, catalogued_paths, dict_relpaths
     return ()
 
 
 @_instrumented
-def legacy_dict_key_scanner():
-    """Plugins predating a C++ dictionary-key scanner hook emit an empty
-    report. Format-specific source scanning belongs to the adapter.
-
-    Returns only the C++ REPORT. The catalogue-path vocabulary that used to
-    come back alongside it is core's own (see
-    core/contracts/catalogue_paths.py) and must not be routed through here:
-    strict planning calls it eagerly to build an argument, so format-specific
-    parsing must remain in the adapter even when the adapter implements
-    get_case_dict_key_diagnostics and never reaches this fallback."""
-
-    class _EmptyReport:
-        def to_json(self):
-            return {
-                "unmatched_cxx_reads": [],
-                "stale_paths": [],
-                "unmatched_subdicts": [],
-                "unused_allowlist": [],
-            }
-
-    def _report(*args, **kwargs):
-        del args, kwargs
-        return _EmptyReport()
-
-    return _report
-
-
-@_instrumented
 def legacy_route_sweep_case(plugin, *, base, resolved_axis_values, driver_context):
-    """Plugins predating route_sweep_case_values().
+    """Without this optional hook, refuse sweep routing.
 
-    Unlike every other fallback here, a neutral empty return is not available:
-    routing produces the values a case is then materialized from, so an empty
-    routing silently yields a case that is not the one the sweep asked for.
-    The honest neutral is to refuse, naming the hook the plugin must
-    implement.
-
-    Historical note: an earlier implementation routed against one solver's
-    dictionary vocabulary. That behavior is no longer active; routing now
-    refuses unless the selected adapter declares the operation."""
+    Routing produces the values that materialization consumes, so an empty
+    result would describe the wrong case.
+    """
 
     del base, resolved_axis_values, driver_context
     from omnidriver.core.sweep.sweep_expansion import SweepValidationError
@@ -309,13 +242,10 @@ def legacy_route_sweep_case(plugin, *, base, resolved_axis_values, driver_contex
 
 @_instrumented
 def legacy_materialize_sweep_case(plugin, *, case_dir, routed) -> None:
-    """Plugins predating materialize_sweep_case(). Refuses for the same
-    reason as :func:`legacy_route_sweep_case`.
+    """Without this optional hook, refuse sweep materialization.
 
-    This refusal is intentional. A missing materializer cannot be replaced by
-    another adapter's writer. The historical defect that motivated this seam
-    involved one solver's generated script, but that behavior is no longer
-    active."""
+    A missing materializer cannot be replaced by another adapter's writer.
+    """
 
     del case_dir, routed
     from omnidriver.core.sweep.sweep_expansion import SweepValidationError
@@ -326,26 +256,6 @@ def legacy_materialize_sweep_case(plugin, *, case_dir, routed) -> None:
         "for it. Implement materialize_sweep_case(case_dir, routed) on the "
         "plugin to support sweeps."
     )
-
-
-@_instrumented
-def legacy_solver_commands(plugin) -> frozenset[str]:
-    """v1 plugins predate get_solver_commands(). A plugin that does not
-    implement the hook gets none authorized and must declare its commands by
-    migrating to v2."""
-
-    del plugin
-    return frozenset()
-
-
-@_instrumented
-def legacy_auxiliary_commands(plugin) -> frozenset[str]:
-    """v1 plugins predate get_auxiliary_commands(). Same rule as
-    :func:`legacy_solver_commands`: a plugin that does not implement the hook
-    gets no non-solver commands authorized."""
-
-    del plugin
-    return frozenset()
 
 
 @_instrumented
@@ -365,78 +275,12 @@ def legacy_is_installed_environment_command(plugin, command: str) -> bool:
 
 
 @_instrumented
-def legacy_utility_manifests(plugin) -> dict:
-    """v1 plugins predate get_utility_manifests(). A plugin that does not
-    implement the hook gets no utility catalog."""
-
-    del plugin
-    return {}
-
-
-@_instrumented
-def legacy_utility_roots(plugin) -> tuple:
-    """v1 plugins predate get_utility_roots(). A plugin that does not
-    implement the hook gets no utility roots."""
-
-    del plugin
-    return ()
-
-
-@_instrumented
-def legacy_resolve_case_models(plugin, case_root) -> dict:
-    """v1 plugins predate resolve_case_models(). A plugin that does not
-    implement the hook gets nothing and must declare its own resolution by
-    migrating to v2."""
-
-    del plugin, case_root
-    return {}
-
-
-@_instrumented
-def legacy_samplable_fields(plugin, resolved) -> dict:
-    """v1 plugins predate get_samplable_fields(). Same rule as
-    :func:`legacy_resolve_case_models`: a plugin that does not implement the
-    hook names no fields."""
-
-    del plugin, resolved
-    return {}
-
-
-@_instrumented
-def legacy_override_schema(plugin, tutorial_name: str, make_spec_info: dict) -> dict:
-    """v1 plugins predate get_override_schema(). A plugin that does not
-    implement the hook gets an empty schema and must declare its own by
-    migrating to v2."""
-
-    del plugin, tutorial_name, make_spec_info
-    return {}
-
-
-@_instrumented
-def legacy_dict_entry_catalog(plugin) -> dict:
-    """v1 plugins predate get_dict_entry_catalog(). Same rule as
-    :func:`legacy_override_schema`: a plugin that does not implement the hook
-    gets no dictionary catalog."""
-
-    del plugin
-    return {}
-
-
-@_instrumented
 def legacy_phases(plugin) -> tuple[str, ...]:
-    """The dictionary phases for a plugin that does not implement
-    ``get_phases()``: those its own ``DictEntry`` values declare, sorted for
-    determinism.
+    """Return declared dictionary phases in deterministic fallback order.
 
-    Sorted, not ordered -- and the order is the semantics, since
-    ``primary_phase()`` returns the first phase in it that an entry claims. A
-    plugin with multi-phase entries should implement ``get_phases()`` rather
-    than accept an alphabetical guess. What this must never do is hand back
-    phases from another adapter to a plugin that never declared them: that
-    was the silent defect this replaces.
-
-    Ungated -- no ``plugin_id`` check. It derives from the plugin's own
-    ``DictEntry`` values, so it is correct for every plugin."""
+    Plugins with multi-phase entries should implement ``get_phases()`` because
+    phase order determines the primary editing phase.
+    """
 
     declared: set[str] = set()
     for entry in plugin.get_dict_entries():
@@ -446,8 +290,7 @@ def legacy_phases(plugin) -> tuple[str, ...]:
 
 @_instrumented
 def legacy_describe_config_resolution(plugin) -> str:
-    """v1 plugins predate describe_config_resolution(). A plugin that does not
-    implement the hook gets a plugin-neutral sentence."""
+    """Without the optional description hook, return neutral prose."""
 
     del plugin
     return "The plugin's configuration files resolve into a valid RunDocument config."
@@ -469,9 +312,7 @@ def legacy_case_runtime_conventions():
 
 @_instrumented
 def legacy_report_catalog(plugin) -> tuple:
-    """v1 plugins predate get_report_catalog(). Same rule as
-    :func:`legacy_override_schema`: a plugin that does not implement the hook
-    gets no reports and must declare its own by migrating to v2."""
+    """Without the optional catalog hook, declare no reports."""
 
     del plugin
     return ()
@@ -479,9 +320,7 @@ def legacy_report_catalog(plugin) -> tuple:
 
 @_instrumented
 def legacy_named_catalogs(plugin) -> dict:
-    """v1 plugins predate get_named_catalogs(). Same rule as
-    :func:`legacy_override_schema`: a plugin that does not implement the hook
-    gets no named catalogs and must declare its own by migrating to v2."""
+    """Without the optional hook, declare no named catalogs."""
 
     del plugin
     return {}
@@ -489,9 +328,7 @@ def legacy_named_catalogs(plugin) -> dict:
 
 @_instrumented
 def legacy_override_scopes(plugin) -> tuple:
-    """v1/v2 plugins predate get_override_scopes(). A plugin that does not
-    implement the hook gets no override scopes and must declare its own by
-    implementing get_override_scopes()."""
+    """Without this optional hook, declare no override scopes."""
 
     del plugin
     return ()
@@ -499,9 +336,7 @@ def legacy_override_scopes(plugin) -> tuple:
 
 @_instrumented
 def legacy_dict_regeneration_scopes(plugin) -> tuple:
-    """v1/v2 plugins predate get_regeneration_scopes(). A plugin that does not
-    implement the hook gets no regeneration scopes and must declare its own
-    by implementing get_regeneration_scopes()."""
+    """Without this optional hook, declare no regeneration scopes."""
 
     del plugin
     return ()

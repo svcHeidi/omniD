@@ -30,7 +30,7 @@ from .catalogs.utilities import UTILITY_MANIFESTS
 
 
 class CardiacCorePlugin:
-    """OmniD API-v2 adapter for a documented cardiacCore preprocessing slice."""
+    """OmniD plugin adapter for a documented cardiacCore preprocessing slice."""
 
     _openfoam = OpenFOAMEnvironmentPlugin()
 

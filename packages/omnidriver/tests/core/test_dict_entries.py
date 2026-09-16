@@ -9,8 +9,8 @@ class TestDictEntryStructuredConstraints(unittest.TestCase):
     """DictEntry exposes four structured-constraint fields so that
     constraints can be expressed in a form the validator can evaluate.
 
-    The fields are additive (P8 additive-only policy): every existing
-    DictEntry must construct unchanged with empty defaults.
+    Existing entries construct unchanged because each field has an empty
+    default.
     """
 
     def _build_entry(self, **overrides) -> "DictEntry":
@@ -115,10 +115,7 @@ def test_dict_entry_phases_default_is_empty_frozenset():
 
 
 def test_core_exports_no_phase_vocabulary():
-    """``omnidriver.dict_entries`` used to re-export a ``Phase`` literal
-    spelling cardiacFoam's four editing phases. A plugin declares its own
-    through ``get_phases()``; core naming them was the last solver noun in the
-    package."""
+    """``omnidriver.dict_entries`` exports no solver phase vocabulary."""
     import omnidriver.dict_entries as dict_entries
 
     assert not hasattr(dict_entries, "Phase")

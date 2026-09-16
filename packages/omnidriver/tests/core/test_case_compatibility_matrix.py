@@ -1,15 +1,4 @@
-"""Existing-case discovery/runnability, for markers core itself defines.
-
-Phase 2 Task M2: three of the five parametrized rows in this file, plus
-their fixture, asserted cardiacFoam's own has_case_marker/
-is_runnable_without_workflow (electroProperties as case marker) and moved to
-packages/omnidriver-cardiacfoam/tests/test_case_compatibility_matrix.py. The
-two rows kept here -- an empty folder, and a plugin-declared ``run-case`` --
-exercise only core's own entrypoint-based discovery/runnability
-(_has_entrypoint/_is_case_directory in registry.py), which is meaningful
-under a minimal explicit context. OpenFOAM's generated-root and
-parallel-decomposition conventions live in its adapter suite.
-"""
+"""Existing-case discovery through Core-owned entrypoint rules."""
 
 from __future__ import annotations
 
@@ -89,23 +78,3 @@ def test_neutral_environment_does_not_assume_a_parallel_output_prefix(
     assert [entry["entry_path"] for entry in list_entries(tmp_path, driver_context=context)] == [
         "processor0/nestedCase",
     ]
-
-
-def test_legacy_resolve_case_models_neutral_shape_has_no_cardiac_keys() -> None:
-    from omnidriver.core.compatibility import legacy_resolve_case_models
-
-    class NotCardiac:
-        plugin_id = "org.example.notcardiac"
-
-    result = legacy_resolve_case_models(NotCardiac(), case_root=None)
-    assert result == {}
-
-
-def test_legacy_samplable_fields_neutral_shape_has_no_cardiac_keys() -> None:
-    from omnidriver.core.compatibility import legacy_samplable_fields
-
-    class NotCardiac:
-        plugin_id = "org.example.notcardiac"
-
-    result = legacy_samplable_fields(NotCardiac(), resolved={})
-    assert result == {}

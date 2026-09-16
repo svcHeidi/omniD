@@ -56,11 +56,7 @@ def test_production_consumers_do_not_bypass_capability_bundle() -> None:
 
 
 def test_core_executable_literals_do_not_encode_adapter_conventions() -> None:
-    """Executable Core code must consume conventions through capabilities.
-
-    Historical adapter vocabulary may remain in explanatory docstrings, but a
-    runtime branch or default must not silently resurrect it as policy.
-    """
+    """Executable Core code consumes adapter conventions through capabilities."""
     forbidden = (
         "Allrun",
         "Allclean",

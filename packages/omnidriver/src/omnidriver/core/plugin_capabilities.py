@@ -1,14 +1,8 @@
-"""Internal, focused capability seams for solver plugins.
+"""Focused capability interfaces and adapters for solver plugins.
 
-The public :class:`SolverPlugin` protocol remains the compatibility contract for
-Plan 1.  Core code consumes this bundle instead of reaching through
-``DriverContext.plugin`` directly.  The adapters deliberately preserve the
-legacy method calls, return values, call order, and exception behaviour.
-
-Optional case-compatibility and sweep hooks let a plugin take ownership of
-solver-specific behaviour without adding new required members to the public
-protocol.  Plugins that do not provide those hooks retain the historical
-omnidriver fallbacks.
+Core consumers use :class:`PluginCapabilities` instead of calling
+``DriverContext.plugin`` directly. Required plugin methods are exposed
+directly; optional hooks have an explicit default or refusal behavior.
 """
 
 from __future__ import annotations
@@ -187,7 +181,7 @@ class DictionaryCatalogCapability(Protocol):
     :adapts: get_dict_entries, get_dict_groups, get_dictionary_catalog, get_phases
     :consumed-by: omnidriver/dict_entries.py, omnidriver/cardiacfoam/sweep.py, omnidriver/openfoam/apply_overrides.py, omnidriver/openfoam/dict_builder.py, omnidriver/core/specs/validation.py, omnidriver/core/strict_planning.py
     :fallback: legacy_phases
-    :status: mandatory
+    :status: mixed
     """
 
     def entries(self) -> tuple[Any, ...]: ...
@@ -287,8 +281,8 @@ class RunDocumentConfigurationCapability(Protocol):
 
     :adapts: build_run_document_config, get_run_document_config_schema
     :consumed-by: omnidriver/core/runtime/run_document_adapter.py, omnidriver/core/runtime/run_document_exec.py
-    :fallback: legacy_run_document_config, legacy_run_document_config_schema
-    :status: optional
+    :fallback: legacy_run_document_config
+    :status: mixed
     """
 
     def build(
@@ -319,16 +313,9 @@ class DictDiagnosticsCapability(Protocol):
     vocabulary: sampled fields absent from the capability manifest, and dict
     keys absent from the plugin's catalogue.
 
-    Both read and parse the case's dictionary files (via ``foamlib`` for
-    OpenFOAM), which core has no business doing itself -- a FEniCS plugin's
-    catalogue is checked against its own config format, not OpenFOAM syntax.
-    Neither ever fails a plan; a false positive here is a question for a
-    human, not a defect -- which is why they land in ``all_diagnostics`` but
-    never in ``plan_diagnostics``. ``strict_planning.py``'s ``all_diagnostics``
-    assembly carries the reasoning. (This used to cite
-    ``strict_planning._resolve_entry``, which has never existed; the only
-    ``resolve_entry`` in the repo is ``core/runtime/registry.py``'s, and it is
-    not what the sentence meant.)
+    The selected adapter parses its own configuration format. These
+    diagnostics are included in ``all_diagnostics`` but do not invalidate a
+    plan.
 
     :adapts: get_function_object_field_diagnostics, get_case_dict_key_diagnostics
     :consumed-by: omnidriver/core/strict_planning.py
@@ -437,8 +424,8 @@ class CommandAuthorizationCapability(Protocol):
 
     :adapts: get_auxiliary_commands, get_environment_commands, get_solver_commands, get_utility_manifests, get_utility_roots, is_installed_environment_command
     :consumed-by: omnidriver/core/runtime/artifacts.py, omnidriver/core/runtime/workflow.py, omnidriver/core/strict_planning.py
-    :fallback: legacy_auxiliary_commands, legacy_environment_commands, legacy_is_installed_environment_command, legacy_solver_commands, legacy_utility_manifests, legacy_utility_roots
-    :status: optional
+    :fallback: legacy_environment_commands, legacy_is_installed_environment_command
+    :status: mixed
     """
 
     def solver_commands(self) -> frozenset[str]: ...
@@ -465,8 +452,8 @@ class CaseIntrospectionCapability(Protocol):
 
     :adapts: get_samplable_fields, get_selected_start_time, resolve_case_models
     :consumed-by: omnidriver/core/runtime/provenance_inputs.py
-    :fallback: legacy_resolve_case_models, legacy_samplable_fields
-    :status: optional
+    :fallback: none
+    :status: mixed
     """
 
     def resolve_case_models(self, case_root: Path) -> dict[str, Any]: ...
@@ -541,15 +528,9 @@ class EnvironmentPreflightCapability(Protocol):
     already-sourced OpenFOAM environment plus any plugin-specific overlay)
     without re-sourcing anything, returning the resolved variable mapping.
 
-    ``diagnostics`` and ``load`` both take an explicit path to an
-    environment-sourcing script, and both now spell it ``explicit_bashrc`` --
-    ``diagnostics`` used to spell it ``openfoam_bashrc``, naming OpenFOAM
-    specifically for a parameter every environment needs (future/
-    ENVIRONMENT_CONTRACT.md §10, Tier 3). The CLI flag threading it in is
-    ``--environment-bashrc``. ``--openfoam-bashrc`` was shipped as a deprecated
-    alias and then removed outright the same day, pre-publication -- this
-    sentence used to claim the alias still worked, which ``cli.py`` and
-    ``test_openfoam_bashrc_kwarg_is_no_longer_accepted`` both disprove.
+    ``diagnostics`` and ``load`` accept an explicit environment-sourcing
+    script through ``explicit_bashrc``. The corresponding CLI option is
+    ``--environment-bashrc``.
 
     :adapts: get_environment_diagnostics, get_configured_environment, get_loaded_environment
     :consumed-by: omnidriver/core/strict_planning.py, omnidriver/core/runtime/sweep_runner.py, omnidriver/cli.py
@@ -582,8 +563,8 @@ class OverrideSchemaCapability(Protocol):
 
     :adapts: get_dict_entry_catalog, get_override_schema
     :consumed-by: omnidriver/core/introspection.py
-    :fallback: legacy_dict_entry_catalog, legacy_override_schema
-    :status: optional
+    :fallback: none
+    :status: mandatory
     """
 
     def config_schema(
@@ -595,19 +576,15 @@ class OverrideSchemaCapability(Protocol):
 class RuntimeEvidenceCapability(Protocol):
     """Where the plugin's runtime evidence lives.
 
-    Telemetry collection consumes ``solve_step_commands`` and
-    ``telemetry_source_globs``; observable extraction will consume
-    ``artifact_value_reader``; both remain declaration-only for now. Phase 2
-    (provenance) now consumes ``extra_provenance_paths`` for real.
-
-    Every member degrades to empty for a plugin that declares nothing, which
-    is the honest answer rather than a solver-shaped guess -- so this
-    capability needs no compatibility fallback.
+    Telemetry uses ``solve_step_commands`` and ``telemetry_source_globs``;
+    provenance uses ``extra_provenance_paths``; observable extraction can use
+    ``artifact_value_reader``. Plugins return empty declarations when a kind
+    of runtime evidence does not apply.
 
     :adapts: get_artifact_value_reader, get_extra_provenance_paths, get_solve_step_commands, get_telemetry_source_globs
     :consumed-by: omnidriver/core/runtime/provenance_inputs.py
     :fallback: none
-    :status: optional
+    :status: mandatory
     """
 
     def solve_step_commands(self) -> frozenset[str]: ...
@@ -835,18 +812,13 @@ class _RunDocumentConfigurationAdapter:
         hook = getattr(self.plugin, "build_run_document_config", None)
         if callable(hook):
             return hook(request.spec)
-        # Older plugins receive the neutral compatibility configuration.
+        # Omitting this optional hook means there is no generated config.
         from .compatibility import legacy_run_document_config
 
         return legacy_run_document_config(self.plugin, request.spec)
 
     def schema(self) -> dict[str, Any]:
-        hook = getattr(self.plugin, "get_run_document_config_schema", None)
-        if callable(hook):
-            return hook()
-        from .compatibility import legacy_run_document_config_schema
-
-        return legacy_run_document_config_schema(self.plugin)
+        return self.plugin.get_run_document_config_schema()
 
 
 @dataclass(frozen=True)
@@ -903,14 +875,7 @@ class _MeshDiagnosticPolicyAdapter:
         return legacy_nondimensional_case(self.plugin, spec)
 
     def extra_geometry_diagnostics(self, case_root: Path) -> tuple[Any, ...]:
-        """Plugin-owned plan-time geometry checks core cannot express.
-
-        Core may provide generic geometry checks; an adapter may own further
-        domain-specific point sets that are not mesh regions. A plugin that
-        declares no such check contributes nothing -- there is no legacy
-        fallback here, because "no extra checks" is the correct answer for a
-        plugin that never had any.
-        """
+        """Return plugin-owned geometry diagnostics, or none when absent."""
         hook = getattr(self.plugin, "get_mesh_geometry_diagnostics", None)
         if callable(hook):
             return tuple(hook(case_root))
@@ -992,20 +957,10 @@ class _CommandAuthorizationAdapter:
     plugin: "SolverPlugin"
 
     def solver_commands(self) -> frozenset[str]:
-        hook = getattr(self.plugin, "get_solver_commands", None)
-        if callable(hook):
-            return frozenset(hook())
-        from .compatibility import legacy_solver_commands
-
-        return legacy_solver_commands(self.plugin)
+        return frozenset(self.plugin.get_solver_commands())
 
     def auxiliary_commands(self) -> frozenset[str]:
-        hook = getattr(self.plugin, "get_auxiliary_commands", None)
-        if callable(hook):
-            return frozenset(hook())
-        from .compatibility import legacy_auxiliary_commands
-
-        return legacy_auxiliary_commands(self.plugin)
+        return frozenset(self.plugin.get_auxiliary_commands())
 
     def environment_commands(self) -> frozenset[str]:
         hook = getattr(self.plugin, "get_environment_commands", None)
@@ -1024,20 +979,10 @@ class _CommandAuthorizationAdapter:
         return legacy_is_installed_environment_command(self.plugin, command)
 
     def utility_manifests(self) -> dict[str, Any]:
-        hook = getattr(self.plugin, "get_utility_manifests", None)
-        if callable(hook):
-            return dict(hook())
-        from .compatibility import legacy_utility_manifests
-
-        return legacy_utility_manifests(self.plugin)
+        return dict(self.plugin.get_utility_manifests())
 
     def utility_roots(self) -> tuple[Path, ...]:
-        hook = getattr(self.plugin, "get_utility_roots", None)
-        if callable(hook):
-            return tuple(hook())
-        from .compatibility import legacy_utility_roots
-
-        return legacy_utility_roots(self.plugin)
+        return tuple(self.plugin.get_utility_roots())
 
 
 @dataclass(frozen=True)
@@ -1045,20 +990,10 @@ class _CaseIntrospectionAdapter:
     plugin: "SolverPlugin"
 
     def resolve_case_models(self, case_root: Path) -> dict[str, Any]:
-        hook = getattr(self.plugin, "resolve_case_models", None)
-        if callable(hook):
-            return dict(hook(case_root))
-        from .compatibility import legacy_resolve_case_models
-
-        return legacy_resolve_case_models(self.plugin, case_root)
+        return dict(self.plugin.resolve_case_models(case_root))
 
     def samplable_fields(self, resolved: dict[str, Any]) -> dict[str, tuple[str, ...]]:
-        hook = getattr(self.plugin, "get_samplable_fields", None)
-        if callable(hook):
-            return {k: tuple(v) for k, v in hook(resolved).items()}
-        from .compatibility import legacy_samplable_fields
-
-        return legacy_samplable_fields(self.plugin, resolved)
+        return {k: tuple(v) for k, v in self.plugin.get_samplable_fields(resolved).items()}
 
     def selected_start_time(
         self, case_root: Path, resolved_case: dict[str, Any], *, driver_context: Any,
@@ -1183,20 +1118,10 @@ class _OverrideSchemaAdapter:
     def config_schema(
         self, tutorial_name: str, make_spec_info: dict[str, Any],
     ) -> dict[str, Any]:
-        hook = getattr(self.plugin, "get_override_schema", None)
-        if callable(hook):
-            return dict(hook(tutorial_name, make_spec_info))
-        from .compatibility import legacy_override_schema
-
-        return legacy_override_schema(self.plugin, tutorial_name, make_spec_info)
+        return dict(self.plugin.get_override_schema(tutorial_name, make_spec_info))
 
     def dict_entry_catalog(self) -> dict[str, Any]:
-        hook = getattr(self.plugin, "get_dict_entry_catalog", None)
-        if callable(hook):
-            return dict(hook())
-        from .compatibility import legacy_dict_entry_catalog
-
-        return legacy_dict_entry_catalog(self.plugin)
+        return dict(self.plugin.get_dict_entry_catalog())
 
 
 @dataclass(frozen=True)
@@ -1204,20 +1129,16 @@ class _RuntimeEvidenceAdapter:
     plugin: "SolverPlugin"
 
     def solve_step_commands(self) -> frozenset[str]:
-        hook = getattr(self.plugin, "get_solve_step_commands", None)
-        return frozenset(hook()) if callable(hook) else frozenset()
+        return frozenset(self.plugin.get_solve_step_commands())
 
     def telemetry_source_globs(self, command: str) -> tuple[str, ...]:
-        hook = getattr(self.plugin, "get_telemetry_source_globs", None)
-        return tuple(hook(command)) if callable(hook) else ()
+        return tuple(self.plugin.get_telemetry_source_globs(command))
 
     def extra_provenance_paths(self, case_root: Path) -> tuple[Path, ...]:
-        hook = getattr(self.plugin, "get_extra_provenance_paths", None)
-        return tuple(hook(case_root)) if callable(hook) else ()
+        return tuple(self.plugin.get_extra_provenance_paths(case_root))
 
     def artifact_value_reader(self, artifact_format: str):
-        hook = getattr(self.plugin, "get_artifact_value_reader", None)
-        return hook(artifact_format) if callable(hook) else None
+        return self.plugin.get_artifact_value_reader(artifact_format)
 
 
 @dataclass(frozen=True)
@@ -1379,8 +1300,9 @@ class PluginCapabilities:
     ``:fallback:``
         the ``compatibility.py`` function used when the hook is absent
     ``:status:``
-        ``mandatory`` (called unconditionally), ``optional`` (probed via
-        ``getattr`` and degraded), or ``mixed``
+        ``mandatory`` (every adapted member is required by plugin validation),
+        ``optional`` (every member is probed and degraded), or ``mixed``
+        (the capability combines both kinds)
 
     Those fields are the single source of the "Plugin capability seams" table
     in ``ARCHITECTURE.md``, rendered by
@@ -1389,13 +1311,9 @@ class PluginCapabilities:
     ``:adapts:`` names a real plugin member and every ``:fallback:`` a real
     compatibility function, so a stale reference fails rather than rots.
 
-    **What a missing optional hook means.** The named fallback runs. No
-    fallback branches on plugin identity any more -- Phase 2 Task 7 deleted the
-    twenty ``plugin_id == "org.cardiacfoam"`` branches -- so a given fallback
-    returns the same answer for every plugin. Two fallbacks cannot be neutral:
-    a plugin
-    without the sweep hooks is refused by name rather than swept by another
-    plugin's writer.
+    A missing optional hook invokes its named fallback. Fallback behavior is
+    independent of plugin identity. Sweep routing and materialization refuse
+    when absent because they have no neutral result.
     """
 
     tutorials: TutorialCatalogCapability

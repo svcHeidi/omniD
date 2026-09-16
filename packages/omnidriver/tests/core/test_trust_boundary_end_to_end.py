@@ -1,5 +1,4 @@
-"""P2.9: end-to-end regression gate for the trust-boundary claims in
-SECURITY.md.
+"""End-to-end checks for the trust-boundary claims in ``SECURITY.md``.
 
 One test per documented claim, exercised through the real entry points named in
 that document -- the CLI ``run``/``step`` path and ``build_execution_inputs``
@@ -660,18 +659,7 @@ def test_invalid_config_blocks_execution_at_ingestion() -> None:
 
 
 def test_non_mapping_config_phase_blocks_execution_at_ingestion() -> None:
-    """A wrong-*type* config phase must produce a diagnostic, not a crash.
-
-    P2.2 opened the core schema's `config` to `additionalProperties: true`
-    with no per-phase type constraint, so a phase value can legally be any
-    JSON type by the time it reaches `validate_run`. Before the guard in
-    `specs/validation.py::_non_mapping_phase_errors`, a non-dict phase
-    (`{"anatomy": "not-an-object"}`) reached `_flatten_context` and raised an
-    uncaught `AttributeError` through the real
-    `driverFoam run --run-document` path -- a traceback instead of the
-    diagnostic SECURITY.md promises. This is the regression gate for that
-    fix: the CLI must exit non-zero with a parseable JSON payload.
-    """
+    """A non-mapping config phase produces a diagnostic and blocks execution."""
     with tempfile.TemporaryDirectory() as temp_dir:
         cases_root = Path(temp_dir)
         case_root = _write_case(cases_root)

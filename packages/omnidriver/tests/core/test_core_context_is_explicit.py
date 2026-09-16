@@ -1,20 +1,14 @@
-"""core/ and openfoam/ must receive an explicit DriverContext, never resolve
-one implicitly.
+"""Core internals receive an explicit DriverContext and never resolve one.
 
 `resolve_public_driver_context(None)` returns the cardiac context. A core
 module that calls it silently becomes cardiacFoam for any plugin that failed
 to thread a context through -- and it does so without raising, which is why
 this guard is static rather than behavioural.
 
-The cardiac default is legitimate at the public edge (omnidriver/*.py and
-cli.py), where "no plugin supplied" genuinely means "the built-in one". It is
-not legitimate inside core/ -- nor inside omnidriver-openfoam, whose three
-former offenders (apply_overrides.py's `_catalog_entries`/`apply_overrides`,
-dict_builder.py's `is_known_override_driver_path`) made a core+openfoam
-install without cardiacfoam silently import `omnidriver.cardiacfoam` (Phase 2
-Task 6). That is a wrong-direction dependency the import-boundary gate cannot
-see, because openfoam imports *core* and core does the cardiac import --
-this guard is the only thing standing between openfoam and that regression.
+Default discovery is legitimate only at the public edge (``omnidriver/*.py``
+and ``cli.py``), where no supplied plugin means "select from installed entry
+points." It is not legitimate inside core. Adapter packages own equivalent
+guards over their own source trees.
 """
 from __future__ import annotations
 
@@ -23,25 +17,9 @@ import pathlib
 
 import omnidriver.core
 
-from conftest import skip_without_repo
-
 _CORE_ROOT = pathlib.Path(omnidriver.core.__file__).resolve().parent
 
 _EXEMPT: set[pathlib.Path] = set()
-
-# omnidriver.openfoam is not importable in a core-only venv, so this is
-# resolved from the repo layout rather than by importing the package.
-# core/__init__.py's ancestors are core, omnidriver, src, omnidriver (the
-# package directory), packages -- parents[4] is "packages". parents[3] would
-# land on packages/omnidriver/ and silently yield a path that does not
-# exist, which would make this guard pass by scanning zero files -- the
-# exact false-reassurance failure mode this repository has hit before, so
-# _OPENFOAM_ROOT.is_dir() is asserted below rather than assumed.
-_OPENFOAM_ROOT = (
-    pathlib.Path(omnidriver.core.__file__).resolve().parents[4]
-    / "omnidriver-openfoam" / "src" / "omnidriver" / "openfoam"
-)
-
 
 def _calls_resolve_public(path: pathlib.Path) -> list[int]:
     tree = ast.parse(path.read_text(), filename=str(path))
@@ -71,23 +49,6 @@ def test_core_never_resolves_an_implicit_driver_context() -> None:
     offenders = _offenders(_CORE_ROOT, exempt=_EXEMPT)
     assert offenders == {}, (
         "core/ modules resolving an implicit (cardiac) DriverContext:\n"
-        + "\n".join(f"  {f}: lines {ls}" for f, ls in sorted(offenders.items()))
-        + "\nMake driver_context a required parameter instead."
-    )
-
-
-@skip_without_repo
-def test_openfoam_never_resolves_an_implicit_driver_context() -> None:
-    assert _OPENFOAM_ROOT.is_dir(), (
-        f"expected omnidriver-openfoam's source tree at {_OPENFOAM_ROOT}, but "
-        "it is not a directory -- a guard that silently scans zero files is "
-        "worse than no guard. Fix the path computation rather than letting "
-        "this assertion pass by finding nothing."
-    )
-    offenders = _offenders(_OPENFOAM_ROOT, exempt=set())
-    assert offenders == {}, (
-        "omnidriver.openfoam modules resolving an implicit (cardiac) "
-        "DriverContext:\n"
         + "\n".join(f"  {f}: lines {ls}" for f, ls in sorted(offenders.items()))
         + "\nMake driver_context a required parameter instead."
     )

@@ -1,7 +1,4 @@
-"""Phase 1 exit gate: a plan produced under --plugin none must contain no
-cardiacFoam command, field, required-file, utility, or override
-semantics. Reading the code is not evidence -- this runs it.
-"""
+"""Generic plans contain no cardiacFOAM commands, fields, or vocabulary."""
 
 from __future__ import annotations
 
@@ -93,19 +90,7 @@ def test_generic_describe_override_surface_has_no_cardiac_semantics(
 def test_generic_spec_metadata_names_dict_files_generically(
     tmp_path, monkeypatch
 ) -> None:
-    """Phase 2 (P2.6) closes the residual that Phase 1 only documented.
-
-    Core's generic-case metadata used to carry two hard-coded cardiac field
-    names (``electro_properties_relpath``/``physics_properties_relpath``) even
-    under ``--plugin none``. It now carries a single generic
-    ``dict_file_relpaths`` mapping whose *keys* are chosen by whoever declares
-    the dictionaries.
-
-    Phase 2 left the cardiac-shaped default *values* arriving through the
-    named ``core.compatibility`` seam, so a plan under ``--plugin none`` still
-    reported ``{"electro", "physics"}`` -- cardiac vocabulary in a plan this
-    module's own name says has no cardiac semantics. That default is gone; the
-    generic plugin declares no dictionary files, so the mapping is empty."""
+    """Generic case metadata uses plugin-declared dictionary names."""
     monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
     monkeypatch.setenv("SKIP_MESH_DIAGNOSTICS", "1")
     case = _minimal_case(tmp_path)

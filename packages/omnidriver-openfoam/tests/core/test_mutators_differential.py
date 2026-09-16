@@ -1,11 +1,4 @@
-"""Differential harness: post-change mutators vs. the tier-1-only reference.
-
-The one-time byte-identity and semantic-preservation comparisons that used to
-live here (against ``_mutators_reference.py``, the pre-migration
-implementation) have been run and verified across the real ``tutorials/``
-corpus and removed per plan. What remains is the standing security
-regression: a directive embedded in a dict value must never be evaluated.
-"""
+"""Security invariant for dictionary mutation: directives remain inert."""
 
 from omnidriver.openfoam import mutators
 

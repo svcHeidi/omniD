@@ -21,14 +21,7 @@ from omnidriver.core.specs.common import (
 from .models import CaseConfig, TutorialSpec
 from omnidriver.core.plugin_profile import entrypoint_command
 
-# ``run_case.sh`` ships inside the installed package (``omnidriver/scripts/``),
-# not at any path relative to a repo checkout -- the pre-migration monorepo
-# layout this used to point at (``applications/scripts/driverFoam/...``) no
-# longer exists. Resolve it relative to this file, the same way
-# This core script resolves from its installed package rather than a repo
-# checkout.
-# The result is already absolute, so ``resolve_run_script_path`` returns it
-# unchanged instead of hunting for it under a repo root.
+# Resolve the bundled runner from the installed package.
 RUN_CASE_SCRIPT_RELPATH = (
     Path(__file__).resolve().parent.parent.parent / "scripts" / "run_case.sh"
 )

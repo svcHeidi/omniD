@@ -1,27 +1,4 @@
-"""``sweep-plan`` must answer in its own contract, like ``plan --strict``.
-
-A sweep already reports a per-case failure structurally -- ``status:
-"failed"`` plus ``materialization_error`` on that case -- and keeps going.
-That is the whole point of a sweep: one bad axis value should cost you one
-case, not the command.
-
-Two paths bypassed it. The per-case guard caught only ``OSError`` and
-``ValueError``, so anything a tutorial factory raised (a ``KeyError`` for an
-unknown ionic model, say) escaped and took the run down with a traceback --
-zero bytes on stdout for the caller. And the spec file was read before any
-guard at all, so a malformed JSON spec did the same.
-
-Phase 2 Task M2: ``test_a_factory_failure_fails_one_case_not_the_command``
-moved to packages/omnidriver-cardiacfoam/tests/test_sweep_plan_contract.py
--- it needs the real ``singleCell`` factory to prove one bad axis costs one
-case, which is cardiacFoam-specific. The three tests kept here never depend
-on that: the two malformed-spec tests never reach ``_SPEC``'s content at all
-(spec loading fails before expansion), and the valid-spec test only checks
-the absence of ``spec_error``, not what happened to any case. ``_SPEC`` was
-trimmed to a trivially generic single-axis sweep and
-``openfoam_environment_context()`` satisfies ``sweep_plan``'s now-mandatory
-``driver_context`` -- no cardiac fixture data needed.
-"""
+"""Structured success and failure results from ``sweep-plan``."""
 
 from __future__ import annotations
 

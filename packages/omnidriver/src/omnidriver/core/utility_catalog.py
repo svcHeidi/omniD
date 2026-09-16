@@ -3,9 +3,7 @@ Utility Manifest Catalog
 
 Utility manifests loaded from ``utility.manifest.toml`` sidecar files placed
 next to each utility source directory. The roots are supplied by the selected
-plugin, not hardcoded -- core names no solver's utilities, and the eager
-module-level catalog this header used to describe is gone (see
-``future/UTILITY_CATALOG_STANDALONE_GAP.md``).
+plugin; Core names no solver's utilities.
 
 Schema
 ------

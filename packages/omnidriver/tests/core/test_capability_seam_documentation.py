@@ -158,6 +158,39 @@ def test_status_is_a_known_value(field: str) -> None:
     assert status in VALID_STATUSES, f"{name} :status: is {status!r}"
 
 
+@pytest.mark.parametrize("field", CAPABILITY_FIELDS)
+def test_status_matches_the_plugin_contract(field: str) -> None:
+    """The rendered status must describe enforcement, not adapter style.
+
+    Capability adapters may defensively use ``getattr`` even for members that
+    plugin validation requires. The public contract is authoritative: a seam
+    is mandatory when all adapted members are required, optional when all are
+    optional hooks, and mixed when it combines both.
+    """
+    name, _ = _protocol_for(field)
+    declared = _fields(field)["adapts"].strip()
+    if declared == "none":
+        return
+
+    required = set(plugin_interface._REQUIRED_PLUGIN_MEMBERS)
+    optional = {
+        member
+        for member in dir(plugin_interface.SolverPluginOptionalHooks)
+        if not member.startswith("_")
+    }
+    kinds = set()
+    for member in (item.strip() for item in declared.split(",")):
+        if member in required:
+            kinds.add("mandatory")
+        else:
+            assert member in optional  # detailed name failure is tested above
+            kinds.add("optional")
+    expected = "mixed" if len(kinds) > 1 else kinds.pop()
+    assert _fields(field)["status"].strip() == expected, (
+        f"{name} status does not match its required/optional adapted members"
+    )
+
+
 def test_no_fallback_reaches_cardiac_code_at_all() -> None:
     """No capability fallback may reach cardiac code, gated or otherwise.
 
@@ -180,12 +213,7 @@ def test_no_fallback_reaches_cardiac_code_at_all() -> None:
     for node in tree.body:
         if not isinstance(node, ast.FunctionDef):
             continue
-        # Look at import statements, not at the function's text. Matching raw
-        # source cannot tell an import from a docstring that names the package
-        # -- and legacy_default_driver_context's docstring has to name it, to
-        # explain which cardiac import used to be there and why it no longer
-        # is. A guard that forces documentation to avoid a word in order to
-        # pass is measuring the wrong thing.
+        # Inspect syntax so prose cannot be mistaken for an import.
         for child in ast.walk(node):
             if isinstance(child, ast.ImportFrom) and (child.module or "").startswith(
                 "omnidriver.cardiacfoam"

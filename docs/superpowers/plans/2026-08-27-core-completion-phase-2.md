@@ -352,7 +352,7 @@ existing ungated fallbacks do — add to `core/compatibility.py`:
 ```python
 @_instrumented
 def legacy_dict_key_scanner():
-    """Plugins predating a C++ dict-key scanner hook. strict_planning has
+    """Fallback for an absent C++ dict-key scanner hook. strict_planning has
     always scanned OpenFOAM C++ sources for dictionary-read call sites, for
     every plugin -- the same was-never-actually-solver-neutral situation as
     legacy_case_dict_key_diagnostics, which parses the dicts themselves.
@@ -1267,9 +1267,8 @@ block and its import, leaving the neutral value. Example —
 ```python
 @_instrumented
 def legacy_solver_commands(plugin) -> frozenset[str]:
-    """v1 plugins predate get_solver_commands(). A plugin that does not declare
-    its commands gets none; authorizing a binary it never named is not a safe
-    default."""
+    """A plugin that does not declare commands gets none; authorizing a binary
+    it never named is not a safe default."""
 
     del plugin
     return frozenset()

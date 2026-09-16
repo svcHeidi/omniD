@@ -1,8 +1,4 @@
-"""CaseProvenanceCapability is routed through the adapter exactly like
-every Phase 1 capability, with an empty fallback -- which under I1's
-precedence means "everything unknown is a required input", the safe
-default for a plugin (or plugin version) that declares nothing.
-"""
+"""Case-provenance declarations exposed through plugin capabilities."""
 
 from __future__ import annotations
 

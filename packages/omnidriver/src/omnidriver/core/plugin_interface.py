@@ -1,10 +1,10 @@
 """Solver-agnostic plugin contract for omnidriver.
 
-Two Protocol classes define what a solver plugin must implement:
+Two Protocol classes define what a solver plugin may implement:
 
-- :class:`SolverPlugin` — the plugin contract; 27 required members,
-  enforced in full by :func:`validate_plugin`.
-- :class:`SolverPluginOptionalHooks` — 14 probe-based optional hooks that
+- :class:`SolverPlugin` — the required plugin contract, enforced in full by
+  :func:`validate_plugin`.
+- :class:`SolverPluginOptionalHooks` — probe-based optional hooks that
   unlock additional capabilities (sweeps, mesh diagnostics, report catalogs,
   override scopes, …).  **Read this class** to discover all extension points
   before deciding your plugin is complete.
@@ -16,19 +16,10 @@ Adapters may provide their own context factories for convenience, and
 
 Environment and solver adapters implement this contract directly. See
 ``AGENT_GUIDE.md``, section "Plugin Guide -- Adding a New Solver".
-2026-09-14: this previously pointed at
-``.agents/skills/driverfoam-plugin-builder/SKILL.md``, a path that lived
-in the pre-migration cardiacFOAM tree and exists in no repository now.
 """
 
-# REQUIRED, not stylistic. Several annotations below name types imported only
-# under ``if TYPE_CHECKING`` (DictEntry, TutorialSpec, TutorialDisplay,
-# DataArtifact, Path). Without lazy annotations those are evaluated when the
-# class body executes, so importing this module raises
-# ``NameError: name 'DictEntry' is not defined`` on every Python before 3.14 --
-# i.e. on 3.11/3.12, which is exactly this project's CI matrix. Python 3.14's
-# PEP 649 defers annotation evaluation and hides the bug, which is why a 3.14
-# virtualenv shows a green suite while CI cannot collect a single test.
+# Required because annotations reference types imported only under
+# ``TYPE_CHECKING``.
 from __future__ import annotations
 
 import hashlib
@@ -95,18 +86,6 @@ class SolverPlugin(Protocol):
     def get_auxiliary_commands(self) -> frozenset[str]:
         """Additionally authorized binaries that produce no artifacts of their
         own -- meshers, decomposers, reconstructors."""
-        ...
-
-    def get_environment_commands(self) -> frozenset[str]:
-        """Optional static commands supplied by the execution environment.
-
-        An environment adapter declares its meshing, reconstruction, or other
-        runtime tools here. Core does not provide environment command names.
-        """
-        ...
-
-    def is_installed_environment_command(self, command: str) -> bool:
-        """Optional runtime lookup for an environment-provided application."""
         ...
 
     def get_utility_manifests(self) -> dict[str, Any]:
@@ -284,7 +263,7 @@ class SolverPluginOptionalHooks(Protocol):
     inert at load time: ``validate_plugin`` never consults it, and declaring or
     omitting any of these changes no plugin's loading behaviour.
 
-    **Why this class exists.** Until it did, these fifteen hooks appeared
+    **Why this class exists.** Until it did, these hooks appeared
     nowhere in the plugin contract. They were reachable only by reading the
     private ``_*Adapter`` bodies, so a plugin author reading this file could
     not discover that the extension points existed at all -- while *not*
@@ -300,6 +279,22 @@ class SolverPluginOptionalHooks(Protocol):
     Hooks are grouped by the capability they back; see that capability's
     docstring in ``plugin_capabilities.py`` for the full contract.
     """
+
+    # -- CommandAuthorizationCapability -------------------------------------
+    def get_environment_commands(self) -> frozenset[str]:
+        """Static commands supplied by the execution environment.
+
+        An environment adapter may declare its meshing, reconstruction, or
+        other runtime tools here. Absent -> no static environment commands.
+        """
+        ...
+
+    def is_installed_environment_command(self, command: str) -> bool:
+        """Recognize a runtime-discovered environment application.
+
+        Absent -> ``False``. Core never invents environment command names.
+        """
+        ...
 
     # -- CaseCompatibilityCapability -----------------------------------------
     def has_case_marker(self, case_root: "Path") -> bool:

@@ -1,21 +1,8 @@
 """Tests for filesystem case workflow ownership.
 
-Plain case folders are owned by their plugin-declared case script. Registry discovery may
-still find a non-runnable marked folder, but it must not invent a
-workflow_dag unless that script exists.
-
-Phase 2 Task M2: ``test_variant_electro_properties_case_is_discoverable_and_runnable``
-moved to
-packages/omnidriver-cardiacfoam/tests/test_workflow_dag_filesystem_ingest.py
--- it asserts cardiacFoam's own electroProperties-variant case marker. The
-two tests kept here assert core's own DAG-synthesis rule (a declared script
-present -> single-step DAG; absent -> None), independent of what marks a folder
-case at all, so the local ``_FilesystemMarkerPlugin`` explicitly defines a
-test-only ``metadata/case.txt`` + ``inputs/`` marker. It wires
-``make_generic_case_spec`` into its tutorial catalog -- the
-same core-owned factory ``resolve_entry`` already falls back to when no
-marker matches, so both branches behave identically and no cardiac
-vocabulary is reachable.
+Plain case folders are owned by their plugin-declared case script. Registry
+discovery may find a marked folder, but Core creates no workflow DAG unless
+the declared script exists.
 """
 from __future__ import annotations
 

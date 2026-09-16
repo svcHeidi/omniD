@@ -10,14 +10,18 @@ from omnidriver.openfoam.apply_overrides import (
     OverrideError,
 )
 from omnidriver.openfoam.mutators import read_foam_entry
-from omnidriver.core.specs.paths import repo_root_default
 
-REPO_ROOT = monorepo_root or repo_root_default()
-SINGLE_CELL = REPO_ROOT / "tutorials" / "electrophysiologyProtocols" / "singleCell"
+
+SINGLE_CELL = (
+    monorepo_root / "tutorials" / "electrophysiologyProtocols" / "singleCell"
+    if monorepo_root is not None
+    else None
+)
 
 
 def _case(tmp_path: Path) -> Path:
     """A minimal case: a real electroProperties + a controlDict carrying deltaT."""
+    assert SINGLE_CELL is not None
     (tmp_path / "constant").mkdir()
     (tmp_path / "system").mkdir()
     (tmp_path / "system" / "electro").mkdir()
@@ -98,8 +102,7 @@ def test_validate_accepts_purkinje_conduction_velocity_and_ode_tolerances():
     m/s (eikonalSolver1D.C:134 -- t = Tact + edgeLength/purkinjeCV), NOT the
     same quantity as the top-level eikonal c0, which has dimensions s^-1/2
     and only becomes a velocity via c0*sqrt(M) (eikonalMyocardiumDomain.C:359).
-    The two used to share the bare key 'c0' at different scopes of one file;
-    the Purkinje side was renamed to purkinjeCV to remove the ambiguity.
+    They therefore remain separate catalogue entries.
 
     absTol/relTol reach upstream ODESolver.C:68-69 through the same
     sub-dict binding as the already-catalogued solver/maxSteps.
@@ -222,13 +225,7 @@ def test_apply_region_fvSolution_edits_file(tmp_path, monkeypatch):
 
 
 def test_apply_system_file_override_works_without_foamdictionary(tmp_path):
-    """A system/<file>:<entry> override must not require a sourced OpenFOAM.
-
-    This route used to call a foamDictionary-only writer directly, so
-    fvSolution/fvSchemes overrides only worked in a sourced shell. It now
-    goes through the same pure-Python mutator path as the rest of the
-    override machinery.
-    """
+    """System-file overrides use the pure-Python dictionary mutator."""
     case = _case(tmp_path)
     apply_overrides(
         [{"driver_path": "system/fvSolution:solvers/V/tolerance", "value": "1e-9"}],
@@ -246,9 +243,9 @@ def test_validate_accepts_the_manufactured_solution_switches():
     electroVerificationModel::New is called unconditionally
     (myocardiumDomainInterface.C:223); selectedType looks for a
     verificationModel sub-dict and reads `type`, returning nullptr when it is
-    absent, empty or "none" (electroVerificationModel.C:42-45). So `type` is
-    the one switch -- the redundant `enabled` key it used to share that job
-    with is gone, and all four verifier tables now accept "none" alike.
+    absent, empty or "none" (electroVerificationModel.C:42-45). ``type`` is
+    therefore the sole activation switch, and all verifier tables accept
+    "none".
 
     The Purkinje graph and the PVJ coupling each have their own verifier
     table, so each needs its own `type` at its own scope; the manufactured
@@ -266,12 +263,7 @@ def test_validate_accepts_the_manufactured_solution_switches():
     ])
 
 
-# --- override scopes are plugin-declared, not core-hardcoded ---------------
-#
-# P2.5-followup: $ELECTRO_MODEL_COEFFS is no longer the one scope token core
-# assumes exists. A plugin declares its own scopes via
-# PluginCapabilities.override_scopes; core only knows how to route a "$TOKEN."
-# override to whichever scope's token matches.
+# --- plugin-declared override scopes ---------------------------------------
 
 def test_validate_rejects_an_unknown_scope_token():
     with pytest.raises(OverrideError) as exc:
@@ -312,9 +304,7 @@ def test_cardiac_plugin_declares_the_electro_model_coeffs_scope():
     assert scope.catalog_group == "electroProperties"
 
 
-def test_cardiac_scope_resolve_entry_matches_the_old_hardcoded_behavior(tmp_path):
-    """Same (scope_path, key) shape apply_overrides used to compute inline
-    via detect_myocardium_solver_name + _entry_scope_and_key."""
+def test_cardiac_scope_resolves_the_active_solver_block(tmp_path):
     from omnidriver.core.plugin_interface import default_driver_context
 
     case = _case(tmp_path)
@@ -327,17 +317,12 @@ def test_cardiac_scope_resolve_entry_matches_the_old_hardcoded_behavior(tmp_path
     assert key == "solutionAlgorithm"
 
 
-# --- regeneration scopes: myocardiumSolver routed through override channel -
-#
-# myocardiumSolver is a bare (non-"$") catalog entry whose value change
-# RESTRUCTURES electroProperties (renames the active <solver>Coeffs
-# sub-block, flips which sibling keys the catalog allows) rather than
-# patching one leaf in place. A plugin declares this via
-# PluginCapabilities.dict_regeneration, the sibling of override_scopes for
-# $TOKEN. leaves.
+# --- dictionary-regeneration scopes ----------------------------------------
 
 PURKINJE_RESTITUTION_2D = (
-    REPO_ROOT / "tutorials" / "electrophysiologyProtocols" / "purkinjeRestitution2D"
+    monorepo_root / "tutorials" / "electrophysiologyProtocols" / "purkinjeRestitution2D"
+    if monorepo_root is not None
+    else None
 )
 
 
@@ -361,8 +346,6 @@ def test_cardiac_plugin_declares_the_myocardium_solver_regeneration_scope():
 
 
 def test_validate_accepts_a_bare_myocardium_solver_override_with_a_valid_enum_value():
-    # Previously rejected outright: "not a known controlDict entry" (VERIFIED
-    # FACT #1 in the task this test guards). Now routed to regeneration.
     validate_overrides([{"driver_path": "myocardiumSolver", "value": "eikonalSolver"}])
 
 
@@ -404,7 +387,9 @@ def test_apply_regenerates_electro_properties_for_a_myocardium_solver_override(t
     forward. See test_dict_builder.py's
     test_purkinje_monodomain_to_eikonal_end_to_end for the same
     scenario exercised directly against regenerate_electro_properties."""
-    if not (PURKINJE_RESTITUTION_2D / "constant" / "electroProperties.monodomain").exists():
+    if PURKINJE_RESTITUTION_2D is None or not (
+        PURKINJE_RESTITUTION_2D / "constant" / "electroProperties.monodomain"
+    ).exists():
         pytest.skip("tutorial fixture not present in this checkout")
 
     (tmp_path / "constant").mkdir()

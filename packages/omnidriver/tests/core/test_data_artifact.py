@@ -1,4 +1,4 @@
-"""Contract tests for the DataArtifact vocabulary (plan v2 phase 2).
+"""Contract tests for the ``DataArtifact`` vocabulary.
 
 DataArtifact is the shared output-description language between the engine
 and the utility

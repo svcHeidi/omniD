@@ -1,12 +1,10 @@
-"""P2.1: one launch predicate, truth-table tested across every state category
-(structural, environment, warning, execution) the roadmap requires covered.
+"""Launch-readiness predicates across structural and execution states.
 
 The real states exercised here come from what the CLI already computes:
 - ``StrictPlanReport.status`` ("ok"/"failed") -- structural/semantic plan
   validity, derived from ``plan_diagnostics`` only (strict_planning.py).
 - ``StrictPlanReport.environment_diagnostics`` -- execution-readiness
-  diagnostics (level "error" or "warning"), excluded from ``.status`` by
-  design so a sampled-field/environment warning can never fail a plan.
+  diagnostics (level "error" or "warning"), excluded from ``.status``.
 - ``WorkflowRunState``/``WorkflowStepState.status`` -- post-execution
   outcome ("completed" is the only success terminal state; see
   ``cli._terminal_status_label``).

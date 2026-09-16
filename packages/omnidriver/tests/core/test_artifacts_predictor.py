@@ -1,4 +1,4 @@
-"""Predictor contract tests (plan v2 phase 3a).
+"""Contract tests for predicted run artifacts.
 
 predict_data_artifacts is the single agent-facing answer to "what raw data
 will/did this run produce?". It must:

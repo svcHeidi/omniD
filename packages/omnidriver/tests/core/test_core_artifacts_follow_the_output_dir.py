@@ -1,24 +1,4 @@
-"""Core's own artifacts must be predicted where core actually writes them.
-
-``workflow_state.json`` and ``workflow_logs/`` are core's, not the
-environment's: core owns their names, their schema and their placement, and
-``execution_context.resolve_execution_context`` puts them at
-``spec.output_dir / ...``. What core does *not* own is where ``output_dir``
-is -- that comes from the spec's ``output_dir_name``, whose default happens
-to be OpenFOAM's ``postProcessing``.
-
-``artifacts._core_generic_artifacts`` used to predict the literal
-``postProcessing/workflow_state.json`` regardless. With the default they
-agree, so nothing noticed. Override ``output_dir_name`` and core writes
-``results/workflow_state.json`` while still promising
-``postProcessing/workflow_state.json`` -- artifact reconciliation then looks
-for a file that was never going to be there and reports core's own guaranteed
-artifact missing.
-
-The bug is a coincidence between two independent constants, which is exactly
-what a test using only the default value cannot see. So these assert the
-CONTRAST: the prediction must move when the output dir moves.
-"""
+"""Core-owned artifact predictions follow the spec's output directory."""
 from __future__ import annotations
 
 from pathlib import Path

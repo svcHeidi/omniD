@@ -290,16 +290,7 @@ def test_run_workflow_step_rejects_cwd_escape() -> None:
 
 
 def test_case_script_step_preserves_dyld_vars_through_shell_hop() -> None:
-    # On macOS, /bin/sh is SIP-protected: the OS silently strips inherited
-    # DYLD_* env vars before a shebang-interpreted script's own body runs,
-    # even though `env=` correctly carried them into the subprocess call.
-    # A case-local script is exactly such a shebang script, so
-    # invoking it directly with env=execution_env used to lose
-    # DYLD_LIBRARY_PATH silently, crashing cardiacFoam with "Library not
-    # loaded" deep inside the script. This test proves the value the real
-    # script sees matches what was passed in `env`, on whatever platform CI
-    # runs on -- the macOS-specific failure mode this guards against can
-    # only be observed by actually running on macOS (verified manually).
+    # The shell wrapper preserves dynamic-library variables for case scripts.
     with tempfile.TemporaryDirectory() as temp_dir:
         root = Path(temp_dir)
         script = root / "run-case"

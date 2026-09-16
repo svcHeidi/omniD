@@ -3,7 +3,9 @@ from __future__ import annotations
 import pytest
 
 from omnidriver.core.plugin_interface import (
+    SolverPlugin,
     SUPPORTED_PLUGIN_API_VERSIONS,
+    _REQUIRED_PLUGIN_MEMBERS,
     driver_context
 )
 from plugins.minimal_plugin import MinimalTestPlugin
@@ -11,6 +13,22 @@ from plugins.minimal_plugin import MinimalTestPlugin
 
 def test_supported_version_is_two() -> None:
     assert SUPPORTED_PLUGIN_API_VERSIONS == frozenset({"2"})
+
+
+def test_runtime_protocol_matches_the_validated_required_contract() -> None:
+    """A member cannot be type-mandatory while validation treats it optional.
+
+    Optional hooks belong on ``SolverPluginOptionalHooks`` and are probed by
+    capability adapters. Keeping them on ``SolverPlugin`` makes
+    ``isinstance(plugin, SolverPlugin)`` stricter than ``driver_context``.
+    """
+    protocol_members = {
+        name
+        for name, value in vars(SolverPlugin).items()
+        if not name.startswith("_")
+        and (isinstance(value, property) or callable(value))
+    }
+    assert protocol_members == set(_REQUIRED_PLUGIN_MEMBERS)
 
 
 def test_neutral_plugin_is_v2() -> None:

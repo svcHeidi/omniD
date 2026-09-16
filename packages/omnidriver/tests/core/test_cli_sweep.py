@@ -1,15 +1,4 @@
-"""Tests CLI wiring for sweep-plan/sweep-run actions.
-
-Phase 2 Task M2: every test mocks omnidriver.cli.sweep_plan/sweep_run
-and asserts CLI argument marshalling (kwargs, exit codes) -- nothing
-cardiac. Six of them failed core-only only because main() calls
-default_driver_context() (which requires omnidriver-cardiacfoam) when
---plugin is omitted; they now patch default_driver_context to return
-openfoam_environment_context() instead. Assertions are unchanged. The
-"TNNP"/"BadModel" fixture strings were renamed to neutral placeholders
-since they are arbitrary labels inside a mocked return value, not
-assertions on cardiacFoam behaviour.
-"""
+"""CLI argument and exit-code wiring for sweep actions."""
 
 import json
 import unittest

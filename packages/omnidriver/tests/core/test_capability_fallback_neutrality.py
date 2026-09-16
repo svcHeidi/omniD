@@ -1,34 +1,4 @@
-"""A non-cardiac plugin must never inherit cardiacFoam semantics.
-
-``core/compatibility.py`` is the one place core is allowed to import the
-cardiac plugin (enforced by
-``test_plugin_dependency_boundary.py::test_core_imports_cardiac_implementation_only_at_compatibility_boundary``).
-That import-level test cannot see *which plugin* the fallback is answering
-for, though: a fallback may legally live in ``compatibility.py`` and still
-route every caller into cardiac code.
-
-Historically, thirteen fallbacks reachable through a capability adapter gated
-on ``plugin_id == "org.cardiacfoam"`` and handed a neutral value to everyone
-else; six did not gate at all, so the shipped ``OpenFOAMEnvironmentPlugin`` --
-which implements only one of the six hooks -- answered cardiac questions about
-non-cardiac cases. The worst of them wrote an ``Allrun`` invoking the
-``cardiacFoam`` binary for a sweep under a plugin that is not cardiacFoam.
-
-Phase 2 Task 7 deleted every ``plugin_id`` gate once the standing census
-(``test_no_cardiac_gate_is_reached.py``) proved none of them was still reached
--- CardiacFoamPlugin now implements every hook directly, so every fallback in
-this file hands the same neutral value (or refusal) to *any* plugin,
-cardiacFoam included. The tests below stay behavioural rather than
-gate-counting for exactly the reason this docstring originally gave: they
-still need to prove the cardiac code path is not what makes a non-cardiac
-case runnable, and that cardiacFoam's own hooks -- not a fallback -- are what
-make a cardiac case runnable now.
-
-These tests are behavioural on purpose. Asserting "the cardiac module was not
-imported" is unreliable once any other test has imported it; asserting that a
-deliberately cardiac-*looking* case is NOT claimed by the generic plugin can
-only pass if the cardiac code path genuinely did not run.
-"""
+"""Compatibility fallbacks never provide another plugin's semantics."""
 
 from __future__ import annotations
 

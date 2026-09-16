@@ -1,5 +1,4 @@
-"""P2.4: compatibility fallbacks must be individually observable by tests,
-and an explicit non-cardiac v2 context must call none of them."""
+"""Compatibility fallbacks are observable and never implicit."""
 from __future__ import annotations
 
 from omnidriver.core import compatibility
@@ -7,8 +6,8 @@ from omnidriver.core import compatibility
 
 def test_recorder_captures_a_fallback_call() -> None:
     with compatibility.track_fallback_calls() as calls:
-        compatibility.legacy_resolve_case_models(object(), case_root=None)
-    assert calls == ["legacy_resolve_case_models"]
+        compatibility.legacy_case_marker(object(), case_root=None)
+    assert calls == ["legacy_case_marker"]
 
 
 def test_recorder_is_empty_when_no_fallback_is_invoked() -> None:
@@ -17,7 +16,7 @@ def test_recorder_is_empty_when_no_fallback_is_invoked() -> None:
     assert calls == []
 
 
-def test_explicit_v2_plugin_calls_no_legacy_fallback() -> None:
+def test_explicit_plugin_calls_no_compatibility_fallback() -> None:
     from plugins.minimal_plugin import MinimalTestPlugin
     from omnidriver.core.plugin_interface import driver_context
 

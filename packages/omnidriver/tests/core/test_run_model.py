@@ -299,16 +299,7 @@ def test_run_document_migrates_v1_explicitly():
 
 
 def test_core_declares_no_phase_vocabulary() -> None:
-    """Neither module may spell a solver's editing phases.
-
-    This used to assert that ``contracts.dictionary.Phase`` and
-    ``run_model.Phase`` were the same object rather than two textually
-    identical declarations -- a guard against the vocabulary being duplicated.
-    It is now absent from both: a plugin declares its phases through
-    ``get_phases()`` and ``primary_phase()`` takes that order as a parameter,
-    so core names none of them. Guarding zero is the stronger version of
-    guarding one.
-    """
+    """Core modules do not define a solver's editing-phase vocabulary."""
     from omnidriver.core.contracts import dictionary
     from omnidriver.core.runtime import run_model
 

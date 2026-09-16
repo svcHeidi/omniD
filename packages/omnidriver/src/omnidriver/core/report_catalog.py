@@ -1,35 +1,8 @@
-"""Solver-neutral report-catalog infrastructure.
+"""Solver-neutral report definitions, filtering, and serialization.
 
-After a run completes, downstream tools can select report definitions whose
-``applicable_when`` predicate matches the run's configuration. This module
-owns the shared machinery -- the ``ReportDefinition`` record, the
-``applicable_when`` predicate evaluator, and the JSON record shape -- but
-not any concrete catalog: which reports exist is solver-specific data owned
-by the plugin that authors them (the built-in cardiac plugin's catalog lives
-at ``plugins/cardiacfoam/reports.py``). ``scripts/export-report-catalog.py``
-reaches the active plugin's catalog through
-``driver_context.capabilities.report_catalog.reports()`` and serializes it
-to JSON.
-
-Two design choices worth re-reading later:
-
-1. **URLs are templates, not absolute.** v1 ships
-   ``http://localhost:{port}/{kind}`` for entries served by the user's
-   standalone Quart app, **4Dpapers**, plus a bundled fallback at
-   ``/reports/stub.html``. ``{port}`` and ``{kind}`` are substituted by the
-   consumer. **No ``{runId}``** in v1 — 4Dpapers does not route by run yet
-   (the user confirmed: "it does not read IDs yet but that is a simple
-   implementation in the future"). When 4Dpapers learns to route by run, the
-   template becomes ``.../{runId}/{kind}`` and JSON consumers pick that up
-   without a code change.
-
-2. **``applicable_when`` is flat key-equality only.** ``None`` ⇒ always
-   applicable; ``{"phase.field": value}`` ⇒ AND of equality checks via
-   shallow get on the run's resolved config. Anything richer
-   (``$in``, ``$gt``, regex) is intentionally rejected so v2 can layer
-   in a real predicate language without silently mis-filtering v1
-   docs. The same predicate language is shared by tutorials' ``preset``
-   field (Spec § Backend contract alignment).
+Plugins own concrete report catalogs. ``applicable_when`` supports flat
+key-equality predicates over resolved run configuration. Report URLs are
+templates whose ``port`` and ``kind`` fields are filled by consumers.
 """
 
 from __future__ import annotations
@@ -38,11 +11,9 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 
-# --- v1 URL templates -------------------------------------------------------
+# --- URL templates ----------------------------------------------------------
 
-#: The 4Dpapers backend (user's existing standalone Quart app) does not
-#: route by ``runId`` in v1. ``{port}`` is supplied by the consumer and
-#: ``{kind}`` is filled from the report's ``id``.
+#: ``port`` is supplied by the consumer; ``kind`` comes from the report id.
 URL_TEMPLATE = "http://localhost:{port}/{kind}"
 
 #: Bundled offline fallback path.

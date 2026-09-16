@@ -213,12 +213,7 @@ def test_present_executables_have_no_error(clean_env):
 
 
 def test_case_script_commands_are_not_path_checked(clean_env):
-    # OpenFOAM's Allrun/Allclean/etc are case-local scripts declared by the
-    # adapter, resolved relative to caseRoot at execution time -- they
-    # are never on PATH by design, so shutil.which() must never be asked
-    # about them. Previously this produced a false-positive
-    # "missing_executable" for every Allrun-routed plan (e.g. every
-    # sweep-run case), even with OpenFOAM fully sourced.
+    # Case-local scripts resolve relative to caseRoot, not PATH.
     clean_env.setattr(strict_planning.shutil, "which", _which_factory(set()))
     diags = _diags(_dag("Allrun"), openfoam_environment_context())
     assert "missing_executable" not in {d.code for d in diags}
