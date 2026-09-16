@@ -15,6 +15,7 @@ FIELD_CONVENTIONS = {
         "uvc_transmural": "min=endocardium, max=epicardium; checked-in cases use 0=endo, 1=epi",
         "uvc_intraventricular": "checked-in cases use LV=-1, RV=1; native code classifies by nearest declared value",
         "uvc_longitudinal": "checked-in cases use 0=apex, 1=base",
+        "coordinate_ring_closure": "The preprocessing coordinate-ring check can infer topology-supported scalar-field candidates without treating names as a convention. When LV/RV naming matters, it expects declared binary values, a varying longitudinal field, and an endocardial transmural value. It uses iso-contours; it does not use AHA angles or pre-exported face sets.",
         "outputs": "setCardiacAnatomy writes AHA_Segment and aha_angle; generatePurkinjeTree writes LVEndoFaces/RVEndoFaces/RVSeptalEndoFaces/EpiFaces",
     },
     "cobiveco_raw": {

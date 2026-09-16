@@ -154,6 +154,34 @@ _add(
 )
 
 _add(
+    "cardiaccore.coordinates.ring_closure.v1",
+    "Check whether coordinate-selected LV/RV endocardial contours are closed at requested longitudinal levels.",
+    "A VTK volume or boundary mesh with binary intraventricular, varying longitudinal, and transmural coordinate fields.",
+    {
+        "report": _entry("coordinates", "coordinate_endocardial_ring_closure_from_vtk",
+            {"mesh_path": "Path to a VTK volume or boundary mesh.",
+             "intraventricular_field": "Optional explicit binary LV/RV coordinate field name; omit every field/value to report generic topology-supported candidates.",
+             "longitudinal_field": "Optional explicit continuous apicobasal coordinate field name.",
+             "transmural_field": "Optional explicit continuous transmural coordinate field name.",
+             "lv_value": "Optional explicit binary LV value.", "rv_value": "Optional explicit binary RV value.",
+             "endocardial_value": "Optional explicit transmural endocardial boundary value.",
+             "endocardial_band": "Positive coordinate tolerance selecting the endocardial boundary; default 0.05.",
+             "ring_levels": "Finite non-empty longitudinal iso-values to inspect; default (0.2, 0.4, 0.6, 0.8).",
+             "binary_tolerance": "Non-negative binary-chamber tolerance; default 1e-9."},
+            "Coordinate-contract result and independent LV/RV contour-loop reports.",
+            "Reads the supplied mesh only; does not mutate the case."),
+    }, "report", native_reader="available_optional",
+    preconditions=["Without declared fields, the operation evaluates normalized scalar candidates from their numerical structure and ring topology; field names are not treated as a convention.",
+                   "A unique candidate identifies two chamber values but not which is LV or RV; declare every field/value when chamber naming matters.",
+                   "Choose requested longitudinal levels away from valve/base openings when a closed ring is anatomically expected.",
+                   "Use a VTK export that preserves the three coordinate fields."],
+    failures={"invalid_input": "Raises for absent/non-finite fields, invalid values/tolerances, duplicate levels, or a mesh without boundary cells.",
+              "missing_capability": "VTK reading requires the optional vtk extra.",
+              "scientific_interpretation": "A failed coordinate contract or open contour identifies a geometry/coordinate prerequisite to investigate; it does not prescribe a UVC, CObiveco, or Purkinje-model change."},
+    evidence=["CObiveco coordinate-result meshes; native cardiacCore UVC-convention surface preparation; owner-selected coordinate-ring closure criterion."],
+    example="from pathlib import Path\nfrom omnidriver.cardiaccore.operations.coordinates import coordinate_endocardial_ring_closure_from_vtk\nreport = coordinate_endocardial_ring_closure_from_vtk(Path('result.vtu'))\n# Inspect report['coordinate_discovery']; explicitly name fields only when LV/RV labels are needed.",
+)
+_add(
     "cardiaccore.vtu.cell_set.v1",
     "Read explicit VTU cell IDs and render an OpenFOAM cellSet.",
     "Selections with GlobalCellIds or vtkOriginalCellIds in the target mesh's numbering.",
