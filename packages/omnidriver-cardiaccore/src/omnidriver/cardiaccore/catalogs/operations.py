@@ -67,6 +67,13 @@ _add(
              "intraventricular_field": "Array name for the intraventricular coordinate; defaults to the canonical name.",
              "longitudinal_field": "Array name for the longitudinal coordinate; defaults to the canonical name."},
             "Versioned JSON-serializable bundle of dimensionless offsets."),
+        "write_bundle": _entry("electrodes", "write_reference_offset_bundle",
+            {"path": "Destination JSON path.", "bundle": "Validated bundle returned by derive_bundle."},
+            "None", "Overwrites the requested file; does not create parent directories, so use a staged destination."),
+        "read_bundle": _entry("electrodes", "read_reference_offset_bundle",
+            {"path": "Path to a bundle previously written by write_bundle."},
+            "The same validated bundle shape derive_bundle produces, for a later or separate apply_bundle call.",
+            "Reads only; raises on a missing schema version or malformed payload."),
         "apply_bundle": _entry("electrodes", "apply_offset_bundle_to_native_file",
             {"heart_vtk": "Native target VTK/VTU path.", "bundle": "Validated reference offset bundle.",
              "target_coordinate_unit": "Required target-coordinate-unit label; no conversion is inferred.",
@@ -163,6 +170,30 @@ _add(
 )
 
 _add(
+    "cardiaccore.coordinates.convention.v1",
+    "Read a case's declared ventricular coordinate convention and derive its coordinate field paths.",
+    "Any staged case with system/coordinatesConventionDict; every other operation that needs a transmural, intraventricular or longitudinal field name reads this first rather than assuming one.",
+    {
+        "read": _entry("coordinates_convention", "read_coordinates_convention",
+            {"case_root": "Path to a staged case."},
+            "CoordinatesConvention: coordinate_system, the three field names, and the transmural/intraventricular reference values, with transmural_lower/upper/range, chamber_seam and is_left_ventricle derived on it."),
+        "field_paths": _entry("coordinates_convention", "coordinate_field_paths",
+            {"convention": "CoordinatesConvention from read, or None for the canonical default names.",
+             "time_dir": "Optional time directory; default '0'."},
+            "Mapping of transmural/intraventricular/longitudinal to their case-relative field paths."),
+    }, "read",
+    preconditions=["The case declares system/coordinatesConventionDict with coordinateSystem, the transmural endocardium/epicardium values and the intraventricularChambers LV/RV values.",
+                   "Classify a chamber with is_left_ventricle (nearest declared value), not by sign or a hardcoded LV/RV convention.",
+                   "Transmural endocardium is not always the smaller value: use transmural_lower/upper/range for a plain numeric bound."],
+    failures={"invalid_input": "Raises when the dictionary is absent or a required key is missing, non-scalar, or not one of the accepted coordinate systems.",
+              "missing_capability": "None; this operation reads only the plain-text case dictionary.",
+              "scientific_interpretation": "This reads the case's declaration; it does not check that declaration against the mesh's actual fields (see cardiaccore.coordinates.ring_closure.v1 for that check)."},
+    evidence=["Mirrors src/coordinatesConvention/coordinatesConvention.H in native cardiacCore; native is the authority where the two could drift."],
+    example="from pathlib import Path\nfrom omnidriver.cardiaccore.operations.coordinates_convention import read_coordinates_convention, coordinate_field_paths\nconvention = read_coordinates_convention(Path(case_root))\npaths = coordinate_field_paths(convention)",
+    native_reader="available",
+)
+
+_add(
     "cardiaccore.coordinates.ring_closure.v1",
     "Check whether coordinate-selected LV/RV endocardial contours are closed at basal longitudinal levels 0.1 and 0.4.",
     "A VTK volume or boundary mesh with binary intraventricular, varying longitudinal, and transmural coordinate fields.",
@@ -245,6 +276,7 @@ _UTILITY_IDS = {
     "electrode_normalization": "cardiaccore.electrodes.reference_frame.v1",
     "purkinje_seed_proposal": "cardiaccore.purkinje.seed_proposal.v1",
     "purkinje_coverage": "cardiaccore.purkinje.coverage_observation.v1",
+    "coordinate_convention": "cardiaccore.coordinates.convention.v1",
     "coordinate_ring_closure": "cardiaccore.coordinates.ring_closure.v1",
     "purkinje_coverage_native": "cardiaccore.purkinje.coverage_native.v1",
     "vtu_selection_to_cellset": "cardiaccore.vtu.cell_set.v1",

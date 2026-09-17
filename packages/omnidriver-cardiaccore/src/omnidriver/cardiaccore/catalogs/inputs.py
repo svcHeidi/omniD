@@ -13,13 +13,16 @@ than prose, following the vocabulary
 evaluated.
 
 Declaring a key here gives an agent KNOWLEDGE of it. It does not make the key
-mutable: a key only becomes an overridable "x value" once it is also routed
-through ``workflows/overrides.py``'s ``_TARGETS`` map AND named in a
-workflow's ``active_input_paths``. Several documents below (setCardiacScar,
-setPurkinjeScar, generatePurkinjeTree, coordinatesConvention) are declared but
-have no ``_TARGETS`` entry -- see the module docstring in ``workflows/overrides.py``
-for why, and ``workflows/preprocessing.py``'s ``PURKINJE_TREE_INPUT_PATHS``
-for the tree-parameter freeze this must not disturb.
+mutable: every declared key is routable (``workflows/overrides.py`` resolves
+any path in this catalog, with no separate allowlist), but a value only
+becomes an overridable "x value" *in a given workflow* once it is also named
+in that workflow's ``active_input_paths``. ``generatePurkinjeTree``'s entries
+are staged this way, through ``workflows/preprocessing.py``'s
+``PURKINJE_TREE_INPUT_PATHS``. ``setCardiacScar``, ``setPurkinjeScar`` and
+``coordinatesConvention`` remain declared-only: no workflow below runs those
+utilities yet, so no ``active_input_paths`` names their entries -- see
+``catalogs/support_boundary.py``'s ``SUPPORT_BOUNDARY["pending"]`` for that
+boundary.
 """
 
 from __future__ import annotations
