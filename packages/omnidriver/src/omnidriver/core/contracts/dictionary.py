@@ -30,6 +30,10 @@ class DictEntry:
     forbidden_when: dict[str, str | tuple[str, ...]] = field(default_factory=dict)
     required_when: dict[str, str | tuple[str, ...]] = field(default_factory=dict)
     mutually_exclusive_with: tuple[str, ...] = ()
+    # Inverse of ``mutually_exclusive_with``: naming a sibling here means
+    # "if my slot is set, that sibling's slot must be set too". Declare it
+    # on every member of the group to make the relation symmetric.
+    co_required_with: tuple[str, ...] = ()
 
 
 def build_group(

@@ -6,7 +6,7 @@ from omnidriver.dict_entries import DictEntry
 
 
 class TestDictEntryStructuredConstraints(unittest.TestCase):
-    """DictEntry exposes four structured-constraint fields so that
+    """DictEntry exposes five structured-constraint fields so that
     constraints can be expressed in a form the validator can evaluate.
 
     The fields are additive (P8 additive-only policy): every existing
@@ -37,6 +37,10 @@ class TestDictEntryStructuredConstraints(unittest.TestCase):
     def test_mutually_exclusive_with_defaults_empty(self) -> None:
         entry = self._build_entry()
         self.assertEqual(entry.mutually_exclusive_with, ())
+
+    def test_co_required_with_defaults_empty(self) -> None:
+        entry = self._build_entry()
+        self.assertEqual(entry.co_required_with, ())
 
     def test_applicable_when_accepts_value_predicate(self) -> None:
         entry = self._build_entry(
@@ -80,6 +84,13 @@ class TestDictEntryStructuredConstraints(unittest.TestCase):
         )
         self.assertEqual(entry.mutually_exclusive_with, ("stimulusDurationList",))
 
+    def test_co_required_with_accepts_path_tuple(self) -> None:
+        entry = self._build_entry(
+            co_required_with=("stimulusDurationList",),
+        )
+        self.assertEqual(entry.co_required_with, ("stimulusDurationList",))
+
+
     def test_entry_remains_frozen(self) -> None:
         """The additive fields must not loosen the existing
         immutability guarantee on DictEntry."""
@@ -122,3 +133,53 @@ def test_core_exports_no_phase_vocabulary():
     import omnidriver.dict_entries as dict_entries
 
     assert not hasattr(dict_entries, "Phase")
+
+
+class TestCoRequiredWithEvaluation(unittest.TestCase):
+    """``co_required_with`` is the inverse of ``mutually_exclusive_with``:
+    a declared group must be set as a whole or not at all.
+
+    This guards behaviour, not a fixture: the validator has to stay silent
+    when nothing in the group is set, stay silent when every member is set,
+    and report once per missing sibling in between.
+    """
+
+    def _group(self) -> list["DictEntry"]:
+        names = ("alpha", "beta", "gamma")
+        return [
+            DictEntry(
+                driver_path=name,
+                description="fixture",
+                source_refs=("ref.C",),
+                co_required_with=tuple(o for o in names if o != name),
+            )
+            for name in names
+        ]
+
+    def _errors(self, context: dict) -> list[str]:
+        from omnidriver.core.specs.validation import _evaluate_structured
+        return [e.message for e in _evaluate_structured(self._group(), context, ())]
+
+    def test_no_error_when_the_whole_group_is_absent(self) -> None:
+        self.assertEqual(self._errors({}), [])
+
+    def test_no_error_when_the_whole_group_is_set(self) -> None:
+        self.assertEqual(
+            self._errors({"alpha": 1.0, "beta": 2.0, "gamma": 3.0}), [],
+        )
+
+    def test_one_error_per_missing_sibling_on_a_partial_group(self) -> None:
+        errors = self._errors({"alpha": 1.0})
+        self.assertEqual(len(errors), 2)
+        self.assertIn("alpha requires beta to be set as well.", errors)
+        self.assertIn("alpha requires gamma to be set as well.", errors)
+
+    def test_each_set_member_reports_its_own_missing_sibling(self) -> None:
+        errors = self._errors({"alpha": 1.0, "beta": 2.0})
+        self.assertEqual(
+            sorted(errors),
+            [
+                "alpha requires gamma to be set as well.",
+                "beta requires gamma to be set as well.",
+            ],
+        )

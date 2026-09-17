@@ -8,7 +8,8 @@ The validator reports three kinds of issue:
    one of the declared ``enum_values``.
 3. **Structured constraints.** Each ``DictEntry`` may declare
    ``applicable_when``, ``forbidden_when``, ``required_when``, and
-   ``mutually_exclusive_with``. The validator evaluates these against a
+   ``mutually_exclusive_with``, and ``co_required_with``. The validator
+   evaluates these against a
    flattened view of the run config. The legacy hardcoded ``eikonalSolver``/
    ``ionicModel`` cross-field check is now encoded as
    ``forbidden_when={"myocardiumSolver": "eikonalSolver"}`` on the
@@ -408,7 +409,7 @@ def _evaluate_structured(
     context: dict[str, Any],
     phase_order: tuple[str, ...],
 ) -> list[ValidationError]:
-    """Evaluate the four structured-constraint families per entry."""
+    """Evaluate the five structured-constraint families per entry."""
     errors: list[ValidationError] = []
     paths_set = {slot_key(e.driver_path) for e in entries
                  if _entry_value_present(e, context)}
@@ -456,6 +457,24 @@ def _evaluate_structured(
                         message=(
                             f"{e.driver_path} is mutually exclusive with "
                             f"{sibling_path}."
+                        ),
+                        level="error",
+                    ))
+
+        # co_required_with: the inverse relation. Fires when this entry's
+        # slot IS set and a listed sibling's slot is NOT. Unlike
+        # mutually_exclusive_with there is no double-reporting to avoid:
+        # each unset sibling is a distinct missing value, and declaring the
+        # relation on every member of the group is what makes it symmetric.
+        if _entry_value_present(e, context):
+            for sibling_path in e.co_required_with:
+                if slot_key(sibling_path) not in paths_set:
+                    errors.append(ValidationError(
+                        phase=ph,
+                        field=e.driver_path,
+                        message=(
+                            f"{e.driver_path} requires {sibling_path} to be "
+                            f"set as well."
                         ),
                         level="error",
                     ))
