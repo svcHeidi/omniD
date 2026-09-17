@@ -1,17 +1,23 @@
 # Working in this repository
 
+For provider-neutral task routing, start with [`AGENTS.md`](AGENTS.md) and
+load the selected role's documents from
+[`agent-handbook/guidance-manifest.yaml`](agent-handbook/guidance-manifest.yaml).
+This file remains the maintainer-specific package and verification guide.
+
 Read this first. It is the entry point for agents and the fastest way to avoid
 re-deriving what the last five sessions established.
 
 ## What this is
 
-A solver-agnostic orchestrator, split into three packages under `packages/`:
+A solver-agnostic orchestrator, split into four packages under `packages/`:
 
 | package | may know about | must not know about |
 |---|---|---|
 | `omnidriver` (core) | DAG execution, schemas, provenance, the plugin contract | OpenFOAM, any solver, any physics |
 | `omnidriver-openfoam` | `foamlib`, dictionaries, meshing, MPI decomposition | cardiology |
 | `omnidriver-cardiacfoam` | electrophysiology, ionic models, the cardiac plugin | — |
+| `omnidriver-cardiaccore` | evidence-backed cardiacCore preprocessing workflows | cardiacFoam solver semantics |
 
 Core containing **zero** cardiac vocabulary is not aspirational — it is
 enforced. `scripts/check-import-boundaries.py` exits non-zero on any cardiac
@@ -30,14 +36,14 @@ of defect is only visible from a wheel.
 # if needed. Build these once; they are not in the repo.
 uv venv --python 3.11 /tmp/od311 && VIRTUAL_ENV=/tmp/od311 uv pip install -q \
   -e "packages/omnidriver[post]" -e packages/omnidriver-openfoam \
-  -e packages/omnidriver-cardiacfoam pytest
+  -e packages/omnidriver-cardiacfoam -e packages/omnidriver-cardiaccore pytest
 uv venv --python 3.11 /tmp/odcore && VIRTUAL_ENV=/tmp/odcore uv pip install -q \
   -e "packages/omnidriver[post]" pytest
 ```
 
 | shape | command | catches |
 |---|---|---|
-| all three | `python -m pytest packages/ -q -m "not slow"` | ordinary regressions |
+| all four | `python -m pytest packages/ -q -m "not slow"` | ordinary regressions |
 | core alone | `python -m pytest packages/omnidriver/tests -q` | core reaching into a sibling package |
 | **installed wheel** | see below | core reading repo-relative state at import time |
 | static gates | `python3 scripts/check-import-boundaries.py` and `scripts/export-capability-seams.py --check` | import direction; a stale generated table |
