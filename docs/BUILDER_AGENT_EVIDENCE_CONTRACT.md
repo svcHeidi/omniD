@@ -220,6 +220,35 @@ OpenFOAM dictionary entry.  Reuse the established layers:
   adapter has declared valid target scopes, transaction targets, and semantic
   constraints.
 
+Discover and guard dictionary keys with the same layers before writing a
+catalog by hand (added 2026-09-16, after the cardiacCore adapter re-typed keys
+the scanner already finds):
+
+- `openfoam.dict_keys_scanner.scan_dict_reads(src_root)` lists every
+  `lookup`/`get`/`getOrDefault`/`found`/`readEntry`/`subDict` read with file and
+  line. It is the inventory to start from, not an accepted catalog. Each read
+  carries `scope` (enclosing sub-dictionaries recovered from local
+  `dictionary&` bindings and chained `subDict` calls; a runtime name appears
+  as `<var>`, and `()` through a function parameter means "not recovered") and
+  `method`. `dict_read_default(read)` returns the source default expression
+  of an `*OrDefault` read, unevaluated.
+- `openfoam.dict_keys_scanner.strict_dict_key_report(src_root, allowlist_path=,
+  entries=)` is the drift gate between that inventory and the adapter's
+  `DictEntry`s; the allowlist holds reviewed non-catalog reads (graph-file
+  keys, upstream OpenFOAM keys, false matches). Every source-available adapter
+  should test it when a native source root is supplied.
+- `DictEntry.dynamic_path` with `<name>` segments covers instance-named blocks
+  such as `regions.<id>.<key>`; do not enumerate instances or skip them.
+- `openfoam.case_dict_keys.case_dict_key_diagnostics` warns about keys written
+  in a supplied case that the catalog does not know.
+- `openfoam.dict_builder` (`select_applicable_entries`, `check_required`,
+  `populate_values`) materializes dictionary text from catalog entries.
+- `core.utility_catalog.UtilityManifest` / `ProducesEntry` declare a native
+  command's inputs and produced artifacts.
+
+`scripts/scan-dict-keys.py` is a cardiacFoam-specific front end to the scanner;
+call the module functions directly for another adapter.
+
 Use a solver-specific adapter only to map its vocabulary to those mechanisms:
 which file and scope an x value belongs to, when it is applicable, and what
 validation/refusal is required.  It must not duplicate OpenFOAM tokenization,

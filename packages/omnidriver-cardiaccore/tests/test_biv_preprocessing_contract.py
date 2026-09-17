@@ -108,11 +108,21 @@ def test_utility_outputs_are_not_misclassified_as_source_inputs(tmp_path):
     assert "0/PurkinjeTerminalWeightIntramural" in output_globs
 
 
-def test_initial_input_catalog_is_scoped_to_the_selected_bivcase_workflow():
+def test_initial_input_catalog_covers_the_selected_bivcase_workflow():
+    # As of the declarative-vocabulary rewrite (see catalogs/inputs.py), the
+    # catalog documents the full evidence-backed surface across all 11
+    # native utilities, not only the keys the selected bivCase workflow
+    # reads, so an exact-set assertion on the catalog is no longer the right
+    # guard. The invariant that still matters -- and that this test now
+    # asserts EXACTLY, not as a subset -- is that declaring a key did not
+    # make it mutable: `_TARGETS` is the routable (overridable) surface, and
+    # it must stay exactly these 10 reviewed x values.
+    from omnidriver.cardiaccore.workflows.overrides import _TARGETS
+
     context = driver_context(CardiacCorePlugin(), source="test")
 
     entries = {entry.driver_path: entry for entry in context.capabilities.dictionaries.entries()}
-    assert set(entries) == {
+    reviewed = {
         "$CARDIAC_CONDUCTIVITY.df",
         "$CARDIAC_CONDUCTIVITY.ds",
         "$CARDIAC_CONDUCTIVITY.dn",
@@ -124,15 +134,20 @@ def test_initial_input_catalog_is_scoped_to_the_selected_bivcase_workflow():
         "$PURKINJE_SLAB.thickness",
         "$PURKINJE_SLAB.multiplier",
     }
+    assert set(_TARGETS) == reviewed
+    assert reviewed.issubset(entries)
     assert entries["$PURKINJE_SLAB.thickness"].constraints
     assert entries["$CARDIAC_CONDUCTIVITY.df"].value_kind == "scalar"
     assert entries["$CARDIAC_CONDUCTIVITY.df"].unit == ""
     assert entries["$CARDIAC_CONDUCTIVITY.df"].phases == frozenset({"preprocessing"})
+    # The old free-text CONDITIONAL_INPUTS entries for the bidomain pair and
+    # subendocardialWeight are now real DictEntry objects (folded into
+    # CATALOG above), so the published conditional-inputs catalog is empty --
+    # the name stays bound for plugin.py's named-catalog publication.
     conditional = context.capabilities.named_catalogs.catalogs()["cardiaccore_conditional_inputs"]
-    assert conditional["setPurkinjeMorphometryDict"][0]["status"] == "conditional"
-    assert conditional["setCardiacConductivityDict"][0]["when"] == (
-        "bidomain tensor preprocessing is selected"
-    )
+    assert conditional == {}
+    assert entries["$CARDIAC_CONDUCTIVITY.conductivityIntracellular.df"].constraints
+    assert entries["$PURKINJE_MORPHOMETRY.subendocardialWeight"].typical_value == "0.56"
     tree_contract = context.capabilities.named_catalogs.catalogs()[
         "cardiaccore_tree_validation"
     ]
