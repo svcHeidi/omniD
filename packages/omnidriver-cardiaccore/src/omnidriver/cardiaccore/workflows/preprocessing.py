@@ -11,10 +11,15 @@ from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 from omnidriver.core.specs.common import resolve_spec_paths
 
 
-TUTORIAL_NAME = "cardiaccore-biv-preprocessing"
-HUMAN_TREE_TUTORIAL_NAME = "cardiaccore-human-endocardial-tree"
-PIG_MORPHOMETRIC_TREE_TUTORIAL_NAME = "cardiaccore-pig-morphometric-tree"
-HUMAN_TREE_INPUT_PATHS = (
+HUMAN_PURKINJE_SLAB_TUTORIAL_NAME = "cardiaccore-human-purkinje-slab"
+HUMAN_PURKINJE_ENDOCARDIAL_TUTORIAL_NAME = (
+    "cardiaccore-human-purkinje-endocardial"
+)
+PIG_MORPHOMETRIC_PURKINJE_TUTORIAL_NAME = (
+    "cardiaccore-pig-morphometric-purkinje"
+)
+PIG_TRANSMURAL_PURKINJE_TUTORIAL_NAME = "cardiaccore-pig-transmural-purkinje"
+PURKINJE_TREE_INPUT_PATHS = (
     "$CARDIAC_CONDUCTIVITY.df",
     "$CARDIAC_CONDUCTIVITY.ds",
     "$CARDIAC_CONDUCTIVITY.dn",
@@ -23,11 +28,6 @@ HUMAN_TREE_INPUT_PATHS = (
     "$CARDIAC_ANATOMY.zApicalMid",
     "$CARDIAC_ANATOMY.zMidBasal",
     "$CARDIAC_ANATOMY.zApexCap",
-    "$CARDIAC_ANATOMY.grooveMode",
-)
-PIG_MORPHOMETRIC_TREE_INPUT_PATHS = (
-    *HUMAN_TREE_INPUT_PATHS,
-    "$PURKINJE_MORPHOMETRY.grooveMode",
 )
 
 
@@ -47,7 +47,7 @@ def _apply_case(
     apply_input_overrides(case_root, input_overrides)
 
 
-def make_biv_preprocessing_spec(
+def make_human_purkinje_slab_spec(
     *,
     cases_root: Path | None = None,
     case_dir_name: str = "bivCase",
@@ -70,7 +70,7 @@ def make_biv_preprocessing_spec(
         default_output_dir_name=".",
     )
     return TutorialSpec(
-        name=TUTORIAL_NAME,
+        name=HUMAN_PURKINJE_SLAB_TUTORIAL_NAME,
         case_root=case_root,
         setup_root=setup_root,
         output_dir=output_dir,
@@ -141,10 +141,10 @@ def _apply_human_tree_case(
     input_overrides: Mapping[str, Any] | None,
 ) -> None:
     requested = dict(input_overrides or {})
-    unsupported = sorted(set(requested).difference(HUMAN_TREE_INPUT_PATHS))
+    unsupported = sorted(set(requested).difference(PURKINJE_TREE_INPUT_PATHS))
     if unsupported:
         raise ValueError(
-            "The human endocardial-tree workflow currently supports the observed "
+            "The human Purkinje endocardial workflow supports the observed "
             "native tree dictionary as a fixed contract. Tree-parameter mutation is "
             "deferred until its complete seed/growth validation contract is added: "
             + ", ".join(unsupported)
@@ -152,7 +152,7 @@ def _apply_human_tree_case(
     _apply_case(case_root, case, input_overrides=requested)
 
 
-def make_human_endocardial_tree_spec(
+def make_human_purkinje_endocardial_spec(
     *,
     cases_root: Path | None = None,
     case_dir_name: str = "bivCase",
@@ -176,7 +176,7 @@ def make_human_endocardial_tree_spec(
         default_output_dir_name=".",
     )
     return TutorialSpec(
-        name=HUMAN_TREE_TUTORIAL_NAME,
+        name=HUMAN_PURKINJE_ENDOCARDIAL_TUTORIAL_NAME,
         case_root=case_root,
         setup_root=setup_root,
         output_dir=output_dir,
@@ -188,7 +188,7 @@ def make_human_endocardial_tree_spec(
                 "The generator writes VTK outputs relative to the staged case cwd."
             ),
             "input_overrides": dict(input_overrides or {}),
-            "active_input_paths": HUMAN_TREE_INPUT_PATHS,
+            "active_input_paths": PURKINJE_TREE_INPUT_PATHS,
             "workflow_dag": {
                 "steps": [
                     {
@@ -232,39 +232,33 @@ def make_human_endocardial_tree_spec(
     )
 
 
-def _apply_pig_morphometric_tree_case(
+def _apply_pig_purkinje_case(
     case_root: Path,
     case: CaseConfig,
     *,
     input_overrides: Mapping[str, Any] | None,
 ) -> None:
     requested = dict(input_overrides or {})
-    unsupported = sorted(set(requested).difference(PIG_MORPHOMETRIC_TREE_INPUT_PATHS))
+    unsupported = sorted(set(requested).difference(PURKINJE_TREE_INPUT_PATHS))
     if unsupported:
         raise ValueError(
-            "The pig morphometric-tree workflow keeps the observed tree dictionary "
+            "The pig Purkinje workflow keeps the observed tree dictionary "
             "fixed until its complete seed/growth validation contract is added: "
             + ", ".join(unsupported)
         )
     _apply_case(case_root, case, input_overrides=requested)
 
 
-def make_pig_morphometric_tree_spec(
+def _make_pig_purkinje_spec(
     *,
+    tutorial_name: str,
+    weighted_lv: bool,
     cases_root: Path | None = None,
     case_dir_name: str = "bivCase",
     setup_dir_name: str | None = None,
     output_dir_name: str | Path | None = ".",
     input_overrides: Mapping[str, Any] | None = None,
 ) -> TutorialSpec:
-    """Declare the native pig weighted-field/transmural-tree wrapper.
-
-    Unlike the human endocardial branch, this case first produces pig
-    morphometry weight fields.  The LV tree consumes those fields through
-    ``terminalSelectionModel weightedField`` and extends terminals
-    transmurally; the tree settings remain an observed fixed contract.
-    """
-
     case_root, setup_root, output_dir = resolve_spec_paths(
         cases_root=cases_root,
         case_dir_name=case_dir_name,
@@ -272,24 +266,41 @@ def make_pig_morphometric_tree_spec(
         output_dir_name=output_dir_name,
         default_output_dir_name=".",
     )
+    tree_consumes = [
+        "system/generatePurkinjeTreeDict",
+        "system/uvcConventionDict",
+        "0/uvc_transmural",
+        "0/uvc_intraventricular",
+        "0/uvc_longitudinal",
+    ]
+    if weighted_lv:
+        tree_consumes.extend(
+            [
+                "0/PurkinjeTerminalWeightSubendocardial",
+                "0/PurkinjeTerminalWeightIntramural",
+            ]
+        )
+    selection_note = (
+        "The LV weightedField selector consumes the two morphometry weight fields."
+        if weighted_lv
+        else "The LV allLeaves selector does not consume morphometry weight fields."
+    )
     return TutorialSpec(
-        name=PIG_MORPHOMETRIC_TREE_TUTORIAL_NAME,
+        name=tutorial_name,
         case_root=case_root,
         setup_root=setup_root,
         output_dir=output_dir,
         build_cases=_single_case,
         apply_case=partial(
-            _apply_pig_morphometric_tree_case, input_overrides=input_overrides
+            _apply_pig_purkinje_case, input_overrides=input_overrides
         ),
         metadata={
             "notes": (
-                "Source-backed declaration of the pig morphometric explicit-tree "
-                "wrapper. The generator writes VTK outputs relative to the staged "
-                "case cwd. Its LV weighted-field mode consumes the preceding "
-                "morphometry weight fields."
+                "Source-backed pig Purkinje tree declaration with transmural "
+                f"terminal extension. {selection_note}"
             ),
             "input_overrides": dict(input_overrides or {}),
-            "active_input_paths": PIG_MORPHOMETRIC_TREE_INPUT_PATHS,
+            "active_input_paths": PURKINJE_TREE_INPUT_PATHS,
             "workflow_dag": {
                 "steps": [
                     {
@@ -334,17 +345,51 @@ def make_pig_morphometric_tree_spec(
                             "anatomy",
                             "purkinje_morphometry",
                         ],
-                        "consumes": [
-                            "system/generatePurkinjeTreeDict",
-                            "system/uvcConventionDict",
-                            "0/uvc_transmural",
-                            "0/uvc_intraventricular",
-                            "0/uvc_longitudinal",
-                            "0/PurkinjeTerminalWeightSubendocardial",
-                            "0/PurkinjeTerminalWeightIntramural",
-                        ],
+                        "consumes": tree_consumes,
                     },
                 ],
             },
         },
+    )
+
+
+def make_pig_morphometric_purkinje_spec(
+    *,
+    cases_root: Path | None = None,
+    case_dir_name: str = "bivCase",
+    setup_dir_name: str | None = None,
+    output_dir_name: str | Path | None = ".",
+    input_overrides: Mapping[str, Any] | None = None,
+) -> TutorialSpec:
+    """Declare the pig tree with weighted LV terminal selection."""
+
+    return _make_pig_purkinje_spec(
+        tutorial_name=PIG_MORPHOMETRIC_PURKINJE_TUTORIAL_NAME,
+        weighted_lv=True,
+        cases_root=cases_root,
+        case_dir_name=case_dir_name,
+        setup_dir_name=setup_dir_name,
+        output_dir_name=output_dir_name,
+        input_overrides=input_overrides,
+    )
+
+
+def make_pig_transmural_purkinje_spec(
+    *,
+    cases_root: Path | None = None,
+    case_dir_name: str = "bivCase",
+    setup_dir_name: str | None = None,
+    output_dir_name: str | Path | None = ".",
+    input_overrides: Mapping[str, Any] | None = None,
+) -> TutorialSpec:
+    """Declare the pig tree with all-leaves LV terminal selection."""
+
+    return _make_pig_purkinje_spec(
+        tutorial_name=PIG_TRANSMURAL_PURKINJE_TUTORIAL_NAME,
+        weighted_lv=False,
+        cases_root=cases_root,
+        case_dir_name=case_dir_name,
+        setup_dir_name=setup_dir_name,
+        output_dir_name=output_dir_name,
+        input_overrides=input_overrides,
     )

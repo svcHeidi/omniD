@@ -30,10 +30,8 @@ _TARGETS: dict[str, InputTarget] = {
     "$CARDIAC_ANATOMY.zApicalMid": InputTarget("system/setCardiacAnatomyDict", "zApicalMid"),
     "$CARDIAC_ANATOMY.zMidBasal": InputTarget("system/setCardiacAnatomyDict", "zMidBasal"),
     "$CARDIAC_ANATOMY.zApexCap": InputTarget("system/setCardiacAnatomyDict", "zApexCap"),
-    "$CARDIAC_ANATOMY.grooveMode": InputTarget("system/setCardiacAnatomyDict", "grooveMode"),
     "$PURKINJE_SLAB.thickness": InputTarget("system/setPurkinjeSlabDict", "thickness"),
     "$PURKINJE_SLAB.multiplier": InputTarget("system/setPurkinjeSlabDict", "multiplier"),
-    "$PURKINJE_MORPHOMETRY.grooveMode": InputTarget("system/setPurkinjeMorphometryDict", "grooveMode"),
 }
 
 _ENTRIES = {entry.driver_path: entry for entry in CATALOG.entries}
@@ -70,17 +68,7 @@ def validate_input_overrides(overrides: Mapping[str, Any] | None, *, allowed_pat
         if entry.enum_values and value not in entry.enum_values:
             raise ValueError(f"input override {driver_path!r} value {value!r} not in enum {entry.enum_values}")
         validated[driver_path] = value
-    _validate_supported_combinations(validated)
     return validated
-
-
-def _validate_supported_combinations(overrides: Mapping[str, Any]) -> None:
-    manual_paths = ("$CARDIAC_ANATOMY.grooveMode", "$PURKINJE_MORPHOMETRY.grooveMode")
-    if any(overrides.get(path) == "manual" for path in manual_paths):
-        raise ValueError(
-            "grooveMode='manual' requires the conditional anteriorGroove and posteriorGroove inputs. "
-            "Those inputs are documented but not yet part of this selected auto-mode bivCase workflow."
-        )
 
 
 def apply_input_overrides(case_root: Path, overrides: Mapping[str, Any] | None) -> None:

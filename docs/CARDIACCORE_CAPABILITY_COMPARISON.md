@@ -2,7 +2,7 @@
 
 This compares the existing user-authored cardiacCore agent material at
 `cardiacCoreStandalone/agent/` with the evidence-backed OmniD
-`cardiaccore-biv-preprocessing` adapter created for CC-1.  It is a scope
+`cardiaccore-human-purkinje-slab` adapter created for CC-1.  It is a scope
 comparison, not a claim that either representation should replace the other.
 
 **Package-usage correction (2026-09-15):** active callable contracts are exposed
@@ -25,7 +25,7 @@ missing reader or establish scientific acceptance.
 | Explicit Purkinje tree | `generatePurkinjeTree`, tree VTKs, endocardial face sets | Human endocardial and pig morphometric/transmural contracts are declared and executed | Retain as two distinct workflow representations |
 | Anatomy-portable seed deduction | `deduce_purkinje_seeds.py`, based on AHA/UVC surface data | Array proposal method using native LVEndoFaces/RVEndoFaces and their AHA labels; current assumptions are in `cardiaccore_tree_validation.seed_placement` | Implement and validate native sampling and proposal-to-dictionary reconciliation separately |
 | Density comparability and coverage | `terminalCount` convention; `check_purkinje_coverage.py` and `check_seed_distances.py` | Array occupancy observations with preserved, named baseline categories; no scientific pass/fail and no implemented surface-distance measurement | Add native sampling, distance measurement and selected study acceptance separately |
-| Graph hand-off | `1DgraphToFoam` turns generated VTK into `constant/purkinjeGraph` | Not yet declared or executed | Add after the tree vertical slice |
+| Graph hand-off | `refine1Dgraph` (VTK edge subdivision, `-maxEdgeLength` in metres) then `1DgraphToFoam` into `constant/purkinjeGraph` | Both utilities declared in `catalogs/utilities.py` | Add as a workflow step after the tree vertical slice |
 | Scar / Purkinje scar chain | `setCardiacScar`, `setPurkinjeScar` with explicit prerequisites | Not yet declared | Separate later workflow, not a prerequisite for the tree slice |
 | VTK import / mesh creation | `newVtkUnstructuredToFoam`; optional external cleaning | The adapter accepts an explicit asset bundle but does not generate it | Keep as a separate asset-preparation pathway |
 
