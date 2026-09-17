@@ -394,6 +394,27 @@ def write_seed_dictionary(
         update_foam_entry(dictionary, key, value, scope=scope)
 
 
+def read_seed_dictionary(dictionary: Path) -> dict[str, tuple[float, float, float]]:
+    """Read the seeds a case declares, the inverse of :func:`write_seed_dictionary`.
+
+    The primary workflow places these by hand -- a longitudinal position plus
+    the AHA segment the root should sit in -- so the question that follows a
+    change is whether the value now in the dictionary landed where it was
+    meant to. Answering that starts by reading back what the case actually
+    asks for, rather than what a proposal computed.
+    """
+    from omnidriver.openfoam.mutators import read_foam_entry
+
+    seeds: dict[str, tuple[float, float, float]] = {}
+    for name, (scope, key) in _SEED_DICTIONARY_ENTRIES.items():
+        raw = read_foam_entry(dictionary, key, scope=scope)
+        if raw is None:
+            location = key if scope is None else f"{scope}.{key}"
+            raise ValueError(f"{dictionary}: missing {location}")
+        seeds[name] = _seed_vector(raw.strip().strip("()").split(), name)
+    return seeds
+
+
 def seed_area_placement_report(
     proposal: Mapping[str, Any],
     fields: Mapping[str, np.ndarray],
@@ -435,18 +456,40 @@ def seed_area_placement_report(
     lv_seed = np.asarray(_seed_vector(proposal["lv_seed"], "lv_seed"))
     rv_seed = np.asarray(_seed_vector(proposal["rv_seed"], "rv_seed"))
     his_seed = np.asarray(_seed_vector(proposal["his_bundle_seed"], "his_bundle_seed"))
+    def observe(seed, candidates, surface_mask):
+        """Distance to the declared area, and the segment actually landed in.
+
+        Both are recorded, neither is scored: the contract states no
+        threshold for either, and a placement this reports as distant is a
+        subject for review rather than a failure this layer can declare.
+        """
+        surface_points = points[surface_mask]
+        surface_aha = aha[surface_mask]
+        nearest = int(np.argmin(np.linalg.norm(surface_points - seed, axis=1)))
+        return {
+            "distance_to_declared_area": float(
+                np.min(np.linalg.norm(candidates - seed, axis=1))
+            ),
+            "nearest_surface_aha_segment": int(surface_aha[nearest]),
+            "distance_to_nearest_surface_point": float(
+                np.linalg.norm(surface_points[nearest] - seed)
+            ),
+        }
+
     return {
         "lv": {
             "surface": "LVEndoFaces",
             "aha_segments": LV_SEPTAL_AHA_SEGMENTS,
             "candidate_count": int(len(lv_candidates)),
             "seed_is_native_candidate": bool(np.any(np.all(lv_candidates == lv_seed, axis=1))),
+            **observe(lv_seed, lv_candidates, lv_mask),
         },
         "rv": {
             "surface": "RVEndoFaces",
             "aha_segments": (RV_BASAL_SEPTAL_AHA_SEGMENT,),
             "candidate_count": int(len(rv_candidates)),
             "seed_is_native_candidate": bool(np.any(np.all(rv_candidates == rv_seed, axis=1))),
+            **observe(rv_seed, rv_candidates, rv_mask),
         },
         "his_bundle": {
             "is_midpoint_of_roots": bool(np.array_equal(his_seed, (lv_seed + rv_seed) / 2.0)),

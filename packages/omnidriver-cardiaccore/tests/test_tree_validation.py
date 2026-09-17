@@ -1,6 +1,15 @@
 import numpy as np
+import pytest
 
-from omnidriver.cardiaccore.operations.purkinje import coverage_report, deduce_seeds
+from omnidriver.cardiaccore.catalogs.purkinje import (
+    LV_SEPTAL_AHA_SEGMENTS,
+    RV_BASAL_SEPTAL_AHA_SEGMENT,
+)
+from omnidriver.cardiaccore.operations.purkinje import (
+    coverage_report,
+    deduce_seeds,
+    read_seed_dictionary,
+)
 
 
 def _surface_points():
@@ -60,3 +69,94 @@ def test_rv_tree_terminal_on_recovered_septum_is_credited_to_rv_segment():
     )
     assert report["counts"][14] == 1
     assert report["counts"][29] == 1
+
+
+def _tree_dictionary(tmp_path):
+    dictionary = tmp_path / "system" / "generatePurkinjeTreeDict"
+    dictionary.parent.mkdir(parents=True, exist_ok=True)
+    dictionary.write_text(
+        "growthModel surfaceFollow;\n"
+        "hisBundleSeed (2.0 0.0 7.0);\n"
+        "lv\n{\n    seed (0.0 0.0 7.0);\n    lineEnd (0.0 0.0 6.0);\n}\n"
+        "rv\n{\n    seed (4.0 0.0 7.0);\n    lineEnd (4.0 0.0 6.0);\n}\n"
+    )
+    return dictionary
+
+
+def test_declared_seeds_are_read_back_from_the_native_dictionary(tmp_path):
+    """The inverse of write_seed_dictionary: what did this case actually ask for?"""
+    from omnidriver.cardiaccore.operations.purkinje import read_seed_dictionary
+
+    seeds = read_seed_dictionary(_tree_dictionary(tmp_path))
+
+    assert seeds["lv_seed"] == (0.0, 0.0, 7.0)
+    assert seeds["rv_seed"] == (4.0, 0.0, 7.0)
+    assert seeds["lv_line_end"] == (0.0, 0.0, 6.0)
+    assert seeds["his_bundle_seed"] == (2.0, 0.0, 7.0)
+
+
+def test_a_dictionary_missing_a_seed_says_which_one(tmp_path):
+    from omnidriver.cardiaccore.operations.purkinje import read_seed_dictionary
+
+    dictionary = _tree_dictionary(tmp_path)
+    dictionary.write_text(dictionary.read_text().replace("    lineEnd (4.0 0.0 6.0);\n", ""))
+
+    with pytest.raises(ValueError, match="rv.lineEnd"):
+        read_seed_dictionary(dictionary)
+
+
+def _fields():
+    points, aha, longitudinal, lv_surface, rv_surface = _surface_points()
+    return {
+        "points": points, "aha_segment": aha,
+        "lv_endocardial_mask": lv_surface, "rv_endocardial_mask": rv_surface,
+    }
+
+
+def test_placement_reports_distance_to_the_declared_septal_area(tmp_path):
+    """Distance is the primary signal; a hand-placed seed rarely sits on a node.
+
+    This exercises the distance and label arithmetic over a labelled cloud.
+    Which segments count as septal is not asserted here -- that comes from
+    TREE_VALIDATION_CONTRACT, which is sourced from the native utility.
+    """
+    from omnidriver.cardiaccore.operations.purkinje import (
+        read_seed_dictionary, seed_area_placement_report,
+    )
+
+    report = seed_area_placement_report(read_seed_dictionary(_tree_dictionary(tmp_path)), _fields())
+
+    # Both seeds coincide with a labelled candidate in this cloud.
+    assert report["lv"]["distance_to_declared_area"] == 0.0
+    assert report["rv"]["distance_to_declared_area"] == 0.0
+    assert report["lv"]["nearest_surface_aha_segment"] in LV_SEPTAL_AHA_SEGMENTS
+    assert report["rv"]["nearest_surface_aha_segment"] == RV_BASAL_SEPTAL_AHA_SEGMENT
+
+
+def test_a_seed_away_from_the_septum_is_reported_by_distance_and_segment(tmp_path):
+    """The rotational mis-placement deduce_seeds exists to repair."""
+    from omnidriver.cardiaccore.operations.purkinje import seed_area_placement_report
+
+    seeds = read_seed_dictionary(_tree_dictionary(tmp_path))
+    strayed = {**seeds, "lv_seed": (3.0, 0.0, 7.0)}   # AHA 5: lateral, not septal
+
+    report = seed_area_placement_report(strayed, _fields())
+
+    assert report["lv"]["distance_to_declared_area"] > 0.0
+    assert report["lv"]["nearest_surface_aha_segment"] == 5
+    assert report["lv"]["nearest_surface_aha_segment"] not in LV_SEPTAL_AHA_SEGMENTS
+
+
+def test_reading_declared_seeds_is_an_advertised_entrypoint():
+    """An agent discovers operations through the catalog, not the module."""
+    from omnidriver.cardiaccore import CardiacCorePlugin
+
+    operation = CardiacCorePlugin().get_named_catalogs()["cardiaccore_operations"][
+        "cardiaccore.purkinje.seed_proposal.v1"
+    ]
+    entry = operation["entrypoints"]["read_declared"]
+
+    assert entry["callable"].endswith(":read_seed_dictionary")
+    assert "dictionary" in entry["inputs"]
+    receipt = operation["entrypoints"]["placement_receipt"]
+    assert "distance" in receipt["outputs"].lower()

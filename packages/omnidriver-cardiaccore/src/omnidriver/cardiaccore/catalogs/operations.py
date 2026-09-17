@@ -108,11 +108,18 @@ _add(
              "longitudinal_field": "Array name the case declares for its longitudinal coordinate; defaults to the canonical name."},
             "Aligned points, AHA labels, longitudinal values, and LV/RV surface masks for deduce_seeds.",
             "Reads only the supplied VTK files; does not mutate the case."),
+        "read_declared": _entry("purkinje", "read_seed_dictionary",
+            {"dictionary": "Path to system/generatePurkinjeTreeDict in a staged case."},
+            "The five seed coordinates the case declares, as read from the dictionary.",
+            "Reads only; the inverse of write_seeds, for checking a hand-placed root."),
         "placement_receipt": _entry("purkinje", "seed_area_placement_report",
-            {"proposal": "Complete mapping returned by deduce_seeds.",
+            {"proposal": "Five seed coordinates: either read_declared's or deduce_seeds'.",
              "fields": "Aligned fields returned by read_native_seed_surface_fields."},
-            "Declared LV/RV basal-septal candidate counts and root/midpoint placement receipt.",
-            "A mechanical placement receipt; not a scientific acceptance result."),
+            "Per ventricle: distance to the declared basal-septal area, the AHA segment "
+            "the root actually lands in, distance to the nearest surface point, the "
+            "declared candidate count, and whether the root coincides with a candidate.",
+            "Observations, not a score: the contract states no threshold for distance, "
+            "so a distant root is a subject for review rather than a failure declared here."),
         "deduce_write_native": _entry("purkinje", "deduce_and_write_native_seed_dictionary",
             {"lv_surface": "Path to an explicitly exported native LVEndoFaces surface.",
              "rv_surface": "Path to an explicitly exported native RVEndoFaces surface.",
