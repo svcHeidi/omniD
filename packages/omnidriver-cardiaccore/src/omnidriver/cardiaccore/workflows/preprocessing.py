@@ -14,6 +14,8 @@ from ..operations.coordinates_convention import (
     CoordinatesConvention,
     coordinate_field_paths,
 )
+from ..catalogs.inputs import CATALOG
+from .overrides import declared_path_template
 
 
 HUMAN_PURKINJE_SLAB_TUTORIAL_NAME = "cardiaccore-human-purkinje-slab"
@@ -24,6 +26,11 @@ PIG_MORPHOMETRIC_PURKINJE_TUTORIAL_NAME = (
     "cardiaccore-pig-morphometric-purkinje"
 )
 PIG_TRANSMURAL_PURKINJE_TUTORIAL_NAME = "cardiaccore-pig-transmural-purkinje"
+#: Paths the tree workflows stage. The generatePurkinjeTreeDict entries were
+#: excluded until 2026-09-17 on the grounds that "tree-parameter mutation is
+#: deferred until its complete seed/growth validation contract is added"; that
+#: contract is now declared (catalogs/purkinje.py TREE_VALIDATION_CONTRACT),
+#: and a declared value the agent cannot set is guidance it cannot act on.
 PURKINJE_TREE_INPUT_PATHS = (
     "$CARDIAC_CONDUCTIVITY.df",
     "$CARDIAC_CONDUCTIVITY.ds",
@@ -33,7 +40,32 @@ PURKINJE_TREE_INPUT_PATHS = (
     "$CARDIAC_ANATOMY.zApicalMid",
     "$CARDIAC_ANATOMY.zMidBasal",
     "$CARDIAC_ANATOMY.zApexCap",
+    *tuple(
+        entry.driver_path
+        for entry in CATALOG.entries
+        if entry.driver_path.startswith("$PURKINJE_TREE.")
+    ),
 )
+
+
+def _reject_unstaged(requested: Mapping[str, Any], workflow: str) -> None:
+    """Refuse a path this workflow does not stage.
+
+    This is scheduling, not permission: the scar dictionaries are declared
+    and movable, but no workflow here runs setCardiacScar, so staging a value
+    into a case nothing reads would be a silent no-op. A `<ventKey>` path is
+    matched through its declared template.
+    """
+    unstaged = sorted(
+        path for path in requested
+        if path not in PURKINJE_TREE_INPUT_PATHS
+        and declared_path_template(path) not in PURKINJE_TREE_INPUT_PATHS
+    )
+    if unstaged:
+        raise ValueError(
+            f"The {workflow} workflow does not stage: " + ", ".join(unstaged)
+            + ". Paths it stages: " + ", ".join(PURKINJE_TREE_INPUT_PATHS)
+        )
 
 
 def _single_case() -> list[CaseConfig]:
@@ -149,14 +181,7 @@ def _apply_human_tree_case(
     input_overrides: Mapping[str, Any] | None,
 ) -> None:
     requested = dict(input_overrides or {})
-    unsupported = sorted(set(requested).difference(PURKINJE_TREE_INPUT_PATHS))
-    if unsupported:
-        raise ValueError(
-            "The human Purkinje endocardial workflow supports the observed "
-            "native tree dictionary as a fixed contract. Tree-parameter mutation is "
-            "deferred until its complete seed/growth validation contract is added: "
-            + ", ".join(unsupported)
-        )
+    _reject_unstaged(requested, "human Purkinje endocardial")
     _apply_case(case_root, case, input_overrides=requested)
 
 
@@ -250,13 +275,7 @@ def _apply_pig_purkinje_case(
     input_overrides: Mapping[str, Any] | None,
 ) -> None:
     requested = dict(input_overrides or {})
-    unsupported = sorted(set(requested).difference(PURKINJE_TREE_INPUT_PATHS))
-    if unsupported:
-        raise ValueError(
-            "The pig Purkinje workflow keeps the observed tree dictionary "
-            "fixed until its complete seed/growth validation contract is added: "
-            + ", ".join(unsupported)
-        )
+    _reject_unstaged(requested, "pig Purkinje")
     _apply_case(case_root, case, input_overrides=requested)
 
 
