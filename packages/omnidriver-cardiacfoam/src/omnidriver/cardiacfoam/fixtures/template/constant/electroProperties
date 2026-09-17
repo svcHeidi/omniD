@@ -311,7 +311,7 @@ monodomainSolverCoeffs
     // When present, the canonical runtime structure is:
     //   conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs { ... }
     // The separate graph file in constant/ carries 'edges', 'points',
-    // 'pvjNodes', 'pvjLocations', and optional 'rootNode'.
+    // 'pvjNodes', 'pvjLocations', and 'rootNode' (all required).
     conductionNetworkDomains
     {
         purkinjeNetwork        // arbitrary name; repeated for multiple networks
@@ -767,8 +767,8 @@ dictionary in constant/ directory. Example constant/purkinjeGraph:
         (0.008  0.001  0.0)
     );
 
-    // Optional: root stimulus node (default: 0)
-    // rootNode  0;
+    // Required: index of the root node (no default).
+    rootNode  0;
 */
 
 // ************************************************************************* //
