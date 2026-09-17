@@ -106,11 +106,17 @@ chamber has its own `aha_angle` frame: do not compare raw LV and RV angles.
 check for a VTK volume or boundary mesh. It expects declared binary LV/RV
 intraventricular values, a varying longitudinal coordinate, and a transmural
 coordinate with a declared endocardial boundary value. It extracts each
-candidate endocardial boundary, contours it at requested longitudinal values,
-and reports whether every contour is a single closed loop. It needs no
+candidate endocardial boundary, contours it only at basal longitudinal values
+0.1 and 0.4, and selects one closed component per level: the component closest
+in physical space to the largest connected endocardial `ab=0` reference. It
+then checks that their centres are approximately 0.3 of the selected endocardial span apart,
+rejecting a false nominal 0.1 ring near a valve opening. It needs no
 pre-exported face sets and does not use AHA angles. A failed coordinate
 contract or open ring is a prerequisite to investigate, not permission to
 change the native UVC/CObiveco implementation or a Purkinje parameter.
+For a cell-to-point surface export, a small seam fraction may interpolate
+between the two chamber values; the default permits up to 2%, while values
+outside the declared chamber interval still fail the coordinate contract.
 When the caller has not declared coordinate fields, it assesses scalar-field
 behaviour and ring topology rather than field names: it reports any unique,
 topology-supported two-chamber candidate, ambiguity, or the missing numerical
@@ -125,8 +131,11 @@ chain automatically, and it does not expose seed, growth, or density controls
 as sweep axes without separately selected and validated acceptance criteria.
 
 A runnable native case requires the explicitly supplied mesh and initial
-field bundle. Clean-clone asset distribution, native surface/field sampling,
-reviewed seed writing, and graph hand-off remain separate pending work.
+field bundle. Clean-clone asset distribution and native surface/field sampling
+remain separate pending work. The seed proposal operation can now write its
+complete, reviewed coordinates into an existing staged
+`system/generatePurkinjeTreeDict`; it does not alter growth or terminal
+settings. Graph hand-off remains a separate cardiacFOAM workflow.
 The VTU selection reader supports ASCII data with base dependencies; encoded
 or multi-piece data requires the optional `omnidriver-cardiaccore[vtk]` extra.
 Installing that extra does not implement the other pending VTK readers.
