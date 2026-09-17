@@ -203,6 +203,7 @@ def _apply_case(
     numerics_profile: str | None = None,
     grad_scheme: str | None = None,
     fv_scheme_overrides: Sequence[Mapping[str, object]] | None = None,
+    fv_solution_overrides: Sequence[Mapping[str, object]] | None = None,
 ) -> None:
     dimension = str(case.params["dimension"])
     cells = int(case.params["cells"])
@@ -220,10 +221,10 @@ def _apply_case(
     case_overrides = {
         f"{electro_properties_scope}.verificationModel.type": verification_model_type,
         f"{ecg_scope}.ecgSolver": "eikonalECG",
-        f"{ecg_scope}.manufacturedEikonalECG.enabled": True,
-        f"{ecg_scope}.manufacturedEikonalECG.referenceQuadratureOrder":
+        f"{ecg_scope}.verificationModel.enabled": True,
+        f"{ecg_scope}.verificationModel.referenceQuadratureOrder":
             int(ecg_reference_quadrature_order),
-        f"{ecg_scope}.manufacturedEikonalECG.checkQuadratureOrders": "("
+        f"{ecg_scope}.verificationModel.checkQuadratureOrders": "("
         + " ".join(str(int(value)) for value in ecg_check_quadrature_orders)
         + ")",
     }
@@ -270,6 +271,11 @@ def _apply_case(
             case_root / "system" / "fvSchemes", entry["key"], entry["value"],
             scope=entry.get("scope"),
         )
+    for entry in fv_solution_overrides or ():
+        update_foam_entry(
+            case_root / "system" / "fvSolution", entry["key"], entry["value"],
+            scope=entry.get("scope"),
+        )
     apply_electro_property_overrides(electro_properties, case_overrides)
     apply_electro_property_overrides(electro_properties, electro_property_overrides)
     apply_physics_property_overrides(physics_properties, physics_property_overrides)
@@ -311,6 +317,7 @@ def make_spec(
     numerics_profile: str | None = None,
     grad_scheme: str | None = None,
     fv_scheme_overrides: Sequence[Mapping[str, object]] | None = None,
+    fv_solution_overrides: Sequence[Mapping[str, object]] | None = None,
     gradient_reconstruction: bool = False,
     error_localisation_analysis: bool = False,
 ) -> TutorialSpec:
@@ -373,6 +380,7 @@ def make_spec(
             numerics_profile=numerics_profile,
             grad_scheme=grad_scheme,
             fv_scheme_overrides=fv_scheme_overrides,
+            fv_solution_overrides=fv_solution_overrides,
         ),
         metadata={
             "notes": "Manufactured eikonal activation and ECG benchmark",
