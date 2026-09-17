@@ -657,6 +657,13 @@ COORDINATES_CONVENTION_ENTRIES: Final[tuple[DictEntry, ...]] = (
     ),
 )
 
+#: The ventricle blocks generatePurkinjeTree reads, in the order it reads
+#: them: ``readVentParams("lv")`` then ``readVentParams("rv")``
+#: (generatePurkinjeTree.C). The domain is closed -- a third block would be
+#: ignored -- so a ``<ventKey>`` path expands to exactly these two.
+VENT_KEYS: Final[tuple[str, ...]] = ("lv", "rv")
+
+
 # --- generatePurkinjeTreeDict -------------------------------------------------
 #
 # CRITICAL: these tree parameters are the ones workflows/preprocessing.py

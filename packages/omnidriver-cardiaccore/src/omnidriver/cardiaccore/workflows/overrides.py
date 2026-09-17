@@ -30,7 +30,7 @@ from typing import Any
 
 from omnidriver.openfoam.mutators import update_foam_entry
 
-from ..catalogs.inputs import CATALOG, DOCUMENTS
+from ..catalogs.inputs import CATALOG, DOCUMENTS, VENT_KEYS
 
 #: Path segment standing for a ventricle block in a declared path.
 VENT_KEY_PLACEHOLDER = "<ventKey>"
@@ -190,11 +190,22 @@ def read_input_values(
 
     selected = tuple(_ENTRIES) if paths is None else paths
     values: dict[str, Any] = {}
-    for driver_path in selected:
-        if VENT_KEY_PLACEHOLDER in driver_path:
-            continue
-        target = resolve_override_target(driver_path)
-        values[driver_path] = read_foam_entry(
-            case_root / target.file_relpath, target.key, scope=target.scope or None,
+    for declared_path in selected:
+        # A <ventKey> path names one value per ventricle, so it is recorded
+        # once per block the case actually defines. read_foam_entry returns
+        # None for an absent scope, so a case that declares only one
+        # ventricle records only that one rather than inventing the other.
+        concrete_paths = (
+            tuple(declared_path.replace(VENT_KEY_PLACEHOLDER, vent) for vent in VENT_KEYS)
+            if VENT_KEY_PLACEHOLDER in declared_path
+            else (declared_path,)
         )
+        for driver_path in concrete_paths:
+            target = resolve_override_target(driver_path)
+            value = read_foam_entry(
+                case_root / target.file_relpath, target.key, scope=target.scope or None,
+            )
+            if value is None and VENT_KEY_PLACEHOLDER in declared_path:
+                continue
+            values[driver_path] = value
     return values

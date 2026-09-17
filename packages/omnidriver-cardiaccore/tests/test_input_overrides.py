@@ -85,3 +85,41 @@ def test_declared_types_and_enums_still_guide():
         validate_input_overrides({"$PURKINJE_TREE.lv.N_it": 3.5})
     with pytest.raises(TypeError):
         validate_input_overrides({"$PURKINJE_TREE.lv.seed": [0.0, 1.0]})
+
+
+def _tree_dict(tmp_path, body):
+    system = tmp_path / "system"
+    system.mkdir(parents=True, exist_ok=True)
+    (system / "generatePurkinjeTreeDict").write_text(body)
+    return tmp_path
+
+
+def test_the_ventricle_domain_is_the_one_native_reads():
+    """generatePurkinjeTree.C reads exactly readVentParams("lv") and ("rv")."""
+    from omnidriver.cardiaccore.catalogs.inputs import VENT_KEYS
+
+    assert VENT_KEYS == ("lv", "rv")
+
+
+def test_per_ventricle_values_are_recorded_for_provenance(tmp_path):
+    """A value an agent can set must be a value the run document records."""
+    from omnidriver.cardiaccore.workflows.overrides import read_input_values
+
+    root = _tree_dict(tmp_path, (
+        "growthModel surfaceFollow;\n"
+        "lv\n{\n    N_it 24;\n}\n"
+        "rv\n{\n    N_it 32;\n}\n"
+    ))
+    values = read_input_values(root, paths=("$PURKINJE_TREE.<ventKey>.N_it",))
+
+    assert values["$PURKINJE_TREE.lv.N_it"] == "24"
+    assert values["$PURKINJE_TREE.rv.N_it"] == "32"
+
+
+def test_a_ventricle_block_the_case_omits_is_not_invented(tmp_path):
+    from omnidriver.cardiaccore.workflows.overrides import read_input_values
+
+    root = _tree_dict(tmp_path, "lv\n{\n    N_it 24;\n}\n")
+    values = read_input_values(root, paths=("$PURKINJE_TREE.<ventKey>.N_it",))
+
+    assert values == {"$PURKINJE_TREE.lv.N_it": "24"}
