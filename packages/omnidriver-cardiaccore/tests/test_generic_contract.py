@@ -82,3 +82,25 @@ def test_declared_vocabulary_names_the_current_coordinates_dictionary() -> None:
     # dictionary; the slab tutorial reaches the endocardium another way. At
     # least one must name it, or this gate would pass on a typo.
     assert any("system/coordinatesConventionDict" in spec for spec in specs.values())
+
+
+def test_declared_tree_extension_targets_are_wall_thickness_depths() -> None:
+    """generatePurkinjeTree takes depthMin/depthMax, bounded to [0, 1].
+
+    cardiacCore 1ea6d23 replaced extension.dMin/dMax, which were raw
+    transmural values and so named a different physical place under each
+    coordinate system, with a depth fraction measured from the endocardium.
+    """
+    entries = {
+        e.driver_path: e
+        for e in driver_context(CardiacCorePlugin(), source="test")
+        .capabilities.dictionaries.entries()
+    }
+    assert "$PURKINJE_TREE.<ventKey>.extension.dMin" not in entries
+    assert "$PURKINJE_TREE.<ventKey>.extension.dMax" not in entries
+
+    for bound in ("depthMin", "depthMax"):
+        entry = entries[f"$PURKINJE_TREE.<ventKey>.extension.{bound}"]
+        joined = " ".join(entry.constraints) + " " + (entry.notes or "")
+        assert "transmuralLowerValue" not in joined, bound
+        assert "0 <= depthMin <= depthMax <= 1" in joined, bound
