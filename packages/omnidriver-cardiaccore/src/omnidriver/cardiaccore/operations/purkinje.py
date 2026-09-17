@@ -43,7 +43,7 @@ def _apical_line_end(
     gradient = coefficients[:3]
     norm = np.linalg.norm(gradient)
     if norm < 1e-12:
-        raise ValueError("uvc_longitudinal has no local gradient near the seed")
+        raise ValueError("the longitudinal field has no local gradient near the seed")
     nonzero = distances[indices][distances[indices] > 0]
     step = np.median(nonzero) if nonzero.size else 1.0
     return seed - step * gradient / norm
@@ -52,7 +52,7 @@ def _apical_line_end(
 def deduce_seeds(
     points: np.ndarray,
     aha_segment: np.ndarray,
-    uvc_longitudinal: np.ndarray,
+    longitudinal: np.ndarray,
     lv_endocardial_mask: np.ndarray,
     rv_endocardial_mask: np.ndarray,
 ) -> dict[str, tuple[float, float, float]]:
@@ -65,7 +65,7 @@ def deduce_seeds(
     """
     points = np.asarray(points, dtype=float)
     aha_segment = np.rint(np.asarray(aha_segment)).astype(int)
-    longitudinal = np.asarray(uvc_longitudinal, dtype=float)
+    longitudinal = np.asarray(longitudinal, dtype=float)
     lv_surface = np.asarray(lv_endocardial_mask, dtype=bool)
     rv_surface = np.asarray(rv_endocardial_mask, dtype=bool)
 
@@ -114,13 +114,20 @@ def _read_pyvista_scalar(mesh: Any, name: str, path: Path) -> np.ndarray:
 def read_native_seed_surface_fields(
     lv_surface: Path,
     rv_surface: Path,
+    longitudinal_field: str = "apicobasal",
 ) -> dict[str, np.ndarray]:
     """Read the two native endocardial surface exports for seed deduction.
+
+    ``longitudinal_field`` is the array name the selected case declares for
+    its longitudinal coordinate; it defaults to the canonical name native
+    itself falls back to. Read it from the case with
+    :func:`~omnidriver.cardiaccore.operations.coordinates_convention.read_coordinates_convention`
+    rather than assuming any particular spelling.
 
     ``lv_surface`` and ``rv_surface`` are the explicit ``foamToVTK`` exports
     of the generator's ``LVEndoFaces`` and ``RVEndoFaces`` sets. The returned
     arrays are aligned and can be passed directly to :func:`deduce_seeds`.
-    No UVC threshold is re-derived here: the native generator has already
+    No transmural threshold is re-derived here: the native generator has already
     selected the growable surfaces.
     """
     try:
@@ -142,9 +149,9 @@ def read_native_seed_surface_fields(
             _read_pyvista_scalar(lv, "AHA_Segment", lv_surface),
             _read_pyvista_scalar(rv, "AHA_Segment", rv_surface),
         )),
-        "uvc_longitudinal": np.concatenate((
-            _read_pyvista_scalar(lv, "uvc_longitudinal", lv_surface),
-            _read_pyvista_scalar(rv, "uvc_longitudinal", rv_surface),
+        "longitudinal": np.concatenate((
+            _read_pyvista_scalar(lv, longitudinal_field, lv_surface),
+            _read_pyvista_scalar(rv, longitudinal_field, rv_surface),
         )),
         "lv_endocardial_mask": np.concatenate((
             np.ones(lv.n_points, dtype=bool),

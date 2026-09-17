@@ -49,25 +49,25 @@ class LVFrame:
 
 def compute_lv_frame(
     points: np.ndarray,
-    uvc_intraventricular: np.ndarray,
-    uvc_longitudinal: np.ndarray,
+    intraventricular: np.ndarray,
+    longitudinal: np.ndarray,
 ) -> LVFrame:
     """Build the point-sampled LV frame used by the reference transfer."""
     points = np.asarray(points, dtype=float)
-    chamber = np.asarray(uvc_intraventricular, dtype=float)
-    longitudinal = np.asarray(uvc_longitudinal, dtype=float)
+    chamber = np.asarray(intraventricular, dtype=float)
+    longitudinal = np.asarray(longitudinal, dtype=float)
     if points.ndim != 2 or points.shape[1] != 3 or chamber.ndim != 1 or longitudinal.ndim != 1:
-        raise ValueError("points must be Nx3 and UVC fields must be one-dimensional arrays")
+        raise ValueError("points must be Nx3 and coordinate fields must be one-dimensional arrays")
     if not (len(points) == len(chamber) == len(longitudinal)):
-        raise ValueError("points and UVC arrays must have equal lengths")
+        raise ValueError("points and coordinate arrays must have equal lengths")
     if not all(np.all(np.isfinite(values)) for values in (points, chamber, longitudinal)):
-        raise ValueError("points and UVC fields must contain only finite values")
+        raise ValueError("points and coordinate fields must contain only finite values")
 
     lv_mask, rv_mask = chamber < 0.0, chamber > 0.0
     if not np.any(lv_mask):
-        raise ValueError("no LV points (uvc_intraventricular < 0)")
+        raise ValueError("no LV points (intraventricular < 0)")
     if not np.any(rv_mask):
-        raise ValueError("no RV points (uvc_intraventricular > 0)")
+        raise ValueError("no RV points (intraventricular > 0)")
     apex_mask = lv_mask & (longitudinal < LV_APEX_LONGITUDINAL_MAX)
     base_mask = lv_mask & (longitudinal > LV_BASE_LONGITUDINAL_MIN)
     if not np.any(apex_mask) or not np.any(base_mask):
@@ -112,12 +112,12 @@ def apply_reference_offsets(frame: LVFrame, *, axial_shift: float = 0.0) -> dict
 def read_native_electrode_fields(
     heart_vtk: Path,
     *,
-    intraventricular_field: str = "uvc_intraventricular",
-    longitudinal_field: str = "uvc_longitudinal",
+    intraventricular_field: str = "intraventricular",
+    longitudinal_field: str = "apicobasal",
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Read the point-aligned UVC arrays needed to construct an LV frame.
+    """Read the point-aligned coordinate arrays needed for an LV frame.
 
-    Native ``foamToVTK`` exports can carry UVC arrays as cell data.  They are
+    Native ``foamToVTK`` exports can carry coordinate arrays as cell data.  They are
     converted to point data before reading, exactly as required by the
     point-sampled :func:`compute_lv_frame` contract.  This function does not
     infer a physical coordinate unit: its caller records that unit alongside
@@ -147,7 +147,7 @@ def read_native_electrode_fields(
     intraventricular = np.asarray(mesh.point_data[intraventricular_field])
     longitudinal = np.asarray(mesh.point_data[longitudinal_field])
     if len(intraventricular) != mesh.n_points or len(longitudinal) != mesh.n_points:
-        raise ValueError(f"{heart_vtk}: UVC fields are not point-aligned")
+        raise ValueError(f"{heart_vtk}: coordinate fields are not point-aligned")
     return np.asarray(mesh.points), intraventricular, longitudinal
 
 
@@ -176,6 +176,8 @@ def derive_reference_offset_bundle(
     reference_electrodes: Mapping[str, Any],
     *,
     coordinate_unit: str,
+    intraventricular_field: str = "intraventricular",
+    longitudinal_field: str = "apicobasal",
 ) -> dict[str, Any]:
     """Encode supplied reference electrodes into a portable, dimensionless bundle.
 
@@ -185,7 +187,11 @@ def derive_reference_offset_bundle(
     the source reference, not a conversion instruction for a target case.
     """
     unit = _coordinate_unit(coordinate_unit)
-    points, chamber, longitudinal = read_native_electrode_fields(reference_heart_vtk)
+    points, chamber, longitudinal = read_native_electrode_fields(
+        reference_heart_vtk,
+        intraventricular_field=intraventricular_field,
+        longitudinal_field=longitudinal_field,
+    )
     frame = compute_lv_frame(points, chamber, longitudinal)
     electrodes = _offset_mapping(reference_electrodes)
     return {
@@ -251,6 +257,8 @@ def apply_offset_bundle_to_native_file(
     *,
     target_coordinate_unit: str,
     axial_shift: float = 0.0,
+    intraventricular_field: str = "intraventricular",
+    longitudinal_field: str = "apicobasal",
 ) -> dict[str, Any]:
     """Decode a validated bundle on a target VTK anatomy without unit conversion."""
     unit = _coordinate_unit(target_coordinate_unit)
@@ -261,7 +269,11 @@ def apply_offset_bundle_to_native_file(
         raise ValueError("unsupported electrode offset bundle schema")
     _coordinate_unit(bundle.get("source_coordinate_unit"))
     offsets = _offset_mapping(bundle.get("normalized_offsets"))
-    points, chamber, longitudinal = read_native_electrode_fields(heart_vtk)
+    points, chamber, longitudinal = read_native_electrode_fields(
+        heart_vtk,
+        intraventricular_field=intraventricular_field,
+        longitudinal_field=longitudinal_field,
+    )
     frame = compute_lv_frame(points, chamber, longitudinal)
     return {
         "schema_version": ELECTRODE_OFFSET_BUNDLE_SCHEMA_VERSION,

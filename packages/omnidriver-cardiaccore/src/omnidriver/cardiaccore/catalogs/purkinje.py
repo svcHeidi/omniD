@@ -66,7 +66,7 @@ TREE_VALIDATION_CONTRACT: dict[str, Any] = {
             "surface": "native RVEndoFaces, including recovered septum",
         },
         "his_bundle": "midpoint of the LV and RV roots",
-        "line_end": "local apex-ward direction inferred from uvc_longitudinal",
+        "line_end": "local apex-ward direction inferred from the longitudinal coordinate field",
     },
     "baseline_coverage": {
         "required_if_endocardium_exists": {

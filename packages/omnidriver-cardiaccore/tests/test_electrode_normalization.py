@@ -54,18 +54,24 @@ def test_native_file_bridge_preserves_explicit_units_and_dimensionless_offsets(t
 
     points, chamber, longitudinal = _cloud()
     mesh = pv.PolyData(points)
+    # This case names its coordinate fields the legacy way; the reader is told
+    # the names rather than assuming any spelling.
     mesh.point_data["uvc_intraventricular"] = chamber
     mesh.point_data["uvc_longitudinal"] = longitudinal
     heart = tmp_path / "heart.vtp"
     mesh.save(heart)
     reference = {"V1": [1.0, 2.0, 3.0], "V2": [2.0, 3.0, 4.0]}
 
-    bundle = derive_reference_offset_bundle(heart, reference, coordinate_unit="mm")
+    legacy = {"intraventricular_field": "uvc_intraventricular",
+              "longitudinal_field": "uvc_longitudinal"}
+    bundle = derive_reference_offset_bundle(
+        heart, reference, coordinate_unit="mm", **legacy
+    )
     bundle_path = tmp_path / "offsets.json"
     write_reference_offset_bundle(bundle_path, bundle)
     loaded = read_reference_offset_bundle(bundle_path)
     positions = apply_offset_bundle_to_native_file(
-        heart, loaded, target_coordinate_unit="mm"
+        heart, loaded, target_coordinate_unit="mm", **legacy
     )
     output_path = tmp_path / "electrodes.json"
     write_electrode_positions(output_path, positions)

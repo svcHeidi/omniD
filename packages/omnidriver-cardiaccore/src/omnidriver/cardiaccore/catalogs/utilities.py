@@ -91,7 +91,7 @@ UTILITY_MANIFESTS = {
     "setCardiacAnatomy": _manifest(
         "setCardiacAnatomy",
         "Assign AHA segment labels and their short-axis angle.",
-        ("system/setCardiacAnatomyDict", "0/uvc_longitudinal", "0/uvc_intraventricular"),
+        ("system/setCardiacAnatomyDict", "0/apicobasal", "0/intraventricular"),
         (
             ProducesEntry("aha_segment", "0/AHA_Segment", "openfoam_field", "AHA segment label", "setCardiacAnatomy"),
             ProducesEntry("aha_angle", "0/aha_angle", "openfoam_field", "Short-axis polar angle", "setCardiacAnatomy"),
@@ -100,7 +100,7 @@ UTILITY_MANIFESTS = {
     "setPurkinjeSlab": _manifest(
         "setPurkinjeSlab",
         "Mark the sub-endocardial Purkinje slab and scale conductivity there.",
-        ("system/setPurkinjeSlabDict", "0/uvc_transmural", "0/Conductivity"),
+        ("system/setPurkinjeSlabDict", "0/transmural", "0/Conductivity"),
         (
             ProducesEntry("purkinje_layer", "0/PurkinjeLayer", "openfoam_field", "Purkinje slab mask", "setPurkinjeSlab"),
             ProducesEntry("conductivity", "0/Conductivity", "openfoam_field", "Conductivity tensor updated in the Purkinje slab", "setPurkinjeSlab"),
@@ -109,7 +109,7 @@ UTILITY_MANIFESTS = {
     "setPurkinjeMorphometry": _manifest(
         "setPurkinjeMorphometry",
         "Prepare Purkinje morphometry regions and terminal-weight fields.",
-        ("system/setPurkinjeMorphometryDict", "0/uvc_longitudinal", "0/uvc_intraventricular"),
+        ("system/setPurkinjeMorphometryDict", "0/apicobasal", "0/intraventricular"),
         (
             ProducesEntry("purkinje_longitudinal_region", "0/PurkinjeLongitudinalRegion", "openfoam_field", "Longitudinal region labels", "setPurkinjeMorphometry"),
             ProducesEntry("purkinje_circumferential_region", "0/PurkinjeCircumferentialRegion", "openfoam_field", "Circumferential region labels", "setPurkinjeMorphometry"),
@@ -123,9 +123,9 @@ UTILITY_MANIFESTS = {
         (
             "system/generatePurkinjeTreeDict",
             "system/coordinatesConventionDict",
-            "0/uvc_transmural",
-            "0/uvc_intraventricular",
-            "0/uvc_longitudinal",
+            "0/transmural",
+            "0/intraventricular",
+            "0/apicobasal",
         ),
         (
             ProducesEntry("lv_endo_faces", "constant/polyMesh/sets/LVEndoFaces", "openfoam_face_set", "Generated LV endocardial face set", "generatePurkinjeTree"),

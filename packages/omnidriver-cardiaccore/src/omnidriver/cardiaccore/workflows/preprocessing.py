@@ -10,6 +10,11 @@ from typing import Any
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 from omnidriver.core.specs.common import resolve_spec_paths
 
+from ..operations.coordinates_convention import (
+    CoordinatesConvention,
+    coordinate_field_paths,
+)
+
 
 HUMAN_PURKINJE_SLAB_TUTORIAL_NAME = "cardiaccore-human-purkinje-slab"
 HUMAN_PURKINJE_ENDOCARDIAL_TUTORIAL_NAME = (
@@ -49,6 +54,7 @@ def _apply_case(
 
 def make_human_purkinje_slab_spec(
     *,
+    convention: CoordinatesConvention | None = None,
     cases_root: Path | None = None,
     case_dir_name: str = "bivCase",
     setup_dir_name: str | None = None,
@@ -61,6 +67,8 @@ def make_human_purkinje_slab_spec(
     model.  Its only inputs and outputs are the files named by the native
     case wrapper and the corresponding utility sources.
     """
+    _COORD = coordinate_field_paths(convention)
+
 
     case_root, setup_root, output_dir = resolve_spec_paths(
         cases_root=cases_root,
@@ -102,8 +110,8 @@ def make_human_purkinje_slab_spec(
                         "depends_on": ["conductivity"],
                         "consumes": [
                             "system/setCardiacAnatomyDict",
-                            "0/uvc_longitudinal",
-                            "0/uvc_intraventricular",
+                            _COORD["longitudinal"],
+                            _COORD["intraventricular"],
                         ],
                     },
                     {
@@ -113,7 +121,7 @@ def make_human_purkinje_slab_spec(
                         "depends_on": ["anatomy"],
                         "consumes": [
                             "system/setPurkinjeSlabDict",
-                            "0/uvc_transmural",
+                            _COORD["transmural"],
                             "0/Conductivity",
                         ],
                     },
@@ -124,8 +132,8 @@ def make_human_purkinje_slab_spec(
                         "depends_on": ["purkinje_slab"],
                         "consumes": [
                             "system/setPurkinjeMorphometryDict",
-                            "0/uvc_longitudinal",
-                            "0/uvc_intraventricular",
+                            _COORD["longitudinal"],
+                            _COORD["intraventricular"],
                         ],
                     },
                 ],
@@ -154,6 +162,7 @@ def _apply_human_tree_case(
 
 def make_human_purkinje_endocardial_spec(
     *,
+    convention: CoordinatesConvention | None = None,
     cases_root: Path | None = None,
     case_dir_name: str = "bivCase",
     setup_dir_name: str | None = None,
@@ -167,6 +176,8 @@ def make_human_purkinje_endocardial_spec(
     adapter increment must establish seed and growth validation before it
     exposes them as sweep axes.
     """
+    _COORD = coordinate_field_paths(convention)
+
 
     case_root, setup_root, output_dir = resolve_spec_paths(
         cases_root=cases_root,
@@ -209,8 +220,8 @@ def make_human_purkinje_endocardial_spec(
                         "depends_on": [],
                         "consumes": [
                             "system/setCardiacAnatomyDict",
-                            "0/uvc_longitudinal",
-                            "0/uvc_intraventricular",
+                            _COORD["longitudinal"],
+                            _COORD["intraventricular"],
                         ],
                     },
                     {
@@ -221,9 +232,9 @@ def make_human_purkinje_endocardial_spec(
                         "consumes": [
                             "system/generatePurkinjeTreeDict",
                             "system/coordinatesConventionDict",
-                            "0/uvc_transmural",
-                            "0/uvc_intraventricular",
-                            "0/uvc_longitudinal",
+                            _COORD["transmural"],
+                            _COORD["intraventricular"],
+                            _COORD["longitudinal"],
                         ],
                     },
                 ],
@@ -251,6 +262,7 @@ def _apply_pig_purkinje_case(
 
 def _make_pig_purkinje_spec(
     *,
+    convention: CoordinatesConvention | None = None,
     tutorial_name: str,
     weighted_lv: bool,
     cases_root: Path | None = None,
@@ -259,6 +271,8 @@ def _make_pig_purkinje_spec(
     output_dir_name: str | Path | None = ".",
     input_overrides: Mapping[str, Any] | None = None,
 ) -> TutorialSpec:
+    _COORD = coordinate_field_paths(convention)
+
     case_root, setup_root, output_dir = resolve_spec_paths(
         cases_root=cases_root,
         case_dir_name=case_dir_name,
@@ -269,9 +283,9 @@ def _make_pig_purkinje_spec(
     tree_consumes = [
         "system/generatePurkinjeTreeDict",
         "system/coordinatesConventionDict",
-        "0/uvc_transmural",
-        "0/uvc_intraventricular",
-        "0/uvc_longitudinal",
+        _COORD["transmural"],
+        _COORD["intraventricular"],
+        _COORD["longitudinal"],
     ]
     if weighted_lv:
         tree_consumes.extend(
@@ -321,8 +335,8 @@ def _make_pig_purkinje_spec(
                         "depends_on": [],
                         "consumes": [
                             "system/setCardiacAnatomyDict",
-                            "0/uvc_longitudinal",
-                            "0/uvc_intraventricular",
+                            _COORD["longitudinal"],
+                            _COORD["intraventricular"],
                         ],
                     },
                     {
@@ -332,8 +346,8 @@ def _make_pig_purkinje_spec(
                         "depends_on": [],
                         "consumes": [
                             "system/setPurkinjeMorphometryDict",
-                            "0/uvc_longitudinal",
-                            "0/uvc_intraventricular",
+                            _COORD["longitudinal"],
+                            _COORD["intraventricular"],
                         ],
                     },
                     {
@@ -355,6 +369,7 @@ def _make_pig_purkinje_spec(
 
 def make_pig_morphometric_purkinje_spec(
     *,
+    convention: CoordinatesConvention | None = None,
     cases_root: Path | None = None,
     case_dir_name: str = "bivCase",
     setup_dir_name: str | None = None,
@@ -366,6 +381,7 @@ def make_pig_morphometric_purkinje_spec(
     return _make_pig_purkinje_spec(
         tutorial_name=PIG_MORPHOMETRIC_PURKINJE_TUTORIAL_NAME,
         weighted_lv=True,
+        convention=convention,
         cases_root=cases_root,
         case_dir_name=case_dir_name,
         setup_dir_name=setup_dir_name,
@@ -376,6 +392,7 @@ def make_pig_morphometric_purkinje_spec(
 
 def make_pig_transmural_purkinje_spec(
     *,
+    convention: CoordinatesConvention | None = None,
     cases_root: Path | None = None,
     case_dir_name: str = "bivCase",
     setup_dir_name: str | None = None,
@@ -387,6 +404,7 @@ def make_pig_transmural_purkinje_spec(
     return _make_pig_purkinje_spec(
         tutorial_name=PIG_TRANSMURAL_PURKINJE_TUTORIAL_NAME,
         weighted_lv=False,
+        convention=convention,
         cases_root=cases_root,
         case_dir_name=case_dir_name,
         setup_dir_name=setup_dir_name,

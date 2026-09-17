@@ -4,7 +4,6 @@ References use module:function syntax. Each entrypoint describes exact arguments
 and side effects. Catalog discovery never invokes these trusted callables.
 """
 
-from .support_boundary import CARDIACCORE_COBIVECO_TARGET
 
 _PREFIX = "omnidriver.cardiaccore.operations"
 
@@ -39,39 +38,14 @@ def _add(operation_id, *args, **kwargs):
 
 
 _add(
-    "cardiaccore.cobiveco.normalize.v1",
-    "Convert explicitly identified raw CObiveco arrays to the supported cardiacCore UVC convention.",
-    "Raw tv/tm/ab aligned to the same mesh entities; target values must match the converter's declared convention.",
-    {
-        "read_target": _entry("cobiveco", "read_cobiveco_target_convention",
-            {"case_root": "Path to the selected case with system/coordinatesConventionDict."},
-            "Literal transmural endocardium/epicardium and lv_value/rv_value scalar mapping.",
-            "Reads the selected dictionary; no writes or directive evaluation."),
-        "normalize": _entry("cobiveco", "normalize_cobiveco_coordinates",
-            {"tv": "Finite 1D array in [0,1].", "tm": "Finite 1D array in [0,1].",
-             "ab": "Finite 1D array, same length as tv/tm.",
-             "target_convention": {"description": "Required keyword: mapping read from the selected case.",
-                                   "required_values": CARDIACCORE_COBIVECO_TARGET}},
-            {"uvc_transmural": "1-tm", "uvc_intraventricular": "2*tv-1", "uvc_longitudinal": "Copy of ab"}),
-    }, "normalize",
-    preconditions=["Read the selected target case convention first.",
-                   "Caller establishes alignment and raw CObiveco origin; this cannot be inferred from array values."],
-    failures={"invalid_input": "ValueError for dimensionality, alignment, nonfinite values, tv/tm range or target mismatch; reader I/O errors propagate.",
-              "missing_capability": "Native VTU field reading/writing is pending.",
-              "scientific_interpretation": "Conversion success does not establish mesh validity or scientific suitability."},
-    evidence=["Native cardiacCore coordinatesConvention.H and preparation cases; origins are not a build attestation."],
-    example="from pathlib import Path\nfrom omnidriver.cardiaccore.operations.cobiveco import read_cobiveco_target_convention, normalize_cobiveco_coordinates\ntarget = read_cobiveco_target_convention(Path(case_root))\nfields = normalize_cobiveco_coordinates(tv, tm, ab, target_convention=target)",
-)
-
-_add(
     "cardiaccore.electrodes.reference_frame.v1",
     "Transfer explicitly selected comparative-reference electrodes through an anatomical LV frame.",
     "Packaged Strocchi-02 approximation; not patient-specific or default electrode placement.",
     {
         "frame": _entry("electrodes", "compute_lv_frame",
             {"points": "Finite Nx3 coordinates in one caller-declared length unit.",
-             "uvc_intraventricular": "Finite length-N vector: negative=LV, positive=RV.",
-             "uvc_longitudinal": "Finite length-N vector, 0=apex and 1=base."},
+             "intraventricular": "Finite length-N vector of the case's intraventricular coordinate.",
+             "longitudinal": "Finite length-N vector of the case's longitudinal coordinate."},
             "LVFrame with centre, orthonormal axes and length scale."),
         "encode": _entry("electrodes", "encode_to_local",
             {"point": "Length-3 coordinate.", "frame": "LVFrame returned by frame."}, "Dimensionless local coordinate."),
@@ -82,19 +56,23 @@ _add(
             {"frame": "LVFrame", "axial_shift": "Optional keyword; default 0.0, explicit study choice."},
             "Mapping V1–V6 to coordinate lists in the input point unit."),
         "read_native_fields": _entry("electrodes", "read_native_electrode_fields",
-            {"heart_vtk": "Native VTK/VTU path with UVC point or cell data.",
-             "intraventricular_field": "Optional caller-selected intraventricular UVC array name; default uvc_intraventricular.",
-             "longitudinal_field": "Optional caller-selected longitudinal UVC array name; default uvc_longitudinal."},
-            "Points and point-aligned UVC arrays for frame construction."),
+            {"heart_vtk": "Native VTK/VTU path with coordinate point or cell data.",
+             "intraventricular_field": "Array name for the intraventricular coordinate; defaults to the canonical name.",
+             "longitudinal_field": "Array name for the longitudinal coordinate; defaults to the canonical name."},
+            "Points and point-aligned coordinate arrays for frame construction."),
         "derive_bundle": _entry("electrodes", "derive_reference_offset_bundle",
             {"reference_heart_vtk": "Native reference VTK/VTU path.",
              "reference_electrodes": "Mapping of electrode names to reference coordinates in one declared unit.",
-             "coordinate_unit": "Required source-coordinate-unit label; no conversion is inferred."},
+             "coordinate_unit": "Required source-coordinate-unit label; no conversion is inferred.",
+             "intraventricular_field": "Array name for the intraventricular coordinate; defaults to the canonical name.",
+             "longitudinal_field": "Array name for the longitudinal coordinate; defaults to the canonical name."},
             "Versioned JSON-serializable bundle of dimensionless offsets."),
         "apply_bundle": _entry("electrodes", "apply_offset_bundle_to_native_file",
             {"heart_vtk": "Native target VTK/VTU path.", "bundle": "Validated reference offset bundle.",
              "target_coordinate_unit": "Required target-coordinate-unit label; no conversion is inferred.",
-             "axial_shift": "Optional fraction of target LV-frame length; default 0.0."},
+             "axial_shift": "Optional fraction of target LV-frame length; default 0.0.",
+             "intraventricular_field": "Array name for the intraventricular coordinate; defaults to the canonical name.",
+             "longitudinal_field": "Array name for the longitudinal coordinate; defaults to the canonical name."},
             "Unit-labelled target electrode-position JSON payload."),
         "write_positions": _entry("electrodes", "write_electrode_positions",
             {"path": "Destination JSON path.", "positions": "Payload returned by apply_bundle."},
@@ -116,7 +94,7 @@ _add(
     "Native LVEndoFaces/RVEndoFaces with aligned AHA/longitudinal arrays; not raw-coordinate surface reconstruction.",
     {"propose": _entry("purkinje", "deduce_seeds",
         {"points": "Finite Nx3 boundary points in one length unit.", "aha_segment": "Length-N labels.",
-         "uvc_longitudinal": "Length-N vector.", "lv_endocardial_mask": "Length-N boolean mask.",
+         "longitudinal": "Length-N vector.", "lv_endocardial_mask": "Length-N boolean mask.",
          "rv_endocardial_mask": "Length-N boolean mask."},
         "lv_seed, rv_seed, his_bundle_seed, lv_line_end and rv_line_end coordinate tuples."),
         "write_seeds": _entry("purkinje", "write_seed_dictionary",
@@ -126,7 +104,8 @@ _add(
             "Updates only hisBundleSeed, lv.seed, lv.lineEnd, rv.seed and rv.lineEnd; preserves all other native settings."),
         "read_surfaces": _entry("purkinje", "read_native_seed_surface_fields",
             {"lv_surface": "Path to the native LVEndoFaces foamToVTK export.",
-             "rv_surface": "Path to the native RVEndoFaces foamToVTK export."},
+             "rv_surface": "Path to the native RVEndoFaces foamToVTK export.",
+             "longitudinal_field": "Array name the case declares for its longitudinal coordinate; defaults to the canonical name."},
             "Aligned points, AHA labels, longitudinal values, and LV/RV surface masks for deduce_seeds.",
             "Reads only the supplied VTK files; does not mutate the case."),
         "placement_receipt": _entry("purkinje", "seed_area_placement_report",
@@ -256,7 +235,6 @@ _add(
 # Retain existing discovery labels, with all content derived from OPERATIONS.
 _UTILITY_IDS = {
     "electrode_normalization": "cardiaccore.electrodes.reference_frame.v1",
-    "cobiveco_normalization": "cardiaccore.cobiveco.normalize.v1",
     "purkinje_seed_proposal": "cardiaccore.purkinje.seed_proposal.v1",
     "purkinje_coverage": "cardiaccore.purkinje.coverage_observation.v1",
     "coordinate_ring_closure": "cardiaccore.coordinates.ring_closure.v1",

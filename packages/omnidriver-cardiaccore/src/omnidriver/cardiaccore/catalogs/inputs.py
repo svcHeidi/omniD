@@ -40,7 +40,7 @@ _SCAR_SEVERITY_SOURCE = "src/setCardiacScar/scarSeverityFn.H"
 _SCAR_README = "src/setCardiacScar/README.md"
 _PURKINJE_SCAR_SOURCE = "src/setPurkinjeScar/setPurkinjeScar.C"
 _PURKINJE_SCAR_README = "src/setPurkinjeScar/README.md"
-_UVC_CONVENTION_SOURCE = "src/coordinatesConvention/coordinatesConvention.H"
+_COORDINATES_CONVENTION_SOURCE = "src/coordinatesConvention/coordinatesConvention.H"
 _TREE_SOURCE = "src/generatePurkinjeTree/generatePurkinjeTree.C"
 _TREE_README = "src/generatePurkinjeTree/README.md"
 
@@ -191,21 +191,21 @@ CONDUCTIVITY_ENTRIES: Final[tuple[DictEntry, ...]] = (
 ANATOMY_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
         driver_path="$CARDIAC_ANATOMY.zApicalMid",
-        description="Longitudinal UVC threshold separating apical and mid AHA regions.",
+        description="Longitudinal-coordinate threshold separating apical and mid AHA regions.",
         source_refs=("cases/bivCase/system/setCardiacAnatomyDict", _ANATOMY_SOURCE),
         value_kind="scalar",
         required=True,
     ),
     DictEntry(
         driver_path="$CARDIAC_ANATOMY.zMidBasal",
-        description="Longitudinal UVC threshold separating mid and basal AHA regions.",
+        description="Longitudinal-coordinate threshold separating mid and basal AHA regions.",
         source_refs=("cases/bivCase/system/setCardiacAnatomyDict", _ANATOMY_SOURCE),
         value_kind="scalar",
         required=True,
     ),
     DictEntry(
         driver_path="$CARDIAC_ANATOMY.zApexCap",
-        description="Longitudinal UVC extent assigned to the apical cap.",
+        description="Longitudinal-coordinate extent assigned to the apical cap.",
         source_refs=("cases/bivCase/system/setCardiacAnatomyDict", _ANATOMY_SOURCE),
         value_kind="scalar",
         required=True,
@@ -582,18 +582,18 @@ PURKINJE_SCAR_ENTRIES: Final[tuple[DictEntry, ...]] = (
 # anatomical meaning, since CObiveco's `tm` has endocardium > epicardium).
 # The entries below describe the CURRENT (post-refactor) shape, confirmed
 # against cases/bivCase/system/coordinatesConventionDict, which already uses
-# it. Superseded UVC_CONVENTION_ENTRIES claims are corrected, not silently
+# it. Superseded COORDINATES_CONVENTION_ENTRIES claims are corrected, not silently
 # overwritten, per house style.
 #
 # Shared across setCardiacAnatomy, setPurkinjeSlab, setPurkinjeMorphometry
 # and generatePurkinjeTree: each utility's coordinatesConvention.H reader only
 # pulls the sub-block(s)/leaves it needs, but the file exists once per case
 # and conventionally carries all blocks together.
-UVC_CONVENTION_ENTRIES: Final[tuple[DictEntry, ...]] = (
+COORDINATES_CONVENTION_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
         driver_path="$COORDINATES_CONVENTION.coordinateSystem",
         description="Selects which ventricular coordinate system the case's fields follow.",
-        source_refs=("cases/bivCase/system/coordinatesConventionDict", _UVC_CONVENTION_SOURCE),
+        source_refs=("cases/bivCase/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
         value_kind="enum",
         enum_values=("uvc", "cobiveco"),
         notes=(
@@ -611,7 +611,7 @@ UVC_CONVENTION_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
         driver_path="$COORDINATES_CONVENTION.coordinates.transmuralField",
         description="Name of the volScalarField carrying the transmural coordinate.",
-        source_refs=("cases/bivCase/system/coordinatesConventionDict", _UVC_CONVENTION_SOURCE),
+        source_refs=("cases/bivCase/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
         value_kind="word",
         typical_value="transmural",
         notes="Read from a subOrEmptyDict, so the whole 'coordinates' block is optional: a case whose fields already carry the canonical names (transmural/intraventricular/apicobasal) needs no 'coordinates' block at all.",
@@ -619,40 +619,40 @@ UVC_CONVENTION_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
         driver_path="$COORDINATES_CONVENTION.coordinates.intraventricularField",
         description="Name of the volScalarField carrying the LV/RV intraventricular coordinate.",
-        source_refs=("cases/bivCase/system/coordinatesConventionDict", _UVC_CONVENTION_SOURCE),
+        source_refs=("cases/bivCase/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
         value_kind="word",
         typical_value="intraventricular",
     ),
     DictEntry(
         driver_path="$COORDINATES_CONVENTION.coordinates.longitudinalField",
         description="Name of the volScalarField carrying the apex-to-base longitudinal coordinate.",
-        source_refs=("cases/bivCase/system/coordinatesConventionDict", _UVC_CONVENTION_SOURCE),
+        source_refs=("cases/bivCase/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
         value_kind="word",
         typical_value="apicobasal",
     ),
     DictEntry(
         driver_path="$COORDINATES_CONVENTION.intraventricularChambers.LV",
         description="Intraventricular coordinate value identifying the LV chamber.",
-        source_refs=("cases/bivCase/system/coordinatesConventionDict", _UVC_CONVENTION_SOURCE),
+        source_refs=("cases/bivCase/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
         value_kind="scalar",
     ),
     DictEntry(
         driver_path="$COORDINATES_CONVENTION.intraventricularChambers.RV",
         description="Intraventricular coordinate value identifying the RV chamber.",
-        source_refs=("cases/bivCase/system/coordinatesConventionDict", _UVC_CONVENTION_SOURCE),
+        source_refs=("cases/bivCase/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
         value_kind="scalar",
         notes="isLeftVentricle()/isRightVentricle() classify a cell by proximity to LV vs RV; the LV/RV seam is their midpoint.",
     ),
     DictEntry(
         driver_path="$COORDINATES_CONVENTION.transmural.endocardium",
         description="Transmural-coordinate value at the endocardium. Not necessarily numerically smaller than epicardium (e.g. CObiveco's tm reads 1=endocardium, 0=epicardium).",
-        source_refs=("cases/bivCase/system/coordinatesConventionDict", _UVC_CONVENTION_SOURCE),
+        source_refs=("cases/bivCase/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
         value_kind="scalar",
     ),
     DictEntry(
         driver_path="$COORDINATES_CONVENTION.transmural.epicardium",
         description="Transmural-coordinate value at the epicardium.",
-        source_refs=("cases/bivCase/system/coordinatesConventionDict", _UVC_CONVENTION_SOURCE),
+        source_refs=("cases/bivCase/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
         value_kind="scalar",
     ),
 )
@@ -897,7 +897,7 @@ _RAW_DOCUMENTS: Final[dict[str, tuple[DictEntry, ...]]] = {
     "setPurkinjeMorphometryDict": MORPHOMETRY_ENTRIES,
     "setCardiacScarDict": SCAR_ENTRIES,
     "setPurkinjeScarDict": PURKINJE_SCAR_ENTRIES,
-    "coordinatesConventionDict": UVC_CONVENTION_ENTRIES,
+    "coordinatesConventionDict": COORDINATES_CONVENTION_ENTRIES,
     "generatePurkinjeTreeDict": TREE_ENTRIES,
 }
 

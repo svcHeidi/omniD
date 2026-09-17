@@ -29,15 +29,12 @@ def test_plugin_exposes_agent_guidance_catalogs() -> None:
     assert catalogs["cardiaccore_field_conventions"]["cobiveco_raw"]["tm"] == "0=epicardium, 1=endocardium"
     assert catalogs["cardiaccore_python_utilities"]["purkinje_seed_proposal"]["status"] == "supported_optional"
     assert catalogs["cardiaccore_operations"]["cardiaccore.purkinje.seed_proposal.v1"]["status"]["array_api"] == "available"
-    operation = catalogs["cardiaccore_operations"]["cardiaccore.cobiveco.normalize.v1"]
-    assert operation["status"]["native_file_reader"] == "pending"
-    assert "target_convention" in operation["inputs"]
+    conventions = catalogs["cardiaccore_field_conventions"]
+    assert "coordinatesConventionDict" in conventions["authority"]
+    assert set(conventions["coordinate_system_effects"]) == {"uvc", "cobiveco"}
     guidance = catalogs["cardiaccore_agent_guidance"]
     assert guidance["discovery"] == "plugin_named_catalogs"
     assert guidance["runner"].endswith("agent_guidance/runner.md")
-
-    from omnidriver.cardiaccore.operations.cobiveco import normalize_cobiveco_coordinates as implementation
-    assert callable(implementation)
 
 
 def test_controlled_allrun_executes_without_domain_claims(tmp_path: Path, capsys) -> None:
