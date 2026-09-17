@@ -146,7 +146,15 @@ def test_initial_input_catalog_covers_the_selected_bivcase_workflow():
     # the name stays bound for plugin.py's named-catalog publication.
     conditional = context.capabilities.named_catalogs.catalogs()["cardiaccore_conditional_inputs"]
     assert conditional == {}
-    assert entries["$CARDIAC_CONDUCTIVITY.conductivityIntracellular.df"].constraints
+    # The bidomain pair's both-or-neither relation is declared, not prose:
+    # each of the six names the other five, so any half-set pair is an error.
+    assert entries["$CARDIAC_CONDUCTIVITY.conductivityIntracellular.df"].co_required_with == (
+        "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.ds",
+        "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.dn",
+        "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.df",
+        "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.ds",
+        "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.dn",
+    )
     assert entries["$PURKINJE_MORPHOMETRY.subendocardialWeight"].typical_value == "0.56"
     tree_contract = context.capabilities.named_catalogs.catalogs()[
         "cardiaccore_tree_validation"
