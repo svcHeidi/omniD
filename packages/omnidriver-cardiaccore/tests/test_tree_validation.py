@@ -190,3 +190,44 @@ def test_the_his_root_is_reported_by_distance_from_the_midpoint(tmp_path):
 
     assert report["his_bundle"]["is_midpoint_of_roots"] is False
     assert report["his_bundle"]["distance_from_root_midpoint"] < 1e-9
+
+
+def test_placement_reports_the_seed_angle_when_the_surface_carries_one():
+    """Distance plus angle, rather than distance plus segment identity.
+
+    On a real biventricular mesh the RV AHA segments come out in pieces --
+    an angular wedge about a centroid does not carve connected regions from
+    a chamber that is not star-shaped about it -- so segment identity is a
+    weaker second reading than the angle it was cut from. The angle itself
+    is continuous and stable: the septum holds a 70-86 degree window across
+    every longitudinal band.
+    """
+    from omnidriver.cardiaccore.operations.purkinje import seed_area_placement_report
+
+    fields = _fields()
+    # a short-axis angle rising with x, so the LV septal candidates sit near 0
+    fields["angle"] = np.asarray(fields["points"])[:, 0] * 0.3 - 0.4
+    seeds = {
+        "lv_seed": (0.0, 0.0, 7.0), "lv_line_end": (0.0, 0.0, 6.0),
+        "rv_seed": (4.0, 0.0, 7.0), "rv_line_end": (4.0, 0.0, 6.0),
+        "his_bundle_seed": (2.0, 0.0, 7.0),
+    }
+    report = seed_area_placement_report(seeds, fields)
+
+    assert report["lv"]["angle_at_nearest_surface_point"] == pytest.approx(-0.4)
+    assert report["rv"]["angle_at_nearest_surface_point"] == pytest.approx(0.8)
+
+
+def test_the_angle_is_omitted_when_the_surface_does_not_carry_one():
+    """The reader only supplies it when the case declares an angle field."""
+    from omnidriver.cardiaccore.operations.purkinje import seed_area_placement_report
+
+    seeds = {
+        "lv_seed": (0.0, 0.0, 7.0), "lv_line_end": (0.0, 0.0, 6.0),
+        "rv_seed": (4.0, 0.0, 7.0), "rv_line_end": (4.0, 0.0, 6.0),
+        "his_bundle_seed": (2.0, 0.0, 7.0),
+    }
+    report = seed_area_placement_report(seeds, _fields())
+
+    assert "angle_at_nearest_surface_point" not in report["lv"]
+    assert "distance_to_declared_area" in report["lv"]

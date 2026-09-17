@@ -115,6 +115,7 @@ def read_native_seed_surface_fields(
     lv_surface: Path,
     rv_surface: Path,
     longitudinal_field: str = "apicobasal",
+    angle_field: str | None = "aha_angle",
 ) -> dict[str, np.ndarray]:
     """Read the two native endocardial surface exports for seed deduction.
 
@@ -153,6 +154,10 @@ def read_native_seed_surface_fields(
             _read_pyvista_scalar(lv, longitudinal_field, lv_surface),
             _read_pyvista_scalar(rv, longitudinal_field, rv_surface),
         )),
+        "angle": np.concatenate((
+            _read_pyvista_scalar(lv, angle_field, lv_surface),
+            _read_pyvista_scalar(rv, angle_field, rv_surface),
+        )) if angle_field else None,
         "lv_endocardial_mask": np.concatenate((
             np.ones(lv.n_points, dtype=bool),
             np.zeros(rv.n_points, dtype=bool),
@@ -457,17 +462,28 @@ def seed_area_placement_report(
     lv_seed = np.asarray(_seed_vector(proposal["lv_seed"], "lv_seed"))
     rv_seed = np.asarray(_seed_vector(proposal["rv_seed"], "rv_seed"))
     his_seed = np.asarray(_seed_vector(proposal["his_bundle_seed"], "his_bundle_seed"))
-    def observe(seed, candidates, surface_mask):
-        """Distance to the declared area, and the segment actually landed in.
+    angle = fields.get("angle")
+    if angle is not None:
+        angle = np.asarray(angle, dtype=float)
+        if len(angle) != len(points):
+            raise ValueError("the angle field must align to the surface points")
 
-        Both are recorded, neither is scored: the contract states no
-        threshold for either, and a placement this reports as distant is a
-        subject for review rather than a failure this layer can declare.
+    def observe(seed, candidates, surface_mask):
+        """Where the root sits, as observations rather than a score.
+
+        ``distance_to_declared_area`` leads: it says how far the root is from
+        the area the contract names for it, and a hand-placed root rarely
+        coincides with a surface node. The AHA segment corroborates, and the
+        short-axis angle corroborates more reliably still where a chamber is
+        not star-shaped about its own centroid: an angular wedge then carves
+        that chamber into disconnected pieces, so segment identity fragments
+        while the angle it was cut from stays continuous. None is scored --
+        the contract states no threshold for any of them.
         """
         surface_points = points[surface_mask]
         surface_aha = aha[surface_mask]
         nearest = int(np.argmin(np.linalg.norm(surface_points - seed, axis=1)))
-        return {
+        observation = {
             "distance_to_declared_area": float(
                 np.min(np.linalg.norm(candidates - seed, axis=1))
             ),
@@ -476,6 +492,11 @@ def seed_area_placement_report(
                 np.linalg.norm(surface_points[nearest] - seed)
             ),
         }
+        if angle is not None:
+            observation["angle_at_nearest_surface_point"] = float(
+                angle[surface_mask][nearest]
+            )
+        return observation
 
     return {
         "lv": {
