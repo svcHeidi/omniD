@@ -13,7 +13,7 @@ def test_plugin_has_a_valid_context() -> None:
     context = driver_context(CardiacCorePlugin(), source="test")
 
     assert context.identity.id == "org.omnidriver.cardiaccore"
-    assert len(context.capabilities.dictionaries.entries()) == 10
+    assert len(context.capabilities.dictionaries.entries()) == 87
     assert context.capabilities.dictionaries.phases() == ("preprocessing",)
     assert context.capabilities.tutorials.catalog()["registered_tutorials"] == (
         "cardiaccore-human-purkinje-slab",
