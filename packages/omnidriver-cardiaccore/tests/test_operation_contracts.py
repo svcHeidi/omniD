@@ -37,9 +37,13 @@ def test_advertised_operations_have_resolvable_interfaces():
 
 
 def test_discovered_cobiveco_calls_check_the_actual_case_without_writes(tmp_path):
-    dictionary = tmp_path / "system" / "uvcConventionDict"
+    dictionary = tmp_path / "system" / "coordinatesConventionDict"
     dictionary.parent.mkdir()
-    original = "transmural { min 0; max 1; } intraventricularChambers { LV -1; RV 1; }"
+    original = (
+        "coordinateSystem uvc; "
+        "transmural { endocardium 0; epicardium 1; } "
+        "intraventricularChambers { LV -1; RV 1; }"
+    )
     dictionary.write_text(original)
     operation = CardiacCorePlugin().get_named_catalogs()["cardiaccore_operations"][
         "cardiaccore.cobiveco.normalize.v1"
@@ -50,9 +54,11 @@ def test_discovered_cobiveco_calls_check_the_actual_case_without_writes(tmp_path
     assert result["uvc_transmural"].tolist() == [0, 1]
     assert dictionary.read_text() == original
     assert [p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*") if p.is_file()] == [
-        "system/uvcConventionDict",
+        "system/coordinatesConventionDict",
     ]
-    dictionary.write_text(original.replace("min 0; max 1", "min 1; max 0"))
+    dictionary.write_text(
+        original.replace("endocardium 0; epicardium 1", "endocardium 1; epicardium 0")
+    )
     with pytest.raises(ValueError, match="target convention"):
         calculate([0], [1], [0.2], target_convention=read(tmp_path))
 

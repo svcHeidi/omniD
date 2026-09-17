@@ -122,7 +122,7 @@ UTILITY_MANIFESTS = {
         "Generate explicit LV/RV endocardial Purkinje trees and inspection VTKs.",
         (
             "system/generatePurkinjeTreeDict",
-            "system/uvcConventionDict",
+            "system/coordinatesConventionDict",
             "0/uvc_transmural",
             "0/uvc_intraventricular",
             "0/uvc_longitudinal",

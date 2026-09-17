@@ -24,18 +24,26 @@ def test_cobiveco_mapping_rejects_non_aligned_or_out_of_range_inputs():
 
 def test_cobiveco_mapping_rejects_a_target_convention_mismatch():
     with pytest.raises(ValueError, match="target convention"):
-        normalize_cobiveco_coordinates(np.array([0]), np.array([0]), np.array([0]), target_convention={**CARDIACCORE_COBIVECO_TARGET, "transmural_min": 1.0})
+        normalize_cobiveco_coordinates(np.array([0]), np.array([0]), np.array([0]), target_convention={**CARDIACCORE_COBIVECO_TARGET, "transmural_endocardium": 1.0})
 
 
 def test_discovered_operation_reads_selected_case_convention_before_calculation(tmp_path):
-    dictionary = tmp_path / "system" / "uvcConventionDict"
+    dictionary = tmp_path / "system" / "coordinatesConventionDict"
     dictionary.parent.mkdir()
-    dictionary.write_text("transmural { min 0; max 1; } intraventricularChambers { LV -1; RV 1; }")
+    dictionary.write_text(
+        "coordinateSystem uvc; "
+        "transmural { endocardium 0; epicardium 1; } "
+        "intraventricularChambers { LV -1; RV 1; }"
+    )
     operation = CardiacCorePlugin().get_named_catalogs()["cardiaccore_operations"]["cardiaccore.cobiveco.normalize.v1"]
     target = read_cobiveco_target_convention(tmp_path)
     assert operation["status"]["array_api"] == "available"
     assert normalize_cobiveco_coordinates(np.array([0]), np.array([1]), np.array([0.5]), target_convention=target)["uvc_transmural"].tolist() == [0.0]
-    dictionary.write_text("transmural { min 1; max 0; } intraventricularChambers { LV -1; RV 1; }")
+    dictionary.write_text(
+        "coordinateSystem uvc; "
+        "transmural { endocardium 1; epicardium 0; } "
+        "intraventricularChambers { LV -1; RV 1; }"
+    )
     with pytest.raises(ValueError, match="target convention"):
         normalize_cobiveco_coordinates(np.array([0]), np.array([1]), np.array([0.5]), target_convention=read_cobiveco_target_convention(tmp_path))
 

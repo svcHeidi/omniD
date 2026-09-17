@@ -44,8 +44,8 @@ _add(
     "Raw tv/tm/ab aligned to the same mesh entities; target values must match the converter's declared convention.",
     {
         "read_target": _entry("cobiveco", "read_cobiveco_target_convention",
-            {"case_root": "Path to the selected case with system/uvcConventionDict."},
-            "Literal transmural_min/max and lv_value/rv_value scalar mapping.",
+            {"case_root": "Path to the selected case with system/coordinatesConventionDict."},
+            "Literal transmural endocardium/epicardium and lv_value/rv_value scalar mapping.",
             "Reads the selected dictionary; no writes or directive evaluation."),
         "normalize": _entry("cobiveco", "normalize_cobiveco_coordinates",
             {"tv": "Finite 1D array in [0,1].", "tm": "Finite 1D array in [0,1].",

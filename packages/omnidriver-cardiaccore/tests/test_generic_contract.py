@@ -57,3 +57,31 @@ def test_controlled_allrun_executes_without_domain_claims(tmp_path: Path, capsys
     assert result == 0
     assert (case_root / "generic-proof.txt").read_text() == "generic-proof"
     assert json.loads(capsys.readouterr().out)["status"] == "ok"
+
+
+def test_declared_vocabulary_names_the_current_coordinates_dictionary() -> None:
+    """No declared path may name the retired uvcConventionDict.
+
+    Native cardiacCore renamed system/uvcConventionDict to
+    system/coordinatesConventionDict; generatePurkinjeTree.C reads the new
+    name. A declared consumes list still naming the old one sends an agent to
+    a file no case has. Historical notes in source comments are exempt: this
+    checks declared paths, not prose.
+    """
+    plugin = CardiacCorePlugin()
+    catalogs = plugin.get_named_catalogs()
+    declared = json.dumps(catalogs)
+
+    assert "uvcConventionDict" not in declared
+    assert "system/coordinatesConventionDict" in declared
+
+    factories = driver_context(plugin, source="test").capabilities.tutorials.catalog()[
+        "spec_factories"
+    ]
+    specs = {name: json.dumps(build(), default=str) for name, build in factories.items()}
+    for name, spec in specs.items():
+        assert "uvcConventionDict" not in spec, name
+    # Only the tutorials that run generatePurkinjeTree consume the convention
+    # dictionary; the slab tutorial reaches the endocardium another way. At
+    # least one must name it, or this gate would pass on a typo.
+    assert any("system/coordinatesConventionDict" in spec for spec in specs.values())

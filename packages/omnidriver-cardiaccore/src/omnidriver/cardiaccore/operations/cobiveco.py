@@ -13,11 +13,18 @@ from ..catalogs.support_boundary import CARDIACCORE_COBIVECO_TARGET
 
 
 def read_cobiveco_target_convention(case_root: Path) -> dict[str, float]:
-    """Read the selected case convention without evaluating its dictionary."""
-    dictionary = case_root / "system" / "uvcConventionDict"
+    """Read the selected case convention without evaluating its dictionary.
+
+    The transmural bounds are named by anatomy, not by numeric order:
+    ``coordinatesConvention.H`` reads ``endocardium``/``epicardium`` precisely
+    because the two coordinate systems order them oppositely (UVC 0=endo,
+    1=epi; CObiveco 1=endo, 0=epi), so ``min``/``max`` cannot say which end
+    is which.
+    """
+    dictionary = case_root / "system" / "coordinatesConventionDict"
     locations = {
-        "transmural_min": ("min", "transmural"),
-        "transmural_max": ("max", "transmural"),
+        "transmural_endocardium": ("endocardium", "transmural"),
+        "transmural_epicardium": ("epicardium", "transmural"),
         "lv_value": ("LV", "intraventricularChambers"),
         "rv_value": ("RV", "intraventricularChambers"),
     }
@@ -57,7 +64,7 @@ def normalize_cobiveco_coordinates(
 
     Raw CObiveco uses ``tv: 0=LV, 1=RV`` and ``tm: 0=epi, 1=endo``. The
     cardiacCore convention used by its checked-in cases is ``LV=-1, RV=1``
-    and ``transmural min=endo, max=epi``. The caller must first supply the
+    and ``transmural endocardium=0, epicardium=1``. The caller must first supply the
     target case's parsed convention; this rejects a silent mismatch.
     """
     validate_cobiveco_target_convention(target_convention)

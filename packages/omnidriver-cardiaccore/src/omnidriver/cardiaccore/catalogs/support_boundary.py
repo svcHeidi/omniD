@@ -3,16 +3,16 @@
 # Shared by the usage contract and implementation; this converter supports
 # exactly this target, not arbitrary user-defined coordinate conventions.
 CARDIACCORE_COBIVECO_TARGET = {
-    "transmural_min": 0.0,
-    "transmural_max": 1.0,
+    "transmural_endocardium": 0.0,
+    "transmural_epicardium": 1.0,
     "lv_value": -1.0,
     "rv_value": 1.0,
 }
 
 FIELD_CONVENTIONS = {
-    "authority": "Read system/uvcConventionDict for every case; field names and ranges are case-owned.",
+    "authority": "Read system/coordinatesConventionDict for every case; field names and ranges are case-owned.",
     "current_cardiaccore": {
-        "uvc_transmural": "min=endocardium, max=epicardium; checked-in cases use 0=endo, 1=epi",
+        "uvc_transmural": "endocardium/epicardium named, not ordered; checked-in cases use 0=endo, 1=epi",
         "uvc_intraventricular": "checked-in cases use LV=-1, RV=1; native code classifies by nearest declared value",
         "uvc_longitudinal": "checked-in cases use 0=apex, 1=base",
         "surface_source": "generatePurkinjeTree uses named LV/RV endocardial patches when present; otherwise it constructs face sets from the selected UVC convention and recovers the RV-facing septum natively.",

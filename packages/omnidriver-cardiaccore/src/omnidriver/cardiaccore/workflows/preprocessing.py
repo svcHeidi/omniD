@@ -220,7 +220,7 @@ def make_human_purkinje_endocardial_spec(
                         "depends_on": ["conductivity", "anatomy"],
                         "consumes": [
                             "system/generatePurkinjeTreeDict",
-                            "system/uvcConventionDict",
+                            "system/coordinatesConventionDict",
                             "0/uvc_transmural",
                             "0/uvc_intraventricular",
                             "0/uvc_longitudinal",
@@ -268,7 +268,7 @@ def _make_pig_purkinje_spec(
     )
     tree_consumes = [
         "system/generatePurkinjeTreeDict",
-        "system/uvcConventionDict",
+        "system/coordinatesConventionDict",
         "0/uvc_transmural",
         "0/uvc_intraventricular",
         "0/uvc_longitudinal",
