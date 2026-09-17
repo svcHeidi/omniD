@@ -101,25 +101,24 @@ CONDUCTIVITY_ENTRIES: Final[tuple[DictEntry, ...]] = (
     # passed to the same `writeConductivity` helper that reads the top-level
     # df/ds/dn (lines 22-34), so the subDict shares that shape.
     #
-    # This is a genuine co-requirement ("both or neither"), which is NOT the
-    # same relation `mutually_exclusive_with` expresses (that fires when BOTH
-    # are set; here both-set is the REQUIRED case and only a mismatch is an
-    # error). The predicate vocabulary has no "sibling is present" test
-    # (`_predicate_matches` only does equality/membership against a value,
-    # never presence) and DictEntry has no "co-required-with" field, so this
-    # relation cannot be expressed as a structured predicate; it stays here
-    # as a cited `constraints` string. See the report for this call-out.
+    # This is a genuine co-requirement ("both or neither"): setCardiacConductivity
+    # raises a FatalIOError when exactly one subdictionary is present. It is NOT
+    # `mutually_exclusive_with`, which fires when BOTH siblings are set; here
+    # both-set is the required case. It is declared with `co_required_with` on
+    # every member of the group, so the relation is symmetric and the validator
+    # reports a half-set pair before a case is staged rather than leaving it to
+    # the native FatalIOError at run time.
     DictEntry(
         driver_path="$CARDIAC_CONDUCTIVITY.conductivityIntracellular.df",
         description="Longitudinal conductivity coefficient for the intracellular bidomain tensor.",
         source_refs=(_CONDUCTIVITY_SOURCE,),
         value_kind="scalar",
-        constraints=(
-            "Co-required with conductivityExtracellular.{df,ds,dn}: "
-            "setCardiacConductivity.C raises a FatalIOError if only one of "
-            "conductivityIntracellular/conductivityExtracellular is present "
-            "(the \"Bidomain output requires both\" FatalIOError). Cannot be expressed as a "
-            "structured predicate -- see module docstring above this group.",
+        co_required_with=(
+            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.ds",
+            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.dn",
+            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.df",
+            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.ds",
+            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.dn",
         ),
     ),
     DictEntry(
@@ -127,35 +126,65 @@ CONDUCTIVITY_ENTRIES: Final[tuple[DictEntry, ...]] = (
         description="Sheet-direction conductivity coefficient for the intracellular bidomain tensor.",
         source_refs=(_CONDUCTIVITY_SOURCE,),
         value_kind="scalar",
-        constraints=("Co-required with conductivityExtracellular.{df,ds,dn}; see .df sibling entry.",),
+        co_required_with=(
+            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.df",
+            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.dn",
+            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.df",
+            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.ds",
+            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.dn",
+        ),
     ),
     DictEntry(
         driver_path="$CARDIAC_CONDUCTIVITY.conductivityIntracellular.dn",
         description="Normal-direction conductivity coefficient for the intracellular bidomain tensor.",
         source_refs=(_CONDUCTIVITY_SOURCE,),
         value_kind="scalar",
-        constraints=("Co-required with conductivityExtracellular.{df,ds,dn}; see .df sibling entry.",),
+        co_required_with=(
+            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.df",
+            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.ds",
+            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.df",
+            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.ds",
+            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.dn",
+        ),
     ),
     DictEntry(
         driver_path="$CARDIAC_CONDUCTIVITY.conductivityExtracellular.df",
         description="Longitudinal conductivity coefficient for the extracellular bidomain tensor.",
         source_refs=(_CONDUCTIVITY_SOURCE,),
         value_kind="scalar",
-        constraints=("Co-required with conductivityIntracellular.{df,ds,dn}; see intracellular.df sibling entry.",),
+        co_required_with=(
+            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.df",
+            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.ds",
+            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.dn",
+            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.ds",
+            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.dn",
+        ),
     ),
     DictEntry(
         driver_path="$CARDIAC_CONDUCTIVITY.conductivityExtracellular.ds",
         description="Sheet-direction conductivity coefficient for the extracellular bidomain tensor.",
         source_refs=(_CONDUCTIVITY_SOURCE,),
         value_kind="scalar",
-        constraints=("Co-required with conductivityIntracellular.{df,ds,dn}; see intracellular.df sibling entry.",),
+        co_required_with=(
+            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.df",
+            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.ds",
+            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.dn",
+            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.df",
+            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.dn",
+        ),
     ),
     DictEntry(
         driver_path="$CARDIAC_CONDUCTIVITY.conductivityExtracellular.dn",
         description="Normal-direction conductivity coefficient for the extracellular bidomain tensor.",
         source_refs=(_CONDUCTIVITY_SOURCE,),
         value_kind="scalar",
-        constraints=("Co-required with conductivityIntracellular.{df,ds,dn}; see intracellular.df sibling entry.",),
+        co_required_with=(
+            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.df",
+            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.ds",
+            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.dn",
+            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.df",
+            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.ds",
+        ),
     ),
 )
 
