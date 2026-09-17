@@ -92,14 +92,6 @@ ANATOMY_ENTRIES: Final[tuple[DictEntry, ...]] = (
         value_kind="scalar",
         required=True,
     ),
-    DictEntry(
-        driver_path="$CARDIAC_ANATOMY.grooveMode",
-        description="Choose automatic groove detection or manually supplied groove angles.",
-        source_refs=("cases/bivCase/system/setCardiacAnatomyDict", _ANATOMY_SOURCE),
-        value_kind="enum",
-        enum_values=("auto", "manual"),
-        required=True,
-    ),
 )
 
 SLAB_ENTRIES: Final[tuple[DictEntry, ...]] = (
@@ -122,18 +114,12 @@ SLAB_ENTRIES: Final[tuple[DictEntry, ...]] = (
     ),
 )
 
-MORPHOMETRY_ENTRIES: Final[tuple[DictEntry, ...]] = (
-    DictEntry(
-        driver_path="$PURKINJE_MORPHOMETRY.grooveMode",
-        description="Choose automatic groove detection or manually supplied groove angles for morphometry.",
-        source_refs=("cases/bivCase/system/setPurkinjeMorphometryDict", _MORPHOMETRY_SOURCE),
-        value_kind="enum",
-        enum_values=("auto", "manual"),
-        # Morphometry is the pig-specific branch, not a prerequisite of each
-        # cardiacCore preprocessing workflow.
-        required=False,
-    ),
-)
+# setPurkinjeMorphometryDict currently has no reviewed, driver-overridable
+# x-values: groove detection is unconditional native behaviour (never a
+# dictionary input), and its one remaining source-defined value
+# (subendocardialWeight) is published only as a conditional input below,
+# not as a strict-validated DictEntry.
+MORPHOMETRY_ENTRIES: Final[tuple[DictEntry, ...]] = ()
 
 _RAW_DOCUMENTS: Final[dict[str, tuple[DictEntry, ...]]] = {
     "setCardiacConductivityDict": CONDUCTIVITY_ENTRIES,
@@ -178,28 +164,6 @@ CONDITIONAL_INPUTS: Final[dict[str, tuple[dict[str, object], ...]]] = {
             "evidence": [_CONDUCTIVITY_SOURCE],
         },
     ),
-    "setCardiacAnatomyDict": (
-        {
-            "path": "anteriorGroove",
-            "status": "conditional",
-            "value_kind": "scalar",
-            "when": "manual AHA segmentation is selected (grooveMode manual)",
-            "reason": (
-                "Required when grooveMode is manual; absent from the selected auto-mode case."
-            ),
-            "evidence": [_ANATOMY_SOURCE],
-        },
-        {
-            "path": "posteriorGroove",
-            "status": "conditional",
-            "value_kind": "scalar",
-            "when": "manual AHA segmentation is selected (grooveMode manual)",
-            "reason": (
-                "Required when grooveMode is manual; absent from the selected auto-mode case."
-            ),
-            "evidence": [_ANATOMY_SOURCE],
-        },
-    ),
     "setPurkinjeMorphometryDict": (
         {
             "path": "subendocardialWeight",
@@ -209,14 +173,6 @@ CONDITIONAL_INPUTS: Final[dict[str, tuple[dict[str, object], ...]]] = {
             "reason": (
                 "Source-defined optional value; bivCase uses the compiled default 0.56."
             ),
-            "evidence": [_MORPHOMETRY_SOURCE],
-        },
-        {
-            "path": "anteriorGroove, posteriorGroove",
-            "status": "conditional",
-            "value_kind": "scalar",
-            "when": "manual groove mode is selected for the pig Purkinje morphometry algorithm",
-            "reason": "Required together when grooveMode is manual; absent from the selected auto-mode case.",
             "evidence": [_MORPHOMETRY_SOURCE],
         },
     ),

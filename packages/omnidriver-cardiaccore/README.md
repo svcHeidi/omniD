@@ -73,10 +73,18 @@ explicit inputs; moving code does not make those assets optional.
 
 ## Supported workflows and limits
 
-The plugin advertises the preprocessing wrapper, human endocardial tree, and
-pig morphometric tree workflows. Query the tutorial and support catalogs for
-the current list. Reviewed inputs are passed through `input_overrides` in
-the normal run configuration, for example:
+The plugin advertises four workflows:
+
+- `cardiaccore-human-purkinje-slab` runs the human slab preparation chain.
+- `cardiaccore-human-purkinje-endocardial` generates the human endocardial tree.
+- `cardiaccore-pig-morphometric-purkinje` uses the morphometry weight fields
+  for LV terminal selection and extends the selected terminals transmurally.
+- `cardiaccore-pig-transmural-purkinje` uses `allLeaves` for LV terminal
+  selection and extends the terminals transmurally.
+
+The two pig workflows otherwise declare the same utility sequence. Reviewed
+inputs are passed through `input_overrides` in the normal run configuration,
+for example:
 
 ```json
 {"input_overrides": {"$PURKINJE_SLAB.thickness": 0.05}}

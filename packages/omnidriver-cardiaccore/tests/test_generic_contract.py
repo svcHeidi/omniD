@@ -13,12 +13,13 @@ def test_plugin_has_a_valid_context() -> None:
     context = driver_context(CardiacCorePlugin(), source="test")
 
     assert context.identity.id == "org.omnidriver.cardiaccore"
-    assert len(context.capabilities.dictionaries.entries()) == 12
+    assert len(context.capabilities.dictionaries.entries()) == 10
     assert context.capabilities.dictionaries.phases() == ("preprocessing",)
     assert context.capabilities.tutorials.catalog()["registered_tutorials"] == (
-        "cardiaccore-biv-preprocessing",
-        "cardiaccore-human-endocardial-tree",
-        "cardiaccore-pig-morphometric-tree",
+        "cardiaccore-human-purkinje-slab",
+        "cardiaccore-human-purkinje-endocardial",
+        "cardiaccore-pig-morphometric-purkinje",
+        "cardiaccore-pig-transmural-purkinje",
     )
     assert context.capabilities.case_runtime_conventions.conventions().case_entrypoints == ("Allrun",)
 

@@ -150,7 +150,7 @@ Its one-axis sweep uses the same input object as the axis value:
 
 ```json
 {
-  "base": {"entry": "cardiaccore-biv-preprocessing"},
+  "base": {"entry": "cardiaccore-human-purkinje-slab"},
   "sweep": {
     "mode": "cross_product",
     "independent": {

@@ -19,12 +19,15 @@ from .catalogs.support_boundary import FIELD_CONVENTIONS, SUPPORT_BOUNDARY
 from .catalogs.operations import OPERATIONS, utility_index
 from .catalogs.purkinje import TREE_VALIDATION_CONTRACT
 from .workflows.preprocessing import (
-    HUMAN_TREE_TUTORIAL_NAME,
-    PIG_MORPHOMETRIC_TREE_TUTORIAL_NAME,
-    TUTORIAL_NAME,
-    make_biv_preprocessing_spec,
-    make_human_endocardial_tree_spec,
-    make_pig_morphometric_tree_spec,
+    HUMAN_PURKINJE_ENDOCARDIAL_TUTORIAL_NAME,
+    HUMAN_PURKINJE_SLAB_TUTORIAL_NAME,
+    PIG_MORPHOMETRIC_PURKINJE_TUTORIAL_NAME,
+    PIG_TRANSMURAL_PURKINJE_TUTORIAL_NAME,
+    PURKINJE_TREE_INPUT_PATHS,
+    make_human_purkinje_endocardial_spec,
+    make_human_purkinje_slab_spec,
+    make_pig_morphometric_purkinje_spec,
+    make_pig_transmural_purkinje_spec,
 )
 from .catalogs.utilities import UTILITY_MANIFESTS
 
@@ -82,14 +85,22 @@ class CardiacCorePlugin:
     def get_tutorial_catalog(self) -> dict[str, Any]:
         return {
             "registered_tutorials": (
-                TUTORIAL_NAME,
-                HUMAN_TREE_TUTORIAL_NAME,
-                PIG_MORPHOMETRIC_TREE_TUTORIAL_NAME,
+                HUMAN_PURKINJE_SLAB_TUTORIAL_NAME,
+                HUMAN_PURKINJE_ENDOCARDIAL_TUTORIAL_NAME,
+                PIG_MORPHOMETRIC_PURKINJE_TUTORIAL_NAME,
+                PIG_TRANSMURAL_PURKINJE_TUTORIAL_NAME,
             ),
             "spec_factories": {
-                TUTORIAL_NAME: make_biv_preprocessing_spec,
-                HUMAN_TREE_TUTORIAL_NAME: make_human_endocardial_tree_spec,
-                PIG_MORPHOMETRIC_TREE_TUTORIAL_NAME: make_pig_morphometric_tree_spec,
+                HUMAN_PURKINJE_SLAB_TUTORIAL_NAME: make_human_purkinje_slab_spec,
+                HUMAN_PURKINJE_ENDOCARDIAL_TUTORIAL_NAME: (
+                    make_human_purkinje_endocardial_spec
+                ),
+                PIG_MORPHOMETRIC_PURKINJE_TUTORIAL_NAME: (
+                    make_pig_morphometric_purkinje_spec
+                ),
+                PIG_TRANSMURAL_PURKINJE_TUTORIAL_NAME: (
+                    make_pig_transmural_purkinje_spec
+                ),
             },
         }
 
@@ -137,27 +148,17 @@ class CardiacCorePlugin:
     def get_override_schema(self, tutorial_name: str, make_spec_info: dict[str, Any]) -> dict[str, Any]:
         del make_spec_info
         if tutorial_name in {
-            HUMAN_TREE_TUTORIAL_NAME,
-            PIG_MORPHOMETRIC_TREE_TUTORIAL_NAME,
+            HUMAN_PURKINJE_ENDOCARDIAL_TUTORIAL_NAME,
+            PIG_MORPHOMETRIC_PURKINJE_TUTORIAL_NAME,
+            PIG_TRANSMURAL_PURKINJE_TUTORIAL_NAME,
         }:
-            from .workflows.preprocessing import (
-                HUMAN_TREE_INPUT_PATHS,
-                PIG_MORPHOMETRIC_TREE_INPUT_PATHS,
-            )
-
-            paths = (
-                HUMAN_TREE_INPUT_PATHS
-                if tutorial_name == HUMAN_TREE_TUTORIAL_NAME
-                else PIG_MORPHOMETRIC_TREE_INPUT_PATHS
-            )
-
             return {
                 "input_overrides": {
                     "description": "JSON object mapping reviewed cardiacCore inputs to values. The tree dictionary is fixed in this workflow.",
-                    "paths": paths,
+                    "paths": PURKINJE_TREE_INPUT_PATHS,
                 },
             }
-        if tutorial_name != TUTORIAL_NAME:
+        if tutorial_name != HUMAN_PURKINJE_SLAB_TUTORIAL_NAME:
             return {}
         return {
             "input_overrides": {

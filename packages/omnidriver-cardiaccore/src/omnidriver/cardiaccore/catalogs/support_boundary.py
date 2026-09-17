@@ -27,7 +27,17 @@ FIELD_CONVENTIONS = {
 
 
 SUPPORT_BOUNDARY = {
-    "supported_workflows": ("cardiaccore-biv-preprocessing", "cardiaccore-human-endocardial-tree", "cardiaccore-pig-morphometric-tree"),
-    "pending": ("VTK adapters for seed and coverage sampling", "CObiveco VTU-to-legacy-VTK conversion with vector-field compatibility", "reviewed seed-dictionary write operation"),
+    "supported_workflows": (
+        "cardiaccore-human-purkinje-slab",
+        "cardiaccore-human-purkinje-endocardial",
+        "cardiaccore-pig-morphometric-purkinje",
+        "cardiaccore-pig-transmural-purkinje",
+    ),
+    "pending": (
+        "VTK adapters for seed and coverage sampling",
+        "CObiveco VTU-to-legacy-VTK conversion with vector-field compatibility",
+        "reviewed seed-dictionary write operation",
+        "Workflow step for the refine1Dgraph/1DgraphToFoam graph hand-off, with -maxEdgeLength scaled from the mesh length unit",
+    ),
     "retired": "Standalone driverFOAM and agent pipeline/catalog interfaces are not adapter authorities.",
 }
