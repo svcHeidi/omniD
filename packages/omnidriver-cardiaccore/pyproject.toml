@@ -10,7 +10,7 @@ requires-python = ">=3.11"
 dependencies = ["numpy>=1.24", "omnidriver>=0.1.0", "omnidriver-openfoam>=0.1.0"]
 
 [project.optional-dependencies]
-# Only the VTU selection reader uses this; array methods require no VTK runtime.
+# Native seed/coverage and encoded VTU readers use this; array methods do not.
 vtk = ["pyvista"]
 
 [project.entry-points."omnidriver.plugins"]
