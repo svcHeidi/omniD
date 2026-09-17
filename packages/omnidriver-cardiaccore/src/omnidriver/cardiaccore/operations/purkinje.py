@@ -405,6 +405,7 @@ def read_seed_dictionary(dictionary: Path) -> dict[str, tuple[float, float, floa
     """
     from omnidriver.openfoam.mutators import read_foam_entry
 
+    dictionary = Path(dictionary)
     seeds: dict[str, tuple[float, float, float]] = {}
     for name, (scope, key) in _SEED_DICTIONARY_ENTRIES.items():
         raw = read_foam_entry(dictionary, key, scope=scope)
@@ -492,7 +493,16 @@ def seed_area_placement_report(
             **observe(rv_seed, rv_candidates, rv_mask),
         },
         "his_bundle": {
+            # Exact equality holds for a proposal computed in memory, which is
+            # what deduce_and_write_native_seed_dictionary self-checks. A seed
+            # read back from dictionary text is rounded, so the distance is
+            # the meaningful reading there -- on the idealized biventricular
+            # ellipsoid a His seed the case plainly intends as the midpoint
+            # sits 9.4e-10 m from it.
             "is_midpoint_of_roots": bool(np.array_equal(his_seed, (lv_seed + rv_seed) / 2.0)),
+            "distance_from_root_midpoint": float(
+                np.linalg.norm(his_seed - (lv_seed + rv_seed) / 2.0)
+            ),
         },
     }
 

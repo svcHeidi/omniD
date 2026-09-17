@@ -160,3 +160,33 @@ def test_reading_declared_seeds_is_an_advertised_entrypoint():
     assert "dictionary" in entry["inputs"]
     receipt = operation["entrypoints"]["placement_receipt"]
     assert "distance" in receipt["outputs"].lower()
+
+
+def test_the_dictionary_may_be_given_as_a_path_string(tmp_path):
+    """Found by calling it from a real case rather than a fixture."""
+    from omnidriver.cardiaccore.operations.purkinje import read_seed_dictionary
+
+    seeds = read_seed_dictionary(str(_tree_dictionary(tmp_path)))
+    assert seeds["lv_seed"] == (0.0, 0.0, 7.0)
+
+
+def test_the_his_root_is_reported_by_distance_from_the_midpoint(tmp_path):
+    """A declared His seed round-trips through dictionary text.
+
+    Its coordinates come back rounded, so exact equality with the computed
+    midpoint fails on a real case even when the case plainly intends it --
+    measured at 9.4e-10 m on the idealized biventricular ellipsoid. The
+    boolean stays for deduce_and_write_native_seed_dictionary, which
+    compares a proposal it just computed in memory.
+    """
+    from omnidriver.cardiaccore.operations.purkinje import (
+        read_seed_dictionary, seed_area_placement_report,
+    )
+
+    dictionary = _tree_dictionary(tmp_path)
+    dictionary.write_text(dictionary.read_text().replace(
+        "hisBundleSeed (2.0 0.0 7.0);", "hisBundleSeed (2.0000000001 0.0 7.0);"))
+    report = seed_area_placement_report(read_seed_dictionary(dictionary), _fields())
+
+    assert report["his_bundle"]["is_midpoint_of_roots"] is False
+    assert report["his_bundle"]["distance_from_root_midpoint"] < 1e-9
