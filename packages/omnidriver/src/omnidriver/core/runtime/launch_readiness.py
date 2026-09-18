@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from omnidriver.core.planning_types import StrictDiagnostic
+from omnidriver.core.planning_types import SimulationAuditItem, StrictDiagnostic
 
 
 @dataclass(frozen=True)
@@ -25,12 +25,24 @@ class LaunchReadiness:
     environment_ok: bool
     has_warnings: bool
     blocking_reason: str | None
+    #: False when a required check could not run. Exposed alongside the other
+    #: two halves for the same reason: a call site reporting readiness needs to
+    #: distinguish "we looked and it is wrong" from "we could not look".
+    coverage_ok: bool = True
+
+
+#: A stage whose check was owed and could not run. The plan says nothing about
+#: it, so nothing may be claimed on its behalf. `not_requested` (an operator
+#: declined it) and `not_applicable` (there was nothing to check) are recorded
+#: but do not block -- see the spec's §5 table.
+_BLOCKING_OUTCOME = "unavailable"
 
 
 def is_launchable(
     *,
     plan_status: str,
     environment_diagnostics: tuple[StrictDiagnostic, ...] = (),
+    simulation_audit: tuple[SimulationAuditItem, ...] = (),
 ) -> LaunchReadiness:
     """Compute launch readiness from a plan's status and environment diagnostics.
 
@@ -45,6 +57,23 @@ def is_launchable(
     ``level == "error"``
     entries block launch; ``level == "warning"`` entries are surfaced via
     ``has_warnings`` but never block.
+
+    ``simulation_audit`` supplies coverage. A stage whose check was owed and
+    could not run (``unavailable``) blocks: the plan says nothing about it, so
+    nothing may be claimed on its behalf. ``not_requested`` and
+    ``not_applicable`` are recorded and do not block. Omitting the argument
+    means "no coverage information supplied" and never blocks, so the planning
+    call sites that only read ``structural_ok`` are unaffected -- offline
+    planning must keep working with the runtime absent.
+
+    **Not yet wired to dispatch, as of 2026-09-19.** No caller passes
+    ``simulation_audit``: ``_refuse_environment_errors`` is the one dispatch-time
+    gate, and ``StepExecutionContext`` does not carry the audit, so the coverage
+    half of this predicate cannot currently fire. Nothing emits ``unavailable``
+    yet either. Read ``coverage_ok`` as "no required check was reported
+    unavailable *to this call*", not as a guarantee that coverage was checked --
+    believing otherwise would be the same false reassurance this predicate
+    exists to remove.
     """
     structural_ok = plan_status == "ok"
     environment_errors = tuple(
@@ -55,13 +84,23 @@ def is_launchable(
     )
     environment_ok = not environment_errors
     has_warnings = bool(environment_warnings)
-    launchable = structural_ok and environment_ok
+    unavailable = tuple(
+        item.stage for item in simulation_audit
+        if item.status == _BLOCKING_OUTCOME
+    )
+    coverage_ok = not unavailable
+    launchable = structural_ok and environment_ok and coverage_ok
 
     blocking_reason: str | None = None
     if not structural_ok:
         blocking_reason = "plan is not structurally/semantically valid"
     elif not environment_ok:
         blocking_reason = "execution environment is not ready"
+    elif not coverage_ok:
+        blocking_reason = (
+            "required checks could not run, so this plan is unverified: "
+            + ", ".join(unavailable)
+        )
 
     return LaunchReadiness(
         launchable=launchable,
@@ -69,6 +108,7 @@ def is_launchable(
         environment_ok=environment_ok,
         has_warnings=has_warnings,
         blocking_reason=blocking_reason,
+        coverage_ok=coverage_ok,
     )
 
 
