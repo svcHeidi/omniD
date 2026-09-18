@@ -39,6 +39,13 @@ UNCOVERED_OUTCOMES = frozenset({"not_requested", "not_applicable", "unavailable"
 #: The stage ran. Its status is then derived from its diagnostics, as before.
 EXECUTED = "executed"
 
+#: The one uncovered outcome that leaves the denominator. `not_requested` and
+#: `unavailable` are gaps -- work that was owed and not done -- so they stay in
+#: and cost the plan its points. `not_applicable` is not a gap: there was
+#: nothing to do. Counting it would replace paying for work never done with
+#: penalising a plan for work never owed, which is the same defect mirrored.
+NOT_APPLICABLE = "not_applicable"
+
 
 def _score_from_diagnostics(
     *,
@@ -171,12 +178,13 @@ def _case_preparation_files_audit(
     if generic_case:
         return SimulationAuditItem(
             stage="case_preparation_files",
-            status="passed",
-            points=max_points,
+            status=NOT_APPLICABLE,
+            points=0,
             max_points=max_points,
             summary=(
                 "Generic case-folder execution relies on its declared workflow "
-                "rather than the plugin's dictionary requirements."
+                "rather than the plugin's dictionary requirements, so there are "
+                "no required adapter files to check for."
             ),
             evidence={"case_root": str(case_root), "required": [], "generic_case": True},
         )
@@ -250,8 +258,15 @@ def _build_simulation_audit(
                 if generic_case else
                 "The dictionaries could not be resolved into a valid run config."
             ),
-            outcome=EXECUTED,
-            evidence={"diagnostic_count": len(validation_diagnostics)},
+            outcome=NOT_APPLICABLE if generic_case else EXECUTED,
+            uncovered_summary=(
+                "The generic case declares its own workflow and has no plugin "
+                "configuration to parse, so there was nothing to resolve."
+            ),
+            evidence={
+                "diagnostic_count": len(validation_diagnostics),
+                "generic_case": generic_case,
+            },
         ),
         _score_from_diagnostics(
             stage="workflow_preparation",
@@ -317,17 +332,36 @@ def _build_simulation_audit(
         ),
     ]
     score = sum(item.points for item in items)
-    max_score = sum(item.max_points for item in items)
+    # The applicable denominator: what this plan actually owed. A
+    # `not_applicable` stage owed nothing and is excluded; `not_requested` and
+    # `unavailable` owed something and did not deliver, so they stay in and
+    # cost the plan its points.
+    max_score = sum(
+        item.max_points for item in items if item.status != NOT_APPLICABLE
+    )
     blocked = [item.stage for item in items if item.status == "blocked"]
     warnings = [item.stage for item in items if item.status == "warning"]
-    uncovered = [item.stage for item in items if item.status in UNCOVERED_OUTCOMES]
+    uncovered = [
+        item.stage for item in items
+        if item.status in UNCOVERED_OUTCOMES and item.status != NOT_APPLICABLE
+    ]
+    inapplicable = [item.stage for item in items if item.status == NOT_APPLICABLE]
     readiness = {
         "score": score,
         "max_score": max_score,
         "percent": round((score / max_score) * 100) if max_score else 0,
-        "status": "blocked" if blocked else ("warning" if warnings else "ready"),
+        # `ready` is a success claim, so a plan with a real coverage gap may not
+        # make it. Coverage outranks `warning`: a warning is something a check
+        # found, an uncovered stage is a check whose findings nobody has.
+        "status": (
+            "blocked" if blocked
+            else "incomplete" if uncovered
+            else "warning" if warnings
+            else "ready"
+        ),
         "blocked_stages": blocked,
         "warning_stages": warnings,
         "uncovered_stages": uncovered,
+        "inapplicable_stages": inapplicable,
     }
     return tuple(items), generation_diagnostics, readiness

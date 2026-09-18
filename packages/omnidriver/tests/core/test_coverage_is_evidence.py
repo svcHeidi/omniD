@@ -77,6 +77,60 @@ def test_a_suppressed_stage_does_not_reach_a_perfect_score(tmp_path: Path) -> No
     )
 
 
+def test_a_generic_case_reports_inapplicable_checks_as_such(tmp_path: Path) -> None:
+    """A generic case has no plugin dictionaries; saying `passed` claims it did.
+
+    Both stages already know: case_preparation_files records
+    ``generic_case: True`` in its evidence, and dictionary_resolution's own
+    success summary reads "The generic case needs no plugin configuration
+    parsing." Both then score full points for work they did not do.
+    """
+    report = _plan(tmp_path)
+
+    assert _stage(report, "case_preparation_files").status == "not_applicable"
+    assert _stage(report, "dictionary_resolution").status == "not_applicable"
+
+
+def test_an_inapplicable_check_leaves_the_denominator(tmp_path: Path) -> None:
+    """`not_applicable` is not a failure to cover; it is nothing to cover.
+
+    A check that could never have applied must not be counted against the plan.
+    Keeping it in the denominator would replace paying for work never done with
+    penalising a plan for work that was never owed -- the same defect mirrored.
+    `not_requested` and `unavailable` stay in, because those are real gaps.
+    """
+    report = _plan(tmp_path)
+    readiness = report.readiness_score
+
+    inapplicable = sum(
+        item.max_points for item in report.simulation_audit
+        if item.status == "not_applicable"
+    )
+    assert inapplicable > 0, "this plan was expected to have inapplicable stages"
+
+    assert readiness["max_score"] == 100 - inapplicable, (
+        "an inapplicable stage is still being counted as something this plan "
+        "owed and did not deliver"
+    )
+    # The suppressed one stays in: it was owed and was not done.
+    assert _stage(report, "environment_preflight").max_points == 10
+    assert "environment_preflight" in readiness["uncovered_stages"]
+
+
+def test_a_partially_covered_plan_is_not_ready(tmp_path: Path) -> None:
+    """`ready` is a success claim, and success over unrun checks is the defect.
+
+    A caller branching on status rather than reading the percentage and the
+    uncovered list would otherwise behave exactly as it did before any of this.
+    """
+    report = _plan(tmp_path)
+
+    assert report.readiness_score["uncovered_stages"], (
+        "precondition: this plan must have an uncovered stage"
+    )
+    assert report.readiness_score["status"] != "ready"
+
+
 def test_an_uncovered_stage_is_named_in_the_score(tmp_path: Path) -> None:
     """Which stage went unchecked has to be recoverable from the report.
 

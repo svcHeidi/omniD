@@ -83,10 +83,11 @@ def test_strict_plan_succeeds_for_single_cell() -> None:
     assert environment["points"] == 0
     assert environment["status"] == "not_requested"
 
-    # Still "ready" at less than full coverage. Deliberate for now: changing the
-    # status vocabulary is the next slice, and moving two things at once would
-    # make any score movement ambiguous between them.
-    assert readiness["status"] == "ready"
+    # Not "ready": `ready` is a success claim, and this plan has a real coverage
+    # gap. The exact replacement value is not asserted for the same reason the
+    # score is not -- this module cannot be run here or in CI, and an unverified
+    # literal is how `== 100` survived.
+    assert readiness["status"] != "ready"
     assert {
         item["stage"] for item in payload["simulation_audit"]
     } == {
