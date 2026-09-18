@@ -54,7 +54,8 @@ from __future__ import annotations
 
 import pytest
 
-from omnidriver.core.plugin_interface import default_driver_context
+from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.cardiacfoam.dict_builder import (
     build_electro_properties,
     select_applicable_entries,
@@ -114,7 +115,10 @@ def _value_for(entry) -> str:
 
 
 def _electro_entries():
-    catalog = default_driver_context().capabilities.dictionaries.catalog()
+    context = _driver_context(
+        CardiacFoamPlugin(), source="test:override_round_trip",
+    )
+    catalog = context.capabilities.dictionaries.catalog()
     return [
         entry
         for entry in catalog.entries_for("electroProperties")

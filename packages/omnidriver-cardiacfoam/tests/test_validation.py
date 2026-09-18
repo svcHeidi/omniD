@@ -49,7 +49,8 @@ from omnidriver.cardiacfoam.common_dict_entries import (
     CONTROL_DICT_ENTRIES,
     PHYSICS_PROPERTY_ENTRIES,
 )
-from omnidriver.core.plugin_interface import default_driver_context
+from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.core.runtime.run_model import RunDocument
 from omnidriver.core.specs.validation import ValidationError, slot_key, validate_run
 
@@ -58,7 +59,7 @@ from omnidriver.core.specs.validation import ValidationError, slot_key, validate
 # omnidriver-cardiacfoam's own tree and already exercised cardiac semantics
 # through the previous implicit default -- this makes that explicit rather
 # than deciding anything new about the tests' content.
-_CTX = default_driver_context()
+_CTX = _driver_context(CardiacFoamPlugin(), source="test:validation")
 
 _PHASE_ORDER = ("anatomy", "physics", "stimulus", "solver")
 
@@ -66,7 +67,7 @@ _PHASE_ORDER = ("anatomy", "physics", "stimulus", "solver")
 def _all_entries():
     yield from PHYSICS_PROPERTY_ENTRIES
     yield from CONTROL_DICT_ENTRIES
-    for group in get_electro_property_entry_groups().values():
+    for group in get_electro_property_entry_groups(_CTX).values():
         yield from group
 
 
@@ -855,7 +856,7 @@ _PHASE_ORDER = ("anatomy", "physics", "stimulus", "solver")
 def _all_entries():
     yield from PHYSICS_PROPERTY_ENTRIES
     yield from CONTROL_DICT_ENTRIES
-    for group in get_electro_property_entry_groups().values():
+    for group in get_electro_property_entry_groups(_CTX).values():
         yield from group
 
 
