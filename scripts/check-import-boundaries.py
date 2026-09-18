@@ -2,9 +2,20 @@
 """Enforce ARCHITECTURE.md's package-independence rules as a CI gate.
 
 Rules (see ARCHITECTURE.md "Architectural Rules"):
-  1. omnidriver.core must not import omnidriver.openfoam or omnidriver.cardiacfoam,
-     and must never import foamlib directly.
-  2. omnidriver.openfoam must not import omnidriver.cardiacfoam.
+  1. omnidriver.core must not import omnidriver.openfoam, omnidriver.cardiacfoam
+     or omnidriver.cardiaccore, and must never import foamlib directly.
+  2. omnidriver.openfoam must not import omnidriver.cardiacfoam or
+     omnidriver.cardiaccore.
+
+A cardiac adapter may import omnidriver.openfoam -- that is the direction the
+layering allows, and omnidriver-cardiaccore does exactly that for
+``read_foam_entry``/``update_foam_entry``. What is forbidden is the reverse.
+
+Added omnidriver.cardiaccore 2026-09-18, when that package was integrated. Until
+then this gate printed "boundaries OK" while saying nothing whatever about the
+new package -- the same too-narrow-scope failure the CORE_SRC comment below
+records. Whoever adds the fourth adapter must add it here too; a package this
+script has never heard of is a package it silently exempts.
 
 Every Core module, including ``core/compatibility.py``, must remain independent
 of OpenFOAM, cardiacFOAM, and foamlib at runtime. Compatibility behavior is
@@ -112,12 +123,21 @@ def main() -> int:
     for path in CORE_SRC.rglob("*.py"):
         found.extend(_check_file(
             path,
-            ("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam"),
+            (
+                "foamlib",
+                "omnidriver.openfoam",
+                "omnidriver.cardiacfoam",
+                "omnidriver.cardiaccore",
+            ),
             CORE_SRC,
         ))
 
     for path in OPENFOAM_SRC.rglob("*.py"):
-        found.extend(_check_file(path, ("omnidriver.cardiacfoam",), OPENFOAM_SRC))
+        found.extend(_check_file(
+            path,
+            ("omnidriver.cardiacfoam", "omnidriver.cardiaccore"),
+            OPENFOAM_SRC,
+        ))
 
     waived = {key for key, _ in found if key in KNOWN_VIOLATIONS}
     violations = [msg for key, msg in found if key not in KNOWN_VIOLATIONS]
@@ -147,8 +167,9 @@ def main() -> int:
         for v in violations:
             print(f"  {v}")
         print(
-            "\nomnidriver.core must not import foamlib or omnidriver.cardiacfoam at "
-            "runtime. omnidriver.openfoam must not import omnidriver.cardiacfoam. "
+            "\nomnidriver.core must not import foamlib, omnidriver.cardiacfoam or "
+            "omnidriver.cardiaccore at runtime. omnidriver.openfoam must not "
+            "import either cardiac package. "
             "See ARCHITECTURE.md's Architectural Rules."
         )
         return 1
