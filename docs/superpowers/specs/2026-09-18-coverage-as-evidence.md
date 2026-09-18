@@ -391,11 +391,22 @@ The review requires `earned_weight` to be "passed weights plus an explicitly
 defined warning policy" and does not define it. **This is the one open decision
 in this document.**
 
-Proposed default, pending the owner: a `warning` counts as **executed** and earns
-**full** weight, with the warning itself reported. Rationale: a warning is a
-check that ran and did not fail, and demoting it would re-introduce the confusion
-between "did not establish" and "established with a caveat" that §2 exists to
-remove. A policy knob may demote warnings per profile; it may not hide them.
+**Corrected 2026-09-18, before implementation.** A first draft of this section
+proposed that a warning earn *full* weight. That was written without reading the
+code: `_score_from_diagnostics` already awards `max_points // 2` on
+`has_warning`. A policy therefore already exists — half weight — it is simply
+implicit and undocumented rather than absent.
+
+So the default is to **preserve half weight and state it**, not to change it. A
+warning counts as `executed`, contributes half its weight to `earned`, and is
+reported. Changing scoring semantics while fixing a different defect would make
+any score movement ambiguous between the two causes, and the ratifying test
+would no longer isolate what it is meant to prove.
+
+The owner decision that remains is narrower than the draft implied: whether half
+weight is right, and whether it should be per-profile configurable. Neither
+blocks the work below — implement against current behaviour and revisit with the
+scores in front of you.
 
 ## 11. What changed from the design, and why
 
