@@ -164,6 +164,40 @@ An entry that is neither a known artifact id nor an existing path is a planning
 error. Ambiguity between an id and a path that happen to coincide is resolved in
 favour of the id, and the collision is reported.
 
+### Core change 4 — a path component may name the config entry that determines it
+
+The Purkinje graph is the worked example, and it is also the artifact that
+crosses the seam, so the problem lands exactly where the two adapters meet.
+Three places state where that file lives:
+
+| statement | says |
+|---|---|
+| `1DgraphToFoam`'s `-name` flag | "Name of the graph object written under `constant/` (default: `purkinjeGraph`)" |
+| its manifest's `[[produces]]` | `path_pattern = "constant/purkinjeGraph"` |
+| `…purkinjeGraphModelCoeffs.graphFile` | `required=True`, "Basename of the solver-facing graph dictionary in `constant/`. The value may name any graph dictionary produced by upstream preprocessing and may vary between study cases." |
+
+The dict entry is the authority: it is what `conductionSystemDomain.C` reads.
+The manifest restates its *default*, and is wrong as soon as anyone uses the
+freedom the entry's own description grants. The flag is the writer's side of the
+same fact.
+
+A `path_pattern` may therefore reference a configured value instead of copying
+it:
+
+```toml
+path_pattern = "constant/{config:$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.graphFile}"
+```
+
+Core resolves it through the adapter's existing `get_config_value_reader`
+capability, so core reads a value without learning what `graphFile` means. The
+dict entry becomes the single truth; the artifact is found wherever the case
+actually puts it; and the step's `-name` argument can be built from the same
+value rather than being a fourth statement of it.
+
+Unresolvable references are the missing-artifact case, not a crash: if the entry
+is absent the artifact's location is unknown, and that is reported with the
+reason, per the decision below.
+
 ## Adapter uniformity
 
 The two adapters reach the same core types by different routes. Some of that is
@@ -196,12 +230,29 @@ an empty snapshot and step attribution for those artifacts is vacuous. This
 affects precisely the artifacts whose location varies, which are the ones worth
 attributing.
 
-**Resolution.** One vocabulary: `{case_id}` and `{time}`. cardiacCore's patterns
-are rewritten. A guard rejects any `path_pattern` containing `<...>`, or a
-`{...}` naming anything other than the two known placeholders, at manifest load
-— so the next one fails loudly instead of silently. Note that a literal brace in
-a pattern would make `.format()` raise, which is a second reason the guard
-belongs at load time rather than at execution.
+**Corrected 2026-09-18.** An earlier draft of this section called every
+angle-bracket pattern the same defect and prescribed rewriting them all to
+`{time}`. That was wrong, and the distinction matters:
+
+- `<current-time>/Scar` means `{time}` written as prose. A genuine defect —
+  rewrite it.
+- `<output-vtk>`, described as "the caller-selected output path", is not that
+  kind of thing at all. Its value is determined by an argument, and no
+  substitution of `{time}` or `{case_id}` could ever produce it.
+
+Note also that `<name>` inside a `DictEntry.driver_path` is a legitimate,
+established convention — `dynamic_path=True`, marking a block name the user
+chooses. Angle brackets are not inherently wrong in this repository; they are
+wrong in a `path_pattern`, where core substitutes braces and then globs.
+
+**Resolution.** `{case_id}` and `{time}` stay as the only *substitution*
+placeholders and cardiacCore's `<current-time>` uses are rewritten. Patterns
+whose value comes from configuration are handled by core change 4 below, not by
+rewriting. A guard at manifest load rejects any `path_pattern` containing a
+`<...>` group or a `{...}` naming anything other than a known placeholder or a
+`config:` reference, so the next one fails loudly instead of silently. A literal
+brace would make `.format()` raise, which is a second reason the guard belongs at
+load rather than at execution.
 
 ### Divergence 2 — authoring medium
 
@@ -248,7 +299,8 @@ Not "identical code". Both adapters must:
 | a consumer transitively depends on its producer | a planning test: a DAG consuming an id produced by a step it does not depend on is a diagnostic, not a run |
 | a missing non-optional artifact reports why | a test asserting the failure names the declaring step, its adapter, the pattern, and whether the producer ran |
 | a consumed artifact id was produced in this run | a test with two neutral plugins where the producing step is skipped, asserting the consumer is refused |
-| every `path_pattern` uses only `{case_id}`/`{time}` | a manifest-load guard, run over both adapters' catalogs |
+| every `path_pattern` uses only known placeholders or a `config:` reference | a manifest-load guard, run over both adapters' catalogs |
+| a configured path is read from the entry, not a copied default | a test that changing `graphFile` moves where the artifact is looked for |
 | core declares no cardiac vocabulary | existing `test_core_declares_no_phase_vocabulary`, unchanged |
 
 Tests use two throwaway plugins from `packages/omnidriver/tests/plugins/`, not
@@ -340,8 +392,13 @@ checking rule above is not written in a way that assumes a single running step.
 
 ## Sequence
 
-1 and 2 are prerequisites for anything cross-adapter and land together with
-neutral tests. 3 is what makes the seam verifiable rather than merely
-expressible. The placeholder repair is independent of all three and can land
-first — it fixes a live defect in cardiacCore's artifact attribution regardless
-of whether cross-adapter execution is ever built.
+Changes 1 and 2 are prerequisites for anything cross-adapter and land together
+with neutral tests. Change 3 is what makes the seam verifiable rather than
+merely expressible.
+
+Change 4 is independent of all three and should land **first**. It is the
+smallest, it fixes a live defect in cardiacCore's artifact attribution whether
+or not cross-adapter execution is ever built, and it is the one that removes a
+duplicated truth about the seam artifact itself — so every later change is built
+on a `path_pattern` that is right rather than one that happens to match the
+default. The `<current-time>` rewrite rides along with it.
