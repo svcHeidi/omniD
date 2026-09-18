@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "omnidriver-cardiaccore"
+version = "0.1.0"
+description = "Source-backed cardiacCore preprocessing plugin for OmniD cases."
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.24", "omnidriver>=0.1.0", "omnidriver-openfoam>=0.1.0"]
+
+[project.optional-dependencies]
+# Native seed/coverage and encoded VTU readers use this; array methods do not.
+vtk = ["pyvista"]
+
+[project.entry-points."omnidriver.plugins"]
+cardiaccore = "omnidriver.cardiaccore.plugin:CardiacCorePlugin"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"omnidriver.cardiaccore" = ["plugin.yaml", "agent_guidance/*.md", "agent_guidance/*.yaml"]

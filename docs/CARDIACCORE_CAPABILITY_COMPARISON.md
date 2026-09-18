@@ -1,0 +1,64 @@
+# cardiacCore Capability Comparison
+
+This compares the existing user-authored cardiacCore agent material at
+`cardiacCoreStandalone/agent/` with the evidence-backed OmniD
+`cardiaccore-human-purkinje-slab` adapter created for CC-1.  It is a scope
+comparison, not a claim that either representation should replace the other.
+
+**Package-usage correction (2026-09-15):** active callable contracts are exposed
+through `cardiaccore_operations` in the installed adapter. The
+[package guide](../packages/omnidriver-cardiaccore/README.md) describes the
+catalog/workflow/operation boundaries and resource-based guidance lookup.
+Historical standalone files are evidence, not an alternative execution API.
+Array methods, native-file readers and workflow integration have separate
+availability fields; installing an optional VTK library does not implement a
+missing reader or establish scientific acceptance.
+
+## Current coverage
+
+| Capability | Existing cardiacCore material | Current OmniD slice | Decision |
+| --- | --- | --- | --- |
+| Fibre/sheet conductivity | `setCardiacConductivity`; fibre and sheet are configurable inputs | Implemented and executed; `fiberField`/`sheetField` and `df`/`ds`/`dn` are reviewed x values | Retain |
+| AHA segmentation | `setCardiacAnatomy` produces `AHA_Segment` and `aha_angle` | Implemented and executed; both are declared artifacts | Retain |
+| Field-based Purkinje slab | `setPurkinjeSlab` | Implemented and executed; thickness/multiplier are reviewed x values | Retain as one representation |
+| Pig/morphometric terminal weighting | `setPurkinjeMorphometry` produces regional and terminal-weight fields | Implemented and executed as an explicit dependency of the named pig tree workflow | Retain |
+| Explicit Purkinje tree | `generatePurkinjeTree`, tree VTKs, endocardial face sets | Human endocardial and pig morphometric/transmural contracts are declared and executed | Retain as two distinct workflow representations |
+| Anatomy-portable seed deduction | Seed deduction from AHA/UVC surface data | Array proposal method using native LVEndoFaces/RVEndoFaces and their AHA labels; reviewed proposals can be written to an existing native tree dictionary; current assumptions are in `cardiaccore_tree_validation.seed_placement` | Native sampling remains; proposal-to-dictionary reconciliation is implemented |
+| Density comparability and coverage | `terminalCount` convention; `check_purkinje_coverage.py` and `check_seed_distances.py` | Array occupancy observations with preserved, named baseline categories; no scientific pass/fail and no implemented surface-distance measurement | Add native sampling, distance measurement and selected study acceptance separately |
+| Graph hand-off | `refine1Dgraph` (VTK edge subdivision, `-maxEdgeLength` in metres) then `1DgraphToFoam` into `constant/purkinjeGraph` | Both utilities declared in `catalogs/utilities.py` | Add as a workflow step after the tree vertical slice |
+| Scar / Purkinje scar chain | `setCardiacScar`, `setPurkinjeScar` with explicit prerequisites | Not yet declared | Separate later workflow, not a prerequisite for the tree slice |
+| VTK import / mesh creation | `newVtkUnstructuredToFoam`; optional external cleaning | The adapter accepts an explicit asset bundle but does not generate it | Keep as a separate asset-preparation pathway |
+
+## Important interpretation
+
+The current adapter already handles the items named as foundational inputs and
+outputs:
+
+- `fiber` and `sheet` are inputs to conductivity construction;
+- `AHA_Segment` and `aha_angle` are generated and tracked outputs;
+- morphometric Purkinje weight fields are generated and tracked outputs.
+
+The adapter now includes the **explicit-tree representation**: a human
+endocardial path and a pig morphometric/transmural path. The latter produces
+and consumes the terminal-weight fields rather than merely cataloguing them.
+It remains a bounded preprocessing/tree-generation adapter, not a complete
+cardiacCore or cardiacFoam interface.
+
+## Recommended next vertical slice
+
+Add result interpretation rather than another broad workflow:
+
+1. define explicit acceptance criteria for the existing seed-distance and
+   coverage checkers;
+2. publish a complete validation contract before exposing tree seed/growth or
+   terminal-count settings as sweep axes;
+3. only then add `1DgraphToFoam` as the explicit cardiacFoam hand-off.
+
+The slab and explicit-tree branches must be selected deliberately. The
+existing preflight records them as mutually exclusive for this milestone; the
+adapter should preserve that solver/domain rule rather than running both by
+default.
+
+Scar, scarred-tree conversion, and VTK import remain subsequent independent
+vertical slices. They should not delay the tree workflow, nor should their
+larger conditional catalog be flattened into the initial user JSON.
