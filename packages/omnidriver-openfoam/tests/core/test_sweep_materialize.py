@@ -23,7 +23,17 @@ def test_materialize_case_honours_dx_for_spatial_solver(tmp_path):
             "omnidriver-cardiacfoam is not installed"
         ),
     )
-    from omnidriver.core.plugin_interface import default_driver_context
+    # The importorskip above already establishes which adapter this test means:
+    # materialize_case()'s only non-refusing implementation is cardiacFOAM's.
+    # Saying so beats asking the registry, which has no unique answer once
+    # cardiacfoam and openfoam-environment are both installed -- exactly the
+    # situation this skip guard implies.
+    from omnidriver.core.plugin_interface import driver_context as _driver_context
+    from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+
+    context = _driver_context(
+        CardiacFoamPlugin(), source="test:sweep_materialize",
+    )
 
     case_dir = tmp_path / "TNNP_monodomain_fine"
     materialize_case(
@@ -34,7 +44,7 @@ def test_materialize_case_honours_dx_for_spatial_solver(tmp_path):
             "electro_overrides": {}, "physics_overrides": {},
             "delta_t": None, "end_time": None, "dx": 0.0004,
         },
-        driver_context=default_driver_context(),
+        driver_context=context,
     )
     written = (case_dir / "system" / "blockMeshDict").read_text()
     assert written == default_block_mesh_dict_text(dx_m=0.0004)
