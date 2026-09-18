@@ -245,6 +245,8 @@ Not "identical code". Both adapters must:
 | a step naming an unknown adapter never executes | `LaunchReadiness` test: `structural_ok` false, nothing written |
 | one command is claimed by at most one adapter | a test over the merged utility map, mirroring `plugin_discovery`'s contested-name refusal |
 | an artifact is credited to a step of the adapter that wrote it | a two-plugin test where an unclaimed artifact must not be absorbed by the other adapter's terminal producer |
+| a consumer transitively depends on its producer | a planning test: a DAG consuming an id produced by a step it does not depend on is a diagnostic, not a run |
+| a missing non-optional artifact reports why | a test asserting the failure names the declaring step, its adapter, the pattern, and whether the producer ran |
 | a consumed artifact id was produced in this run | a test with two neutral plugins where the producing step is skipped, asserting the consumer is refused |
 | every `path_pattern` uses only `{case_id}`/`{time}` | a manifest-load guard, run over both adapters' catalogs |
 | core declares no cardiac vocabulary | existing `test_core_declares_no_phase_vocabulary`, unchanged |
@@ -267,22 +269,74 @@ that uses the mechanism, tested in its own package.
   forbids the import, and nothing here needs it.
 - **Renaming `workflows/` and `tutorials/`.** Recorded above, not done here.
 
-## Open questions
+## Decisions
 
-1. **Strict or evidential `produces`.** Should a step that did not produce what
-   it declared fail, or should the discrepancy be recorded the way checker
-   results are? `core/experiments`' boundary suggests recording; `LaunchReadiness`
-   suggests failing. Likely answer: fail for a non-optional artifact, record for
-   an optional one — but this should be decided against the coverage-as-evidence
-   amendments, which cover the same question for checks.
-2. **Where the merged `driver_contexts` mapping is built.** The CLI is the
-   obvious place, since it already resolves `--plugin`. A DAG spanning two
-   adapters implies something like repeated `--plugin`, and that surface needs
-   designing.
-3. **Whether `depends_on` should be derivable.** If B consumes an id that A
-   produces, the edge is implied. Deriving it removes a second hand-maintained
-   truth; keeping it and *checking* it against the artifact graph is the more
-   conservative option and probably the right first step.
+**A missing artifact must say why it is missing.** Decided 2026-09-18. The
+question was whether a step that did not produce what it declared should fail or
+merely record the discrepancy. Both, and neither alone: knowing an artifact is
+absent is worthless without knowing *why*, because the reason is the whole point
+of running the comparison. A non-optional declared artifact that does not appear
+fails the step, and the failure carries the attributable facts — which step and
+which adapter declared it, the `path_pattern` the declaration gave, what was
+found at that location, and whether the producing step ran at all. An absence
+reported as a bare boolean throws away the evidence that was the reason to look.
+
+This is the same principle as the coverage-as-evidence amendments: a check that
+did not run must say so, and say why, rather than being scored as though it had.
+An artifact that did not appear is that principle applied to outputs.
+
+**The DAG is the CLI surface.** Decided 2026-09-18. No new syntax. The steps
+already name their adapters, so the DAG *is* the request; the CLI resolves each
+adapter named in it through the same installed-plugin mechanism `--plugin`
+already uses, and refuses with the missing name if one is not installed.
+
+This keeps §12 intact. Resolution happens at the CLI — a public edge, where "no
+plugin supplied" legitimately means "find the installed one" — and core still
+receives a mapping it was handed. Core does not gain a lookup; the CLI already
+has one.
+
+**`depends_on` is checked against the artifact graph, not replaced by it.**
+Decided 2026-09-18. See below.
+
+## What `depends_on` does, and why `consumes` is not a substitute
+
+`depends_on` is the only thing that sequences execution.
+`workflow_runner._next_runnable_step_id` scans steps in declaration order and
+returns the first `pending` step whose every dependency is in
+`completed_steps`; `initial_workflow_state` starts the run at the first step
+with no dependencies. `normalize_workflow_dag` rejects a dependency on an
+unknown step and rejects cycles. Execution is serial: one `current_step_id` at a
+time, so the DAG is declared as a graph and executed as a topological sequence.
+
+`consumes` and `produces` affect **none** of that. They drive provenance and
+artifact attribution only. So the two keys are not redundant today — they are
+disconnected, which is worse. In cardiacCore's real preprocessing DAG,
+`purkinje_slab` consumes `0/Conductivity`, which the `conductivity` step writes,
+and the ordering happens to hold only through the chain
+`purkinje_slab → anatomy → conductivity`. Nothing checks that those two facts
+agree. Drop or reorder a `depends_on` and the `consumes` list stays perfectly
+truthful while the step now runs before its input exists.
+
+Once `consumes` refers to artifacts by id (core change 3), the artifact graph
+states the real dependency: a step consuming an id that another step produces
+must run after it. The choice is to derive `depends_on` from that graph or to
+keep it and check it. **Check it.** Deriving would make ordering implicit and
+silently change existing DAGs, and it cannot express the orderings that are not
+artifact-mediated — a step that must follow another for a reason no file records.
+Checking adds no key, removes no expressiveness, and turns a silent
+misordering into a planning error: if a step consumes an artifact another step
+produces and does not transitively depend on it, that is a diagnostic, reported
+before execution.
+
+That is the relation between existing keys, modelled — rather than a third key
+restating what two already imply.
+
+## Remaining open question
+
+**Parallel execution.** Derived or checked, the artifact graph would make safe
+fan-out computable: independent branches could run concurrently. Execution is
+serial today and this spec does not change that. Worth noting only so that the
+checking rule above is not written in a way that assumes a single running step.
 
 ## Sequence
 
