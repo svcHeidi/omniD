@@ -45,14 +45,20 @@ import sys
 from pathlib import Path
 
 from omnidriver.core.runtime.registry import list_tutorials
-from omnidriver.core.plugin_interface import default_driver_context
+from omnidriver.core.plugin_interface import (
+    default_driver_context,
+    load_plugin_context,
+)
 from omnidriver.core.tutorials_display import to_record
 
 
-def build_catalog() -> dict:
-    context = default_driver_context()
-    plugin = context.plugin
-    display_ids = {t.id for t in plugin.get_tutorial_displays()}
+def build_catalog(plugin: str | None = None) -> dict:
+    # `selected` rather than reusing `plugin`: the argument is a plugin *id*
+    # and this is the plugin *object*. Binding both to one name reads as a
+    # mistake even when it is not.
+    context = load_plugin_context(plugin) if plugin else default_driver_context()
+    selected = context.plugin
+    display_ids = {t.id for t in selected.get_tutorial_displays()}
     registry_ids = set(list_tutorials(context))
 
     only_in_display = display_ids - registry_ids
@@ -69,7 +75,7 @@ def build_catalog() -> dict:
 
     # Stable order: keep list_tutorials()' declared order so the
     # JSON is reproducible regardless of get_tutorial_displays() tuple order.
-    by_id = {t.id: t for t in plugin.get_tutorial_displays()}
+    by_id = {t.id: t for t in selected.get_tutorial_displays()}
     return {
         "version": "1",
         "tutorials": [to_record(by_id[name]) for name in list_tutorials(context)],
@@ -79,8 +85,16 @@ def build_catalog() -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", required=True, help="output JSON path")
+    parser.add_argument(
+        "--plugin",
+        help=(
+            "Plugin whose tutorial catalog to export: an installed plugin id, "
+            "a trusted local-development import target "
+            "(module.path:PluginClass). Defaults to the single installed adapter."
+        ),
+    )
     args = parser.parse_args()
-    catalog = build_catalog()
+    catalog = build_catalog(args.plugin)
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(catalog, indent=2, sort_keys=True))

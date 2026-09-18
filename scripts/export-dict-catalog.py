@@ -53,10 +53,10 @@ from omnidriver.cardiacfoam.active_tension_catalog import (
 PHASES = ("anatomy", "physics", "stimulus", "solver")
 
 
-def _all_entries():
+def _all_entries(context):
     """Yield every ``DictEntry`` known to the backend, regardless of group."""
     entries: list[DictEntry] = list(PHYSICS_PROPERTY_ENTRIES)
-    for group in get_electro_property_entry_groups().values():
+    for group in get_electro_property_entry_groups(context).values():
         entries.extend(group)
     yield from entries
 
@@ -72,9 +72,18 @@ def _entry_to_record(e) -> dict:
     return d
 
 
-def build_catalog() -> dict:
+def build_catalog(plugin: str | None) -> dict:
+    from omnidriver.core.plugin_interface import (
+        default_driver_context,
+        load_plugin_context,
+    )
+    if plugin:
+        context = load_plugin_context(plugin)
+    else:
+        context = default_driver_context()
+
     by_phase: dict[str, list] = {p: [] for p in PHASES}
-    for e in _all_entries():
+    for e in _all_entries(context):
         if not e.phases:
             raise SystemExit(f"entry missing phases: {e.driver_path}")
         record = _entry_to_record(e)
@@ -100,8 +109,16 @@ def build_catalog() -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", required=True, help="output JSON path")
+    parser.add_argument(
+        "--plugin",
+        help=(
+            "Plugin whose dictionary entries to export: an installed plugin id, "
+            "or a trusted local-development import target "
+            "(module.path:PluginClass). Defaults to the single installed adapter."
+        ),
+    )
     args = parser.parse_args()
-    catalog = build_catalog()
+    catalog = build_catalog(args.plugin)
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(catalog, indent=2, sort_keys=True))
