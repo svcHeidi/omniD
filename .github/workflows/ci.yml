@@ -85,6 +85,42 @@ jobs:
       - name: Run tests
         run: python -m pytest packages/omnidriver-cardiacfoam/tests -m "not slow" -q
 
+  # omnidriver-cardiaccore arrived with the 2026-09-18 branch integration and
+  # had no job of its own, so its 69 tests ran nowhere. It installs
+  # omnidriver-openfoam because it genuinely depends on it -- operations/
+  # and workflows/ use read_foam_entry/update_foam_entry -- which is the
+  # allowed direction: a cardiac adapter may know OpenFOAM, not the reverse.
+  # That also means two adapters are installed here, so this job is what would
+  # catch a regression of the ambient-default-context defect in this package.
+  test-cardiaccore:
+    name: test-cardiaccore (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            packages/omnidriver/pyproject.toml
+            packages/omnidriver-openfoam/pyproject.toml
+            packages/omnidriver-cardiaccore/pyproject.toml
+
+      - name: Install omnidriver + omnidriver-openfoam + omnidriver-cardiaccore
+        run: |
+          pip install -e packages/omnidriver \
+                      -e packages/omnidriver-openfoam \
+                      -e packages/omnidriver-cardiaccore \
+                      pytest
+
+      - name: Run tests
+        run: python -m pytest packages/omnidriver-cardiaccore/tests -q
+
   test-all-package-wheels:
     name: test-all-package-wheels (py3.11)
     runs-on: ubuntu-latest

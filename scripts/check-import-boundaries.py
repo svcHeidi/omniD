@@ -42,6 +42,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # claims to verify. This gate reported "boundaries OK" throughout.
 CORE_SRC = REPO_ROOT / "packages/omnidriver/src/omnidriver"
 OPENFOAM_SRC = REPO_ROOT / "packages/omnidriver-openfoam/src/omnidriver/openfoam"
+# CLAUDE.md's package table states what cardiaccore must not know about:
+# "cardiacFoam solver semantics". The two cardiac adapters are siblings, and a
+# direct import between them would make one adapter's vocabulary a silent
+# dependency of the other -- the producer/consumer seam between them is meant
+# to be declared and mediated, not imported.
+CARDIACCORE_SRC = REPO_ROOT / "packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore"
 
 # Waived pre-existing violations. This list may only SHRINK. A new violation
 # fails the gate; a waiver that no longer matches anything also fails it, so
@@ -139,6 +145,13 @@ def main() -> int:
             OPENFOAM_SRC,
         ))
 
+    for path in CARDIACCORE_SRC.rglob("*.py"):
+        found.extend(_check_file(
+            path,
+            ("omnidriver.cardiacfoam",),
+            CARDIACCORE_SRC,
+        ))
+
     waived = {key for key, _ in found if key in KNOWN_VIOLATIONS}
     violations = [msg for key, msg in found if key not in KNOWN_VIOLATIONS]
 
@@ -169,7 +182,11 @@ def main() -> int:
         print(
             "\nomnidriver.core must not import foamlib, omnidriver.cardiacfoam or "
             "omnidriver.cardiaccore at runtime. omnidriver.openfoam must not "
-            "import either cardiac package. "
+            "import either cardiac package. omnidriver.cardiaccore must not "
+            "import omnidriver.cardiacfoam: the two cardiac adapters are "
+            "siblings, and what passes between them is declared, not imported. "
+            "A cardiac adapter importing omnidriver.openfoam is allowed -- that "
+            "is the direction the layering permits. "
             "See ARCHITECTURE.md's Architectural Rules."
         )
         return 1
