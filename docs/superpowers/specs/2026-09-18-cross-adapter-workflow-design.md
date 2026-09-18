@@ -428,6 +428,26 @@ that uses the mechanism, tested in its own package.
   one DAG that exchange declared artifacts. `scripts/check-import-boundaries.py`
   forbids the import, and nothing here needs it.
 - **Renaming `workflows/` and `tutorials/`.** Recorded above, not done here.
+- **Reconciling the transmural orientation.** cardiacCore reads `endocardium`
+  and `epicardium` as required scalars from a case's
+  `coordinatesConventionDict`, allowing either orientation and any range;
+  cardiacFOAM never reads that dictionary and instead asserts a normalized
+  0=endo/1=epi scale in four prose descriptions — `ionicHeterogeneity.field`,
+  `endoMInterface`, `mEpiInterface` and `setFibreField`'s manifest. Nothing
+  compares the two. Both named coordinate systems conventionally run endo=0 to
+  epi=1, so the assumption usually holds; where it does not, the M-cell bands at
+  0.3/0.7 land in the wrong layers silently and the run still completes.
+
+  **Deferred deliberately, 2026-09-18.** The author's intended fix is a small
+  preflight that inspects the mesh, determines which surface carries which
+  value, and normalizes before the run — a property of the data, not of the
+  orchestration, and correctly not a DAG step.
+
+  The one orchestration consequence worth preserving: if that preflight
+  *rewrites* the coordinate fields, it changes a run input. Its effect must be
+  visible — a fingerprint taken after normalization, or a recorded note that it
+  ran — or provenance loses an input that moved, which is the one question this
+  design exists to answer.
 
 ## Decisions
 
