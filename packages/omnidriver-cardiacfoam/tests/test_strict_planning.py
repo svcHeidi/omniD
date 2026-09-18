@@ -58,8 +58,35 @@ def test_strict_plan_succeeds_for_single_cell() -> None:
     payload = report.to_json()
 
     assert payload["status"] == "ok"
-    assert payload["readiness_score"]["score"] == 100
-    assert payload["readiness_score"]["status"] == "ready"
+
+    # Updated 2026-09-18. This asserted `score == 100` and `status == "ready"`.
+    # The test supplies a deliberately nonexistent bashrc AND runs under a
+    # conftest that sets SKIP_ENV_DIAGNOSTICS, so environment preflight never
+    # executes -- and it used to be paid its full ten points regardless. This
+    # assertion did not fail, it *ratified*: see
+    # docs/superpowers/specs/2026-09-18-coverage-as-evidence.md §1.
+    #
+    # The invariant is asserted rather than a new exact total, deliberately.
+    # This module needs the cardiacFoam tutorials tree and is skipped both here
+    # and in CI, so the replacement number could not be observed -- and an
+    # unverified literal is how the previous one survived. Whoever first runs
+    # this with the tree present should tighten it to the exact score.
+    readiness = payload["readiness_score"]
+    assert readiness["score"] < 100, (
+        "a plan whose environment preflight did not run reports a perfect score"
+    )
+    assert "environment_preflight" in readiness["uncovered_stages"]
+    environment = next(
+        item for item in payload["simulation_audit"]
+        if item["stage"] == "environment_preflight"
+    )
+    assert environment["points"] == 0
+    assert environment["status"] == "not_requested"
+
+    # Still "ready" at less than full coverage. Deliberate for now: changing the
+    # status vocabulary is the next slice, and moving two things at once would
+    # make any score movement ambiguous between them.
+    assert readiness["status"] == "ready"
     assert {
         item["stage"] for item in payload["simulation_audit"]
     } == {

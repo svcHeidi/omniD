@@ -28,6 +28,18 @@ _READINESS_WEIGHTS = {
 }
 
 
+#: Outcomes for a stage that did not run, from
+#: docs/superpowers/specs/2026-09-18-coverage-as-evidence.md. Each is a distinct
+#: fact -- the operator declined the check, it cannot apply to this plan, or the
+#: thing it needs was absent -- and all three scored `passed` with full points
+#: until 2026-09-18, because every skip path returns an empty diagnostic tuple
+#: and an empty tuple has no error and no warning.
+UNCOVERED_OUTCOMES = frozenset({"not_requested", "not_applicable", "unavailable"})
+
+#: The stage ran. Its status is then derived from its diagnostics, as before.
+EXECUTED = "executed"
+
+
 def _score_from_diagnostics(
     *,
     stage: str,
@@ -35,9 +47,31 @@ def _score_from_diagnostics(
     success_summary: str,
     warning_summary: str,
     error_summary: str,
+    outcome: str,
+    uncovered_summary: str = "",
     evidence: dict[str, Any] | None = None,
 ) -> SimulationAuditItem:
+    """Score one stage. ``outcome`` is required and has no default.
+
+    Requiring it is the fix: this function cannot infer from an empty diagnostic
+    tuple whether a check ran and found nothing or never ran at all, and for as
+    long as it guessed, it guessed success. The caller knows, so the caller says.
+    """
     max_points = _READINESS_WEIGHTS[stage]
+    if outcome in UNCOVERED_OUTCOMES:
+        return SimulationAuditItem(
+            stage=stage,
+            status=outcome,
+            points=0,
+            max_points=max_points,
+            summary=uncovered_summary or f"{stage} did not run ({outcome}).",
+            evidence=evidence or {},
+        )
+    if outcome != EXECUTED:
+        raise ValueError(
+            f"{stage}: outcome must be {EXECUTED!r} or one of "
+            f"{sorted(UNCOVERED_OUTCOMES)}; got {outcome!r}"
+        )
     if has_error(diagnostics):
         return SimulationAuditItem(
             stage=stage,
@@ -216,6 +250,7 @@ def _build_simulation_audit(
                 if generic_case else
                 "The dictionaries could not be resolved into a valid run config."
             ),
+            outcome=EXECUTED,
             evidence={"diagnostic_count": len(validation_diagnostics)},
         ),
         _score_from_diagnostics(
@@ -224,6 +259,7 @@ def _build_simulation_audit(
             success_summary="The workflow DAG is normalized into executable argv-style steps.",
             warning_summary="The workflow DAG is executable, but normalization emitted warnings.",
             error_summary="The workflow DAG is missing or invalid, so strict execution cannot start.",
+            outcome=EXECUTED,
             evidence={
                 "step_count": 0 if workflow_dag is None else len(workflow_dag.get("steps", ())),
                 "step_ids": [] if workflow_dag is None else [
@@ -237,6 +273,7 @@ def _build_simulation_audit(
             success_summary="The planner predicts raw data artifacts and links them to workflow steps.",
             warning_summary="Artifacts are predicted, but coverage warnings remain.",
             error_summary="The planner cannot reliably predict this run's data artifacts.",
+            outcome=EXECUTED,
             evidence={
                 "artifact_count": len(artifacts),
                 "artifact_ids": [artifact.artifact_id for artifact in artifacts],
@@ -248,6 +285,13 @@ def _build_simulation_audit(
             success_summary="The current environment satisfies the commands declared by the workflow.",
             warning_summary="The environment can be used, but preflight emitted warnings.",
             error_summary="The current environment is missing executables or runtime setup needed to run.",
+            outcome=(
+                "not_requested" if "SKIP_ENV_DIAGNOSTICS" in os.environ else EXECUTED
+            ),
+            uncovered_summary=(
+                "Environment preflight was not requested: SKIP_ENV_DIAGNOSTICS is "
+                "set, so nothing was checked about this environment."
+            ),
             evidence={
                 "skipped": "SKIP_ENV_DIAGNOSTICS" in os.environ,
                 "diagnostic_count": len(environment_diagnostics),
@@ -259,6 +303,13 @@ def _build_simulation_audit(
             success_summary="Mesh-scale checks did not find run-preparation issues.",
             warning_summary="Mesh-scale checks emitted warnings.",
             error_summary="Mesh-scale checks found run-preparation issues.",
+            outcome=(
+                "not_requested" if "SKIP_MESH_DIAGNOSTICS" in os.environ else EXECUTED
+            ),
+            uncovered_summary=(
+                "Mesh-scale checks were not requested: SKIP_MESH_DIAGNOSTICS is "
+                "set, so no mesh geometry was examined."
+            ),
             evidence={
                 "skipped": "SKIP_MESH_DIAGNOSTICS" in os.environ,
                 "diagnostic_count": len(mesh_geometry_diagnostics),
@@ -269,6 +320,7 @@ def _build_simulation_audit(
     max_score = sum(item.max_points for item in items)
     blocked = [item.stage for item in items if item.status == "blocked"]
     warnings = [item.stage for item in items if item.status == "warning"]
+    uncovered = [item.stage for item in items if item.status in UNCOVERED_OUTCOMES]
     readiness = {
         "score": score,
         "max_score": max_score,
@@ -276,5 +328,6 @@ def _build_simulation_audit(
         "status": "blocked" if blocked else ("warning" if warnings else "ready"),
         "blocked_stages": blocked,
         "warning_stages": warnings,
+        "uncovered_stages": uncovered,
     }
     return tuple(items), generation_diagnostics, readiness
