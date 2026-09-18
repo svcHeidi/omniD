@@ -1,5 +1,10 @@
 # Review: build OmniDriver around a demonstrated workflow
 
+> **FOLDED INTO `2026-09-18-coverage-as-evidence.md` on 2026-09-18.**
+> All six amendments were accepted and are now in the consolidated spec; this
+> file is retained for the probes and measurements that justify them, which the
+> consolidation cites but does not reproduce. Implement from the consolidation.
+
 2026-09-18. Review of `2026-09-18-coverage-as-evidence-design.md` against
 OmniDriver `78dc3aee35f6f9b97d2a58ba5b432fa39749a53d` and selected local native
 source. Recommendations, not implemented behavior or new scientific policy.

@@ -1,6 +1,14 @@
 # Coverage is evidence: one vocabulary for what a check actually proves
 
-Design, 2026-09-18. Status: proposed, not implemented.
+> **SUPERSEDED 2026-09-18 by `2026-09-18-coverage-as-evidence.md`.**
+> Read this for its reasoning, not as the specification. Nine of its positions
+> were amended by `2026-09-18-coverage-as-evidence-review.md` and the
+> consolidation records each change with its reason. In particular: §2's
+> corollary, §4.1's scoring formula, §4.5.3's `native_owned` outcome and
+> §4.5.4's numeric-literal lint are **not** the current design. Its cardiaccore
+> census in §4.5.2 is stale. Do not implement from this file.
+
+Design, 2026-09-18. Status: superseded; retained for reasoning.
 
 Supersedes nothing. Amends no contract. It names an invariant this repository
 already states in prose fifteen times, implements correctly in two subsystems,
