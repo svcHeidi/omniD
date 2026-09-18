@@ -198,6 +198,56 @@ Unresolvable references are the missing-artifact case, not a crash: if the entry
 is absent the artifact's location is unknown, and that is reported with the
 reason, per the decision below.
 
+**How widespread is this?** Measured 2026-09-18 over all 62 declared artifacts
+(48 distinct basenames) and the cardiacFOAM dict catalog, in both directions —
+entries that name a file, and artifact basenames that appear as an entry's
+default. Three patterns exist, and only one of them is this defect:
+
+**(a) Fixed name, conditional presence.** `$ELECTRO_MODEL_COEFFS.conductivitySource`
+is an enum of `field` / `uniform`, and its constraint reads: "Spatial solvers use
+**fixed field names**: Conductivity for monodomain/eikonal and
+ConductivityIntracellular plus ConductivityExtracellular for bidomain." The name
+is not configurable. What the entry selects is *whether the file is read at all*.
+A hardcoded `path_pattern` is correct here — see change 5, which is about
+something else.
+
+**(b) The entry names the file.** Three, and only three:
+
+| entry | status | artifact hardcoding its default |
+|---|---|---|
+| `…purkinjeGraphModelCoeffs.graphFile` | `required=True`, no default | `1DgraphToFoam` → `constant/purkinjeGraph` (the *flag's* default) |
+| `…bathPotentialDomain.bathConductivityField` | optional, `typical_value='bodyAndOrgansConductivity'` | `setTorsoOrganConductivityField` → `0/bodyAndOrgansConductivity` |
+| `…ionicHeterogeneity.field` | optional, `examples=('t',)` | `setFibreField` → `0/t` |
+
+The optional two are the more dangerous shape: the solver has a default, so the
+hardcoded pattern is right until someone exercises a freedom the entry grants,
+and then attribution moves silently to a file that is not there.
+
+**(c) Convention only.** The remaining 45 basenames. Nothing configures them and
+a literal `path_pattern` is the whole truth.
+
+So change 4 applies to exactly three artifacts. That is small enough to do by
+hand and important enough to guard, since all three sit on data crossing between
+preprocessing and the solver.
+
+### Core change 5 — an artifact may be expected conditionally
+
+Pattern (a) needs something change 4 does not provide. Under
+`conductivitySource=uniform` there is no `0/Conductivity` and there never should
+be; under `field` there must be one. `ProducesEntry.optional` is a static
+boolean, so it has to choose: mark it optional and a genuinely missing required
+field passes unnoticed, or mark it required and every `uniform` run fails on an
+absence that is correct.
+
+That directly undercuts the missing-artifact decision below. An absence reported
+with a reason is worth nothing if the reason is wrong.
+
+An artifact declaration may therefore carry the same `applicable_when` /
+`required_when` conditions `DictEntry` already uses, evaluated against the run's
+configuration through the same reader change 4 introduces. This adds no
+vocabulary: it reuses the condition language the dictionary layer already has,
+applied to outputs instead of inputs.
+
 ## Adapter uniformity
 
 The two adapters reach the same core types by different routes. Some of that is
@@ -301,6 +351,8 @@ Not "identical code". Both adapters must:
 | a consumed artifact id was produced in this run | a test with two neutral plugins where the producing step is skipped, asserting the consumer is refused |
 | every `path_pattern` uses only known placeholders or a `config:` reference | a manifest-load guard, run over both adapters' catalogs |
 | a configured path is read from the entry, not a copied default | a test that changing `graphFile` moves where the artifact is looked for |
+| no artifact hardcodes a value a dict entry owns | the 2026-09-18 cross-check, kept as a test over both catalogs in both directions |
+| a conditionally-expected artifact is judged against the condition | a test that `conductivitySource=uniform` does not fail on an absent `0/Conductivity`, and `field` does |
 | core declares no cardiac vocabulary | existing `test_core_declares_no_phase_vocabulary`, unchanged |
 
 Tests use two throwaway plugins from `packages/omnidriver/tests/plugins/`, not
