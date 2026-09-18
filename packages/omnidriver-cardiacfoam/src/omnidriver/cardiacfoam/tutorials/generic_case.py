@@ -30,9 +30,9 @@ def make_spec(**kwargs):
     # OpenFOAM behavior itself.  Callers that need a different explicit
     # environment may still pass ``driver_context``.
     if kwargs.get("driver_context") is None:
-        from omnidriver.core.plugin_interface import default_driver_context
+        from omnidriver.cardiacfoam.own_context import own_driver_context
 
-        kwargs["driver_context"] = default_driver_context()
+        kwargs["driver_context"] = own_driver_context()
     kwargs.setdefault("_apply_case_mutation", apply_case_mutation)
     kwargs.setdefault("dict_file_relpaths", dict(CARDIAC_DICT_FILE_RELPATHS))
     return _core_make_spec(**kwargs)

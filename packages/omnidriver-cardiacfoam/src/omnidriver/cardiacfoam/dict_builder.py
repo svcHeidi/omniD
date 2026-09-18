@@ -59,7 +59,7 @@ from omnidriver.openfoam.dict_builder import (
 from omnidriver.openfoam.dict_builder import (
     select_applicable_entries as _select_applicable_entries,
 )
-from omnidriver.core.plugin_interface import default_driver_context
+from omnidriver.cardiacfoam.own_context import own_driver_context
 from omnidriver.core.specs.validation import (
     _predicate_matches,
     slot_key,
@@ -88,10 +88,11 @@ def _all_electro_entries() -> list[DictEntry]:
         "ecg"
     ]
     out: list[DictEntry] = []
+    groups = get_electro_property_entry_groups(own_driver_context())
     for k in ordered_keys:
-        if k in get_electro_property_entry_groups():
-            out.extend(get_electro_property_entry_groups()[k])
-    for k, group in get_electro_property_entry_groups().items():
+        if k in groups:
+            out.extend(groups[k])
+    for k, group in groups.items():
         if k not in ordered_keys:
             out.extend(group)
     return out
@@ -132,7 +133,10 @@ def _infer_virtual_presence(ctx: dict[str, Any]) -> None:
 
     # Support OR logic for ionicHeterogeneity applicability
     from omnidriver.dict_entries import get_heterogeneity_models
-    if ctx.get("myocardiumSolver") == "eikonalSolver" or ctx.get("ionicModel") in get_heterogeneity_models():
+    if (
+        ctx.get("myocardiumSolver") == "eikonalSolver"
+        or ctx.get("ionicModel") in get_heterogeneity_models(own_driver_context())
+    ):
         ctx["$ionicHeterogeneity_supported"] = True
 
 
@@ -270,7 +274,7 @@ def build_electro_properties(
     # does), so we don't pre-call `check_required` from the public builder
     # entry-point. `check_required` stays exported for callers that want
     # just the required-field subset.
-    context_ = default_driver_context()
+    context_ = own_driver_context()
     run = _populated_to_run(
         populated, entries, context_.capabilities.dictionaries.phases(),
     )
@@ -818,7 +822,7 @@ def build_physics_properties(
         entries, context, typical_value_fallback=typical_value_fallback,
     )
 
-    context_ = default_driver_context()
+    context_ = own_driver_context()
     run = _populated_to_run(
         populated, entries, context_.capabilities.dictionaries.phases(),
     )

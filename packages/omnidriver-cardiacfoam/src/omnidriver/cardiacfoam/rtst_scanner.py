@@ -46,6 +46,7 @@ from pathlib import Path
 from omnidriver.cardiacfoam.common_dict_entries import PHYSICS_PROPERTY_ENTRIES
 from omnidriver.core.contracts.dictionary import DictEntry
 from omnidriver.dict_entries import get_electro_property_entry_groups
+from omnidriver.cardiacfoam.own_context import own_driver_context
 
 
 # `addToRunTimeSelectionTable(base, derived, ctor);` — argument layout is
@@ -179,7 +180,7 @@ def iter_catalogue_enums() -> Iterable[CatalogueEnum]:
         c = from_entry(e)
         if c is not None:
             yield c
-    for group in get_electro_property_entry_groups().values():
+    for group in get_electro_property_entry_groups(own_driver_context()).values():
         for e in group:
             c = from_entry(e)
             if c is not None:

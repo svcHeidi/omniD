@@ -204,9 +204,10 @@ def _dynamic_block_templates() -> dict[str, list[Any]]:
     """
     from omnidriver.dict_entries import get_electro_property_entry_groups
     from omnidriver.core.specs.validation import slot_key
+    from omnidriver.cardiacfoam.own_context import own_driver_context
 
     templates: dict[str, list[Any]] = {}
-    for group in get_electro_property_entry_groups().values():
+    for group in get_electro_property_entry_groups(own_driver_context()).values():
         for entry in group:
             if not entry.dynamic_path:
                 continue
