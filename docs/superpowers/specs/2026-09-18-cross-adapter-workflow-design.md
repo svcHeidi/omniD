@@ -230,23 +230,76 @@ So change 4 applies to exactly three artifacts. That is small enough to do by
 hand and important enough to guard, since all three sit on data crossing between
 preprocessing and the solver.
 
-### Core change 5 — an artifact may be expected conditionally
+### Core change 5 — conditional expectedness, derived where it already exists
 
-Pattern (a) needs something change 4 does not provide. Under
-`conductivitySource=uniform` there is no `0/Conductivity` and there never should
-be; under `field` there must be one. `ProducesEntry.optional` is a static
-boolean, so it has to choose: mark it optional and a genuinely missing required
-field passes unnoticed, or mark it required and every `uniform` run fails on an
-absence that is correct.
+`ProducesEntry.optional` is a static boolean. Under `conductivitySource=uniform`
+there is no `0/Conductivity` and there never should be; under `field` there must
+be one. A boolean has to choose: marked optional, a genuinely missing field
+passes unnoticed; marked required, every `uniform` run fails on an absence that
+is correct. Either way the missing-artifact decision below reports a reason that
+is wrong, and a wrong reason is worth less than none.
 
-That directly undercuts the missing-artifact decision below. An absence reported
-with a reason is worth nothing if the reason is wrong.
+But the two patterns need opposite treatment, and an earlier draft of this
+section got that wrong by proposing one mechanism for both.
 
-An artifact declaration may therefore carry the same `applicable_when` /
-`required_when` conditions `DictEntry` already uses, evaluated against the run's
-configuration through the same reader change 4 introduces. This adds no
-vocabulary: it reuses the condition language the dictionary layer already has,
-applied to outputs instead of inputs.
+**Pattern (b) — derive it. Do not restate it.** `ionicHeterogeneity.field`
+already carries `applicable_when={"$ionicHeterogeneity_supported": True}`, and
+that flag is computed in `dict_builder._infer_virtual_presence`. The condition is
+machine-readable today. Once an artifact's `path_pattern` references that entry
+(change 4), the artifact's applicability follows from the entry it already points
+at. Adding a condition to the artifact would restate a structured fact — the
+second truth this whole design exists to remove. **Corrected 2026-09-18**: an
+earlier draft proposed exactly that.
+
+**Pattern (a) — express it once, because it is currently prose.**
+`conductivitySource` states its consequence in an English sentence:
+
+```python
+constraints=('Spatial solvers use fixed field names: Conductivity for
+              monodomain/eikonal and ConductivityIntracellular plus
+              ConductivityExtracellular for bidomain.',)
+```
+
+An agent reads that and correctly infers it needs `0/Conductivity`. The
+orchestrator cannot, and the orchestrator is what produces the evidence. A
+design whose verification depends on an agent having understood a sentence is
+not verification; it is the agent's assertion with extra steps, which is exactly
+what the provenance trail exists to avoid.
+
+So here `required_when={"conductivitySource": "field", "myocardiumSolver": (...)}`
+on the artifact is not a second truth — it is the *first* machine-readable
+statement of a fact that currently exists only in prose, in the vocabulary
+`DictEntry` already uses. The prose constraint then becomes the human-readable
+rendering of the structure, not its only home.
+
+### The third class: inputs from before the pipeline
+
+The coordinate fields are the worked example of the case-input member of
+`consumes` (change 3), and they are worth naming because they look like seam
+artifacts and are not.
+
+cardiacCore *consumes* `_COORD["transmural"]`, `["longitudinal"]` and
+`["intraventricular"]`, and declares none of them among its thirty-one
+artifacts. They are produced upstream of the whole pipeline — a UVC or cobiveco
+computation that omnidriver does not run. **Confirmed with the author
+2026-09-18** after an earlier reading of this design assumed cardiacCore
+produced the transmural field. It does not; the quantity arrives from before.
+
+Note also that cardiacFOAM's `setFibreField` produces `0/t`, a fibre-side
+transmural quantity. That is a *different* field from the UVC transmural
+coordinate cardiacCore consumes, despite both being "transmural". Provenance
+must never be inferred from a field's name.
+
+Consequences for the design:
+
+- These are never attributable to a producing step, so no `depends_on` check
+  applies to them and none should be invented.
+- They are fingerprinted as external inputs via `provenance_inputs.ResolvedInput`,
+  with an explicit `unavailable` component when a required one does not resolve.
+- Their *names* come from the case's declared coordinates convention, resolved by
+  role through `coordinate_field_paths`. A run must record which convention was
+  in force, because the same role resolves to different names under uvc and
+  cobiveco and the files alone do not say which.
 
 ## Adapter uniformity
 
@@ -353,6 +406,9 @@ Not "identical code". Both adapters must:
 | a configured path is read from the entry, not a copied default | a test that changing `graphFile` moves where the artifact is looked for |
 | no artifact hardcodes a value a dict entry owns | the 2026-09-18 cross-check, kept as a test over both catalogs in both directions |
 | a conditionally-expected artifact is judged against the condition | a test that `conductivitySource=uniform` does not fail on an absent `0/Conductivity`, and `field` does |
+| a condition is derived, not restated, where the entry already carries it | a test that an artifact referencing `ionicHeterogeneity.field` inherits its `applicable_when` and declares no condition of its own |
+| an external input is never treated as a produced artifact | a test that a coordinate field is fingerprinted as a case input and attributed to no step |
+| the coordinates convention in force is recorded | a test that two runs differing only in convention produce different recorded input names |
 | core declares no cardiac vocabulary | existing `test_core_declares_no_phase_vocabulary`, unchanged |
 
 Tests use two throwaway plugins from `packages/omnidriver/tests/plugins/`, not
