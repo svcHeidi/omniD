@@ -396,7 +396,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             value_kind='scalar',
             required=True,
             constraints=('Required when myocardiumSolver=singleCellSolver.',),
-            unit='s',
+            unit='ms',
             typical_value='0.0',
             required_when={"$singleCellStimulus_present": True},
             applicable_when={"myocardiumSolver": "singleCellSolver"},
@@ -407,7 +407,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             value_kind='scalar',
             required=True,
             constraints=('Required when myocardiumSolver=singleCellSolver.',),
-            unit='s',
+            unit='ms',
             typical_value='1.0',
             required_when={"$singleCellStimulus_present": True},
             applicable_when={"myocardiumSolver": "singleCellSolver"},
@@ -418,7 +418,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             value_kind='scalar',
             required=True,
             constraints=('Required when myocardiumSolver=singleCellSolver.',),
-            unit='s',
+            unit='ms',
             typical_value='1.0',
             required_when={"$singleCellStimulus_present": True},
             applicable_when={"myocardiumSolver": "singleCellSolver"},
@@ -1288,21 +1288,45 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.apdNominal',
             phases=frozenset({'physics'}),
-            description='Nominal Action Potential Duration [s] used as the baseline for multi-beat restitution dynamics.',
+            description=(
+                'Fixed action-potential duration [s] subtracted from the activation interval to form the '
+                'reported DI. It is a duration surrogate, not a measured repolarization event and not an ERP: '
+                'the solver stores no repolarization time. Default is the conditioned APD90 measured on the '
+                'Stewart cable.'
+            ),
             source_refs=('src/electroModels/conductionSystemModels/restitutionEikonalSolver1D/restitutionEikonalSolver1D.H',),
             value_kind='scalar',
             dynamic_path=True,
-            typical_value='0.290',
+            typical_value='0.303037',
+            applicable_when={"$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.conductionSystemSolver": ("restitutionEikonalSolver1D",)},
+        ),
+        DictEntry(
+            driver_path='$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.minimumDI90',
+            phases=frozenset({'physics'}),
+            description=(
+                'Calibrated capture boundary [s]: the shortest diastolic interval at which a node accepts a new '
+                'activation, so a node re-activates once its activation interval reaches apdNominal + minimumDI90. '
+                'Deliberately independent of the CV table domain -- deriving it from the table\'s lower endpoint '
+                'tied the refractory threshold to wherever the velocity measurements happened to start.'
+            ),
+            source_refs=('src/electroModels/conductionSystemModels/restitutionEikonalSolver1D/restitutionEikonalSolver1D.H',),
+            value_kind='scalar',
+            dynamic_path=True,
+            typical_value='0.050',
             applicable_when={"$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.conductionSystemSolver": ("restitutionEikonalSolver1D",)},
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.escapeInterval',
             phases=frozenset({'physics'}),
-            description="Funny current escape interval [s] dictating the intrinsic spontaneous firing rate of the pacemaker cells in the absence of an external stimulus.",
+            description=(
+                'Spontaneous firing interval [s] for a node that receives no wave. A graph scheduling parameter '
+                'rather than a conduction result. Default is the measured proximal automaticity cycle on the '
+                'Stewart cable.'
+            ),
             source_refs=('src/electroModels/conductionSystemModels/restitutionEikonalSolver1D/restitutionEikonalSolver1D.H',),
             value_kind='scalar',
             dynamic_path=True,
-            typical_value='1.1',
+            typical_value='1.202470',
             applicable_when={"$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.conductionSystemSolver": ("restitutionEikonalSolver1D",)},
         ),
         DictEntry(
@@ -1520,16 +1544,6 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             notes='conductionSystemDomain.C:402-404; defaults to identity(nNodes), i.e. EVERY node -- on a large tree that is one column per node per variable, so setting this is usually worthwhile.',
             value_kind='label_list',
             typical_value='(0 100 500)',
-            dynamic_path=True,
-        ),
-        DictEntry(
-            driver_path='$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.stimulus.sites',
-            phases=frozenset({'stimulus'}),
-            description='Graph node indices stimulated by the restitution protocol.',
-            source_refs=('src/electroModels/conductionSystemModels/restitutionEikonalSolver1D/restitutionEikonalSolver1D.C',),
-            notes='restitutionEikonalSolver1D.C:84 uses get<labelList> -- if a stimulus sub-dict is present but sites is absent, that is a FatalError, not a default.',
-            value_kind='label_list',
-            typical_value='(0)',
             dynamic_path=True,
         ),
         ),

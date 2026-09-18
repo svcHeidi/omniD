@@ -336,7 +336,9 @@ def test_cardiac_scope_resolve_entry_matches_the_old_hardcoded_behavior(tmp_path
 # PluginCapabilities.dict_regeneration, the sibling of override_scopes for
 # $TOKEN. leaves.
 
-PURKINJE_NIEDERER = REPO_ROOT / "tutorials" / "NiedererEtAl2011" / "purkinjeNiedererEtAl2011"
+PURKINJE_RESTITUTION_2D = (
+    REPO_ROOT / "tutorials" / "electrophysiologyProtocols" / "purkinjeRestitution2D"
+)
 
 
 def test_generic_plugin_declares_zero_regeneration_scopes():
@@ -385,7 +387,7 @@ def test_validate_still_rejects_other_bare_selector_keys_as_unknown_controlDict_
 def test_apply_regenerates_electro_properties_for_a_myocardium_solver_override(tmp_path):
     """End-to-end through the public apply_overrides() entry point (not the
     dict_builder function directly): on a copy of the real
-    purkinjeNiedererEtAl2011 monodomain fixture, myocardiumSolver=eikonalSolver
+    purkinjeRestitution2D monodomain fixture, myocardiumSolver=eikonalSolver
     -- bundled, in the same call, with the handful of new fields eikonalSolver
     requires with no catalog default -- must now be REJECTED, propagated as
     an OverrideError.
@@ -397,17 +399,17 @@ def test_apply_regenerates_electro_properties_for_a_myocardium_solver_override(t
     explicitly invalid per solver_coupling.SOLVER_COMPATIBILITY_RULES
     ("eikonal myocardium cannot couple to reaction-diffusion Purkinje") --
     confirmed against the real, hand-authored electroProperties.eikonal
-    fixture for this same tutorial, which uses a different, compatible
+    fixture of idealizedHeart/electroHeart, which uses a different, compatible
     pairing (eikonalSolver1D / eikonalPvjCoupler) instead of a bare carry-
     forward. See test_dict_builder.py's
-    test_purkinje_niederer_monodomain_to_eikonal_end_to_end for the same
+    test_purkinje_monodomain_to_eikonal_end_to_end for the same
     scenario exercised directly against regenerate_electro_properties."""
-    if not (PURKINJE_NIEDERER / "constant" / "electroProperties.monodomain").exists():
+    if not (PURKINJE_RESTITUTION_2D / "constant" / "electroProperties.monodomain").exists():
         pytest.skip("tutorial fixture not present in this checkout")
 
     (tmp_path / "constant").mkdir()
     original_text = (
-        PURKINJE_NIEDERER / "constant" / "electroProperties.monodomain"
+        PURKINJE_RESTITUTION_2D / "constant" / "electroProperties.monodomain"
     ).read_text()
     (tmp_path / "constant" / "electroProperties").write_text(original_text)
 

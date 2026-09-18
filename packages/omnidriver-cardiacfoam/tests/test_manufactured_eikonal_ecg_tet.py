@@ -28,7 +28,7 @@ eikonalSolverCoeffs
         ECG
         {
             ecgSolver none;
-            manufacturedEikonalECG
+            verificationModel
             {
                 enabled false;
                 referenceQuadratureOrder 1;
