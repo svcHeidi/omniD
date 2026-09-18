@@ -40,7 +40,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from omnidriver.core.plugin_interface import default_driver_context
+from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+
+# Two adapters are installed side by side, so there is no ambient default
+# left to discover. A test that means cardiacFoam says so.
+_CTX = _driver_context(CardiacFoamPlugin(), source="test:provenance_inputs")
 from omnidriver.core.runtime.provenance_inputs import enumerate_case_inputs
 
 
@@ -67,7 +72,7 @@ def test_system_and_constant_are_required_and_diagnostic_outputs_are_excluded(tm
     (tmp_path / "constant" / "skewness").write_bytes(b"mesh-diagnostic-byproduct")
 
     components = enumerate_case_inputs(
-        tmp_path, workflow_dag={"steps": []}, driver_context=default_driver_context(),
+        tmp_path, workflow_dag={"steps": []}, driver_context=_CTX,
     )
     included = _paths(components, kind="case_file")
 

@@ -37,7 +37,15 @@
 
 import pytest
 
+from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.sweep_materialize import materialize_case
+
+# Every case below is a cardiacFoam case, so it says so. materialize_case only
+# falls back to the ambient default when no context is supplied, and that
+# default has no single answer once a second adapter is installed alongside
+# this one (future/ENVIRONMENT_CONTRACT.md §12).
+_CTX = _driver_context(CardiacFoamPlugin(), source="test:sweep_materialize")
 
 
 def test_materialize_case_writes_dict_files_and_allrun_only(tmp_path):
@@ -52,6 +60,7 @@ def test_materialize_case_writes_dict_files_and_allrun_only(tmp_path):
             "delta_t": 1e-6,
             "end_time": None,
         },
+        driver_context=_CTX,
     )
     assert (case_dir / "constant" / "electroProperties").exists()
     assert (case_dir / "constant" / "physicsProperties").exists()
@@ -70,12 +79,14 @@ def test_materialize_case_two_cases_do_not_collide(tmp_path):
         routed={"electro_selectors": {"myocardiumSolver": "singleCellSolver", "tissue": "epicardialCells", "ionicModel": "TNNP"},
                 "physics_selectors": {"type": "electroModel"}, "electro_overrides": {}, "physics_overrides": {},
                 "delta_t": None, "end_time": None},
+        driver_context=_CTX,
     )
     materialize_case(
         case_dir=tmp_path / "caseB",
         routed={"electro_selectors": {"myocardiumSolver": "singleCellSolver", "tissue": "epicardialCells", "ionicModel": "BuenoOrovio"},
                 "physics_selectors": {"type": "electroModel"}, "electro_overrides": {}, "physics_overrides": {},
                 "delta_t": None, "end_time": None},
+        driver_context=_CTX,
     )
     a = (tmp_path / "caseA" / "constant" / "electroProperties").read_text()
     b = (tmp_path / "caseB" / "constant" / "electroProperties").read_text()
@@ -98,6 +109,7 @@ def test_materialize_case_runs_block_mesh_first_for_spatial_solver(tmp_path):
             "electro_overrides": {}, "physics_overrides": {},
             "delta_t": None, "end_time": None,
         },
+        driver_context=_CTX,
     )
     assert (case_dir / "system" / "blockMeshDict").exists()
     allrun_text = (case_dir / "Allrun").read_text()
@@ -111,4 +123,5 @@ def test_materialize_case_raises_on_invalid_combination(tmp_path):
             routed={"electro_selectors": {"myocardiumSolver": "singleCellSolver", "tissue": "myocyte", "ionicModel": "TNNP"},
                     "physics_selectors": {"type": "electroModel"}, "electro_overrides": {}, "physics_overrides": {},
                     "delta_t": None, "end_time": None},
+            driver_context=_CTX,
         )

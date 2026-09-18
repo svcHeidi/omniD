@@ -13,13 +13,18 @@ from __future__ import annotations
 
 import json
 
-from omnidriver.core.plugin_interface import default_driver_context
+from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+
+# Two adapters are installed side by side, so there is no ambient default
+# left to discover. A test that means cardiacFoam says so.
+_CTX = _driver_context(CardiacFoamPlugin(), source="test:override_schema_capability")
 
 _MAKE_SPEC_INFO = {"parameters": {"ionic_models": {"default": ["TNNP"]}}}
 
 
 def test_cardiac_config_schema_keeps_its_documented_tokens() -> None:
-    schema = default_driver_context().capabilities.override_schema.config_schema(
+    schema = _CTX.capabilities.override_schema.config_schema(
         "singleCell", _MAKE_SPEC_INFO
     )
     blob = json.dumps(schema)
@@ -31,7 +36,7 @@ def test_cardiac_config_schema_keeps_its_documented_tokens() -> None:
 
 
 def test_cardiac_dict_entry_catalog_keeps_its_document_shape() -> None:
-    catalog = default_driver_context().capabilities.override_schema.dict_entry_catalog()
+    catalog = _CTX.capabilities.override_schema.dict_entry_catalog()
     assert "physicsProperties" in catalog
     assert "electroProperties" in catalog
     # physicsProperties is a flat sequence; electroProperties is grouped. That

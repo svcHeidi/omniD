@@ -223,9 +223,16 @@ def test_tet_unclaimed_artifacts_are_credited_to_the_solve_step(tmp_path):
     (``workflow_runner._run_step``'s ``missing_artifacts`` check), so crediting
     the metrics utility would make a silent solver blame ``interfaceMetrics``.
     """
-    from omnidriver.core.plugin_interface import default_driver_context
+    from omnidriver.core.plugin_interface import driver_context as _driver_context
+    from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
     from omnidriver.core.runtime.models import DataArtifact
     from omnidriver.core.runtime.workflow import normalize_workflow_dag
+
+    # Two adapters are installed side by side, so there is no ambient default
+    # left to discover. The DAG being normalized is cardiacFoam's.
+    context = _driver_context(
+        CardiacFoamPlugin(), source="test:manufactured_bath_bidomain_tet",
+    )
 
     spec = _make_spec(tmp_path, mesh_family="tet")
     artifact = DataArtifact(
@@ -236,7 +243,7 @@ def test_tet_unclaimed_artifacts_are_credited_to_the_solve_step(tmp_path):
     dag, diagnostics = normalize_workflow_dag(
         spec.metadata["workflow_dag"],
         expected_artifacts=(artifact,),
-        driver_context=default_driver_context(),
+        driver_context=context,
     )
     assert [d for d in diagnostics if d.level == "error"] == []
     producers = {

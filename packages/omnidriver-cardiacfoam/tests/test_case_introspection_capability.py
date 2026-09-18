@@ -11,7 +11,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from omnidriver.core.plugin_interface import default_driver_context
+from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+
+# Two adapters are installed side by side, so there is no ambient default
+# left to discover. A test that means cardiacFoam says so.
+_CTX = _driver_context(CardiacFoamPlugin(), source="test:case_introspection_capability")
 
 
 def _cardiac_case(root: Path) -> Path:
@@ -23,7 +28,7 @@ def _cardiac_case(root: Path) -> Path:
 
 
 def test_cardiac_plugin_exposes_its_fixed_fields(tmp_path: Path) -> None:
-    introspection = default_driver_context().capabilities.case_introspection
+    introspection = _CTX.capabilities.case_introspection
     resolved = introspection.resolve_case_models(_cardiac_case(tmp_path))
     assert resolved["solver"] == "monodomainSolver"
     electro = introspection.samplable_fields(resolved)["electro"]
@@ -32,13 +37,13 @@ def test_cardiac_plugin_exposes_its_fixed_fields(tmp_path: Path) -> None:
 
 
 def test_missing_case_file_resolves_to_none_without_raising(tmp_path: Path) -> None:
-    introspection = default_driver_context().capabilities.case_introspection
+    introspection = _CTX.capabilities.case_introspection
     resolved = introspection.resolve_case_models(tmp_path)
     assert resolved == {"solver": None, "ionic_model": None, "active_tension": None}
 
 
 def test_no_active_tension_means_no_solid_region(tmp_path: Path) -> None:
     """A spatial EP solver alone must not imply a mechanics region."""
-    introspection = default_driver_context().capabilities.case_introspection
+    introspection = _CTX.capabilities.case_introspection
     resolved = introspection.resolve_case_models(_cardiac_case(tmp_path))
     assert introspection.samplable_fields(resolved)["solid"] == ()

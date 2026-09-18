@@ -31,7 +31,13 @@ import unittest
 from pathlib import Path
 
 from omnidriver.dict_entries import all_documented_driver_paths
+from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from conftest import monorepo_root, skip_without_monorepo
+
+# Two adapters are installed side by side, so there is no ambient default left
+# to discover. The documented driver paths compared here are cardiacFoam's.
+_CTX = _driver_context(CardiacFoamPlugin(), source="test:template_contract")
 
 
 def _template_path() -> Path:
@@ -248,7 +254,7 @@ class TestTemplateAndSchemaContract(unittest.TestCase):
         self.assertIn('OverrideTypeName("pseudoECG")', pseudo_ecg_runtime)
 
     def test_driver_schema_paths_follow_template_truth_family(self) -> None:
-        documented = set(all_documented_driver_paths())
+        documented = set(all_documented_driver_paths(_CTX))
 
         expected = {
             "myocardiumSolver",

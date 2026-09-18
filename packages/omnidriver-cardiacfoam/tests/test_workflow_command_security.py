@@ -12,13 +12,18 @@ from __future__ import annotations
 
 import unittest
 
-from omnidriver.core.plugin_interface import default_driver_context
+from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+
+# Two adapters are installed side by side, so there is no ambient default
+# left to discover. A test that means cardiacFoam says so.
+_CTX = _driver_context(CardiacFoamPlugin(), source="test:workflow_command_security")
 from omnidriver.core.runtime.workflow import validate_workflow_commands
 
 
 class TestCardiacWorkflowCommands(unittest.TestCase):
     def setUp(self) -> None:
-        self.context = default_driver_context()
+        self.context = _CTX
 
     def test_known_openfoam_command_is_allowed(self) -> None:
         dag = {"steps": [{"id": "s", "command": "cardiacFoam"}]}

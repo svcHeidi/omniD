@@ -299,6 +299,12 @@ def _drive_agent(case: RegressionCase, driver: str, cases_root: Path) -> subproc
     Editable installs and wheels both register their packages with the same
     interpreter. Injecting one source directory would bypass that installation
     and cannot represent a namespace split across three distributions.
+
+    The child is a fresh interpreter, so it cannot be handed a DriverContext.
+    That same three-distribution namespace can leave more than one adapter
+    installed, and then there is no ambient default for the child to discover
+    -- so it is told which adapter to drive. These are cardiacFoam regression
+    cases; naming the plugin is the CLI's way of saying so.
     """
     if driver == "strict":
         entry_args = ["--entry", case.entry_name]
@@ -306,6 +312,7 @@ def _drive_agent(case: RegressionCase, driver: str, cases_root: Path) -> subproc
         entry_args = ["--entry", case.case_dir, "--entry-kind", "case_folder"]
     argv = [
         sys.executable, "-m", "omnidriver", "run", "--strict",
+        "--plugin", "cardiacfoam",
         *entry_args, "--cases-root", str(cases_root),
     ]
     return subprocess.run(argv, capture_output=True, text=True)

@@ -152,7 +152,7 @@ def test_transmural_only_models_do_not_support_apex_base_heterogeneity():
 
 def _het_entries():
     from omnidriver.dict_entries import get_electro_property_entry_groups
-    return get_electro_property_entry_groups()["ionic_heterogeneity"]
+    return get_electro_property_entry_groups(_CTX)["ionic_heterogeneity"]
 
 
 def _transmural_entries():

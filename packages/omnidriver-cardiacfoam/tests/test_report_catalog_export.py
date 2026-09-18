@@ -62,7 +62,12 @@ SCRIPT = REPO / "scripts" / "export-report-catalog.py"
 
 def _run(out_path: Path) -> dict:
     subprocess.run(
-        [sys.executable, str(SCRIPT), "--out", str(out_path)],
+        # The exporter falls back to the ambient default only when no plugin
+        # is named, and that default is ambiguous whenever a second adapter is
+        # installed alongside cardiacfoam. This module is about the cardiac
+        # report catalog, so it names the plugin rather than leaving the child
+        # process to guess (future/ENVIRONMENT_CONTRACT.md §12).
+        [sys.executable, str(SCRIPT), "--out", str(out_path), "--plugin", "cardiacfoam"],
         cwd=REPO,
         check=True,
     )

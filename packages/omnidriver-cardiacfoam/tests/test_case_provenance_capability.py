@@ -13,7 +13,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from omnidriver.core.plugin_interface import default_driver_context
+from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+
+# Two adapters are installed side by side, so there is no ambient default
+# left to discover. A test that means cardiacFoam says so.
+_CTX = _driver_context(CardiacFoamPlugin(), source="test:case_provenance_capability")
 
 
 def test_cardiac_declares_the_mesh_diagnostic_fields_as_generated_outputs(
@@ -21,7 +26,7 @@ def test_cardiac_declares_the_mesh_diagnostic_fields_as_generated_outputs(
 ) -> None:
     """constant/C, Cx, Cy, Cz, skewness are consumed by nothing -- confirmed
     by exhaustive grep across src/ and applications/: zero hits."""
-    cardiac = default_driver_context().capabilities.case_provenance
+    cardiac = _CTX.capabilities.case_provenance
     globs = cardiac.generated_output_globs(tmp_path, {}, "0")
     assert set(globs) == {
         "constant/C",
@@ -36,5 +41,5 @@ def test_cardiac_required_inputs_defers_to_the_safe_default(tmp_path: Path) -> N
     """Model-dependent per-field required-input resolution is Task 2b's job
     (input enumeration). Returning () here is safe under I1's precedence:
     an unclassified file still defaults to required_input upstream."""
-    cardiac = default_driver_context().capabilities.case_provenance
+    cardiac = _CTX.capabilities.case_provenance
     assert cardiac.required_inputs(tmp_path, {}, "0") == ()

@@ -39,13 +39,23 @@ import json
 import tempfile
 from pathlib import Path
 
-from omnidriver.core.plugin_interface import default_driver_context
+from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.cardiacfoam.run_document_config import _read_physics_type
 from omnidriver.core.strict_planning import strict_plan
 
 
+# This module asserts the *cardiac* plugin's config schema, so it names that
+# plugin rather than asking the ambient default -- which has no single answer
+# once a second adapter is installed (future/ENVIRONMENT_CONTRACT.md §12).
+def _context():
+    return _driver_context(
+        CardiacFoamPlugin(), source="test:run_document_config_schema",
+    )
+
+
 def test_cardiac_plugin_declares_a_config_schema() -> None:
-    context = default_driver_context()
+    context = _context()
     schema = context.plugin.get_run_document_config_schema()
     assert schema["required"] == ["anatomy", "physics", "stimulus", "solver"]
 
@@ -57,7 +67,7 @@ def test_strict_plan_reports_a_structured_diagnostic_for_schema_violation(monkey
     from omnidriver.core.plugin_capabilities import RunDocumentConfigurationRequest
     from omnidriver.cardiacfoam import cardiacfoam_plugin
 
-    context = default_driver_context()
+    context = _context()
 
     def _broken_build(spec):
         # Deliberately omit the required "solver" phase key.
@@ -107,7 +117,7 @@ def _ingest(config: dict) -> tuple[dict, ...]:
         path.write_text(json.dumps(_document_json(config)))
         run_doc = load_run_document(path)
     _inputs, diagnostics = build_execution_inputs(
-        run_doc, driver_context=default_driver_context(),
+        run_doc, driver_context=_context(),
     )
     return diagnostics
 

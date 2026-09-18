@@ -58,7 +58,12 @@ SCRIPT = REPO / "scripts" / "export-tutorials-catalog.py"
 
 def _run(out_path: Path) -> dict:
     subprocess.run(
-        [sys.executable, str(SCRIPT), "--out", str(out_path)],
+        # The exporter falls back to the ambient default only when no plugin
+        # is named, and that default is ambiguous whenever a second adapter is
+        # installed alongside cardiacfoam. This module is about the cardiac
+        # tutorial registry, so it names the plugin rather than leaving the
+        # child process to guess (future/ENVIRONMENT_CONTRACT.md §12).
+        [sys.executable, str(SCRIPT), "--out", str(out_path), "--plugin", "cardiacfoam"],
         cwd=REPO,
         check=True,
     )
@@ -86,12 +91,16 @@ def test_every_registered_tutorial_is_exported(tmp_path):
     """The display catalog cannot ship a tutorial card whose backend
     factory does not exist, and cannot omit a registered tutorial.
     Either drift makes the catalog lie about what the backend can run."""
-    from omnidriver.core.plugin_interface import default_driver_context
+    from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+    from omnidriver.core.plugin_interface import driver_context as _driver_context
     from omnidriver.core.runtime.registry import list_tutorials, _normalized_registry
 
+    context = _driver_context(
+        CardiacFoamPlugin(), source="test:tutorials_catalog_export",
+    )
     data = _run(tmp_path / "t.json")
     exported = {t["id"] for t in data["tutorials"]}
-    registered = set(list_tutorials(default_driver_context()))
+    registered = set(list_tutorials(context))
     assert exported == registered, (
         f"exported vs registered mismatch — only-in-exported: "
         f"{exported - registered}, only-in-registered: "

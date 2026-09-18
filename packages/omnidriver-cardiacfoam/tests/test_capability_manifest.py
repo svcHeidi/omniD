@@ -45,7 +45,12 @@ def _resolved(
     )
 
 
-from omnidriver.core.plugin_interface import default_driver_context
+from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+
+# Two adapters are installed side by side, so there is no ambient default
+# left to discover. A test that means cardiacFoam says so.
+_CTX = _driver_context(CardiacFoamPlugin(), source="test:capability_manifest")
 from omnidriver.core.runtime.workflow import (
     CORE_NEUTRAL_COMMANDS,
     validate_workflow_commands,
@@ -68,7 +73,7 @@ def test_core_commands_match_enforcer():
 
 def test_manifest_utilities_are_accepted_by_validator():
     manifest = build_capability_manifest()
-    context = default_driver_context()
+    context = _CTX
     for cmd in manifest["allowed_commands"]["utilities"]:
         dag = {"steps": [{"id": "s", "command": cmd}]}
         errors = [
@@ -141,7 +146,7 @@ def test_unknown_model_is_not_an_error():
 def test_describe_entry_includes_capability_manifest():
     from omnidriver.core.introspection import describe_entry
 
-    payload = describe_entry("singleCell", driver_context=default_driver_context())
+    payload = describe_entry("singleCell", driver_context=_CTX)
     manifest = payload["capability_manifest"]
     assert "cardiacFoam" in manifest["allowed_commands"]["plugin"]
     assert "electro" in manifest["samplable_fields"]
@@ -152,6 +157,6 @@ def test_strict_plan_carries_capability_manifest(monkeypatch):
     from omnidriver.core.strict_planning import strict_plan
 
     report = strict_plan(
-        "singleCell", driver_context=default_driver_context(),
+        "singleCell", driver_context=_CTX,
     ).to_json()
     assert "cardiacFoam" in report["capability_manifest"]["allowed_commands"]["plugin"]

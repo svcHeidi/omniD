@@ -13,11 +13,18 @@ from __future__ import annotations
 
 import pytest
 
-from omnidriver.core.plugin_interface import (
-    default_driver_context
-)
+from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.openfoam.environment import openfoam_environment_context
 from omnidriver.core.runtime.workflow import validate_workflow_commands
+
+# Every assertion below names the cardiac plugin's own solver and utilities,
+# so the context is supplied rather than discovered: the ambient default is
+# ambiguous as soon as a second adapter is installed alongside cardiacfoam
+# (future/ENVIRONMENT_CONTRACT.md §12).
+_CTX = _driver_context(
+    CardiacFoamPlugin(), source="test:command_authorization",
+)
 
 
 def _dag(command: str) -> dict:
@@ -29,7 +36,7 @@ def test_cardiac_plugin_authorizes_its_unmanifested_utility() -> None:
     come through utility_manifests(); the plugin must authorize it directly or
     manufactured_eikonal_ecg.py's gradient_reconstruction=True workflow stops
     validating."""
-    context = default_driver_context()
+    context = _CTX
     errors = [
         d for d in validate_workflow_commands(
             _dag("gradientReconstructionOrder"), driver_context=context
@@ -40,7 +47,7 @@ def test_cardiac_plugin_authorizes_its_unmanifested_utility() -> None:
 
 
 def test_cardiac_plugin_authorizes_its_own_solver() -> None:
-    context = default_driver_context()
+    context = _CTX
     errors = [
         d for d in validate_workflow_commands(_dag("cardiacFoam"), driver_context=context)
         if d.level == "error"
@@ -49,7 +56,7 @@ def test_cardiac_plugin_authorizes_its_own_solver() -> None:
 
 
 def test_cardiac_utilities_come_from_the_plugin() -> None:
-    context = default_driver_context()
+    context = _CTX
     manifests = context.capabilities.command_authorization.utility_manifests()
     assert "listCellModelsVariables" in manifests
     generic = openfoam_environment_context()
@@ -59,7 +66,7 @@ def test_cardiac_utilities_come_from_the_plugin() -> None:
 def test_solver_and_auxiliary_commands_are_distinct() -> None:
     """Both are authorized, but only solver_commands() may be credited with a
     run's artifacts (see normalize_workflow_dag's producer heuristic)."""
-    auth = default_driver_context().capabilities.command_authorization
+    auth = _CTX.capabilities.command_authorization
     assert auth.solver_commands() == frozenset({"cardiacFoam"})
     assert auth.auxiliary_commands() == frozenset({"gradientReconstructionOrder"})
     assert not (auth.solver_commands() & auth.auxiliary_commands())
@@ -76,7 +83,7 @@ def test_utility_manifests_are_not_a_shared_mutable_dict() -> None:
     with pytest.raises(TypeError):
         cached["injected"] = object()  # type: ignore[index]
 
-    plugin = default_driver_context().plugin
+    plugin = _CTX.plugin
     handed_out = plugin.get_utility_manifests()
     handed_out["injected"] = object()
     assert "injected" not in plugin.get_utility_manifests()

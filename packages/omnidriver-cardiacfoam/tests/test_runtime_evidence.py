@@ -22,25 +22,32 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from omnidriver.core.plugin_interface import default_driver_context
+from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+from omnidriver.core.plugin_interface import driver_context as _driver_context
+
+# These declarations are cardiacFoam's own, so this module names the plugin
+# rather than asking the ambient default -- which has no single answer once a
+# second adapter is installed alongside this one
+# (future/ENVIRONMENT_CONTRACT.md §12).
+_CTX = _driver_context(CardiacFoamPlugin(), source="test:runtime_evidence")
 
 
 def test_cardiac_declares_its_solver_as_a_solve_step() -> None:
-    evidence = default_driver_context().capabilities.runtime_evidence
+    evidence = _CTX.capabilities.runtime_evidence
     assert "cardiacFoam" in evidence.solve_step_commands()
 
 
 def test_a_post_processing_utility_is_not_a_solve_step() -> None:
     """bathBidomainInterfaceMetrics is authorized to run but does not solve;
     Phase 4 must not expect solver telemetry from it."""
-    evidence = default_driver_context().capabilities.runtime_evidence
+    evidence = _CTX.capabilities.runtime_evidence
     assert "bathBidomainInterfaceMetrics" not in evidence.solve_step_commands()
 
 
 def test_allrun_declares_a_log_glob_so_redirected_output_is_findable() -> None:
     """OpenFOAM's runApplication redirects solver output to log.<app>, so an
     Allrun step produces no parseable driver-captured stdout."""
-    evidence = default_driver_context().capabilities.runtime_evidence
+    evidence = _CTX.capabilities.runtime_evidence
     globs = evidence.telemetry_source_globs("Allrun")
     assert any("log." in glob for glob in globs)
 
@@ -54,7 +61,7 @@ def test_cardiac_extra_provenance_paths_declares_the_solver_as_a_dependency(
     still declared as something Phase 2 must fingerprint."""
     from omnidriver.core.plugin_capabilities import RuntimeDependency
 
-    evidence = default_driver_context().capabilities.runtime_evidence
+    evidence = _CTX.capabilities.runtime_evidence
     dependencies = evidence.extra_provenance_paths(tmp_path)
     assert dependencies
     assert all(isinstance(dependency, RuntimeDependency) for dependency in dependencies)

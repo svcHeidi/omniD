@@ -13,7 +13,14 @@ from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.cardiacfoam.active_tension_catalog import ACTIVE_TENSION_MODEL_CATALOG
 from omnidriver.cardiacfoam.common_dict_entries import PHYSICS_PROPERTY_ENTRIES
 from omnidriver.cardiacfoam.overrides import apply_electro_property_overrides
+from omnidriver.core.plugin_interface import driver_context as _driver_context
 from cardiacfoam_assertions import assert_foam_entry
+
+# This suite is cardiacFoam's own dictionary catalog, so it names the plugin
+# it means rather than relying on the ambient default -- which has no single
+# answer once a second adapter is installed alongside this one
+# (future/ENVIRONMENT_CONTRACT.md §12).
+_CTX = _driver_context(CardiacFoamPlugin(), source="test:dict_entries_catalog")
 
 # These four names are this plugin's, so they come from this plugin. They used
 # to be read out of core's ``Phase`` literal via typing.get_args -- core
@@ -27,7 +34,7 @@ class TestDictEntryCatalog(unittest.TestCase):
         physics_paths = {entry.driver_path for entry in PHYSICS_PROPERTY_ENTRIES}
         self.assertEqual(physics_paths, {"type"})
 
-        documented = set(all_documented_driver_paths())
+        documented = set(all_documented_driver_paths(_CTX))
         expected = {
             "myocardiumSolver",
             "$ELECTRO_MODEL_COEFFS.solutionAlgorithm",
@@ -50,7 +57,7 @@ class TestDictEntryCatalog(unittest.TestCase):
         self.assertTrue(expected.issubset(documented))
 
     def test_catalog_paths_are_unique(self) -> None:
-        documented = all_documented_driver_paths()
+        documented = all_documented_driver_paths(_CTX)
         self.assertEqual(len(documented), len(set(documented)))
 
     def test_catalog_mentions_existing_source_files(self) -> None:
@@ -72,7 +79,7 @@ class TestDictEntryCatalog(unittest.TestCase):
             for source_ref in entry.source_refs:
                 self.assertTrue((repo_root / source_ref).exists(), source_ref)
 
-        for entries in get_electro_property_entry_groups().values():
+        for entries in get_electro_property_entry_groups(_CTX).values():
             for entry in entries:
                 for source_ref in entry.source_refs:
                     self.assertTrue((repo_root / source_ref).exists(), source_ref)
@@ -83,7 +90,7 @@ class TestDictEntryCatalog(unittest.TestCase):
         self.assertIn("electroMechanicalModel", type_entry.enum_values)
 
         monodomain_entries = {
-            entry.driver_path: entry for entry in get_electro_property_entry_groups()["monodomain"]
+            entry.driver_path: entry for entry in get_electro_property_entry_groups(_CTX)["monodomain"]
         }
         self.assertEqual(
             monodomain_entries["$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusLocationMin"].value_kind,
@@ -94,7 +101,7 @@ class TestDictEntryCatalog(unittest.TestCase):
             "dimensioned_scalar_literal",
         )
 
-        ecg_entries = {entry.driver_path: entry for entry in get_electro_property_entry_groups()["ecg"]}
+        ecg_entries = {entry.driver_path: entry for entry in get_electro_property_entry_groups(_CTX)["ecg"]}
         self.assertTrue(
             ecg_entries[
                 "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.electrodePositions.<electrode>"
@@ -103,7 +110,7 @@ class TestDictEntryCatalog(unittest.TestCase):
 
         active_tension = {
             entry.driver_path: entry
-            for entry in get_electro_property_entry_groups()["active_tension"]
+            for entry in get_electro_property_entry_groups(_CTX)["active_tension"]
         }
         self.assertIn(
             "LandNiedererTWorld",
@@ -192,7 +199,7 @@ class TestConductionSystemSchemaContract(unittest.TestCase):
     def setUp(self):
         self.entries = {
             e.driver_path: e
-            for e in get_electro_property_entry_groups()["conduction_system"]
+            for e in get_electro_property_entry_groups(_CTX)["conduction_system"]
         }
 
     def test_conduction_domain_selector_key_is_conductionSystemDomain(self):
@@ -264,7 +271,7 @@ class TestConductionSystemSchemaContract(unittest.TestCase):
     def test_personalized_templates_schema_and_source_fixture(self):
         ecg_entries = {
             entry.driver_path: entry
-            for entry in get_electro_property_entry_groups()["ecg"]
+            for entry in get_electro_property_entry_groups(_CTX)["ecg"]
         }
         prefix = (
             "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates."
@@ -303,7 +310,7 @@ class TestConductionSystemSchemaContract(unittest.TestCase):
     def test_nested_ecg_verification_model_is_a_supported_source_alias(self):
         entries = {
             entry.driver_path: entry
-            for entry in get_electro_property_entry_groups()["ecg"]
+            for entry in get_electro_property_entry_groups(_CTX)["ecg"]
         }
         prefix = "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel."
         for leaf in ("type", "enabled", "dimension", "referenceQuadratureOrder", "checkQuadratureOrders"):
@@ -331,7 +338,7 @@ class TestDomainCouplingSchemaContract(unittest.TestCase):
     def setUp(self):
         self.entries = {
             e.driver_path: e
-            for e in get_electro_property_entry_groups()["domain_couplings"]
+            for e in get_electro_property_entry_groups(_CTX)["domain_couplings"]
         }
 
     def test_coupler_selector_key_is_electroDomainCoupler(self):
@@ -365,7 +372,7 @@ class TestDomainCouplingSchemaContract(unittest.TestCase):
     def test_common_model_coeffs_owns_electrophysics_advance_scheme(self):
         common_entries = {
             e.driver_path: e
-            for e in get_electro_property_entry_groups()["common_model_coeffs"]
+            for e in get_electro_property_entry_groups(_CTX)["common_model_coeffs"]
         }
         self.assertIn(
             "$ELECTRO_MODEL_COEFFS.electrophysicsAdvanceScheme",
@@ -382,7 +389,7 @@ def test_existing_entries_in_catalog_have_empty_defaults() -> None:
     with empty structured-constraint fields — migration is opt-in
     per-entry, not a forced rewrite."""
     all_entries = list(PHYSICS_PROPERTY_ENTRIES)
-    for group in get_electro_property_entry_groups().values():
+    for group in get_electro_property_entry_groups(_CTX).values():
         all_entries.extend(group)
     assert len(all_entries) > 80  # sanity: we have 87+ today
     for entry in all_entries:
@@ -705,7 +712,7 @@ if __name__ == "__main__":
 
 def _all_entries():
     yield from PHYSICS_PROPERTY_ENTRIES
-    for group in get_electro_property_entry_groups().values():
+    for group in get_electro_property_entry_groups(_CTX).values():
         yield from group
 
 

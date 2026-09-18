@@ -50,12 +50,16 @@ from omnidriver.core.specs.paths import repo_root_default
 
 REPO = repo_root_default()
 SCRIPT = REPO / "scripts" / "export-dict-catalog.py"
+# The exporter runs in a child interpreter, so a Python DriverContext cannot be
+# handed to it. More than one adapter may be installed, leaving no ambient
+# default for the child to discover, so the child is told which one to export.
+PLUGIN = ("--plugin", "cardiacfoam")
 
 
 def test_exporter_writes_grouped_json(tmp_path):
     out = tmp_path / "catalog.json"
     subprocess.run(
-        [sys.executable, str(SCRIPT), "--out", str(out)],
+        [sys.executable, str(SCRIPT), "--out", str(out), *PLUGIN],
         cwd=REPO, check=True,
     )
     data = json.loads(out.read_text())
@@ -78,7 +82,7 @@ def test_multi_phase_entry_appears_in_every_declared_phase(tmp_path):
     """An entry with phases={'anatomy','physics'} must appear in BOTH phase buckets."""
     out = tmp_path / "catalog.json"
     subprocess.run(
-        [sys.executable, str(SCRIPT), "--out", str(out)],
+        [sys.executable, str(SCRIPT), "--out", str(out), *PLUGIN],
         cwd=REPO, check=True,
     )
     data = json.loads(out.read_text())

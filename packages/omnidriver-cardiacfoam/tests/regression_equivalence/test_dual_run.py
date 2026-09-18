@@ -38,7 +38,14 @@ def test_driver_invokes_installed_namespace_without_source_path_injection(monkey
     expected_entry = ["--entry", "syntheticEntry"] if driver == "strict" else [
         "--entry", "synthetic/case", "--entry-kind", "case_folder",
     ]
-    assert argv[5:] == expected_entry + ["--cases-root", str(tmp_path)]
+    # The child interpreter cannot be handed a DriverContext, so the harness
+    # names the adapter it means rather than relying on an ambient default that
+    # does not exist once a second adapter is installed alongside cardiacfoam.
+    assert argv[5:] == (
+        ["--plugin", "cardiacfoam"]
+        + expected_entry
+        + ["--cases-root", str(tmp_path)]
+    )
     assert kwargs == {"capture_output": True, "text": True}
     assert not calls
 
