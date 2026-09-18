@@ -1,1 +1,1 @@
-"""Typed, solver-neutral contracts shared by driverFOAM core and plugins."""
+"""Typed, solver-neutral contracts shared by omnidriver core and plugins."""

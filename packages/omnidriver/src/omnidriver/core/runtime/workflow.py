@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path, PurePath
 from typing import Any, Iterable
 
+from .artifacts import DRIVER_PRODUCED_BY_VALUES
 from .models import DataArtifact
 from omnidriver.core.plugin_profile import entrypoint_relpaths
 
@@ -466,12 +467,15 @@ def workflow_output_artifacts(
 ) -> tuple[DataArtifact, ...]:
     """Return artifacts whose existence is a responsibility of a workflow step.
 
-    ``expectedArtifacts`` also records driverFOAM's own state and log files.
+    ``expectedArtifacts`` also records omnidriver's own state and log files.
     Those files are created by the executor around a step transition, rather
     than by the solver command itself, so assigning them to a normalized step
     would make the solver incorrectly responsible for driver bookkeeping.
     """
-    return tuple(artifact for artifact in artifacts if artifact.produced_by != "driverFOAM")
+    return tuple(
+        artifact for artifact in artifacts
+        if artifact.produced_by not in DRIVER_PRODUCED_BY_VALUES
+    )
 
 
 def validate_workflow_commands(

@@ -36,7 +36,7 @@ from omnidriver.core.runtime.step_candidate import (
 )
 from omnidriver.core.runtime.workflow_runner import WorkflowStepRunResult
 from omnidriver.core.runtime.workflow_state import initial_workflow_state
-from plugins.minimal_plugin import MinimalOpenFOAMPlugin
+from plugins.minimal_plugin import MinimalTestPlugin
 
 
 def _dag(command: str = "neutral") -> dict:
@@ -46,7 +46,7 @@ def _dag(command: str = "neutral") -> dict:
     }]}
 
 
-class _NeutralMutator(MinimalOpenFOAMPlugin):
+class _NeutralMutator(MinimalTestPlugin):
     def __init__(self, target: Path, events: list[str]) -> None:
         super().__init__(entrypoint="run-case")
         self.target = target

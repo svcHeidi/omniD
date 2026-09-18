@@ -1,4 +1,4 @@
-"""Discovery of installed driverFOAM solver plugins via Python entry-points.
+"""Discovery of installed omnidriver solver plugins via Python entry-points.
 
 Plugins register themselves in the installing package's ``pyproject.toml``
 under the ``[project.entry-points."omnidriver.plugins"]`` group::
@@ -109,14 +109,14 @@ def load_discovered_plugin(name: str):
     ambiguous = ambiguous_plugin_names().get(name)
     if ambiguous is not None:
         raise KeyError(
-            f"driverFOAM plugin name {name!r} is claimed by more than one "
+            f"omnidriver plugin name {name!r} is claimed by more than one "
             f"installed distribution ({', '.join(ambiguous)}); uninstall one "
             "or select it with the module:Class form"
         )
     entry_point = discover_plugins().get(name)
     if entry_point is None:
         raise KeyError(
-            f"No installed driverFOAM plugin named {name!r} in entry-point "
+            f"No installed omnidriver plugin named {name!r} in entry-point "
             f"group {ENTRY_POINT_GROUP!r}"
         )
     plugin_class = entry_point.load()

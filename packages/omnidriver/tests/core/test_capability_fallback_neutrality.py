@@ -36,7 +36,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.core.plugin_capabilities import (
     CaseCompatibilityRequest,
     SweepMaterializationRequest,
@@ -44,11 +43,12 @@ from omnidriver.core.plugin_capabilities import (
 )
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError
+from plugins.minimal_plugin import MinimalTestPlugin
 
 
 def _generic_capabilities():
     context = driver_context(
-        OpenFOAMEnvironmentPlugin(), source="test:openfoam-environment",
+        MinimalTestPlugin(), source="test:neutral-environment",
     )
     return context.capabilities
 

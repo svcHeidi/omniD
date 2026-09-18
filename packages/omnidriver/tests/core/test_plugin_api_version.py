@@ -2,27 +2,25 @@ from __future__ import annotations
 
 import pytest
 
-from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.core.plugin_interface import (
     SUPPORTED_PLUGIN_API_VERSIONS,
     driver_context
 )
-from omnidriver.openfoam.environment import openfoam_environment_context
+from plugins.minimal_plugin import MinimalTestPlugin
 
 
 def test_supported_version_is_two() -> None:
     assert SUPPORTED_PLUGIN_API_VERSIONS == frozenset({"2"})
 
 
-def test_generic_builtin_plugin_is_v2() -> None:
-    """Half of what was test_builtin_plugins_are_v2; the cardiac half moved
-    to omnidriver-cardiacfoam's tests/test_plugin_api_version.py as
-    CardiacFoamPlugin().plugin_api_version == "2"."""
-    assert openfoam_environment_context().identity.api_version == "2"
+def test_neutral_plugin_is_v2() -> None:
+    assert driver_context(
+        MinimalTestPlugin(), source="test:plugin-api",
+    ).identity.api_version == "2"
 
 
 def test_unsupported_version_is_rejected_before_any_catalog_runs() -> None:
-    class FuturePlugin(OpenFOAMEnvironmentPlugin):
+    class FuturePlugin(MinimalTestPlugin):
         @property
         def plugin_api_version(self) -> str:
             return "99"
@@ -43,7 +41,7 @@ def test_declaring_the_contract_without_implementing_it_is_rejected() -> None:
     member would fail only much later, deep inside whichever core module
     first called the missing method."""
 
-    class HalfMigratedPlugin(OpenFOAMEnvironmentPlugin):
+    class HalfMigratedPlugin(MinimalTestPlugin):
         # Drops one required member.
         get_artifact_value_reader = None
 
@@ -52,7 +50,7 @@ def test_declaring_the_contract_without_implementing_it_is_rejected() -> None:
 
 
 def test_the_shape_check_names_what_is_missing() -> None:
-    class MissingTwo(OpenFOAMEnvironmentPlugin):
+    class MissingTwo(MinimalTestPlugin):
         get_solve_step_commands = None
         get_utility_roots = None
 
@@ -63,13 +61,6 @@ def test_the_shape_check_names_what_is_missing() -> None:
     assert "get_utility_roots" in message
 
 
-def test_generic_builtin_plugin_satisfies_the_full_protocol() -> None:
-    """Half of what was test_both_builtin_plugins_satisfy_the_full_protocol:
-    cardiac AND generic must each exercise every required capability -- this
-    test previously caught the generic plugin declaring v2 while
-    implementing only 8 of 12, riding the adapter's degrade-to-empty
-    fallback. The cardiac half moved to omnidriver-cardiacfoam's
-    tests/test_plugin_api_version.py, preserving that same intent there."""
-    from omnidriver.core.plugin_interface import SolverPlugin
-
-    assert isinstance(OpenFOAMEnvironmentPlugin(), SolverPlugin)
+def test_neutral_plugin_builds_an_explicit_context() -> None:
+    context = driver_context(MinimalTestPlugin(), source="test:plugin-api")
+    assert context.identity.id == "org.driverfoam.test-minimal"

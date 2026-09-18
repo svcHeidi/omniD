@@ -1,0 +1,41 @@
+version: 1
+purpose: >-
+  Routes a task to the minimum portable guidance an integrated agent must
+  receive. This manifest is declarative: a provider launcher must inject the
+  listed files and record their content hashes in the task record.
+provider_integration: agent-handbook/provider-integration.md
+
+common:
+  - AGENTS.md
+
+roles:
+  builder:
+    required:
+      - agent-handbook/builder.md
+      - docs/BUILDER_AGENT_EVIDENCE_CONTRACT.md
+      - docs/ONBOARDING_STUDY_PROTOCOL.md
+    when:
+      - Onboarding a solver or extending a solver adapter.
+      - Publishing catalogs, implementing a workflow, or adding result interpretation.
+
+  runner:
+    required:
+      - agent-handbook/runner.md
+    optional:
+      - AGENT_GUIDE.md
+    when:
+      - Planning, executing, recovering, or reporting an already-supported experiment.
+
+  evaluator:
+    required:
+      - agent-handbook/evaluator.md
+      - docs/BUILDER_AGENT_EVIDENCE_CONTRACT.md
+    when:
+      - Comparing agents, prompts, or guidance revisions on the same task.
+
+  maintainer:
+    required:
+      - CLAUDE.md
+      - agent-handbook/maintainer.md
+    when:
+      - Changing OmniD implementation without adding solver semantics.

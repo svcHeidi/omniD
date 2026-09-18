@@ -14,7 +14,7 @@ from omnidriver.core.plugin_capabilities import (
 )
 from omnidriver.core.plugin_interface import DriverContext, driver_context
 from omnidriver.core.runtime.models import TutorialSpec
-from plugins.minimal_plugin import MinimalOpenFOAMPlugin
+from plugins.minimal_plugin import MinimalTestPlugin
 
 
 def _spec(tmp_path: Path) -> TutorialSpec:
@@ -32,7 +32,7 @@ def _spec(tmp_path: Path) -> TutorialSpec:
 def test_context_exposes_focused_adapters_without_replacing_public_plugin(
     tmp_path: Path,
 ) -> None:
-    plugin = MinimalOpenFOAMPlugin()
+    plugin = MinimalTestPlugin()
     context = driver_context(plugin, source="test")
     spec = _spec(tmp_path)
 
@@ -86,7 +86,7 @@ def test_non_cardiac_plugin_does_not_inherit_cardiac_case_evidence(
     Preserving that behaviour was never the intent; it was the Plan-1
     fallback's unexamined default, and it meant a third-party plugin was
     silently judged by cardiac filesystem evidence."""
-    plugin = MinimalOpenFOAMPlugin()
+    plugin = MinimalTestPlugin()
     context = driver_context(plugin, source="test")
     case_root = tmp_path / "case"
     for relative in (
@@ -111,7 +111,7 @@ def test_report_catalog_is_empty_for_non_cardiac_plugin() -> None:
     """P2.7: report_catalog.py's former REPORTS tuple was cardiac-specific
     data consumed unconditionally. A non-cardiac v1 plugin must get an empty
     report catalog, not the built-in "Vm field"/"activation map" reports."""
-    plugin = MinimalOpenFOAMPlugin()
+    plugin = MinimalTestPlugin()
     context = driver_context(plugin, source="test")
 
     reports = context.capabilities.report_catalog.reports()
@@ -122,7 +122,7 @@ def test_report_catalog_is_empty_for_non_cardiac_plugin() -> None:
 
 
 def test_capability_adapter_preserves_plugin_exceptions(tmp_path: Path) -> None:
-    class ThrowingPlugin(MinimalOpenFOAMPlugin):
+    class ThrowingPlugin(MinimalTestPlugin):
         def validate_configuration(self, spec):
             del spec
             raise RuntimeError("same failure")

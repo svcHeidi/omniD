@@ -11,7 +11,7 @@ from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime.workflow_orchestrator import run_workflow
 from omnidriver.core.runtime.workflow_runner import run_workflow_step
 from omnidriver.core.runtime.workflow_state import initial_workflow_state
-from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+from plugins.minimal_plugin import MinimalTestPlugin
 
 
 @pytest.mark.parametrize("budget", [0, 1])
@@ -21,7 +21,7 @@ def test_run_dispatch_context_and_incomplete_budget(tmp_path, monkeypatch, capsy
          "cwd": ".", "depends_on": [] if name == "first" else ["first"]}
         for name in ("first", "second")
     ]}
-    context = driver_context(NeutralEnvironmentPlugin(), source="test:dispatch")
+    context = driver_context(MinimalTestPlugin(), source="test:dispatch")
     received = []
 
     def runner(*args, driver_context, **kwargs):

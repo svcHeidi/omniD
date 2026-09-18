@@ -889,8 +889,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-dir",
         help=(
             "Output directory for action=sweep-plan/sweep-run. Defaults to "
-            "<repo>/.tmp/driverfoam/sweeps/<spec-name>; generated cases and "
-            "logs never belong under tutorials/."
+            "<repo>/.omnidriver/sweeps/<spec-name> (or "
+            "$OMNIDRIVER_SCRATCH_DIR/sweeps/<spec-name>); generated cases "
+            "and logs never belong under tutorials/."
         ),
     )
     parser.add_argument(
@@ -914,8 +915,8 @@ def build_parser() -> argparse.ArgumentParser:
             "a real rerun instead of silently resuming a stale "
             "workflow_state.json/sweep_manifest.json as 'completed'. "
             "Refuses to delete the filesystem root, your home directory, a "
-            "too-shallow path, anything outside DRIVERFOAM_ALLOWED_RUNS_ROOT "
-            "when set, or a directory with no recognizable driverFOAM "
+            "too-shallow path, anything outside OMNIDRIVER_ALLOWED_RUNS_ROOT "
+            "when set, or a directory with no recognizable omnidriver "
             "artifact. No confirmation prompt -- treat --output-dir as fully "
             "disposable when passing this flag. Mutually exclusive with "
             "--retry-failed."

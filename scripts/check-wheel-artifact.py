@@ -52,24 +52,33 @@ def main() -> int:
             failures.append(f"import {name}: {type(exc).__name__}: {exc}")
     print(f"modules imported            : {len(names) - len(failures)}/{len(names)}")
 
-    # 2. The implicit default context resolves. With no plugin distribution
-    #    installed this must be the built-in generic one, not an ImportError
-    #    reaching for a plugin package that is not there.
+    # 2. With no plugin distribution installed, implicit context selection
+    #    must fail loudly. Core has no built-in solver context: inventing one
+    #    here would silently attach solver meaning to a core-only install.
     try:
         from omnidriver.core.plugin_interface import default_driver_context
 
-        context = default_driver_context()
-        print(f"default context             : {context.identity.id} ({context.identity.source})")
+        default_driver_context()
+    except LookupError as exc:
+        print(f"no default context          : {type(exc).__name__}: {exc}")
     except Exception as exc:  # noqa: BLE001
-        failures.append(f"default_driver_context(): {type(exc).__name__}: {exc}")
+        failures.append(f"default_driver_context() raised {type(exc).__name__}, not LookupError: {exc}")
+    else:
+        failures.append("default_driver_context() unexpectedly resolved without an adapter")
 
-    # 3. The public edge answers without a plugin rather than raising.
+    # 3. Public edges that need adapter capabilities carry the same explicit
+    #    context rule. Calling one without a context and without an installed
+    #    adapter must not manufacture a generic answer.
     try:
         from omnidriver.dict_entries import get_heterogeneity_models
 
-        print(f"public edge with no plugin  : {get_heterogeneity_models()!r}")
+        get_heterogeneity_models()
+    except LookupError as exc:
+        print(f"public edge without context : {type(exc).__name__}: {exc}")
     except Exception as exc:  # noqa: BLE001
-        failures.append(f"get_heterogeneity_models(): {type(exc).__name__}: {exc}")
+        failures.append(f"get_heterogeneity_models() raised {type(exc).__name__}, not LookupError: {exc}")
+    else:
+        failures.append("get_heterogeneity_models() unexpectedly answered without an adapter")
 
     # 4. The CLI is reachable. It hard-imported omnidriver.openfoam at module
     #    scope once, which made the whole command surface unusable in a

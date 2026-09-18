@@ -14,21 +14,20 @@ import pytest
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime.registry import resolve_entry
 
-from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+from plugins.minimal_plugin import MinimalTestPlugin
 
 
 def _case(tmp_path: Path, name: str = "mycase") -> Path:
-    """A directory the NeutralEnvironmentPlugin's profile calls a case."""
+    """A directory with the test's explicitly declared entrypoint."""
     case = tmp_path / name
-    (case / "system").mkdir(parents=True)
-    (case / "constant").mkdir()
-    (case / "system" / "controlDict").write_text("")
+    case.mkdir(parents=True)
+    (case / "run-case").write_text("#!/bin/sh\n")
     (case / "run-case").write_text("#!/bin/sh\nexit 0\n")
     return case
 
 
 def test_an_absolute_path_resolves_as_a_case(tmp_path: Path) -> None:
-    ctx = driver_context(NeutralEnvironmentPlugin(), source="test:case-path")
+    ctx = driver_context(MinimalTestPlugin(entrypoint="run-case"), source="test:case-path")
     case = _case(tmp_path)
 
     resolution = resolve_entry(str(case), entry_kind="case_folder", driver_context=ctx)
@@ -42,7 +41,7 @@ def test_an_absolute_path_resolves_as_a_case(tmp_path: Path) -> None:
 def test_a_relative_path_resolves_against_the_working_directory(
     tmp_path: Path, monkeypatch
 ) -> None:
-    ctx = driver_context(NeutralEnvironmentPlugin(), source="test:case-path")
+    ctx = driver_context(MinimalTestPlugin(entrypoint="run-case"), source="test:case-path")
     _case(tmp_path)
     monkeypatch.chdir(tmp_path)
 
@@ -55,7 +54,7 @@ def test_a_relative_path_resolves_against_the_working_directory(
 def test_a_directory_that_is_not_a_case_is_still_refused(tmp_path: Path) -> None:
     """The contrast is the point: if any path resolved, the assertions above
     would pass for a directory with nothing in it."""
-    ctx = driver_context(NeutralEnvironmentPlugin(), source="test:case-path")
+    ctx = driver_context(MinimalTestPlugin(entrypoint="run-case"), source="test:case-path")
     empty = tmp_path / "notacase"
     empty.mkdir()
 
@@ -69,7 +68,7 @@ def test_listing_an_empty_directory_returns_nothing(tmp_path: Path) -> None:
     looking for repository markers and raised when it found none."""
     from omnidriver.core.runtime.registry import list_case_directories
 
-    ctx = driver_context(NeutralEnvironmentPlugin(), source="test:case-path")
+    ctx = driver_context(MinimalTestPlugin(entrypoint="run-case"), source="test:case-path")
     assert list_case_directories(tmp_path, driver_context=ctx) == []
 
 

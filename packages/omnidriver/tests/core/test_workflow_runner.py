@@ -7,12 +7,17 @@ from pathlib import Path
 
 import pytest
 
-from omnidriver.openfoam.environment import openfoam_environment_context
 from omnidriver.core.runtime.models import DataArtifact
+from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime.workflow_runner import run_workflow_step
 from omnidriver.core.runtime.workflow_state import initial_workflow_state
-from plugins.minimal_plugin import MinimalOpenFOAMPlugin
+from plugins.minimal_plugin import MinimalTestPlugin
+
+
+class _ParallelOutputPlugin(MinimalTestPlugin):
+    def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
+        return CaseRuntimeConventions(decomposition_directory_prefix="processor")
 
 
 def _dag(command: str, args: list[str], *, produces: list[str] | None = None) -> dict:
@@ -119,7 +124,7 @@ def test_run_workflow_step_allows_missing_optional_artifacts() -> None:
                     optional=True,
                 ),
             ),
-            driver_context=openfoam_environment_context(),
+            driver_context=driver_context(_ParallelOutputPlugin(), source="test:parallel-output"),
         )
 
         payload = result.state.to_json()
@@ -152,7 +157,7 @@ def test_run_workflow_step_accepts_decomposed_time_artifact() -> None:
                     time_indexed=True,
                 ),
             ),
-            driver_context=openfoam_environment_context(),
+            driver_context=driver_context(_ParallelOutputPlugin(), source="test:parallel-output"),
         )
 
         payload = result.state.to_json()
@@ -305,7 +310,7 @@ def test_case_script_step_preserves_dyld_vars_through_shell_hop() -> None:
         state = initial_workflow_state(dag)
         assert state is not None
         context = driver_context(
-            MinimalOpenFOAMPlugin(entrypoint="run-case"),
+            MinimalTestPlugin(entrypoint="run-case"),
             source="test:workflow-runner",
         )
 
@@ -338,7 +343,7 @@ def test_case_script_invocation_embeds_dyld_vars_literally_in_argv() -> None:
         "run-case", "/case/run-case", (),
         {"PATH": __import__("os").environ.get("PATH", ""), "DYLD_LIBRARY_PATH": "/marker/xyz"},
         driver_context(
-            MinimalOpenFOAMPlugin(entrypoint="run-case"),
+            MinimalTestPlugin(entrypoint="run-case"),
             source="test:workflow-runner",
         ),
     )

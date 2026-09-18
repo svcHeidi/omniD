@@ -301,7 +301,7 @@ def legacy_route_sweep_case(plugin, *, base, resolved_axis_values, driver_contex
 
     raise SweepValidationError(
         f"plugin {getattr(plugin, 'plugin_id', '<unknown>')!r} does not implement "
-        "route_sweep_case_values(); driverFOAM cannot route sweep axes for it. "
+        "route_sweep_case_values(); omnidriver cannot route sweep axes for it. "
         "Implement route_sweep_case_values(base, resolved_axis_values, "
         "driver_context) on the plugin to support sweeps."
     )
@@ -322,7 +322,7 @@ def legacy_materialize_sweep_case(plugin, *, case_dir, routed) -> None:
 
     raise SweepValidationError(
         f"plugin {getattr(plugin, 'plugin_id', '<unknown>')!r} does not implement "
-        "materialize_sweep_case(); driverFOAM cannot materialize sweep cases "
+        "materialize_sweep_case(); omnidriver cannot materialize sweep cases "
         "for it. Implement materialize_sweep_case(case_dir, routed) on the "
         "plugin to support sweeps."
     )

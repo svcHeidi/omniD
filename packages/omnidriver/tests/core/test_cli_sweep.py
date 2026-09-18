@@ -17,7 +17,8 @@ from pathlib import Path
 from unittest import mock
 
 from omnidriver.cli import main
-from omnidriver.openfoam.environment import openfoam_environment_context
+from omnidriver.core.plugin_interface import driver_context
+from plugins.minimal_plugin import MinimalTestPlugin
 
 
 def _patch_default_driver_context():
@@ -26,7 +27,9 @@ def _patch_default_driver_context():
     # attribute to patch -- patch it at its defining module instead.
     return mock.patch(
         "omnidriver.core.plugin_interface.default_driver_context",
-        side_effect=openfoam_environment_context,
+        side_effect=lambda: driver_context(
+            MinimalTestPlugin(), source="test:cli-sweep",
+        ),
     )
 
 

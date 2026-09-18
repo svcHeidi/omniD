@@ -8,7 +8,7 @@ legacy method calls, return values, call order, and exception behaviour.
 Optional case-compatibility and sweep hooks let a plugin take ownership of
 solver-specific behaviour without adding new required members to the public
 protocol.  Plugins that do not provide those hooks retain the historical
-driverFOAM fallbacks.
+omnidriver fallbacks.
 """
 
 from __future__ import annotations
@@ -156,7 +156,7 @@ class TutorialCatalogCapability(Protocol):
     """The tutorials this plugin registers, and how to display them.
 
     ``catalog`` returns the plugin's registry keyed by tutorial name -- the
-    entry names ``driverFoam`` accepts. ``displays`` returns the presentation
+    entry names ``omnidriver`` accepts. ``displays`` returns the presentation
     metadata ``describe`` renders. Both are required v1 members, so there is
     no fallback: a plugin that registers no tutorials returns empty rather
     than omitting the member.

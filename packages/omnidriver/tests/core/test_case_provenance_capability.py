@@ -11,17 +11,20 @@ from pathlib import Path
 from omnidriver.core.plugin_interface import (
     driver_context
 )
-from omnidriver.openfoam.environment import openfoam_environment_context
-from plugins.minimal_plugin import MinimalOpenFOAMPlugin
+from plugins.minimal_plugin import MinimalTestPlugin
 
 
-def test_generic_plugin_declares_no_required_inputs(tmp_path: Path) -> None:
-    generic = openfoam_environment_context().capabilities.case_provenance
+def test_minimal_plugin_declares_no_required_inputs(tmp_path: Path) -> None:
+    generic = driver_context(
+        MinimalTestPlugin(), source="test:minimal-provenance",
+    ).capabilities.case_provenance
     assert generic.required_inputs(tmp_path, {}, "0") == ()
 
 
-def test_generic_plugin_declares_no_generated_outputs(tmp_path: Path) -> None:
-    generic = openfoam_environment_context().capabilities.case_provenance
+def test_minimal_plugin_declares_no_generated_outputs(tmp_path: Path) -> None:
+    generic = driver_context(
+        MinimalTestPlugin(), source="test:minimal-provenance",
+    ).capabilities.case_provenance
     assert generic.generated_output_globs(tmp_path, {}, "0") == ()
 
 
@@ -29,6 +32,6 @@ def test_a_v1_plugin_with_no_hooks_gets_the_empty_fallback(tmp_path: Path) -> No
     """A plugin that predates this capability -- v1 or a v2 third-party
     plugin that never implemented it -- must still load and adapt cleanly.
     CaseProvenanceCapability is not a mandatory SolverPlugin member."""
-    context = driver_context(MinimalOpenFOAMPlugin(), source="test")
+    context = driver_context(MinimalTestPlugin(), source="test")
     assert context.capabilities.case_provenance.required_inputs(tmp_path, {}, "0") == ()
     assert context.capabilities.case_provenance.generated_output_globs(tmp_path, {}, "0") == ()

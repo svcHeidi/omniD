@@ -14,20 +14,17 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from omnidriver.openfoam.environment import openfoam_environment_context
 from omnidriver.core.runtime.run_document_exec import (
     build_execution_inputs,
     load_run_document,
 )
 from omnidriver.core.runtime.run_model import RunDocument
+from omnidriver.core.plugin_interface import driver_context
+from plugins.minimal_plugin import MinimalTestPlugin
 
-# A neutral, in-core context: these tests exercise the executor's own
-# diagnostic behaviour (loading, v1 migration, path/DAG validation), none of
-# which depends on a specific plugin's vocabulary. `driver_context` is a
-# mandatory parameter now (see test_core_context_is_explicit.py); this is
-# the built-in generic binding, not a judgement about which real plugin
-# owns this test.
-_CTX = openfoam_environment_context()
+# This test declares the one case-script spelling it consumes.  Its executor
+# diagnostics do not need dictionary syntax or another environment convention.
+_CTX = driver_context(MinimalTestPlugin(entrypoint="run-test-case"), source="test:run-document")
 
 
 def _empty_config() -> dict:
@@ -35,26 +32,10 @@ def _empty_config() -> dict:
 
 
 def _make_runnable_case(root: Path) -> Path:
-    """Create a minimal but _case_is_runnable-passing OpenFOAM case dir.
-
-    Includes an ``Allrun`` entrypoint declared by the test's OpenFOAM context.
-    so the directory reads as runnable under any plugin's case-compatibility
-    hook, not only a cardiac one -- these tests exercise path/allowed-root
-    resolution, not plugin-specific case semantics, and now take an explicit
-    ``driver_context``.
-    """
+    """Create a case with this test's explicitly declared entrypoint."""
     case = root / "case"
-    (case / "constant").mkdir(parents=True)
-    (case / "system").mkdir()
-    for rel in (
-        "constant/electroProperties",
-        "constant/physicsProperties",
-        "system/controlDict",
-        "system/fvSchemes",
-        "system/fvSolution",
-    ):
-        (case / rel).write_text("\n")
-    (case / "Allrun").write_text("#!/bin/sh\nexit 0\n")
+    case.mkdir()
+    (case / "run-test-case").write_text("#!/bin/sh\nexit 0\n")
     return case
 
 
@@ -69,9 +50,9 @@ def _minimal_doc(**overrides) -> RunDocument:
             "schema_version": "1",
             "step_status_values": ["pending", "running", "completed", "failed", "skipped"],
             "steps": [
-                {"id": "solve", "command": "Allrun", "args": [], "cwd": ".",
+                {"id": "solve", "command": "run-test-case", "args": [], "cwd": ".",
                  "depends_on": [], "produces": [], "consumes": [],
-                 "retry_policy": {}, "command_display": "Allrun"},
+                 "retry_policy": {}, "command_display": "run-test-case"},
             ],
         },
         expectedArtifacts=[],

@@ -1,4 +1,4 @@
-"""Solver-agnostic plugin contract for driverFOAM.
+"""Solver-agnostic plugin contract for omnidriver.
 
 Two Protocol classes define what a solver plugin must implement:
 
@@ -14,8 +14,11 @@ validated, immutable :class:`DriverContext` for each public operation.
 Adapters may provide their own context factories for convenience, and
 :func:`default_driver_context` only at compatibility boundaries.
 
-Environment and solver adapters implement this contract directly. Follow
-``.agents/skills/driverfoam-plugin-builder/SKILL.md``.
+Environment and solver adapters implement this contract directly. See
+``AGENT_GUIDE.md``, section "Plugin Guide -- Adding a New Solver".
+2026-09-14: this previously pointed at
+``.agents/skills/driverfoam-plugin-builder/SKILL.md``, a path that lived
+in the pre-migration cardiacFOAM tree and exists in no repository now.
 """
 
 # REQUIRED, not stylistic. Several annotations below name types imported only
@@ -80,7 +83,7 @@ class SolverPlugin(Protocol):
 
     @property
     def plugin_api_version(self) -> str:
-        """Version of the driverFOAM plugin contract implemented by this plugin."""
+        """Version of the omnidriver plugin contract implemented by this plugin."""
         ...
 
     # -- Command authorization -----------------------------------------------
@@ -583,7 +586,7 @@ def validate_plugin(plugin: Any) -> SolverPlugin:
     if plugin.plugin_api_version not in SUPPORTED_PLUGIN_API_VERSIONS:
         raise TypeError(
             f"SolverPlugin.plugin_api_version {plugin.plugin_api_version!r} is "
-            "not supported; this driverFOAM core drives "
+            "not supported; this omnidriver core drives "
             f"{sorted(SUPPORTED_PLUGIN_API_VERSIONS)}"
         )
     if not _PLUGIN_ID_RE.fullmatch(plugin.plugin_id):

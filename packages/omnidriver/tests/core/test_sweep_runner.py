@@ -22,6 +22,7 @@ from omnidriver.core.runtime.attempt_lease import AttemptLeaseError, acquire_cas
 from omnidriver.core.runtime.workflow_state import initial_workflow_state
 from omnidriver.core.runtime.sweep_manifest import CaseManifestEntry, compute_override_hash
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError
+from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 
 # Phase 2 Task 5b / test-ownership split: this file used to require
 # omnidriver-cardiacfoam (its specs were cardiac vocabulary throughout --
@@ -37,13 +38,32 @@ from omnidriver.core.sweep.sweep_expansion import SweepValidationError
 # cardiac one, to prove core's own sweep bookkeeping (resume/fresh/retry/
 # timeout/archive) still works.
 from omnidriver.core.plugin_interface import driver_context as _driver_context
-from omnidriver.openfoam.environment import openfoam_environment_context
-from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+from plugins.declared_case_plugin import DeclaredCasePlugin
+from plugins.resume_test_plugin import ResumeTestPlugin
 
-_CTX = _driver_context(
-    NeutralEnvironmentPlugin(), source="test:sweep_runner",
-)
-_OPENFOAM_CTX = openfoam_environment_context()
+_CTX = _driver_context(ResumeTestPlugin(), source="test:sweep_runner")
+
+
+class _StagingConventionPlugin(DeclaredCasePlugin):
+    def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
+        return CaseRuntimeConventions(
+            output_collection_relpath="postProcessing",
+            generated_directory_names=("postProcessing", "workflow_logs"),
+            generated_file_names=("workflow_state.json",),
+            generated_case_markers=("workflow_state.json", "workflow_logs"),
+            decomposition_directory_prefix="processor",
+            time_directory_name_pattern=r"^-?\d+(\.\d+)?(e[+\-]?\d+)?$",
+            preserved_time_directory_names=("0",),
+        )
+
+
+class _PostProcessingOutputPlugin(DeclaredCasePlugin):
+    def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
+        return CaseRuntimeConventions(output_collection_relpath="postProcessing")
+
+
+_STAGING_CTX = _driver_context(_StagingConventionPlugin(), source="test:staging")
+_POSTPROCESSING_CTX = _driver_context(_PostProcessingOutputPlugin(), source="test:postprocessing")
 
 
 def _write_spec(path: Path, models=("TNNP", "BuenoOrovio")):
@@ -167,7 +187,7 @@ def test_entry_case_staging_keeps_authored_case_clean(tmp_path):
     (generated_case / "system" / "controlDict").write_text("generated")
 
     staged = tmp_path / "scratch" / "case_0001"
-    _stage_entry_case(source, staged, driver_context=_OPENFOAM_CTX)
+    _stage_entry_case(source, staged, driver_context=_STAGING_CTX)
 
     assert (staged / "system" / "controlDict").read_text() == "endTime 0.2;\n"
     assert (staged / "0" / "Vm").exists()
@@ -443,7 +463,7 @@ def test_sweep_run_archives_each_case_postprocessing_output_when_configured(tmp_
     with mock.patch("omnidriver.core.runtime.sweep_runner.load_entry_spec", return_value=fake_spec), \
          mock.patch("omnidriver.core.runtime.sweep_runner.strict_plan", return_value=fake_report), \
          mock.patch("omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run):
-        result = sweep_run(spec_path, output_dir=output_dir, driver_context=_OPENFOAM_CTX)
+        result = sweep_run(spec_path, output_dir=output_dir, driver_context=_POSTPROCESSING_CTX)
 
     assert result["completed_count"] == 2
     # Each case's archived output lands inside that case's own output_dir --
@@ -504,7 +524,7 @@ def test_sweep_run_archives_each_case_postprocessing_output_by_default(tmp_path)
     with mock.patch("omnidriver.core.runtime.sweep_runner.load_entry_spec", return_value=fake_spec), \
          mock.patch("omnidriver.core.runtime.sweep_runner.strict_plan", return_value=fake_report), \
          mock.patch("omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run):
-        result = sweep_run(spec_path, output_dir=output_dir, driver_context=_OPENFOAM_CTX)
+        result = sweep_run(spec_path, output_dir=output_dir, driver_context=_POSTPROCESSING_CTX)
 
     assert result["completed_count"] == 2
     assert (case_output_dirs[1] / "collectedOutput" / "case_1.dat").read_text() == "result 1"

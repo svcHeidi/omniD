@@ -17,18 +17,16 @@ from omnidriver.core.runtime.attempt_lease import acquire_attempt_lease, acquire
 from omnidriver.core.runtime.resume import validate_resume
 from omnidriver.core.runtime.workflow_runner import run_workflow_step
 from omnidriver.core.runtime.workflow_state import initial_workflow_state, workflow_state_from_json
-from omnidriver.openfoam.environment import openfoam_environment_context
-from plugins.neutral_environment_plugin import NeutralEnvironmentPlugin
+from plugins.resume_test_plugin import ResumeTestPlugin
 
 
 def _completed(tmp_path):
     (tmp_path / "system").mkdir()
-    (tmp_path / "system/controlDict").write_text("startTime 0;\n")
     (tmp_path / "system/settings").write_text("value 1;\n")
     dag = {"steps": [{"id": "solve", "command": sys.executable,
         "args": ["-c", "from pathlib import Path; Path('result.txt').write_text('done')"],
         "cwd": ".", "depends_on": []}]}
-    context = driver_context(NeutralEnvironmentPlugin(), source="test:resume")
+    context = driver_context(ResumeTestPlugin(), source="test:resume")
     output = tmp_path / "output"
     result = run_workflow_step(dag, initial_workflow_state(dag), "solve", case_root=tmp_path,
         log_dir=output / "logs", state_path=output / "workflow_state.json", env={}, driver_context=context)
@@ -41,30 +39,6 @@ def test_unchanged_checkpoint_roundtrips_and_resumes(tmp_path):
     saved = workflow_state_from_json(json.loads((output / "workflow_state.json").read_text()))
     assert saved == state
     validate_resume(saved, dag, case_root=tmp_path, driver_context=context, env={})
-
-
-def test_unchanged_optional_include_absence_resumes_but_appearance_refuses(tmp_path):
-    dag, context, output, _state = _completed(tmp_path)
-    context = openfoam_environment_context()
-    optional = tmp_path / "runtime" / "optional.cfg"
-    control_dict = tmp_path / "system" / "controlDict"
-    control_dict.write_text(f'#includeIfPresent "{optional}"\nstartTime 0;\n')
-    # Recreate the checkpoint after adding the optional declaration, while it
-    # remains absent. The absence witness is complete resume evidence.
-    result = run_workflow_step(
-        dag, initial_workflow_state(dag), "solve", case_root=tmp_path,
-        log_dir=output / "optional-logs", state_path=output / "optional-state.json",
-        env={}, driver_context=context,
-    )
-    saved = workflow_state_from_json(
-        json.loads((output / "optional-state.json").read_text())
-    )
-    assert saved == result.state
-    validate_resume(saved, dag, case_root=tmp_path, driver_context=context, env={})
-    optional.parent.mkdir()
-    optional.write_text("value 2;\n")
-    with pytest.raises(ValueError, match="input evidence changed"):
-        validate_resume(saved, dag, case_root=tmp_path, driver_context=context, env={})
 
 
 def test_internal_environment_transport_path_does_not_invalidate_resume(tmp_path):
@@ -176,15 +150,14 @@ def test_completed_checkpoint_requires_its_required_output_on_resume(tmp_path, c
 def test_run_document_embedded_completed_state_refuses_changed_inputs(tmp_path) -> None:
     """A RunDocument state is resumable evidence, not a success override.
 
-    This uses the core-owned generic plugin and a shell-only ``Allrun`` so it
+    This uses the core-owned test plugin and a shell-only declared entrypoint so it
     proves the public CLI contract without any cardiacFOAM dependency.
     """
     case_root = tmp_path / "case"
     (case_root / "system").mkdir(parents=True)
-    (case_root / "constant").mkdir()
-    control_dict = case_root / "system" / "controlDict"
-    control_dict.write_text("value 1;\n")
-    script = case_root / "run-case"
+    settings = case_root / "system" / "settings"
+    settings.write_text("value 1;\n")
+    script = case_root / "run-test-case"
     script.write_text("#!/bin/sh\nexit 0\n")
     os.chmod(script, 0o755)
 
@@ -193,14 +166,14 @@ def test_run_document_embedded_completed_state_refuses_changed_inputs(tmp_path) 
         "step_status_values": ["pending", "running", "completed", "failed", "skipped"],
         "steps": [{
             "id": "run",
-                "command": "run-case",
+                "command": "run-test-case",
             "args": [],
             "cwd": ".",
             "depends_on": [],
             "produces": [],
             "consumes": [],
             "retry_policy": {"max_attempts": 1},
-                "command_display": "run-case",
+                "command_display": "run-test-case",
         }],
     }
     state = initial_workflow_state(workflow_dag)
@@ -227,7 +200,7 @@ def test_run_document_embedded_completed_state_refuses_changed_inputs(tmp_path) 
     first_out = StringIO()
     with redirect_stdout(first_out):
         first_code = cli.main([
-            "run", "--plugin", "plugins.neutral_environment_plugin:NeutralEnvironmentPlugin",
+            "run", "--plugin", "plugins.resume_test_plugin:ResumeTestPlugin",
             "--run-document", str(doc_path),
         ])
     first = json.loads(first_out.getvalue())
@@ -239,12 +212,12 @@ def test_run_document_embedded_completed_state_refuses_changed_inputs(tmp_path) 
     doc["workflowState"] = json.loads(saved_state_path.read_text())
     doc_path.write_text(json.dumps(doc))
     saved_state_path.unlink()
-    control_dict.write_text("value 2;\n")
+    settings.write_text("value 2;\n")
 
     resumed_out = StringIO()
     with redirect_stdout(resumed_out):
         resumed_code = cli.main([
-            "run", "--plugin", "plugins.neutral_environment_plugin:NeutralEnvironmentPlugin",
+            "run", "--plugin", "plugins.resume_test_plugin:ResumeTestPlugin",
             "--run-document", str(doc_path),
         ])
     resumed = json.loads(resumed_out.getvalue())

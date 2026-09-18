@@ -1,15 +1,15 @@
-# omniDriver Agent Guide
+# Historical cardiacFoam operational notes
 
-> **Paths and commands corrected 2026-09-04.** Every import path here named
-> `openfoam_driver.*` and every CLI example invoked `driverFoam`; neither
-> existed in any install, so this guide could not be followed. They now name
-> the shipped packages and the `omnidriver` console script. `CLAUDE.md` covers
-> how to verify a change; this file covers the domain — planning, sweeping,
-> post-processing, and authoring a plugin or a tutorial.
+> **Not a current agent contract.** This file contains useful historical
+> cardiacFoam operational detail, including retired driverFOAM-era names and
+> host assumptions. Do not use it as a routing or implementation authority.
+> Start at [`AGENTS.md`](AGENTS.md), then verify any command here against the
+> current CLI, package, and selected adapter before use.
 
-This is the agent contract for planning, launching, polling, and inspecting
-cardiacFoam runs through the Python orchestrator. Read this once before
-driving it.
+> **Historical correction, 2026-09-04.** This guide was amended after its
+> original `openfoam_driver.*` imports and `driverFoam` CLI examples proved
+> nonexistent. It may still provide useful context, but current instructions,
+> current CLI help, and the selected adapter are authoritative.
 
 ## What the agent can do
 
@@ -884,7 +884,7 @@ Once registered, drive it exclusively through `driverFoam`
 
 ---
 
-## Plugin Guide — Adding a New Solver to driverFOAM
+## Plugin Guide — Adding a New Solver to omnidriver
 
 This section is for **plugin authors** — developers or AI agents who need to
 add support for a new OpenFOAM solver to driverFOAM. End-users running existing

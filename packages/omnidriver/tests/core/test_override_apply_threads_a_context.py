@@ -35,7 +35,7 @@ import plugins.minimal_plugin as minimal_plugin
 
 def _context():
     return driver_context(
-        minimal_plugin.MinimalOpenFOAMPlugin(), source="test:override-apply",
+        minimal_plugin.MinimalTestPlugin(), source="test:override-apply",
     )
 
 
@@ -95,7 +95,7 @@ def test_the_fallback_refuses_cleanly_when_openfoam_is_not_installed(monkeypatch
 
 
 def test_custom_mutator_must_declare_its_complete_target_set(tmp_path: Path) -> None:
-    class CustomMutator(minimal_plugin.MinimalOpenFOAMPlugin):
+    class CustomMutator(minimal_plugin.MinimalTestPlugin):
         def apply_overrides(self, overrides, *, case_root):
             del overrides, case_root
 
@@ -108,7 +108,7 @@ def test_custom_mutator_must_declare_its_complete_target_set(tmp_path: Path) -> 
 
 
 def test_custom_target_declaration_is_exposed_without_mutating(tmp_path: Path) -> None:
-    class DeclaredMutator(minimal_plugin.MinimalOpenFOAMPlugin):
+    class DeclaredMutator(minimal_plugin.MinimalTestPlugin):
         def apply_overrides(self, overrides, *, case_root):
             del overrides, case_root
 
