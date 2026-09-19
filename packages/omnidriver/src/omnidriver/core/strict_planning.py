@@ -483,12 +483,18 @@ def strict_plan(
         explicit_bashrc=str(explicit_bashrc) if explicit_bashrc is not None else None,
         driver_context=driver_context,
     )
+    # Bound once and passed on: the audit has to know *why* the mesh
+    # diagnostics are empty. An exempt case (no physical scale, or a generic
+    # case whose conventions core does not know) produces the same empty tuple
+    # as a mesh that was examined and found clean, and used to be scored the
+    # same way.
+    mesh_geometry_exempt = (
+        _is_nondimensional_entry(spec, driver_context)
+        or bool(spec.metadata.get("generic_case"))
+    )
     mesh_diagnostics = _mesh_geometry_diagnostics(
         spec.case_root,
-        exempt=(
-            _is_nondimensional_entry(spec, driver_context)
-            or bool(spec.metadata.get("generic_case"))
-        ),
+        exempt=mesh_geometry_exempt,
         driver_context=driver_context,
     )
     configuration_evidence = driver_context.capabilities.override_scopes.inspect(
@@ -513,6 +519,7 @@ def strict_plan(
         artifact_diagnostics=artifact_diagnostics,
         environment_diagnostics=env_diagnostics,
         mesh_geometry_diagnostics=mesh_diagnostics,
+        mesh_geometry_exempt=mesh_geometry_exempt,
         required_case_files=tuple(
             rule.path
             for rule in driver_context.capabilities.cxx_mapping.profile().case_files

@@ -228,6 +228,7 @@ def _build_simulation_audit(
     artifact_diagnostics: tuple[StrictDiagnostic, ...],
     environment_diagnostics: tuple[StrictDiagnostic, ...],
     mesh_geometry_diagnostics: tuple[StrictDiagnostic, ...],
+    mesh_geometry_exempt: bool = False,
     required_case_files: tuple[str, ...] = (),
 ) -> tuple[tuple[SimulationAuditItem, ...], tuple[StrictDiagnostic, ...], dict[str, Any]]:
     generation_item, generation_diagnostics = _simulation_generation_audit(spec)
@@ -318,15 +319,24 @@ def _build_simulation_audit(
             success_summary="Mesh-scale checks did not find run-preparation issues.",
             warning_summary="Mesh-scale checks emitted warnings.",
             error_summary="Mesh-scale checks found run-preparation issues.",
+            # Three ways to arrive with an empty tuple, and they are not the
+            # same fact: the operator declined the check, the case has no mesh
+            # scale to check, or the mesh was examined and was clean.
             outcome=(
-                "not_requested" if "SKIP_MESH_DIAGNOSTICS" in os.environ else EXECUTED
+                "not_requested" if "SKIP_MESH_DIAGNOSTICS" in os.environ
+                else NOT_APPLICABLE if mesh_geometry_exempt
+                else EXECUTED
             ),
             uncovered_summary=(
                 "Mesh-scale checks were not requested: SKIP_MESH_DIAGNOSTICS is "
                 "set, so no mesh geometry was examined."
+                if "SKIP_MESH_DIAGNOSTICS" in os.environ else
+                "This entry declares no physical mesh scale, so there is no "
+                "mesh geometry to check."
             ),
             evidence={
                 "skipped": "SKIP_MESH_DIAGNOSTICS" in os.environ,
+                "exempt": mesh_geometry_exempt,
                 "diagnostic_count": len(mesh_geometry_diagnostics),
             },
         ),

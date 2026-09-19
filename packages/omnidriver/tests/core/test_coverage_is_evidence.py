@@ -91,6 +91,21 @@ def test_a_generic_case_reports_inapplicable_checks_as_such(tmp_path: Path) -> N
     assert _stage(report, "dictionary_resolution").status == "not_applicable"
 
 
+def test_an_exempt_mesh_check_is_reported_as_inapplicable(tmp_path: Path) -> None:
+    """`_mesh_geometry_diagnostics` returns () for two unrelated reasons.
+
+    One is SKIP_MESH_DIAGNOSTICS. The other is `exempt`, which is
+    `_is_nondimensional_entry(...) or generic_case` -- a case with no physical
+    mesh scale, or one whose conventions core does not know. Both produce an
+    empty tuple, so the audit could not tell them apart from a mesh that was
+    examined and found clean, and an exempt case kept earning the stage's full
+    five points.
+    """
+    report = _plan(tmp_path)
+
+    assert _stage(report, "mesh_geometry").status == "not_applicable"
+
+
 def test_an_inapplicable_check_leaves_the_denominator(tmp_path: Path) -> None:
     """`not_applicable` is not a failure to cover; it is nothing to cover.
 
