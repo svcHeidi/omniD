@@ -124,8 +124,14 @@ runtime, silently.
 - `docs/superpowers/specs/` and `plans/` — design reasoning and executed plans.
 
 - `AGENT_GUIDE.md` — the domain guide: planning, sweeping, post-processing,
-  and authoring a plugin or a tutorial. Its paths and commands were corrected
-  2026-09-04 and every module path in it is import-checked.
+  and authoring a plugin or a tutorial. Its CLI walkthrough is accurate; its
+  plugin-authoring section had rotted badly and was repaired 2026-09-19.
+  **Corrected 2026-09-19:** this said "every module path in it is
+  import-checked". No such check exists — the only test naming that file
+  asserts it links to `SECURITY.md`. Several of its imports did not resolve,
+  which is exactly what the claimed guard would have caught had it been real.
+  Verify an import before relying on it, and if you build that guard, delete
+  this sentence.
 
 **Read for reasoning, not for locations:** `CHANGELOG.md` and
 `MIGRATION_AUDIT_v2.md`, which describe the retired flat `openfoam_driver/`

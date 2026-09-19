@@ -1,6 +1,6 @@
 # Version Policy
 
-omniD is a monorepo of independently versioned packages: `omnidriver` (core orchestrator) and plugins (`omnidriver-openfoam`, `omnidriver-cardiacfoam`, and future domain plugins such as a deal.II package). Each package strictly adheres to [Semantic Versioning 2.0.0](https://semver.org/) **on its own version number** — there is no shared/lockstep version across packages.
+omniD is a monorepo of independently versioned packages: `omnidriver` (core orchestrator) and plugins (`omnidriver-openfoam`, `omnidriver-cardiacfoam`, `omnidriver-cardiaccore`, and future domain plugins such as a deal.II package). Each package strictly adheres to [Semantic Versioning 2.0.0](https://semver.org/) **on its own version number** — there is no shared/lockstep version across packages. (**Corrected 2026-09-19**: this list omitted `omnidriver-cardiaccore`, integrated 2026-09-18 — it is a real plugin, not one of the hypothetical "future domain plugins" this sentence still names.)
 
 ## Core (`omnidriver`)
 
@@ -12,9 +12,9 @@ Given the nature of core as a workflow orchestrator, we guarantee backward compa
 
 Any breaking changes to the above result in a major version bump on `omnidriver`. Internal Python modules not explicitly exposed as part of the public API may change in minor versions.
 
-## Plugins (`omnidriver-openfoam`, `omnidriver-cardiacfoam`, ...)
+## Plugins (`omnidriver-openfoam`, `omnidriver-cardiacfoam`, `omnidriver-cardiaccore`, ...)
 
-Plugins are agnostic to each other: a plugin depends on `omnidriver` core (and, only where it genuinely needs to, on another specific plugin — e.g. `omnidriver-cardiacfoam` depends on `omnidriver-openfoam`), never on siblings it doesn't use. A new plugin that only needs core (e.g. a future deal.II plugin) depends on `omnidriver` alone.
+Plugins are agnostic to each other: a plugin depends on `omnidriver` core (and, only where it genuinely needs to, on another specific plugin — e.g. `omnidriver-cardiacfoam` depends on `omnidriver-openfoam`, and `omnidriver-cardiaccore` also depends on `omnidriver-openfoam` while staying a sibling of, not a dependent of, `omnidriver-cardiacfoam`), never on siblings it doesn't use. A new plugin that only needs core (e.g. a future deal.II plugin) depends on `omnidriver` alone.
 
 Each plugin pins its `omnidriver` (and any plugin) dependency with a PEP 440 compatible-release specifier against the current 0.x line, e.g. `omnidriver~=0.1.0`. This means:
 

@@ -10,12 +10,17 @@ role-vocabulary enforcement, misplaced modules, and the `DriverContext`
 call-site count (21 → 6) all closed or shrank without a dedicated pass, as a
 side effect of that separate work. What's genuinely still open, in priority
 order for a publication-ready release: **licensing** — no `LICENSE` file and
-no `license` field in any of the three `pyproject.toml`, so `omnidriver` and
-`omnidriver-openfoam` ship with no license declared at all (**corrected
+no `license` field in any of the four package `pyproject.toml` (**corrected
+2026-09-19**: this said "three"; `omnidriver-cardiaccore` joined 2026-09-18 as
+a fourth package pyproject with the same gap), so `omnidriver`,
+`omnidriver-openfoam`, and `omnidriver-cardiaccore` ship with no license
+declared at all (**corrected
 2026-09-03**: this paragraph used to name the cardiacFoam GPL header as the
 largest blocker; that half was finished in `c8d6172` and `0039753`, and this
 summary was not updated alongside the licensing row in §3) — then the CI
-matrix (still 3.11/3.12 only, no wheel-install job), and the two unused
+matrix (**corrected 2026-09-19**: this said "still 3.11/3.12 only, no
+wheel-install job", contradicting §3's own "Closed 2026-09-04" entry — see
+that entry, and §3's CI row, for the real and current job list), and the two unused
 declared dependencies (`numpy`, `gmsh`). **Both core/plugin decoupling rows are now closed.** The 20
 cardiac-gated `legacy_*` branches turned out to be already deleted — that row
 was stale, not open. The `DriverContext` row is done as of 2026-09-03: core
@@ -29,8 +34,9 @@ for the design and each row in §3 for detail.
 The Python orchestrator was developed inside
 `noFrontendCardiacFoam/applications/scripts/driverFoam`. Because the C++
 OpenFOAM environment is heavy, only the Python framework moves here, split into
-three decoupled packages so that projects other than cardiacFoam can drive their
-own solvers with it.
+four decoupled packages (**corrected 2026-09-19**: this said "three" before
+`omnidriver-cardiaccore` joined 2026-09-18) so that projects other than
+cardiacFoam can drive their own solvers with it.
 
 ## Next steps (written 2026-09-04)
 
@@ -53,8 +59,12 @@ shapes pass on 3.11/3.12/3.13, and CI is green for the first time.
 
 In a fresh cardiacFoam monorepo:
 
+<!-- Corrected 2026-09-19: this recipe installed only the original three
+     packages. `omnidriver-cardiaccore` (integrated 2026-09-18) is added below
+     so `pytest packages/ -q` actually covers all four. -->
+
 ```bash
-pip install -e "packages/omnidriver[post]"             -e packages/omnidriver-openfoam             -e packages/omnidriver-cardiacfoam pytest
+pip install -e "packages/omnidriver[post]"             -e packages/omnidriver-openfoam             -e packages/omnidriver-cardiacfoam             -e packages/omnidriver-cardiaccore pytest
 
 # Registered tutorials join cases_root + their own case_dir_name, so point the
 # base at the tutorials tree. Core no longer discovers it -- see §12 of
@@ -112,8 +122,18 @@ resolved by the same decision.
   deliberately not built; see `future/ENVIRONMENT_CONTRACT.md` §12.
 - `omnidriver-openfoam` declares `gmsh` while its only consumers are cardiac
   tutorials: right dependency, wrong package.
-- No wheel gate for `omnidriver-openfoam` / `omnidriver-cardiacfoam`; their
-  suites genuinely need a checkout.
+- ~~No wheel gate for `omnidriver-openfoam` / `omnidriver-cardiacfoam`; their
+  suites genuinely need a checkout.~~ **Closed 2026-09-19.**
+  `packages/omnidriver-cardiacfoam/tests/test_all_packages_wheel_install.py`
+  builds all three distributions from a temporary source copy, installs the
+  wheels into a fresh venv, and exercises installed plugin discovery plus the
+  public `describe` edge with no checkout on `sys.path`; the
+  `test-all-package-wheels` job in `.github/workflows/ci.yml` runs exactly
+  that test. **Not covered**: the test's own `_PACKAGES` tuple is still
+  `("omnidriver", "omnidriver-openfoam", "omnidriver-cardiacfoam")` —
+  `omnidriver-cardiaccore` (2026-09-18) has no wheel gate of its own and no
+  test file under `packages/omnidriver-cardiaccore/tests/` mentions "wheel" at
+  all, so this row is closed for the original three packages only.
 
 ---
 
@@ -124,6 +144,12 @@ resolved by the same decision.
 | `omnidriver` | DAG execution, schemas, provenance, the plugin contract | zero OpenFOAM vocabulary, zero physics rules |
 | `omnidriver-openfoam` | `foamlib` mutators, mesh provisioning, OpenFOAM parsing | depends on core; knows no cardiology |
 | `omnidriver-cardiacfoam` | electrophysiology, ionic models, the cardiac plugin | depends on both |
+| `omnidriver-cardiaccore` | cardiacCore preprocessing operations and workflows | depends on core and openfoam; sibling of `omnidriver-cardiacfoam`, not a dependent of it (`ARCHITECTURE.md` Rule 4) |
+
+(**Corrected 2026-09-19**: this table listed only the first three rows;
+`omnidriver-cardiaccore` was integrated 2026-09-18 — see
+`.github/workflows/ci.yml`'s `test-cardiaccore` job and
+`ARCHITECTURE.md`'s Architectural Rules.)
 
 Round 1 delivered all three, plus a `core/` subdirectory free of
 `foamlib`/OpenFOAM imports (`a2eb34b`, `39e56d1`, `59fd6a2` — note this holds
@@ -164,7 +190,10 @@ per-file disposition and the reasoning behind each call.
 
 Verify against a core-only virtualenv, on the Python 3.13 floor, not this
 repo's own `.venv` — it runs Python 3.14 (PEP 649 hides annotation-evaluation
-bugs that break the 3.11/3.12 CI matrix) and has all three packages installed.
+bugs that break the CI matrix) and has all four packages installed.
+(**Corrected 2026-09-19**: this said "3.11/3.12 CI matrix" and "all three
+packages installed" — the matrix is 3.11/3.12/3.13 (see §3's CI row) and
+`omnidriver-cardiaccore` makes it four packages as of 2026-09-18.)
 
 **Corrected 2026-08-27.** This paragraph used to say the stale pre-rename
 `omnidriver-cardiac` editable install "was fixed in the venv itself". It was
@@ -266,8 +295,8 @@ which is mechanical — see the Phase 2 plan's "Task 5, remeasured".
 | **the role vocabulary is unenforced** | resolved by `future/ENVIRONMENT_CONTRACT.md` §11 (the escape-tier design, landed 2026-09-01) — `KNOWN_ROLES` is a closed, validated enum for `openfoam.*`/`plugin.*`/`case.*`, and a typo in a known namespace still raises at load. See that section for what is and isn't caught. |
 | ~~**declared roles that nothing reads**~~ | **`openfoam.entrypoint` fixed.** `entrypoint_relpaths()` now backs `registry.py`'s case-detection/runnability checks and `generic_case.py`'s one-step DAG (Tier 2, 2026-09-01), and, as of Tier 4, a plugin's declared entrypoint resolves case-locally too (`future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md`). `openfoam.cleanup` is still declared (`cardiacfoam/plugin.yaml:68`) and still has **zero readers** — no `cleanup_relpaths()` equivalent exists; deliberately deferred, see that threat-model doc's scope section. `openfoam.mesh_generation` not re-checked. |
 | ~~**misplaced modules in core**~~ | **resolved.** `spatial_pacing.py` now lives in `omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/`, not core. `scripts/_rtst_scanner.py`, `_names_parser.py`, and `_dict_keys_scanner.py` no longer exist anywhere in the repo — removed, not just relocated. The `dict_entries.py` PEP 562 lazy re-export these scripts reached cardiacfoam through was itself removed 2026-09-02 during pre-publication alias cleanup (`dict_entries.py` no longer defines `__getattr__` at all), so the escape route is gone even if a similar script reappeared. |
-| **licensing** | **the wrong-header half fixed 2026-09-02; the "what license do we actually ship under" half still fully open.** The cardiacFoam GPL header is gone from all 120 core + `omnidriver-openfoam` files that carried it: 70 `src` files in `c8d6172` (`packages/omnidriver/src`: 58, `omnidriver-openfoam/src`: 12), then the 50 test files (`omnidriver/tests`: 41, `omnidriver-openfoam/tests`: 9). The test pass could not reuse the `src` approach of deleting the whole banner: 17 of those files carried a substantial `Description` section that existed nowhere else — about 110 lines of real reasoning — so those were converted to module docstrings and the rest dropped outright (113 insertions, 1412 deletions; only the 17 have any insertion at all). `omnidriver-cardiacfoam`'s own 81 files (44 `src` + 37 tests) keep their header untouched; that package's content genuinely is cardiacFoam-derived. Still carrying it outside that package: `scripts/` (7 `.py`) and one `future/` markdown file — deliberately left, being neither package source nor tests. Still open: no `LICENSE` file anywhere in the repo, no `license` field in any of the three `pyproject.toml` — core and `omnidriver-openfoam` currently ship with **no license declared at all**, which is a blocker in its own right, not a neutral state. Needs an actual decision on what these two packages are licensed under before a release, not just the removal that's now done. |
-| ~~**CI does not test what ships**~~ | **closed 2026-09-03.** The matrix is now `["3.11", "3.12", "3.13"]` across all three test jobs, so the version the project is developed on is tested. A new `test-wheel` job builds core's sdist+wheel, installs the wheel into a clean venv, and runs `scripts/check-wheel-artifact.py` against it — the only job that exercises a non-editable install, where a module reading repo-relative state at import time can no longer hide behind the repository being on `sys.path`. `release.yml` now installs and smoke-tests each built wheel *before* publishing, so a broken artifact blocks the release instead of reaching it. Verified locally first: 1546 passed identically on 3.11, 3.12, 3.13 and 3.14. **Updated 2026-09-03→04**: the `test-wheel` job now runs core's whole suite against the installed wheel, not only `check-wheel-artifact.py` — 544 passed, 0 failed, where the same command gave 13 failures and 8 collection errors before core stopped resolving a repository root for itself. Still open: no job runs a wheel gate for `omnidriver-openfoam`/`omnidriver-cardiacfoam`, whose suites genuinely need a checkout. |
+| **licensing** | **the wrong-header half fixed 2026-09-02; the "what license do we actually ship under" half still fully open.** The cardiacFoam GPL header is gone from all 120 core + `omnidriver-openfoam` files that carried it: 70 `src` files in `c8d6172` (`packages/omnidriver/src`: 58, `omnidriver-openfoam/src`: 12), then the 50 test files (`omnidriver/tests`: 41, `omnidriver-openfoam/tests`: 9). The test pass could not reuse the `src` approach of deleting the whole banner: 17 of those files carried a substantial `Description` section that existed nowhere else — about 110 lines of real reasoning — so those were converted to module docstrings and the rest dropped outright (113 insertions, 1412 deletions; only the 17 have any insertion at all). `omnidriver-cardiacfoam`'s own 81 files (44 `src` + 37 tests) keep their header untouched; that package's content genuinely is cardiacFoam-derived. Still carrying it outside that package: `scripts/` (7 `.py`) and one `future/` markdown file — deliberately left, being neither package source nor tests. Still open: no `LICENSE` file anywhere in the repo, no `license` field in any of the four package `pyproject.toml` (**corrected 2026-09-19**: this said "three" and "these two packages"; `omnidriver-cardiaccore` joined 2026-09-18 with the same gap and no cardiacFoam-derived header of its own) — core, `omnidriver-openfoam`, and `omnidriver-cardiaccore` currently ship with **no license declared at all**, which is a blocker in its own right, not a neutral state. Needs an actual decision on what these three packages are licensed under before a release, not just the removal that's now done. |
+| ~~**CI does not test what ships**~~ | **closed 2026-09-03.** The matrix is now `["3.11", "3.12", "3.13"]` across all three test jobs, so the version the project is developed on is tested. A new `test-wheel` job builds core's sdist+wheel, installs the wheel into a clean venv, and runs `scripts/check-wheel-artifact.py` against it — the only job that exercises a non-editable install, where a module reading repo-relative state at import time can no longer hide behind the repository being on `sys.path`. `release.yml` now installs and smoke-tests each built wheel *before* publishing, so a broken artifact blocks the release instead of reaching it. Verified locally first: 1546 passed identically on 3.11, 3.12, 3.13 and 3.14. **Updated 2026-09-03→04**: the `test-wheel` job now runs core's whole suite against the installed wheel, not only `check-wheel-artifact.py` — 544 passed, 0 failed, where the same command gave 13 failures and 8 collection errors before core stopped resolving a repository root for itself. ~~Still open: no job runs a wheel gate for `omnidriver-openfoam`/`omnidriver-cardiacfoam`, whose suites genuinely need a checkout.~~ **Closed 2026-09-19** — see the Deferred-list entry in §2 above; `test_all_packages_wheel_install.py` plus the `test-all-package-wheels` job now provide exactly that, for those two packages (not for `omnidriver-cardiaccore`, which has no wheel gate). **Corrected 2026-09-19**: this row is also the source of the summary-vs-detail contradiction at the top of this document — the summary paragraph said the matrix was "3.11/3.12 only, no wheel-install job", which was never true of this row and has been fixed there. The real job list in `.github/workflows/ci.yml` as of 2026-09-19, none of which this document enumerated before now: `test-core` (py3.11/3.12/3.13), `test-openfoam` (py3.11/3.12/3.13), `test-cardiac` (py3.11/3.12/3.13), `test-cardiaccore` (py3.11/3.12/3.13, added with the 2026-09-18 integration), `test-all-package-wheels` (py3.11), `static-gates` (py3.11), and `test-wheel` (py3.11/3.13). |
 
 ### Closed 2026-09-04
 

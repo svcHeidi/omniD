@@ -1,8 +1,9 @@
-# Contributing to driverFOAM
+# Contributing to OmniDriver
 
-Thank you for considering contributing to **driverFOAM**!
+Thank you for considering contributing to **OmniDriver**!
 
 This project is a typed planning, validation, provenance, and workflow orchestration layer for reproducible OpenFOAM simulation studies.
+(**Corrected 2026-09-19**: this file was still branded "driverFOAM" throughout — the tool is OmniDriver and its CLI is `omnidriver`, per `CLAUDE.md`.)
 
 ## How Can I Contribute?
 
@@ -17,7 +18,7 @@ If you encounter a bug, please open a GitHub issue and include the following:
   ```plaintext
   - OS version:
   - Python version:
-  - driverFOAM version: 0.1.0
+  - OmniDriver version: 0.1.0
   - OpenFOAM version:
   ```
 
@@ -27,7 +28,7 @@ To suggest a feature:
 
 - Open a GitHub issue with the title: **Feature request: [feature title]**.
 - Provide a detailed description of the proposed feature.
-- Explain its potential benefits for the driverFOAM ecosystem.
+- Explain its potential benefits for the OmniDriver ecosystem.
 
 ### 3. Submitting Code Changes
 
@@ -51,7 +52,7 @@ environment; in short:
 
 | shape | catches |
 |---|---|
-| all three packages installed | ordinary regressions |
+| all four packages installed | ordinary regressions |
 | core installed alone | core reaching into a sibling package |
 | **core installed from a built wheel** | core reading repo-relative state at import time |
 | `scripts/check-import-boundaries.py`, `scripts/export-capability-seams.py --check` | import direction; a stale generated table |
@@ -69,4 +70,4 @@ Write clear, descriptive commit messages and open a Pull Request against the mai
 
 ## Plugin Development
 
-driverFOAM is designed to be extensible. External solvers or pipelines should ideally be developed as separate Python packages exposing a `omnidriver.plugins` entry point. Please check the documentation on how to scaffold and link your own plugins without modifying the core `driverFOAM` repository.
+OmniDriver is designed to be extensible. External solvers or pipelines should ideally be developed as separate Python packages exposing a `omnidriver.plugins` entry point. Please check the documentation on how to scaffold and link your own plugins without modifying the core `omnidriver` repository.

@@ -119,9 +119,12 @@ omnidriver run --strict --entry singleCell --fresh
 `--fresh` refuses to delete anything that doesn't look like driverFOAM's own
 output (no `workflow_state.json`/`sweep_manifest.json`/`run_document.json`
 found), the filesystem root, your home directory, or a path outside
-`DRIVERFOAM_ALLOWED_RUNS_ROOT` when that's set — but it does not prompt for
-confirmation, so treat any `--output-dir`/case directory you point it at as
-fully disposable and copy out anything you want to keep first.
+`OMNIDRIVER_ALLOWED_RUNS_ROOT` when that's set (corrected 2026-09-19: this
+named the legacy `DRIVERFOAM_ALLOWED_RUNS_ROOT`; that name is still honoured
+if set, but the current name is `OMNIDRIVER_ALLOWED_RUNS_ROOT` and wins when
+both are set) — but it does not prompt for confirmation, so treat any
+`--output-dir`/case directory you point it at as fully disposable and copy
+out anything you want to keep first.
 
 `--max-total-attempts <N>` caps the total number of step executions across the
 whole run (a retry-storm guard on top of each step's per-step `max_attempts`).
@@ -135,14 +138,23 @@ Defaults to no timeout.
 Programmatic planning uses the same contract:
 
 ```python
+from omnidriver.core.plugin_interface import load_plugin_context
 from omnidriver.core.strict_planning import strict_plan
 
-report = strict_plan("singleCell")
+# `driver_context` is keyword-only and has NO default: which adapter's
+# semantics a plan is built under is supplied, never guessed. Resolve it once,
+# the way the CLI does for `--plugin`, and thread it down.
+report = strict_plan("singleCell", driver_context=load_plugin_context("cardiacfoam"))
 payload = report.to_json()
 if payload["status"] != "ok":
     raise RuntimeError(payload)
 print(payload["workflow_state"]["current_step_id"])
 ```
+
+**Corrected 2026-09-19:** this example read `strict_plan("singleCell")`, which
+raises `TypeError` — `driver_context` has been required since the process-global
+"active plugin" was removed. Verify an example runs before copying it; several
+in this file did not.
 
 ### Executing an agent-authored RunDocument
 
@@ -172,11 +184,15 @@ omnidriver step --run-document run.json --step solve   # single step
 2. Runs `validate_run` on its `config`.
 3. Re-normalizes the supplied `workflowDag` and enforces the **command
    allowlist**: each step's command must be a known OpenFOAM/driver core
-   command, a recognized case script (`Allrun`-family), a `UTILITY_CATALOG`
-   entry, or an executable installed under `$FOAM_APPBIN`/`$FOAM_USER_APPBIN`
-   (any core OpenFOAM app or your own compiled utility). Arbitrary non-OpenFOAM
-   commands are rejected before anything runs. Note: when OpenFOAM is not
-   sourced, only the core set + case scripts + `UTILITY_CATALOG` are accepted.
+   command, a recognized case script (`Allrun`-family), an entry in the
+   active plugin's utility manifests (`get_utility_manifests()`, declaring
+   `produces`), or an executable installed under
+   `$FOAM_APPBIN`/`$FOAM_USER_APPBIN` (any core OpenFOAM app or your own
+   compiled utility). Arbitrary non-OpenFOAM commands are rejected before
+   anything runs. Note: when OpenFOAM is not sourced, only the core set +
+   case scripts + declared utility manifests are accepted. (Corrected
+   2026-09-19: there is no `UTILITY_CATALOG` constant to consult — see the
+   "What utilities are known?" entry below.)
 4. Requires `launch.caseRoot` and `launch.outputDir`.
 
 If any of these produce an error-level diagnostic, the command prints
@@ -550,11 +566,11 @@ configurations, for example probes that were not enabled.
 
 Three layers of discovery:
 
-1. **What tutorials exist?** `from omnidriver.core.introspection import describe_launch_matrix; describe_launch_matrix()` returns every registered entry.
-2. **What dict keys can I set?** Iterate `omnidriver.dict_entries.ELECTRO_PROPERTY_ENTRY_GROUPS` and `PHYSICS_PROPERTY_ENTRIES` for case-physics entries. For time-control use `omnidriver.dict_entries.CONTROL_DICT_ENTRIES` (`deltaT`, `endTime`). Each entry carries `driver_path`, `value_kind`, `enum_values`, `unit`, `typical_value`, and structured constraints (`applicable_when`, `forbidden_when`, `required_when`, `mutually_exclusive_with`).
+1. **What tutorials exist?** `describe_launch_matrix` (Corrected 2026-09-19: this was removed as dead code — no caller — before 2026-09-04; `omnidriver.core.introspection` does not export it). Read `registered_tutorials`/`available_tutorials` off `describe_entry(...)`'s output (see item 6 below), or call `list_tutorials(driver_context)` / `list_available_tutorials(cases_root, driver_context=driver_context)` from `omnidriver.core.runtime.registry` directly.
+2. **What dict keys can I set?** Iterate `omnidriver.cardiacfoam.dict_entries_catalog.ELECTRO_PROPERTY_ENTRY_GROUPS` and `omnidriver.cardiacfoam.common_dict_entries.PHYSICS_PROPERTY_ENTRIES` for case-physics entries. For time-control use `omnidriver.cardiacfoam.common_dict_entries.CONTROL_DICT_ENTRIES` (`deltaT`, `endTime`). Each entry carries `driver_path`, `value_kind`, `enum_values`, `unit`, `typical_value`, and structured constraints (`applicable_when`, `forbidden_when`, `required_when`, `mutually_exclusive_with`). (Corrected 2026-09-19: these live in the `omnidriver-cardiacfoam` package, not `omnidriver.dict_entries` in core — core's `dict_entries.py` only exposes context-aware helpers such as `get_electro_property_entry_groups(driver_context)`.)
 3. **What ionic models can I pick?** `from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG`. Each entry carries `states`, `algebraic`, `compatible_solvers`, `compatible_tissues`, `species`, `cardiac_region`, `recommended_exports`.
-4. **What utilities are known?** `from omnidriver.core.utility_catalog import UTILITY_CATALOG`. Strict planning fails when a workflow command has missing required `produces` metadata.
-5. **What dict keys have parser limitations?** Read `omnidriver/plugins/cardiacfoam/dict_key_allowlist.json`. Strict dict-key scanning fails when new uncatalogued keys appear, stale catalog paths remain, or allowlist entries become unused.
+4. **What utilities are known?** `from omnidriver.core.utility_catalog import load_utility_manifests`; call it with a plugin's utility root(s) (`plugin.get_utility_roots()`) to get a `dict[str, UtilityManifest]`. Strict planning fails when a workflow command has missing required `produces` metadata. (Corrected 2026-09-19: `UTILITY_CATALOG` was an eager module-level constant removed by design — core names no solver's utilities; see `future/UTILITY_CATALOG_STANDALONE_GAP.md`.)
+5. **What dict keys have parser limitations?** Read `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/dict_key_allowlist.json`. Strict dict-key scanning fails when new uncatalogued keys appear, stale catalog paths remain, or allowlist entries become unused. (Corrected 2026-09-19: was given as `omnidriver/plugins/cardiacfoam/dict_key_allowlist.json` — `omnidriver.plugins` is the entry-point group name, not a package path.)
 6. **What commands may a workflow step run, and what fields may a function object sample?** Read the `capability_manifest` block emitted by both `describe --entry <name>` and `plan --strict --entry <name>` (and `describe_entry(...)` / `strict_plan(...).to_json()` programmatically). It is the authoritative, machine-readable accept-surface: `allowed_commands` (`core`, `case_scripts`, `utilities`, plus the `$FOAM_APPBIN` note) mirrors the command allowlist exactly, and `samplable_fields` lists the field names the *resolved* model exposes,
 keyed by region. **Both blocks are plugin-dependent.** For cardiacFoam the
 regions are `electro` / `solid`; under `--plugin none` neither key is
@@ -809,10 +825,11 @@ If your agent depends on any of these, expect failure and consider a workaround 
 
 ## Where to read further
 
-- `omnidriver/dict_entries.py` — every dict key with its constraints
-- `omnidriver/plugins/cardiacfoam/ionic_model_catalog.py` — every ionic model
-- `omnidriver/core/utility_catalog.py` — every utility's CLI surface and outputs
-- `omnidriver/plugins/cardiacfoam/solver_coupling.py` — cross-domain coupler rules
+- `omnidriver/dict_entries.py` — context-aware dict-key helpers (core)
+- `omnidriver/cardiacfoam/dict_entries_catalog.py`, `omnidriver/cardiacfoam/common_dict_entries.py` — every dict key with its constraints (corrected 2026-09-19: was given as `omnidriver/plugins/cardiacfoam/ionic_model_catalog.py`-style paths — `omnidriver.plugins` is the entry-point group name, not a package)
+- `omnidriver/cardiacfoam/ionic_model_catalog.py` — every ionic model
+- `omnidriver/core/utility_catalog.py` — utility manifest schema and `load_utility_manifests()`; roots come from the active plugin, not an ambient catalog
+- `omnidriver/cardiacfoam/solver_coupling.py` — cross-domain coupler rules
 - `omnidriver/core/strict_planning.py` — strict preflight report and RunDocument v3 assembly
 - `omnidriver/core/runtime/run_model.py` — RunDocument v3 model and explicit v1/v2 migration
 - `omnidriver/core/runtime/workflow.py` — workflow DAG normalization and validation
@@ -839,13 +856,16 @@ solver family already wired up — not for adding support for a different
 solver binary. For that, see "Plugin Guide — Adding a New Solver" below.
 
 **The registry is the single source of truth:**
-`omnidriver/plugins/cardiacfoam/tutorials/registry.py` holds
-`SPEC_FACTORIES` (id, and its lowercase alias, → factory function) and
+`omnidriver/cardiacfoam/tutorials/registry.py` (corrected 2026-09-19: was
+given as `omnidriver/plugins/cardiacfoam/tutorials/registry.py` —
+`omnidriver.plugins` is the entry-point group name, not a package; the real
+package is `omnidriver-cardiacfoam`, importable as `omnidriver.cardiacfoam`)
+holds `SPEC_FACTORIES` (id, and its lowercase alias, → factory function) and
 `REGISTERED_TUTORIALS` (the canonical id tuple). Both are exported through
 `CardiacFoamPlugin.get_tutorial_catalog()`.
 
 1. **Add an id** to the `CardiacTutorialID` enum in
-   `omnidriver/plugins/cardiacfoam/tutorials/ids.py`, e.g.
+   `omnidriver/cardiacfoam/tutorials/ids.py`, e.g.
    `MY_NEW_CASE = "myNewCase"`.
 2. **Write `tutorials/my_new_case.py`** with a `make_spec(...) -> TutorialSpec`
    factory. `TutorialSpec` (`core/runtime/models.py`) needs `name`,
@@ -853,7 +873,8 @@ solver binary. For that, see "Plugin Guide — Adding a New Solver" below.
    `resolve_spec_paths(...)` helper), `build_cases` (returns
    `list[CaseConfig]`), `apply_case` (mutates the case's dict files per
    `CaseConfig`, typically via `apply_electro_property_overrides`/
-   `apply_physics_property_overrides` from `plugins/cardiacfoam/overrides.py`),
+   `apply_physics_property_overrides` from `omnidriver/cardiacfoam/overrides.py`
+   (corrected 2026-09-19: was given as `plugins/cardiacfoam/overrides.py`)),
    and a `metadata` dict with at least a `workflow_dag` (a `solve` step at
    minimum). There is no per-tutorial output-collection callback to wire up
    — output discovery globs the case's actual on-disk files instead.
@@ -879,8 +900,9 @@ solver binary. For that, see "Plugin Guide — Adding a New Solver" below.
    `json.dumps(..., indent=2, sort_keys=True)`, matching the existing
    formatting).
 
-Once registered, drive it exclusively through `driverFoam`
-(plan/run/sweep) per `CLAUDE.md` — never a bespoke shell script.
+Once registered, drive it exclusively through `omnidriver`
+(plan/run/sweep) per `CLAUDE.md` — never a bespoke shell script. (Corrected
+2026-09-19: the binary is `omnidriver`, not `driverFoam`.)
 
 ---
 
@@ -891,9 +913,12 @@ add support for a new OpenFOAM solver to driverFOAM. End-users running existing
 solvers do not need to read this section.
 
 > **Quickest path:** Follow the dedicated skill at
-> `../../../../.agents/skills/driverfoam-plugin-builder/SKILL.md`
-> (relative to this file), which contains a complete step-by-step workflow,
-> a worked `ShallowWaterPlugin` example, and a troubleshooting table.
+> `.agents/skills/driverfoam-plugin-builder/SKILL.md` (**not present in this
+> repository** — it lives in the cardiacFoam monorepo, per `KEY_FILES.md`),
+> which contains a complete step-by-step workflow, a worked
+> `ShallowWaterPlugin` example, and a troubleshooting table. (Corrected
+> 2026-09-19: this was previously given as a path "relative to this file";
+> no such file exists anywhere in this repository.)
 
 ### What a plugin is
 
@@ -906,8 +931,11 @@ Two Protocol classes define the contract:
 
 | Class | Members | Required when |
 |---|---|---|
-| `SolverPlugin` | 27 | Always |
-| `SolverPluginOptionalHooks` | 14 (probe-based) | Never required; enable capabilities |
+| `SolverPlugin` | 29 | Always |
+| `SolverPluginOptionalHooks` | 27 (probe-based) | Never required; enable capabilities |
+
+(Corrected 2026-09-19: previously stated 27 and 14 respectively; re-counted
+directly from the `Protocol` classes in `plugin_interface.py`.)
 
 ### Mandatory files
 
@@ -936,6 +964,8 @@ validate_run_semantics(context) # tuple[...]
 predict_data_artifacts(case_root, spec) # tuple[DataArtifact, ...]
 get_solver_commands()           # frozenset[str] — artifact-producing binaries
 get_auxiliary_commands()        # frozenset[str] — meshers, decomposers
+get_environment_commands()      # frozenset[str] — environment-supplied static commands
+is_installed_environment_command(command) # bool — runtime lookup for an environment app
 get_utility_manifests()         # dict[str, Any]
 get_utility_roots()             # tuple[Path, ...]
 resolve_case_models(case_root)  # dict — best-effort, never raise
@@ -949,9 +979,17 @@ get_extra_provenance_paths(case_root) # tuple[RuntimeDependency, ...]
 get_artifact_value_reader(format)    # Any | None
 ```
 
-`GenericOpenFOAMPlugin` (`core/generic_plugin.py`) is the canonical scaffold —
-copy it and fill in identity properties; every required member already has a
-neutral implementation to start from.
+(Corrected 2026-09-19: `get_environment_commands()` and
+`is_installed_environment_command(command)` were missing from this block —
+both are required `SolverPlugin` members, bringing the true count to 29.)
+
+There is no shipped scaffold to copy in this repository (corrected
+2026-09-19: previously named a nonexistent `GenericOpenFOAMPlugin` in
+`core/generic_plugin.py`). The closest in-repo example of a plugin with no
+domain-specific semantics is `OpenFOAMEnvironmentPlugin`
+(`packages/omnidriver-openfoam/src/omnidriver/openfoam/environment.py`,
+paired with `openfoam-environment.yaml` in the same directory) — read it
+alongside this contract and the plugin-builder skill referenced above.
 
 ### Key Optional Hooks (`SolverPluginOptionalHooks`, probed with `getattr`)
 
@@ -1017,7 +1055,12 @@ omnidriver --plugin mysolver plan --strict --entry <tutorial_or_case_path>
 ### See also
 
 - `omnidriver/core/plugin_interface.py` — full Protocol definitions
-- `omnidriver/core/generic_plugin.py` — minimal v2 scaffold to copy
-- `omnidriver/core/generic-plugin.yaml` — annotated `plugin.yaml` template
-- `omnidriver/plugins/cardiacfoam_plugin.py` — full v2 reference
+- `omnidriver/openfoam/environment.py` (`OpenFOAMEnvironmentPlugin`) — closest
+  in-repo example of a plugin with no domain-specific semantics (corrected
+  2026-09-19: previously named a nonexistent `omnidriver/core/generic_plugin.py`
+  and `omnidriver/core/generic-plugin.yaml`)
+- `omnidriver/cardiacfoam/cardiacfoam_plugin.py` — full v2 reference
+  (corrected 2026-09-19: previously given as `omnidriver/plugins/cardiacfoam_plugin.py`
+  — `omnidriver.plugins` is the entry-point group name, not a package; the
+  real path is `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/cardiacfoam_plugin.py`)
 - `KEY_FILES.md` — navigational map for all reader types

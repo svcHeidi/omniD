@@ -12,10 +12,15 @@ from omnidriver.cardiaccore.agent_guidance import read_guidance
 
 print(read_guidance("runner"))
 catalogs = CardiacCorePlugin().get_named_catalogs()
-operation = catalogs["cardiaccore_operations"]["cardiaccore.cobiveco.normalize.v1"]
+operation = catalogs["cardiaccore_operations"]["cardiaccore.coordinates.convention.v1"]
 print(operation["preconditions"])
 print(operation["entrypoints"])
 ```
+
+<!-- Corrected 2026-09-19: the previous example indexed
+`cardiaccore.cobiveco.normalize.v1`, which is not one of the seven keys
+`CardiacCorePlugin().get_named_catalogs()["cardiaccore_operations"]` actually
+returns. -->
 
 The guide and its manifest are package resources: this works without a source
 checkout. The manifest identifies required catalogs for each role. It does
@@ -28,24 +33,55 @@ arguments and side effects before calling it. Array availability, native-file
 reading and workflow integration are separate status fields. An available
 array method does not imply that an arbitrary native case can be processed.
 
-For CObiveco, read the selected target convention before calculation:
+A case declares which ventricular coordinate system it uses -- `uvc` or
+`cobiveco`, both first-class -- in `system/coordinatesConventionDict`, along
+with its transmural and chamber reference values and, optionally, its own
+field names. Read that declaration before touching a coordinate field; do not
+assume one system or hardcode canonical field names as if they were always
+correct:
 
 ```python
+import tempfile
 from pathlib import Path
-from omnidriver.cardiaccore.operations.cobiveco import (
-    normalize_cobiveco_coordinates,
-    read_cobiveco_target_convention,
+
+from omnidriver.cardiaccore.operations.coordinates_convention import (
+    read_coordinates_convention,
+    coordinate_field_paths,
 )
 
-# case_root and aligned tv/tm/ab arrays are supplied by the caller.
-target = read_cobiveco_target_convention(Path(case_root))
-fields = normalize_cobiveco_coordinates(tv, tm, ab, target_convention=target)
+# Illustrative: case_root is normally an already-staged case directory
+# supplied by the caller. Here a minimal one is built inline so this example
+# runs standalone.
+with tempfile.TemporaryDirectory() as case_dir:
+    case_root = Path(case_dir)
+    (case_root / "system").mkdir()
+    (case_root / "system" / "coordinatesConventionDict").write_text(
+        "coordinateSystem cobiveco; "
+        "transmural { endocardium 1; epicardium 0; } "
+        "intraventricularChambers { LV -1; RV 1; }"
+    )
+
+    convention = read_coordinates_convention(case_root)
+    paths = coordinate_field_paths(convention)
 ```
 
-Do not invent missing fields, reinterpret coordinates, or silently use a
-different method after an error. Distinguish invalid input, an unavailable
-reader, and unresolved scientific interpretation. Read the operation record
-for its limits and correct the identified prerequisite first.
+`convention.coordinate_system` names the declared system; `paths` maps
+`transmural`/`intraventricular`/`longitudinal` to that case's actual field
+paths, falling back to the canonical names only for whatever the case's
+`coordinates` block leaves unstated. Do not invent missing fields,
+reinterpret coordinates, or silently use a different method after an error.
+Distinguish invalid input, an unavailable reader, and unresolved scientific
+interpretation. Read the operation record for its limits and correct the
+identified prerequisite first.
+
+<!-- Corrected 2026-09-19: the previous example imported
+`normalize_cobiveco_coordinates` and `read_cobiveco_target_convention` from
+`omnidriver.cardiaccore.operations.cobiveco`. Neither that module nor those
+functions exist; the real, generalised module is
+`omnidriver.cardiaccore.operations.coordinates_convention`, with
+`read_coordinates_convention(case_root)` and `coordinate_field_paths(convention)`.
+The module covers both `uvc` and `cobiveco` (see `COORDINATE_SYSTEMS`) rather
+than being cobiveco-specific. -->
 
 ## Ownership within the package
 

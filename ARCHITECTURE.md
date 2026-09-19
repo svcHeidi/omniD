@@ -5,7 +5,7 @@ This repository is the staging ground for the transition from a monolithic `driv
 ## The Grand Vision: Monorepo + Namespace Packages
 The engine is shifting from being an OpenFOAM-specific orchestrator to a universal scientific workflow engine capable of orchestrating deterministic continuous simulations (e.g., FEniCS, deal.II, OpenFOAM) and steering dynamic optimization loops via autonomous agents.
 
-To achieve this, the project is adopting a **Monorepo** structure paired with Python **Namespace Packages** (PEP 420). All the code lives in one GitHub repository, but it is published as three strictly decoupled `pip` packages.
+To achieve this, the project is adopting a **Monorepo** structure paired with Python **Namespace Packages** (PEP 420). All the code lives in one GitHub repository, but it is published as four strictly decoupled `pip` packages. (**Corrected 2026-09-19**: this said "three" — `omnidriver-cardiaccore` joined 2026-09-18, and the Architectural Rules below already documented it as a fourth, sibling adapter; only this intro sentence and the diagram below it had not caught up.)
 
 ### Directory Structure & Import Semantics
 Because `src/omnidriver/` will not contain an `__init__.py` file in any of the packages, Python treats it as a namespace. Users can install them independently but import them beautifully:
@@ -19,8 +19,12 @@ omnidriver/ (GitHub Root)
 │   ├── omnidriver-openfoam/         (import omnidriver.openfoam)
 │   │   └── src/omnidriver/openfoam/ <-- Translates core requests into OpenFOAM
 │   │
-│   └── omnidriver-cardiacfoam/          (import omnidriver.cardiacfoam)
-│       └── src/omnidriver/cardiacfoam/  <-- Cardiac physics and logic
+│   ├── omnidriver-cardiacfoam/          (import omnidriver.cardiacfoam)
+│   │   └── src/omnidriver/cardiacfoam/  <-- Cardiac physics and logic
+│   │
+│   └── omnidriver-cardiaccore/          (import omnidriver.cardiaccore)
+│       └── src/omnidriver/cardiaccore/  <-- Cardiac preprocessing adapter; sibling to
+│                                             cardiacfoam, not a dependent of it (Rule 4)
 ```
 
 ### Architectural Rules

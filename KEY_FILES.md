@@ -17,12 +17,12 @@ repository root.
 
 | File | Role |
 |---|---|
-| `packages/omnidriver/src/omnidriver/core/plugin_interface.py` | **Start here.** Defines `SolverPlugin` (the single 27-member contract), `SolverPluginOptionalHooks`, `DriverContext`, and `validate_plugin()`. |
-| `packages/omnidriver/src/omnidriver/core/plugin_capabilities.py` | 17 capability Protocol classes + adapter dataclasses + `adapt_plugin_capabilities()`. Every plugin capability seam is documented here. |
+| `packages/omnidriver/src/omnidriver/core/plugin_interface.py` | **Start here.** Defines `SolverPlugin` (the single 29-member contract — corrected 2026-09-19, was stated as 27), `SolverPluginOptionalHooks` (27 probe-based hooks — corrected 2026-09-19, was stated as 14), `DriverContext`, and `validate_plugin()`. |
+| `packages/omnidriver/src/omnidriver/core/plugin_capabilities.py` | 24 capability Protocol classes (corrected 2026-09-19, was stated as 17 — this count is *generated*, not hand-counted: `ARCHITECTURE.md`'s capability-seam table is produced and CI-verified by `scripts/export-capability-seams.py --check`, so treat that table as the authority over any number restated here) + adapter dataclasses + `adapt_plugin_capabilities()`. Every plugin capability seam is documented here. |
 | `packages/omnidriver/src/omnidriver/core/compatibility.py` | Backward-compatibility shims for optional-hook capabilities: cardiac-shaped fallbacks for the built-in cardiac plugin, neutral fallbacks for every other plugin. |
 | `packages/omnidriver/src/omnidriver/core/plugin_discovery.py` | Entry-point discovery via `importlib.metadata`. Explains `omnidriver.plugins` group name, ambiguity handling, and `_entry_points()` test seam. |
-| `packages/omnidriver/src/omnidriver/core/strict_planning.py` | The strict planner: `strict_plan()` / `driverFoam plan --strict`. Non-mutating; produces machine-readable JSON with readiness score, diagnostics, and launch command. |
-| `packages/omnidriver/src/omnidriver/cli.py` | `driverFoam` / `driverFoam` CLI entry-point. All public subcommands are here. |
+| `packages/omnidriver/src/omnidriver/core/strict_planning.py` | The strict planner: `strict_plan()` / `omnidriver plan --strict`. Non-mutating; produces machine-readable JSON with readiness score, diagnostics, and launch command. |
+| `packages/omnidriver/src/omnidriver/cli.py` | `omnidriver` CLI entry-point (corrected 2026-09-19: previously read `driverFoam` / `driverFoam` here — a copy-paste duplicate of the retired CLI name; `pyproject.toml`'s `[project.scripts]` names the installed binary `omnidriver`). All public subcommands are here. |
 | `ARCHITECTURE.md` | Deep architectural review: layer map, claim discipline, coupling analysis, runtime flow diagrams. Read the package-independence rules and the capability-seam table first. |
 | `CHANGELOG.md` | History of contract changes per phase. |
 
@@ -35,10 +35,10 @@ repository root.
 
 | File | Role | Why you must read it |
 |---|---|---|
-| `packages/omnidriver/src/omnidriver/core/generic_plugin.py` | **Canonical scaffold.** Copy this file as `my_solver_plugin.py`. | Shows every required method with minimal stubs. |
-| `packages/omnidriver/src/omnidriver/core/generic-plugin.yaml` | Minimal `plugin.yaml` template. | Documents all valid `kind`, `role`, `required` values inline. |
+| `packages/omnidriver-openfoam/src/omnidriver/openfoam/environment.py` (`OpenFOAMEnvironmentPlugin`) | Closest in-repo example of a plugin with no domain-specific semantics. Not a copy-and-fill scaffold. | Shows every required method actually implemented, with no cardiac vocabulary. (Corrected 2026-09-19: this row previously named `core/generic_plugin.py`/`GenericOpenFOAMPlugin`, which does not exist in this repository and nothing replaced as a literal scaffold.) |
+| `packages/omnidriver-openfoam/src/omnidriver/openfoam/openfoam-environment.yaml` | Real `plugin.yaml` for the plugin above. | Documents a working, minimal manifest. (Corrected 2026-09-19: this row previously named a nonexistent `core/generic-plugin.yaml`.) |
 | `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/plugin.yaml` | Full `plugin.yaml` example. | Shows `cxx_mapping`, `reviewed_allowlist`, real dictionary list. |
-| `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/cardiacfoam_plugin.py` | Full plugin reference (428 lines). | Shows all method signatures, `@lru_cache`, `@staticmethod get_profile()`, catalog patterns. |
+| `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/cardiacfoam_plugin.py` | Full plugin reference. | Shows all method signatures, `@lru_cache`, `@staticmethod get_profile()`, catalog patterns. (Corrected 2026-09-19: removed a stated line count — it read 428, the file is actually 567 lines. A line count drifts on every edit to the file and is not worth restating here.) |
 | `packages/omnidriver/src/omnidriver/core/contracts/dictionary.py` | `DictEntry` dataclass — the vocabulary unit. | Every dictionary key your solver reads must be a `DictEntry`. |
 | `packages/omnidriver/src/omnidriver/core/contracts/dictionary_catalog.py` | `DictionaryCatalog` — immutable partitioned store. | Return from `get_dictionary_catalog()`; validates uniqueness at construction. |
 | `pyproject.toml` | Entry-point registration. | You must add your plugin under `[project.entry-points."omnidriver.plugins"]`. |
@@ -46,7 +46,9 @@ repository root.
 
 ### Plugin Contract Quick Reference
 
-**Required (27 members — all plugins)**
+**Required (29 members — all plugins; corrected 2026-09-19, was stated as 27
+with two members missing from this table: `get_environment_commands` and
+`is_installed_environment_command`)**
 
 | Member | Returns |
 |---|---|
@@ -66,6 +68,8 @@ repository root.
 | `predict_data_artifacts(case_root, spec)` | `tuple[DataArtifact, ...]` — never raise |
 | `get_solver_commands()` | `frozenset[str]` — artifact-producing binaries |
 | `get_auxiliary_commands()` | `frozenset[str]` — meshers, decomposers |
+| `get_environment_commands()` | `frozenset[str]` — optional static commands supplied by the execution environment |
+| `is_installed_environment_command(command)` | `bool` — runtime lookup for an environment-provided application |
 | `get_utility_manifests()` | `dict[str, Any]` — per-utility pre-flight declarations |
 | `get_utility_roots()` | `tuple[Path, ...]` — utility source dirs |
 | `resolve_case_models(case_root)` | `dict` — best-effort, never raise |
@@ -82,8 +86,8 @@ repository root.
 
 | Hook | If absent | Unlocks |
 |---|---|---|
-| `route_sweep_case_values(...)` | **Sweeps refused** | `driverFoam sweep-run` |
-| `materialize_sweep_case(...)` | **Sweeps refused** | `driverFoam sweep-run` |
+| `route_sweep_case_values(...)` | **Sweeps refused** | `omnidriver sweep-run` |
+| `materialize_sweep_case(...)` | **Sweeps refused** | `omnidriver sweep-run` |
 | `has_case_marker(case_root)` | `False` | Case auto-detection |
 | `is_nondimensional_case(spec)` | `False` (diagnostics on) | Skip SI mesh checks |
 | `get_mesh_geometry_diagnostics(case_root)` | `()` | Custom geometry checks |
@@ -99,7 +103,7 @@ repository root.
 
 | File | Role |
 |---|---|
-| `AGENT_GUIDE.md` | Full agent CLI reference: `driverFoam` commands, RunDocument, sweeps, post-processing, PLUGIN_GUIDE section. |
+| `AGENT_GUIDE.md` | Full agent CLI reference: `omnidriver` commands, RunDocument, sweeps, post-processing, PLUGIN_GUIDE section. |
 | `.agents/skills/driverfoam-assistant/SKILL.md` (**not present in this repository** — it lives in the cardiacFoam monorepo) | Agent workflow skill: case scaffolding, sweep generation, strict diagnostics loop, post-processing. |
 | `.agents/skills/driverfoam-plugin-builder/SKILL.md` (**not present in this repository** — it lives in the cardiacFoam monorepo) | **Plugin builder skill:** complete step-by-step guide for integrating a new solver. |
 
@@ -107,7 +111,7 @@ repository root.
 
 | Variable | Purpose |
 |---|---|
-| `DRIVERFOAM_ALLOWED_RUNS_ROOT` | Restrict where `--fresh` may delete; recommended in production. |
+| `OMNIDRIVER_ALLOWED_RUNS_ROOT` | Restrict where `--fresh` may delete; recommended in production. The legacy name `DRIVERFOAM_ALLOWED_RUNS_ROOT` is still honoured if set (the current name wins when both are set). (Corrected 2026-09-19: this row previously named only the legacy variable, per `core/runtime/run_document_exec.py`'s `ALLOWED_RUNS_ROOT_ENV`/`LEGACY_ALLOWED_RUNS_ROOT_ENV`.) |
 | `FOAM_APPBIN` | Standard OpenFOAM binary path; required for environment preflight. |
 | `FOAM_USER_APPBIN` | User-compiled binary path; also checked during preflight. |
 | `WM_PROJECT_DIR` | OpenFOAM installation root; sourced by `etc/bashrc`. |
