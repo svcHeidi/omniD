@@ -856,9 +856,9 @@ def build_parser() -> argparse.ArgumentParser:
         dest="environment_bashrc",
         default=None,
         help=(
-            "Environment-sourcing script (e.g. an OpenFOAM bashrc) to source "
-            "for strict plan/step/run. Defaults to OPENFOAM_BASHRC, "
-            "$WM_PROJECT_DIR/etc/bashrc, or a known local OpenFOAM install path."
+            "Path to the active plugin's environment-sourcing script (e.g. its "
+            "bashrc) to source for strict plan/step/run. Defaults to whatever "
+            "the plugin discovers for its own tool's ambient environment."
         ),
     )
     parser.add_argument(
