@@ -367,3 +367,48 @@ def test_report_to_json_contains_environment_diagnostics():
 def test_report_to_json_environment_diagnostics_defaults_empty():
     report = StrictPlanReport(status="ok", entry="singleCell", resolved_entry={})
     assert report.to_json()["environment_diagnostics"] == []
+
+
+# --- WM_PROJECT_DIR is conditioned on the plan, like its neighbours ----------
+#
+# The missing_executable and missing_mpi checks both ask "what does this plan
+# actually invoke?". The WM_PROJECT_DIR check sat beside them asking nothing,
+# so it blocked any plan whenever OpenFOAM was not sourced -- including a plan
+# that invokes no OpenFOAM executable at all.
+#
+# That is what reddened the test-cardiaccore CI job on its first run:
+# CardiacCorePlugin delegates environment diagnostics to this module, and a
+# case whose whole DAG is a two-line Allrun was refused on a Linux runner with
+# no OpenFOAM, while passing on a machine that happens to have one.
+
+
+def test_unsourced_environment_does_not_block_a_plan_that_needs_no_openfoam(clean_env):
+    """A plan invoking no OpenFOAM executable must not be blocked by its absence."""
+    clean_env.delenv("WM_PROJECT_DIR", raising=False)
+    clean_env.setattr(strict_planning.shutil, "which", _which_factory(set()))
+
+    diags = _diags({"steps": []})
+
+    blocking = [d for d in diags if d.level == "error"]
+    assert blocking == [], (
+        "a plan that invokes no OpenFOAM executable is blocked because OpenFOAM "
+        f"is not sourced: {[(d.code, d.message) for d in blocking]}"
+    )
+
+
+def test_an_unsourced_environment_is_still_reported_when_nothing_needs_it(clean_env):
+    """Not blocking is not the same as saying nothing.
+
+    The plan declares no OpenFOAM executable, but a case script this module
+    cannot see into might still want one. Silence here would be the same defect
+    one level down: absence of a declared need read as evidence of no need.
+    """
+    clean_env.delenv("WM_PROJECT_DIR", raising=False)
+    clean_env.setattr(strict_planning.shutil, "which", _which_factory(set()))
+
+    diags = _diags({"steps": []})
+
+    assert [d for d in diags if d.code == "openfoam_env_not_sourced"], (
+        "nothing records that the environment was unsourced: "
+        f"{[(d.level, d.code) for d in diags]}"
+    )

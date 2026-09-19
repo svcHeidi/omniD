@@ -193,13 +193,40 @@ def _environment_diagnostics(
             field=loaded_environment.bashrc or explicit_bashrc or "",
         ))
 
+    # Derived before the environment checks, because whether an unsourced
+    # environment is a problem depends on what this plan actually invokes --
+    # the question `missing_executable` and `missing_mpi` below already ask.
+    # Until 2026-09-19 the WM_PROJECT_DIR check sat between them asking nothing,
+    # so it blocked every plan whenever OpenFOAM was not sourced, including one
+    # that invokes no OpenFOAM executable at all. That refused a cardiacCore
+    # case whose whole DAG is a two-line Allrun on any machine without OpenFOAM,
+    # while passing on one that happens to have it.
+    requirements = _required_executables(workflow_dag, driver_context)
+    plan_needs_openfoam = bool(requirements.executables) or requirements.is_parallel
+
     if "WM_PROJECT_DIR" not in checked_env:
-        diagnostics.append(diagnostic(
-            "error",
-            "missing_openfoam_env",
-            "WM_PROJECT_DIR is not set. OpenFOAM environment not sourced.",
-            source="environment",
-        ))
+        if plan_needs_openfoam:
+            diagnostics.append(diagnostic(
+                "error",
+                "missing_openfoam_env",
+                "WM_PROJECT_DIR is not set. OpenFOAM environment not sourced.",
+                source="environment",
+            ))
+        else:
+            # Not blocking is not the same as saying nothing. A case script this
+            # preflight cannot read into may still want an environment, so the
+            # absence is recorded rather than passed over -- treating "nothing
+            # declared it" as "nothing needs it" would be the same defect one
+            # level down.
+            diagnostics.append(diagnostic(
+                "warning",
+                "openfoam_env_not_sourced",
+                "WM_PROJECT_DIR is not set, so the OpenFOAM environment was not "
+                "sourced. This plan declares no OpenFOAM executable, so launch is "
+                "not blocked; a case script this preflight cannot read may still "
+                "expect one.",
+                source="environment",
+            ))
     else:
         for var in ("WM_PROJECT_VERSION", "FOAM_USER_LIBBIN"):
             if var not in checked_env:
@@ -211,7 +238,6 @@ def _environment_diagnostics(
                     field=var,
                 ))
 
-    requirements = _required_executables(workflow_dag, driver_context)
     for executable in requirements.executables:
         if not shutil.which(executable, path=checked_env.get("PATH")):
             diagnostics.append(diagnostic(
