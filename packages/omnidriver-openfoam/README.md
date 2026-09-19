@@ -14,11 +14,17 @@ expands substitutions, or evaluates directives. It is suitable for inspecting
 and applying known, catalogue-addressed edits without making a runtime claim.
 
 Effective OpenFOAM resolution is a separate native operation. The conformance
-fixtures use `foamDictionary` from `/Volumes/OpenFOAM-v2412` as the oracle for
-includes, substitutions, duplicate-key precedence, nested dictionaries,
-dimensions, lists, comments, quoted strings, and multiline values. That is
-local v2412 evidence only; it does not claim support for other OpenFOAM
-versions or distributions.
+fixtures use `foamDictionary` from a **discovered** OpenFOAM installation as
+the oracle for includes, substitutions, duplicate-key precedence, nested
+dictionaries, dimensions, lists, comments, quoted strings, and multiline
+values. That evidence is only as good as whichever installation was found; it
+does not claim support for other OpenFOAM versions or distributions, and the
+fixtures report what they resolved against rather than assuming one.
+
+**Corrected 2026-09-19:** this named `/Volumes/OpenFOAM-v2412` — one machine's
+external volume — as though it were the oracle everywhere. The same literal was
+a default argument of `resolve_effective_foam_entry`, which is why
+`test-openfoam` failed in CI on every runner.
 
 `resolve_effective_foam_entry(...)` exposes that native operation explicitly.
 It reports the parser/runtime identity and inspected local files, follows only
