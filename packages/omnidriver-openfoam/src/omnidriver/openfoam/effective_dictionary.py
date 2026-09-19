@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Mapping
 
 from .mutators import _mask_comments
+from .openfoam_environment import discover_openfoam_bashrc
 
 _EXECUTABLE_DIRECTIVE = re.compile(r"#(?:calc|codeStream|eval)\b")
 _QUOTED_INCLUDE = re.compile(r'^\s*#include(?P<optional>IfPresent)?\s+"(?P<path>[^"]+)"', re.MULTILINE)
@@ -29,6 +30,17 @@ def _mask_quoted_strings(text: str) -> str:
     return re.sub(
         r'"(?:\\.|[^"\\])*"', lambda match: " " * len(match.group()), text,
     )
+
+
+class _Unset:
+    """Marks ``bashrc`` as unspecified, so a default can be discovered lazily
+    instead of a fixed path being invented for every machine."""
+
+    def __repr__(self) -> str:
+        return "<discover ambient OpenFOAM installation>"
+
+
+_UNSET = _Unset()
 
 
 @dataclass(frozen=True)
@@ -139,21 +151,26 @@ def resolve_effective_foam_entry(
     path: str | Path,
     entry: str,
     *,
-    bashrc: str | Path | None = "/Volumes/OpenFOAM-v2412/etc/bashrc",
+    bashrc: str | Path | None | _Unset = _UNSET,
     allow_executable_directives: bool = False,
     env: Mapping[str, str] | None = None,
     timeout_s: float = 10.0,
 ) -> EffectiveDictionaryResult:
     """Resolve one entry through native ``foamDictionary`` explicitly.
 
-    The supported profile is the caller-provided bashrc (v2412 by default).
-    Simple quoted local includes are inspected recursively before execution.
+    The supported profile is an ambient OpenFOAM installation, discovered via
+    :func:`discover_openfoam_bashrc` unless the caller supplies ``bashrc``
+    explicitly. Passing ``bashrc=None`` explicitly opts out of bashrc sourcing
+    entirely and resolves ``foamDictionary`` from ``PATH`` instead. Simple
+    quoted local includes are inspected recursively before execution.
     Runtime-dependent include forms always return explicit unresolved status.
     Executable directives return ``execution_required`` unless the caller opts
     into that capability. Even with that opt-in, dependency closure remains a
     runtime concern and is reported only by the native command's outcome.
     """
     dictionary = Path(path)
+    if bashrc is _UNSET:
+        bashrc = discover_openfoam_bashrc()
     runtime = Path(bashrc) if bashrc is not None else None
     if not dictionary.is_file():
         return EffectiveDictionaryResult(

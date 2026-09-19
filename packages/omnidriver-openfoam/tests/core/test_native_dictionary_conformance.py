@@ -15,12 +15,13 @@ from pathlib import Path
 import pytest
 
 from omnidriver.openfoam.mutators import read_foam_entry
+from omnidriver.openfoam.openfoam_environment import discover_openfoam_bashrc
 
 
-FOAM_BASHRC = Path("/Volumes/OpenFOAM-v2412/etc/bashrc")
+FOAM_BASHRC = discover_openfoam_bashrc()
 native = pytest.mark.skipif(
-    not FOAM_BASHRC.exists(),
-    reason="OpenFOAM v2412 runtime unavailable; native conformance is not verified",
+    FOAM_BASHRC is None,
+    reason="no OpenFOAM installation discoverable; native conformance is not verified",
 )
 
 
@@ -28,7 +29,7 @@ def _native_value(path: Path, entry: str) -> str:
     # Source the verified runtime explicitly; no installation files are
     # modified, and the fixture lives under pytest's temporary directory.
     proc = subprocess.run(
-        ["bash", "-lc", "source /Volumes/OpenFOAM-v2412/etc/bashrc >/dev/null && foamDictionary \"$OMNI_PROBE_PATH\" -entry \"$OMNI_PROBE_ENTRY\" -value"],
+        ["bash", "-lc", f"source \"{FOAM_BASHRC}\" >/dev/null && foamDictionary \"$OMNI_PROBE_PATH\" -entry \"$OMNI_PROBE_ENTRY\" -value"],
         env={**os.environ, "OMNI_PROBE_PATH": str(path), "OMNI_PROBE_ENTRY": entry},
         text=True,
         capture_output=True,

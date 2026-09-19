@@ -1,6 +1,7 @@
 """Contract tests for explicit native effective dictionary resolution."""
 from __future__ import annotations
 
+import inspect
 import os
 import subprocess
 from pathlib import Path
@@ -11,14 +12,41 @@ from omnidriver.openfoam.effective_dictionary import (
     inspect_effective_foam_configuration,
     resolve_effective_foam_entry,
 )
+from omnidriver.openfoam.openfoam_environment import discover_openfoam_bashrc
 
 
 HEADER = "FoamFile { version 2.0; format ascii; class dictionary; object d; }\n"
-V2412_BASHRC = Path("/Volumes/OpenFOAM-v2412/etc/bashrc")
+NATIVE_BASHRC = discover_openfoam_bashrc()
 native = pytest.mark.skipif(
-    not V2412_BASHRC.exists(),
-    reason="OpenFOAM v2412 runtime unavailable; native effective resolution is not verified",
+    NATIVE_BASHRC is None,
+    reason="no OpenFOAM installation discoverable; native effective resolution is not verified",
 )
+
+
+def test_bashrc_default_is_not_a_hardcoded_machine_path():
+    """The shipped default must not name one machine's absolute path."""
+    sig = inspect.signature(resolve_effective_foam_entry)
+    default = sig.parameters["bashrc"].default
+    assert not isinstance(default, (str, Path)), (
+        f"bashrc default is a hardcoded path: {default!r}; "
+        "it must be a sentinel that triggers ambient discovery instead"
+    )
+
+
+def test_unspecified_bashrc_does_not_mask_lexical_execution_required(monkeypatch, tmp_path):
+    """Purely-lexical classification needs no runtime and must not be
+    shadowed by a runtime-availability gate when nothing is discoverable."""
+    import omnidriver.openfoam.effective_dictionary as effective_dictionary_module
+
+    monkeypatch.setattr(effective_dictionary_module, "discover_openfoam_bashrc", lambda: None)
+    path = tmp_path / "d"
+    path.write_text(
+        HEADER + f'pwned #codeStream {{ code #{{ system("touch dummy"); #}}; }};\n'
+    )
+
+    result = effective_dictionary_module.resolve_effective_foam_entry(path, "pwned")
+
+    assert result.status == "execution_required"
 
 
 def test_missing_runtime_is_explicit_not_a_lexical_fallback(tmp_path: Path) -> None:
@@ -153,7 +181,7 @@ def test_v2412_resolves_include_etc_and_records_runtime_dependency(
 
     result = resolve_effective_foam_entry(path, "type")
 
-    dependency = V2412_BASHRC.parent / "caseDicts" / "profiling" / "parallel.cfg"
+    dependency = NATIVE_BASHRC.parent / "caseDicts" / "profiling" / "parallel.cfg"
     assert (result.status, result.value) == ("resolved", "parProfiling")
     assert result.environment_keys == ("FOAM_ETC",)
     assert str(dependency.resolve()) in result.inspected_files
