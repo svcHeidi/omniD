@@ -92,6 +92,17 @@ def status_map(status: str) -> dict[str, str]:
     return parsed
 
 
+def adapts_members(seam: Seam) -> frozenset[str]:
+    """Split a seam's raw ``:adapts:`` text into contract member names.
+
+    The one place a seam's ``:adapts:`` field is parsed into a member set --
+    :func:`members_by_tier` and :mod:`provider_stack`'s
+    ``capability_members`` both call this rather than re-splitting the text
+    themselves.
+    """
+    return frozenset(name.strip() for name in seam.adapts.split(",") if name.strip())
+
+
 def status_tiers(status: str) -> tuple[str, ...]:
     """Extract the tier(s) a seam's raw ``:status:`` text declares.
 
@@ -110,7 +121,7 @@ def members_by_tier() -> dict[str, frozenset[str]]:
     """
     buckets: dict[str, set[str]] = {tier: set() for tier in TIERS}
     for seam in collect_seams():
-        adapted = [name.strip() for name in seam.adapts.split(",") if name.strip()]
+        adapted = adapts_members(seam)
         per_member = status_map(seam.status)
         for member in adapted:
             tier = per_member.get(member, per_member.get("*"))

@@ -41,3 +41,41 @@ def test_provides_rejects_an_unknown_capability(tmp_path):
     payload = dict(BASE, provides=["not_a_capability"])
     with pytest.raises(ValueError, match="not_a_capability"):
         _profile(tmp_path, payload)
+
+
+def test_declared_provides_must_match_implementation():
+    """A misspelled hook name must be an error, not a silent fallback."""
+    from omnidriver.core import provider_stack
+
+    class _Claims:
+        """Declares command_authorization but misspells one of its members."""
+        def get_solver_commands(self): return frozenset()
+        def get_auxiliary_commands(self): return frozenset()
+        def get_utility_manifest(self): return {}          # typo: no trailing s
+        def get_utility_roots(self): return ()
+
+        class _Profile:
+            provides = frozenset({"command_authorization"})
+        def get_profile(self): return self._Profile()
+
+    problems = provider_stack.check_provides(_Claims())
+    assert problems, "a misspelled member must be reported"
+    assert any("get_utility_manifests" in p for p in problems)
+
+
+def test_matching_declaration_reports_nothing():
+    from omnidriver.core import provider_stack
+
+    class _Honest:
+        def get_solver_commands(self): return frozenset()
+        def get_auxiliary_commands(self): return frozenset()
+        def get_utility_manifests(self): return {}
+        def get_utility_roots(self): return ()
+        def get_environment_commands(self): return frozenset()
+        def is_installed_environment_command(self, command): return False
+
+        class _Profile:
+            provides = frozenset({"command_authorization"})
+        def get_profile(self): return self._Profile()
+
+    assert provider_stack.check_provides(_Honest()) == []
