@@ -15,6 +15,8 @@ from typing import Any
 
 import yaml
 
+from .capability_seams import collect_seams
+
 
 @dataclass(frozen=True)
 class CaseFileRule:
@@ -38,6 +40,16 @@ class PluginProfile:
     case_files: tuple[CaseFileRule, ...]
     cxx_mapping: CxxMapping | None
     payload: dict[str, Any]
+    #: Capability names this provider supplies, validated against the seam
+    #: vocabulary at load. Intent, not observation: what the provider MEANS to
+    #: supply. Core separately discovers what it actually implements, and a
+    #: future declared-vs-implemented guard errors when they disagree --
+    #: which is how a misspelled hook name becomes visible. Before this,
+    #: a typo'd hook silently routed to a fallback and nothing reported it.
+    provides: frozenset[str] = frozenset()
+    #: Provider ids this one layers on top of, least-specific first. Ordering
+    #: is declared, never inferred from install order or entry-point name.
+    requires: tuple[str, ...] = ()
     _digest: str = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -47,9 +59,20 @@ class PluginProfile:
         is nested YAML/JSON data and therefore cannot be made meaningfully
         immutable without changing its public shape. The context identity must
         nevertheless stay stable for the lifetime of a plan.
+
+        ``provides``/``requires`` are folded in explicitly, alongside
+        ``payload`` -- a provider that changes what it provides or what it
+        requires has changed its semantics, and that must not depend on those
+        keys surviving verbatim inside ``payload`` (e.g. a profile built
+        directly rather than through :func:`load_plugin_profile`).
         """
         canonical = json.dumps(
-            self.payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
+            {
+                "payload": self.payload,
+                "provides": sorted(self.provides),
+                "requires": list(self.requires),
+            },
+            sort_keys=True, separators=(",", ":"), ensure_ascii=True,
         ).encode("utf-8")
         object.__setattr__(self, "_digest", "sha256:" + hashlib.sha256(canonical).hexdigest())
 
@@ -224,6 +247,17 @@ def load_plugin_profile(path: str | Path) -> PluginProfile:
             allowlist_path=(profile_path.parent / allowlist).resolve(),
         )
 
+    known_capabilities = {seam.field for seam in collect_seams()}
+    provides = frozenset(raw.get("provides", ()) or ())
+    unknown = sorted(provides - known_capabilities)
+    if unknown:
+        raise _mapping_error(
+            profile_path,
+            "provides entries that name no capability: "
+            f"{unknown}; known capabilities are {sorted(known_capabilities)}",
+        )
+    requires = tuple(raw.get("requires", ()) or ())
+
     return PluginProfile(
         path=profile_path,
         plugin_id=plugin_id,
@@ -231,4 +265,6 @@ def load_plugin_profile(path: str | Path) -> PluginProfile:
         case_files=tuple(rules),
         cxx_mapping=cxx_mapping,
         payload=raw,
+        provides=provides,
+        requires=requires,
     )
