@@ -168,6 +168,21 @@ never fail — which makes nine `legacy_*` functions unreachable in production:
 nine in its `fallback` column, and `test_fallback_census` is partly measuring
 the impossible.
 
+**Corrected 2026-09-20, by the guard this section asked for.** The paragraph
+above is factually right and its remedy was wrong. Those nine fallbacks *are*
+unreachable today. But deleting them makes their members mandatory for every
+provider -- and under §4 an *environment* provider legitimately has no solver
+commands, no tutorials and no samplable fields. `OpenFOAMEnvironmentPlugin`
+already carries hollow stubs for all of them, returning `frozenset()` and `{}`,
+which exist only to satisfy `validate_plugin`.
+
+The correct remedy is the opposite one: **demote the members**, so the
+fallbacks become reachable and the stubs can go. `_REQUIRED_PLUGIN_MEMBERS`
+over-declares -- it names thirteen members the seams tag `optional-neutral`,
+while omitting `get_phases`, which no capability tags optional either. Deriving
+the required set from the tiers (§3.1's own proposal) fixes both directions at
+once and deletes no fallback.
+
 Every contract member carries exactly one tier:
 
 | tier | validator | fallback | adapter |

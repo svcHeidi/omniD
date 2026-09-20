@@ -429,84 +429,90 @@ git commit -m "test(core): guard that each contract member has exactly one tier"
 
 ---
 
-## Task 3: Delete the nine unreachable fallbacks
+## Task 3: Split the `dictionaries` tier
 
-Nine `legacy_*` functions can never fire: their members are in `_REQUIRED_PLUGIN_MEMBERS`, `validate_plugin` rejects a plugin lacking any of them, and `driver_context` is the only way to build a `DriverContext`.
+**Rewritten 2026-09-20, after Task 2's guard ran.** This task previously said
+"delete the nine unreachable fallbacks". That was the wrong remedy and is
+recorded as such in the spec's §3.1. The nine fallbacks are unreachable, but
+the fix is to demote their members (Task 4), not to make them mandatory for
+every provider -- an environment provider has no solver commands, and
+`OpenFOAMEnvironmentPlugin` carries hollow stubs for all nine purely to satisfy
+`validate_plugin`.
+
+Task 2's guard reported exactly one real offender: `get_phases` is tagged
+`required` and has a `legacy_phases` fallback. It is tagged required only
+because `dictionaries` was tagged wholesale, and `get_phases` is genuinely
+optional -- `SolverPluginOptionalHooks` documents it as an optional hook and
+`validate_plugin` does not require it.
 
 **Files:**
-- Modify: `packages/omnidriver/src/omnidriver/core/compatibility.py`
 - Modify: `packages/omnidriver/src/omnidriver/core/plugin_capabilities.py`
 - Test: `packages/omnidriver/tests/core/test_contract_tier_coherence.py`
 
 **Interfaces:**
 - Consumes: `capability_seams.members_by_tier()` (Task 2).
-- Produces: nothing new; removes `compatibility.legacy_solver_commands`, `legacy_auxiliary_commands`, `legacy_utility_manifests`, `legacy_utility_roots`, `legacy_resolve_case_models`, `legacy_samplable_fields`, `legacy_override_schema`, `legacy_dict_entry_catalog`, `legacy_run_document_config_schema`.
+- Produces: nothing new. `DictionaryCatalogCapability`'s `:status:` becomes per-member. No fallback is deleted by this task.
 
-- [ ] **Step 1: Confirm each is unreachable before deleting**
-
-For each of the nine names, verify the member is in `_REQUIRED_PLUGIN_MEMBERS`:
+- [ ] **Step 1: Confirm `get_phases` is the only offender**
 
 ```bash
-python3 - <<'PY'
+python -m pytest packages/omnidriver/tests/core/test_contract_tier_coherence.py::test_no_required_member_has_a_fallback -v --runxfail
+```
+
+Expected: FAIL reporting `['get_phases']` and nothing else. If it reports more,
+stop and report -- the tier assignment moved since Task 2 and this task's
+premise needs rechecking.
+
+- [ ] **Step 2: Verify `get_phases` is genuinely optional**
+
+```bash
+python3 -c "
 import re, pathlib
-src = pathlib.Path("packages/omnidriver/src/omnidriver/core/plugin_interface.py").read_text()
-required = set(re.findall(r'"([a-z_]+)"', re.search(
-    r'_REQUIRED_PLUGIN_MEMBERS = \(([^)]*)\)', src, re.S).group(1)))
-for member in [
-    "get_solver_commands", "get_auxiliary_commands", "get_utility_manifests",
-    "get_utility_roots", "resolve_case_models", "get_samplable_fields",
-    "get_override_schema", "get_dict_entry_catalog",
-    "get_run_document_config_schema",
-]:
-    print(f"{member}: {'REQUIRED' if member in required else 'NOT REQUIRED — DO NOT DELETE ITS FALLBACK'}")
-PY
+s = pathlib.Path('packages/omnidriver/src/omnidriver/core/plugin_interface.py').read_text()
+names = re.findall(r'\"([a-z_]+)\"', re.search(r'_REQUIRED_PLUGIN_MEMBERS = \(([^)]*)\)', s, re.S).group(1))
+print('get_phases required by validator:', 'get_phases' in names)
+print('declared in SolverPluginOptionalHooks:', 'def get_phases' in s)
+"
 ```
 
-Expected: all nine print `REQUIRED`. If any prints otherwise, stop and re-read the spec — the audit may have drifted.
+Expected: `False` then `True` — the validator does not require it and the
+optional-hooks class documents it. Its `legacy_phases` fallback derives phases
+from the plugin's own `DictEntry` values, so a plugin without it still works.
 
-- [ ] **Step 2: Replace each probe with an unconditional call**
+- [ ] **Step 3: Split the `:status:` line**
 
-In `plugin_capabilities.py`, each of the nine currently reads roughly:
+In `plugin_capabilities.py`, `DictionaryCatalogCapability`'s `:adapts:` names
+`get_dict_entries, get_dict_groups, get_dictionary_catalog, get_phases`.
+Replace its single `:status: required` with a per-member line, in the same
+shape `case_files` and `override_scopes` already use:
 
-```python
-hook = getattr(self.plugin, "get_solver_commands", None)
-if hook is None:
-    return compatibility.legacy_solver_commands()
-return hook()
+```
+    :status: get_dict_entries=required, get_dict_groups=required,
+        get_dictionary_catalog=required, get_phases=optional-neutral
 ```
 
-Replace with:
+Check whether `capability_seams.parse_fields` handles a wrapped field — its
+docstring notes the `:consumed-by:` list may wrap. If `:status:` may not wrap,
+keep the line unwrapped rather than changing the parser in this task.
 
-```python
-return self.plugin.get_solver_commands()
-```
+- [ ] **Step 4: Remove the xfail from the fallback test**
 
-Do this for all nine. Do **not** touch any adapter whose member is not in the list above.
+Delete the `@pytest.mark.xfail` decorator above
+`test_no_required_member_has_a_fallback` in `test_contract_tier_coherence.py`.
+Leave the one above `test_required_tier_matches_the_validator` — Task 4 removes
+that.
 
-- [ ] **Step 3: Delete the nine functions from `compatibility.py`**
-
-Delete each `@_instrumented def legacy_*` block for the nine names. Leave `track_fallback_calls`, `_instrumented`, and every other `legacy_*` untouched.
-
-- [ ] **Step 4: Remove them from the seam docstrings**
-
-In `plugin_capabilities.py`, each affected Protocol's `:fallback:` field must no longer name a deleted function. For a capability all of whose members are now `required`, the `:fallback:` field becomes `none`.
-
-- [ ] **Step 5: Remove the xfail from the fallback test**
-
-In `test_contract_tier_coherence.py`, delete the `@pytest.mark.xfail` decorator above `test_no_required_member_has_a_fallback`.
-
-- [ ] **Step 6: Run the tests**
+- [ ] **Step 5: Run the tests**
 
 ```bash
 python -m pytest packages/omnidriver/tests/core/test_contract_tier_coherence.py -v
-python -m pytest packages/omnidriver/tests/core/test_compatibility_fallback_instrumentation.py -v
-python -m pytest packages/omnidriver/tests/core/test_capability_fallback_neutrality.py -v
-python -m pytest packages/omnidriver/tests -q
+python -m pytest packages/omnidriver/tests/core/test_capability_seam_documentation.py -q
 ```
 
-Expected: `test_no_required_member_has_a_fallback` PASSES. The instrumentation and neutrality tests must still pass — if either names a deleted function, update that test to stop naming it rather than restoring the function.
+Expected: `test_no_required_member_has_a_fallback` PASSES, one xfail remains,
+and Task 1's seam tests still pass.
 
-- [ ] **Step 7: Regenerate the seam table and run everything**
+- [ ] **Step 6: Regenerate the seam table and run everything**
 
 ```bash
 python3 scripts/export-capability-seams.py
@@ -515,14 +521,15 @@ python -m pytest packages/ -q -m "not slow"
 python3 scripts/check-import-boundaries.py
 ```
 
-- [ ] **Step 8: Commit**
+Expected: `0 failed`, both gates exit 0.
+
+- [ ] **Step 7: Commit**
 
 ```bash
-git add packages/omnidriver/src/omnidriver/core/compatibility.py \
-        packages/omnidriver/src/omnidriver/core/plugin_capabilities.py \
+git add packages/omnidriver/src/omnidriver/core/plugin_capabilities.py \
         packages/omnidriver/tests/core/test_contract_tier_coherence.py \
         ARCHITECTURE.md
-git commit -m "refactor(core): delete nine fallbacks that could never fire"
+git commit -m "fix(core): get_phases is optional, and the dictionaries tier now says so"
 ```
 
 ---
@@ -593,6 +600,45 @@ python -m pytest packages/omnidriver/tests -q
 ```
 
 Expected: all three tier tests PASS, no xfail remains, core suite `0 failed`.
+
+- [ ] **Step 4b: Confirm demotion is behaviour-preserving**
+
+Deriving the set **shrinks** it: thirteen members the validator currently
+demands are tagged `optional-neutral`, so `validate_plugin` will stop rejecting
+a provider that lacks them. That is the intended change -- it is what lets an
+environment provider stop carrying hollow stubs -- but it must not alter what
+any *installed* plugin does today.
+
+For each demoted member, verify the shipped implementation returns what its
+fallback would:
+
+```bash
+python3 - <<'CHECK'
+from omnidriver.core import plugin_discovery
+from omnidriver.core.plugin_interface import driver_context
+from omnidriver.core import compatibility
+
+for name, cls in plugin_discovery.discover_plugins().items():
+    plugin = cls()
+    for member, fallback in [
+        ("get_solver_commands", compatibility.legacy_solver_commands),
+        ("get_auxiliary_commands", compatibility.legacy_auxiliary_commands),
+        ("get_utility_manifests", compatibility.legacy_utility_manifests),
+        ("get_utility_roots", compatibility.legacy_utility_roots),
+        ("resolve_case_models", None),
+        ("get_samplable_fields", None),
+    ]:
+        if fallback is None:
+            continue
+        own = getattr(plugin, member)()
+        print(f"{name}.{member}: own={own!r} fallback={fallback(plugin)!r}")
+CHECK
+```
+
+Record the output. Where a plugin's own value differs from the fallback, that
+plugin genuinely implements the member and keeps doing so -- demotion changes
+nothing for it. Where they are equal, the implementation was a stub and can be
+deleted in Phase 1 Task 9.
 
 - [ ] **Step 5: Run the whole matrix**
 
