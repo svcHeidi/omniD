@@ -24,6 +24,82 @@
 - There is no `LICENSE` file and no `license` field in any `pyproject.toml`. Do not add one.
 - After every source change, rebuild the wheel before running the wheel-shape suite, or it tests stale code.
 
+## Status
+
+| task | state | commit |
+|---|---|---|
+| 1 · `:status:` becomes the tier vocabulary | done | `078e125` |
+| 2 · tier coherence guard | done | `7761f68` |
+| 3 · split the `dictionaries` tier | done (rewritten mid-flight) | `5ce023f` |
+| 4 · derive `_REQUIRED_PLUGIN_MEMBERS` (27 → 14) | done | `1f4359c` |
+| 5 · correct the contract's docstrings | done | `f321940` |
+| 6 · `get_dict_entries` + controlDict reader | done (amended mid-flight) | `9d2c7f0` |
+| 7 · close the MPI authorization hole | done | `c7f0c7e` |
+| 8 · stop discarding records and contexts | done | `5c1eb68` |
+| 9 · `ConfigValueCapability` | done | `c8c5581` |
+| 10 · one diagnostic shape | done | `d3f0d9d` |
+| 11 · cardiacCore declaration hygiene | **next** | — |
+| 12 · caching (prerequisite for Phase 1's digest) | pending | — |
+| 13 · the three remaining §3.3 defects | pending | — |
+| 14 · all four shapes, close-out | pending | — |
+| 15 · the composition-mechanism spike | pending | — |
+
+Every completed task passes `0 failed` in all four verification shapes.
+
+**Deliverables produced so far that later phases consume:**
+- Task 4's Step 4b stub census → recorded in Phase 1 Task 9.
+- Task 9's `config_value` divergence report → recorded in Phase 1 Task 9.
+
+## How to execute a task in this plan
+
+Learned from Phase 0 Tasks 1–10, each of which found something the plan had
+wrong. Read this before starting any task.
+
+**Protect the working tree.** Never `git add` a file that already had
+uncommitted changes before your task started. Run `git status` first and treat
+every pre-existing modification as someone else's work in progress. If your
+change genuinely requires touching such a file, make the edit, leave it
+**unstaged**, and say so in your report. This rule exists because a task
+committed a pre-existing WIP file along with its own work, and the two could
+not be separated afterwards.
+
+**Verify every factual claim before acting on it.** The claims in these tasks
+come from audits, not from measurement at execution time. Several have been
+wrong. The contract's own docstrings have been wrong six times — two hook
+counts, a constant defined in no module, a member count, a `-> None`
+annotation on a function that always returned records, and a heading naming a
+Protocol that was never written. Verify, then act.
+
+**"Expected: PASS" has been wrong twice.** A correct fix can expose a real gap
+downstream. When that happens, do not narrow the fix and do not weaken a test.
+Investigate the gap, decide the remedy on evidence, and report. Task 6 is the
+worked example: fixing `get_dict_entries` revealed that `config["solver"]`
+never recorded what the run used, and the remedy was to add the missing reader,
+not to relax the requirement.
+
+**Fixture and helper names in these snippets are illustrative.** Check what
+already exists in the target test file and its conftest before adding one.
+Duplicating a fixture is the defect class this work exists to remove. Known
+trap: `plugin_discovery.discover_plugins()` returns `EntryPoint` objects, not
+plugin classes — use `load_discovered_plugin(name)`, which loads and builds a
+context correctly. Two tasks hit this.
+
+**A test may encode a defect as intended behaviour.** One did, in a file named
+`test_workflow_command_security.py`, complete with a comment explaining the
+hole as a design choice. When you find one: correct it with a dated note **and
+add a test for the corrected behaviour**, so coverage grows rather than moves.
+
+**The `Files:` block is authoritative for what to commit, not the per-step
+`git add` list.** Those lists were written before the tasks ran and have been
+stale three times. Commit what you actually changed, and report any divergence
+from the `Files:` block.
+
+**Report being wrong as a finding.** A plan that turns out to mis-describe the
+codebase is information, not a failure. Say so plainly rather than working
+around it silently.
+
+---
+
 ## Verification shapes
 
 Every task's "run the tests" step means at minimum the targeted test. Before each **commit** step, also run:

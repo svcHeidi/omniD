@@ -27,6 +27,56 @@
 - Rebuild the wheel after every source change before running the wheel shape.
 - **Every write must be rollback-safe.** A task that adds a write path without a before-image is incomplete.
 
+## How to execute a task in this plan
+
+Learned from Phase 0 Tasks 1–10, each of which found something the plan had
+wrong. Read this before starting any task.
+
+**Protect the working tree.** Never `git add` a file that already had
+uncommitted changes before your task started. Run `git status` first and treat
+every pre-existing modification as someone else's work in progress. If your
+change genuinely requires touching such a file, make the edit, leave it
+**unstaged**, and say so in your report. This rule exists because a task
+committed a pre-existing WIP file along with its own work, and the two could
+not be separated afterwards.
+
+**Verify every factual claim before acting on it.** The claims in these tasks
+come from audits, not from measurement at execution time. Several have been
+wrong. The contract's own docstrings have been wrong six times — two hook
+counts, a constant defined in no module, a member count, a `-> None`
+annotation on a function that always returned records, and a heading naming a
+Protocol that was never written. Verify, then act.
+
+**"Expected: PASS" has been wrong twice.** A correct fix can expose a real gap
+downstream. When that happens, do not narrow the fix and do not weaken a test.
+Investigate the gap, decide the remedy on evidence, and report. Task 6 is the
+worked example: fixing `get_dict_entries` revealed that `config["solver"]`
+never recorded what the run used, and the remedy was to add the missing reader,
+not to relax the requirement.
+
+**Fixture and helper names in these snippets are illustrative.** Check what
+already exists in the target test file and its conftest before adding one.
+Duplicating a fixture is the defect class this work exists to remove. Known
+trap: `plugin_discovery.discover_plugins()` returns `EntryPoint` objects, not
+plugin classes — use `load_discovered_plugin(name)`, which loads and builds a
+context correctly. Two tasks hit this.
+
+**A test may encode a defect as intended behaviour.** One did, in a file named
+`test_workflow_command_security.py`, complete with a comment explaining the
+hole as a design choice. When you find one: correct it with a dated note **and
+add a test for the corrected behaviour**, so coverage grows rather than moves.
+
+**The `Files:` block is authoritative for what to commit, not the per-step
+`git add` list.** Those lists were written before the tasks ran and have been
+stale three times. Commit what you actually changed, and report any divergence
+from the `Files:` block.
+
+**Report being wrong as a finding.** A plan that turns out to mis-describe the
+codebase is information, not a failure. Say so plainly rather than working
+around it silently.
+
+---
+
 ---
 
 ## File Structure
