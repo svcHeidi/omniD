@@ -1192,6 +1192,23 @@ provides:
 
 Per spec §2.1, remove from both cardiac manifests every `case_profile.dictionaries` entry the environment profile already declares — `system/controlDict`, `constant`, and `Allrun` in all three.
 
+**Resolve `config_value`'s divergence here (reported by Phase 0 Task 9,
+2026-09-20).** The two adapters return different callables for this one seam:
+
+| adapter | returns | `scope` support |
+|---|---|---|
+| `OpenFOAMEnvironmentPlugin` | `mutators.read_foam_entry(path, key, *, scope=None)` | yes |
+| `CardiacFoamPlugin` | `config_values.openfoam_config_value_reader()`, a closure `_read(path, key)` | **no — silently dropped** |
+
+The composed seam must return the **wider** one, or an equivalent that forwards
+`scope`. The narrow closure exists only because `ConfigValueCapability.reader()`
+had no fixed signature to conform to; nothing about its callers requires
+dropping `scope`. A composed seam that silently discards a capability one
+provider offers is the same defect class as two declarations of one fact.
+
+Delete `config_values.openfoam_config_value_reader` once cardiacFoam stops
+returning it, unless something else consumes it — check before deleting.
+
 **Measured stub census, from Phase 0 Task 4's Step 4b (2026-09-20).** Do not
 re-derive this; it was produced by comparing each plugin's shipped
 implementation against what its fallback returns.
