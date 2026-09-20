@@ -76,17 +76,18 @@ def _run_document_from_case(
     # A core generic case has no solver-specific config to validate. Every
     # other case uses the explicit planning context rather than an ambient
     # cardiac compatibility default.
-    validator_errors = [] if generic_case else validate_run(
+    #
+    # `validate_run` already returns the canonical `StrictDiagnostic` shape
+    # (code="run_validation", source=<phase>), so these pass straight
+    # through. Before Phase 0 Task 10 this re-wrapped `ValidationError` --
+    # a different four-field shape with `.phase` instead of `.source` and
+    # no `.code` -- into a `StrictDiagnostic` field-for-field; now that
+    # `validate_run` speaks the canonical shape itself, that re-wrap was a
+    # genuine no-op and is gone.
+    validator_diagnostics = () if generic_case else validate_run(
         run_doc, driver_context=driver_context,
     )
-    for error in validator_errors:
-        diagnostics.append(diagnostic(
-            error.level,
-            "run_validation",
-            error.message,
-            field=error.field,
-            source=error.phase,
-        ))
+    diagnostics.extend(validator_diagnostics)
     run_doc.validation = {
         "status": "ok" if not diagnostics else "failed",
         "diagnostics": [asdict(d) for d in diagnostics],

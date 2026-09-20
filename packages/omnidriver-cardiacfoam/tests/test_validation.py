@@ -51,8 +51,9 @@ from omnidriver.cardiacfoam.common_dict_entries import (
 )
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+from omnidriver.core.planning_types import StrictDiagnostic
 from omnidriver.core.runtime.run_model import RunDocument
-from omnidriver.core.specs.validation import ValidationError, slot_key, validate_run
+from omnidriver.core.specs.validation import slot_key, validate_run
 
 # validate_run now takes a mandatory driver_context
 # (test_core_context_is_explicit.py). Every test in this file lives in
@@ -146,10 +147,15 @@ def _filled_run(**overrides) -> RunDocument:
 
 
 def test_empty_run_reports_missing_required_fields_per_phase():
+    # Corrected 2026-09-20 (Phase 0 Task 10): `validate_run` used to return
+    # `ValidationError` (four fields: `phase`, `field`, `message`, `level`).
+    # It now returns the canonical `core.planning_types.StrictDiagnostic`
+    # (`level`, `code`, `message`, `source`, `field`); `phase` maps to
+    # `source`.
     errors = validate_run(_blank_run(), driver_context=_CTX)
-    phases_with_errors = {e.phase for e in errors}
-    assert {"physics"} <= phases_with_errors
-    assert all(isinstance(e, ValidationError) for e in errors)
+    sources_with_errors = {e.source for e in errors}
+    assert {"physics"} <= sources_with_errors
+    assert all(isinstance(e, StrictDiagnostic) for e in errors)
 
 
 def test_valid_minimal_run_has_no_errors():
@@ -316,8 +322,10 @@ def test_required_when_silent_when_value_present():
         "physics": {"myocardiumSolver": "singleCellSolver"},
         "stimulus": {"singleCellStimulus.stim_amplitude": "60"},
     })
+    # Corrected 2026-09-20 (Phase 0 Task 10): `validate_run` now returns a
+    # tuple, not a list -- `() != []`.
     errors = validate_run(run, entries=[entry], driver_context=_CTX)
-    assert errors == []
+    assert errors == ()
 
 
 def test_required_when_silent_when_predicate_doesnt_match():
@@ -330,8 +338,10 @@ def test_required_when_silent_when_predicate_doesnt_match():
     run = _blank_run(config={"physics": {
         "myocardiumSolver": "monodomainSolver",
     }})
+    # Corrected 2026-09-20 (Phase 0 Task 10): `validate_run` now returns a
+    # tuple, not a list -- `() != []`.
     errors = validate_run(run, entries=[entry], driver_context=_CTX)
-    assert errors == []
+    assert errors == ()
 
 
 def test_applicable_when_skips_inapplicable_entry():
@@ -345,8 +355,10 @@ def test_applicable_when_skips_inapplicable_entry():
     run = _blank_run(config={"physics": {
         "myocardiumSolver": "monodomainSolver",
     }})
+    # Corrected 2026-09-20 (Phase 0 Task 10): `validate_run` now returns a
+    # tuple, not a list -- `() != []`.
     errors = validate_run(run, entries=[entry], driver_context=_CTX)
-    assert errors == [], (
+    assert errors == (), (
         f"inapplicable entry must not fire required check, got: "
         f"{[e.message for e in errors]}"
     )
@@ -393,8 +405,10 @@ def test_tuple_predicate_matches_membership():
         required=True,
     )
     # Not applicable → no required-check fire.
+    # Corrected 2026-09-20 (Phase 0 Task 10): `validate_run` now returns a
+    # tuple (`StrictDiagnostic`, ...) rather than a list -- `() != []`.
     run_inactive = _blank_run(config={"physics": {"ionicModel": "TNNP"}})
-    assert validate_run(run_inactive, entries=[entry], driver_context=_CTX) == []
+    assert validate_run(run_inactive, entries=[entry], driver_context=_CTX) == ()
 
     # Applicable → required fires when value missing.
     run_active = _blank_run(config={"physics": {
@@ -997,7 +1011,7 @@ def test_representative_run_has_no_validator_errors(spec_label: str, run: RunDoc
     errors = [e for e in validate_run(run, driver_context=_CTX) if e.level == "error"]
     assert errors == [], (
         f"spec='{spec_label}': expected no validator errors for representative run, "
-        f"got:\n" + "\n".join(f"  [{e.phase}] {e.field}: {e.message}" for e in errors)
+        f"got:\n" + "\n".join(f"  [{e.source}] {e.field}: {e.message}" for e in errors)
     )
 
 

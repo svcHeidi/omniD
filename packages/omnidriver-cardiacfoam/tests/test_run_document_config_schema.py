@@ -41,6 +41,7 @@ from pathlib import Path
 
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.core.planning_types import StrictDiagnostic
 from omnidriver.cardiacfoam.run_document_config import _read_physics_type
 from omnidriver.core.strict_planning import strict_plan
 
@@ -105,7 +106,7 @@ def _document_json(config: dict) -> dict:
     }
 
 
-def _ingest(config: dict) -> tuple[dict, ...]:
+def _ingest(config: dict) -> tuple["StrictDiagnostic", ...]:
     """Load a hand-authored document off disk and adapt it for execution."""
     from omnidriver.core.runtime.run_document_exec import (
         build_execution_inputs,
@@ -132,6 +133,11 @@ def test_ingested_document_is_checked_against_the_plugin_config_schema() -> None
     but no catalog enum that ``validate_run`` would independently reject, so
     an out-of-enum value here isolates the plugin-schema gate.
     """
+    # Corrected 2026-09-20 (Phase 0 Task 10): `build_execution_inputs` used
+    # to serialize diagnostics as plain `{level, code, message, field}`
+    # dicts (`run_document_exec._diag`); it now returns the canonical
+    # `core.planning_types.StrictDiagnostic` dataclass, so these are
+    # attribute lookups, not subscripts.
     diagnostics = _ingest({
         "anatomy": {},
         "physics": {"tissue": "notATissue"},
@@ -139,11 +145,11 @@ def test_ingested_document_is_checked_against_the_plugin_config_schema() -> None
         "solver": {},
     })
     violations = [
-        d for d in diagnostics if d["code"] == "plugin_config_schema_violation"
+        d for d in diagnostics if d.code == "plugin_config_schema_violation"
     ]
     assert violations, diagnostics
-    assert violations[0]["field"] == "physics.tissue"
-    assert "notATissue" in violations[0]["message"]
+    assert violations[0].field == "physics.tissue"
+    assert "notATissue" in violations[0].message
 
 
 def test_ingested_document_with_a_schema_valid_config_raises_no_violation() -> None:
@@ -153,7 +159,7 @@ def test_ingested_document_with_a_schema_valid_config_raises_no_violation() -> N
         "anatomy": {}, "physics": {}, "stimulus": {}, "solver": {},
     })
     assert not [
-        d for d in diagnostics if d["code"] == "plugin_config_schema_violation"
+        d for d in diagnostics if d.code == "plugin_config_schema_violation"
     ], diagnostics
 
 

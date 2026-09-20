@@ -3,10 +3,25 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from omnidriver.cardiacfoam.solver_coupling import SOLVER_COMPATIBILITY_RULES
-from omnidriver.core.specs.validation_types import ValidationError
+from omnidriver.core.planning_types import diagnostic
 
 if TYPE_CHECKING:
     from omnidriver.core.planning_types import StrictDiagnostic
+
+
+def _diagnostic_from_phase(phase: str, field: str, message: str, level: str) -> "StrictDiagnostic":
+    """Build the canonical :class:`StrictDiagnostic` from this module's old
+    ``(phase, field, message, level)`` call shape.
+
+    Retired 2026-09-20 (Phase 0 Task 10): every call site below used to
+    construct ``core.specs.validation_types.ValidationError``, a four-field
+    dataclass with no ``code`` and ``phase`` where the canonical shape has
+    ``source``. That type is gone; this adapter keeps every call site below
+    unchanged in argument order while emitting the one canonical shape
+    (``core.planning_types.StrictDiagnostic``). ``code`` is the generic
+    ``"run_validation"`` -- none of these sites carried a more specific one.
+    """
+    return diagnostic(level, "run_validation", message, source=phase, field=field)
 
 
 _CONDUCTION_SOLVER_SUFFIX = ".purkinjeGraphModelCoeffs.conductionSystemSolver"
@@ -29,14 +44,14 @@ def _is_template_slot_key(key: str) -> bool:
     return "<" in key or ">" in key
 
 
-def _evaluate_solver_coupling(context: dict[str, Any]) -> list[ValidationError]:
+def _evaluate_solver_coupling(context: dict[str, Any]) -> list["StrictDiagnostic"]:
     """Validate each explicit coupling against its referenced network.
 
     Network creation alone does not imply a coupling. Match the C++ system
     builder's conductionNetworkDomain lookup rather than borrowing whichever
     network selector happens to appear first in the flattened context.
     """
-    errors: list[ValidationError] = []
+    errors: list["StrictDiagnostic"] = []
     myocardium = context.get("myocardiumSolver")
     if myocardium is None:
         return errors
@@ -71,7 +86,7 @@ def _evaluate_solver_coupling(context: dict[str, Any]) -> list[ValidationError]:
         ), None)
 
         if rule is None:
-            errors.append(ValidationError(
+            errors.append(_diagnostic_from_phase(
                 phase="physics",
                 field=coupler_key,
                 message=(
@@ -86,7 +101,7 @@ def _evaluate_solver_coupling(context: dict[str, Any]) -> list[ValidationError]:
             continue
 
         if not rule["valid"]:
-            errors.append(ValidationError(
+            errors.append(_diagnostic_from_phase(
                 phase="physics",
                 field=coupler_key,
                 message=(
@@ -104,7 +119,7 @@ def _evaluate_solver_coupling(context: dict[str, Any]) -> list[ValidationError]:
         if required is None:
             continue
         if actual is None:
-            errors.append(ValidationError(
+            errors.append(_diagnostic_from_phase(
                 phase="physics",
                 field=coupler_key,
                 message=(
@@ -116,7 +131,7 @@ def _evaluate_solver_coupling(context: dict[str, Any]) -> list[ValidationError]:
                 level="error",
             ))
         elif actual != required:
-            errors.append(ValidationError(
+            errors.append(_diagnostic_from_phase(
                 phase="physics",
                 field=coupler_key,
                 message=(
@@ -151,8 +166,8 @@ def _declared_conduction_networks(context: dict[str, Any]) -> set[str]:
 
 def _evaluate_block_references(
     context: dict[str, Any],
-) -> list[ValidationError]:
-    errors: list[ValidationError] = []
+) -> list["StrictDiagnostic"]:
+    errors: list["StrictDiagnostic"] = []
     declared_networks = _declared_conduction_networks(context)
 
     for key, val in context.items():
@@ -165,7 +180,7 @@ def _evaluate_block_references(
             continue
         referenced = str(val)
         if referenced not in declared_networks:
-            errors.append(ValidationError(
+            errors.append(_diagnostic_from_phase(
                 phase="physics",
                 field=key,
                 message=(
@@ -287,7 +302,7 @@ def _instance_applicable(
     return True
 
 
-def _evaluate_dynamic_required_fields(context: dict[str, Any]) -> list[ValidationError]:
+def _evaluate_dynamic_required_fields(context: dict[str, Any]) -> list["StrictDiagnostic"]:
     """Required-field checks for every configured dynamic block.
 
     ``validate_run``'s generic required-field pass (``specs/validation.py``)
@@ -309,7 +324,7 @@ def _evaluate_dynamic_required_fields(context: dict[str, Any]) -> list[Validatio
     """
     from omnidriver.core.specs.validation import slot_key
 
-    errors: list[ValidationError] = []
+    errors: list["StrictDiagnostic"] = []
     templates = _dynamic_block_templates()
 
     for template, entries in sorted(templates.items()):
@@ -354,7 +369,7 @@ def _evaluate_dynamic_required_fields(context: dict[str, Any]) -> list[Validatio
                 if concrete_key in context and context[concrete_key] not in (None, ""):
                     continue
                 block = template.split(".")[:-1]
-                errors.append(ValidationError(
+                errors.append(_diagnostic_from_phase(
                     phase="physics",
                     field=concrete_key,
                     message=(
@@ -371,8 +386,8 @@ _HETEROGENEITY_PREFIX = "ionicHeterogeneity."
 _APEX_BASE_PREFIX = "ionicHeterogeneity.apexBaseBands."
 
 
-def _evaluate_heterogeneity(context: dict[str, Any]) -> list[ValidationError]:
-    errors: list[ValidationError] = []
+def _evaluate_heterogeneity(context: dict[str, Any]) -> list["StrictDiagnostic"]:
+    errors: list["StrictDiagnostic"] = []
     het_keys = [k for k in context if k.startswith(_HETEROGENEITY_PREFIX)]
     if not het_keys:
         return errors
@@ -391,7 +406,7 @@ def _evaluate_heterogeneity(context: dict[str, Any]) -> list[ValidationError]:
             if getattr(e, "supports_heterogeneity", False)
             and not n.endswith("compactBatched")
         )
-        errors.append(ValidationError(
+        errors.append(_diagnostic_from_phase(
             phase="physics",
             field="$ELECTRO_MODEL_COEFFS.ionicHeterogeneity",
             message=(
@@ -408,7 +423,7 @@ def _evaluate_heterogeneity(context: dict[str, Any]) -> list[ValidationError]:
     if endo is not None and mepi is not None:
         try:
             if float(endo) >= float(mepi):
-                errors.append(ValidationError(
+                errors.append(_diagnostic_from_phase(
                     phase="physics",
                     field="$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.endoMInterface",
                     message=(
@@ -442,14 +457,14 @@ def _evaluate_heterogeneity(context: dict[str, Any]) -> list[ValidationError]:
         for i in range(len(ranges)):
             min_v, max_v, name, k = ranges[i]
             if min_v >= max_v:
-                errors.append(ValidationError(
+                errors.append(_diagnostic_from_phase(
                     phase="physics",
                     field=f"$ELECTRO_MODEL_COEFFS.{k}",
                     message=f"Region '{name}' range [{min_v}, {max_v}] must be strictly increasing.",
                     level="error",
                 ))
             if min_v < 0.0 or max_v > 1.0:
-                errors.append(ValidationError(
+                errors.append(_diagnostic_from_phase(
                     phase="physics",
                     field=f"$ELECTRO_MODEL_COEFFS.{k}",
                     message=f"Region '{name}' range [{min_v}, {max_v}] must be within [0, 1].",
@@ -458,7 +473,7 @@ def _evaluate_heterogeneity(context: dict[str, Any]) -> list[ValidationError]:
             if i > 0:
                 prev_min, prev_max, prev_name, prev_k = ranges[i - 1]
                 if min_v < prev_max:
-                    errors.append(ValidationError(
+                    errors.append(_diagnostic_from_phase(
                         phase="physics",
                         field=f"$ELECTRO_MODEL_COEFFS.{k}",
                         message=f"Region '{name}' range [{min_v}, {max_v}] overlaps with region '{prev_name}' [{prev_min}, {prev_max}].",
@@ -472,7 +487,7 @@ def _evaluate_heterogeneity(context: dict[str, Any]) -> list[ValidationError]:
                 if getattr(e, "supports_apex_base_heterogeneity", False)
                 and not n.endswith("compactBatched")
             )
-            errors.append(ValidationError(
+            errors.append(_diagnostic_from_phase(
                 phase="physics",
                 field="$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.apexBaseBands",
                 message=(
@@ -488,7 +503,7 @@ def _evaluate_heterogeneity(context: dict[str, Any]) -> list[ValidationError]:
         if beta is not None:
             try:
                 if float(beta) <= 0:
-                    errors.append(ValidationError(
+                    errors.append(_diagnostic_from_phase(
                         phase="physics",
                         field="$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.apexBaseBands.beta",
                         message=f"apexBaseBands.beta ({beta}) must be > 0.",
@@ -502,7 +517,7 @@ def _evaluate_heterogeneity(context: dict[str, Any]) -> list[ValidationError]:
         if scaling_min is not None:
             try:
                 if float(scaling_min) <= 0:
-                    errors.append(ValidationError(
+                    errors.append(_diagnostic_from_phase(
                         phase="physics",
                         field="$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.apexBaseBands.scalingMin",
                         message=f"apexBaseBands.scalingMin ({scaling_min}) must be > 0.",
@@ -513,7 +528,7 @@ def _evaluate_heterogeneity(context: dict[str, Any]) -> list[ValidationError]:
         if scaling_min is not None and scaling_max is not None:
             try:
                 if float(scaling_min) > float(scaling_max):
-                    errors.append(ValidationError(
+                    errors.append(_diagnostic_from_phase(
                         phase="physics",
                         field="$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.apexBaseBands.scalingMin",
                         message=(
@@ -528,8 +543,8 @@ def _evaluate_heterogeneity(context: dict[str, Any]) -> list[ValidationError]:
     return errors
 
 
-def _evaluate_tissue_compatibility(context: dict[str, Any]) -> list[ValidationError]:
-    errors: list[ValidationError] = []
+def _evaluate_tissue_compatibility(context: dict[str, Any]) -> list["StrictDiagnostic"]:
+    errors: list["StrictDiagnostic"] = []
     model = context.get("ionicModel")
     tissue = context.get("tissue")
     if model is None or tissue is None:
@@ -543,7 +558,7 @@ def _evaluate_tissue_compatibility(context: dict[str, Any]) -> list[ValidationEr
     if "manufactured" in entry.compatible_tissues:
         return errors
     if tissue not in entry.compatible_tissues:
-        errors.append(ValidationError(
+        errors.append(_diagnostic_from_phase(
             phase="physics",
             field="$ELECTRO_MODEL_COEFFS.tissue",
             message=(
@@ -560,7 +575,7 @@ _ECG_DOMAIN_PREFIX = "ecgDomains."
 _PERSONALIZED_TEMPLATES_SUFFIX = ".personalizedTemplates."
 
 
-def _evaluate_personalized_templates(context: dict[str, Any]) -> list[ValidationError]:
+def _evaluate_personalized_templates(context: dict[str, Any]) -> list["StrictDiagnostic"]:
     """Validate an explicitly selected eikonalECG template-generation block.
 
     The block is intentionally optional: eikonalECG otherwise uses compiled
@@ -568,7 +583,7 @@ def _evaluate_personalized_templates(context: dict[str, Any]) -> list[Validation
     manufactured verifier are solver science, not generic dictionary rules.
     This mirrors constructor checks in ``eikonalECG.C`` before a run starts.
     """
-    errors: list[ValidationError] = []
+    errors: list["StrictDiagnostic"] = []
     domains = {
         key[len(_ECG_DOMAIN_PREFIX):].split(".", 1)[0]
         for key in context
@@ -581,7 +596,7 @@ def _evaluate_personalized_templates(context: dict[str, Any]) -> list[Validation
         template_prefix = prefix + "personalizedTemplates."
         field = prefix + "personalizedTemplates"
         if context.get(prefix + "ecgSolver") != "eikonalECG":
-            errors.append(ValidationError(
+            errors.append(_diagnostic_from_phase(
                 phase="physics", field=field,
                 message="personalizedTemplates is supported only by ecgSolver=eikonalECG.",
                 level="error",
@@ -594,7 +609,7 @@ def _evaluate_personalized_templates(context: dict[str, Any]) -> list[Validation
             or context.get(prefix + "verificationModel.type") == "manufacturedEikonalECGVerifier"
         )
         if manufactured:
-            errors.append(ValidationError(
+            errors.append(_diagnostic_from_phase(
                 phase="physics", field=field,
                 message=("personalizedTemplates cannot be combined with a manufactured "
                          "eikonal ECG verification configuration."),
@@ -611,7 +626,7 @@ def _evaluate_personalized_templates(context: dict[str, Any]) -> list[Validation
         for suffix in required:
             key = template_prefix + suffix
             if context.get(key) in (None, ""):
-                errors.append(ValidationError(
+                errors.append(_diagnostic_from_phase(
                     phase="physics", field=key,
                     message=f"{key} is required when personalizedTemplates is configured.",
                     level="error",
@@ -629,17 +644,17 @@ def _evaluate_personalized_templates(context: dict[str, Any]) -> list[Validation
         period = number("ionicModelConfig.singleCellStimulus.stim_period_S1")
         nstim2 = number("ionicModelConfig.singleCellStimulus.nstim2")
         if n_beats is not None and n_beats < 1:
-            errors.append(ValidationError("physics", template_prefix + "nBeats", "personalizedTemplates.nBeats must be at least 1.", "error"))
+            errors.append(_diagnostic_from_phase("physics", template_prefix + "nBeats", "personalizedTemplates.nBeats must be at least 1.", "error"))
         if duration is not None and duration <= 0:
-            errors.append(ValidationError("physics", template_prefix + "duration", "personalizedTemplates.duration must be positive.", "error"))
+            errors.append(_diagnostic_from_phase("physics", template_prefix + "duration", "personalizedTemplates.duration must be positive.", "error"))
         if dt is not None and dt <= 0:
-            errors.append(ValidationError("physics", template_prefix + "dt", "personalizedTemplates.dt must be positive.", "error"))
+            errors.append(_diagnostic_from_phase("physics", template_prefix + "dt", "personalizedTemplates.dt must be positive.", "error"))
         if duration is not None and period is not None and duration > 1e-3 * period:
-            errors.append(ValidationError("physics", template_prefix + "duration", "personalizedTemplates.duration must not exceed one S1 period.", "error"))
+            errors.append(_diagnostic_from_phase("physics", template_prefix + "duration", "personalizedTemplates.duration must not exceed one S1 period.", "error"))
         if nstim2 is not None and nstim2 != 0:
-            errors.append(ValidationError("physics", template_prefix + "ionicModelConfig.singleCellStimulus.nstim2", "personalizedTemplates does not support non-zero nstim2.", "error"))
+            errors.append(_diagnostic_from_phase("physics", template_prefix + "ionicModelConfig.singleCellStimulus.nstim2", "personalizedTemplates does not support non-zero nstim2.", "error"))
         if not any(key.startswith("ionicHeterogeneity.") for key in context):
-            errors.append(ValidationError("physics", "ionicHeterogeneity", "personalizedTemplates requires an ionicHeterogeneity block.", "error"))
+            errors.append(_diagnostic_from_phase("physics", "ionicHeterogeneity", "personalizedTemplates requires an ionicHeterogeneity block.", "error"))
 
     return errors
 

@@ -99,4 +99,6 @@ def test_run_document_rejects_a_mismatched_supplied_plugin(tmp_path: Path) -> No
     )
 
     assert inputs is None
-    assert [item["code"] for item in diagnostics] == ["plugin_identity_mismatch"]
+    # Corrected 2026-09-20 (Phase 0 Task 10): diagnostics are now the
+    # canonical `StrictDiagnostic` dataclass, not `{code: ...}` dicts.
+    assert [item.code for item in diagnostics] == ["plugin_identity_mismatch"]

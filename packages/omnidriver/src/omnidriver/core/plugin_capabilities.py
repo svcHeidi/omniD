@@ -247,7 +247,9 @@ class RunSemanticValidatorCapability(Protocol):
     :status: required
     """
 
-    def validate(self, request: RunSemanticValidationRequest) -> tuple[Any, ...]: ...
+    def validate(
+        self, request: RunSemanticValidationRequest,
+    ) -> tuple["StrictDiagnostic", ...]: ...
 
 
 class ArtifactPredictorCapability(Protocol):
@@ -843,7 +845,9 @@ class _ConfigurationValidatorAdapter:
 class _RunSemanticValidatorAdapter:
     plugin: "SolverPlugin"
 
-    def validate(self, request: RunSemanticValidationRequest) -> tuple[Any, ...]:
+    def validate(
+        self, request: RunSemanticValidationRequest,
+    ) -> tuple["StrictDiagnostic", ...]:
         return self.plugin.validate_run_semantics(request.context)
 
 

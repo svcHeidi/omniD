@@ -16,13 +16,16 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
-from conftest import monorepo_root, skip_without_monorepo, NO_REPO_ROOT, repo_root, skip_without_repo
-pytestmark = [skip_without_repo, skip_without_monorepo]
+from conftest import skip_without_repo, skip_without_single_adapter
+pytestmark = [skip_without_repo, skip_without_single_adapter]
 
 from omnidriver.cli import main
 
-REPO_ROOT = monorepo_root or repo_root or NO_REPO_ROOT
-SINGLE_CELL_ROOT = REPO_ROOT / "tutorials" / "electrophysiologyProtocols" / "singleCell"
+# Vendored copy of the cardiacFoam monorepo's singleCell tutorial
+# dictionaries (see fixtures/single_cell_tutorial/README.md), shipped
+# alongside this test file so it runs without a real cardiacFoam checkout
+# instead of always skipping in CI.
+SINGLE_CELL_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "single_cell_tutorial"
 
 
 def _write_case(root: Path, *, allrun: str, steps: list[dict]) -> Path:
@@ -233,6 +236,24 @@ def test_run_document_respects_allowed_runs_root() -> None:
 
 
 def test_step_via_run_document_apply_mutates_reruns_and_audits() -> None:
+    # A flat "deltaT" override is only accepted against a catalog-declared
+    # controlDict entry (apply_overrides._catalog_entries reads the active
+    # plugin's declared catalog, never the case's live file -- see
+    # apply_overrides.py). Core and the generic OpenFOAM environment plugin
+    # declare no dict entries at all, so this claim needs a solver-adapter
+    # default; see test_invalid_config_blocks_execution_at_ingestion in
+    # test_trust_boundary_end_to_end.py for the same shape of guard.
+    from omnidriver.core.plugin_interface import default_driver_context
+
+    active_context = default_driver_context()
+    if "deltaT" not in {
+        entry.driver_path for entry in active_context.capabilities.dictionaries.entries()
+    }:
+        pytest.skip(
+            f"{active_context.identity.id!r} declares no deltaT controlDict "
+            "entry; this claim needs a solver-adapter default plugin."
+        )
+
     with tempfile.TemporaryDirectory() as temp_dir:
         cases_root = Path(temp_dir)
         case_root = _write_case(
@@ -261,3 +282,74 @@ def test_step_via_run_document_apply_mutates_reruns_and_audits() -> None:
         rec = json.loads((output_dir / "remediation_history.jsonl").read_text().splitlines()[0])
         assert rec["applied_overrides"][0]["driver_path"] == "deltaT"
         assert rec["resulting_status"] == "ok"
+
+
+@pytest.fixture
+def invalid_run_document_report() -> dict:
+    """Run the ``--run-document`` path against a document with a
+    known-bad ``config`` phase slice and return the parsed JSON payload.
+
+    The document is invalid three ways at once -- a non-mapping ``anatomy``
+    config slice, a missing ``workflowDag``, and an empty ``launch`` -- so
+    the payload mixes diagnostics from three different emission sites
+    (``specs/validation.py`` via ``validate_run``, ``normalize_workflow_dag``,
+    and ``build_execution_inputs`` itself). Before Phase 0 Task 10 those
+    three sites spoke different diagnostic shapes; the non-mapping-config
+    one is the specific case that used to carry a non-empty ``source``
+    (the offending phase) that ``run_document_exec._diag`` then discarded
+    instead of serializing.
+    """
+    with tempfile.TemporaryDirectory() as temp_dir:
+        doc_path = Path(temp_dir) / "run.json"
+        doc_path.write_text(json.dumps({
+            "version": "3",
+            "id": "d",
+            "name": "bad-config",
+            "status": "planned",
+            "config": {
+                "anatomy": "not-an-object",
+                "physics": {},
+                "stimulus": {},
+                "solver": {},
+            },
+            "launch": {},
+            "workflowDag": None,
+        }))
+
+        out = StringIO()
+        with redirect_stdout(out):
+            main(["run", "--run-document", str(doc_path)])
+        return json.loads(out.getvalue())
+
+
+def test_every_diagnostic_carries_the_same_five_fields(invalid_run_document_report) -> None:
+    """An agent repairs against one shape or it repairs against none.
+
+    ``run_document_exec._diag`` used to drop ``source`` even when
+    re-serializing a ``StrictDiagnostic`` that had one, so the same logical
+    error reached an agent with four fields from one path and five from
+    another. This is the run-document CLI's own regression gate for Phase 0
+    Task 10's "one diagnostic shape".
+
+    Corrected 2026-09-20: the plan this test was written from
+    (``docs/superpowers/plans/2026-09-20-phase0-contract-coherence.md``
+    Task 10) assumed the payload split diagnostics into
+    ``validation_diagnostics``/``workflow_diagnostics``/
+    ``configuration_diagnostics`` keys. That three-key split is
+    ``strict_planning.StrictPlanningReport``'s shape (the ``plan --strict``
+    report), not this one -- the ``--run-document`` CLI path
+    (``cli._context_from_run_document``) emits one flat ``diagnostics``
+    list instead, so this test reads that.
+    """
+    expected = {"level", "code", "message", "source", "field"}
+    diagnostics = invalid_run_document_report["diagnostics"]
+    assert diagnostics, invalid_run_document_report
+    for item in diagnostics:
+        assert set(item) == expected, (
+            f"diagnostics entry {item!r} has fields {sorted(item)}, "
+            f"expected {sorted(expected)}"
+        )
+    codes = {d["code"] for d in diagnostics}
+    assert "run_validation" in codes, diagnostics
+    assert "missing_workflow_dag" in codes, diagnostics
+    assert "missing_case_root" in codes, diagnostics

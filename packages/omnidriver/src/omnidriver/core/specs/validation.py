@@ -32,7 +32,7 @@ from omnidriver.core.contracts.dictionary import DictEntry
 if TYPE_CHECKING:
     from omnidriver.core.plugin_interface import DriverContext
 
-from .validation_types import ValidationError
+from ..planning_types import StrictDiagnostic, diagnostic
 def _all_entries(driver_context: "DriverContext"):
     yield from driver_context.capabilities.dictionaries.entries()
 
@@ -91,7 +91,7 @@ def _slice_value(run, phase: str, driver_path: str):
     return slice_.get(slot_key(driver_path))
 
 
-def _non_mapping_phase_errors(run, phase_order: tuple[str, ...]) -> list[ValidationError]:
+def _non_mapping_phase_errors(run, phase_order: tuple[str, ...]) -> list[StrictDiagnostic]:
     """Reject any ``run.config`` phase slice that is not a mapping.
 
     ``RunDocument.config`` is plugin-defined and the core JSON Schema only
@@ -107,22 +107,23 @@ def _non_mapping_phase_errors(run, phase_order: tuple[str, ...]) -> list[Validat
     ``None`` and other falsy values are tolerated: both helpers already
     coerce them to an empty slice.
     """
-    errors: list[ValidationError] = []
+    errors: list[StrictDiagnostic] = []
     for phase, slice_ in (run.config or {}).items():
         if not slice_ or isinstance(slice_, Mapping):
             continue
-        errors.append(ValidationError(
-            # `phase` is the *reporting* phase and must stay inside the
-            # declared vocabulary; the offending key is carried by `field`.
-            phase=phase if phase in phase_order else (
-                phase_order[0] if phase_order else ""
-            ),
-            field=str(phase),
+        errors.append(diagnostic(
+            level="error",
+            code="run_validation",
             message=(
                 f"config[{phase!r}] must be an object, got "
                 f"{type(slice_).__name__}."
             ),
-            level="error",
+            # `source` is the *reporting* phase and must stay inside the
+            # declared vocabulary; the offending key is carried by `field`.
+            source=phase if phase in phase_order else (
+                phase_order[0] if phase_order else ""
+            ),
+            field=str(phase),
         ))
     return errors
 
@@ -276,7 +277,7 @@ def validate_run(
     *,
     entries: Iterable[DictEntry] | None = None,
     driver_context: "DriverContext",
-) -> list[ValidationError]:
+) -> tuple[StrictDiagnostic, ...]:
     """Validate ``run`` against the dict-entry catalog.
 
     ``entries`` overrides the live catalog for testability and for callers
@@ -295,13 +296,13 @@ def validate_run(
 
     shape_errors = _non_mapping_phase_errors(run, phase_order)
     if shape_errors:
-        return shape_errors
+        return tuple(shape_errors)
 
     entry_list: list[DictEntry] = (
         list(entries) if entries is not None else _all_entries_list(driver_context)
     )
     context = _flatten_context(run)
-    errors: list[ValidationError] = []
+    errors: list[StrictDiagnostic] = []
 
     # 1) Required-field checks. Skip entries whose applicable_when fails —
     #    requiredness is conditional on applicability. When an entry has
@@ -330,8 +331,9 @@ def validate_run(
             # entirely for any entry whose phases fall outside the active
             # plugin's declared order. Report it instead: an unvalidatable
             # entry is a catalog defect, not a pass.
-            errors.append(ValidationError(
-                phase=phase_order[0] if phase_order else "",
+            errors.append(diagnostic(
+                code="run_validation",
+                source=phase_order[0] if phase_order else "",
                 field=e.driver_path,
                 message=(
                     f"{e.driver_path} declares phases {sorted(e.phases)}, none "
@@ -344,8 +346,9 @@ def validate_run(
             continue
         val = _slice_value(run, ph, e.driver_path)
         if val in (None, ""):
-            errors.append(ValidationError(
-                phase=ph,
+            errors.append(diagnostic(
+                code="run_validation",
+                source=ph,
                 field=e.driver_path,
                 message=f"{e.driver_path} is required.",
                 level="error",
@@ -363,8 +366,9 @@ def validate_run(
             # entirely for any entry whose phases fall outside the active
             # plugin's declared order. Report it instead: an unvalidatable
             # entry is a catalog defect, not a pass.
-            errors.append(ValidationError(
-                phase=phase_order[0] if phase_order else "",
+            errors.append(diagnostic(
+                code="run_validation",
+                source=phase_order[0] if phase_order else "",
                 field=e.driver_path,
                 message=(
                     f"{e.driver_path} declares phases {sorted(e.phases)}, none "
@@ -381,8 +385,9 @@ def validate_run(
         normalised_val = _normalise_word(val)
         normalised_enum_values = tuple(_normalise_word(item) for item in e.enum_values)
         if normalised_val not in normalised_enum_values:
-            errors.append(ValidationError(
-                phase=ph,
+            errors.append(diagnostic(
+                code="run_validation",
+                source=ph,
                 field=e.driver_path,
                 message=f"{val!r} is not one of {list(e.enum_values)}.",
                 level="error",
@@ -401,16 +406,16 @@ def validate_run(
         )
     )
 
-    return errors
+    return tuple(errors)
 
 
 def _evaluate_structured(
     entries: list[DictEntry],
     context: dict[str, Any],
     phase_order: tuple[str, ...],
-) -> list[ValidationError]:
+) -> list[StrictDiagnostic]:
     """Evaluate the five structured-constraint families per entry."""
-    errors: list[ValidationError] = []
+    errors: list[StrictDiagnostic] = []
     paths_set = {slot_key(e.driver_path) for e in entries
                  if _entry_value_present(e, context)}
 
@@ -419,18 +424,19 @@ def _evaluate_structured(
 
         # forbidden_when: fires when ANY predicate matches AND the entry's
         # own slot has a value. Each matching predicate emits its own
-        # ValidationError so the reason text stays specific.
+        # diagnostic so the reason text stays specific.
         if _entry_value_present(e, context):
             for key, expected in e.forbidden_when.items():
                 if _predicate_matches(context, key, expected):
-                    errors.append(ValidationError(
-                        phase=ph,
-                        field=e.driver_path,
+                    errors.append(diagnostic(
+                        level="error",
+                        code="run_validation",
                         message=(
                             f"{e.driver_path} is forbidden when "
                             f"{_format_predicate({key: expected})}."
                         ),
-                        level="error",
+                        source=ph,
+                        field=e.driver_path,
                     ))
 
         # Skip entries whose applicable_when/forbidden_when precondition fails
@@ -451,14 +457,15 @@ def _evaluate_structured(
             for sibling_path in e.mutually_exclusive_with:
                 sibling_slot = slot_key(sibling_path)
                 if sibling_slot in paths_set:
-                    errors.append(ValidationError(
-                        phase=ph,
-                        field=e.driver_path,
+                    errors.append(diagnostic(
+                        level="error",
+                        code="run_validation",
                         message=(
                             f"{e.driver_path} is mutually exclusive with "
                             f"{sibling_path}."
                         ),
-                        level="error",
+                        source=ph,
+                        field=e.driver_path,
                     ))
 
         # co_required_with: the inverse relation. Fires when this entry's
@@ -469,14 +476,15 @@ def _evaluate_structured(
         if _entry_value_present(e, context):
             for sibling_path in e.co_required_with:
                 if slot_key(sibling_path) not in paths_set:
-                    errors.append(ValidationError(
-                        phase=ph,
-                        field=e.driver_path,
+                    errors.append(diagnostic(
+                        level="error",
+                        code="run_validation",
                         message=(
                             f"{e.driver_path} requires {sibling_path} to be "
                             f"set as well."
                         ),
-                        level="error",
+                        source=ph,
+                        field=e.driver_path,
                     ))
 
     return errors

@@ -22,6 +22,7 @@ from .core.runtime.sweep_runner import (
     sweep_run,
 )
 from omnidriver.core.introspection import describe_entry
+from omnidriver.core.planning_types import diagnostic
 from omnidriver.core.specs.common import default_setup_dir_name
 from omnidriver.core.specs.paths import (
     default_sweep_output_dir,
@@ -360,10 +361,17 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
     try:
         run_doc = load_run_document(args.run_document)
     except Exception as exc:
+        # The envelope has no other diagnostic to report -- it never reached
+        # validate_run -- but an agent parsing `diagnostics` should still
+        # find one here, in the one canonical shape, rather than needing a
+        # second, unstructured code path for "the document didn't load".
         print(json.dumps({
             "status": "failed",
             "error": f"Could not load run document: {exc}",
             "run_document": args.run_document,
+            "diagnostics": [asdict(diagnostic(
+                "error", "run_document_unreadable", str(exc), source="cli",
+            ))],
         }, indent=2))
         return None
     if run_doc.plugin is not None:
@@ -399,7 +407,7 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
         print(json.dumps({
             "status": "failed",
             "run_document": args.run_document,
-            "diagnostics": list(diagnostics),
+            "diagnostics": [asdict(d) for d in diagnostics],
         }, indent=2))
         return None
     setup_root_raw = (run_doc.launch or {}).get("setupRoot")
@@ -415,7 +423,7 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
         if current_inputs is None:
             raise ValueError(
                 "replanned RunDocument is invalid: "
-                + json.dumps(list(current_diagnostics), sort_keys=True)
+                + json.dumps([asdict(d) for d in current_diagnostics], sort_keys=True)
             )
         if (
             current_inputs.case_root.resolve() != inputs.case_root.resolve()

@@ -30,6 +30,7 @@ from .workflow_state import (
     initial_workflow_state,
     workflow_state_from_json,
 )
+from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 from omnidriver.core.specs.validation import validate_run
 
 if TYPE_CHECKING:
@@ -65,10 +66,6 @@ def load_run_document(path: str | Path) -> RunDocument:
     return RunDocument.from_json(data)
 
 
-def _diag(level: str, code: str, message: str, field: str = "") -> dict[str, Any]:
-    return {"level": level, "code": code, "message": message, "field": field}
-
-
 #: Environment variable naming the only tree run outputs may be written to or
 #: deleted from. ``LEGACY_ALLOWED_RUNS_ROOT_ENV`` is the name this carried
 #: before 2026-09-14; it is still read, because silently ignoring an operator's
@@ -95,7 +92,7 @@ def _allowed_runs_root(env: dict[str, str] | None = None) -> Path | None:
 def _validate_config_against_plugin_schema(
     run_doc: RunDocument,
     driver_context: "DriverContext",
-    diagnostics: list[dict[str, Any]],
+    diagnostics: list[StrictDiagnostic],
 ) -> None:
     """Append a ``plugin_config_schema_violation`` diagnostic per violation.
 
@@ -110,12 +107,12 @@ def _validate_config_against_plugin_schema(
     try:
         jsonschema.validate(run_doc.config, config_schema)
     except jsonschema.exceptions.ValidationError as exc:
-        diagnostics.append(_diag(
+        diagnostics.append(diagnostic(
             "error",
             "plugin_config_schema_violation",
             f"Plugin-declared config schema rejected the run document config: "
             f"{exc.message}",
-            ".".join(str(part) for part in exc.absolute_path) or "config",
+            field=".".join(str(part) for part in exc.absolute_path) or "config",
         ))
 
 
@@ -125,16 +122,17 @@ def build_execution_inputs(
     utility_produces: dict[str, tuple[str, ...]] | None = None,
     driver_context: "DriverContext",
     execution_env: Mapping[str, str] | None = None,
-) -> tuple[RunDocumentExecutionInputs | None, tuple[dict[str, Any], ...]]:
+) -> tuple[RunDocumentExecutionInputs | None, tuple[StrictDiagnostic, ...]]:
     """Adapt ``run_doc`` into executor inputs.
 
     Returns ``(inputs, diagnostics)``. ``inputs`` is ``None`` whenever any
     error-level diagnostic is present (config invalid, no/invalid workflow
     DAG, disallowed command, no launch paths, unparseable artifact/state).
-    ``diagnostics`` is always the full list, using the shape ``{level, code,
-    message, field}``.
+    ``diagnostics`` is always the full list, using the one canonical shape
+    (``core.planning_types.StrictDiagnostic``: ``level, code, message,
+    source, field``).
     """
-    diagnostics: list[dict[str, Any]] = []
+    diagnostics: list[StrictDiagnostic] = []
 
     if run_doc.plugin is not None:
         planned = run_doc.plugin
@@ -144,20 +142,23 @@ def build_execution_inputs(
             if planned.get(key) != selected.get(key)
         ]
         if mismatched:
-            diagnostics.append(_diag(
+            diagnostics.append(diagnostic(
                 "error",
                 "plugin_identity_mismatch",
                 "RunDocument plugin does not match the supplied driver context: "
                 + ", ".join(mismatched),
-                "plugin",
+                field="plugin",
             ))
 
     # 1) Config validity against the selected plugin's live dictionary
     # catalog and semantic validators. This must use the same immutable
     # context whose identity was checked by the CLI before execution.
-    for err in validate_run(run_doc, driver_context=driver_context):
-        message = f"[{err.phase}] {err.message}" if err.phase else err.message
-        diagnostics.append(_diag(err.level, "run_validation", message, err.field))
+    # `validate_run` already returns the canonical `StrictDiagnostic` shape
+    # (with `source` carrying the phase), so these pass through unchanged --
+    # previously this folded `err.phase` into the message text and dropped
+    # it as a field, which was the worst of the four diagnostic shapes this
+    # module used to speak.
+    diagnostics.extend(validate_run(run_doc, driver_context=driver_context))
 
     # 1b) Plugin-declared config schema. run_document_adapter applies this on
     # the *emission* path (config the plugin just built); an ingested,
@@ -176,10 +177,10 @@ def build_execution_inputs(
     expected_artifacts: list[DataArtifact] = []
     raw_artifacts = run_doc.expectedArtifacts
     if not isinstance(raw_artifacts, (list, tuple)):
-        diagnostics.append(_diag(
+        diagnostics.append(diagnostic(
             "error", "invalid_expected_artifacts",
             f"expectedArtifacts must be a list, got {type(raw_artifacts).__name__}.",
-            "expectedArtifacts",
+            field="expectedArtifacts",
         ))
         raw_artifacts = []
     for raw in raw_artifacts:
@@ -187,7 +188,7 @@ def build_execution_inputs(
             expected_artifacts.append(data_artifact_from_json(raw))
         except Exception as exc:  # malformed shape / unknown placeholder
             diagnostics.append(
-                _diag("error", "invalid_expected_artifact", str(exc), "expectedArtifacts")
+                diagnostic("error", "invalid_expected_artifact", str(exc), field="expectedArtifacts")
             )
 
     # 3) Re-normalize the supplied DAG so a hand-authored workflow gets the
@@ -199,11 +200,11 @@ def build_execution_inputs(
         driver_context=driver_context,
     )
     for d in wf_diagnostics:
-        diagnostics.append(_diag(d.level, d.code, d.message, d.field))
+        diagnostics.append(diagnostic(d.level, d.code, d.message, field=d.field))
 
     # 4) Command allowlist — same gate as the --entry path.
     for d in validate_workflow_commands(dag, driver_context=driver_context):
-        diagnostics.append(_diag(d.level, d.code, d.message, d.field))
+        diagnostics.append(diagnostic(d.level, d.code, d.message, field=d.field))
 
     # 5) Launch paths are mandatory for execution.
     raw_launch = run_doc.launch
@@ -213,24 +214,24 @@ def build_execution_inputs(
         launch = raw_launch
     else:
         launch = {}
-        diagnostics.append(_diag(
+        diagnostics.append(diagnostic(
             "error", "invalid_launch",
             f"Run document launch must be a JSON object, got {type(raw_launch).__name__}.",
-            "launch",
+            field="launch",
         ))
     case_root_raw = launch.get("caseRoot")
     output_dir_raw = launch.get("outputDir")
     if not case_root_raw:
-        diagnostics.append(_diag(
+        diagnostics.append(diagnostic(
             "error", "missing_case_root",
             "Run document launch.caseRoot is required for execution.",
-            "launch.caseRoot",
+            field="launch.caseRoot",
         ))
     if not output_dir_raw:
-        diagnostics.append(_diag(
+        diagnostics.append(diagnostic(
             "error", "missing_output_dir",
             "Run document launch.outputDir is required for execution.",
-            "launch.outputDir",
+            field="launch.outputDir",
         ))
 
     # 5b) Validate + canonicalize launch paths against the selected adapter's
@@ -241,27 +242,27 @@ def build_execution_inputs(
     if case_root_raw:
         resolved_case_root = Path(case_root_raw).resolve()
         if not resolved_case_root.exists():
-            diagnostics.append(_diag(
+            diagnostics.append(diagnostic(
                 "error", "case_root_missing",
                 f"Run document launch.caseRoot does not exist: {case_root_raw}.",
-                "launch.caseRoot",
+                field="launch.caseRoot",
             ))
             resolved_case_root = None
         elif not resolved_case_root.is_dir():
-            diagnostics.append(_diag(
+            diagnostics.append(diagnostic(
                 "error", "case_root_not_a_directory",
                 f"Run document launch.caseRoot is not a directory: {case_root_raw}.",
-                "launch.caseRoot",
+                field="launch.caseRoot",
             ))
             resolved_case_root = None
         elif not _case_is_runnable(
             resolved_case_root, driver_context=driver_context,
         ):
-            diagnostics.append(_diag(
+            diagnostics.append(diagnostic(
                 "error", "case_root_not_a_runnable_case",
                 f"Run document launch.caseRoot is not runnable according to the "
                 f"selected adapter: {case_root_raw}.",
-                "launch.caseRoot",
+                field="launch.caseRoot",
             ))
             resolved_case_root = None
 
@@ -287,18 +288,18 @@ def build_execution_inputs(
     allowed_root = _allowed_runs_root()
     if allowed_root is not None:
         if resolved_case_root is not None and not resolved_case_root.is_relative_to(allowed_root):
-            diagnostics.append(_diag(
+            diagnostics.append(diagnostic(
                 "error", "case_root_outside_allowed_root",
                 f"launch.caseRoot resolves outside {ALLOWED_RUNS_ROOT_ENV} "
                 f"({allowed_root}): {resolved_case_root}.",
-                "launch.caseRoot",
+                field="launch.caseRoot",
             ))
         if resolved_output_dir is not None and not resolved_output_dir.is_relative_to(allowed_root):
-            diagnostics.append(_diag(
+            diagnostics.append(diagnostic(
                 "error", "output_dir_outside_allowed_root",
                 f"launch.outputDir resolves outside {ALLOWED_RUNS_ROOT_ENV} "
                 f"({allowed_root}): {resolved_output_dir}.",
-                "launch.outputDir",
+                field="launch.outputDir",
             ))
 
     # 6) Workflow state: prefer the document's snapshot, else derive from DAG.
@@ -309,7 +310,7 @@ def build_execution_inputs(
         except Exception as exc:
             workflow_state = None
             diagnostics.append(
-                _diag("error", "invalid_workflow_state", str(exc), "workflowState")
+                diagnostic("error", "invalid_workflow_state", str(exc), field="workflowState")
             )
     else:
         # Computed regardless of earlier errors so all diagnostics are gathered
@@ -340,15 +341,15 @@ def build_execution_inputs(
                 expected_artifacts=tuple(expected_artifacts),
             )
         except Exception as exc:
-            diagnostics.append(_diag(
+            diagnostics.append(diagnostic(
                 "error",
                 "workflow_state_resume_rejected",
                 f"Run document workflowState cannot be resumed: {exc}",
-                "workflowState",
+                field="workflowState",
             ))
 
     blocked = (
-        any(d["level"] == "error" for d in diagnostics)
+        any(d.level == "error" for d in diagnostics)
         or dag is None
         or workflow_state is None
         or resolved_case_root is None

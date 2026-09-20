@@ -11,9 +11,11 @@ import json
 import os
 import tempfile
 import unittest
+from dataclasses import fields
 from pathlib import Path
 from unittest import mock
 
+from omnidriver.core.planning_types import StrictDiagnostic
 from omnidriver.core.runtime.run_document_exec import (
     build_execution_inputs,
     load_run_document,
@@ -112,14 +114,14 @@ class TestBuildExecutionInputsDiagnostics(unittest.TestCase):
         doc = _minimal_doc(workflowDag=None)
         inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
         self.assertIsNone(inputs)
-        codes = {d["code"] for d in diagnostics}
+        codes = {d.code for d in diagnostics}
         self.assertIn("missing_workflow_dag", codes)
 
     def test_missing_launch_paths_are_not_executable(self) -> None:
         doc = _minimal_doc(launch={})
         inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
         self.assertIsNone(inputs)
-        codes = {d["code"] for d in diagnostics}
+        codes = {d.code for d in diagnostics}
         self.assertIn("missing_case_root", codes)
         self.assertIn("missing_output_dir", codes)
 
@@ -130,7 +132,7 @@ class TestBuildExecutionInputsDiagnostics(unittest.TestCase):
         })
         inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
         self.assertIsNone(inputs)
-        codes = {d["code"] for d in diagnostics}
+        codes = {d.code for d in diagnostics}
         self.assertIn("unknown_workflow_command", codes)
 
     def test_invalid_expected_artifact_is_reported(self) -> None:
@@ -139,38 +141,45 @@ class TestBuildExecutionInputsDiagnostics(unittest.TestCase):
         ])
         inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
         self.assertIsNone(inputs)
-        codes = {d["code"] for d in diagnostics}
+        codes = {d.code for d in diagnostics}
         self.assertIn("invalid_expected_artifact", codes)
 
     def test_non_dict_launch_does_not_raise(self) -> None:
         doc = _minimal_doc(launch="not-a-dict")
         inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)  # must not raise
         self.assertIsNone(inputs)
-        codes = {d["code"] for d in diagnostics}
+        codes = {d.code for d in diagnostics}
         self.assertIn("invalid_launch", codes)
 
     def test_non_iterable_expected_artifacts_does_not_raise(self) -> None:
         doc = _minimal_doc(expectedArtifacts=42)
         inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)  # must not raise
         self.assertIsNone(inputs)
-        codes = {d["code"] for d in diagnostics}
+        codes = {d.code for d in diagnostics}
         self.assertIn("invalid_expected_artifacts", codes)
 
     def test_malformed_workflow_state_is_reported(self) -> None:
         doc = _minimal_doc(workflowState={"bogus": "shape"})
         inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)  # must not raise
         self.assertIsNone(inputs)
-        codes = {d["code"] for d in diagnostics}
+        codes = {d.code for d in diagnostics}
         self.assertIn("invalid_workflow_state", codes)
 
     def test_every_diagnostic_has_required_keys(self) -> None:
+        # Corrected 2026-09-20 (Phase 0 Task 10): `build_execution_inputs`
+        # used to emit plain `{level, code, message, field}` dicts
+        # (`run_document_exec._diag`, no `source`); it now returns the one
+        # canonical shape, `core.planning_types.StrictDiagnostic`
+        # (`level, code, message, source, field`). See also
+        # test_cli_run_document.py::
+        # test_every_diagnostic_carries_the_same_five_fields for the same
+        # guard at the CLI/JSON boundary.
         doc = _minimal_doc(workflowDag=None, launch={})
         _inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
+        expected = {"level", "code", "message", "source", "field"}
         for d in diagnostics:
-            self.assertIn("level", d)
-            self.assertIn("code", d)
-            self.assertIn("message", d)
-            self.assertIn("field", d)
+            self.assertIsInstance(d, StrictDiagnostic)
+            self.assertEqual({f.name for f in fields(d)}, expected)
 
 
 class TestCaseRootValidation(unittest.TestCase):
@@ -183,7 +192,7 @@ class TestCaseRootValidation(unittest.TestCase):
             })
             inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
             self.assertIsNone(inputs)
-            codes = {d["code"] for d in diagnostics}
+            codes = {d.code for d in diagnostics}
             self.assertIn("case_root_missing", codes)
 
     def test_non_runnable_case_root_is_rejected(self) -> None:
@@ -196,7 +205,7 @@ class TestCaseRootValidation(unittest.TestCase):
             })
             inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
             self.assertIsNone(inputs)
-            codes = {d["code"] for d in diagnostics}
+            codes = {d.code for d in diagnostics}
             self.assertIn("case_root_not_a_runnable_case", codes)
 
     def test_canonical_paths_are_resolved_and_stored(self) -> None:
@@ -234,7 +243,7 @@ class TestAllowedRunsRoot(unittest.TestCase):
                  ):
                 inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
             self.assertIsNone(inputs)
-            codes = {d["code"] for d in diagnostics}
+            codes = {d.code for d in diagnostics}
             self.assertIn("case_root_outside_allowed_root", codes)
 
     def test_output_dir_outside_allowed_root_is_rejected(self) -> None:
@@ -255,7 +264,7 @@ class TestAllowedRunsRoot(unittest.TestCase):
                  ):
                 inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
             self.assertIsNone(inputs)
-            codes = {d["code"] for d in diagnostics}
+            codes = {d.code for d in diagnostics}
             self.assertIn("output_dir_outside_allowed_root", codes)
 
     def test_both_inside_allowed_root_is_accepted(self) -> None:

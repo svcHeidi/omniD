@@ -226,7 +226,7 @@ class SolverPlugin(Protocol):
         """
         ...
 
-    def validate_run_semantics(self, context: dict[str, Any]) -> tuple[Any, ...]:
+    def validate_run_semantics(self, context: dict[str, Any]) -> tuple[StrictDiagnostic, ...]:
         """Return solver-specific validation errors for a flattened config."""
         ...
 
