@@ -1358,6 +1358,23 @@ python -m pytest packages/omnidriver/tests/core/test_deferred_duplicate_intakes.
 
 `RunDocumentConfigurationCapability.schema()` is what core validates against; `OverrideSchemaCapability.config_schema()` is agent-facing documentation. Make the documentation derive from the validated schema rather than be authored separately, so they cannot diverge.
 
+**Resolve this isolation narrowing while you are here (found by the Phase 0
+review, 2026-09-20).** Phase 0 Task 12 made `_CapabilityManifestAdapter.manifest`
+a `cached_property`; Task 13 added `dict(...)` copies inside
+`CardiacFoamPlugin.get_capabilities`. Together they protect the module-level
+`IONIC_MODEL_CATALOG` — the copy happens before caching, so the real catalogue
+is never the cached object — but they narrow a second property: within one
+`DriverContext`, every `.manifest()` caller now shares one copy, where each
+previously got a fresh one. Three consumers call it per context
+(`dict_entries`, `strict_planning`, `introspection`), and the `dict()` wrapping
+at two of those copies only the top level, not `manifest["ionic_models"]`.
+
+No code mutates it today, so nothing breaks — but `DriverContext` exists to stop
+one operation affecting another's, and this weakens that within a context.
+Moving assembly into core removes the shared-mutable entirely: core builds the
+manifest from capability reads it already holds, so there is no plugin-owned
+dict to share. Verify that outcome rather than re-adding a defensive copy.
+
 - [ ] **Step 4: Move manifest assembly into core**
 
 `build_capability_manifest` currently takes arguments the plugin gathers. Change it to take the composed `PluginCapabilities` and read each declaration once. `CardiacFoamPlugin.get_capabilities` and `CardiacCorePlugin.get_capabilities` then return only what core cannot compose — the domain model catalogues — and core merges.
