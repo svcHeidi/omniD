@@ -35,3 +35,33 @@ def test_a_v1_plugin_with_no_hooks_gets_the_empty_fallback(tmp_path: Path) -> No
     context = driver_context(MinimalTestPlugin(), source="test")
     assert context.capabilities.case_provenance.required_inputs(tmp_path, {}, "0") == ()
     assert context.capabilities.case_provenance.generated_output_globs(tmp_path, {}, "0") == ()
+
+
+def test_extra_provenance_paths_is_annotated_as_dependencies():
+    """A bare Path can only omit, and omission reads as nothing-to-check.
+
+    That is the gap `RuntimeDependency` was introduced to close, so the
+    adapter must not narrow the contract back to `tuple[Path, ...]`.
+    """
+    import typing
+    from omnidriver.core import plugin_capabilities
+
+    hints = typing.get_type_hints(
+        plugin_capabilities._RuntimeEvidenceAdapter.extra_provenance_paths,
+        include_extras=True,
+    )
+    assert "RuntimeDependency" in str(hints["return"]), (
+        f"annotation is {hints['return']!r}, not a RuntimeDependency tuple"
+    )
+
+
+def test_capability_manifest_does_not_hand_out_a_live_catalog():
+    """`get_utility_manifests` was hardened against this; the model
+    catalogues were not, and one of them is mutated at import."""
+    import pytest
+    pytest.importorskip("omnidriver.cardiacfoam")
+    from omnidriver.cardiacfoam import ionic_model_catalog
+    from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+
+    manifest = CardiacFoamPlugin().get_capabilities()
+    assert manifest["ionic_models"] is not ionic_model_catalog.IONIC_MODEL_CATALOG

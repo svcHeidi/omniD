@@ -223,8 +223,13 @@ class CardiacFoamPlugin:
             | frozenset(self.get_case_runtime_conventions().case_entrypoints),
         )
         manifest["heterogeneity_models"] = HETEROGENEITY_MODELS
-        manifest["ionic_models"] = IONIC_MODEL_CATALOG
-        manifest["active_tension_models"] = ACTIVE_TENSION_MODEL_CATALOG
+        # Copy on the way out, as get_utility_manifests() already does: these
+        # are the live module-level catalogues, and IONIC_MODEL_CATALOG is
+        # additionally written into at import by the BATCHED_MODELS loop. A
+        # shallow copy is enough -- the values are frozen dataclasses, so the
+        # only hazard is the mutable dict itself.
+        manifest["ionic_models"] = dict(IONIC_MODEL_CATALOG)
+        manifest["active_tension_models"] = dict(ACTIVE_TENSION_MODEL_CATALOG)
         manifest["solver_compatibility_rules"] = SOLVER_COMPATIBILITY_RULES
         return manifest
 

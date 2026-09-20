@@ -502,6 +502,11 @@ class CaseFileContractCapability(Protocol):
     status, since a file can legitimately be conditional rather than always
     required.
 
+    ``get_profile`` deliberately backs this capability AND
+    ``CxxMappingCapability``: one declaration, two consumers with different
+    concerns. Recorded 2026-09-20 because it reads as a duplicate intake and
+    is not one.
+
     :adapts: get_profile, get_config_resolution_description
     :consumed-by: omnidriver/core/runtime/strict_audit.py, omnidriver/core/tutorial_contracts.py, omnidriver/core/runtime/provenance_inputs.py
     :fallback: legacy_describe_config_resolution
@@ -1258,7 +1263,7 @@ class _RuntimeEvidenceAdapter:
         hook = getattr(self.plugin, "get_telemetry_source_globs", None)
         return tuple(hook(command)) if callable(hook) else ()
 
-    def extra_provenance_paths(self, case_root: Path) -> tuple[Path, ...]:
+    def extra_provenance_paths(self, case_root: Path) -> tuple[RuntimeDependency, ...]:
         hook = getattr(self.plugin, "get_extra_provenance_paths", None)
         return tuple(hook(case_root)) if callable(hook) else ()
 

@@ -94,15 +94,6 @@ def describe_tutorial_contract(
         "solver_required_files": _existing_relpaths(case_root, solver_required_files),
         "conditional_files": _existing_relpaths(case_root, conditional_files),
         "declared_files": _existing_relpaths(case_root, declared_files),
-        # These legacy fields remain for API compatibility. Their former
-        # values were OpenFOAM-specific discovery; adapters that own mesh,
-        # reference, or post-processing semantics must report them through a
-        # dedicated adapter capability rather than Core guessing by filename.
-        "mesh_files": [],
-        "constant_files": [],
-        "system_files": [],
-        "reference_cases": [],
-        "postprocess_modules": [],
         "case_parameters": _case_parameter_contract(spec),
         "metadata": spec.metadata,
     }
