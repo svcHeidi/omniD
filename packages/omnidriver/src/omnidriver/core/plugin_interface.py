@@ -2,9 +2,9 @@
 
 Two Protocol classes define what a solver plugin must implement:
 
-- :class:`SolverPlugin` — the plugin contract; 27 required members,
-  enforced in full by :func:`validate_plugin`.
-- :class:`SolverPluginOptionalHooks` — 14 probe-based optional hooks that
+- :class:`SolverPlugin` — the plugin contract, enforced in full by
+  :func:`validate_plugin`.
+- :class:`SolverPluginOptionalHooks` — the probe-based optional hooks that
   unlock additional capabilities (sweeps, mesh diagnostics, report catalogs,
   override scopes, …).  **Read this class** to discover all extension points
   before deciding your plugin is complete.
@@ -19,6 +19,11 @@ Environment and solver adapters implement this contract directly. See
 2026-09-14: this previously pointed at
 ``.agents/skills/driverfoam-plugin-builder/SKILL.md``, a path that lived
 in the pre-migration cardiacFOAM tree and exists in no repository now.
+2026-09-20: the ``SolverPlugin`` bullet previously said "27 required
+members." That count went stale the moment :func:`_required_plugin_members`
+started deriving the required set from the capability seams' ``:status:``
+tiers instead of a hand-maintained literal; counting members in prose is
+exactly what rotted here, so the number is not restated.
 """
 
 # REQUIRED, not stylistic. Several annotations below name types imported only
@@ -280,11 +285,16 @@ class SolverPluginOptionalHooks(Protocol):
 
     Every member here is probed with ``getattr`` by an adapter in
     :mod:`omnidriver.core.plugin_capabilities`. None is listed in
-    ``_REQUIRED_PLUGIN_MEMBERS`` or ``_REQUIRED_V2_MEMBERS``, so this class is
-    inert at load time: ``validate_plugin`` never consults it, and declaring or
-    omitting any of these changes no plugin's loading behaviour.
+    ``_REQUIRED_PLUGIN_MEMBERS``, so this class is inert at load time:
+    ``validate_plugin`` never consults it, and declaring or omitting any of
+    these changes no plugin's loading behaviour.
 
-    **Why this class exists.** Until it did, these fifteen hooks appeared
+    **Corrected 2026-09-20:** this previously also named
+    ``_REQUIRED_V2_MEMBERS``, a constant that exists in no module -- it was
+    referenced only here. It named two hook counts, 14 and fifteen, where the
+    class declares neither.
+
+    **Why this class exists.** Until it did, these hooks appeared
     nowhere in the plugin contract. They were reachable only by reading the
     private ``_*Adapter`` bodies, so a plugin author reading this file could
     not discover that the extension points existed at all -- while *not*
