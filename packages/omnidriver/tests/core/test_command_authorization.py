@@ -61,3 +61,46 @@ def test_generic_plugin_authorizes_neither_kind_of_command() -> None:
     auth = driver_context(MinimalTestPlugin(), source="test:commands").capabilities.command_authorization
     assert auth.solver_commands() == frozenset()
     assert auth.auxiliary_commands() == frozenset()
+
+
+def test_mpi_wrapped_payload_is_authorized() -> None:
+    """An mpirun wrapper must not launder an unauthorized binary.
+
+    ``mpirun`` is in CORE_NEUTRAL_COMMANDS, so before 2026-09-20 the wrapped
+    program was never checked against solver_commands(). It was
+    provenance-visible (fingerprinted by _unwrap_mpi_program for the run's
+    dependency record) but allowlist-invisible.
+    """
+    from omnidriver.core.runtime import workflow
+
+    context = driver_context(MinimalTestPlugin(), source="test:commands")
+    dag = {"steps": [{
+        "id": "solve",
+        "command": "mpirun",
+        "args": ["-np", "4", "definitelyNotAuthorized", "-parallel"],
+    }]}
+    problems = workflow.validate_workflow_commands(dag, driver_context=context)
+    assert any(
+        getattr(p, "code", None) == "unauthorized_mpi_payload"
+        for p in problems
+    ), f"expected an unauthorized_mpi_payload diagnostic, got {problems}"
+
+
+def test_mpi_wrapped_authorized_solver_is_accepted() -> None:
+    from omnidriver.core.runtime import workflow
+
+    context = driver_context(
+        MinimalTestPlugin(solver_commands={"authorized-solver"}),
+        source="test:commands",
+    )
+    solver = next(iter(context.capabilities.command_authorization.solver_commands()))
+    dag = {"steps": [{
+        "id": "solve",
+        "command": "mpirun",
+        "args": ["-np", "4", solver, "-parallel"],
+    }]}
+    problems = workflow.validate_workflow_commands(dag, driver_context=context)
+    assert not any(
+        getattr(p, "code", None) == "unauthorized_mpi_payload"
+        for p in problems
+    )

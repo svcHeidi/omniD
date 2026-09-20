@@ -53,11 +53,24 @@ class TestValidateWorkflowCommands(unittest.TestCase):
 
     def test_mpirun_is_allowed(self) -> None:
         # run_in_parallel=True wraps the solve step as
-        # `mpirun -np <N> cardiacFoam -parallel`; only the bare command is
-        # allowlist-checked (args are not re-validated as commands), same
-        # reasoning as the other explicit workflow-step entries above.
-        dag = {"steps": [{"id": "s", "command": "mpirun", "args": ["-np", "6", "cardiacFoam", "-parallel"]}]}
+        # `mpirun -np <N> <solver> -parallel`. mpirun itself is core-neutral,
+        # but since 2026-09-20 the program it wraps is checked against the
+        # same allowlist as a bare step command (test_mpirun_wrapping_an_
+        # unauthorized_program_is_rejected below covers the negative case),
+        # so the wrapped name here must be one this context actually
+        # authorizes -- `checkMesh`, already declared in setUp.
+        dag = {"steps": [{"id": "s", "command": "mpirun", "args": ["-np", "6", "checkMesh", "-parallel"]}]}
         self.assertEqual(validate_workflow_commands(dag, driver_context=self.context), ())
+
+    def test_mpirun_wrapping_an_unauthorized_program_is_rejected(self) -> None:
+        # Corrected 2026-09-20: this case used to assert the opposite --
+        # that an mpirun-wrapped, unauthorized program was silently accepted
+        # because only the bare `mpirun` command was allowlist-checked. That
+        # was the hole; see workflow._is_authorized and
+        # test_command_authorization.py::test_mpi_wrapped_payload_is_authorized.
+        dag = {"steps": [{"id": "s", "command": "mpirun", "args": ["-np", "6", "cardiacFoam", "-parallel"]}]}
+        codes = {d.code for d in validate_workflow_commands(dag, driver_context=self.context)}
+        self.assertIn("unauthorized_mpi_payload", codes)
 
     def test_unknown_command_is_rejected(self) -> None:
         dag = {"steps": [{"id": "s", "command": "rm"}]}

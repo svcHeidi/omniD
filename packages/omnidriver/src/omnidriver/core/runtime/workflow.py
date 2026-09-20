@@ -478,6 +478,45 @@ def workflow_output_artifacts(
     )
 
 
+def _is_authorized(command: str, driver_context: Any) -> bool:
+    """Return whether ``command`` is in the accepted command surface.
+
+    This is the ONE definition of "authorized" for a bare command name:
+    the union of :data:`CORE_NEUTRAL_COMMANDS`, :func:`case_script_commands`,
+    and -- when a ``driver_context`` is given -- the commands its
+    ``CommandAuthorizationCapability`` grants (``environment_commands``,
+    ``solver_commands() | auxiliary_commands()``, a ``utility_manifests()``
+    entry that declares ``produces``, and ``is_installed_environment_command``
+    as a runtime fallback). ``validate_workflow_commands`` calls this for
+    both a step's own command and, when that command is an MPI launcher, the
+    program it wraps -- a second, independent notion of "authorized" for the
+    wrapped program is exactly how it escaped review (an ``mpirun`` step was
+    accepted from :data:`CORE_NEUTRAL_COMMANDS` alone, and the binary it
+    wrapped was never checked against this surface at all).
+
+    Preserves the original per-step precedence: a utility manifest, once
+    present, decides the outcome for that command on its own (``produces``
+    or not) and is never overridden by ``is_installed_environment_command``.
+    """
+    if command in CORE_NEUTRAL_COMMANDS or command in case_script_commands(driver_context):
+        return True
+    if driver_context is None:
+        return False
+    authorization = driver_context.capabilities.command_authorization
+    # Authorization is the union: both kinds of plugin command may run. The
+    # split between solver and auxiliary matters only to the
+    # artifact-producer heuristic in normalize_workflow_dag, not here.
+    if (
+        command in authorization.environment_commands()
+        or command in authorization.solver_commands() | authorization.auxiliary_commands()
+    ):
+        return True
+    manifest = authorization.utility_manifests().get(command)
+    if manifest is not None:
+        return bool(manifest.produces)
+    return authorization.is_installed_environment_command(command)
+
+
 def validate_workflow_commands(
     workflow_dag: dict[str, Any] | None,
     *,
@@ -490,30 +529,27 @@ def validate_workflow_commands(
     ``CommandAuthorizationCapability``, :func:`case_script_commands` (the
     active adapter's declared case scripts and entrypoints), that context's
     utility manifests that declare ``produces``,
-    and applications the active environment recognizes at runtime. Without a
-    ``driver_context`` no environment, plugin command, or utility is
-    authorized, leaving only core-neutral commands and case scripts. An
-    explicit path form (``command`` containing ``/``) is allowed only as
-    ``./<name>`` where ``<name>`` is an adapter-declared case script — this
-    keeps the gate in parity with ``_resolve_command`` while
+    and applications the active environment recognizes at runtime -- see
+    :func:`_is_authorized`, the single function that decides this for a bare
+    command name. Without a ``driver_context`` no environment, plugin
+    command, or utility is authorized, leaving only core-neutral commands and
+    case scripts. An explicit path form (``command`` containing ``/``) is
+    allowed only as ``./<name>`` where ``<name>`` is an adapter-declared case
+    script — this keeps the gate in parity with ``_resolve_command`` while
     still refusing arbitrary ``./script`` and absolute paths. This is the one
     owner of the command allowlist; both ``strict_plan`` and the run-document
     adapter call it so neither can drift. Runs on the *normalized* DAG, where
     ``command`` is the bare executable (args already split out).
+
+    A step whose command is an MPI launcher (:data:`_MPI_LAUNCHERS`) is
+    additionally checked on the program its args wrap: an authorized
+    launcher does not authorize an arbitrary wrapped binary, since
+    :func:`_is_authorized` is applied to that program too.
     """
     case_scripts = case_script_commands(driver_context)
     if driver_context is not None:
-        authorization = driver_context.capabilities.command_authorization
-        # Authorization is the union: both kinds of plugin command may run.
-        # The split matters only to the artifact-producer heuristic above.
-        plugin_commands = (
-            authorization.solver_commands() | authorization.auxiliary_commands()
-        )
-        environment_commands = authorization.environment_commands()
-        utilities = authorization.utility_manifests()
+        utilities = driver_context.capabilities.command_authorization.utility_manifests()
     else:
-        plugin_commands = frozenset()
-        environment_commands = frozenset()
         utilities = {}
 
     diagnostics: list[WorkflowDiagnostic] = []
@@ -544,28 +580,31 @@ def validate_workflow_commands(
                 field=step_id,
             ))
             continue
-        if (
-            command in CORE_NEUTRAL_COMMANDS
-            or command in environment_commands
-            or command in plugin_commands
-            or command in case_scripts
-        ):
+        if _is_authorized(command, driver_context):
+            if command in _MPI_LAUNCHERS:
+                payload = _unwrap_mpi_program(tuple(step.get("args", ()) or ()))
+                if payload is not None and not _is_authorized(payload, driver_context):
+                    diagnostics.append(WorkflowDiagnostic(
+                        level="error",
+                        code="unauthorized_mpi_payload",
+                        message=(
+                            f"step {step_id or '<unknown>'!r} runs {payload!r} under "
+                            "an MPI launcher, and that program is not in this "
+                            "plugin's authorized command set"
+                        ),
+                        field=f"{step_id}.args" if step_id else "args",
+                    ))
             continue
         manifest = utilities.get(command)
         if manifest is not None:
-            if manifest.produces:
-                continue
+            # Present but declares no ``produces``: _is_authorized already
+            # decided this command is not authorized on that basis.
             diagnostics.append(WorkflowDiagnostic(
                 level="error",
                 code="utility_without_produces",
                 message=f"Utility {command!r} has no authoritative produces entries.",
                 field=step_id,
             ))
-            continue
-        if (
-            driver_context is not None
-            and authorization.is_installed_environment_command(command)
-        ):
             continue
         diagnostics.append(WorkflowDiagnostic(
             level="error",
