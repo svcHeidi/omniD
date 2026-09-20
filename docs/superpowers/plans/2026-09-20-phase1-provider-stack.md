@@ -33,8 +33,8 @@
 | 1 · `provides:`/`requires:` in the profile | done | `d901ea9` |
 | 2 · declared-vs-implemented guard | done | `0326899` |
 | 3 · topological ordering | done | `3b451fa` |
-| 4 · the composition rules, as failing tests | **next** | — |
-| 5 · `ProviderIdentity` / `StackIdentity` | pending | — |
+| 4 · the composition rules, as failing tests | done (red by design) | `10fea49` |
+| 5 · `ProviderIdentity` / `StackIdentity` | **next** | — |
 | 6 · the composition mechanism (spike resolved: **own it**) | pending | — |
 | 7 · `DriverContext.providers` | pending | — |
 | 8 · extend the dependency boundary to adapters | pending | — |
@@ -43,6 +43,12 @@
 | 11 · `legacy_dict_key_scanner` gets a capability | pending | — |
 | 12 · document the composition contract | pending | — |
 | 13 · all four shapes | pending | — |
+
+**The suite is intentionally red from Task 4 until Task 6.** 13 tests in
+`test_provider_composition_rules.py` fail on `provider_stack.compose` not
+existing. That is the design: they are the specification Task 6 implements
+against, and Task 6 must turn them green WITHOUT editing them. Any other
+failure in the meantime is a real regression.
 
 Re-audited against post-Phase-0 code on 2026-09-20; five corrections applied
 (Tasks 6, 7 and 9). Tasks 1-5, 8 and 10-13 were confirmed still correct as
