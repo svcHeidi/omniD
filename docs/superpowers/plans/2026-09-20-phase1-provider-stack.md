@@ -31,8 +31,8 @@
 | task | state | commit |
 |---|---|---|
 | 1 · `provides:`/`requires:` in the profile | done | `d901ea9` |
-| 2 · declared-vs-implemented guard | **next** | — |
-| 3 · topological ordering | pending | — |
+| 2 · declared-vs-implemented guard | done | `0326899` |
+| 3 · topological ordering | **next** | — |
 | 4 · the six composition rules, as failing tests | pending | — |
 | 5 · `ProviderIdentity` / `StackIdentity` | pending | — |
 | 6 · the composition mechanism (spike resolved: **own it**) | pending | — |
@@ -1299,6 +1299,22 @@ provides:
   - config_value
   - case_files
 ```
+
+**Do NOT generate `provides:` from `implemented_capabilities()`.** Measured
+2026-09-20 by Phase 1 Task 2: that function reports capabilities by **presence**
+of their members, which is right for catching a misspelled hook but wrong for
+declaring intent. It reports 17 capabilities for `openfoam-environment` — while
+Phase 0 Task 4 measured nine of that adapter's members as **hollow stubs**
+returning `frozenset()` and `{}`.
+
+A `provides:` entry means "this provider genuinely answers this capability". A
+stub declared there lands in the stack digest's `resolutions` record as the
+provider that answered — which is a false provenance claim, and the digest is
+what makes a run reproducible.
+
+So: cross-reference the stub census below against `implemented_capabilities()`,
+and declare only capabilities the provider really answers. Where the two
+disagree, the census wins and the stub gets deleted.
 
 Verify that list against `provider_stack.implemented_capabilities(OpenFOAMEnvironmentPlugin())` rather than trusting it — Task 2's guard errors on any it does not fully implement.
 
