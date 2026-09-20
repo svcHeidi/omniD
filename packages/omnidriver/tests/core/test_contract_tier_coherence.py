@@ -7,8 +7,6 @@ nine `legacy_*` fallbacks unreachable while the generated seam table still
 advertised them.
 """
 
-import pytest
-
 from omnidriver.core import capability_seams
 from omnidriver.core import plugin_interface
 
@@ -42,12 +40,6 @@ def test_no_required_member_has_a_fallback():
     )
 
 
-@pytest.mark.xfail(
-    reason="fixed by Task 3 (delete unreachable fallbacks) and Task 4 "
-           "(derive _REQUIRED_PLUGIN_MEMBERS from tiers); see "
-           "docs/superpowers/plans/2026-09-20-phase0-contract-coherence.md",
-    strict=True,
-)
 def test_required_tier_matches_the_validator():
     """`_REQUIRED_PLUGIN_MEMBERS` must be derived from the tiers, not parallel."""
     required = capability_seams.members_by_tier()["required"]

@@ -530,35 +530,31 @@ class SolverPluginOptionalHooks(Protocol):
 SUPPORTED_PLUGIN_API_VERSIONS: frozenset[str] = frozenset({"2"})
 
 
-_REQUIRED_PLUGIN_MEMBERS = (
+#: Identity properties, which are strings rather than capability members and
+#: therefore appear in no capability's ``:adapts:`` list.
+_IDENTITY_MEMBERS = (
     "plugin_name",
     "plugin_id",
     "plugin_version",
     "plugin_api_version",
-    "get_profile",
-    "get_dict_entries",
-    "get_dictionary_catalog",
-    "get_dict_groups",
-    "get_capabilities",
-    "get_tutorial_catalog",
-    "get_tutorial_displays",
-    "validate_configuration",
-    "validate_run_semantics",
-    "predict_data_artifacts",
-    "get_solver_commands",
-    "get_auxiliary_commands",
-    "get_utility_manifests",
-    "get_utility_roots",
-    "resolve_case_models",
-    "get_samplable_fields",
-    "get_override_schema",
-    "get_run_document_config_schema",
-    "get_dict_entry_catalog",
-    "get_solve_step_commands",
-    "get_telemetry_source_globs",
-    "get_extra_provenance_paths",
-    "get_artifact_value_reader",
 )
+
+
+def _required_plugin_members() -> tuple[str, ...]:
+    """The contract members ``validate_plugin`` rejects a plugin for lacking.
+
+    Derived from the capability seams' ``:status:`` tiers rather than
+    hand-maintained beside them. Before 2026-09-20 these were two independent
+    lists and they disagreed: the tuple named 27 members while the
+    ``SolverPlugin`` Protocol declared 29, and the two it omitted were exactly
+    the environment ones.
+    """
+    from .capability_seams import members_by_tier
+
+    return _IDENTITY_MEMBERS + tuple(sorted(members_by_tier()["required"]))
+
+
+_REQUIRED_PLUGIN_MEMBERS = _required_plugin_members()
 
 _PLUGIN_ID_RE = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?")
 

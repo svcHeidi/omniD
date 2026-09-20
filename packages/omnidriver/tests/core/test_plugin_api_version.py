@@ -42,23 +42,29 @@ def test_declaring_the_contract_without_implementing_it_is_rejected() -> None:
     first called the missing method."""
 
     class HalfMigratedPlugin(MinimalTestPlugin):
-        # Drops one required member.
-        get_artifact_value_reader = None
+        # Drops one required member. Must be a member the seam tiers still
+        # mark `required` -- Task 4 (2026-09-20) demoted thirteen members
+        # (including the former `get_artifact_value_reader`) to
+        # `optional-neutral`, so a plugin lacking one of those is no longer
+        # rejected here.
+        get_dictionary_catalog = None
 
     with pytest.raises(TypeError, match="does not implement the plugin contract"):
         driver_context(HalfMigratedPlugin(), source="test")
 
 
 def test_the_shape_check_names_what_is_missing() -> None:
+    # Both members must be `required` per the seam tiers -- see the note in
+    # test_declaring_the_contract_without_implementing_it_is_rejected above.
     class MissingTwo(MinimalTestPlugin):
-        get_solve_step_commands = None
-        get_utility_roots = None
+        get_dict_groups = None
+        get_tutorial_catalog = None
 
     with pytest.raises(TypeError) as excinfo:
         driver_context(MissingTwo(), source="test")
     message = str(excinfo.value)
-    assert "get_solve_step_commands" in message
-    assert "get_utility_roots" in message
+    assert "get_dict_groups" in message
+    assert "get_tutorial_catalog" in message
 
 
 def test_neutral_plugin_builds_an_explicit_context() -> None:
