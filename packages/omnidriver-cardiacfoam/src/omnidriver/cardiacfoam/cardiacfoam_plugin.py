@@ -167,8 +167,15 @@ class CardiacFoamPlugin:
     def get_dict_entries(self) -> tuple[DictEntry, ...]:
         """
         Aggregate and return all dictionary entries specific to cardiacFoam.
+
+        Must stay in step with :meth:`get_dictionary_catalog` -- both are
+        ``DictionaryCatalogCapability`` accessors over the same catalogue, so
+        every source folded into the catalog (``PHYSICS_PROPERTY_ENTRIES``,
+        each electro-property group, and ``CONTROL_DICT_ENTRIES``) must be
+        folded in here too.
         """
         entries: list[DictEntry] = list(PHYSICS_PROPERTY_ENTRIES)
+        entries.extend(CONTROL_DICT_ENTRIES)
         for group in self.get_dict_groups().values():
             entries.extend(group)
         return tuple(entries)

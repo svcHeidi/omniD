@@ -63,3 +63,59 @@ skip_without_monorepo = pytest.mark.skipif(
         "Clone the full repository or run with --cases-root to enable this test."
     ),
 )
+
+
+def _default_adapter_resolves() -> bool:
+    """Whether exactly one ``omnidriver.plugins`` adapter is installed.
+
+    ``default_driver_context()`` raises ``LookupError`` with zero adapters
+    installed (e.g. the ``test-core`` CI job, which installs none) or with
+    two or more (e.g. ``test-cardiac``/``test-cardiaccore``, which each
+    install two: a solver adapter plus the ``omnidriver-openfoam`` dependency
+    it pulls in, which registers its own entry point). Computed once at
+    collection time, matching ``repo_root``/``monorepo_root`` above.
+    """
+    from omnidriver.core.plugin_interface import default_driver_context
+
+    try:
+        default_driver_context()
+    except LookupError:
+        return False
+    return True
+
+
+#: Apply to any test module whose CLI/RunDocument round-trip calls omit
+#: ``--plugin`` and rely on ``default_driver_context()``'s implicit
+#: resolution -- which only succeeds when exactly one adapter is installed.
+#: Distinct from ``skip_without_monorepo``: this is about how many adapter
+#: *packages* are installed, not whether a monorepo checkout exists.
+skip_without_single_adapter = pytest.mark.skipif(
+    not _default_adapter_resolves(),
+    reason=(
+        "Requires exactly one omnidriver.plugins adapter installed so "
+        "default_driver_context() has an unambiguous answer; this test's "
+        "CLI calls omit --plugin. See test-openfoam's CI job."
+    ),
+)
+
+
+@pytest.fixture
+def driver_context_for_installed_plugins() -> list:
+    """A :class:`DriverContext` per discoverable plugin, skipping when none is
+    installed.
+
+    ``plugin_discovery.discover_plugins()`` keys on entry-point name but its
+    values are ``EntryPoint`` objects, not plugin classes -- go through
+    ``load_discovered_plugin`` (which loads the class *and* builds the
+    context via ``driver_context()``) rather than calling ``entry_point()``
+    a second time.
+    """
+    from omnidriver.core import plugin_discovery
+
+    discovered = plugin_discovery.discover_plugins()
+    if not discovered:
+        pytest.skip("no omnidriver.plugins entry points installed")
+    return [
+        plugin_discovery.load_discovered_plugin(name)
+        for name in discovered
+    ]

@@ -14,6 +14,7 @@ from foamlib import FoamFile
 
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 from omnidriver.openfoam.dict_builder import populate_values
+from omnidriver.cardiacfoam.common_dict_entries import CONTROL_DICT_ENTRIES
 from omnidriver.cardiacfoam.dict_builder import (
     build_electro_properties,
     build_physics_properties,
@@ -21,10 +22,18 @@ from omnidriver.cardiacfoam.dict_builder import (
     resolve_context,
     select_applicable_entries,
 )
+from omnidriver.cardiacfoam.own_context import own_driver_context
 from omnidriver.core.specs.validation import primary_phase, slot_key
 
 # This plugin owns its phase vocabulary; see CardiacFoamPlugin.get_phases().
 _PHASES: tuple[str, ...] = ("anatomy", "physics", "stimulus", "solver")
+
+#: Namespaced role the adapter's profile uses for its controlDict rule (see
+#: ``plugin.yaml``'s ``case_profile.dictionaries``). Matched by role, not by
+#: a literal ``system/controlDict`` path, so this stays correct if the
+#: profile ever relocates the file -- the profile is the one place that fact
+#: is allowed to live.
+_CONTROL_DICT_ROLE = "openfoam.control_dict"
 
 
 def _read_physics_type(path: Path) -> str | None:
@@ -34,6 +43,75 @@ def _read_physics_type(path: Path) -> str | None:
         return str(FoamFile(path)["type"])
     except (KeyError, ValueError):
         return None
+
+
+def _read_control_dict_values(
+    case_root: Path, driver_context: Any,
+) -> tuple[dict[str, str], tuple[StrictDiagnostic, ...]]:
+    """Read the solver-phase values the case's controlDict actually carries.
+
+    Resolved BY ROLE, never by literal path: the adapter declares
+    ``openfoam.control_dict`` in its profile, and
+    ``CardiacFoamPlugin.get_selected_start_time`` already resolves the same
+    file the same way. Spelling ``system/controlDict`` here would be a
+    second declaration of a fact the profile already owns.
+
+    A key silently defaulted would make the RunDocument's ``config`` lie
+    about what the run actually used -- ``build_control_dict`` takes
+    ``delta_t``/``end_time``/``write_interval`` as parameters written into
+    the case, so the case's own controlDict is the only source of truth for
+    them. Every absence is reported, never defaulted.
+    """
+    diagnostics: list[StrictDiagnostic] = []
+    values: dict[str, str] = {}
+
+    rule = next(
+        (
+            r for r in driver_context.capabilities.case_files.all_rules()
+            if r.role == _CONTROL_DICT_ROLE
+        ),
+        None,
+    )
+    if rule is None:
+        diagnostics.append(diagnostic(
+            "error",
+            "missing_control_dict_role",
+            f"No case_files rule in this plugin's profile declares role "
+            f"{_CONTROL_DICT_ROLE!r}",
+        ))
+        return values, tuple(diagnostics)
+
+    control_dict_path = case_root / rule.path
+    if not control_dict_path.exists():
+        diagnostics.append(diagnostic(
+            "error",
+            "missing_control_dict",
+            f"Missing controlDict at {control_dict_path}",
+            source=str(control_dict_path),
+        ))
+        return values, tuple(diagnostics)
+
+    # TODO(2026-09-20-phase0-contract-coherence.md Task 9): route this
+    # through driver_context.capabilities.config_value once
+    # ConfigValueCapability is a real seam; call the adapter's own reader
+    # directly until then, the same reader get_config_value_reader() wraps.
+    from omnidriver.openfoam.mutators import read_foam_entry
+
+    for entry in CONTROL_DICT_ENTRIES:
+        key = entry.driver_path
+        value = read_foam_entry(control_dict_path, key)
+        if value is None:
+            diagnostics.append(diagnostic(
+                "error",
+                "missing_control_dict_value",
+                f"Could not read {key!r} from {control_dict_path}",
+                source=str(control_dict_path),
+                field=key,
+            ))
+        else:
+            values[key] = value
+
+    return values, tuple(diagnostics)
 
 
 def build_config(spec) -> tuple[dict[str, dict[str, Any]], tuple[StrictDiagnostic, ...]]:
@@ -102,5 +180,11 @@ def build_config(spec) -> tuple[dict[str, dict[str, Any]], tuple[StrictDiagnosti
             diagnostics.append(diagnostic(
                 "error", "unparseable_electro_properties", str(exc), source=str(electro_path),
             ))
+
+    control_dict_values, control_dict_diagnostics = _read_control_dict_values(
+        case_root, own_driver_context(),
+    )
+    config["solver"].update(control_dict_values)
+    diagnostics.extend(control_dict_diagnostics)
 
     return config, tuple(diagnostics)

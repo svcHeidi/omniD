@@ -183,3 +183,21 @@ class TestCoRequiredWithEvaluation(unittest.TestCase):
                 "beta requires gamma to be set as well.",
             ],
         )
+
+
+def test_entries_and_catalog_agree(driver_context_for_installed_plugins):
+    """One capability must not give two answers.
+
+    `get_dict_entries()` and `get_dictionary_catalog().entries` are both
+    `DictionaryCatalogCapability`. A consumer should not have to know which
+    accessor sees the whole catalogue.
+    """
+    for context in driver_context_for_installed_plugins:
+        dictionaries = context.capabilities.dictionaries
+        flat = {entry.driver_path for entry in dictionaries.entries()}
+        catalogued = {entry.driver_path for entry in dictionaries.catalog().entries}
+        assert flat == catalogued, (
+            f"{context.identity.id}: entries() and catalog() disagree; "
+            f"missing from entries()={sorted(catalogued - flat)} "
+            f"missing from catalog()={sorted(flat - catalogued)}"
+        )
