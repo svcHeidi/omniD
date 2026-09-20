@@ -149,26 +149,18 @@ class OpenFOAMEnvironmentPlugin:
             dict_relpaths=dict_relpaths,
         )
 
-    def apply_overrides(self, overrides, *, case_root):
+    def apply_overrides(self, overrides, *, case_root, driver_context):
         from .apply_overrides import apply_overrides
 
         return apply_overrides(
-            overrides,
-            case_root=case_root,
-            driver_context=make_driver_context(
-                self, source="adapter:openfoam-environment"
-            ),
+            overrides, case_root=case_root, driver_context=driver_context,
         )
 
-    def get_override_target_paths(self, overrides, *, case_root):
+    def get_override_target_paths(self, overrides, *, case_root, driver_context):
         from .apply_overrides import override_target_paths
 
         return override_target_paths(
-            overrides,
-            case_root=case_root,
-            driver_context=make_driver_context(
-                self, source="adapter:openfoam-environment"
-            ),
+            overrides, case_root=case_root, driver_context=driver_context,
         )
 
     def inspect_effective_configuration(self, *, case_root, execution_env=None):

@@ -467,22 +467,28 @@ class SolverPluginOptionalHooks(Protocol):
         ...
 
     # -- OverrideScopeCapability ---------------------------------------------
-    def apply_overrides(self, overrides: Any, *, case_root: "Path") -> None:
+    def apply_overrides(
+        self, overrides: Any, *, case_root: "Path", driver_context: Any,
+    ) -> tuple[dict[str, Any], ...]:
         """Validate and apply a ``--apply`` override document to a case.
 
         One call, not two: core has only ever validated and applied together,
         and separating them would let a caller apply without validating. Raise
-        a ``ValueError`` subclass to reject. Absent -> applying overrides is
+        a ``ValueError`` subclass to reject. ``driver_context`` is the
+        caller's context -- an adapter must thread it through, not build a
+        substitute from itself, or it silently discards whatever solver
+        semantics the caller carried. Absent -> applying overrides is
         unsupported for this adapter."""
         ...
 
     def get_override_target_paths(
-        self, overrides: Any, *, case_root: "Path",
+        self, overrides: Any, *, case_root: "Path", driver_context: Any,
     ) -> tuple["Path", ...]:
         """Return every file ``apply_overrides`` may mutate, without writing.
 
         Required when a plugin supplies its own mutator so core can persist
-        exact before-images before publishing an applying transaction."""
+        exact before-images before publishing an applying transaction.
+        ``driver_context`` is the caller's context (see ``apply_overrides``)."""
         ...
 
     def inspect_effective_configuration(

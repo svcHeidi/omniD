@@ -1297,14 +1297,19 @@ class _OverrideScopeAdapter:
     ) -> tuple[dict[str, Any], ...]:
         """Apply adapter-owned overrides, or leave them unsupported.
 
-        The context is passed so an adapter can resolve its own transaction
-        and provenance requirements. Core does not delegate to a solver-
-        specific mutator when the hook is absent.
+        The context is passed through to the hook -- not just held here --
+        so an adapter can resolve its own transaction and provenance
+        requirements under the caller's context rather than substituting one
+        it invents from itself. Core does not delegate to a solver-specific
+        mutator when the hook is absent. Returns whatever records the hook
+        reports (possibly ``()``); it must not be discarded here, since
+        ``legacy_apply_overrides`` below reports through the same return.
         """
         hook = getattr(self.plugin, "apply_overrides", None)
         if callable(hook):
-            hook(overrides, case_root=case_root)
-            return ()
+            return tuple(
+                hook(overrides, case_root=case_root, driver_context=driver_context)
+            )
         from .compatibility import legacy_apply_overrides
 
         return legacy_apply_overrides(
@@ -1317,7 +1322,12 @@ class _OverrideScopeAdapter:
     ) -> tuple[Path, ...]:
         hook = getattr(self.plugin, "get_override_target_paths", None)
         if callable(hook):
-            return tuple(Path(path) for path in hook(overrides, case_root=case_root))
+            return tuple(
+                Path(path)
+                for path in hook(
+                    overrides, case_root=case_root, driver_context=driver_context,
+                )
+            )
         if callable(getattr(self.plugin, "apply_overrides", None)):
             raise ValueError(
                 f"plugin {self.plugin.plugin_id!r} implements apply_overrides() "

@@ -56,16 +56,18 @@ class _NeutralMutator(MinimalTestPlugin):
         assert case_lease_is_held(case_root)
         assert attempt_lease_is_held(case_root.parent / "output")
 
-    def get_override_target_paths(self, overrides, *, case_root):
-        del overrides
+    def get_override_target_paths(self, overrides, *, case_root, driver_context):
+        del overrides, driver_context
         self._owned(case_root)
         self.events.append("targets")
         return (self.target,)
 
-    def apply_overrides(self, overrides, *, case_root):
+    def apply_overrides(self, overrides, *, case_root, driver_context):
+        del driver_context
         self._owned(case_root)
         self.events.append("apply")
         self.target.write_text(str(overrides[0]["value"]) + "\n")
+        return ()
 
 
 def _fixture(tmp_path: Path):
