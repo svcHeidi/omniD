@@ -69,25 +69,58 @@ TIERS: frozenset[str] = frozenset({
 })
 
 
+def status_map(status: str) -> dict[str, str]:
+    """Parse a seam's raw ``:status:`` text into a member -> tier mapping.
+
+    A single-tier line applies to every member the seam adapts, and is
+    returned under the key ``"*"``. A capability whose members genuinely
+    differ (``case_files``, ``override_scopes``) declares one ``member=tier``
+    entry per member instead.
+
+    The single parser behind both :func:`status_tiers`, which needs the tiers
+    alone, and :func:`members_by_tier`, which needs the member each belongs
+    to. Added 2026-09-20 when the second consumer appeared; ``status_tiers``
+    previously parsed the text itself.
+    """
+    if "=" not in status:
+        return {"*": status.strip()}
+    parsed: dict[str, str] = {}
+    for clause in status.split(","):
+        member, _, tier = clause.partition("=")
+        if member.strip():
+            parsed[member.strip()] = tier.strip()
+    return parsed
+
+
 def status_tiers(status: str) -> tuple[str, ...]:
     """Extract the tier(s) a seam's raw ``:status:`` text declares.
 
-    Most seams declare exactly one tier and this returns it unchanged. A
-    capability whose members genuinely differ (``case_files``,
-    ``override_scopes``) cannot declare one tier for the whole seam without
-    re-inventing the ``mixed`` free text this closes off -- so it declares
-    one ``member=tier`` entry per member instead, comma-separated, e.g.
-    ``"get_profile=required, get_config_resolution_description=optional-
-    neutral"``. This splits that back into the tiers alone, dropping the
-    member name, so :func:`validate_tiers` can check both shapes the same
-    way without the caller telling them apart.
+    See :func:`status_map`, which does the parsing; this drops the member
+    names so :func:`validate_tiers` can check both shapes the same way.
     """
-    tiers = []
-    for part in (p.strip() for p in status.split(",")):
-        if not part:
-            continue
-        tiers.append(part.split("=", 1)[1].strip() if "=" in part else part)
-    return tuple(tiers)
+    return tuple(status_map(status).values())
+
+
+def members_by_tier() -> dict[str, frozenset[str]]:
+    """Map each tier to the contract member names declared at it.
+
+    Derived from the ``:adapts:`` and ``:status:`` fields of every capability
+    Protocol, so the tiers and the seam table cannot drift: they are the same
+    parse.
+    """
+    buckets: dict[str, set[str]] = {tier: set() for tier in TIERS}
+    for seam in collect_seams():
+        adapted = [name.strip() for name in seam.adapts.split(",") if name.strip()]
+        per_member = status_map(seam.status)
+        for member in adapted:
+            tier = per_member.get(member, per_member.get("*"))
+            if tier is None:
+                raise ValueError(
+                    f"capability {seam.field!r} adapts {member!r} but its "
+                    f":status: names neither that member nor a single tier"
+                )
+            buckets[tier].add(member)
+    return {tier: frozenset(members) for tier, members in buckets.items()}
 
 
 def validate_tiers(seams) -> list[str]:
