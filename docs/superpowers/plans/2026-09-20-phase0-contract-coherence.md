@@ -734,7 +734,9 @@ git commit -m "docs(core): correct three false claims in the plugin contract"
 
 **Files:**
 - Modify: `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/cardiacfoam_plugin.py`
+- Modify: `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/run_document_config.py`
 - Test: `packages/omnidriver/tests/core/test_dict_entries.py`
+- Test: `packages/omnidriver/tests/conftest.py` (fixture)
 
 **Interfaces:**
 - Consumes: nothing.
@@ -792,6 +794,69 @@ Expected: FAIL for `org.cardiacfoam`, naming the nine `controlDict` paths as mis
 - [ ] **Step 3: Include `CONTROL_DICT_ENTRIES`**
 
 In `cardiacfoam_plugin.py`, find `get_dict_entries` and add `CONTROL_DICT_ENTRIES` to the tuple it concatenates, importing it from `.common_dict_entries` the same way `PHYSICS_PROPERTY_ENTRIES` is imported in that method.
+
+- [ ] **Step 3b: Make `build_config` read the controlDict**
+
+**Added 2026-09-20, after Step 4 was measured.** Step 4 previously expected
+`0 failed`. It is not, and the reason is a real gap rather than a test-data
+problem.
+
+Once `get_dict_entries()` returns the nine `CONTROL_DICT_ENTRIES`,
+`specs/validation.validate_run` correctly sees them — `phases={"solver"}`,
+`required=True`, no `applicable_when`. But
+`cardiacfoam/run_document_config.build_config` initialises
+`config["solver"] = {}` and then reads only `constant/electroProperties` and
+`constant/physicsProperties`. It never reads `system/controlDict`, so those
+nine keys can never be populated and every cardiacFoam RunDocument fails
+validation with nine "is required" errors.
+
+Narrowing their `required` flag would be the wrong cure. `build_control_dict`
+takes `delta_t`, `end_time` and `write_interval` as parameters — the values
+originate upstream in the spec and are written into the case. A RunDocument
+whose `config["solver"]` omits them does not record what the run actually used,
+which is the thing `config` exists to record.
+
+This cannot be a separate task: a reviewer cannot accept Step 3 while rejecting
+this, because Step 3 is broken without it.
+
+Add a controlDict reader to `run_document_config.py`, mirroring the existing
+`_read_physics_type` pattern:
+
+```python
+def _read_control_dict_values(case_root: Path, driver_context) -> dict[str, Any]:
+    """Read the solver-phase values the case's controlDict actually carries.
+
+    Resolved BY ROLE, never by literal path: the adapter declares
+    ``openfoam.control_dict`` in its profile, and `get_selected_start_time`
+    already resolves it the same way. Spelling ``system/controlDict`` here
+    would be a second declaration of a fact the profile already owns.
+    """
+```
+
+Resolve the file through `driver_context.capabilities.case_files`, matching on
+`rule.role == "openfoam.control_dict"`. Read each of the nine keys with the
+adapter's own config-value reader rather than a new parser — Task 9 of this
+plan makes `get_config_value_reader` a real capability, and `mutators.read_foam_entry`
+is what it returns. If Task 9 has not landed yet, call
+`openfoam.mutators.read_foam_entry` directly and leave a comment naming Task 9
+as the follow-up that routes it through the seam.
+
+A key absent from the file must produce a diagnostic, not a silent default —
+`build_config` already does this for `physicsProperties` via
+`missing_physics_properties`, so follow that shape with a distinct code.
+
+- [ ] **Step 3c: Verify the three sweep-runner tests pass again**
+
+```bash
+python -m pytest packages/omnidriver-cardiacfoam/tests/test_sweep_runner.py -v
+```
+
+Expected: PASS. These three — `test_sweep_plan_materializes_and_audits_each_case_for_real`,
+`test_sweep_plan_records_materialization_failure_and_continues`,
+`test_sweep_run_writes_run_documents_and_continues_past_failure` — fail with
+Step 3 alone and pass once the reader exists. **Do not edit them.** If they
+still fail, the reader is not populating what validation demands; fix the
+reader.
 
 - [ ] **Step 4: Run the test**
 
