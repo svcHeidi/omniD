@@ -56,7 +56,11 @@ def _resolve_consumed_by(relpath: str) -> Path | None:
     return None
 
 REQUIRED_FIELDS = ("adapts", "consumed-by", "fallback", "status")
-VALID_STATUSES = {"mandatory", "optional", "mixed"}
+# The closed tier vocabulary lives on capability_seams.TIERS (Task 1,
+# 2026-09-20) -- this used to hand-duplicate the old free-text values
+# ("mandatory", "optional", "mixed") here, which is exactly the kind of
+# restated fact this repository's tests exist to catch elsewhere.
+VALID_STATUSES = capability_seams.TIERS
 
 CAPABILITY_FIELDS = tuple(plugin_capabilities.PluginCapabilities.__annotations__)
 
@@ -155,7 +159,8 @@ def test_consumed_by_names_modules_that_touch_the_capability(field: str) -> None
 def test_status_is_a_known_value(field: str) -> None:
     name, _ = _protocol_for(field)
     status = _fields(field)["status"].strip()
-    assert status in VALID_STATUSES, f"{name} :status: is {status!r}"
+    for tier in capability_seams.status_tiers(status):
+        assert tier in VALID_STATUSES, f"{name} :status: entry {tier!r} (of {status!r}) is unknown"
 
 
 def test_no_fallback_reaches_cardiac_code_at_all() -> None:
@@ -230,3 +235,46 @@ def test_every_probed_hook_is_declared_somewhere() -> None:
         "adapters probe hooks that no plugin protocol declares: "
         f"{undeclared}. Add them to SolverPluginOptionalHooks."
     )
+
+
+def test_every_seam_declares_a_known_tier():
+    """:status: is the single declaration of a member's enforcement tier.
+
+    Free text here is how the contract came to say `mandatory` in one place
+    and probe with getattr in another.
+
+    A capability whose members genuinely differ (``case_files``,
+    ``override_scopes``) declares one ``member=tier`` entry per member on the
+    same ``:status:`` line rather than reinventing ``mixed`` free text --
+    :func:`capability_seams.status_tiers` splits that back into the tiers
+    alone, so this check covers both the single-tier and the per-member shape
+    without needing to tell them apart itself.
+    """
+    from omnidriver.core import capability_seams
+
+    seams = capability_seams.collect_seams()
+    unknown = [
+        (seam.field, seam.status)
+        for seam in seams
+        if any(
+            tier not in capability_seams.TIERS
+            for tier in capability_seams.status_tiers(seam.status)
+        )
+    ]
+    assert unknown == [], (
+        "capability seams declare a :status: outside the tier vocabulary "
+        f"{sorted(capability_seams.TIERS)}: {unknown}"
+    )
+
+
+def test_validate_tiers_rejects_an_unknown_status():
+    from omnidriver.core import capability_seams
+
+    class _Seam:
+        field = "made_up"
+        status = "sort-of-optional"
+
+    problems = capability_seams.validate_tiers([_Seam()])
+    assert len(problems) == 1
+    assert "made_up" in problems[0]
+    assert "sort-of-optional" in problems[0]

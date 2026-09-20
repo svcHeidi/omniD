@@ -48,6 +48,58 @@ class Seam:
     status: str
 
 
+#: The enforcement tier a capability member sits in. Exactly one per member.
+#:
+#: ``required``          -- ``validate_plugin`` rejects absence; NO fallback
+#:                          may exist; the adapter calls unconditionally.
+#: ``optional-neutral``  -- probed; the named fallback returns a documented
+#:                          neutral value (``False``, ``{}``, ``()``).
+#: ``optional-refusing`` -- probed; the named fallback RAISES, naming the hook.
+#:                          Correct where a neutral answer would silently
+#:                          produce the wrong result rather than no result.
+#:
+#: Added 2026-09-20. Before this, ``:status:`` was free text and carried
+#: ``mandatory``/``optional``/``mixed``, while ``_REQUIRED_PLUGIN_MEMBERS``
+#: separately decided enforcement -- so fifteen members were both enforced and
+#: probed, and nine ``legacy_*`` fallbacks were unreachable in production.
+TIERS: frozenset[str] = frozenset({
+    "required",
+    "optional-neutral",
+    "optional-refusing",
+})
+
+
+def status_tiers(status: str) -> tuple[str, ...]:
+    """Extract the tier(s) a seam's raw ``:status:`` text declares.
+
+    Most seams declare exactly one tier and this returns it unchanged. A
+    capability whose members genuinely differ (``case_files``,
+    ``override_scopes``) cannot declare one tier for the whole seam without
+    re-inventing the ``mixed`` free text this closes off -- so it declares
+    one ``member=tier`` entry per member instead, comma-separated, e.g.
+    ``"get_profile=required, get_config_resolution_description=optional-
+    neutral"``. This splits that back into the tiers alone, dropping the
+    member name, so :func:`validate_tiers` can check both shapes the same
+    way without the caller telling them apart.
+    """
+    tiers = []
+    for part in (p.strip() for p in status.split(",")):
+        if not part:
+            continue
+        tiers.append(part.split("=", 1)[1].strip() if "=" in part else part)
+    return tuple(tiers)
+
+
+def validate_tiers(seams) -> list[str]:
+    """Return one problem string per seam whose ``:status:`` is not a tier."""
+    return [
+        f"capability {seam.field!r} declares :status: {seam.status!r}, "
+        f"which is not one of {sorted(TIERS)}"
+        for seam in seams
+        if any(tier not in TIERS for tier in status_tiers(seam.status))
+    ]
+
+
 def parse_fields(docstring: str | None) -> dict[str, str]:
     """Extract the four structured fields from a capability docstring.
 
@@ -127,10 +179,11 @@ def render(seams: list[Seam]) -> str:
         "`core/plugin_capabilities.py` is core's **internal** view *over* a loaded",
         "plugin — it points the opposite way and is not an authoring surface.",
         "",
-        "A capability marked `optional` degrades when the plugin does not implement",
-        "its hook: the named `compatibility.py` fallback runs instead. No fallback",
-        "branches on plugin identity, so a given fallback answers the same for every",
-        "plugin. The two sweep fallbacks cannot be neutral and refuse by hook name.",
+        "A capability marked `optional-neutral` or `optional-refusing` degrades when",
+        "the plugin does not implement its hook: the named `compatibility.py`",
+        "fallback runs instead. No fallback branches on plugin identity, so a given",
+        "fallback answers the same for every plugin. An `optional-refusing` member's",
+        "fallback cannot be neutral and refuses by hook name instead.",
         "",
         "| capability | protocol | adapts | consumed by | fallback | status |",
         "|---|---|---|---|---|---|",

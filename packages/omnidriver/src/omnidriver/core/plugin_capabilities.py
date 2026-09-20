@@ -164,7 +164,7 @@ class TutorialCatalogCapability(Protocol):
     :adapts: get_tutorial_catalog, get_tutorial_displays
     :consumed-by: omnidriver/core/runtime/registry.py, omnidriver/cardiacfoam/dict_builder.py
     :fallback: none
-    :status: mandatory
+    :status: required
     """
 
     def catalog(self) -> dict[str, Any]: ...
@@ -187,7 +187,7 @@ class DictionaryCatalogCapability(Protocol):
     :adapts: get_dict_entries, get_dict_groups, get_dictionary_catalog, get_phases
     :consumed-by: omnidriver/dict_entries.py, omnidriver/cardiacfoam/sweep.py, omnidriver/openfoam/apply_overrides.py, omnidriver/openfoam/dict_builder.py, omnidriver/core/specs/validation.py, omnidriver/core/strict_planning.py
     :fallback: legacy_phases
-    :status: mandatory
+    :status: required
     """
 
     def entries(self) -> tuple[Any, ...]: ...
@@ -208,7 +208,7 @@ class CapabilityManifestCapability(Protocol):
     :adapts: get_capabilities
     :consumed-by: omnidriver/dict_entries.py, omnidriver/core/introspection.py, omnidriver/core/strict_planning.py
     :fallback: none
-    :status: mandatory
+    :status: required
     """
 
     def manifest(self) -> Any: ...
@@ -226,7 +226,7 @@ class ConfigurationValidatorCapability(Protocol):
     :adapts: validate_configuration
     :consumed-by: omnidriver/core/strict_planning.py
     :fallback: none
-    :status: mandatory
+    :status: required
     """
 
     def validate(
@@ -244,7 +244,7 @@ class RunSemanticValidatorCapability(Protocol):
     :adapts: validate_run_semantics
     :consumed-by: omnidriver/core/specs/validation.py
     :fallback: none
-    :status: mandatory
+    :status: required
     """
 
     def validate(self, request: RunSemanticValidationRequest) -> tuple[Any, ...]: ...
@@ -266,7 +266,7 @@ class ArtifactPredictorCapability(Protocol):
     :adapts: predict_data_artifacts
     :consumed-by: omnidriver/core/runtime/artifacts.py
     :fallback: none
-    :status: mandatory
+    :status: required
     """
 
     def predict(self, request: ArtifactPredictionRequest) -> tuple["DataArtifact", ...]: ...
@@ -288,7 +288,7 @@ class RunDocumentConfigurationCapability(Protocol):
     :adapts: build_run_document_config, get_run_document_config_schema
     :consumed-by: omnidriver/core/runtime/run_document_adapter.py, omnidriver/core/runtime/run_document_exec.py
     :fallback: legacy_run_document_config, legacy_run_document_config_schema
-    :status: optional
+    :status: optional-neutral
     """
 
     def build(
@@ -308,7 +308,7 @@ class CxxMappingCapability(Protocol):
     :adapts: get_profile
     :consumed-by: omnidriver/core/strict_planning.py
     :fallback: none
-    :status: mandatory
+    :status: required
     """
 
     def profile(self) -> Any: ...
@@ -333,7 +333,7 @@ class DictDiagnosticsCapability(Protocol):
     :adapts: get_function_object_field_diagnostics, get_case_dict_key_diagnostics
     :consumed-by: omnidriver/core/strict_planning.py
     :fallback: legacy_function_object_field_diagnostics, legacy_case_dict_key_diagnostics
-    :status: optional
+    :status: optional-neutral
     """
 
     def function_object_fields(
@@ -367,7 +367,7 @@ class MeshDiagnosticPolicyCapability(Protocol):
     :adapts: get_mesh_geometry_diagnostics, get_base_mesh_geometry_diagnostics, is_nondimensional_case
     :consumed-by: omnidriver/core/strict_planning.py
     :fallback: legacy_nondimensional_case, legacy_base_mesh_geometry_diagnostics
-    :status: optional
+    :status: optional-neutral
     """
 
     def is_nondimensional(self, spec: "TutorialSpec") -> bool: ...
@@ -387,7 +387,7 @@ class CaseCompatibilityCapability(Protocol):
     :adapts: has_case_marker, is_case_runnable_without_workflow
     :consumed-by: omnidriver/core/runtime/registry.py
     :fallback: legacy_case_marker, legacy_case_runnable_without_workflow
-    :status: optional
+    :status: optional-neutral
     """
 
     def has_case_marker(self, request: CaseCompatibilityRequest) -> bool: ...
@@ -416,7 +416,7 @@ class SweepMaterializerCapability(Protocol):
     :adapts: materialize_sweep_case, route_sweep_case_values
     :consumed-by: omnidriver/sweep_materialize.py, omnidriver/sweep_routing.py
     :fallback: legacy_materialize_sweep_case, legacy_route_sweep_case
-    :status: optional
+    :status: optional-refusing
     """
 
     def route(self, request: SweepRoutingRequest, *, driver_context: Any) -> dict[str, Any]: ...
@@ -438,7 +438,7 @@ class CommandAuthorizationCapability(Protocol):
     :adapts: get_auxiliary_commands, get_environment_commands, get_solver_commands, get_utility_manifests, get_utility_roots, is_installed_environment_command
     :consumed-by: omnidriver/core/runtime/artifacts.py, omnidriver/core/runtime/workflow.py, omnidriver/core/strict_planning.py
     :fallback: legacy_auxiliary_commands, legacy_environment_commands, legacy_is_installed_environment_command, legacy_solver_commands, legacy_utility_manifests, legacy_utility_roots
-    :status: optional
+    :status: optional-neutral
     """
 
     def solver_commands(self) -> frozenset[str]: ...
@@ -466,7 +466,7 @@ class CaseIntrospectionCapability(Protocol):
     :adapts: get_samplable_fields, get_selected_start_time, resolve_case_models
     :consumed-by: omnidriver/core/runtime/provenance_inputs.py
     :fallback: legacy_resolve_case_models, legacy_samplable_fields
-    :status: optional
+    :status: optional-neutral
     """
 
     def resolve_case_models(self, case_root: Path) -> dict[str, Any]: ...
@@ -502,7 +502,7 @@ class CaseFileContractCapability(Protocol):
     :adapts: get_profile, get_config_resolution_description
     :consumed-by: omnidriver/core/runtime/strict_audit.py, omnidriver/core/tutorial_contracts.py, omnidriver/core/runtime/provenance_inputs.py
     :fallback: legacy_describe_config_resolution
-    :status: mixed
+    :status: get_profile=required, get_config_resolution_description=optional-neutral
     """
 
     def required_files(self) -> tuple[str, ...]: ...
@@ -523,7 +523,7 @@ class CaseRuntimeConventionsCapability(Protocol):
     :adapts: get_case_runtime_conventions
     :consumed-by: omnidriver/core/runtime/registry.py, omnidriver/core/runtime/sweep_runner.py
     :fallback: legacy_case_runtime_conventions
-    :status: optional
+    :status: optional-neutral
     """
 
     def conventions(self) -> CaseRuntimeConventions: ...
@@ -554,7 +554,7 @@ class EnvironmentPreflightCapability(Protocol):
     :adapts: get_environment_diagnostics, get_configured_environment, get_loaded_environment
     :consumed-by: omnidriver/core/strict_planning.py, omnidriver/core/runtime/sweep_runner.py, omnidriver/cli.py
     :fallback: legacy_environment_diagnostics, legacy_configured_environment, legacy_load_environment
-    :status: optional
+    :status: optional-neutral
     """
 
     def diagnostics(
@@ -583,7 +583,7 @@ class OverrideSchemaCapability(Protocol):
     :adapts: get_dict_entry_catalog, get_override_schema
     :consumed-by: omnidriver/core/introspection.py
     :fallback: legacy_dict_entry_catalog, legacy_override_schema
-    :status: optional
+    :status: optional-neutral
     """
 
     def config_schema(
@@ -607,7 +607,7 @@ class RuntimeEvidenceCapability(Protocol):
     :adapts: get_artifact_value_reader, get_extra_provenance_paths, get_solve_step_commands, get_telemetry_source_globs
     :consumed-by: omnidriver/core/runtime/provenance_inputs.py
     :fallback: none
-    :status: optional
+    :status: optional-neutral
     """
 
     def solve_step_commands(self) -> frozenset[str]: ...
@@ -642,7 +642,7 @@ class CaseProvenanceCapability(Protocol):
     :adapts: get_generated_output_globs, get_required_inputs
     :consumed-by: omnidriver/core/runtime/provenance_inputs.py
     :fallback: none
-    :status: optional
+    :status: optional-neutral
     """
 
     def required_inputs(
@@ -674,7 +674,7 @@ class ReportCatalogCapability(Protocol):
     :adapts: get_report_catalog
     :consumed-by: scripts/export-report-catalog.py
     :fallback: legacy_report_catalog
-    :status: optional
+    :status: optional-neutral
     """
 
     def reports(self) -> tuple["ReportDefinition", ...]: ...
@@ -695,7 +695,7 @@ class NamedCatalogsCapability(Protocol):
     :adapts: get_named_catalogs
     :consumed-by: omnidriver/core/introspection.py
     :fallback: legacy_named_catalogs
-    :status: optional
+    :status: optional-neutral
     """
 
     def catalogs(self) -> dict[str, Any]: ...
@@ -714,7 +714,7 @@ class OverrideScopeCapability(Protocol):
     :adapts: get_override_scopes, get_override_target_paths, apply_overrides, inspect_effective_configuration
     :consumed-by: omnidriver/openfoam/apply_overrides.py, omnidriver/core/runtime/provenance_inputs.py, omnidriver/core/runtime/step_candidate.py, omnidriver/core/strict_planning.py
     :fallback: legacy_override_scopes, legacy_override_target_paths, legacy_apply_overrides, legacy_inspect_effective_configuration
-    :status: optional
+    :status: get_override_scopes=optional-neutral, get_override_target_paths=optional-refusing, apply_overrides=optional-refusing, inspect_effective_configuration=optional-neutral
     """
 
     def scopes(self) -> tuple[Any, ...]: ...
@@ -746,13 +746,19 @@ class DictRegenerationCapability(Protocol):
     keys are legal -- so a single key/value/scope patch cannot express it.
     Not a mandatory ``SolverPlugin`` member, so existing v2 third-party
     plugins keep loading; the fallback (``legacy_dict_regeneration_scopes``)
-    declares the cardiac plugin's one scope and an empty tuple for everyone
-    else, matching :class:`OverrideScopeCapability`.
+    declares no regeneration scopes for any plugin, matching
+    :class:`OverrideScopeCapability`. **Corrected 2026-09-20:** this used to
+    say the fallback "declares the cardiac plugin's one scope and an empty
+    tuple for everyone else" -- reading ``compatibility.py`` during the Phase
+    0 tier retag (Task 1) found no such branch; the function returns ``()``
+    unconditionally, with no ``plugin_id`` check, consistent with Phase 2
+    Task 7 having deleted the identity-branching fallbacks elsewhere in this
+    module.
 
     :adapts: get_regeneration_scopes
     :consumed-by: omnidriver/openfoam/apply_overrides.py
     :fallback: legacy_dict_regeneration_scopes
-    :status: optional
+    :status: optional-neutral
     """
 
     def scopes(self) -> tuple[Any, ...]: ...
@@ -1379,8 +1385,18 @@ class PluginCapabilities:
     ``:fallback:``
         the ``compatibility.py`` function used when the hook is absent
     ``:status:``
-        ``mandatory`` (called unconditionally), ``optional`` (probed via
-        ``getattr`` and degraded), or ``mixed``
+        one of :data:`capability_seams.TIERS` -- ``required`` (called
+        unconditionally, no fallback may exist), ``optional-neutral``
+        (probed via ``getattr``; the fallback returns a neutral value), or
+        ``optional-refusing`` (probed; the fallback raises, naming the
+        hook). A capability whose members genuinely differ (``case_files``,
+        ``override_scopes``) declares one ``member=tier`` entry per member
+        on the same line instead of one tier for the whole seam --
+        :func:`capability_seams.status_tiers` reads either shape.
+        **Corrected 2026-09-20:** this used to say ``mandatory``/
+        ``optional``/``mixed``, free text that let ``_REQUIRED_PLUGIN_MEMBERS``
+        disagree with what a Protocol's own docstring claimed. ``:status:``
+        is now the single declaration of a member's enforcement tier.
 
     Those fields are the single source of the "Plugin capability seams" table
     in ``ARCHITECTURE.md``, rendered by

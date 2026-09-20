@@ -44,6 +44,7 @@ from omnidriver.core.capability_seams import (
     collect_seams,
     render,
     splice,
+    validate_tiers,
 )
 
 
@@ -58,6 +59,13 @@ def main() -> int:
 
     architecture = architecture_path()
     seams = collect_seams()
+
+    problems = validate_tiers(seams)
+    if problems:
+        for problem in problems:
+            print(problem, file=sys.stderr)
+        raise SystemExit(1)
+
     document = architecture.read_text()
     updated = splice(document, render(seams))
 
