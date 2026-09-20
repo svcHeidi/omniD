@@ -26,6 +26,30 @@
 - Do not add a `LICENSE` file or a `license` field.
 - Rebuild the wheel after every source change before running the wheel shape.
 
+## Status
+
+| task | state | commit |
+|---|---|---|
+| 1 · `provides:`/`requires:` in the profile | done | `d901ea9` |
+| 2 · declared-vs-implemented guard | **next** | — |
+| 3 · topological ordering | pending | — |
+| 4 · the six composition rules, as failing tests | pending | — |
+| 5 · `ProviderIdentity` / `StackIdentity` | pending | — |
+| 6 · the composition mechanism (spike resolved: **own it**) | pending | — |
+| 7 · `DriverContext.providers` | pending | — |
+| 8 · extend the dependency boundary to adapters | pending | — |
+| 9 · delete the hand-embedding | pending | — |
+| 10 · the four deferred duplicate intakes | pending | — |
+| 11 · `legacy_dict_key_scanner` gets a capability | pending | — |
+| 12 · document the composition contract | pending | — |
+| 13 · all four shapes | pending | — |
+
+Re-audited against post-Phase-0 code on 2026-09-20; five corrections applied
+(Tasks 6, 7 and 9). Tasks 1-5, 8 and 10-13 were confirmed still correct as
+written. No task was made redundant by Phase 0.
+
+---
+
 ## How to execute a task in this plan
 
 Learned from Phase 0 Tasks 1–10, each of which found something the plan had
