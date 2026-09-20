@@ -91,15 +91,11 @@ def _read_control_dict_values(
         ))
         return values, tuple(diagnostics)
 
-    # TODO(2026-09-20-phase0-contract-coherence.md Task 9): route this
-    # through driver_context.capabilities.config_value once
-    # ConfigValueCapability is a real seam; call the adapter's own reader
-    # directly until then, the same reader get_config_value_reader() wraps.
-    from omnidriver.openfoam.mutators import read_foam_entry
+    read_value = driver_context.capabilities.config_value.reader()
 
     for entry in CONTROL_DICT_ENTRIES:
         key = entry.driver_path
-        value = read_foam_entry(control_dict_path, key)
+        value = read_value(control_dict_path, key)
         if value is None:
             diagnostics.append(diagnostic(
                 "error",

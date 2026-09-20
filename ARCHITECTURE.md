@@ -195,7 +195,8 @@ fallback cannot be neutral and refuses by hook name instead.
 | `named_catalogs` | `NamedCatalogsCapability` | `get_named_catalogs` | `omnidriver/core/introspection.py` | `legacy_named_catalogs` | optional-neutral |
 | `override_scopes` | `OverrideScopeCapability` | `get_override_scopes`, `get_override_target_paths`, `apply_overrides`, `inspect_effective_configuration` | `omnidriver/openfoam/apply_overrides.py`, `omnidriver/core/runtime/provenance_inputs.py`, `omnidriver/core/runtime/step_candidate.py`, `omnidriver/core/strict_planning.py` | `legacy_override_scopes`, `legacy_override_target_paths`, `legacy_apply_overrides`, `legacy_inspect_effective_configuration` | get_override_scopes=optional-neutral, get_override_target_paths=optional-refusing, apply_overrides=optional-refusing, inspect_effective_configuration=optional-neutral |
 | `dict_regeneration` | `DictRegenerationCapability` | `get_regeneration_scopes` | `omnidriver/openfoam/apply_overrides.py` | `legacy_dict_regeneration_scopes` | optional-neutral |
+| `config_value` | `ConfigValueCapability` | `get_config_value_reader` | `omnidriver/cardiacfoam/run_document_config.py` | none | optional-neutral |
 
-24 capability seams.
+25 capability seams.
 
 <!-- END GENERATED: capability-seams -->

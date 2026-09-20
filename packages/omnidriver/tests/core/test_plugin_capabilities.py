@@ -132,3 +132,37 @@ def test_capability_adapter_preserves_plugin_exceptions(tmp_path: Path) -> None:
         context.capabilities.configuration_validator.validate(
             ConfigurationValidationRequest(_spec(tmp_path)),
         )
+
+
+def test_config_value_reader_is_none_for_a_plugin_that_declares_nothing() -> None:
+    """ConfigValueCapability's fallback is `none`: absence means `None`.
+
+    Added 2026-09-20 (Phase 0 Task 9), alongside the Protocol itself --
+    `get_config_value_reader` had no capability at all before this, so
+    nothing exercised the adapter's behaviour for a plugin that never
+    implements the hook.
+    """
+    plugin = MinimalTestPlugin()
+    context = driver_context(plugin, source="test")
+
+    assert context.capabilities.config_value.reader() is None
+
+
+def test_config_value_reader_calls_through_to_the_plugin_hook() -> None:
+    """When a plugin implements the hook, the adapter returns its callable
+    unchanged -- it does not wrap or reinterpret it."""
+
+    def _read(path, key):
+        del path, key
+        return "sentinel"
+
+    class ReaderPlugin(MinimalTestPlugin):
+        def get_config_value_reader(self):
+            return _read
+
+    context = driver_context(ReaderPlugin(), source="test")
+
+    reader = context.capabilities.config_value.reader()
+
+    assert reader is _read
+    assert reader(Path("unused"), "unused") == "sentinel"

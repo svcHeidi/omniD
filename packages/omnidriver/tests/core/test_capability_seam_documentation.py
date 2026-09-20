@@ -278,3 +278,16 @@ def test_validate_tiers_rejects_an_unknown_status():
     assert len(problems) == 1
     assert "made_up" in problems[0]
     assert "sort-of-optional" in problems[0]
+
+
+def test_config_value_is_a_real_capability():
+    """`plugin_interface` documents ConfigValueCapability; it must exist.
+
+    Before 2026-09-20 the heading named a Protocol no module defined, so two
+    adapters implemented the hook and returned different callables while core
+    read neither.
+    """
+    from omnidriver.core import plugin_capabilities
+
+    assert hasattr(plugin_capabilities, "ConfigValueCapability")
+    assert "config_value" in plugin_capabilities.PluginCapabilities.__annotations__

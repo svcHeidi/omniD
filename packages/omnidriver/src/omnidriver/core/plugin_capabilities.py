@@ -764,6 +764,30 @@ class DictRegenerationCapability(Protocol):
     def scopes(self) -> tuple[Any, ...]: ...
 
 
+class ConfigValueCapability(Protocol):
+    """Read one configuration value from an adapter's own file format.
+
+    Before 2026-09-20 ``plugin_interface.py`` declared ``get_config_value_reader``
+    under a heading naming this Protocol, but no module defined it -- so
+    ``OpenFOAMEnvironmentPlugin`` and ``CardiacFoamPlugin`` each implemented
+    the hook and returned a different callable, while core read neither: the
+    only caller was ``CardiacFoamPlugin.get_selected_start_time`` invoking it
+    on ``self``. Phase 1's composed provider seam needs a real reader here,
+    so the hook is wired up rather than deleted. Not a mandatory
+    ``SolverPlugin`` member, so existing v2 third-party plugins keep loading;
+    a plugin that declares nothing has no adapter-specific format to read,
+    which is the honest answer rather than a solver-shaped guess -- so this
+    capability needs no compatibility fallback.
+
+    :adapts: get_config_value_reader
+    :consumed-by: omnidriver/cardiacfoam/run_document_config.py
+    :fallback: none
+    :status: optional-neutral
+    """
+
+    def reader(self): ...
+
+
 @dataclass(frozen=True)
 class _TutorialCatalogAdapter:
     plugin: "SolverPlugin"
@@ -1370,6 +1394,15 @@ class _DictRegenerationAdapter:
 
 
 @dataclass(frozen=True)
+class _ConfigValueAdapter:
+    plugin: "SolverPlugin"
+
+    def reader(self):
+        hook = getattr(self.plugin, "get_config_value_reader", None)
+        return hook() if callable(hook) else None
+
+
+@dataclass(frozen=True)
 class PluginCapabilities:
     """Core's focused, internal view over one loaded plugin.
 
@@ -1448,6 +1481,7 @@ class PluginCapabilities:
     named_catalogs: NamedCatalogsCapability
     override_scopes: OverrideScopeCapability
     dict_regeneration: DictRegenerationCapability
+    config_value: ConfigValueCapability
 
 
 def adapt_plugin_capabilities(plugin: "SolverPlugin") -> PluginCapabilities:
@@ -1485,4 +1519,5 @@ def adapt_plugin_capabilities(plugin: "SolverPlugin") -> PluginCapabilities:
         named_catalogs=_NamedCatalogsAdapter(plugin),
         override_scopes=_OverrideScopeAdapter(plugin),
         dict_regeneration=_DictRegenerationAdapter(plugin),
+        config_value=_ConfigValueAdapter(plugin),
     )
