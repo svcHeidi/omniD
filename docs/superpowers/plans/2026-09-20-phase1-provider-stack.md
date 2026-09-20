@@ -942,6 +942,37 @@ Then one combinator per shape: `_union`, `_merge_with_override`, `_first_non_non
 
 `_merge_with_override` implements the override marker: a value carrying `overrides: <provider id>` replaces that provider's key; an unmarked duplicate raises; a marker naming a provider that did not declare the key raises.
 
+**Two rules the `_SHAPE` table above does not cover. Added 2026-09-20 after the
+spike and the Phase 1 re-audit.**
+
+**(a) The refusing-hook rule is cross-member, not per-member.** `apply_overrides`
+and `get_override_target_paths` must come from the **same** provider. Split
+across two, before-images are computed by a different provider than the one
+mutating, and rollback silently breaks.
+
+You are not inventing this check — `_OverrideScopeAdapter.target_paths` already
+enforces it for the single-plugin case:
+
+```python
+if callable(getattr(self.plugin, "apply_overrides", None)):
+    raise ValueError(
+        f"plugin {self.plugin.plugin_id!r} implements apply_overrides() but "
+        "does not declare get_override_target_paths(); crash-safe --apply is "
+        "unavailable"
+    )
+```
+
+Generalise it to N providers: whichever provider wins `apply_overrides` must
+also win `get_override_target_paths`. Two providers each supplying one is an
+error naming both.
+
+**(b) `get_override_scopes` fits none of the six shapes.** The spike found this
+by building. It is not a set, map, single value, diagnostic sequence, refusing
+hook, or case-file rule. Classify it explicitly — do not let it fall through a
+default. Its natural shape is a concatenating sequence, since scopes from an
+environment provider and a solver provider should both be offered, but decide
+that deliberately and record the reason.
+
 - [ ] **Step 3B: If the spike chose pluggy**
 
 Add `pluggy` to `packages/omnidriver/pyproject.toml` dependencies. Express each capability member as a hookspec, using `firstresult=True` for the `single` shape and the default collect-all for `sequence`. Implement `set`, `map` and `exclusive` as post-processing over the collected results, since pluggy has no built-in for them.
@@ -987,6 +1018,15 @@ git commit -m "feat(core): compose N providers per capability"
 - Modify: `packages/omnidriver/src/omnidriver/core/plugin_interface.py`
 - Modify: `packages/omnidriver/src/omnidriver/core/plugin_discovery.py`
 - Test: `packages/omnidriver/tests/core/test_core_context_is_explicit.py`
+- Test: `packages/omnidriver/tests/core/test_plugin_capabilities.py` — **this guard WILL break; see below**
+
+**A guard that breaks, identified in advance.** `test_plugin_capabilities.py::test_context_exposes_focused_adapters_without_replacing_public_plugin`
+asserts `context.plugin is plugin`, reconstructs `DriverContext(plugin, context.identity)`
+**positionally**, and asserts `[f.name for f in fields(reconstructed)] == ["plugin", "identity"]`.
+All three break when the field becomes `providers`. The spike hit exactly this.
+Update the test to the new arity — do not let it fail as a surprise, and do not
+weaken what it checks: it exists to prove the context does not hide the
+provider behind the adapters, and that property survives the change.
 
 **Interfaces:**
 - Consumes: `provider_stack.compose`, `provider_stack.resolutions` (Task 6); `provider_identity.build_stack_identity` (Task 5).
@@ -1014,7 +1054,17 @@ def test_identity_names_every_provider(two_provider_context):
     assert payload["resolutions"], "the identity must record who answered what"
 ```
 
-Add a `two_provider_context` fixture beside it, composing the OpenFOAM environment adapter with whichever solver adapter is installed, skipping when fewer than two are.
+Add a `two_provider_context` fixture beside it, composing the OpenFOAM
+environment adapter with whichever solver adapter is installed, skipping when
+fewer than two are.
+
+**Build raw plugin instances, not contexts.** Do NOT wrap the existing
+`driver_context_for_installed_plugins` fixture in `conftest.py` — it returns
+built single-plugin `DriverContext` objects, and you need the plugin instances
+themselves to pass into `driver_context(*providers, ...)`. Mirror
+`plugin_discovery.load_discovered_plugin`'s `entry_point.load()()` pattern
+rather than writing new discovery: `discover_plugins()` returns `EntryPoint`
+objects, not classes, and that trap has already caught two tasks.
 
 - [ ] **Step 2: Run to verify it fails**
 
@@ -1232,7 +1282,7 @@ Verify that list against `provider_stack.implemented_capabilities(OpenFOAMEnviro
 
 ```yaml
 requires:
-  - org.omnidriver.openfoam-environment
+  - org.omnidriver.openfoam.environment
 provides:
   - dictionaries
   - tutorials
@@ -1240,7 +1290,22 @@ provides:
   # plus whatever implemented_capabilities() reports for that plugin
 ```
 
-Per spec §2.1, remove from both cardiac manifests every `case_profile.dictionaries` entry the environment profile already declares — `system/controlDict`, `constant`, and `Allrun` in all three.
+Per spec §2.1, remove every `case_profile.dictionaries` entry the environment
+profile already declares. **Verified 2026-09-20 against all three manifests —
+this is not uniform, and the earlier "all three" instruction was wrong:**
+
+| manifest | remove | keep, and why |
+|---|---|---|
+| `cardiacfoam/plugin.yaml` | `system/controlDict` (exact duplicate, same role), `Allrun` (exact duplicate, same role `openfoam.entrypoint`) | `constant/electroProperties` and `constant/physicsProperties` — these are **not** duplicates of the environment's bare `constant` entry. Different path, different role (`plugin.configuration`), finer granularity. cardiacfoam declares no bare `constant` rule at all. |
+| `cardiaccore/plugin.yaml` | `system/controlDict` and `constant` (exact duplicates), plus `Allrun` | — |
+| `openfoam-environment.yaml` | nothing — it is the declarer | all three |
+
+cardiaccore's `Allrun` is a **role-mismatched** duplicate: same path, but role
+`cardiaccore.entrypoint` against the environment's `openfoam.entrypoint`. Still
+a single-declarer violation, so it still goes — but before deleting, grep for
+any consumer keying off the literal string `cardiaccore.entrypoint`. Case
+entrypoint resolution reads `CaseRuntimeConventions.case_entrypoints`, not this
+role, so that consumer is safe; confirm no other is.
 
 **Resolve `config_value`'s divergence here (reported by Phase 0 Task 9,
 2026-09-20).** The two adapters return different callables for this one seam:
