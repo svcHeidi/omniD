@@ -17,6 +17,7 @@
 - `omnidriver.cardiaccore` MUST NOT import `omnidriver.cardiacfoam`, nor the reverse.
 - No production module in core may touch `driver_context.plugin` directly; go through `driver_context.capabilities`. Guarded by `test_plugin_dependency_boundary.py`.
 - Do not weaken or skip an existing guard to make a change pass. If a guard fails, fix the cause.
+- **The `Files:` block is authoritative for what to commit, not the per-step `git add` list.** Those lists were written before the tasks ran and have been stale three times (Phase 0 Tasks 1, 4 and 6). Commit every file the task actually changed; if that differs from the `Files:` block, say so in the report.
 - Do not quote test-suite totals in any code comment, docstring or document. The durable claim is `0 failed`.
 - Prefer naming a **symbol** over a `file.py:123` line number in comments and docstrings.
 - When correcting a claim in a document, record the correction with a date rather than silently overwriting.

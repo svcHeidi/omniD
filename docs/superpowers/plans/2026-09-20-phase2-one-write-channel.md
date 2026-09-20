@@ -19,6 +19,7 @@
 - `omnidriver.cardiaccore` MUST NOT import `omnidriver.cardiacfoam`, nor the reverse.
 - No production module in core or an adapter may touch `driver_context.providers` directly.
 - Do not weaken or skip a guard to make a change pass.
+- **The `Files:` block is authoritative for what to commit, not the per-step `git add` list.** Those lists were written before the tasks ran and have been stale three times (Phase 0 Tasks 1, 4 and 6). Commit every file the task actually changed; if that differs from the `Files:` block, say so in the report.
 - Do not quote suite totals. The durable claim is `0 failed`.
 - Prefer naming a **symbol** over a `file.py:123` line number.
 - Record document corrections with a date.
