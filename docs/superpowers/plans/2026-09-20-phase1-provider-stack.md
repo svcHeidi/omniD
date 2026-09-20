@@ -34,8 +34,8 @@
 | 2 · declared-vs-implemented guard | done | `0326899` |
 | 3 · topological ordering | done | `3b451fa` |
 | 4 · the composition rules, as failing tests | done (red by design) | `10fea49` |
-| 5 · `ProviderIdentity` / `StackIdentity` | **next** | — |
-| 6 · the composition mechanism (spike resolved: **own it**) | pending | — |
+| 5 · `ProviderIdentity` / `StackIdentity` | done | `f408dc6` |
+| 6 · the composition mechanism (spike resolved: **own it**) | **next** | — |
 | 7 · `DriverContext.providers` | pending | — |
 | 8 · extend the dependency boundary to adapters | pending | — |
 | 9 · delete the hand-embedding | pending | — |
