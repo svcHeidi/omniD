@@ -41,10 +41,11 @@
 | 11 · cardiacCore declaration hygiene | done | `07a71b2` |
 | 12 · caching (prerequisite for Phase 1's digest) | done | `41056a4` |
 | 13 · the three remaining §3.3 defects | done | `43bd487` |
-| 14 · all four shapes, close-out | **next** | — |
-| 15 · the composition-mechanism spike | pending | — |
+| 14 · all four shapes, close-out | done | no commit needed |
+| 15 · the composition-mechanism spike | done | `57d4d3a` |
 
-Every completed task passes `0 failed` in all four verification shapes.
+**Phase 0 is COMPLETE.** Every task passes `0 failed` in all four
+verification shapes; Task 14 re-verified the whole phase from a rebuilt wheel.
 
 **Deliverables produced so far that later phases consume:**
 - Task 4's Step 4b stub census → recorded in Phase 1 Task 9.

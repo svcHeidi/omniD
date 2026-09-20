@@ -342,6 +342,22 @@ unmarked duplicate is an error; a marker naming a provider that did not declare
 that key is also an error, so a stale override surfaces when the declaration it
 shadowed is removed.
 
+**Amended 2026-09-20 by the Task 15 spike, which prototyped these rules
+twice.** Three corrections, each found by building rather than arguing:
+
+1. **`get_override_scopes` fits none of the six rows.** It is neither a set, a
+   map, a single value, a diagnostic sequence, a refusing hook, nor a case-file
+   rule. Phase 1 must classify it explicitly rather than let it fall through a
+   default.
+2. **The refusing-hook rule is a *cross-member* constraint, not a per-member
+   one.** `apply_overrides` and `get_override_target_paths` must come from the
+   **same** provider. Split across two, before-images are computed by a
+   different provider than the one mutating, which silently breaks rollback —
+   and the rule as written above permits exactly that.
+3. **`pluggy`'s `firstresult` does not express "exactly one implementation,
+   else error".** Both prototypes had to hand-write that check, which is why
+   §4.6's mechanism question resolved the way it did.
+
 The map row implements the cardiacCore/cardiacFOAM seam decision recorded on
 2026-09-18 and shelved before a spec existed: where cardiacFOAM's entries
 duplicate a name cardiacCore already declares for the same physical artifact,
@@ -437,9 +453,16 @@ Two candidates, decided by a spike rather than by argument.
    dependency in a core that has nearly none, rewriting 24 Protocols as
    hookspecs, and losing the seam table in its present form.
 
-**Spike.** Prototype both against cardiacCore's six missing delegations.
-**Success criterion:** `step --strict --apply` succeeds on a cardiacCore case
-with no new cardiacCore code.
+**Spike — RESOLVED 2026-09-20.** Recommendation: **own it**. Prototype A was
+169 insertions across 3 files; prototype B, 291 across 5, plus a runtime
+dependency, for identical rule coverage. Both met the criterion with zero
+changes in `omnidriver-cardiaccore`. The seam table survived untouched on
+both branches — a narrower result than this section predicted, because the
+Protocols were kept as documentation rather than replaced. Full measurements:
+`docs/superpowers/specs/2026-09-20-composition-mechanism-spike.md`.
+
+The original criterion, kept for the record: `step --strict --apply` succeeds
+on a cardiacCore case with no new cardiacCore code.
 
 Read how `pluggy` resolved this before inventing, whichever is chosen. Verify
 its current API directly; this document's summary of it is from memory and is
