@@ -15,6 +15,7 @@ instead of a silent fallback route.
 
 from __future__ import annotations
 
+from graphlib import TopologicalSorter
 from typing import Any
 
 from .capability_seams import adapts_members, collect_seams
@@ -66,3 +67,30 @@ def check_provides(provider: Any) -> list[str]:
                 f"implement {missing}"
             )
     return problems
+
+
+def order_providers(providers) -> tuple:
+    """Order providers least-specific first, by declared `requires:`.
+
+    Stable: independent providers keep sorted-by-id order, so the same
+    installation always composes identically. That matters because the stack
+    digest hashes this order.
+    """
+    by_id = {provider.plugin_id: provider for provider in providers}
+    graph: dict[str, set[str]] = {}
+    for plugin_id, provider in sorted(by_id.items()):
+        requires = tuple(provider.get_profile().requires)
+        missing = sorted(set(requires) - set(by_id))
+        if missing:
+            raise ValueError(
+                f"provider {plugin_id!r} requires {missing}, which "
+                f"{'is' if len(missing) == 1 else 'are'} not installed"
+            )
+        graph[plugin_id] = set(requires)
+    try:
+        ordered = tuple(TopologicalSorter(graph).static_order())
+    except Exception as exc:  # graphlib.CycleError
+        raise ValueError(
+            f"provider requirements form a cycle: {exc}"
+        ) from exc
+    return tuple(by_id[plugin_id] for plugin_id in ordered)

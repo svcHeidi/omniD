@@ -79,3 +79,55 @@ def test_matching_declaration_reports_nothing():
         def get_profile(self): return self._Profile()
 
     assert provider_stack.check_provides(_Honest()) == []
+
+
+def _fake(plugin_id, requires=(), provides=frozenset()):
+    class _P:
+        class _Profile:
+            pass
+        def get_profile(self):
+            profile = self._Profile()
+            profile.requires = requires
+            profile.provides = provides
+            return profile
+    p = _P()
+    p.plugin_id = plugin_id
+    return p
+
+
+def test_ordering_puts_requirements_first():
+    from omnidriver.core import provider_stack
+
+    env = _fake("org.env")
+    solver = _fake("org.solver", requires=("org.env",))
+    ordered = provider_stack.order_providers([solver, env])
+    assert [p.plugin_id for p in ordered] == ["org.env", "org.solver"]
+
+
+def test_ordering_is_stable_for_independent_providers():
+    from omnidriver.core import provider_stack
+
+    a, b = _fake("org.a"), _fake("org.b")
+    assert [p.plugin_id for p in provider_stack.order_providers([a, b])] == [
+        "org.a", "org.b",
+    ]
+    assert [p.plugin_id for p in provider_stack.order_providers([b, a])] == [
+        "org.a", "org.b",
+    ]
+
+
+def test_a_cycle_is_refused_by_name():
+    from omnidriver.core import provider_stack
+
+    a = _fake("org.a", requires=("org.b",))
+    b = _fake("org.b", requires=("org.a",))
+    with pytest.raises(ValueError, match="org.a"):
+        provider_stack.order_providers([a, b])
+
+
+def test_a_missing_requirement_is_refused_by_name():
+    from omnidriver.core import provider_stack
+
+    solver = _fake("org.solver", requires=("org.absent",))
+    with pytest.raises(ValueError, match="org.absent"):
+        provider_stack.order_providers([solver])
