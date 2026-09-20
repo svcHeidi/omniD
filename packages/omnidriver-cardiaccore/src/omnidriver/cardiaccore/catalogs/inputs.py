@@ -930,60 +930,11 @@ CATALOG: Final[DictionaryCatalog] = DictionaryCatalog(DOCUMENTS)
 # unconditionally.
 CONDITIONAL_INPUTS: Final[dict[str, tuple[dict[str, object], ...]]] = {}
 
-# --- Triage of the remaining native reads that are NOT settings a user places
-# in a system/*Dict configuration file. Keeping these visible (rather than
-# silently dropping them) is the point: a reader can see they were
-# classified, not missed. ---
-
-# Graph-file format keys: the on-disk shape of a `constant/<graphName>`
-# 1D-graph object (written by 1DgraphToFoam / generatePurkinjeTree's VTK
-# output, read by foamTo1Dgraph and setPurkinjeScar). Not a system/*Dict
-# user setting, so never a DictEntry.
-GRAPH_FILE_KEYS: Final[tuple[dict[str, object], ...]] = (
-    {
-        "name": "points",
-        "reason": "Graph node coordinates (pointField).",
-        "source_refs": ("src/foamTo1Dgraph/foamTo1Dgraph.C", "src/setPurkinjeScar/setPurkinjeScar.C"),
-    },
-    {
-        "name": "conductionEdges",
-        "reason": "Scalar-list edge records: endpoint node indices at positions 0/1, conductance at position 3.",
-        "source_refs": ("src/foamTo1Dgraph/foamTo1Dgraph.C", "src/setPurkinjeScar/setPurkinjeScar.C"),
-    },
-    {
-        "name": "pvjNodes",
-        "reason": "Optional node indices receiving PVJ resistances.",
-        "source_refs": ("src/foamTo1Dgraph/foamTo1Dgraph.C", "src/setPurkinjeScar/setPurkinjeScar.C"),
-    },
-    {
-        "name": "pvjResistances",
-        "reason": "Optional per-PVJ-node resistance values, written by setPurkinjeScar.",
-        "source_refs": ("src/foamTo1Dgraph/foamTo1Dgraph.C",),
-    },
-)
-
-# CLI options, not dictionary keys: the scanner matches any
-# `.getOrDefault<T>("key", default)` call syntactically, and cannot
-# distinguish an `argList` option accessor (`args.getOrDefault(...)`) from a
-# `dictionary` accessor. All three of these are read from argList, not from
-# any system/*Dict.
-UTILITY_CLI_OPTIONS: Final[tuple[dict[str, object], ...]] = (
-    {
-        "name": "name",
-        "utility": "1DgraphToFoam",
-        "reason": "-name command-line option naming the constant/ graph object to write (default: purkinjeGraph).",
-        "source_refs": ("src/1DgraphToFoam/1DgraphToFoam.C",),
-    },
-    {
-        "name": "maxEdgeLength",
-        "utility": "refine1Dgraph",
-        "reason": "-maxEdgeLength command-line option (default: 3e-4 m).",
-        "source_refs": ("src/refine1Dgraph/refine1Dgraph.C",),
-    },
-    {
-        "name": "internalRole",
-        "utility": "refine1Dgraph",
-        "reason": "-internalRole command-line option for the inserted-node role value (default: -1).",
-        "source_refs": ("src/refine1Dgraph/refine1Dgraph.C",),
-    },
-)
+# Corrected 2026-09-20 (Phase 0 Task 11): this module previously also carried
+# GRAPH_FILE_KEYS (the on-disk shape of a `constant/<graphName>` 1D-graph
+# object) and UTILITY_CLI_OPTIONS (argList options the scanner
+# mis-classified as dictionary keys). Both were orphans -- referenced nowhere
+# outside this module -- and UTILITY_CLI_OPTIONS additionally contradicted
+# `catalogs/utilities.UTILITY_MANIFESTS` on `-internalRole`'s default.
+# `catalogs/utilities.py` is the single source for utility CLI metadata;
+# deleted rather than reconciled.
