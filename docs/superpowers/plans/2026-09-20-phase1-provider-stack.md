@@ -1191,6 +1191,24 @@ provides:
 
 Per spec §2.1, remove from both cardiac manifests every `case_profile.dictionaries` entry the environment profile already declares — `system/controlDict`, `constant`, and `Allrun` in all three.
 
+**Measured stub census, from Phase 0 Task 4's Step 4b (2026-09-20).** Do not
+re-derive this; it was produced by comparing each plugin's shipped
+implementation against what its fallback returns.
+
+| provider | real implementations | hollow stubs, equal to the fallback |
+|---|---|---|
+| `openfoam-environment` | none of the nine | **all nine** — `get_auxiliary_commands`, `get_dict_entry_catalog`, `get_override_schema`, `get_run_document_config_schema`, `get_samplable_fields`, `get_solver_commands`, `get_utility_manifests`, `get_utility_roots`, `resolve_case_models` |
+| `cardiaccore` | `get_auxiliary_commands`, `get_dict_entry_catalog`, `get_run_document_config_schema`, `get_utility_manifests` | `get_override_schema`, `get_samplable_fields`, `get_solver_commands`, `get_utility_roots`, `resolve_case_models` |
+| `cardiacfoam` | **all nine** | none |
+
+Every stub in that table exists only because the pre-Task-4 validator demanded
+the member. Task 4 demoted all thirteen, so the stubs are now deletable — and
+deleting `openfoam-environment`'s nine is the concrete evidence that the
+environment adapter was being forced to impersonate a solver plugin.
+
+Delete the stubs in this table alongside the delegations below. Leave every
+"real implementation" untouched.
+
 - [ ] **Step 4: Delete the delegations**
 
 From `CardiacCorePlugin`, delete `_openfoam` and these nine methods, which now compose from the environment provider: `get_environment_commands`, `is_installed_environment_command`, `get_case_runtime_conventions`, `get_selected_start_time`, `get_environment_diagnostics`, `get_loaded_environment`, `get_configured_environment`, `get_function_object_field_diagnostics`, `get_case_dict_key_diagnostics`.
