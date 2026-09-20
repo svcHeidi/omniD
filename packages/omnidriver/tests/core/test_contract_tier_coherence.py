@@ -23,12 +23,6 @@ def test_every_member_sits_in_exactly_one_tier():
     assert duplicated == {}, f"members declared at more than one tier: {duplicated}"
 
 
-@pytest.mark.xfail(
-    reason="fixed by Task 3 (delete unreachable fallbacks) and Task 4 "
-           "(derive _REQUIRED_PLUGIN_MEMBERS from tiers); see "
-           "docs/superpowers/plans/2026-09-20-phase0-contract-coherence.md",
-    strict=True,
-)
 def test_no_required_member_has_a_fallback():
     """A `required` member cannot be absent, so a fallback for it is dead code.
 

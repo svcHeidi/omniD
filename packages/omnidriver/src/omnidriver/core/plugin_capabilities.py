@@ -187,7 +187,7 @@ class DictionaryCatalogCapability(Protocol):
     :adapts: get_dict_entries, get_dict_groups, get_dictionary_catalog, get_phases
     :consumed-by: omnidriver/dict_entries.py, omnidriver/cardiacfoam/sweep.py, omnidriver/openfoam/apply_overrides.py, omnidriver/openfoam/dict_builder.py, omnidriver/core/specs/validation.py, omnidriver/core/strict_planning.py
     :fallback: legacy_phases
-    :status: required
+    :status: get_dict_entries=required, get_dict_groups=required, get_dictionary_catalog=required, get_phases=optional-neutral
     """
 
     def entries(self) -> tuple[Any, ...]: ...
