@@ -14,7 +14,6 @@ import yaml
 
 
 _PLUGIN_ID = "org.cardiacfoam"
-_PROFILE_PATH = Path(__file__).with_name("plugin.yaml")
 _RUNTIME_CONFIG_ENV = "DRIVERFOAM_RUNTIME_CONFIG"
 _BACKEND_ENV = "DRIVERFOAM_CARDIACFOAM_BACKEND"
 _SOLIDS_ROOT_ENV = "DRIVERFOAM_CARDIACFOAM_SOLIDS4FOAM_ROOT"
@@ -23,7 +22,17 @@ _LIBRARY_EXTENSIONS = ("dylib", "so")
 
 
 def _profile_contract() -> dict[str, Any]:
-    payload = yaml.safe_load(_PROFILE_PATH.read_text(encoding="utf-8"))
+    """The runtime.backend contract, reusing the profile `CardiacFoamPlugin`
+    already parsed and cached rather than re-reading `plugin.yaml`.
+
+    This also means `runtime.backend` is now inside the same digest as the
+    rest of the profile (`PluginProfile.payload`), where before it sat
+    outside it -- a caller that only saw `get_profile()`'s parsed document
+    would not have seen this contract at all.
+    """
+    from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+
+    payload = CardiacFoamPlugin.get_profile().payload
     try:
         contract = payload["runtime"]["backend"]
     except (KeyError, TypeError) as exc:

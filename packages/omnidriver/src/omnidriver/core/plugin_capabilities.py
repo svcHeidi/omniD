@@ -14,6 +14,7 @@ omnidriver fallbacks.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 from typing import Any, Protocol, TYPE_CHECKING
 
@@ -825,9 +826,21 @@ class _DictionaryCatalogAdapter:
 
 @dataclass(frozen=True)
 class _CapabilityManifestAdapter:
+    """Caches on the instance, not a module-level table.
+
+    ``adapt_plugin_capabilities`` builds one adapter per
+    :class:`~omnidriver.core.plugin_interface.DriverContext`, so a
+    ``cached_property`` here memoizes for that context's lifetime only and
+    cannot leak the manifest -- or a stale one -- into a different context.
+    """
+
     plugin: "SolverPlugin"
 
     def manifest(self) -> Any:
+        return self._manifest
+
+    @cached_property
+    def _manifest(self) -> Any:
         return self.plugin.get_capabilities()
 
 
