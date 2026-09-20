@@ -313,41 +313,78 @@ Expected: FAIL — `AttributeError: module 'omnidriver.core.capability_seams' ha
 
 - [ ] **Step 3: Implement `members_by_tier`**
 
-In `capability_seams.py`, below `validate_tiers`:
+**Amended 2026-09-20, after Task 1 landed.** Task 1 added
+`capability_seams.status_tiers(status)`, which parses a composite
+`member=tier, member=tier` line but **discards the member name**, returning
+tiers only. `members_by_tier` needs the member. Do NOT add a second parser
+alongside it — that is the duplication this whole phase exists to remove.
+
+Instead refactor to one parser with two views. Replace `status_tiers`'s body
+so it derives from a new `status_map`, and add both to `capability_seams.py`:
 
 ```python
-def members_by_tier() -> dict[str, frozenset[str]]:
-    """Map each tier to the contract member names declared at it.
+def status_map(status: str) -> dict[str, str]:
+    """Parse a seam's raw ``:status:`` text into a member -> tier mapping.
 
-    Derived from the ``:adapts:`` and ``:status:`` fields of every capability
-    Protocol, so the tiers and the seam table cannot drift: they are the same
-    parse. A ``:status:`` line naming per-member tiers (``case_files`` does)
-    is split here; a single-tier line applies to every name in ``:adapts:``.
-    """
-    buckets: dict[str, set[str]] = {tier: set() for tier in TIERS}
-    for seam in collect_seams():
-        adapted = [name.strip() for name in seam.adapts.split(",") if name.strip()]
-        per_member = _parse_per_member_status(seam.status)
-        for member in adapted:
-            buckets[per_member.get(member, per_member.get("*", seam.status))].add(member)
-    return {tier: frozenset(members) for tier, members in buckets.items()}
+    A single-tier line applies to every member the seam adapts, and is
+    returned under the key ``"*"``. A capability whose members genuinely
+    differ (``case_files``, ``override_scopes``) declares one ``member=tier``
+    entry per member instead.
 
-
-def _parse_per_member_status(status: str) -> dict[str, str]:
-    """Parse ``:status:`` into a member->tier map.
-
-    ``"required"``                      -> ``{"*": "required"}``
-    ``"get_profile=required, get_config_resolution_description=optional-neutral"``
-                                        -> one entry per named member
+    The single parser behind both :func:`status_tiers`, which needs the tiers
+    alone, and :func:`members_by_tier`, which needs the member each belongs
+    to. Added 2026-09-20 when the second consumer appeared; ``status_tiers``
+    previously parsed the text itself.
     """
     if "=" not in status:
         return {"*": status.strip()}
     parsed: dict[str, str] = {}
     for clause in status.split(","):
         member, _, tier = clause.partition("=")
-        parsed[member.strip()] = tier.strip()
+        if member.strip():
+            parsed[member.strip()] = tier.strip()
     return parsed
+
+
+def status_tiers(status: str) -> tuple[str, ...]:
+    """Extract the tier(s) a seam's raw ``:status:`` text declares.
+
+    See :func:`status_map`, which does the parsing; this drops the member
+    names so :func:`validate_tiers` can check both shapes the same way.
+    """
+    return tuple(status_map(status).values())
+
+
+def members_by_tier() -> dict[str, frozenset[str]]:
+    """Map each tier to the contract member names declared at it.
+
+    Derived from the ``:adapts:`` and ``:status:`` fields of every capability
+    Protocol, so the tiers and the seam table cannot drift: they are the same
+    parse.
+    """
+    buckets: dict[str, set[str]] = {tier: set() for tier in TIERS}
+    for seam in collect_seams():
+        adapted = [name.strip() for name in seam.adapts.split(",") if name.strip()]
+        per_member = status_map(seam.status)
+        for member in adapted:
+            tier = per_member.get(member, per_member.get("*"))
+            if tier is None:
+                raise ValueError(
+                    f"capability {seam.field!r} adapts {member!r} but its "
+                    f":status: names neither that member nor a single tier"
+                )
+            buckets[tier].add(member)
+    return {tier: frozenset(members) for tier, members in buckets.items()}
 ```
+
+Verify `status_tiers`'s existing behaviour is unchanged:
+
+```bash
+python -m pytest packages/omnidriver/tests/core/test_capability_seam_documentation.py -q
+```
+
+Expected: `0 failed`. If Task 1's tests break, `status_map` is not a faithful
+refactor of what `status_tiers` did — fix `status_map`, not the tests.
 
 - [ ] **Step 4: Run the test**
 
