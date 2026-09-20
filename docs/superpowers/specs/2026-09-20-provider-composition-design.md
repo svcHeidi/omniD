@@ -283,8 +283,13 @@ which re-walks `get_utility_manifests()`, `get_samplable_fields()` and
 `get_case_runtime_conventions()`; `_CapabilityManifestAdapter.manifest()` is a
 bare pass-through with no cache. `cardiacfoam.runtime_profile._profile_contract()`
 re-reads `plugin.yaml` from disk on every call rather than reusing
-`PluginProfile.payload`, which already holds the same parsed document — and
-therefore places the `runtime.backend` contract outside the profile digest.
+`PluginProfile.payload`, which already holds the same parsed document.
+**Corrected 2026-09-20 by Phase 0 Task 12:** this previously said the
+second read placed `runtime.backend` *outside the profile digest*. It did
+not — `payload` is the raw unfiltered document, so `runtime.backend` was
+always hashed. What was outside was single-parse provenance: two
+independent `yaml.safe_load` calls of one file can diverge between reads.
+A real defect, described wrongly.
 
 This is ordinary hygiene in Phase 0 and becomes load-bearing in §4.4.
 

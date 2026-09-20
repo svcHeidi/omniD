@@ -38,9 +38,9 @@
 | 8 · stop discarding records and contexts | done | `5c1eb68` |
 | 9 · `ConfigValueCapability` | done | `c8c5581` |
 | 10 · one diagnostic shape | done | `d3f0d9d` |
-| 11 · cardiacCore declaration hygiene | **next** | — |
-| 12 · caching (prerequisite for Phase 1's digest) | pending | — |
-| 13 · the three remaining §3.3 defects | pending | — |
+| 11 · cardiacCore declaration hygiene | done | `07a71b2` |
+| 12 · caching (prerequisite for Phase 1's digest) | done | `41056a4` |
+| 13 · the three remaining §3.3 defects | **next** | — |
 | 14 · all four shapes, close-out | pending | — |
 | 15 · the composition-mechanism spike | pending | — |
 
