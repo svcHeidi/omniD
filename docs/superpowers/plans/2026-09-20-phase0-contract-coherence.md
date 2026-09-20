@@ -40,8 +40,8 @@
 | 10 · one diagnostic shape | done | `d3f0d9d` |
 | 11 · cardiacCore declaration hygiene | done | `07a71b2` |
 | 12 · caching (prerequisite for Phase 1's digest) | done | `41056a4` |
-| 13 · the three remaining §3.3 defects | **next** | — |
-| 14 · all four shapes, close-out | pending | — |
+| 13 · the three remaining §3.3 defects | done | `43bd487` |
+| 14 · all four shapes, close-out | **next** | — |
 | 15 · the composition-mechanism spike | pending | — |
 
 Every completed task passes `0 failed` in all four verification shapes.
