@@ -32,8 +32,8 @@
 |---|---|---|
 | 1 · `provides:`/`requires:` in the profile | done | `d901ea9` |
 | 2 · declared-vs-implemented guard | done | `0326899` |
-| 3 · topological ordering | **next** | — |
-| 4 · the six composition rules, as failing tests | pending | — |
+| 3 · topological ordering | done | `3b451fa` |
+| 4 · the composition rules, as failing tests | **next** | — |
 | 5 · `ProviderIdentity` / `StackIdentity` | pending | — |
 | 6 · the composition mechanism (spike resolved: **own it**) | pending | — |
 | 7 · `DriverContext.providers` | pending | — |
@@ -664,6 +664,47 @@ def test_zero_providers_implementing_a_refusing_hook_still_refuses_by_name():
         _compose(only).sweep_materializer.materialize(
             case_dir=None, routed={},
         )
+
+
+def test_apply_and_target_paths_must_come_from_one_provider():
+    """The refusing-hook rule is CROSS-member, not per-member.
+
+    Added 2026-09-20 after the spike. Split across two providers, before-images
+    are computed by a different provider than the one mutating, and rollback
+    breaks silently. `_OverrideScopeAdapter.target_paths` already enforces this
+    for a single plugin; composition must generalise it, not lose it.
+    """
+    a = _Provider("org.a", apply_overrides=lambda *a, **k: ())
+    b = _Provider("org.b", requires=("org.a",),
+                  get_override_target_paths=lambda *a, **k: ())
+    with pytest.raises(ValueError, match="get_override_target_paths"):
+        _compose(a, b)
+
+
+def test_one_provider_supplying_both_is_accepted():
+    both = _Provider(
+        "org.both",
+        apply_overrides=lambda *a, **k: (),
+        get_override_target_paths=lambda *a, **k: (),
+    )
+    _compose(both)   # must not raise
+
+
+def test_override_scopes_concatenate_across_providers():
+    """`get_override_scopes` fits none of the original six shapes.
+
+    Spike finding #1, 2026-09-20. Classified here as a concatenating sequence:
+    scopes an environment provider offers and scopes a solver provider offers
+    should BOTH be available, since they address different files. If Task 6
+    concludes another shape is right, change this test and record why in the
+    spec -- do not leave it unclassified.
+    """
+    env = _Provider("org.env", get_override_scopes=lambda: ("env-scope",))
+    solver = _Provider("org.solver", requires=("org.env",),
+                       get_override_scopes=lambda: ("solver-scope",))
+    assert _compose(env, solver).override_scopes.scopes() == (
+        "env-scope", "solver-scope",
+    )
 
 
 def test_a_case_file_path_declared_twice_is_an_error():
