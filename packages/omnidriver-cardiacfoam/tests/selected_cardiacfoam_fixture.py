@@ -197,9 +197,9 @@ def selected_runtime_from_environment(
         raise FixtureInputError(
             "Build manifest is older than cardiacFoam; fixture refuses manifest regeneration"
         )
-    from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+    from omnidriver.cardiacfoam.runtime_profile import configure_runtime_environment
 
-    configured_runtime, configuration_error = CardiacFoamPlugin().configure_execution_environment(
+    configured_runtime, configuration_error = configure_runtime_environment(
         configured_input
     )
     if configuration_error:

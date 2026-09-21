@@ -133,3 +133,28 @@ def test_catalogue_paths_follow_adapter_case_file_rules(tmp_path: Path) -> None:
     spec = SimpleNamespace(case_root=case_root, metadata={})
 
     assert _owned_dict_relpaths(spec, context) == ("config/solver.yaml",)
+
+
+ADAPTER_PACKAGES = (
+    "packages/omnidriver-openfoam/src",
+    "packages/omnidriver-cardiacfoam/src",
+    "packages/omnidriver-cardiaccore/src",
+)
+
+
+def test_no_adapter_reaches_into_the_context_providers():
+    """Adapters go through `.capabilities` too.
+
+    Core has been clean since Phase 2 Task 7, but this guard never covered the
+    adapters -- so `openfoam_environment` grew a private, unversioned plugin
+    ABI (`get_openfoam_bashrc`, `configure_execution_environment`) that no
+    Protocol declared and nothing validated.
+    """
+    offenders = []
+    for package in ADAPTER_PACKAGES:
+        for path in Path(package).rglob("*.py"):
+            text = path.read_text()
+            for needle in ("driver_context.plugin", "driver_context.providers"):
+                if needle in text and "test" not in path.parts:
+                    offenders.append(f"{path}: {needle}")
+    assert offenders == [], offenders

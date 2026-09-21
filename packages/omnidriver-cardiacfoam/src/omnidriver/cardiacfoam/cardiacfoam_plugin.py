@@ -110,21 +110,6 @@ class CardiacFoamPlugin:
 
         return openfoam_case_runtime_conventions()
 
-    def configure_execution_environment(self, env: dict[str, str]):
-        """Apply the plugin's declared backend and build-manifest contract."""
-        from omnidriver.cardiacfoam.runtime_profile import (
-            configure_runtime_environment,
-        )
-
-        return configure_runtime_environment(env)
-
-    def get_openfoam_bashrc(self, env: dict[str, str]) -> str | None:
-        from omnidriver.cardiacfoam.runtime_profile import (
-            configured_openfoam_bashrc,
-        )
-
-        return configured_openfoam_bashrc(env)
-
     def get_environment_diagnostics(
         self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None,
     ):
@@ -139,14 +124,46 @@ class CardiacFoamPlugin:
         )
 
     def get_configured_environment(self, env, driver_context):
-        """Preserve generic OpenFOAM setup and apply cardiacFoam build validation."""
-        from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
+        """Apply this plugin's declared backend and build-manifest contract.
 
-        return OpenFOAMEnvironmentPlugin().get_configured_environment(env, driver_context)
+        Formerly a private ``configure_execution_environment`` hook that
+        `openfoam_environment.py` reached for by hand, via a `getattr` on the
+        context's selected provider. The stack now composes this directly:
+        `provider_stack.py` classifies ``get_configured_environment`` as
+        ``chain``, so when this provider is composed with
+        openfoam-environment's, that provider's (generic, no-op)
+        contribution runs first and this one runs on its result -- no
+        back-channel required.
+        """
+        del driver_context
+        from omnidriver.cardiacfoam.runtime_profile import (
+            configure_runtime_environment,
+        )
+
+        configured_env, _error = configure_runtime_environment(env)
+        return configured_env
 
     def get_loaded_environment(self, *, explicit_bashrc=None, driver_context=None):
-        """Load the explicit OpenFOAM profile, then this plugin's runtime contract."""
+        """Resolve this plugin's configured bashrc, then source it via OpenFOAM.
+
+        Formerly a private ``get_openfoam_bashrc`` hook that
+        `openfoam_environment.py` reached for by hand, via a `getattr` on the
+        context's selected provider. `provider_stack.py` classifies
+        ``get_loaded_environment`` as ``single`` (first non-``None``,
+        most-specific provider first), so this provider must resolve the
+        bashrc itself rather than rely on the generic OpenFOAM provider to
+        ask it for one.
+        """
         from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
+
+        if explicit_bashrc is None:
+            import os
+
+            from omnidriver.cardiacfoam.runtime_profile import (
+                configured_openfoam_bashrc,
+            )
+
+            explicit_bashrc = configured_openfoam_bashrc(os.environ)
 
         return OpenFOAMEnvironmentPlugin().get_loaded_environment(
             explicit_bashrc=explicit_bashrc,

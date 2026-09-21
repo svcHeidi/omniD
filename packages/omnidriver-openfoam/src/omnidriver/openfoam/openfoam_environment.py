@@ -137,16 +137,6 @@ def load_openfoam_environment(
     executables.
     """
     env = dict(base_env or os.environ)
-    if explicit_bashrc is None and driver_context is not None:
-        bashrc_hook = getattr(driver_context.plugin, "get_openfoam_bashrc", None)
-        if callable(bashrc_hook):
-            try:
-                explicit_bashrc = bashrc_hook(env)
-            except Exception as exc:  # plugin diagnostics must not crash planning
-                return OpenFOAMEnvironment(
-                    env=env,
-                    error=f"Plugin OpenFOAM runtime configuration failed: {exc}",
-                )
     bashrc = discover_openfoam_bashrc(
         explicit_bashrc=explicit_bashrc,
         base_env=env,
@@ -222,33 +212,17 @@ def _configure_plugin_environment(
     environment: OpenFOAMEnvironment,
     driver_context: Any | None,
 ) -> OpenFOAMEnvironment:
-    """Apply an optional plugin-owned runtime environment contract.
+    """Return the sourced environment unchanged.
 
-    OpenFOAM sourcing is generic. Project-specific library selection belongs
-    to the selected plugin, so the core only invokes the optional hook and
-    carries its returned environment/error forward.
+    OpenFOAM sourcing is generic; project-specific library selection belongs
+    to whichever other provider composes with this one (via `.capabilities`,
+    e.g. ``get_configured_environment``'s ``chain`` composition in
+    `provider_stack.py`), not to a hook this module reaches for on
+    ``driver_context`` itself. ``driver_context`` is accepted for signature
+    stability with the two call sites above, but this function no longer
+    reads it.
     """
-    if environment.error or driver_context is None:
-        return environment
-
-    hook = getattr(driver_context.plugin, "configure_execution_environment", None)
-    if hook is None:
-        return environment
-
-    try:
-        configured_env, error = hook(dict(environment.env))
-    except Exception as exc:  # plugin diagnostics must not crash planning
-        return OpenFOAMEnvironment(
-            env=environment.env,
-            bashrc=environment.bashrc,
-            error=f"Plugin runtime environment configuration failed: {exc}",
-        )
-
-    return OpenFOAMEnvironment(
-        env=dict(configured_env),
-        bashrc=environment.bashrc,
-        error=error,
-    )
+    return environment
 
 
 def configure_plugin_environment(

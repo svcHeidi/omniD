@@ -48,7 +48,7 @@ def test_cardiac_catalog_partitions_entries_by_document() -> None:
 
 def test_cardiac_runtime_requires_a_discoverable_solver(tmp_path: Path) -> None:
     del tmp_path
-    env, error = CardiacFoamPlugin().configure_execution_environment({})
+    env, error = configure_runtime_environment({})
 
     assert env == {}
     assert error is not None
@@ -66,7 +66,7 @@ def test_cardiac_runtime_exports_one_validated_solids4foam_root(tmp_path: Path) 
     manifest = tmp_path / "cardiacFoam.build.json"
     solver = _write_complete_full_manifest(manifest, tmp_path, root)
 
-    env, error = CardiacFoamPlugin().configure_execution_environment({
+    env, error = configure_runtime_environment({
         "DRIVERFOAM_CARDIACFOAM_BACKEND": "full",
         "DRIVERFOAM_CARDIACFOAM_SOLIDS4FOAM_ROOT": str(root),
         "DRIVERFOAM_CARDIACFOAM_BUILD_MANIFEST": str(manifest),
@@ -252,7 +252,7 @@ def test_cardiac_runtime_file_selects_backend_and_bashrc(tmp_path: Path) -> None
         f"    build_manifest: {manifest}\n"
     )
 
-    env, error = CardiacFoamPlugin().configure_execution_environment({
+    env, error = configure_runtime_environment({
         "DRIVERFOAM_RUNTIME_CONFIG": str(config),
         "WM_PROJECT_DIR": str(tmp_path),
         "PATH": str(solver.parent),
@@ -261,6 +261,6 @@ def test_cardiac_runtime_file_selects_backend_and_bashrc(tmp_path: Path) -> None
     assert error is None
     assert env["DRIVERFOAM_CARDIACFOAM_BACKEND"] == "full"
     assert env["SOLIDS4FOAM_INST_DIR"] == str(root.resolve())
-    assert CardiacFoamPlugin().get_openfoam_bashrc({
+    assert runtime_profile.configured_openfoam_bashrc({
         "DRIVERFOAM_RUNTIME_CONFIG": str(config),
     }) == "/tmp/openfoam/etc/bashrc"
