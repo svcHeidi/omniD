@@ -41,7 +41,6 @@ from omnidriver.cardiacfoam.common_dict_entries import (
 from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 from omnidriver.cardiacfoam.active_tension_catalog import ACTIVE_TENSION_MODEL_CATALOG
 from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG
-from omnidriver.core.capability_manifest import build_capability_manifest
 from omnidriver.cardiacfoam.solver_coupling import SOLVER_COMPATIBILITY_RULES
 from omnidriver.core.runtime.registry import list_tutorials
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
@@ -170,32 +169,24 @@ class CardiacFoamPlugin:
 
     def get_capabilities(self) -> CapabilityManifest:
         """
-        Return the cardiacFoam capabilities (models, solvers, etc.).
+        Return cardiacFoam's domain catalogues: models, solvers, etc.
 
-        No longer reaches for the environment provider's commands or case
-        conventions -- ``get_capabilities`` is a ``single``-shape composed
-        member, so this provider must answer for itself, and a provider must
-        not embed another to fill the gap. The environment-sourced fields
-        degrade to the same neutral values core's own compatibility
-        fallbacks would supply for an adapter that never implemented them; a
-        caller after the full composed picture reads
-        ``DriverContext.capabilities`` per member instead of this method.
+        **Changed by Task 10 (2026-09-22).** This used to build the WHOLE
+        capability manifest itself (``allowed_commands``/``samplable_fields``,
+        by calling core's own manifest builder directly) and hand it back to
+        core, which just returned it unchanged. Since ``get_capabilities`` is a
+        ``single``-shape composed member, that meant only this plugin's own
+        self-authored answer ever won in a stack -- a companion environment
+        provider's ``environment_commands`` were discarded entirely, always
+        replaced by the ``frozenset()`` this method passed in their place.
+        Core (``plugin_capabilities._CapabilityManifestAdapter.manifest``)
+        now builds that base itself from the composed
+        ``command_authorization``/``case_introspection``/
+        ``case_runtime_conventions`` reads over the SAME provider stack, and
+        merges in only what follows: the domain catalogues core has no way
+        to compose, because they are cardiacFoam's own vocabulary.
         """
-        # No case_root is available at this call site, so this resolves to
-        # the fixed solver fields only (matches historical behaviour: no
-        # resolved model, no ionic/active-tension-specific field names).
-        resolved: dict = {}
-        manifest = build_capability_manifest(
-            environment_commands=frozenset(),
-            # The manifest advertises the accept-surface, so it lists both
-            # kinds of authorized plugin command -- the solver/auxiliary split
-            # only governs who may be credited with a run's artifacts.
-            plugin_commands=self.get_solver_commands() | self.get_auxiliary_commands(),
-            utility_manifests=self.get_utility_manifests(),
-            samplable_fields=self.get_samplable_fields(resolved),
-            case_script_commands=frozenset(),
-        )
-        manifest["heterogeneity_models"] = HETEROGENEITY_MODELS
+        manifest: dict = {"heterogeneity_models": HETEROGENEITY_MODELS}
         # Copy on the way out, as get_utility_manifests() already does: these
         # are the live module-level catalogues, and IONIC_MODEL_CATALOG is
         # additionally written into at import by the BATCHED_MODELS loop. A

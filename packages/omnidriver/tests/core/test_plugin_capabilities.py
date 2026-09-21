@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from omnidriver.core.capability_manifest import build_capability_manifest
 from omnidriver.core.plugin_capabilities import (
     ArtifactPredictionRequest,
     CaseCompatibilityRequest,
@@ -39,7 +40,35 @@ def test_context_exposes_focused_adapters_without_replacing_public_plugin(
     assert context.providers == (plugin,)
     assert context.capabilities.tutorials.catalog() == plugin.get_tutorial_catalog()
     assert context.capabilities.dictionaries.entries() == plugin.get_dict_entries()
-    assert context.capabilities.manifest.manifest() == plugin.get_capabilities()
+    # Corrected 2026-09-22 (Task 10): this used to assert
+    # `manifest.manifest() == plugin.get_capabilities()` -- true only because
+    # `MinimalTestPlugin.get_capabilities()` happened to return `{}` and
+    # `manifest()` was a bare pass-through of whatever the plugin built
+    # itself. Core now builds `allowed_commands`/`samplable_fields` itself
+    # from the SAME composed reads a plugin's own get_capabilities() used to
+    # gather privately, and merges in only what a plugin's own
+    # get_capabilities() adds (nothing, for this plugin). Building the
+    # expected value the same way core does is the real assertion now: that
+    # core no longer needs the plugin to hand back an already-assembled
+    # manifest.
+    command_authorization = context.capabilities.command_authorization
+    case_introspection = context.capabilities.case_introspection
+    conventions = context.capabilities.case_runtime_conventions.conventions()
+    expected_manifest = build_capability_manifest(
+        environment_commands=command_authorization.environment_commands(),
+        plugin_commands=(
+            command_authorization.solver_commands()
+            | command_authorization.auxiliary_commands()
+        ),
+        utility_manifests=command_authorization.utility_manifests(),
+        samplable_fields=case_introspection.samplable_fields({}),
+        case_script_commands=(
+            frozenset(conventions.case_script_commands)
+            | frozenset(conventions.case_entrypoints)
+        ),
+    )
+    expected_manifest.update(plugin.get_capabilities())
+    assert context.capabilities.manifest.manifest() == expected_manifest
     assert context.capabilities.configuration_validator.validate(
         ConfigurationValidationRequest(spec),
     ) == ()

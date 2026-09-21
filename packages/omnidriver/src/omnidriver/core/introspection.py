@@ -137,6 +137,11 @@ def _describe_config_schema(
 
     The vocabulary (override tokens, examples, document names) is solver
     knowledge and lives in the active plugin; core only routes the request.
+    Updated 2026-09-22 (Task 10): when the active plugin has no
+    tutorial-specific vocabulary to give, ``override_schema.config_schema``
+    itself derives an answer from the validated run-document schema instead
+    of an empty one -- still routed here unchanged, but no longer always the
+    plugin's own words.
     """
     return driver_context.capabilities.override_schema.config_schema(
         tutorial_name, make_spec_info,

@@ -14,7 +14,6 @@ omnidriver fallbacks.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import cached_property
 from pathlib import Path
 from typing import Any, Protocol, TYPE_CHECKING
 
@@ -387,6 +386,18 @@ class CaseCompatibilityCapability(Protocol):
     no-workflow run policy. Core first checks an adapter-declared entrypoint;
     the fallback returns ``False``.
 
+    ``is_case`` composes the THIRD filesystem question a caller used to ask
+    by hand: ``registry._is_case_directory`` was
+    ``has_case_marker(...) or _has_entrypoint(...)``, duplicated at every
+    discovery call site. This collapses that into one predicate and adds a
+    signal discovery never checked -- a case whose declared entrypoint was
+    since removed, but which still carries a generated marker from a prior
+    run (e.g. OpenFOAM's ``run_document.json``), is still this plugin's case.
+    Not a new plugin hook: it reads the already-adapted ``has_case_marker``
+    plus whatever ``get_case_runtime_conventions`` the stack composes (an
+    absent hook degrades through that capability's own neutral fallback, so
+    ``is_case`` needs none of its own). (Task 10, 2026-09-22.)
+
     :adapts: has_case_marker, is_case_runnable_without_workflow
     :consumed-by: omnidriver/core/runtime/registry.py
     :fallback: legacy_case_marker, legacy_case_runnable_without_workflow
@@ -395,6 +406,7 @@ class CaseCompatibilityCapability(Protocol):
 
     def has_case_marker(self, request: CaseCompatibilityRequest) -> bool: ...
     def is_runnable_without_workflow(self, request: CaseCompatibilityRequest) -> bool: ...
+    def is_case(self, request: CaseCompatibilityRequest) -> bool: ...
 
 
 class SweepMaterializerCapability(Protocol):
@@ -583,10 +595,15 @@ class OverrideSchemaCapability(Protocol):
     """The plugin's authored configuration vocabulary.
 
     ``config_schema`` is the machine-readable description of the ``--config``
-    JSON an agent writes, including a worked example for the named tutorial.
-    ``dict_entry_catalog`` returns the plugin's dictionary entries arranged by
-    its own document names, **unserialized** -- core owns serialization, the
-    plugin owns the vocabulary and the document shape.
+    JSON an agent writes, including a worked example for the named tutorial,
+    when the plugin has one to give. When it does not (an unrecognized
+    tutorial, or no hook at all), the adapter derives the answer from
+    :class:`RunDocumentConfigurationCapability`'s validated schema instead of
+    handing back a second, independently-authored empty answer -- see
+    :meth:`_OverrideSchemaAdapter.config_schema`. ``dict_entry_catalog``
+    returns the plugin's dictionary entries arranged by its own document
+    names, **unserialized** -- core owns serialization, the plugin owns the
+    vocabulary and the document shape.
 
     :adapts: get_dict_entry_catalog, get_override_schema
     :consumed-by: omnidriver/core/introspection.py
@@ -831,22 +848,73 @@ class _DictionaryCatalogAdapter:
 
 @dataclass(frozen=True)
 class _CapabilityManifestAdapter:
-    """Caches on the instance, not a module-level table.
+    """Assembles the accept-surface manifest from capabilities core already
+    holds, merging in only what a plugin alone can supply.
 
-    ``adapt_plugin_capabilities`` builds one adapter per
-    :class:`~omnidriver.core.plugin_interface.DriverContext`, so a
-    ``cached_property`` here memoizes for that context's lifetime only and
-    cannot leak the manifest -- or a stale one -- into a different context.
+    Before Task 10 (2026-09-22), ``manifest()`` was just
+    ``self.plugin.get_capabilities()`` -- the WHOLE manifest, including the
+    ``allowed_commands``/``samplable_fields`` sections, built and handed back
+    BY the plugin. Since ``get_capabilities`` is a ``single``-shape composed
+    member (:mod:`provider_stack`), that round trip meant only the
+    most-specific provider's own self-authored answer ever won, discarding
+    e.g. a companion environment provider's ``environment_commands``
+    entirely -- exactly the isolation a composed stack (Tasks 6-9) exists to
+    remove. Core now builds those two sections itself from the SAME
+    ``command_authorization``/``case_introspection``/
+    ``case_runtime_conventions`` reads every other capability here already
+    uses, and merges in only what a plugin's own ``get_capabilities()``
+    supplies that core cannot compose: a domain catalogue, such as
+    cardiacFoam's ionic-model table.
+
+    **No cache.** Phase 0 Task 12 made this a ``cached_property`` to avoid
+    recomputing an expensive, plugin-authored manifest. Combined with
+    ``DriverContext.capabilities`` also being cached, every ``.manifest()``
+    caller sharing one ``DriverContext`` ended up sharing the exact same
+    assembled dict -- including its ``ionic_models`` sub-dict -- for as long
+    as that context lived (three call sites read it per context:
+    ``dict_entries``, ``strict_planning``, ``introspection``). Nothing
+    mutates it today, but that narrows the very isolation ``DriverContext``
+    exists to provide (found by the Phase 0 review, 2026-09-20). Now that
+    assembly is a handful of cheap composed-capability reads plus a small,
+    already-copied domain dict, recomputing it on every call costs nothing,
+    so the cache bought nothing but that narrowing -- it is removed here.
+    **Corrected 2026-09-22:**
+    ``test_capability_calls_are_cheap.py::test_capability_manifest_adapter_caches_per_instance``
+    used to assert identity across two calls on one adapter; it now asserts
+    the opposite, since there is no longer a cached object to share.
     """
 
     plugin: "SolverPlugin"
 
     def manifest(self) -> Any:
-        return self._manifest
+        from .capability_manifest import build_capability_manifest
 
-    @cached_property
-    def _manifest(self) -> Any:
-        return self.plugin.get_capabilities()
+        command_authorization = _CommandAuthorizationAdapter(self.plugin)
+        case_introspection = _CaseIntrospectionAdapter(self.plugin)
+        conventions = _CaseRuntimeConventionsAdapter(self.plugin).conventions()
+        built = build_capability_manifest(
+            environment_commands=command_authorization.environment_commands(),
+            # The manifest advertises the accept-surface, so it lists both
+            # kinds of authorized plugin command -- the solver/auxiliary
+            # split only governs who may be credited with a run's artifacts.
+            plugin_commands=(
+                command_authorization.solver_commands()
+                | command_authorization.auxiliary_commands()
+            ),
+            utility_manifests=command_authorization.utility_manifests(),
+            # No case_root is available at this call site -- matches every
+            # historical caller of get_capabilities(), which never resolved
+            # one either -- so this resolves to the fixed solver fields only.
+            samplable_fields=case_introspection.samplable_fields({}),
+            case_script_commands=(
+                frozenset(conventions.case_script_commands)
+                | frozenset(conventions.case_entrypoints)
+            ),
+        )
+        extra = self.plugin.get_capabilities()
+        if extra:
+            built.update(extra)
+        return built
 
 
 @dataclass(frozen=True)
@@ -1001,6 +1069,27 @@ class _CaseCompatibilityAdapter:
         from .compatibility import legacy_case_runnable_without_workflow
 
         return legacy_case_runnable_without_workflow(self.plugin, request.case_root)
+
+    def is_case(self, request: CaseCompatibilityRequest) -> bool:
+        """Marker, entrypoint, or a leftover generated-case marker -- any one
+        signal is enough. See the capability docstring for why this
+        collapses ``registry``'s own duplicated ``has_case_marker(...) or
+        _has_entrypoint(...)`` check."""
+        if self.has_case_marker(request):
+            return True
+        hook = getattr(self.plugin, "get_case_runtime_conventions", None)
+        if callable(hook):
+            conventions = hook()
+        else:
+            from .compatibility import legacy_case_runtime_conventions
+
+            conventions = legacy_case_runtime_conventions()
+        case_root = request.case_root
+        if any((case_root / relpath).is_file() for relpath in conventions.case_entrypoints):
+            return True
+        return any(
+            (case_root / marker).exists() for marker in conventions.generated_case_markers
+        )
 
 
 @dataclass(frozen=True)
@@ -1253,12 +1342,32 @@ class _OverrideSchemaAdapter:
     def config_schema(
         self, tutorial_name: str, make_spec_info: dict[str, Any],
     ) -> dict[str, Any]:
+        """Return the plugin's config documentation, or the validated schema.
+
+        Two capabilities used to independently author an answer to "what may
+        config contain": this one (agent-facing documentation, keyed by
+        tutorial) and :class:`RunDocumentConfigurationCapability` (the schema
+        core actually validates against). A plugin with real per-tutorial
+        vocabulary to document (e.g. cardiacFoam's worked examples) still
+        supplies it here and that answer wins unchanged. But when a plugin
+        has nothing tutorial-specific to say -- an unrecognized tutorial
+        name, or no ``get_override_schema`` hook at all -- the old behaviour
+        was a second, independently-authored EMPTY answer (``{}``), which
+        documents nothing. That can no longer diverge from the validated
+        schema: an empty answer here now derives from
+        ``RunDocumentConfigurationCapability.schema()`` instead. (Task 10,
+        2026-09-22.)
+        """
         hook = getattr(self.plugin, "get_override_schema", None)
         if callable(hook):
-            return dict(hook(tutorial_name, make_spec_info))
-        from .compatibility import legacy_override_schema
+            answer = dict(hook(tutorial_name, make_spec_info))
+        else:
+            from .compatibility import legacy_override_schema
 
-        return legacy_override_schema(self.plugin, tutorial_name, make_spec_info)
+            answer = legacy_override_schema(self.plugin, tutorial_name, make_spec_info)
+        if answer:
+            return answer
+        return _RunDocumentConfigurationAdapter(self.plugin).schema()
 
     def dict_entry_catalog(self) -> dict[str, Any]:
         hook = getattr(self.plugin, "get_dict_entry_catalog", None)

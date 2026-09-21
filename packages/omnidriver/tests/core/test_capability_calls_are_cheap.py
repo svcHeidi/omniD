@@ -5,6 +5,18 @@ built. An accessor that re-parses YAML from package resources on every call
 makes that too slow to do. Phase 0 Task 12 caches the three accessors an
 audit found doing that: cardiacCore's guidance manifest, cardiacFoam's
 runtime backend contract, and core's own capability-manifest adapter.
+
+**Corrected 2026-09-22 (Task 10):** the third of those three is no longer
+cached. Task 10 moved capability-manifest ASSEMBLY into core itself (reading
+the composed ``command_authorization``/``case_introspection``/
+``case_runtime_conventions`` capabilities plus a plugin's own small domain
+dict), which is a handful of in-memory reads, not a re-parse -- so the
+"cheap enough to call repeatedly" property this module guards no longer
+needs a cache to hold. Caching it instead meant every `.manifest()` caller
+sharing one `DriverContext` (`dict_entries`, `strict_planning`,
+`introspection`) shared the exact same assembled dict, narrowing the
+isolation `DriverContext` exists to provide (Phase 0 review, 2026-09-20).
+See `plugin_capabilities._CapabilityManifestAdapter` for the removal.
 """
 
 import pytest
@@ -59,15 +71,21 @@ def test_profile_contract_reuses_the_cached_profile_parse():
     assert contract is profile.payload["runtime"]["backend"]
 
 
-def test_capability_manifest_adapter_caches_per_instance():
-    """`_CapabilityManifestAdapter` memoizes per adapter instance, not
-    globally.
+def test_capability_manifest_adapter_no_longer_shares_a_cached_copy():
+    """`_CapabilityManifestAdapter` no longer memoizes -- on purpose.
 
-    `adapt_plugin_capabilities` builds one adapter per `DriverContext`. A
-    module-level cache would leak one context's manifest into another's;
-    caching on the (frozen) adapter instance instead means the same adapter
-    called twice returns the exact object it built the first time, while a
-    different adapter -- a different context -- starts fresh.
+    **Corrected 2026-09-22 (Task 10):** this test used to be named
+    `test_capability_manifest_adapter_caches_per_instance` and asserted the
+    opposite (`first is second`). That cache -- introduced by Phase 0 Task
+    12 to avoid recomputing an expensive plugin-authored manifest -- meant
+    every `.manifest()` call on one adapter (i.e. every caller sharing one
+    `DriverContext`, since `DriverContext.capabilities` is itself cached)
+    got back the exact same dict, including its nested, plugin-owned
+    sub-dicts. Nothing mutated it, but that narrowed the very isolation
+    `DriverContext` exists to provide. Now that assembly reads a handful of
+    cheap composed capabilities instead of doing the plugin's own expensive
+    work, there is nothing left to cache, and this asserts the opposite: two
+    calls return equal but independent objects.
     """
     from omnidriver.core.plugin_capabilities import _CapabilityManifestAdapter
     from plugins.minimal_plugin import MinimalTestPlugin
@@ -75,7 +93,5 @@ def test_capability_manifest_adapter_caches_per_instance():
     adapter = _CapabilityManifestAdapter(MinimalTestPlugin())
     first = adapter.manifest()
     second = adapter.manifest()
-    assert first is second
-
-    other_adapter = _CapabilityManifestAdapter(MinimalTestPlugin())
-    assert other_adapter.manifest() is not first
+    assert first == second
+    assert first is not second

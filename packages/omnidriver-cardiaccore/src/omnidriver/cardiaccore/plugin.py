@@ -8,7 +8,6 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from omnidriver.core.capability_manifest import build_capability_manifest
 from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 from omnidriver.core.plugin_profile import load_plugin_profile
 
@@ -69,24 +68,20 @@ class CardiacCorePlugin:
         return DOCUMENTS
 
     def get_capabilities(self) -> dict[str, Any]:
-        """This provider's own self-description.
+        """This provider has no domain catalogue core cannot already compose.
 
-        No longer reaches for the environment provider's commands or case
-        conventions: composition (``get_capabilities`` is a ``single``-shape
-        member) means whichever provider is most specific answers this call
-        alone, and a provider must not embed another to fill the gap. The
-        environment-sourced fields degrade to the same neutral values core's
-        own compatibility fallbacks would supply for an adapter that never
-        implemented them; a caller after the full composed picture reads
-        ``DriverContext.capabilities`` per member instead of this method.
+        **Changed by Task 10 (2026-09-22).** This used to build the whole
+        manifest itself via ``build_capability_manifest`` and hand it back to
+        core, which just returned it unchanged -- duplicating what
+        ``plugin_capabilities._CapabilityManifestAdapter.manifest`` now
+        computes directly from the composed ``command_authorization``/
+        ``case_introspection``/``case_runtime_conventions`` reads over this
+        same provider stack. cardiacCore declares no domain vocabulary beyond
+        those (its named catalogues -- conditional inputs, tree validation,
+        etc. -- are exposed through ``get_named_catalogs`` instead), so there
+        is nothing left for this method to add.
         """
-        return build_capability_manifest(
-            environment_commands=frozenset(),
-            plugin_commands=self.get_solver_commands() | self.get_auxiliary_commands(),
-            utility_manifests=self.get_utility_manifests(),
-            samplable_fields=self.get_samplable_fields({}),
-            case_script_commands=frozenset(),
-        )
+        return {}
 
     def get_tutorial_catalog(self) -> dict[str, Any]:
         return {

@@ -54,6 +54,23 @@ def build_capability_manifest(
     but does have its own ``get_profile()`` -- see
     future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md §5).
 
+    **Callers, since Task 10 (2026-09-22).** ``CardiacFoamPlugin`` and
+    ``CardiacCorePlugin`` used to gather these five arguments from
+    themselves and call this function directly inside their own
+    ``get_capabilities()``, then hand the whole assembled manifest back to
+    core -- a round trip that meant only their OWN commands/conventions
+    were ever reflected, never a composed stack's. Core now gathers these
+    arguments itself, from the composed ``command_authorization``/
+    ``case_introspection``/``case_runtime_conventions`` capabilities (see
+    ``plugin_capabilities._CapabilityManifestAdapter.manifest``), and calls
+    this function directly; a plugin's own ``get_capabilities()`` supplies
+    only what core cannot compose from those reads (a domain catalogue). The
+    keyword-argument shape here is unchanged -- ``OpenFOAMEnvironmentPlugin``
+    (which has no domain catalogue of its own to add) and several existing
+    tests (e.g. ``test_case_script_commands_entrypoint_seam.py``,
+    ``omnidriver-cardiacfoam/tests/test_capability_manifest.py``) still call
+    it this way directly, as a pure builder, and continue to.
+
     ``allowed_commands`` names exactly what a workflow DAG step may invoke;
     ``samplable_fields`` names the fields a function object may sample for the
     resolved model, split by region -- resolving the model and naming its

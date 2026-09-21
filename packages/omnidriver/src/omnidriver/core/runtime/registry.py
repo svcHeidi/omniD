@@ -56,11 +56,11 @@ def _is_case_directory(
         return False
     from ..plugin_capabilities import CaseCompatibilityRequest
 
-    return (
-        driver_context.capabilities.case_compatibility.has_case_marker(
-            CaseCompatibilityRequest(path),
-        )
-        or _has_entrypoint(path, driver_context)
+    # Was `has_case_marker(...) or _has_entrypoint(...)`, duplicating logic
+    # `case_compatibility.is_case` now composes in one place (marker,
+    # entrypoint, and a leftover generated-case marker). Task 10, 2026-09-22.
+    return driver_context.capabilities.case_compatibility.is_case(
+        CaseCompatibilityRequest(path),
     )
 
 
