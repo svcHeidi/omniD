@@ -36,7 +36,7 @@ def test_context_exposes_focused_adapters_without_replacing_public_plugin(
     context = driver_context(plugin, source="test")
     spec = _spec(tmp_path)
 
-    assert context.plugin is plugin
+    assert context.providers == (plugin,)
     assert context.capabilities.tutorials.catalog() == plugin.get_tutorial_catalog()
     assert context.capabilities.dictionaries.entries() == plugin.get_dict_entries()
     assert context.capabilities.manifest.manifest() == plugin.get_capabilities()
@@ -62,12 +62,14 @@ def test_context_exposes_focused_adapters_without_replacing_public_plugin(
     assert config == {}
     assert diagnostics == ()
 
-    # Existing callers that constructed DriverContext(plugin, identity)
-    # directly retain the same constructor shape.
-    reconstructed = DriverContext(plugin, context.identity)
-    assert reconstructed.plugin is plugin
+    # Existing callers that constructed DriverContext(providers, identity)
+    # directly retain the same constructor shape -- now a one-provider stack.
+    # This is the same property the pre-composition test proved of `.plugin`:
+    # the context does not hide the provider behind the capability adapters.
+    reconstructed = DriverContext((plugin,), context.identity)
+    assert reconstructed.providers == (plugin,)
     assert reconstructed.capabilities.tutorials.catalog() == plugin.get_tutorial_catalog()
-    assert [item.name for item in fields(reconstructed)] == ["plugin", "identity"]
+    assert [item.name for item in fields(reconstructed)] == ["providers", "identity"]
 
 
 def test_non_cardiac_plugin_does_not_inherit_cardiac_case_evidence(

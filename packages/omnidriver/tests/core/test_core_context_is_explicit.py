@@ -21,6 +21,8 @@ from __future__ import annotations
 import ast
 import pathlib
 
+import pytest
+
 import omnidriver.core
 
 from conftest import skip_without_repo
@@ -219,3 +221,57 @@ def test_core_never_invents_a_filesystem_root() -> None:
         + "\n".join(f"  {f}: lines {ls}" for f, ls in sorted(offenders.items()))
         + "\nTake the location as a parameter instead."
     )
+
+
+@pytest.fixture
+def two_provider_context():
+    """A composed :class:`DriverContext` over two real, installed providers.
+
+    Skips rather than fabricating a stand-in when fewer than two adapters are
+    installed -- this fixture exists to prove composition over genuine
+    providers, not over test doubles that happen to satisfy the Protocol.
+
+    Deliberately does not wrap ``driver_context_for_installed_plugins``: that
+    fixture returns already-built single-plugin ``DriverContext`` objects, and
+    `driver_context(*providers, ...)` needs the plugin *instances* themselves.
+    Mirrors ``plugin_discovery.load_discovered_plugin``'s
+    ``entry_point.load()()`` pattern instead of writing new discovery, since
+    ``discover_plugins()`` returns ``EntryPoint`` objects, not classes.
+    """
+    from omnidriver.core import plugin_discovery
+    from omnidriver.core.plugin_interface import driver_context
+
+    discovered = plugin_discovery.discover_plugins()
+    environment_name = next(
+        (name for name in discovered if "environment" in name), None,
+    )
+    solver_name = next(
+        (name for name in discovered if name != environment_name), None,
+    )
+    if environment_name is None or solver_name is None:
+        pytest.skip(
+            "requires the OpenFOAM environment adapter plus at least one "
+            "other installed omnidriver.plugins adapter"
+        )
+
+    environment_plugin = discovered[environment_name].load()()
+    solver_plugin = discovered[solver_name].load()()
+    return driver_context(environment_plugin, solver_plugin, source="test")
+
+
+def test_a_context_holds_an_ordered_stack():
+    import dataclasses
+
+    from omnidriver.core.plugin_interface import DriverContext
+
+    fields = {f.name for f in dataclasses.fields(DriverContext)}
+    assert "providers" in fields
+    assert "plugin" not in fields, (
+        "a single `plugin` field is the arity assumption this phase removes"
+    )
+
+
+def test_identity_names_every_provider(two_provider_context):
+    payload = two_provider_context.identity.to_json()
+    assert len(payload["providers"]) == 2
+    assert payload["resolutions"], "the identity must record who answered what"

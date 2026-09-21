@@ -53,6 +53,7 @@ if TYPE_CHECKING:
     from omnidriver.core.tutorials_display import TutorialDisplay
     from omnidriver.core.plugin_capabilities import ResolvedInput
     from omnidriver.core.report_catalog import ReportDefinition
+    from omnidriver.core.provider_identity import StackIdentity, ProviderIdentity
     from pathlib import Path
 
 
@@ -239,7 +240,15 @@ class SolverPlugin(Protocol):
 
 @dataclass(frozen=True)
 class PluginIdentity:
-    """Stable description of the plugin semantics attached to an operation."""
+    """Stable description of the plugin semantics attached to an operation.
+
+    **Superseded 2026-09-21.** :class:`DriverContext.identity` now holds a
+    :class:`~omnidriver.core.provider_identity.StackIdentity` -- one identity
+    per operation was an arity assumption that composition removes, the same
+    way :class:`DriverContext.plugin` was. This class is kept, unconstructed
+    by :func:`driver_context`, because nothing in this repository still names
+    it; delete it once that stays true across a survey.
+    """
 
     id: str
     version: str
@@ -260,23 +269,25 @@ class PluginIdentity:
 
 @dataclass(frozen=True)
 class DriverContext:
-    """Per-operation dependency bundle for solver-specific behaviour.
+    """Per-operation provider stack for solver-specific behaviour.
 
-    A context is deliberately immutable and must be passed through planning,
-    discovery, and execution.  It replaces the former process-global active
-    plugin, which allowed one CLI invocation or test to change another one's
-    solver semantics.
+    Immutable and threaded through planning, discovery and execution, as
+    before. What changed 2026-09-20 is arity: this held a single `plugin`
+    because the migration it came from replaced a process-global active
+    plugin, and that migration was about isolation, not about how many
+    providers there are. Composition was consequently done by hand inside each
+    solver plugin, differently in each.
     """
 
-    plugin: SolverPlugin
-    identity: PluginIdentity
+    providers: tuple[SolverPlugin, ...]
+    identity: "StackIdentity"
 
     @cached_property
     def capabilities(self) -> "PluginCapabilities":
         """Return the focused internal view without changing dataclass fields."""
-        from .plugin_capabilities import adapt_plugin_capabilities
+        from .provider_stack import compose
 
-        return adapt_plugin_capabilities(self.plugin)
+        return compose(self.providers)
 
 
 @runtime_checkable
@@ -622,15 +633,23 @@ def validate_plugin(plugin: Any) -> SolverPlugin:
     return plugin
 
 
-def driver_context(plugin: SolverPlugin, *, source: str) -> DriverContext:
-    """Create a validated immutable context for one public operation."""
+def _validate_one_provider(provider: SolverPlugin) -> SolverPlugin:
+    """Structural checks a single provider must pass before it joins a stack.
 
-    checked = validate_plugin(plugin)
+    Each check here was previously run once, against the single plugin a
+    context held. Composition does not relax any of them -- a provider that
+    fails one of these is malformed regardless of what else is in its stack,
+    so each provider is still checked independently rather than only as part
+    of the composed whole.
+    """
+
+    checked = validate_plugin(provider)
     profile = checked.get_profile()
     if profile.plugin_id != checked.plugin_id:
         raise TypeError("SolverPlugin profile id does not match plugin_id")
     if profile.api_version != checked.plugin_api_version:
         raise TypeError("SolverPlugin profile API version does not match plugin_api_version")
+
     from .contracts.dictionary import DictEntry
 
     entries = tuple(checked.get_dict_entries())
@@ -647,22 +666,73 @@ def driver_context(plugin: SolverPlugin, *, source: str) -> DriverContext:
             "SolverPlugin dictionary catalog has duplicate paths: "
             + ", ".join(duplicates)
         )
-    manifest = checked.get_capabilities()
-    capability_digest = _resolved_capability_digest(
-        profile_digest=profile.digest,
-        dictionary_entries=entries,
-        manifest=manifest,
+
+    from .provider_stack import check_provides
+
+    problems = check_provides(checked)
+    if problems:
+        raise TypeError("; ".join(problems))
+
+    return checked
+
+
+def _provider_identity(provider: SolverPlugin, *, source: str) -> "ProviderIdentity":
+    """One provider's own identity, independent of the stack it joins."""
+    from .provider_identity import ProviderIdentity
+
+    provider_digest = _resolved_capability_digest(
+        profile_digest=provider.get_profile().digest,
+        dictionary_entries=tuple(provider.get_dict_entries()),
+        manifest=provider.get_capabilities(),
     )
-    return DriverContext(
-        plugin=checked,
-        identity=PluginIdentity(
-            id=checked.plugin_id,
-            version=checked.plugin_version,
-            api_version=checked.plugin_api_version,
-            source=source,
-            capability_digest=capability_digest,
-        ),
+    return ProviderIdentity(
+        id=provider.plugin_id,
+        version=provider.plugin_version,
+        api_version=provider.plugin_api_version,
+        source=source,
+        provider_digest=provider_digest,
     )
+
+
+def driver_context(*providers: SolverPlugin, source: str) -> DriverContext:
+    """Create a validated immutable context for an ordered provider stack.
+
+    One provider is the common case -- a solver plugin on its own -- but any
+    number may be supplied, e.g. a solver plugin layered on the environment
+    adapter it requires. Each provider is validated and profile-checked
+    independently; the stack is then ordered least-specific first by
+    :func:`provider_stack.order_providers` and composed eagerly so that a
+    packaging error (a duplicated case-file declarer, two providers claiming
+    the same exclusive hook, ...) is raised here rather than lazily, the
+    first time some caller happens to touch ``.capabilities``.
+    """
+
+    if not providers:
+        raise TypeError("driver_context() requires at least one provider")
+
+    from .provider_stack import compose, order_providers, resolutions
+    from .provider_identity import build_stack_identity
+
+    checked_providers = tuple(_validate_one_provider(provider) for provider in providers)
+    ordered = order_providers(checked_providers)
+
+    # Eager, not lazy: compose() enforces the packaging-level rules (the
+    # single-declarer rule over case_files among them) that must fail here,
+    # at construction, rather than later and only for whichever capability a
+    # caller happens to touch first. DriverContext.capabilities recomputes
+    # this from self.providers on first access -- a second, equally cheap
+    # call -- rather than this function reaching into the frozen dataclass's
+    # cached_property cache to avoid it.
+    compose(ordered)
+
+    provider_identities = tuple(
+        _provider_identity(provider, source=source) for provider in ordered
+    )
+    identity = build_stack_identity(
+        providers=provider_identities,
+        resolutions=resolutions(ordered),
+    )
+    return DriverContext(providers=ordered, identity=identity)
 
 
 def _identity_jsonable(value: Any) -> Any:

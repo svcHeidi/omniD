@@ -66,20 +66,32 @@ skip_without_monorepo = pytest.mark.skipif(
 
 
 def _default_adapter_resolves() -> bool:
-    """Whether exactly one ``omnidriver.plugins`` adapter is installed.
+    """Whether ``default_driver_context()`` resolves to a single clean answer.
 
     ``default_driver_context()`` raises ``LookupError`` with zero adapters
-    installed (e.g. the ``test-core`` CI job, which installs none) or with
-    two or more (e.g. ``test-cardiac``/``test-cardiaccore``, which each
-    install two: a solver adapter plus the ``omnidriver-openfoam`` dependency
-    it pulls in, which registers its own entry point). Computed once at
-    collection time, matching ``repo_root``/``monorepo_root`` above.
+    installed (e.g. the ``test-core`` CI job, which installs none). Computed
+    once at collection time, matching ``repo_root``/``monorepo_root`` above.
+
+    **Corrected 2026-09-21 (Phase 1 Task 7).** Two or more adapters used to
+    mean the same ``LookupError``, because a single ``DriverContext.plugin``
+    field could not hold more than one. Composition removed that constraint:
+    several installed adapters are now composed rather than refused, which
+    means the failure this venv actually hits with three real adapters
+    installed together (``cardiacfoam``, ``cardiaccore``,
+    ``openfoam-environment``) is a packaging conflict from
+    ``provider_stack.compose`` -- e.g. two adapters declaring the same
+    case-file path -- surfaced as ``ValueError``, not ``LookupError``. Either
+    way the answer this predicate exists to give is the same: no, there is
+    not a single adapter's worth of semantics to assume implicitly, so a test
+    relying on that assumption must still skip. Catching only ``LookupError``
+    let that ``ValueError`` escape and abort collection for the whole suite
+    instead of skipping the tests that named the assumption.
     """
     from omnidriver.core.plugin_interface import default_driver_context
 
     try:
         default_driver_context()
-    except LookupError:
+    except Exception:
         return False
     return True
 

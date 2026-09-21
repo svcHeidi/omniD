@@ -140,12 +140,24 @@ def _entry_point_source(entry_point) -> str:
 
 
 @functools.lru_cache(maxsize=8)
-def _default_selection(snapshot: tuple[Any, ...]) -> tuple[Any, str] | None:
-    """Which plugin answers when a public caller supplies no context.
+def _default_selection(snapshot: tuple[Any, ...]) -> tuple[tuple[Any, str], ...]:
+    """Which providers answer when a public caller supplies no context.
 
-    Returns ``(plugin_class, source)`` when exactly one adapter is installed.
-    Raises ``LookupError`` when no adapter is installed or there is no unique
-    answer.  Core never manufactures an environment-specific fallback.
+    Returns one ``(plugin_class, source)`` pair per unambiguously installed
+    adapter, ordered by entry-point name -- a stable input order, so the same
+    installation always resolves to the same stack before
+    ``driver_context()`` orders it again by declared ``requires:``. Raises
+    ``LookupError`` only when there is nothing to compose at all: no adapter
+    installed, or every installed name contested. Core never manufactures an
+    environment-specific fallback.
+
+    **Corrected 2026-09-21.** Two or more unambiguous adapters used to be a
+    third ``LookupError`` case. That error existed only because
+    ``DriverContext`` held a single ``plugin`` and two adapters could not
+    coexist in it; composing an ordered stack per capability removes that
+    constraint, so several unambiguous adapters are now returned together
+    rather than refused. ``--plugin`` still narrows the implicit stack to one
+    provider by bypassing this function entirely -- see ``load_plugin_context``.
 
     Cached per entry-point snapshot rather than recomputed. The public edge
     resolves the implicit default once per sweep case, and each recomputation
@@ -155,7 +167,7 @@ def _default_selection(snapshot: tuple[Any, ...]) -> tuple[Any, str] | None:
     different key and a fresh decision -- the seam still works.
 
     The *context* is deliberately not cached. Core must not retain a
-    DriverContext in module state; only the decision about which plugin to
+    DriverContext in module state; only the decision about which plugins to
     build one from is stable.
     """
     seen: dict[str, list[Any]] = {}
@@ -165,43 +177,37 @@ def _default_selection(snapshot: tuple[Any, ...]) -> tuple[Any, str] | None:
     unambiguous = {name: eps[0] for name, eps in seen.items() if len(eps) == 1}
     ambiguous = sorted(name for name, eps in seen.items() if len(eps) > 1)
 
-    if len(unambiguous) == 1:
-        # One clean answer. An unrelated duplicated name alongside it does not
-        # make this one ambiguous -- that name fails loudly on its own if
-        # anybody selects it, which is what discover_plugins() excluding it is
-        # for.
-        entry_point = next(iter(unambiguous.values()))
-        return entry_point.load(), _entry_point_source(entry_point)
+    if unambiguous:
+        # One pair per unambiguous name, in a stable order. An unrelated
+        # duplicated name alongside these does not make them ambiguous --
+        # that name fails loudly on its own if anybody selects it, which is
+        # what discover_plugins() excluding it is for.
+        return tuple(
+            (entry_point.load(), _entry_point_source(entry_point))
+            for _, entry_point in sorted(unambiguous.items())
+        )
 
-    if not unambiguous and not ambiguous:
+    if not ambiguous:
         raise LookupError(
             f"No DriverContext was supplied and no adapter is installed in the "
             f"{ENTRY_POINT_GROUP!r} entry-point group. Select an installed "
             "adapter with --plugin or supply an explicit DriverContext."
         )
 
-    if not unambiguous:
-        # Every installed name is contested. Falling through to the generic
-        # context here would be the worst outcome available: it answers a
-        # question about *which solver* with a context that has no solver
-        # semantics, and it does so silently.
-        conflicts = "; ".join(
-            f"{name} claimed by {', '.join(sorted(_origin(ep) for ep in seen[name]))}"
-            for name in ambiguous
-        )
-        raise LookupError(
-            f"No DriverContext was supplied, and every plugin name in the "
-            f"{ENTRY_POINT_GROUP!r} entry-point group is claimed by more than "
-            f"one installed distribution ({conflicts}), so there is no "
-            "unambiguous default. Uninstall one, or select a plugin with "
-            "--plugin or an explicit DriverContext."
-        )
-
+    # Every installed name is contested. Falling through to the generic
+    # context here would be the worst outcome available: it answers a
+    # question about *which solver* with a context that has no solver
+    # semantics, and it does so silently.
+    conflicts = "; ".join(
+        f"{name} claimed by {', '.join(sorted(_origin(ep) for ep in seen[name]))}"
+        for name in ambiguous
+    )
     raise LookupError(
-        f"No DriverContext was supplied, and {len(unambiguous)} plugins are "
-        f"installed in the {ENTRY_POINT_GROUP!r} entry-point group "
-        f"({', '.join(sorted(unambiguous))}), so there is no single default to "
-        "fall back on. Select one with --plugin or an explicit DriverContext."
+        f"No DriverContext was supplied, and every plugin name in the "
+        f"{ENTRY_POINT_GROUP!r} entry-point group is claimed by more than "
+        f"one installed distribution ({conflicts}), so there is no "
+        "unambiguous default. Uninstall one, or select a plugin with "
+        "--plugin or an explicit DriverContext."
     )
 
 
@@ -211,14 +217,19 @@ def _origin(entry_point) -> str:
 
 
 def default_discovered_context():
-    """Build a fresh context for the implicitly-selected default plugin.
+    """Build a fresh context for the implicitly-selected default stack.
 
     See :func:`_default_selection` for the selection rule and
     ``compatibility.legacy_default_driver_context`` for why the public edge
-    needs one at all.
+    needs one at all. With several unambiguous adapters installed, all of
+    them are instantiated and handed to :func:`~omnidriver.core.plugin_interface.driver_context`
+    together, which orders and composes them into one stack -- exactly as if
+    a caller had passed several providers explicitly.
     """
     from .plugin_interface import driver_context
 
     selection = _default_selection(_entry_points())
-    plugin_class, source = selection
-    return driver_context(plugin_class(), source=source)
+    providers = [plugin_class() for plugin_class, _ in selection]
+    sources = [source for _, source in selection]
+    combined_source = sources[0] if len(sources) == 1 else "; ".join(sources)
+    return driver_context(*providers, source=combined_source)
