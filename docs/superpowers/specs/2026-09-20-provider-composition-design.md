@@ -392,6 +392,22 @@ than a silent default — forced four decisions the six rows above do not make.
    first, which is exactly what a single plugin does today. Stated here
    rather than discovered later: an environment provider's manifest is not
    visible in a composed stack's manifest.
+
+   **Corrected 2026-09-22 (Task 12).** This held only while
+   `_CapabilityManifestAdapter.manifest()` was literally
+   `self.plugin.get_capabilities()` -- the raw `single`-shaped member. Task 10
+   (2026-09-22) rewrote that adapter to build the `environment_commands`,
+   `plugin_commands`, `utility_manifests` and `samplable_fields` sections from
+   the `set`/`map`-shaped capability reads every other composed capability
+   already uses, merging in a provider's raw `get_capabilities()` only for
+   what core cannot compose itself (e.g. cardiacFoam's `ionic_models`). Every
+   real caller goes through `.manifest.manifest()`, not the raw member, so an
+   environment provider's contribution (its `environment_commands`, for one)
+   is now visible in a composed stack's manifest. `get_capabilities` itself is
+   still `single`-shaped if called directly, and `case_script_commands` still
+   comes from the `single`-shaped `get_case_runtime_conventions` -- see
+   `ARCHITECTURE.md`'s "Provider composition" section for the current,
+   verified state.
 4. **The refusing-hook row's cross-member constraint is now mechanised**, as
    `_CROSS_MEMBER_PAIRS`. Whichever provider wins `apply_overrides` must also
    win `get_override_target_paths`; the single-plugin case (a mutator with no

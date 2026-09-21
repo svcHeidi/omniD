@@ -197,6 +197,13 @@ value today is that it supplies `allowed_commands` for a plan
 (`generic_plugin.py:60`), and that block comes from the hardcoded command set.
 Sequence it after.
 
+**Amended 2026-09-20:** Phase 1 of the provider-composition spec makes the
+environment adapter a composed provider rather than a competing entry in the
+same discovery group. The rename's original blocker -- that the generic
+plugin's value was supplying `allowed_commands` from a hardcoded set -- is
+unchanged, but "substitution, not composition" no longer describes the
+architecture. Re-evaluate §6 against the stack before acting on it.
+
 ## 7. The cardiac `Phase` enum is a different problem
 
 `run_model.py:44` — `Phase = Literal["anatomy","physics","stimulus","solver"]`

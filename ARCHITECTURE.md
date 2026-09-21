@@ -148,6 +148,129 @@ Tracked as standalone notes in `future/`, each with its own status:
   `_is_installed_openfoam_app` remain open, and §6's
   `GenericEnvironmentPlugin` rename stays blocked until Tier 4 is fully closed.
 
+## Provider composition
+
+**Hand-written. Outside the generated block below.** The table under
+"Plugin capability seams" is spliced by `scripts/export-capability-seams.py`
+between the `BEGIN GENERATED`/`END GENERATED` markers and regenerated from
+`core/plugin_capabilities.py`'s docstrings; this section sits above those
+markers, so `--check` and regeneration never touch it, and it is this
+document's own job to keep it accurate.
+
+`provider_stack.py` composes an ordered stack of providers into one
+capability view — the same shape a single plugin produces, so every
+consumer of one plugin's capabilities consumes a composed stack unchanged.
+Composition happens per **contract member** (a `SolverPlugin` method), not
+per capability: `_SHAPE` classifies every member a capability adapts into
+exactly one shape, and `_check_classification()` fails at import if a member
+reaches composition unclassified, so an unclassified member can never fall
+through to an accidental default.
+
+The original composition spec
+(`docs/superpowers/specs/2026-09-20-provider-composition-design.md`) named
+six shapes. Classifying every member (Task 6) found it needed three more —
+opaque single-valued documents, and two container types core owns and a
+provider cannot merge itself — so what ships today is nine:
+
+| shape | semantics | example member(s) |
+|---|---|---|
+| `set` | union of every implementer's declared set | `get_solver_commands`, `get_environment_commands` |
+| `map` | merge in stack order; a duplicate key is an error unless the more specific entry carries `overrides: <provider id>` naming whose declaration it replaces | `get_dict_groups`, `get_named_catalogs` |
+| `catalog` | the `map` rule applied to a `DictionaryCatalog`'s `documents`, then rebuilt into a catalog — core owns that type, so a provider cannot merge it itself | `get_dictionary_catalog` |
+| `tutorial_catalog` | unions `registered_tutorials`, merges `spec_factories` by tutorial name (a duplicate name is an error), and keeps only the most-specific value for any other key | `get_tutorial_catalog` |
+| `sequence` | concatenate every implementer's result, in stack order | `get_phases`, `validate_configuration`, `get_override_scopes` |
+| `single` | first non-`None` answer, most-specific provider first | `get_capabilities`, `get_config_value_reader`, `get_selected_start_time` |
+| `chain` | thread the first argument through every implementer, in stack order | `get_configured_environment` |
+| `exclusive` | exactly one provider may implement; two implementers is an error, zero leaves the member absent so the capability's declared fallback refuses by name | `apply_overrides`, `materialize_sweep_case` |
+| `profile` | the declarative profile itself: `case_files` concatenated (see the single-declarer rule below), `provides` unioned, everything else from the most specific provider | `get_profile` |
+
+`exclusive` also carries one cross-member constraint (`_CROSS_MEMBER_PAIRS`):
+whichever provider wins `apply_overrides` must also be the one that wins
+`get_override_target_paths`. A mutator that doesn't declare what it touched
+is a data-loss risk, and splitting the pair across two providers would
+reintroduce that risk even though each member on its own still satisfies
+"exactly one".
+
+### `provides:` / `requires:`
+
+A `PluginProfile` declares two things about how it joins a stack:
+
+- **`provides:`** is intent, not discovery — the set of capability names the
+  provider claims to fully implement. `check_provides()` compares it against
+  what the provider object actually exposes (`implemented_capabilities()`,
+  built from the same seam table the generated section below documents) and
+  reports a declared-but-absent capability as an error — how a misspelled
+  hook name becomes visible instead of silently taking a fallback route.
+  Implementing a member without declaring it is not an error: a provider may
+  use a member internally without offering it to the stack.
+- **`requires:`** names other providers' `plugin_id`s that must be present
+  for this one to compose. `order_providers()` builds the stack from every
+  provider's `requires:`, raising if a requirement is unmet or the
+  requirements form a cycle, and orders the result least-specific first —
+  stably, so the same installation always composes identically, which
+  matters because the stack digest hashes that order.
+
+### The single-declarer rule for case files
+
+`_check_case_file_declarers()` requires that every case-file path be
+declared by exactly one provider in the stack. Two providers declaring the
+same path raises `ValueError` naming both. This is checked eagerly, at
+`compose()` time, because it is a packaging error, not something that should
+depend on which capability a run happens to touch.
+
+### The solver-tier-root refusal rule
+
+When no `DriverContext` is supplied and a caller relies on the implicit
+default, `plugin_discovery._default_selection` does not compose every
+unambiguously-installed adapter together. It first asks which installed
+candidates are **solver-tier roots** — candidates that nothing else
+installed declares `requires:` against (`_solver_tier_roots`). Exactly one
+root auto-composes with its full transitive `requires:` closure, which is
+what lets a single solver plugin (plus whatever environment adapter it
+requires) keep working with no `--plugin` flag at all. Two or more roots —
+e.g. cardiacCore and cardiacFoam installed side by side, neither requiring
+the other — raise `LookupError` naming every contested root and pointing at
+`--plugin` as the escape hatch, rather than silently composing two
+mutually-independent solver plugins into one stack. That silent composition
+is exactly what an earlier version of this function did, for one day
+(2026-09-21): it let a `single`-shape member such as
+`build_run_document_config` resolve to whichever sibling solver plugin
+happened to sort last alphabetically, not to the one that actually matched
+the case. `--plugin` continues to bypass this function entirely, narrowing
+straight to one provider (see `load_discovered_plugin`).
+
+### Manifest visibility across a composed stack (corrected 2026-09-22)
+
+The composition spec's §4.4 point 3 stated, as a standing limitation: "an
+environment provider's manifest is not visible in a composed stack's
+manifest." That was accurate when written: `_CapabilityManifestAdapter.manifest()`
+was then just `self.plugin.get_capabilities()` — the raw, `single`-shaped
+member — so only the most-specific provider's self-authored manifest ever
+won, discarding a companion environment provider's contribution entirely.
+
+Task 10 (2026-09-22) rewrote that adapter. It now builds the
+`environment_commands` and `plugin_commands` sections from
+`get_environment_commands`/`get_solver_commands`/`get_auxiliary_commands`
+(all `set`-shaped, unioned across the whole stack) and the
+`utility_manifests`/`samplable_fields` sections from `get_utility_manifests`/
+`get_samplable_fields` (both `map`-shaped, merged across the whole stack) —
+capability reads genuinely composed across every provider, not just the
+most specific. It merges in a provider's own raw `get_capabilities()` only
+for what core cannot compose on its own, such as cardiacFoam's
+`ionic_models` catalogue; that raw member is still `single`-shaped and still
+most-specific-wins. (`case_script_commands` is the one section this does not
+apply to: it still comes from `get_case_runtime_conventions`, which stays
+`single`-shaped, so that one section is the most-specific provider's alone.)
+
+Every real caller of the manifest capability (`dict_entries.py`,
+`core/introspection.py`, `core/strict_planning.py`) goes through
+`.manifest.manifest()`, not the raw `get_capabilities` member directly — so
+in practice an environment provider's contribution (its
+`environment_commands`, for instance) **is** visible in a composed stack's
+manifest today. The original limitation survives only for the raw
+`get_capabilities` member itself, if something were to bypass the manifest
+capability and call it directly on a composed stack — nothing in this
+codebase does.
 
 ## Plugin capability seams
 
