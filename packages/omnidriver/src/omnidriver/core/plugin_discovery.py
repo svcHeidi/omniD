@@ -196,21 +196,44 @@ def _entry_point_source(entry_point) -> str:
 def _default_selection(snapshot: tuple[Any, ...]) -> tuple[tuple[Any, str], ...]:
     """Which providers answer when a public caller supplies no context.
 
-    Returns one ``(plugin_class, source)`` pair per unambiguously installed
-    adapter, ordered by entry-point name -- a stable input order, so the same
-    installation always resolves to the same stack before
-    ``driver_context()`` orders it again by declared ``requires:``. Raises
-    ``LookupError`` only when there is nothing to compose at all: no adapter
-    installed, or every installed name contested. Core never manufactures an
-    environment-specific fallback.
+    Returns one ``(plugin_class, source)`` pair for the selected candidate
+    solver-tier adapter plus its full transitive `requires:` closure, ordered
+    by entry-point name -- a stable input order, so the same installation
+    always resolves to the same stack before ``driver_context()`` orders it
+    again by declared ``requires:``. Raises ``LookupError`` when there is
+    nothing to compose at all (no adapter installed, or every installed name
+    contested), or when the installed set names two or more mutually
+    independent solver-tier candidates with no ``requires:`` relationship
+    tying them together. Core never manufactures an environment-specific
+    fallback.
 
     **Corrected 2026-09-21.** Two or more unambiguous adapters used to be a
     third ``LookupError`` case. That error existed only because
     ``DriverContext`` held a single ``plugin`` and two adapters could not
     coexist in it; composing an ordered stack per capability removes that
-    constraint, so several unambiguous adapters are now returned together
-    rather than refused. ``--plugin`` still narrows the implicit stack to one
+    constraint, so several unambiguous adapters were returned together rather
+    than refused. ``--plugin`` still narrows the implicit stack to one
     provider by bypassing this function entirely -- see ``load_plugin_context``.
+
+    **Corrected 2026-09-21 (later the same day, Task 9).** The above
+    correction over-corrected: it composed *every* unambiguous adapter
+    together with no regard for whether they were actually related.
+    cardiacCore and cardiacFoam installed side by side -- both requiring only
+    the shared OpenFOAM environment adapter, neither requiring the other --
+    silently composed into one three-provider stack, and `single`-shape
+    members like ``build_run_document_config`` then resolved to whichever
+    sibling happened to sort last alphabetically, not to the one that
+    actually matched the case. `ARCHITECTURE.md` confirms cardiacCore and
+    cardiacFoam are meant to be installed independently by real users; the
+    "all four packages together" venv this repository's own verification
+    recipe builds (see CLAUDE.md) is a test shape, not a deployment scenario,
+    so a real installation never had exactly this ambiguity to silently paper
+    over. Now: exactly one candidate solver-tier adapter (a "root" -- see
+    :func:`_solver_tier_roots`) composes with its full transitive `requires:`
+    closure, unchanged from the single-adapter behaviour this correction never
+    touched; two or more roots refuse by name instead, naming
+    ``--plugin`` as the escape hatch that was always available at every real
+    call site.
 
     Cached per entry-point snapshot rather than recomputed. The public edge
     resolves the implicit default once per sweep case, and each recomputation
@@ -231,13 +254,31 @@ def _default_selection(snapshot: tuple[Any, ...]) -> tuple[tuple[Any, str], ...]
     ambiguous = sorted(name for name, eps in seen.items() if len(eps) > 1)
 
     if unambiguous:
-        # One pair per unambiguous name, in a stable order. An unrelated
-        # duplicated name alongside these does not make them ambiguous --
-        # that name fails loudly on its own if anybody selects it, which is
-        # what discover_plugins() excluding it is for.
+        id_by_name, requires_by_id = _requires_graph(unambiguous)
+        roots = _solver_tier_roots(id_by_name, requires_by_id)
+        if len(roots) > 1:
+            raise LookupError(
+                "No DriverContext was supplied, and "
+                f"{len(roots)} installed adapters in the {ENTRY_POINT_GROUP!r} "
+                "entry-point group are mutually independent solver-tier "
+                f"plugins with no requires: relationship tying them together "
+                f"({', '.join(roots)}), so there is no unambiguous default. "
+                "Select one with --plugin or supply an explicit DriverContext."
+            )
+        # Exactly one root: compose it with its full transitive requires:
+        # closure. Zero roots (every candidate required by another -- only
+        # reachable via a requires: cycle among installed adapters) falls
+        # through to every unambiguous name, same as before this correction;
+        # order_providers's own cycle detection reports that case specifically
+        # if anyone actually tries to compose it.
+        selected = (
+            _transitive_requires_closure(roots[0], id_by_name, requires_by_id)
+            if roots
+            else sorted(unambiguous)
+        )
         return tuple(
-            (entry_point.load(), _entry_point_source(entry_point))
-            for _, entry_point in sorted(unambiguous.items())
+            (unambiguous[name].load(), _entry_point_source(unambiguous[name]))
+            for name in selected
         )
 
     if not ambiguous:
@@ -269,15 +310,91 @@ def _origin(entry_point) -> str:
     return f"{dist.name}={dist.version}" if dist is not None else "<unknown>"
 
 
+def _requires_graph(unambiguous: dict[str, Any]) -> tuple[dict[str, str], dict[str, tuple[str, ...]]]:
+    """Each unambiguous candidate's ``plugin_id``, and its declared `requires:`.
+
+    Returns ``(id_by_name, requires_by_id)``. Building this needs one instance
+    per candidate -- ``plugin_id`` is an instance property, not resolvable
+    from the class alone, unlike ``get_profile()`` (a ``staticmethod`` on
+    every shipped plugin). This runs at most once per distinct entry-point
+    snapshot (the caller, :func:`_default_selection`, is itself cached), so
+    it costs one extra instantiation per installed adapter at CLI-startup
+    frequency, not a hot loop.
+    """
+    id_by_name: dict[str, str] = {}
+    requires_by_id: dict[str, tuple[str, ...]] = {}
+    for name, entry_point in unambiguous.items():
+        instance = entry_point.load()()
+        id_by_name[name] = instance.plugin_id
+        requires_by_id[instance.plugin_id] = tuple(instance.get_profile().requires)
+    return id_by_name, requires_by_id
+
+
+def _solver_tier_roots(id_by_name: dict[str, str], requires_by_id: dict[str, tuple[str, ...]]) -> list[str]:
+    """Candidate names nothing else in this discovered set declares `requires:`.
+
+    A root is a candidate solver-tier entry point: composing an implicit
+    default from exactly one root (plus whatever it transitively requires) is
+    the case Task 7 rightly stopped refusing. Two or more roots means two or
+    more mutually independent solver-tier plugins are installed side by side
+    -- e.g. cardiacCore and cardiacFoam, neither requiring the other -- and
+    silently composing both together is exactly what produced Task 9's wrong
+    `single`-shape resolution (a sibling plugin winning `single`-shape members
+    like ``build_run_document_config`` by alphabetical accident, not because
+    it matches the case). An adapter required by no one and requiring nothing
+    (a lone environment-only install, or a single self-contained plugin) is
+    still its own root of one -- this degrades to the pre-existing
+    single-adapter behaviour exactly.
+    """
+    all_ids = set(id_by_name.values())
+    required_ids = {
+        required_id
+        for requires in requires_by_id.values()
+        for required_id in requires
+        if required_id in all_ids
+    }
+    return sorted(name for name, plugin_id in id_by_name.items() if plugin_id not in required_ids)
+
+
+def _transitive_requires_closure(
+    root_name: str, id_by_name: dict[str, str], requires_by_id: dict[str, tuple[str, ...]],
+) -> list[str]:
+    """``root_name`` plus every candidate it transitively `requires:`.
+
+    Depth is not limited to one level (unlike :func:`_expand_with_requirements`,
+    which only ever needs to resolve one level for an explicitly-selected
+    ``--plugin``): the implicit default has no caller to ask, so it must
+    settle the whole chain itself. A `requires:` id with no installed
+    candidate is left for :func:`~omnidriver.core.plugin_interface.driver_context`
+    (via ``order_providers``) to report -- that error names the specific
+    missing id, which silently omitting it here would not.
+    """
+    name_by_id = {plugin_id: name for name, plugin_id in id_by_name.items()}
+    closure_ids: set[str] = set()
+    pending = [id_by_name[root_name]]
+    while pending:
+        plugin_id = pending.pop()
+        if plugin_id in closure_ids:
+            continue
+        closure_ids.add(plugin_id)
+        for required_id in requires_by_id.get(plugin_id, ()):
+            if required_id in name_by_id:
+                pending.append(required_id)
+    return sorted(name_by_id[plugin_id] for plugin_id in closure_ids)
+
+
 def default_discovered_context():
     """Build a fresh context for the implicitly-selected default stack.
 
     See :func:`_default_selection` for the selection rule and
     ``compatibility.legacy_default_driver_context`` for why the public edge
-    needs one at all. With several unambiguous adapters installed, all of
-    them are instantiated and handed to :func:`~omnidriver.core.plugin_interface.driver_context`
-    together, which orders and composes them into one stack -- exactly as if
-    a caller had passed several providers explicitly.
+    needs one at all. Whichever providers :func:`_default_selection` selects
+    (one solver-tier root plus its `requires:` closure, per its 2026-09-21
+    Task 9 correction -- not necessarily every unambiguous adapter installed)
+    are instantiated and handed to
+    :func:`~omnidriver.core.plugin_interface.driver_context` together, which
+    orders and composes them into one stack -- exactly as if a caller had
+    passed several providers explicitly.
 
     **Corrected 2026-09-21.** This used to join every provider's source into
     one ``"; "``-separated string and pass it as the single shared ``source``

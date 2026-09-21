@@ -86,6 +86,18 @@ def _default_adapter_resolves() -> bool:
     relying on that assumption must still skip. Catching only ``LookupError``
     let that ``ValueError`` escape and abort collection for the whole suite
     instead of skipping the tests that named the assumption.
+
+    **Corrected 2026-09-21 (later the same day, Task 9).** The above
+    correction over-corrected: composing every installed adapter together
+    unconditionally papered over cardiacCore and cardiacFoam -- two mutually
+    independent solver-tier plugins, neither requiring the other -- silently
+    landing in one stack and resolving `single`-shape members like
+    ``build_run_document_config`` by alphabetical accident.
+    ``plugin_discovery._default_selection`` now refuses that specific case by
+    name instead, which raises ``LookupError`` again (not ``ValueError``) for
+    this venv's three real adapters installed together. Both exception types
+    are still caught here, and the conclusion is unchanged either way: no,
+    there is not a single adapter's worth of semantics to assume implicitly.
     """
     from omnidriver.core.plugin_interface import default_driver_context
 
