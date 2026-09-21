@@ -10,19 +10,27 @@ from omnidriver.core import provider_stack
 
 
 class _Provider:
-    """Minimal provider; attributes are set per test."""
-    def __init__(self, plugin_id, provides=frozenset(), requires=(), **members):
+    """Minimal provider; attributes are set per test.
+
+    The profile is built ONCE and memoized. Corrected 2026-09-21: it used to be
+    rebuilt per call, so a test that did `p.get_profile().case_files = (rule,)`
+    set the attribute on a throwaway object and composition could never see it.
+    That made `test_a_case_file_path_declared_twice_is_an_error` unsatisfiable
+    by any implementation -- a fixture defect masquerading as a failing rule.
+    """
+
+    def __init__(self, plugin_id, provides=frozenset(), requires=(),
+                 case_files=(), **members):
         self.plugin_id = plugin_id
-        self._provides = frozenset(provides)
-        self._requires = tuple(requires)
+        self._profile = type("_P", (), {})()
+        self._profile.provides = frozenset(provides)
+        self._profile.requires = tuple(requires)
+        self._profile.case_files = tuple(case_files)
         for name, value in members.items():
             setattr(self, name, value)
 
     def get_profile(self):
-        profile = type("_P", (), {})()
-        profile.provides = self._provides
-        profile.requires = self._requires
-        return profile
+        return self._profile
 
 
 def _compose(*providers):
