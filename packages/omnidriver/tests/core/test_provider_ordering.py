@@ -131,3 +131,94 @@ def test_a_missing_requirement_is_refused_by_name():
     solver = _fake("org.solver", requires=("org.absent",))
     with pytest.raises(ValueError, match="org.absent"):
         provider_stack.order_providers([solver])
+
+
+def _fake_with_profile(plugin_id, *, requires=(), case_files=(), **members):
+    """A provider whose ``get_profile()`` returns the SAME object every call.
+
+    Added 2026-09-20 (Phase 1 Task 6). ``test_provider_composition_rules``'s
+    own ``_Provider`` builds a fresh profile object per call, so
+    ``env.get_profile().case_files = (rule,)`` there sets an attribute on a
+    throwaway and nothing downstream can observe it -- which is why that
+    file's case-file test cannot exercise the rule it names. This fixture
+    keeps the profile, so §2.1's one-declarer rule is actually tested.
+    """
+    class _Profile:
+        pass
+
+    profile = _Profile()
+    profile.requires = tuple(requires)
+    profile.provides = frozenset()
+    profile.case_files = tuple(case_files)
+
+    class _P:
+        def get_profile(self):
+            return profile
+
+    provider = _P()
+    provider.plugin_id = plugin_id
+    for name, value in members.items():
+        setattr(provider, name, value)
+    return provider
+
+
+def _rule(path, required="always"):
+    return type("_R", (), {
+        "path": path, "role": "openfoam.control_dict",
+        "kind": "dictionary", "required": required,
+    })()
+
+
+def test_a_case_file_path_declared_by_two_providers_is_an_error():
+    """Spec §2.1: one fact, one declarer -- across the stack, not per provider."""
+    from omnidriver.core import provider_stack
+
+    rule = _rule("system/controlDict")
+    env = _fake_with_profile("org.env", case_files=(rule,))
+    solver = _fake_with_profile(
+        "org.solver", requires=("org.env",), case_files=(rule,),
+    )
+    with pytest.raises(ValueError, match="system/controlDict"):
+        provider_stack.compose(provider_stack.order_providers([env, solver]))
+
+
+def test_distinct_case_file_paths_compose():
+    from omnidriver.core import provider_stack
+
+    env = _fake_with_profile("org.env", case_files=(_rule("system/controlDict"),))
+    solver = _fake_with_profile(
+        "org.solver", requires=("org.env",),
+        case_files=(_rule("constant/electroProperties"),),
+    )
+    composed = provider_stack.compose(
+        provider_stack.order_providers([env, solver])
+    )
+    assert sorted(composed.case_files.required_files()) == [
+        "constant/electroProperties", "system/controlDict",
+    ]
+    assert sorted(rule.path for rule in composed.case_files.all_rules()) == [
+        "constant/electroProperties", "system/controlDict",
+    ]
+
+
+def test_resolutions_name_a_winner_for_every_capability():
+    from omnidriver.core import capability_seams, provider_stack
+
+    env = _fake_with_profile(
+        "org.env", get_environment_commands=lambda: frozenset({"blockMesh"}),
+    )
+    solver = _fake_with_profile(
+        "org.solver", requires=("org.env",),
+        get_solver_commands=lambda: frozenset({"theSolver"}),
+    )
+    resolved = provider_stack.resolutions(
+        provider_stack.order_providers([env, solver])
+    )
+    assert set(resolved) == {seam.field for seam in capability_seams.collect_seams()}
+    # command_authorization is answered by the most specific provider that
+    # implements any of its members.
+    assert resolved["command_authorization"][0] == "org.solver"
+    # Only the three capabilities the single-plugin digest covered carry a
+    # content digest; the rest record the decision alone (spec §4.4).
+    assert resolved["named_catalogs"][1] == provider_stack.RESOLUTION_PLACEHOLDER
+    assert resolved["cxx_mapping"][1].startswith("sha256:")

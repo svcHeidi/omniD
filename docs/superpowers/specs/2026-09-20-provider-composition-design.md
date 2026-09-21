@@ -358,6 +358,46 @@ twice.** Three corrections, each found by building rather than arguing:
    else error".** Both prototypes had to hand-write that check, which is why
    §4.6's mechanism question resolved the way it did.
 
+**Amended 2026-09-21 by Phase 1 Task 6, which implemented these rules over
+every contract member rather than the handful the spike exercised.**
+Classifying all of them — `provider_stack._SHAPE` is the table, and
+`_check_classification()` makes an unclassified member an ImportError rather
+than a silent default — forced four decisions the six rows above do not make.
+
+1. **`get_override_scopes` is a concatenating sequence.** This settles the
+   spike's finding #1, which left the choice between "a seventh row" and
+   "fold it into `set`". Neither: it is the **diagnostics** row's shape.
+   Scopes an environment provider offers and scopes a solver provider offers
+   address different files, so both must survive; concatenation keeps them in
+   stack order, which is the precedence a caller resolving a `$TOKEN.` needs,
+   whereas a union would both discard that order and require every adapter's
+   scope object to be hashable — a constraint the contract never stated.
+   `inspect_effective_configuration` takes the same shape, for the same
+   reason both prototypes reached for it.
+2. **Three shapes the six rows cannot express.** `get_dictionary_catalog`
+   returns a `DictionaryCatalog`, not a mapping, so it cannot go through the
+   map row directly; core owns that type, so composition merges the
+   `documents` mapping under the map rule and rebuilds the catalog
+   (shape `catalog`). `get_configured_environment` *transforms* an
+   environment mapping rather than declaring one, so the only composition
+   that leaves an environment provider useful is to thread the mapping
+   through every implementer in stack order (shape `chain`); merging or
+   picking one would silently drop the layer underneath. `get_profile` is the
+   declarative profile itself, and needs a view whose `case_files` is the
+   concatenation and whose `provides` is the union (shape `profile`).
+3. **Opaque documents take the single-value row.** `get_capabilities`,
+   `get_override_schema`, `get_run_document_config_schema` and
+   `build_run_document_config` each return a document core cannot merge
+   without inventing semantics for its interior. They resolve most-specific
+   first, which is exactly what a single plugin does today. Stated here
+   rather than discovered later: an environment provider's manifest is not
+   visible in a composed stack's manifest.
+4. **The refusing-hook row's cross-member constraint is now mechanised**, as
+   `_CROSS_MEMBER_PAIRS`. Whichever provider wins `apply_overrides` must also
+   win `get_override_target_paths`; the single-plugin case (a mutator with no
+   declarer anywhere) is still refused by name at call time, by the check
+   `_OverrideScopeAdapter.target_paths` already carried.
+
 The map row implements the cardiacCore/cardiacFOAM seam decision recorded on
 2026-09-18 and shelved before a spec existed: where cardiacFOAM's entries
 duplicate a name cardiacCore already declares for the same physical artifact,

@@ -1027,7 +1027,25 @@ class _SweepMaterializerAdapter:
             driver_context=driver_context,
         )
 
-    def materialize(self, request: SweepMaterializationRequest) -> None:
+    def materialize(
+        self,
+        request: SweepMaterializationRequest | None = None,
+        *,
+        case_dir: Path | None = None,
+        routed: dict[str, Any] | None = None,
+    ) -> None:
+        """Write one resolved sweep case, or refuse by name.
+
+        **Widened 2026-09-20 (Phase 1 Task 6).** Accepts the contract member's
+        own argument names (``case_dir``/``routed``) as well as the request
+        object. A composed stack is addressed in *member* terms -- that is what
+        ``provider_stack`` composes -- and ``test_provider_composition_rules``
+        calls this member's composed form that way. This is not a fallback: the
+        two shapes name the same two values, and the request is still what the
+        body works with.
+        """
+        if request is None:
+            request = SweepMaterializationRequest(case_dir=case_dir, routed=routed)
         hook = getattr(self.plugin, "materialize_sweep_case", None)
         if callable(hook):
             hook(case_dir=request.case_dir, routed=request.routed)
