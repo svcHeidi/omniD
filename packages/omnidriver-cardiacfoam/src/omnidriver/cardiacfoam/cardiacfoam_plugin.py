@@ -82,19 +82,6 @@ class CardiacFoamPlugin:
 
         return load_plugin_profile(Path(__file__).parent / "plugin.yaml")
 
-    def get_environment_diagnostics(
-        self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None,
-    ):
-        """Use OpenFOAM's preflight before applying this solver's runtime profile."""
-        from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
-
-        return OpenFOAMEnvironmentPlugin().get_environment_diagnostics(
-            workflow_dag,
-            env=env,
-            explicit_bashrc=explicit_bashrc,
-            driver_context=driver_context,
-        )
-
     def get_configured_environment(self, env, driver_context):
         """Apply this plugin's declared backend and build-manifest contract.
 

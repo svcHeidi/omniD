@@ -4,26 +4,53 @@ plugin:
   api_version: "2"
 requires:
   - org.omnidriver.openfoam.environment
-# Verified 2026-09-21 against provider_stack.implemented_capabilities(
-# CardiacCorePlugin()) after deleting the nine _openfoam delegations: every
-# capability here is one this provider answers on its own, with no gap a
-# deleted delegation would have papered over. override_schema and
-# run_document_configuration are genuinely real (not stubs) -- the earlier
-# Phase 0 Task 4 census calling get_override_schema a hollow stub does not
-# match this file's per-tutorial $CARDIAC_CONDUCTIVITY/... schema, so that
-# entry in the census was stale and is superseded by this direct check.
+# provides: was audited two ways, and both matter -- neither alone is enough:
+#
+# 1. Presence (check_provides()'s own gate, driver_context()-construction
+#    time, 2026-09-21): after deleting the nine _openfoam delegations, every
+#    capability declared here is one this provider still answers on its own,
+#    with no gap a deleted delegation would have papered over.
+#
+# 2. Realness (this file's own re-audit, corrected the same day after a
+#    review found the first pass had only checked presence): presence is not
+#    intent -- a member callable that unconditionally ignores its arguments
+#    and returns a constant is not "genuinely answered" any more than an
+#    absent one, and provider_stack.implemented_capabilities() cannot tell
+#    the two apart (it only checks callability). Read every adapted member's
+#    actual body against that test, not just gate 1's presence check. Three
+#    capabilities that passed gate 1 fail this one and are withheld:
+#      - artifacts: predict_data_artifacts is
+#        `del case_root, spec; return ()` unconditionally -- never predicts
+#        anything for any case.
+#      - run_semantic_validator: validate_run_semantics is
+#        `del context; return ()` unconditionally.
+#      - runtime_evidence: all four adapted members
+#        (get_artifact_value_reader, get_extra_provenance_paths,
+#        get_solve_step_commands, get_telemetry_source_globs) ignore their
+#        arguments and return a fixed empty/`None` value.
+#    One hollow member disqualifies the whole capability -- the same
+#    standard this file's earlier pass applied correctly to
+#    org.omnidriver.openfoam.environment's provides: (see its plugin.yaml)
+#    but did not apply to this file's own list the first time.
+#
+# override_schema and run_document_configuration remain: genuinely real (not
+# stubs) -- the earlier Phase 0 Task 4 census calling get_override_schema a
+# hollow stub does not match this file's per-tutorial
+# $CARDIAC_CONDUCTIVITY/... schema, so that entry in the census was stale.
+#
+# validate_configuration (configuration_validator) is `del spec; return ()`:
+# a genuinely hollow stub, restored to that shape after a separate
+# accidental-commit fix (see git history) picked up an in-progress parallel
+# session's real implementation by mistake -- not this file's own work, and
+# not declared here.
 provides:
   - dictionaries
   - tutorials
   - named_catalogs
-  - artifacts
-  - configuration_validator
   - cxx_mapping
   - manifest
   - override_schema
   - run_document_configuration
-  - run_semantic_validator
-  - runtime_evidence
 case_profile:
   dictionaries:
     - path: system/setCardiacConductivityDict

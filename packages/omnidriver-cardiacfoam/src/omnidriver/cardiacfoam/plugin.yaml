@@ -4,17 +4,54 @@ plugin:
   api_version: "2"
 requires:
   - org.omnidriver.openfoam.environment
-# Verified 2026-09-21 against provider_stack.implemented_capabilities(
-# CardiacFoamPlugin()) after deleting the five composed-concern delegations
-# (command_authorization's environment half, profile's openfoam-role
-# validation, config_values, time_selection, case_runtime_conventions).
-# command_authorization, case_introspection, config_value, override_scopes
-# and dict_diagnostics are deliberately absent: this plugin no longer
-# implements every member each of those adapts on its own (the environment
-# half now comes only from org.omnidriver.openfoam.environment), so
-# declaring them here would fail check_provides()'s per-provider guard even
-# though the composed stack still answers each capability -- from whichever
-# provider in the stack implements that particular member.
+# provides: was audited two ways, and both matter -- neither alone is enough:
+#
+# 1. Presence (check_provides()'s own gate, driver_context()-construction
+#    time): after deleting the five composed-concern delegations
+#    (command_authorization's environment half, profile's openfoam-role
+#    validation, config_values, time_selection, case_runtime_conventions),
+#    command_authorization, case_introspection, config_value, override_scopes
+#    and dict_diagnostics are absent from this list because this plugin no
+#    longer implements every member each of those adapts on its own (the
+#    environment half now comes only from org.omnidriver.openfoam.environment)
+#    -- declaring them would fail check_provides() outright. environment_preflight
+#    joins that list for the same reason (below): deleting
+#    get_environment_diagnostics left only 2 of its 3 members implemented here.
+#
+# 2. Realness (this file's own re-audit, 2026-09-21, corrected the same day
+#    after a review found the first pass had skipped it): presence is not
+#    intent -- a member callable that unconditionally ignores its arguments
+#    and returns a constant is not "genuinely answered" any more than an
+#    absent one, and provider_stack.implemented_capabilities() cannot tell
+#    the two apart (it only checks callability). Read every adapted member's
+#    actual body (not just its existence) against that test. Two capabilities
+#    that pass gate 1 fail this one and are also withheld:
+#      - case_provenance: get_generated_output_globs is real (a specific,
+#        deliberate glob list), but get_required_inputs is
+#        `del case_root, resolved_case, selected_start_time; return ()`
+#        unconditionally -- case_provenance.py's own module docstring calls
+#        this "deferred... until input enumeration lands," i.e. an admitted
+#        stub, not a genuine answer.
+#      - runtime_evidence: get_solve_step_commands, get_telemetry_source_globs
+#        and get_extra_provenance_paths are all real, but
+#        get_artifact_value_reader is `del artifact_format; return None`
+#        unconditionally -- runtime_evidence.py's own docstring calls it
+#        "Empty today," an admitted stub for a reader that "register[s] here
+#        when observable extraction lands."
+#    One hollow member disqualifies the whole capability, same standard
+#    applied to org.omnidriver.openfoam.environment's provides: (see its
+#    plugin.yaml) and to org.omnidriver.cardiaccore's (see its plugin.yaml,
+#    corrected the same day for the same reason).
+#
+# environment_preflight is ALSO now absent for gate 1: get_environment_diagnostics
+# was deleted (not merely left unimplemented) because it was a pure passthrough
+# to a fresh OpenFOAMEnvironmentPlugin() with no cardiacFoam-specific content,
+# reachable in production via own_context.own_driver_context() (which always
+# composes the real environment provider alongside this one) -- sequence-shape
+# composition was concatenating every OpenFOAM preflight diagnostic TWICE.
+# get_configured_environment and get_loaded_environment remain, both real
+# (cardiacFoam-specific bashrc/build-manifest resolution), but a capability
+# needs every adapted member, not most of them.
 provides:
   - dictionaries
   - tutorials
@@ -22,17 +59,14 @@ provides:
   - artifacts
   - case_compatibility
   - case_files
-  - case_provenance
   - configuration_validator
   - cxx_mapping
   - dict_regeneration
-  - environment_preflight
   - manifest
   - override_schema
   - report_catalog
   - run_document_configuration
   - run_semantic_validator
-  - runtime_evidence
   - sweep_materializer
 runtime:
   openfoam:
