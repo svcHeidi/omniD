@@ -35,7 +35,7 @@
 | 3 · topological ordering | done | `3b451fa` |
 | 4 · the composition rules, as failing tests | done (red by design) | `10fea49` |
 | 5 · `ProviderIdentity` / `StackIdentity` | done | `f408dc6` |
-| 6 · the composition mechanism (spike resolved: **own it**) | **next** | — |
+| 6 · the composition mechanism (spike resolved: **own it**) | done, one test blocked | `e7dc7b5` |
 | 7 · `DriverContext.providers` | pending | — |
 | 8 · extend the dependency boundary to adapters | pending | — |
 | 9 · delete the hand-embedding | pending | — |
@@ -49,6 +49,26 @@
 existing. That is the design: they are the specification Task 6 implements
 against, and Task 6 must turn them green WITHOUT editing them. Any other
 failure in the meantime is a real regression.
+
+**Corrected 2026-09-21, by Task 6.** Twelve of the thirteen are green and the
+thirteenth cannot be made green by any implementation.
+`test_a_case_file_path_declared_twice_is_an_error` writes
+`env.get_profile().case_files = (rule,)`, but that file's `_Provider.get_profile`
+builds a **fresh** `type("_P", (), {})()` on every call, so the attribute is
+set on a throwaway and no `case_files` is ever observable from the provider.
+The rule it names is implemented and is tested — `test_provider_ordering.py`'s
+`test_a_case_file_path_declared_by_two_providers_is_an_error` uses a provider
+whose profile persists and the duplicate path is refused by name. Making the
+committed test exercise its own rule needs one line in its `_Provider`
+(memoize the profile); Task 6 did not take it, because the task's terms
+forbade editing that file. Whoever lands that edit should delete this note.
+
+A second, milder slip in the same file: it calls the composed
+`sweep_materializer.materialize` with the *contract member's* argument names
+(`case_dir=`, `routed=`) rather than the Protocol's
+`SweepMaterializationRequest`. Task 6 honoured the test — `_SweepMaterializerAdapter.materialize`
+now accepts either, which is additive and breaks no caller — rather than
+declaring a second slip.
 
 Re-audited against post-Phase-0 code on 2026-09-20; five corrections applied
 (Tasks 6, 7 and 9). Tasks 1-5, 8 and 10-13 were confirmed still correct as
