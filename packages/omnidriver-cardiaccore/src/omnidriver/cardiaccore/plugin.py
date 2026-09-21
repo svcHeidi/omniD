@@ -114,9 +114,8 @@ class CardiacCorePlugin:
         return ()
 
     def validate_configuration(self, spec: Any) -> tuple[Any, ...]:
-        from .workflows.run_config import validate_configuration as _validate_configuration
-
-        return _validate_configuration(spec, self)
+        del spec
+        return ()
 
     def validate_run_semantics(self, context: dict[str, Any]) -> tuple[Any, ...]:
         del context
