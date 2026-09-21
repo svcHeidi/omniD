@@ -56,6 +56,20 @@ jobs:
       - name: Run tests
         run: python -m pytest packages/omnidriver-openfoam/tests -q
 
+      # This installs exactly one omnidriver.plugins adapter (openfoam-environment),
+      # which default_driver_context() needs to resolve an implicit default --
+      # test-core installs no adapter at all, and test-cardiac/test-cardiaccore
+      # install two, so this is the only job where these two files' `_cli()`
+      # calls (none pass --plugin) can resolve one. Both files were previously
+      # skip_without_monorepo-gated and had never run in any CI job; see
+      # docs/PROGRESS_LEDGER.md and packages/omnidriver/tests/fixtures/single_cell_tutorial/README.md.
+      - name: Run core's plugin-dependent CLI/security regression tests
+        run: |
+          python -m pytest \
+            packages/omnidriver/tests/core/test_trust_boundary_end_to_end.py \
+            packages/omnidriver/tests/core/test_cli_run_document.py \
+            -q
+
   test-cardiac:
     name: test-cardiac (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -135,12 +149,14 @@ jobs:
             packages/omnidriver/pyproject.toml
             packages/omnidriver-openfoam/pyproject.toml
             packages/omnidriver-cardiacfoam/pyproject.toml
+            packages/omnidriver-cardiaccore/pyproject.toml
 
       - name: Install test collection dependencies
         run: |
           pip install -e packages/omnidriver \
                       -e packages/omnidriver-openfoam \
                       -e packages/omnidriver-cardiacfoam \
+                      -e packages/omnidriver-cardiaccore \
                       pytest
 
       - name: Build, install, and invoke all package wheels

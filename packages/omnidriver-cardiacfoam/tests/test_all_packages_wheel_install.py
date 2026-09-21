@@ -1,4 +1,4 @@
-"""The three published distributions work together outside this checkout.
+"""The four published distributions work together outside this checkout.
 
 This is deliberately an artifact gate, not a cardiacFoam scientific run.  It
 builds each distribution from a temporary copy, installs the resulting wheels
@@ -24,7 +24,12 @@ import pytest
 # This test is directly below ``tests/`` (unlike Core's wheel test, which is
 # below ``tests/core/``), so the repository root is parent 3 rather than 4.
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-_PACKAGES = ("omnidriver", "omnidriver-openfoam", "omnidriver-cardiacfoam")
+_PACKAGES = (
+    "omnidriver",
+    "omnidriver-openfoam",
+    "omnidriver-cardiacfoam",
+    "omnidriver-cardiaccore",
+)
 
 
 def _run(command: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> str:
@@ -35,7 +40,7 @@ def _run(command: list[str], *, cwd: Path, env: dict[str, str] | None = None) ->
 
 @pytest.mark.slow
 def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> None:
-    """Prove the declared three-distribution route without checkout imports."""
+    """Prove the declared four-distribution route without checkout imports."""
     source_root = tmp_path / "sources"
     dist_root = tmp_path / "dist"
     source_root.mkdir()
@@ -103,6 +108,11 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
             "fixtures/template/constant/electroProperties"
         ).is_file()
 
+        assert "cardiaccore" in discover_plugins()
+        assert load_plugin_context("cardiaccore").identity.id == "org.omnidriver.cardiaccore"
+        assert load_plugin_context("cardiaccore").capabilities.case_runtime_conventions.conventions().output_collection_relpath == "postProcessing"
+        assert "blockMesh" in load_plugin_context("cardiaccore").capabilities.command_authorization.environment_commands()
+
         # Core has no path-name default. In a neutral staging call, these are
         # authored inputs, even though the OpenFOAM adapter declares one of
         # the same names as a generated output root.
@@ -138,3 +148,26 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
     payload = json.loads(describe)
     assert payload["resolved_name"] == "niederer2012"
     assert payload["capability_manifest"]["plugin_identity"]["id"] == "org.cardiacfoam"
+
+    cardiaccore_describe = _run(
+        [
+            str(python),
+            "-m",
+            "omnidriver",
+            "describe",
+            "--plugin",
+            "cardiaccore",
+            "--entry",
+            "cardiaccore-human-purkinje-slab",
+            "--cases-root",
+            str(cases_root),
+        ],
+        cwd=probe_root,
+        env=clean_environment,
+    )
+    cardiaccore_payload = json.loads(cardiaccore_describe)
+    assert cardiaccore_payload["resolved_name"] == "cardiaccore-human-purkinje-slab"
+    assert (
+        cardiaccore_payload["capability_manifest"]["plugin_identity"]["id"]
+        == "org.omnidriver.cardiaccore"
+    )

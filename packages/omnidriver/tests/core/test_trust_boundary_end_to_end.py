@@ -24,9 +24,9 @@ from unittest import mock
 
 import pytest
 
-from conftest import monorepo_root, skip_without_monorepo, NO_REPO_ROOT, repo_root, skip_without_repo
+from conftest import NO_REPO_ROOT, repo_root, skip_without_repo, skip_without_single_adapter
 
-pytestmark = [skip_without_repo, skip_without_monorepo]
+pytestmark = [skip_without_repo, skip_without_single_adapter]
 
 from omnidriver.cli import main
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
@@ -38,9 +38,15 @@ from omnidriver.core.runtime.workflow_runner import (
 from omnidriver.core.runtime.workflow_state import initial_workflow_state
 from omnidriver.core.strict_planning import strict_plan
 
-REPO_ROOT = monorepo_root or repo_root or NO_REPO_ROOT
-SECURITY_MD = REPO_ROOT / "applications" / "scripts" / "driverFoam" / "SECURITY.md"
-SINGLE_CELL_ROOT = REPO_ROOT / "tutorials" / "electrophysiologyProtocols" / "singleCell"
+REPO_ROOT = repo_root or NO_REPO_ROOT
+# This omnidriver checkout's own SECURITY.md, not the cardiacFoam monorepo's --
+# the CLI/RunDocument/workflow code these tests drive against lives here.
+SECURITY_MD = REPO_ROOT / "SECURITY.md"
+# Vendored copy of the monorepo's singleCell tutorial dictionaries (see
+# fixtures/single_cell_tutorial/README.md), shipped alongside this test file
+# so this suite runs without a real cardiacFoam checkout instead of always
+# skipping in CI.
+SINGLE_CELL_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "single_cell_tutorial"
 
 CASE_NAME = "trustBoundaryCase"
 
@@ -139,6 +145,13 @@ def _tampered_document(
     document = _plan_to_file(cases_root, doc_path)
     if steps is not None:
         document["workflowDag"]["steps"] = steps
+        # The planned workflowState's digest describes the *original* DAG.
+        # Swapping in different steps without clearing it makes every such
+        # document look like a resume of a mismatched prior attempt --
+        # rejected by validate_resume regardless of the field under test.
+        # None is what a never-run document already carries (see
+        # _hand_authored_document below, which omits the key entirely).
+        document["workflowState"] = None
     if launch is not None:
         document["launch"] = {**document["launch"], **launch}
     if config is not None:
@@ -487,9 +500,19 @@ def test_case_directory_cannot_shadow_a_trusted_path_binary() -> None:
         os.chmod(shadow, 0o755)
 
         # The resolver is the enforcement point: a case-local `blockMesh` is
-        # never picked up, while an Allrun-family name deliberately is.
+        # never picked up, while an Allrun-family name deliberately is --
+        # for the *active plugin's* declared entrypoints, so this needs the
+        # same context the CLI round-trip below resolves implicitly (Core
+        # itself declares no case-script names; see
+        # workflow.case_script_commands's "with no context the set is
+        # empty" and test_case_script_commands_entrypoint_seam.py).
+        from omnidriver.core.plugin_interface import default_driver_context
+
+        active_context = default_driver_context()
         assert _resolve_command("blockMesh", case_root) == "blockMesh"
-        assert _resolve_command("Allrun", case_root) == str(case_root / "Allrun")
+        assert _resolve_command("Allrun", case_root, active_context) == str(
+            case_root / "Allrun"
+        )
 
         # End-to-end: running the step never executes the case-local shadow,
         # whether or not a real blockMesh exists on this machine's PATH.
@@ -515,6 +538,7 @@ def test_a_plugins_declared_entrypoint_resolves_case_locally_but_blockmesh_still
     """
     from plugins.minimal_plugin import MinimalTestPlugin
 
+    from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
     from omnidriver.core.plugin_interface import driver_context as _driver_context
     from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile
 
@@ -536,6 +560,17 @@ def test_a_plugins_declared_entrypoint_resolves_case_locally_but_blockmesh_still
                     "plugin": {"id": self.plugin_id, "api_version": self.plugin_api_version},
                     "case_profile": {"dictionaries": []},
                 },
+            )
+
+        def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
+            # case_script_commands()/entrypoint_relpaths() read this capability,
+            # not get_profile() -- see test_case_script_commands_entrypoint_seam.py's
+            # identically-shaped _ForeignEntrypointPlugin, the un-gated sibling
+            # of this exact seam.
+            return CaseRuntimeConventions(
+                output_collection_relpath="outputs",
+                case_entrypoints=("run.sh",),
+                case_script_commands=("run.sh",),
             )
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -635,7 +670,27 @@ def test_invalid_config_blocks_execution_at_ingestion() -> None:
     `test_non_mapping_config_phase_blocks_execution_at_ingestion` below;
     keeping the two apart preserves this test's original claim (domain
     semantics) as its own regression gate.
+
+    The out-of-enum diagnostic comes from a catalog entry the *active
+    plugin* declares (Core and the generic OpenFOAM environment plugin
+    carry no `myocardiumSolver` vocabulary at all -- see the package table
+    in CLAUDE.md). This claim can only be exercised against a plugin that
+    declares it, and only one adapter can be the unambiguous default at a
+    time (omnidriver.core.plugin_discovery._default_selection), so this
+    test skips rather than fabricating an always-false negative when no
+    such plugin is the resolved default.
     """
+    from omnidriver.core.plugin_interface import default_driver_context
+
+    active_context = default_driver_context()
+    if "myocardiumSolver" not in {
+        entry.driver_path for entry in active_context.capabilities.dictionaries.entries()
+    }:
+        pytest.skip(
+            f"{active_context.identity.id!r} declares no myocardiumSolver "
+            "catalog entry; this claim needs a cardiac-aware default plugin."
+        )
+
     with tempfile.TemporaryDirectory() as temp_dir:
         cases_root = Path(temp_dir)
         case_root = _write_case(cases_root)
