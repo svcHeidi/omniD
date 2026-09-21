@@ -36,7 +36,6 @@ from omnidriver.core.planning_types import (
     artifact_to_json as _artifact_to_json,
     diagnostic as _diagnostic,
 )
-from .compatibility import legacy_dict_key_scanner
 from .contracts.catalogue_paths import catalogued_paths as _catalogued_paths
 
 
@@ -271,7 +270,6 @@ def _catalog_diagnostics(driver_context: "DriverContext") -> tuple[StrictDiagnos
     cxx_mapping_source = driver_context.identity.resolutions.get(
         "cxx_mapping", "cxx_mapping",
     )
-    strict_dict_key_report = legacy_dict_key_scanner()
     diagnostics: list[StrictDiagnostic] = []
     for source_root in mapping.source_roots:
         if not source_root.is_dir():
@@ -282,7 +280,7 @@ def _catalog_diagnostics(driver_context: "DriverContext") -> tuple[StrictDiagnos
                 source=cxx_mapping_source,
             ))
             continue
-        report = strict_dict_key_report(
+        report = driver_context.capabilities.dict_key_scanner.scan(
             source_root,
             allowlist_path=mapping.allowlist_path,
             entries=driver_context.capabilities.dictionaries.entries(),

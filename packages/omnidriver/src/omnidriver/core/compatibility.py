@@ -262,9 +262,15 @@ def legacy_dict_key_scanner():
     Returns only the C++ REPORT. The catalogue-path vocabulary that used to
     come back alongside it is core's own (see
     core/contracts/catalogue_paths.py) and must not be routed through here:
-    strict planning calls it eagerly to build an argument, so format-specific
-    parsing must remain in the adapter even when the adapter implements
-    get_case_dict_key_diagnostics and never reaches this fallback."""
+    format-specific parsing must remain in the adapter even when the adapter
+    implements get_case_dict_key_diagnostics and never reaches this fallback.
+
+    **Corrected 2026-09-22:** this used to say "strict planning calls it
+    eagerly to build an argument" -- true when ``strict_planning.py`` imported
+    and invoked this function directly at module scope, which was the defect
+    Task 11 fixed. It is now reached only as ``DictKeyScannerCapability``'s
+    declared fallback (``plugin_capabilities._DictKeyScannerAdapter.scan``),
+    when a plugin implements no ``get_dict_key_scanner`` hook of its own."""
 
     class _EmptyReport:
         def to_json(self):

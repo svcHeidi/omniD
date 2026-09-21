@@ -20,12 +20,17 @@ plugin:
 # dict_regeneration (no get_regeneration_scopes), mesh_diagnostic_policy (no
 # get_mesh_geometry_diagnostics/is_nondimensional_case) -- those three are
 # solver-specific and cardiacFoam is the only current implementer.
+#
+# Added 2026-09-22 (Task 11): dict_key_scanner. get_dict_key_scanner returns
+# dict_keys_scanner.strict_dict_key_report unconditionally -- a real scanner,
+# not a stub -- so it passes the same realness bar as everything else here.
 provides:
   - case_runtime_conventions
   - environment_preflight
   - dict_diagnostics
   - override_scopes
   - config_value
+  - dict_key_scanner
 case_profile:
   dictionaries:
     - path: system/controlDict

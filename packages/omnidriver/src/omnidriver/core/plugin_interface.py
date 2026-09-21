@@ -537,6 +537,14 @@ class SolverPluginOptionalHooks(Protocol):
         sibling keys are legal. Absent -> ``()``."""
         ...
 
+    # -- DictKeyScannerCapability ---------------------------------------------
+    def get_dict_key_scanner(self):
+        """Return a ``(source_root, *, allowlist_path, entries) -> report``
+        callable that scans this adapter's C++ source for dictionary-key
+        reads, for the strict-planning catalogue/C++ drift check. Absent ->
+        the neutral scanner that reports no drift."""
+        ...
+
     # -- DictionaryCatalogCapability ------------------------------------------
     def get_phases(self) -> tuple[str, ...]:
         """This plugin's dictionary editing phases, in order.

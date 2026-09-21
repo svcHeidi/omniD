@@ -197,3 +197,54 @@ def test_config_value_reader_calls_through_to_the_plugin_hook() -> None:
 
     assert reader is _read
     assert reader(Path("unused"), "unused") == "sentinel"
+
+
+def test_dict_key_scanner_uses_the_fallback_for_a_plugin_that_declares_nothing() -> None:
+    """DictKeyScannerCapability's fallback is legacy_dict_key_scanner: absence
+    means an empty drift report, not an AttributeError.
+
+    Added 2026-09-22 (Task 11), alongside the Protocol itself --
+    `get_dict_key_scanner` had no capability at all before this; strict
+    planning imported and called `compatibility.legacy_dict_key_scanner`
+    directly at module scope, so nothing exercised the adapter's own
+    fallback routing.
+    """
+    plugin = MinimalTestPlugin()
+    context = driver_context(plugin, source="test")
+
+    report = context.capabilities.dict_key_scanner.scan(
+        Path("/no/such/source"),
+        allowlist_path=Path("/no/such/allowlist.json"),
+        entries=(),
+    )
+
+    assert report.to_json() == {
+        "unmatched_cxx_reads": [],
+        "stale_paths": [],
+        "unmatched_subdicts": [],
+        "unused_allowlist": [],
+    }
+
+
+def test_dict_key_scanner_calls_through_to_the_plugin_hook() -> None:
+    """When a plugin implements the hook, the adapter calls the scanner it
+    returns instead of falling back to the empty report."""
+
+    calls = []
+
+    def _scan(source_root, *, allowlist_path, entries):
+        calls.append((source_root, allowlist_path, entries))
+        return "sentinel-report"
+
+    class ScannerPlugin(MinimalTestPlugin):
+        def get_dict_key_scanner(self):
+            return _scan
+
+    context = driver_context(ScannerPlugin(), source="test")
+
+    report = context.capabilities.dict_key_scanner.scan(
+        Path("/src"), allowlist_path=Path("/allow.json"), entries=("e",),
+    )
+
+    assert report == "sentinel-report"
+    assert calls == [(Path("/src"), Path("/allow.json"), ("e",))]

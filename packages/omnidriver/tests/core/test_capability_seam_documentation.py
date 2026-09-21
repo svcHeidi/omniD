@@ -291,3 +291,11 @@ def test_config_value_is_a_real_capability():
 
     assert hasattr(plugin_capabilities, "ConfigValueCapability")
     assert "config_value" in plugin_capabilities.PluginCapabilities.__annotations__
+
+
+def test_dict_key_scanning_is_overridable():
+    """A fallback no adapter can replace is not a seam."""
+    from omnidriver.core import plugin_capabilities
+
+    assert hasattr(plugin_capabilities, "DictKeyScannerCapability")
+    assert "dict_key_scanner" in plugin_capabilities.PluginCapabilities.__annotations__

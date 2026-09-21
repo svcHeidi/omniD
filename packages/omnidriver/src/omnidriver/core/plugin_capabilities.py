@@ -813,6 +813,34 @@ class ConfigValueCapability(Protocol):
     def reader(self): ...
 
 
+class DictKeyScannerCapability(Protocol):
+    """Scan an adapter's C++ source for dictionary-key reads.
+
+    ``_catalog_diagnostics`` (``strict_planning.py``) compares a solver
+    plugin's catalogue against what its C++ actually reads, and until this
+    capability existed it called ``compatibility.legacy_dict_key_scanner``
+    directly, at module scope, unconditionally -- a "fallback" no adapter
+    could ever override, since nothing probed for a real one first. The scan
+    itself is C++/dictionary-format knowledge, not solver knowledge (the
+    regex over ``.lookup("key")``-shaped call sites in ``dict_keys_scanner.py``
+    knows nothing about ionic models or myocardium selectors), so it belongs
+    to the OpenFOAM environment adapter, not to a specific solver plugin. Not
+    a mandatory ``SolverPlugin`` member, so existing v2 third-party plugins
+    keep loading; the fallback (``legacy_dict_key_scanner``) reports an empty
+    drift -- no unmatched reads, no stale paths -- until an adapter declares a
+    real scanner.
+
+    :adapts: get_dict_key_scanner
+    :consumed-by: omnidriver/core/strict_planning.py
+    :fallback: legacy_dict_key_scanner
+    :status: optional-neutral
+    """
+
+    def scan(
+        self, source_root: Any, *, allowlist_path: Any, entries: Any,
+    ) -> Any: ...
+
+
 @dataclass(frozen=True)
 class _TutorialCatalogAdapter:
     plugin: "SolverPlugin"
@@ -1552,6 +1580,20 @@ class _ConfigValueAdapter:
 
 
 @dataclass(frozen=True)
+class _DictKeyScannerAdapter:
+    plugin: "SolverPlugin"
+
+    def scan(self, source_root: Any, *, allowlist_path: Any, entries: Any) -> Any:
+        hook = getattr(self.plugin, "get_dict_key_scanner", None)
+        scanner = hook() if callable(hook) else None
+        if scanner is None:
+            from .compatibility import legacy_dict_key_scanner
+
+            scanner = legacy_dict_key_scanner()
+        return scanner(source_root, allowlist_path=allowlist_path, entries=entries)
+
+
+@dataclass(frozen=True)
 class PluginCapabilities:
     """Core's focused, internal view over one loaded plugin.
 
@@ -1631,6 +1673,7 @@ class PluginCapabilities:
     override_scopes: OverrideScopeCapability
     dict_regeneration: DictRegenerationCapability
     config_value: ConfigValueCapability
+    dict_key_scanner: DictKeyScannerCapability
 
 
 def adapt_plugin_capabilities(plugin: "SolverPlugin") -> PluginCapabilities:
@@ -1669,4 +1712,5 @@ def adapt_plugin_capabilities(plugin: "SolverPlugin") -> PluginCapabilities:
         override_scopes=_OverrideScopeAdapter(plugin),
         dict_regeneration=_DictRegenerationAdapter(plugin),
         config_value=_ConfigValueAdapter(plugin),
+        dict_key_scanner=_DictKeyScannerAdapter(plugin),
     )

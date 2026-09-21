@@ -179,6 +179,7 @@ _SHAPE: dict[str, str] = {
     "get_capabilities": "single",
     "get_selected_start_time": "single",
     "get_config_value_reader": "single",
+    "get_dict_key_scanner": "single",
     "get_case_runtime_conventions": "single",
     "get_config_resolution_description": "single",
     "get_override_schema": "single",
