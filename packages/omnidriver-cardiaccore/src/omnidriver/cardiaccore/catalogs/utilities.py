@@ -36,48 +36,18 @@ def _manifest(
 
 
 UTILITY_MANIFESTS = {
-    "newVtkUnstructuredToFoam": UtilityManifest(
-        name="newVtkUnstructuredToFoam",
-        description="Import a legacy ASCII VTK unstructured grid as an OpenFOAM mesh and cell fields.",
-        purpose=(
-            "Reads an ASCII VTK UNSTRUCTURED_GRID, writes constant/polyMesh with a "
-            "single default boundary patch, and imports scalar, vector, and tensor "
-            "CELL_DATA into current-time volume fields. Equivalent POINT_DATA is "
-            "averaged onto cells; unit-vector point data is renormalized after averaging. "
-            "The import does not scale geometry and writes every imported field "
-            "dimensionless, because VTK carries no OpenFOAM dimensions."
-        ),
-        inputs=("<vtk-file>",),
-        requires_mesh=False,
-        flags=(),
-        example="newVtkUnstructuredToFoam myMesh.vtk -case ./myCase",
-        category="io-conversion",
-        source_path=_SOURCE,
-        positional_args=(
-            PositionalArg(
-                "vtk_file",
-                "path",
-                "Input legacy ASCII VTK UNSTRUCTURED_GRID file.",
-            ),
-        ),
-        produces=(
-            ProducesEntry(
-                "vtk_imported_polymesh",
-                "constant/polyMesh",
-                "openfoam_polymesh",
-                "Imported OpenFOAM mesh; all faces are assigned to the default patch.",
-                "newVtkUnstructuredToFoam",
-            ),
-            ProducesEntry(
-                "vtk_imported_fields",
-                "<current-time>/<vtk-cell-data-name>",
-                "openfoam_field",
-                "One dimensionless volume field for each supported VTK CELL_DATA or POINT_DATA array.",
-                "newVtkUnstructuredToFoam",
-                optional=True,
-            ),
-        ),
-    ),
+    # newVtkUnstructuredToFoam is NOT declared here (removed 2026-09-21): it
+    # duplicated cardiacFoam's own declaration
+    # (omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/utilities/newVtkUnstructuredToFoam/utility.manifest.toml),
+    # which core's provider_stack "map" composition rule refuses to merge
+    # without an overrides: marker UtilityManifest has no field for. Verified
+    # unused within this package (grepped source, workflows and tests -- no
+    # tutorial, workflow-DAG step, or test references the name), so cardiacCore
+    # never depended on its own copy. cardiacFoam's description is also the
+    # operationally complete one: it documents post-import mm-to-m geometry
+    # scaling and a conductivity-dimension fix cardiacCore's copy omitted
+    # entirely, so cardiacFoam's declaration is the intended sole source of
+    # truth for this utility, not merely the one composition happened to keep.
     "setCardiacConductivity": _manifest(
         "setCardiacConductivity",
         "Build orthotropic conductivity tensors from fiber and sheet fields.",
@@ -181,36 +151,17 @@ UTILITY_MANIFESTS = {
             ProducesEntry("refined_purkinje_vtk", "<output-vtk>", "vtk_polydata", "Refined line graph at the caller-selected output path", "refine1Dgraph"),
         ),
     ),
-    "1DgraphToFoam": UtilityManifest(
-        name="1DgraphToFoam",
-        description="Convert a VTK line graph into the cardiacFoam Purkinje graph dictionary.",
-        purpose=(
-            "Reads a legacy ASCII VTK line graph and writes constant/<name> with rootNode, "
-            "pvjNodes, pvjLocations, conductionEdges, points, edges, pointFields and edgeFields. "
-            "Each VTK line segment becomes one conductionEdges entry; refine1Dgraph sets a "
-            "maximum edge length beforehand."
-        ),
-        inputs=("<vtk-file>",),
-        requires_mesh=False,
-        flags=(
-            UtilityFlag(
-                "-name",
-                "Graph object name written under constant/.",
-                takes_value=True,
-                argument_kind="word",
-                default="purkinjeGraph",
-            ),
-        ),
-        example="1DgraphToFoam postProcessing/generatePurkinjeTree/purkinje.vtk -case . -name purkinjeGraph",
-        category="io-conversion",
-        source_path=_SOURCE,
-        positional_args=(
-            PositionalArg("vtk_file", "path", "Input legacy ASCII VTK line graph (VTK_LINE, VTK_POLY_LINE or POLYDATA LINES)."),
-        ),
-        produces=(
-            ProducesEntry("purkinje_graph", "constant/<name>", "openfoam_dict", "Solver-facing Purkinje graph dictionary; name defaults to purkinjeGraph", "1DgraphToFoam"),
-        ),
-    ),
+    # 1DgraphToFoam is NOT declared here either (removed 2026-09-21, found
+    # while re-verifying the newVtkUnstructuredToFoam fix above): the SAME
+    # collision, the same "map" composition refusal, and the same resolution
+    # -- cardiacFoam owns a dedicated manifest
+    # (omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/utilities/1DgraphToFoam/utility.manifest.toml)
+    # for what even this package's own (now-removed) description called "the
+    # cardiacFoam Purkinje graph dictionary." Verified unused within this
+    # package the same way: grepped workflows/ (no DAG step names it) and
+    # tests/ (nothing references it); the two mentions elsewhere in this
+    # package (catalogs/inputs.py, catalogs/support_boundary.py) are prose
+    # describing the native hand-off, not code that reads this catalog entry.
     "foamTo1Dgraph": UtilityManifest(
         name="foamTo1Dgraph",
         description="Export an OpenFOAM Purkinje graph dictionary as a legacy VTK line graph.",
