@@ -41,6 +41,7 @@ Covers the four surfaces wired in Phase 2:
 from __future__ import annotations
 
 from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.core.runtime.run_model import RunDocument
 from omnidriver.core.specs.validation import validate_run
@@ -50,7 +51,7 @@ from omnidriver.core.specs.validation import validate_run
 # vocabulary throughout, so the cardiac context reproduces the previous
 # implicit default exactly.
 _CTX = _driver_context(
-    CardiacFoamPlugin(), source="test:ionic_heterogeneity",
+    OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:ionic_heterogeneity",
 )
 
 _NATIVE_TISSUE_MODELS = ("BuenoOrovio", "TNNP", "TWorld", "ToRORd_dynCl")

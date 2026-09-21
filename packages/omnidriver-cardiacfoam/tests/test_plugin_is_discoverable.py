@@ -24,5 +24,11 @@ def test_cardiacfoam_is_registered_in_the_group_core_reads() -> None:
 def test_cardiacfoam_loads_by_discovered_name() -> None:
     assert "cardiacfoam" in discover_plugins()
     context = load_plugin_context("cardiacfoam")
-    assert context.identity.id == "org.cardiacfoam"
-    assert context.identity.source.startswith("entry-point:omnidriver-cardiacfoam=")
+    # `.identity` is a `StackIdentity` (Task 7): cardiacFoam declares
+    # `requires: [org.omnidriver.openfoam.environment]` (Task 9), so
+    # `load_plugin_context` composes that provider in too (Task 9's
+    # `plugin_discovery._expand_with_requirements`) -- cardiacFoam itself is
+    # still the most specific, last in the ordered stack.
+    primary = context.identity.to_json()["providers"][-1]
+    assert primary["id"] == "org.cardiacfoam"
+    assert primary["source"].startswith("entry-point:omnidriver-cardiacfoam=")

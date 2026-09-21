@@ -30,9 +30,10 @@ def test_materialize_case_honours_dx_for_spatial_solver(tmp_path):
     # situation this skip guard implies.
     from omnidriver.core.plugin_interface import driver_context as _driver_context
     from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+    from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
     context = _driver_context(
-        CardiacFoamPlugin(), source="test:sweep_materialize",
+        OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:sweep_materialize",
     )
 
     case_dir = tmp_path / "TNNP_monodomain_fine"

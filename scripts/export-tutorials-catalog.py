@@ -57,7 +57,10 @@ def build_catalog(plugin: str | None = None) -> dict:
     # and this is the plugin *object*. Binding both to one name reads as a
     # mistake even when it is not.
     context = load_plugin_context(plugin) if plugin else default_driver_context()
-    selected = context.plugin
+    # `.plugin` was the retired single-plugin field (Task 7's
+    # `DriverContext` now holds an ordered `.providers` stack); the most
+    # specific provider -- last in the ordered tuple -- is this selection.
+    selected = context.providers[-1]
     display_ids = {t.id for t in selected.get_tutorial_displays()}
     registry_ids = set(list_tutorials(context))
 

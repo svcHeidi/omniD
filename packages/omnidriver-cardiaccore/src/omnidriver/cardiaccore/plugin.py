@@ -11,7 +11,6 @@ from typing import Any
 from omnidriver.core.capability_manifest import build_capability_manifest
 from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 from omnidriver.core.plugin_profile import load_plugin_profile
-from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
 from .catalogs.inputs import CATALOG, CONDITIONAL_INPUTS, DOCUMENTS
 from .agent_guidance import describe_guidance
@@ -34,8 +33,6 @@ from .catalogs.utilities import UTILITY_MANIFESTS
 
 class CardiacCorePlugin:
     """OmniD API-v2 adapter for a documented cardiacCore preprocessing slice."""
-
-    _openfoam = OpenFOAMEnvironmentPlugin()
 
     @property
     def plugin_name(self) -> str:
@@ -72,14 +69,23 @@ class CardiacCorePlugin:
         return DOCUMENTS
 
     def get_capabilities(self) -> dict[str, Any]:
-        conventions = self.get_case_runtime_conventions()
+        """This provider's own self-description.
+
+        No longer reaches for the environment provider's commands or case
+        conventions: composition (``get_capabilities`` is a ``single``-shape
+        member) means whichever provider is most specific answers this call
+        alone, and a provider must not embed another to fill the gap. The
+        environment-sourced fields degrade to the same neutral values core's
+        own compatibility fallbacks would supply for an adapter that never
+        implemented them; a caller after the full composed picture reads
+        ``DriverContext.capabilities`` per member instead of this method.
+        """
         return build_capability_manifest(
-            environment_commands=self._openfoam.get_environment_commands(),
+            environment_commands=frozenset(),
             plugin_commands=self.get_solver_commands() | self.get_auxiliary_commands(),
             utility_manifests=self.get_utility_manifests(),
             samplable_fields=self.get_samplable_fields({}),
-            case_script_commands=frozenset(conventions.case_script_commands)
-            | frozenset(conventions.case_entrypoints),
+            case_script_commands=frozenset(),
         )
 
     def get_tutorial_catalog(self) -> dict[str, Any]:
@@ -107,12 +113,10 @@ class CardiacCorePlugin:
     def get_tutorial_displays(self) -> tuple[Any, ...]:
         return ()
 
-    def get_case_runtime_conventions(self):
-        return self._openfoam.get_case_runtime_conventions()
-
     def validate_configuration(self, spec: Any) -> tuple[Any, ...]:
-        del spec
-        return ()
+        from .workflows.run_config import validate_configuration as _validate_configuration
+
+        return _validate_configuration(spec, self)
 
     def validate_run_semantics(self, context: dict[str, Any]) -> tuple[Any, ...]:
         del context
@@ -141,9 +145,6 @@ class CardiacCorePlugin:
     def get_samplable_fields(self, resolved: dict[str, Any]) -> dict[str, tuple[str, ...]]:
         del resolved
         return {}
-
-    def get_selected_start_time(self, case_root: Path, resolved_case: dict[str, Any]) -> str:
-        return self._openfoam.get_selected_start_time(case_root, resolved_case)
 
     def get_override_schema(self, tutorial_name: str, make_spec_info: dict[str, Any]) -> dict[str, Any]:
         del make_spec_info
@@ -229,50 +230,3 @@ class CardiacCorePlugin:
         del artifact_format
         return None
 
-    def get_environment_diagnostics(
-        self,
-        workflow_dag: dict[str, Any] | None,
-        *,
-        env: dict[str, str] | None = None,
-        explicit_bashrc: str | None = None,
-        driver_context: Any | None = None,
-    ) -> tuple[Any, ...]:
-        return self._openfoam.get_environment_diagnostics(
-            workflow_dag,
-            env=env,
-            explicit_bashrc=explicit_bashrc,
-            driver_context=driver_context,
-        )
-
-    def get_loaded_environment(
-        self, *, explicit_bashrc: str | None = None, driver_context: Any | None = None,
-    ) -> dict[str, str]:
-        return self._openfoam.get_loaded_environment(
-            explicit_bashrc=explicit_bashrc,
-            driver_context=driver_context,
-        )
-
-    def get_configured_environment(
-        self, env: dict[str, str], driver_context: Any | None,
-    ) -> dict[str, str]:
-        return self._openfoam.get_configured_environment(env, driver_context)
-
-    def get_function_object_field_diagnostics(
-        self, case_root: Path, *, samplable: dict[str, Any],
-    ) -> tuple[Any, ...]:
-        return self._openfoam.get_function_object_field_diagnostics(
-            case_root, samplable=samplable,
-        )
-
-    def get_case_dict_key_diagnostics(
-        self,
-        case_root: Path,
-        *,
-        catalogued_paths: tuple[str, ...],
-        dict_relpaths: tuple[str, ...],
-    ) -> tuple[Any, ...]:
-        return self._openfoam.get_case_dict_key_diagnostics(
-            case_root,
-            catalogued_paths=catalogued_paths,
-            dict_relpaths=dict_relpaths,
-        )

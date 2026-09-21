@@ -40,13 +40,14 @@ from pathlib import Path
 from conftest import monorepo_root
 from omnidriver.core.specs.paths import repo_root_default
 from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
 REPO_ROOT = monorepo_root or repo_root_default()
 
 # Two adapters are installed side by side, so there is no ambient default left
 # to discover. build_and_launch here is always driving cardiacFoam.
-_CTX = _driver_context(CardiacFoamPlugin(), source="test:dict_builder")
+_CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:dict_builder")
 SINGLE_CELL_ELECTRO_PROPERTIES = (
     REPO_ROOT / "tutorials" / "electrophysiologyProtocols" / "singleCell"
     / "constant" / "electroProperties"

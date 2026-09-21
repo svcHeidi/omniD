@@ -24,12 +24,13 @@ from pathlib import Path
 
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
 # These declarations are cardiacFoam's own, so this module names the plugin
 # rather than asking the ambient default -- which has no single answer once a
 # second adapter is installed alongside this one
 # (future/ENVIRONMENT_CONTRACT.md §12).
-_CTX = _driver_context(CardiacFoamPlugin(), source="test:runtime_evidence")
+_CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:runtime_evidence")
 
 
 def test_cardiac_declares_its_solver_as_a_solve_step() -> None:

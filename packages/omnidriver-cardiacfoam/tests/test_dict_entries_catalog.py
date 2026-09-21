@@ -14,13 +14,14 @@ from omnidriver.cardiacfoam.active_tension_catalog import ACTIVE_TENSION_MODEL_C
 from omnidriver.cardiacfoam.common_dict_entries import PHYSICS_PROPERTY_ENTRIES
 from omnidriver.cardiacfoam.overrides import apply_electro_property_overrides
 from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from cardiacfoam_assertions import assert_foam_entry
 
 # This suite is cardiacFoam's own dictionary catalog, so it names the plugin
 # it means rather than relying on the ambient default -- which has no single
 # answer once a second adapter is installed alongside this one
 # (future/ENVIRONMENT_CONTRACT.md §12).
-_CTX = _driver_context(CardiacFoamPlugin(), source="test:dict_entries_catalog")
+_CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:dict_entries_catalog")
 
 # These four names are this plugin's, so they come from this plugin. They used
 # to be read out of core's ``Phase`` literal via typing.get_args -- core

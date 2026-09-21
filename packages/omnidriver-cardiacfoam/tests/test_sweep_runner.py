@@ -62,10 +62,11 @@ import pytest
 from omnidriver.core.runtime.sweep_runner import sweep_plan, sweep_run
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError
 from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
 _CTX = _driver_context(
-    CardiacFoamPlugin(), source="test:sweep_runner",
+    OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:sweep_runner",
 )
 
 #: These two tests invoke a REAL solver run: sweep_run shells out to

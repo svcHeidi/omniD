@@ -60,11 +60,23 @@ def own_driver_context():
 
     The imports are function-local because ``cardiacfoam_plugin`` reaches back
     into ``tutorials.generic_case``, which is one of this helper's callers.
+
+    Composes the OpenFOAM environment adapter alongside this plugin (Task 9):
+    ``plugin.yaml`` now declares ``requires: [org.omnidriver.openfoam.environment]``,
+    since cardiacFoam no longer hand-embeds that adapter's environment
+    capabilities -- it composes them. A single-provider stack here would make
+    ``order_providers`` refuse every call for an unmet requirement, which is
+    exactly the "this adapter's own identity is statically known" case this
+    module exists to serve without consulting the registry; the environment
+    adapter is equally static here; it is not a registry lookup.
     """
     from omnidriver.core.plugin_interface import driver_context
     from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+    from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
-    return driver_context(CardiacFoamPlugin(), source="omnidriver.cardiacfoam")
+    return driver_context(
+        OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="omnidriver.cardiacfoam",
+    )
 
 
 __all__ = ["own_driver_context"]

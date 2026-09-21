@@ -20,6 +20,7 @@ from omnidriver.openfoam.dict_keys_scanner import (
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
 from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 from omnidriver.core.strict_planning import strict_plan
 
@@ -31,7 +32,7 @@ CARDIAC_MAPPING = CARDIAC_PLUGIN.get_profile().cxx_mapping
 # strict_plan now takes a mandatory driver_context
 # (test_core_context_is_explicit.py); this file already builds
 # CARDIAC_PLUGIN above, so this reproduces the previous implicit default.
-_CTX = _driver_context(CARDIAC_PLUGIN, source="test:strict_planning")
+_CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CARDIAC_PLUGIN, source="test:strict_planning")
 
 
 def _spec_with_workflow(case_root: Path, *, steps: list[dict]) -> TutorialSpec:

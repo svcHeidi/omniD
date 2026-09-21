@@ -21,9 +21,10 @@ from conftest import skip_without_monorepo
 from omnidriver.core.runtime.sweep_runner import sweep_plan
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
 _CTX = _driver_context(
-    CardiacFoamPlugin(), source="test:sweep_plan_contract",
+    OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:sweep_plan_contract",
 )
 
 _SPEC = {

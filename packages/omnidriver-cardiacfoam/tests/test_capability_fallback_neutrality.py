@@ -22,6 +22,7 @@ from pathlib import Path
 
 from omnidriver.core.plugin_capabilities import CaseCompatibilityRequest
 from omnidriver.core.plugin_interface import driver_context
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
 
 def _cardiac_looking_case() -> Path:
@@ -51,7 +52,7 @@ class TestCardiacPluginBehaviourIsUnchanged(unittest.TestCase):
     def _cardiac_capabilities(self):
         from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
-        context = driver_context(CardiacFoamPlugin(), source="test:cardiacfoam")
+        context = driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:cardiacfoam")
         return context.capabilities
 
     def test_cardiac_plugin_still_claims_a_cardiac_case(self) -> None:

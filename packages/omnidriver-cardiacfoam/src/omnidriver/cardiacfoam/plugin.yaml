@@ -2,6 +2,38 @@ schema_version: 1
 plugin:
   id: org.cardiacfoam
   api_version: "2"
+requires:
+  - org.omnidriver.openfoam.environment
+# Verified 2026-09-21 against provider_stack.implemented_capabilities(
+# CardiacFoamPlugin()) after deleting the five composed-concern delegations
+# (command_authorization's environment half, profile's openfoam-role
+# validation, config_values, time_selection, case_runtime_conventions).
+# command_authorization, case_introspection, config_value, override_scopes
+# and dict_diagnostics are deliberately absent: this plugin no longer
+# implements every member each of those adapts on its own (the environment
+# half now comes only from org.omnidriver.openfoam.environment), so
+# declaring them here would fail check_provides()'s per-provider guard even
+# though the composed stack still answers each capability -- from whichever
+# provider in the stack implements that particular member.
+provides:
+  - dictionaries
+  - tutorials
+  - named_catalogs
+  - artifacts
+  - case_compatibility
+  - case_files
+  - case_provenance
+  - configuration_validator
+  - cxx_mapping
+  - dict_regeneration
+  - environment_preflight
+  - manifest
+  - override_schema
+  - report_catalog
+  - run_document_configuration
+  - run_semantic_validator
+  - runtime_evidence
+  - sweep_materializer
 runtime:
   openfoam:
     bashrc_env: OPENFOAM_BASHRC
@@ -31,10 +63,6 @@ runtime:
           - libphysicsModel
 case_profile:
   dictionaries:
-    - path: system/controlDict
-      kind: openfoam_dictionary
-      role: openfoam.control_dict
-      required: always
     - path: system/fvSchemes
       kind: openfoam_dictionary
       role: openfoam.discretisation
@@ -58,10 +86,6 @@ case_profile:
     - path: system/blockMeshDict
       kind: openfoam_dictionary
       role: openfoam.mesh_generation
-      required: conditional
-    - path: Allrun
-      kind: case_script
-      role: openfoam.entrypoint
       required: conditional
     - path: Allclean
       kind: case_script

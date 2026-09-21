@@ -22,6 +22,7 @@ from pathlib import Path
 
 from omnidriver.core import compatibility
 from omnidriver.core.plugin_interface import driver_context
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
 
@@ -51,7 +52,7 @@ def test_no_gated_fallback_exists() -> None:
 
 def test_reading_every_capability_under_cardiac_fires_no_gated_fallback() -> None:
     gated = _gated_fallback_names()
-    context = driver_context(CardiacFoamPlugin(), source="test:cardiac-census")
+    context = driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:cardiac-census")
 
     with compatibility.track_fallback_calls() as calls:
         caps = context.capabilities

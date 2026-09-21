@@ -6,6 +6,7 @@ from __future__ import annotations
 from omnidriver.core.runtime.remediation import STATIC_REMEDIATION_HINTS, RemediationHint
 from omnidriver.dict_entries import get_electro_property_entry_groups
 from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.cardiacfoam.common_dict_entries import (
     CONTROL_DICT_ENTRIES,
@@ -15,7 +16,7 @@ from omnidriver.cardiacfoam.common_dict_entries import (
 # Two adapters are installed side by side, so there is no ambient default left
 # to discover. The catalog these hints are checked against is cardiacFoam's.
 _CTX = _driver_context(
-    CardiacFoamPlugin(), source="test:remediation_catalog_addressability",
+    OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:remediation_catalog_addressability",
 )
 
 _PREFIX = "$ELECTRO_MODEL_COEFFS."

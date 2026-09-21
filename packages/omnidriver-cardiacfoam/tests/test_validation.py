@@ -50,6 +50,7 @@ from omnidriver.cardiacfoam.common_dict_entries import (
     PHYSICS_PROPERTY_ENTRIES,
 )
 from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.core.planning_types import StrictDiagnostic
 from omnidriver.core.runtime.run_model import RunDocument
@@ -60,7 +61,7 @@ from omnidriver.core.specs.validation import slot_key, validate_run
 # omnidriver-cardiacfoam's own tree and already exercised cardiac semantics
 # through the previous implicit default -- this makes that explicit rather
 # than deciding anything new about the tests' content.
-_CTX = _driver_context(CardiacFoamPlugin(), source="test:validation")
+_CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:validation")
 
 _PHASE_ORDER = ("anatomy", "physics", "stimulus", "solver")
 

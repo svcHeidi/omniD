@@ -39,13 +39,14 @@ import pytest
 
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.sweep_materialize import materialize_case
 
 # Every case below is a cardiacFoam case, so it says so. materialize_case only
 # falls back to the ambient default when no context is supplied, and that
 # default has no single answer once a second adapter is installed alongside
 # this one (future/ENVIRONMENT_CONTRACT.md §12).
-_CTX = _driver_context(CardiacFoamPlugin(), source="test:sweep_materialize")
+_CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:sweep_materialize")
 
 
 def test_materialize_case_writes_dict_files_and_allrun_only(tmp_path):

@@ -78,37 +78,9 @@ class CardiacFoamPlugin:
     @staticmethod
     @lru_cache(maxsize=1)
     def get_profile():
-        from omnidriver.openfoam.profile import load_openfoam_profile
+        from omnidriver.core.plugin_profile import load_plugin_profile
 
-        return load_openfoam_profile(Path(__file__).parent / "plugin.yaml")
-
-    def get_config_value_reader(self):
-        from omnidriver.openfoam.config_values import openfoam_config_value_reader
-
-        return openfoam_config_value_reader()
-
-    def get_selected_start_time(self, case_root, resolved_case) -> str:
-        del resolved_case
-        from omnidriver.openfoam.time_selection import selected_start_time
-
-        control_dict = next(
-            rule.path
-            for rule in self.get_profile().case_files
-            if rule.role == "openfoam.control_dict"
-        )
-        return selected_start_time(
-            case_root,
-            control_dict_relpath=control_dict,
-            read_value=self.get_config_value_reader(),
-        )
-
-    def get_case_runtime_conventions(self):
-        """Reuse OpenFOAM's generated-path conventions without owning them."""
-        from omnidriver.openfoam.case_runtime_conventions import (
-            openfoam_case_runtime_conventions,
-        )
-
-        return openfoam_case_runtime_conventions()
+        return load_plugin_profile(Path(__file__).parent / "plugin.yaml")
 
     def get_environment_diagnostics(
         self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None,
@@ -212,32 +184,29 @@ class CardiacFoamPlugin:
     def get_capabilities(self) -> CapabilityManifest:
         """
         Return the cardiacFoam capabilities (models, solvers, etc.).
+
+        No longer reaches for the environment provider's commands or case
+        conventions -- ``get_capabilities`` is a ``single``-shape composed
+        member, so this provider must answer for itself, and a provider must
+        not embed another to fill the gap. The environment-sourced fields
+        degrade to the same neutral values core's own compatibility
+        fallbacks would supply for an adapter that never implemented them; a
+        caller after the full composed picture reads
+        ``DriverContext.capabilities`` per member instead of this method.
         """
         # No case_root is available at this call site, so this resolves to
         # the fixed solver fields only (matches historical behaviour: no
         # resolved model, no ionic/active-tension-specific field names).
         resolved: dict = {}
         manifest = build_capability_manifest(
-            environment_commands=self.get_environment_commands(),
+            environment_commands=frozenset(),
             # The manifest advertises the accept-surface, so it lists both
             # kinds of authorized plugin command -- the solver/auxiliary split
             # only governs who may be credited with a run's artifacts.
-            plugin_commands=(
-                self.get_solver_commands()
-                | self.get_auxiliary_commands()
-                | self.get_environment_commands()
-            ),
+            plugin_commands=self.get_solver_commands() | self.get_auxiliary_commands(),
             utility_manifests=self.get_utility_manifests(),
             samplable_fields=self.get_samplable_fields(resolved),
-            # This plugin's own declared entrypoint, not just the fixed
-            # Allrun-family names -- read from get_profile() directly since
-            # get_capabilities() runs before any DriverContext necessarily
-            # wraps the plugin (future/
-            # CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md §5).
-            case_script_commands=frozenset(
-                self.get_case_runtime_conventions().case_script_commands
-            )
-            | frozenset(self.get_case_runtime_conventions().case_entrypoints),
+            case_script_commands=frozenset(),
         )
         manifest["heterogeneity_models"] = HETEROGENEITY_MODELS
         # Copy on the way out, as get_utility_manifests() already does: these
@@ -546,16 +515,6 @@ class CardiacFoamPlugin:
         )
 
         return auxiliary_commands()
-
-    def get_environment_commands(self) -> frozenset[str]:
-        from omnidriver.openfoam.command_authorization import openfoam_runtime_commands
-
-        return openfoam_runtime_commands()
-
-    def is_installed_environment_command(self, command: str) -> bool:
-        from omnidriver.openfoam.command_authorization import is_installed_openfoam_application
-
-        return is_installed_openfoam_application(command)
 
     def get_utility_manifests(self) -> dict:
         """This plugin's ``utility.manifest.toml`` sidecars, by command name."""

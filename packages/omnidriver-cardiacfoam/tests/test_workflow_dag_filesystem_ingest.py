@@ -16,10 +16,11 @@ import tempfile
 
 from omnidriver.core.runtime.registry import resolve_entry
 from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
 _CTX = _driver_context(
-    CardiacFoamPlugin(),
+    OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(),
     source="test:workflow_dag_filesystem_ingest",
 )
 

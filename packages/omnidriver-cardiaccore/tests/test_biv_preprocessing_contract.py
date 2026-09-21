@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from omnidriver.core.plugin_interface import driver_context
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
 from omnidriver.cardiaccore.plugin import CardiacCorePlugin
 from omnidriver.cardiaccore.workflows.preprocessing import (
@@ -19,7 +20,7 @@ from omnidriver.cardiaccore.workflows.preprocessing import (
 
 
 def test_biv_preprocessing_declares_the_native_wrapper_sequence(tmp_path):
-    context = driver_context(CardiacCorePlugin(), source="test")
+    context = driver_context(OpenFOAMEnvironmentPlugin(), CardiacCorePlugin(), source="test")
     spec = make_human_purkinje_slab_spec(cases_root=tmp_path)
 
     assert spec.name == HUMAN_PURKINJE_SLAB_TUTORIAL_NAME
@@ -37,7 +38,7 @@ def test_biv_preprocessing_declares_the_native_wrapper_sequence(tmp_path):
 
 
 def test_human_tree_declares_the_native_case_local_generator_contract(tmp_path):
-    context = driver_context(CardiacCorePlugin(), source="test")
+    context = driver_context(OpenFOAMEnvironmentPlugin(), CardiacCorePlugin(), source="test")
     spec = make_human_purkinje_endocardial_spec(cases_root=tmp_path)
 
     assert spec.name == HUMAN_PURKINJE_ENDOCARDIAL_TUTORIAL_NAME
@@ -98,7 +99,7 @@ def test_pig_workflows_differ_only_in_lv_weight_consumption(tmp_path):
 
 
 def test_utility_outputs_are_not_misclassified_as_source_inputs(tmp_path):
-    context = driver_context(CardiacCorePlugin(), source="test")
+    context = driver_context(OpenFOAMEnvironmentPlugin(), CardiacCorePlugin(), source="test")
 
     output_globs = context.capabilities.case_provenance.generated_output_globs(
         tmp_path, {}, "0"
@@ -192,7 +193,7 @@ def test_every_declared_value_is_reachable(tmp_path):
     """
     from omnidriver.cardiaccore.workflows.overrides import resolve_override_target
 
-    context = driver_context(CardiacCorePlugin(), source="test")
+    context = driver_context(OpenFOAMEnvironmentPlugin(), CardiacCorePlugin(), source="test")
     for entry in context.capabilities.dictionaries.entries():
         path = entry.driver_path.replace("<ventKey>", "lv")
         assert resolve_override_target(path).key

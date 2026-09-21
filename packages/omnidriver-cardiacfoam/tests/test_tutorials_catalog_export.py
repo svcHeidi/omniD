@@ -94,9 +94,11 @@ def test_every_registered_tutorial_is_exported(tmp_path):
     from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
     from omnidriver.core.plugin_interface import driver_context as _driver_context
     from omnidriver.core.runtime.registry import list_tutorials, _normalized_registry
+    from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
     context = _driver_context(
-        CardiacFoamPlugin(), source="test:tutorials_catalog_export",
+        OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(),
+        source="test:tutorials_catalog_export",
     )
     data = _run(tmp_path / "t.json")
     exported = {t["id"] for t in data["tutorials"]}

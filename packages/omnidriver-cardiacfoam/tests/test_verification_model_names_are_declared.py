@@ -52,9 +52,10 @@ would be no check at all.
 from __future__ import annotations
 
 from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
-_CTX = _driver_context(CardiacFoamPlugin(), source="test:verification_model_names")
+_CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:verification_model_names")
 
 _TYPE_KEY_SUFFIX = "verificationModel.type"
 

@@ -17,8 +17,12 @@ def test_cardiac_profile_declares_case_files_and_cxx_provenance() -> None:
     profile = CardiacFoamPlugin().get_profile()
 
     assert profile.plugin_id == "org.cardiacfoam"
+    # `system/controlDict` is NOT here (Task 9): it duplicated the
+    # environment provider's own declaration (same path, same role), which
+    # spec §2.1's one-declarer rule forbids -- cardiacFoam's profile no
+    # longer declares it; the composed stack still does, via
+    # org.omnidriver.openfoam.environment.
     assert {rule.path for rule in profile.case_files} >= {
-        "system/controlDict",
         "constant/physicsProperties",
         "constant/electroProperties",
     }

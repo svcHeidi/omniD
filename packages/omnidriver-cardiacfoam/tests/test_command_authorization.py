@@ -15,6 +15,7 @@ import pytest
 
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.openfoam.environment import openfoam_environment_context
 from omnidriver.core.runtime.workflow import validate_workflow_commands
 
@@ -23,7 +24,7 @@ from omnidriver.core.runtime.workflow import validate_workflow_commands
 # ambiguous as soon as a second adapter is installed alongside cardiacfoam
 # (future/ENVIRONMENT_CONTRACT.md §12).
 _CTX = _driver_context(
-    CardiacFoamPlugin(), source="test:command_authorization",
+    OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:command_authorization",
 )
 
 
@@ -83,7 +84,9 @@ def test_utility_manifests_are_not_a_shared_mutable_dict() -> None:
     with pytest.raises(TypeError):
         cached["injected"] = object()  # type: ignore[index]
 
-    plugin = _CTX.plugin
+    # `.plugin` was the retired single-plugin field; the most specific
+    # provider -- last in the ordered stack -- is cardiacFoam itself.
+    plugin = _CTX.providers[-1]
     handed_out = plugin.get_utility_manifests()
     handed_out["injected"] = object()
     assert "injected" not in plugin.get_utility_manifests()

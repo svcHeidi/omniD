@@ -58,7 +58,9 @@ def test_the_fallback_reaches_openfoam_with_the_context_it_was_given() -> None:
         reason="omnidriver-openfoam is not installed",
     )
     context = _context()
-    assert not hasattr(context.plugin, "apply_overrides"), (
+    # `.plugin` was the retired single-plugin field (Task 7); `_context()`
+    # builds a one-provider stack, so the sole provider is `.providers[-1]`.
+    assert not hasattr(context.providers[-1], "apply_overrides"), (
         "this test exists to exercise the FALLBACK; the minimal plugin must "
         "not implement the hook"
     )

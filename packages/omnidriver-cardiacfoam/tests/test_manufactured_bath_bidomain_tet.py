@@ -225,13 +225,17 @@ def test_tet_unclaimed_artifacts_are_credited_to_the_solve_step(tmp_path):
     """
     from omnidriver.core.plugin_interface import driver_context as _driver_context
     from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+    from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
     from omnidriver.core.runtime.models import DataArtifact
     from omnidriver.core.runtime.workflow import normalize_workflow_dag
 
     # Two adapters are installed side by side, so there is no ambient default
-    # left to discover. The DAG being normalized is cardiacFoam's.
+    # left to discover. The DAG being normalized is cardiacFoam's. cardiacFoam
+    # declares `requires: [org.omnidriver.openfoam.environment]` (Task 9), so
+    # it must be composed explicitly rather than passed alone.
     context = _driver_context(
-        CardiacFoamPlugin(), source="test:manufactured_bath_bidomain_tet",
+        OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(),
+        source="test:manufactured_bath_bidomain_tet",
     )
 
     spec = _make_spec(tmp_path, mesh_family="tet")

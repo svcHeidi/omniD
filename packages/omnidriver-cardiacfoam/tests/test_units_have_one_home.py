@@ -55,9 +55,10 @@ from __future__ import annotations
 import re
 
 from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
-_CTX = _driver_context(CardiacFoamPlugin(), source="test:units_have_one_home")
+_CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:units_have_one_home")
 
 #: A bracketed token is read as a unit claim unless it contains a comma or a
 #: space. Measured over the whole catalogue, the only bracketed token that is

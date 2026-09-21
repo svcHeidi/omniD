@@ -6,13 +6,18 @@ from pathlib import Path
 
 from omnidriver.cli import main
 from omnidriver.core.plugin_interface import driver_context
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.cardiaccore import CardiacCorePlugin
 
 
 def test_plugin_has_a_valid_context() -> None:
-    context = driver_context(CardiacCorePlugin(), source="test")
+    context = driver_context(OpenFOAMEnvironmentPlugin(), CardiacCorePlugin(), source="test")
 
-    assert context.identity.id == "org.omnidriver.cardiaccore"
+    # `.identity` is a `StackIdentity` (Task 7): the most-specific provider
+    # (last in the ordered stack) is this plugin, per
+    # `identity.to_json()["providers"][-1]["id"]` -- `.identity.id` was the
+    # retired single-plugin shape.
+    assert context.identity.to_json()["providers"][-1]["id"] == "org.omnidriver.cardiaccore"
     assert len(context.capabilities.dictionaries.entries()) == 87
     assert context.capabilities.dictionaries.phases() == ("preprocessing",)
     assert context.capabilities.tutorials.catalog()["registered_tutorials"] == (
@@ -72,7 +77,9 @@ def test_declared_vocabulary_names_the_current_coordinates_dictionary() -> None:
     assert "uvcConventionDict" not in declared
     assert "system/coordinatesConventionDict" in declared
 
-    factories = driver_context(plugin, source="test").capabilities.tutorials.catalog()[
+    factories = driver_context(
+        OpenFOAMEnvironmentPlugin(), plugin, source="test",
+    ).capabilities.tutorials.catalog()[
         "spec_factories"
     ]
     specs = {name: json.dumps(build(), default=str) for name, build in factories.items()}
@@ -93,7 +100,9 @@ def test_declared_tree_extension_targets_are_wall_thickness_depths() -> None:
     """
     entries = {
         e.driver_path: e
-        for e in driver_context(CardiacCorePlugin(), source="test")
+        for e in driver_context(
+            OpenFOAMEnvironmentPlugin(), CardiacCorePlugin(), source="test",
+        )
         .capabilities.dictionaries.entries()
     }
     assert "$PURKINJE_TREE.<ventKey>.extension.dMin" not in entries

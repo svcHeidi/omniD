@@ -2,6 +2,30 @@ schema_version: 1
 plugin:
   id: org.omnidriver.openfoam.environment
   api_version: "2"
+# Verified 2026-09-21 against provider_stack.implemented_capabilities() after
+# deleting the nine hollow stubs (Phase 0 Task 4's census): a capability is
+# declared here only if every member it adapts is a real, non-stub method on
+# this class -- check_provides() (provider_stack.py) enforces exactly that at
+# driver_context() construction, per provider, before composition ever runs.
+# Deliberately NOT declared, though implemented_capabilities() reports them
+# with the stubs still present: command_authorization (get_solver_commands,
+# get_auxiliary_commands, get_utility_manifests, get_utility_roots were the
+# solver-vocabulary stubs; this adapter genuinely knows only
+# get_environment_commands/is_installed_environment_command), case_introspection
+# (get_samplable_fields, resolve_case_models were stubs), and
+# run_document_configuration / override_schema (get_run_document_config_schema,
+# get_dict_entry_catalog, get_override_schema were stubs). Also not declared,
+# and never implemented by this adapter at all (not part of the stub census,
+# just genuinely absent): case_files (no get_config_resolution_description),
+# dict_regeneration (no get_regeneration_scopes), mesh_diagnostic_policy (no
+# get_mesh_geometry_diagnostics/is_nondimensional_case) -- those three are
+# solver-specific and cardiacFoam is the only current implementer.
+provides:
+  - case_runtime_conventions
+  - environment_preflight
+  - dict_diagnostics
+  - override_scopes
+  - config_value
 case_profile:
   dictionaries:
     - path: system/controlDict

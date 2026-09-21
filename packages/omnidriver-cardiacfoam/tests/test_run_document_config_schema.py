@@ -44,20 +44,27 @@ from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.core.planning_types import StrictDiagnostic
 from omnidriver.cardiacfoam.run_document_config import _read_physics_type
 from omnidriver.core.strict_planning import strict_plan
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
 
 # This module asserts the *cardiac* plugin's config schema, so it names that
 # plugin rather than asking the ambient default -- which has no single answer
 # once a second adapter is installed (future/ENVIRONMENT_CONTRACT.md §12).
+# Composes the environment adapter too (Task 9): cardiacFoam's profile now
+# declares `requires: [org.omnidriver.openfoam.environment]`, unmet by a
+# single-provider stack.
 def _context():
     return _driver_context(
-        CardiacFoamPlugin(), source="test:run_document_config_schema",
+        OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(),
+        source="test:run_document_config_schema",
     )
 
 
 def test_cardiac_plugin_declares_a_config_schema() -> None:
     context = _context()
-    schema = context.plugin.get_run_document_config_schema()
+    # `.plugin` was the retired single-plugin field; cardiacFoam is the most
+    # specific provider, last in the ordered stack.
+    schema = context.providers[-1].get_run_document_config_schema()
     assert schema["required"] == ["anatomy", "physics", "stimulus", "solver"]
 
 
@@ -75,7 +82,7 @@ def test_strict_plan_reports_a_structured_diagnostic_for_schema_violation(monkey
         return {"anatomy": {}, "physics": {}, "stimulus": {}}, ()
 
     monkeypatch.setattr(
-        context.plugin, "build_run_document_config", _broken_build, raising=False,
+        context.providers[-1], "build_run_document_config", _broken_build, raising=False,
     )
     report = strict_plan("singleCell", driver_context=context)
     codes = {d.code for d in report.validation_diagnostics}

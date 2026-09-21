@@ -48,15 +48,23 @@ class OpenFOAMEnvironmentPlugin:
         return {}
 
     def get_capabilities(self):
+        """This provider's own self-description.
+
+        No solver vocabulary: this adapter has no scientific configuration,
+        so ``plugin_commands``/``utility_manifests``/``samplable_fields``
+        carry the same neutral values core's own compatibility fallbacks
+        would supply for an adapter that never implemented those hooks --
+        matching :meth:`get_solver_commands` and friends having been removed
+        as hollow stubs rather than genuine environment behaviour.
+        """
+        conventions = self.get_case_runtime_conventions()
         return build_capability_manifest(
             environment_commands=self.get_environment_commands(),
-            plugin_commands=self.get_solver_commands() | self.get_auxiliary_commands(),
-            utility_manifests=self.get_utility_manifests(),
-            samplable_fields=self.get_samplable_fields({}),
-            case_script_commands=frozenset(
-                self.get_case_runtime_conventions().case_script_commands
-            )
-            | frozenset(self.get_case_runtime_conventions().case_entrypoints),
+            plugin_commands=frozenset(),
+            utility_manifests={},
+            samplable_fields={},
+            case_script_commands=frozenset(conventions.case_script_commands)
+            | frozenset(conventions.case_entrypoints),
         )
 
     def get_tutorial_catalog(self):
@@ -73,12 +81,6 @@ class OpenFOAMEnvironmentPlugin:
 
     def predict_data_artifacts(self, case_root, spec):
         return ()
-
-    def get_solver_commands(self) -> frozenset[str]:
-        return frozenset()
-
-    def get_auxiliary_commands(self) -> frozenset[str]:
-        return frozenset()
 
     def get_base_mesh_geometry_diagnostics(self, case_root):
         from .mesh_geometry import mesh_geometry_diagnostics
@@ -183,24 +185,6 @@ class OpenFOAMEnvironmentPlugin:
     def is_installed_environment_command(self, command: str) -> bool:
         return is_installed_openfoam_application(command)
 
-    def get_utility_manifests(self) -> dict:
-        return {}
-
-    def get_utility_roots(self) -> tuple[Path, ...]:
-        return ()
-
-    def resolve_case_models(self, case_root):
-        del case_root
-        return {}
-
-    def get_samplable_fields(self, resolved):
-        del resolved
-        return {}
-
-    def get_override_schema(self, tutorial_name, make_spec_info):
-        del tutorial_name, make_spec_info
-        return {}
-
     def get_solve_step_commands(self) -> frozenset:
         return frozenset()
 
@@ -216,9 +200,6 @@ class OpenFOAMEnvironmentPlugin:
         del artifact_format
         return None
 
-    def get_dict_entry_catalog(self):
-        return {}
-
     def get_named_catalogs(self):
         return {}
 
@@ -231,9 +212,6 @@ class OpenFOAMEnvironmentPlugin:
     def build_run_document_config(self, spec):
         del spec
         return {}, ()
-
-    def get_run_document_config_schema(self) -> dict:
-        return {"type": "object", "additionalProperties": True}
 
 
 def openfoam_environment_context():

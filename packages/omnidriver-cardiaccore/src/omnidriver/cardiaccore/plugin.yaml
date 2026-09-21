@@ -2,20 +2,30 @@ schema_version: 1
 plugin:
   id: org.omnidriver.cardiaccore
   api_version: "2"
+requires:
+  - org.omnidriver.openfoam.environment
+# Verified 2026-09-21 against provider_stack.implemented_capabilities(
+# CardiacCorePlugin()) after deleting the nine _openfoam delegations: every
+# capability here is one this provider answers on its own, with no gap a
+# deleted delegation would have papered over. override_schema and
+# run_document_configuration are genuinely real (not stubs) -- the earlier
+# Phase 0 Task 4 census calling get_override_schema a hollow stub does not
+# match this file's per-tutorial $CARDIAC_CONDUCTIVITY/... schema, so that
+# entry in the census was stale and is superseded by this direct check.
+provides:
+  - dictionaries
+  - tutorials
+  - named_catalogs
+  - artifacts
+  - configuration_validator
+  - cxx_mapping
+  - manifest
+  - override_schema
+  - run_document_configuration
+  - run_semantic_validator
+  - runtime_evidence
 case_profile:
   dictionaries:
-    - path: Allrun
-      kind: case_script
-      role: cardiaccore.entrypoint
-      required: conditional
-    - path: system/controlDict
-      kind: openfoam_dictionary
-      role: openfoam.control_dict
-      required: always
-    - path: constant
-      kind: openfoam_dictionary
-      role: openfoam.case_directory
-      required: always
     - path: system/setCardiacConductivityDict
       kind: openfoam_dictionary
       role: cardiaccore.conductivity_dictionary

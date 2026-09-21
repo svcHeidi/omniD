@@ -97,6 +97,56 @@ def discover_plugins() -> dict[str, Any]:
     }
 
 
+def _find_installed_provider(plugin_id: str):
+    """The installed, unambiguous provider answering ``plugin_id``, if any.
+
+    Loads every discovered entry point to read its ``plugin_id`` -- there is
+    no id-keyed index, only the name-keyed one ``discover_plugins()``
+    returns. Only ever called to resolve a `requires:` declaration, which is
+    a CLI-startup-frequency operation, not a hot loop.
+    """
+    for entry_point in discover_plugins().values():
+        plugin_class = entry_point.load()
+        candidate = plugin_class()
+        if candidate.plugin_id == plugin_id:
+            return candidate, _entry_point_source(entry_point)
+    return None
+
+
+def _expand_with_requirements(primary: Any, source: str):
+    """Add whichever installed provider answers ``primary``'s `requires:`.
+
+    ``--plugin`` (and the bare discovered-name form) select ONE provider by
+    design -- see ``_default_selection``'s docstring: "`--plugin` still
+    narrows the implicit stack to one provider". Task 9 gave cardiacCore and
+    cardiacFoam their first `requires:` declaration
+    (``org.omnidriver.openfoam.environment``), and ``order_providers`` raises
+    the instant a declared requirement is unmet -- so without this, selecting
+    either by name or by trusted import would refuse to compose at all,
+    turning "the environment adapter is now composed in, not hand-embedded"
+    into "cardiacCore/cardiacFoam are no longer usable outside a stack the
+    caller assembles by hand". Resolving `requires:` against what is already
+    installed keeps the single-name ``--plugin`` UX working. One level only
+    (no shipped profile declares a chain today); an unmet requirement that
+    resolution can't find is left for ``order_providers`` to report, which
+    names it more specifically than this function would.
+    """
+    providers = [primary]
+    sources = [source]
+    seen_ids = {primary.plugin_id}
+    for required_id in primary.get_profile().requires:
+        if required_id in seen_ids:
+            continue
+        found = _find_installed_provider(required_id)
+        if found is None:
+            continue
+        provider, provider_source = found
+        providers.append(provider)
+        sources.append(provider_source)
+        seen_ids.add(required_id)
+    return providers, sources
+
+
 def load_discovered_plugin(name: str):
     """Load and validate a discovered plugin by entry-point name.
 
@@ -120,7 +170,10 @@ def load_discovered_plugin(name: str):
             f"group {ENTRY_POINT_GROUP!r}"
         )
     plugin_class = entry_point.load()
-    return driver_context(plugin_class(), source=_entry_point_source(entry_point))
+    providers, sources = _expand_with_requirements(
+        plugin_class(), _entry_point_source(entry_point),
+    )
+    return driver_context(*providers, source=sources)
 
 
 def _entry_point_source(entry_point) -> str:

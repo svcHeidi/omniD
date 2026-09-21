@@ -18,10 +18,11 @@ import pytest
 
 from omnidriver.core.runtime.registry import list_entries
 from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
 _CTX = _driver_context(
-    CardiacFoamPlugin(), source="test:case_compatibility_matrix",
+    OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:case_compatibility_matrix",
 )
 
 

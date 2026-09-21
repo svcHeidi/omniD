@@ -13,11 +13,12 @@ from omnidriver.cli import main
 from omnidriver.core.introspection import describe_tutorial
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
 # These payloads are the cardiac adapter's own introspection, so the context
 # is supplied rather than discovered: the ambient default is ambiguous as soon
 # as a second adapter is installed (future/ENVIRONMENT_CONTRACT.md §12).
-_CTX = _driver_context(CardiacFoamPlugin(), source="test:introspection")
+_CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:introspection")
 
 
 def _single_cell_case_root(cases_root: Path) -> Path:
@@ -123,11 +124,19 @@ def test_cardiac_profile_contract_file_order_is_declared(tmp_path: Path) -> None
     assert contract["core_required_files"] == [
         "constant/electroProperties", "constant/physicsProperties",
     ]
+    # `constant` (role `openfoam.case_directory`) now appears: it was always
+    # required, but only became visible once the environment adapter (Task
+    # 9) actually composes into `_CTX` instead of cardiacFoam's own profile
+    # being the only one in a single-provider stack.
     assert contract["solver_required_files"] == [
-        "system/controlDict", "system/fvSchemes", "system/fvSolution",
+        "system/controlDict", "constant", "system/fvSchemes", "system/fvSolution",
     ]
+    # `Allrun` now leads: it is the environment adapter's declaration
+    # (composed first, being least-specific), not cardiacFoam's own -- the
+    # duplicate `Allrun` role cardiacFoam's own profile used to carry was
+    # removed as part of Task 9's case-file de-duplication.
     assert contract["conditional_files"] == [
-        "system/decomposeParDict", "system/blockMeshDict", "Allrun", "Allclean",
+        "Allrun", "system/decomposeParDict", "system/blockMeshDict", "Allclean",
         "README.md", "runRegressionTest.sh",
     ]
 

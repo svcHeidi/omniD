@@ -819,7 +819,12 @@ def load_plugin_context(target: str) -> DriverContext:
         raise ValueError("Plugin target must use the form 'module.path:ClassName'") from exc
     module = import_module(module_path)
     plugin_class = getattr(module, class_name)
-    return driver_context(plugin_class(), source=f"trusted-import:{target}")
+    from .plugin_discovery import _expand_with_requirements
+
+    providers, sources = _expand_with_requirements(
+        plugin_class(), f"trusted-import:{target}",
+    )
+    return driver_context(*providers, source=sources)
 
 
 def default_driver_context() -> DriverContext:

@@ -37,6 +37,7 @@ import pytest
 
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError
 from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.sweep_routing import route_case_values
 
@@ -44,7 +45,7 @@ from omnidriver.sweep_routing import route_case_values
 # plugin they mean rather than leaning on the ambient default -- which has no
 # single answer once a second adapter is installed alongside this one
 # (future/ENVIRONMENT_CONTRACT.md §12).
-_CTX = _driver_context(CardiacFoamPlugin(), source="test:sweep_routing")
+_CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:sweep_routing")
 
 
 def test_selector_keys_route_to_electro_selectors():
