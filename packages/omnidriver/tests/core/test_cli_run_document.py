@@ -249,8 +249,11 @@ def test_step_via_run_document_apply_mutates_reruns_and_audits() -> None:
     if "deltaT" not in {
         entry.driver_path for entry in active_context.capabilities.dictionaries.entries()
     }:
+        # StackIdentity has no singular id -- name every provider in the
+        # composed stack instead.
+        provider_ids = [p.id for p in active_context.identity.providers]
         pytest.skip(
-            f"{active_context.identity.id!r} declares no deltaT controlDict "
+            f"{provider_ids!r} declares no deltaT controlDict "
             "entry; this claim needs a solver-adapter default plugin."
         )
 

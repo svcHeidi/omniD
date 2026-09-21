@@ -14,9 +14,11 @@ def test_supported_version_is_two() -> None:
 
 
 def test_neutral_plugin_is_v2() -> None:
-    assert driver_context(
-        MinimalTestPlugin(), source="test:plugin-api",
-    ).identity.api_version == "2"
+    # StackIdentity has no singular api_version -- one per provider, on
+    # StackIdentity.providers (a tuple of ProviderIdentity). A single-plugin
+    # driver_context composes to a one-entry stack.
+    context = driver_context(MinimalTestPlugin(), source="test:plugin-api")
+    assert context.identity.providers[0].api_version == "2"
 
 
 def test_unsupported_version_is_rejected_before_any_catalog_runs() -> None:
@@ -69,4 +71,4 @@ def test_the_shape_check_names_what_is_missing() -> None:
 
 def test_neutral_plugin_builds_an_explicit_context() -> None:
     context = driver_context(MinimalTestPlugin(), source="test:plugin-api")
-    assert context.identity.id == "org.driverfoam.test-minimal"
+    assert context.identity.providers[0].id == "org.driverfoam.test-minimal"

@@ -255,11 +255,22 @@ def _owned_dict_relpaths(spec, driver_context: "DriverContext") -> tuple[str, ..
 
 
 def _catalog_diagnostics(driver_context: "DriverContext") -> tuple[StrictDiagnostic, ...]:
-    """Run only the active plugin's reviewed C++↔Python mapping checks."""
+    """Run only the resolved cxx_mapping provider's reviewed C++<->Python
+    mapping checks."""
 
     mapping = driver_context.capabilities.cxx_mapping.profile().cxx_mapping
     if mapping is None:
         return ()
+    # A diagnostic's `source=` names what reported it, not the whole stack --
+    # `StackIdentity` has no singular id to fall back on. `resolutions()`
+    # already records, per capability, which provider answered it; the
+    # provider that answered `cxx_mapping` is exactly the one whose profile
+    # supplied `mapping` above, so its plugin_id is the correct "what
+    # reported this" answer, not an arbitrary stand-in such as the
+    # most-specific provider or the stack's capability_digest.
+    cxx_mapping_source = driver_context.identity.resolutions.get(
+        "cxx_mapping", "cxx_mapping",
+    )
     strict_dict_key_report = legacy_dict_key_scanner()
     diagnostics: list[StrictDiagnostic] = []
     for source_root in mapping.source_roots:
@@ -268,7 +279,7 @@ def _catalog_diagnostics(driver_context: "DriverContext") -> tuple[StrictDiagnos
                 "warning",
                 "plugin_cxx_source_unavailable",
                 f"Plugin C++ source root is unavailable: {source_root}",
-                source=driver_context.identity.id,
+                source=cxx_mapping_source,
             ))
             continue
         report = strict_dict_key_report(
@@ -283,7 +294,7 @@ def _catalog_diagnostics(driver_context: "DriverContext") -> tuple[StrictDiagnos
                     "error",
                     f"plugin_dict_key_{key}",
                     f"Plugin C++/catalog scanner reported {key}: {item}",
-                    source=f"{driver_context.identity.id}:{source_root}",
+                    source=f"{cxx_mapping_source}:{source_root}",
                 ))
     return tuple(diagnostics)
 

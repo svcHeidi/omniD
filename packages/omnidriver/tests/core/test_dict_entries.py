@@ -196,8 +196,11 @@ def test_entries_and_catalog_agree(driver_context_for_installed_plugins):
         dictionaries = context.capabilities.dictionaries
         flat = {entry.driver_path for entry in dictionaries.entries()}
         catalogued = {entry.driver_path for entry in dictionaries.catalog().entries}
+        # StackIdentity has no singular id -- name every provider in the
+        # composed stack instead.
+        provider_ids = [p.id for p in context.identity.providers]
         assert flat == catalogued, (
-            f"{context.identity.id}: entries() and catalog() disagree; "
+            f"{provider_ids}: entries() and catalog() disagree; "
             f"missing from entries()={sorted(catalogued - flat)} "
             f"missing from catalog()={sorted(flat - catalogued)}"
         )

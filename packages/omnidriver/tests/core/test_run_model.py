@@ -213,12 +213,20 @@ def test_schema_accepts_serialized_workflow_identity_and_resume_evidence(schema)
                 "link_target": None,
             }],
             "workflow_digest": "sha256:" + "a" * 64,
+            # StackIdentity.to_json() (core.provider_identity) plus the
+            # environment_digest that runtime.resume.checkpoint_snapshot adds
+            # -- not the retired flat PluginIdentity shape.
             "plugin_identity": {
-                "id": "org.example.test",
-                "version": "1",
-                "api_version": "1",
-                "source": "test",
-                "capability_digest": "sha256:" + "b" * 64,
+                "providers": [{
+                    "id": "org.example.test",
+                    "version": "1",
+                    "api_version": "1",
+                    "source": "test",
+                    "provider_digest": "sha256:" + "e" * 64,
+                }],
+                "composition_rule_version": "1",
+                "capability_digest": "b" * 64,
+                "resolutions": {"command_authorization": "org.example.test"},
                 "environment_digest": "c" * 64,
             },
             "aggregate_digest": "sha256:" + "d" * 64,

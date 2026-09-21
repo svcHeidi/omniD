@@ -129,8 +129,10 @@ def test_contexts_do_not_share_plugin_selection() -> None:
 
     assert list_tutorials(alpha) == ["alpha"]
     assert list_tutorials(beta) == ["beta"]
-    assert alpha.identity.to_json()["id"] == "example.alpha"
-    assert beta.identity.to_json()["id"] == "example.beta"
+    # StackIdentity.to_json() has no singular "id" -- one provider per entry
+    # in "providers". Each of these contexts composes a one-provider stack.
+    assert alpha.identity.to_json()["providers"][0]["id"] == "example.alpha"
+    assert beta.identity.to_json()["providers"][0]["id"] == "example.beta"
 
 
 def test_plugin_contexts_remain_isolated_sequentially_and_concurrently() -> None:

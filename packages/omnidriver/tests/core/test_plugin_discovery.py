@@ -21,8 +21,11 @@ def test_a_colon_still_means_a_trusted_local_import() -> None:
     context = load_plugin_context(
         "plugins.minimal_plugin:MinimalTestPlugin"
     )
-    assert context.identity.id == "org.driverfoam.test-minimal"
-    assert context.identity.source.startswith("trusted-import:")
+    # StackIdentity has no singular id/source -- one per provider, on
+    # StackIdentity.providers (a tuple of ProviderIdentity). A single-plugin
+    # driver_context composes to a one-entry stack.
+    assert context.identity.providers[0].id == "org.driverfoam.test-minimal"
+    assert context.identity.providers[0].source.startswith("trusted-import:")
 
 
 def test_an_unknown_discovered_id_raises_keyerror() -> None:
@@ -37,8 +40,10 @@ def test_discovery_reads_the_omnidriver_plugins_group(monkeypatch) -> None:
     assert "fakeplugin" in plugin_discovery.discover_plugins()
     context = plugin_discovery.load_discovered_plugin("fakeplugin")
     # Identity provenance records the installing distribution, so a plan says
-    # which package supplied the semantics it was built against.
-    assert context.identity.source == "entry-point:fake-dist=9.9"
+    # which package supplied the semantics it was built against. One
+    # ProviderIdentity per provider on StackIdentity.providers; this is a
+    # one-provider stack.
+    assert context.identity.providers[0].source == "entry-point:fake-dist=9.9"
 
 
 def test_a_discovered_id_wins_only_when_there_is_no_colon(monkeypatch) -> None:
@@ -49,7 +54,7 @@ def test_a_discovered_id_wins_only_when_there_is_no_colon(monkeypatch) -> None:
     context = load_plugin_context(
         "plugins.minimal_plugin:MinimalTestPlugin"
     )
-    assert context.identity.source.startswith("trusted-import:")
+    assert context.identity.providers[0].source.startswith("trusted-import:")
 
 
 def test_discovery_is_empty_by_default_and_does_not_raise() -> None:

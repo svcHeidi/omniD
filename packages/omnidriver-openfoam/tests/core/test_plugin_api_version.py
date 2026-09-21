@@ -10,7 +10,11 @@ from omnidriver.openfoam.environment import (
 
 
 def test_openfoam_environment_plugin_is_v2() -> None:
-    assert openfoam_environment_context().identity.api_version == "2"
+    # StackIdentity has no singular api_version -- one per provider, on
+    # StackIdentity.providers (a tuple of ProviderIdentity). A single-plugin
+    # driver_context composes to a one-entry stack.
+    context = openfoam_environment_context()
+    assert context.identity.providers[0].api_version == "2"
 
 
 def test_openfoam_environment_plugin_satisfies_the_full_protocol() -> None:
