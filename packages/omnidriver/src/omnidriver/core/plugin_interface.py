@@ -43,7 +43,7 @@ from dataclasses import asdict, is_dataclass
 from dataclasses import dataclass
 from functools import cached_property
 from importlib import import_module
-from typing import Any, Protocol, TYPE_CHECKING, runtime_checkable
+from typing import Any, Protocol, Sequence, TYPE_CHECKING, runtime_checkable
 
 if TYPE_CHECKING:
     from omnidriver.core.plugin_capabilities import PluginCapabilities, RuntimeDependency
@@ -694,7 +694,9 @@ def _provider_identity(provider: SolverPlugin, *, source: str) -> "ProviderIdent
     )
 
 
-def driver_context(*providers: SolverPlugin, source: str) -> DriverContext:
+def driver_context(
+    *providers: SolverPlugin, source: str | Sequence[str],
+) -> DriverContext:
     """Create a validated immutable context for an ordered provider stack.
 
     One provider is the common case -- a solver plugin on its own -- but any
@@ -705,34 +707,63 @@ def driver_context(*providers: SolverPlugin, source: str) -> DriverContext:
     packaging error (a duplicated case-file declarer, two providers claiming
     the same exclusive hook, ...) is raised here rather than lazily, the
     first time some caller happens to touch ``.capabilities``.
+
+    ``source`` is a single string, broadcast to every provider -- the
+    overwhelmingly common single-provider call shape, and still correct for
+    several providers that genuinely share one origin (e.g. all loaded from
+    the same trusted local import) -- or one string per provider, positional
+    against ``providers`` as given (not against the reordered stack; pairing
+    is tracked by ``plugin_id`` internally, so which position wins the
+    reorder does not matter). A shared string for a multi-provider stack
+    whose providers do NOT share an origin silently records the wrong
+    provenance for every provider but one -- that was
+    :func:`~omnidriver.core.plugin_discovery.default_discovered_context`'s
+    bug before it started passing one source per provider explicitly.
     """
 
     if not providers:
         raise TypeError("driver_context() requires at least one provider")
 
-    from .provider_stack import compose, order_providers, resolutions
+    if isinstance(source, str):
+        sources = (source,) * len(providers)
+    else:
+        sources = tuple(source)
+        if len(sources) != len(providers):
+            raise TypeError(
+                f"driver_context() received {len(providers)} provider(s) but "
+                f"{len(sources)} source(s); pass one string (shared by every "
+                "provider) or exactly one source per provider"
+            )
+
+    from .provider_stack import order_providers, resolutions
     from .provider_identity import build_stack_identity
 
     checked_providers = tuple(_validate_one_provider(provider) for provider in providers)
+    # Paired with the CHECKED providers, in the caller's original order --
+    # before order_providers can reorder them. Looked back up by plugin_id
+    # below, not position, so the pairing survives the reorder.
+    source_by_id = dict(zip((p.plugin_id for p in checked_providers), sources))
     ordered = order_providers(checked_providers)
 
-    # Eager, not lazy: compose() enforces the packaging-level rules (the
-    # single-declarer rule over case_files among them) that must fail here,
-    # at construction, rather than later and only for whichever capability a
-    # caller happens to touch first. DriverContext.capabilities recomputes
-    # this from self.providers on first access -- a second, equally cheap
-    # call -- rather than this function reaching into the frozen dataclass's
-    # cached_property cache to avoid it.
-    compose(ordered)
-
     provider_identities = tuple(
-        _provider_identity(provider, source=source) for provider in ordered
+        _provider_identity(provider, source=source_by_id[provider.plugin_id])
+        for provider in ordered
     )
     identity = build_stack_identity(
         providers=provider_identities,
         resolutions=resolutions(ordered),
     )
-    return DriverContext(providers=ordered, identity=identity)
+    context = DriverContext(providers=ordered, identity=identity)
+    # Eager, not lazy: touching .capabilities here runs provider_stack.compose
+    # now, at construction, so a packaging error (the single-declarer rule
+    # over case_files, two providers claiming the same exclusive hook, ...)
+    # is raised here rather than lazily on whichever caller first reaches for
+    # .capabilities. Because .capabilities is a cached_property, this is the
+    # ONE compose() call for this context's lifetime, not a duplicate of a
+    # later one -- the result is cached on the instance and every later
+    # access (including this function's own callers) reuses it.
+    context.capabilities
+    return context
 
 
 def _identity_jsonable(value: Any) -> Any:

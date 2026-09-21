@@ -24,6 +24,7 @@ import pathlib
 import pytest
 
 import omnidriver.core
+from plugins.minimal_plugin import MinimalTestPlugin
 
 from conftest import skip_without_repo
 
@@ -275,3 +276,94 @@ def test_identity_names_every_provider(two_provider_context):
     payload = two_provider_context.identity.to_json()
     assert len(payload["providers"]) == 2
     assert payload["resolutions"], "the identity must record who answered what"
+
+
+def test_each_provider_records_its_own_source_not_a_shared_one():
+    """Spec 4.4: a provenance record must say which adapter came from where.
+
+    `default_discovered_context()` used to join every selected provider's
+    source into one string and pass it as the single shared `source=`, so
+    every `ProviderIdentity.source` in the stack recorded the SAME joined
+    string instead of each provider's own origin -- silently defeating the
+    one reason `StackIdentity` records an identity per provider at all.
+    Uses two synthetic, no-case-file providers (not real installed adapters)
+    so this is provable independently of Finding 2's real cross-adapter
+    case-file conflict, which stops `two_provider_context` above from
+    actually composing.
+
+    Deliberately passes providers and sources in an order that does NOT
+    match `order_providers`' output (which sorts by plugin_id when nothing
+    `requires:` anything else): "zzz" is passed first but sorts last, so a
+    fix that merely paired sources positionally against the REORDERED stack,
+    rather than tracking each provider's own id, would misattribute them.
+    """
+    from omnidriver.core.plugin_interface import driver_context
+
+    class _NamedProvider(MinimalTestPlugin):
+        """A MinimalTestPlugin whose plugin_id is chosen per instance, so two
+        can compose together as distinct providers without a real adapter's
+        case files ever entering the picture."""
+
+        def __init__(self, plugin_id: str) -> None:
+            super().__init__()
+            self._named_plugin_id = plugin_id
+
+        @property
+        def plugin_id(self) -> str:
+            return self._named_plugin_id
+
+    zzz = _NamedProvider("org.example.zzz")
+    aaa = _NamedProvider("org.example.aaa")
+
+    context = driver_context(
+        zzz, aaa, source=["source-for-zzz", "source-for-aaa"],
+    )
+
+    by_id = {p.id: p.source for p in context.identity.providers}
+    assert by_id == {
+        "org.example.zzz": "source-for-zzz",
+        "org.example.aaa": "source-for-aaa",
+    }
+
+
+def test_a_single_source_string_still_broadcasts_to_every_provider():
+    """The common single-provider call shape, and a multi-provider stack that
+    genuinely shares one origin, must keep working with one plain string."""
+    from omnidriver.core.plugin_interface import driver_context
+
+    class _NamedProvider(MinimalTestPlugin):
+        def __init__(self, plugin_id: str) -> None:
+            super().__init__()
+            self._named_plugin_id = plugin_id
+
+        @property
+        def plugin_id(self) -> str:
+            return self._named_plugin_id
+
+    solo = driver_context(_NamedProvider("org.example.solo"), source="shared")
+    assert solo.identity.providers[0].source == "shared"
+
+    stacked = driver_context(
+        _NamedProvider("org.example.one"), _NamedProvider("org.example.two"),
+        source="shared",
+    )
+    assert {p.source for p in stacked.identity.providers} == {"shared"}
+
+
+def test_source_count_must_match_provider_count():
+    from omnidriver.core.plugin_interface import driver_context
+
+    class _NamedProvider(MinimalTestPlugin):
+        def __init__(self, plugin_id: str) -> None:
+            super().__init__()
+            self._named_plugin_id = plugin_id
+
+        @property
+        def plugin_id(self) -> str:
+            return self._named_plugin_id
+
+    with pytest.raises(TypeError, match="2 provider"):
+        driver_context(
+            _NamedProvider("org.example.one"), _NamedProvider("org.example.two"),
+            source=["only-one-source"],
+        )

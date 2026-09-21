@@ -91,7 +91,10 @@ def _default_adapter_resolves() -> bool:
 
     try:
         default_driver_context()
-    except Exception:
+    # LookupError: _default_selection's "no adapter" / "every name contested"
+    # cases. ValueError: provider_stack.compose's packaging conflicts (see
+    # above). These are the only two exception types either path can raise.
+    except (LookupError, ValueError):
         return False
     return True
 

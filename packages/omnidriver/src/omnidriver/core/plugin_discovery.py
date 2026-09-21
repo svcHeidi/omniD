@@ -225,11 +225,22 @@ def default_discovered_context():
     them are instantiated and handed to :func:`~omnidriver.core.plugin_interface.driver_context`
     together, which orders and composes them into one stack -- exactly as if
     a caller had passed several providers explicitly.
+
+    **Corrected 2026-09-21.** This used to join every provider's source into
+    one ``"; "``-separated string and pass it as the single shared ``source``
+    -- so ``ProviderIdentity.source`` recorded the SAME joined string for
+    every provider in a multi-provider stack, rather than each provider's own
+    actual origin (e.g. ``entry-point:cardiacfoam=1.0`` vs
+    ``entry-point:openfoam-environment=1.0``). That directly defeated the
+    reason ``StackIdentity`` records one identity per provider at all: so a
+    provenance record can say which adapter came from where. Passing the
+    list of each selected entry point's own source, positionally against
+    ``providers``, lets :func:`~omnidriver.core.plugin_interface.driver_context`
+    attribute each one correctly.
     """
     from .plugin_interface import driver_context
 
     selection = _default_selection(_entry_points())
     providers = [plugin_class() for plugin_class, _ in selection]
     sources = [source for _, source in selection]
-    combined_source = sources[0] if len(sources) == 1 else "; ".join(sources)
-    return driver_context(*providers, source=combined_source)
+    return driver_context(*providers, source=sources)
