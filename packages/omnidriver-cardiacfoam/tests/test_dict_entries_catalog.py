@@ -326,7 +326,6 @@ class TestConductionSystemSchemaContract(unittest.TestCase):
             (
                 "manufacturedPseudoECGVerifier",
                 "manufacturedEikonalECGVerifier",
-                "manufacturedBathBidomainECGVerifier",
             ),
         )
         self.assertNotIn(prefix + "alpha", entries)
