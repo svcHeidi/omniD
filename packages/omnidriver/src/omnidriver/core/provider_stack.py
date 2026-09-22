@@ -72,23 +72,50 @@ def check_provides(provider: Any) -> list[str]:
 def order_providers(providers) -> tuple:
     """Order providers least-specific first, by declared `requires:`.
 
-    Stable: independent providers keep sorted-by-id order, so the same
-    installation always composes identically. That matters because the stack
-    digest hashes this order.
+    Stable and hash-independent: every node is registered in sorted-id order
+    before any edge is added, and each node's predecessors are added sorted, so
+    `TopologicalSorter` sees one insertion order regardless of `PYTHONHASHSEED`.
+    Independent providers therefore keep sorted-by-id order. That matters
+    because `build_stack_identity` hashes this order into the stack digest,
+    which a reviewed plan is bound to.
+
+    Corrected 2026-09-22 (audit finding C1): the previous implementation passed
+    `set(requires)` to `TopologicalSorter`, which registers a node first seen as
+    a predecessor in set-iteration order. A three-dependency provider therefore
+    composed in four different orders across eight hash seeds.
     """
+    providers = tuple(providers)
+    seen: dict[str, int] = {}
+    for provider in providers:
+        seen[provider.plugin_id] = seen.get(provider.plugin_id, 0) + 1
+    duplicates = sorted(plugin_id for plugin_id, count in seen.items() if count > 1)
+    if duplicates:
+        raise ValueError(
+            f"provider identities are not unique: {duplicates}; two "
+            f"distributions claiming one id make the answering implementation "
+            f"depend on discovery order, and the stack digest then records an "
+            f"identity that does not identify one implementation"
+        )
     by_id = {provider.plugin_id: provider for provider in providers}
-    graph: dict[str, set[str]] = {}
-    for plugin_id, provider in sorted(by_id.items()):
-        requires = tuple(provider.get_profile().requires)
+    requirements: dict[str, tuple[str, ...]] = {}
+    for plugin_id in sorted(by_id):
+        requires = tuple(by_id[plugin_id].get_profile().requires)
         missing = sorted(set(requires) - set(by_id))
         if missing:
             raise ValueError(
                 f"provider {plugin_id!r} requires {missing}, which "
                 f"{'is' if len(missing) == 1 else 'are'} not installed"
             )
-        graph[plugin_id] = set(requires)
+        requirements[plugin_id] = tuple(sorted(set(requires)))
+    sorter = TopologicalSorter()
+    # Two passes, both in sorted order: registration first, so no node is ever
+    # created by an edge, then the edges themselves.
+    for plugin_id in sorted(requirements):
+        sorter.add(plugin_id)
+    for plugin_id in sorted(requirements):
+        sorter.add(plugin_id, *requirements[plugin_id])
     try:
-        ordered = tuple(TopologicalSorter(graph).static_order())
+        ordered = tuple(sorter.static_order())
     except Exception as exc:  # graphlib.CycleError
         raise ValueError(
             f"provider requirements form a cycle: {exc}"
