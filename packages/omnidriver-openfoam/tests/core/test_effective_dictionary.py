@@ -128,14 +128,23 @@ def test_runtime_dependent_include_is_explicitly_unresolved(tmp_path: Path) -> N
 
 
 def test_include_etc_requires_explicit_root_without_running(tmp_path: Path) -> None:
+    """Corrected 2026-09-22 (audit finding F2): resolution used to consult
+    ``$FOAM_ETC`` alone, so this asserted a single unset variable and a
+    message naming it. Resolution now follows the native ``findEtcFile``
+    chain -- user, site, then distribution -- so an empty environment reports
+    every key that chain depends on, and the message names the searched
+    locations (none configured) rather than one variable."""
     path = tmp_path / "d"
     path.write_text(HEADER + '#includeEtc "caseDicts/example"\n')
 
     result = resolve_effective_foam_entry(path, "anything", bashrc=None, env={})
 
     assert result.status == "unresolved"
-    assert result.environment_keys == ("FOAM_ETC",)
-    assert "FOAM_ETC" in result.message
+    assert result.environment_keys == (
+        "FOAM_ETC", "HOME", "WM_PROJECT_DIR", "WM_PROJECT_INST_DIR",
+        "WM_PROJECT_SITE", "WM_PROJECT_VERSION",
+    )
+    assert "no location configured" in result.message
 
 
 def test_include_etc_dependency_is_inspected_from_configured_root(
@@ -168,7 +177,14 @@ def test_include_etc_dependency_is_inspected_from_configured_root(
     )
 
     assert (result.status, result.value) == ("resolved", "23")
-    assert result.environment_keys == ("FOAM_ETC",)
+    # Corrected 2026-09-22 (audit finding F2): every key the native
+    # `findEtcFile` chain depends on is now recorded, not just `FOAM_ETC` --
+    # whether HOME/WM_PROJECT_SITE/WM_PROJECT_DIR are set or not changes which
+    # file a future run would select.
+    assert result.environment_keys == (
+        "FOAM_ETC", "HOME", "WM_PROJECT_DIR", "WM_PROJECT_INST_DIR",
+        "WM_PROJECT_SITE", "WM_PROJECT_VERSION",
+    )
     assert set(result.inspected_files) == {str(path.resolve()), str(included.resolve())}
 
 
@@ -183,7 +199,12 @@ def test_v2412_resolves_include_etc_and_records_runtime_dependency(
 
     dependency = NATIVE_BASHRC.parent / "caseDicts" / "profiling" / "parallel.cfg"
     assert (result.status, result.value) == ("resolved", "parProfiling")
-    assert result.environment_keys == ("FOAM_ETC",)
+    # Corrected 2026-09-22 (audit finding F2): see the note in
+    # test_include_etc_dependency_is_inspected_from_configured_root.
+    assert result.environment_keys == (
+        "FOAM_ETC", "HOME", "WM_PROJECT_DIR", "WM_PROJECT_INST_DIR",
+        "WM_PROJECT_SITE", "WM_PROJECT_VERSION",
+    )
     assert str(dependency.resolve()) in result.inspected_files
 
 

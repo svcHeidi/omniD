@@ -73,6 +73,58 @@ def _expand_include(value: str, environment: Mapping[str, str]) -> tuple[str | N
         return None, tuple(keys), f"include requires unset environment variable {exc.args[0]!r}"
 
 
+def find_etc_file(
+    name: str, environment: Mapping[str, str],
+) -> tuple[Path | None, tuple[Path, ...]]:
+    """Locate an ``#includeEtc`` dependency the way the native runtime does.
+
+    Returns ``(selected, candidates)``: the first existing file in search order,
+    and every location searched whether or not it exists. The absent candidates
+    matter as much as the selected one -- a file appearing at a higher-priority
+    location changes which file the next run reads, so a plan's preconditions
+    must record that those locations were empty.
+
+    Search order mirrors ``Foam::findEtcFile``: the user's personal directory,
+    then the site directory, then the distribution's own ``etc``. Added
+    2026-09-22 (audit finding F2): resolution previously consulted
+    ``$FOAM_ETC`` alone, so a site file that shadowed the vendor file was read
+    natively while the vendor file was recorded as the dependency.
+
+    Only the version-qualified forms are searched. An installation using a
+    layout this does not cover selects nothing and reports its candidates, which
+    surfaces as an explicit unresolved result rather than a wrong attribution.
+    """
+    version = environment.get("WM_PROJECT_VERSION", "")
+    candidates: list[Path] = []
+
+    home = environment.get("HOME")
+    if home and version:
+        candidates.append(Path(home) / ".OpenFOAM" / version / name)
+
+    site = environment.get("WM_PROJECT_SITE")
+    if not site:
+        install = environment.get("WM_PROJECT_INST_DIR")
+        if install:
+            site = str(Path(install) / "site")
+    if site and version:
+        candidates.append(Path(site) / version / "etc" / name)
+
+    project_dir = environment.get("WM_PROJECT_DIR")
+    if project_dir:
+        candidates.append(Path(project_dir) / "etc" / name)
+    etc_root = environment.get("FOAM_ETC")
+    if etc_root:
+        distribution = Path(etc_root) / name
+        if distribution not in candidates:
+            candidates.append(distribution)
+
+    resolved = tuple(dict.fromkeys(candidates))
+    for candidate in resolved:
+        if candidate.is_file():
+            return candidate, resolved
+    return None, resolved
+
+
 def _inspect_source_closure(
     path: Path, environment: Mapping[str, str],
 ) -> tuple[tuple[Path, ...], tuple[Path, ...], tuple[str, ...], str | None]:
@@ -110,23 +162,30 @@ def _inspect_source_closure(
             )
         for match in _ETC_INCLUDE.finditer(lexical_text):
             environment_keys.add("FOAM_ETC")
-            etc_root = environment.get("FOAM_ETC")
-            if not etc_root:
-                return tuple(inspected), tuple(absent_optional), tuple(sorted(environment_keys)), (
-                    "#includeEtc requires unset environment variable 'FOAM_ETC'"
-                )
+            environment_keys.update(
+                ("HOME", "WM_PROJECT_VERSION", "WM_PROJECT_SITE",
+                 "WM_PROJECT_INST_DIR", "WM_PROJECT_DIR")
+            )
             include_name = match.group("path")
             expanded, keys, error = _expand_include(include_name, environment)
             environment_keys.update(keys)
             if error is not None:
                 return tuple(inspected), tuple(absent_optional), tuple(sorted(environment_keys)), error
             assert expanded is not None
-            candidate = (Path(etc_root) / expanded).resolve()
-            if not candidate.is_file():
+            selected, candidates = find_etc_file(expanded, environment)
+            if selected is None:
+                searched = ", ".join(str(candidate) for candidate in candidates) or "<no location configured>"
                 return tuple(inspected), tuple(absent_optional), tuple(sorted(environment_keys)), (
-                    f"#includeEtc dependency is missing: {candidate}"
+                    f"#includeEtc dependency is missing: {expanded}; searched {searched}"
                 )
-            pending.append(candidate)
+            # Higher-priority locations that are empty today are recorded as
+            # absent: a file appearing at one of them changes which file the
+            # next run reads, which is a precondition, not a detail.
+            for candidate in candidates:
+                if candidate == selected:
+                    break
+                absent_optional.append(candidate)
+            pending.append(selected.resolve())
         for match in _QUOTED_INCLUDE.finditer(lexical_text):
             include_name = match.group("path")
             expanded, keys, error = _expand_include(include_name, environment)
