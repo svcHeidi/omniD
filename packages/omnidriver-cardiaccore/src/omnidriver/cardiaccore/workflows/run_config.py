@@ -2,7 +2,6 @@
 
 from pathlib import Path
 from omnidriver.core.planning_types import diagnostic
-from omnidriver.core.specs.validation import slot_key
 from .overrides import qualified_slot_key, read_input_values, validate_input_overrides
 
 
@@ -61,16 +60,17 @@ def _relevant_catalog_paths(spec, plugin) -> tuple[str, ...]:
     Scoping to *every* catalog entry (``paths=None``) is wrong: several
     documents (``setCardiacScarDict``, ``setPurkinjeScarDict``,
     ``coordinatesConventionDict``) are declared-only -- no current tutorial
-    runs their utility -- and one of them, the scar dictionary, happens to
-    declare its own ``fiberField``/``sheetField`` leaves. ``slot_key``
-    strips the ``$SCOPE.`` prefix, so those collide with
-    ``$CARDIAC_CONDUCTIVITY.fiberField``/``.sheetField`` in a flattened
-    context; reading the whole catalog would let a case that never runs
-    ``setCardiacScar`` still report a value from a scar dictionary that
-    does not exist, and (worse) let iteration order silently overwrite the
-    real conductivity value with that absent one. Scoping to what the
-    spec's own utilities read keeps this a per-workflow check, matching
-    what actually gets staged and run.
+    runs their utility -- so reading the whole catalog would let a case that
+    never runs ``setCardiacScar`` report a value from a scar dictionary that
+    does not exist. Scoping to what the spec's own utilities read keeps this
+    a per-workflow check, matching what actually gets staged and run.
+
+    **Corrected 2026-09-22:** this also cited a ``slot_key`` collision between
+    ``$CARDIAC_SCAR.fiberField`` and ``$CARDIAC_CONDUCTIVITY.fiberField``,
+    where iteration order could overwrite a real value with an absent one. That
+    collision was real (audit findings S1, S3) and is now fixed at its cause by
+    ``qualified_slot_key``, which keeps the scope token. The scoping below is
+    kept for the declared-only reason above, which stands on its own.
     """
     from .overrides import resolve_override_target
     from ..catalogs.inputs import CATALOG
@@ -129,6 +129,7 @@ def validate_configuration(spec, plugin):
     from types import SimpleNamespace
     from omnidriver.core.plugin_interface import driver_context as _driver_context
     from omnidriver.core.specs.validation import validate_run
+    from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
     case_root = Path(spec.case_root)
     try:
@@ -139,13 +140,29 @@ def validate_configuration(spec, plugin):
         return ()
 
     fake_run = SimpleNamespace(config={"preprocessing": {
-        slot_key(driver_path): value for driver_path, value in values.items()
+        qualified_slot_key(driver_path): value
+        for driver_path, value in values.items()
+        if value is not None
     }})
     # `validate_run` already returns the canonical `StrictDiagnostic` shape
     # (core.planning_types, code="run_validation", source=<phase>) as of
     # Phase 0 Task 10 -- passed through unchanged rather than re-wrapped
     # field-for-field through a now-deleted `ValidationError.phase`.
+    #
+    # Corrected 2026-09-22 (audit finding S2, wiring this hook): a bare
+    # `_driver_context(plugin, ...)` raises, because `plugin` declares
+    # `requires: [org.omnidriver.openfoam.environment]` (plugin.yaml) and
+    # `provider_stack.order_providers` (audit finding C1) now refuses an
+    # unmet requirement rather than silently ordering a partial stack. Every
+    # other caller in this package composes the environment adapter
+    # alongside `CardiacCorePlugin` for exactly this reason (see
+    # tests/test_apply_works_through_the_stack.py's
+    # `cardiaccore_stack_context` fixture) -- this hook was the one caller
+    # that did not, because until this commit it had never actually run.
     return validate_run(
         fake_run,
-        driver_context=_driver_context(plugin, source="cardiaccore.validate_configuration"),
+        driver_context=_driver_context(
+            OpenFOAMEnvironmentPlugin(), plugin,
+            source="cardiaccore.validate_configuration",
+        ),
     )

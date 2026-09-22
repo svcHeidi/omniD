@@ -38,19 +38,32 @@ requires:
 # hollow stub does not match this file's per-tutorial
 # $CARDIAC_CONDUCTIVITY/... schema, so that entry in the census was stale.
 #
-# validate_configuration (configuration_validator) is `del spec; return ()`:
+# validate_configuration (configuration_validator) was `del spec; return ()`:
 # a genuinely hollow stub, restored to that shape after a separate
 # accidental-commit fix (see git history) picked up an in-progress parallel
 # session's real implementation by mistake -- not this file's own work, and
 # not declared here.
 #
+# Corrected 2026-09-22 (batch G0-C, audit finding S2): wired to
+# workflows/run_config.validate_configuration -- the very implementation the
+# accidental-commit fix above discarded. It now checks the spec's own
+# workflow-relevant catalog entries against the resolved case at plan time
+# (required / enum / co_required_with / mutually_exclusive_with, by
+# composing this provider with the OpenFOAM environment adapter it requires
+# and reusing core's validate_run), and exempts a generic case_folder run
+# (spec.metadata["generic_case"]). Still not declared in provides: below --
+# that is the same open question gate 2 below raises for every capability
+# here, and wiring the hook does not settle it.
+#
 # Correction, 2026-09-22 (final whole-branch review, Finding 4): gate 2's
 # realness standard above is still correct about what check_provides()
 # enforces -- a hollow member declared here would fail it. It does NOT
 # prevent resolutions()/the stack digest from crediting this provider for a
-# withheld capability (artifacts, run_semantic_validator, runtime_evidence,
-# configuration_validator -- see line 41 above; validate_configuration is
-# callable, just hollow, so implemented_capabilities() counts it too):
+# withheld capability (artifacts, run_semantic_validator, runtime_evidence --
+# configuration_validator no longer belongs on this list, see the later
+# 2026-09-22 (batch G0-C) correction above: validate_configuration is wired
+# and genuinely checks something now, it is simply still undeclared in
+# provides: below, which is a different gap than hollowness):
 # resolutions() (provider_stack.py) picks each capability's winner purely by
 # which provider has a callable member, never by consulting provides: at
 # all. A capability withheld here for realness can still win resolutions()

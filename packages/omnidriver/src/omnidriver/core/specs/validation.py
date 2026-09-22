@@ -85,10 +85,36 @@ def slot_key(driver_path: str) -> str:
     return _SCOPE_TOKEN_PREFIX_RE.sub("", driver_path, count=1)
 
 
+def _lookup_slot(mapping: dict[str, Any], driver_path: str):
+    """Look up ``driver_path``'s value in a slot mapping, trying both
+    legitimate spellings.
+
+    A phase slice (or the flattened context built over every phase slice) may
+    key a slot either by the full ``driver_path`` -- an adapter whose
+    documents share a leaf name must qualify this way, keeping its document
+    scope, see cardiacCore's ``qualified_slot_key`` -- or by the
+    scope-stripped ``slot_key`` form, which is what an adapter whose
+    documents never collide has always written. Try the full path first,
+    then the stripped one, so both spellings resolve correctly without this
+    module knowing which one a given adapter chose.
+
+    Added 2026-09-22 alongside cardiacCore's qualified addressing (audit
+    findings S1, S3). Before this, only :func:`_slice_value` tried the full
+    path; :func:`_entry_value_present` and :func:`_predicate_matches` still
+    read only the stripped form, so a qualified slice made every
+    ``co_required_with``/``mutually_exclusive_with``/``forbidden_when``
+    check (:func:`_evaluate_structured`) blind to a slot that was genuinely
+    present.
+    """
+    if driver_path in mapping:
+        return mapping[driver_path]
+    return mapping.get(slot_key(driver_path))
+
+
 def _slice_value(run, phase: str, driver_path: str):
     """Look up the slot value for a driver_path inside a phase slice."""
     slice_ = run.config.get(phase, {}) or {}
-    return slice_.get(slot_key(driver_path))
+    return _lookup_slot(slice_, driver_path)
 
 
 def _non_mapping_phase_errors(run, phase_order: tuple[str, ...]) -> list[StrictDiagnostic]:
@@ -163,17 +189,23 @@ def _predicate_matches(
     condition that names a sibling leaf inside a ``dynamic_path`` block
     (e.g. ``conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.
     conductionSystemSolver``), a ``<placeholder>`` segment. ``context``
-    keys are always in resolved slot-key form: prefix stripped, and any
-    placeholder replaced by the concrete instance name the caller
-    actually configured. Both transforms have to be undone before doing
-    the lookup, or the predicate can never match anything and silently
-    evaluates to "not applicable" -- which is exactly what happened to
-    every ``applicable_when`` gated on a real driver_path instead of a
-    bare virtual ``$..._present`` token (see the
-    restitutionEikonalSolver1D regression tests in
-    tests/plugins/cardiacfoam/test_dict_builder.py and
-    tests/plugins/cardiacfoam/test_validation.py for the case this was
-    found from).
+    keys are ordinarily in resolved slot-key form: prefix stripped, and any
+    placeholder replaced by the concrete instance name the caller actually
+    configured -- both transforms have to be undone before doing the lookup,
+    or the predicate can never match anything and silently evaluates to "not
+    applicable" -- which is exactly what happened to every
+    ``applicable_when`` gated on a real driver_path instead of a bare
+    virtual ``$..._present`` token (see the restitutionEikonalSolver1D
+    regression tests in tests/plugins/cardiacfoam/test_dict_builder.py and
+    tests/plugins/cardiacfoam/test_validation.py for the case this was found
+    from).
+
+    An adapter whose documents share a leaf name may instead key its slice by
+    the full, unstripped ``driver_path`` (see cardiacCore's
+    ``qualified_slot_key``, audit findings S1/S3). ``key`` is tried as given
+    first for that case, before falling back to the stripped form; a
+    placeholder condition is not affected, since dynamic-path templates are
+    not a qualified-addressing concern today. Corrected 2026-09-22.
     """
     resolved_key = slot_key(key)
     if _PLACEHOLDER_RE.search(resolved_key):
@@ -190,6 +222,8 @@ def _predicate_matches(
             and _value_matches(ctx_val, expected)
             for ctx_key, ctx_val in context.items()
         )
+    if key in context:
+        return _value_matches(context[key], expected)
     if resolved_key not in context:
         return False
     return _value_matches(context[resolved_key], expected)
@@ -253,9 +287,13 @@ def is_required_in_context(entry: DictEntry, context: dict[str, Any]) -> bool:
 
 
 def _entry_value_present(entry: DictEntry, context: dict[str, Any]) -> bool:
-    """Is the entry's own slot set in the flattened context?"""
-    key = slot_key(entry.driver_path)
-    return key in context and context[key] not in (None, "")
+    """Is the entry's own slot set in the flattened context?
+
+    Tries the entry's own full ``driver_path`` before the scope-stripped
+    ``slot_key`` form (see :func:`_lookup_slot`), so a qualified slice is
+    read correctly. Corrected 2026-09-22 (audit findings S1, S3).
+    """
+    return _lookup_slot(context, entry.driver_path) not in (None, "")
 
 
 def _format_predicate(predicate: dict[str, Any]) -> str:

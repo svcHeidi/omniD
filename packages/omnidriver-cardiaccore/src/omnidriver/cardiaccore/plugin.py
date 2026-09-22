@@ -109,8 +109,17 @@ class CardiacCorePlugin:
         return ()
 
     def validate_configuration(self, spec: Any) -> tuple[Any, ...]:
-        del spec
-        return ()
+        """Check this spec's workflow-relevant catalog entries at plan time.
+
+        Wired 2026-09-22 (audit finding S2). This returned ``()``
+        unconditionally while a complete implementation sat unreachable in
+        ``workflows/run_config.py``, so a co-required pair left half-set in
+        the resolved case went unreported until a RunDocument happened to
+        expose it at run/step time.
+        """
+        from .workflows.run_config import validate_configuration
+
+        return validate_configuration(spec, self)
 
     def validate_run_semantics(self, context: dict[str, Any]) -> tuple[Any, ...]:
         del context
