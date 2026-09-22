@@ -16,10 +16,28 @@ Three creation modes, kept distinct because their prerequisites differ:
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import json
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import Any, Mapping
+
+#: Bumped whenever a field is added, removed or reinterpreted. A plan
+#: serialized under one version is not readable under another: a reader that
+#: silently accepts an older payload is a reader that fills a missing field
+#: with a default nobody reviewed.
+PLAN_SCHEMA_VERSION = 1
+
+PRECONDITION_KINDS = frozenset({
+    "file",              # a case file that must have this digest
+    "include",           # a file the renderer read through an include directive
+    "source_artifact",   # a mesh or template the synthesis consumed
+    "environment",       # an environment value the resolution depended on
+    "absence",           # a location that must stay empty, because a file
+                         # appearing there changes which file is selected
+})
 
 MUTATION_MODES = frozenset({"clone_and_patch", "synthesize", "generated_input"})
 
@@ -123,9 +141,31 @@ class ParameterAssignment:
             "value": _json_value(self.value),
             "value_kind": self.value_kind,
             "source": self.source,
+            "allowed_bindings": {
+                key: list(values) for key, values in self.allowed_bindings.items()
+            },
             "unit": self.unit,
             "evidence_refs": list(self.evidence_refs),
         }
+
+    @classmethod
+    def from_json(cls, payload: Mapping[str, Any]) -> "ParameterAssignment":
+        return cls(
+            qualified_id=payload["qualified_id"],
+            owner=payload["owner"],
+            document=payload["document"],
+            key_path=tuple(payload["key_path"]),
+            binding=dict(payload["binding"]),
+            value=payload["value"],
+            value_kind=payload["value_kind"],
+            source=payload["source"],
+            allowed_bindings={
+                key: tuple(values)
+                for key, values in payload.get("allowed_bindings", {}).items()
+            },
+            unit=payload.get("unit", ""),
+            evidence_refs=tuple(payload.get("evidence_refs", ())),
+        )
 
 
 def _json_value(value: Any) -> Any:
@@ -180,4 +220,228 @@ class CaseMutationRequest:
             "source_artifacts": list(self.source_artifacts),
             "parameters": [parameter.to_json() for parameter in self.parameters],
             "requested_by": self.requested_by,
+        }
+
+    @classmethod
+    def from_json(cls, payload: Mapping[str, Any]) -> "CaseMutationRequest":
+        return cls(
+            mode=payload["mode"],
+            case_root=Path(payload["case_root"]),
+            adapter_id=payload["adapter_id"],
+            workflow=payload["workflow"],
+            source_artifacts=tuple(payload["source_artifacts"]),
+            parameters=tuple(
+                ParameterAssignment.from_json(item) for item in payload["parameters"]
+            ),
+            requested_by=payload["requested_by"],
+        )
+
+
+def canonical_json(payload: Any) -> str:
+    """The one serialization a digest is taken over.
+
+    ``sort_keys`` and fixed separators, so dict iteration order cannot enter a
+    digest. ``allow_nan=False``, because ``NaN`` is not JSON and a payload
+    carrying one round-trips into something a reader cannot parse.
+    """
+    return json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), allow_nan=False, ensure_ascii=False,
+    )
+
+
+def _digest_bytes(content: bytes) -> str:
+    return hashlib.sha256(content).hexdigest()
+
+
+@dataclass(frozen=True)
+class RenderedFile:
+    """One file's complete proposed content, as its format owner rendered it.
+
+    ``content`` is embedded in the plan whole, base64-encoded, not merely
+    digested. The global "large assets are referenced by digest, never
+    embedded" rule is about meshes and VTU output -- this channel's actual
+    subject, a rendered dictionary or input file, is typically kilobytes, and
+    a reviewer (or a later recovery reader, Task 6) needs the real bytes, not
+    a hash of bytes it does not have. ``content_digest`` stays as a derived,
+    quick-to-compare integrity check over exactly those bytes.
+    """
+
+    path: str
+    content: bytes
+    mode: int | None
+    exists_before: bool
+    before_digest: str | None
+    renderer_id: str
+    format: str
+
+    def __post_init__(self) -> None:
+        _check_case_relative("a rendered file's path", self.path)
+        if not isinstance(self.content, bytes):
+            raise TypeError(
+                f"rendered content for {self.path!r} must be bytes, not "
+                f"{type(self.content).__name__}; core does not encode text it "
+                f"cannot read"
+            )
+        if self.exists_before and not self.before_digest:
+            raise ValueError(
+                f"{self.path!r} is declared to exist before the write but "
+                f"carries no before-digest; a conflict check needs one"
+            )
+        if not self.exists_before and self.before_digest:
+            raise ValueError(
+                f"{self.path!r} is declared absent before the write but carries "
+                f"a before-digest"
+            )
+
+    @property
+    def content_digest(self) -> str:
+        return _digest_bytes(self.content)
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "path": self.path,
+            "content_digest": self.content_digest,
+            "content_bytes": len(self.content),
+            "content_base64": base64.b64encode(self.content).decode("ascii"),
+            "mode": self.mode,
+            "exists_before": self.exists_before,
+            "before_digest": self.before_digest,
+            "renderer_id": self.renderer_id,
+            "format": self.format,
+        }
+
+    @classmethod
+    def from_json(cls, payload: Mapping[str, Any]) -> "RenderedFile":
+        return cls(
+            path=payload["path"],
+            content=base64.b64decode(payload["content_base64"]),
+            mode=payload["mode"],
+            exists_before=payload["exists_before"],
+            before_digest=payload["before_digest"],
+            renderer_id=payload["renderer_id"],
+            format=payload["format"],
+        )
+
+
+@dataclass(frozen=True)
+class Precondition:
+    """One fact that must still hold when the plan is committed."""
+
+    kind: str
+    target: str
+    digest: str | None
+    must_be_absent: bool
+
+    def __post_init__(self) -> None:
+        if self.kind not in PRECONDITION_KINDS:
+            raise ValueError(
+                f"a precondition may not guess its kind: {self.kind!r} is not "
+                f"one of {sorted(PRECONDITION_KINDS)}"
+            )
+        if self.must_be_absent and self.digest:
+            raise ValueError(
+                f"precondition on {self.target!r} requires the target to be "
+                f"absent and also to have a digest; those are different claims"
+            )
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "kind": self.kind, "target": self.target,
+            "digest": self.digest, "must_be_absent": self.must_be_absent,
+        }
+
+    @classmethod
+    def from_json(cls, payload: Mapping[str, Any]) -> "Precondition":
+        return cls(
+            kind=payload["kind"], target=payload["target"],
+            digest=payload["digest"], must_be_absent=payload["must_be_absent"],
+        )
+
+
+@dataclass(frozen=True)
+class CaseWritePlan:
+    """Everything that will happen, reviewable before any of it does.
+
+    The plan holds no execution state. Before-*images* live in the journal
+    (:mod:`omnidriver.core.case_transaction`); before-*digests* live here,
+    because a conflict check is part of what a reviewer approves.
+    """
+
+    request: CaseMutationRequest
+    files: tuple[RenderedFile, ...]
+    preconditions: tuple[Precondition, ...]
+    semantic_owner_id: str
+    stack_identity: str
+    created_at: str
+    schema_version: int = PLAN_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        seen: set[str] = set()
+        for rendered in self.files:
+            if rendered.path in seen:
+                raise ValueError(
+                    f"{rendered.path!r} is written twice by one plan; the "
+                    f"surviving content would depend on ordering"
+                )
+            seen.add(rendered.path)
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "request": self.request.to_json(),
+            "files": [rendered.to_json() for rendered in self.files],
+            "preconditions": [p.to_json() for p in self.preconditions],
+            "semantic_owner_id": self.semantic_owner_id,
+            "stack_identity": self.stack_identity,
+            "created_at": self.created_at,
+        }
+
+    @property
+    def plan_digest(self) -> str:
+        return hashlib.sha256(canonical_json(self.to_json()).encode()).hexdigest()
+
+    @property
+    def plan_id(self) -> str:
+        return self.plan_digest[:16]
+
+    @classmethod
+    def from_json(cls, payload: Mapping[str, Any]) -> "CaseWritePlan":
+        version = payload.get("schema_version")
+        if version != PLAN_SCHEMA_VERSION:
+            raise ValueError(
+                f"plan schema version {version!r} is not {PLAN_SCHEMA_VERSION}; "
+                f"reading it would mean filling fields nobody reviewed"
+            )
+        return cls(
+            request=CaseMutationRequest.from_json(payload["request"]),
+            files=tuple(RenderedFile.from_json(item) for item in payload["files"]),
+            preconditions=tuple(
+                Precondition.from_json(item) for item in payload["preconditions"]
+            ),
+            semantic_owner_id=payload["semantic_owner_id"],
+            stack_identity=payload["stack_identity"],
+            created_at=payload["created_at"],
+            schema_version=version,
+        )
+
+
+@dataclass(frozen=True)
+class CaseWriteRecord:
+    """What a committed transaction actually did. Not part of the plan."""
+
+    transaction_id: str
+    plan_id: str
+    plan_digest: str
+    committed: tuple[Mapping[str, Any], ...]
+    evidence: tuple[Mapping[str, Any], ...]
+    status: str
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "transaction_id": self.transaction_id,
+            "plan_id": self.plan_id,
+            "plan_digest": self.plan_digest,
+            "committed": [dict(entry) for entry in self.committed],
+            "evidence": [dict(entry) for entry in self.evidence],
+            "status": self.status,
         }
