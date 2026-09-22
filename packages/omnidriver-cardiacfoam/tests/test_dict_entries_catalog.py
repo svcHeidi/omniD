@@ -99,7 +99,12 @@ class TestDictEntryCatalog(unittest.TestCase):
         )
         self.assertEqual(
             monodomain_entries["$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusIntensity"].value_kind,
-            "dimensioned_scalar_literal",
+            # Renamed 2026-09-22 (Phase 2 Task 4): "dimensioned_scalar_literal"
+            # named a rendered-text FORMAT in a core vocabulary that must not
+            # know OpenFOAM syntax. "dimensioned_scalar" is the same generic
+            # shape (a magnitude plus a seven-exponent dimension vector)
+            # without the format-specific name.
+            "dimensioned_scalar",
         )
 
         ecg_entries = {entry.driver_path: entry for entry in get_electro_property_entry_groups(_CTX)["ecg"]}

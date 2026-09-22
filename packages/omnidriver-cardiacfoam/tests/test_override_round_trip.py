@@ -75,22 +75,28 @@ _COEFFS_PREFIX = "$ELECTRO_MODEL_COEFFS."
 
 # A plausible value per value_kind. The point is emission, not validity, so
 # these only need to survive the builder.
+#
+# Corrected 2026-09-22 (Phase 2 Task 4): the catalog's value_kind vocabulary
+# was closed in omnidriver.core.contracts.dictionary. "label" and "label_list"
+# renamed to "integer"/"integer_list" (the generic shape; "label" named
+# OpenFOAM's own type spelling), "wordList"/"scalarList" normalised to
+# "word_list"/"scalar_list" (same shape, one spelling), and
+# "dimensioned_scalar_literal"/"dimensioned_tensor_literal"/"openfoam_literal"
+# retired -- the first two renamed to "dimensioned_scalar"/"dimensioned_tensor"
+# (dropping the format-named "_literal" suffix) and every "openfoam_literal"
+# entry migrated to the generic "scalar" or "integer" shape it actually has.
 _VALUES = {
     "scalar": "1.5",
     "integer": "3",
-    "label": "3",
     "boolean": "yes",
     "word": "probeValue",
     "word_list": "(alpha beta)",
-    "wordList": "(alpha beta)",
     "scalar_list": "(1 2 3)",
-    "scalarList": "(1 2 3)",
-    "label_list": "(0 1 2)",
+    "integer_list": "(0 1 2)",
     "vector3": "(1 0 0)",
     "vector3_list": "((1 0 0) (0 1 0))",
-    "dimensioned_scalar_literal": "[0 0 0 0 0 0 0] 1.0",
-    "dimensioned_tensor_literal": "[0 0 0 0 0 0 0] (1 0 0 1 0 1)",
-    "openfoam_literal": "1.0",
+    "dimensioned_scalar": "[0 0 0 0 0 0 0] 1.0",
+    "dimensioned_tensor": "[0 0 0 0 0 0 0] (1 0 0 1 0 1)",
 }
 
 

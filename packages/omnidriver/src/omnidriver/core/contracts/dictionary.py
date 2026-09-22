@@ -2,13 +2,153 @@
 
 The core owns this shape and its generic constraint vocabulary. Individual
 plugins own the entries and document-specific catalogues built from it.
+
+``value_kind`` is a closed vocabulary of generic value *shapes* -- how a value
+is built, never what it means. No units, no ranges, no physical
+interpretation: those are the adapter's, supplied only where domain evidence
+justifies them, through ``unit`` and the applicability maps below.
+
+Closed 2026-09-22 (Phase 2, Task 4). The previous default was the string
+``"literal"``, which said nothing and was checked by nothing, so an adapter's
+own value check was the only barrier -- and it accepted ``nan`` for a scalar
+and any non-empty string for a vector (audit finding S1). See
+``docs/superpowers/plans/2026-09-20-phase2-one-write-channel.md`` Task 4 for
+the full migration evidence: 258 declarations were surveyed before this
+vocabulary was fixed, and every one of them was migrated to a kind that
+describes its actual shape, with no residual "unchecked" escape hatch.
 """
 
 from __future__ import annotations
 
+import math
+import re
+from collections.abc import Mapping as _Mapping, Sequence as _Sequence
 from dataclasses import dataclass, field, replace
+from numbers import Integral, Real
 from typing import Any
 
+#: Generic value SHAPES, closed. Adding a member here is a real change to what
+#: every adapter and renderer must handle; do not add one that no declaration
+#: uses (see the plan's Task 4 instructions) and do not add a member that
+#: means "unchecked" -- that is exactly the hole this vocabulary closes.
+#:
+#: The typed-list members (``word_list``, ``scalar_list``, ``vector3_list``,
+#: ``integer_list``) are kept distinct from a bare ``list`` because the
+#: element type is information a renderer needs (a list of words and a list
+#: of scalars are spelled differently in every format this framework has),
+#: and a bare ``list`` is not what any current declaration means. No
+#: declaration currently needs a bare, untyped list, so one is not offered.
+#:
+#: ``dimensioned_scalar`` and ``dimensioned_tensor`` name a magnitude paired
+#: with a seven-exponent physical-dimension vector -- a dimensional-analysis
+#: concept older than and independent of OpenFOAM, not a file format. They
+#: replace the previous ``dimensioned_scalar_literal`` and
+#: ``dimensioned_tensor_literal``, whose ``_literal`` suffix named a
+#: rendered-text format rather than a shape (see the module docstring on
+#: layering). Kept as two kinds, not one, for the same reason as the typed
+#: lists: the magnitude's shape differs (one number vs. several).
+#:
+#: ``tensor9`` and ``dictionary`` were in the plan's first proposal for this
+#: vocabulary and are deliberately absent here: no current ``DictEntry``
+#: declaration has that shape, and the plan's own instructions are not to add
+#: a kind nothing uses.
+VALUE_KINDS = frozenset({
+    "scalar", "integer", "boolean", "word", "enum", "vector3",
+    "dimensioned_scalar", "dimensioned_tensor",
+    "word_list", "scalar_list", "vector3_list", "integer_list",
+})
+
+#: Element shape for each typed-list kind, reusing the singular check.
+_LIST_ELEMENT_KIND = {
+    "word_list": "word",
+    "scalar_list": "scalar",
+    "vector3_list": "vector3",
+    "integer_list": "integer",
+}
+
+_PLACEHOLDER = re.compile(r"<[A-Za-z][A-Za-z0-9_]*>")
+
+
+def _finite(value: Any) -> bool:
+    return isinstance(value, Real) and not isinstance(value, bool) and math.isfinite(float(value))
+
+
+def _validate_scalar_like(value: Any) -> tuple[str, ...]:
+    if isinstance(value, bool) or not isinstance(value, Real):
+        return ("must be a number",)
+    return () if _finite(value) else ("must be a finite number",)
+
+
+def validate_value_shape(kind: str, value: Any) -> tuple[str, ...]:
+    """Reasons a value does not fit a declared shape; empty when it fits.
+
+    Returns reasons rather than raising, so a caller can report every bad
+    parameter in one pass instead of stopping at the first one. This checks
+    generic shape only -- never units, ranges, or a specific entry's
+    ``enum_values``; those are the adapter's concern.
+    """
+    if kind not in VALUE_KINDS:
+        return (f"unknown value kind {kind!r}; known kinds are {sorted(VALUE_KINDS)}",)
+    if kind == "scalar":
+        return _validate_scalar_like(value)
+    if kind == "integer":
+        if isinstance(value, bool) or not isinstance(value, Integral):
+            return ("must be an integer",)
+        return ()
+    if kind == "boolean":
+        return () if isinstance(value, bool) else ("must be a boolean",)
+    if kind in {"word", "enum"}:
+        if not isinstance(value, str) or not value:
+            return ("must be a non-empty word",)
+        return () if value.split() == [value] else ("must contain no whitespace",)
+    if kind == "vector3":
+        if isinstance(value, str) or not isinstance(value, _Sequence):
+            return ("must be three numbers",)
+        if len(value) != 3:
+            return (f"must be three numbers, not {len(value)}",)
+        bad = [i for i, item in enumerate(value) if isinstance(item, bool) or not _finite(item)]
+        return (f"components {bad} must be finite numbers",) if bad else ()
+    if kind in {"dimensioned_scalar", "dimensioned_tensor"}:
+        if not isinstance(value, _Mapping):
+            return ("must be a mapping with value and dimensions",)
+        reasons = []
+        magnitude = value.get("value")
+        if "value" not in value:
+            reasons.append("missing 'value'")
+        elif kind == "dimensioned_scalar":
+            reasons.extend(f"'value' {r}" for r in _validate_scalar_like(magnitude))
+        else:
+            if isinstance(magnitude, str) or not isinstance(magnitude, _Sequence) or not magnitude:
+                reasons.append("'value' must be a non-empty sequence of numbers for a tensor")
+            else:
+                bad = [
+                    i for i, item in enumerate(magnitude)
+                    if isinstance(item, bool) or not _finite(item)
+                ]
+                if bad:
+                    reasons.append(f"'value' components {bad} must be finite numbers")
+        dimensions = value.get("dimensions")
+        if dimensions is None:
+            reasons.append("missing 'dimensions'")
+        elif isinstance(dimensions, str) or not isinstance(dimensions, _Sequence):
+            reasons.append("'dimensions' must be seven exponents")
+        elif len(dimensions) != 7:
+            reasons.append(f"'dimensions' must be seven exponents, not {len(dimensions)}")
+        else:
+            bad_dims = [i for i, item in enumerate(dimensions) if not _finite(item)]
+            if bad_dims:
+                reasons.append(f"'dimensions' components {bad_dims} must be finite numbers")
+        return tuple(reasons)
+    if kind in _LIST_ELEMENT_KIND:
+        if isinstance(value, (str, bytes)) or not isinstance(value, _Sequence):
+            return ("must be a sequence",)
+        element_kind = _LIST_ELEMENT_KIND[kind]
+        reasons = []
+        for index, item in enumerate(value):
+            item_reasons = validate_value_shape(element_kind, item)
+            reasons.extend(f"element {index} {r}" for r in item_reasons)
+        return tuple(reasons)
+    raise AssertionError(f"unhandled value kind {kind!r}")  # pragma: no cover
 
 
 @dataclass(frozen=True)
@@ -17,7 +157,7 @@ class DictEntry:
     description: str
     source_refs: tuple[str, ...] = ()
     notes: str = ""
-    value_kind: str = "literal"
+    value_kind: str = "word"
     enum_values: tuple[str, ...] = ()
     examples: tuple[str, ...] = ()
     dynamic_path: bool = False
@@ -34,6 +174,46 @@ class DictEntry:
     # "if my slot is set, that sibling's slot must be set too". Declare it
     # on every member of the group to make the relation symmetric.
     co_required_with: tuple[str, ...] = ()
+    # A dynamic path's declared domain per placeholder, e.g.
+    # ``{"<ventKey>": ("lv", "rv")}``. Optional: most placeholders in this
+    # catalog (``<name>``, ``<electrode>``, ``<region_name>``, ...) are
+    # open-ended, case-author-chosen instance identifiers with no closed
+    # domain to declare, and leaving them undeclared is honest, not
+    # "unchecked" -- there is nothing to check. What is refused is a *partial*
+    # declaration: naming some of an entry's placeholders and silently
+    # omitting another, which is how ``<ventKey>`` accepted ``"banana"``
+    # while a sibling placeholder went unchecked (audit finding S1).
+    allowed_bindings: dict[str, tuple[str, ...]] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.value_kind not in VALUE_KINDS:
+            raise ValueError(
+                f"{self.driver_path!r} declares value_kind {self.value_kind!r}, "
+                f"which is not one of {sorted(VALUE_KINDS)}"
+            )
+        if self.allowed_bindings and not self.dynamic_path:
+            raise ValueError(
+                f"{self.driver_path!r} declares allowed_bindings but is not a "
+                f"dynamic_path entry; bindings only apply to a placeholder in "
+                f"the path"
+            )
+        if self.allowed_bindings:
+            placeholders = set(_PLACEHOLDER.findall(self.driver_path))
+            declared = set(self.allowed_bindings)
+            unknown = sorted(declared - placeholders)
+            if unknown:
+                raise ValueError(
+                    f"{self.driver_path!r} declares allowed_bindings for "
+                    f"{unknown}, which do not appear in the path"
+                )
+            undeclared = sorted(placeholders - declared)
+            if undeclared:
+                raise ValueError(
+                    f"{self.driver_path!r} declares allowed_bindings for some "
+                    f"of its placeholders but not {undeclared}; a partially "
+                    f"declared binding is how an undeclared placeholder went "
+                    f"unchecked"
+                )
 
 
 def build_group(

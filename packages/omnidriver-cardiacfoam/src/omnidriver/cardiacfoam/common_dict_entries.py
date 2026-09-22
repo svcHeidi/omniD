@@ -45,7 +45,7 @@ CONTROL_DICT_ENTRIES: Final[tuple[DictEntry, ...]] = (
             "fine-resolution sweep."
         ),
         source_refs=("applications/solvers/cardiacFoam/cardiacFoam.C",),
-        value_kind="openfoam_literal",
+        value_kind="scalar",
         unit="s",
         required=True,
         typical_value="",
@@ -60,7 +60,7 @@ CONTROL_DICT_ENTRIES: Final[tuple[DictEntry, ...]] = (
             "production run."
         ),
         source_refs=("applications/solvers/cardiacFoam/cardiacFoam.C",),
-        value_kind="openfoam_literal",
+        value_kind="scalar",
         unit="s",
         required=True,
         typical_value="",
@@ -70,7 +70,7 @@ CONTROL_DICT_ENTRIES: Final[tuple[DictEntry, ...]] = (
         phases=frozenset({"solver"}),
         description="Simulation start time. Almost always 0 for new runs.",
         source_refs=("applications/solvers/cardiacFoam/cardiacFoam.C",),
-        value_kind="openfoam_literal",
+        value_kind="scalar",
         unit="s",
         required=True,
         typical_value="0",
@@ -122,7 +122,7 @@ CONTROL_DICT_ENTRIES: Final[tuple[DictEntry, ...]] = (
             "Typical cardiac simulations write every 5 ms."
         ),
         source_refs=("applications/solvers/cardiacFoam/cardiacFoam.C",),
-        value_kind="openfoam_literal",
+        value_kind="scalar",
         unit="s (when writeControl=runTime)",
         required=True,
         typical_value="5e-3",
@@ -145,7 +145,7 @@ CONTROL_DICT_ENTRIES: Final[tuple[DictEntry, ...]] = (
             "Use 2-3 when disk space is limited on long convergence sweeps."
         ),
         source_refs=("applications/solvers/cardiacFoam/cardiacFoam.C",),
-        value_kind="openfoam_literal",
+        value_kind="integer",
         required=True,
         typical_value="0",
     ),
