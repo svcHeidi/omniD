@@ -12,6 +12,26 @@
 
 **Prerequisite:** Phase 1 complete. The composition rule decides who owns the writer when two providers could.
 
+## Status
+
+**Prerequisite met 2026-09-22**: Phase 1 (`docs/superpowers/plans/2026-09-20-phase1-provider-stack.md`) merged to `main` at `02fde13`. Not started.
+
+| task | state | commit |
+|---|---|---|
+| 1 · the plan types | pending | — |
+| 2 · the transactional writer | pending | — |
+| 3 · `CaseWriterCapability` | pending | — |
+| 4 · promote the value-kind vocabulary | pending | — |
+| 5 · promote the dynamic-path placeholder | pending | — |
+| 6 · cardiacCore's override writer becomes `plan_case` | pending | — |
+| 7 · cardiacCore's bespoke writers | pending | — |
+| 8 · split `build_and_launch` | pending | — |
+| 9 · retire the second materialization mechanism | pending | — |
+| 10 · the sweep spec gets a schema | pending | — |
+| 11 · `describe` shows the write surface | pending | — |
+| 12 · a core type for in-process operations | pending | — |
+| 13 · all four shapes, and the close-out | pending | — |
+
 ## Global Constraints
 
 - Python floor is **3.11**. Keep lazy annotations in `plugin_interface.py`.

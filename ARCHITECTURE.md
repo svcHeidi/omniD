@@ -78,8 +78,10 @@ failures — 129 from the implicit cardiac `DriverContext`, 11 from
 export-script subprocesses — and analysing how many were a threading problem.
 They were left un-deleted when the count reached zero, so this section stated
 its own headline metric two ways, in adjacent paragraphs, with no strikethrough
-or transition. The measurement history is preserved in `GITHUB_MIGRATION.md` §2
-and in the Phase 2 plan's "Task 5, remeasured".)
+or transition. The measurement history was preserved in `GITHUB_MIGRATION.md` §2
+and in the Phase 2 plan's "Task 5, remeasured" — the former deleted
+2026-09-22 once the plans directory's own per-phase Status tables superseded
+it; the latter still stands at `docs/superpowers/plans/2026-08-27-core-completion-phase-2.md`.)
 
 **Two claims this section used to make, both withdrawn 2026-08-27:**
 

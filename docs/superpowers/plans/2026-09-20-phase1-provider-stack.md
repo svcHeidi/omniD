@@ -36,13 +36,16 @@
 | 4 · the composition rules, as failing tests | done (red by design) | `10fea49` |
 | 5 · `ProviderIdentity` / `StackIdentity` | done | `f408dc6` |
 | 6 · the composition mechanism (spike resolved: **own it**) | done, one test blocked | `e7dc7b5` |
-| 7 · `DriverContext.providers` | pending | — |
-| 8 · extend the dependency boundary to adapters | pending | — |
-| 9 · delete the hand-embedding | pending | — |
-| 10 · the four deferred duplicate intakes | pending | — |
-| 11 · `legacy_dict_key_scanner` gets a capability | pending | — |
-| 12 · document the composition contract | pending | — |
-| 13 · all four shapes | pending | — |
+| 7 · `DriverContext.providers` | done | `b0df7ad` (+ `5b2d4b2`, `66d59ab` — review fix round) |
+| 8 · extend the dependency boundary to adapters | done | `678af56` |
+| 9 · delete the hand-embedding | done | `4a25c3d` (+ `18da0ac`, `73d122a`, `fb4287b`, `e732c26` — see note below) |
+| 10 · the four deferred duplicate intakes | done | `cd47102` |
+| 11 · `legacy_dict_key_scanner` gets a capability | done | `ce6996f` |
+| 12 · document the composition contract | done | `edb0921` (+ `d0fa3ec` — review fix round) |
+| 13 · all four shapes | done, no commit (pure verification) | — |
+| final whole-branch review | done | `3998a85`, `c93f860`, `61c7e7e`, `55a8060`, `bc5a33c`, `02fde13` |
+
+**Merged to `main` 2026-09-22** (fast-forward, `02fde13`). Branch `docs/provider-composition-spec` deleted after merge.
 
 **The suite is intentionally red from Task 4 until Task 6.** 13 tests in
 `test_provider_composition_rules.py` fail on `provider_stack.compose` not
@@ -73,6 +76,56 @@ declaring a second slip.
 Re-audited against post-Phase-0 code on 2026-09-20; five corrections applied
 (Tasks 6, 7 and 9). Tasks 1-5, 8 and 10-13 were confirmed still correct as
 written. No task was made redundant by Phase 0.
+
+**Tasks 7-13, landed 2026-09-22.** Three things surfaced mid-execution that
+the plan text did not anticipate, each resolved with a human decision before
+continuing rather than guessed:
+
+- **Task 7** found `DriverContext.identity` changing from `PluginIdentity`
+  (flat `id`/`version`/`api_version`) to `StackIdentity` broke five
+  core-internal call sites and `RunDocument.plugin`'s own JSON Schema — not
+  just adapter code, which is all the task anticipated. Per spec §4.4's own
+  stated rationale ("a provenance record can state which adapter answered
+  which capability"), the fix gave `RunDocument.plugin` the full
+  `StackIdentity` shape rather than a single-provider shim.
+- **Task 9** (the payoff task) found two further things once its own
+  case-file-duplication fix let real adapters compose for the first time:
+  cardiacCore and cardiacFoam each independently declared two identical
+  utilities (`newVtkUnstructuredToFoam`, `1DgraphToFoam`) with diverging
+  documentation — resolved by deleting cardiacCore's copies, since
+  cardiacFoam's were more complete and neither utility had any consumer
+  inside cardiacCore itself. And `default_driver_context()` (Task 7's own
+  change) was found to silently compose *any* two mutually-independent
+  solver-tier plugins together with no way to pick a winner beyond
+  alphabetical accident — fixed by making it refuse (name the candidates,
+  point at `--plugin`) when 2+ solver-tier roots are ambiguous, while still
+  auto-composing one root with its full `requires:` closure.
+- **Task 12** found the plan's own "six rules" framing was stale — the
+  actual implementation needed nine composition shapes, not six (three added
+  by Task 6, a tenth-in-name-but-really-ninth added later by Task 9's own
+  `get_tutorial_catalog` collision). Documented in `ARCHITECTURE.md`'s new
+  "Provider composition" section rather than perpetuated here.
+
+**The final whole-branch review** (after Task 13, covering all of the above)
+found one Critical regression invisible to any single task's own review:
+Task 8 turned `openfoam_environment.py`'s environment-configuration
+back-channel into a no-op (correctly, per its own scope), and Task 9 deleted
+cardiacFoam's redundant diagnostics passthrough (also correctly) — but
+together, cardiacFoam's real backend/build-manifest configuration
+(`configure_runtime_environment`, wired as a `chain`-shape
+`get_configured_environment`) stopped being reachable from the CLI's actual
+run/step path, which only ever called `.load()` (the `single`-shape
+`get_loaded_environment`), never `.configure()`. Fixed by making `.load()`
+thread its result through `.configure()`, restoring "load = source +
+configure" as one contract. Three further Important findings (a
+RunDocument identity gate in `cli.py` comparing dead keys; a
+`@pytest.mark.slow` wheel test broken by the identity-shape change and never
+run because every verification shape excludes slow tests; the `provides:`
+realness standard from Task 9 having no actual effect on `resolutions()`'s
+provenance, corrected in documentation rather than by changing the digest)
+were fixed in the same round. Full detail in each task's own report under
+`.superpowers/sdd/` in the branch history (not preserved after merge; see
+commit messages `3998a85`..`02fde13` for the final fix round).
 
 ---
 

@@ -118,10 +118,12 @@ runtime, silently.
 - `future/ENVIRONMENT_CONTRACT.md` — what core owns and how. Supersedes
   `ARCHITECTURE.md`'s Rule 1. §12 is the supplied-vs-discovered rule.
 - `ARCHITECTURE.md` — layer map and the generated capability-seam table.
-- `GITHUB_MIGRATION.md` — what is done and what is open. **Start at its "Next steps" section**, which names the two things that actually remain. Check it before
-  starting anything; several rows have been stale in the past, so verify a
-  claim against the code before acting on it.
 - `docs/superpowers/specs/` and `plans/` — design reasoning and executed plans.
+  **Start at `plans/`'s newest-dated file's own `## Status` table** for what is
+  done and what is open; each phase plan tracks its own tasks there, with
+  commit hashes for landed work. `GITHUB_MIGRATION.md`, which used to serve
+  this purpose, was deleted 2026-09-22 once Phase 0/1's plan-based tracking
+  superseded it — it predated this whole effort and had already gone stale.
 
 - `AGENT_GUIDE.md` — the domain guide: planning, sweeping, post-processing,
   and authoring a plugin or a tutorial. Its CLI walkthrough is accurate; its
