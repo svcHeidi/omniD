@@ -141,8 +141,9 @@ def test_include_etc_requires_explicit_root_without_running(tmp_path: Path) -> N
 
     assert result.status == "unresolved"
     assert result.environment_keys == (
-        "FOAM_API", "FOAM_ETC", "HOME", "WM_PROJECT_DIR",
-        "WM_PROJECT_SITE", "WM_PROJECT_VERSION",
+        "FOAM_API", "FOAM_CONFIG_ETC", "FOAM_CONFIG_MODE", "FOAM_ETC", "HOME",
+        "WM_PROJECT_DIR", "WM_PROJECT_INST_DIR", "WM_PROJECT_SITE",
+        "WM_PROJECT_VERSION",
     )
     assert "no location configured" in result.message
 
@@ -182,8 +183,9 @@ def test_include_etc_dependency_is_inspected_from_configured_root(
     # whether HOME/WM_PROJECT_SITE/WM_PROJECT_DIR are set or not changes which
     # file a future run would select.
     assert result.environment_keys == (
-        "FOAM_API", "FOAM_ETC", "HOME", "WM_PROJECT_DIR",
-        "WM_PROJECT_SITE", "WM_PROJECT_VERSION",
+        "FOAM_API", "FOAM_CONFIG_ETC", "FOAM_CONFIG_MODE", "FOAM_ETC", "HOME",
+        "WM_PROJECT_DIR", "WM_PROJECT_INST_DIR", "WM_PROJECT_SITE",
+        "WM_PROJECT_VERSION",
     )
     assert set(result.inspected_files) == {str(path.resolve()), str(included.resolve())}
 
@@ -202,8 +204,9 @@ def test_v2412_resolves_include_etc_and_records_runtime_dependency(
     # Corrected 2026-09-22 (audit finding F2): see the note in
     # test_include_etc_dependency_is_inspected_from_configured_root.
     assert result.environment_keys == (
-        "FOAM_API", "FOAM_ETC", "HOME", "WM_PROJECT_DIR",
-        "WM_PROJECT_SITE", "WM_PROJECT_VERSION",
+        "FOAM_API", "FOAM_CONFIG_ETC", "FOAM_CONFIG_MODE", "FOAM_ETC", "HOME",
+        "WM_PROJECT_DIR", "WM_PROJECT_INST_DIR", "WM_PROJECT_SITE",
+        "WM_PROJECT_VERSION",
     )
     assert str(dependency.resolve()) in result.inspected_files
 
@@ -324,14 +327,35 @@ def _sourced_native_environment(bashrc: Path, home: Path) -> dict[str, str]:
     return environment
 
 
-def _native_foam_etc_file(bashrc: Path, home: Path, name: str) -> str | None:
+def _native_foam_etc_file(
+    bashrc: Path, home: Path, name: str, *, extra_env: dict[str, str] | None = None,
+) -> str | None:
     """What the real ``foamEtcFile`` binary selects for a scratch ``HOME``,
     or ``None`` if it reports nothing found."""
-    script = f'export HOME="{home}"; source "{bashrc}" >/dev/null 2>&1; foamEtcFile "{name}"'
+    exports = "".join(f'export {key}="{value}"; ' for key, value in (extra_env or {}).items())
+    script = (
+        f'export HOME="{home}"; source "{bashrc}" >/dev/null 2>&1; {exports}'
+        f'foamEtcFile "{name}"'
+    )
     completed = subprocess.run(["bash", "-lc", script], capture_output=True, text=True)
     if completed.returncode != 0:
         return None
     return completed.stdout.strip()
+
+
+def _native_foam_etc_file_list(
+    bashrc: Path, home: Path, name: str, *, extra_env: dict[str, str] | None = None,
+) -> tuple[str, ...]:
+    """The full ``foamEtcFile -list`` candidate order for a scratch ``HOME``."""
+    exports = "".join(f'export {key}="{value}"; ' for key, value in (extra_env or {}).items())
+    script = (
+        f'export HOME="{home}"; source "{bashrc}" >/dev/null 2>&1; {exports}'
+        f'foamEtcFile -list "{name}"'
+    )
+    completed = subprocess.run(
+        ["bash", "-lc", script], capture_output=True, text=True, check=True,
+    )
+    return tuple(line for line in completed.stdout.splitlines() if line.strip())
 
 
 @native
@@ -372,3 +396,51 @@ def test_find_etc_file_agrees_with_native_foam_etc_file(tmp_path: Path) -> None:
     ours_selected_with_shadow, _ = find_etc_file("controlDict", environment)
     assert native_selected_with_shadow == str(shadow)
     assert str(ours_selected_with_shadow) == native_selected_with_shadow
+
+
+@native
+def test_find_etc_file_matches_native_list_entry_for_entry(tmp_path: Path) -> None:
+    """`find_etc_file`'s candidate order must match `foamEtcFile -list`
+    entry for entry, in order -- not merely agree on the final selection --
+    for the default mode, an explicit `FOAM_CONFIG_ETC`, and each
+    `FOAM_CONFIG_MODE` the second reopened review specifically asked for
+    (`o`, `u`, `go`). A scratch `HOME` is used throughout; nothing is ever
+    written under the real `~/.OpenFOAM`.
+    """
+    from omnidriver.openfoam.effective_dictionary import find_etc_file
+
+    home = tmp_path / "home"
+    home.mkdir()
+    base_environment = _sourced_native_environment(NATIVE_BASHRC, home)
+
+    config_etc_dir = tmp_path / "config_etc_override"
+    config_etc_dir.mkdir()
+
+    cases: dict[str, dict[str, str]] = {
+        "default mode": {},
+        "FOAM_CONFIG_ETC set": {"FOAM_CONFIG_ETC": str(config_etc_dir)},
+        "FOAM_CONFIG_MODE=o": {"FOAM_CONFIG_MODE": "o"},
+        "FOAM_CONFIG_MODE=u": {"FOAM_CONFIG_MODE": "u"},
+        "FOAM_CONFIG_MODE=go": {"FOAM_CONFIG_MODE": "go"},
+    }
+
+    report_lines = []
+    for label, extra_env in cases.items():
+        native_list = _native_foam_etc_file_list(
+            NATIVE_BASHRC, home, "controlDict", extra_env=extra_env,
+        )
+        ours_selected, ours_candidates = find_etc_file(
+            "controlDict", {**base_environment, **extra_env},
+        )
+        ours_list = tuple(str(candidate) for candidate in ours_candidates)
+        report_lines.append(f"{label}:\n  native: {native_list}\n  ours:   {ours_list}")
+        assert ours_list == native_list, "\n".join(report_lines)
+
+        native_selected = _native_foam_etc_file(
+            NATIVE_BASHRC, home, "controlDict", extra_env=extra_env,
+        )
+        assert (str(ours_selected) if ours_selected else None) == native_selected, (
+            "\n".join(report_lines)
+        )
+
+    print("\n\n".join(report_lines))
