@@ -156,7 +156,13 @@ def test_run_document_config_records_the_effective_requested_value(tmp_path):
     config, diagnostics = CardiacCorePlugin().build_run_document_config(spec)
 
     assert diagnostics == ()
-    assert config["preprocessing"]["thickness"] == 0.05
+    # Corrected 2026-09-22 (audit finding S3, batch G0-C): `preprocessing`
+    # slice keys are now qualified by
+    # `overrides.qualified_slot_key`/`run_config.resolve_workflow_inputs`, so
+    # a leaf name declared by two documents occupies two slots instead of
+    # colliding. This assertion previously read the unqualified `"thickness"`
+    # key.
+    assert config["preprocessing"]["$PURKINJE_SLAB.thickness"] == 0.05
 
 
 def test_human_tree_config_uses_only_the_shared_utility_inputs(tmp_path):
@@ -174,12 +180,25 @@ def test_human_tree_config_uses_only_the_shared_utility_inputs(tmp_path):
     config, diagnostics = CardiacCorePlugin().build_run_document_config(spec)
 
     assert diagnostics == ()
-    # A <ventKey> path names no single location until a ventricle is chosen,
-    # so the run document records the paths that resolve on their own.
+    # This case writes only the conductivity and anatomy dictionaries -- no
+    # Purkinje-tree dictionary exists at all, `<ventKey>` or otherwise -- so
+    # only entries declared by a document actually present resolve to a real
+    # value. Keys are qualified (kept scope token) rather than stripped.
+    #
+    # Corrected 2026-09-22 (audit finding S3, batch G0-C): before
+    # `resolve_workflow_inputs` filtered out every `None` value,
+    # `build_config` kept every path in `active_input_paths` as a key
+    # regardless of whether its document existed, so this assertion held for
+    # a different reason -- it excluded only the `<ventKey>` paths because
+    # *those alone* were filtered (by `read_input_values`'s own vent-block
+    # skip), not because an unresolved path was filtered at all. Now every
+    # unresolved path is filtered, `<ventKey>` or not, which is why the
+    # non-`<ventKey>` Purkinje-tree entries (`growthModel`, `hisBundleSeed`)
+    # are absent here too.
     assert set(config["preprocessing"]) == {
-        path.split(".", 1)[1]
-        for path in PURKINJE_TREE_INPUT_PATHS
-        if "<ventKey>" not in path
+        path for path in PURKINJE_TREE_INPUT_PATHS
+        if path.startswith("$CARDIAC_CONDUCTIVITY.")
+        or path.startswith("$CARDIAC_ANATOMY.")
     }
 
 

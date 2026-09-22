@@ -47,6 +47,30 @@ PURKINJE_TREE_INPUT_PATHS = (
     ),
 )
 
+#: Conductivity field names the native utility reads when the dictionary does
+#: not name others. These are the defaults `setCardiacConductivity.C` compiles
+#: in, not a recommendation.
+_DEFAULT_CONDUCTIVITY_FIELDS = {
+    "$CARDIAC_CONDUCTIVITY.fiberField": "fiber",
+    "$CARDIAC_CONDUCTIVITY.sheetField": "sheet",
+}
+
+
+def conductivity_field_paths(
+    input_overrides: "Mapping[str, Any] | None",
+) -> tuple[str, ...]:
+    """The ``0/<field>`` inputs the conductivity step actually reads.
+
+    A field name is adapter-configurable, so a DAG that names ``0/fiber``
+    literally declares an input the case may not have and omits the one it
+    does. Added 2026-09-22 (audit finding S3).
+    """
+    overrides = dict(input_overrides or {})
+    return tuple(
+        f"0/{overrides.get(driver_path, default)}"
+        for driver_path, default in _DEFAULT_CONDUCTIVITY_FIELDS.items()
+    )
+
 
 def _reject_unstaged(requested: Mapping[str, Any], workflow: str) -> None:
     """Refuse a path this workflow does not stage.
@@ -131,8 +155,7 @@ def make_human_purkinje_slab_spec(
                         "depends_on": [],
                         "consumes": [
                             "system/setCardiacConductivityDict",
-                            "0/fiber",
-                            "0/sheet",
+                            *conductivity_field_paths(input_overrides),
                         ],
                     },
                     {
@@ -234,8 +257,7 @@ def make_human_purkinje_endocardial_spec(
                         "depends_on": [],
                         "consumes": [
                             "system/setCardiacConductivityDict",
-                            "0/fiber",
-                            "0/sheet",
+                            *conductivity_field_paths(input_overrides),
                         ],
                     },
                     {
@@ -343,8 +365,7 @@ def _make_pig_purkinje_spec(
                         "depends_on": [],
                         "consumes": [
                             "system/setCardiacConductivityDict",
-                            "0/fiber",
-                            "0/sheet",
+                            *conductivity_field_paths(input_overrides),
                         ],
                     },
                     {
