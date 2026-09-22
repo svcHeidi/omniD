@@ -84,30 +84,67 @@ def find_etc_file(
     location changes which file the next run reads, so a plan's preconditions
     must record that those locations were empty.
 
-    Search order mirrors ``Foam::findEtcFile``: the user's personal directory,
-    then the site directory, then the distribution's own ``etc``. Added
-    2026-09-22 (audit finding F2): resolution previously consulted
-    ``$FOAM_ETC`` alone, so a site file that shadowed the vendor file was read
-    natively while the vendor file was recorded as the dependency.
+    Five locations, in the order ``bin/foamEtcFile`` builds ``dirList`` (its
+    ``userDir``/``groupDir`` match ``foamVersion.H``):
 
-    Only the version-qualified forms are searched. An installation using a
-    layout this does not cover selects nothing and reports its candidates, which
-    surfaces as an explicit unresolved result rather than a wrong attribution.
+    1. ``$HOME/.OpenFOAM/<api>``       -- versioned user directory
+    2. ``$HOME/.OpenFOAM``             -- unversioned user fallback
+    3. ``<site>/<api>/etc``            -- versioned site directory
+    4. ``<site>/etc``                  -- unversioned site fallback
+    5. ``$WM_PROJECT_DIR/etc`` (``$FOAM_ETC``) -- the distribution's own etc
+
+    where ``<site>`` is ``$WM_PROJECT_SITE`` if set, else
+    ``$WM_PROJECT_DIR/site`` (``foamEtcFile``'s ``groupDir="${WM_PROJECT_SITE:-
+    $projectDir/site}"`` -- not ``$WM_PROJECT_INST_DIR``, which this function
+    does not consult at all).
+
+    ``<api>`` is ``$FOAM_API`` when set. Foundation (openfoam.org) builds such
+    as ``~/.OpenFOAM/11`` do not export ``FOAM_API``, so ``<api>`` falls back to
+    ``$WM_PROJECT_VERSION`` there. On ESI (openfoam.com) builds the two differ
+    -- ``WM_PROJECT_VERSION`` is spelled ``"v2412"`` while the directory native
+    actually reads is ``FOAM_API``'s ``"2412"`` -- so preferring
+    ``WM_PROJECT_VERSION`` outright is wrong for that family, not merely
+    incomplete.
+
+    Added 2026-09-22 (audit finding F2). Corrected the same day, second pass:
+    the first draft searched three ``$WM_PROJECT_VERSION``-qualified locations
+    and used ``$WM_PROJECT_INST_DIR`` for the site fallback. Measured against a
+    real ESI v2412 install (``foamEtcFile -list``), both were wrong -- the
+    first draft's own ``$HOME/.OpenFOAM/v2412`` candidate is a location native
+    never reads at all, so a file placed there was selected by this function
+    while the native run kept reading the distribution file underneath it.
+    That is strictly worse than the defect F2 describes: F2 was a wrong
+    attribution (recording the vendor file while a site file shadowed it);
+    the first draft could select a file with no bearing on the run whatsoever.
+    Confirmed correct by comparing this function's selection against
+    ``foamEtcFile`` directly, both with and without a shadowing file under a
+    scratch ``HOME`` -- see ``tests/test_etc_search_chain.py``.
+
+    Every location this repository's own ``FoamFile`` layouts can produce is
+    searched; an installation whose layout differs (a ``FOAM_CONFIG_ETC``
+    override, which ``foamEtcFile`` also consults, is not modelled here)
+    selects nothing and reports its candidates, which surfaces as an explicit
+    unresolved result rather than a wrong attribution.
     """
-    version = environment.get("WM_PROJECT_VERSION", "")
+    api = environment.get("FOAM_API")
+    version = api if api else environment.get("WM_PROJECT_VERSION", "")
     candidates: list[Path] = []
 
     home = environment.get("HOME")
-    if home and version:
-        candidates.append(Path(home) / ".OpenFOAM" / version / name)
+    if home:
+        if version:
+            candidates.append(Path(home) / ".OpenFOAM" / version / name)
+        candidates.append(Path(home) / ".OpenFOAM" / name)
 
     site = environment.get("WM_PROJECT_SITE")
     if not site:
-        install = environment.get("WM_PROJECT_INST_DIR")
-        if install:
-            site = str(Path(install) / "site")
-    if site and version:
-        candidates.append(Path(site) / version / "etc" / name)
+        project_dir = environment.get("WM_PROJECT_DIR")
+        if project_dir:
+            site = str(Path(project_dir) / "site")
+    if site:
+        if version:
+            candidates.append(Path(site) / version / "etc" / name)
+        candidates.append(Path(site) / "etc" / name)
 
     project_dir = environment.get("WM_PROJECT_DIR")
     if project_dir:
@@ -162,9 +199,14 @@ def _inspect_source_closure(
             )
         for match in _ETC_INCLUDE.finditer(lexical_text):
             environment_keys.add("FOAM_ETC")
+            # Corrected 2026-09-22, second pass: `find_etc_file` does not
+            # consult WM_PROJECT_INST_DIR at all (site defaults from
+            # WM_PROJECT_DIR, per native's own `groupDir`), and it prefers
+            # FOAM_API over WM_PROJECT_VERSION for the version segment -- so
+            # FOAM_API replaces WM_PROJECT_INST_DIR here.
             environment_keys.update(
-                ("HOME", "WM_PROJECT_VERSION", "WM_PROJECT_SITE",
-                 "WM_PROJECT_INST_DIR", "WM_PROJECT_DIR")
+                ("FOAM_API", "HOME", "WM_PROJECT_VERSION", "WM_PROJECT_SITE",
+                 "WM_PROJECT_DIR")
             )
             include_name = match.group("path")
             expanded, keys, error = _expand_include(include_name, environment)
