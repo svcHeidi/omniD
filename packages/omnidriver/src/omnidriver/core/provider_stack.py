@@ -431,6 +431,29 @@ def _first_non_none(ordered, implementers, member):
     return _composed
 
 
+#: Recorded in place of a winner when no provider in the stack implements any
+#: member of a capability. Naming the most specific provider there asserted an
+#: ownership that did not exist; the capability adapter runs its declared
+#: fallback, which belongs to no provider. Added 2026-09-22 (audit finding C3).
+UNCLAIMED = "<unclaimed>"
+
+
+def resolve_with_provenance(ordered, member, *args, **kwargs):
+    """Run the ``single`` rule and report which provider actually answered.
+
+    Returns ``(value, provider_id)``; ``(None, None)`` when every implementer
+    returned ``None``. This is the same traversal :func:`_first_non_none`
+    performs -- most specific first -- so the reported provider is the one whose
+    value a caller would have received, not the one that merely declared the
+    hook.
+    """
+    for provider in reversed(_implementers(tuple(ordered), member)):
+        answer = getattr(provider, member)(*args, **kwargs)
+        if answer is not None:
+            return answer, provider.plugin_id
+    return None, None
+
+
 def _chain(ordered, implementers, member):
     if not implementers:
         return None
@@ -668,10 +691,23 @@ def resolutions(ordered_providers) -> dict[str, tuple[str, str]]:
     """capability -> (winning provider id, resolved-content digest).
 
     The input to :func:`~omnidriver.core.provider_identity.build_stack_identity`,
-    which hashes the composition RESULT rather than merely its inputs. The
-    winner is the most specific provider implementing any member of that
-    capability -- which is what a provenance record needs in order to say
-    which adapter answered.
+    which hashes the composition RESULT rather than merely its inputs.
+
+    For the three capabilities in :data:`_DIGESTED_CAPABILITIES` whose digested
+    member is ``single``-shaped, the winner is the provider whose value the
+    ``single`` rule actually used -- :func:`resolve_with_provenance` runs the
+    same traversal :func:`_first_non_none` does, so "who answered" and "what
+    the composed callable returns" can never disagree. For every other
+    capability the winner remains the most specific declaring implementer: it
+    is the best available claim, not an assertion about content, and the
+    placeholder digest that accompanies it says so.
+
+    Corrected 2026-09-22 (audit finding C3): the winner used to be the most
+    specific provider that merely declared a member, for every capability --
+    including the three that are actually resolved here. A provider that
+    declared a ``single``-shaped hook and returned ``None`` was recorded as the
+    source of a value ``_first_non_none`` fell through to a less specific
+    provider to find.
     """
     ordered = tuple(ordered_providers)
     if not ordered:
@@ -680,7 +716,7 @@ def resolutions(ordered_providers) -> dict[str, tuple[str, str]]:
     members = capability_members()
     resolved: dict[str, tuple[str, str]] = {}
     for capability in members:
-        answering = [
+        implementers = [
             provider
             for provider in ordered
             if any(
@@ -688,16 +724,25 @@ def resolutions(ordered_providers) -> dict[str, tuple[str, str]]:
                 for member in members[capability]
             )
         ]
-        winner = (answering[-1] if answering else ordered[-1]).plugin_id
         digested_member = _DIGESTED_CAPABILITIES.get(capability)
-        if digested_member is None:
-            resolved[capability] = (winner, RESOLUTION_PLACEHOLDER)
+        if not implementers:
+            resolved[capability] = (UNCLAIMED, RESOLUTION_PLACEHOLDER)
             continue
-        hook = getattr(composed, digested_member, None)
-        if not callable(hook):
-            resolved[capability] = (winner, RESOLUTION_PLACEHOLDER)
+        if digested_member is None or not callable(
+            getattr(composed, digested_member, None)
+        ):
+            # Not digested, or digested through a member this stack does not
+            # implement: the declared most-specific implementer is the best
+            # available claim, and the placeholder digest already says the
+            # content behind it is not bound. Recorded, not asserted.
+            resolved[capability] = (implementers[-1].plugin_id, RESOLUTION_PLACEHOLDER)
             continue
-        value = hook()
+        if _SHAPE.get(digested_member) == "single":
+            value, answering_id = resolve_with_provenance(ordered, digested_member)
+            winner = answering_id or UNCLAIMED
+        else:
+            value = getattr(composed, digested_member)()
+            winner = implementers[-1].plugin_id
         content = (
             getattr(value, "digest", None)
             if digested_member == "get_profile"

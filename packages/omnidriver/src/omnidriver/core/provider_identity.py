@@ -15,7 +15,12 @@ from dataclasses import dataclass
 #: Without it, the same providers at the same versions would digest
 #: identically across a semantic change core made -- the one case no other
 #: element of the digest covers.
-COMPOSITION_RULE_VERSION = "1"
+#:
+#: Bumped 2026-09-22: `resolutions()` records the provider that supplied the
+#: value under the `single` rule, and `<unclaimed>` where no provider
+#: implements the capability at all (audit finding C3). A digest computed
+#: before this date is not comparable with one computed after it.
+COMPOSITION_RULE_VERSION = "2"
 
 
 @dataclass(frozen=True)
