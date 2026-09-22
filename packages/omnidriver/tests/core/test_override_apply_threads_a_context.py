@@ -98,8 +98,10 @@ def test_the_fallback_refuses_cleanly_when_openfoam_is_not_installed(monkeypatch
 
 def test_custom_mutator_must_declare_its_complete_target_set(tmp_path: Path) -> None:
     class CustomMutator(minimal_plugin.MinimalTestPlugin):
-        def apply_overrides(self, overrides, *, case_root, driver_context):
-            del overrides, case_root, driver_context
+        def apply_overrides(
+            self, overrides, *, case_root, driver_context, execution_env=None,
+        ):
+            del overrides, case_root, driver_context, execution_env
 
     context = driver_context(CustomMutator(), source="test:custom-mutator")
 
@@ -111,8 +113,10 @@ def test_custom_mutator_must_declare_its_complete_target_set(tmp_path: Path) -> 
 
 def test_custom_target_declaration_is_exposed_without_mutating(tmp_path: Path) -> None:
     class DeclaredMutator(minimal_plugin.MinimalTestPlugin):
-        def apply_overrides(self, overrides, *, case_root, driver_context):
-            del overrides, case_root, driver_context
+        def apply_overrides(
+            self, overrides, *, case_root, driver_context, execution_env=None,
+        ):
+            del overrides, case_root, driver_context, execution_env
 
         def get_override_target_paths(self, overrides, *, case_root, driver_context):
             del overrides, driver_context

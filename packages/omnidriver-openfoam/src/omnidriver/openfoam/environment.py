@@ -153,11 +153,14 @@ class OpenFOAMEnvironmentPlugin:
             dict_relpaths=dict_relpaths,
         )
 
-    def apply_overrides(self, overrides, *, case_root, driver_context):
+    def apply_overrides(
+        self, overrides, *, case_root, driver_context, execution_env=None,
+    ):
         from .apply_overrides import apply_overrides
 
         return apply_overrides(
             overrides, case_root=case_root, driver_context=driver_context,
+            execution_env=execution_env,
         )
 
     def get_override_target_paths(self, overrides, *, case_root, driver_context):

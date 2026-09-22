@@ -1524,25 +1524,46 @@ class _OverrideScopeAdapter:
     ) -> tuple[dict[str, Any], ...]:
         """Apply adapter-owned overrides, or leave them unsupported.
 
-        The context is passed through to the hook -- not just held here --
-        so an adapter can resolve its own transaction and provenance
-        requirements under the caller's context rather than substituting one
-        it invents from itself. Core does not delegate to a solver-specific
-        mutator when the hook is absent. Returns whatever records the hook
-        reports (possibly ``()``); it must not be discarded here, since
-        ``legacy_apply_overrides`` below reports through the same return.
+        The context and the execution environment are both passed through to
+        the hook -- not just held here -- so an adapter can resolve its own
+        transaction and provenance requirements under the caller's context, and
+        read each written value back under the caller's runtime, rather than
+        substituting either from itself. Core does not delegate to a
+        solver-specific mutator when the hook is absent.
+
+        Corrected 2026-09-22 (audit finding F1): ``execution_env`` was accepted
+        and forwarded only to ``legacy_apply_overrides``. Every real adapter
+        implements the hook, so on the path that runs it was silently dropped,
+        and the OpenFOAM implementation answers an absent environment with an
+        empty evidence tuple. A required readback was satisfied by evidence
+        that was never gathered.
         """
         hook = getattr(self.plugin, "apply_overrides", None)
         if callable(hook):
-            return tuple(
-                hook(overrides, case_root=case_root, driver_context=driver_context)
+            records = tuple(
+                hook(
+                    overrides,
+                    case_root=case_root,
+                    driver_context=driver_context,
+                    execution_env=execution_env,
+                )
             )
-        from .compatibility import legacy_apply_overrides
+        else:
+            from .compatibility import legacy_apply_overrides
 
-        return legacy_apply_overrides(
-            overrides, case_root=case_root, driver_context=driver_context,
-            execution_env=execution_env,
-        )
+            records = legacy_apply_overrides(
+                overrides, case_root=case_root, driver_context=driver_context,
+                execution_env=execution_env,
+            )
+        if execution_env is not None and overrides and not records:
+            raise ValueError(
+                f"provider {self.plugin.plugin_id!r} applied "
+                f"{len(tuple(overrides))} override(s) under an explicit "
+                f"execution environment but returned no effective-value "
+                f"evidence; an empty record set must not satisfy a required "
+                f"readback"
+            )
+        return records
 
     def target_paths(
         self, overrides: Any, *, case_root: Any, driver_context: Any,

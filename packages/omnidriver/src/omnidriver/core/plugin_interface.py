@@ -480,6 +480,7 @@ class SolverPluginOptionalHooks(Protocol):
     # -- OverrideScopeCapability ---------------------------------------------
     def apply_overrides(
         self, overrides: Any, *, case_root: "Path", driver_context: Any,
+        execution_env: Any | None = None,
     ) -> tuple[dict[str, Any], ...]:
         """Validate and apply a ``--apply`` override document to a case.
 
@@ -488,8 +489,19 @@ class SolverPluginOptionalHooks(Protocol):
         a ``ValueError`` subclass to reject. ``driver_context`` is the
         caller's context -- an adapter must thread it through, not build a
         substitute from itself, or it silently discards whatever solver
-        semantics the caller carried. Absent -> applying overrides is
-        unsupported for this adapter."""
+        semantics the caller carried.
+
+        ``execution_env`` is the selected runtime's environment. When it is
+        supplied the adapter MUST read each written value back under it and
+        return one evidence record per override; returning ``()`` with an
+        environment in hand is refused by the capability adapter, because "I
+        wrote it and can say nothing about the result" is not a passed check.
+        When it is absent the write still happens and the adapter reports
+        whatever it can, which may be nothing. Absent -> applying overrides is
+        unsupported for this adapter.
+
+        Added 2026-09-22 (audit finding F1): the parameter existed on the
+        capability adapter and was never forwarded here."""
         ...
 
     def get_override_target_paths(

@@ -49,8 +49,10 @@ def test_apply_returns_the_plugins_records() -> None:
     sentinel = ({"path": "constant/x", "key": "a", "old": "1", "new": "2"},)
 
     class _Plugin:
-        def apply_overrides(self, overrides, *, case_root, driver_context):
-            del overrides, case_root, driver_context
+        def apply_overrides(
+            self, overrides, *, case_root, driver_context, execution_env=None,
+        ):
+            del overrides, case_root, driver_context, execution_env
             return sentinel
 
         def get_override_target_paths(self, overrides, *, case_root, driver_context):

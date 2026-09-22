@@ -62,8 +62,10 @@ class _NeutralMutator(MinimalTestPlugin):
         self.events.append("targets")
         return (self.target,)
 
-    def apply_overrides(self, overrides, *, case_root, driver_context):
-        del driver_context
+    def apply_overrides(
+        self, overrides, *, case_root, driver_context, execution_env=None,
+    ):
+        del driver_context, execution_env
         self._owned(case_root)
         self.events.append("apply")
         self.target.write_text(str(overrides[0]["value"]) + "\n")

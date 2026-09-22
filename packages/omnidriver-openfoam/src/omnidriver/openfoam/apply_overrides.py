@@ -290,9 +290,12 @@ def apply_overrides(
         evidence.append({
             "driver_path": driver_path,
             "requested_value": override["value"],
+            # Raw spellings are preserved on both sides: `requested_value`
+            # above and `value` from `asdict(result)` below. `matches_requested`
+            # is a typed comparison of the two, not a rewrite of either.
             "matches_requested": (
                 result.status == "resolved"
-                and result.value == _effective_value_text(override["value"])
+                and effective_values_agree(override["value"], result.value)
             ),
             **asdict(result),
         })
@@ -347,6 +350,89 @@ def _effective_value_text(value: Any) -> str:
     from .mutators import _format_value
 
     return _format_value(value).strip()
+
+
+def _as_comparable_text(text: str):
+    """Parse one native scalar/word/vector spelling into a comparable value.
+
+    Returns a float for a number, a bool for an OpenFOAM boolean word, a tuple
+    of floats for a parenthesised vector, and the stripped text otherwise.
+    """
+    stripped = text.strip().rstrip(";").strip()
+    if not stripped:
+        return None
+    if stripped in {"true", "yes", "on"}:
+        return True
+    if stripped in {"false", "no", "off"}:
+        return False
+    if stripped.startswith("(") and stripped.endswith(")"):
+        parts = stripped[1:-1].split()
+        try:
+            return tuple(float(part) for part in parts)
+        except ValueError:
+            return stripped
+    try:
+        return float(stripped)
+    except ValueError:
+        return stripped
+
+
+def _as_comparable(value: Any):
+    """Parse a requested override *or* a native resolution into a comparable
+    value, dispatching on the Python type actually in hand.
+
+    A number becomes a ``float``, an OpenFOAM boolean word or a Python ``bool``
+    stays a ``bool``, a list/tuple and a parenthesised vector string both
+    become a tuple of floats, and anything else is compared as text.
+
+    Corrected 2026-09-22 (audit finding F1b, second pass): the first draft
+    always rendered the *requested* side through ``_effective_value_text``
+    (``str(value)``) before parsing it back. ``str([1, 2, 3])`` is the Python
+    literal ``"[1, 2, 3]"``, not the OpenFOAM vector spelling ``"(1 2 3)"``, so
+    a correct vector override compared unequal to its own resolution. Dispatch
+    on the requested value's own type instead of round-tripping it through
+    text formatting meant for writing a dictionary, not for comparison.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, (list, tuple)):
+        try:
+            return tuple(float(item) for item in value)
+        except (TypeError, ValueError):
+            return tuple(value)
+    if isinstance(value, str):
+        return _as_comparable_text(value)
+    return value
+
+
+def effective_values_agree(requested: Any, resolved: str | None) -> bool:
+    """Whether a native resolution is the value that was requested.
+
+    Compared as parsed values, not as text: a requested ``1e-3`` resolves
+    through ``foamDictionary`` as ``0.001``, and rejecting that is rejecting a
+    correct edit. Added 2026-09-22 (audit finding F1b).
+
+    Deliberately NOT a tolerance. ``0.001`` and ``0.0010000001`` are different
+    configurations, and a comparison that calls them equal hides exactly the
+    drift this check exists to find. The raw spellings are preserved in the
+    evidence record either way, so a reader can always see what was written and
+    what came back.
+
+    An unparseable or absent resolution is not agreement. "I could not read it"
+    is reported as a non-match so the caller sees an unverified edit, never a
+    passed check.
+    """
+    if resolved is None:
+        return False
+    left = _as_comparable(requested)
+    right = _as_comparable_text(resolved)
+    if left is None or right is None:
+        return False
+    if isinstance(left, bool) != isinstance(right, bool):
+        return False
+    return left == right
 
 
 @contextmanager
