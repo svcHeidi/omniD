@@ -1353,14 +1353,40 @@ class _EnvironmentPreflightAdapter:
     def load(
         self, *, explicit_bashrc: Any | None, driver_context: Any | None,
     ) -> dict[str, str]:
+        """Source the environment, then configure it. Both halves, always.
+
+        ``get_loaded_environment`` is classified ``single`` in
+        `provider_stack.py` -- most-specific provider wins, no combining --
+        so sourcing alone cannot reach every provider's runtime contract.
+        Configuration (backend/library selection, build-manifest validation)
+        is a separate, ``chain``-shape member, ``get_configured_environment``,
+        reachable only through :meth:`configure`. Before composition existed,
+        a single active plugin's sourcing step ended by reaching
+        ``driver_context.plugin``'s configure hook directly (a back-channel
+        `openfoam_environment.py`'s ``_configure_plugin_environment`` no
+        longer has, by design -- see that function's docstring), so "load"
+        always meant "source AND configure" as one step. Restoring that
+        combined contract here, via this adapter's own composed
+        :meth:`configure`, is what lets every future caller of ``.load()``
+        get the correct combined behaviour without every provider's
+        ``get_loaded_environment`` needing to remember to configure too.
+
+        Every current call site either calls ``.load()`` alone (`cli.py`'s
+        two run/step sites) or ``.configure()`` alone (`sweep_runner.py`'s
+        `sweep_run`, on an already-externally-sourced ``os.environ``) --
+        never both in sequence -- so this does not double-apply
+        configuration anywhere in this repository today.
+        """
         hook = getattr(self.plugin, "get_loaded_environment", None)
         if callable(hook):
-            return dict(hook(explicit_bashrc=explicit_bashrc, driver_context=driver_context))
-        from .compatibility import legacy_load_environment
+            sourced = dict(hook(explicit_bashrc=explicit_bashrc, driver_context=driver_context))
+        else:
+            from .compatibility import legacy_load_environment
 
-        return dict(legacy_load_environment(
-            explicit_bashrc=explicit_bashrc, driver_context=driver_context,
-        ))
+            sourced = dict(legacy_load_environment(
+                explicit_bashrc=explicit_bashrc, driver_context=driver_context,
+            ))
+        return self.configure(sourced, driver_context)
 
 
 @dataclass(frozen=True)
