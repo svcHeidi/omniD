@@ -28,14 +28,33 @@ which must not start until this plan closes.
 | 1 · deterministic provider order, duplicate identities refused | C1 | done | `9bb8c7c` |
 | 2 · resolution provenance names the provider that answered | C3 | done | `0bab354` |
 | 3 · `execution_env` reaches the hook; readback compares typed values | F1, F1b | done | `e2fead3` |
-| 4 · `#includeEtc` follows the native search chain | F2 | done | `d0f13ed`, corrected `628e39e` |
+| 4 · `#includeEtc` follows the native search chain | F2 | done | `d0f13ed`, corrected `628e39e`, corrected again `0f9654c` |
 | 5 · cardiacCore addressing keeps document scope; values are checked | S1 | done | `bd8b89e` |
 | 6 · final workflow inputs are resolved once, from effective config | S3 | done | `3b1e0f5` |
 | 7 · `validate_configuration` is wired to the plugin | S2 | done | `97ac44c` |
 | 8 · required-check coverage blocks at the dispatch boundary | C2 | done | `75ba387` |
 | 9 · four shapes, static gates, and the close-out | — | done | (this commit) |
 
-**G0 closed 2026-09-22.** All eight findings reproduce no longer; four
+**G0 closed 2026-09-22, after review R1 held it open once.** R1's verdict was
+**not closed**, on three blockers, all now resolved:
+
+* **B1** — `find_etc_file` still disagreed with the real `foamEtcFile` under
+  `$FOAM_CONFIG_ETC` and `$FOAM_CONFIG_MODE`, measured. Closed by `0f9654c`;
+  the candidate list now matches `foamEtcFile -list` entry for entry in the
+  default, `o`, `u` and `go` modes, verified twice independently.
+* **B2** — neither variable appeared in `environment_keys`, so a Phase 2
+  precondition set could not have detected one appearing. Closed by the same
+  commit; the set is now nine keys, recorded unconditionally by deliberate
+  choice.
+* **B3** — the Status table claimed C2 without saying the gate is wired and
+  **unfed**. Closed above, with the grep evidence, in C2's own row.
+
+R1 is the reason F2 is right. Its fixtures passed at `628e39e`; only comparison
+against the real binary found the gap — the second time on this one task that a
+complete, passing fixture set accompanied a wrong implementation. Weigh that
+when deciding how much evidence a "confirmed" claim needs in later gates.
+
+All eight findings reproduce no longer; four
 installation shapes and both static gates pass. Phase 2
 (`2026-09-20-phase2-one-write-channel.md`) may begin at G1.
 
@@ -134,7 +153,7 @@ not assumed correct as written:
 | S1 (Task 5) | no -- undeclared `banana` segment refused; non-vector string refused; `nan` refused |
 | S3 (Task 6) | no -- qualified key resolves the override (`myFibre`) and DAG `consumes` follows it (`0/myFibre`) |
 | S2 (Task 7) | no -- `test_validate_configuration.py` is 3 passed; `validate_configuration` delegates instead of `del spec; return ()` |
-| C2 (Task 8) | no -- `is_launchable`'s docstring no longer says "not yet wired"; one `is_launchable` call site in `cli.py` now passes `simulation_audit` |
+| C2 (Task 8) | no -- `is_launchable`'s docstring no longer says "not yet wired"; one `is_launchable` call site in `cli.py` now passes `simulation_audit`. **But the gate is wired and UNFED:** nothing in the codebase can emit an `unavailable` outcome, so `coverage_ok` cannot be false in a real run. `SimulationAuditItem(` is constructed only in `core/runtime/strict_audit.py`, and every site passes `blocked`/`warning`/`passed`/`not_applicable`/`not_requested`; the only route to `unavailable` is `_score_from_diagnostics(outcome=...)` with an outcome in `UNCOVERED_OUTCOMES`, which no caller passes. The behavioural test exercises the gate through a stubbed report, which is the only way it can be exercised today. Phase 2 Task 7's post-write readback is what starts feeding it. Recorded 2026-09-22 by review R1, which held G0 open until this said so. |
 
 ### Installation shapes and static gates, final revision (both venvs rebuilt from scratch)
 
@@ -199,6 +218,13 @@ that audit claims are claims until measured.
 | S1 | `validate_input_overrides` accepts `$PURKINJE_TREE.banana.seed`, accepts `'not a vector at all'` for a `vector3`, and accepts `nan`/`inf` for a `scalar`. |
 | S2 | `CardiacCorePlugin.validate_configuration` is `del spec; return ()`. `tests/test_validate_configuration.py` — 1 failed, 2 passed. |
 | S3 | `make_human_purkinje_slab_spec(input_overrides={"$CARDIAC_CONDUCTIVITY.fiberField": "myFibre"})` → `config["preprocessing"]["fiberField"] is None`, **no diagnostic**. |
+
+**Corrected 2026-09-22 (review R1).** Both gate scripts import `omnidriver`, so
+bare `python3` fails with `ModuleNotFoundError` on a machine where the packages
+are installed only into the task virtualenvs. Run them with
+`/tmp/od311/bin/python` (or `/tmp/odcore/bin/python` for the core-only shape).
+The plan previously wrote `python3` throughout, which would have made both gates
+look unrunnable rather than passing.
 
 ## Execution batches and review points
 
@@ -558,8 +584,8 @@ order.
 - [ ] **Step 6: Run the static gates and the full suite**
 
 ```bash
-python3 scripts/check-import-boundaries.py
-python3 scripts/export-capability-seams.py --check
+/tmp/od311/bin/python scripts/check-import-boundaries.py
+/tmp/od311/bin/python scripts/export-capability-seams.py --check
 /tmp/od311/bin/python -m pytest packages/ -q -m "not slow"
 ```
 
@@ -844,7 +870,7 @@ refuse a stack that works today, before the contract that replaces it exists.
 ```bash
 /tmp/od311/bin/python -m pytest packages/omnidriver/tests/core/test_resolution_provenance.py -v
 /tmp/od311/bin/python -m pytest packages/omnidriver/tests -q
-python3 scripts/export-capability-seams.py --check
+/tmp/od311/bin/python scripts/export-capability-seams.py --check
 ```
 
 Expected: the new file PASSES; core reports `0 failed`; the seam gate exits 0.
@@ -1235,7 +1261,7 @@ Then replace the `matches_requested` expression in the evidence loop:
 ```bash
 /tmp/od311/bin/python -m pytest packages/omnidriver/tests/core/test_override_apply_forwards_execution_env.py packages/omnidriver-openfoam/tests/test_effective_value_comparison.py -v
 /tmp/od311/bin/python -m pytest packages/ -q -m "not slow"
-python3 scripts/export-capability-seams.py --check
+/tmp/od311/bin/python scripts/export-capability-seams.py --check
 ```
 
 Expected: the new files PASS. The full suite reports only the pre-existing
@@ -1562,6 +1588,37 @@ and the first implementation selected the user file -- so a plan's precondition
 digest would have been taken over a file with no bearing on the run. F2's
 original form recorded the wrong file; that form would have *read* the wrong
 file.
+
+**Corrected again 2026-09-22, after review R1.** The five-location chain above
+was still incomplete. Two ESI mechanisms were unmodelled, and review R1 measured
+both against the real binary:
+
+* `$FOAM_CONFIG_ETC` is a candidate, inserted immediately **before** the
+  distribution entry — not at the top. It only changes the answer when nothing
+  higher in the chain matches, which is why a first reproduction attempt with a
+  user shadow present showed a false match.
+* `$FOAM_CONFIG_MODE` selects which of the three groups are searched at all
+  (default `ugo`; `u` user, `g` group/site, `o` other). Only membership matters,
+  not the letters' order — `foamEtcFile` tests `case "$optMode" in (*[u]*) ...`
+  in a fixed u, g, o sequence. Under `FOAM_CONFIG_MODE=o` the implementation was
+  reading a user file that native deliberately skips: selecting a file with no
+  bearing on the run, the same class of error as the `v2412` bug.
+
+Both now join `environment_keys`, which is recorded unconditionally (nine keys)
+rather than narrowed to what a given install happens to set. Over-declaration is
+the conservative direction — a spurious invalidation, never a missed one — and
+the docstring states that as a deliberate choice.
+
+**The Foundation (openfoam.org) branch is source-verified, not runtime-verified.**
+No such install exists on this machine. Foundation's published `bin/foamEtcFile`
+derives its site root from `${WM_PROJECT_SITE:-$prefixDir/site}` where
+`prefixDir` is the **parent** of the versioned install — genuinely different
+from ESI's `$projectDir/site`, so the ESI correction had broken Foundation.
+`FOAM_API` is absent from Foundation's source entirely and is used as the
+discriminator. Where neither site hint is set, no site candidate is added rather
+than one being guessed. Record this as **modelled and source-verified, not
+confirmed against a runtime** — it is a fixture asserting a reading of published
+source, which is better than a belief and weaker than a measurement.
 
 The lesson generalises past this task: the fixture tests all passed. Only
 comparison against the real ``foamEtcFile`` binary caught it. Where a task's
@@ -2461,8 +2518,8 @@ this verbatim.
 ```bash
 /tmp/od311/bin/python -m pytest packages/omnidriver-cardiaccore/tests -q
 /tmp/od311/bin/python -m pytest packages/ -q -m "not slow"
-python3 scripts/check-import-boundaries.py
-python3 scripts/export-capability-seams.py --check
+/tmp/od311/bin/python scripts/check-import-boundaries.py
+/tmp/od311/bin/python scripts/export-capability-seams.py --check
 ```
 
 Expected: **`0 failed` across the whole non-slow suite.** This is the task that
@@ -2657,7 +2714,7 @@ Replace the old paragraph; do not leave both.
 ```bash
 /tmp/od311/bin/python -m pytest packages/omnidriver/tests/core/test_coverage_blocks_dispatch.py -v
 /tmp/od311/bin/python -m pytest packages/ -q -m "not slow"
-python3 scripts/export-capability-seams.py --check
+/tmp/od311/bin/python scripts/export-capability-seams.py --check
 ```
 
 Expected: the new file PASSES and the full non-slow suite reports `0 failed`.
@@ -2707,8 +2764,8 @@ uv venv --python 3.11 /tmp/odcore && VIRTUAL_ENV=/tmp/odcore uv pip install -q \
 /tmp/od311/bin/python -m pytest packages/ -q -m "not slow"
 /tmp/od311/bin/python -m pytest packages/omnidriver/tests -q
 /tmp/odcore/bin/python -m pytest packages/omnidriver/tests -q -m "not slow"
-python3 scripts/check-import-boundaries.py
-python3 scripts/export-capability-seams.py --check
+/tmp/od311/bin/python scripts/check-import-boundaries.py
+/tmp/od311/bin/python scripts/export-capability-seams.py --check
 ```
 
 Expected: `0 failed` in all three suites; both gates exit 0.
