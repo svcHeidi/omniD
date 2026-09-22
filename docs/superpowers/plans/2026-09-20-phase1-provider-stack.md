@@ -1379,6 +1379,23 @@ stub declared there lands in the stack digest's `resolutions` record as the
 provider that answered — which is a false provenance claim, and the digest is
 what makes a run reproducible.
 
+**Correction, 2026-09-22 (final whole-branch review, Finding 4).** The
+premise above is false, discovered too late to change this task's scope
+(the re-audit it justifies was already done and reviewed). `resolutions()`
+(`provider_stack.py`) never reads `provides:` — it picks each capability's
+winner purely by which provider has a callable member, independent of
+whether that provider declared the capability. So a stub withheld from
+`provides:` by this task's own re-audit can still win `resolutions()`, and
+the stack digest, if it is the most-specific implementer: the exact false
+provenance claim this paragraph describes still happens, just silently. The
+re-audit itself was not wasted work — `provides:`/`check_provides()` still
+needed it, for the reason gate 1/gate 2 give in each manifest's own comment
+block — it just does not protect the digest the way this paragraph claims.
+Not fixed (here or in `resolutions()` itself, which would change every
+`capability_digest` this codebase has ever computed); see
+`ARCHITECTURE.md`'s "Provider composition" > "provides: / requires:" section
+for the full explanation.
+
 So: cross-reference the stub census below against `implemented_capabilities()`,
 and declare only capabilities the provider really answers. Where the two
 disagree, the census wins and the stub gets deleted.

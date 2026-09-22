@@ -220,6 +220,30 @@ A `PluginProfile` declares two things about how it joins a stack:
   stably, so the same installation always composes identically, which
   matters because the stack digest hashes that order.
 
+**Correction, 2026-09-22 (final whole-branch review, Finding 4).** Task 9's
+plan step justified an expensive per-manifest `provides:` realness re-audit
+across all three adapters by claiming that declaring a hollow stub in
+`provides:` "lands in the stack digest's `resolutions` record as the
+provider that answered — which is a false provenance claim." That premise
+is false: `resolutions()` (`provider_stack.py`) never reads `provides:` at
+all. It picks each capability's winner purely by which provider has a
+*callable member* for it (`any(callable(getattr(provider, member, None)) ...)`),
+independent of whether that provider *declared* the capability in
+`provides:`. So a provider that implements a member but withholds the
+capability from `provides:` still wins `resolutions()` for it if it is the
+most-specific implementer — the exact "false provenance claim" the audit
+was meant to prevent still happens, just silently, in the digest. `provides:`
+is declaration-and-validation only, as the paragraph above still correctly
+describes: it controls what `check_provides()` enforces about a provider's
+own honesty (declared but not implemented is an error), and it documents
+intent. It has no effect on which provider's answer `resolutions()` — and
+therefore the stack digest — credits for a capability. This is a real gap,
+found during the final whole-branch review of Phase 1's provider-composition
+work, and is deliberately **not fixed here**: changing `resolutions()`'s
+winner-selection rule would change every `capability_digest` this codebase
+has ever computed, a far bigger and riskier change than this finding
+warrants on its own.
+
 ### The single-declarer rule for case files
 
 `_check_case_file_declarers()` requires that every case-file path be

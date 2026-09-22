@@ -24,6 +24,21 @@ plugin:
 # Added 2026-09-22 (Task 11): dict_key_scanner. get_dict_key_scanner returns
 # dict_keys_scanner.strict_dict_key_report unconditionally -- a real scanner,
 # not a stub -- so it passes the same realness bar as everything else here.
+#
+# Correction, 2026-09-22 (final whole-branch review, Finding 4): this
+# realness standard is still correct about what check_provides() enforces --
+# a hollow member declared here would fail it. It does NOT, as the
+# surrounding reasoning implies, prevent resolutions()/the stack digest from
+# crediting this provider for a withheld capability: resolutions()
+# (provider_stack.py) picks each capability's winner purely by which
+# provider has a callable member, never by consulting provides: at all. So a
+# capability withheld here for realness can still win resolutions() if this
+# provider is the most-specific implementer -- the same "false provenance
+# claim" this audit was meant to prevent still happens, just silently, in
+# the digest. See ARCHITECTURE.md's "Provider composition" > "provides: /
+# requires:" section for the full explanation; not fixed there or here,
+# since changing resolutions() would change every capability_digest this
+# codebase has ever computed.
 provides:
   - case_runtime_conventions
   - environment_preflight

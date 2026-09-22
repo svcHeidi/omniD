@@ -43,6 +43,21 @@ requires:
 # accidental-commit fix (see git history) picked up an in-progress parallel
 # session's real implementation by mistake -- not this file's own work, and
 # not declared here.
+#
+# Correction, 2026-09-22 (final whole-branch review, Finding 4): gate 2's
+# realness standard above is still correct about what check_provides()
+# enforces -- a hollow member declared here would fail it. It does NOT
+# prevent resolutions()/the stack digest from crediting this provider for a
+# withheld capability (artifacts, run_semantic_validator, runtime_evidence):
+# resolutions() (provider_stack.py) picks each capability's winner purely by
+# which provider has a callable member, never by consulting provides: at
+# all. A capability withheld here for realness can still win resolutions()
+# if this provider is the most-specific implementer -- the "false
+# provenance claim" this audit was meant to prevent still happens, just
+# silently, in the digest. See ARCHITECTURE.md's "Provider composition" >
+# "provides: / requires:" section for the full explanation; not fixed there
+# or here, since changing resolutions() would change every
+# capability_digest this codebase has ever computed.
 provides:
   - dictionaries
   - tutorials
