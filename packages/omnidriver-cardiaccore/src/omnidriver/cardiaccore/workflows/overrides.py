@@ -22,6 +22,8 @@ no-op -- the one failure the solver cannot report and this layer can.
 
 from __future__ import annotations
 
+import math
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from numbers import Integral, Real
@@ -61,17 +63,44 @@ _DOCUMENT_FOR_SCOPE: dict[str, str] = {
 _ENTRIES = {entry.driver_path: entry for entry in CATALOG.entries}
 
 
+def qualified_slot_key(driver_path: str) -> str:
+    """The slot key for a declared path, keeping its document scope.
+
+    ``core.specs.validation.slot_key`` strips the ``$SCOPE.`` prefix, which
+    makes ``$CARDIAC_SCAR.fiberField`` and ``$CARDIAC_CONDUCTIVITY.fiberField``
+    one slot. Which one survives a flatten then depends on catalog iteration
+    order, and the surviving value can be ``None`` from a dictionary the case
+    does not even have.
+
+    This keeps the whole path, so a slot identifies one parameter in one
+    document. Added 2026-09-22 (audit findings S1, S3).
+
+    ``slot_key`` itself is core's and is unchanged: core cannot know that two
+    adapter documents share a leaf name, and the unqualified form is still what
+    a caller wants when it has already fixed the document.
+    """
+    return driver_path
+
+
 def _template_for(driver_path: str) -> str | None:
     """The declared path this concrete path instantiates, if any.
 
-    A declared ``<ventKey>`` entry covers ``lv`` and ``rv`` alike, so the
-    concrete path is matched back to its template to find the declaration
-    that describes it.
+    A declared ``<ventKey>`` entry covers every key in ``VENT_KEYS``, so the
+    concrete path is matched back to its template to find the declaration that
+    describes it.
+
+    Corrected 2026-09-22 (audit finding S1): the segment was previously
+    substituted without being checked, so ``$PURKINJE_TREE.banana.seed`` matched
+    ``$PURKINJE_TREE.<ventKey>.seed`` and was written into a ``banana`` block no
+    native utility reads. A dynamic segment is now valid only when it is one of
+    the bindings the placeholder declares.
     """
     if driver_path in _ENTRIES:
         return driver_path
     parts = driver_path.split(".")
     for index in range(1, len(parts)):
+        if parts[index] not in VENT_KEYS:
+            continue
         candidate = ".".join(
             [*parts[:index], VENT_KEY_PLACEHOLDER, *parts[index + 1:]]
         )
@@ -101,14 +130,27 @@ def resolve_override_target(driver_path: str) -> InputTarget:
     return InputTarget(document, parts[-1], tuple(parts[:-1]))
 
 
+_VECTOR_TEXT = re.compile(r"^\(\s*(\S+)\s+(\S+)\s+(\S+)\s*\)$")
+
+
+def _require_finite(driver_path: str, value: Any) -> None:
+    if isinstance(value, Real) and not math.isfinite(float(value)):
+        raise ValueError(
+            f"input override {driver_path!r} must be a finite number, not {value!r}; "
+            f"a dictionary accepts the text and the solver fails at read time"
+        )
+
+
 def _check_value(driver_path: str, entry: Any, value: Any) -> None:
     kind = entry.value_kind
     if kind == "integer":
         if isinstance(value, bool) or not isinstance(value, Integral):
             raise TypeError(f"input override {driver_path!r} must be a JSON integer")
+        _require_finite(driver_path, value)
     elif kind == "scalar":
         if isinstance(value, bool) or not isinstance(value, Real):
             raise TypeError(f"input override {driver_path!r} must be a JSON number")
+        _require_finite(driver_path, value)
     elif kind in {"word", "enum"}:
         if not isinstance(value, str) or not value:
             raise TypeError(f"input override {driver_path!r} must be a non-empty JSON string")
@@ -116,9 +158,27 @@ def _check_value(driver_path: str, entry: Any, value: Any) -> None:
         # A dictionary spells a vector "(x y z)"; a caller may hand over
         # either that text or three numbers. Both reach the dictionary
         # unchanged, as they do in omnidriver-cardiacfoam.
+        #
+        # Corrected 2026-09-22 (audit finding S1): any non-empty string was
+        # accepted, so "not a vector at all" was written into a vector entry
+        # and failed natively at read time with no reference back to the
+        # override that caused it.
         if isinstance(value, str):
-            if not value.strip():
-                raise TypeError(f"input override {driver_path!r} must not be empty")
+            match = _VECTOR_TEXT.match(value.strip())
+            if match is None:
+                raise TypeError(
+                    f"input override {driver_path!r} must be three numbers or a "
+                    f"'(x y z)' string, not {value!r}"
+                )
+            for component in match.groups():
+                try:
+                    number = float(component)
+                except ValueError:
+                    raise TypeError(
+                        f"input override {driver_path!r} component {component!r} "
+                        f"is not a number"
+                    ) from None
+                _require_finite(driver_path, number)
         elif isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
             if len(value) != 3 or any(
                 isinstance(item, bool) or not isinstance(item, Real) for item in value
@@ -126,6 +186,8 @@ def _check_value(driver_path: str, entry: Any, value: Any) -> None:
                 raise TypeError(
                     f"input override {driver_path!r} must be three numbers or a '(x y z)' string"
                 )
+            for component in value:
+                _require_finite(driver_path, component)
         else:
             raise TypeError(
                 f"input override {driver_path!r} must be three numbers or a '(x y z)' string"
@@ -156,6 +218,17 @@ def validate_input_overrides(
         resolve_override_target(driver_path)
         template = _template_for(driver_path)
         if template is None:
+            parts = driver_path.split(".")
+            for index in range(1, len(parts)):
+                probe = ".".join(
+                    [*parts[:index], VENT_KEY_PLACEHOLDER, *parts[index + 1:]]
+                )
+                if probe in _ENTRIES:
+                    raise ValueError(
+                        f"input override {driver_path!r} binds "
+                        f"{parts[index]!r} where {probe!r} declares one of "
+                        f"{sorted(VENT_KEYS)}"
+                    )
             raise ValueError(
                 f"input override {driver_path!r} is not declared; no native utility reads "
                 "that key, and OpenFOAM would ignore it rather than report it"
