@@ -168,9 +168,19 @@ through to an accidental default.
 
 The original composition spec
 (`docs/superpowers/specs/2026-09-20-provider-composition-design.md`) named
-six shapes. Classifying every member (Task 6) found it needed three more —
-opaque single-valued documents, and two container types core owns and a
-provider cannot merge itself — so what ships today is nine:
+six shapes. Classifying every member against those six (Task 6) found three
+members it could not express — `get_dictionary_catalog` (a `DictionaryCatalog`
+core owns, not a mapping), `get_configured_environment` (a transform, not a
+declaration, so it must thread through every implementer rather than merge),
+and `get_profile` (needing `case_files` concatenated and `provides` unioned,
+not resolved most-specific-first like every other opaque document) — adding
+`catalog`, `chain`, and `profile`. Task 9 later added a ninth,
+`tutorial_catalog`, for a different reason: `get_tutorial_catalog` is
+`:status: required` on every provider, so the plain `map` rule's duplicate-key
+error fired on the literal key `registered_tutorials` the first time two
+providers actually composed it — not a genuine collision, just two providers
+each answering the same fixed-shape required hook. So what ships today is
+nine:
 
 | shape | semantics | example member(s) |
 |---|---|---|
@@ -232,8 +242,9 @@ e.g. cardiacCore and cardiacFoam installed side by side, neither requiring
 the other — raise `LookupError` naming every contested root and pointing at
 `--plugin` as the escape hatch, rather than silently composing two
 mutually-independent solver plugins into one stack. That silent composition
-is exactly what an earlier version of this function did, for one day
-(2026-09-21): it let a `single`-shape member such as
+is exactly what an earlier version of this function did, for a few hours on
+2026-09-21 (per the two same-day "Corrected" notes in its own docstring): it
+let a `single`-shape member such as
 `build_run_document_config` resolve to whichever sibling solver plugin
 happened to sort last alphabetically, not to the one that actually matched
 the case. `--plugin` continues to bypass this function entirely, narrowing
