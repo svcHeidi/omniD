@@ -377,8 +377,22 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
     if run_doc.plugin is not None:
         planned = run_doc.plugin
         selected = driver_context.identity.to_json()
+        # `StackIdentity.to_json()` (see `plugin_interface.py`) has no
+        # singular `id`/`version`/`api_version` to compare the way the
+        # retired single-plugin `PluginIdentity` did -- a stack has several,
+        # one per provider, under `providers`. `capability_digest` alone is
+        # necessary and sufficient to detect a real mismatch (it changes
+        # whenever the stack -- which providers, their versions, their order
+        # -- or the composition result changes); `composition_rule_version`
+        # and `resolutions` add no detection power but let the diagnostic
+        # name which aspect of the stack moved. `providers` is deliberately
+        # NOT compared: each entry embeds `source`, and comparing it wholesale
+        # would reintroduce the source-sensitivity the old id/version/
+        # api_version comparison never had. Same key list and reasoning as
+        # the twin gate in `run_document_exec.py`'s `build_execution_inputs`
+        # -- read that copy of this comment if this one drifts.
         mismatched = [
-            key for key in ("id", "version", "api_version", "capability_digest")
+            key for key in ("composition_rule_version", "capability_digest", "resolutions")
             if planned.get(key) != selected.get(key)
         ]
         if mismatched:
