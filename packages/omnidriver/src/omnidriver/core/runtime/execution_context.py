@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
+from ..planning_types import SimulationAuditItem
 from .models import TutorialSpec
 
 if TYPE_CHECKING:
@@ -51,6 +52,15 @@ class StepExecutionContext:
     expected_artifacts: tuple[Any, ...]
     setup_root: Path | None = None
     environment_diagnostics: tuple["StrictDiagnostic", ...] = ()
+    #: The plan-time coverage audit, when the caller has one. Populated from
+    #: ``StrictPlanReport.simulation_audit`` for an entry-based plan
+    #: (``cli._context_from_entry``); always empty for a RunDocument-based
+    #: execution (``cli._context_from_run_document``), because a RunDocument
+    #: carries no plan-time audit today -- ``schemas/run-document.json`` has
+    #: no such field. Added 2026-09-22 (audit finding C2) so the dispatch-time
+    #: ``is_launchable`` gate can see a required check that came back
+    #: ``unavailable``, rather than checking a value nobody supplied.
+    simulation_audit: tuple[SimulationAuditItem, ...] = ()
     execution_env: dict[str, str] | None = None
     source_path: str | None = None
     driver_context: "DriverContext | None" = None

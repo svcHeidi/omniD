@@ -30,7 +30,7 @@ from .workflow_state import (
     initial_workflow_state,
     workflow_state_from_json,
 )
-from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
+from omnidriver.core.planning_types import SimulationAuditItem, StrictDiagnostic, diagnostic
 from omnidriver.core.specs.validation import validate_run
 
 if TYPE_CHECKING:
@@ -47,6 +47,12 @@ class RunDocumentExecutionInputs:
     output_dir: Path
     expected_artifacts: tuple[DataArtifact, ...]
     run_document: RunDocument
+    #: Always empty today: a RunDocument (``schemas/run-document.json``)
+    #: carries no plan-time simulation audit, so there is nothing to thread
+    #: through to the dispatch-time coverage gate (audit finding C2). Recorded
+    #: explicitly, 2026-09-22, rather than left as a silent default, so the
+    #: gap is visible on the type that is supposed to carry it.
+    simulation_audit: tuple[SimulationAuditItem, ...] = ()
 
 
 def load_run_document(path: str | Path) -> RunDocument:

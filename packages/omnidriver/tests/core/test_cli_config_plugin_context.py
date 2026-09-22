@@ -31,6 +31,7 @@ def test_execution_materializes_registered_entry_before_final_plan(tmp_path: Pat
     report = SimpleNamespace(
         status="ok",
         environment_diagnostics=(),
+        simulation_audit=(),
         workflow_dag={"steps": []},
         workflow_state=SimpleNamespace(),
         launch={

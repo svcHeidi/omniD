@@ -66,14 +66,26 @@ def is_launchable(
     call sites that only read ``structural_ok`` are unaffected -- offline
     planning must keep working with the runtime absent.
 
-    **Not yet wired to dispatch, as of 2026-09-19.** No caller passes
-    ``simulation_audit``: ``_refuse_environment_errors`` is the one dispatch-time
-    gate, and ``StepExecutionContext`` does not carry the audit, so the coverage
-    half of this predicate cannot currently fire. Nothing emits ``unavailable``
-    yet either. Read ``coverage_ok`` as "no required check was reported
-    unavailable *to this call*", not as a guarantee that coverage was checked --
-    believing otherwise would be the same false reassurance this predicate
-    exists to remove.
+    **Wired to dispatch 2026-09-22** (audit finding C2). The dispatch-time gate
+    passes ``simulation_audit``; planning call sites still omit it and read
+    ``structural_ok`` only, so offline planning keeps working with the runtime
+    absent. Read ``coverage_ok`` as "no required check reported ``unavailable``
+    to this call" -- for a call that was given no audit, that remains a
+    statement about the call, not a guarantee about the run.
+
+    Concretely: ``cli._refuse_environment_errors`` (the one dispatch-time gate)
+    now passes ``context.simulation_audit``, which ``StepExecutionContext``
+    carries. An entry-based plan populates it from
+    ``StrictPlanReport.simulation_audit``, so a stage genuinely scored
+    ``unavailable`` there blocks launch. A RunDocument-based execution still
+    supplies an empty audit -- ``schemas/run-document.json`` has no field for
+    one yet -- so that path's ``coverage_ok`` is "no coverage information was
+    available to check", same as omitting the argument entirely; it is not
+    evidence that nothing is missing. Nothing in this codebase emits
+    ``unavailable`` yet either (no ``_score_from_diagnostics`` call site passes
+    that outcome as of this date), so this gate is correct and currently
+    unfed for both paths -- the fix that makes it fire is a real check
+    starting to report the outcome it was always able to model.
     """
     structural_ok = plan_status == "ok"
     environment_errors = tuple(

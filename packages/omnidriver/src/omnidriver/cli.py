@@ -87,21 +87,35 @@ def _terminal_status_label(workflow_status: str) -> str:
 def _refuse_environment_errors(context: _ExecutionContext, *, action: str) -> int | None:
     # Structural validity was already established when this context was
     # built (_context_from_entry / _context_from_run_document both refuse to
-    # hand back a context otherwise), so only the environment half of
-    # is_launchable is relevant at this dispatch-time gate.
+    # hand back a context otherwise), so only the environment and coverage
+    # halves of is_launchable are relevant at this dispatch-time gate.
+    #
+    # Corrected 2026-09-22 (audit finding C2): `simulation_audit` was not
+    # threaded to this call, so `coverage_ok` was always True here regardless
+    # of what the plan's audit actually said -- a required check reported
+    # `unavailable` could never block. It is threaded now, from
+    # `context.simulation_audit` (see `execution_context.StepExecutionContext`
+    # for what populates it, and what does not yet).
     readiness = is_launchable(
         plan_status="ok",
         environment_diagnostics=context.environment_diagnostics,
+        simulation_audit=context.simulation_audit,
     )
-    if readiness.environment_ok:
+    if readiness.environment_ok and readiness.coverage_ok:
         return None
     payload = {
         "status": "failed",
         "entry": context.entry_label,
         "action": action,
-        "error": "Execution environment preflight failed.",
+        "error": (
+            "Execution environment preflight failed."
+            if not readiness.environment_ok
+            else "A required check could not run; dispatch refused."
+        ),
         "environment_diagnostics": [asdict(diagnostic) for diagnostic in context.environment_diagnostics],
     }
+    if not readiness.coverage_ok:
+        payload["blocking_reason"] = readiness.blocking_reason
     if context.source_path is not None:
         payload["run_document"] = context.source_path
     print(json.dumps(payload, indent=2))
@@ -463,6 +477,7 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
             explicit_bashrc=args.environment_bashrc,
             driver_context=driver_context,
         ),
+        simulation_audit=inputs.simulation_audit,
         execution_env=execution_env,
         driver_context=driver_context,
         source_path=args.run_document,
@@ -644,6 +659,7 @@ def _context_from_entry(
             expected_artifacts=report.expected_artifacts,
             setup_root=Path(report.launch["setup_root"]),
             environment_diagnostics=report.environment_diagnostics,
+            simulation_audit=report.simulation_audit,
             execution_env=execution_env,
             driver_context=driver_context,
             replan_after_mutation=replan_after_mutation,
