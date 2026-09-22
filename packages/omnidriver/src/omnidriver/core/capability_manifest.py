@@ -65,11 +65,16 @@ def build_capability_manifest(
     ``plugin_capabilities._CapabilityManifestAdapter.manifest``), and calls
     this function directly; a plugin's own ``get_capabilities()`` supplies
     only what core cannot compose from those reads (a domain catalogue). The
-    keyword-argument shape here is unchanged -- ``OpenFOAMEnvironmentPlugin``
-    (which has no domain catalogue of its own to add) and several existing
-    tests (e.g. ``test_case_script_commands_entrypoint_seam.py``,
+    keyword-argument shape here is unchanged -- several existing tests
+    (e.g. ``test_case_script_commands_entrypoint_seam.py``,
     ``omnidriver-cardiacfoam/tests/test_capability_manifest.py``) still call
     it this way directly, as a pure builder, and continue to.
+
+    **Corrected 2026-09-22 (final review fix round).** ``OpenFOAMEnvironmentPlugin``
+    no longer calls this function directly either -- its ``get_capabilities()``
+    now returns ``{}`` like ``CardiacCorePlugin``'s does, since it has no
+    domain catalogue of its own to add and self-assembling a manifest was the
+    exact pattern this task removed from the other two adapters.
 
     ``allowed_commands`` names exactly what a workflow DAG step may invoke;
     ``samplable_fields`` names the fields a function object may sample for the

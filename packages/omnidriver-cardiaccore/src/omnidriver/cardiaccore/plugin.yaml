@@ -48,7 +48,9 @@ requires:
 # realness standard above is still correct about what check_provides()
 # enforces -- a hollow member declared here would fail it. It does NOT
 # prevent resolutions()/the stack digest from crediting this provider for a
-# withheld capability (artifacts, run_semantic_validator, runtime_evidence):
+# withheld capability (artifacts, run_semantic_validator, runtime_evidence,
+# configuration_validator -- see line 41 above; validate_configuration is
+# callable, just hollow, so implemented_capabilities() counts it too):
 # resolutions() (provider_stack.py) picks each capability's winner purely by
 # which provider has a callable member, never by consulting provides: at
 # all. A capability withheld here for realness can still win resolutions()
