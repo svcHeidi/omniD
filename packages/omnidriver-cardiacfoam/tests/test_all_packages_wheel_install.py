@@ -95,7 +95,12 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
             assert not location.is_relative_to(repository), location
 
         assert "cardiacfoam" in discover_plugins()
-        assert load_plugin_context("cardiacfoam").identity.id == "org.cardiacfoam"
+        # `DriverContext.identity` is a `StackIdentity` (one `ProviderIdentity`
+        # per composed provider under `.providers`, ordered least-specific
+        # first) -- it has no singular `.id` of its own. Corrected 2026-09-22
+        # (final whole-branch review, Finding 3): this raised `AttributeError`
+        # until now, unnoticed because this whole file is `@pytest.mark.slow`.
+        assert load_plugin_context("cardiacfoam").identity.to_json()["providers"][-1]["id"] == "org.cardiacfoam"
         assert openfoam_environment_context().capabilities.case_runtime_conventions.conventions().output_collection_relpath == "postProcessing"
         assert openfoam_environment_context().capabilities.case_runtime_conventions.conventions().time_directory_name_pattern
         assert openfoam_environment_context().capabilities.case_runtime_conventions.conventions().case_discovery_ignored_directory_names == ("postProcessing", "logs")
@@ -109,7 +114,8 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
         ).is_file()
 
         assert "cardiaccore" in discover_plugins()
-        assert load_plugin_context("cardiaccore").identity.id == "org.omnidriver.cardiaccore"
+        # Same migration as the cardiacFoam assertion above.
+        assert load_plugin_context("cardiaccore").identity.to_json()["providers"][-1]["id"] == "org.omnidriver.cardiaccore"
         assert load_plugin_context("cardiaccore").capabilities.case_runtime_conventions.conventions().output_collection_relpath == "postProcessing"
         assert "blockMesh" in load_plugin_context("cardiaccore").capabilities.command_authorization.environment_commands()
 
@@ -147,7 +153,16 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
     )
     payload = json.loads(describe)
     assert payload["resolved_name"] == "niederer2012"
-    assert payload["capability_manifest"]["plugin_identity"]["id"] == "org.cardiacfoam"
+    # `plugin_identity` is `StackIdentity.to_json()` (Task 7's migration,
+    # corrected 2026-09-22 here): no top-level `id`, only `providers`, one
+    # `ProviderIdentity` per composed provider, ordered least-specific first.
+    # cardiacFoam is the most specific (composed on top of the openfoam
+    # environment provider), so it is the last entry -- same `[-1]` idiom as
+    # `test_plugin_architecture.py`'s `identity.to_json()["providers"][-1]`.
+    assert (
+        payload["capability_manifest"]["plugin_identity"]["providers"][-1]["id"]
+        == "org.cardiacfoam"
+    )
 
     cardiaccore_describe = _run(
         [
@@ -167,7 +182,10 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
     )
     cardiaccore_payload = json.loads(cardiaccore_describe)
     assert cardiaccore_payload["resolved_name"] == "cardiaccore-human-purkinje-slab"
+    # Same migration as the cardiacFoam assertion above -- see
+    # `test_generic_contract.py`'s `identity.to_json()["providers"][-1]["id"]`
+    # for the established idiom this follows.
     assert (
-        cardiaccore_payload["capability_manifest"]["plugin_identity"]["id"]
+        cardiaccore_payload["capability_manifest"]["plugin_identity"]["providers"][-1]["id"]
         == "org.omnidriver.cardiaccore"
     )
