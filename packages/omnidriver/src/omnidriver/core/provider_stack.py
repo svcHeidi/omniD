@@ -170,6 +170,8 @@ _SHAPE: dict[str, str] = {
     "get_auxiliary_commands": "set",
     "get_environment_commands": "set",
     "get_solve_step_commands": "set",
+    "get_supported_mutation_modes": "set",
+    "get_rendered_formats": "set",
     # -- tutorial_catalog ----------------------------------------------------
     "get_tutorial_catalog": "tutorial_catalog",
     # -- map ---------------------------------------------------------------
@@ -202,8 +204,10 @@ _SHAPE: dict[str, str] = {
     "get_regeneration_scopes": "sequence",
     "get_override_scopes": "sequence",
     "inspect_effective_configuration": "sequence",
+    "render_case_files": "sequence",
     # -- single ------------------------------------------------------------
     "get_capabilities": "single",
+    "resolve_case_mutation": "single",
     "get_selected_start_time": "single",
     "get_config_value_reader": "single",
     "get_dict_key_scanner": "single",
@@ -635,6 +639,27 @@ def _check_case_file_declarers(ordered) -> None:
             declared_by[path] = provider.plugin_id
 
 
+def _check_format_declarers(ordered) -> None:
+    """One declarer per rendered format, always.
+
+    Two providers claiming `openfoam_dictionary` makes the bytes that reach
+    disk depend on composition order, which is the same defect
+    `_check_case_file_declarers` refuses for case files.
+    """
+    declared_by: dict[str, str] = {}
+    for provider in ordered:
+        hook = getattr(provider, "get_rendered_formats", None)
+        for file_format in (hook() if callable(hook) else ()):
+            if file_format in declared_by:
+                raise ValueError(
+                    f"format {file_format!r} is rendered by both "
+                    f"{declared_by[file_format]!r} and {provider.plugin_id!r}; "
+                    f"one format has one renderer, and tolerating two makes the "
+                    f"bytes on disk depend on composition order"
+                )
+            declared_by[file_format] = provider.plugin_id
+
+
 def compose(ordered_providers):
     """Compose an ordered provider stack into one capability bundle.
 
@@ -644,7 +669,7 @@ def compose(ordered_providers):
     consumer of a single plugin's capabilities consumes a composed stack
     unchanged.
 
-    The three checks below are eager because their failure is a packaging
+    The four checks below are eager because their failure is a packaging
     error, not a runtime one: it cannot depend on which capability a run
     happens to touch.
     """
@@ -656,6 +681,7 @@ def compose(ordered_providers):
     _check_exclusive_arity(ordered)
     _check_cross_member_pairs(ordered)
     _check_case_file_declarers(ordered)
+    _check_format_declarers(ordered)
     return adapt_plugin_capabilities(_ComposedProvider(ordered))
 
 

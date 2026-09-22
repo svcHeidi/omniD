@@ -841,6 +841,38 @@ class DictKeyScannerCapability(Protocol):
     ) -> Any: ...
 
 
+class CaseWriterCapability(Protocol):
+    """How a framework-authored case mutation becomes reviewable bytes.
+
+    Three answers from up to three owners. ``resolve`` is the selected
+    adapter's and is pure. ``render`` belongs to whichever provider declares
+    the file's format, one declarer per format. Committing is core's and is not
+    here at all -- see :mod:`omnidriver.core.case_transaction`.
+
+    The fallback cannot be neutral. An empty resolution silently yields a case
+    that is not the one requested, so an adapter without these hooks is refused
+    by name.
+
+    No consumer yet (2026-09-22): the real one, ``case_transaction.py``'s
+    ``commit_case_write``, is Phase 2 Task 5, a later batch in this plan.
+    Update ``:consumed-by:`` to name it once that module lands and calls
+    ``capabilities.case_writer``.
+
+    :adapts: resolve_case_mutation, get_supported_mutation_modes, get_rendered_formats, render_case_files
+    :consumed-by: none
+    :fallback: none
+    :status: resolve_case_mutation=optional-refusing, get_supported_mutation_modes=optional-neutral, get_rendered_formats=optional-neutral, render_case_files=optional-refusing
+    """
+
+    def resolve(self, request: Any, *, driver_context: Any) -> Any: ...
+    def supported_modes(self) -> "frozenset[str]": ...
+    def renderer_for(self, file_format: str) -> str: ...
+    def render(
+        self, resolved: Any, *, snapshot_root: Any, driver_context: Any,
+        execution_env: Any | None = None,
+    ) -> tuple[Any, ...]: ...
+
+
 @dataclass(frozen=True)
 class _TutorialCatalogAdapter:
     plugin: "SolverPlugin"
@@ -1640,6 +1672,82 @@ class _DictKeyScannerAdapter:
         return scanner(source_root, allowlist_path=allowlist_path, entries=entries)
 
 
+def _resolved_purely(hook, request, *, driver_context):
+    """Run a resolution hook and refuse one that touched the case.
+
+    Resolution is declared pure, and a dry run's promise rests on that. This
+    detects creation and deletion, not in-place modification of an existing
+    file -- state that limit rather than implying a stronger guarantee. A
+    renderer is where filesystem reads belong.
+    """
+    root = Path(request.case_root)
+    before = set(root.rglob("*")) if root.is_dir() else set()
+    resolved = hook(request, driver_context=driver_context)
+    after = set(root.rglob("*")) if root.is_dir() else set()
+    if before != after:
+        changed = sorted(str(p) for p in before ^ after)
+        raise ValueError(
+            f"resolve_case_mutation() must be pure; "
+            f"{request.adapter_id!r} changed {changed}"
+        )
+    return resolved
+
+
+@dataclass(frozen=True)
+class _CaseWriterAdapter:
+    plugin: "SolverPlugin"
+
+    def supported_modes(self) -> "frozenset[str]":
+        hook = getattr(self.plugin, "get_supported_mutation_modes", None)
+        if callable(hook):
+            return frozenset(hook())
+        from .case_write import MUTATION_MODES
+
+        return MUTATION_MODES
+
+    def resolve(self, request: Any, *, driver_context: Any) -> Any:
+        hook = getattr(self.plugin, "resolve_case_mutation", None)
+        if not callable(hook):
+            raise ValueError(
+                f"provider {self.plugin.plugin_id!r} declares no "
+                f"resolve_case_mutation(); it authors no case inputs, and an "
+                f"empty resolution would silently produce a case that is not "
+                f"the one requested"
+            )
+        supported = self.supported_modes()
+        if request.mode not in supported:
+            raise ValueError(
+                f"provider {self.plugin.plugin_id!r} does not support creation "
+                f"mode {request.mode!r}; it supports {sorted(supported)}"
+            )
+        return _resolved_purely(hook, request, driver_context=driver_context)
+
+    def renderer_for(self, file_format: str) -> str:
+        hook = getattr(self.plugin, "get_rendered_formats", None)
+        declared = frozenset(hook()) if callable(hook) else frozenset()
+        if file_format not in declared:
+            raise ValueError(
+                f"no provider in this stack renders {file_format!r}; declared "
+                f"formats are {sorted(declared)}. A file whose format nobody "
+                f"renders stops the plan rather than being dropped from it"
+            )
+        return self.plugin.plugin_id
+
+    def render(
+        self, resolved: Any, *, snapshot_root: Any, driver_context: Any,
+        execution_env: Any | None = None,
+    ) -> tuple[Any, ...]:
+        hook = getattr(self.plugin, "render_case_files", None)
+        if not callable(hook):
+            raise ValueError(
+                f"provider {self.plugin.plugin_id!r} declares no render_case_files()"
+            )
+        return tuple(hook(
+            resolved, snapshot_root=snapshot_root,
+            driver_context=driver_context, execution_env=execution_env,
+        ))
+
+
 @dataclass(frozen=True)
 class PluginCapabilities:
     """Core's focused, internal view over one loaded plugin.
@@ -1721,6 +1829,7 @@ class PluginCapabilities:
     dict_regeneration: DictRegenerationCapability
     config_value: ConfigValueCapability
     dict_key_scanner: DictKeyScannerCapability
+    case_writer: CaseWriterCapability
 
 
 def adapt_plugin_capabilities(plugin: "SolverPlugin") -> PluginCapabilities:
@@ -1760,4 +1869,5 @@ def adapt_plugin_capabilities(plugin: "SolverPlugin") -> PluginCapabilities:
         dict_regeneration=_DictRegenerationAdapter(plugin),
         config_value=_ConfigValueAdapter(plugin),
         dict_key_scanner=_DictKeyScannerAdapter(plugin),
+        case_writer=_CaseWriterAdapter(plugin),
     )

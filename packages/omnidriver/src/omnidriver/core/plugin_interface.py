@@ -571,6 +571,58 @@ class SolverPluginOptionalHooks(Protocol):
         multi-phase, because otherwise which phase is "primary" is arbitrary."""
         ...
 
+    # -- CaseWriterCapability -------------------------------------------------
+    def resolve_case_mutation(
+        self, request: Any, *, driver_context: Any,
+    ) -> Any:
+        """Resolve a mutation request into concrete addresses and effects.
+
+        The semantic owner's hook: which parameters apply, what they mean,
+        which document and key each lands in, and what the edit is expected to
+        change. Returns a ``ResolvedMutation``.
+
+        **Pure.** Must not read or write the filesystem. A dry run's promise of
+        costing nothing rests on this, and core enforces it rather than
+        trusting it. Raise a ``ValueError`` naming the supported modes to
+        refuse a mode this adapter does not support. Absent -> this adapter
+        authors no case inputs."""
+        ...
+
+    def get_supported_mutation_modes(self) -> "frozenset[str]":
+        """Which creation modes this adapter supports.
+
+        Adapters differ and are meant to: cardiacCore preprocessing patches
+        declared dictionaries, cardiacFoam synthesizes a case from a catalog.
+        Absent -> every mode the adapter's ``resolve_case_mutation`` accepts."""
+        ...
+
+    def get_rendered_formats(self) -> "frozenset[str]":
+        """File formats this provider renders. Exactly one declarer per format.
+
+        Composition refuses a stack where two providers claim one format: the
+        bytes reaching disk would otherwise depend on composition order.
+        Absent -> this provider renders nothing."""
+        ...
+
+    def render_case_files(
+        self, resolved: Any, *, snapshot_root: "Path", driver_context: Any,
+        execution_env: Any | None = None,
+    ) -> tuple[Any, ...]:
+        """Render complete proposed file contents, in this provider's formats.
+
+        The format owner's hook. **Reads** the case -- it must, to patch an
+        existing file -- and writes nothing outside ``snapshot_root``, an
+        isolated copy core provides. Returns ``RenderedFile`` objects with
+        complete bytes; core commits them and this hook does not.
+
+        ``execution_env`` is the selected runtime, for a renderer that must
+        resolve includes or evaluate a directive to know what it is editing.
+        Declare every file read through it as a precondition on the
+        ``ResolvedMutation``, including files that were *absent* where their
+        presence would change which file is selected. Absent -> this provider
+        renders nothing."""
+        ...
+
 
 # The single plugin contract version this core can drive. Anything else is
 # refused before any plugin catalog code runs.

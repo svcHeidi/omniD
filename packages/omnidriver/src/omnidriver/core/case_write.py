@@ -445,3 +445,21 @@ class CaseWriteRecord:
             "evidence": [dict(entry) for entry in self.evidence],
             "status": self.status,
         }
+
+
+@dataclass(frozen=True)
+class ResolvedMutation:
+    """The semantic owner's answer: concrete addresses and expected effects.
+
+    Pure. Produced without reading the case, so a dry run costs nothing and
+    changes nothing. The renderer reads; this does not.
+    """
+
+    request: CaseMutationRequest
+    targets: tuple[Mapping[str, Any], ...]
+    preconditions: tuple[Precondition, ...]
+    expected_effects: tuple[str, ...]
+    semantic_owner_id: str
+
+    def formats(self) -> tuple[str, ...]:
+        return tuple(sorted({str(target["format"]) for target in self.targets}))
