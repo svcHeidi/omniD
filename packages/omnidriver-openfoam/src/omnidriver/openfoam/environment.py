@@ -5,7 +5,6 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from omnidriver.core.capability_manifest import build_capability_manifest
 from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 from omnidriver.core.plugin_interface import driver_context as make_driver_context
 
@@ -48,24 +47,27 @@ class OpenFOAMEnvironmentPlugin:
         return {}
 
     def get_capabilities(self):
-        """This provider's own self-description.
+        """This provider has no domain catalogue core cannot already compose.
 
-        No solver vocabulary: this adapter has no scientific configuration,
-        so ``plugin_commands``/``utility_manifests``/``samplable_fields``
-        carry the same neutral values core's own compatibility fallbacks
-        would supply for an adapter that never implemented those hooks --
-        matching :meth:`get_solver_commands` and friends having been removed
-        as hollow stubs rather than genuine environment behaviour.
+        **Changed 2026-09-22 (final whole-branch review, bundled Minor).**
+        This used to build the whole manifest itself via
+        ``build_capability_manifest`` -- the exact plugin-assembles-its-own-
+        manifest pattern Task 10 removed from ``CardiacFoamPlugin``/
+        ``CardiacCorePlugin`` (see ``build_capability_manifest``'s own
+        docstring and ``CardiacCorePlugin.get_capabilities``). Harmless in
+        practice today, since ``get_capabilities`` is a ``single``-shape
+        composed member and this environment provider is never the most
+        specific in a composed stack, so this answer never won -- but
+        inconsistent with Task 10's rule and a latent risk if that stopped
+        holding. ``plugin_capabilities._CapabilityManifestAdapter.manifest``
+        already builds ``allowed_commands``/``samplable_fields`` from the
+        composed ``command_authorization``/``case_introspection``/
+        ``case_runtime_conventions`` reads (which include this provider's
+        own ``get_environment_commands``/``get_case_runtime_conventions``,
+        standalone or composed), so there is nothing left for this method to
+        add -- same as ``CardiacCorePlugin.get_capabilities()``.
         """
-        conventions = self.get_case_runtime_conventions()
-        return build_capability_manifest(
-            environment_commands=self.get_environment_commands(),
-            plugin_commands=frozenset(),
-            utility_manifests={},
-            samplable_fields={},
-            case_script_commands=frozenset(conventions.case_script_commands)
-            | frozenset(conventions.case_entrypoints),
-        )
+        return {}
 
     def get_tutorial_catalog(self):
         return {"registered_tutorials": (), "spec_factories": {}}

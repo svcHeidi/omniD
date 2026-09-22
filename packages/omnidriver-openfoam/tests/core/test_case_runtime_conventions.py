@@ -8,7 +8,7 @@ import pytest
 
 from omnidriver.core.runtime.registry import list_entries
 from omnidriver.openfoam.case_runtime_conventions import openfoam_case_runtime_conventions
-from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin, openfoam_environment_context
+from omnidriver.openfoam.environment import openfoam_environment_context
 
 
 def _touch(case_root: Path, relative: str) -> None:
@@ -18,7 +18,13 @@ def _touch(case_root: Path, relative: str) -> None:
 
 
 def test_openfoam_declares_allrun_case_scripts() -> None:
-    manifest = OpenFOAMEnvironmentPlugin().get_capabilities()
+    # Corrected 2026-09-22 (final whole-branch review, bundled Minor):
+    # `OpenFOAMEnvironmentPlugin.get_capabilities()` now returns `{}`,
+    # matching `CardiacCorePlugin.get_capabilities()` (Task 10's rule --
+    # a provider builds no manifest of its own when core can compose one).
+    # The composed manifest capability is the real assertion now, same
+    # correction `test_plugin_capabilities.py` made for Task 10 itself.
+    manifest = openfoam_environment_context().capabilities.manifest.manifest()
     assert manifest["allowed_commands"]["case_scripts"] == sorted(
         openfoam_case_runtime_conventions().case_script_commands
     )
