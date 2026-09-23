@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from collections.abc import Mapping, Sequence
 from functools import partial
@@ -35,6 +34,45 @@ STIMULUS_BOUNDS_MIN = "(0 0 0)"
 STIMULUS_BOUNDS_MAX = "(2e-3 2e-4 2e-4)"
 STIMULUS_DURATION_S = "4e-3"
 STIMULUS_INTENSITY = "50000"
+
+#: **Marker, not an input (Phase 3 Task 7 classification).** A bare sentinel
+#: file whose only content is the sweep's own semantic `case.case_id`
+#: (`implicit_Stewart_..._RDI9025`, never the staged directory name a sweep
+#: gives the case root -- see `make_spec`'s "extract_cv" step comment).
+#: Written so the postprocessing step below can recover that identifier
+#: without a `--case-id` argument threading it through the workflow_dag;
+#: framework bookkeeping for this same run, not a data output a scientist or
+#: agent inspects, and not read by cardiacFoam itself. Read **by name** by
+#: the native tutorial's own postprocessor: this exact filename is
+#: `postProcessing_cableRestitution.py`'s `__main__` fallback
+#: (`case_dir / ".driverfoam_case_id"`) in
+#: `noFrontendCardiacFoam_minor_errors/tutorials/electrophysiologyProtocols/
+#: cableProtocol/monodomain1DCableCV/setup/postProcessing_cableRestitution.py`,
+#: found by reading that reader before touching anything here -- changing
+#: this name or its plain-text-case-id contract without updating that
+#: script silently breaks postprocessing.
+CASE_ID_SENTINEL_FILENAME = ".driverfoam_case_id"
+
+#: **Standalone export (Phase 3 Task 7 classification), not a parameter.**
+#: Not a `ParameterAssignment` (nothing here addresses a key in an existing
+#: OpenFOAM document -- it is its own file, its own JSON schema) and not a
+#: source artifact either (nothing was *consumed* to produce it; it is
+#: authored directly from this run's own protocol parameters, purely so a
+#: later reader does not have to re-derive the pacing schedule from the
+#: mesh and overrides). Read **by name** by the same native postprocessor
+#: named above: `postProcessing_cableRestitution.py`'s own
+#: `PROTOCOL_METADATA = ".cardiacfoam_protocol.json"` /
+#: `load_protocol_metadata(case_dir)` (`case_dir / PROTOCOL_METADATA`).
+#: Schema (``"schema_version": 1``, bump on any incompatible change and
+#: update that reader in lockstep): ``case_id``, ``ionic_model``, ``tissue``,
+#: ``dt_s``, ``dx_m``, ``s1_interval_s``, ``n_s1``, ``n_s2``, ``pacing_mode``,
+#: ``s2_coupling_interval_s``, ``requested_di90_s``,
+#: ``reference_repolarization90_s``, ``s1_stimulus_times_s``,
+#: ``s2_stimulus_times_s``, ``stimulus_times_s``, ``stimulus_location_min``,
+#: ``stimulus_location_max``, ``stimulus_duration_s``, ``stimulus_intensity``,
+#: ``end_time_s`` -- see `_plan_case`'s own construction of
+#: ``protocol_metadata`` for the authoritative field list.
+PROTOCOL_SIDECAR_FILENAME = ".cardiacfoam_protocol.json"
 
 
 
@@ -171,10 +209,11 @@ def _plan_case(
     """`TutorialSpec.plan_case` (Phase 3 Task 6). The two pacing modes'
     arithmetic (`requested_di90` vs `coupling_interval`) is unchanged --
     only the block-mesh rewrite, `deltaT`/`endTime`, and the electro/physics
-    overrides move onto the channel. `.driverfoam_case_id` (a marker) and
-    `.cardiacfoam_protocol.json` (a standalone export postprocessing reads
-    by name) are Task 7's classification, not parameters, and stay direct
-    writes here exactly as `_apply_case` makes them.
+    overrides move onto the channel. `CASE_ID_SENTINEL_FILENAME` (a marker)
+    and `PROTOCOL_SIDECAR_FILENAME` (a standalone export postprocessing
+    reads by name) are Task 7's classification, not parameters -- see their
+    own module-level docstrings for the stated contract and reader -- and
+    stay direct writes here exactly as `_apply_case` makes them.
     """
     electro_properties = case_root / electro_properties_relpath
     physics_properties = case_root / physics_properties_relpath
@@ -243,7 +282,7 @@ def _plan_case(
         requested_by="cardiacfoam.tutorials.cable_1d_restitution",
     )
 
-    (case_root / ".driverfoam_case_id").write_text(case.case_id)
+    (case_root / CASE_ID_SENTINEL_FILENAME).write_text(case.case_id)
 
     protocol_metadata = {
         "schema_version": 1,
@@ -268,7 +307,7 @@ def _plan_case(
         "stimulus_intensity": float(STIMULUS_INTENSITY),
         "end_time_s": end_time,
     }
-    (case_root / ".cardiacfoam_protocol.json").write_text(
+    (case_root / PROTOCOL_SIDECAR_FILENAME).write_text(
         json.dumps(protocol_metadata, indent=2) + "\n",
         encoding="ascii",
     )
