@@ -25,6 +25,8 @@ from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import Any, Mapping
 
+from .contracts.dictionary import validate_value_shape
+
 #: Bumped whenever a field is added, removed or reinterpreted. A plan
 #: serialized under one version is not readable under another: a reader that
 #: silently accepts an older payload is a reader that fills a missing field
@@ -141,6 +143,18 @@ class ParameterAssignment:
             raise ValueError(
                 f"parameter {self.qualified_id!r} declares value source "
                 f"{self.source!r}; known sources are {sorted(VALUE_SOURCES)}"
+            )
+        # Plan's 2026-09-23 decision ("a parameter value is typed data, never
+        # rendered text"): a value is native Python data, checked against its
+        # declared shape here, not rendered text checked nowhere. This closes
+        # R2 finding 4 -- `value_kind="scalar", value=float("nan")` and
+        # `value_kind="banana"` were both accepted before this call existed.
+        shape_reasons = validate_value_shape(self.value_kind, self.value)
+        if shape_reasons:
+            raise ValueError(
+                f"parameter {self.qualified_id!r} declares value_kind "
+                f"{self.value_kind!r} but its value does not fit: "
+                f"{'; '.join(shape_reasons)}"
             )
         for placeholder, bound in self.binding.items():
             allowed = self.allowed_bindings.get(placeholder)

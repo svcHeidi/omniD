@@ -91,13 +91,19 @@ def test_a_frozen_plan_has_no_mutable_interior():
 
 
 def test_a_dict_valued_parameter_is_frozen_too():
+    """"dictionary" was in the plan's own Task 2 snippet, but Task 4 closed
+    the value_kind vocabulary without it -- no current DictEntry declaration
+    has that shape, and the plan's decision section forbids re-adding an
+    untyped escape. `dimensioned_scalar` is a real kind whose value is also a
+    mapping, so it still exercises the same freeze behaviour."""
     assignment = case_write.ParameterAssignment(
         qualified_id="$ELECTRO.coeffs", owner="org.a",
         document="constant/electroProperties", key_path=("coeffs",),
-        binding={}, value={"gNa": 1.0}, value_kind="dictionary", source="template",
+        binding={}, value={"value": 1.0, "dimensions": (0, -3, 0, 0, 0, 1, 0)},
+        value_kind="dimensioned_scalar", source="template",
     )
     with pytest.raises(TypeError):
-        assignment.value["gNa"] = 2.0
+        assignment.value["value"] = 2.0
 
 
 def test_a_plan_carries_no_before_image():
@@ -132,8 +138,10 @@ def test_the_digest_is_stable_across_processes():
                 case_write.ParameterAssignment(
                     qualified_id="$E.coeffs", owner="org.a",
                     document="constant/electroProperties", key_path=("coeffs",),
-                    binding={}, value={"z": 1.0, "a": 2.0, "m": 3.0},
-                    value_kind="dictionary", source="template",
+                    binding={}, value={
+                        "value": (3.0, 1.0, 2.0), "dimensions": (0, 0, 0, 0, 0, 0, 0),
+                    },
+                    value_kind="dimensioned_tensor", source="template",
                 ),
             ),
             requested_by="probe",

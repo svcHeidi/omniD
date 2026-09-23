@@ -134,3 +134,27 @@ def test_a_declared_binding_is_accepted_and_expanded():
         allowed_bindings={"<ventKey>": ("lv", "rv")},
     )
     assert assignment.expanded_key_path() == ("lv", "seed")
+
+
+# --- R2 finding 4, closed per the plan's 2026-09-23 decision section: "a
+# parameter value is typed data, never rendered text". `validate_value_shape`
+# was never called from `ParameterAssignment`, so the closed value_kind
+# vocabulary was closed for DictEntry and wide open here -- the exact hole
+# audit finding S1 was supposed to have closed. ---
+
+
+def test_nan_is_refused_for_a_scalar():
+    with pytest.raises(ValueError, match="finite"):
+        _assignment(value=float("nan"), value_kind="scalar")
+
+
+def test_an_unknown_value_kind_is_refused():
+    with pytest.raises(ValueError, match="banana"):
+        _assignment(value="x", value_kind="banana")
+
+
+def test_a_value_not_matching_its_declared_kind_is_refused():
+    with pytest.raises(ValueError, match="ionicModel"):
+        _assignment(
+            qualified_id="$ELECTRO.ionicModel", value=1.0, value_kind="word",
+        )
