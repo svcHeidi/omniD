@@ -236,12 +236,14 @@ def test_catalogued_names_covers_wildcard_leaves_and_containers():
         DictEntry(
             driver_path="$C.ecgDomains.<name>.sigmaExtracellular",
             description="",
+            value_kind="scalar",
             phases=frozenset({"physics"}),
             dynamic_path=True,
         ),
         DictEntry(
             driver_path="$C.singleCellSolverCoeffs.ionicModel",
             description="",
+            value_kind="word",
             phases=frozenset({"physics"}),
         ),
     ]

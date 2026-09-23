@@ -170,8 +170,8 @@ def test_plugin_contract_rejects_an_invalid_stable_id() -> None:
 def test_driver_context_rejects_duplicate_catalog_paths() -> None:
     plugin = _Plugin("example.duplicates", "duplicates")
     plugin.get_dict_entries = lambda: (
-        DictEntry(driver_path="shared", description="first"),
-        DictEntry(driver_path="shared", description="second"),
+        DictEntry(driver_path="shared", description="first", value_kind="word"),
+        DictEntry(driver_path="shared", description="second", value_kind="word"),
     )
 
     with pytest.raises(TypeError, match="duplicate paths: shared"):
@@ -185,7 +185,10 @@ def test_context_identity_binds_resolved_manifest_and_dictionary_vocabulary() ->
     plugin.get_capabilities = lambda: {"accepted": ["utilityA"]}
     manifest_changed = driver_context(plugin, source="test").identity.capability_digest
     plugin.get_dict_entries = lambda: (
-        DictEntry(driver_path="system/controlDict:endTime", description="end time"),
+        DictEntry(
+            driver_path="system/controlDict:endTime", description="end time",
+            value_kind="scalar",
+        ),
     )
     vocabulary_changed = driver_context(plugin, source="test").identity.capability_digest
 

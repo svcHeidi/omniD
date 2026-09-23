@@ -336,6 +336,7 @@ class TestRequiredCheck(unittest.TestCase):
             DictEntry(
                 driver_path="$ELECTRO_MODEL_COEFFS.optionalField",
                 description="x",
+                value_kind="word",
                 source_refs=("ref.C",),
                 required=False,
                 phases=frozenset({"physics"}),

@@ -250,6 +250,7 @@ def _entry(driver_path: str, **overrides) -> DictEntry:
     defaults = {
         "driver_path": driver_path,
         "description": "fixture",
+        "value_kind": "word",
         "source_refs": ("ref.C",),
         "phases": frozenset({"physics"}),
     }

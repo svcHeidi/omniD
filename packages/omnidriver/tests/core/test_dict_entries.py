@@ -17,6 +17,7 @@ class TestDictEntryStructuredConstraints(unittest.TestCase):
         defaults = {
             "driver_path": "test.path",
             "description": "fixture",
+            "value_kind": "word",
             "source_refs": ("ref.C",),
         }
         defaults.update(overrides)
@@ -104,6 +105,7 @@ def test_dict_entry_has_phases_field_accepting_a_frozenset():
     entry = DictEntry(
         driver_path="foo",
         description="x",
+        value_kind="word",
         source_refs=("bar",),
         phases=frozenset({"physics"}),
     )
@@ -114,6 +116,7 @@ def test_dict_entry_phases_supports_multi_phase_ownership():
     entry = DictEntry(
         driver_path="nRegions",
         description="number of regions",
+        value_kind="integer",
         source_refs=("bar",),
         phases=frozenset({"anatomy", "solver"}),
     )
@@ -121,7 +124,9 @@ def test_dict_entry_phases_supports_multi_phase_ownership():
 
 
 def test_dict_entry_phases_default_is_empty_frozenset():
-    entry = DictEntry(driver_path="foo", description="x", source_refs=("bar",))
+    entry = DictEntry(
+        driver_path="foo", description="x", value_kind="word", source_refs=("bar",),
+    )
     assert entry.phases == frozenset()
 
 
@@ -150,6 +155,7 @@ class TestCoRequiredWithEvaluation(unittest.TestCase):
             DictEntry(
                 driver_path=name,
                 description="fixture",
+                value_kind="word",
                 source_refs=("ref.C",),
                 co_required_with=tuple(o for o in names if o != name),
             )

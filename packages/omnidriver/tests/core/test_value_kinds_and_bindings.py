@@ -162,3 +162,15 @@ def test_no_kind_means_unchecked():
     for kind in dictionary.VALUE_KINDS:
         reasons = dictionary.validate_value_shape(kind, object())
         assert reasons, f"{kind} accepted an arbitrary object with no reasons"
+
+
+def test_value_kind_is_mandatory():
+    """R2 finding 8: value_kind defaulted first to "literal" (which said
+    nothing), then to "word" once that vocabulary closed -- and "word" says
+    something specific and can be WRONG. Three production entries
+    ($ELECTRO_MODEL_COEFFS.ecgDomains.<name>.sampling.{start,end,deltaT})
+    omitted the field and silently declared "word" while actually being
+    scalars. A `grep` for `value_kind=` cannot find an entry that omits it;
+    a mandatory field cannot be missed the same way."""
+    with pytest.raises(TypeError, match="value_kind"):
+        dictionary.DictEntry(driver_path="$A.x", description="")

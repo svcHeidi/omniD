@@ -155,9 +155,20 @@ def validate_value_shape(kind: str, value: Any) -> tuple[str, ...]:
 class DictEntry:
     driver_path: str
     description: str
+    # Mandatory since 2026-09-23 (R2 finding 8). It defaulted to "literal",
+    # which said nothing, then to "word" once that vocabulary closed --
+    # "word" says something specific and can be WRONG, and three production
+    # entries silently declared it by omission
+    # ($ELECTRO_MODEL_COEFFS.ecgDomains.<name>.sampling.{start,end,deltaT},
+    # each really a "scalar"). A `grep` for `value_kind=` cannot find an
+    # entry that omits it, which is how they were missed; a mandatory field
+    # cannot be missed the same way. Placed right after `description` --
+    # before every field that still defaults -- because a dataclass field
+    # with no default cannot follow one that has one; every call site here
+    # already uses keyword arguments, so the reorder changes no call site.
+    value_kind: str
     source_refs: tuple[str, ...] = ()
     notes: str = ""
-    value_kind: str = "word"
     enum_values: tuple[str, ...] = ()
     examples: tuple[str, ...] = ()
     dynamic_path: bool = False

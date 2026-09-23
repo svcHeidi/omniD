@@ -12,7 +12,7 @@ from omnidriver.openfoam.effective_dictionary import EffectiveDictionaryResult
 class _Catalog:
     def entries_for(self, document: str) -> tuple[DictEntry, ...]:
         if document == "controlDict":
-            return (DictEntry(driver_path="deltaT", description="time step"),)
+            return (DictEntry(driver_path="deltaT", description="time step", value_kind="scalar"),)
         return ()
 
 

@@ -110,6 +110,7 @@ def test_openfoam_environment_hooks_thread_the_callers_context(tmp_path: Path) -
                     DictEntry(
                         driver_path="$ELECTRO_MODEL_COEFFS.myocardiumSolver",
                         description="test-only cardiac-ish entry",
+                        value_kind="word",
                     ),
                 ),
             })
