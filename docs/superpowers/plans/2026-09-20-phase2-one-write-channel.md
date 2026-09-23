@@ -58,20 +58,34 @@ four installation shapes and both static gates pass. Phase 2 may begin at G1.
 
 | gate | task | state | commit |
 |---|---|---|---|
-| G1 | 1 · the mutation request and the parameter envelope | blocked on G0 | — |
-| G1 | 2 · the reviewed plan, complete and immutable | blocked on G0 | — |
-| G1 | 3 · `CaseWriterCapability` and format ownership | blocked on G0 | — |
-| G1 | 4 · value kinds and dynamic-path bindings | blocked on G0 | — |
-| G2 | 5 · the core transaction executor | pending | — |
-| G2 | 6 · recovery, replay and staleness | pending | — |
-| G2 | 7 · the conformance suite | pending | — |
-| G2 | 8 · vertical slice A — one patch path | pending | — |
-| G2 | 9 · vertical slice B — one synthesis path | pending | — |
+| G1 | 1 · the mutation request and the parameter envelope | done | `bbc989b` +R2 fixes |
+| G1 | 2 · the reviewed plan, complete and immutable | done | `c29c46d` +R2 fixes |
+| G1 | 3 · `CaseWriterCapability` and format ownership | done | `c43a7ca` +R2 fixes |
+| G1 | 4 · value kinds and dynamic-path bindings | done | `f427ae6` +R2 fixes |
+| G2 | 5 · the core transaction executor | done | `9986c1d` +R3 fixes |
+| G2 | 6 · recovery, replay and staleness | done | `33fb553` +R3 fixes |
+| G2 | 7 · the conformance suite | done | `e13f085` +R3 fixes |
+| G2 | 8 · vertical slice A — one patch path | done | `dc7fbef` |
+| G2 | 9 · vertical slice B — one synthesis path | done | `8721f21` +R3 fixes |
 | G3 | 10 · entry cases migrate | pending | — |
 | G3 | 11 · sweeps migrate, and the sweep spec gets a versioned schema | pending | — |
 | G3 | 12 · cardiacCore operations and remediation migrate | pending | — |
 | G3 | 13 · `describe` shows the write surface | pending | — |
 | G3 | 14 · four shapes, the mutation inventory, and the close-out | pending | — |
+
+**G1 closed 2026-09-23.** Review R2 returned *not closed* on twelve findings —
+including proposal defect W1 fixed on one field and left open on every other,
+and `renderer_for` naming the wrong provider on the two-provider stack this plan
+calls the real path. All twelve fixed (`3571ecb`..`0f024c8`).
+
+**G2 closed 2026-09-23.** Review R3 returned *not closed* on two blockers: an
+unwrapped `PermissionError` escaping `commit_case_write`, and a relative
+`case_root` silently committing into a different directory that happened to
+share its name. Both fixed, with seven tracked findings, in `3f7dcac`..`4633aac`.
+What survived R3 unscathed is worth recording too: cross-process lease
+serialisation, mid-commit interruption, and a rollback whose own restore
+partially fails — that last one names the failed paths, keeps the journal, and
+never claims a false rollback.
 
 ## What "one write channel" does and does not mean
 
@@ -160,6 +174,52 @@ holds.
 
 P2-F carries no review because P2-G is what proves it: a transaction executor
 with no consumer is untested design, and R3 reviews both together.
+
+## Decision, 2026-09-23: a parameter value is typed data, never rendered text
+
+Review R2 found this contract question unmade, and every task from 5 onward
+depends on it. Deciding it here.
+
+**`ParameterAssignment.value` carries native Python data.** A `vector3` is
+`(1.0, 0.0, 0.0)`, not `"(1 0 0)"`. A `dimensioned_scalar` is
+`{"value": 50000, "dimensions": (0, -3, 0, 0, 0, 1, 0)}`, not
+`"[0 -3 0 0 0 1 0] 50000"`. Rendering that into dictionary syntax is the format
+owner's job, in `render_case_files`, and nowhere else.
+
+Four reasons, in order of weight:
+
+1. **The alternative puts OpenFOAM syntax in core.** `case_write.py` is a core
+   module and this plan's hardest constraint is that core moves bytes and
+   digests. A `value` field holding `"[0 -3 0 0 0 1 0] 50000"` is dictionary
+   syntax sitting in core, and every consumer that reads it has to parse it —
+   which is the layering failure that deleting `openfoam_literal` fixed.
+2. **It is the only way `validate_value_shape` can mean anything.** Against
+   rendered text every kind collapses to "is a string", which is the
+   unqualified scalar/string vocabulary the roadmap §2 names as unsafe, and it
+   reopens the `nan`-for-a-scalar hole that audit finding S1 closed.
+3. **Text comparison is already known to be wrong here.** Finding F1b: a
+   requested `1e-3` resolves natively to `0.001`, and comparing spellings
+   rejected a correct edit. Storing spellings would rebuild that defect inside
+   the plan.
+4. **The write channel is new code and inherits nothing.** The rendered strings
+   R2 found — `test_override_round_trip.py`'s `_VALUES` — belong to the
+   existing `--apply` override surface, not to this channel. An adapter that
+   holds a rendered string parses it when it builds the request. That is the
+   adapter's job: it owns what the parameter means.
+
+**On the objection that deleting `openfoam_literal` removed the way to say
+"pre-rendered text", and nothing replaced it.** Nothing needed to. A value core
+cannot type is not a parameter — it is content, and content already has a
+carrier: `RenderedFile`, which holds complete bytes the format owner produced.
+A `#codeStream` block or an arbitrary sub-dictionary reaches disk as part of a
+rendered file, not as a `ParameterAssignment`. Do **not** add a `literal` kind,
+a `text` kind, or an untyped escape to `VALUE_KINDS`. If a case arises that
+this genuinely cannot express, that is a finding worth reporting — not a reason
+to reintroduce the default that let `nan` through.
+
+**Consequence to implement:** `ParameterAssignment.__post_init__` calls
+`validate_value_shape(self.value_kind, self.value)` and raises on any returned
+reason. That is what closes R2's finding 4.
 
 ## Global Constraints
 
@@ -1136,11 +1196,11 @@ class CaseWriteRecord:
         }
 ```
 
-`from_json` raising `NotImplementedError` is deliberate and temporary: the
-round-trip test needs it, and Task 6 is the first consumer that reads a
-persisted plan. **Implement it in Task 6, and delete this paragraph then.** If
-the round-trip test fails here, implement the reader now rather than weakening
-the test — the version guard above it is the part that must not move.
+**Superseded 2026-09-23.** `from_json` was implemented in full during Task 2,
+not deferred to Task 6, and it takes `payload` alone — no `contents=`
+side-channel. `RenderedFile` embeds its bytes as base64, so a persisted plan
+already round-trips without one. The Task 6 snippet below that calls
+`from_json(payload, contents={...})` is stale; ignore its signature.
 
 - [ ] **Step 4: Run and commit**
 
@@ -1910,6 +1970,27 @@ grep finds nothing in core. Record both outputs in the Status table as G1's exit
 evidence.
 
 ---
+
+### Stale snippets in Tasks 5–7, corrected 2026-09-23
+
+Batch P2-F found four places where these tasks' illustrative code predates the
+R2 contract fixes. The prose is still right; the snippets are not. Fix them as
+you go rather than working around them:
+
+* `CaseMutationRequest(..., parameters=())` for a `clone_and_patch` request is
+  now refused — R2 finding 7 made that mode require at least one parameter, on
+  the grounds that a patch patching nothing is not a mutation. Test helpers
+  need a real parameter.
+* `value_kind="dictionary"` appears in Task 2's and Task 7's snippets. Task 4
+  deleted that kind; nothing used it. `dimensioned_scalar` is the mapping-shaped
+  kind. Do **not** re-add `dictionary` to `VALUE_KINDS`.
+* `CaseWritePlan.from_json(payload, contents={...})` — see the superseding note
+  in Task 2. The signature takes `payload` only.
+* Task 7's `stale_build` snippet calls a helper `_installed_providers()` that
+  does not exist. Build one locally, and make the limit assertion name a
+  specific capability whose winner is real while its digest is a placeholder —
+  asserting merely that *some* capability is placeheld is trivially true for
+  any incomplete provider and proves nothing.
 
 ## Gate G2 — prove one write channel
 
@@ -2931,6 +3012,64 @@ G2 close-out rather than during the migration.
 - Modify: every `apply_case` implementation the grep below finds
 - Create: `packages/omnidriver/tests/core/test_entry_case_parity.py`
 
+**Filled in 2026-09-23 (batch P2-H, before implementation), from the landed
+G2 code:**
+
+`grep -rn "\.apply_case(" packages/ --include="*.py" | grep -v /tests/` finds
+exactly **one** production call site:
+`core/runtime/sweep_runner.py::_materialize_entry_case`
+(`spec.apply_case(spec.case_root, cases[0])`). Every other hit is a
+`TutorialSpec` construction site (`apply_case=partial(_apply_case, ...)`,
+~19 of them across `cardiaccore/workflows/preprocessing.py` and 13
+`cardiacfoam/tutorials/*.py` files) or a test. So "prefer `plan_case`" only
+has to change in one place.
+
+Two of the four `cardiaccore/workflows/preprocessing.py` specs' `_apply_case`
+already delegate to `overrides.apply_input_overrides`, which (Slice A,
+`dc7fbef`) already calls `apply_input_overrides_planned` internally — the
+write channel is already underneath them; what is missing is only that
+`apply_case`'s `-> None` signature throws the `CaseWriteRecord` away. The 13
+`cardiacfoam/tutorials/*.py` specs' `_apply_case` implementations call
+`omnidriver.cardiacfoam.overrides.apply_electro_property_overrides`/
+`apply_physics_property_overrides` (dict_builder.py's Slice B
+`resolve_synthesis_mutation` is a *different*, synthesis-only path — it does
+not cover this patch path at all), plus several call `gmsh`/template-swap
+logic with no channel equivalent yet. Migrating those is real, adapter-shaped
+design work (a new `resolve_patch_mutation` for cardiacfoam's own catalog),
+not a signature rename, and is out of scope for one batch.
+
+Concrete steps:
+1. Add `PlanCaseFn = Callable[[Path, CaseConfig], "CaseWriteRecord | None"]`
+   and `TutorialSpec.plan_case: PlanCaseFn | None = None` (after `apply_case`,
+   before `metadata`) to `runtime/models.py`. Add
+   `invoke_case_mutation(spec, case_root, case) -> CaseWriteRecord | None`
+   next to it: calls `spec.plan_case(...)` when set; otherwise emits
+   `warnings.warn(..., DeprecationWarning)` naming the removal condition
+   ("removed when no in-tree spec supplies `apply_case`") and falls back to
+   `spec.apply_case(...)`.
+2. Change `sweep_runner.py`'s one call site to
+   `invoke_case_mutation(spec, spec.case_root, cases[0])`.
+3. Migrate the two `preprocessing.py` specs whose `_apply_case` already
+   routes through the channel (`make_human_purkinje_slab_spec`,
+   `make_human_purkinje_endocardial_spec` — and, by the same shape,
+   `make_pig_morphometric_purkinje_spec`/`make_pig_transmural_purkinje_spec`
+   via `_make_pig_purkinje_spec`) to also supply `plan_case=partial(_plan_case,
+   ...)`, a thin wrapper calling `apply_input_overrides_planned` directly and
+   returning its `CaseWriteRecord | None`. Keep `apply_case=` too — a
+   pre-existing test (`test_biv_preprocessing_contract.py`) calls
+   `spec.apply_case(...)` directly and stays a legitimate consumer.
+4. Do **not** touch the 13 `cardiacfoam/tutorials/*.py` specs this batch —
+   their underlying mutation is not yet channel-routed at all, so adding
+   `plan_case=` to them would either (a) alias `apply_case` (no real
+   migration, just theater) or (b) require inventing a new
+   `resolve_patch_mutation` for cardiacfoam under this task's time budget,
+   risking a physics-relevant regression with no adapter-specific review.
+   Reported as the remaining count, not silently dropped.
+5. `apply_case` is **not** retired this batch: the grep in step (1) still
+   returns 13 non-test cardiacfoam construction sites after step 3. Report
+   the count before (this section) and after (post-migration, still 13 + the
+   2 cardiaccore-authored functions kept for the direct-`apply_case` test).
+
 - [ ] **Step 1: Find every consumer before changing anything**
 
 ```bash
@@ -2975,6 +3114,62 @@ python3 scripts/export-capability-seams.py --check
 **The schema goes inside the installed package, not a repository-only
 `schemas/` directory.** A repository-only file is absent from every wheel, which
 is exactly the defect class the wheel shape exists to find.
+
+**Filled in 2026-09-23 (batch P2-H, before implementation), from the landed
+G2 code and one correction to this task's own file list:**
+
+**Correction:** `packages/omnidriver/src/omnidriver/resources/` does not
+exist and there is no precedent for it. `packages/omnidriver/src/omnidriver/
+schemas/` already does — it ships `run-document.json` today via
+`[tool.setuptools.package-data]` (`"omnidriver.schemas" = ["run-document.json"]`)
+and is read back with `importlib.resources.files("omnidriver.schemas")`
+(`core/runtime/run_model.py`). Creating a second resource-package convention
+for one more schema would restate a fact the existing convention already
+owns. `sweep-spec.schema.json` goes in `omnidriver/schemas/` beside it, and
+the package-data line gains a second file, not a second package.
+
+There are **no in-tree `*.json` sweep-spec files** — `sweep-plan`/`sweep-run`
+load a spec from a path the caller supplies (`sweep_runner._load_spec`);
+nothing under `packages/` is one. The "in-tree sweep specs" that exist are
+the two worked JSON examples in `AGENT_GUIDE.md` (generic mode, ~line 274;
+`base.entry` mode, ~line 378) — those are what
+`test_every_in_tree_sweep_spec_validates` validates, as embedded dict
+literals (not `SWEEP_SPEC_PATHS` reading real files, since there are none).
+
+The schema, enumerated from what `core/sweep/sweep_expansion.py` actually
+reads (not from `AGENT_GUIDE.md`): top level requires `"sweep"` (object);
+`"base"`, if present, is an object with no core-imposed shape (adapter
+vocabulary — `sweep_runner._entry_name`/`base = sweep_spec.get("base", {})`
+only ever `.get()` into it). `sweep.mode` must be `"cross_product"` or
+`"zip"`. `sweep.independent` is a required non-empty object of
+non-empty-array values. `sweep.dependent` is an optional array of
+`{"name", "derive", "of"}` objects (`"of"` a string or array of strings).
+Cross-field rules `expand_sweep` enforces (no forward references, no name
+collisions, path-safe `caseId`) are semantic, not structural, and are left
+to `expand_sweep` itself rather than encoded in JSON Schema.
+
+Concrete steps:
+1. Write `packages/omnidriver/src/omnidriver/schemas/sweep-spec.schema.json`,
+   `"$id"` ending `/v1`, matching the enumeration above.
+2. Add a loader next to `run_model.py`'s (`core/sweep/sweep_expansion.py` or
+   a new small module) using the identical
+   `importlib.resources.files("omnidriver.schemas").joinpath(...)` pattern.
+3. Extend `pyproject.toml`'s existing
+   `"omnidriver.schemas" = ["run-document.json"]` line to list both files.
+4. Extend `scripts/check-wheel-artifact.py` with a numbered check that the
+   resource loads, parses, and its `$id` ends in a version, from the wheel
+   env only.
+5. `test_sweep_spec_schema.py`: the two `AGENT_GUIDE.md`-derived examples
+   validate; a structurally-rejected spec (e.g. `mode="banana"`, which
+   `_mode()` already raises `SweepValidationError` for) fails schema
+   validation too; the wheel-resource test.
+6. Route `SweepMaterializerCapability.route`/`materialize` through
+   `resolve_case_mutation`/`commit_case_write` **only if** a concrete
+   adapter implementation exists to migrate onto (`_SweepMaterializerAdapter`
+   is a refusing compatibility bridge over `route_sweep_case_values`/
+   `materialize_sweep_case` plugin hooks, not itself a case-input author);
+   verify against G2's landed `CaseWriterCapability` before assuming this
+   step is still shaped the way the original task text describes it.
 
 - [ ] **Step 1: Derive the schema from executable behaviour**
 
@@ -3041,6 +3236,74 @@ treated them as one:
   where they go, who owns them, what happens on failure — not a transaction
   channel built for inputs.
 
+**Filled in 2026-09-23 (batch P2-H, before implementation), from the landed
+G2 code and one correction to this task's own file list:**
+
+**Correction:** `mesh_provisioning.provision_mesh` (Step 3's explicit target)
+is not in `cardiaccore` at all — it lives in
+`packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/mesh_provisioning.py`.
+This task's "Files" header omits it; adding it here rather than silently
+touching an unlisted file.
+
+`grep -rn "write_text\|write_bytes\|open(.*[\"']w" .../operations/` finds
+exactly three hits, classified:
+
+| hit | classification | why |
+|---|---|---|
+| `vtu_selection.py:86` `write_cell_set` | case input, **not migrated this batch** | renders a real OpenFOAM `cellSet` FoamFile meant for a case's `constant/polyMesh/sets/`; the value shape fits today's channel (`value_kind="integer_list"` exists), but there is no registered renderer for the `cellSet` format — `case_rendering.py` owns `openfoam_dictionary` only. Inventing that renderer is design work beyond this task's stated files; left as an open bypass for Task 14's inventory. |
+| `electrodes.py:251` `write_reference_offset_bundle` | standalone export | writes a portable, unit-labelled coordinate bundle to an arbitrary destination for cross-tool/human consumption; no case dictionary, no case-relative addressing, nothing an OpenFOAM utility reads. |
+| `electrodes.py:307` `write_electrode_positions` | standalone export | same reasoning — explicit unit-labelled target positions, a data product for a downstream step, not a case input. |
+
+Extraction target (shared mechanics, two real consumers): `case_transaction.py`
+already imports `_atomic_write_bytes`/`_fsync_directory` **from**
+`remediation_transaction.py` — a real, if backwards, existing coupling. The
+genuinely dual-consumed primitives are exactly those two functions plus the
+"write JSON atomically" pattern (`case_transaction._write_journal`/
+`_persist_completed` do it inline; `remediation_transaction._atomic_write`
+does the same thing under a different name). Before-image capture
+(`case_transaction._before_image`/`_restore_one`) and remediation's
+manifest/backup-file scheme (`_snapshot_paths`/`_validated_manifest`) are
+**not** unified — remediation's is more elaborate because of attempt
+ownership (compare-and-swap, backup archive keyed by transaction id); forcing
+either shape onto the other is exactly the "invent a fake attempt" trap this
+task warns against.
+
+Concrete steps:
+1. New module `core/runtime/transaction_mechanics.py`:
+   `atomic_write_bytes`, `fsync_directory`, `atomic_write_json` (the
+   dedup of `_atomic_write`/the inline journal-write pattern).
+2. `remediation_transaction.py`: delete its own `_atomic_write_bytes`/
+   `_fsync_directory` bodies, import from `transaction_mechanics`; `_atomic_write`
+   becomes a one-line delegation to `atomic_write_json`. What goes away:
+   the duplicate fsync/replace implementation (two independent copies today).
+3. `case_transaction.py`: import from `transaction_mechanics` instead of
+   `remediation_transaction` (removing the backwards dependency); use
+   `atomic_write_json` in `_write_journal`/`_persist_completed`.
+4. `mesh_provisioning.py`: fix the clobber unconditionally (all callers,
+   including `ionic_catalog_verification.py`'s direct use) — a *partial*
+   five-file state now raises instead of being silently completed either
+   direction. Add `meshless_polymesh_fixture() -> dict[str, bytes]`.
+5. `dict_builder.py`: `resolve_synthesis_mutation` folds the fixture's five
+   files in as `skip_if_present` synthesis targets when a new
+   `_SYNTHESIS_META_DOCUMENT` meta-parameter
+   (`include_meshless_polymesh`, mirroring the existing `overwrite` one)
+   is true. `build_case` gains `dry_run: bool = False`, sets that meta
+   parameter to `myocardium_solver in _meshless_solvers() and not dry_run`
+   (dry_run must keep writing nothing — R3 finding 8), keeps the `dx`
+   rejection for meshless solvers unconditional (regardless of dry_run,
+   matching the pre-existing test), and runs the partial-mesh precheck
+   before adding those targets. `build_and_launch` drops its direct
+   `provision_mesh(...)` call for `_meshless_solvers()` and passes
+   `dry_run=dry_run` into `build_case`. `provision_mesh` itself is untouched
+   as a standalone function (still the right tool for
+   `ionic_catalog_verification.py`, which does not go through
+   `build_and_launch`).
+6. Parity/characterization tests: partial mesh now raises (revert-confirmed);
+   `build_case`/`commit_case_write` for a meshless solver produces the same
+   five fixture bytes the old `provision_mesh` copy produced, atomically and
+   journaled; `dry_run=True` still writes nothing (pre-existing test must
+   keep passing unchanged).
+
 - [ ] **Step 1: Classify every write in these modules, in writing**
 
 ```bash
@@ -3086,6 +3349,58 @@ evidence, and complete proposed changes — **generated from the same contracts
 validation uses**, not from a second hand-maintained description. A second
 description is a second source of truth, and this repository's rule is that one
 fact has one declarer.
+
+**Filled in 2026-09-23 (batch P2-H, before implementation), from the landed
+G2 code and one correction to this task's own test snippet:**
+
+**Correction:** the sketched test imports `CATALOG.entries` directly — but
+this test file lives under `packages/omnidriver/tests/core/`, and core must
+not import cardiac vocabulary (`CATALOG` is cardiac). The core-level test
+uses a fake `DictionaryCatalogCapability`-shaped double composed into a test
+`driver_context`, the same way every other core capability test in this
+package already does, not a real adapter's catalog.
+
+The one core-owned, flat, adapter-agnostic anchor for "the same catalog
+entries validation uses" is `driver_context.capabilities.dictionary_catalog.
+entries()` → a tuple of `DictEntry` (core's own dataclass,
+`contracts/dictionary.py`) with `.driver_path`/`.value_kind`/`.typical_value`
+etc. — every adapter's `get_dict_entries()` backs it, and it is exactly what
+`validate_value_shape(entry.value_kind, value)` is checked against
+elsewhere. `override_schema.dict_entry_catalog()` is **not** this anchor —
+its own docstring says its shape is adapter-declared and nested differently
+per adapter (physicsProperties flat, electroProperties grouped), so core
+cannot walk it generically to recover qualified ids.
+
+Concrete steps:
+1. `_write_surface(driver_context, spec, overrides)` in `introspection.py`:
+   - `mutable`: one entry per `dictionary_catalog.entries()` item —
+     `qualified_id`, `value_kind`, `unit`, and `source` (`"case"` when
+     `overrides` supplies it, `"template"` when the entry's `typical_value`
+     is non-empty and no override does, else `"call_site_default"` — every
+     value drawn from `VALUE_SOURCES`, `core/case_write.py`).
+   - `consumed`: paths named in `spec.metadata["workflow_dag"]["steps"][*]
+     ["consumes"]` (already-declared data every `TutorialSpec` with a
+     workflow DAG carries; not a new concept).
+   - `modes`: one entry per `case_write.MUTATION_MODES`, each
+     `{"supported": bool, "reason": str}` from
+     `driver_context.capabilities.case_writer.supported_modes()` —
+     `reason` non-empty exactly when `supported` is `False` (an absent
+     resolver, an exception resolving `supported_modes()`, or the mode
+     simply not reported).
+   - `proposed_changes`: the `mutable` entries whose `qualified_id` the
+     caller's `overrides` actually set, each showing the value and
+     `source="case"`. **Scope limit, stated in the report, not hidden:**
+     this lists what the caller asked to change, validated against the
+     catalog — it does not invoke a real adapter's `resolve()`, because
+     core cannot construct an adapter-specific `CaseMutationRequest`
+     (document/key_path addressing) generically. A literal resolve/render
+     preview is future work, named as such.
+2. Wire `"write_surface": _write_surface(...)` into `describe_entry`'s
+   return dict.
+3. `test_describe_write_surface.py`: the three tests named above, adapted to
+   the fake-capability-double correction.
+
+
 
 ```python
 def test_the_described_surface_comes_from_the_validation_contracts():
@@ -3191,6 +3506,7 @@ Then record, explicitly, the four audit findings this phase deliberately does
 | C4 — placeholder capability digests; explicit selection expands one dependency level | the reviewed plan is bound to `stack_identity`, and Task 7 measures exactly how far that binding reaches. Real content digests need a contract for what "capability content" is, which is G4's | G4 |
 | F3 — no reusable numerical-parameter/default knowledge surface; builders author numerical choices | Task 4's value kinds give shapes, not defaults. An inventory separating authored templates from native defaults is G4's | G4 |
 | F4 — `typical_value_fallback=True` promotes catalog examples into generated inputs; the C++ scanner misses reads after `//` inside a string and duplicates nested matches | this phase makes value *origin* recordable (`VALUE_SOURCES`) and does not repair the scanner or change the fallback policy | G4 |
+| placeholder grammar is declared three times | `_PLACEHOLDER` in `core/contracts/dictionary.py`, plus its own copies in `core/specs/validation.py` and `cardiacfoam/dict_builder.py`. The regex cannot see `<_x>` or `<x-y>`, so the all-declared-bindings guard is defeatable; widening one copy without the others diverges them silently. Zero production declarations are affected today, so it is latent. Found by R2 2026-09-23; the fix batch reported it rather than widening one copy, which was the right call. One fact, three declarers — model the relation instead of restating it. | G4 |
 | R1 — release tags omit cardiacCore; eligibility is not bound to all gates at the exact revision | release work follows contract convergence, and the supported profile and distribution terms are the owner's decisions | G5 |
 
 `VALUE_SOURCES` exists from Task 1 and F4 is the first place it earns its keep:
