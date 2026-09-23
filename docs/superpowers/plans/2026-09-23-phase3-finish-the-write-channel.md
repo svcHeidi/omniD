@@ -1302,6 +1302,70 @@ present before this task and unrelated to it). Both static gates pass.
 
 ---
 
+## Decision, 2026-09-23: a parameter asserts a final state, not only a value
+
+Task 6 migrated nine of eleven tutorials and found the third gap in Phase 2's
+contract. The first two — a dimensioned-literal parser that was asserted but
+never written, and bindings that assumed every dynamic domain is closed — are
+closed. This one is more fundamental.
+
+**`ParameterAssignment` can only say "set X to V".** It has no vocabulary for
+an upsert or a removal. So `manufactured_bath_bidomain` cannot migrate at all,
+and `manufactured_monodomain_pseudo_ecg` migrated only its disjoint
+`deltaT`/`endTime`/block-mesh edits: both interleave
+`ensure_electro_property_entry`, `remove_electro_property_entry` and
+`remove_electro_property_dict` between their override calls, and those removals
+are load-bearing for a reused `case_root`. Forcing them into the current
+vocabulary would silently drop real cleanup.
+
+**A removal is a mutation, and arguably the one most worth reviewing.** Deleting
+`bathPotentialDomain` changes which solver path runs, by absence. A channel that
+claims to be the one auditable record of framework-authored inputs, and cannot
+describe a deletion, is not that record.
+
+**Decision: `ParameterAssignment` gains an `operation`, and every operation is an
+assertion about the document's final state.**
+
+| operation | asserts |
+|---|---|
+| `set` (default) | the key exists with this value |
+| `ensure` | the key exists with this value, created if absent |
+| `remove` | the key does not exist |
+
+`value` is required for `set` and `ensure`, and **forbidden** for `remove` —
+enforced in `__post_init__`. There is precedent for exactly this shape:
+`Precondition` already refuses a `digest` together with `must_be_absent`,
+because "must be absent" and "must have this digest" are different claims.
+
+Three things this must not become:
+
+- **Not a new type.** One addressing vocabulary. A `ParameterRemoval` beside
+  `ParameterAssignment` would mean two things to keep in step, and this
+  repository's rule is that one fact has one declarer.
+- **Not a rendering concern.** `update_foam_entry` already carries
+  `add_if_missing`; `ensure` maps onto it. Removal belongs to the format owner
+  in `case_rendering`, the same way the `hex (` rewrite does. Core describes the
+  assertion; OpenFOAM performs it.
+- **Not an excuse to keep both paths.** Task 6 left `_apply_case` in place
+  beside `_plan_case`, so the `apply_case=` count is unchanged at 16 and bypass
+  1 is still open. Adding `operation` is what unblocks the last two tutorials;
+  retiring `_apply_case` is what actually closes the bypass. Both are needed.
+
+### What Task 6 left open, to be finished alongside
+
+- `manufactured_bath_bidomain` and `heart_solver_comparison` unmigrated.
+  `heart_solver_comparison` is four `shutil.copy` calls of whole template files
+  — that is a source-artifact classification and belongs to **Task 7**, not to
+  the `operation` work.
+- `_apply_case` retained on all thirteen tutorials. Once byte parity is proven,
+  collapse it to a thin wrapper over `_plan_case` and retire it, which retires
+  `set_delta_t`/`set_end_time`/`replace_block_mesh_resolutions` with it.
+- A real production bug Task 6 found and correctly did not fix in place:
+  `manufactured_monodomain_total_lagrangian_em`'s `_apply_case` writes
+  `electromechanicalVerificationModel.type` where the native C++ reads
+  `verificationModel.type`, so its own default call already raised on unmodified
+  `HEAD`. Tracked separately.
+
 ## Task 7: Source artifacts and sidecars, classified — bypass 1 remainder
 
 Not every write in a tutorial is a parameter. From the measured surface:
