@@ -524,8 +524,15 @@ def commit_case_write(
         lease_context = acquire_case_lease(case_root)
         lease_context.__enter__()
     except AttemptLeaseError as exc:
+        # R3 finding 6 (2026-09-23): this used to always say "write lease is
+        # already held", regardless of *why* `acquire_case_lease` refused --
+        # including when the real reason was that `case_root` does not exist
+        # at all (a relative root that failed to resolve where the caller
+        # expected, before blocker 2's construction-time guard closed the
+        # most common way that happened). Report the cause `exc` actually
+        # gives, not an assumption about which one it must be.
         raise CaseTransactionError(
-            f"case {case_root} write lease is already held: {exc}"
+            f"cannot acquire the write lease for case {case_root}: {exc}"
         ) from exc
 
     try:
@@ -603,8 +610,10 @@ def recover_case_transaction(case_root: Path) -> CaseWriteRecord | None:
         lease_context = acquire_case_lease(case_root)
         lease_context.__enter__()
     except AttemptLeaseError as exc:
+        # Same correction as commit_case_write's (R3 finding 6): report the
+        # cause acquire_case_lease actually gives.
         raise CaseTransactionError(
-            f"cannot recover case {case_root}: write lease is already held: {exc}"
+            f"cannot acquire the write lease to recover case {case_root}: {exc}"
         ) from exc
     try:
         journal = pending_transaction(case_root)

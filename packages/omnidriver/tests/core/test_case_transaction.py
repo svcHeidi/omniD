@@ -362,3 +362,20 @@ def test_a_symlinked_absence_target_still_counts_as_present(tmp_path):
     )
     with pytest.raises(case_transaction.CaseTransactionError, match="site/shadow"):
         case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
+
+
+# --------------------------------------------------------------------------
+# R3 finding 6 (2026-09-23): a misleading lease error. When the case root
+# does not resolve, the refusal used to say "write lease is already held"
+# regardless of the real cause.
+# --------------------------------------------------------------------------
+
+
+def test_a_missing_case_root_reports_the_real_cause_not_a_held_lease(tmp_path):
+    missing = tmp_path / "does-not-exist-yet"
+    plan = _plan(missing, [_rendered("constant/a", b"one\n")])
+    with pytest.raises(case_transaction.CaseTransactionError) as excinfo:
+        case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
+    message = str(excinfo.value)
+    assert "does not exist" in message
+    assert "already held" not in message
