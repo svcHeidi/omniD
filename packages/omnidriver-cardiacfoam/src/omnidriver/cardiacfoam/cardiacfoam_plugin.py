@@ -252,6 +252,18 @@ class CardiacFoamPlugin:
 
         return artifact_value_reader(artifact_format)
 
+    # -- CaseWriterCapability (Phase 2 Task 9) --------------------------------
+    def get_supported_mutation_modes(self) -> "frozenset[str]":
+        return frozenset({"synthesize"})
+
+    def resolve_case_mutation(self, request, *, driver_context):
+        """Delegate to ``dict_builder``, this package's semantic owner of a
+        from-scratch case synthesis."""
+        from omnidriver.cardiacfoam.dict_builder import resolve_synthesis_mutation
+
+        del driver_context
+        return resolve_synthesis_mutation(request)
+
     def get_required_inputs(self, case_root, resolved_case, selected_start_time) -> tuple:
         """Model-dependent required inputs (CaseProvenanceCapability). See
         ``case_provenance.py`` for why this defers to the safe default."""

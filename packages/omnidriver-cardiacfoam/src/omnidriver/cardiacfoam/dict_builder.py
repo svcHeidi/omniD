@@ -41,7 +41,8 @@ is validator-clean.
 """
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from numbers import Integral, Real
 from typing import Any
 
 from omnidriver.dict_entries import (
@@ -60,6 +61,7 @@ from omnidriver.openfoam.dict_builder import (
     select_applicable_entries as _select_applicable_entries,
 )
 from omnidriver.cardiacfoam.own_context import own_driver_context
+from omnidriver.core.case_write import CaseMutationRequest, ParameterAssignment, ResolvedMutation
 from omnidriver.core.specs.validation import (
     _predicate_matches,
     slot_key,
@@ -67,6 +69,39 @@ from omnidriver.core.specs.validation import (
 )
 
 from .common_dict_entries import PHYSICS_PROPERTY_ENTRIES
+
+#: This adapter's identity on every synthesis request and resolution it
+#: produces (Phase 2 Task 9).
+PLUGIN_ID = "org.cardiacfoam"
+
+#: The one format `resolve_synthesis_mutation`'s targets declare. Rendered by
+#: `OpenFOAMEnvironmentPlugin` -- see `openfoam/case_rendering.py`.
+_SYNTHESIS_FORMAT = "openfoam_dictionary"
+
+_ELECTRO_DOCUMENT = "constant/electroProperties"
+_PHYSICS_DOCUMENT = "constant/physicsProperties"
+_FV_SCHEMES_DOCUMENT = "system/fvSchemes"
+_FV_SOLUTION_DOCUMENT = "system/fvSolution"
+_CONTROL_DOCUMENT = "system/controlDict"
+_BLOCK_MESH_DOCUMENT = "system/blockMeshDict"
+
+#: Not a real case document -- carries `build_and_launch`'s `overwrite` flag
+#: as a reconstructable parameter so `resolve_synthesis_mutation` stays pure
+#: (everything it needs comes from `request.parameters`, nothing from a
+#: side channel), without inventing a file for a flag that has none. Never
+#: becomes a target/`RenderedFile`; `ParameterAssignment.document` only
+#: requires a case-relative string, which this satisfies without being read
+#: or written by anything.
+_SYNTHESIS_META_DOCUMENT = "_meta/synthesis"
+
+#: `qualified_id` prefixes distinguishing a selector parameter (a top-level
+#: discriminator such as `myocardiumSolver`) from an override parameter (an
+#: arbitrary catalog `driver_path`, whose value replaces a specific entry's
+#: `typical_value`) landing on the same document -- see
+#: `_selector_parameters`/`_override_parameters` and their inverse,
+#: `resolve_synthesis_mutation`.
+_ELECTRO_SELECTOR_PREFIX = "$CARDIACFOAM.electro_selector."
+_PHYSICS_SELECTOR_PREFIX = "$CARDIACFOAM.physics_selector."
 
 
 def _all_electro_entries() -> list[DictEntry]:
@@ -843,6 +878,342 @@ def build_physics_properties(
     return _foamfile_preamble("physicsProperties") + "\n" + body
 
 
+# --------------------------------------------------------------------------
+# The write channel: `synthesize` (Phase 2 Task 9)
+# --------------------------------------------------------------------------
+
+
+def _typed_value(value: Any) -> tuple[str, Any]:
+    """The `ParameterAssignment` kind and coerced value for one selector or
+    override value.
+
+    A selector/override value here is `Any`-typed at the call site
+    (`electro_overrides: dict[str, Any]` in `sweep.py`), but a
+    `ParameterAssignment` carries typed data, never rendered text (2026-09-23
+    decision) -- so a value this cannot type is refused by name rather than
+    silently flattened to a string. No current caller supplies one (every
+    exercised override value is a plain word or a number); if one arises,
+    that is a finding about this channel's coverage, not a reason to add a
+    `literal`/`text` escape hatch back to `VALUE_KINDS`.
+    """
+    if isinstance(value, bool):
+        return "boolean", value
+    if isinstance(value, Integral):
+        return "integer", int(value)
+    if isinstance(value, Real):
+        return "scalar", float(value)
+    if isinstance(value, str) and value and value.split() == [value]:
+        return "word", value
+    raise ValueError(
+        f"value {value!r} cannot be carried as a typed case-write parameter "
+        f"(must be a bool, a number, or a single whitespace-free word); this "
+        f"is content, not a parameter value, and has no carrier in this "
+        f"channel yet"
+    )
+
+
+def _selector_parameters(
+    document: str, prefix: str, selectors: Mapping[str, Any],
+) -> list[ParameterAssignment]:
+    parameters = []
+    for key, value in selectors.items():
+        kind, typed_value = _typed_value(value)
+        parameters.append(ParameterAssignment(
+            qualified_id=f"{prefix}{key}", owner=PLUGIN_ID, document=document,
+            key_path=(key,), binding={}, value=typed_value, value_kind=kind,
+            source="case",
+        ))
+    return parameters
+
+
+def _override_parameters(
+    document: str, overrides: Mapping[str, Any] | None,
+) -> list[ParameterAssignment]:
+    parameters = []
+    for driver_path, value in (overrides or {}).items():
+        kind, typed_value = _typed_value(value)
+        parameters.append(ParameterAssignment(
+            qualified_id=driver_path, owner=PLUGIN_ID, document=document,
+            key_path=(slot_key(driver_path),), binding={}, value=typed_value,
+            value_kind=kind, source="case",
+        ))
+    return parameters
+
+
+def resolve_synthesis_mutation(request: CaseMutationRequest) -> ResolvedMutation:
+    """The semantic owner's answer for a `synthesize` request: complete
+    document bodies, authored from the same builders `build_and_launch`
+    called directly before this migration (`build_electro_properties`,
+    `build_physics_properties`, `get_fv_schemes`/`get_fv_solution`,
+    `build_control_dict`) -- this does not reimplement dictionary synthesis,
+    it packages it.
+
+    Pure: every input is reconstructed from `request.parameters`, and
+    `build_electro_properties`/`build_physics_properties`/the system
+    templates touch no filesystem.
+
+    `system/fvSchemes`/`fvSolution`/`controlDict` carry
+    ``"skip_if_present"`` unless the request asked to `overwrite` -- matching
+    the pre-migration ``if not X.exists() or overwrite: write`` guard on each
+    of those three files (``electroProperties``/``physicsProperties`` were
+    never individually guarded that way and stay unconditional here too).
+
+    `system/controlDict`'s deltaT/endTime is the ``repeated_edits_to_one_file``
+    conformance case in its real setting: the pre-migration code wrote a
+    freshly templated ``controlDict`` and then called ``update_control_dict``
+    on it a SECOND time when the caller passed an explicit ``delta_t``/
+    ``end_time`` -- unconditionally, even against a pre-existing file whose
+    base write above had just been skipped. Characterized (byte-for-byte,
+    including `update_foam_entry`'s re-formatting of the patched line) in
+    `tests/test_synthesis_through_the_channel.py`. Reproduced here as one
+    content target (the base, always using a default when no explicit value
+    was given) plus, only when a value was explicitly given, a separate edit
+    target for that one key -- folded by `render_synthesis_case_files` into
+    one rendering, not two writes.
+    """
+    if request.mode != "synthesize":
+        raise ValueError(
+            f"cardiacFoam's build_and_launch resolves synthesize requests "
+            f"only, not {request.mode!r}"
+        )
+
+    electro_selectors: dict[str, Any] = {}
+    electro_overrides: dict[str, Any] = {}
+    physics_selectors: dict[str, Any] = {}
+    physics_overrides: dict[str, Any] = {}
+    control_values: dict[str, Any] = {}
+    dx: float | None = None
+    overwrite = False
+
+    for parameter in request.parameters:
+        key = parameter.key_path[-1]
+        if parameter.document == _ELECTRO_DOCUMENT:
+            if parameter.qualified_id.startswith(_ELECTRO_SELECTOR_PREFIX):
+                electro_selectors[key] = parameter.value
+            else:
+                electro_overrides[parameter.qualified_id] = parameter.value
+        elif parameter.document == _PHYSICS_DOCUMENT:
+            if parameter.qualified_id.startswith(_PHYSICS_SELECTOR_PREFIX):
+                physics_selectors[key] = parameter.value
+            else:
+                physics_overrides[parameter.qualified_id] = parameter.value
+        elif parameter.document == _CONTROL_DOCUMENT:
+            control_values[key] = parameter.value
+        elif parameter.document == _BLOCK_MESH_DOCUMENT:
+            dx = parameter.value
+        elif parameter.document == _SYNTHESIS_META_DOCUMENT:
+            # Not a case document at all -- `overwrite` governs which
+            # targets below carry `skip_if_present`, and has no file of its
+            # own to land in. See `_SYNTHESIS_META_DOCUMENT`'s docstring.
+            overwrite = bool(parameter.value)
+        else:
+            raise ValueError(
+                f"synthesis parameter {parameter.qualified_id!r} targets "
+                f"undeclared document {parameter.document!r}"
+            )
+
+    from omnidriver.cardiacfoam.system_templates import (
+        build_control_dict,
+        get_fv_schemes,
+        get_fv_solution,
+    )
+
+    myocardium_solver = electro_selectors.get("myocardiumSolver", "monodomainSolver")
+    skip_if_present = not overwrite
+
+    electro_text = build_electro_properties(electro_selectors, overrides=electro_overrides or None)
+    physics_text = build_physics_properties(physics_selectors, overrides=physics_overrides or None)
+    fv_schemes_text = get_fv_schemes(myocardium_solver)
+    fv_solution_text = get_fv_solution(myocardium_solver)
+    dt = control_values.get("deltaT_base", 1e-4)
+    et = control_values.get("endTime_base", 1.0)
+    control_dict_text = build_control_dict(delta_t=dt, end_time=et)
+
+    targets: list[dict[str, Any]] = [
+        {"document": _ELECTRO_DOCUMENT, "content": electro_text, "format": _SYNTHESIS_FORMAT},
+        {"document": _PHYSICS_DOCUMENT, "content": physics_text, "format": _SYNTHESIS_FORMAT},
+        {
+            "document": _FV_SCHEMES_DOCUMENT, "content": fv_schemes_text,
+            "format": _SYNTHESIS_FORMAT, "skip_if_present": skip_if_present,
+        },
+        {
+            "document": _FV_SOLUTION_DOCUMENT, "content": fv_solution_text,
+            "format": _SYNTHESIS_FORMAT, "skip_if_present": skip_if_present,
+        },
+        {
+            "document": _CONTROL_DOCUMENT, "content": control_dict_text,
+            "format": _SYNTHESIS_FORMAT, "skip_if_present": skip_if_present,
+        },
+    ]
+    if "deltaT_patch" in control_values:
+        targets.append({
+            "document": _CONTROL_DOCUMENT, "format": _SYNTHESIS_FORMAT,
+            "expanded_key_path": ["deltaT"], "value": control_values["deltaT_patch"],
+        })
+    if "endTime_patch" in control_values:
+        targets.append({
+            "document": _CONTROL_DOCUMENT, "format": _SYNTHESIS_FORMAT,
+            "expanded_key_path": ["endTime"], "value": control_values["endTime_patch"],
+        })
+    if myocardium_solver in _block_mesh_solvers():
+        from omnidriver.openfoam.mesh_provisioning import default_block_mesh_dict_text
+
+        targets.append({
+            "document": _BLOCK_MESH_DOCUMENT,
+            "content": default_block_mesh_dict_text(dx_m=dx),
+            "format": _SYNTHESIS_FORMAT,
+            # Never clobbered, regardless of `overwrite` -- a hand-authored
+            # custom blockMeshDict/polyMesh must survive a repeat synthesis.
+            # Mirrors mesh_provisioning.provision_mesh's own existence guard,
+            # which still runs after this commits (idempotent: it is this
+            # same file, already there either way).
+            "skip_if_present": True,
+        })
+
+    expected_effects = tuple(
+        f"author {target['document']}" for target in targets if "content" in target
+    )
+    return ResolvedMutation(
+        request=request, targets=tuple(targets), preconditions=(),
+        expected_effects=expected_effects, semantic_owner_id=PLUGIN_ID,
+    )
+
+
+def _block_mesh_solvers() -> frozenset[str]:
+    """`mesh_provisioning.BLOCK_MESH_SOLVERS`, named for this call site.
+
+    A plain re-export would be a second name for one constant that drifts;
+    this stays a function so the import -- and the single set it reads --
+    happens at call time, matching every other cross-module reference in
+    this file (`from omnidriver.cardiacfoam.mesh_provisioning import ...`
+    would create a real import-time dependency this module has not needed
+    until now)."""
+    from omnidriver.cardiacfoam.mesh_provisioning import BLOCK_MESH_SOLVERS
+
+    return BLOCK_MESH_SOLVERS
+
+
+def build_case(
+    electro_selectors: dict[str, str],
+    *,
+    physics_selectors: dict[str, str],
+    case_dir: "Path",
+    electro_overrides: "dict[str, str] | None" = None,
+    physics_overrides: "dict[str, str] | None" = None,
+    overwrite: bool = False,
+    delta_t: "float | str | None" = None,
+    end_time: "float | str | None" = None,
+    dx: "float | None" = None,
+    driver_context: "Any | None" = None,
+) -> Any:
+    """Resolve and render a from-scratch cardiacFoam case as one reviewable
+    `CaseWritePlan` -- the pure half of what `build_and_launch` used to do
+    with five bare `write_text` calls plus a second `controlDict` mutation.
+    `build_and_launch` commits this plan (through `commit_case_write`) and
+    then launches; calling this alone costs only the read `render_case_files`
+    needs to decide whether an already-present `blockMeshDict` should join
+    the plan at all (never clobbered -- see `mesh_provisioning.provision_mesh`'s
+    docstring).
+
+    Does not implement the `overwrite=False` case-already-built guard --
+    `build_and_launch` checks that before calling this, and keeps raising the
+    exact `FileExistsError` it always has (preserved deliberately: the
+    pre-existing regression test
+    `test_dict_builder.py::test_existing_case_dir_is_not_overwritten_without_consent`
+    asserts that specific type, and this migration does not change it)."""
+    from pathlib import Path as _Path
+    import datetime as _datetime
+    import tempfile as _tempfile
+
+    from omnidriver.core.case_write import CaseWritePlan
+
+    case_dir = _Path(case_dir)
+    myocardium_solver = electro_selectors.get("myocardiumSolver", "monodomainSolver")
+
+    dt = delta_t if delta_t is not None else 1e-4
+    et = end_time if end_time is not None else 1.0
+
+    parameters = (
+        *_selector_parameters(_ELECTRO_DOCUMENT, _ELECTRO_SELECTOR_PREFIX, electro_selectors),
+        *_override_parameters(_ELECTRO_DOCUMENT, electro_overrides),
+        *_selector_parameters(_PHYSICS_DOCUMENT, _PHYSICS_SELECTOR_PREFIX, physics_selectors),
+        *_override_parameters(_PHYSICS_DOCUMENT, physics_overrides),
+        # `_base`: what the freshly-templated document uses (always -- a
+        # default when the caller gave none). `_patch`: only present when the
+        # caller explicitly gave a value, and folded in as a second effect on
+        # top of whichever body `render_synthesis_case_files` used as the
+        # base -- matching `update_control_dict`'s pre-migration per-key
+        # `is not None` guard exactly (patching only the key that was
+        # actually given, never both together by default).
+        ParameterAssignment(
+            qualified_id="$CARDIACFOAM.control.deltaT_base", owner=PLUGIN_ID,
+            document=_CONTROL_DOCUMENT, key_path=("deltaT_base",), binding={},
+            value=float(dt), value_kind="scalar",
+            source="case" if delta_t is not None else "template",
+        ),
+        ParameterAssignment(
+            qualified_id="$CARDIACFOAM.control.endTime_base", owner=PLUGIN_ID,
+            document=_CONTROL_DOCUMENT, key_path=("endTime_base",), binding={},
+            value=float(et), value_kind="scalar",
+            source="case" if end_time is not None else "template",
+        ),
+        ParameterAssignment(
+            qualified_id="$CARDIACFOAM.synthesis.overwrite", owner=PLUGIN_ID,
+            document=_SYNTHESIS_META_DOCUMENT, key_path=("overwrite",), binding={},
+            value=bool(overwrite), value_kind="boolean", source="case",
+        ),
+    )
+    if delta_t is not None:
+        parameters = (*parameters, ParameterAssignment(
+            qualified_id="$CARDIACFOAM.control.deltaT_patch", owner=PLUGIN_ID,
+            document=_CONTROL_DOCUMENT, key_path=("deltaT_patch",), binding={},
+            value=float(delta_t), value_kind="scalar", source="case",
+        ))
+    if end_time is not None:
+        parameters = (*parameters, ParameterAssignment(
+            qualified_id="$CARDIACFOAM.control.endTime_patch", owner=PLUGIN_ID,
+            document=_CONTROL_DOCUMENT, key_path=("endTime_patch",), binding={},
+            value=float(end_time), value_kind="scalar", source="case",
+        ))
+    if myocardium_solver in _block_mesh_solvers() and dx is not None:
+        parameters = (*parameters, ParameterAssignment(
+            qualified_id="$CARDIACFOAM.mesh.dx", owner=PLUGIN_ID,
+            document=_BLOCK_MESH_DOCUMENT, key_path=("dx",), binding={},
+            value=float(dx), value_kind="scalar", source="case",
+        ))
+
+    source_artifacts = (
+        f"cardiacfoam.dict_entries:electro:{myocardium_solver}",
+        "cardiacfoam.dict_entries:physics",
+        "cardiacfoam.system_templates:fvSchemes+fvSolution+controlDict",
+    )
+    request = CaseMutationRequest(
+        mode="synthesize", case_root=case_dir, adapter_id=PLUGIN_ID,
+        workflow="entry", source_artifacts=source_artifacts,
+        parameters=parameters, requested_by="cardiacfoam.build_and_launch",
+    )
+    if driver_context is None:
+        driver_context = own_driver_context()
+
+    resolved = driver_context.capabilities.case_writer.resolve(
+        request, driver_context=driver_context,
+    )
+    with _tempfile.TemporaryDirectory(prefix="omnidriver-case-render-") as scratch:
+        snapshot_root = _Path(scratch)
+        rendered = driver_context.capabilities.case_writer.render(
+            resolved, snapshot_root=snapshot_root, driver_context=driver_context,
+            execution_env=None,
+        )
+        identity = getattr(driver_context, "identity", None)
+        stack_identity = identity.capability_digest if identity is not None else "0" * 64
+        plan = CaseWritePlan(
+            request=request, files=rendered, preconditions=resolved.preconditions,
+            semantic_owner_id=resolved.semantic_owner_id, stack_identity=stack_identity,
+            created_at=_datetime.datetime.now(_datetime.timezone.utc).isoformat(),
+        )
+    return plan
+
+
 def build_and_launch(
     electro_selectors: dict[str, str],
     *,
@@ -901,54 +1272,53 @@ def build_and_launch(
     """
     from pathlib import Path as _Path
 
-    case_dir = _Path(case_dir)
-    constant_dir = case_dir / "constant"
-    electro_path = constant_dir / "electroProperties"
-    physics_path = constant_dir / "physicsProperties"
+    from omnidriver.core.case_transaction import commit_case_write
 
+    case_dir = _Path(case_dir)
+    electro_path = case_dir / "constant" / "electroProperties"
+
+    # Preserved as a direct check, not a channel precondition (2026-09-23,
+    # Phase 2 Task 9): the pre-existing regression test
+    # test_dict_builder.py::test_existing_case_dir_is_not_overwritten_without_consent
+    # asserts this exact FileExistsError type. Routing it through
+    # commit_case_write's precondition recheck instead would surface it as
+    # CaseTransactionError -- a real option (the plan's own Task 9 snippet
+    # assumes exactly that), but not one this migration commit takes, since
+    # it would break that external-facing exception contract for no
+    # behavioural gain.
     if electro_path.exists() and not overwrite:
         raise FileExistsError(
             f"{electro_path} already exists; pass overwrite=True to replace."
         )
 
-    electro_text = build_electro_properties(
-        electro_selectors, overrides=electro_overrides,
-    )
-    physics_text = build_physics_properties(
-        physics_selectors, overrides=physics_overrides,
-    )
+    # The case-write lease and the transaction journal both live case-
+    # adjacent (`.omnidriver/` under `case_root`), so a case root that does
+    # not exist yet -- the common case, a from-scratch case_dir -- has
+    # nowhere for either to be recorded. Old code got this for free from
+    # `constant_dir.mkdir(parents=True, exist_ok=True)` before its first bare
+    # `write_text`; `commit_case_write`'s atomic replace creates a WRITE
+    # TARGET's parent directories itself, but not the case root the lease
+    # needs before any target is even known.
+    case_dir.mkdir(parents=True, exist_ok=True)
 
-    constant_dir.mkdir(parents=True, exist_ok=True)
-    electro_path.write_text(electro_text)
-    physics_path.write_text(physics_text)
-
-    system_dir = case_dir / "system"
-    system_dir.mkdir(parents=True, exist_ok=True)
-
-    from omnidriver.cardiacfoam.system_templates import get_fv_schemes, get_fv_solution, build_control_dict
     myocardium_solver = electro_selectors.get("myocardiumSolver", "monodomainSolver")
 
-    fv_schemes_path = system_dir / "fvSchemes"
-    if not fv_schemes_path.exists() or overwrite:
-        fv_schemes_path.write_text(get_fv_schemes(myocardium_solver))
-
-    fv_solution_path = system_dir / "fvSolution"
-    if not fv_solution_path.exists() or overwrite:
-        fv_solution_path.write_text(get_fv_solution(myocardium_solver))
-
-    control_dict_path = system_dir / "controlDict"
-    if not control_dict_path.exists() or overwrite:
-        dt = delta_t if delta_t is not None else 1e-4
-        et = end_time if end_time is not None else 1.0
-        control_dict_path.write_text(build_control_dict(delta_t=dt, end_time=et))
-
-    if delta_t is not None or end_time is not None:
-        from omnidriver.openfoam.mutators import update_control_dict
-        update_control_dict(
-            case_dir / "system" / "controlDict",
-            delta_t=delta_t,
-            end_time=end_time,
-        )
+    # `own_driver_context()`, not the caller's `driver_context` -- matching
+    # `build_electro_properties`/`build_physics_properties`'s own existing
+    # behaviour, which already validates against `own_driver_context()`
+    # regardless of what this function's caller passed. The `driver_context`
+    # PARAMETER is reserved for the launch phase below, exactly as before
+    # this migration; threading it into the write phase too would be a
+    # behaviour change (a caller-supplied context previously had zero
+    # influence on what got written).
+    write_context = driver_context if driver_context is not None else own_driver_context()
+    plan = build_case(
+        electro_selectors, physics_selectors=physics_selectors, case_dir=case_dir,
+        electro_overrides=electro_overrides, physics_overrides=physics_overrides,
+        overwrite=overwrite, delta_t=delta_t, end_time=end_time, dx=dx,
+        driver_context=write_context,
+    )
+    commit_case_write(plan, driver_context=write_context, execution_env=None)
 
     from omnidriver.cardiacfoam.mesh_provisioning import provision_mesh
     needs_block_mesh = provision_mesh(

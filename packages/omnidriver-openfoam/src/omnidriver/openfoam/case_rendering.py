@@ -132,6 +132,112 @@ def _case_relative(case_root: Path, path: Path) -> str:
         return str(resolved)
 
 
+def render_synthesis_case_files(
+    resolved: Any,
+    *,
+    snapshot_root: Path,
+    driver_context: Any,
+    execution_env: Any | None = None,
+    renderer_id: str,
+) -> tuple[RenderedFile, ...]:
+    """Render a ``synthesize`` resolution.
+
+    Two kinds of target may land on one document, and both may be present at
+    once -- this is the ``repeated_edits_to_one_file`` conformance case in
+    its real setting, ``system/controlDict`` synthesized from a template and
+    then patched with an explicit ``deltaT``/``endTime`` (characterized
+    against the pre-migration ``build_and_launch``, which produced exactly
+    this by writing the file and then calling ``update_control_dict`` on it
+    a second time -- reproduced here as one rendering, not two writes):
+
+    * a ``"content"`` target -- a whole document body, authored from scratch
+      by the semantic owner (e.g. cardiacFoam's ``build_electro_properties``
+      and siblings). This module carries no cardiac vocabulary and does not
+      generate that text, only turns it into bytes.
+    * an edit target (``"expanded_key_path"``/``"value"``, no ``"content"``)
+      -- one key folded into the document's current body via
+      ``update_foam_entry``, applied after the content target (if any) is
+      decided.
+
+    A ``"content"`` target marked ``"skip_if_present": True`` does not
+    replace an already-present file (``mesh_provisioning.provision_mesh``
+    never overwrites a hand-authored ``blockMeshDict``, and a resolution
+    that always proposes one must not force it back through the channel
+    where the real case already has one) -- but any edit targets for that
+    same document still apply, atop the existing file, exactly as they would
+    atop freshly authored content. A document with only edit targets and no
+    already-existing file is refused: there is nothing to fold them onto.
+    """
+    del driver_context, execution_env
+    case_root = Path(resolved.request.case_root)
+    snapshot_root = Path(snapshot_root)
+    rendered: list[RenderedFile] = []
+    for document, edits in sorted(_document_edits(resolved).items()):
+        content_edits = [edit for edit in edits if "content" in edit]
+        patch_edits = [edit for edit in edits if "content" not in edit]
+        if len(content_edits) > 1:
+            raise ValueError(
+                f"synthesis target {document!r} carries {len(content_edits)} "
+                f"whole-document contents; a document's body is authored "
+                f"once, by one target"
+            )
+        content_edit = content_edits[0] if content_edits else None
+        source = case_root / document
+        file_exists = source.is_file()
+
+        use_content = content_edit is not None and not (
+            content_edit.get("skip_if_present") and file_exists
+        )
+        if use_content:
+            body = content_edit["content"]
+            if isinstance(body, str):
+                body = body.encode()
+            exists_before = file_exists
+            before_digest = _digest_bytes(source.read_bytes()) if file_exists else None
+            snapshot_path = snapshot_root / document
+            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            snapshot_path.write_bytes(body)
+        else:
+            if not patch_edits:
+                # The content target was skipped (already present) and
+                # nothing else touches this document: nothing to render.
+                continue
+            if not file_exists:
+                raise ValueError(
+                    f"synthesis target {document!r} carries an edit but no "
+                    f"content and no existing file to fold it onto"
+                )
+            exists_before = True
+            before_digest = _digest_bytes(source.read_bytes())
+            snapshot_path = _snapshot_copy(case_root, snapshot_root, document)
+
+        for edit in patch_edits:
+            key_path = tuple(edit["expanded_key_path"])
+            scope = key_path[:-1] or None
+            key = key_path[-1]
+            # Unlike a patch's declared-but-possibly-absent key (Task 8,
+            # `render_patch_case_files`), a synthesis edit targets a key its
+            # own just-authored template always declares (`deltaT`/`endTime`
+            # in `controlDict`) -- `add_if_missing` defaults False here,
+            # matching the pre-migration `update_control_dict`'s own
+            # `update_foam_entry(path, key, value)` call exactly. Requesting
+            # it anyway with no scope is refused by the structured-editor
+            # tier before it even looks for the key (every template's
+            # FoamFile header's `/*...*/` banner routes it there), for a key
+            # that would have been found regardless.
+            update_foam_entry(
+                snapshot_path, key, edit["value"], scope=scope,
+                add_if_missing=edit.get("add_if_missing", False),
+            )
+
+        rendered.append(RenderedFile(
+            path=document, content=snapshot_path.read_bytes(), mode=None,
+            exists_before=exists_before, before_digest=before_digest,
+            renderer_id=renderer_id, format=FORMAT,
+        ))
+    return tuple(rendered)
+
+
 def patch_preconditions(
     resolved: Any,
     *,
