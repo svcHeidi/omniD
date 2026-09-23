@@ -36,14 +36,19 @@ from pathlib import Path
 
 from omnidriver.cardiacfoam.tutorials.defaults import restitution_curves as defaults
 from omnidriver.cardiacfoam.overrides import (
+    PLUGIN_ID,
     apply_electro_property_overrides,
     apply_physics_property_overrides,
+    commit_case_overrides,
+    merge_assignments,
+    resolve_entry_overrides,
 )
 from omnidriver.core.specs.common import (
     resolve_run_script_path,
     resolve_spec_paths,
 )
 from omnidriver.openfoam.utils import (
+    plan_end_time,
     set_end_time,
 )
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
@@ -121,6 +126,73 @@ def _apply_case(
     apply_physics_property_overrides(physics_properties_file, physics_property_overrides)
 
 
+def _plan_case(
+    case_root: Path,
+    case: CaseConfig,
+    *,
+    stimulus_map: Mapping[str, float],
+    s1_interval_ms: int,
+    n_s1: int,
+    n_s2: int,
+    write_after_time_s: float,
+    end_time_buffer_s: float,
+    electro_properties_scope: str = defaults.ELECTRO_PROPERTIES_SCOPE,
+    electro_properties_relpath: Path = defaults.ELECTRO_PROPERTIES_RELPATH,
+    control_dict_relpath: Path = defaults.CONTROL_DICT_RELPATH,
+    physics_properties_relpath: Path = Path("constant/physicsProperties"),
+    electro_property_overrides: Mapping[str, object] | Sequence[Mapping[str, object]] | None = None,
+    physics_property_overrides: Mapping[str, object] | Sequence[Mapping[str, object]] | None = None,
+):
+    """`TutorialSpec.plan_case` (Phase 3 Task 6). Same arithmetic as
+    `_apply_case`; the `endTime` edit and the electro/physics overrides are
+    described once and committed together."""
+    ionic_model = case.params["ionicModel"]
+    tissue = case.params["tissue"]
+    s2_interval_ms = case.params["s2Interval"]
+
+    if ionic_model not in stimulus_map:
+        raise KeyError(f"Missing stimulus amplitude for ionic model '{ionic_model}'")
+
+    electro_properties_file = case_root / electro_properties_relpath
+    physics_properties_file = case_root / physics_properties_relpath
+    case_overrides = {
+        f"{electro_properties_scope}.tissue": tissue,
+        f"{electro_properties_scope}.ionicModel": ionic_model,
+        f"{electro_properties_scope}.singleCellStimulus.stim_amplitude": stimulus_map[ionic_model],
+        f"{electro_properties_scope}.singleCellStimulus.stim_period_S1": s1_interval_ms,
+        f"{electro_properties_scope}.singleCellStimulus.nstim1": n_s1,
+        f"{electro_properties_scope}.singleCellStimulus.stim_period_S2": s2_interval_ms,
+        f"{electro_properties_scope}.singleCellStimulus.nstim2": n_s2,
+        f"{electro_properties_scope}.writeAfterTime": write_after_time_s,
+    }
+
+    end_time = (s1_interval_ms * (n_s1 - 1) + s2_interval_ms * n_s2) / 1000.0 + end_time_buffer_s
+
+    electro_document = str(electro_properties_relpath)
+    physics_document = str(physics_properties_relpath)
+    parameters = merge_assignments(
+        (plan_end_time(end_time, owner=PLUGIN_ID),),
+        resolve_entry_overrides(
+            electro_properties_file, case_overrides, document=electro_document,
+            electro_properties_path=electro_properties_file,
+        ),
+        resolve_entry_overrides(
+            electro_properties_file, electro_property_overrides, document=electro_document,
+            electro_properties_path=electro_properties_file,
+        ),
+        resolve_entry_overrides(
+            physics_properties_file, physics_property_overrides, document=physics_document,
+        ),
+    )
+
+    return commit_case_overrides(
+        case_root,
+        parameters=parameters,
+        workflow="restitution_curves",
+        requested_by="cardiacfoam.tutorials.restitution_curves",
+    )
+
+
 def make_spec(
     *,
     cases_root: Path | None = None,
@@ -188,6 +260,21 @@ def make_spec(
         ),
         apply_case=partial(
             _apply_case,
+            stimulus_map=stimulus_map,
+            s1_interval_ms=s1_interval_ms,
+            n_s1=n_s1,
+            n_s2=n_s2,
+            write_after_time_s=write_after_time_s,
+            end_time_buffer_s=end_time_buffer_s,
+            electro_properties_scope=electro_properties_scope,
+            electro_properties_relpath=electro_properties_path,
+            control_dict_relpath=control_dict_path,
+            physics_properties_relpath=physics_properties_path,
+            electro_property_overrides=electro_property_overrides,
+            physics_property_overrides=physics_property_overrides,
+        ),
+        plan_case=partial(
+            _plan_case,
             stimulus_map=stimulus_map,
             s1_interval_ms=s1_interval_ms,
             n_s1=n_s1,
