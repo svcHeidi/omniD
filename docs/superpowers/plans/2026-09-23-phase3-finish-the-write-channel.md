@@ -37,13 +37,13 @@ Suite `0 failed` in all four shapes; both static gates pass.
 
 ## Status
 
-Tasks 1–2 done. Tasks 3–11 not started.
+Tasks 1–3 done. Tasks 4–11 not started.
 
 | task | what it closes | state | commit |
 |---|---|---|---|
 | 1 · cut the surface before migrating onto it | over-modelled contract | done | `f476a13` |
 | 2 · `apply_entry_overrides` becomes a resolver | the chokepoint, 28 calls | done | `7830529` |
-| 3 · `controlDict` setters become resolvers | 11 calls | pending | — |
+| 3 · `controlDict` setters become resolvers | 11 calls | done | `2fb5805` |
 | 4 · `replace_block_mesh_resolutions` | 8 calls, the special case | pending | — |
 | 5 · `--apply` joins the channel | **bypass 4** | pending | — |
 | 6 · the eleven tutorials follow through | **bypass 1** (most of it) | pending | — |
@@ -670,19 +670,136 @@ present before this task and unrelated to it). Both static gates pass.
 `set_delta_t` and `set_end_time` are two-line wrappers around
 `update_foam_entry`. 11 calls across the tutorials.
 
-- [ ] **Step 1: Add `plan_delta_t` / `plan_end_time` beside them**
+- [x] **Step 1: Add `plan_delta_t` / `plan_end_time` beside them**
 
 Returning a `ParameterAssignment` each, for `system/controlDict`'s `deltaT` and
 `endTime`, `value_kind="scalar"`. Keep the writing versions until Task 6
 migrates their callers, then retire them in the same commit that removes the last
 caller.
 
-- [ ] **Step 2: Note the overlap with slice B and do not duplicate it**
+- [x] **Step 2: Note the overlap with slice B and do not duplicate it**
 
 `dict_builder`'s synthesis path already renders `controlDict` with both its
 template content and its `deltaT`/`endTime` edits folded into one `RenderedFile`
 — that was Phase 2's `repeated_edits_to_one_file` case in its real setting. Reuse
 that folding rather than writing a second one. If the two cannot share, say why.
+
+### Findings, 2026-09-23
+
+**Step 1 — signatures, and the two decisions the plan left open.**
+`plan_delta_t(delta_t_seconds: float, *, owner: str) -> ParameterAssignment`
+and `plan_end_time(t_s: float, *, owner: str) -> ParameterAssignment`, added
+beside the two-line writers in `utils.py`. No `control_dict_path` parameter —
+unlike `resolve_entry_overrides` (which takes `document` from its caller
+because it has only a bare `file_path` and no case root to derive one from),
+these two need no path at all: `system/controlDict` is a fixed, case-relative
+location, the same for every case, so it is hardcoded (`_CONTROL_DICT_DOCUMENT`)
+rather than threaded through a parameter with nothing genuine to vary.
+
+`owner` is a required keyword, not a default. `utils.py` lives in
+`omnidriver-openfoam`, which this repository's own package table says "must
+not know about cardiology" — so it cannot hardcode `"org.cardiacfoam"` the
+way `dict_builder.py` does for its own `ParameterAssignment`s (that module
+lives inside `omnidriver-cardiacfoam` and owns that identity). No
+`PLUGIN_ID`-equivalent constant exists anywhere in `omnidriver-openfoam`
+today (checked: `grep -rn "PLUGIN_ID\|adapter_id=" packages/omnidriver-openfoam/src/`
+finds none) — inventing a generic one with no second consumer would repeat
+the mistake Task 1 just cut (`generated_input`). Supplied, not discovered.
+
+**`source` — verified constant, for a different reason than Task 2's
+resolver.** Every assignment these two build has `source="case"`. Unlike
+`dict_builder.py`'s synthesis resolver, which genuinely branches
+(`source="case" if delta_t is not None else "template"`, because IT supplies
+a built-in default — `1e-4`/`1.0` — when its own caller passes `None`),
+`plan_delta_t`/`plan_end_time` have no optional parameter and no fallback of
+their own: `delta_t_seconds`/`t_s` are required, exactly like
+`set_delta_t`/`set_end_time`'s existing parameters. Every value they ever see
+is one a caller explicitly chose to assign, so there is no branch to make —
+matching `resolve_entry_overrides`'s reasoning for the same conclusion
+("this function has no fallback of its own").
+
+**Can a `controlDict` value arrive as a rendered string here? Checked, not
+assumed: no.** `grep -rn "set_delta_t\|set_end_time"` across all eleven real
+tutorial call sites (`restitution_curves.py`, `manufactured_bath_bidomain.py`,
+`niederer_2012.py`, `manufactured_monodomain_pseudo_ecg.py`,
+`manufactured_eikonal_ecg.py`, `manufactured_monodomain_total_lagrangian_em.py`,
+`cable_1d_restitution.py`, `manufactured_monodomain_1d3d.py`,
+`cable_1d_cv_convergence.py`) shows every one already computes and passes a
+native Python `float` (`float(case.params["dt"])`, `dt_ms * 1.0e-3`, arithmetic
+on floats) — never an already-rendered OpenFOAM literal string. This differs
+from Task 2's Gap 1 (`dimensioned_scalar`/`dimensioned_tensor`/`vector3`
+catalog entries, whose real callers pass literal text like
+`"[-1 -3 3 0 0 2 0] (0.2 0 0 0.03 0 0.03)"`) for a structural reason: a bare
+`controlDict` scalar has no OpenFOAM-specific literal grammar at all — no
+dimension brackets, no parenthesised magnitude — so there is nothing here
+for `omnidriver.openfoam.literals` to parse. Accordingly `plan_delta_t`/
+`plan_end_time` take `float` only (matching `set_delta_t`/`set_end_time`'s
+existing parameter types exactly), populate no `evidence_refs`, and there is
+no "original spelling" distinct from the Python float value itself to
+preserve — confirmed by a characterization test showing `1e-3` and `0.001`
+already collapse to identical output bytes today (`_format_value` renders a
+float with `str()`, and `1e-3 == 0.001` is the same float). If a future
+caller (Task 6) needs to pass a rendered string, `validate_value_shape`
+refuses it outright (not a `Real`) rather than silently accepting or
+guessing — the same strict-resolver posture Task 2 established, not a new
+gap.
+
+**Does `dict_builder.py`'s `controlDict` folding consume these planners? No
+— and it is not supposed to, by this task's own file scope** (the plan lists
+only `utils.py` and a new test file for Task 3; `dict_builder.py` is not
+listed). Read in full before concluding this
+(`resolve_synthesis_mutation` and `build_and_launch`'s parameter-building
+loop, `dict_builder.py:943-1057` and `:1227-1275`): the fold answers a
+different question than the planners do. `plan_delta_t`/`plan_end_time`
+assume `system/controlDict` **already exists** and unconditionally address
+its real `deltaT`/`endTime` keys — exactly what the eleven tutorial callers
+need, patching a file a template already rendered. `dict_builder.py`'s
+synthesis path has **no existing file to patch**; it must decide what
+content to author from scratch, using a built-in default (`1e-4`/`1.0`) when
+the caller gave none, and *additionally* fold in a second, redundant edit
+target only when the caller gave an explicit value — reproducing a real
+pre-migration double-write bug byte-for-byte
+(`test_synthesis_through_the_channel.py`). That base/patch duality is encoded
+in its own private `ParameterAssignment` convention
+(`key_path=("deltaT_base",)` / `("deltaT_patch",)`, `qualified_id=
+"$CARDIACFOAM.control.deltaT_base"`) that `resolve_synthesis_mutation` alone
+unpacks into `control_values` before building `build_control_dict(...)`'s
+freshly authored text — a content-authoring decision no planner addressing a
+concrete `("deltaT",)` key against an existing document can make. The
+**mechanism** that folds multiple edit targets addressing one document into
+a single `RenderedFile` (`case_rendering.py`'s `_document_edits` /
+`render_synthesis_case_files`) is genuinely shared already, by both
+`resolve_patch_mutation` (cardiacCore's `clone_and_patch` producer) and
+`resolve_synthesis_mutation` — this task adds no second copy of *that*, which
+is the duplication the plan actually warns against. A smaller, optional
+reuse **is** available and was deliberately left for a later task rather
+than done here: `dict_builder.py` could build its `deltaT_patch`/
+`endTime_patch` target dicts by calling `plan_delta_t`/`plan_end_time` and
+reading `.document`/`.expanded_key_path()`/`.value` off the result, instead of
+writing the literal key `"deltaT"`/`"endTime"` a second time — genuine, but
+out of this task's file scope (`dict_builder.py` is not listed as a file
+Task 3 modifies), and changing that module's synthesis path is a
+Task 6/7-shaped decision, not this one's.
+
+**Characterization (Step 2 of the report, not of this checklist).**
+`test_control_dict_resolution.py` pins `set_delta_t`/`set_end_time`'s exact
+output by content digest for both spellings of the same float
+(`1e-3`/`0.001`), and separately proves those two spellings already collapse
+to identical bytes today — a real, verified writer behaviour: `update_foam_entry`
+rewrites a whole-line entry as `<indent><key>    <value>;` (four spaces, not
+the original column alignment; confirmed by direct execution, not assumed —
+`deltaT          1e-06;` becomes `deltaT    0.001;`, `endTime         1;`
+becomes `endTime    250.0;`, `str(250.0)`'s `.0` carried through). Both pass
+before and unchanged after this task's change. Verified by reverting
+`utils.py` alone: exactly the twelve planner tests fail (`NoneType` not
+callable, since the test module's planner import falls back to `None` when
+`plan_delta_t`/`plan_end_time` do not exist yet), the four characterization
+tests still pass — no more and no fewer failures either way.
+
+**All four shapes, 0 failed** (core-only shape's
+`test_every_core_module_imports_from_a_wheel` aborts in `ensurepip`,
+documented pre-existing and environmental, unrelated to this task — this
+task touches no core module). Both static gates pass.
 
 ---
 
