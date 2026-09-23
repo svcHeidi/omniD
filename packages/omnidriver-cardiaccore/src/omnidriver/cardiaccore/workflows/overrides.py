@@ -297,6 +297,17 @@ def resolve_patch_mutation(request: CaseMutationRequest) -> ResolvedMutation:
     `_parameters_for`, this module's only place that resolves a declared
     ``$SCOPE`` path against the catalog. This just repackages that addressing
     into a `ResolvedMutation`; it reads and writes nothing.
+
+    **Carries `parameter.operation` through, 2026-09-23** (the decision, "a
+    parameter asserts a final state, not only a value") -- no cardiacCore
+    workflow builds an `ensure`/`remove` parameter today (`_parameters_for`
+    only ever constructs the implicit `set` default), so this is a
+    correctness/symmetry change, not one any current caller exercises: it
+    keeps this resolver's target shape identical to
+    `cardiacfoam.overrides.resolve_patch_mutation`'s, which both feed the
+    same shared renderer (`case_rendering.render_patch_case_files`). A
+    `remove` target carries no `"value"` -- `parameter.value` is `None` for
+    one, and there is nothing to write.
     """
     if request.mode != "clone_and_patch":
         raise ValueError(
@@ -308,13 +319,14 @@ def resolve_patch_mutation(request: CaseMutationRequest) -> ResolvedMutation:
             "qualified_id": parameter.qualified_id,
             "document": parameter.document,
             "expanded_key_path": list(parameter.expanded_key_path()),
-            "value": parameter.value,
+            "operation": parameter.operation,
             "format": "openfoam_dictionary",
+            **({"value": parameter.value} if parameter.operation != "remove" else {}),
         }
         for parameter in request.parameters
     )
     expected_effects = tuple(
-        f"set {parameter.qualified_id!r} in {parameter.document}"
+        f"{parameter.operation} {parameter.qualified_id!r} in {parameter.document}"
         for parameter in request.parameters
     )
     return ResolvedMutation(

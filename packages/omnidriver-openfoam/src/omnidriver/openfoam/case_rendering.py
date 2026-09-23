@@ -51,7 +51,7 @@ from typing import Any, Mapping
 from omnidriver.core.case_write import Precondition, RenderedFile, _digest_bytes
 
 from .effective_dictionary import _inspect_source_closure
-from .mutators import update_foam_entry
+from .mutators import ensure_foam_dict, remove_foam_dict, remove_foam_entry, update_foam_entry
 from .utils import _rewrite_hex_block_lines
 
 #: The one format this module renders. Declared truthfully by whichever
@@ -112,6 +112,55 @@ def render_patch_case_files(
     two would make "how many blocks changed" depend on application order,
     the same duplicate-slot reasoning ``CaseMutationRequest`` already applies
     to ``ParameterAssignment``\\ s.
+
+    **A target may instead carry ``"dict_operation"``** (Phase 3 Task 6's
+    completion, 2026-09-23) -- ``"ensure"`` with a ``"block_text"``, or
+    ``"remove"`` -- a whole sub-dictionary inserted or deleted verbatim,
+    rather than one key set to one value. Not a ``ParameterAssignment``: like
+    the hex rewrite above, there is no single ``key_path`` a typed value sits
+    at -- ``block_text`` is hand-authored OpenFOAM text a tutorial supplies
+    (e.g. an ``ecgDomains`` block with several nested sub-dictionaries), and
+    inventing a ``value_kind`` to carry that through core's vocabulary would
+    be the same layering mistake the hex case's own docstring already
+    rejects. Delegates to :func:`mutators.ensure_foam_dict`/
+    :func:`mutators.remove_foam_dict` -- reused, not reimplemented, same as
+    every other edit this function applies. Applied **before** the ordinary
+    key/value edits below, not after: a real caller
+    (``manufactured_bath_bidomain``'s ``ecgDomains`` block, inserted via this
+    path and then immediately patched at ``ecgDomains.bodyECG.ecgSolver`` by
+    an ordinary ``set`` in the same commit) depends on the block existing
+    before a scoped key inside it can be found at all -- the reverse order
+    would have the ``set`` fail against a scope that does not exist yet. A
+    document whose ``ecgDomains`` block is being *removed* in the same
+    commit never also sets a key inside it (the caller's own branch is
+    exclusive on ``ecg_enabled``), so this fixed order never conflicts with
+    the removal case either. ``remove`` is idempotent -- always applied with
+    ``missing_ok=True`` -- because a `ParameterAssignment`-shaped removal
+    asserts the document's *final* state (the block is gone), not that a
+    deletion action occurred; a block already absent already satisfies that
+    assertion.
+
+    **A value edit's ``"operation"``** (same 2026-09-23 decision) selects
+    which write `mutators.update_foam_entry`/`mutators.remove_foam_entry`
+    performs, defaulting to ``"set"`` for a target built before the field
+    existed:
+
+    - ``"set"`` -- ``add_if_missing=False``. The key must already be there;
+      a typo fails loudly. **Corrected 2026-09-23:** before this, every edit
+      here was applied with ``add_if_missing=True`` regardless, which made a
+      channel-routed ``set`` silently more permissive than the direct writer
+      it replaces (`cardiacfoam.overrides.apply_entry_overrides`, which has
+      never allowed a missing key). No currently-migrated tutorial's real
+      template was missing any of its overridden keys, so tightening this
+      changed no test's outcome -- confirmed by running the full suite
+      after the change, not assumed.
+    - ``"ensure"`` -- ``add_if_missing=True``, the typed counterpart of an
+      upsert (e.g. a bath-boundary patch entry whose presence varies with
+      which boundary variant a reused ``case_root`` was last written for).
+    - ``"remove"`` -- :func:`mutators.remove_foam_entry`, not
+      ``update_foam_entry`` at all, also with ``missing_ok=True`` for the
+      same "final-state assertion, not an action" reasoning ``dict_operation``
+      removal gives above.
     """
     del driver_context, execution_env
     case_root = Path(resolved.request.case_root)
@@ -130,7 +179,11 @@ def render_patch_case_files(
         snapshot_path = _snapshot_copy(case_root, snapshot_root, document)
 
         hex_edits = [edit for edit in edits if "hex_cell_counts" in edit]
-        value_edits = [edit for edit in edits if "hex_cell_counts" not in edit]
+        dict_edits = [edit for edit in edits if "dict_operation" in edit]
+        value_edits = [
+            edit for edit in edits
+            if "hex_cell_counts" not in edit and "dict_operation" not in edit
+        ]
         if len(hex_edits) > 1:
             raise ValueError(
                 f"patch target {document!r} carries {len(hex_edits)} hex "
@@ -143,13 +196,43 @@ def render_patch_case_files(
                 int(edit["expected_blocks"]), label=document,
             )
             snapshot_path.write_text(rewritten)
+        for edit in dict_edits:
+            scope = tuple(edit["scope"]) if edit.get("scope") else None
+            if edit["dict_operation"] == "ensure":
+                ensure_foam_dict(
+                    snapshot_path, edit["dict_name"], edit["block_text"], scope=scope,
+                )
+            elif edit["dict_operation"] == "remove":
+                remove_foam_dict(
+                    snapshot_path, edit["dict_name"], scope=scope, missing_ok=True,
+                )
+            else:
+                raise ValueError(
+                    f"patch target {document!r} declares dict_operation "
+                    f"{edit['dict_operation']!r}; known operations are "
+                    f"'ensure' and 'remove'"
+                )
         for edit in value_edits:
             key_path = tuple(edit["expanded_key_path"])
             scope = key_path[:-1] or None
             key = key_path[-1]
-            update_foam_entry(
-                snapshot_path, key, edit["value"], scope=scope, add_if_missing=True,
-            )
+            operation = edit.get("operation", "set")
+            if operation == "remove":
+                remove_foam_entry(snapshot_path, key, scope=scope, missing_ok=True)
+            elif operation == "ensure":
+                update_foam_entry(
+                    snapshot_path, key, edit["value"], scope=scope, add_if_missing=True,
+                )
+            elif operation == "set":
+                update_foam_entry(
+                    snapshot_path, key, edit["value"], scope=scope, add_if_missing=False,
+                )
+            else:
+                raise ValueError(
+                    f"patch target {document!r} declares operation "
+                    f"{operation!r} for {key!r}; known operations are "
+                    f"'set', 'ensure' and 'remove'"
+                )
         rendered.append(RenderedFile(
             path=document, content=snapshot_path.read_bytes(), mode=mode,
             exists_before=True, before_digest=before_digest,

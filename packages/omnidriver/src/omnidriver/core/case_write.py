@@ -37,7 +37,7 @@ from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import Any, Mapping
 
-from .contracts.dictionary import validate_value_shape
+from .contracts.dictionary import VALUE_KINDS, validate_value_shape
 
 #: Bumped whenever a field is added, removed or reinterpreted. A plan
 #: serialized under one version is not readable under another: a reader that
@@ -64,6 +64,21 @@ PRECONDITION_KINDS = frozenset({
 #: as unused; a later reader should not conflate the two.
 
 MUTATION_MODES = frozenset({"clone_and_patch", "synthesize"})
+
+#: What a `ParameterAssignment` asserts about the document's *final* state,
+#: not merely the action that gets it there (2026-09-23 decision, "a
+#: parameter asserts a final state, not only a value"). ``set`` is the
+#: default and matches every assignment built before this field existed: the
+#: key already exists, and must hold this value. ``ensure`` is the same
+#: assertion plus "...and if the key is absent, create it" -- the typed
+#: counterpart of `mutators.update_foam_entry`'s own `add_if_missing`.
+#: ``remove`` asserts the key does not exist; it carries no value at all
+#: (enforced in `ParameterAssignment.__post_init__`, the same "digest and
+#: must_be_absent are different claims" reasoning `Precondition` already
+#: applies). One vocabulary, not three types: a caller that wants to upsert
+#: or delete still builds a `ParameterAssignment`, just with a different
+#: `operation`.
+PARAMETER_OPERATIONS = frozenset({"set", "ensure", "remove"})
 
 #: Where a value came from. These never convert into one another: a tutorial
 #: example is not a solver default, and a plausible number is not a validated
@@ -148,6 +163,7 @@ class ParameterAssignment:
     allowed_bindings: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     unit: str = ""
     evidence_refs: tuple[str, ...] = ()
+    operation: str = "set"
 
     def __post_init__(self) -> None:
         # Coerced to a tuple before anything below reads it (R2 finding 3): a
@@ -165,18 +181,60 @@ class ParameterAssignment:
                 f"parameter {self.qualified_id!r} declares value source "
                 f"{self.source!r}; known sources are {sorted(VALUE_SOURCES)}"
             )
+        if self.operation not in PARAMETER_OPERATIONS:
+            raise ValueError(
+                f"parameter {self.qualified_id!r} declares operation "
+                f"{self.operation!r}; known operations are "
+                f"{sorted(PARAMETER_OPERATIONS)}"
+            )
+        # 2026-09-23 decision ("a parameter asserts a final state, not only a
+        # value"): `remove` asserts absence, which is a different claim from
+        # "has this value" -- carrying a value alongside it would be two
+        # assertions on one field, so it is refused outright, the same way
+        # `Precondition` refuses a `digest` together with `must_be_absent`.
+        # `set`/`ensure` still require a value; every declared `VALUE_KINDS`
+        # shape check already rejects `None`, but refusing it here first
+        # gives a caller a direct answer instead of a shape-mismatch message
+        # about `None` not fitting `"scalar"`/`"boolean"`/etc.
+        if self.operation == "remove":
+            if self.value is not None:
+                raise ValueError(
+                    f"parameter {self.qualified_id!r} declares operation "
+                    f"'remove' but also a value ({self.value!r}); removal "
+                    f"asserts the key is absent, which is a different claim "
+                    f"from 'has this value' -- Precondition refuses the same "
+                    f"combination for `must_be_absent`/`digest`"
+                )
+        elif self.value is None:
+            raise ValueError(
+                f"parameter {self.qualified_id!r} declares operation "
+                f"{self.operation!r}, which requires a value; only 'remove' "
+                f"may omit one"
+            )
         # Plan's 2026-09-23 decision ("a parameter value is typed data, never
         # rendered text"): a value is native Python data, checked against its
         # declared shape here, not rendered text checked nowhere. This closes
         # R2 finding 4 -- `value_kind="scalar", value=float("nan")` and
         # `value_kind="banana"` were both accepted before this call existed.
-        shape_reasons = validate_value_shape(self.value_kind, self.value)
-        if shape_reasons:
+        # `value_kind` itself is always checked, even for `remove` -- it
+        # still names the shape of the key being removed, for audit
+        # purposes, so `value_kind="banana"` is refused regardless of
+        # operation. Only the "does the value fit that shape" half is
+        # skipped for `remove`: there is no value to check.
+        if self.value_kind not in VALUE_KINDS:
             raise ValueError(
                 f"parameter {self.qualified_id!r} declares value_kind "
-                f"{self.value_kind!r} but its value does not fit: "
-                f"{'; '.join(shape_reasons)}"
+                f"{self.value_kind!r}, which is not one of "
+                f"{sorted(VALUE_KINDS)}"
             )
+        if self.operation != "remove":
+            shape_reasons = validate_value_shape(self.value_kind, self.value)
+            if shape_reasons:
+                raise ValueError(
+                    f"parameter {self.qualified_id!r} declares value_kind "
+                    f"{self.value_kind!r} but its value does not fit: "
+                    f"{'; '.join(shape_reasons)}"
+                )
         for placeholder, bound in self.binding.items():
             allowed = self.allowed_bindings.get(placeholder)
             if allowed is None:
@@ -222,6 +280,7 @@ class ParameterAssignment:
             },
             "unit": self.unit,
             "evidence_refs": list(self.evidence_refs),
+            "operation": self.operation,
         }
 
     @classmethod
@@ -240,6 +299,12 @@ class ParameterAssignment:
                 for key, values in payload.get("allowed_bindings", {}).items()
             },
             unit=payload.get("unit", ""),
+            # Absent in a plan written before this field existed (schema
+            # version unchanged -- see the 2026-09-23 decision's report):
+            # every such assignment was implicitly a `set`, so that is the
+            # neutral default here, the same "no field means the prior,
+            # only behaviour" reasoning `unit`/`evidence_refs` already use.
+            operation=payload.get("operation", "set"),
             evidence_refs=tuple(payload.get("evidence_refs", ())),
         )
 

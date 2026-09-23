@@ -545,6 +545,29 @@ def _write_value_for_assignment(assignment: ParameterAssignment) -> Any:
     return render(assignment.value) if render is not None else assignment.value
 
 
+def _target_for_parameter(parameter: ParameterAssignment) -> dict[str, Any]:
+    """One `render_patch_case_files` edit target for `parameter` (2026-09-23
+    decision, "a parameter asserts a final state, not only a value").
+
+    A `remove` carries no `"value"` key: there is nothing to format (its
+    `value` is `None`, refused as a value to write), and `render_patch_case_files`
+    never reads `"value"` for a `remove` edit -- matching the hex-rewrite
+    target's own shape, which also carries no `"value"`, for the same reason.
+    Every other operation keeps writing `_write_value_for_assignment`'s
+    result, unchanged from before this field existed.
+    """
+    target: dict[str, Any] = {
+        "qualified_id": parameter.qualified_id,
+        "document": parameter.document,
+        "expanded_key_path": list(parameter.expanded_key_path()),
+        "operation": parameter.operation,
+        "format": case_rendering.FORMAT,
+    }
+    if parameter.operation != "remove":
+        target["value"] = _write_value_for_assignment(parameter)
+    return target
+
+
 def resolve_patch_mutation(request: CaseMutationRequest) -> ResolvedMutation:
     """The semantic owner's answer for a `clone_and_patch` request
     (Phase 3 Task 6, "the eleven tutorials follow through").
@@ -563,24 +586,24 @@ def resolve_patch_mutation(request: CaseMutationRequest) -> ResolvedMutation:
     `update_foam_entry(..., edit["value"], ...)` would not reproduce
     `apply_entry_overrides`'s bytes for a dimensioned/vector3/list kind --
     see this task's report.
+
+    **Carries `parameter.operation` through, 2026-09-23.** A `remove`
+    parameter has no value to format (`ParameterAssignment.__post_init__`
+    refuses one) -- `_write_value_for_assignment` is not called for it, and
+    its target carries no `"value"` key at all, matching the hex-rewrite
+    target's own shape (no `"value"` either, for the same reason: nothing
+    to write). `render_patch_case_files` reads `target["operation"]`,
+    defaulting to `"set"` for a target this still-unmodified `else` branch
+    would have built before this field existed.
     """
     if request.mode != "clone_and_patch":
         raise ValueError(
             f"cardiacFoam's overrides workflow resolves clone_and_patch "
             f"requests only, not {request.mode!r}"
         )
-    targets = tuple(
-        {
-            "qualified_id": parameter.qualified_id,
-            "document": parameter.document,
-            "expanded_key_path": list(parameter.expanded_key_path()),
-            "value": _write_value_for_assignment(parameter),
-            "format": case_rendering.FORMAT,
-        }
-        for parameter in request.parameters
-    )
+    targets = tuple(_target_for_parameter(parameter) for parameter in request.parameters)
     expected_effects = tuple(
-        f"set {parameter.qualified_id!r} in {parameter.document}"
+        f"{parameter.operation} {parameter.qualified_id!r} in {parameter.document}"
         for parameter in request.parameters
     )
     return ResolvedMutation(
