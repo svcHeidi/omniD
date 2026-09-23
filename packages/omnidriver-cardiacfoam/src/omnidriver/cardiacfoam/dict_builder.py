@@ -1361,10 +1361,17 @@ def build_and_launch(
         # `commit_case_write` entirely (Task 12 migrates this; see the
         # dated comment at the copy site in
         # `mesh_provisioning.provision_mesh` for the clobber risk R3 found
-        # there).
+        # there). Called even under `dry_run` -- so `dx`-for-a-meshless-
+        # solver validation still fires -- but `provision_mesh` itself now
+        # takes `dry_run` and skips the filesystem effect (R3 finding 8,
+        # 2026-09-23): a dry run must not write a mesh, and this call
+        # previously wrote one unconditionally.
         from omnidriver.cardiacfoam.mesh_provisioning import provision_mesh
 
-        provision_mesh(case_dir=case_dir, myocardium_solver=myocardium_solver, dx_m=dx)
+        provision_mesh(
+            case_dir=case_dir, myocardium_solver=myocardium_solver, dx_m=dx,
+            dry_run=dry_run,
+        )
 
     if dry_run:
         return {

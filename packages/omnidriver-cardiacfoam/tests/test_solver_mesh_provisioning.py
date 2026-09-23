@@ -75,3 +75,35 @@ def test_provision_mesh_leaves_an_unknown_solver_to_the_caller(tmp_path):
     assert provision_mesh(case_dir=case_dir, myocardium_solver="futureSolver") is False
     assert not (case_dir / "system" / "blockMeshDict").exists()
     assert not (case_dir / "constant" / "polyMesh").exists()
+
+
+def test_provision_mesh_dry_run_writes_nothing_for_a_meshless_solver(tmp_path):
+    """R3 finding 8 (2026-09-23): `dry_run=True` must not write the bundled
+    polyMesh fixture -- `build_and_launch`'s dry_run promise ("writes the
+    dicts and returns without further effect") was broken by an
+    unconditional `provision_mesh` call."""
+    case_dir = tmp_path / "case"
+    needs_block_mesh = provision_mesh(
+        case_dir=case_dir, myocardium_solver="singleCellSolver", dry_run=True,
+    )
+    assert needs_block_mesh is False
+    assert not (case_dir / "constant" / "polyMesh").exists()
+
+
+def test_provision_mesh_dry_run_writes_nothing_for_a_spatial_solver(tmp_path):
+    case_dir = tmp_path / "case"
+    needs_block_mesh = provision_mesh(
+        case_dir=case_dir, myocardium_solver="monodomainSolver", dry_run=True,
+    )
+    assert needs_block_mesh is True
+    assert not (case_dir / "system" / "blockMeshDict").exists()
+
+
+def test_provision_mesh_dry_run_still_rejects_dx_for_meshless_solver(tmp_path):
+    """Validation is not part of the filesystem effect `dry_run` skips."""
+    case_dir = tmp_path / "case"
+    with pytest.raises(ValueError, match="dx"):
+        provision_mesh(
+            case_dir=case_dir, myocardium_solver="singleCellSolver",
+            dx_m=0.0004, dry_run=True,
+        )

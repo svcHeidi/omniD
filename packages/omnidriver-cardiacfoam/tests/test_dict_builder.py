@@ -571,6 +571,17 @@ class TestBuildAndLaunchMeshProvisioning(unittest.TestCase):
     """
 
     def test_single_cell_solver_gets_a_static_polymesh(self) -> None:
+        """Corrected 2026-09-23 (R3 finding 8): this used to assert that
+        `dry_run=True` left a real polyMesh on disk, which encoded the very
+        defect that finding reported -- `build_and_launch` called
+        `provision_mesh` unconditionally, so a *dry run* silently wrote a
+        mesh, breaking the promise that `dry_run=True` writes only the dicts
+        and returns without further effect. `provision_mesh` itself is still
+        exercised writing the real polyMesh, directly, in
+        `test_solver_mesh_provisioning.py::
+        test_provision_mesh_copies_the_bundled_single_cell_polymesh` -- that
+        coverage did not depend on going through `build_and_launch`'s
+        `dry_run` path at all."""
         import tempfile
         from pathlib import Path
         from omnidriver.cardiacfoam.dict_builder import build_and_launch
@@ -589,8 +600,34 @@ class TestBuildAndLaunchMeshProvisioning(unittest.TestCase):
             )
             poly_mesh = case_dir / "constant" / "polyMesh"
             for name in ("points", "faces", "owner", "neighbour", "boundary"):
-                self.assertTrue((poly_mesh / name).exists(), f"missing {name}")
+                self.assertFalse((poly_mesh / name).exists(), f"dry_run wrote {name}")
             self.assertFalse(result.get("needs_block_mesh", False))
+
+    def test_single_cell_solver_dx_validation_still_fires_under_dry_run(self) -> None:
+        """R3 finding 8's `dry_run` fix must not also skip validation --
+        `provision_mesh`'s `dx_m` rejection for a meshless solver runs
+        unconditionally, only the filesystem effect is skipped under
+        `dry_run`. Companion to `test_dx_kwarg_rejected_for_meshless_solver`
+        below, stated at this class's level."""
+        import tempfile
+        from pathlib import Path
+        from omnidriver.cardiacfoam.dict_builder import build_and_launch
+
+        with tempfile.TemporaryDirectory() as temp:
+            case_dir = Path(temp) / "case"
+            with self.assertRaisesRegex(ValueError, "dx"):
+                build_and_launch(
+                    electro_selectors={
+                        "myocardiumSolver": "singleCellSolver",
+                        "ionicModel": "AlievPanfilov",
+                        "tissue": "myocyte",
+                    },
+                    physics_selectors={"type": "electroModel"},
+                    case_dir=case_dir,
+                    dry_run=True,
+                    dx=0.0004,
+                )
+            self.assertFalse((case_dir / "constant" / "polyMesh").exists())
 
     def test_spatial_solver_gets_a_block_mesh_dict(self) -> None:
         import tempfile

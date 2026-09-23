@@ -68,6 +68,7 @@ _POLYMESH_FILES = ("points", "faces", "owner", "neighbour", "boundary")
 
 def provision_mesh(
     *, case_dir: Path, myocardium_solver: str, dx_m: float | None = None,
+    dry_run: bool = False,
 ) -> bool:
     """Provision whatever mesh `myocardium_solver` needs under `case_dir`.
 
@@ -89,6 +90,22 @@ def provision_mesh(
     rather than silently having no effect, and it has no bearing on real
     anatomical meshes imported via `vtkUnstructuredToFoam`, which this
     function never touches.
+
+    `dry_run` (2026-09-23, R3 finding 8): validation (the `dx_m` rejection
+    above) still runs unconditionally -- a dry run that silently skipped it
+    would let `build_and_launch(..., dry_run=True, dx=...)` claim success for
+    a combination the real run would refuse. Only the filesystem effect below
+    is skipped, so a dry run reports what it would do without writing a mesh.
+
+    **Known clobber risk, not fixed here (R3 finding 8, 2026-09-23):** the
+    `MESHLESS_SOLVERS` skip guard below is ``all(...)`` over the five
+    polyMesh files, so a *partially* present hand-authored mesh (some but not
+    all five) fails the guard and every one of the five is silently
+    overwritten. This function bypasses `commit_case_write` entirely, so
+    there is no precondition to refuse that the way the write channel would.
+    Migrating this branch onto the channel -- where a partial-mesh
+    precondition could refuse instead of overwriting -- is Task 12, not this
+    batch.
     """
     if myocardium_solver in MESHLESS_SOLVERS:
         if dx_m is not None:
@@ -98,7 +115,7 @@ def provision_mesh(
             )
         poly_mesh_dir = case_dir / "constant" / "polyMesh"
         already_present = all((poly_mesh_dir / name).exists() for name in _POLYMESH_FILES)
-        if not already_present:
+        if not already_present and not dry_run:
             poly_mesh_dir.mkdir(parents=True, exist_ok=True)
             for name in _POLYMESH_FILES:
                 shutil.copyfile(_SINGLE_CELL_POLYMESH_DIR / name, poly_mesh_dir / name)
@@ -106,7 +123,7 @@ def provision_mesh(
 
     if myocardium_solver in BLOCK_MESH_SOLVERS:
         block_mesh_dict = case_dir / "system" / "blockMeshDict"
-        if not block_mesh_dict.exists():
+        if not block_mesh_dict.exists() and not dry_run:
             block_mesh_dict.parent.mkdir(parents=True, exist_ok=True)
             block_mesh_dict.write_text(default_block_mesh_dict_text(dx_m=dx_m))
         return True
