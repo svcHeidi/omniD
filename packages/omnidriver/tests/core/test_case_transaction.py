@@ -199,6 +199,43 @@ def test_a_second_attempt_under_a_held_lease_is_refused(tmp_path):
             )
 
 
+def test_case_lease_held_reuses_the_callers_own_lease(tmp_path):
+    """Phase 3 Task 5: `--apply` calls this from inside `cli.py`'s own
+    already-held case lease (`_dispatch_context`). Without
+    `case_lease_held=True`, this reproduces
+    `test_a_second_attempt_under_a_held_lease_is_refused` above -- the same
+    thread's own lease looks exactly like a conflicting second attempt.
+    `case_lease_held=True` must let the commit through, using the caller's
+    lease rather than acquiring (and refusing on) its own."""
+    from omnidriver.core.runtime.attempt_lease import acquire_case_lease
+
+    plan = _plan(tmp_path, [_rendered("constant/a", b"one\n")])
+    with acquire_case_lease(tmp_path):
+        record = case_transaction.commit_case_write(
+            plan, driver_context=object(), execution_env=None,
+            case_lease_held=True,
+        )
+    assert record.status == "committed"
+    assert (tmp_path / "constant" / "a").read_bytes() == b"one\n"
+    # The caller's lease is untouched -- released only when the caller's own
+    # `with` block exits, not early by this commit.
+    assert not case_transaction.pending_transaction(tmp_path)
+
+
+def test_case_lease_held_refuses_an_unverified_claim(tmp_path):
+    """`case_lease_held=True` is checked, not merely trusted (R3 finding 6's
+    same "report the real cause" spirit): a caller that claims to already
+    hold the lease without actually holding it must be refused loudly rather
+    than proceed with no serialization at all."""
+    plan = _plan(tmp_path, [_rendered("constant/a", b"one\n")])
+    with pytest.raises(case_transaction.CaseTransactionError, match="case_lease_held"):
+        case_transaction.commit_case_write(
+            plan, driver_context=object(), execution_env=None,
+            case_lease_held=True,
+        )
+    assert not (tmp_path / "constant" / "a").exists()
+
+
 def test_the_journal_is_removed_after_a_clean_commit(tmp_path):
     plan = _plan(tmp_path, [_rendered("constant/a", b"one\n")])
     case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)

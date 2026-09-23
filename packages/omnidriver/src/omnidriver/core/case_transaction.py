@@ -61,7 +61,7 @@ from .case_write import (
     _digest_bytes,
 )
 from .planning_types import SimulationAuditItem
-from .runtime.attempt_lease import AttemptLeaseError, acquire_case_lease
+from .runtime.attempt_lease import AttemptLeaseError, acquire_case_lease, case_lease_is_held
 from .runtime.transaction_mechanics import (
     atomic_write_bytes as _atomic_write_bytes,
     atomic_write_json as _atomic_write_json,
@@ -500,12 +500,33 @@ def commit_case_write(
     driver_context: Any,
     execution_env: Any,
     transaction_id: str | None = None,
+    case_lease_held: bool = False,
 ) -> CaseWriteRecord:
     """Commit a reviewed plan, or replay a completed one by id.
 
     Ordering (roadmap lifecycle steps 5-6): replay check -> stack-freshness
     check -> lease -> unrecovered-journal check -> preconditions -> path
     safety -> journal -> writes -> (rollback on failure | completion record).
+
+    ``case_lease_held`` (added 2026-09-23, Phase 3 Task 5): the lease this
+    function acquires is host-local and **not reentrant** (see
+    ``runtime.attempt_lease``'s own docstring) -- a second
+    ``acquire_case_lease`` from the same thread finds its own record already
+    on disk and refuses it as a conflicting owner. `--apply` joining this
+    channel exposed a caller shape Task 1-4 never exercised: `cli.py`'s
+    `--apply` dispatch already holds the case lease for the whole `step`
+    execution (`_dispatch_context`) before `apply_overrides.py` reaches this
+    function, so an unconditional acquire-here would refuse itself. Passing
+    ``case_lease_held=True`` tells this function the caller already owns the
+    lease for `plan.request.case_root` (verified, not merely trusted, against
+    `case_lease_is_held` -- a caller that lies about holding it is a bug
+    worth failing loudly for, not silently running unprotected) and this call
+    neither acquires nor releases a second one, relying on the caller's own
+    lease for the whole duration instead. Every existing caller (e.g.
+    `cardiaccore.workflows.overrides.apply_input_overrides_planned`, and this
+    module's own tests) omits it, defaults to ``False``, and keeps acquiring
+    its own lease exactly as before -- this is additive, not a behaviour
+    change for them.
     """
     case_root = Path(plan.request.case_root)
 
@@ -524,20 +545,30 @@ def commit_case_write(
 
     _check_stack_freshness(plan, driver_context)
 
-    try:
-        lease_context = acquire_case_lease(case_root)
-        lease_context.__enter__()
-    except AttemptLeaseError as exc:
-        # R3 finding 6 (2026-09-23): this used to always say "write lease is
-        # already held", regardless of *why* `acquire_case_lease` refused --
-        # including when the real reason was that `case_root` does not exist
-        # at all (a relative root that failed to resolve where the caller
-        # expected, before blocker 2's construction-time guard closed the
-        # most common way that happened). Report the cause `exc` actually
-        # gives, not an assumption about which one it must be.
-        raise CaseTransactionError(
-            f"cannot acquire the write lease for case {case_root}: {exc}"
-        ) from exc
+    lease_context = None
+    if case_lease_held:
+        if not case_lease_is_held(case_root):
+            raise CaseTransactionError(
+                f"commit_case_write was called with case_lease_held=True for "
+                f"{case_root}, but this thread does not hold that case's "
+                f"lease; refusing to proceed unprotected rather than trust "
+                f"an unverified claim"
+            )
+    else:
+        try:
+            lease_context = acquire_case_lease(case_root)
+            lease_context.__enter__()
+        except AttemptLeaseError as exc:
+            # R3 finding 6 (2026-09-23): this used to always say "write lease is
+            # already held", regardless of *why* `acquire_case_lease` refused --
+            # including when the real reason was that `case_root` does not exist
+            # at all (a relative root that failed to resolve where the caller
+            # expected, before blocker 2's construction-time guard closed the
+            # most common way that happened). Report the cause `exc` actually
+            # gives, not an assumption about which one it must be.
+            raise CaseTransactionError(
+                f"cannot acquire the write lease for case {case_root}: {exc}"
+            ) from exc
 
     try:
         pending = pending_transaction(case_root)
@@ -598,7 +629,8 @@ def commit_case_write(
         _persist_completed(case_root, record)
         return record
     finally:
-        lease_context.__exit__(None, None, None)
+        if lease_context is not None:
+            lease_context.__exit__(None, None, None)
 
 
 def recover_case_transaction(case_root: Path) -> CaseWriteRecord | None:
