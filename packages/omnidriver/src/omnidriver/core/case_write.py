@@ -19,6 +19,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import math
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
@@ -58,22 +59,55 @@ def _check_case_relative(label: str, value: str) -> PurePosixPath:
     return path
 
 
+#: The only JSON-representable scalar types. Deliberately excludes ``bytes``:
+#: JSON has no byte-string type, and ``RenderedFile.content`` already carries
+#: real bytes outside this payload system (see its docstring on why the
+#: "referenced by digest" rule does not apply there).
+_JSON_SCALAR_TYPES = (type(None), bool, int, float, str)
+
+
 def _freeze(value: Any) -> Any:
     """Deep-freeze a payload so a "frozen" record has no mutable interior.
 
     ``@dataclass(frozen=True)`` prevents rebinding a field, not mutating the
     object a field points at. A plan holding a ``dict`` is a reviewed plan whose
     reviewed contents can change after review -- proposal defect W1.
+
+    Also where "a plan payload must be JSON-shaped and immutable" is made
+    true rather than merely claimed (R2 finding 3): a mapping key must be a
+    ``str`` -- JSON has no other key type, and an int key silently becomes a
+    string on a real JSON round trip without changing the plan digest, which
+    is how a reviewed plan can drift after review without the stability check
+    noticing -- and a non-finite float is refused here too, the same
+    ``allow_nan=False`` reasoning ``canonical_json`` applies at digest time,
+    but at construction instead of two steps later. Anything that is not a
+    mapping, a list/tuple, or one of the JSON scalar types is refused outright
+    rather than passed through unchanged, which is what let an arbitrary
+    object slip through before while this docstring already promised
+    otherwise.
     """
     if isinstance(value, Mapping):
+        for key in value:
+            if not isinstance(key, str):
+                raise TypeError(
+                    f"a plan payload's mapping keys must be strings; JSON has "
+                    f"no other key type, so a non-string key silently becomes "
+                    f"one on a real round trip. Got key {key!r} of type "
+                    f"{type(key).__name__}"
+                )
         return MappingProxyType({key: _freeze(item) for key, item in sorted(value.items())})
     if isinstance(value, (list, tuple)):
         return tuple(_freeze(item) for item in value)
-    if isinstance(value, (bytearray, set)):
-        raise TypeError(
-            f"a plan payload must be JSON-shaped and immutable; got {type(value).__name__}"
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError(
+            f"a plan payload must be JSON-representable; got non-finite "
+            f"float {value!r}"
         )
-    return value
+    if isinstance(value, _JSON_SCALAR_TYPES):
+        return value
+    raise TypeError(
+        f"a plan payload must be JSON-shaped and immutable; got {type(value).__name__}"
+    )
 
 
 @dataclass(frozen=True)
@@ -93,6 +127,13 @@ class ParameterAssignment:
     evidence_refs: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
+        # Coerced to a tuple before anything below reads it (R2 finding 3): a
+        # list `key_path` let a caller append to it *after* the duplicate-slot
+        # check in `CaseMutationRequest.__post_init__` had already run against
+        # the pre-append `slot()`, silently invalidating a check that had
+        # already passed.
+        object.__setattr__(self, "key_path", tuple(self.key_path))
+        object.__setattr__(self, "evidence_refs", tuple(self.evidence_refs))
         _check_case_relative("a parameter's document", self.document)
         if not self.key_path:
             raise ValueError(f"parameter {self.qualified_id!r} names no key")
@@ -189,6 +230,13 @@ class CaseMutationRequest:
     requested_by: str
 
     def __post_init__(self) -> None:
+        # Coerced before any check reads them (R2 finding 3): a list
+        # `parameters`/`source_artifacts` let a caller mutate the stored
+        # object in place *after* the duplicate-slot check below had already
+        # run against it, silently invalidating a check that had already
+        # passed. See the analogous comment on ParameterAssignment.
+        object.__setattr__(self, "source_artifacts", tuple(self.source_artifacts))
+        object.__setattr__(self, "parameters", tuple(self.parameters))
         if self.mode not in MUTATION_MODES:
             raise ValueError(
                 f"unsupported creation mode {self.mode!r}; supported modes are "
@@ -376,6 +424,13 @@ class CaseWritePlan:
     schema_version: int = PLAN_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
+        # Coerced before the duplicate-path check below reads them (R2
+        # finding 3): a list `files` let a caller `.append()` a colliding
+        # path onto the SAME object this check had already approved,
+        # silently changing `plan_digest` after review. See the analogous
+        # comment on ParameterAssignment.
+        object.__setattr__(self, "files", tuple(self.files))
+        object.__setattr__(self, "preconditions", tuple(self.preconditions))
         seen: set[str] = set()
         for rendered in self.files:
             if rendered.path in seen:
@@ -436,6 +491,14 @@ class CaseWriteRecord:
     evidence: tuple[Mapping[str, Any], ...]
     status: str
 
+    def __post_init__(self) -> None:
+        # R2 finding 3: `rec.committed[0]["a"] = 999` worked, because these
+        # were plain dicts inside a tuple whose OWN outer immutability said
+        # nothing about its elements. Deep-freeze each entry the same way
+        # `ResolvedMutation.targets` now is.
+        object.__setattr__(self, "committed", tuple(_freeze(entry) for entry in self.committed))
+        object.__setattr__(self, "evidence", tuple(_freeze(entry) for entry in self.evidence))
+
     def to_json(self) -> dict[str, Any]:
         return {
             "transaction_id": self.transaction_id,
@@ -460,6 +523,15 @@ class ResolvedMutation:
     preconditions: tuple[Precondition, ...]
     expected_effects: tuple[str, ...]
     semantic_owner_id: str
+
+    def __post_init__(self) -> None:
+        # Coerced and deep-frozen, the same as every other declared-tuple
+        # field in this module (R2 finding 3): `targets` holds plain mappings
+        # -- unlike `RenderedFile`/`Precondition`, which are themselves frozen
+        # dataclasses -- so it needs `_freeze`, not just a tuple() call.
+        object.__setattr__(self, "targets", tuple(_freeze(target) for target in self.targets))
+        object.__setattr__(self, "preconditions", tuple(self.preconditions))
+        object.__setattr__(self, "expected_effects", tuple(self.expected_effects))
 
     def formats(self) -> tuple[str, ...]:
         return tuple(sorted({str(target["format"]) for target in self.targets}))

@@ -211,3 +211,111 @@ def test_a_record_is_separate_from_its_plan():
     assert "committed" not in {
         field.name for field in case_write.CaseWritePlan.__dataclass_fields__.values()
     }
+
+
+# --- R2 finding 3: declared-tuple fields accepted a list, and appending to it
+# after construction bypassed the checks that had already run and mutated
+# "frozen" state -- W1 verbatim, fixed for exactly one field before this. ---
+
+
+def test_a_list_passed_as_files_cannot_be_mutated_after_construction():
+    """Passing a list where the field is declared `tuple[...]` used to be
+    accepted, and the SAME list object was stored -- so appending a
+    colliding path after construction bypassed the duplicate-path check that
+    had already run and silently changed `plan_digest`. `files` must be a
+    real tuple, which has no `.append`."""
+    original = [_file()]
+    plan = _plan(files=original)
+    assert isinstance(plan.files, tuple)
+    original.append(_file(path="system/evil", content=b"rm -rf /"))
+    assert len(plan.files) == 1, "mutating the caller's list must not reach the plan"
+    with pytest.raises(AttributeError):
+        plan.files.append(_file(path="system/evil", content=b"rm -rf /"))
+
+
+def test_a_list_passed_as_parameters_is_coerced_and_the_duplicate_check_survives_mutation():
+    conductivity_dup = case_write.ParameterAssignment(
+        qualified_id="$E.ionicModel", owner="org.a",
+        document="constant/electroProperties", key_path=("ionicModel",),
+        binding={}, value="TT06", value_kind="word", source="case",
+    )
+    original = [conductivity_dup]
+    request = case_write.CaseMutationRequest(
+        mode="clone_and_patch", case_root=Path("/tmp/case"),
+        adapter_id="org.a", workflow="w", source_artifacts=(),
+        parameters=original, requested_by="test",
+    )
+    assert isinstance(request.parameters, tuple)
+    original.append(conductivity_dup)
+    assert len(request.parameters) == 1, "mutating the caller's list must not reach the request"
+
+
+def test_a_list_passed_as_key_path_cannot_retroactively_change_the_slot():
+    """`slot()` reads `key_path`. A list `key_path` let a caller append to it
+    after `CaseMutationRequest`'s duplicate-slot check already ran against the
+    pre-append value, so the check passed against one slot while the
+    assignment silently occupied another."""
+    key_path = ["ionicModel"]
+    assignment = case_write.ParameterAssignment(
+        qualified_id="$E.ionicModel", owner="org.a",
+        document="constant/electroProperties", key_path=key_path,
+        binding={}, value="TT06", value_kind="word", source="case",
+    )
+    assert isinstance(assignment.key_path, tuple)
+    key_path.append("extra")
+    assert assignment.slot() == "constant/electroProperties::ionicModel"
+
+
+def test_a_committed_entry_is_frozen_not_a_live_dict():
+    plan = _plan()
+    record = case_write.CaseWriteRecord(
+        transaction_id="t1", plan_id=plan.plan_id, plan_digest=plan.plan_digest,
+        committed=({"path": "constant/electroProperties", "digest": "b" * 64},),
+        evidence=({"source": "runtime"},), status="committed",
+    )
+    with pytest.raises(TypeError):
+        record.committed[0]["digest"] = "9" * 64
+    with pytest.raises(TypeError):
+        record.evidence[0]["source"] = "tampered"
+
+
+def test_a_resolved_mutation_target_is_frozen_not_a_live_dict():
+    resolved = case_write.ResolvedMutation(
+        request=_request(), targets=({"format": "openfoam_dictionary", "path": "x"},),
+        preconditions=(), expected_effects=(), semantic_owner_id="org.a",
+    )
+    with pytest.raises(TypeError):
+        resolved.targets[0]["path"] = "y"
+
+
+def test_a_mapping_payload_must_use_string_keys():
+    """JSON has no other key type. An int key silently becomes a string on a
+    real JSON round trip without changing the digest, which is how a
+    reviewed plan could drift after review unnoticed."""
+    with pytest.raises(TypeError, match="string"):
+        case_write.CaseWriteRecord(
+            transaction_id="t1", plan_id="p", plan_digest="d" * 16,
+            committed=({1: "a"},), evidence=(), status="committed",
+        )
+
+
+def test_a_mapping_payload_rejects_a_non_finite_float():
+    with pytest.raises(ValueError, match="non-finite"):
+        case_write.CaseWriteRecord(
+            transaction_id="t1", plan_id="p", plan_digest="d" * 16,
+            committed=({"magnitude": float("nan")},), evidence=(), status="committed",
+        )
+
+
+def test_a_mapping_payload_rejects_an_arbitrary_object():
+    """`_freeze` used to return an unrecognised type unchanged, while
+    promising "a plan payload must be JSON-shaped and immutable"."""
+
+    class _Opaque:
+        pass
+
+    with pytest.raises(TypeError, match="JSON-shaped"):
+        case_write.CaseWriteRecord(
+            transaction_id="t1", plan_id="p", plan_digest="d" * 16,
+            committed=({"thing": _Opaque()},), evidence=(), status="committed",
+        )
