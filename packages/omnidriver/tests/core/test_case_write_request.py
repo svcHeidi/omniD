@@ -206,13 +206,36 @@ def test_a_patch_with_no_parameters_is_refused():
     (`cardiaccore.workflows.overrides.apply_input_overrides_planned`) already
     returns `None` before constructing a request when its overrides resolve
     to nothing -- it does not rely on this guard to catch a real
-    zero-parameter patch. No caller needs this rule relaxed."""
+    zero-parameter patch. No caller needs this rule relaxed.
+
+    **Corrected 2026-09-23 (Phase 3 Task 7):** that last sentence no longer
+    holds -- `heart_solver_comparison` is a real zero-parameter
+    `clone_and_patch` caller (see
+    `test_a_clone_and_patch_request_with_no_parameters_but_a_source_artifact_is_accepted`
+    below). The rule was widened, not dropped: a request with *neither* a
+    parameter *nor* a source artifact -- this test -- still names nothing it
+    did, and is still refused."""
     with pytest.raises(ValueError, match="at least one"):
         case_write.CaseMutationRequest(
             mode="clone_and_patch", case_root=Path("/tmp/case"),
             adapter_id="org.a", workflow="w", source_artifacts=(),
             parameters=(), requested_by="test",
         )
+
+
+def test_a_clone_and_patch_request_with_no_parameters_but_a_source_artifact_is_accepted():
+    """Phase 3 Task 7's widened invariant: a `clone_and_patch` request that
+    assigns no `ParameterAssignment` at all still declares a real mutation
+    when it names a source artifact -- `heart_solver_comparison`'s own shape
+    (four whole template files copied in verbatim, no key/value edits)."""
+    request = case_write.CaseMutationRequest(
+        mode="clone_and_patch", case_root=Path("/tmp/case"),
+        adapter_id="org.a", workflow="w",
+        source_artifacts=("heart_solver_comparison.solverVariants:eikonal",),
+        parameters=(), requested_by="test",
+    )
+    assert request.parameters == ()
+    assert request.source_artifacts == ("heart_solver_comparison.solverVariants:eikonal",)
 
 
 def test_an_empty_source_artifact_is_refused():

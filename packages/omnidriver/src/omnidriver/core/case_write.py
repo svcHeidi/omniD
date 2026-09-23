@@ -322,29 +322,40 @@ class CaseMutationRequest:
     """An explicit request to author case inputs, in a declared mode.
 
     Each mode's declared prerequisite is enforced, not merely documented (R2
-    finding 7): ``clone_and_patch`` assigns at least one parameter, and
-    ``synthesize`` names at least one non-empty source artifact.
+    finding 7): ``clone_and_patch`` assigns at least one parameter or names at
+    least one source artifact, and ``synthesize`` names at least one non-empty
+    source artifact.
 
     **Corrected 2026-09-23 (Phase 3 Task 1):** a third prerequisite used to
     live here too -- ``generated_input`` authors exactly one document -- for
     a mode that had no production consumer at all. See the module docstring's
     2026-09-23 note. `clone_and_patch`'s "at least one parameter" rule was
-    reconsidered in the same pass and kept: the one production caller that
-    could produce a zero-parameter patch
+    reconsidered in the same pass and kept as-was: the one production caller
+    that could produce a zero-parameter patch
     (`cardiaccore.workflows.overrides.apply_input_overrides_planned`) already
     returns `None` before constructing a request when its overrides resolve
-    to nothing, rather than relying on this guard to catch it. No caller
-    exercises this rule as the thing that stops a real zero-parameter patch;
-    it stays as a construction-time invariant for whatever calls next
-    (`--apply`, Task 5).
+    to nothing, rather than relying on this guard to catch it. At the time,
+    "no caller exercises this rule as the thing that stops a real
+    zero-parameter patch" was true.
+
+    **Corrected again, 2026-09-23 (Phase 3 Task 7).** A real caller now does:
+    `heart_solver_comparison`'s whole-template-file swap assigns zero
+    `ParameterAssignment`s (its four documents are copied in verbatim, not
+    key/value-patched) but is still a genuine `clone_and_patch` mutation, not
+    a no-op. The rule is widened, not dropped: a `clone_and_patch` request
+    must still assign at least one parameter OR name at least one source
+    artifact -- the same "you must declare what you did" shape `synthesize`
+    already has, rather than accepting a request that does neither.
 
     ``source_artifacts`` are opaque identifiers -- a path, a digest, a URI --
-    naming something a synthesis consumed, and are deliberately NOT
-    case-relative-checked the way ``ParameterAssignment.document`` and
-    ``RenderedFile.path`` are: a mesh a synthesis reads from may legitimately
-    live outside the case (an externally supplied source), where a document
-    this framework writes into never should. Only non-empty,
-    non-whitespace-only is enforced here.
+    naming something a mutation consumed (a synthesis, per the original
+    design, but now also a `clone_and_patch` whose only content is a declared
+    artifact -- see above), and are deliberately NOT case-relative-checked
+    the way ``ParameterAssignment.document`` and ``RenderedFile.path`` are: a
+    mesh or template a mutation reads from may legitimately live outside the
+    case (an externally supplied source), where a document this framework
+    writes into never should. Only non-empty, non-whitespace-only is
+    enforced here.
     """
 
     mode: str
@@ -396,11 +407,22 @@ class CaseMutationRequest:
                 "case built from no declared source is not a supported creation "
                 "mode"
             )
-        if self.mode == "clone_and_patch" and not self.parameters:
+        # **Corrected 2026-09-23 (Phase 3 Task 7).** This used to require at
+        # least one `ParameterAssignment` outright. Task 1 kept that rule
+        # after finding "no caller needs this rule relaxed" -- true at the
+        # time, false now: `heart_solver_comparison`'s whole-template-file
+        # swap and `manufactured_purkinje_graph`'s (source-artifact-only)
+        # copies are real `clone_and_patch` mutations with zero key/value
+        # assignments. Widened to mirror `synthesize`'s own "you must declare
+        # what you did" invariant: a clone_and_patch request now satisfies it
+        # with a parameter OR a named source artifact -- not neither. A
+        # request with both empty still patches nothing and is still refused.
+        if self.mode == "clone_and_patch" and not self.parameters and not self.source_artifacts:
             raise ValueError(
                 "a clone_and_patch request must assign at least one "
-                "parameter; a patch that patches nothing is not a supported "
-                "creation mode"
+                "parameter or name at least one source artifact; a patch "
+                "that neither assigns nor declares anything is not a "
+                "supported creation mode"
             )
         seen: dict[str, str] = {}
         for parameter in self.parameters:
