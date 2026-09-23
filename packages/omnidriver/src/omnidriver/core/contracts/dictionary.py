@@ -206,6 +206,26 @@ class DictEntry:
                 f"{self.driver_path!r} declares value_kind {self.value_kind!r}, "
                 f"which is not one of {sorted(VALUE_KINDS)}"
             )
+        # R2 finding 12: three one-line guards, latent on the 258 production
+        # declarations R2 scanned (zero instances today) but cheap to close
+        # regardless. `_PLACEHOLDER` is `<[A-Za-z][A-Za-z0-9_]*>` and so
+        # cannot see a placeholder spelled `<_x>` or `<x-y>` -- reported as a
+        # known, separate gap rather than widened here, since no current
+        # declaration is affected and widening it is a larger, cross-module
+        # change (specs/validation.py's `_predicate_matches` and
+        # `dict_builder.py`'s own `_PLACEHOLDER_RE` copy would need to move
+        # together, not be fixed one at a time).
+        has_placeholder = bool(_PLACEHOLDER.search(self.driver_path))
+        if has_placeholder and not self.dynamic_path:
+            raise ValueError(
+                f"{self.driver_path!r} contains a placeholder but does not "
+                f"declare dynamic_path=True"
+            )
+        if self.dynamic_path and not has_placeholder:
+            raise ValueError(
+                f"{self.driver_path!r} declares dynamic_path=True but "
+                f"contains no placeholder for it to expand"
+            )
         if self.allowed_bindings and not self.dynamic_path:
             raise ValueError(
                 f"{self.driver_path!r} declares allowed_bindings but is not a "
@@ -228,6 +248,16 @@ class DictEntry:
                     f"of its placeholders but not {undeclared}; a partially "
                     f"declared binding is how an undeclared placeholder went "
                     f"unchecked"
+                )
+            empty = sorted(
+                placeholder for placeholder, domain in self.allowed_bindings.items()
+                if not domain
+            )
+            if empty:
+                raise ValueError(
+                    f"{self.driver_path!r} declares an empty domain for "
+                    f"{empty}; a placeholder with no allowed value can never "
+                    f"be satisfied"
                 )
 
 

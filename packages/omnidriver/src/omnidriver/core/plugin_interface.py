@@ -583,9 +583,19 @@ class SolverPluginOptionalHooks(Protocol):
 
         **Pure.** Must not read or write the filesystem. A dry run's promise of
         costing nothing rests on this, and core enforces it rather than
-        trusting it. Raise a ``ValueError`` naming the supported modes to
-        refuse a mode this adapter does not support. Absent -> this adapter
-        authors no case inputs."""
+        trusting it -- but only as far as that enforcement actually reaches
+        (**narrowed 2026-09-23, R2 finding 12**): what is enforced is that no
+        path is added or removed under ``request.case_root`` by name, between
+        two snapshots taken before and after this hook runs. In-place content
+        or permission changes, a write outside ``request.case_root``, a
+        create-then-delete of one path within the call, and -- the one that
+        matters most -- any READ at all, are none of them caught. A resolver
+        that reads makes the dry run's answer depend on case state at read
+        time, which defeats the entire reason this hook is declared pure; the
+        enforcement above will not tell you this happened. Raise a
+        ``ValueError`` naming the supported modes to refuse a mode this
+        adapter does not support. Absent -> this adapter authors no case
+        inputs."""
         ...
 
     def get_supported_mutation_modes(self) -> "frozenset[str]":

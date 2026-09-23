@@ -1702,10 +1702,31 @@ class _DictKeyScannerAdapter:
 def _resolved_purely(hook, request, *, driver_context):
     """Run a resolution hook and refuse one that touched the case.
 
-    Resolution is declared pure, and a dry run's promise rests on that. This
-    detects creation and deletion, not in-place modification of an existing
-    file -- state that limit rather than implying a stronger guarantee. A
-    renderer is where filesystem reads belong.
+    Resolution is declared pure, and a dry run's promise rests on that.
+
+    **What this catches, precisely (R2 finding 12, narrowed 2026-09-23 to
+    match what is actually caught rather than what purity would ideally
+    mean):** a path added or removed under ``request.case_root`` BETWEEN the
+    before- and after-snapshot, taken by name only, via two full ``rglob``
+    walks of the case per resolve (including the mesh -- this is not cheap,
+    and a mode with a large tree pays it on every resolve, dry run or not).
+
+    **What this does NOT catch:**
+
+    - in-place content modification of a file whose path does not change
+      (only names are compared, not digests or mtimes);
+    - a permission/mode change (``chmod``) on an existing path;
+    - a write outside ``request.case_root`` entirely;
+    - a create-then-delete of the same path within one call (the name-set
+      comparison sees only the two endpoints, never an intermediate state);
+    - any read at all -- reading is not detected, and a resolver that reads
+      makes the dry run's result depend on case state at read time, which is
+      the entire point of the purity rule this hook exists to enforce. A
+      resolver that reads is not "less pure" in some acceptable, partial
+      sense; it has silently broken the guarantee a dry run promises, and
+      nothing here would tell you.
+
+    A renderer is where filesystem reads belong; it is declared to read.
     """
     root = Path(request.case_root)
     before = set(root.rglob("*")) if root.is_dir() else set()

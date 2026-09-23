@@ -409,9 +409,23 @@ class RenderedFile:
 
     @classmethod
     def from_json(cls, payload: Mapping[str, Any]) -> "RenderedFile":
+        # R2 finding 12: this used to recompute content_digest from the
+        # decoded bytes and never compare it against the stored one, so a
+        # tampered or corrupted content_digest was silently discarded rather
+        # than caught -- the opposite of what "an integrity check" promises.
+        content = base64.b64decode(payload["content_base64"])
+        stored_digest = payload["content_digest"]
+        computed_digest = _digest_bytes(content)
+        if stored_digest != computed_digest:
+            raise ValueError(
+                f"{payload['path']!r} content_digest {stored_digest!r} does "
+                f"not match the decoded bytes (which hash to "
+                f"{computed_digest!r}); the payload was tampered with or "
+                f"corrupted"
+            )
         return cls(
             path=payload["path"],
-            content=base64.b64decode(payload["content_base64"]),
+            content=content,
             mode=payload["mode"],
             exists_before=payload["exists_before"],
             before_digest=payload["before_digest"],
@@ -480,6 +494,21 @@ class CaseWritePlan:
         # comment on ParameterAssignment.
         object.__setattr__(self, "files", tuple(self.files))
         object.__setattr__(self, "preconditions", tuple(self.preconditions))
+        # R2 finding 12: schema_version was checked only in from_json, so a
+        # plan constructed directly (not read back from a persisted payload)
+        # with schema_version=99 was accepted outright. And a plan with zero
+        # files -- nothing to write, so committing it would be a no-op
+        # dressed as a mutation -- was also accepted.
+        if self.schema_version != PLAN_SCHEMA_VERSION:
+            raise ValueError(
+                f"plan schema version {self.schema_version!r} is not "
+                f"{PLAN_SCHEMA_VERSION}"
+            )
+        if not self.files:
+            raise ValueError(
+                "a plan must render at least one file; a plan with nothing "
+                "to write commits nothing"
+            )
         seen: set[str] = set()
         for rendered in self.files:
             if rendered.path in seen:
@@ -502,7 +531,28 @@ class CaseWritePlan:
 
     @property
     def plan_digest(self) -> str:
-        return hashlib.sha256(canonical_json(self.to_json()).encode()).hexdigest()
+        return hashlib.sha256(canonical_json(self._digest_payload()).encode()).hexdigest()
+
+    def _digest_payload(self) -> dict[str, Any]:
+        """``to_json()`` with order-irrelevant lists canonically sorted.
+
+        R2 finding 12: ``files`` and ``request.parameters`` cannot contain
+        two entries at the same path/slot (enforced above and in
+        ``CaseMutationRequest.__post_init__``), so their as-written order is
+        not semantically meaningful -- but ``plan_digest`` hashed them
+        as-given, so two plans differing only in list order digested
+        differently. That breaks Task 6's replay/staleness comparison with a
+        spurious mismatch. Sorted here, not in ``to_json()``, so a reviewer
+        still sees the plan in the order it was authored; only the digest is
+        canonicalized.
+        """
+        payload = self.to_json()
+        payload["files"] = sorted(payload["files"], key=lambda f: f["path"])
+        payload["request"]["parameters"] = sorted(
+            payload["request"]["parameters"],
+            key=lambda p: f"{p['document']}::{'.'.join(p['expanded_key_path'])}",
+        )
+        return payload
 
     @property
     def plan_id(self) -> str:

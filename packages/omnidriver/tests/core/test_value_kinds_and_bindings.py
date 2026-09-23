@@ -154,6 +154,35 @@ def test_a_binding_key_absent_from_the_path_is_refused():
         )
 
 
+# --- R2 finding 12: three one-line DictEntry guards, latent on the 258
+# production declarations R2 scanned (zero instances today) but cheap to
+# close regardless. ---
+
+
+def test_a_placeholder_without_dynamic_path_is_refused():
+    with pytest.raises(ValueError, match="placeholder"):
+        dictionary.DictEntry(
+            driver_path="$A.<ventKey>.x", description="", value_kind="scalar",
+        )
+
+
+def test_dynamic_path_with_no_placeholder_is_refused():
+    with pytest.raises(ValueError, match="no placeholder"):
+        dictionary.DictEntry(
+            driver_path="$A.x", description="", value_kind="scalar",
+            dynamic_path=True,
+        )
+
+
+def test_an_empty_binding_domain_is_refused():
+    """A placeholder with no allowed value can never be satisfied."""
+    with pytest.raises(ValueError, match="empty domain"):
+        dictionary.DictEntry(
+            driver_path="$A.<ventKey>.x", description="", value_kind="scalar",
+            dynamic_path=True, allowed_bindings={"<ventKey>": ()},
+        )
+
+
 def test_core_asserts_nothing_about_units():
     """``unit`` is the adapter's, supplied where domain evidence justifies it.
     Core carries it and checks nothing against it."""

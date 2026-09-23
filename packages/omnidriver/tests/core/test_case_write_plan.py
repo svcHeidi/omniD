@@ -327,3 +327,61 @@ def test_a_mapping_payload_rejects_an_arbitrary_object():
             transaction_id="t1", plan_id="p", plan_digest="d" * 16,
             committed=({"thing": _Opaque()},), evidence=(), status="committed",
         )
+
+
+# --- R2 finding 12: "cheap correctness items". ---
+
+
+def test_a_bad_schema_version_is_refused_at_construction_not_only_from_json():
+    with pytest.raises(ValueError, match="99"):
+        _plan(schema_version=99)
+
+
+def test_a_plan_with_zero_files_is_refused():
+    with pytest.raises(ValueError, match="at least one file"):
+        _plan(files=())
+
+
+def test_from_json_catches_a_tampered_content_digest():
+    """`from_json` recomputed content_digest from the decoded bytes and never
+    compared it against the stored one -- a tampered digest was silently
+    discarded rather than caught, the opposite of "an integrity check"."""
+    payload = _file().to_json()
+    payload["content_digest"] = "0" * 64
+    with pytest.raises(ValueError, match="does not match"):
+        case_write.RenderedFile.from_json(payload)
+
+
+def test_plan_digest_is_insensitive_to_file_and_parameter_order():
+    """`files` and `request.parameters` cannot hold two entries at the same
+    path/slot, so their as-authored order carries no meaning -- but the
+    digest used to hash them as-given, so Task 6's replay/staleness
+    comparison would see a spurious mismatch on a reordered-but-equivalent
+    plan."""
+    first_file = _file(path="constant/electroProperties")
+    second_file = _file(path="constant/electroConductivity", content=b"df 0.1;\n")
+    first_param = case_write.ParameterAssignment(
+        qualified_id="$E.a", owner="org.a", document="constant/electroProperties",
+        key_path=("a",), binding={}, value="x", value_kind="word", source="case",
+    )
+    second_param = case_write.ParameterAssignment(
+        qualified_id="$E.b", owner="org.a", document="constant/electroProperties",
+        key_path=("b",), binding={}, value="y", value_kind="word", source="case",
+    )
+
+    def _request_with(*params):
+        return case_write.CaseMutationRequest(
+            mode="clone_and_patch", case_root=Path("/tmp/case"),
+            adapter_id="org.a", workflow="w", source_artifacts=(),
+            parameters=params, requested_by="test",
+        )
+
+    forward = _plan(
+        request=_request_with(first_param, second_param),
+        files=(first_file, second_file),
+    )
+    reversed_plan = _plan(
+        request=_request_with(second_param, first_param),
+        files=(second_file, first_file),
+    )
+    assert forward.plan_digest == reversed_plan.plan_digest
