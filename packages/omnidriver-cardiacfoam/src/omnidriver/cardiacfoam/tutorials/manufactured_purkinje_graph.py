@@ -28,7 +28,6 @@
 from __future__ import annotations
 
 import shutil
-import subprocess
 from functools import partial
 from pathlib import Path
 from typing import Sequence
@@ -49,30 +48,42 @@ def _build_cases(graph_ids: Sequence[str]) -> list[CaseConfig]:
 
 
 def _apply_case(case_root: Path, case: CaseConfig) -> None:
+    """This tutorial's entire mutation surface (Phase 3 Task 7).
+
+    **Classification: source artifact, not a parameter.** `purkinjeGraph` is
+    large geometric data (nodes, edges, conductance -- the same class of
+    content `RenderedFile`'s own docstring calls out as "the global 'large
+    assets are referenced by digest, never embedded' rule ... about meshes
+    and VTU output"), not a small hand-editable dictionary key. It is copied
+    verbatim, never key/value-patched, matching the identical pattern
+    already accepted for `manufactured_monodomain_1d3d`'s own
+    `purkinjeGraph.<id>` -> `purkinjeGraph` copy.
+
+    **Corrected 2026-09-24 (review of Phase 3 Task 7): not a declared
+    exception -- blocked on a missing channel capability, artifact staging.**
+    This still stays a direct write, but the first-pass reasoning above
+    ("forcing it through the channel would build a zero-`RenderedFile`
+    plan, which `CaseWritePlan` refuses -- so this is a declared exception
+    like `write_cell_set`") missed the actual cause. `CaseMutationRequest`'s
+    own docstring already distinguishes what a source artifact IS (a
+    reference: opaque, undigested, un-path-checked, "may legitimately live
+    outside the case") from what it lacks: a way to *place* the referenced
+    bytes at a case-relative destination. Phase 2's own plan anticipated
+    both halves -- "large assets referenced by digest **and staged**" -- but
+    only the reference half (`source_artifacts`, the `source_artifact`
+    `Precondition` kind) was ever built; staging never was. So this copy
+    stays direct not because it was decided to stay outside the channel
+    (that is `write_cell_set`'s shape: one consumer, no second one yet, a
+    real decision) but because the channel has no primitive for it yet -- a
+    missing capability, buildable, tracked for Task 11 rather than declared
+    settled here.
+    """
     graph_id = str(case.params["graph_id"])
     source = case_root / "constant" / f"purkinjeGraph.{graph_id}"
     destination = case_root / "constant" / "purkinjeGraph"
     if not source.exists():
         raise FileNotFoundError(f"Missing graph file: {source}")
     shutil.copy2(source, destination)
-
-
-def _ensure_mesh(case_root: Path, block_mesh_dict_relpath: Path) -> None:
-    if (case_root / "constant" / "polyMesh").exists():
-        return
-    with (case_root / "log.blockMesh").open("w") as log:
-        subprocess.run(
-            [
-                "blockMesh",
-                "-case",
-                str(case_root),
-                "-dict",
-                str(case_root / block_mesh_dict_relpath),
-            ],
-            check=True,
-            stdout=log,
-            stderr=subprocess.STDOUT,
-        )
 
 
 def make_spec(
@@ -105,6 +116,24 @@ def make_spec(
         apply_case=_apply_case,
         metadata={
             "notes": "Manufactured Purkinje graph convergence benchmark",
+            # **Corrected 2026-09-23 (Phase 3 Task 7).** This module used to
+            # also carry a private `_ensure_mesh(case_root, block_mesh_dict_
+            # relpath)` helper that shelled out to `blockMesh` directly and
+            # logged to `case_root/log.blockMesh` -- a framework-invoked
+            # utility authoring `constant/polyMesh` (a case *input*, not a
+            # declared workflow output) outside the DAG entirely. It had
+            # zero callers anywhere in this repository (confirmed by
+            # `grep -rn "_ensure_mesh"`, before this deletion, matching only
+            # its own definition) and duplicated the "mesh" step already
+            # declared right here -- the real, executed mechanism
+            # (`workflow_orchestrator.py`/`workflow_runner.py` dispatch
+            # `workflow_dag` steps; see `manufactured_eikonal_ecg.py`'s own
+            # comment: "this lives on the workflow_dag path, which is the
+            # mechanism sweep-run actually executes"). Deleted rather than
+            # migrated: there was nothing live to migrate, since this "mesh"
+            # step already is the declared, channel-external authoring of
+            # `constant/polyMesh` that `_ensure_mesh` would otherwise have
+            # needed to become.
             "workflow_dag": {
                 "steps": [
                     {

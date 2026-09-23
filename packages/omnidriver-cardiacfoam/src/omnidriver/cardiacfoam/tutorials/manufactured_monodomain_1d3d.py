@@ -119,6 +119,29 @@ def _plan_case(
     just created. The `purkinjeGraph.<id>` -> `purkinjeGraph` copy is a
     source artifact (Task 7's classification, not this task's), left as a
     direct `shutil.copy2` exactly as `_apply_case` still does it.
+
+    **Corrected 2026-09-24 (review of Phase 3 Task 7): both of the above stay
+    direct for the same underlying reason, not two unrelated ones.** Neither
+    is "a routing convention" and "a source artifact that stays direct" as
+    two separate, settled shapes -- both are blocked on the same missing
+    channel capability: **artifact staging**. The channel can *reference* an
+    artifact (`source_artifacts`, the `source_artifact` `Precondition` kind)
+    but has no primitive to *place* one's bytes at a case-relative
+    destination without either patching an existing document's keys
+    (`render_patch_case_files`'s ordinary targets) or authoring a whole new
+    document's logical content from a caller-supplied string
+    (`plan_verbatim_content`, Task 7's own addition -- deliberately not used
+    here: `purkinjeGraph` is the same "large asset, not a small
+    hand-editable document" class `RenderedFile`'s docstring excludes from
+    embedding, so routing it through `plan_verbatim_content` would be the
+    wrong fix even though it is mechanically possible for a file this
+    small). The `.active` copy is a case input for exactly the same reason
+    (`system/blockMeshDict.3D.active` is what the `mesh` workflow step reads,
+    so this write authors a real case input, not mere bookkeeping) and hits
+    the identical gap: there is a source file already in the case and a
+    destination path, and no channel primitive for "stage this one to that
+    one." Both are tracked in this plan as blocked on that missing
+    capability, not as settled exceptions the way `write_cell_set` is.
     """
     graph_id = str(case.params["graph_id"])
     cells = int(case.params["cells"])
