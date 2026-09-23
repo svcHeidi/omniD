@@ -340,6 +340,45 @@ def test_the_renderer_still_refuses_the_wrong_expected_blocks(tmp_path):
         )
 
 
+def test_the_renderer_refuses_a_missing_block_mesh_dict(tmp_path):
+    """A missing `blockMeshDict` fails loudly, naming the document.
+
+    Added 2026-09-23. The retired `replace_block_mesh_resolutions` pinned this
+    with `test_missing_file_raises` (`FileNotFoundError`), in
+    `tests/core/test_common_blockmesh_resize.py`, which Phase 3 Task 6b deleted
+    along with the function. Three of that file's four behaviours have
+    successors here; this one moved to the renderer -- which refuses with a
+    `ValueError` naming the patch target -- but its test did not move with it.
+    A structural patch against a document that is not there must never
+    render silently.
+    """
+    case_root = _real_case(tmp_path)
+    (case_root / "system" / "blockMeshDict").unlink()
+    delta_t = plan_delta_t(1e-4, owner="test")
+    request = CaseMutationRequest(
+        mode="clone_and_patch", case_root=case_root, adapter_id="org.omnidriver.test",
+        workflow="test", source_artifacts=(), parameters=(delta_t,), requested_by="test",
+    )
+    targets = (
+        {
+            "document": delta_t.document,
+            "expanded_key_path": list(delta_t.expanded_key_path()),
+            "value": delta_t.value,
+            "format": "openfoam_dictionary",
+        },
+        plan_block_mesh_resolution("system/blockMeshDict", "40 40 40", expected_blocks=1),
+    )
+    resolved = ResolvedMutation(
+        request=request, targets=targets, preconditions=(),
+        expected_effects=(), semantic_owner_id="org.omnidriver.test",
+    )
+    with pytest.raises(ValueError, match="system/blockMeshDict"):
+        case_rendering.render_patch_case_files(
+            resolved, snapshot_root=tmp_path / "scratch", driver_context=None,
+            execution_env=None, renderer_id="test",
+        )
+
+
 def test_two_hex_targets_on_one_document_are_refused_as_ambiguous(tmp_path):
     case_root = _real_case(tmp_path)
     delta_t = plan_delta_t(1e-4, owner="test")
