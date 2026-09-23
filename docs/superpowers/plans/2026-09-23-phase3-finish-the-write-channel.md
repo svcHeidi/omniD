@@ -37,14 +37,14 @@ Suite `0 failed` in all four shapes; both static gates pass.
 
 ## Status
 
-Tasks 1–3 done. Tasks 4–11 not started.
+Tasks 1–4 done. Tasks 5–11 not started.
 
 | task | what it closes | state | commit |
 |---|---|---|---|
 | 1 · cut the surface before migrating onto it | over-modelled contract | done | `f476a13` |
 | 2 · `apply_entry_overrides` becomes a resolver | the chokepoint, 28 calls | done | `7830529` |
 | 3 · `controlDict` setters become resolvers | 11 calls | done | `2fb5805` |
-| 4 · `replace_block_mesh_resolutions` | 8 calls, the special case | pending | — |
+| 4 · `replace_block_mesh_resolutions` | 8 calls, the special case | done | `746f9c0` |
 | 5 · `--apply` joins the channel | **bypass 4** | pending | — |
 | 6 · the eleven tutorials follow through | **bypass 1** (most of it) | pending | — |
 | 7 · source artifacts and sidecars, classified | **bypass 1** (remainder) | pending | — |
@@ -814,7 +814,7 @@ an existing `blockMeshDict`, validating that exactly `expected_blocks` were
 replaced. A `ParameterAssignment` cannot express it, and inventing a value kind
 for it would be the `openfoam_literal` layering mistake again.
 
-- [ ] **Step 1: Decide its shape, on evidence**
+- [x] **Step 1: Decide its shape, on evidence**
 
 Two candidates, and the choice is yours to argue:
 
@@ -829,10 +829,108 @@ Two candidates, and the choice is yours to argue:
 
 Report which you chose and why. Do **not** put `hex (` knowledge in core.
 
-- [ ] **Step 2: Characterize against a real `blockMeshDict`, then migrate**
+- [x] **Step 2: Characterize against a real `blockMeshDict`, then migrate**
 
 Include the `expected_blocks` validation — silently replacing the wrong number of
 blocks is the failure this function exists to prevent.
+
+### Findings, 2026-09-23
+
+**Chose candidate 2, and the plan's own framing of candidate 1 undersells
+how badly it fails.** The plan asked to check
+`manufactured_monodomain_1d3d` for whether it patches a document the
+framework did not author, as a possible exception to candidate 1. Checked
+against the authoritative native tree (`~/noFrontendCardiacFoam_minor_errors`,
+per this repo's "authoritative native trees" convention) for all eight real
+`replace_block_mesh_resolutions` call sites, not just that one: every single
+one patches a tutorial-authored `blockMeshDict` with its own vertices and
+boundary patches (`bathBidomain/system/blockMeshDict.3D`: three ``hex (``
+blocks, vertices `(-1 0 0) (0 0 0) (1 0 0) (2 0 0)...`, boundary
+`xMin`/`xMax`/`sides`; `monodomain1D3D/system/blockMeshDict.3D`: one ``hex (``
+block, boundary `inlet`/`outlet`/`sides`) -- nothing like
+`default_block_mesh_dict_text`'s generic one-block slab with a single
+`walls` patch, which its own docstring already calls "not tuned to any
+specific tutorial's science". **There is no split between the eight call
+sites**: the plan's "two cases may genuinely need different answers"
+possibility does not apply here, because all eight need the same answer.
+`manufactured_monodomain_1d3d` differs only in copying `blockMeshDict.3D` to
+`blockMeshDict.3D.active` before patching that copy -- a detail of *which*
+document the eventual Task 6 resolver names, not a reason for a different
+target shape. Candidate 1 is not viable for any of the eight; candidate 2 is
+viable for all of them.
+
+**The shape.** `utils.plan_block_mesh_resolution(document, cell_counts_str,
+*, expected_blocks=1)` is a pure function returning a plain
+`Mapping[str, Any]` -- `{"document", "format", "hex_cell_counts",
+"expected_blocks"}` -- not a `ParameterAssignment`. This needed no change to
+`core.case_write` at all: `ResolvedMutation.targets` is already a
+loosely-typed mapping per target (`dict_builder.resolve_synthesis_mutation`'s
+own raw `{"document", "content", "format"}` targets are the existing
+precedent), consumed only by `case_rendering._document_edits`, which never
+assumed every target is a `ParameterAssignment`. `case_rendering.
+render_patch_case_files` now recognizes a target carrying
+`"hex_cell_counts"` and applies `utils._rewrite_hex_block_lines` (the
+algorithm factored out of `replace_block_mesh_resolutions`, reused rather
+than re-implemented) instead of `update_foam_entry`, validating
+`expected_blocks` against what it actually found in the real document --
+the same check the function always made, now made by the renderer because
+that is where the real file is read. At most one hex target per document is
+accepted; a second is refused (`render_patch_case_files` raises), for the
+same "which one survives depends on ordering" reason
+`CaseMutationRequest` already refuses two `ParameterAssignment`s at one
+slot.
+
+**No `source` field.** A raw `ResolvedMutation` target carries no
+`VALUE_SOURCES` vocabulary at all -- neither this target nor
+`dict_builder.py`'s own synthesis targets have one. `source` classifies
+where a *value* a caller assigned came from; this target assigns no value,
+it names a structural rewrite and the count it must satisfy. There was
+nothing to determine here, and forcing a `source` field onto it would be
+inventing a distinction the shape does not have, the same mistake Phase 2's
+`generated_input` mode made (Task 1's finding).
+
+**`replace_block_mesh_resolutions` (the writer) kept, not retired.** Same
+pattern Task 3 established for `set_delta_t`/`set_end_time`: the writer
+keeps writing directly for its eight tutorial callers until Task 6 migrates
+them onto the render/commit channel; both the writer and the new resolver
+are retired together, in the same commit that removes the last caller.
+
+**Corrected 2026-09-23, in passing.** The pre-Task-4 writer wrote each
+rewritten line to disk as it iterated, so a mismatched `expected_blocks`
+still raised, but only after the file had already been overwritten with the
+(wrong-count) rewrite -- an undocumented side effect no test pinned
+(`test_missing_hex_line_raises` never read the file back). Refactoring onto
+`_rewrite_hex_block_lines` (which computes the full rewritten text in memory
+before anything is written) means a raised `KeyError` now leaves the file
+untouched. This is a behaviour change on the error path, verified against no
+currently-passing test, so it is recorded as a correction rather than
+silently carried forward.
+
+**Characterization: real content, not an invented fixture.** Per this
+repo's "no invented-geometry tests" rule,
+`packages/omnidriver-openfoam/tests/core/test_block_mesh_resolution_channel.py`
+embeds `bathBidomain/system/blockMeshDict.3D`'s real bytes (transcribed from
+the native tree, digest-checked against a cited sha256 by its own first
+test) rather than a single-block fixture -- deliberately chosen because it
+has three `hex (` blocks, so `expected_blocks=1` vs `expected_blocks=3` is a
+real distinction, not one a single-block fixture could exercise. Tests
+against this fixture: the direct writer's byte-exact output (characterization,
+passed before this task's change and passes unchanged after -- verified,
+not assumed: `test_common_blockmesh_resize.py`'s four pre-existing tests
+also pass unchanged), `expected_blocks` mismatch still refuses (both via the
+writer and via the renderer), and the renderer's output is byte-identical to
+the direct writer's for the same real content and request -- the actual
+migration proof.
+
+**Verified by reverting**, not by assuming: `git stash` on both modified
+files reproduced an `ImportError: cannot import name 'plan_block_mesh_
+resolution'` at collection for all ten new tests, with every pre-existing
+test in the package (including `test_common_blockmesh_resize.py`'s four)
+unaffected. Restoring the change returns all ten to green.
+
+**All four required shapes: 0 failed** (the documented environmental
+`ensurepip` abort in `test_every_core_module_imports_from_a_wheel` aside,
+present before this task and unrelated to it). Both static gates pass.
 
 ---
 
