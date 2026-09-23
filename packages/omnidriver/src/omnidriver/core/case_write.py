@@ -5,13 +5,25 @@ owner turns it into bytes; core commits those bytes. Nothing in this module
 touches a filesystem or knows any dictionary syntax -- it is types and
 canonical serialization, and that is what lets it sit in core at all.
 
-Three creation modes, kept distinct because their prerequisites differ:
+Two creation modes, kept distinct because their prerequisites differ:
 
 ``clone_and_patch``   an existing case is edited in place or into a clone.
 ``synthesize``        a case is built from a catalog. Requires explicit source
                       artifacts; a case built from nothing is not a supported
                       mode.
-``generated_input``   one input file is authored by an operation.
+
+**Corrected 2026-09-23 (Phase 3 Task 1):** this used to declare a third mode,
+``generated_input`` ("one input file is authored by an operation"), with an
+invented prerequisite -- exactly one distinct document -- so it would differ
+from ``clone_and_patch``. Review R2 had already named the two "distinct in
+name only"; Phase 2 answered that by inventing a rule instead of finding a
+real distinction. Phase 3 Task 1 counted production consumers
+(`grep -rn "generated_input" packages/*/src/`): zero. Neither adapter's
+`get_supported_mutation_modes` ever named it, no renderer in
+`openfoam/case_rendering.py` ever handled it, and the only production
+constructors of a `CaseMutationRequest` (`cardiaccore/workflows/overrides.py`,
+`cardiacfoam/dict_builder.py`) never built one. It named nothing. Removed,
+along with its invented prerequisite.
 """
 
 from __future__ import annotations
@@ -42,7 +54,16 @@ PRECONDITION_KINDS = frozenset({
                          # appearing there changes which file is selected
 })
 
-MUTATION_MODES = frozenset({"clone_and_patch", "synthesize", "generated_input"})
+#: **Implemented-and-thin, noted 2026-09-23 (Phase 3 Task 1 Step 3).**
+#: ``"environment"`` is implemented end to end -- built by
+#: ``openfoam/case_rendering.py::patch_preconditions`` and checked by
+#: ``case_transaction._check_preconditions`` -- and correct, but it has
+#: exactly one emitter today. Do not delete it: Phase 3 Task 5 (``--apply``
+#: joining the channel) gives it a second consumer, and it was built for
+#: exactly that (see that task's F1b readback). Thin is not the same claim
+#: as unused; a later reader should not conflate the two.
+
+MUTATION_MODES = frozenset({"clone_and_patch", "synthesize"})
 
 #: Where a value came from. These never convert into one another: a tutorial
 #: example is not a solver default, and a plausible number is not a validated
@@ -236,9 +257,21 @@ class CaseMutationRequest:
     """An explicit request to author case inputs, in a declared mode.
 
     Each mode's declared prerequisite is enforced, not merely documented (R2
-    finding 7): ``generated_input`` authors exactly one document,
-    ``clone_and_patch`` assigns at least one parameter, and ``synthesize``
-    names at least one non-empty source artifact.
+    finding 7): ``clone_and_patch`` assigns at least one parameter, and
+    ``synthesize`` names at least one non-empty source artifact.
+
+    **Corrected 2026-09-23 (Phase 3 Task 1):** a third prerequisite used to
+    live here too -- ``generated_input`` authors exactly one document -- for
+    a mode that had no production consumer at all. See the module docstring's
+    2026-09-23 note. `clone_and_patch`'s "at least one parameter" rule was
+    reconsidered in the same pass and kept: the one production caller that
+    could produce a zero-parameter patch
+    (`cardiaccore.workflows.overrides.apply_input_overrides_planned`) already
+    returns `None` before constructing a request when its overrides resolve
+    to nothing, rather than relying on this guard to catch it. No caller
+    exercises this rule as the thing that stops a real zero-parameter patch;
+    it stays as a construction-time invariant for whatever calls next
+    (`--apply`, Task 5).
 
     ``source_artifacts`` are opaque identifiers -- a path, a digest, a URI --
     naming something a synthesis consumed, and are deliberately NOT
@@ -304,14 +337,6 @@ class CaseMutationRequest:
                 "parameter; a patch that patches nothing is not a supported "
                 "creation mode"
             )
-        if self.mode == "generated_input":
-            documents = sorted({parameter.document for parameter in self.parameters})
-            if len(documents) != 1:
-                raise ValueError(
-                    f"a generated_input request must author exactly one "
-                    f"input document; got {documents}. generated_input means "
-                    f"one operation authors one file"
-                )
         seen: dict[str, str] = {}
         for parameter in self.parameters:
             slot = parameter.slot()
@@ -630,6 +655,32 @@ class ResolvedMutation:
 
     Pure. Produced without reading the case, so a dry run costs nothing and
     changes nothing. The renderer reads; this does not.
+
+    **Audited 2026-09-23 (Phase 3 Task 1 Step 3).** Not a pure passthrough
+    container: it earns its type. ``targets`` is genuinely consumed, not
+    forwarded whole -- ``case_rendering._document_edits`` groups it by
+    document and ``formats()`` derives a value from it that neither producer
+    hands over directly. ``__post_init__`` also enforces a real invariant
+    (deep-freezing ``targets`` the same way every other declared-tuple field
+    in this module is, per R2 finding 3) that a plain container would not.
+
+    ``preconditions`` and ``semantic_owner_id``, by contrast, *are* passed
+    straight through untouched by both producers
+    (``cardiaccore/workflows/overrides.py::resolve_patch_mutation``,
+    ``cardiacfoam/dict_builder.py``'s synthesis resolver) into
+    ``CaseWritePlan`` unchanged -- that is expected of a resolve/render
+    boundary and not itself a defect.
+
+    ``expected_effects`` is a different finding: both producers build one
+    (human-readable strings describing what will change), but
+    ``CaseWritePlan`` has no ``expected_effects`` field, and nothing else
+    reads this one either (checked: no reference outside its own producers,
+    this class, and tests that merely supply ``()``). It is computed and then
+    discarded on every real call. Recommendation: either give it a consumer
+    (an evidence/record field, or a `describe`-style preview) or drop it in
+    a later task once nothing writes it either -- but that is Tasks 2-6's
+    call, not this one's: removing a field mid-plan while those tasks still
+    build on this type is worse than carrying one thin field.
     """
 
     request: CaseMutationRequest

@@ -37,11 +37,11 @@ Suite `0 failed` in all four shapes; both static gates pass.
 
 ## Status
 
-Not started.
+Task 1 done. Tasks 2–11 not started.
 
 | task | what it closes | state | commit |
 |---|---|---|---|
-| 1 · cut the surface before migrating onto it | over-modelled contract | pending | — |
+| 1 · cut the surface before migrating onto it | over-modelled contract | done | (this task's commit) |
 | 2 · `apply_entry_overrides` becomes a resolver | the chokepoint, 28 calls | pending | — |
 | 3 · `controlDict` setters become resolvers | 11 calls | pending | — |
 | 4 · `replace_block_mesh_resolutions` | 8 calls, the special case | pending | — |
@@ -136,7 +136,7 @@ so they would differ. That is backwards: a distinction that needs a
 made-up rule to justify it is not a distinction. Migrating eleven tutorials onto
 a three-mode contract multiplies that mistake by eleven.
 
-- [ ] **Step 1: Count the real consumers of each mode**
+- [x] **Step 1: Count the real consumers of each mode**
 
 ```bash
 grep -rn "generated_input\|clone_and_patch\|synthesize" packages/*/src/ | grep -v "/build/"
@@ -146,7 +146,7 @@ Report, per mode: how many production call sites construct a request in it, and
 what each one actually needs from it. If `generated_input` has no consumer that
 `clone_and_patch` cannot serve, it goes.
 
-- [ ] **Step 2: Reduce to two modes if the count supports it**
+- [x] **Step 2: Reduce to two modes if the count supports it**
 
 `MUTATION_MODES = frozenset({"clone_and_patch", "synthesize"})`. The distinction
 that survives is real and was validated in Phase 2: `synthesize` requires
@@ -156,7 +156,7 @@ explicit source artifacts, `clone_and_patch` does not. Remove
 **If the count does not support it, do not force it.** Report what you found and
 leave three modes. A mode with a genuine consumer stays.
 
-- [ ] **Step 3: Shelve what has no consumer, honestly**
+- [x] **Step 3: Shelve what has no consumer, honestly**
 
 The `environment` precondition kind is implemented end to end and is correct, but
 no planning path outside `patch_preconditions` emits one. Do **not** delete it —
@@ -166,13 +166,95 @@ so a later reader does not mistake thin for unused.
 Audit `ResolvedMutation`: if every field is passed straight through to the
 renderer untouched, say so and consider whether it earns its own type.
 
-- [ ] **Step 4: Run and commit**
+- [x] **Step 4: Run and commit**
 
 ```bash
 /tmp/od311/bin/python -m pytest packages/ -q -m "not slow"
 /tmp/od311/bin/python scripts/check-import-boundaries.py
 /tmp/od311/bin/python scripts/export-capability-seams.py --check
 ```
+
+### Findings, 2026-09-23
+
+**Per-mode consumer count** (`grep -rn "generated_input\|clone_and_patch\|synthesize" packages/*/src/ | grep -v "/build/"`,
+cross-checked against `grep -rln "CaseMutationRequest(" packages/*/src/` and
+`grep -rn "supported_creation_modes\|MUTATION_MODES" packages/*/src/`):
+
+| mode | production call sites | what each needs |
+|---|---|---|
+| `clone_and_patch` | 1 — `cardiaccore/workflows/overrides.py::apply_input_overrides_planned` (the only production `CaseMutationRequest(mode="clone_and_patch", ...)`; declared supported by `cardiaccore/plugin.py`'s `get_supported_mutation_modes` → `{"clone_and_patch"}`) | edits keys in a case that already exists; no source artifacts |
+| `synthesize` | 1 — `cardiacfoam/dict_builder.py`'s `build_and_launch` resolution path (the only production `CaseMutationRequest(mode="synthesize", ...)`; declared supported by `cardiacfoam/cardiacfoam_plugin.py`'s `get_supported_mutation_modes` → `{"synthesize"}`) | explicit, non-empty `source_artifacts` — a case built from nothing is refused |
+| `generated_input` | **0** | nothing — no adapter's `get_supported_mutation_modes()` ever names it, `openfoam/case_rendering.py` has no renderer for it, and neither production `CaseMutationRequest` constructor ever builds one |
+
+Every other hit is a test (`test_case_write_request.py`), a docstring, or an
+unrelated identifier (`_synthesize_case` in
+`cardiacfoam/ionic_catalog_verification.py`, a private helper name that
+constructs no `CaseMutationRequest` at all).
+
+**Decision: cut.** `generated_input` removed from `MUTATION_MODES`; its
+"exactly one document" prerequisite removed from
+`CaseMutationRequest.__post_init__`. See the dated correction in
+`docs/superpowers/plans/2026-09-20-phase2-one-write-channel.md` (after its
+"Decision, 2026-09-23: a parameter value is typed data" section) and in
+`omnidriver.core.case_write`'s module/class docstrings. Test coverage: the
+three tests that asserted its invented prerequisite
+(`test_generated_input_with_no_parameters_is_refused`,
+`test_generated_input_with_more_than_one_document_is_refused`,
+`test_generated_input_with_exactly_one_document_is_accepted`) are replaced by
+one test asserting the mode is now unknown
+(`test_generated_input_is_no_longer_a_supported_mode`), per this plan's own
+rule that a removed mode's refusal test is replaced, not deleted. Verified by
+reverting `case_write.py` to HEAD and confirming the new test fails there
+(`DID NOT RAISE ValueError`) and passes after the change.
+
+**`clone_and_patch`'s "at least one parameter" rule: kept.** Its one
+production caller, `apply_input_overrides_planned`, already returns `None`
+before constructing a request when `validate_input_overrides(overrides)` is
+empty — it does not rely on this constructor guard to catch a real
+zero-parameter patch. No caller was found that legitimately wants to submit
+one (no sweep-axis-resolves-to-no-change caller exists yet; Tasks 2–6 have not
+landed). The rule stays as a construction-time invariant for future callers
+(`--apply`, Task 5) rather than being relaxed on no evidence.
+
+**`environment` precondition kind: implemented-and-thin, not unused.** Built
+by `openfoam/case_rendering.py::patch_preconditions` and checked by
+`case_transaction._check_preconditions`; its only emitter today is that one
+call site. Not deleted — Task 5 (`--apply` joining the channel) gives it a
+second consumer via the F1b `execution_env` readback it was built for. Noted
+both here and as a comment beside `PRECONDITION_KINDS` in `case_write.py`.
+
+**`ResolvedMutation` audit.** Not a pure passthrough container:
+- `targets` is genuinely consumed, not merely forwarded —
+  `openfoam/case_rendering.py::_document_edits` groups it by document, and
+  `.formats()` derives a value from it that neither producer hands over
+  directly. `__post_init__` also deep-freezes it, a real invariant a plain
+  container would not enforce.
+- `preconditions` and `semantic_owner_id` genuinely *are* passed straight
+  through untouched by both producers
+  (`cardiaccore/workflows/overrides.py::resolve_patch_mutation`,
+  `cardiacfoam/dict_builder.py`'s synthesis resolver) into `CaseWritePlan`.
+  That is expected of a resolve/render boundary, not a defect.
+- `expected_effects` is a genuine finding: both producers build one, but
+  `CaseWritePlan` has no field for it and nothing else reads it either —
+  confirmed by grep across the repo (only its two producers, this class, and
+  tests supplying `()`). It is computed and discarded on every real call
+  today.
+
+**Recommendation:** the type earns its keep (real behaviour + a real
+invariant on `targets`), so it should not be flattened into a dict. The
+`expected_effects` field should either gain a consumer (an evidence/record
+field on `CaseWriteRecord`, or a `describe`-style preview) or be dropped once
+nothing writes it either — but that is Tasks 2–6's call, not Task 1's:
+removing a field mid-plan, while later tasks still build on this type, would
+be worse than carrying one thin field for now. Not removed in this task, per
+the plan's own instruction.
+
+**Plan-claim correction:** `packages/omnidriver/src/omnidriver/core/plugin_interface.py`
+was listed as a file this task modifies. It contains no reference to
+`generated_input`, to the three/two-mode count, or to any per-mode
+enumeration that the cut invalidates — its `get_supported_mutation_modes`
+docstring is generic across however many modes exist. No change was needed
+there; left unmodified.
 
 ---
 

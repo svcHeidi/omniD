@@ -466,6 +466,45 @@ to reintroduce the default that let `nan` through.
 `validate_value_shape(self.value_kind, self.value)` and raises on any returned
 reason. That is what closes R2's finding 4.
 
+## Correction, 2026-09-23: `generated_input` is removed (Phase 3 Task 1)
+
+This plan's Task 1 (above) declared three modes and, per R2 finding 7, gave
+each a prerequisite so they would differ: `generated_input` requires exactly
+one distinct document, `clone_and_patch` requires at least one parameter.
+Phase 3's review of that decision (`docs/superpowers/plans/2026-09-23-phase3-finish-the-write-channel.md`,
+Task 1) found the prerequisite was the *only* thing distinguishing
+`generated_input` from `clone_and_patch` — a manufactured rule, not a real
+one — and counted its production consumers:
+
+```
+grep -rn "generated_input" packages/*/src/
+```
+
+Zero. Neither adapter's `get_supported_mutation_modes()` ever named it
+(`cardiaccore/plugin.py` declares `{"clone_and_patch"}`,
+`cardiacfoam/cardiacfoam_plugin.py` declares `{"synthesize"}`), no renderer in
+`openfoam/case_rendering.py` ever handled it, and the only two production
+constructors of a `CaseMutationRequest`
+(`cardiaccore/workflows/overrides.py::apply_input_overrides_planned`,
+`cardiacfoam/dict_builder.py`'s synthesis path) never built one. It was
+declared, tested, and never used.
+
+**Removed.** `MUTATION_MODES = frozenset({"clone_and_patch", "synthesize"})`,
+and the "exactly one document" prerequisite went with it. The test file this
+task created (`test_case_write_request.py`) keeps a test at this mode name,
+now asserting it is unknown rather than asserting its old prerequisite — a
+removed mode's refusal test is replaced, not deleted, per this plan's own
+"How to execute a task" convention.
+
+`clone_and_patch`'s "at least one parameter" prerequisite was reconsidered in
+the same pass and **kept**: `apply_input_overrides_planned`, the one
+production caller that could hand it zero parameters, already returns `None`
+before constructing a request when its overrides resolve to nothing, so no
+real caller needs — or is blocked by — this guard. See
+`omnidriver.core.case_write`'s module and class docstrings for the same
+correction, dated identically, and Phase 3 Task 1's report for the full
+per-mode consumer count.
+
 ## Global Constraints
 
 - Python floor is **3.11**. Keep lazy annotations in `plugin_interface.py`.
