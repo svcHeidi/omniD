@@ -89,6 +89,14 @@ def test_a_well_shaped_value_passes(kind, value):
     ("word_list", ("alpha", ""), "empty"),
     ("scalar_list", ("1", "2"), "number"),
     ("integer_list", (1.5,), "integer"),
+    # R2 finding 10: `bytes` is a `collections.abc.Sequence`, so the typed
+    # branches that only excluded `str` let `b"abc"` through as three
+    # "numbers" (97, 98, 99). The typed-list branch already excluded
+    # `(str, bytes)`; vector3 and the dimensioned branches excluded only
+    # `str`.
+    ("vector3", b"abc", "three"),
+    ("dimensioned_scalar", {"value": 1.0, "dimensions": b"1234567"}, "seven"),
+    ("dimensioned_tensor", {"value": b"123456789", "dimensions": (0,) * 7}, "sequence"),
 ])
 def test_a_badly_shaped_value_is_reported_with_a_reason(kind, value, reason):
     reasons = dictionary.validate_value_shape(kind, value)

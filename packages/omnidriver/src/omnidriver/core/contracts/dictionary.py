@@ -102,7 +102,7 @@ def validate_value_shape(kind: str, value: Any) -> tuple[str, ...]:
             return ("must be a non-empty word",)
         return () if value.split() == [value] else ("must contain no whitespace",)
     if kind == "vector3":
-        if isinstance(value, str) or not isinstance(value, _Sequence):
+        if isinstance(value, (str, bytes)) or not isinstance(value, _Sequence):
             return ("must be three numbers",)
         if len(value) != 3:
             return (f"must be three numbers, not {len(value)}",)
@@ -118,7 +118,11 @@ def validate_value_shape(kind: str, value: Any) -> tuple[str, ...]:
         elif kind == "dimensioned_scalar":
             reasons.extend(f"'value' {r}" for r in _validate_scalar_like(magnitude))
         else:
-            if isinstance(magnitude, str) or not isinstance(magnitude, _Sequence) or not magnitude:
+            if (
+                isinstance(magnitude, (str, bytes))
+                or not isinstance(magnitude, _Sequence)
+                or not magnitude
+            ):
                 reasons.append("'value' must be a non-empty sequence of numbers for a tensor")
             else:
                 bad = [
@@ -130,7 +134,7 @@ def validate_value_shape(kind: str, value: Any) -> tuple[str, ...]:
         dimensions = value.get("dimensions")
         if dimensions is None:
             reasons.append("missing 'dimensions'")
-        elif isinstance(dimensions, str) or not isinstance(dimensions, _Sequence):
+        elif isinstance(dimensions, (str, bytes)) or not isinstance(dimensions, _Sequence):
             reasons.append("'dimensions' must be seven exponents")
         elif len(dimensions) != 7:
             reasons.append(f"'dimensions' must be seven exponents, not {len(dimensions)}")
