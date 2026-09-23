@@ -37,7 +37,7 @@ Suite `0 failed` in all four shapes; both static gates pass.
 
 ## Status
 
-Tasks 1–4 done. Tasks 5–11 not started.
+Tasks 1–5 done. Tasks 6–11 not started.
 
 | task | what it closes | state | commit |
 |---|---|---|---|
@@ -45,7 +45,7 @@ Tasks 1–4 done. Tasks 5–11 not started.
 | 2 · `apply_entry_overrides` becomes a resolver | the chokepoint, 28 calls | done | `7830529` |
 | 3 · `controlDict` setters become resolvers | 11 calls | done | `2fb5805` |
 | 4 · `replace_block_mesh_resolutions` | 8 calls, the special case | done | `746f9c0` |
-| 5 · `--apply` joins the channel | **bypass 4** | pending | — |
+| 5 · `--apply` joins the channel | **bypass 4** | done | `b6fe66f`, `7eb919d` |
 | 6 · the eleven tutorials follow through | **bypass 1** (most of it) | pending | — |
 | 7 · source artifacts and sidecars, classified | **bypass 1** (remainder) | pending | — |
 | 8 · `generic_case.py` | **bypass 2** | pending | — |
@@ -952,7 +952,7 @@ rescue — and that means **the bar is semantic parity, not improvement**. If
 migrating loses a property the remediation path has, that is a regression even
 though the channel is "better".
 
-- [ ] **Step 1: Inventory what `--apply` does that the channel does not**
+- [x] **Step 1: Inventory what `--apply` does that the channel does not**
 
 Read `apply_overrides.py`, `cli.py`'s `--apply` handling, and
 `remediation_transaction.py` side by side. List every property the current path
@@ -961,16 +961,103 @@ restore, the `execution_env` readback added by finding F1. For each, name where
 it lands in the channel. **Anything with no home is a blocker — report it rather
 than dropping it.**
 
-- [ ] **Step 2: Characterize the CLI contract**
+- [x] **Step 2: Characterize the CLI contract**
 
 `--apply`'s observable behaviour — exit codes, stdout, the diagnostics it emits,
 what it leaves on disk on failure — must not change. Capture it.
 
-- [ ] **Step 3: Migrate, giving the `environment` precondition its second consumer**
+- [x] **Step 3: Migrate, giving the `environment` precondition its second consumer**
 
 The readback from finding F1b runs under `execution_env`; the `environment`
 precondition kind exists and has one consumer. This is the second. That also
 discharges Task 1 Step 3's note.
+
+### Findings, 2026-09-23
+
+**Step 1 inventory — where each property lands.** Read `apply_overrides.py`,
+`cli.py`'s `--apply` handling, `step_candidate.py` (the real call site —
+see the corrected plan claim below) and `remediation_transaction.py` side
+by side.
+
+| property | today | lands in the channel as |
+|---|---|---|
+| Override scopes (`$TOKEN.` key-patch, `OverrideScope.resolve_entry`) | reads/writes `case_root` directly | Unchanged mechanism, now given a private snapshot copy instead of `case_root` (see progressive-visibility note below) |
+| Regeneration scopes (bare-selector full-file rebuild) | `regenerate()` rewrites `case_root/file_relpath` directly | Same callable, called on the snapshot copy; its own selector value is *also* represented as a `ParameterAssignment` for the audit trail |
+| `get_override_target_paths` (the crash-safety pair `_check_cross_member_pairs` enforces) | computes the finite write set before any write | Unchanged — still the same function, still paired with `apply_overrides` on one provider; reused to pick which documents to snapshot |
+| Before-image restore | `apply_overrides.py`'s own `_restore_on_failure`, in-process only, no crash recovery | `commit_case_write`'s journal. Strictly stronger: `case_root` is never touched at all until the final atomic replace (today it's touched then restored), and a mid-commit crash is now recoverable, which `_restore_on_failure` never provided. `_restore_on_failure`/`_apply_validated_overrides` are removed (confirmed gone by `test_the_pre_channel_direct_write_helpers_are_removed`) |
+| F1 `execution_env` readback | loop after the direct write succeeds | Unchanged loop, repositioned to run after `commit_case_write` succeeds |
+| F1b typed comparison (`effective_values_agree`) | same loop | Unchanged |
+| `environment` precondition's second consumer | no precondition machinery on this path | New: `apply_overrides.py` calls `case_rendering.patch_preconditions` before building the plan — the same function cardiacCore's Task 8 consumer already calls |
+| `;`/`#`/newline security refusal (SECURITY.md) | `_format_value` inside `update_foam_entry` | Unchanged — still applied automatically; nothing bypasses it |
+| Case lease / serialization | `cli.py`'s `_dispatch_context` holds the case lease for the whole `step`; `apply_overrides.py` never acquired one itself | **The one property with no home without a core change.** `commit_case_write`'s own lease is not reentrant from the same thread (`acquire_case_lease` finds its own lock file and refuses it), so calling it unmodified from inside `--apply`'s already-held lease would refuse itself on every call — a guaranteed regression, not a hypothetical (confirmed by reproducing the refusal directly). Closed by giving `commit_case_write` an explicit, opt-in, **verified** `case_lease_held: bool = False` parameter (`core/case_transaction.py`, commit `b6fe66f`, its own commit because it changes shared machinery every future consumer inherits) — a caller claiming to already hold the lease without holding it is refused loudly (`case_lease_is_held` checked, never trusted), and every existing caller omitting the parameter is byte-identical to before. Three alternatives were considered and rejected: making `acquire_case_lease` itself silently reentrant (weakens `test_a_second_attempt_under_a_held_lease_is_refused`, an existing guard); releasing `cli.py`'s lease around override-application (opens a real race window `remediation_transaction.py`'s own lease-held assertions already rely on not existing); duplicating `commit_case_write`'s write/journal logic lease-free inside `apply_overrides.py` (DRY-violating, strictly riskier, no less "shared surface" than an opt-in parameter). |
+
+Everything else found a home; nothing was dropped as a blocker.
+
+**Step 2 — the CLI contract.** `cli.py` and `step_candidate.py` were read
+and neither needed to change. `cli.py::_execute_step` only parses the
+`--apply` JSON payload and wraps any exception from
+`execute_step_candidate_owned` as `{"status": "failed", ..., "error":
+f"--apply rejected: {exc}"}` with exit code 1 (0 on success) —
+`step_candidate.py::execute_step_candidate_owned` (not `cli.py` — see
+below) is what actually calls `override_scopes.apply()`. Since
+`apply_overrides()` kept its exact external signature and return shape
+(same evidence-tuple keys, same `OverrideError` type for every failure
+category), this wrapping is unaffected. The one behaviour that is
+observably different: the wrapped `FileNotFoundError` text for a missing
+document now names the private snapshot path instead of the real
+`case_root` path (no test pins the exact text either way). What's left on
+disk on any failure changed for the *better*, not differently, and is
+tested directly (`test_a_failure_partway_through_a_batch_leaves_case_root_
+completely_untouched`, `test_regeneration_failure_leaves_case_root_
+untouched`, `test_a_change_between_precondition_capture_and_commit_
+refuses_the_apply`): `case_root` is left exactly as it was before the
+call, in every failure mode exercised, including one (precondition drift)
+that did not exist as a concept before this task.
+
+**Corrected plan claim, 2026-09-23.** This task's own brief said to read
+"`cli.py`'s `--apply` handling" for the call site. That is incomplete:
+`cli.py` only parses the JSON payload; the actual call chain
+(`execute_step_candidate_owned` → `override_scopes.apply()` →
+`apply_overrides.apply_overrides()`) lives in
+`core/runtime/step_candidate.py`, which the plan's file list never named.
+Neither file needed to change in the end, but the read target was wrong.
+
+**F1/F1b, verified against the real install, not a fixture.**
+`test_apply_readback_matches_the_real_foamdictionary`
+(`test_apply_through_the_channel.py`) sources the real OpenFOAM v2412
+install at `/Volumes/OpenFOAM-v2412` via `discover_openfoam_bashrc()` +
+`load_openfoam_environment()`, applies `deltaT="1e-3"`, and asserts the
+real `foamDictionary` reports back `"0.001"` while `matches_requested` is
+still `True` (F1b: values compared, not spellings) — and that the file on
+disk keeps `"1e-3"` verbatim (Gap 1). This test is not skipped in this
+environment; it ran against the real binary.
+
+**The `environment` precondition's second consumer, confirmed
+functionally.** `test_environment_precondition_is_a_genuine_second_
+consumer` gives `--apply` a dict carrying a real `#includeEtc` directive
+and asserts an `environment`-kind `Precondition` actually appears in what
+`case_rendering.patch_preconditions` returns — not merely that the
+function was invoked.
+
+**Verified by reverting.** Stashing `apply_overrides.py` alone reproduces
+exactly 4 of the 17 new tests failing —
+`test_a_change_between_precondition_capture_and_commit_refuses_the_apply`,
+`test_environment_precondition_is_a_genuine_second_consumer`,
+`test_apply_file_path_route_refuses_a_value_with_no_closed_shape`,
+`test_the_pre_channel_direct_write_helpers_are_removed` — exactly the
+genuinely-new properties this task adds, nothing else; every parity test
+(byte-identical writes, empty-overrides no-op, missing-target error,
+mid-batch-failure isolation, regeneration structural rewrite, lease reuse)
+passes against both the old and the new code, which is what "parity, not
+improvement" being satisfied actually looks like as evidence rather than
+assertion.
+
+**All four shapes: 0 failed** (aside from the documented environmental
+`ensurepip` abort in `test_every_core_module_imports_from_a_wheel`,
+present before this task and unrelated to it — confirmed unchanged: same
+single `SIGABRT` failure, same test). Both static gates pass. Commits:
+`b6fe66f` (the `case_lease_held` core change, reviewable on its own) and
+`7eb919d` (the `apply_overrides.py` migration itself).
 
 ---
 
