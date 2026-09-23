@@ -147,7 +147,14 @@ def _spec(tmp_path: Path, **kwargs):
 
 def test_generic_dict_file_overrides_reach_the_mutation_callback(tmp_path: Path) -> None:
     """A plugin names its own dictionary files; core just carries the mapping
-    through to the callback without knowing what the names mean."""
+    through to the callback without knowing what the names mean.
+
+    Task 8, 2026-09-24: a real (non-sentinel) mutation callback keeps this
+    spec on the deprecated, non-reporting ``apply_case`` hook -- core cannot
+    see what an adapter-supplied callback writes or whether it already goes
+    through the case-write channel, so it must not be reported as
+    channel-compliant via ``plan_case``.
+    """
     spy = _MutationSpy()
     spec = _spec(
         tmp_path,
@@ -155,6 +162,7 @@ def test_generic_dict_file_overrides_reach_the_mutation_callback(tmp_path: Path)
         dict_file_overrides={"turbulence": {"simulationType": "laminar"}},
         _apply_case_mutation=spy,
     )
+    assert spec.plan_case is None
     case = spec.build_cases()[0]
     spec.apply_case(spec.case_root, case)
 
@@ -335,7 +343,13 @@ def test_metadata_reports_dict_file_overrides_as_one_generic_flag(
 
 def test_make_generic_case_spec_applies_no_solver_mutation(tmp_path: Path) -> None:
     """The dedicated generic entry point must never reach into a plugin's
-    mutator, even though bare make_spec still defaults to the legacy seam."""
+    mutator, even though bare make_spec still defaults to the legacy seam.
+
+    Task 8, 2026-09-24: with no adapter-supplied mutation callback, this spec
+    genuinely writes nothing -- ``apply_case`` is ``None`` (not a fake no-op
+    standing in for a previously-required field), and the honest ``None``
+    report goes through ``plan_case`` instead.
+    """
     from omnidriver.core import compatibility
     from omnidriver.core.runtime.generic_case import make_generic_case_spec
 
@@ -344,7 +358,58 @@ def test_make_generic_case_spec_applies_no_solver_mutation(tmp_path: Path) -> No
         case_dir_name="aCase",
         driver_context=driver_context(DeclaredCasePlugin(), source="test:generic-case"),
     )
+    assert spec.apply_case is None
     with compatibility.track_fallback_calls() as calls:
-        spec.apply_case(spec.case_root, spec.build_cases()[0])
+        result = spec.plan_case(spec.case_root, spec.build_cases()[0])
 
     assert calls == []
+    assert result is None
+
+
+def test_a_generic_case_with_no_mutation_reports_through_invoke_case_mutation_without_warning(
+    tmp_path: Path,
+) -> None:
+    """`invoke_case_mutation` must prefer `plan_case` here and emit no
+    `DeprecationWarning` -- the whole point of Task 8 is that this spec no
+    longer needs the deprecated, non-reporting `apply_case` fallback to
+    represent "nothing was written"."""
+    import warnings
+
+    from omnidriver.core.runtime.generic_case import make_generic_case_spec
+    from omnidriver.core.runtime.models import invoke_case_mutation
+
+    spec = make_generic_case_spec(
+        cases_root=tmp_path,
+        case_dir_name="aCase",
+        driver_context=driver_context(DeclaredCasePlugin(), source="test:generic-case"),
+    )
+    case = spec.build_cases()[0]
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        result = invoke_case_mutation(spec, spec.case_root, case)
+
+    assert result is None
+
+
+def test_a_generic_case_with_a_real_callback_still_falls_back_through_apply_case(
+    tmp_path: Path,
+) -> None:
+    """The counterpart to the no-mutation case above: a real, adapter-supplied
+    callback is not something core can vouch for, so `invoke_case_mutation`
+    still reaches it only through the deprecated `apply_case` fallback (and
+    still warns), rather than reporting it as channel-compliant."""
+    import pytest
+
+    from omnidriver.core.runtime.models import invoke_case_mutation
+
+    spy = _MutationSpy()
+    spec = _spec(tmp_path, _apply_case_mutation=spy)
+    case = spec.build_cases()[0]
+
+    assert spec.plan_case is None
+    with pytest.warns(DeprecationWarning, match="removed when no in-tree spec supplies apply_case"):
+        result = invoke_case_mutation(spec, spec.case_root, case)
+
+    assert result is None
+    assert spy.calls, "the real callback must still have run"

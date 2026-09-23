@@ -51,7 +51,7 @@ Tasks 8–11 not started.
 | 5 · `--apply` joins the channel | **bypass 4** | done | `b6fe66f`, `7eb919d` |
 | 6 · the eleven tutorials follow through | **bypass 1** (most of it) | pending | — |
 | 7 · source artifacts and sidecars, classified | **bypass 1** (remainder) | done | `85fc504`, `8594422`, `e85784c`, `2c3939c`, `570abfa`, `0b7d337`, and this doc's own commit |
-| 8 · `generic_case.py` | **bypass 2** | pending | — |
+| 8 · `generic_case.py` | **bypass 2** | done | this doc's own commit |
 | 9 · the `describe` seam | the unmet second payoff | pending | — |
 | 10 · `Allrun`, and delete what is unreachable | **bypass 5** | pending | — |
 | 11 · close-out, with a widened inventory | G3 | pending | — |
@@ -1672,7 +1672,7 @@ The last `apply_case` consumer, and the only one in **core**. R4 flagged it as
 needing its own design pass, because a generic case has no adapter vocabulary to
 resolve against — which is precisely why core owns it.
 
-- [ ] **Step 1: Establish what it may legitimately assume**
+- [x] **Step 1: Establish what it may legitimately assume**
 
 A generic case folder declares no catalog. If it cannot produce
 `ParameterAssignment`s with real qualified ids, it must not invent them. The
@@ -1680,6 +1680,158 @@ honest options are a `synthesize` request whose content comes entirely from
 `RenderedFile` bytes, or an explicit statement that a generic case is not a
 framework-authored mutation at all. **Argue which, with evidence from how a
 generic case is actually used.**
+
+### Findings, 2026-09-24
+
+**What `_apply_case` writes.** `generic_case.py::_apply_case` calls exactly
+one thing: `mutation_callback(case_root, case, dict_file_relpaths=...,
+dict_file_overrides=...)`. `make_spec`'s own `_apply_case_mutation`
+parameter defaults to `_no_solver_mutation`, whose entire body is `return
+None` (its docstring already says so: "what a case mutation is when no
+plugin supplies one: nothing"). So `apply_case` is a genuine no-op
+placeholder in the common case, not a stub that used to do something — it
+exists purely because `TutorialSpec.apply_case` had no default.
+
+**Who authors a generic case's inputs, and the production path that proves
+it.** `packages/omnidriver/src/omnidriver/core/runtime/registry.py`'s entry
+resolution (`_match_entry`/case-path branch) picks core's own
+`make_generic_case_spec` — the no-op-default factory — precisely when
+`driver_context.capabilities.case_compatibility.has_case_marker(...)` is
+false, i.e. exactly the "no catalog" case this task's brief describes. When
+an adapter *does* recognise a case marker, a different factory (the
+adapter's own, e.g. `cardiacfoam.tutorials.generic_case.make_generic_case_spec`)
+is used instead, wired to a real, adapter-owned mutation callback — a
+different code path this task does not touch. The only test exercising the
+true bypass-2 path end to end,
+`packages/omnidriver-cardiaccore/tests/test_generic_contract.py::test_controlled_allrun_executes_without_domain_claims`,
+proves this concretely: it hands `omnidriver run --entry controlled-case` a
+case folder containing nothing but a user-written `Allrun` script, and the
+observable output (`generic-proof.txt`) comes entirely from that script
+running as the declared workflow step, not from any dictionary mutation.
+Materialization (`sweep_runner._materialize_entry_case`, the only caller of
+`invoke_case_mutation`/`apply_case` in core — confirmed by
+`grep -rn "\.apply_case(\|invoke_case_mutation("` returning exactly those two
+sites) stages this pre-existing, user-authored folder via `shutil.copytree`
+before the mutation hook runs at all. So a generic case's inputs are
+authored by the user, before handing the folder to the framework; the
+framework's role is staging + declared-workflow execution, never content
+authorship.
+
+**Decision: candidates 2 and 3, combined; candidate 1 does not apply.**
+Candidate 1 (a `synthesize` request from `RenderedFile` bytes) requires core
+to have bytes of its own to embed — it has none: this module renders
+nothing, it only stages a copy and dispatches to an optional callback.
+Candidate 2 holds for exactly the no-catalog, no-adapter-callback case:
+`apply_case` there is not a framework-authored mutation at all, the same
+reasoning the plan already applies to native solver/meshing output — the
+channel never claimed it. Candidate 3 (`apply_case` optional when
+`plan_case` is supplied) is needed regardless, and for a concrete, verified
+reason beyond the brief's own: every real invocation of this no-op path
+through `invoke_case_mutation` was, before this change, emitting a
+`DeprecationWarning` on **every** marker-less generic-case run (confirmed by
+running the previous code — see revert-to-confirm below) — a warning that
+was not describing anything actually deprecated, only an unavoidable
+required field. `TutorialSpec.apply_case` is now `ApplyCaseFn | None = None`
+in `core/runtime/models.py`.
+
+**A third case the brief's two-way split did not name, resolved by not
+conflating them.** An adapter *can* supply a real, non-sentinel mutation
+callback to this same factory (cardiacfoam's own generic-case wrapper always
+does). Core cannot see what that callback writes or whether it already
+routes through the case-write channel — wiring it to `plan_case` returning
+`None` would misreport a possibly-real, possibly-uncommitted write as
+channel-compliant, which is exactly the kind of false negative Task 11's
+close-out needs to avoid. `make_spec` therefore branches on
+`mutation_callback is _no_solver_mutation` (an identity check against the
+module's own private sentinel, set only when the caller passed no callback):
+the genuine no-op case gets `apply_case=None, plan_case=<dispatch>`; a
+real-callback case keeps `apply_case=<dispatch>, plan_case=None`, unchanged
+from before and still routed through the deprecated, non-reporting fallback
+(honest: this call site's write status remains genuinely unknown to core,
+tracked separately, not fixed here).
+
+**`invoke_case_mutation`'s "neither present" refusal.** Added an explicit
+branch: `plan_case` preferred, then `apply_case` with the existing
+deprecation warning, and only if both are `None` a `TypeError` naming the
+spec by `spec.name!r` and both missing hooks — verified this replaces a bare
+`TypeError: 'NoneType' object is not callable` (see revert-to-confirm).
+
+**The `apply_case=` count.** `grep -rn "apply_case=" packages/*/src | grep -v
+/build/` is **16 before and 16 after** — unchanged, because it is a static
+text-occurrence count and `generic_case.py`'s own construction still
+contains the keyword (now as a conditional expression, `apply_case=None if
+... else ...`). This matches the "After Task 6b" section's own warning that
+this grep "measures a field's presence, not whether anything writes outside
+the channel." What changed is not the text count but the runtime value: in
+the true bypass-2 scenario (no case marker, `_no_solver_mutation` in
+effect), the field this factory hands `TutorialSpec` is now genuinely
+`None`, and the honest `plan_case` reports the `None` mutation instead —
+removing `generic_case.py` from the "remaining six" bypass-1/2 sites named
+in "After Task 6b", for that scenario specifically. The real-adapter-callback
+branch is unchanged and intentionally left as a named, tracked gap (see
+above), not silently absorbed into this count.
+
+**Existing tests updated, and why each was still the right test to change
+rather than replace.**
+`packages/omnidriver/tests/core/test_core_generic_case.py::test_make_generic_case_spec_applies_no_solver_mutation`
+called `spec.apply_case(...)` directly on a no-callback spec; updated to
+assert `spec.apply_case is None` and call `spec.plan_case(...)` instead,
+asserting it returns `None`. Same file's
+`test_generic_dict_file_overrides_reach_the_mutation_callback` (a real
+callback, `_MutationSpy`) gained one assertion, `spec.plan_case is None`,
+locking in that the real-callback branch is unaffected. Two new tests in
+that file exercise `invoke_case_mutation` itself against `generic_case.py`
+specs: `test_a_generic_case_with_no_mutation_reports_through_invoke_case_mutation_without_warning`
+(no `DeprecationWarning`, `warnings.simplefilter("error", ...)` would fail
+the test if one fired) and
+`test_a_generic_case_with_a_real_callback_still_falls_back_through_apply_case`
+(the real-callback branch still warns and still runs the callback).
+`packages/omnidriver/tests/core/test_entry_case_parity.py` gained
+`test_invoke_case_mutation_refuses_by_name_when_neither_hook_is_supplied`,
+which is core-level plumbing coverage independent of `generic_case.py`
+(matching that file's own stated scope in its module docstring).
+
+**No test deleted; nothing to map to a survivor.** This task only changed
+behaviour that these tests directly exercise; none had coverage retired out
+from under them.
+
+**Revert-to-confirm.** `git stash push -- .../generic_case.py
+.../models.py`, then ran the four touched/new tests against unmodified HEAD:
+`test_make_generic_case_spec_applies_no_solver_mutation` and
+`test_a_generic_case_with_no_mutation_reports_through_invoke_case_mutation_without_warning`
+failed (`AttributeError`-shaped: `spec.plan_case` was `None` so calling it
+raised, and the "no warning" assertion caught the real
+`DeprecationWarning` that fired every time under the old code — direct
+confirmation of the warning-on-every-run finding above);
+`test_invoke_case_mutation_refuses_by_name_when_neither_hook_is_supplied`
+failed with `AssertionError: Regex pattern did not match ... Actual message:
+"'NoneType' object is not callable"` — exactly the bare, untraceable error
+the named refusal replaces. `git stash pop` restored the change; all four
+passed again.
+
+**All four shapes: 0 failed.** `packages/ -q -m "not slow"`: 2546 passed,
+259 skipped, 2 deselected. Core-only (`/tmp/odcore`,
+`packages/omnidriver/tests`): 1117 passed, 94 skipped, plus the documented
+environmental `ensurepip`/`SIGABRT` abort in
+`test_every_core_module_imports_from_a_wheel` (present before this task,
+unrelated — it aborts building its own disposable venv, not from anything
+this task touched). Wheel shape (`python -m build` +
+`scripts/check-wheel-artifact.py` + `pytest packages/omnidriver/tests`
+against `/tmp/wheelenv`): artifact gate OK, 950 passed, 262 skipped, 0
+failed. Both static gates (`check-import-boundaries.py`,
+`export-capability-seams.py --check`) pass.
+
+**What this task's brief got right, and one thing worth flagging for
+Task 11.** The brief's framing (a generic case has no catalog, so it must
+not invent qualified ids) held up exactly as stated once checked against the
+real registry dispatch and the real test. The one addition beyond the brief:
+it posed the decision as a binary (synthesize vs. "not a mutation"), but the
+actual call site is not uniform — the same factory serves both a genuine
+no-op and an opaque real-callback case, and treating them identically would
+have either invented content (candidate 1, ruled out) or silently
+misreported a real write as channel-compliant. Recorded here rather than
+silently resolved so Task 11's inventory does not read the real-callback
+branch as fixed.
 
 ---
 

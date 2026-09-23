@@ -62,6 +62,23 @@ def test_invoke_case_mutation_falls_back_to_apply_case_with_a_deprecation_warnin
     assert result is None
 
 
+def test_invoke_case_mutation_refuses_by_name_when_neither_hook_is_supplied():
+    """Phase 3 Task 8, 2026-09-24: `apply_case` became optional so a spec that
+    genuinely writes nothing (e.g. `core.runtime.generic_case`'s no-adapter-
+    callback path) need not carry a fake no-op just to satisfy a required
+    field. But `invoke_case_mutation` must still refuse cleanly -- by name,
+    naming both missing hooks -- when a spec supplies neither, rather than
+    raising a bare `TypeError: 'NoneType' object is not callable` a reader
+    would have to trace back here to understand."""
+    import pytest
+
+    spec = _spec(name="no-hooks-at-all", apply_case=None)
+    case = spec.build_cases()[0]
+
+    with pytest.raises(TypeError, match="no-hooks-at-all.*neither plan_case nor apply_case"):
+        invoke_case_mutation(spec, spec.case_root, case)
+
+
 def test_invoke_case_mutation_falling_back_still_returns_none_even_if_apply_case_returns_something():
     """`apply_case`'s declared return type is `None`; a caller relying on
     `invoke_case_mutation`'s return value for a not-yet-migrated spec must

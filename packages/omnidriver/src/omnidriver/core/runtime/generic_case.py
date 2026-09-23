@@ -3,6 +3,27 @@
 This module owns the default case-folder execution contract. Environment
 adapters declare the case entrypoint and output convention; plugins may still
 call this factory for richer flows such as build-and-launch.
+
+**Decision, 2026-09-24 (Phase 3 Task 8, bypass 2):** a generic case folder
+declares no catalog -- that is precisely why core, and not a solver adapter,
+owns this module. With no catalog, core cannot resolve a ``ParameterAssignment``
+to a real qualified id, and must not invent one (``CLAUDE.md``: "a case root
+has no ambient truth, so discovering one invents an answer"). Every byte in
+the folder this factory runs over was placed there before the run -- by the
+user who authored the tutorial/case directory, or by whatever process staged
+it (``sweep_runner``'s ``copytree``) -- not by this factory. When no adapter
+supplies its own mutation callback (the common case: a marker-less folder
+with no recognised dictionary catalog, e.g. the ``controlled-case`` fixture in
+``test_generic_contract.py::test_controlled_allrun_executes_without_domain_claims``),
+``apply_case`` writes *nothing at all*; it is dispatch machinery, not a
+framework-authored mutation, the same reasoning that excludes declared
+workflow outputs (native solver/meshing output) from this channel. That case
+reports through ``plan_case`` instead, returning ``None`` honestly rather than
+through the deprecated non-reporting ``apply_case`` fallback. When an adapter
+*does* supply a real callback (e.g. cardiacfoam's own generic-case wrapper),
+this module cannot see what that callback writes or whether it already goes
+through the case-write channel, so it is left on ``apply_case`` rather than
+being misreported as channel-compliant.
 """
 
 from __future__ import annotations
@@ -240,6 +261,26 @@ def make_spec(
         pre_solve_commands=normalized_pre_solve,
     )
 
+    # Task 8 (bypass 2), 2026-09-24: a generic case folder declares no
+    # catalog (module docstring), so this factory can never produce a
+    # ParameterAssignment with a real qualified id, nor RenderedFile bytes of
+    # its own -- inventing either would be exactly the "discovered versus
+    # supplied" mistake CLAUDE.md names. The one honest claim it can make is
+    # "nothing was written", and that claim is true only when no adapter
+    # supplied its own callback above -- i.e. ``mutation_callback`` is still
+    # the ``_no_solver_mutation`` sentinel. When an adapter *did* supply a
+    # real callback (e.g. cardiacfoam's ``apply_case_mutation``), core has no
+    # visibility into what it writes or whether that write already goes
+    # through the case-write channel, so that case keeps going through the
+    # deprecated, non-reporting ``apply_case`` fallback rather than being
+    # misreported as a channel-compliant ``None`` via ``plan_case``.
+    mutation_is_genuinely_a_no_op = _apply_case_mutation is _no_solver_mutation
+    dispatch_case_mutation = partial(
+        _apply_case,
+        dict_file_relpaths=resolved_relpaths,
+        mutation_callback=_apply_case_mutation,
+    )
+
     # A case counts as generic when its *primary* declared dictionary file --
     # the first entry of ``dict_file_relpaths`` -- is absent from the folder.
     # Core imposes no vocabulary on that mapping: whichever file a caller (or
@@ -261,11 +302,8 @@ def make_spec(
         setup_root=setup_root,
         output_dir=output_dir,
         build_cases=lambda: list(normalized_cases),
-        apply_case=partial(
-            _apply_case,
-            dict_file_relpaths=resolved_relpaths,
-            mutation_callback=_apply_case_mutation,
-        ),
+        apply_case=None if mutation_is_genuinely_a_no_op else dispatch_case_mutation,
+        plan_case=dispatch_case_mutation if mutation_is_genuinely_a_no_op else None,
         metadata={
             "notes": "Core generic case runner for arbitrary tutorial folders.",
             "workflow_dag": workflow_dag,

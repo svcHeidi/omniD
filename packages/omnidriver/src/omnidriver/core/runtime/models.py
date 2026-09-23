@@ -176,12 +176,21 @@ class TutorialSpec:
     setup_root: Path
     output_dir: Path
     build_cases: BuildCasesFn
-    apply_case: ApplyCaseFn
+    #: Optional as of Phase 3 Task 8 (2026-09-24, corrected: this field used
+    #: to have no default, so every spec -- migrated or not, mutating or not
+    #: -- had to supply *something* here even when it had nothing to write.
+    #: ``core.runtime.generic_case``'s no-adapter-callback case is the
+    #: motivating example: it writes nothing, ever, and was still forced to
+    #: carry a no-op ``apply_case`` purely to satisfy this field. ``None`` is
+    #: now legal, but only when ``plan_case`` is supplied instead --
+    #: ``invoke_case_mutation`` below refuses by name if neither is.
+    apply_case: ApplyCaseFn | None = None
     #: Preferred over ``apply_case`` when present (see ``invoke_case_mutation``
     #: below). ``None`` for every spec not yet migrated onto the case-write
     #: channel -- most of them, as of Task 10's first batch (2026-09-23): see
     #: that task's filled-in plan section for the exact count and which specs
-    #: this covers.
+    #: this covers. Also the honest home for a spec that writes nothing at
+    #: all (Task 8): returning ``None`` there is true, not a placeholder.
     plan_case: PlanCaseFn | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -201,18 +210,29 @@ def invoke_case_mutation(spec: "TutorialSpec", case_root: Path, case: CaseConfig
     apply_case") rather than silently preferring one path forever -- a
     fallback with no stated removal condition is a fallback nobody is ever
     wrong to leave in place.
+
+    Phase 3 Task 8 (2026-09-24): ``apply_case`` is now optional too, so a
+    spec that mutates nothing may supply neither. That is refused here by
+    name -- naming the spec and both missing hooks -- rather than letting
+    ``None(...)`` raise a bare ``TypeError``/``AttributeError`` a reader
+    would have to trace back to this function to understand.
     """
     if spec.plan_case is not None:
         return spec.plan_case(case_root, case)
-    import warnings
+    if spec.apply_case is not None:
+        import warnings
 
-    warnings.warn(
-        f"TutorialSpec {spec.name!r} supplies apply_case but not plan_case; "
-        f"apply_case does not report what it wrote through the case-write "
-        f"channel (if anything). This fallback is removed when no in-tree "
-        f"spec supplies apply_case any more.",
-        DeprecationWarning,
-        stacklevel=2,
+        warnings.warn(
+            f"TutorialSpec {spec.name!r} supplies apply_case but not plan_case; "
+            f"apply_case does not report what it wrote through the case-write "
+            f"channel (if anything). This fallback is removed when no in-tree "
+            f"spec supplies apply_case any more.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        spec.apply_case(case_root, case)
+        return None
+    raise TypeError(
+        f"TutorialSpec {spec.name!r} supplies neither plan_case nor apply_case; "
+        f"there is no case mutation to invoke for it."
     )
-    spec.apply_case(case_root, case)
-    return None
