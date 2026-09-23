@@ -55,6 +55,16 @@ def plan_delta_t(delta_t_seconds: float, *, owner: str) -> ParameterAssignment:
     OpenFOAM-specific literal syntax to parse (no dimension brackets), so
     `omnidriver.openfoam.literals` does not apply here and there is no
     original rendered spelling to preserve as evidence.
+
+    **The value is passed through untouched, not coerced with `float()`.**
+    A non-`Real` (a string included -- there is no parser for it to go
+    through, per the paragraph above) is refused by `ParameterAssignment`'s
+    own construction-time `validate_value_shape` check, the same guard every
+    other `scalar` declaration gets. Coercing here instead would silently
+    swallow a caller's mistake (or a genuine rendered literal this function
+    has no business accepting) rather than refusing it -- the same
+    strict-resolver posture the fallback deletion established for the
+    override channel.
     """
     return ParameterAssignment(
         qualified_id="deltaT",
@@ -62,7 +72,7 @@ def plan_delta_t(delta_t_seconds: float, *, owner: str) -> ParameterAssignment:
         document=_CONTROL_DICT_DOCUMENT,
         key_path=("deltaT",),
         binding={},
-        value=float(delta_t_seconds),
+        value=delta_t_seconds,
         value_kind="scalar",
         source="case",
     )
@@ -77,7 +87,7 @@ def plan_end_time(t_s: float, *, owner: str) -> ParameterAssignment:
         document=_CONTROL_DICT_DOCUMENT,
         key_path=("endTime",),
         binding={},
-        value=float(t_s),
+        value=t_s,
         value_kind="scalar",
         source="case",
     )

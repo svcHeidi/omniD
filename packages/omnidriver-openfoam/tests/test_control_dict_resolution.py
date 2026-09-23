@@ -161,6 +161,21 @@ def test_plan_end_time_refuses_non_finite_value(bad):
         plan_end_time(bad, owner="test.owner")
 
 
+def test_plan_delta_t_refuses_a_rendered_string_rather_than_coercing_it():
+    """A bare `controlDict` scalar has no literal grammar to parse (no
+    dimension brackets), so there is nothing to parse a string INTO -- the
+    planner must refuse it, not silently `float()` it and discard the
+    original spelling. Coercing here would be exactly the silent-lossy-
+    conversion defect this repository's own literals work exists to avoid."""
+    with pytest.raises(ValueError):
+        plan_delta_t("1e-3", owner="test.owner")
+
+
+def test_plan_end_time_refuses_a_rendered_string_rather_than_coercing_it():
+    with pytest.raises(ValueError):
+        plan_end_time("1.0", owner="test.owner")
+
+
 def test_plan_delta_t_value_survives_either_spelling_of_the_same_float():
     """`1e-3` and `0.001` are the same float; the planner must not lose or
     re-derive the value it was given -- it carries it through unchanged."""
