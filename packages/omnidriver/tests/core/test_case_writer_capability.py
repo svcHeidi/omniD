@@ -212,3 +212,52 @@ def test_a_renderer_renders_its_declared_format():
     )
     assert rendered[0].path == "constant/electroProperties"
     assert rendered[0].format == "openfoam_dictionary"
+
+
+class _Liar:
+    """Declares one format, renders a file claiming a different one."""
+
+    plugin_id = "org.liar"
+
+    def get_profile(self):
+        return _Profile()
+
+    def get_rendered_formats(self):
+        return frozenset({"other_format"})
+
+    def render_case_files(self, resolved, *, snapshot_root, driver_context, execution_env):
+        return (
+            case_write.RenderedFile(
+                path="constant/lie", content=b"x", mode=None,
+                exists_before=False, before_digest=None,
+                renderer_id=self.plugin_id, format="openfoam_dictionary",
+            ),
+        )
+
+
+def test_a_renderer_cannot_claim_a_format_it_does_not_declare():
+    """R2 finding 5: `render_case_files` is a `sequence`-composed hook, so
+    every provider's returned files were concatenated with no check that a
+    returned `RenderedFile.format` was one the returning provider actually
+    declared. `_check_format_declarers` guards the declaration; nothing
+    guarded the bytes it is supposed to describe."""
+    capabilities = plugin_capabilities.adapt_plugin_capabilities(_Liar())
+    with pytest.raises(ValueError, match="does not declare"):
+        capabilities.case_writer.render(
+            object(), snapshot_root=Path("/tmp/snap"), driver_context=object(),
+        )
+
+
+def test_a_composed_stack_refuses_a_liar_alongside_the_real_declarer():
+    """The defect as described: a provider declaring only `other_format` can
+    return a file claiming `openfoam_dictionary` and it is concatenated
+    alongside the real declarer's, unnoticed. `_Renderer` and `_Liar`
+    declare disjoint formats, so composition itself accepts the stack --
+    only `render()` can catch the lie."""
+    capabilities = provider_stack.compose(
+        provider_stack.order_providers([_Renderer(), _Liar()])
+    )
+    with pytest.raises(ValueError, match="does not declare"):
+        capabilities.case_writer.render(
+            object(), snapshot_root=Path("/tmp/snap"), driver_context=object(),
+        )

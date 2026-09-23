@@ -1750,15 +1750,57 @@ class _CaseWriterAdapter:
         self, resolved: Any, *, snapshot_root: Any, driver_context: Any,
         execution_env: Any | None = None,
     ) -> tuple[Any, ...]:
-        hook = getattr(self.plugin, "render_case_files", None)
-        if not callable(hook):
+        # Iterated per-provider, not through the pre-composed
+        # `render_case_files` sequence callable, so each provider's returned
+        # files can be checked against THAT provider's own declared formats
+        # before being concatenated (R2 finding 5). Nothing previously
+        # checked that a returned `RenderedFile.format` was one the
+        # returning provider actually declared via `get_rendered_formats()`,
+        # nor that `renderer_id` matched it -- a provider declaring only
+        # `other_format` could return a file claiming `openfoam_dictionary`
+        # and it would be concatenated alongside the real declarer's,
+        # unnoticed. `_check_format_declarers` guards the DECLARATION; this
+        # guards the bytes the declaration is supposed to describe.
+        try:
+            providers = self.plugin.providers
+        except AttributeError:
+            providers = (self.plugin,)
+        rendered: list = []
+        saw_renderer = False
+        for provider in providers:
+            hook = getattr(provider, "render_case_files", None)
+            if not callable(hook):
+                continue
+            saw_renderer = True
+            formats_hook = getattr(provider, "get_rendered_formats", None)
+            declared = frozenset(formats_hook()) if callable(formats_hook) else frozenset()
+            for rendered_file in hook(
+                resolved, snapshot_root=snapshot_root,
+                driver_context=driver_context, execution_env=execution_env,
+            ):
+                if rendered_file.format not in declared:
+                    raise ValueError(
+                        f"provider {provider.plugin_id!r} rendered "
+                        f"{rendered_file.path!r} claiming format "
+                        f"{rendered_file.format!r}, which it does not declare "
+                        f"via get_rendered_formats() (declared: "
+                        f"{sorted(declared)}); a provider may only render the "
+                        f"formats it declares"
+                    )
+                if rendered_file.renderer_id != provider.plugin_id:
+                    raise ValueError(
+                        f"provider {provider.plugin_id!r} rendered "
+                        f"{rendered_file.path!r} with renderer_id "
+                        f"{rendered_file.renderer_id!r}; a rendered file's "
+                        f"renderer_id must name the provider that actually "
+                        f"produced it"
+                    )
+                rendered.append(rendered_file)
+        if not saw_renderer:
             raise ValueError(
                 f"provider {self.plugin.plugin_id!r} declares no render_case_files()"
             )
-        return tuple(hook(
-            resolved, snapshot_root=snapshot_root,
-            driver_context=driver_context, execution_env=execution_env,
-        ))
+        return tuple(rendered)
 
 
 @dataclass(frozen=True)
