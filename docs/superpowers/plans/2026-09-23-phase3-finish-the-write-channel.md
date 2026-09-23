@@ -1076,27 +1076,229 @@ is Task 7's.
 **Fill in this task's steps from Tasks 2–4's landed code before writing any
 production code, and commit the filled-in plan first.**
 
-- [ ] **Step 1: One tutorial end to end, as the pattern**
+- [x] **Step 1: One tutorial end to end, as the pattern**
 
 Start with `single_cell` — three overrides, no mesh, no sidecar. Its `_apply_case`
 becomes a `plan_case` that returns assignments instead of writing. Prove
 byte-level parity. **That diff is the template for the other ten; put it in the
 plan.**
 
-- [ ] **Step 2: The remaining ten, one commit each**
+- [x] **Step 2: The remaining ten, one commit each**
 
 Each with its own characterization test. Where a tutorial's arithmetic is genuinely
 bespoke — `cable_1d_restitution`'s two pacing modes, `manufactured_monodomain_1d3d`'s
 `blockMeshDict.3D` convention — that arithmetic **stays**; only the write moves.
 If a tutorial resists the pattern, report why before inventing a variant.
 
-- [ ] **Step 3: Retire `apply_case` only when the grep is clean**
+- [x] **Step 3: Retire `apply_case` only when the grep is clean**
 
 ```bash
 grep -rn "apply_case=" packages/*/src/ | grep -v "/build/"
 ```
 
 Report the count at the start and at the end. Task 8 owns the last one.
+
+### Findings, 2026-09-23
+
+**The shape, derived from Tasks 2–5's landed code, not assumed.**
+`resolve_entry_overrides` (Task 2) already returns typed `ParameterAssignment`s;
+`plan_delta_t`/`plan_end_time` (Task 3) and `plan_block_mesh_resolution` (Task 4)
+do the same for `controlDict` and the hex-block rewrite. What Task 6 needed
+was the missing middle: a `clone_and_patch` **resolver** for cardiacFoam
+(cardiacCore already has one, `workflows/overrides.py::resolve_patch_mutation`,
+from Phase 2) and a shared **commit** helper every tutorial's `plan_case`
+calls once. Both landed in `cardiacfoam/overrides.py`:
+
+- `_write_value_for_assignment(assignment)` — extracted, not duplicated, from
+  `apply_entry_overrides`'s own write loop. Returns `assignment.evidence_refs[0]`
+  when present (the preserved original spelling, Task 2 Gap 1), else a
+  `_CONTAINER_FORMATTERS`-rendered value, else the raw value. **This is the
+  one fact that makes byte parity possible for a dimensioned/vector3/list
+  override**: `case_rendering.render_patch_case_files`'s generic
+  `update_foam_entry(..., edit["value"], ...)` would otherwise be handed
+  `ParameterAssignment.value` (the *typed* value — a tuple, a
+  `{"value":..., "dimensions":...}` mapping) and render it differently from
+  what `apply_entry_overrides` always wrote. cardiacCore's own
+  `resolve_patch_mutation` can pass `parameter.value` straight through
+  because none of its parameters carry `evidence_refs` or need container
+  formatting; cardiacFoam's can, so its resolver cannot copy that shortcut.
+- `resolve_patch_mutation(request) -> ResolvedMutation` — cardiacFoam's own
+  `clone_and_patch` resolver, mirroring cardiacCore's in shape, differing
+  in exactly that one line (`"value": _write_value_for_assignment(parameter)`
+  instead of `parameter.value`).
+- `merge_assignments(*groups)` — collapses several `ParameterAssignment`
+  sequences addressing the same document to their final per-slot value,
+  later group wins. Needed because `CaseMutationRequest` refuses two
+  parameters at one slot outright, but several tutorials (`single_cell`
+  included) apply two override sets to the same document in sequence today,
+  the second legitimately overwriting the first at a shared key — the same
+  "later write wins" behaviour two sequential `apply_electro_property_overrides`
+  calls already have.
+- `commit_case_overrides(case_root, *, parameters, extra_targets=(), extra_effects=(), workflow, requested_by, driver_context=None, execution_env=None)`
+  — one channel-routed commit per tutorial case. Reaches
+  `resolve_patch_mutation`/`case_rendering.render_patch_case_files` the same
+  way `dict_builder.build_and_launch` already reaches its own synthesis
+  resolver: `driver_context.capabilities.case_writer.resolve`/`.render`, not
+  a direct function call — which required declaring the capability, below.
+  `extra_targets`/`extra_effects` fold in a target `resolve_patch_mutation`
+  cannot build (no `ParameterAssignment` to build it from) — today, only
+  `plan_block_mesh_resolution`'s raw mapping — by constructing a new
+  `ResolvedMutation` whose `targets` is `resolved.targets + extra_targets`;
+  `render_case_files` only ever iterates `resolved.targets` and never assumed
+  every one came from a `ParameterAssignment` (Task 4's own finding). Returns
+  `None` when there is nothing to write — `CaseMutationRequest` refuses an
+  empty `parameters` tuple for `clone_and_patch` outright, so this check runs
+  before one is constructed, the same no-op contract
+  `cardiaccore.apply_input_overrides_planned` already gives.
+
+**`cardiacfoam_plugin.CardiacFoamPlugin` now declares `clone_and_patch`
+support.** `get_supported_mutation_modes()` → `frozenset({"synthesize",
+"clone_and_patch"})`; `resolve_case_mutation` dispatches on `request.mode`
+to `dict_builder.resolve_synthesis_mutation` or `overrides.resolve_patch_mutation`.
+Chosen over building each tutorial's `ResolvedMutation` directly (the way
+`openfoam/apply_overrides.py` does, since that module resolves overrides
+against *whichever* plugin's declared scopes the composed stack carries and
+cannot claim one identity) because cardiacFoam tutorials genuinely are one
+plugin's own semantic-owner resolution, the same shape cardiacCore's
+`resolve_patch_mutation` already has — declaring the mode is the honest
+statement of what is now true, not an invented distinction (Task 1's own
+lesson).
+
+**Per-tutorial outcome (9 of 11 got a `plan_case`; 2 report as resisting):**
+
+| tutorial | coverage | characterization test |
+|---|---|---|
+| `single_cell` | full (the template) | `test_single_cell_write_channel.py` |
+| `cable_1d_cv_convergence` | full (entry + `deltaT`/`endTime` + block mesh) | `test_cable_1d_cv_convergence_write_channel.py` |
+| `restitution_curves` | full (entry + `endTime`, no mesh) | `test_restitution_curves_write_channel.py` |
+| `manufactured_monodomain_total_lagrangian_em` | full (entry on two documents + `deltaT` + block mesh) | `test_manufactured_monodomain_total_lagrangian_em_write_channel.py` |
+| `niederer_2012` | hex-family only (`mesh_family == "tet"` keeps `apply_case` as its only route) | `test_niederer_2012_write_channel.py` |
+| `manufactured_monodomain_1d3d` | full (the `.active` copy convention stays a direct write; only the rewrite that follows it moves) | `test_manufactured_monodomain_1d3d_write_channel.py` |
+| `cable_1d_restitution` | full (both pacing modes' arithmetic unchanged; `.driverfoam_case_id`/`.cardiacfoam_protocol.json` stay direct — Task 7's classification) | `test_cable_1d_restitution_write_channel.py` |
+| `manufactured_eikonal_ecg` | hex-family only; `grad_scheme`/`fv_scheme_overrides`/`fv_solution_overrides` (uncataloged `fvSchemes`/`fvSolution`) stay direct | `test_manufactured_eikonal_ecg_write_channel.py` |
+| `manufactured_monodomain_pseudo_ecg` | **partial**: only `deltaT`/`endTime` + hex-family block mesh migrate; electroProperties edits stay direct (see below) | `test_manufactured_monodomain_pseudo_ecg_write_channel.py` |
+| `manufactured_bath_bidomain` | **resists — not migrated** (see below) | — |
+| `heart_solver_comparison` | **resists — not migrated** (see below) | — |
+
+**Two tutorials report as resisting the pattern, per this task's own
+escape hatch, rather than inventing a variant:**
+
+- **`heart_solver_comparison`** has no `ParameterAssignment`-shaped mutation
+  at all: `_apply_case` is four `shutil.copy` calls swapping whole files
+  (`electroProperties`, `fvSchemes`, `fvSolution`, `controlDict`) in from a
+  fixed template directory — its own module docstring already says so
+  ("apply_case swaps into constant/ and system/ verbatim"). This is
+  structurally a source-artifact copy (Task 7's classification: "a copied
+  mesh or graph file is a source artifact, not a parameter"), not a
+  key/value patch; `render_patch_case_files` has no target shape for "whole
+  document copied in" (only `render_synthesis_case_files` has a `"content"`
+  target, for `synthesize` mode, which this is not — the case already
+  exists). Forcing this through `clone_and_patch` would mean inventing a
+  third target shape mid-task, which this task's own instruction says to
+  report instead of doing.
+- **`manufactured_bath_bidomain`**'s electroProperties edits are not a
+  single set of independent key assignments: `_ensure_patch_entry` (upsert
+  via `ensure_electro_property_entry`, `add_if_missing=True`) and
+  `remove_electro_property_entry`/`remove_electro_property_dict` run
+  *interleaved* with the two `apply_electro_property_overrides` calls in a
+  load-bearing order — a stale `groundPatches.xMin`/`surfaceCurrentPatches.xMin`
+  or `ecgDomains` block left behind by a *previous* case sharing the same
+  reused `case_root` is explicitly removed before the new values are set
+  (the code's own comment: "The committed electroProperties records
+  whichever variant ran last -- the shared case_root entry-based sweeps
+  mutate in place"). `ParameterAssignment` describes a SET at an existing
+  key; it has no vocabulary for an upsert or a conditional removal, and
+  collapsing the two `apply_electro_property_overrides` calls into one
+  merged channel commit (the way `single_cell` merges its two calls) would
+  silently drop this cleanup for a reused case_root — a real regression, not
+  a cosmetic one. `_apply_case` is left unmodified; no `_plan_case` is
+  supplied.
+
+**One tutorial (`manufactured_monodomain_pseudo_ecg`) partially resists for
+the identical reason** `manufactured_bath_bidomain` fully does — an
+add-if-missing electrode upsert and a conditional `ecgDomains` removal,
+interleaved with its own two `apply_electro_property_overrides` calls — but
+its `deltaT`/`endTime`/block-mesh edits touch entirely different files
+(`controlDict`, `blockMeshDict.<dimension>`) with no ordering dependency on
+the resisting electroProperties edits, so that subset migrates cleanly while
+the electroProperties edits stay direct, run in their original relative
+position, after the channel commit.
+
+**Every migrated document's real values, not an invented fixture, and
+verified against the real catalog validation path — several genuinely
+exercise Task 2's Gap 1 parser** (`cable_1d_cv_convergence`'s and
+`cable_1d_restitution`'s `conductivity` overrides are real dimensioned
+tensor literals, e.g. `"[-1 -3 3 0 0 2 0] (0.1334 0 0 0.1334 0 0.1334)"`,
+round-tripped through `_write_value_for_assignment`'s `evidence_refs`
+path). No characterization needed hardcoded byte spellings invented for
+this task — each test's fixture text is a plausible, minimal document the
+real catalog's declared entries accept, and every digest in every test was
+captured by running the unmodified `_apply_case` once and recording its
+actual output, not composed by hand.
+
+**A real, previously undiscovered production bug found while writing
+`manufactured_monodomain_total_lagrangian_em`'s characterization test, out
+of this task's mandate to fix.** Its `_apply_case` hardcodes the key
+`sequentialElectroMechanicalCoeffs.electromechanicalVerificationModel.type`,
+but the native reader
+(`~/noFrontendCardiacFoam_minor_errors/src/verificationModels/electromechanicsVerification/electromechanicalVerificationModel.C`'s
+`configured`/`New`, via
+`~/noFrontendCardiacFoam_minor_errors/src/electroMechanicalModels/electroMechanicalModel/electroMechanicalModel.C`'s
+`electroMechanicalProperties_(subDict(type + "Coeffs"))`) actually reads
+`verificationModel.type` off that same subDict — not
+`electromechanicalVerificationModel.type`. Before Task 2's 2026-09-23
+catalog-strictness decision this wrong key was written silently as a dead
+entry no native code ever read; Task 2's fallback removal now refuses it
+outright, since the catalog never declared the misspelled path (correctly —
+nothing reads it). This means **the tutorial's own default call already
+raises `ValueError` on unmodified HEAD**, independent of anything Task 6
+touches — confirmed by running `_apply_case(root, case())` with no overrides
+against HEAD before this task's changes. `test_manufactured_monodomain_total_lagrangian_em_write_channel.py`
+characterizes this honestly: it asserts `_apply_case` and `_plan_case` raise
+the *identical* `ValueError` for the default call (true behavioural parity
+for a call that itself fails), rather than working around the bug inside
+Task 6. Flagged as a separate follow-up (`task_7eca39be`), not fixed here —
+fixing the tutorial's own hardcoded key is a correctness change to that
+tutorial's arithmetic, not a write-channel migration.
+
+**`set_delta_t`/`set_end_time`/`replace_block_mesh_resolutions` are NOT
+retired in this task**, and the `apply_case=` grep count is unchanged
+(16 before, 16 after — see Step 3 below). Two things block retirement,
+independently:
+
+1. **`_apply_case` is deliberately kept as an independent, unmodified
+   writer beside `_plan_case` for every migrated tutorial**, the same "one
+   transitional release" reasoning Task 2 gave for keeping
+   `apply_entry_overrides`'s own direct-write body: `TutorialSpec.apply_case`
+   has no default (`core/runtime/models.py`), so every spec must supply
+   one regardless, and every characterization test in this task proves
+   `_plan_case` byte-identical *against* `_apply_case`'s independent output
+   — collapsing `_apply_case` into a thin wrapper over `_plan_case` before
+   proving that would make the proof circular. Collapsing it now, having
+   proven parity, is a safe, mechanical follow-up this task did not spend
+   its remaining budget on.
+2. **Two tutorials were not migrated for `deltaT`/block-mesh at all**
+   (`manufactured_bath_bidomain`'s `set_delta_t`/`replace_block_mesh_resolutions`
+   calls, `heart_solver_comparison` calls neither) — these are real,
+   unremoved callers regardless of point 1.
+
+**Step 3, reported as instructed:**
+
+```
+grep -rn "apply_case=" packages/*/src/ | grep -v "/build/"
+```
+
+**Count at the start of this task: 16. Count at the end: 16** (unchanged —
+see above). Breakdown: 3 in `cardiaccore/workflows/preprocessing.py`
+(already migrated in Phase 2, outside this task), 11 in
+`cardiacfoam/tutorials/` (all eleven Task 6 tutorials, `manufactured_purkinje_graph`
+included — Task 7's), 1 in `core/runtime/generic_case.py` (Task 8's, and
+expected to remain — this task's own brief said so: "expect the count to
+reach one, not zero").
+
+**All four required shapes: 0 failed** (aside from the documented
+environmental `ensurepip` abort in `test_every_core_module_imports_from_a_wheel`,
+present before this task and unrelated to it). Both static gates pass.
 
 ---
 
