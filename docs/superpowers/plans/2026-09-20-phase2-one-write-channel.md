@@ -71,7 +71,7 @@ four installation shapes and both static gates pass. Phase 2 may begin at G1.
 | G3 | 11 · sweeps migrate, and the sweep spec gets a versioned schema | done | `2480f3f` |
 | G3 | 12 · cardiacCore operations and remediation migrate | done (partial -- `write_cell_set` classified, not migrated, see report) | `5e350eb` |
 | G3 | 13 · `describe` shows the write surface | done | `b0ac9dd` |
-| G3 | 14 · four shapes, the mutation inventory, and the close-out | pending -- not this batch | — |
+| G3 | 14 · four shapes, the mutation inventory, and the close-out | done -- G3 does NOT close; five open bypasses recorded, see close-out below | `docs`-only, this commit |
 
 **G1 closed 2026-09-23.** Review R2 returned *not closed* on twelve findings —
 including proposal defect W1 fixed on one field and left open on every other,
@@ -86,6 +86,167 @@ What survived R3 unscathed is worth recording too: cross-process lease
 serialisation, mid-commit interruption, and a rollback whose own restore
 partially fails — that last one names the failed paths, keeps the journal, and
 never claims a false rollback.
+
+**G3 close-out, batch P2-I, Task 14, 2026-09-23. G3 does NOT close.** Full
+detail (all four shapes' results, the complete per-line inventory, the
+`describe` transcript) is in that session's report, not reproduced here in
+full to keep this file from doubling in size; what follows is the durable
+record a future session needs without re-deriving it.
+
+**Four shapes + both static gates: `0 failed` everywhere**, rebuilt from
+scratch (`/tmp/od311`, `/tmp/odcore`, `/tmp/wheeltest`+`/tmp/wheelenv`),
+`check-import-boundaries.py` and `export-capability-seams.py --check` both
+exit 0. One environment trap found and recorded here because it will
+otherwise cost a future session an hour: on this machine, `test_every_core_
+module_imports_from_a_wheel` (core-alone shape, `pytest.mark.slow`) crashes
+with `SIGABRT` — `dyld: Library not loaded: @rpath/libpython3.11.dylib` —
+because `venv.create(..., with_pip=True)`'s nested venv is a COPY of `uv`'s
+portable CPython 3.11.15 binary, placed somewhere that copy's `@rpath` cannot
+resolve. Setting `DYLD_LIBRARY_PATH` to that interpreter's own `lib/` before
+running pytest works around it (verified independent of this batch's changes,
+reproducible with `dangerouslyDisableSandbox`, present with zero source
+changes applied). This is a machine/toolchain defect, not a code regression;
+it is not one of the five write-channel classifications below because it has
+nothing to do with case mutation.
+
+**The inventory found five open bypasses, three already known, two new:**
+
+1. *(known)* 12 cardiacfoam tutorial specs (`cable_1d_cv_convergence`,
+   `cable_1d_restitution`, `heart_solver_comparison`,
+   `manufactured_bath_bidomain`, `manufactured_eikonal_ecg`,
+   `manufactured_monodomain_1d3d`, `manufactured_monodomain_pseudo_ecg`,
+   `manufactured_monodomain_total_lagrangian_em`,
+   `manufactured_purkinje_graph`, `niederer_2012`, `restitution_curves`,
+   `single_cell`) supply `apply_case` and no `plan_case` (verified: zero
+   `plan_case` occurrences in all twelve files, confirmed 2026-09-23).
+2. *(known)* `core/runtime/generic_case.py` constructs an `apply_case`-only
+   `TutorialSpec` (line naming `apply_case=partial(...)`; zero `plan_case`).
+3. *(known)* `cardiaccore/operations/vtu_selection.py::write_cell_set` — no
+   `cellSet`-format renderer exists; classified, not migrated (Task 12's own
+   table).
+4. *(new)* **The `--apply`/regeneration override CLI surface is a second,
+   fully live, currently-wired write path for framework-authored case
+   input**, entirely outside `case_write.py`/`commit_case_write`:
+   `cli.py`'s `--apply OVERRIDES_JSON` → `step_candidate.
+   execute_step_candidate_owned` → `openfoam/apply_overrides.py::
+   apply_overrides()` → `openfoam/mutators.py::update_foam_entry` (a
+   tier-1 pure-Python line editor that `write_text`s the **live** case file
+   directly — not a grep hit, since it falls back to `openfoam/
+   foam_backend.py::update_entry`/`remove_dict`, which mutates through
+   `foamlib`'s `FoamFile.__setitem__`/`del`, invisible to a `write_text`
+   grep entirely) and `cardiacfoam/dict_builder.py::
+   regenerate_electro_properties` (the `myocardiumSolver` `RegenerationScope`
+   callback, also a direct live `path.write_text`). This is not unsafe — the
+   CLI wraps every `--apply` in `remediation_transaction.
+   begin_remediation_transaction`/`finish_remediation_transaction`, which
+   has its own before-image snapshot, compare-and-swap ownership and
+   rollback — but it is a **second planned-and-reviewable-in-spirit but not
+   `commit_case_write`-routed channel** for exactly the class of write this
+   phase exists to unify. Confirmed live (not dead code): `cardiacfoam_
+   plugin.py::get_override_scopes`/`get_regeneration_scopes` wire it for
+   real, and `cli.py:738` threads `args.apply` into `_execute_step`
+   unconditionally.
+5. *(new)* `cardiacfoam/sweep.py::materialize_case` — the only real
+   (non-refusing) `materialize_case` implementation sweeps actually use —
+   writes the case's `Allrun` launch script with a bare `allrun_path.
+   write_text(...)`, outside `commit_case_write`, on every sweep-case
+   materialization. Small (one of two fixed strings, gated by one bool) but
+   structurally unplanned, unjournaled, unrolled-back.
+
+Everything else in the 83-line `write_text`/`write_bytes`/`shutil.copy*`/
+`os.replace`/`open(...,"w")` grep across `packages/*/src/` is one of:
+the channel's own rendering/commit mechanics (`case_transaction.py`,
+`transaction_mechanics.py`, `case_rendering.py`'s snapshot-only writes);
+a **separate, third** transactional mechanism for whole-case cloning
+(`sweep_runner.py`'s `_copy_and_promote_staged_case` staging journal — it
+duplicates an already-valid case tree rather than authoring new parameter
+values, so it is not classified as a bypass under this phase's definition,
+but it is a third parallel write-safety mechanism worth G4 knowing about);
+framework bookkeeping that is not a case document at all (repair-loop
+reservations, attempt leases, sweep manifests, workflow-state checkpoints,
+`run_document.json`); declared workflow output or a standalone export
+(`output_collection.py`, `table_writer.py`, `electrodes.py`'s two functions,
+per Task 12's own table); or test/verification scaffolding
+(`ionic_catalog_verification.py`'s `_synthesize_case`, called only from
+`tests/test_ionic_catalog_live_verification.py`, and `mesh_provisioning.
+provision_mesh`'s direct copy, whose only living caller is that same test).
+
+**`describe`'s write surface, run for real** (`singleCell`, cardiacfoam
+plugin): returns 171 `mutable` catalog entries with `value_kind`/`unit`/
+`source` each, and a `modes` block correctly reporting `synthesize:
+supported`, `clone_and_patch`/`generated_input`: unsupported with a named
+reason. `proposed_changes` came back **empty** even with a real `--config`
+override (`ionic_model`/`tissue`), for a reason worth recording rather than
+re-discovering: `_write_surface` matches `overrides`' top-level keys against
+catalog `qualified_id`s, but every real tutorial factory (`single_cell.
+make_spec`, `niederer_2012.make_spec`, `preprocessing.make_human_purkinje_
+slab_spec`) accepts a **nested** overrides mapping under its own kwarg name
+(`ionic_model`, `electro_property_overrides`, `input_overrides`...), never a
+flat kwarg literally named `$ELECTRO_MODEL_COEFFS.ionicModel`. As currently
+wired, no registered tutorial's CLI `--config` override can populate
+`proposed_changes` — the feature is real and correctly generated from the
+validation contracts (payoff 2 holds for `mutable`/`modes`), but is silent on
+the one field an approving agent most wants to see. Not a fabricated defect:
+this is the direct, reproducible result of a real invocation, not a reading
+of the code.
+
+**G3 exit criteria (roadmap's disposition table), each with evidence:**
+
+| criterion | verdict | evidence |
+|---|---|---|
+| Entry/sweep/remediation semantic parity on supported modes | met, for the modes that are migrated | Task 8/9 characterization tests pass unchanged (R3); conformance suite `test_write_channel_conformance.py` green in all four shapes |
+| No framework-authored input bypasses | **not met** | the five open bypasses above; #4 and #5 are new findings from this session, not previously recorded anywhere |
+| Unsupported modes refuse explicitly | met | `describe`'s `modes` block above; `CaseMutationRequest.__post_init__` raises by name for an unknown mode (Task 1) |
+| Obsolete routes removed | **not met** | `mesh_provisioning.provision_mesh`'s meshless branch and `--apply`'s pre-channel machinery both still exist and are both still the live, called implementation for their remaining callers — nothing obsolete has been deleted yet because parity has not been proven for those routes |
+
+**Can G3 close? No.** Two of four exit criteria are not met, and the
+"no bypasses" criterion is the one this whole phase exists to satisfy. What
+remains, roughly sized:
+
+- Migrate the 12 cardiacfoam tutorial specs to `plan_case` — the largest
+  item; each spec's `_apply_case` becomes a `_plan_case` the way the four
+  cardiacCore preprocessing specs already did (Task 10's pattern), but twelve
+  specs each with their own file layout (`tet_mesh_provisioning`, per-tutorial
+  overlay copies, `.driverfoam_case_id`/`.cardiacfoam_protocol.json` markers)
+  means twelve individual migrations, not one shared fix.
+- Migrate `generic_case.py` to supply `plan_case` — one function, but it is
+  core's own generic fallback path, so it has no adapter to delegate the
+  "what does this key mean" question to; needs its own design pass.
+- Migrate `vtu_selection.py::write_cell_set`, the way `provision_mesh`'s
+  meshless branch was folded into `dict_builder.build_case`'s plan (Task
+  12's pattern) — needs a `cellSet` `RenderedFile` format and a renderer
+  registered for it in `case_rendering.py`, plus a `value_kind` for a
+  cell-index list if `integer_list` does not already cover it (Task 12's
+  note says it does).
+- Design whether the `--apply`/regeneration surface joins the channel or
+  stays a deliberately separate, remediation-owned mechanism — this is a
+  design decision, not a mechanical migration, because unlike the other
+  bypasses `--apply` already has full transactional safety through
+  `remediation_transaction.py`; unifying it means either teaching
+  `commit_case_write` about attempt ownership (the "invent a fake attempt"
+  trap Task 12 already refused once) or accepting two channels by design and
+  saying so in the architecture doc instead of implying one.
+- Route `sweep.py::materialize_case`'s `Allrun` write through
+  `commit_case_write` — smallest item, one `RenderedFile` with a fixed-choice
+  body and an executable mode bit, both of which `RenderedFile.mode` already
+  supports.
+- Fix `describe`'s `proposed_changes` key-space mismatch (nested override
+  kwarg vs. flat qualified-id matching) so the feature is not silently empty
+  on every real call — a `describe`-side fix, not a write-path migration.
+
+**What G4 inherits**, added to the plan's existing C4/F3/F4/placeholder-
+grammar/R1 handoff:
+
+| item | detail | owner |
+|---|---|---|
+| bypass: 12 cardiacfoam tutorial specs | `apply_case`-only; see file list above | G4 |
+| bypass: `generic_case.py` | `apply_case`-only, core's own fallback path | G4 |
+| bypass: `vtu_selection.write_cell_set` | needs a `cellSet` renderer | G4 |
+| bypass: `--apply`/regeneration override surface | live, safe (via `remediation_transaction`), architecturally separate; needs a design decision, not a mechanical fix | G4 |
+| bypass: `sweep.py::materialize_case`'s `Allrun` write | smallest remaining item | G4 |
+| third transactional mechanism | `sweep_runner.py`'s whole-case-clone staging journal, sibling to `case_transaction.py` and `remediation_transaction.py` — not a bypass (duplicates bytes, does not author values) but a third thing to keep straight | G4 |
+| `describe` scope gap | `proposed_changes` cannot populate for any current tutorial factory's real overrides (key-space mismatch, not the previously-documented "no adapter resolve()" limit) | G4 |
+| environment trap | nested `venv.create(with_pip=True)` SIGABRTs on this machine's `uv` CPython 3.11.15; `DYLD_LIBRARY_PATH` workaround recorded above | whoever runs the core-alone shape next |
 
 ## What "one write channel" does and does not mean
 
