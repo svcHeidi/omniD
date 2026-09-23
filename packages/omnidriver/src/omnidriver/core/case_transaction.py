@@ -5,9 +5,15 @@ What this guarantees:
 * Each file is replaced atomically, so a framework reader never observes a
   partially written file.
 * A journal records every before-image before any write, so an interrupted
-  transaction is recoverable and a failed one is rolled back: overwritten
-  files are restored, created files are removed, and directories created only
-  for the transaction are removed.
+  transaction is recoverable and a failed one is **rolled back when the
+  rollback itself succeeds**: overwritten files are restored, created files
+  are removed, and directories created only for the transaction are removed.
+  Rollback can itself fail -- :func:`_rollback`'s own docstring carries that
+  nuance, corrected here 2026-09-23 (R3 finding 9) because this summary used
+  to read as unconditional. When it does, the journal is left in place
+  rather than removed, and :func:`commit_case_write` raises naming every path
+  restoration failed for; the case's prior state remains recoverable from
+  that journal, but it is not restored automatically a second time.
 * A case lease serializes this framework's attempts against one case.
 
 What this does NOT guarantee, and must not be documented as guaranteeing
