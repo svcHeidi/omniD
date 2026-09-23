@@ -1,15 +1,45 @@
 from __future__ import annotations
 
+import datetime
 import re
-from contextlib import contextmanager
+import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Any, Callable, Iterable, Mapping
 
+from omnidriver.core.case_transaction import CaseTransactionError, commit_case_write
+from omnidriver.core.case_write import (
+    CaseMutationRequest,
+    CaseWritePlan,
+    ParameterAssignment,
+    RenderedFile,
+    ResolvedMutation,
+    _digest_bytes,
+)
+from omnidriver.core.runtime.attempt_lease import case_lease_is_held
+
+from . import case_rendering
+from .literals import (
+    parse_boolean_literal,
+    parse_dimensioned_literal,
+    parse_integer_list_literal,
+    parse_scalar_list_literal,
+    parse_vector3_list_literal,
+    parse_vector3_literal,
+    parse_word_list_literal,
+)
 from .mutators import update_foam_entry
 
 if TYPE_CHECKING:
     from omnidriver.core.plugin_interface import DriverContext
+
+#: This module's identity on every `ParameterAssignment`/`CaseMutationRequest`
+#: it produces (Phase 3 Task 5, "--apply joins the channel"). Deliberately
+#: not a solver plugin's own identity (e.g. cardiacFoam's `"org.cardiacfoam"`):
+#: this module resolves overrides against WHICHEVER plugin's declared
+#: `override_scopes`/`dict_regeneration` the composed stack carries, so it
+#: cannot claim to be any one of them.
+_OWNER = "org.omnidriver.openfoam.apply_overrides"
 
 
 @dataclass(frozen=True)
@@ -148,6 +178,29 @@ def _scope_token(dp: str) -> str:
     return dp[1:].split(".", 1)[0]
 
 
+def _document_relpath_for(
+    dp: str,
+    *,
+    scope_by_token: dict[str, "OverrideScope"],
+    regen_scope_by_key: dict[str, "RegenerationScope"],
+) -> str:
+    """The case-relative document one override's ``driver_path`` addresses.
+
+    Factored out of ``override_target_paths`` (2026-09-23, Phase 3 Task 5) so
+    the channel migration's own document-set computation (which relpaths to
+    snapshot-copy before staging) shares one routing decision with the
+    existing path-safety check, rather than a second copy that could drift
+    from it. ``dp`` must already have passed ``validate_overrides``.
+    """
+    if ":" in dp:
+        return dp.partition(":")[0]
+    if dp in regen_scope_by_key:
+        return regen_scope_by_key[dp].file_relpath
+    if dp.startswith("$"):
+        return scope_by_token[_scope_token(dp)].file_relpath
+    return "system/controlDict"
+
+
 def validate_overrides(overrides: Any, *, driver_context: "DriverContext") -> None:
     """Reject anything not safely applyable, *before* any write. Raises OverrideError."""
     if not isinstance(overrides, list):
@@ -239,13 +292,43 @@ def apply_overrides(
     driver_context: "DriverContext",
     execution_env: Mapping[str, str] | None = None,
 ) -> tuple[dict[str, Any], ...]:
-    """Apply overrides with in-process rollback of every declared target file.
+    """Apply overrides through the case-write channel (Phase 3 Task 5,
+    "--apply joins the channel" -- bypass 4).
 
-    Validate routing before any writes. A mutator failure restores the original
-    dictionary bytes; this is not a crash-recovery or concurrent-writer lock.
-    Plugin regenerators must restrict writes to their declared file_relpath.
+    Validate routing before any writes, exactly as before. What changes is
+    where the writes land: every touched document is staged into a private
+    snapshot (case_root is never read or written directly), a
+    `CaseMutationRequest`/`ParameterAssignment` per override describes what
+    is about to change, and `case_transaction.commit_case_write` replaces
+    the real files atomically, journalled, with automatic rollback on
+    failure -- case_root is untouched on any validation or staging failure
+    (stronger than the pre-channel `_restore_on_failure`, which restored
+    case_root only after writing to it), and crash-recoverable via the
+    journal on a failure during the commit itself, which no prior mechanism
+    on this path provided at all.
+
+    `commit_case_write` is called with ``case_lease_held=True`` when this
+    thread already holds the case lease -- true for `--apply` reached via
+    `cli.py`'s `--apply` dispatch (`_dispatch_context` holds it for the
+    whole `step`), which is why `case_transaction.py` grew that parameter.
+    A standalone caller (e.g. this module's own unit tests, calling
+    `apply_overrides()` directly with no lease held) is unaffected: the
+    flag is only passed when a held lease is actually detected, and
+    `commit_case_write` acquires its own otherwise, exactly as it always has.
     """
     validate_overrides(overrides, driver_context=driver_context)
+    if not overrides:
+        # `clone_and_patch` requires at least one parameter
+        # (`CaseMutationRequest.__post_init__`); an override list that
+        # resolves to nothing is a no-op, not a mutation with zero effects
+        # -- the same rule `cardiaccore.workflows.overrides
+        # .apply_input_overrides_planned` already applies. Matches this
+        # function's own pre-channel behaviour: `apply_overrides([], ...)`
+        # has always been a well-defined no-op
+        # (`test_applying_overrides_is_supported`).
+        return ()
+
+    case_root = Path(case_root)
     scope_by_token = {
         scope.token: scope
         for scope in driver_context.capabilities.override_scopes.scopes()
@@ -255,11 +338,103 @@ def apply_overrides(
         for regen_scope in driver_context.capabilities.dict_regeneration.scopes()
         for key in regen_scope.selector_keys
     }
-    paths = set(override_target_paths(
-        overrides, case_root=case_root, driver_context=driver_context,
-    ))
-    with _restore_on_failure(paths):
-        _apply_validated_overrides(overrides, case_root, scope_by_token, regen_scope_by_key)
+    _, scoped_entries, _, _ = _catalog_entries(driver_context)
+    controldict_entries = _control_dict_entries(driver_context)
+
+    # Re-validates and raises OverrideError on a symlinked/escaping target
+    # BEFORE anything is staged -- override_target_paths's own refusal,
+    # unchanged; its return value itself isn't otherwise needed below,
+    # which computes case-relative strings (for the snapshot copy and
+    # RenderedFile.path) via the same routing decision.
+    override_target_paths(overrides, case_root=case_root, driver_context=driver_context)
+    relpaths = sorted({
+        _document_relpath_for(
+            ov["driver_path"], scope_by_token=scope_by_token,
+            regen_scope_by_key=regen_scope_by_key,
+        )
+        for ov in overrides
+    })
+
+    with tempfile.TemporaryDirectory(prefix="omnidriver-apply-render-") as scratch:
+        snapshot_root = Path(scratch)
+        for relpath in relpaths:
+            case_rendering._snapshot_copy(case_root, snapshot_root, relpath)
+
+        parameters = _stage_overrides_into_snapshot(
+            overrides,
+            snapshot_root=snapshot_root,
+            scope_by_token=scope_by_token,
+            regen_scope_by_key=regen_scope_by_key,
+            scoped_entries=scoped_entries,
+            controldict_entries=controldict_entries,
+        )
+
+        rendered: list[RenderedFile] = []
+        for relpath in relpaths:
+            source = case_root / relpath
+            # Every relpath above was written by _stage_overrides_into_snapshot
+            # without raising, which -- since every route requires its target
+            # to already exist (add_if_missing is never set) -- proves this
+            # source existed the whole time and is untouched (only the
+            # snapshot copy was ever written to).
+            before_digest = _digest_bytes(source.read_bytes())
+            mode = source.stat().st_mode & 0o7777
+            content = (snapshot_root / relpath).read_bytes()
+            rendered.append(RenderedFile(
+                path=relpath, content=content, mode=mode, exists_before=True,
+                before_digest=before_digest, renderer_id=_OWNER,
+                format=case_rendering.FORMAT,
+            ))
+
+        request = CaseMutationRequest(
+            mode="clone_and_patch", case_root=case_root, adapter_id=_OWNER,
+            workflow="apply_overrides", source_artifacts=(), parameters=tuple(parameters),
+            requested_by="openfoam.apply_overrides",
+        )
+        targets = tuple(
+            {
+                "qualified_id": parameter.qualified_id,
+                "document": parameter.document,
+                "expanded_key_path": list(parameter.expanded_key_path()),
+                "value": parameter.value,
+                "format": case_rendering.FORMAT,
+            }
+            for parameter in parameters
+        )
+        resolved = ResolvedMutation(
+            request=request, targets=targets, preconditions=(),
+            expected_effects=tuple(
+                f"apply override {parameter.qualified_id!r}" for parameter in parameters
+            ),
+            semantic_owner_id=_OWNER,
+        )
+        # Gives the `environment` precondition kind (declared in
+        # `core.case_write`, implemented here, checked in
+        # `core.case_transaction`) its second real emitter -- until now the
+        # only caller was cardiacCore's Task 8 channel consumer
+        # (`workflows.overrides.apply_input_overrides_planned`). Discharges
+        # the note Task 1 Step 3 recorded ("implemented-and-thin").
+        preconditions = case_rendering.patch_preconditions(
+            resolved, case_root=case_root, execution_env=execution_env,
+        )
+        identity = getattr(driver_context, "identity", None)
+        stack_identity = (
+            identity.capability_digest if identity is not None else "0" * 64
+        )
+        plan = CaseWritePlan(
+            request=request, files=tuple(rendered), preconditions=preconditions,
+            semantic_owner_id=_OWNER, stack_identity=stack_identity,
+            created_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        )
+
+    try:
+        commit_case_write(
+            plan, driver_context=driver_context, execution_env=execution_env,
+            case_lease_held=case_lease_is_held(case_root),
+        )
+    except CaseTransactionError as exc:
+        raise OverrideError(f"failed to commit overrides: {exc}") from exc
+
     if execution_env is None:
         return ()
 
@@ -322,14 +497,9 @@ def override_target_paths(
     paths: set[Path] = set()
     for ov in overrides:
         dp = ov["driver_path"]
-        if ":" in dp:
-            relpath = dp.partition(":")[0]
-        elif dp in regen_scope_by_key:
-            relpath = regen_scope_by_key[dp].file_relpath
-        elif dp.startswith("$"):
-            relpath = scope_by_token[_scope_token(dp)].file_relpath
-        else:
-            relpath = "system/controlDict"
+        relpath = _document_relpath_for(
+            dp, scope_by_token=scope_by_token, regen_scope_by_key=regen_scope_by_key,
+        )
         target = case_root / relpath
         resolved_root = case_root.resolve()
         if (
@@ -435,35 +605,165 @@ def effective_values_agree(requested: Any, resolved: str | None) -> bool:
     return left == right
 
 
-@contextmanager
-def _restore_on_failure(paths: set[Path]):
+#: value_kind -> text-to-typed parser, for a raw string override value that
+#: needs interpreting before it fits `validate_value_shape`'s closed shape
+#: vocabulary. Mirrors `omnidriver.cardiacfoam.overrides._TEXT_PARSERS`
+#: (same reasoning, same `omnidriver.openfoam.literals` functions -- see
+#: that module's own docstring on why parsing lives there and not here) but
+#: widened with `scalar`/`integer`: cardiacFoam's tutorial call sites always
+#: pass an already-typed Python float for those two kinds (Task 3's own
+#: finding), but `--apply` values arrive from the CLI and `sweep.json` as
+#: strings (``{"driver_path": "deltaT", "value": "0.0005"}``), so this route
+#: needs a parser those production call sites never did. `word`/`enum` are
+#: excluded: a JSON string already IS the correct shape for those, and
+#: `validate_value_shape` accepts any non-empty, whitespace-free string
+#: (a plausible number like "1e-6" is a perfectly valid "word" spelling too).
+_TEXT_PARSERS: dict[str, Callable[[str], Any]] = {
+    "scalar": lambda text: _parse_number_text(text, what="scalar"),
+    "integer": lambda text: _parse_integer_text(text),
+    "boolean": parse_boolean_literal,
+    "dimensioned_scalar": parse_dimensioned_literal,
+    "dimensioned_tensor": parse_dimensioned_literal,
+    "vector3": parse_vector3_literal,
+    "word_list": parse_word_list_literal,
+    "scalar_list": parse_scalar_list_literal,
+    "integer_list": parse_integer_list_literal,
+    "vector3_list": parse_vector3_list_literal,
+}
+
+def _parse_number_text(text: str, *, what: str) -> float:
     try:
-        originals = {path: path.read_bytes() if path.exists() else None for path in paths}
-    except OSError as exc:
-        raise OverrideError(f"cannot snapshot override targets: {exc}") from exc
-    try:
-        yield
-    except BaseException as error:
-        failures = []
-        for path, original in originals.items():
-            try:
-                if original is None:
-                    path.unlink(missing_ok=True)
-                elif not path.exists() or path.read_bytes() != original:
-                    path.write_bytes(original)
-            except OSError as exc:
-                failures.append(f"{path}: {exc}")
-        if failures:
-            raise OverrideError(f"override failed ({error}); rollback failed: {'; '.join(failures)}") from error
-        raise
+        return float(text)
+    except ValueError as exc:
+        raise ValueError(f"{text!r} is not a {what}") from exc
 
 
-def _apply_validated_overrides(
+def _parse_integer_text(text: str) -> int:
+    try:
+        return int(text)
+    except ValueError:
+        pass
+    number = _parse_number_text(text, what="integer")
+    if not number.is_integer():
+        raise ValueError(f"{text!r} is not an integer")
+    return int(number)
+
+
+def _typed_value_for_apply(value_kind: str, value: Any) -> tuple[Any, tuple[str, ...]]:
+    """The typed value a `ParameterAssignment` records, plus any raw-text
+    evidence to write back verbatim.
+
+    Mirrors `cardiaccore.overrides._typed_value_for_entry` /
+    `cardiacfoam.overrides._typed_value_for_entry` (Gap 1's "the raw
+    spelling is still evidence"): unlike those two, the caller here
+    (`_stage_overrides_into_snapshot`) does not use this typed value or its
+    evidence to decide what gets WRITTEN at all -- the write call already
+    happened with the raw override value, unchanged from the pre-channel
+    write path, which is what guarantees byte-for-byte parity with it. This
+    function exists purely to produce a typed, shape-valid value for the
+    `ParameterAssignment` AUDIT record; `evidence_refs` records the original
+    spelling there too, so a reader of the plan can see what was actually
+    typed even though it is not what drove the write.
+    """
+    parse = _TEXT_PARSERS.get(value_kind)
+    if parse is not None and isinstance(value, str):
+        return parse(value), (value,)
+    return value, ()
+
+
+def _inferred_value_kind(value: Any) -> str | None:
+    """A `value_kind` for an override this module's catalog cannot
+    declare -- the ``system/<file>:<entry>`` route, which
+    `validate_overrides` only path-safety-checks, never catalog-validates
+    (see its own docstring). Dispatches on the Python type actually in
+    hand, never on whether the text *looks* numeric: `validate_value_shape`
+    accepts any non-empty, whitespace-free string as a "word", including one
+    that also happens to parse as a number ("1e-6"), so classifying every
+    such string as "word" is not imprecise -- it is the most conservative
+    true statement this route can make with no catalog entry to consult.
+    ``None`` means genuinely unclassifiable (empty string, a string
+    containing whitespace, or an unsupported JSON type such as a list or a
+    mapping) -- refused by the caller rather than guessed at.
+    """
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int):
+        return "integer"
+    if isinstance(value, float):
+        return "scalar"
+    if isinstance(value, str) and value and value.split() == [value]:
+        return "word"
+    return None
+
+
+def _control_dict_entries(driver_context: "DriverContext") -> dict[str, Any]:
+    """driver_path -> `DictEntry`, for every controlDict entry the catalog
+    declares -- `_catalog_entries` discards everything but the bare path
+    set (`validate_overrides` only ever needed membership), so this is
+    built separately, for the one extra fact the channel needs: each
+    entry's `value_kind`.
+    """
+    catalog = driver_context.capabilities.dictionaries.catalog()
+    return {entry.driver_path: entry for entry in catalog.entries_for("controlDict")}
+
+
+def _catalog_entry_for_apply(
+    dp: str,
+    *,
+    scoped_entries: dict[str, Any],
+) -> Any | None:
+    """The catalog `DictEntry` a ``$TOKEN.``/regeneration-selector
+    ``driver_path`` addresses -- the direct-or-dynamic match
+    `validate_overrides` already performed to accept ``dp`` in the first
+    place (see that function), re-run here for the one additional fact it
+    does not return: the matched entry's `value_kind`. Kept as its own,
+    small function rather than threading a return value back through
+    `validate_overrides` -- that function's control flow (and its 20-plus
+    pinned error messages) stays untouched; this duplicates roughly four
+    lines of matching, not `validate_overrides`'s trust decisions."""
+    entry = scoped_entries.get(dp)
+    if entry is not None:
+        return entry
+    return _match_dynamic_entry(dp, scoped_entries.values())
+
+
+def _stage_overrides_into_snapshot(
     overrides: list[dict[str, Any]],
-    case_root: Path,
+    *,
+    snapshot_root: Path,
     scope_by_token: dict[str, OverrideScope],
     regen_scope_by_key: dict[str, RegenerationScope],
-) -> None:
+    scoped_entries: dict[str, Any],
+    controldict_entries: dict[str, Any],
+) -> list[ParameterAssignment]:
+    """Apply every override into `snapshot_root`, building one
+    `ParameterAssignment` per override as a byproduct.
+
+    Byte-for-byte the same routing and write calls as the pre-channel
+    `_apply_validated_overrides` (removed 2026-09-23, Phase 3 Task 5) --
+    ``case_root`` replaced by ``snapshot_root`` throughout, so `case_root`
+    is never read or written by this function at all. `scope.resolve_entry`
+    and `regen_scope.regenerate` are given `snapshot_root` too (not the real
+    `case_root`), which is what preserves the one behaviour that a naive
+    "copy touched files, then apply" split would have broken: within a
+    single `apply_overrides()` call, cardiacFoam's `resolve_entry` detects
+    the ACTIVE `<solver>Coeffs` block by reading `constant/electroProperties`
+    (see `overrides._resolve_electro_model_coeffs_entry`) -- the same file a
+    prior override in the SAME call may have just regenerated. Passing
+    `snapshot_root` throughout means a later override's `resolve_entry` sees
+    that prior write, exactly as it would reading `case_root` directly today;
+    passing the untouched `case_root` instead would silently resolve against
+    the pre-regeneration solver.
+
+    The caller has already copied every document `override_target_paths`
+    names into `snapshot_root`, so every read/write below targets a file
+    that already exists there -- an override addressing one that does not
+    exist under the real case still raises the same `FileNotFoundError`,
+    now surfacing from the snapshot copy instead of `case_root` (message
+    unchanged; only the path differs), wrapped into `OverrideError` exactly
+    as before.
+    """
+    parameters: list[ParameterAssignment] = []
     for ov in overrides:
         dp, value = ov["driver_path"], ov["value"]
         try:
@@ -475,8 +775,17 @@ def _apply_validated_overrides(
                 # without a sourced OpenFOAM, like every other override path.
                 *scope_path, key = entry_path.split("/")
                 update_foam_entry(
-                    case_root / file_path, key, value, scope=scope_path or None
+                    snapshot_root / file_path, key, value, scope=scope_path or None
                 )
+                document, key_path = file_path, tuple((*scope_path, key))
+                kind = _inferred_value_kind(value)
+                if kind is None:
+                    raise ValueError(
+                        f"value {value!r} has no closed shape this route can "
+                        f"describe (expected a boolean, a number, or a single "
+                        f"whitespace-free word); {dp!r} is not catalog-declared, "
+                        f"so its value_kind cannot be looked up"
+                    )
             elif not dp.startswith("$") and dp in regen_scope_by_key:
                 regen_scope = regen_scope_by_key[dp]
                 # Other $TOKEN. overrides in this same call that target the
@@ -494,16 +803,53 @@ def _apply_validated_overrides(
                     == regen_scope.file_relpath
                 }
                 regen_scope.regenerate(
-                    case_root / regen_scope.file_relpath, dp, value, extra_overrides,
+                    snapshot_root / regen_scope.file_relpath, dp, value, extra_overrides,
                 )
+                document, key_path = regen_scope.file_relpath, (dp,)
+                entry = _catalog_entry_for_apply(dp, scoped_entries=scoped_entries)
+                if entry is None:
+                    raise AssertionError(
+                        f"{dp!r} routed as a regeneration selector but has no "
+                        f"catalog entry; validate_overrides should have "
+                        f"refused it already"
+                    )
+                kind = entry.value_kind
             elif not dp.startswith("$"):
-                update_foam_entry(case_root / "system" / "controlDict", dp, value)
+                update_foam_entry(snapshot_root / "system" / "controlDict", dp, value)
+                document, key_path = "system/controlDict", (dp,)
+                entry = controldict_entries.get(dp)
+                if entry is None:
+                    raise AssertionError(
+                        f"{dp!r} routed as a controlDict entry but has no "
+                        f"catalog entry; validate_overrides should have "
+                        f"refused it already"
+                    )
+                kind = entry.value_kind
             else:
                 token = _scope_token(dp)
                 scope = scope_by_token.get(token)
                 if scope is None:
                     raise OverrideError(f"unknown scope token {'$' + token!r}")
-                scope_path, key = scope.resolve_entry(dp, case_root)
-                update_foam_entry(case_root / scope.file_relpath, key, value, scope=scope_path)
+                scope_path, key = scope.resolve_entry(dp, snapshot_root)
+                update_foam_entry(
+                    snapshot_root / scope.file_relpath, key, value, scope=scope_path,
+                )
+                document = scope.file_relpath
+                key_path = tuple((*(scope_path or ()), key))
+                entry = _catalog_entry_for_apply(dp, scoped_entries=scoped_entries)
+                if entry is None:
+                    raise AssertionError(
+                        f"{dp!r} passed validate_overrides but matches no "
+                        f"catalog entry here; the two lookups have drifted"
+                    )
+                kind = entry.value_kind
         except (OSError, KeyError, ValueError, RuntimeError) as exc:
             raise OverrideError(f"failed to apply override {dp!r}: {exc}") from exc
+
+        typed_value, evidence_refs = _typed_value_for_apply(kind, value)
+        parameters.append(ParameterAssignment(
+            qualified_id=dp, owner=_OWNER, document=document, key_path=key_path,
+            binding={}, value=typed_value, value_kind=kind, source="case",
+            evidence_refs=evidence_refs,
+        ))
+    return parameters
