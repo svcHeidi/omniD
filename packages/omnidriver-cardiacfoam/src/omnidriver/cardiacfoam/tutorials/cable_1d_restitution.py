@@ -11,8 +11,12 @@ from pathlib import Path
 from omnidriver.cardiacfoam.tutorials.defaults import cable_1d_restitution as defaults
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec, DataArtifact
 from omnidriver.cardiacfoam.overrides import (
+    PLUGIN_ID,
     apply_electro_property_overrides,
     apply_physics_property_overrides,
+    commit_case_overrides,
+    merge_assignments,
+    resolve_entry_overrides,
 )
 from omnidriver.core.specs.common import (
     resolve_run_script_path,
@@ -20,6 +24,9 @@ from omnidriver.core.specs.common import (
 )
 from omnidriver.core.specs.utils import load_python_module
 from omnidriver.openfoam.utils import (
+    plan_block_mesh_resolution,
+    plan_delta_t,
+    plan_end_time,
     replace_block_mesh_resolutions,
     set_delta_t,
     set_end_time,
@@ -209,6 +216,131 @@ def _apply_case(
     )
 
 
+def _plan_case(
+    case_root: Path,
+    case: CaseConfig,
+    *,
+    s1_interval_ms: float = defaults.S1_INTERVAL_MS,
+    n_s1: int = defaults.N_S1,
+    n_s2: int = defaults.N_S2,
+    end_time_buffer_s: float = defaults.END_TIME_BUFFER_S,
+    electro_properties_scope: str = defaults.ELECTRO_PROPERTIES_SCOPE,
+    control_dict_relpath: Path = defaults.CONTROL_DICT_RELPATH,
+    block_mesh_dict_relpath: Path = defaults.BLOCK_MESH_DICT_RELPATH,
+    electro_properties_relpath: Path = defaults.ELECTRO_PROPERTIES_RELPATH,
+    physics_properties_relpath: Path = Path("constant/physicsProperties"),
+    electro_property_overrides: Mapping[str, object] | Sequence[Mapping[str, object]] | None = None,
+    physics_property_overrides: Mapping[str, object] | Sequence[Mapping[str, object]] | None = None,
+    cable_length_mm: float = defaults.CABLE_LENGTH_MM,
+    cross_section_cell_counts: Sequence[int] = defaults.CROSS_SECTION_CELL_COUNTS,
+):
+    """`TutorialSpec.plan_case` (Phase 3 Task 6). The two pacing modes'
+    arithmetic (`requested_di90` vs `coupling_interval`) is unchanged --
+    only the block-mesh rewrite, `deltaT`/`endTime`, and the electro/physics
+    overrides move onto the channel. `.driverfoam_case_id` (a marker) and
+    `.cardiacfoam_protocol.json` (a standalone export postprocessing reads
+    by name) are Task 7's classification, not parameters, and stay direct
+    writes here exactly as `_apply_case` makes them.
+    """
+    electro_properties = case_root / electro_properties_relpath
+    physics_properties = case_root / physics_properties_relpath
+
+    (cells,) = cell_counts_from_dx(float(case.params["dx_mm"]), (cable_length_mm,))
+    cell_counts_str = f"{cells} {int(cross_section_cell_counts[0])} {int(cross_section_cell_counts[1])}"
+    block_mesh_document = str(block_mesh_dict_relpath)
+    block_mesh_target = plan_block_mesh_resolution(block_mesh_document, cell_counts_str)
+
+    s1_times_s = [i * (s1_interval_ms / 1000.0) for i in range(n_s1)]
+    last_s1_time_s = s1_times_s[-1] if s1_times_s else 0.0
+    if case.params.get("pacingMode") == "requested_di90":
+        if n_s2 != 1:
+            raise ValueError("requested DI90 scheduling currently requires n_s2 == 1")
+        s2_times_s = [
+            float(case.params["referenceRepolarization90_s"])
+            + float(case.params["requestedDI90_ms"]) / 1000.0
+        ]
+        end_time = s2_times_s[-1] + end_time_buffer_s
+    else:
+        s2_times_s = [
+            last_s1_time_s + (i + 1) * (float(case.params["s2Interval"]) / 1000.0)
+            for i in range(n_s2)
+        ]
+        end_time = (s1_interval_ms * n_s1 + float(case.params["s2Interval"]) * n_s2) / 1000.0 + end_time_buffer_s
+
+    stimulus_arrays = generate_spatial_stimulus_lists(
+        times_s=s1_times_s + s2_times_s,
+        bounds_min=STIMULUS_BOUNDS_MIN, bounds_max=STIMULUS_BOUNDS_MAX,
+        duration_s=STIMULUS_DURATION_S, intensity=STIMULUS_INTENSITY,
+    )
+
+    case_overrides = {
+        f"{electro_properties_scope}.conductivity": str(case.params["conductivity"]),
+        f"{electro_properties_scope}.tissue": str(case.params["tissue"]),
+        f"{electro_properties_scope}.ionicModel": str(case.params["ionicModel"]),
+        f"{electro_properties_scope}.solutionAlgorithm": str(case.params["solver"]),
+    }
+    for k, v in stimulus_arrays.items():
+        case_overrides[f"{electro_properties_scope}.externalStimulus.{k}"] = v
+
+    electro_document = str(electro_properties_relpath)
+    physics_document = str(physics_properties_relpath)
+    parameters = merge_assignments(
+        (plan_delta_t(float(case.params["dt_ms"]) * 1.0e-3, owner=PLUGIN_ID),),
+        (plan_end_time(end_time, owner=PLUGIN_ID),),
+        resolve_entry_overrides(
+            electro_properties, case_overrides, document=electro_document,
+            electro_properties_path=electro_properties,
+        ),
+        resolve_entry_overrides(
+            electro_properties, electro_property_overrides, document=electro_document,
+            electro_properties_path=electro_properties,
+        ),
+        resolve_entry_overrides(
+            physics_properties, physics_property_overrides, document=physics_document,
+        ),
+    )
+
+    record = commit_case_overrides(
+        case_root,
+        parameters=parameters,
+        extra_targets=(block_mesh_target,),
+        extra_effects=(f"rewrite hex blocks in {block_mesh_document}",),
+        workflow="cable_1d_restitution",
+        requested_by="cardiacfoam.tutorials.cable_1d_restitution",
+    )
+
+    (case_root / ".driverfoam_case_id").write_text(case.case_id)
+
+    protocol_metadata = {
+        "schema_version": 1,
+        "case_id": case.case_id,
+        "ionic_model": str(case.params["ionicModel"]),
+        "tissue": str(case.params["tissue"]),
+        "dt_s": float(case.params["dt_ms"]) * 1.0e-3,
+        "dx_m": float(case.params["dx_mm"]) * 1.0e-3,
+        "s1_interval_s": s1_interval_ms / 1000.0,
+        "n_s1": n_s1,
+        "n_s2": n_s2,
+        "pacing_mode": str(case.params.get("pacingMode", "coupling_interval")),
+        "s2_coupling_interval_s": None if not s2_times_s else s2_times_s[0] - last_s1_time_s,
+        "requested_di90_s": None if "requestedDI90_ms" not in case.params else float(case.params["requestedDI90_ms"]) / 1000.0,
+        "reference_repolarization90_s": case.params.get("referenceRepolarization90_s"),
+        "s1_stimulus_times_s": s1_times_s,
+        "s2_stimulus_times_s": s2_times_s,
+        "stimulus_times_s": s1_times_s + s2_times_s,
+        "stimulus_location_min": STIMULUS_BOUNDS_MIN,
+        "stimulus_location_max": STIMULUS_BOUNDS_MAX,
+        "stimulus_duration_s": float(STIMULUS_DURATION_S),
+        "stimulus_intensity": float(STIMULUS_INTENSITY),
+        "end_time_s": end_time,
+    }
+    (case_root / ".cardiacfoam_protocol.json").write_text(
+        json.dumps(protocol_metadata, indent=2) + "\n",
+        encoding="ascii",
+    )
+
+    return record
+
 
 def make_spec(
     *,
@@ -278,6 +410,22 @@ def make_spec(
         ),
         apply_case=partial(
             _apply_case,
+            s1_interval_ms=s1_interval_ms,
+            n_s1=n_s1,
+            n_s2=n_s2,
+            end_time_buffer_s=end_time_buffer_s,
+            electro_properties_scope=electro_properties_scope,
+            control_dict_relpath=Path(control_dict_relpath),
+            block_mesh_dict_relpath=Path(block_mesh_dict_relpath),
+            electro_properties_relpath=Path(electro_properties_relpath),
+            physics_properties_relpath=Path(physics_properties_relpath),
+            electro_property_overrides=electro_property_overrides,
+            physics_property_overrides=physics_property_overrides,
+            cable_length_mm=cable_length_mm,
+            cross_section_cell_counts=cross_section_cell_counts,
+        ),
+        plan_case=partial(
+            _plan_case,
             s1_interval_ms=s1_interval_ms,
             n_s1=n_s1,
             n_s2=n_s2,
