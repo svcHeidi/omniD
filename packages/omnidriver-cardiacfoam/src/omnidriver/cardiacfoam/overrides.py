@@ -441,6 +441,115 @@ def resolve_entry_overrides(
     return tuple(assignments)
 
 
+def _resolve_single_catalog_assignment(
+    entry_name: str,
+    scope: str | Sequence[str] | None,
+    value: Any,
+    *,
+    document: str,
+    electro_properties_path: Path | None,
+    operation: str,
+) -> ParameterAssignment:
+    """One catalog-addressed key, resolved into a typed `ParameterAssignment`
+    carrying an explicit `operation` (Phase 3 Task 6's completion,
+    2026-09-23) -- the single-key counterpart of `resolve_entry_overrides`
+    for a caller that already knows exactly which key it means and wants an
+    upsert or a removal, neither of which `resolve_entry_overrides` itself
+    can express: it only ever builds `operation="set"` assignments, and
+    always requires a value.
+
+    Same catalog strictness as `resolve_entry_overrides` -- an override
+    addressing a key the catalog does not declare is refused, not silently
+    written -- and the same dynamic-path/binding-validation machinery
+    (`_catalog_entry_for`, `_validate_dynamic_binding`), reused rather than
+    duplicated. `value` is ignored for `operation="remove"` (there is
+    nothing to type or preserve evidence for -- `ParameterAssignment` itself
+    refuses a value alongside `remove`).
+    """
+    is_electro = electro_properties_path is not None
+    resolved_scope: tuple[str, ...] = ()
+    if scope is not None:
+        raw_scope = (scope,) if isinstance(scope, str) else tuple(scope)
+        resolved_scope = tuple(
+            part
+            for token in raw_scope
+            for part in _resolve_scope_tokens(
+                str(token), electro_properties_path=electro_properties_path,
+            )
+        )
+    key_path = (*resolved_scope, entry_name)
+    match = _catalog_entry_for(entry_name, resolved_scope, is_electro=is_electro)
+    if match is None:
+        raise ValueError(
+            f"override {'.'.join(key_path)!r} is not declared by the "
+            f"{'electroProperties' if is_electro else 'physicsProperties'} "
+            f"catalog; no native utility is known to read an undeclared "
+            f"key, so writing it would be a silent no-op the catalog "
+            f"exists to catch"
+        )
+    entry, binding = match
+    for placeholder, bound_value in binding.items():
+        _validate_dynamic_binding(entry, placeholder, bound_value)
+    if operation == "remove":
+        typed_value, evidence_refs = None, ()
+    else:
+        typed_value, evidence_refs = _typed_value_for_entry(entry, value)
+    return ParameterAssignment(
+        qualified_id=".".join(key_path),
+        owner=PLUGIN_ID,
+        document=document,
+        key_path=key_path,
+        binding={},
+        value=typed_value,
+        value_kind=entry.value_kind,
+        source="case",
+        evidence_refs=evidence_refs,
+        operation=operation,
+    )
+
+
+def resolve_electro_property_ensure(
+    electro_properties_path: Path,
+    entry_name: str,
+    value: Any,
+    *,
+    document: str,
+    scope: str | Sequence[str] | None = None,
+) -> ParameterAssignment:
+    """Pure, channel-routed counterpart of `ensure_electro_property_entry`
+    (Phase 3 Task 6's completion, 2026-09-23): resolves the same upsert into
+    an `operation="ensure"` `ParameterAssignment` instead of writing it
+    directly. See that function's own docstring for why an upsert is
+    needed -- a bath-boundary patch entry whose presence varies with which
+    boundary variant a reused `case_root` was last written for."""
+    return _resolve_single_catalog_assignment(
+        entry_name, scope, value, document=document,
+        electro_properties_path=electro_properties_path, operation="ensure",
+    )
+
+
+def resolve_electro_property_removal(
+    electro_properties_path: Path,
+    entry_name: str,
+    *,
+    document: str,
+    scope: str | Sequence[str] | None = None,
+) -> ParameterAssignment:
+    """Pure, channel-routed counterpart of `remove_electro_property_entry`
+    (Phase 3 Task 6's completion, 2026-09-23): resolves the same removal
+    into an `operation="remove"` `ParameterAssignment` instead of writing it
+    directly. Unlike `remove_electro_property_entry`, this has no
+    `missing_ok` parameter -- there is nothing to be "ok" about at
+    resolution time (this never touches the file); `render_patch_case_files`
+    always applies a `remove` target with `missing_ok=True`, since removal
+    asserts the document's *final* state, not that a deletion action
+    occurred (2026-09-23 decision)."""
+    return _resolve_single_catalog_assignment(
+        entry_name, scope, None, document=document,
+        electro_properties_path=electro_properties_path, operation="remove",
+    )
+
+
 def apply_entry_overrides(
     file_path: Path,
     overrides: Mapping[str, Any] | Sequence[Mapping[str, Any]] | None,

@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -92,6 +93,32 @@ def plan_end_time(t_s: float, *, owner: str) -> ParameterAssignment:
         value_kind="scalar",
         source="case",
     )
+
+
+
+def plan_write_interval(t_s: float, *, owner: str) -> ParameterAssignment:
+    """`plan_end_time`'s counterpart for `writeInterval` (Phase 3 Task 6's
+    completion, 2026-09-23). Real caller:
+    `manufactured_bath_bidomain._apply_case`, which sets `writeInterval` to
+    the same value as `endTime` whenever an explicit `end_time` is given --
+    `writeControl` there is `adjustableRunTime` (time-based, not
+    step-count-based), so a temporal-convergence sweep's writeInterval must
+    track an overridden endTime or it stays pinned to the checked-in default
+    and stops matching. Same `owner`/`source`/evidence reasoning as
+    `plan_delta_t`/`plan_end_time`; `operation` defaults to `"set"`, matching
+    that tutorial's own direct call (`update_foam_entry(control_dict,
+    "writeInterval", end_time)`, no `add_if_missing`)."""
+    return ParameterAssignment(
+        qualified_id="writeInterval",
+        owner=owner,
+        document=_CONTROL_DICT_DOCUMENT,
+        key_path=("writeInterval",),
+        binding={},
+        value=t_s,
+        value_kind="scalar",
+        source="case",
+    )
+
 
 
 
@@ -237,6 +264,70 @@ def plan_block_mesh_resolution(
         "hex_cell_counts": _format_value(cell_counts_str),
         "expected_blocks": expected_blocks,
     }
+
+
+def plan_dict_block(
+    document: str,
+    dict_name: str,
+    *,
+    operation: str,
+    scope: Sequence[str] | None = None,
+    block_text: str | None = None,
+) -> Mapping[str, Any]:
+    """Resolve a whole-sub-dictionary insert/removal into a
+    ``render_patch_case_files`` target (Phase 3 Task 6's completion,
+    2026-09-23) -- the counterpart of :func:`plan_block_mesh_resolution` for
+    :func:`mutators.ensure_foam_dict`/:func:`mutators.remove_foam_dict`
+    instead of the ``hex (`` rewrite.
+
+    **Why this is not a `ParameterAssignment`**, same reasoning as
+    `plan_block_mesh_resolution`'s own docstring: there is no single
+    ``key_path`` a typed value sits at. ``block_text`` (``operation="ensure"``
+    only) is a whole hand-authored sub-dictionary body -- e.g.
+    `manufactured_bath_bidomain`'s ``ecgDomains`` block, several nested
+    sub-dictionaries deep -- and inventing a `value_kind` to carry that
+    through core's typed-value vocabulary would be the same layering mistake
+    the hex case already rejects. ``operation="remove"`` needs no value at
+    all, matching a `ParameterAssignment` `remove`'s own "nothing to write"
+    shape, but still is not one: `ParameterAssignment.key_path` addresses one
+    leaf entry with a declared `value_kind`; a whole sub-dictionary has
+    neither.
+
+    Pure: reads nothing, writes nothing. ``render_patch_case_files`` is
+    where ``ensure_foam_dict``/``remove_foam_dict`` actually run, against the
+    snapshot copy, the same "resolver never touches the case" split every
+    other target in this module keeps.
+
+    ``scope`` is passed through as given (already-resolved segments, e.g.
+    an active ``<solver>Coeffs`` block name) -- unlike
+    `cardiacfoam.overrides._resolve_scope_tokens`, this module owns no
+    ``$ELECTRO_MODEL_COEFFS``-style token vocabulary; a caller resolves its
+    own tokens before calling this, the same division
+    `plan_block_mesh_resolution` already has (no cardiac vocabulary here).
+    """
+    if operation not in {"ensure", "remove"}:
+        raise ValueError(
+            f"dict block target {dict_name!r} in {document!r} declares "
+            f"operation {operation!r}; known operations are 'ensure' and "
+            f"'remove'"
+        )
+    if operation == "ensure" and block_text is None:
+        raise ValueError(
+            f"dict block target {dict_name!r} in {document!r} declares "
+            f"operation 'ensure' but no block_text; there is nothing to "
+            f"insert"
+        )
+    target: dict[str, Any] = {
+        "document": document,
+        "format": _hex_patch_format(),
+        "dict_operation": operation,
+        "dict_name": dict_name,
+        "scope": list(scope) if scope else None,
+    }
+    if operation == "ensure":
+        target["block_text"] = block_text
+    return target
+
 
 
 def _hex_patch_format() -> str:

@@ -38,12 +38,18 @@ from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 from omnidriver.openfoam.mutators import update_foam_entry
 from omnidriver.openfoam.parallel_execution import solve_steps
 from omnidriver.cardiacfoam.overrides import (
+    PLUGIN_ID,
     apply_electro_property_overrides,
     apply_physics_property_overrides,
+    commit_case_overrides,
     ensure_electro_property_dict,
     remove_electro_property_dict,
     ensure_electro_property_entry,
     remove_electro_property_entry,
+    merge_assignments,
+    resolve_electro_property_ensure,
+    resolve_electro_property_removal,
+    resolve_entry_overrides,
 )
 from omnidriver.core.specs.common import (
     resolve_run_script_path,
@@ -51,6 +57,11 @@ from omnidriver.core.specs.common import (
 )
 from omnidriver.core.specs.utils import load_python_module
 from omnidriver.openfoam.utils import (
+    plan_block_mesh_resolution,
+    plan_delta_t,
+    plan_dict_block,
+    plan_end_time,
+    plan_write_interval,
     replace_block_mesh_resolutions,
     set_delta_t,
     set_end_time,
@@ -439,6 +450,278 @@ def _apply_case(
     apply_physics_property_overrides(physics_properties, physics_property_overrides)
 
 
+def _plan_case(
+    case_root: Path,
+    case: CaseConfig,
+    *,
+    electro_properties_scope: str = defaults.ELECTRO_PROPERTIES_SCOPE,
+    control_dict_relpath: Path = Path("system/controlDict"),
+    electro_properties_relpath: Path = Path("constant/electroProperties"),
+    physics_properties_relpath: Path = Path("constant/physicsProperties"),
+    electro_property_overrides: Sequence[dict[str, object]] | dict[str, object] | None = None,
+    physics_property_overrides: Sequence[dict[str, object]] | dict[str, object] | None = None,
+    verification_model_type: str = defaults.VERIFICATION_MODEL_TYPE,
+    ecg_enabled: bool = False,
+    block_mesh_dict_template: str = defaults.BLOCK_MESH_DICT_TEMPLATE,
+    bath_predictor_corrector: bool = False,
+    fda_bath_variant: str = "electrodePair",
+    mesh_family: str = "hex",
+    numerics_profile: str | None = None,
+    grad_scheme: str | None = None,
+    phi_tolerance: float | None = None,
+    end_time: float | None = None,
+    fv_scheme_overrides: Sequence[Mapping[str, object]] | None = None,
+    fv_solution_overrides: Sequence[Mapping[str, object]] | None = None,
+    tet_geo_template_relpath: Path = Path("setup/studies/tetConvergence/three_domain_box.geo.template"),
+):
+    """`TutorialSpec.plan_case` (Phase 3 Task 6's completion, 2026-09-23
+    decision, "a parameter asserts a final state, not only a value") --
+    **full migration**, the tutorial Task 6 itself reported as resisting
+    the `clone_and_patch`/`ParameterAssignment` contract outright, because
+    its `fdaBathVariant` switch removes a stale patch entry left behind by a
+    previous case sharing this reused `case_root` before writing the new
+    one, and `ParameterAssignment` had no vocabulary for a removal. It does
+    now:
+
+    - The `groundPatches`/`surfaceCurrentPatches` `xMin`/`xMax` upserts
+      (`_ensure_patch_entry`) become `resolve_electro_property_ensure` calls
+      (`operation="ensure"`); the stale-entry cleanup
+      (`remove_electro_property_entry`) becomes
+      `resolve_electro_property_removal` (`operation="remove"`). Both are
+      catalog-addressed the same way `resolve_entry_overrides` addresses an
+      ordinary `set` -- `bathPotentialDomain.groundPatches.<patch>`/
+      `surfaceCurrentPatches.<patch>` are declared `dynamic_path` entries
+      (`dict_entries_catalog.py`), not invented for this task.
+    - The whole-`ecgDomains`-block insert/removal
+      (`ensure_electro_property_dict`/`remove_electro_property_dict`) is not
+      a `ParameterAssignment` at all -- `_DEFAULT_ECG_DOMAINS_BLOCK` is
+      hand-authored OpenFOAM text with no single `key_path`, the same "not a
+      key/value edit" shape Task 4's hex-block rewrite already has. Resolved
+      via `plan_dict_block` into a raw `render_patch_case_files` target
+      (`dict_operation`), folded in through `commit_case_overrides`'s
+      `extra_targets` the same way the hex target already is.
+      `render_patch_case_files` applies every `dict_operation` target before
+      ordinary value edits in the same document -- load-bearing here: when
+      `ecg_enabled`, the block must exist before the `set`s below it
+      (`ecgDomains.bodyECG.ecgSolver` and siblings, part of `case_overrides`)
+      can find their scope at all.
+    - `manufacturedBidomain.fdaBathVariant` is **not** declared anywhere in
+      `dict_entries_catalog.py` -- confirmed by grep, not assumed; that
+      module's own 2026-09-19 correction note says exactly why ("native
+      reads that block only at electroProperties top level, for ECG
+      inheritance, never under `<solver>Coeffs`" -- removed from the catalog
+      that day). Routing it through `resolve_entry_overrides` raises
+      `ValueError`, the catalog-strictness Task 2 gave every override. This
+      tutorial's own write of that key was never updated to match, the same
+      class of stale-key defect `manufactured_monodomain_total_lagrangian_em`
+      has for a different key -- fixing it is a correctness change to this
+      tutorial's arithmetic, not a write-channel migration, and out of this
+      task's mandate the same way that one is. It stays a direct write
+      (`uncataloged_case_overrides` below), run after the channel commit,
+      in its original relative position.
+
+    Every other `case_overrides` key (`dimension`, `solutionAlgorithm`,
+    `bathPredictorCorrector`, `verificationModel.type`,
+    `verificationModel.fdaBathVariant`, `phiERefPoint`,
+    `phiEReferenceValue`, and, when `ecg_enabled`, the `ecgDomains.bodyECG`/
+    `ecgDomains.pseudoECGSignals` keys) is catalog-declared -- confirmed by
+    grep against `dict_entries_catalog.py`, not assumed -- and moves onto
+    the channel via the ordinary `resolve_entry_overrides` path, same as
+    `single_cell`'s own `case_overrides`.
+
+    `grad_scheme`/`phi_tolerance`/`fv_scheme_overrides`/`fv_solution_overrides`
+    (uncataloged `fvSchemes`/`fvSolution` edits this package's catalog does
+    not cover) stay direct writes, the same precedent
+    `manufactured_eikonal_ecg` already established for the identical shape
+    of override. The `mesh_family == "tet"` branch (`render_tet_geo`/
+    numerics-profile overlay copies) stays direct too -- source-artifact
+    renders and copies, Task 7's classification, the same as every other
+    partially-hex-only tutorial.
+
+    `set_delta_t`/`set_end_time`/`replace_block_mesh_resolutions` are not
+    called here at all; `plan_delta_t`/`plan_end_time`/`plan_write_interval`/
+    `plan_block_mesh_resolution` replace them, same as every other migrated
+    tutorial's `_plan_case`.
+    """
+    dimension = str(case.params["dimension"])
+    solver = str(case.params["solver"])
+    cells = int(case.params["cells"])
+    dt_value = float(case.params["dt"])
+
+    electro_properties = case_root / electro_properties_relpath
+    physics_properties = case_root / physics_properties_relpath
+    block_mesh_dict_document = str(Path(block_mesh_dict_template.format(dimension=dimension)))
+    electro_document = str(electro_properties_relpath)
+    physics_document = str(physics_properties_relpath)
+
+    case_overrides = {
+        f"{electro_properties_scope}.dimension": f'"{dimension}"',
+        f"{electro_properties_scope}.solutionAlgorithm": solver,
+        f"{electro_properties_scope}.bathPredictorCorrector": bool(
+            bath_predictor_corrector
+        ),
+        f"{electro_properties_scope}.verificationModel.type": verification_model_type,
+        f"{electro_properties_scope}.verificationModel.fdaBathVariant": fda_bath_variant,
+    }
+    # See this function's own docstring: not catalog-declared, stays direct.
+    uncataloged_case_overrides = {
+        f"{electro_properties_scope}.manufacturedBidomain.fdaBathVariant": fda_bath_variant,
+    }
+
+    if fda_bath_variant not in ("groundElectrode", "electrodePair"):
+        raise ValueError(
+            "fda_bath_variant must be 'groundElectrode' or 'electrodePair', "
+            f"got {fda_bath_variant!r}"
+        )
+
+    extra_targets: list[Mapping[str, object]] = []
+    extra_effects: list[str] = []
+
+    if mesh_family == "tet":
+        render_tet_geo(
+            case_root,
+            cells,
+            template_relpath=tet_geo_template_relpath,
+            geo_relpath=Path("setup/studies/tetConvergence/three_domain_box.geo"),
+        )
+        for overlay_name in _TET_NUMERICS_PROFILES.get(numerics_profile or "", ()):
+            shutil.copy(
+                case_root / "setup" / "studies" / "tetConvergence" / overlay_name,
+                case_root / "system" / overlay_name,
+            )
+    else:
+        try:
+            cell_counts = defaults.BLOCK_MESH_RESOLUTION_BY_DIMENSION[dimension].format(cells=cells)
+        except KeyError as exc:
+            raise ValueError(f"Unsupported dimension: {dimension}") from exc
+        extra_targets.append(
+            plan_block_mesh_resolution(block_mesh_dict_document, cell_counts, expected_blocks=3)
+        )
+        extra_effects.append(f"rewrite hex blocks in {block_mesh_dict_document}")
+
+    bath_scope = f"{electro_properties_scope}.bathPotentialDomain"
+    patch_parameters: list = []
+    if fda_bath_variant == "electrodePair":
+        patch_parameters.append(resolve_electro_property_removal(
+            electro_properties, "xMin", document=electro_document,
+            scope=[electro_properties_scope, "bathPotentialDomain", "groundPatches"],
+        ))
+        ref_y, ref_z = _phi_e_ref_point_yz(dimension, cells)
+        patch_parameters.append(resolve_electro_property_ensure(
+            electro_properties, "xMin", -defaults.FDA_ALPHA, document=electro_document,
+            scope=[electro_properties_scope, "bathPotentialDomain", "surfaceCurrentPatches"],
+        ))
+        patch_parameters.append(resolve_electro_property_ensure(
+            electro_properties, "xMax", defaults.FDA_ALPHA, document=electro_document,
+            scope=[electro_properties_scope, "bathPotentialDomain", "surfaceCurrentPatches"],
+        ))
+        case_overrides.update(
+            {
+                f"{bath_scope}.phiERefPoint": f"(-0.9 {ref_y} {ref_z})",
+                f"{bath_scope}.phiEReferenceValue": 0.0,
+            }
+        )
+    else:
+        patch_parameters.append(resolve_electro_property_removal(
+            electro_properties, "xMin", document=electro_document,
+            scope=[electro_properties_scope, "bathPotentialDomain", "surfaceCurrentPatches"],
+        ))
+        patch_parameters.append(resolve_electro_property_ensure(
+            electro_properties, "xMin", 0.0, document=electro_document,
+            scope=[electro_properties_scope, "bathPotentialDomain", "groundPatches"],
+        ))
+        patch_parameters.append(resolve_electro_property_ensure(
+            electro_properties, "xMax", defaults.FDA_ALPHA, document=electro_document,
+            scope=[electro_properties_scope, "bathPotentialDomain", "surfaceCurrentPatches"],
+        ))
+
+    if ecg_enabled:
+        extra_targets.append(plan_dict_block(
+            electro_document, "ecgDomains", operation="ensure",
+            scope=(electro_properties_scope,), block_text=_DEFAULT_ECG_DOMAINS_BLOCK,
+        ))
+        extra_effects.append(f"insert ecgDomains block in {electro_document}")
+        case_overrides.update(
+            {
+                f"{electro_properties_scope}.ecgDomains.bodyECG.ecgSolver": "torsoECG",
+                f"{electro_properties_scope}.ecgDomains.bodyECG.ecgVerificationModel":
+                    "bathECGManufacturedVerifier",
+                f"{electro_properties_scope}.ecgDomains.pseudoECGSignals.ecgSolver": "pseudoECG",
+            }
+        )
+    else:
+        extra_targets.append(plan_dict_block(
+            electro_document, "ecgDomains", operation="remove",
+            scope=(electro_properties_scope,),
+        ))
+        extra_effects.append(f"remove ecgDomains block from {electro_document}")
+
+    control_dict_parameters = [plan_delta_t(dt_value, owner=PLUGIN_ID)]
+    if end_time is not None:
+        control_dict_parameters.append(plan_end_time(end_time, owner=PLUGIN_ID))
+        # writeControl is adjustableRunTime (time-based, not step-count-based)
+        # so every case in a temporal-convergence sweep writes a
+        # reconstructable time regardless of how few steps its deltaT takes
+        # to reach endTime; writeInterval must track an overridden endTime
+        # or it stays pinned to the checked-in default and stops matching.
+        control_dict_parameters.append(plan_write_interval(end_time, owner=PLUGIN_ID))
+
+    electro_parameters = merge_assignments(
+        patch_parameters,
+        resolve_entry_overrides(
+            electro_properties, case_overrides, document=electro_document,
+            electro_properties_path=electro_properties,
+        ),
+        resolve_entry_overrides(
+            electro_properties, electro_property_overrides, document=electro_document,
+            electro_properties_path=electro_properties,
+        ),
+    )
+    physics_parameters = resolve_entry_overrides(
+        physics_properties, physics_property_overrides, document=physics_document,
+    )
+
+    record = commit_case_overrides(
+        case_root,
+        parameters=merge_assignments(electro_parameters, physics_parameters, control_dict_parameters),
+        extra_targets=tuple(extra_targets),
+        extra_effects=tuple(extra_effects),
+        workflow="manufactured_bath_bidomain",
+        requested_by="cardiacfoam.tutorials.manufactured_bath_bidomain",
+    )
+
+    if grad_scheme is not None:
+        update_foam_entry(
+            case_root / "system" / "fvSchemes",
+            "default",
+            _GRAD_SCHEME_TOKENS[grad_scheme],
+            scope=["gradSchemes"],
+        )
+    if phi_tolerance is not None:
+        update_foam_entry(
+            case_root / "system" / "fvSolution",
+            "tolerance",
+            phi_tolerance,
+            scope=["solvers", '"phiE|phiEFinal|phiI|phiIFinal"'],
+        )
+    for entry in fv_scheme_overrides or ():
+        update_foam_entry(
+            case_root / "system" / "fvSchemes", entry["key"], entry["value"],
+            scope=entry.get("scope"),
+        )
+    for entry in fv_solution_overrides or ():
+        update_foam_entry(
+            case_root / "system" / "fvSolution", entry["key"], entry["value"],
+            scope=entry.get("scope"),
+        )
+
+    apply_electro_property_overrides(electro_properties, uncataloged_case_overrides)
+
+    return record
+
+
+
+
 def make_spec(
     *,
     cases_root: Path | None = None,
@@ -527,6 +810,28 @@ def make_spec(
         ),
         apply_case=partial(
             _apply_case,
+            electro_properties_scope=electro_properties_scope,
+            control_dict_relpath=Path(control_dict_relpath),
+            electro_properties_relpath=Path(electro_properties_relpath),
+            physics_properties_relpath=Path(physics_properties_relpath),
+            electro_property_overrides=electro_property_overrides,
+            physics_property_overrides=physics_property_overrides,
+            verification_model_type=verification_model_type,
+            ecg_enabled=ecg_enabled,
+            block_mesh_dict_template=block_mesh_dict_template,
+            bath_predictor_corrector=bath_predictor_corrector,
+            fda_bath_variant=fda_bath_variant,
+            mesh_family=mesh_family,
+            numerics_profile=numerics_profile,
+            grad_scheme=grad_scheme,
+            phi_tolerance=phi_tolerance,
+            end_time=end_time,
+            fv_scheme_overrides=fv_scheme_overrides,
+            fv_solution_overrides=fv_solution_overrides,
+            tet_geo_template_relpath=tet_geo_template_path,
+        ),
+        plan_case=partial(
+            _plan_case,
             electro_properties_scope=electro_properties_scope,
             control_dict_relpath=Path(control_dict_relpath),
             electro_properties_relpath=Path(electro_properties_relpath),
