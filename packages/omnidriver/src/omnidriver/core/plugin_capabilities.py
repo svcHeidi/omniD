@@ -866,6 +866,20 @@ class CaseWriterCapability(Protocol):
     provider by name before the mode check is ever reached. See
     ``_CaseWriterAdapter.supported_modes`` for the three-state logic.
 
+    **Corrected 2026-09-23 (R2 finding 11):** ``get_rendered_formats`` said
+    ``optional-neutral`` here too, alongside ``:fallback: none`` and the
+    opening paragraph's own claim that "the fallback cannot be neutral" --
+    two of four members contradicted the paragraph directly above them. Its
+    OWN fallback, when the hook is absent, does return a neutral value
+    (``frozenset()``) -- but that empty set then reaches ``renderer_for``,
+    which refuses BY NAME the moment any format is looked up against it
+    (nothing declares anything, so nothing is ever found). A hook whose
+    absence is only neutral in isolation, and refuses on the very next step
+    every real caller takes, is ``optional-refusing`` here, matching
+    ``render_case_files`` and ``get_supported_mutation_modes``. All four
+    members of this capability now refuse; none is neutral in practice, which
+    is what the opening paragraph always claimed.
+
     No consumer yet (2026-09-22): the real one, ``case_transaction.py``'s
     ``commit_case_write``, is Phase 2 Task 5, a later batch in this plan.
     Update ``:consumed-by:`` to name it once that module lands and calls
@@ -874,7 +888,7 @@ class CaseWriterCapability(Protocol):
     :adapts: resolve_case_mutation, get_supported_mutation_modes, get_rendered_formats, render_case_files
     :consumed-by: none
     :fallback: none
-    :status: resolve_case_mutation=optional-refusing, get_supported_mutation_modes=optional-refusing, get_rendered_formats=optional-neutral, render_case_files=optional-refusing
+    :status: resolve_case_mutation=optional-refusing, get_supported_mutation_modes=optional-refusing, get_rendered_formats=optional-refusing, render_case_files=optional-refusing
     """
 
     def resolve(self, request: Any, *, driver_context: Any) -> Any: ...

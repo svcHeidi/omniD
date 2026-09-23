@@ -357,7 +357,7 @@ fallback cannot be neutral and refuses by hook name instead.
 | `dict_regeneration` | `DictRegenerationCapability` | `get_regeneration_scopes` | `omnidriver/openfoam/apply_overrides.py` | `legacy_dict_regeneration_scopes` | optional-neutral |
 | `config_value` | `ConfigValueCapability` | `get_config_value_reader` | `omnidriver/cardiacfoam/run_document_config.py` | none | optional-neutral |
 | `dict_key_scanner` | `DictKeyScannerCapability` | `get_dict_key_scanner` | `omnidriver/core/strict_planning.py` | `legacy_dict_key_scanner` | optional-neutral |
-| `case_writer` | `CaseWriterCapability` | `resolve_case_mutation`, `get_supported_mutation_modes`, `get_rendered_formats`, `render_case_files` | none | none | resolve_case_mutation=optional-refusing, get_supported_mutation_modes=optional-refusing, get_rendered_formats=optional-neutral, render_case_files=optional-refusing |
+| `case_writer` | `CaseWriterCapability` | `resolve_case_mutation`, `get_supported_mutation_modes`, `get_rendered_formats`, `render_case_files` | none | none | resolve_case_mutation=optional-refusing, get_supported_mutation_modes=optional-refusing, get_rendered_formats=optional-refusing, render_case_files=optional-refusing |
 
 27 capability seams.
 

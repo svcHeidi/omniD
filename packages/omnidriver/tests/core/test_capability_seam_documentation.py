@@ -267,6 +267,21 @@ def test_every_seam_declares_a_known_tier():
     )
 
 
+def test_get_rendered_formats_is_optional_refusing_not_neutral():
+    """R2 finding 11: get_rendered_formats said optional-neutral, alongside
+    :fallback: none and the case_writer docstring's own claim that "the
+    fallback cannot be neutral". Absent -> its OWN fallback is neutral
+    (frozenset()), but that empty set reaches renderer_for, which refuses BY
+    NAME the moment any format is looked up against it -- so the member is
+    optional-refusing in practice, the same as the other three case_writer
+    members."""
+    from omnidriver.core import capability_seams
+
+    tiers = capability_seams.members_by_tier()
+    assert "get_rendered_formats" in tiers["optional-refusing"]
+    assert "get_rendered_formats" not in tiers["optional-neutral"]
+
+
 def test_validate_tiers_rejects_an_unknown_status():
     from omnidriver.core import capability_seams
 
