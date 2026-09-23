@@ -155,6 +155,17 @@ class CaseConfig:
 BuildCasesFn = Callable[[], list[CaseConfig]]
 ApplyCaseFn = Callable[[Path, CaseConfig], None]
 
+#: Phase 2 Task 10 (docs/superpowers/plans/2026-09-20-phase2-one-write-channel.md):
+#: same two positional arguments as ``ApplyCaseFn``, but a spec that supplies
+#: this is expected to have routed its mutation through the case-write
+#: channel (``core.case_write``/``core.case_transaction``), and to say so by
+#: returning the ``CaseWriteRecord`` that produced (``None`` only when the
+#: mutation had nothing to write -- see ``apply_input_overrides_planned``'s
+#: own docstring for that case). A spec with no case inputs to plan simply
+#: does not need this field at all; it is optional, not a requirement every
+#: spec must satisfy.
+PlanCaseFn = Callable[[Path, CaseConfig], Any]
+
 
 @dataclass(frozen=True)
 class TutorialSpec:
@@ -166,4 +177,42 @@ class TutorialSpec:
     output_dir: Path
     build_cases: BuildCasesFn
     apply_case: ApplyCaseFn
+    #: Preferred over ``apply_case`` when present (see ``invoke_case_mutation``
+    #: below). ``None`` for every spec not yet migrated onto the case-write
+    #: channel -- most of them, as of Task 10's first batch (2026-09-23): see
+    #: that task's filled-in plan section for the exact count and which specs
+    #: this covers.
+    plan_case: PlanCaseFn | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+def invoke_case_mutation(spec: "TutorialSpec", case_root: Path, case: CaseConfig) -> Any:
+    """Apply one case's mutation, preferring the channel-routed path.
+
+    Phase 2 Task 10. There is exactly one production call site for this
+    today (``core.runtime.sweep_runner._materialize_entry_case``) -- see the
+    plan's filled-in Task 10 section for the grep that established that.
+    Centralized here rather than inlined at that call site so a future
+    second call site gets the same preference-and-deprecation policy for
+    free, instead of a second place that could drift from it.
+
+    Falls back to ``apply_case`` with a ``DeprecationWarning`` naming the
+    exact removal condition (Task 10: "removed when no in-tree spec supplies
+    apply_case") rather than silently preferring one path forever -- a
+    fallback with no stated removal condition is a fallback nobody is ever
+    wrong to leave in place.
+    """
+    if spec.plan_case is not None:
+        return spec.plan_case(case_root, case)
+    import warnings
+
+    warnings.warn(
+        f"TutorialSpec {spec.name!r} supplies apply_case but not plan_case; "
+        f"apply_case does not report what it wrote through the case-write "
+        f"channel (if anything). This fallback is removed when no in-tree "
+        f"spec supplies apply_case any more.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    spec.apply_case(case_root, case)
+    return None

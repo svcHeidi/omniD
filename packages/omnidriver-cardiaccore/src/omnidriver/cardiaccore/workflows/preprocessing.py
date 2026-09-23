@@ -108,6 +108,25 @@ def _apply_case(
     apply_input_overrides(case_root, input_overrides)
 
 
+def _plan_case(
+    case_root: Path,
+    case: CaseConfig,
+    *,
+    input_overrides: Mapping[str, Any] | None,
+) -> Any:
+    """`TutorialSpec.plan_case` (Phase 2 Task 10). Same effect as
+    `_apply_case` above -- both ultimately call `overrides.
+    apply_input_overrides_planned`, which already routes through the
+    case-write channel (Slice A, `dc7fbef`) -- but this returns the
+    `CaseWriteRecord` that call produces instead of discarding it the way
+    `apply_input_overrides`'s `-> None` compatibility signature does.
+    """
+    del case
+    from .overrides import apply_input_overrides_planned
+
+    return apply_input_overrides_planned(case_root, input_overrides)
+
+
 def make_human_purkinje_slab_spec(
     *,
     convention: CoordinatesConvention | None = None,
@@ -140,6 +159,7 @@ def make_human_purkinje_slab_spec(
         output_dir=output_dir,
         build_cases=_single_case,
         apply_case=partial(_apply_case, input_overrides=input_overrides),
+        plan_case=partial(_plan_case, input_overrides=input_overrides),
         metadata={
             "notes": (
                 "Source-backed declaration of cardiacCore cases/bivCase/Allrun. "
@@ -208,6 +228,17 @@ def _apply_human_tree_case(
     _apply_case(case_root, case, input_overrides=requested)
 
 
+def _plan_human_tree_case(
+    case_root: Path,
+    case: CaseConfig,
+    *,
+    input_overrides: Mapping[str, Any] | None,
+) -> Any:
+    requested = dict(input_overrides or {})
+    _reject_unstaged(requested, "human Purkinje endocardial")
+    return _plan_case(case_root, case, input_overrides=requested)
+
+
 def make_human_purkinje_endocardial_spec(
     *,
     convention: CoordinatesConvention | None = None,
@@ -241,6 +272,7 @@ def make_human_purkinje_endocardial_spec(
         output_dir=output_dir,
         build_cases=_single_case,
         apply_case=partial(_apply_human_tree_case, input_overrides=input_overrides),
+        plan_case=partial(_plan_human_tree_case, input_overrides=input_overrides),
         metadata={
             "notes": (
                 "Source-backed declaration of the human endocardial tree wrapper. "
@@ -301,6 +333,17 @@ def _apply_pig_purkinje_case(
     _apply_case(case_root, case, input_overrides=requested)
 
 
+def _plan_pig_purkinje_case(
+    case_root: Path,
+    case: CaseConfig,
+    *,
+    input_overrides: Mapping[str, Any] | None,
+) -> Any:
+    requested = dict(input_overrides or {})
+    _reject_unstaged(requested, "pig Purkinje")
+    return _plan_case(case_root, case, input_overrides=requested)
+
+
 def _make_pig_purkinje_spec(
     *,
     convention: CoordinatesConvention | None = None,
@@ -348,6 +391,9 @@ def _make_pig_purkinje_spec(
         build_cases=_single_case,
         apply_case=partial(
             _apply_pig_purkinje_case, input_overrides=input_overrides
+        ),
+        plan_case=partial(
+            _plan_pig_purkinje_case, input_overrides=input_overrides
         ),
         metadata={
             "notes": (

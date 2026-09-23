@@ -19,7 +19,7 @@ from omnidriver.sweep_materialize import materialize_case
 from omnidriver.sweep_routing import route_case_values, route_entry_case_values
 from .fresh import ensure_fresh_output_dir
 from .attempt_lease import acquire_case_staging_lease
-from .models import data_artifact_from_json
+from .models import data_artifact_from_json, invoke_case_mutation
 from .output_collection import collect_new_output_tree, snapshot_output_tree
 from .postprocess_phase import build_sweep_context, run_postprocessing_module
 from .registry import load_entry_spec
@@ -191,7 +191,7 @@ def _materialize_entry_case(
         if driver_context is not None else CaseRuntimeConventions()
     )
     _clean_stale_time_directories(spec.case_root, conventions=conventions)
-    spec.apply_case(spec.case_root, cases[0])
+    invoke_case_mutation(spec, spec.case_root, cases[0])
     return effective_routed
 
 
