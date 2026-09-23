@@ -41,12 +41,16 @@ from omnidriver.openfoam.parallel_execution import solve_steps
 from omnidriver.cardiacfoam.overrides import (
     apply_electro_property_overrides,
     apply_physics_property_overrides,
+    commit_case_overrides,
+    merge_assignments,
+    resolve_entry_overrides,
 )
 from omnidriver.core.specs.common import (
     resolve_run_script_path,
     resolve_spec_paths,
 )
 from omnidriver.openfoam.utils import (
+    plan_block_mesh_resolution,
     replace_block_mesh_resolutions,
     set_delta_t,
 )
@@ -281,6 +285,127 @@ def _apply_case(
     apply_physics_property_overrides(physics_properties, physics_property_overrides)
 
 
+def _plan_case(
+    case_root: Path,
+    case: CaseConfig,
+    *,
+    electro_properties_scope: str = defaults.ELECTRO_PROPERTIES_SCOPE,
+    electro_properties_relpath: Path = defaults.ELECTRO_PROPERTIES_RELPATH,
+    physics_properties_relpath: Path = Path("constant/physicsProperties"),
+    electro_property_overrides: Sequence[dict[str, object]] | dict[str, object] | None = None,
+    physics_property_overrides: Sequence[dict[str, object]] | dict[str, object] | None = None,
+    verification_model_type: str = defaults.VERIFICATION_MODEL_TYPE,
+    conductivity: str | None = None,
+    eikonal_advection_diffusion_approach: str | None = None,
+    ecg_reference_quadrature_order: int = defaults.ECG_REFERENCE_QUADRATURE_ORDER,
+    ecg_check_quadrature_orders: Sequence[int] = defaults.ECG_CHECK_QUADRATURE_ORDERS,
+    ecg_electrodes_by_dimension: Mapping[str, Mapping[str, str]] = (
+        defaults.ECG_ELECTRODES_BY_DIMENSION
+    ),
+    block_mesh_dict_template: str = defaults.BLOCK_MESH_DICT_TEMPLATE,
+    mesh_family: str = "hex",
+    tet_geo_template_relpath: Path = Path("setup/studies/tetConvergence/box.geo.template"),
+    numerics_profile: str | None = None,
+    grad_scheme: str | None = None,
+    fv_scheme_overrides: Sequence[Mapping[str, object]] | None = None,
+    fv_solution_overrides: Sequence[Mapping[str, object]] | None = None,
+):
+    """`TutorialSpec.plan_case` (Phase 3 Task 6). Covers the hex-family
+    path only: the electro/physics overrides and the block-mesh rewrite.
+    `mesh_family == "tet"` (a `.geo` template render plus overlay
+    `shutil.copy`s -- source artifacts, Task 7's domain) and the optional
+    `grad_scheme`/`fv_scheme_overrides`/`fv_solution_overrides` (raw edits
+    to `fvSchemes`/`fvSolution`, documents this package's catalog does not
+    cover at all) are left as direct writes, unconditionally, exactly as
+    `_apply_case` still makes them -- they touch files disjoint from the
+    ones this function channel-commits, so there is no write-ordering
+    conflict between the two. `wired into make_spec only when
+    mesh_family == "hex"` (see `make_spec`, mirroring `niederer_2012`'s own
+    scoping decision).
+    """
+    dimension = str(case.params["dimension"])
+    cells = int(case.params["cells"])
+
+    electro_properties = case_root / electro_properties_relpath
+    physics_properties = case_root / physics_properties_relpath
+    ecg_scope = f"{electro_properties_scope}.ecgDomains.ECG"
+
+    try:
+        electrodes = ecg_electrodes_by_dimension[dimension]
+    except KeyError as exc:
+        raise ValueError(f"Missing ECG electrode set for dimension '{dimension}'") from exc
+
+    case_overrides = {
+        f"{electro_properties_scope}.verificationModel.type": verification_model_type,
+        f"{ecg_scope}.ecgSolver": "eikonalECG",
+        f"{ecg_scope}.verificationModel.enabled": True,
+        f"{ecg_scope}.verificationModel.referenceQuadratureOrder":
+            int(ecg_reference_quadrature_order),
+        f"{ecg_scope}.verificationModel.checkQuadratureOrders": "("
+        + " ".join(str(int(value)) for value in ecg_check_quadrature_orders)
+        + ")",
+    }
+    if conductivity is not None:
+        case_overrides[f"{electro_properties_scope}.conductivity"] = conductivity
+    if eikonal_advection_diffusion_approach is not None:
+        case_overrides[f"{electro_properties_scope}.eikonalAdvectionDiffusionApproach"] = eikonal_advection_diffusion_approach
+
+    for electrode_name, electrode_position in electrodes.items():
+        case_overrides[f"{ecg_scope}.electrodePositions.{electrode_name}"] = (
+            electrode_position
+        )
+
+    try:
+        cell_counts = defaults.BLOCK_MESH_RESOLUTION_BY_DIMENSION[dimension].format(cells=cells)
+    except KeyError as exc:
+        raise ValueError(f"Unsupported dimension: {dimension}") from exc
+    block_mesh_document = str(Path(block_mesh_dict_template.format(dimension=dimension)))
+    block_mesh_target = plan_block_mesh_resolution(block_mesh_document, cell_counts)
+
+    if grad_scheme is not None:
+        update_foam_entry(
+            case_root / "system" / "fvSchemes",
+            "default",
+            defaults.GRAD_SCHEME_TOKENS[grad_scheme],
+            scope=["gradSchemes"],
+        )
+    for entry in fv_scheme_overrides or ():
+        update_foam_entry(
+            case_root / "system" / "fvSchemes", entry["key"], entry["value"],
+            scope=entry.get("scope"),
+        )
+    for entry in fv_solution_overrides or ():
+        update_foam_entry(
+            case_root / "system" / "fvSolution", entry["key"], entry["value"],
+            scope=entry.get("scope"),
+        )
+
+    electro_document = str(electro_properties_relpath)
+    physics_document = str(physics_properties_relpath)
+    parameters = merge_assignments(
+        resolve_entry_overrides(
+            electro_properties, case_overrides, document=electro_document,
+            electro_properties_path=electro_properties,
+        ),
+        resolve_entry_overrides(
+            electro_properties, electro_property_overrides, document=electro_document,
+            electro_properties_path=electro_properties,
+        ),
+        resolve_entry_overrides(
+            physics_properties, physics_property_overrides, document=physics_document,
+        ),
+    )
+
+    return commit_case_overrides(
+        case_root,
+        parameters=parameters,
+        extra_targets=(block_mesh_target,),
+        extra_effects=(f"rewrite hex blocks in {block_mesh_document}",),
+        workflow="manufactured_eikonal_ecg",
+        requested_by="cardiacfoam.tutorials.manufactured_eikonal_ecg",
+    )
+
+
 
 
 
@@ -381,6 +506,33 @@ def make_spec(
             grad_scheme=grad_scheme,
             fv_scheme_overrides=fv_scheme_overrides,
             fv_solution_overrides=fv_solution_overrides,
+        ),
+        # `_plan_case` covers the `mesh_family == "hex"` path only -- see
+        # its own docstring; a `"tet"` spec keeps `apply_case` as its only
+        # mutation route (mirrors `niederer_2012`'s identical scoping).
+        plan_case=(
+            partial(
+                _plan_case,
+                electro_properties_scope=electro_properties_scope,
+                electro_properties_relpath=Path(electro_properties_relpath),
+                physics_properties_relpath=Path(physics_properties_relpath),
+                electro_property_overrides=electro_property_overrides,
+                physics_property_overrides=physics_property_overrides,
+                verification_model_type=verification_model_type,
+                conductivity=conductivity,
+                eikonal_advection_diffusion_approach=eikonal_advection_diffusion_approach,
+                ecg_reference_quadrature_order=ecg_reference_quadrature_order,
+                ecg_check_quadrature_orders=ecg_check_quadrature_orders,
+                ecg_electrodes_by_dimension=ecg_electrodes_by_dimension,
+                block_mesh_dict_template=block_mesh_dict_template,
+                mesh_family=mesh_family,
+                tet_geo_template_relpath=tet_geo_template_path,
+                numerics_profile=numerics_profile,
+                grad_scheme=grad_scheme,
+                fv_scheme_overrides=fv_scheme_overrides,
+                fv_solution_overrides=fv_solution_overrides,
+            )
+            if mesh_family == "hex" else None
         ),
         metadata={
             "notes": "Manufactured eikonal activation and ECG benchmark",
