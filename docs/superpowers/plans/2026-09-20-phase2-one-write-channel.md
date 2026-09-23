@@ -248,6 +248,14 @@ grammar/R1 handoff:
 | `describe` scope gap | `proposed_changes` cannot populate for any current tutorial factory's real overrides (key-space mismatch, not the previously-documented "no adapter resolve()" limit) | G4 |
 | environment trap | nested `venv.create(with_pip=True)` SIGABRTs on this machine's `uv` CPython 3.11.15; `DYLD_LIBRARY_PATH` workaround recorded above | whoever runs the core-alone shape next |
 
+**Phase 3 written 2026-09-23.** The remaining work is
+[`2026-09-23-phase3-finish-the-write-channel.md`](2026-09-23-phase3-finish-the-write-channel.md).
+It closes four of the five bypasses on a deliberately smaller surface than this
+phase built: measurement showed ~65 of ~73 tutorial write calls funnel through
+one chokepoint (`apply_entry_overrides`), not twelve bespoke paths. `--apply`
+joins the channel by owner decision. `write_cell_set` stays open by design —
+one consumer, and a `cellSet` renderer needs two.
+
 ## Review R4, 2026-09-23: the inventory is complete, and what it costs to finish
 
 R4 re-derived the mutation inventory independently rather than checking the
