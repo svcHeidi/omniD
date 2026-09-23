@@ -113,3 +113,21 @@ def test_declared_tree_extension_targets_are_wall_thickness_depths() -> None:
         joined = " ".join(entry.constraints) + " " + (entry.notes or "")
         assert "transmuralLowerValue" not in joined, bound
         assert "0 <= depthMin <= depthMax <= 1" in joined, bound
+
+
+def test_every_ventkey_entry_declares_its_allowed_bindings() -> None:
+    """R2 finding 9: all 21 `<ventKey>` entries declared no allowed_bindings,
+    including the ones audit finding S1 was about ("banana" as a ventricle).
+    `VENT_KEYS = ("lv", "rv")` sits immediately above `TREE_ENTRIES` with a
+    comment saying the domain is closed; every dynamic_path entry with a
+    `<ventKey>` placeholder must declare it from that constant."""
+    from omnidriver.cardiaccore.catalogs.inputs import VENT_KEYS
+
+    entries = list(
+        driver_context(OpenFOAMEnvironmentPlugin(), CardiacCorePlugin(), source="test")
+        .capabilities.dictionaries.entries()
+    )
+    vent_key_entries = [e for e in entries if "<ventKey>" in e.driver_path]
+    assert len(vent_key_entries) == 21, len(vent_key_entries)
+    for entry in vent_key_entries:
+        assert entry.allowed_bindings.get("<ventKey>") == tuple(VENT_KEYS), entry.driver_path

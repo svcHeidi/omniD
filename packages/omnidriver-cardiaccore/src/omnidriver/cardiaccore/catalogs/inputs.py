@@ -30,7 +30,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Final
 
-from omnidriver.core.contracts.dictionary import DictEntry
+from omnidriver.core.contracts.dictionary import DictEntry, build_group
 from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 
 
@@ -677,7 +677,11 @@ VENT_KEYS: Final[tuple[str, ...]] = ("lv", "rv")
 # workflows/preprocessing.py's `_apply_human_tree_case` / `_apply_pig_purkinje_case`,
 # both of which reject any override outside `PURKINJE_TREE_INPUT_PATHS`
 # regardless of what this catalog declares).
-TREE_ENTRIES: Final[tuple[DictEntry, ...]] = (
+#: Not per-ventricle: no <ventKey> placeholder, dynamic_path=False. Kept out
+#: of the build_group below, which would otherwise fill allowed_bindings on
+#: an entry with no placeholder to bind -- DictEntry.__post_init__ refuses
+#: exactly that.
+_TREE_ROOT_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
         driver_path="$PURKINJE_TREE.hisBundleSeed",
         description="Common His/root point shared by the LV and RV trees in the glued output.",
@@ -693,6 +697,16 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = (
         typical_value="legacy",
         notes="'legacy': nearest-vertex one-ring projection, fixed straight march direction. 'surfaceFollow': nearest-point-on-surface projection plus march-direction re-projection every step (generatePurkinjeTree.C's growthModel legacy/surfaceFollow guard, README).",
     ),
+)
+
+TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
+    # R2 finding 9: all 21 <ventKey> entries below declared no
+    # allowed_bindings, including the ones audit finding S1 was about
+    # ("banana" as a ventricle). Declared from VENT_KEYS -- the closed
+    # domain generatePurkinjeTree.C actually reads -- rather than retyping
+    # the literal ("lv", "rv") on every entry.
+    {"allowed_bindings": {"<ventKey>": VENT_KEYS}},
+    (
     # Per-ventricle block: the scanner reports scope <ventKey> (README: "the
     # same block structure is used for lv and rv"). Modelled the way
     # cardiacFoam models ionicHeterogeneity.regions.<region_name>.* --
@@ -897,6 +911,7 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = (
         applicable_when={"$PURKINJE_TREE.<ventKey>.terminalSelectionModel": ("weightedField",)},
         required_when={"$PURKINJE_TREE.<ventKey>.terminalSelectionModel": ("weightedField",)},
         constraints=("Must be positive (generatePurkinjeTree.C's terminalCount positivity guard).",),
+    ),
     ),
 )
 
