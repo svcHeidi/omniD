@@ -37,8 +37,12 @@ from pathlib import Path
 from omnidriver.cardiacfoam.tutorials.defaults import cable_1d_cv_convergence as defaults
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 from omnidriver.cardiacfoam.overrides import (
+    PLUGIN_ID,
     apply_electro_property_overrides,
     apply_physics_property_overrides,
+    commit_case_overrides,
+    merge_assignments,
+    resolve_entry_overrides,
 )
 from omnidriver.core.specs.common import (
     resolve_run_script_path,
@@ -46,6 +50,9 @@ from omnidriver.core.specs.common import (
 )
 from omnidriver.core.specs.utils import load_python_module
 from omnidriver.openfoam.utils import (
+    plan_block_mesh_resolution,
+    plan_delta_t,
+    plan_end_time,
     replace_block_mesh_resolutions,
     set_delta_t,
     set_end_time,
@@ -128,6 +135,80 @@ def _apply_case(
     apply_physics_property_overrides(physics_properties, physics_property_overrides)
 
 
+def _plan_case(
+    case_root: Path,
+    case: CaseConfig,
+    *,
+    electro_properties_scope: str = defaults.ELECTRO_PROPERTIES_SCOPE,
+    control_dict_relpath: Path = defaults.CONTROL_DICT_RELPATH,
+    block_mesh_dict_relpath: Path = defaults.BLOCK_MESH_DICT_RELPATH,
+    electro_properties_relpath: Path = defaults.ELECTRO_PROPERTIES_RELPATH,
+    physics_properties_relpath: Path = Path("constant/physicsProperties"),
+    electro_property_overrides: Mapping[str, object] | Sequence[Mapping[str, object]] | None = None,
+    physics_property_overrides: Mapping[str, object] | Sequence[Mapping[str, object]] | None = None,
+    cable_length_mm: float = defaults.CABLE_LENGTH_MM,
+    cross_section_cell_counts: Sequence[int] = defaults.CROSS_SECTION_CELL_COUNTS,
+    end_time_s: float = defaults.END_TIME_S,
+):
+    """`TutorialSpec.plan_case` (Phase 3 Task 6). Same arithmetic as
+    `_apply_case`; the block-mesh rewrite, the `deltaT`/`endTime` edits and
+    the electro/physics overrides are described once and committed together
+    through `commit_case_overrides`, instead of four direct writers.
+
+    `plan_delta_t`/`plan_end_time` address `system/controlDict` by a fixed
+    name (Task 3's own finding), not by `control_dict_relpath` -- this
+    tutorial's own default (`defaults.shared.CONTROL_DICT_RELPATH`) already
+    is `"system/controlDict"`, so this holds for every real caller; a
+    caller overriding `control_dict_relpath` to something else would
+    already diverge between the two control-dict-touching calls today
+    (`set_delta_t`/`set_end_time` follow the override, `plan_delta_t`/
+    `plan_end_time` cannot) -- an existing constraint of Task 3's design,
+    not a new one this tutorial introduces.
+    """
+    electro_properties = case_root / electro_properties_relpath
+    physics_properties = case_root / physics_properties_relpath
+
+    (x_cells,) = cell_counts_from_dx(float(case.params["dx_mm"]), (cable_length_mm,))
+    cell_counts_str = f"{x_cells} {int(cross_section_cell_counts[0])} {int(cross_section_cell_counts[1])}"
+    block_mesh_document = str(block_mesh_dict_relpath)
+    block_mesh_target = plan_block_mesh_resolution(block_mesh_document, cell_counts_str)
+
+    case_overrides = {
+        f"{electro_properties_scope}.conductivity": str(case.params["conductivity"]),
+    }
+    if electro_properties_scope != "eikonalSolverCoeffs":
+        case_overrides[f"{electro_properties_scope}.tissue"] = str(case.params["tissue"])
+        case_overrides[f"{electro_properties_scope}.ionicModel"] = str(case.params["ionicModel"])
+        case_overrides[f"{electro_properties_scope}.solutionAlgorithm"] = str(case.params["solver"])
+
+    electro_document = str(electro_properties_relpath)
+    physics_document = str(physics_properties_relpath)
+    parameters = merge_assignments(
+        (plan_delta_t(float(case.params["dt_ms"]) * 1.0e-3, owner=PLUGIN_ID),),
+        (plan_end_time(end_time_s, owner=PLUGIN_ID),),
+        resolve_entry_overrides(
+            electro_properties, case_overrides, document=electro_document,
+            electro_properties_path=electro_properties,
+        ),
+        resolve_entry_overrides(
+            electro_properties, electro_property_overrides, document=electro_document,
+            electro_properties_path=electro_properties,
+        ),
+        resolve_entry_overrides(
+            physics_properties, physics_property_overrides, document=physics_document,
+        ),
+    )
+
+    return commit_case_overrides(
+        case_root,
+        parameters=parameters,
+        extra_targets=(block_mesh_target,),
+        extra_effects=(f"rewrite hex blocks in {block_mesh_document}",),
+        workflow="cable_1d_cv_convergence",
+        requested_by="cardiacfoam.tutorials.cable_1d_cv_convergence",
+    )
+
+
 def make_spec(
     *,
     cases_root: Path | None = None,
@@ -190,6 +271,19 @@ def make_spec(
         ),
         apply_case=partial(
             _apply_case,
+            electro_properties_scope=electro_properties_scope,
+            control_dict_relpath=control_dict_path,
+            block_mesh_dict_relpath=block_mesh_dict_path,
+            electro_properties_relpath=electro_properties_path,
+            physics_properties_relpath=physics_properties_path,
+            electro_property_overrides=electro_property_overrides,
+            physics_property_overrides=physics_property_overrides,
+            cable_length_mm=cable_length_mm,
+            cross_section_cell_counts=cross_section_cell_counts,
+            end_time_s=end_time_s,
+        ),
+        plan_case=partial(
+            _plan_case,
             electro_properties_scope=electro_properties_scope,
             control_dict_relpath=control_dict_path,
             block_mesh_dict_relpath=block_mesh_dict_path,
