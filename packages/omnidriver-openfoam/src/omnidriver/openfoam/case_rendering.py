@@ -10,8 +10,17 @@ and 9). Two creation modes land here:
                      (the ``repeated_edits_to_one_file`` conformance case, in
                      its real setting -- see :func:`render_synthesis_case_files`).
 
-Reuses :func:`mutators.update_foam_entry` for every edit; this module does not
-implement a second dictionary writer. Every rendering happens against a copy
+Reuses :func:`mutators.update_foam_entry` for every key/value edit; this module
+does not implement a second dictionary writer. **Corrected 2026-09-23 (Phase 3
+Task 4):** a `clone_and_patch` edit is not always a key/value set -- a target
+carrying ``"hex_cell_counts"`` (see :func:`utils.plan_block_mesh_resolution`)
+is a structural rewrite of an existing document's ``hex (`` block
+declarations instead, and :func:`render_patch_case_files` reuses
+:func:`utils._rewrite_hex_block_lines` for it the same way it reuses
+`update_foam_entry` for everything else -- one implementation of the ``hex (``
+grammar, not a second one living beside this module's key/value path.
+
+Every rendering happens against a copy
 under ``snapshot_root`` -- the real case is read only to seed that copy (and,
 for a patch, to discover what the edit's precondition set must cover), never
 written to directly. Core reads the returned bytes and commits them through
@@ -43,6 +52,7 @@ from omnidriver.core.case_write import Precondition, RenderedFile, _digest_bytes
 
 from .effective_dictionary import _inspect_source_closure
 from .mutators import update_foam_entry
+from .utils import _rewrite_hex_block_lines
 
 #: The one format this module renders. Declared truthfully by whichever
 #: provider composes it in (``OpenFOAMEnvironmentPlugin.get_rendered_formats``)
@@ -88,6 +98,20 @@ def render_patch_case_files(
     ``update_foam_entry`` pass over one snapshot copy, because
     ``CaseWritePlan`` refuses two ``RenderedFile``s claiming one path (the
     ``repeated_edits_to_one_file`` conformance case).
+
+    **A target may instead carry ``"hex_cell_counts"``** (Phase 3 Task 4,
+    :func:`utils.plan_block_mesh_resolution`) rather than
+    ``"expanded_key_path"``/``"value"``: a structural rewrite of every
+    ``hex (`` block declaration in the document, not a key/value edit.
+    Applied via :func:`utils._rewrite_hex_block_lines` -- reused, the same
+    grammar `replace_block_mesh_resolutions` still writes directly today --
+    instead of ``update_foam_entry``, and validated against that target's
+    own ``expected_blocks`` the same way that function always has: silently
+    replacing the wrong number of blocks is exactly the failure this check
+    exists to prevent. At most one such target per document is accepted;
+    two would make "how many blocks changed" depend on application order,
+    the same duplicate-slot reasoning ``CaseMutationRequest`` already applies
+    to ``ParameterAssignment``\\ s.
     """
     del driver_context, execution_env
     case_root = Path(resolved.request.case_root)
@@ -104,7 +128,22 @@ def render_patch_case_files(
         before_digest = _digest_bytes(source.read_bytes())
         mode = source.stat().st_mode & 0o7777
         snapshot_path = _snapshot_copy(case_root, snapshot_root, document)
-        for edit in edits:
+
+        hex_edits = [edit for edit in edits if "hex_cell_counts" in edit]
+        value_edits = [edit for edit in edits if "hex_cell_counts" not in edit]
+        if len(hex_edits) > 1:
+            raise ValueError(
+                f"patch target {document!r} carries {len(hex_edits)} hex "
+                f"block-count rewrites; a document's `hex (` blocks are "
+                f"rewritten once, by one target"
+            )
+        for edit in hex_edits:
+            rewritten = _rewrite_hex_block_lines(
+                snapshot_path.read_text(), edit["hex_cell_counts"],
+                int(edit["expected_blocks"]), label=document,
+            )
+            snapshot_path.write_text(rewritten)
+        for edit in value_edits:
             key_path = tuple(edit["expanded_key_path"])
             scope = key_path[:-1] or None
             key = key_path[-1]

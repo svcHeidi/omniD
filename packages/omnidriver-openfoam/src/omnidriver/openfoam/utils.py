@@ -1,8 +1,9 @@
 from pathlib import Path
+from typing import Any, Mapping
 
 from omnidriver.core.case_write import ParameterAssignment
 
-from .mutators import update_foam_entry
+from .mutators import _format_value, update_foam_entry
 
 #: `system/controlDict` is a fixed, case-relative location -- the same for
 #: every OpenFOAM case, never derived from a caller-supplied path. Unlike
@@ -94,6 +95,52 @@ def plan_end_time(t_s: float, *, owner: str) -> ParameterAssignment:
 
 
 
+def _rewrite_hex_block_lines(
+    text: str, cell_counts_str: str, expected_blocks: int, *, label: str,
+) -> str:
+    """Pure text-level rewrite of every ``hex (`` block declaration in a
+    `blockMeshDict` body, factored out of `replace_block_mesh_resolutions`
+    (Phase 3 Task 4) so the resolve/render channel's patch renderer
+    (`case_rendering.render_patch_case_files`) reuses this exact grammar
+    instead of a second implementation of it -- the same
+    "reuse, do not re-implement a dictionary writer" reasoning
+    `case_rendering.py`'s module docstring already gives for
+    `mutators.update_foam_entry`.
+
+    Reads nothing, writes nothing: `text` in, rewritten text out. Raises
+    ``KeyError`` if the number of ``hex (`` lines actually rewritten does not
+    equal `expected_blocks` -- silently replacing the wrong number of blocks
+    is exactly the failure this function exists to prevent, and this check
+    survives being called from either caller (the direct writer below, or
+    the renderer's snapshot-copy patch). ``label`` is only used to name the
+    checked document in that error; the writer passes the real path, the
+    renderer passes the case-relative document name -- neither leaks into
+    the other's caller.
+    """
+    lines = text.splitlines(keepends=True)
+    rewritten: list[str] = []
+    replaced_count = 0
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("hex (") and not stripped.startswith("//"):
+            prefix, _, suffix = line.partition(") (")
+            if not suffix:
+                rewritten.append(line)
+                continue
+            _, _, trailing = suffix.partition(") simpleGrading")
+            rewritten.append(f"{prefix}) ({cell_counts_str}) simpleGrading{trailing}")
+            replaced_count += 1
+        else:
+            rewritten.append(line)
+
+    if replaced_count != expected_blocks:
+        raise KeyError(
+            f"Expected to update {expected_blocks} hex blocks in {label}, "
+            f"but found {replaced_count}."
+        )
+    return "".join(rewritten)
+
+
 def replace_block_mesh_resolutions(
     block_mesh_dict_path: Path,
     cell_counts_str: str,
@@ -103,29 +150,103 @@ def replace_block_mesh_resolutions(
     """Rewrite lines starting with ``hex (`` in an existing `block_mesh_dict_path`.
     Replaces the cell counts portion of the hex definition with `cell_counts_str`.
     Validates that exactly `expected_blocks` were replaced.
+
+    **Not yet retired (Phase 3 Task 4).** Kept, unchanged in behaviour,
+    beside the pure resolver `plan_block_mesh_resolution` below -- the same
+    "both are retired together, in the same commit that removes the last
+    caller" pattern Task 3 established for `set_delta_t`/`set_end_time`. Its
+    eight tutorial callers migrate onto the render/commit channel in Task 6.
+
+    **Corrected 2026-09-23 (Phase 3 Task 4):** the pre-Task-4 version wrote
+    each line to `block_mesh_dict_path` as it iterated, so a mismatched
+    `expected_blocks` still raised, but only *after* the file had already
+    been overwritten with the (wrong-count) rewrite -- an incidental,
+    undocumented side effect no test pinned (checked:
+    `test_missing_hex_line_raises` never reads the file back). Refactored
+    onto `_rewrite_hex_block_lines`, which computes the full rewritten text
+    in memory first; a raised `KeyError` now leaves the file untouched. No
+    currently-passing test asserted the old partial-write behaviour, so this
+    is a correction, not a silently accepted regression.
     """
     if not block_mesh_dict_path.exists():
         raise FileNotFoundError(f"Missing mesh dictionary: {block_mesh_dict_path}")
 
-    lines = block_mesh_dict_path.read_text().splitlines(keepends=True)
-    replaced_count = 0
+    rewritten = _rewrite_hex_block_lines(
+        block_mesh_dict_path.read_text(), cell_counts_str, expected_blocks,
+        label=str(block_mesh_dict_path),
+    )
+    block_mesh_dict_path.write_text(rewritten)
 
-    with block_mesh_dict_path.open("w") as handle:
-        for line in lines:
-            stripped = line.strip()
-            if stripped.startswith("hex (") and not stripped.startswith("//"):
-                prefix, _, suffix = line.partition(") (")
-                if not suffix:
-                    handle.write(line)
-                    continue
-                _, _, trailing = suffix.partition(") simpleGrading")
-                handle.write(f"{prefix}) ({cell_counts_str}) simpleGrading{trailing}")
-                replaced_count += 1
-            else:
-                handle.write(line)
 
-    if replaced_count != expected_blocks:
-        raise KeyError(
-            f"Expected to update {expected_blocks} hex blocks in {block_mesh_dict_path}, "
-            f"but found {replaced_count}."
-        )
+def plan_block_mesh_resolution(
+    document: str,
+    cell_counts_str: str,
+    *,
+    expected_blocks: int = 1,
+) -> Mapping[str, Any]:
+    """Resolve a `replace_block_mesh_resolutions` edit into a target
+    `case_rendering.render_patch_case_files` understands (Phase 3 Task 4).
+
+    **Why this is not a `ParameterAssignment`.** The plan's own framing:
+    rewriting every ``hex (`` line in an existing document is not a
+    key/value set -- there is no single `key_path` a caller could name, and
+    the number of lines actually rewritten (`expected_blocks`) is itself
+    part of what is being asserted, not a value being assigned. Inventing a
+    `value_kind` to carry ``hex (`` syntax through `ParameterAssignment`
+    would be the `openfoam_literal` layering mistake Phase 2 deliberately
+    undid: a kind naming a format inside a vocabulary core owns.
+    `ResolvedMutation.targets` is already a loosely-typed
+    ``Mapping[str, Any]`` per target, consumed only by
+    `case_rendering._document_edits` -- never assumed to be a
+    `ParameterAssignment` (see `dict_builder.resolve_synthesis_mutation`'s
+    own raw ``{"document", "content", "format"}``/``{"expanded_key_path",
+    "value"}`` targets) -- so a target naming this edit's shape needs no
+    change to core at all, and no `hex (` knowledge ever reaches it: core
+    only ever sees the rendered bytes and their digest.
+
+    Pure: reads nothing, writes nothing, and in particular does **not**
+    check `expected_blocks` against a real file -- there is no file to read
+    from a resolver that never touches the case. That check is the
+    renderer's job (`case_rendering.render_patch_case_files`, which reads
+    the real document to build the snapshot it patches), reusing this same
+    `_rewrite_hex_block_lines` so the check is asked exactly once, not
+    duplicated. Matches `plan_delta_t`/`plan_end_time`'s reasoning for
+    staying pure while `set_delta_t`/`set_end_time` (and, here,
+    `replace_block_mesh_resolutions`) keep writing until Task 6 migrates
+    their callers.
+
+    No `source` field: unlike `ParameterAssignment`, a raw
+    `ResolvedMutation` target carries no `VALUE_SOURCES` vocabulary at all
+    (`dict_builder.py`'s own synthesis targets carry none either) -- the
+    "case vs template" distinction is a property of a *value* a caller
+    assigned, and this target assigns no value, only names a structural
+    rewrite and the count it must satisfy. There is nothing here for
+    `source` to classify.
+
+    `cell_counts_str` is passed through `mutators._format_value` for its
+    existing `;`/`#`/newline security refusal (SECURITY.md) -- the same
+    refusal every other value this channel writes into a dictionary already
+    gets, and one `replace_block_mesh_resolutions` itself never applied.
+    Reused, not re-implemented; it also happens to leave a plain non-bool
+    string like ``"80 80 80"`` unchanged, since `_format_value` only special
+    -cases `bool` and otherwise returns ``str(value)``.
+    """
+    return {
+        "document": document,
+        "format": _hex_patch_format(),
+        "hex_cell_counts": _format_value(cell_counts_str),
+        "expected_blocks": expected_blocks,
+    }
+
+
+def _hex_patch_format() -> str:
+    """`case_rendering.FORMAT`, imported lazily to avoid a module cycle:
+    `case_rendering.py` imports `_rewrite_hex_block_lines` from this module
+    at its own module level, so this module cannot import `case_rendering`
+    at ITS module level in turn -- deferred to call time instead, the same
+    way `dict_builder.py` defers several of its own cross-module imports for
+    the same reason.
+    """
+    from .case_rendering import FORMAT
+
+    return FORMAT
