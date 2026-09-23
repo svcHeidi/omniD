@@ -360,12 +360,23 @@ def apply_input_overrides_planned(
     if not validated:
         return None
 
+    # Made absolute here if it is not already, once, regardless of what the
+    # caller passed in: `CaseMutationRequest` now refuses a relative
+    # `case_root` outright (R3 blocker 2, 2026-09-23), and this is the one
+    # place in this module that constructs one. Only a genuinely relative
+    # path is resolved -- an already-absolute `case_root` (the common case)
+    # is passed through exactly as given, rather than also normalizing away
+    # a symlink nobody asked to have collapsed.
+    case_root = Path(case_root)
+    if not case_root.is_absolute():
+        case_root = case_root.resolve()
+
     parameters = _parameters_for(validated)
     if driver_context is None:
         driver_context = _default_driver_context()
 
     request = CaseMutationRequest(
-        mode="clone_and_patch", case_root=Path(case_root), adapter_id=PLUGIN_ID,
+        mode="clone_and_patch", case_root=case_root, adapter_id=PLUGIN_ID,
         workflow="preprocessing", source_artifacts=(), parameters=parameters,
         requested_by="cardiaccore.overrides",
     )

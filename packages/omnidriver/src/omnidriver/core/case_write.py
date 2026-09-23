@@ -265,6 +265,21 @@ class CaseMutationRequest:
         # passed. See the analogous comment on ParameterAssignment.
         object.__setattr__(self, "source_artifacts", tuple(self.source_artifacts))
         object.__setattr__(self, "parameters", tuple(self.parameters))
+        # R3 blocker 2 (2026-09-23): a relative `case_root` resolves against
+        # whatever directory happens to be current *at commit time*, not at
+        # plan time -- two different processes (or the same process after a
+        # `chdir`) can commit one plan into two different directories with no
+        # error at all. A channel whose entire purpose is auditability must
+        # refuse that at construction, before a plan built on this request
+        # can even exist, not discover it later inside `commit_case_write`.
+        if not Path(self.case_root).is_absolute():
+            raise ValueError(
+                f"case_root must be absolute, not {str(self.case_root)!r}; a "
+                f"relative root resolves against whatever directory the "
+                f"process committing the plan happens to be in, so the same "
+                f"plan could silently write into two different places -- "
+                f"which is not auditable"
+            )
         if self.mode not in MUTATION_MODES:
             raise ValueError(
                 f"unsupported creation mode {self.mode!r}; supported modes are "

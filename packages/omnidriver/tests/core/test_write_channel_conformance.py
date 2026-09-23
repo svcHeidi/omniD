@@ -704,6 +704,23 @@ def test_path_escape_and_symlinks(tmp_path):
         case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
 
 
+def test_path_escape_a_relative_case_root_is_refused_at_construction(tmp_path):
+    """R3 blocker 2 (2026-09-23): the other way a plan could escape to the
+    wrong place -- not a symlinked write target, but a `case_root` that never
+    named an absolute location at all, so it resolved against whatever
+    directory the committing process happened to be in. Reproduced against
+    the real public constructor: no defensive check existed in
+    `commit_case_write` itself, so this had to be refused at
+    `CaseMutationRequest.__post_init__`, before a plan naming an unauditable
+    root could exist."""
+    with pytest.raises(ValueError, match="absolute"):
+        case_write.CaseMutationRequest(
+            mode="clone_and_patch", case_root=Path("somecase"),
+            adapter_id="org.a", workflow="w", source_artifacts=(),
+            parameters=(_parameter(),), requested_by="test",
+        )
+
+
 # --------------------------------------------------------------------------
 # 17: duplicate ownership
 # --------------------------------------------------------------------------

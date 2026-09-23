@@ -1127,7 +1127,17 @@ def build_case(
 
     from omnidriver.core.case_write import CaseWritePlan
 
+    # Made absolute here if it is not already: `CaseMutationRequest` below
+    # refuses a relative `case_root` outright (R3 blocker 2, 2026-09-23) -- a
+    # relative one would resolve against whatever directory the *committing*
+    # process happens to be in, silently writing into a different case than
+    # the caller named. Only a genuinely relative path is resolved (which
+    # also normalizes `..`/symlinks) -- an already-absolute `case_dir` is
+    # passed through exactly as given, so this does not change the returned
+    # `case_dir` string for the (common) already-absolute case.
     case_dir = _Path(case_dir)
+    if not case_dir.is_absolute():
+        case_dir = case_dir.resolve()
     myocardium_solver = electro_selectors.get("myocardiumSolver", "monodomainSolver")
 
     dt = delta_t if delta_t is not None else 1e-4
@@ -1274,7 +1284,12 @@ def build_and_launch(
 
     from omnidriver.core.case_transaction import commit_case_write
 
+    # Made absolute if not already, without disturbing an already-absolute
+    # path's spelling: see the matching comment in `build_case`
+    # (R3 blocker 2, 2026-09-23).
     case_dir = _Path(case_dir)
+    if not case_dir.is_absolute():
+        case_dir = case_dir.resolve()
     electro_path = case_dir / "constant" / "electroProperties"
 
     # Preserved as a direct check, not a channel precondition (2026-09-23,

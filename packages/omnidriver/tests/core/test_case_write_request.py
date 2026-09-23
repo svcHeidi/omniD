@@ -230,3 +230,48 @@ def test_a_whitespace_only_source_artifact_is_refused():
             adapter_id="org.a", workflow="w", source_artifacts=("   ",),
             parameters=(_assignment(),), requested_by="test",
         )
+
+
+# --- R3 blocker 2 (2026-09-23): a relative `case_root` resolves against
+# whatever directory the *committing* process happens to be in, not the one
+# the plan was built in. Reproduced against the real public constructor, not
+# a monkeypatch: `commit_case_write` had no defensive check of its own, so
+# the same plan committed from two different working directories silently
+# wrote the right bytes into two different, wrong-relative-to-each-other
+# case roots with no error at all. Refusing it here, at construction, means
+# a plan naming an unauditable root never comes into existence. ---
+
+
+def test_a_relative_case_root_is_refused_at_construction():
+    with pytest.raises(ValueError, match="absolute"):
+        case_write.CaseMutationRequest(
+            mode="clone_and_patch", case_root=Path("somecase"),
+            adapter_id="org.a", workflow="w", source_artifacts=(),
+            parameters=(_assignment(),), requested_by="test",
+        )
+
+
+def test_a_relative_case_root_committed_from_two_directories_would_diverge_but_is_refused_first(tmp_path, monkeypatch):
+    """The exact reproduction R3 gave: build a plan whose `case_root` is a
+    relative `Path("somecase")` from directory A, then attempt to commit it
+    from directory B where a `somecase/` also exists. Without the
+    construction-time guard this silently wrote into whichever directory the
+    *committing* process happened to be in; with it, the plan cannot be built
+    at all."""
+    dir_a = tmp_path / "a"
+    dir_b = tmp_path / "b"
+    (dir_a / "somecase").mkdir(parents=True)
+    (dir_b / "somecase").mkdir(parents=True)
+
+    monkeypatch.chdir(dir_a)
+    with pytest.raises(ValueError, match="absolute"):
+        case_write.CaseMutationRequest(
+            mode="clone_and_patch", case_root=Path("somecase"),
+            adapter_id="org.a", workflow="w", source_artifacts=(),
+            parameters=(_assignment(),), requested_by="test",
+        )
+    # It was refused before it could be committed from anywhere, so neither
+    # candidate directory shows any effect.
+    monkeypatch.chdir(dir_b)
+    assert list((dir_a / "somecase").iterdir()) == []
+    assert list((dir_b / "somecase").iterdir()) == []
