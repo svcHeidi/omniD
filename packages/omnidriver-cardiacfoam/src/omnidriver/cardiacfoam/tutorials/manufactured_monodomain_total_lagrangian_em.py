@@ -37,15 +37,21 @@ from pathlib import Path
 from omnidriver.cardiacfoam.tutorials.defaults import manufactured_monodomain_total_lagrangian_em as defaults
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 from omnidriver.cardiacfoam.overrides import (
+    PLUGIN_ID,
     apply_electro_property_overrides,
     apply_entry_overrides,
     apply_physics_property_overrides,
+    commit_case_overrides,
+    merge_assignments,
+    resolve_entry_overrides,
 )
 from omnidriver.core.specs.common import (
     resolve_run_script_path,
     resolve_spec_paths,
 )
 from omnidriver.openfoam.utils import (
+    plan_block_mesh_resolution,
+    plan_delta_t,
     replace_block_mesh_resolutions,
     set_delta_t,
 )
@@ -123,6 +129,93 @@ def _apply_case(
     apply_physics_property_overrides(physics_properties, physics_property_overrides)
 
 
+def _plan_case(
+    case_root: Path,
+    case: CaseConfig,
+    *,
+    electro_properties_scope: str = defaults.ELECTRO_PROPERTIES_SCOPE,
+    control_dict_relpath: Path = defaults.CONTROL_DICT_RELPATH,
+    electro_properties_relpath: Path = defaults.ELECTRO_PROPERTIES_RELPATH,
+    electromechanical_properties_relpath: Path = defaults.ELECTROMECHANICAL_PROPERTIES_RELPATH,
+    physics_properties_relpath: Path = defaults.PHYSICS_PROPERTIES_RELPATH,
+    block_mesh_dict_template: str = defaults.BLOCK_MESH_DICT_TEMPLATE,
+    electro_property_overrides: Sequence[dict[str, object]] | dict[str, object] | None = None,
+    electromechanical_property_overrides: Sequence[dict[str, object]] | dict[str, object] | None = None,
+    physics_property_overrides: Sequence[dict[str, object]] | dict[str, object] | None = None,
+    verification_model_type: str = defaults.ELECTROMECHANICAL_VERIFICATION_MODEL_TYPE,
+):
+    """`TutorialSpec.plan_case` (Phase 3 Task 6). Same arithmetic as
+    `_apply_case`. `electromechanical_properties` is addressed through
+    `resolve_entry_overrides` with the real case-relative
+    `electromechanical_properties_relpath` as its `document` -- unlike
+    `apply_entry_overrides` (which, having no case root, falls back to
+    `Path(file_path).name`), this function has a real `case_root` and so
+    supplies the genuine relative path the renderer needs to locate the
+    file, not a bare filename.
+    """
+    dimension = str(case.params["dimension"])
+    solver = str(case.params["solver"])
+    cells = int(case.params["cells"])
+    dt_value = float(case.params["dt"])
+
+    electro_properties = case_root / electro_properties_relpath
+    electromechanical_properties = case_root / electromechanical_properties_relpath
+    physics_properties = case_root / physics_properties_relpath
+    block_mesh_dict_relpath = Path(block_mesh_dict_template.format(dimension=dimension))
+
+    try:
+        cell_counts = defaults.BLOCK_MESH_RESOLUTION_BY_DIMENSION[dimension].format(cells=cells)
+    except KeyError as exc:
+        raise ValueError(f"Unsupported dimension: {dimension}") from exc
+    block_mesh_document = str(block_mesh_dict_relpath)
+    block_mesh_target = plan_block_mesh_resolution(block_mesh_document, cell_counts)
+
+    electro_document = str(electro_properties_relpath)
+    electromechanical_document = str(electromechanical_properties_relpath)
+    physics_document = str(physics_properties_relpath)
+
+    parameters = merge_assignments(
+        (plan_delta_t(dt_value, owner=PLUGIN_ID),),
+        resolve_entry_overrides(
+            electro_properties,
+            {
+                f"{electro_properties_scope}.dimension": f'"{dimension}"',
+                f"{electro_properties_scope}.solutionAlgorithm": solver,
+            },
+            document=electro_document, electro_properties_path=electro_properties,
+        ),
+        resolve_entry_overrides(
+            electro_properties, electro_property_overrides, document=electro_document,
+            electro_properties_path=electro_properties,
+        ),
+        resolve_entry_overrides(
+            electromechanical_properties,
+            {
+                (
+                    "sequentialElectroMechanicalCoeffs."
+                    "electromechanicalVerificationModel.type"
+                ): verification_model_type,
+            },
+            document=electromechanical_document,
+        ),
+        resolve_entry_overrides(
+            electromechanical_properties, electromechanical_property_overrides,
+            document=electromechanical_document,
+        ),
+        resolve_entry_overrides(
+            physics_properties, physics_property_overrides, document=physics_document,
+        ),
+    )
+
+    return commit_case_overrides(
+        case_root,
+        parameters=parameters,
+        extra_targets=(block_mesh_target,),
+        extra_effects=(f"rewrite hex blocks in {block_mesh_document}",),
+        workflow="manufactured_monodomain_total_lagrangian_em",
+        requested_by="cardiacfoam.tutorials.manufactured_monodomain_total_lagrangian_em",
+    )
+
 
 
 
@@ -190,6 +283,19 @@ def make_spec(
         ),
         apply_case=partial(
             _apply_case,
+            electro_properties_scope=electro_properties_scope,
+            control_dict_relpath=control_dict_path,
+            electro_properties_relpath=electro_properties_path,
+            electromechanical_properties_relpath=electromechanical_properties_path,
+            physics_properties_relpath=physics_properties_path,
+            block_mesh_dict_template=block_mesh_dict_template,
+            electro_property_overrides=electro_property_overrides,
+            electromechanical_property_overrides=electromechanical_property_overrides,
+            physics_property_overrides=physics_property_overrides,
+            verification_model_type=verification_model_type,
+        ),
+        plan_case=partial(
+            _plan_case,
             electro_properties_scope=electro_properties_scope,
             control_dict_relpath=control_dict_path,
             electro_properties_relpath=electro_properties_path,
