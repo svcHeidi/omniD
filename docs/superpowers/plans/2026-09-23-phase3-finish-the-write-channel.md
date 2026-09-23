@@ -1366,6 +1366,54 @@ Three things this must not become:
   `verificationModel.type`, so its own default call already raised on unmodified
   `HEAD`. Tracked separately.
 
+## After Task 6b, 2026-09-23: three corrections to how bypass 1 is measured and read
+
+**The `apply_case=` count cannot reach 1, and the plan was wrong to expect it.**
+Task 6b collapsed `_apply_case` to a thin wrapper over `_plan_case` on ten of
+sixteen sites, yet the count is unchanged at 16 — because `TutorialSpec.apply_case`
+has **no default**, so every `make_spec` must still pass one whether or not it
+supplies `plan_case`. Collapsing a body does not remove the wiring. The grep
+therefore measures a field's presence, not whether anything writes outside the
+channel, and it cannot fall until `apply_case` becomes optional when `plan_case`
+is supplied. That is a small core change to `core/runtime/models.py`, and it is
+what lets Task 11 read bypass 1 honestly. Until then, the meaningful measure is:
+**does any tutorial write outside `commit_case_write`?** Ten do not. The remaining
+six are `heart_solver_comparison` and `manufactured_purkinje_graph` (Task 7),
+`core/runtime/generic_case.py` (Task 8), and three cardiacCore sites already
+migrated in Phase 2 that still wire the field.
+
+**Two tutorials write a key where the native solver does not read it.** Both
+were already broken before Phase 3; strictness made them fail loudly rather than
+introducing the fault, which was checked by running both sides of the fallback
+deletion and against the native source:
+
+| tutorial | writes | native reads |
+|---|---|---|
+| `manufactured_monodomain_total_lagrangian_em` | `electromechanicalVerificationModel.type` | `verificationModel.type` |
+| `manufactured_bath_bidomain` | `manufacturedBidomain.fdaBathVariant` | `verificationModel.fdaBathVariant` (`manufacturedFDABathBidomainVerifier.C`, `getOrDefault(..., electrodePair)`) |
+
+The bath template carries `verificationModel { fdaBathVariant electrodePair; }`
+and no `manufacturedBidomain` block, so the old unchecked write raised `KeyError`
+and the new strict path raises `ValueError` before touching a file. A caller
+asking this tutorial for the `groundElectrode` variant has therefore never been
+able to get it. **The strict resolver is now the drift gate for this class**:
+any key a tutorial writes must be one the catalog declares at that scope, so the
+next wrong-scope key fails at plan time rather than silently. Both fixes are
+one-line scope corrections and are tracked separately.
+
+**Retiring a function must not retire its coverage.** Task 6b deleted
+`test_common_blockmesh_resize.py` with `replace_block_mesh_resolutions`. Three of
+its four behaviours had successors; the fourth — a missing `blockMeshDict` must
+fail loudly — had moved to the renderer but its test had not. Restored in
+`a0f9954` and revert-confirmed. The rule for Tasks 7–10: before deleting a test
+alongside a retired function, map each behaviour it pinned to a surviving test
+by name.
+
+Task 6b also tightened `set` to `add_if_missing=False` — previously
+unconditionally `True`, so a `set` against a missing key silently created it.
+Verified that no migrated tutorial relied on the old permissiveness. `ensure`
+is now the explicit way to create.
+
 ## Task 7: Source artifacts and sidecars, classified — bypass 1 remainder
 
 Not every write in a tutorial is a parameter. From the measured surface:
