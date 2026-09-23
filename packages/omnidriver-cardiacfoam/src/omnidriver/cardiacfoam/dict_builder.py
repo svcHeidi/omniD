@@ -1093,6 +1093,16 @@ def _block_mesh_solvers() -> frozenset[str]:
     return BLOCK_MESH_SOLVERS
 
 
+def _meshless_solvers() -> frozenset[str]:
+    """`mesh_provisioning.MESHLESS_SOLVERS`, named for this call site --
+    added 2026-09-23 (R3 finding 7) alongside `_block_mesh_solvers`, for the
+    same reason: a function, not a re-exported constant, so the import
+    happens at call time rather than creating a new import-time dependency."""
+    from omnidriver.cardiacfoam.mesh_provisioning import MESHLESS_SOLVERS
+
+    return MESHLESS_SOLVERS
+
+
 def build_case(
     electro_selectors: dict[str, str],
     *,
@@ -1335,10 +1345,26 @@ def build_and_launch(
     )
     commit_case_write(plan, driver_context=write_context, execution_env=None)
 
-    from omnidriver.cardiacfoam.mesh_provisioning import provision_mesh
-    needs_block_mesh = provision_mesh(
-        case_dir=case_dir, myocardium_solver=myocardium_solver, dx_m=dx,
-    )
+    # `needs_block_mesh` is pure set membership -- `_block_mesh_solvers()`
+    # already computes exactly it -- so it no longer costs a call to a
+    # function that can write bytes (R3 finding 7, 2026-09-23).
+    needs_block_mesh = myocardium_solver in _block_mesh_solvers()
+
+    if myocardium_solver in _meshless_solvers():
+        # The one branch of `provision_mesh` that still has an effect. For
+        # `BLOCK_MESH_SOLVERS`, `build_case` above already rendered
+        # `system/blockMeshDict` through the write channel with
+        # `skip_if_present=True`, so calling `provision_mesh` for that
+        # branch would find the file already there and do nothing -- not
+        # worth the call. `MESHLESS_SOLVERS` is different: it copies a
+        # bundled 1-cell polyMesh fixture directly, bypassing
+        # `commit_case_write` entirely (Task 12 migrates this; see the
+        # dated comment at the copy site in
+        # `mesh_provisioning.provision_mesh` for the clobber risk R3 found
+        # there).
+        from omnidriver.cardiacfoam.mesh_provisioning import provision_mesh
+
+        provision_mesh(case_dir=case_dir, myocardium_solver=myocardium_solver, dx_m=dx)
 
     if dry_run:
         return {
