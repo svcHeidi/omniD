@@ -37,6 +37,9 @@ from omnidriver.cardiacfoam.tutorials.defaults import single_cell as defaults
 from omnidriver.cardiacfoam.overrides import (
     apply_electro_property_overrides,
     apply_physics_property_overrides,
+    commit_case_overrides,
+    merge_assignments,
+    resolve_entry_overrides,
 )
 from omnidriver.core.specs.common import (
     resolve_run_script_path,
@@ -93,6 +96,69 @@ def _apply_case(
     apply_electro_property_overrides(electro_properties_file, case_overrides)
     apply_electro_property_overrides(electro_properties_file, electro_property_overrides)
     apply_physics_property_overrides(physics_properties_file, physics_property_overrides)
+
+
+def _plan_case(
+    case_root: Path,
+    case: CaseConfig,
+    *,
+    stimulus_map: Mapping[str, float],
+    electro_properties_scope: str = defaults.ELECTRO_PROPERTIES_SCOPE,
+    electro_properties_relpath: Path = defaults.ELECTRO_PROPERTIES_RELPATH,
+    physics_properties_relpath: Path = Path("constant/physicsProperties"),
+    electro_property_overrides: Mapping[str, object] | Sequence[Mapping[str, object]] | None = None,
+    physics_property_overrides: Mapping[str, object] | Sequence[Mapping[str, object]] | None = None,
+):
+    """`TutorialSpec.plan_case` (Phase 3 Task 6, single_cell as the
+    template). Same effect as `_apply_case` above -- same arithmetic, same
+    two override sets folded onto `constant/electroProperties` the same
+    "second call wins" way -- but the actual write happens once, through
+    `commit_case_overrides` (`overrides.py`), not through two direct
+    `apply_electro_property_overrides` calls. Returns the committed
+    `CaseWriteRecord`, or `None` when there was nothing to write.
+    """
+    tissue = case.params["tissue"]
+    ionic_model = case.params["ionicModel"]
+
+    if ionic_model not in stimulus_map:
+        raise KeyError(f"Missing stimulus amplitude for ionic model '{ionic_model}'")
+
+    electro_properties_file = case_root / electro_properties_relpath
+    physics_properties_file = case_root / physics_properties_relpath
+    case_overrides = {
+        f"{electro_properties_scope}.tissue": tissue,
+        f"{electro_properties_scope}.ionicModel": ionic_model,
+        f"{electro_properties_scope}.singleCellStimulus.stim_amplitude": stimulus_map[ionic_model],
+    }
+
+    electro_document = str(electro_properties_relpath)
+    physics_document = str(physics_properties_relpath)
+
+    # `case_overrides` first, `electro_property_overrides` second -- the
+    # same order `_apply_case` applies them in, so a key both sets name
+    # resolves to the caller-supplied override, matching that function's
+    # "second write wins" behaviour exactly (merge_assignments's own
+    # docstring).
+    electro_parameters = merge_assignments(
+        resolve_entry_overrides(
+            electro_properties_file, case_overrides, document=electro_document,
+            electro_properties_path=electro_properties_file,
+        ),
+        resolve_entry_overrides(
+            electro_properties_file, electro_property_overrides, document=electro_document,
+            electro_properties_path=electro_properties_file,
+        ),
+    )
+    physics_parameters = resolve_entry_overrides(
+        physics_properties_file, physics_property_overrides, document=physics_document,
+    )
+
+    return commit_case_overrides(
+        case_root,
+        parameters=merge_assignments(electro_parameters, physics_parameters),
+        workflow="single_cell",
+        requested_by="cardiacfoam.tutorials.single_cell",
+    )
 
 
 def make_spec(
@@ -162,6 +228,15 @@ def make_spec(
         ),
         apply_case=partial(
             _apply_case,
+            stimulus_map=stimulus_map,
+            electro_properties_scope=electro_properties_scope,
+            electro_properties_relpath=electro_properties_path,
+            physics_properties_relpath=physics_properties_path,
+            electro_property_overrides=electro_property_overrides,
+            physics_property_overrides=physics_property_overrides,
+        ),
+        plan_case=partial(
+            _plan_case,
             stimulus_map=stimulus_map,
             electro_properties_scope=electro_properties_scope,
             electro_properties_relpath=electro_properties_path,

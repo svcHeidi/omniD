@@ -1,9 +1,17 @@
+import datetime
+import tempfile
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from omnidriver.core.case_write import ParameterAssignment
+from omnidriver.core.case_write import (
+    CaseMutationRequest,
+    CaseWritePlan,
+    ParameterAssignment,
+    ResolvedMutation,
+)
 from omnidriver.core.contracts.dictionary import validate_value_shape
+from omnidriver.openfoam import case_rendering
 from omnidriver.openfoam.dict_builder import match_dynamic_entry
 from omnidriver.openfoam.literals import (
     format_dimensioned_literal,
@@ -30,6 +38,7 @@ from omnidriver.openfoam.mutators import (
 from .detection import detect_electro_coeffs_scope
 from .dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
 from .common_dict_entries import PHYSICS_PROPERTY_ENTRIES
+from .own_context import own_driver_context
 
 #: This module's identity on every `ParameterAssignment` it produces. Mirrors
 #: `dict_builder.PLUGIN_ID` / `runtime_profile._PLUGIN_ID` (both
@@ -495,35 +504,203 @@ def apply_entry_overrides(
 
     for assignment in assignments:
         scope = assignment.key_path[:-1] or None
-        if assignment.evidence_refs:
-            # The original, already-rendered spelling this assignment was
-            # parsed from (dimensioned/vector3 kinds only -- see
-            # `_typed_value_for_entry`). Writing it verbatim, rather than a
-            # re-rendering, preserves bytes a re-rendering is not guaranteed
-            # to reproduce (see `omnidriver.openfoam.literals`'s module
-            # docstring) and that at least one real test asserts exactly
-            # (`test_tet_apply_case_forwards_conductivity_and_advection_approach`).
-            # `update_foam_entry` -> `_format_value` still re-applies the
-            # `;`/`#`/newline security check to it, same as any value.
-            write_value = assignment.evidence_refs[0]
-        else:
-            # No preserved evidence: this assignment's value arrived already
-            # typed (e.g. a real Python `bool`, or a value some future
-            # direct caller of `resolve_entry_overrides` constructed itself
-            # rather than parsing from text). A container-shaped kind still
-            # needs `_CONTAINER_FORMATTERS` to render correctly through
-            # `update_foam_entry` -> `_format_value`, which only ever
-            # `str()`s an unrecognised type; every other kind (`boolean`
-            # included -- see that dict's own docstring) is already
-            # `_format_value`'s job.
-            render = _CONTAINER_FORMATTERS.get(assignment.value_kind)
-            write_value = render(assignment.value) if render is not None else assignment.value
         update_foam_entry(
             file_path,
             assignment.key_path[-1],
-            write_value,
+            _write_value_for_assignment(assignment),
             scope=scope,
         )
+
+
+def _write_value_for_assignment(assignment: ParameterAssignment) -> Any:
+    """The raw value that must actually reach `update_foam_entry` for
+    `assignment` to write the same bytes `apply_entry_overrides` always has
+    (extracted 2026-09-23, Phase 3 Task 6, from that function's own loop
+    body -- reused, not duplicated, by `resolve_patch_mutation` below, which
+    needs the identical mapping to give the render/commit channel the same
+    bytes as the direct writer).
+
+    If `assignment.evidence_refs` is non-empty, that is the original,
+    already-rendered spelling this assignment was parsed from
+    (dimensioned/vector3 kinds only -- see `_typed_value_for_entry`).
+    Writing it verbatim, rather than a re-rendering, preserves bytes a
+    re-rendering is not guaranteed to reproduce (see
+    `omnidriver.openfoam.literals`'s module docstring) and that at least one
+    real test asserts exactly
+    (`test_tet_apply_case_forwards_conductivity_and_advection_approach`).
+    `update_foam_entry` -> `_format_value` still re-applies the `;`/`#`/
+    newline security check to it, same as any value.
+
+    Otherwise, `assignment.value` arrived already typed (e.g. a real Python
+    `bool`, or a value some direct caller of `resolve_entry_overrides`
+    constructed itself rather than parsing from text). A container-shaped
+    kind still needs `_CONTAINER_FORMATTERS` to render correctly through
+    `update_foam_entry` -> `_format_value`, which only ever `str()`s an
+    unrecognised type; every other kind (`boolean` included -- see that
+    dict's own docstring) is already `_format_value`'s job.
+    """
+    if assignment.evidence_refs:
+        return assignment.evidence_refs[0]
+    render = _CONTAINER_FORMATTERS.get(assignment.value_kind)
+    return render(assignment.value) if render is not None else assignment.value
+
+
+def resolve_patch_mutation(request: CaseMutationRequest) -> ResolvedMutation:
+    """The semantic owner's answer for a `clone_and_patch` request
+    (Phase 3 Task 6, "the eleven tutorials follow through").
+
+    Mirrors `cardiaccore.workflows.overrides.resolve_patch_mutation` in
+    shape -- pure, every parameter already addressed by the caller
+    (`resolve_entry_overrides`, `omnidriver.openfoam.utils.plan_delta_t`/
+    `plan_end_time`) before this ever runs. The one real difference:
+    `target["value"]` is `_write_value_for_assignment(parameter)`, not
+    `parameter.value` (the typed value) the way cardiacCore's resolver uses
+    directly. cardiacCore's own parameters carry no `evidence_refs` and need
+    no container formatting, so `parameter.value` already IS the write
+    value there; this package's do (Task 2's Gap 1/its vector3 corollary),
+    so writing `parameter.value` unmodified through
+    `case_rendering.render_patch_case_files`'s generic
+    `update_foam_entry(..., edit["value"], ...)` would not reproduce
+    `apply_entry_overrides`'s bytes for a dimensioned/vector3/list kind --
+    see this task's report.
+    """
+    if request.mode != "clone_and_patch":
+        raise ValueError(
+            f"cardiacFoam's overrides workflow resolves clone_and_patch "
+            f"requests only, not {request.mode!r}"
+        )
+    targets = tuple(
+        {
+            "qualified_id": parameter.qualified_id,
+            "document": parameter.document,
+            "expanded_key_path": list(parameter.expanded_key_path()),
+            "value": _write_value_for_assignment(parameter),
+            "format": case_rendering.FORMAT,
+        }
+        for parameter in request.parameters
+    )
+    expected_effects = tuple(
+        f"set {parameter.qualified_id!r} in {parameter.document}"
+        for parameter in request.parameters
+    )
+    return ResolvedMutation(
+        request=request, targets=targets, preconditions=(),
+        expected_effects=expected_effects, semantic_owner_id=PLUGIN_ID,
+    )
+
+
+def merge_assignments(*groups: Sequence[ParameterAssignment]) -> tuple[ParameterAssignment, ...]:
+    """Merge several `ParameterAssignment` sequences that may address the
+    same slot, later group wins (Phase 3 Task 6).
+
+    `CaseMutationRequest` refuses two parameters occupying one slot outright
+    ("which one survives would depend on ordering") -- correct for a single
+    request, but several migrated tutorials (`single_cell` included) apply
+    more than one override set to the same document in sequence, the second
+    legitimately overwriting the first at a shared key exactly the way two
+    successive `apply_entry_overrides` calls already do. This collapses
+    such a sequence to its final per-slot value before a request is built,
+    preserving that "later call wins" behaviour instead of it becoming a
+    refusal.
+    """
+    by_slot: dict[str, ParameterAssignment] = {}
+    for group in groups:
+        for parameter in group:
+            by_slot[parameter.slot()] = parameter
+    return tuple(by_slot.values())
+
+
+def commit_case_overrides(
+    case_root: Path,
+    *,
+    parameters: Sequence[ParameterAssignment] = (),
+    extra_targets: Sequence[Mapping[str, Any]] = (),
+    extra_effects: Sequence[str] = (),
+    workflow: str,
+    requested_by: str,
+    driver_context: Any | None = None,
+    execution_env: Mapping[str, str] | None = None,
+) -> "Any | None":
+    """Commit one tutorial case's whole mutation through the case-write
+    channel, in a single transaction (Phase 3 Task 6 -- the shared shape
+    every migrated tutorial's `plan_case` builds on, the same role
+    `cardiaccore.workflows.overrides.apply_input_overrides_planned` plays
+    for that package).
+
+    ``parameters`` are both described AND written through
+    `resolve_patch_mutation` -- reached the same way
+    `dict_builder.build_and_launch` already reaches its own synthesis
+    resolver, `driver_context.capabilities.case_writer.resolve`/``.render``,
+    now that `cardiacfoam_plugin.CardiacFoamPlugin` declares
+    `clone_and_patch` support too (Phase 3 Task 6).
+
+    ``extra_targets``/``extra_effects`` carry a target `resolve_patch_mutation`
+    cannot build because it has no `ParameterAssignment` to build it from --
+    today, only `omnidriver.openfoam.utils.plan_block_mesh_resolution`'s
+    block-mesh rewrite (Phase 3 Task 4's own finding: a raw
+    `ResolvedMutation` target "needs no change to core.case_write at all").
+    Folded into the resolution returned by the generic dispatch above by
+    constructing a new `ResolvedMutation` that carries both -- `render_case_files`
+    only ever iterates `resolved.targets` and never assumes every one came
+    from a `ParameterAssignment`.
+
+    Returns ``None`` when there is nothing to write -- the same no-op
+    contract `apply_input_overrides_planned` gives: a mutation with no
+    parameters and no extra targets patches nothing. A `clone_and_patch`
+    `CaseMutationRequest` refuses an empty `parameters` tuple outright, so
+    this check must happen before one is constructed, not be left to that
+    refusal -- an empty override set is a legitimate no-op call, not a
+    caller error.
+    """
+    if not parameters and not extra_targets:
+        return None
+
+    from omnidriver.core.case_transaction import commit_case_write
+
+    case_root = Path(case_root)
+    if not case_root.is_absolute():
+        case_root = case_root.resolve()
+    if driver_context is None:
+        driver_context = own_driver_context()
+
+    request = CaseMutationRequest(
+        mode="clone_and_patch", case_root=case_root, adapter_id=PLUGIN_ID,
+        workflow=workflow, source_artifacts=(), parameters=tuple(parameters),
+        requested_by=requested_by,
+    )
+    resolved = driver_context.capabilities.case_writer.resolve(
+        request, driver_context=driver_context,
+    )
+    if extra_targets:
+        resolved = ResolvedMutation(
+            request=resolved.request,
+            targets=resolved.targets + tuple(extra_targets),
+            preconditions=resolved.preconditions,
+            expected_effects=resolved.expected_effects + tuple(extra_effects),
+            semantic_owner_id=resolved.semantic_owner_id,
+        )
+
+    with tempfile.TemporaryDirectory(prefix="omnidriver-cardiacfoam-render-") as scratch:
+        snapshot_root = Path(scratch)
+        rendered = driver_context.capabilities.case_writer.render(
+            resolved, snapshot_root=snapshot_root, driver_context=driver_context,
+            execution_env=execution_env,
+        )
+        preconditions = resolved.preconditions + case_rendering.patch_preconditions(
+            resolved, case_root=case_root, execution_env=execution_env,
+        )
+        identity = getattr(driver_context, "identity", None)
+        stack_identity = (
+            identity.capability_digest if identity is not None else "0" * 64
+        )
+        plan = CaseWritePlan(
+            request=request, files=rendered, preconditions=preconditions,
+            semantic_owner_id=resolved.semantic_owner_id,
+            stack_identity=stack_identity,
+            created_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        )
+
+    return commit_case_write(plan, driver_context=driver_context, execution_env=execution_env)
 
 
 def apply_electro_property_overrides(
