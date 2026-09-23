@@ -23,11 +23,14 @@ true -- are a separate concern from the bytes themselves, because
 ``CaseWriterCapability`` protocol. :func:`patch_preconditions` is the sibling
 an orchestrator calls directly (cardiacCore's ``workflows.overrides``, Task 8)
 to build the complete set: the document itself, every file it transitively
-includes, and the *absence* of any higher-priority ``#includeEtc`` candidate
+includes, the *absence* of any higher-priority ``#includeEtc`` candidate
 that would change which file a later run selects (audit finding F2 -- this is
-the entire reason F2 was sequenced before this task). Reuses
-:func:`effective_dictionary._inspect_source_closure` for that walk rather than
-re-deriving it.
+the entire reason F2 was sequenced before this task), and every environment
+key that selection depended on (``WM_PROJECT_DIR``, ``FOAM_ETC`` and
+siblings -- recorded, since F2, as ``environment`` preconditions rather than
+discarded; corrected 2026-09-23, R3 finding 3, which found them bound to `_`
+and dropped). Reuses :func:`effective_dictionary._inspect_source_closure` for
+that walk rather than re-deriving it.
 """
 from __future__ import annotations
 
@@ -238,19 +241,59 @@ def render_synthesis_case_files(
     return tuple(rendered)
 
 
+def _environment_preconditions(
+    keys: tuple[str, ...], environment: Mapping[str, str],
+) -> tuple[Precondition, ...]:
+    """One ``environment`` precondition per key the resolution depended on
+    (R3 finding 3, 2026-09-23).
+
+    A key present at planning time is recorded as a value precondition
+    (``digest`` of its value, ``must_be_absent=False``); a key absent at
+    planning time is recorded as an absence precondition (``digest=None``,
+    ``must_be_absent=True``) rather than skipped. Skipping it would lose the
+    dependency entirely: an absent ``FOAM_CONFIG_ETC`` (say) can change which
+    file ``findEtcFile`` selects exactly as much as a changed one can (the
+    same "absence is a dependency" principle audit finding F2 established for
+    include candidates -- a candidate that does not exist yet is still part
+    of what the resolution depends on staying true).
+    """
+    preconditions: list[Precondition] = []
+    for key in sorted(set(keys)):
+        value = environment.get(key)
+        if value is None:
+            preconditions.append(Precondition(
+                kind="environment", target=key, digest=None, must_be_absent=True,
+            ))
+        else:
+            preconditions.append(Precondition(
+                kind="environment", target=key, digest=_digest_bytes(value.encode()),
+                must_be_absent=False,
+            ))
+    return tuple(preconditions)
+
+
 def patch_preconditions(
     resolved: Any,
     *,
     case_root: Path,
     execution_env: Mapping[str, str] | None = None,
 ) -> tuple[Precondition, ...]:
-    """Every file a patch's rendering depends on, as preconditions.
+    """Every file -- and every environment value -- a patch's rendering
+    depends on, as preconditions.
 
     Reuses ``effective_dictionary._inspect_source_closure`` for the include
     set: after audit finding F2 it follows the real ``findEtcFile`` chain, and
     the *absent* higher-priority candidates it reports become ``absence``
     preconditions -- a file appearing at one of them changes which file the
     next run reads, which is exactly why F2 was sequenced before this task.
+
+    The closure also reports the environment keys resolution actually
+    consulted (``WM_PROJECT_DIR``, ``FOAM_ETC`` and siblings, recorded since
+    audit finding F2 precisely so this could be done) -- these become
+    ``environment`` preconditions (R3 finding 3, 2026-09-23) rather than
+    being bound to ``_`` and discarded: a changed ``WM_PROJECT_DIR`` between
+    planning and commit is exactly the kind of drift a patch that reads
+    ``#includeEtc`` needs to notice, and until now it could not.
     """
     case_root = Path(case_root)
     environment: Mapping[str, str] = (
@@ -260,11 +303,12 @@ def patch_preconditions(
     preconditions: list[Precondition] = []
     seen_files: set[str] = set()
     seen_absent: set[str] = set()
+    seen_env_keys: set[str] = set()
     for document in documents:
         dictionary = case_root / document
         if not dictionary.is_file():
             continue
-        inspected, absent_optional, _keys, _error = _inspect_source_closure(
+        inspected, absent_optional, environment_keys, _error = _inspect_source_closure(
             dictionary, environment,
         )
         dictionary_resolved = dictionary.resolve()
@@ -286,4 +330,7 @@ def patch_preconditions(
             preconditions.append(Precondition(
                 kind="absence", target=target, digest=None, must_be_absent=True,
             ))
+        new_env_keys = tuple(key for key in environment_keys if key not in seen_env_keys)
+        seen_env_keys.update(new_env_keys)
+        preconditions.extend(_environment_preconditions(new_env_keys, environment))
     return tuple(preconditions)

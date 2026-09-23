@@ -638,6 +638,29 @@ def test_changed_indirect_dependency(tmp_path):
         case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
 
 
+def test_changed_indirect_dependency_an_environment_value_too(tmp_path, monkeypatch):
+    """R3 finding 3 (2026-09-23): an indirect dependency is not only an
+    included file -- `openfoam.case_rendering.patch_preconditions` used to
+    call `_inspect_source_closure`, bind its `environment_keys` to `_keys`,
+    and discard them, though `"environment"` is a first-class
+    `PRECONDITION_KINDS` member. A changed `WM_PROJECT_DIR` between planning
+    and commit was invisible. Covered here at the `case_transaction` level
+    (the environment-precondition *check*); the openfoam-level *emission* of
+    these preconditions is covered in
+    `omnidriver-cardiaccore/tests/test_patch_through_the_channel.py`."""
+    monkeypatch.setenv("OMNIDRIVER_CONFORMANCE_ENV_KEY", "planned-value")
+    plan = _plan(
+        tmp_path, [_rendered("constant/a", b"new\n")],
+        preconditions=[case_write.Precondition(
+            kind="environment", target="OMNIDRIVER_CONFORMANCE_ENV_KEY",
+            digest=case_write._digest_bytes(b"planned-value"), must_be_absent=False,
+        )],
+    )
+    monkeypatch.setenv("OMNIDRIVER_CONFORMANCE_ENV_KEY", "changed-since-planning")
+    with pytest.raises(case_transaction.CaseTransactionError, match="OMNIDRIVER_CONFORMANCE_ENV_KEY"):
+        case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
+
+
 # --------------------------------------------------------------------------
 # 14: replay after an uncertain result
 # --------------------------------------------------------------------------

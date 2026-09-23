@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import uuid
 from pathlib import Path
 from typing import Any, Mapping
@@ -170,21 +171,63 @@ def _record_from_completed(payload: Mapping[str, Any]) -> CaseWriteRecord:
 # --------------------------------------------------------------------------
 
 
-def _check_preconditions(case_root: Path, preconditions: tuple) -> None:
+def _check_environment_precondition(
+    precondition: "Precondition", environment: Mapping[str, str],
+) -> None:
+    """Recheck one ``environment`` precondition against the environment the
+    commit is running under (R3 finding 3, 2026-09-23).
+
+    Recorded at planning time as either a value (``digest`` is that value's
+    digest, ``must_be_absent`` is ``False``) or an absence (``digest`` is
+    ``None``, ``must_be_absent`` is ``True``) -- there is no third state, so
+    an absent variable that later appears is exactly as much a change as a
+    present one whose value changed (the same "absence is a dependency"
+    principle audit finding F2 established for include candidates).
+    """
+    key = precondition.target
+    value = environment.get(key)
+    if precondition.must_be_absent:
+        if value is not None:
+            raise CaseTransactionError(
+                f"precondition on environment variable {key!r} expected it "
+                f"to be unset, but it is now {value!r}; the plan was made "
+                f"assuming this variable played no part in resolution"
+            )
+        return
+    if value is None:
+        raise CaseTransactionError(
+            f"precondition on environment variable {key!r} expected a value "
+            f"but it is now unset; the case changed since the plan was made"
+        )
+    actual = _digest_bytes(value.encode())
+    if actual != precondition.digest:
+        raise CaseTransactionError(
+            f"precondition on environment variable {key!r} failed: its "
+            f"value changed since the plan was made"
+        )
+
+
+def _check_preconditions(
+    case_root: Path, preconditions: tuple, *, environment: Mapping[str, str],
+) -> None:
     """Recheck every precondition against the filesystem, before any write.
 
     ``file`` and ``include`` are checked identically -- both name a
     case-relative path whose content must still match a digest; the
     distinction between them is provenance (why the plan cared), not
-    mechanics. ``source_artifact`` and ``environment`` are checked the same
-    generic way for now: no case in this batch exercises an artifact or
-    environment precondition whose target is not a case-relative file, and a
-    target that does not resolve to one simply reads as "missing" and refuses
-    -- fail-closed, not silently accepted. A real environment-value check
-    (reading ``os.environ`` rather than a file) is adapter-shaped work with no
-    consumer yet; noted here rather than half-built.
+    mechanics. ``source_artifact`` is checked the same generic way: no case
+    in this batch exercises one whose target is not a case-relative file, and
+    a target that does not resolve to one simply reads as "missing" and
+    refuses -- fail-closed, not silently accepted. ``environment`` is checked
+    against ``environment`` (the execution environment the commit runs
+    under, or ``os.environ`` when the caller supplied none), never the
+    filesystem -- implemented 2026-09-23 (R3 finding 3); see
+    :func:`_check_environment_precondition`.
     """
     for precondition in preconditions:
+        if precondition.kind == "environment":
+            _check_environment_precondition(precondition, environment)
+            continue
         target = Path(case_root) / precondition.target
         exists = target.is_file()
         if precondition.must_be_absent:
@@ -458,7 +501,8 @@ def commit_case_write(
                 f"recover_case_transaction() before committing another"
             )
 
-        _check_preconditions(case_root, plan.preconditions)
+        environment = execution_env if execution_env is not None else os.environ
+        _check_preconditions(case_root, plan.preconditions, environment=environment)
 
         targets = {
             rendered.path: _resolve_target(case_root, rendered.path)

@@ -257,3 +257,64 @@ def test_an_unreadable_precondition_target_is_wrapped_not_leaked(tmp_path):
             )
     finally:
         target.chmod(0o644)
+
+
+# --------------------------------------------------------------------------
+# R3 finding 3 (2026-09-23): an `environment` precondition, checked against
+# the execution environment rather than the filesystem.
+# --------------------------------------------------------------------------
+
+
+def test_an_environment_precondition_with_a_value_is_rechecked(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMNIDRIVER_TEST_ENV_KEY", "v1")
+    plan = _plan(
+        tmp_path, [_rendered("constant/a", b"new\n")],
+        preconditions=[case_write.Precondition(
+            kind="environment", target="OMNIDRIVER_TEST_ENV_KEY",
+            digest=case_write._digest_bytes(b"v1"), must_be_absent=False,
+        )],
+    )
+    case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
+    assert (tmp_path / "constant" / "a").exists()
+
+
+def test_an_environment_precondition_refuses_when_the_value_changed(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMNIDRIVER_TEST_ENV_KEY", "v2")
+    plan = _plan(
+        tmp_path, [_rendered("constant/a", b"new\n")],
+        preconditions=[case_write.Precondition(
+            kind="environment", target="OMNIDRIVER_TEST_ENV_KEY",
+            digest=case_write._digest_bytes(b"v1"), must_be_absent=False,
+        )],
+    )
+    with pytest.raises(case_transaction.CaseTransactionError, match="OMNIDRIVER_TEST_ENV_KEY"):
+        case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
+
+
+def test_an_absent_environment_precondition_refuses_when_the_variable_appears(tmp_path, monkeypatch):
+    """"Absence is a dependency" (audit finding F2's principle, extended to
+    environment preconditions here): a variable recorded as unset at
+    planning time must refuse the commit if it has since been set."""
+    monkeypatch.setenv("OMNIDRIVER_TEST_ENV_KEY", "surprise")
+    plan = _plan(
+        tmp_path, [_rendered("constant/a", b"new\n")],
+        preconditions=[case_write.Precondition(
+            kind="environment", target="OMNIDRIVER_TEST_ENV_KEY",
+            digest=None, must_be_absent=True,
+        )],
+    )
+    with pytest.raises(case_transaction.CaseTransactionError, match="OMNIDRIVER_TEST_ENV_KEY"):
+        case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
+
+
+def test_an_absent_environment_precondition_passes_when_it_stays_absent(tmp_path, monkeypatch):
+    monkeypatch.delenv("OMNIDRIVER_TEST_ENV_KEY", raising=False)
+    plan = _plan(
+        tmp_path, [_rendered("constant/a", b"new\n")],
+        preconditions=[case_write.Precondition(
+            kind="environment", target="OMNIDRIVER_TEST_ENV_KEY",
+            digest=None, must_be_absent=True,
+        )],
+    )
+    case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
+    assert (tmp_path / "constant" / "a").exists()

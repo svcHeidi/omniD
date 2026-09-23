@@ -181,6 +181,102 @@ def test_a_patched_document_carries_a_before_digest_precondition(tmp_path):
     assert any(p.target == "system/setCardiacConductivityDict" for p in file_preconditions)
 
 
+def test_environment_keys_become_environment_preconditions(tmp_path):
+    """R3 finding 3 (2026-09-23): `patch_preconditions` called
+    `_inspect_source_closure`, bound its `environment_keys` to `_keys`, and
+    never converted them into `environment`-kind `Precondition`s -- though
+    `"environment"` is a first-class member of `PRECONDITION_KINDS`. A
+    changed `WM_PROJECT_DIR` between planning and commit was invisible.
+
+    No real OpenFOAM install needed: `_inspect_source_closure` records the
+    environment keys an `#includeEtc` directive depends on before it even
+    attempts to resolve them, so they are present in `environment_keys`
+    regardless of whether resolution itself succeeds against the supplied
+    (here, fake) environment.
+    """
+    from omnidriver.core import case_write
+    from omnidriver.openfoam import case_rendering
+
+    case = _case_with_conductivity_dict(tmp_path)
+    dictionary = case / "system" / "setCardiacConductivityDict"
+    dictionary.write_text('#includeEtc "controlDict"\n' + dictionary.read_text())
+
+    context = _stack_context()
+    request = CaseMutationRequest(
+        mode="clone_and_patch", case_root=case, adapter_id="org.omnidriver.cardiaccore",
+        workflow="preprocessing", source_artifacts=(),
+        parameters=(ParameterAssignment(
+            qualified_id="$CARDIAC_CONDUCTIVITY.df", owner="org.omnidriver.cardiaccore",
+            document="system/setCardiacConductivityDict", key_path=("df",),
+            binding={}, value=0.42, value_kind="scalar", source="case",
+        ),),
+        requested_by="test",
+    )
+    resolved = context.capabilities.case_writer.resolve(request, driver_context=context)
+
+    environment = {"WM_PROJECT_DIR": "/opt/openfoam-v1", "HOME": "/home/tester"}
+    preconditions = case_rendering.patch_preconditions(
+        resolved, case_root=case, execution_env=environment,
+    )
+    env_preconditions = {p.target: p for p in preconditions if p.kind == "environment"}
+
+    # Present in the supplied environment: recorded as a value precondition.
+    assert env_preconditions["WM_PROJECT_DIR"].must_be_absent is False
+    assert env_preconditions["WM_PROJECT_DIR"].digest == case_write._digest_bytes(
+        b"/opt/openfoam-v1"
+    )
+
+    # Never set in the supplied environment: recorded as an absence, not
+    # skipped -- a key F2's closure names as read must fail this precondition
+    # if it later appears, not be silently invisible because it started
+    # unset.
+    assert "FOAM_API" in env_preconditions
+    assert env_preconditions["FOAM_API"].must_be_absent is True
+    assert env_preconditions["FOAM_API"].digest is None
+
+
+def test_a_changed_environment_value_refuses_the_commit(tmp_path):
+    """End-to-end: a value that changed between planning and commit refuses,
+    the same way a changed file would."""
+    from omnidriver.core import case_transaction, case_write
+    from omnidriver.openfoam import case_rendering
+
+    case = _case_with_conductivity_dict(tmp_path)
+    dictionary = case / "system" / "setCardiacConductivityDict"
+    dictionary.write_text('#includeEtc "controlDict"\n' + dictionary.read_text())
+
+    context = _stack_context()
+    request = CaseMutationRequest(
+        mode="clone_and_patch", case_root=case, adapter_id="org.omnidriver.cardiaccore",
+        workflow="preprocessing", source_artifacts=(),
+        parameters=(ParameterAssignment(
+            qualified_id="$CARDIAC_CONDUCTIVITY.df", owner="org.omnidriver.cardiaccore",
+            document="system/setCardiacConductivityDict", key_path=("df",),
+            binding={}, value=0.77, value_kind="scalar", source="case",
+        ),),
+        requested_by="test",
+    )
+    resolved = context.capabilities.case_writer.resolve(request, driver_context=context)
+    rendered = context.capabilities.case_writer.render(
+        resolved, snapshot_root=tmp_path / "scratch", driver_context=context, execution_env=None,
+    )
+    planning_env = {"WM_PROJECT_DIR": "/opt/openfoam-v1"}
+    preconditions = resolved.preconditions + case_rendering.patch_preconditions(
+        resolved, case_root=case, execution_env=planning_env,
+    )
+    plan = case_write.CaseWritePlan(
+        request=request, files=rendered, preconditions=preconditions,
+        semantic_owner_id=resolved.semantic_owner_id,
+        stack_identity=context.identity.capability_digest,
+        created_at="2026-09-23T00:00:00Z",
+    )
+    commit_env = {"WM_PROJECT_DIR": "/opt/openfoam-v2"}
+    with pytest.raises(case_transaction.CaseTransactionError, match="WM_PROJECT_DIR"):
+        case_transaction.commit_case_write(
+            plan, driver_context=context, execution_env=commit_env,
+        )
+
+
 def test_the_include_closure_is_exercised_against_the_native_install(tmp_path):
     """A dictionary reading `#includeEtc "controlDict"` pulls in a real etc
     file from the real OpenFOAM v2412 install at /Volumes/OpenFOAM-v2412,
