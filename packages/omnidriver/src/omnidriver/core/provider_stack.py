@@ -639,12 +639,16 @@ def _check_case_file_declarers(ordered) -> None:
             declared_by[path] = provider.plugin_id
 
 
-def _check_format_declarers(ordered) -> None:
-    """One declarer per rendered format, always.
+def _format_declarers(ordered) -> dict[str, str]:
+    """Map each rendered format to the one provider that declares it.
 
-    Two providers claiming `openfoam_dictionary` makes the bytes that reach
-    disk depend on composition order, which is the same defect
-    `_check_case_file_declarers` refuses for case files.
+    Raises the same way :func:`_check_format_declarers` used to: two
+    providers claiming `openfoam_dictionary` makes the bytes that reach disk
+    depend on composition order, which is the same defect
+    `_check_case_file_declarers` refuses for case files. Returning the map
+    (rather than discarding it, as the check-only version used to) is what
+    lets `renderer_for` answer with the real declarer instead of the stack's
+    most-specific provider -- see `_ComposedProvider._format_declared_by`.
     """
     declared_by: dict[str, str] = {}
     for provider in ordered:
@@ -658,6 +662,17 @@ def _check_format_declarers(ordered) -> None:
                     f"bytes on disk depend on composition order"
                 )
             declared_by[file_format] = provider.plugin_id
+    return declared_by
+
+
+def _check_format_declarers(ordered) -> None:
+    """One declarer per rendered format, always.
+
+    Two providers claiming `openfoam_dictionary` makes the bytes that reach
+    disk depend on composition order, which is the same defect
+    `_check_case_file_declarers` refuses for case files.
+    """
+    _format_declarers(ordered)
 
 
 def compose(ordered_providers):
@@ -681,8 +696,14 @@ def compose(ordered_providers):
     _check_exclusive_arity(ordered)
     _check_cross_member_pairs(ordered)
     _check_case_file_declarers(ordered)
-    _check_format_declarers(ordered)
-    return adapt_plugin_capabilities(_ComposedProvider(ordered))
+    format_declared_by = _format_declarers(ordered)
+    composed = _ComposedProvider(ordered)
+    # Attached after construction, not computed inside __init__: __init__ is
+    # also used by resolutions() below with a stack that has not passed the
+    # eager checks above yet, and duplicating the raise there would surface it
+    # at the wrong place. Here the format-declarer map is already known safe.
+    composed._format_declared_by = format_declared_by
+    return adapt_plugin_capabilities(composed)
 
 
 #: Capabilities whose resolved CONTENT is hashed into the stack digest. Spec

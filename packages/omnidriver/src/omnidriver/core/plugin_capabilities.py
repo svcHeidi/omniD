@@ -1731,6 +1731,19 @@ class _CaseWriterAdapter:
                 f"formats are {sorted(declared)}. A file whose format nobody "
                 f"renders stops the plan rather than being dropped from it"
             )
+        # `self.plugin` is a `_ComposedProvider` for a composed stack, whose
+        # own `.plugin_id` is the most-specific provider -- not necessarily
+        # the one that declared `file_format`. `provider_stack.compose`
+        # attaches the real per-format map as instance state (not a plugin
+        # hook, so read via `vars()` rather than `getattr(self.plugin, ...)`
+        # -- the latter pattern is reserved for probing the plugin protocol,
+        # see test_every_probed_hook_is_declared_somewhere). A single,
+        # uncomposed plugin (as `adapt_plugin_capabilities` is also called
+        # directly in tests) carries no such map and is trivially its own
+        # declarer.
+        declared_by = vars(self.plugin).get("_format_declared_by")
+        if declared_by is not None:
+            return declared_by[file_format]
         return self.plugin.plugin_id
 
     def render(

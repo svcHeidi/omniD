@@ -65,6 +65,38 @@ def test_the_declared_renderer_is_the_one_asked():
     assert capabilities.case_writer.renderer_for("openfoam_dictionary") == "org.format"
 
 
+class _SemanticOnly:
+    """A more-specific provider that renders nothing -- only resolves."""
+
+    plugin_id = "org.semantic"
+
+    def get_profile(self):
+        return _Profile()
+
+    def resolve_case_mutation(self, request, *, driver_context):
+        return case_write.ResolvedMutation(
+            request=request, targets=(), preconditions=(),
+            expected_effects=(), semantic_owner_id=self.plugin_id,
+        )
+
+
+def test_the_declared_renderer_is_the_one_asked_in_a_composed_stack():
+    """`_ComposedProvider.plugin_id` is the most-specific provider's id, which
+    is not necessarily who declared the format being asked about.
+
+    Reproduces the bug verbatim: a two-provider stack ``['org.format',
+    'org.semantic']`` where `org.format` declares `openfoam_dictionary` and
+    `org.semantic` is the more specific provider (last in stack order) but
+    renders nothing. Before the fix, `renderer_for` returned
+    `self.plugin.plugin_id`, which is the composed provider's -- i.e.
+    `org.semantic` -- regardless of who actually declared the format.
+    """
+    capabilities = provider_stack.compose(
+        provider_stack.order_providers([_Renderer(), _SemanticOnly()])
+    )
+    assert capabilities.case_writer.renderer_for("openfoam_dictionary") == "org.format"
+
+
 def test_resolution_must_not_touch_the_filesystem(tmp_path, monkeypatch):
     """A dry run is non-destructive only if resolution is pure. The adapter
     that resolves is the one with a case in front of it, so this is enforced,
