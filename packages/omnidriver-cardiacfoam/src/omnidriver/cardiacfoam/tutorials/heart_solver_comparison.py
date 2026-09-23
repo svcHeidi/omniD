@@ -46,8 +46,6 @@
 
 from __future__ import annotations
 
-import shutil
-import subprocess
 from functools import partial
 from pathlib import Path
 from typing import Final
@@ -55,6 +53,8 @@ from typing import Final
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 from omnidriver.openfoam.parallel_execution import solve_steps
 from omnidriver.core.specs.paths import resolve_spec_paths
+from omnidriver.cardiacfoam.overrides import PLUGIN_ID, commit_case_overrides
+from omnidriver.openfoam.utils import plan_verbatim_content
 
 # The owner's four named studies -- each key is a directory name under
 # <case_root>/setup/solverVariants/. Adding a fifth study means adding a
@@ -91,12 +91,64 @@ def _build_cases(*, solver_variant: str) -> list[CaseConfig]:
     return [CaseConfig(case_id=solver_variant, params={"solver_variant": solver_variant})]
 
 
+#: Where each template file lands under `case_root`. `electroProperties` is
+#: the only one under `constant/`; the other three are under `system/` --
+#: matching `_apply_case`'s own pre-Task-7 hardcoded destinations exactly.
+_DESTINATION_RELPATH: Final[dict[str, str]] = {
+    "electroProperties": "constant/electroProperties",
+    "fvSchemes": "system/fvSchemes",
+    "fvSolution": "system/fvSolution",
+    "controlDict": "system/controlDict",
+}
+
+
 def _apply_case(case_root: Path, case: CaseConfig) -> None:
+    """`TutorialSpec.apply_case` -- thin wrapper over `_plan_case` (Phase 3
+    Task 7, following Task 6's own convention for the other eleven
+    tutorials). `TutorialSpec.apply_case` has no default
+    (`core/runtime/models.py`), so `make_spec` still supplies one regardless
+    of `plan_case`; `invoke_case_mutation` prefers `plan_case` unconditionally
+    once a spec supplies one, so this exists only for a caller that still
+    invokes `apply_case` directly (e.g. this tutorial's own characterization
+    test).
+    """
+    _plan_case(case_root, case)
+
+
+def _plan_case(case_root: Path, case: CaseConfig):
+    """`TutorialSpec.plan_case` (Phase 3 Task 7).
+
+    Four whole template files, swapped in verbatim -- no key/value edit at
+    all. Classified as a `RenderedFile` (`plan_verbatim_content`), not a
+    source artifact: see that function's own docstring for the argument from
+    how these documents are used downstream (cardiacFoam reads each one
+    exactly as it reads any other tutorial's `electroProperties`/
+    `controlDict`, so they belong in the channel's own audit trail, not
+    referenced from outside it). `source_artifacts` names which
+    solver-variant template supplied the bytes, since this request assigns no
+    `ParameterAssignment` for `resolve_patch_mutation` to describe otherwise
+    -- see `CaseMutationRequest`'s 2026-09-23 (Task 7) correction.
+    """
     solver_variant = str(case.params["solver_variant"])
     template_dir = _template_dir(case_root, solver_variant)
-    shutil.copy(template_dir / "electroProperties", case_root / "constant" / "electroProperties")
-    for name in ("fvSchemes", "fvSolution", "controlDict"):
-        shutil.copy(template_dir / name, case_root / "system" / name)
+    targets = tuple(
+        plan_verbatim_content(
+            _DESTINATION_RELPATH[name],
+            (template_dir / name).read_text(encoding="utf-8"),
+        )
+        for name in _TEMPLATE_FILES
+    )
+    return commit_case_overrides(
+        case_root,
+        extra_targets=targets,
+        extra_effects=tuple(
+            f"replace {relpath} with the {solver_variant!r} template"
+            for relpath in _DESTINATION_RELPATH.values()
+        ),
+        source_artifacts=(f"heart_solver_comparison.solverVariants:{solver_variant}",),
+        workflow="heart_solver_comparison",
+        requested_by="cardiacfoam.tutorials.heart_solver_comparison",
+    )
 
 
 def make_spec(
@@ -133,6 +185,7 @@ def make_spec(
         output_dir=output_dir,
         build_cases=partial(_build_cases, solver_variant=solver_variant),
         apply_case=_apply_case,
+        plan_case=_plan_case,
         metadata={
             "notes": "Solver-stack comparison over one shared real heart anatomy.",
             "workflow_dag": {"steps": steps},

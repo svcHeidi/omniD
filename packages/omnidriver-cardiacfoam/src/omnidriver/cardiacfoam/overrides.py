@@ -748,6 +748,7 @@ def commit_case_overrides(
     parameters: Sequence[ParameterAssignment] = (),
     extra_targets: Sequence[Mapping[str, Any]] = (),
     extra_effects: Sequence[str] = (),
+    source_artifacts: Sequence[str] = (),
     workflow: str,
     requested_by: str,
     driver_context: Any | None = None,
@@ -768,21 +769,32 @@ def commit_case_overrides(
 
     ``extra_targets``/``extra_effects`` carry a target `resolve_patch_mutation`
     cannot build because it has no `ParameterAssignment` to build it from --
-    today, only `omnidriver.openfoam.utils.plan_block_mesh_resolution`'s
-    block-mesh rewrite (Phase 3 Task 4's own finding: a raw
-    `ResolvedMutation` target "needs no change to core.case_write at all").
-    Folded into the resolution returned by the generic dispatch above by
-    constructing a new `ResolvedMutation` that carries both -- `render_case_files`
-    only ever iterates `resolved.targets` and never assumes every one came
-    from a `ParameterAssignment`.
+    `omnidriver.openfoam.utils.plan_block_mesh_resolution`'s block-mesh
+    rewrite (Phase 3 Task 4) and `plan_verbatim_content`'s whole-document
+    content target (Phase 3 Task 7, `heart_solver_comparison`'s own shape:
+    zero parameters, all content). Folded into the resolution returned by the
+    generic dispatch above by constructing a new `ResolvedMutation` that
+    carries both -- `render_case_files` only ever iterates `resolved.targets`
+    and never assumes every one came from a `ParameterAssignment`.
+
+    ``source_artifacts`` (Phase 3 Task 7) declares what a zero-parameter
+    request actually did, threaded straight into the `CaseMutationRequest` --
+    see that type's 2026-09-23 correction for why a `clone_and_patch` request
+    with no parameters now needs one of these instead. Empty by default,
+    matching every pre-Task-7 caller's behaviour exactly (they all pass
+    parameters).
 
     Returns ``None`` when there is nothing to write -- the same no-op
     contract `apply_input_overrides_planned` gives: a mutation with no
-    parameters and no extra targets patches nothing. A `clone_and_patch`
-    `CaseMutationRequest` refuses an empty `parameters` tuple outright, so
-    this check must happen before one is constructed, not be left to that
-    refusal -- an empty override set is a legitimate no-op call, not a
-    caller error.
+    parameters and no extra targets patches nothing. **Corrected 2026-09-23
+    (Phase 3 Task 7):** a `clone_and_patch` `CaseMutationRequest` no longer
+    refuses an empty `parameters` tuple outright by itself -- it now also
+    accepts one accompanied by a non-empty `source_artifacts` -- but the
+    early no-op check below is unaffected: `source_artifacts` with no
+    `extra_targets` at all would build a `CaseWritePlan` with zero rendered
+    files, which `CaseWritePlan.__post_init__` itself refuses ("a plan must
+    render at least one file"); this function reports that as the same
+    legitimate no-op instead of an avoidable crash.
     """
     if not parameters and not extra_targets:
         return None
@@ -797,8 +809,8 @@ def commit_case_overrides(
 
     request = CaseMutationRequest(
         mode="clone_and_patch", case_root=case_root, adapter_id=PLUGIN_ID,
-        workflow=workflow, source_artifacts=(), parameters=tuple(parameters),
-        requested_by=requested_by,
+        workflow=workflow, source_artifacts=tuple(source_artifacts),
+        parameters=tuple(parameters), requested_by=requested_by,
     )
     resolved = driver_context.capabilities.case_writer.resolve(
         request, driver_context=driver_context,
