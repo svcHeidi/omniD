@@ -165,12 +165,17 @@ def test_an_unsupported_mode_is_refused_by_the_adapter_not_the_type():
         capabilities.case_writer.resolve(request, driver_context=object())
 
 
-def test_an_adapter_with_no_mutation_modes_hook_supports_every_mode():
-    """Absent get_supported_mutation_modes -> every MUTATION_MODES member, per
-    the seam's documented default."""
+def test_a_resolver_with_no_mutation_modes_hook_is_refused_by_name():
+    """R2 finding 0, corrected 2026-09-23. This test used to assert the
+    defect it now guards against: "Absent get_supported_mutation_modes ->
+    every MUTATION_MODES member". That default was the root cause -- three
+    installed providers, implementing no resolver hooks either, ended up
+    reporting support for every mode while implementing none of them. A
+    provider that implements a resolver but not the modes hook has an
+    undeclared support surface and is refused by name instead."""
 
-    class _AllModes(_Renderer):
-        plugin_id = "org.all_modes"
+    class _UndeclaredModes(_Renderer):
+        plugin_id = "org.undeclared_modes"
 
         def resolve_case_mutation(self, request, *, driver_context):
             return case_write.ResolvedMutation(
@@ -178,8 +183,25 @@ def test_an_adapter_with_no_mutation_modes_hook_supports_every_mode():
                 expected_effects=(), semantic_owner_id=self.plugin_id,
             )
 
-    capabilities = plugin_capabilities.adapt_plugin_capabilities(_AllModes())
-    assert capabilities.case_writer.supported_modes() == case_write.MUTATION_MODES
+    capabilities = plugin_capabilities.adapt_plugin_capabilities(_UndeclaredModes())
+    with pytest.raises(ValueError, match="org.undeclared_modes"):
+        capabilities.case_writer.supported_modes()
+
+
+def test_a_provider_with_neither_hook_supports_no_modes():
+    """Both absent -> `frozenset()`, not a raise: nothing here resolves, so
+    an empty set changes nothing -- `resolve()` already refuses this
+    provider by name (no `resolve_case_mutation`) before the mode check is
+    ever reached."""
+
+    class _Bystander:
+        plugin_id = "org.bystander"
+
+        def get_profile(self):
+            return _Profile()
+
+    capabilities = plugin_capabilities.adapt_plugin_capabilities(_Bystander())
+    assert capabilities.case_writer.supported_modes() == frozenset()
 
 
 def test_an_adapter_with_no_render_hook_refuses_by_name():

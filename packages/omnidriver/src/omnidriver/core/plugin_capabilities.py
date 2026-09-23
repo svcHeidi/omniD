@@ -853,6 +853,19 @@ class CaseWriterCapability(Protocol):
     that is not the one requested, so an adapter without these hooks is refused
     by name.
 
+    **Corrected 2026-09-23 (R2 finding 0):** ``get_supported_mutation_modes``
+    used to say ``optional-neutral`` here, with a fallback of "every mode the
+    adapter's ``resolve_case_mutation`` accepts". That default is exactly the
+    root cause: three installed providers, implementing no
+    ``resolve_case_mutation`` hook either, ended up reporting support for
+    every mode while implementing none of them. The real behaviour is
+    conditional and, once resolved, refusing rather than neutral: absent
+    alongside a resolver -> raise, naming the provider (its supported modes
+    are undeclared); absent alongside no resolver -> ``frozenset()``, which
+    changes nothing because ``resolve()`` already refuses a hook-less
+    provider by name before the mode check is ever reached. See
+    ``_CaseWriterAdapter.supported_modes`` for the three-state logic.
+
     No consumer yet (2026-09-22): the real one, ``case_transaction.py``'s
     ``commit_case_write``, is Phase 2 Task 5, a later batch in this plan.
     Update ``:consumed-by:`` to name it once that module lands and calls
@@ -861,7 +874,7 @@ class CaseWriterCapability(Protocol):
     :adapts: resolve_case_mutation, get_supported_mutation_modes, get_rendered_formats, render_case_files
     :consumed-by: none
     :fallback: none
-    :status: resolve_case_mutation=optional-refusing, get_supported_mutation_modes=optional-neutral, get_rendered_formats=optional-neutral, render_case_files=optional-refusing
+    :status: resolve_case_mutation=optional-refusing, get_supported_mutation_modes=optional-refusing, get_rendered_formats=optional-neutral, render_case_files=optional-refusing
     """
 
     def resolve(self, request: Any, *, driver_context: Any) -> Any: ...
@@ -1698,12 +1711,42 @@ class _CaseWriterAdapter:
     plugin: "SolverPlugin"
 
     def supported_modes(self) -> "frozenset[str]":
-        hook = getattr(self.plugin, "get_supported_mutation_modes", None)
-        if callable(hook):
-            return frozenset(hook())
-        from .case_write import MUTATION_MODES
+        """Which creation modes this provider supports.
 
-        return MUTATION_MODES
+        Three states (R2 finding 0 -- corrected 2026-09-23; the plain
+        ``frozenset()`` fix considered and rejected below):
+
+        - the modes hook is present -> its declared set.
+        - the modes hook is absent but a resolver is present -> raise, naming
+          the provider: an absent-but-resolving provider has NOT declared
+          which modes it supports, and defaulting to "every mode" is exactly
+          how three installed providers, implementing no resolver hooks
+          either, ended up silently claiming to support all of them.
+        - both are absent -> ``frozenset()``. Nothing here resolves, so an
+          empty set changes nothing: ``resolve()`` below already refuses this
+          provider by name before it would ever consult ``supported_modes()``.
+
+        A bare ``frozenset()`` for the middle case would have been the wrong
+        fix on its own: ``resolve()`` checks for the ``resolve_case_mutation``
+        hook FIRST and refuses by name when it is absent, so a hook-less
+        provider never reaches the mode check at all -- and a resolving
+        provider that silently supported zero modes would have its every
+        request refused with no indication that the omission, not a genuine
+        unsupported mode, was the cause.
+        """
+        modes_hook = getattr(self.plugin, "get_supported_mutation_modes", None)
+        if callable(modes_hook):
+            return frozenset(modes_hook())
+        if callable(getattr(self.plugin, "resolve_case_mutation", None)):
+            raise ValueError(
+                f"provider {self.plugin.plugin_id!r} implements "
+                f"resolve_case_mutation() but declares no "
+                f"get_supported_mutation_modes(); which modes it supports is "
+                f"undeclared, and defaulting to every mode is how a "
+                f"provider implementing no resolver hooks at all came to "
+                f"claim it supported all of them"
+            )
+        return frozenset()
 
     def resolve(self, request: Any, *, driver_context: Any) -> Any:
         hook = getattr(self.plugin, "resolve_case_mutation", None)

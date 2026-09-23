@@ -593,7 +593,15 @@ class SolverPluginOptionalHooks(Protocol):
 
         Adapters differ and are meant to: cardiacCore preprocessing patches
         declared dictionaries, cardiacFoam synthesizes a case from a catalog.
-        Absent -> every mode the adapter's ``resolve_case_mutation`` accepts."""
+
+        **Corrected 2026-09-23 (R2 finding 0):** this used to say "Absent ->
+        every mode the adapter's ``resolve_case_mutation`` accepts" -- a
+        promise core cannot keep, since nothing here introspects what a
+        resolver hook accepts, and it was the root cause of three installed
+        providers, implementing no resolver either, reporting support for
+        every mode. Absent alongside ``resolve_case_mutation`` -> refused by
+        name (an implemented resolver whose supported modes are undeclared).
+        Absent alongside no ``resolve_case_mutation`` -> no modes."""
         ...
 
     def get_rendered_formats(self) -> "frozenset[str]":
