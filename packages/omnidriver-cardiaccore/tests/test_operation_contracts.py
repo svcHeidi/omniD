@@ -46,7 +46,7 @@ def test_guidance_is_readable_and_catalogs_are_independent_snapshots():
         assert set(record["required_catalogs"]) <= catalogs.keys()
     with pytest.raises(ValueError, match="Unknown"):
         reader("../../README")
-    operation_id = "cardiaccore.purkinje.seed_proposal.v1"
+    operation_id = "cardiaccore.purkinje.coverage_observation.v1"
     catalogs["cardiaccore_operations"][operation_id]["status"]["array_api"] = "broken"
     fresh = plugin.get_named_catalogs()
     assert fresh["cardiaccore_operations"][operation_id]["status"]["array_api"] == "available"
@@ -71,74 +71,6 @@ def test_appended_vtu_does_not_silently_become_an_empty_selection(tmp_path, monk
                     '</CellData></Piece></UnstructuredGrid></VTKFile>')
     monkeypatch.setattr(vtu_selection, "_read_with_pyvista", lambda path: {"GlobalCellIds": [9, 2]})
     assert vtu_selection.read_cell_ids(path) == ("GlobalCellIds", [2, 9])
-
-
-def test_seed_writer_updates_only_reviewed_native_entries(tmp_path):
-    from omnidriver.cardiaccore.operations.purkinje import write_seed_dictionary
-
-    path = tmp_path / "generatePurkinjeTreeDict"
-    original = """hisBundleSeed (0 0 0);
-
-lv
-{
-    seed (1 1 1);
-    lineEnd (2 1 1);
-    initLength 30;
-}
-
-rv
-{
-    seed (-1 -1 -1);
-    lineEnd (-2 -1 -1);
-    initLength 30;
-}
-"""
-    path.write_text(original)
-    proposal = {
-        "his_bundle_seed": (10, 11, 12),
-        "lv_seed": (1, 2, 3),
-        "lv_line_end": (2, 2, 3),
-        "rv_seed": (-1, -2, -3),
-        "rv_line_end": (-2, -2, -3),
-    }
-
-    write_seed_dictionary(path, proposal)
-    updated = path.read_text()
-    assert "hisBundleSeed    (10.0 11.0 12.0);" in updated
-    assert "seed    (1.0 2.0 3.0);" in updated
-    assert "lineEnd    (2.0 2.0 3.0);" in updated
-    assert "initLength 30;" in updated
-
-
-def test_seed_writer_rejects_incomplete_or_degenerate_proposals_without_writing(tmp_path):
-    from omnidriver.cardiaccore.operations.purkinje import write_seed_dictionary
-
-    path = tmp_path / "generatePurkinjeTreeDict"
-    original = """hisBundleSeed (0 0 0);
-lv
-{
-    seed (1 1 1);
-    lineEnd (2 1 1);
-}
-rv
-{
-    seed (-1 -1 -1);
-    lineEnd (-2 -1 -1);
-}
-"""
-    path.write_text(original)
-    with pytest.raises(ValueError, match="exactly"):
-        write_seed_dictionary(path, {})
-    assert path.read_text() == original
-
-    degenerate = {
-        "his_bundle_seed": (0, 0, 0), "lv_seed": (1, 1, 1),
-        "lv_line_end": (1, 1, 1), "rv_seed": (-1, -1, -1),
-        "rv_line_end": (-2, -1, -1),
-    }
-    with pytest.raises(ValueError, match="lv.lineEnd"):
-        write_seed_dictionary(path, degenerate)
-    assert path.read_text() == original
 
 
 @pytest.mark.parametrize("ids", [[-1], [1.5], [float("nan")]])

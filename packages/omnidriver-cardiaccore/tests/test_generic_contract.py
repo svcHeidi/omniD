@@ -32,8 +32,8 @@ def test_plugin_has_a_valid_context() -> None:
 def test_plugin_exposes_agent_guidance_catalogs() -> None:
     catalogs = CardiacCorePlugin().get_named_catalogs()
     assert catalogs["cardiaccore_field_conventions"]["cobiveco_raw"]["tm"] == "0=epicardium, 1=endocardium"
-    assert catalogs["cardiaccore_python_utilities"]["purkinje_seed_proposal"]["status"] == "supported_optional"
-    assert catalogs["cardiaccore_operations"]["cardiaccore.purkinje.seed_proposal.v1"]["status"]["array_api"] == "available"
+    assert catalogs["cardiaccore_python_utilities"]["purkinje_coverage"]["status"] == "supported_array_method"
+    assert catalogs["cardiaccore_operations"]["cardiaccore.purkinje.coverage_observation.v1"]["status"]["array_api"] == "available"
     conventions = catalogs["cardiaccore_field_conventions"]
     assert "coordinatesConventionDict" in conventions["authority"]
     assert set(conventions["coordinate_system_effects"]) == {"uvc", "cobiveco"}

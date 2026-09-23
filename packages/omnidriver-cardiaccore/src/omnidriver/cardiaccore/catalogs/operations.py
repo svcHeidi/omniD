@@ -96,56 +96,6 @@ _add(
 )
 
 _add(
-    "cardiaccore.purkinje.seed_proposal.v1",
-    "Propose Purkinje roots and apex-ward line ends from explicitly prepared native surfaces.",
-    "Native LVEndoFaces/RVEndoFaces with aligned AHA/longitudinal arrays; not raw-coordinate surface reconstruction.",
-    {"propose": _entry("purkinje", "deduce_seeds",
-        {"points": "Finite Nx3 boundary points in one length unit.", "aha_segment": "Length-N labels.",
-         "longitudinal": "Length-N vector.", "lv_endocardial_mask": "Length-N boolean mask.",
-         "rv_endocardial_mask": "Length-N boolean mask."},
-        "lv_seed, rv_seed, his_bundle_seed, lv_line_end and rv_line_end coordinate tuples."),
-        "write_seeds": _entry("purkinje", "write_seed_dictionary",
-            {"dictionary": "Existing Path to system/generatePurkinjeTreeDict in a staged case.",
-             "proposal": "Complete mapping returned by deduce_seeds: five finite length-3 coordinates."},
-            "None",
-            "Updates only hisBundleSeed, lv.seed, lv.lineEnd, rv.seed and rv.lineEnd; preserves all other native settings."),
-        "read_surfaces": _entry("purkinje", "read_native_seed_surface_fields",
-            {"lv_surface": "Path to the native LVEndoFaces foamToVTK export.",
-             "rv_surface": "Path to the native RVEndoFaces foamToVTK export.",
-             "longitudinal_field": "Array name the case declares for its longitudinal coordinate; defaults to the canonical name.",
-             "angle_field": "Array name for the short-axis angle; None to omit it."},
-            "Aligned points, AHA labels, longitudinal values, the short-axis angle, and LV/RV surface masks for deduce_seeds.",
-            "Reads only the supplied VTK files; does not mutate the case."),
-        "read_declared": _entry("purkinje", "read_seed_dictionary",
-            {"dictionary": "Path to system/generatePurkinjeTreeDict in a staged case."},
-            "The five seed coordinates the case declares, as read from the dictionary.",
-            "Reads only; the inverse of write_seeds, for checking a hand-placed root."),
-        "placement_receipt": _entry("purkinje", "seed_area_placement_report",
-            {"proposal": "Five seed coordinates: either read_declared's or deduce_seeds'.",
-             "fields": "Aligned fields returned by read_native_seed_surface_fields."},
-            "Per ventricle: distance to the declared basal-septal area, the AHA segment "
-            "the root actually lands in, distance to the nearest surface point, the "
-            "declared candidate count, and whether the root coincides with a candidate.",
-            "Observations, not a score: the contract states no threshold for distance, "
-            "so a distant root is a subject for review rather than a failure declared here."),
-        "deduce_write_native": _entry("purkinje", "deduce_and_write_native_seed_dictionary",
-            {"lv_surface": "Path to an explicitly exported native LVEndoFaces surface.",
-             "rv_surface": "Path to an explicitly exported native RVEndoFaces surface.",
-             "dictionary": "Path to system/generatePurkinjeTreeDict in a staged case."},
-            "Seed proposal and placement receipt after updating only the five reviewed dictionary entries.",
-            "The native generator has no surface-preparation-only mode: exports come from an explicit prior run, then the caller performs the next tree run."),
-    }, "propose", native_reader="available_optional",
-    preconditions=["Sample native surfaces onto the same points.",
-                   "Use the method assumptions in cardiaccore_tree_validation.seed_placement.",
-                   "A domain decision establishes whether this proposal method applies to the study."],
-    failures={"invalid_input": "Raises on mismatched lengths, absent septal candidates or unavailable local gradient. Array preparation remains the caller's responsibility.",
-              "missing_capability": "Reading supplied native surface exports requires the optional vtk extra; exporting the face sets is an explicit prerequisite. The separate write_seeds entrypoint updates the staged dictionary.",
-              "scientific_interpretation": "Proposal only; does not establish anatomical or electrophysiological acceptance."},
-    evidence=["Native generatePurkinjeTree surface conventions and the adapter's packaged seed-proposal method."],
-    example="from omnidriver.cardiaccore.operations.purkinje import deduce_seeds\nproposal = deduce_seeds(points, aha, longitudinal, lv_mask, rv_mask)",
-)
-
-_add(
     "cardiaccore.purkinje.coverage_observation.v1",
     "Report terminal occupancy and the existing baseline's coverage categories.",
     "Prepared terminal AHA labels and optional native tree-zone/endocardial labels.",
@@ -274,7 +224,6 @@ _add(
 # Retain existing discovery labels, with all content derived from OPERATIONS.
 _UTILITY_IDS = {
     "electrode_normalization": "cardiaccore.electrodes.reference_frame.v1",
-    "purkinje_seed_proposal": "cardiaccore.purkinje.seed_proposal.v1",
     "purkinje_coverage": "cardiaccore.purkinje.coverage_observation.v1",
     "coordinate_convention": "cardiaccore.coordinates.convention.v1",
     "coordinate_ring_closure": "cardiaccore.coordinates.ring_closure.v1",

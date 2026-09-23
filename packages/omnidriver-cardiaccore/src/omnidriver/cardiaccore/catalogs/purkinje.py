@@ -1,15 +1,15 @@
-"""Declared method constants and coverage policy; no analysis is run here."""
+"""Declared method constants and coverage policy; no analysis is run here.
+
+Purkinje seed placement is not declared here: it lives in
+cardiacCoreStandalone's own scripts/place_purkinje_seeds.py. An earlier
+AHA-segment-based seed-candidate declaration (LV_SEPTAL_AHA_SEGMENTS,
+RV_BASAL_SEPTAL_AHA_SEGMENT, APICAL_STEP_NEIGHBOURS, and
+TREE_VALIDATION_CONTRACT's seed_placement key) was removed 2026-09-23 at
+the user's explicit instruction, after that method was tried and rejected
+in cardiacCoreStandalone. Do not reintroduce it.
+"""
 
 from typing import Any
-
-# Native ``generatePurkinjeTree`` face-set preparation identifies the actual
-# growable LV/RV endocardial surfaces.  Seed selection consumes those surfaces
-# plus the C++-generated AHA labels; it does not re-derive a septum from raw
-# coordinate fields.  This matters for CObiveco's hard binary chamber tag,
-# where the historical recovered-septum UVC heuristic selects LV epicardium.
-LV_SEPTAL_AHA_SEGMENTS = (2, 3)
-RV_BASAL_SEPTAL_AHA_SEGMENT = 21
-APICAL_STEP_NEIGHBOURS = 24
 
 LV_SEPTAL_TO_RV_SEPTAL_CODE = {2: 21, 3: 21, 8: 25, 9: 25, 14: 29}
 
@@ -54,20 +54,6 @@ TREE_VALIDATION_CONTRACT: dict[str, Any] = {
     "id": "cardiaccore.purkinje.baseline.v1",
     "version": 1,
     "scope": "Preserved adapter method assumptions and coverage categories; not universal scientific acceptance.",
-    "seed_placement": {
-        "lv": {
-            "anatomy": "basal LV septal endocardium",
-            "aha_segments": LV_SEPTAL_AHA_SEGMENTS,
-            "surface": "native LVEndoFaces",
-        },
-        "rv": {
-            "anatomy": "basal RV septal endocardium",
-            "aha_segments": (RV_BASAL_SEPTAL_AHA_SEGMENT,),
-            "surface": "native RVEndoFaces, including recovered septum",
-        },
-        "his_bundle": "midpoint of the LV and RV roots",
-        "line_end": "local apex-ward direction inferred from the longitudinal coordinate field",
-    },
     "baseline_coverage": {
         "required_if_endocardium_exists": {
             "lv": tuple(range(7, 18)),
