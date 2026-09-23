@@ -97,15 +97,18 @@ def provision_mesh(
     a combination the real run would refuse. Only the filesystem effect below
     is skipped, so a dry run reports what it would do without writing a mesh.
 
-    **Known clobber risk, not fixed here (R3 finding 8, 2026-09-23):** the
-    `MESHLESS_SOLVERS` skip guard below is ``all(...)`` over the five
+    **Fixed 2026-09-23 (R3 finding 8, Task 12, batch P2-H):** the
+    `MESHLESS_SOLVERS` skip guard used to be ``all(...)`` over the five
     polyMesh files, so a *partially* present hand-authored mesh (some but not
-    all five) fails the guard and every one of the five is silently
-    overwritten. This function bypasses `commit_case_write` entirely, so
-    there is no precondition to refuse that the way the write channel would.
-    Migrating this branch onto the channel -- where a partial-mesh
-    precondition could refuse instead of overwriting -- is Task 12, not this
-    batch.
+    all five) failed the guard and every one of the five was silently
+    overwritten. A partial set now raises instead, for every caller of this
+    function -- `build_and_launch` no longer calls this branch at all (its
+    meshless-solver mesh is folded into `dict_builder.build_case`'s
+    `CaseWritePlan` and committed through `commit_case_write`, which has its
+    own precondition-based conflict detection); `provision_mesh` itself keeps
+    this direct-copy strategy for its other caller,
+    `ionic_catalog_verification.py`, which does not go through
+    `build_and_launch`.
     """
     if myocardium_solver in MESHLESS_SOLVERS:
         if dx_m is not None:
@@ -114,7 +117,19 @@ def provision_mesh(
                 "(no spatial mesh -- it has no geometry for dx to resolve)."
             )
         poly_mesh_dir = case_dir / "constant" / "polyMesh"
-        already_present = all((poly_mesh_dir / name).exists() for name in _POLYMESH_FILES)
+        present = [name for name in _POLYMESH_FILES if (poly_mesh_dir / name).exists()]
+        if present and len(present) != len(_POLYMESH_FILES):
+            missing = [name for name in _POLYMESH_FILES if name not in present]
+            raise ValueError(
+                f"{poly_mesh_dir} has a partially authored mesh (present: "
+                f"{present}, missing: {missing}); a previous version of this "
+                f"function silently overwrote all five with the bundled "
+                f"fixture whenever even one was missing (R3 finding 8) -- "
+                f"refusing instead of guessing which provenance should win. "
+                f"Author all five files by hand, or remove the partial set "
+                f"before calling this again."
+            )
+        already_present = bool(present)
         if not already_present and not dry_run:
             poly_mesh_dir.mkdir(parents=True, exist_ok=True)
             for name in _POLYMESH_FILES:
@@ -130,3 +145,26 @@ def provision_mesh(
 
     # Unknown/future solver: leave mesh provisioning to the caller.
     return False
+
+
+def meshless_polymesh_fixture() -> dict[str, str]:
+    """The bundled single-cell polyMesh fixture's five files, by name.
+
+    Text, not bytes: every file in this fixture is a small ASCII OpenFOAM
+    list (``FoamFile`` header plus a handful of entries), and
+    `ResolvedMutation`'s targets must be JSON-shaped -- `core.case_write.
+    _freeze` refuses raw `bytes` outright, the same way a plan payload
+    always has (only `RenderedFile.content`, outside this payload system,
+    carries real bytes). `render_synthesis_case_files` already treats a
+    string `content` target as text to `.encode()`, exactly like every
+    other synthesis target (`build_electro_properties` and siblings).
+
+    Exposed (Task 12, batch P2-H) so `dict_builder.resolve_synthesis_mutation`/
+    `build_case` can fold this fixture into the case-write channel as
+    ordinary `skip_if_present` synthesis targets, instead of `provision_mesh`
+    copying it directly with `shutil.copyfile` and no journal. `provision_mesh`
+    itself is unchanged as a standalone function -- it is still the right
+    tool for `ionic_catalog_verification.py`, which does not go through
+    `build_and_launch`.
+    """
+    return {name: (_SINGLE_CELL_POLYMESH_DIR / name).read_text() for name in _POLYMESH_FILES}

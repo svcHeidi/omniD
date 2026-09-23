@@ -984,6 +984,7 @@ def resolve_synthesis_mutation(request: CaseMutationRequest) -> ResolvedMutation
     control_values: dict[str, Any] = {}
     dx: float | None = None
     overwrite = False
+    include_meshless_polymesh = False
 
     for parameter in request.parameters:
         key = parameter.key_path[-1]
@@ -1002,10 +1003,19 @@ def resolve_synthesis_mutation(request: CaseMutationRequest) -> ResolvedMutation
         elif parameter.document == _BLOCK_MESH_DOCUMENT:
             dx = parameter.value
         elif parameter.document == _SYNTHESIS_META_DOCUMENT:
-            # Not a case document at all -- `overwrite` governs which
-            # targets below carry `skip_if_present`, and has no file of its
-            # own to land in. See `_SYNTHESIS_META_DOCUMENT`'s docstring.
-            overwrite = bool(parameter.value)
+            # Not a case document at all -- `overwrite`/`include_meshless_
+            # polymesh` govern how targets below are built, and have no file
+            # of their own to land in. See `_SYNTHESIS_META_DOCUMENT`'s
+            # docstring.
+            if key == "overwrite":
+                overwrite = bool(parameter.value)
+            elif key == "include_meshless_polymesh":
+                include_meshless_polymesh = bool(parameter.value)
+            else:
+                raise ValueError(
+                    f"synthesis parameter {parameter.qualified_id!r} names "
+                    f"undeclared meta key {key!r}"
+                )
         else:
             raise ValueError(
                 f"synthesis parameter {parameter.qualified_id!r} targets "
@@ -1070,6 +1080,28 @@ def resolve_synthesis_mutation(request: CaseMutationRequest) -> ResolvedMutation
             "skip_if_present": True,
         })
 
+    if myocardium_solver in _meshless_solvers() and include_meshless_polymesh:
+        # Task 12 (batch P2-H): the bundled single-cell polyMesh fixture,
+        # folded in as five ordinary skip_if_present synthesis targets
+        # instead of mesh_provisioning.provision_mesh's direct
+        # shutil.copyfile. `build_case` has already refused a *partial*
+        # five-file state before this function ever runs (see its own
+        # docstring) -- reaching here means the real case is either
+        # entirely absent (all five render) or already complete (all five
+        # skip), never a mix. Reading the fixture's bytes here (not
+        # case-dependent state -- the same bundled bytes every time) is the
+        # one narrow exception to this function's "pure, touches no
+        # filesystem" docstring; it never reads `case_root`.
+        from omnidriver.cardiacfoam.mesh_provisioning import meshless_polymesh_fixture
+
+        for name, content in sorted(meshless_polymesh_fixture().items()):
+            targets.append({
+                "document": f"constant/polyMesh/{name}",
+                "content": content,
+                "format": _SYNTHESIS_FORMAT,
+                "skip_if_present": True,
+            })
+
     expected_effects = tuple(
         f"author {target['document']}" for target in targets if "content" in target
     )
@@ -1114,6 +1146,7 @@ def build_case(
     delta_t: "float | str | None" = None,
     end_time: "float | str | None" = None,
     dx: "float | None" = None,
+    dry_run: bool = False,
     driver_context: "Any | None" = None,
 ) -> Any:
     """Resolve and render a from-scratch cardiacFoam case as one reviewable
@@ -1130,7 +1163,17 @@ def build_case(
     exact `FileExistsError` it always has (preserved deliberately: the
     pre-existing regression test
     `test_dict_builder.py::test_existing_case_dir_is_not_overwritten_without_consent`
-    asserts that specific type, and this migration does not change it)."""
+    asserts that specific type, and this migration does not change it).
+
+    `dry_run` (Task 12, batch P2-H): added so a meshless solver's bundled
+    polyMesh fixture -- now folded into this function's own plan instead of
+    `build_and_launch` calling `mesh_provisioning.provision_mesh` separately
+    -- is excluded from the plan under `dry_run=True`, matching R3 finding
+    8's "a dry run must not write a mesh". The `dx` rejection for a meshless
+    solver, and the partial-mesh precheck below, both still run
+    unconditionally: validation is not part of the filesystem effect a dry
+    run skips (same reasoning `provision_mesh`'s own docstring already
+    states for its `dx_m` rejection)."""
     from pathlib import Path as _Path
     import datetime as _datetime
     import tempfile as _tempfile
@@ -1152,6 +1195,34 @@ def build_case(
 
     dt = delta_t if delta_t is not None else 1e-4
     et = end_time if end_time is not None else 1.0
+
+    include_meshless_polymesh = False
+    if myocardium_solver in _meshless_solvers():
+        if dx is not None:
+            raise ValueError(
+                f"dx has no effect for myocardiumSolver={myocardium_solver!r} "
+                "(no spatial mesh -- it has no geometry for dx to resolve)."
+            )
+        # Validation, not the filesystem effect -- runs unconditionally,
+        # matching the `dx` rejection just above and `provision_mesh`'s own
+        # documented reasoning for its `dx_m` rejection ("dry_run is not
+        # part of the filesystem effect it skips"). A dry run must still
+        # report a partial-mesh refusal the real run would give, rather than
+        # reporting success for a combination that would fail for real.
+        from omnidriver.cardiacfoam.mesh_provisioning import meshless_polymesh_fixture
+
+        poly_mesh_dir = case_dir / "constant" / "polyMesh"
+        fixture_names = sorted(meshless_polymesh_fixture())
+        present = [name for name in fixture_names if (poly_mesh_dir / name).exists()]
+        if present and len(present) != len(fixture_names):
+            missing = [name for name in fixture_names if name not in present]
+            raise ValueError(
+                f"{poly_mesh_dir} has a partially authored mesh (present: "
+                f"{present}, missing: {missing}); refusing to complete or "
+                f"overwrite it -- author all five files by hand, or "
+                f"remove the partial set before calling this again"
+            )
+        include_meshless_polymesh = not dry_run
 
     parameters = (
         *_selector_parameters(_ELECTRO_DOCUMENT, _ELECTRO_SELECTOR_PREFIX, electro_selectors),
@@ -1181,6 +1252,13 @@ def build_case(
             qualified_id="$CARDIACFOAM.synthesis.overwrite", owner=PLUGIN_ID,
             document=_SYNTHESIS_META_DOCUMENT, key_path=("overwrite",), binding={},
             value=bool(overwrite), value_kind="boolean", source="case",
+        ),
+        ParameterAssignment(
+            qualified_id="$CARDIACFOAM.synthesis.include_meshless_polymesh",
+            owner=PLUGIN_ID, document=_SYNTHESIS_META_DOCUMENT,
+            key_path=("include_meshless_polymesh",), binding={},
+            value=bool(include_meshless_polymesh), value_kind="boolean",
+            source="case",
         ),
     )
     if delta_t is not None:
@@ -1341,7 +1419,7 @@ def build_and_launch(
         electro_selectors, physics_selectors=physics_selectors, case_dir=case_dir,
         electro_overrides=electro_overrides, physics_overrides=physics_overrides,
         overwrite=overwrite, delta_t=delta_t, end_time=end_time, dx=dx,
-        driver_context=write_context,
+        dry_run=dry_run, driver_context=write_context,
     )
     commit_case_write(plan, driver_context=write_context, execution_env=None)
 
@@ -1350,28 +1428,16 @@ def build_and_launch(
     # function that can write bytes (R3 finding 7, 2026-09-23).
     needs_block_mesh = myocardium_solver in _block_mesh_solvers()
 
-    if myocardium_solver in _meshless_solvers():
-        # The one branch of `provision_mesh` that still has an effect. For
-        # `BLOCK_MESH_SOLVERS`, `build_case` above already rendered
-        # `system/blockMeshDict` through the write channel with
-        # `skip_if_present=True`, so calling `provision_mesh` for that
-        # branch would find the file already there and do nothing -- not
-        # worth the call. `MESHLESS_SOLVERS` is different: it copies a
-        # bundled 1-cell polyMesh fixture directly, bypassing
-        # `commit_case_write` entirely (Task 12 migrates this; see the
-        # dated comment at the copy site in
-        # `mesh_provisioning.provision_mesh` for the clobber risk R3 found
-        # there). Called even under `dry_run` -- so `dx`-for-a-meshless-
-        # solver validation still fires -- but `provision_mesh` itself now
-        # takes `dry_run` and skips the filesystem effect (R3 finding 8,
-        # 2026-09-23): a dry run must not write a mesh, and this call
-        # previously wrote one unconditionally.
-        from omnidriver.cardiacfoam.mesh_provisioning import provision_mesh
-
-        provision_mesh(
-            case_dir=case_dir, myocardium_solver=myocardium_solver, dx_m=dx,
-            dry_run=dry_run,
-        )
+    # Migrated 2026-09-23 (Task 12, batch P2-H): `MESHLESS_SOLVERS`' bundled
+    # 1-cell polyMesh fixture used to be copied here via a direct
+    # `provision_mesh(...)` call, bypassing `commit_case_write` entirely.
+    # `build_case` above now folds those same five files into its own plan
+    # (as `skip_if_present` synthesis targets, excluded under `dry_run` --
+    # see its docstring), so this branch has nothing left to do:
+    # `commit_case_write` just wrote them, journaled, the same way it wrote
+    # every other case document. `provision_mesh` itself is unchanged and
+    # still the right tool for `ionic_catalog_verification.py`'s direct use,
+    # which does not go through `build_and_launch`.
 
     if dry_run:
         return {

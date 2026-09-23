@@ -10,6 +10,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
+from .transaction_mechanics import atomic_write_bytes as _atomic_write_bytes
+from .transaction_mechanics import atomic_write_json as _atomic_write_json
+from .transaction_mechanics import fsync_directory as _fsync_directory
+
 
 MARKER_NAME = ".omnidriver-remediation-transaction.json"
 
@@ -27,53 +31,11 @@ def _marker(case_root: Path) -> Path:
 
 
 def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
-    try:
-        with temporary.open("w", encoding="utf-8") as handle:
-            handle.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-        if os.name == "posix":
-            directory = os.open(path.parent, os.O_RDONLY)
-            try:
-                os.fsync(directory)
-            finally:
-                os.close(directory)
-    finally:
-        temporary.unlink(missing_ok=True)
-
-
-def _atomic_write_bytes(path: Path, content: bytes, *, mode: int | None = None) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
-    try:
-        with temporary.open("wb") as handle:
-            handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
-        if mode is not None:
-            os.chmod(temporary, mode)
-        os.replace(temporary, path)
-        if os.name == "posix":
-            directory = os.open(path.parent, os.O_RDONLY)
-            try:
-                os.fsync(directory)
-            finally:
-                os.close(directory)
-    finally:
-        temporary.unlink(missing_ok=True)
-
-
-def _fsync_directory(path: Path) -> None:
-    if os.name != "posix":
-        return
-    descriptor = os.open(path, os.O_RDONLY)
-    try:
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
+    """Phase 2 Task 12: delegates to the primitive
+    :mod:`transaction_mechanics` and :mod:`case_transaction` now share --
+    what "goes away" here is the duplicate write-tmp/fsync/rename/fsync-dir
+    implementation this function used to carry itself."""
+    _atomic_write_json(path, payload)
 
 
 def _persist(case_root: Path, transaction: dict[str, Any]) -> None:

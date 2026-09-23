@@ -62,7 +62,11 @@ from .case_write import (
 )
 from .planning_types import SimulationAuditItem
 from .runtime.attempt_lease import AttemptLeaseError, acquire_case_lease
-from .runtime.remediation_transaction import _atomic_write_bytes, _fsync_directory
+from .runtime.transaction_mechanics import (
+    atomic_write_bytes as _atomic_write_bytes,
+    atomic_write_json as _atomic_write_json,
+    fsync_directory as _fsync_directory,
+)
 
 #: The transaction's authoritative head is the journal file. Legal states and
 #: who may advance them:
@@ -106,10 +110,7 @@ def _journal_path(case_root: Path) -> Path:
 
 def _write_journal(case_root: Path, transaction: Mapping[str, Any]) -> None:
     """Persist the transaction head atomically, before the first file write."""
-    path = _journal_path(case_root)
-    payload = (json.dumps(dict(transaction), sort_keys=True, indent=2) + "\n").encode()
-    _atomic_write_bytes(path, payload)
-    _fsync_directory(path.parent)
+    _atomic_write_json(_journal_path(case_root), dict(transaction))
 
 
 def _read_journal(case_root: Path) -> dict[str, Any] | None:
@@ -175,10 +176,7 @@ def _read_completed(case_root: Path, transaction_id: str) -> dict[str, Any] | No
 
 
 def _persist_completed(case_root: Path, record: CaseWriteRecord) -> None:
-    path = _completed_path(case_root, record.transaction_id)
-    payload = (json.dumps(record.to_json(), sort_keys=True, indent=2) + "\n").encode()
-    _atomic_write_bytes(path, payload)
-    _fsync_directory(path.parent)
+    _atomic_write_json(_completed_path(case_root, record.transaction_id), record.to_json())
 
 
 def _record_from_completed(payload: Mapping[str, Any]) -> CaseWriteRecord:

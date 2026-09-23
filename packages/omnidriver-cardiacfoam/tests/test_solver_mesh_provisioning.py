@@ -107,3 +107,33 @@ def test_provision_mesh_dry_run_still_rejects_dx_for_meshless_solver(tmp_path):
             case_dir=case_dir, myocardium_solver="singleCellSolver",
             dx_m=0.0004, dry_run=True,
         )
+
+
+def test_provision_mesh_refuses_a_partially_authored_mesh(tmp_path):
+    """R3 finding 8, fixed 2026-09-23 (Task 12, batch P2-H): the old
+    `all(...)` skip guard silently overwrote every one of the five polyMesh
+    files whenever even one was missing -- a hand-authored mesh missing, say,
+    only its `boundary` file got the other four silently replaced too. A
+    partial set must now refuse instead of guessing which provenance wins."""
+    case_dir = tmp_path / "case"
+    poly_mesh = case_dir / "constant" / "polyMesh"
+    poly_mesh.mkdir(parents=True)
+    (poly_mesh / "points").write_text("hand-authored, not the fixture\n")
+
+    with pytest.raises(ValueError, match="partially authored"):
+        provision_mesh(case_dir=case_dir, myocardium_solver="singleCellSolver")
+
+    # Refusing, not completing it behind the caller's back either direction.
+    assert (poly_mesh / "points").read_text() == "hand-authored, not the fixture\n"
+    assert not (poly_mesh / "faces").exists()
+
+
+def test_meshless_polymesh_fixture_matches_the_bundled_files(tmp_path):
+    from omnidriver.cardiacfoam.mesh_provisioning import meshless_polymesh_fixture
+
+    provision_mesh(case_dir=tmp_path, myocardium_solver="singleCellSolver")
+    poly_mesh = tmp_path / "constant" / "polyMesh"
+    fixture = meshless_polymesh_fixture()
+    assert set(fixture) == {"points", "faces", "owner", "neighbour", "boundary"}
+    for name, content in fixture.items():
+        assert (poly_mesh / name).read_text() == content

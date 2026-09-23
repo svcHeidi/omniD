@@ -81,6 +81,25 @@ def render_cell_set(object_name: str, ids: list[int]) -> str:
 
 
 def write_cell_set(path: Path, object_name: str, ids: list[int]) -> None:
+    """Write a rendered `cellSet` to an explicit, caller-chosen destination.
+
+    **Classified 2026-09-23 (Phase 2 Task 12, batch P2-H): a case input, not
+    yet migrated onto the case-write channel.** A `cellSet` under a real
+    case's `constant/polyMesh/sets/` is a framework-authored input a native
+    utility reads -- the value shape already fits (`value_kind="integer_list"`
+    exists in `core.contracts.dictionary.VALUE_KINDS`) -- but there is no
+    renderer registered for the `cellSet` format; `openfoam/case_rendering.py`
+    owns `openfoam_dictionary` (key=value documents) only, and a `cellSet` is
+    a different native format entirely. This function also has no
+    `case_root`/adapter addressing to resolve `path` against -- it renders to
+    whatever destination the caller names, which is why its own catalog entry
+    (`catalogs/operations.py`, `cardiaccore.vtu.cell_set.v1`) already says
+    "use a staged destination for writes" rather than a live case path.
+    Registering a `cellSet` renderer and giving this an addressed,
+    channel-routed sibling (mirroring `overrides.apply_input_overrides_planned`)
+    is design work beyond this task's stated files; left as an open bypass
+    for the mutation-path inventory.
+    """
     rendered = render_cell_set(object_name, ids)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(rendered, encoding="utf-8")
