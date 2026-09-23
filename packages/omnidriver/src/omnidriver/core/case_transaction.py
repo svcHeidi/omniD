@@ -199,7 +199,21 @@ def _check_preconditions(case_root: Path, preconditions: tuple) -> None:
                 f"precondition on {precondition.target!r} expected digest "
                 f"{precondition.digest!r}, but the target is missing"
             )
-        actual = _digest_bytes(target.read_bytes())
+        # R3 blocker 1 (2026-09-23): this read used to be unguarded. A target
+        # with no read permission (``mode=0o000`` is a plan-legal
+        # ``RenderedFile.mode``, so this is reachable by ordinary use, not a
+        # contrived edge case) raised a bare ``PermissionError`` here, which
+        # propagated straight out of ``commit_case_write`` past every
+        # caller's and every test's assumption that a commit failure
+        # surfaces as ``CaseTransactionError``.
+        try:
+            content = target.read_bytes()
+        except OSError as exc:
+            raise CaseTransactionError(
+                f"cannot read {precondition.target!r} to check its "
+                f"precondition: {exc}"
+            ) from exc
+        actual = _digest_bytes(content)
         if actual != precondition.digest:
             raise CaseTransactionError(
                 f"precondition on {precondition.target!r} failed: expected "
@@ -244,10 +258,23 @@ def _resolve_target(case_root: Path, rendered_path: str) -> Path:
 
 
 def _before_image(rendered: RenderedFile, target: Path) -> dict[str, Any]:
-    """What ``target`` looked like before this transaction touches it."""
+    """What ``target`` looked like before this transaction touches it.
+
+    R3 blocker 1 (2026-09-23): this read used to be unguarded, with the same
+    unwrapped-``PermissionError`` failure mode as ``_check_preconditions``'s
+    own read (see its matching comment). Any ``OSError`` reading the
+    before-image is now reported as a ``CaseTransactionError`` naming the
+    path and the operation, with the original preserved as ``__cause__``.
+    """
     if target.exists() and not target.is_dir():
-        content = target.read_bytes()
-        mode = target.stat().st_mode & 0o7777
+        try:
+            content = target.read_bytes()
+            mode = target.stat().st_mode & 0o7777
+        except OSError as exc:
+            raise CaseTransactionError(
+                f"cannot read {rendered.path!r} to record its before-image "
+                f"before overwriting it: {exc}"
+            ) from exc
         return {
             "path": rendered.path,
             "existed_before": True,

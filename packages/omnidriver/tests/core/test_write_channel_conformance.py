@@ -373,6 +373,27 @@ def test_file_modes(tmp_path):
     assert script.stat().st_mode & 0o777 == 0o755
 
 
+@_root_makes_chmod_tests_meaningless
+def test_file_modes_an_unreadable_existing_file_is_a_transaction_error_not_a_leak(tmp_path):
+    """R3 blocker 1 (2026-09-23): closest existing case to file modes,
+    since it is one of those modes -- 0o000 -- that made the pre-existing
+    file unreadable. `_before_image`'s `target.read_bytes()` used to raise a
+    bare `PermissionError` that escaped `commit_case_write` unwrapped."""
+    first = _plan(tmp_path, [_rendered("constant/a", b"one\n", mode=0o000)])
+    case_transaction.commit_case_write(first, driver_context=object(), execution_env=None)
+    before = case_write._digest_bytes(b"one\n")
+    second = _plan(tmp_path, [
+        _rendered("constant/a", b"two\n", exists_before=True, before_digest=before),
+    ])
+    try:
+        with pytest.raises(case_transaction.CaseTransactionError, match="constant/a"):
+            case_transaction.commit_case_write(
+                second, driver_context=object(), execution_env=None,
+            )
+    finally:
+        (tmp_path / "constant" / "a").chmod(0o644)
+
+
 # --------------------------------------------------------------------------
 # 8: rollback after injected failure
 # --------------------------------------------------------------------------

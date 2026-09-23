@@ -203,3 +203,57 @@ def test_the_journal_is_removed_after_a_clean_commit(tmp_path):
     plan = _plan(tmp_path, [_rendered("constant/a", b"one\n")])
     case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
     assert not case_transaction.pending_transaction(tmp_path)
+
+
+# --------------------------------------------------------------------------
+# R3 blocker 1 (2026-09-23): an unwrapped PermissionError escaped
+# commit_case_write. mode=0o000 is a plan-legal RenderedFile.mode, so this is
+# reachable by ordinary use -- not a monkeypatch, the real public path.
+# --------------------------------------------------------------------------
+
+
+@_root_makes_chmod_tests_meaningless
+def test_an_unreadable_existing_file_is_wrapped_not_leaked(tmp_path):
+    """Commit a `RenderedFile(mode=0o000)`, then a second transaction
+    overwriting that same path. `_before_image`'s `target.read_bytes()` needs
+    read access to snapshot the before-image; it used to raise a bare
+    `PermissionError` that escaped past the lease's release and every
+    caller's assumption that a commit failure surfaces as
+    `CaseTransactionError`."""
+    first = _plan(tmp_path, [_rendered("constant/a", b"one\n", mode=0o000)])
+    case_transaction.commit_case_write(first, driver_context=object(), execution_env=None)
+    assert (tmp_path / "constant" / "a").stat().st_mode & 0o777 == 0o000
+
+    before = case_write._digest_bytes(b"one\n")
+    second = _plan(tmp_path, [
+        _rendered("constant/a", b"two\n", exists_before=True, before_digest=before),
+    ])
+    try:
+        with pytest.raises(case_transaction.CaseTransactionError, match="constant/a"):
+            case_transaction.commit_case_write(
+                second, driver_context=object(), execution_env=None,
+            )
+    finally:
+        (tmp_path / "constant" / "a").chmod(0o644)
+
+
+@_root_makes_chmod_tests_meaningless
+def test_an_unreadable_precondition_target_is_wrapped_not_leaked(tmp_path):
+    """The same unguarded read existed in `_check_preconditions`."""
+    (tmp_path / "constant").mkdir()
+    target = tmp_path / "constant" / "locked"
+    target.write_bytes(b"secret\n")
+    target.chmod(0o000)
+    plan = _plan(
+        tmp_path, [_rendered("constant/a", b"new\n")],
+        preconditions=[case_write.Precondition(
+            kind="file", target="constant/locked", digest="0" * 64, must_be_absent=False,
+        )],
+    )
+    try:
+        with pytest.raises(case_transaction.CaseTransactionError, match="constant/locked"):
+            case_transaction.commit_case_write(
+                plan, driver_context=object(), execution_env=None,
+            )
+    finally:
+        target.chmod(0o644)
