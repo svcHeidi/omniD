@@ -744,6 +744,29 @@ def test_path_escape_a_relative_case_root_is_refused_at_construction(tmp_path):
         )
 
 
+def test_path_escape_and_symlinks_a_precondition_target_too(tmp_path):
+    """R3 finding 4 (2026-09-23): the symlink refusal `test_path_escape_and_
+    symlinks` proves for a *write* target has a mirror-image hole on the
+    *read* side -- a precondition's `is_file()`/`read_bytes()` dereferenced a
+    symlink instead of refusing it."""
+    outside = tmp_path.parent / "outside_precondition_dep"
+    outside.mkdir(exist_ok=True)
+    swapped = outside / "swapped.txt"
+    swapped.write_bytes(b"attacker-controlled content\n")
+    (tmp_path / "constant").mkdir()
+    (tmp_path / "constant" / "dep").symlink_to(swapped)
+    plan = _plan(
+        tmp_path, [_rendered("constant/a", b"new\n")],
+        preconditions=[case_write.Precondition(
+            kind="file", target="constant/dep",
+            digest=case_write._digest_bytes(b"original trusted content\n"),
+            must_be_absent=False,
+        )],
+    )
+    with pytest.raises(case_transaction.CaseTransactionError, match="symlink"):
+        case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
+
+
 # --------------------------------------------------------------------------
 # 17: duplicate ownership
 # --------------------------------------------------------------------------

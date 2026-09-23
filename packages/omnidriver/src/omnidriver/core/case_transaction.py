@@ -19,8 +19,14 @@ What this does NOT guarantee, and must not be documented as guaranteeing
   readers, and outside readers that read after the transaction completes.
 * Control over writers outside the framework. A lease coordinates this
   framework's attempts. A user editing a dictionary in an editor is not
-  prevented -- they are detected at precondition recheck as drift, which
-  refuses the commit.
+  prevented -- an edit that changes the file's content in place is detected
+  at precondition recheck as drift, which refuses the commit. A read
+  dependency replaced by a *symlink* is a different case and is refused
+  outright rather than detected as drift by digest (R3 finding 4, corrected
+  2026-09-23): dereferencing it would validate one file's identity while
+  reading another's content, so :func:`_check_preconditions` refuses to trust
+  a symlinked precondition target at all, the same way :func:`_resolve_target`
+  already refused a symlinked write target.
 * Durability beyond what ``fsync`` on the file and its directory provides on
   the host filesystem. Network filesystems that reorder or defer writes are
   outside the supported profile -- this module has been exercised only
@@ -223,20 +229,36 @@ def _check_preconditions(
     under, or ``os.environ`` when the caller supplied none), never the
     filesystem -- implemented 2026-09-23 (R3 finding 3); see
     :func:`_check_environment_precondition`.
+
+    A symlink at a ``file``/``include``/``source_artifact``/``absence``
+    target is refused outright, mirroring :func:`_resolve_target`'s refusal
+    of a symlink write target (R3 finding 4, 2026-09-23): dereferencing it
+    would validate one file's identity while reading another's content,
+    which is exactly how a case-relative read dependency could be quietly
+    replaced by a symlink to content outside the case with its precondition
+    still reporting green.
     """
     for precondition in preconditions:
         if precondition.kind == "environment":
             _check_environment_precondition(precondition, environment)
             continue
         target = Path(case_root) / precondition.target
+        is_symlink = target.is_symlink()
         exists = target.is_file()
         if precondition.must_be_absent:
-            if exists or target.is_symlink():
+            if exists or is_symlink:
                 raise CaseTransactionError(
                     f"precondition on {precondition.target!r} requires it to be "
                     f"absent, but it exists"
                 )
             continue
+        if is_symlink:
+            raise CaseTransactionError(
+                f"precondition on {precondition.target!r} targets a symlink; "
+                f"refusing to trust it as {precondition.kind!r} evidence -- a "
+                f"symlink can point to different content than what was "
+                f"digested when the plan was made"
+            )
         if not exists:
             raise CaseTransactionError(
                 f"precondition on {precondition.target!r} expected digest "

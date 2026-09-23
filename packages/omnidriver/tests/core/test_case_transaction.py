@@ -318,3 +318,47 @@ def test_an_absent_environment_precondition_passes_when_it_stays_absent(tmp_path
     )
     case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
     assert (tmp_path / "constant" / "a").exists()
+
+
+# --------------------------------------------------------------------------
+# R3 finding 4 (2026-09-23): precondition checks followed symlinks
+# (`is_file()`/`read_bytes()` dereference), while `_resolve_target` already
+# refused a symlink at a write target. Mirrored here.
+# --------------------------------------------------------------------------
+
+
+def test_a_symlinked_precondition_target_is_refused(tmp_path):
+    """A case-relative read dependency swapped for a symlink to content
+    outside the case must not pass its precondition."""
+    outside = tmp_path.parent / "outside_dep"
+    outside.mkdir(exist_ok=True)
+    swapped = outside / "swapped.txt"
+    swapped.write_bytes(b"attacker-controlled content\n")
+
+    (tmp_path / "constant").mkdir()
+    (tmp_path / "constant" / "dep").symlink_to(swapped)
+    plan = _plan(
+        tmp_path, [_rendered("constant/a", b"new\n")],
+        preconditions=[case_write.Precondition(
+            kind="file", target="constant/dep",
+            digest=case_write._digest_bytes(b"original trusted content\n"),
+            must_be_absent=False,
+        )],
+    )
+    with pytest.raises(case_transaction.CaseTransactionError, match="symlink"):
+        case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
+
+
+def test_a_symlinked_absence_target_still_counts_as_present(tmp_path):
+    outside = tmp_path.parent / "outside_dep2"
+    outside.mkdir(exist_ok=True)
+    (tmp_path / "site").mkdir()
+    (tmp_path / "site" / "shadow").symlink_to(outside)
+    plan = _plan(
+        tmp_path, [_rendered("constant/a", b"new\n")],
+        preconditions=[case_write.Precondition(
+            kind="absence", target="site/shadow", digest=None, must_be_absent=True,
+        )],
+    )
+    with pytest.raises(case_transaction.CaseTransactionError, match="site/shadow"):
+        case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
