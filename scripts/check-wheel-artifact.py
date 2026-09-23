@@ -90,6 +90,30 @@ def main() -> int:
     if result.returncode != 0:
         failures.append(f"CLI --help exited {result.returncode}: {result.stderr[:300]}")
 
+    # 5. The sweep-spec schema (Phase 2 Task 11) ships inside the installed
+    #    package -- a repository-only schemas/ file would pass every other
+    #    check here and still be absent from every wheel, which is exactly
+    #    the defect class this script exists to catch.
+    try:
+        import importlib.resources as _resources
+        import json as _json
+
+        payload = (
+            _resources.files("omnidriver.schemas")
+            .joinpath("sweep-spec.schema.json")
+            .read_text()
+        )
+        schema = _json.loads(payload)
+        schema_id = schema.get("$id", "")
+        if not schema_id.rsplit("/", 1)[-1].startswith("v"):
+            failures.append(
+                f"sweep-spec.schema.json $id {schema_id!r} does not end in a version"
+            )
+        else:
+            print(f"sweep-spec schema present   : $id={schema_id}")
+    except Exception as exc:  # noqa: BLE001
+        failures.append(f"sweep-spec.schema.json unreadable from the wheel: {exc}")
+
     if failures:
         print("\nFAILED:")
         for f in failures:

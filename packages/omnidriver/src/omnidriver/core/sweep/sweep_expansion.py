@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from importlib import resources
 from itertools import product
 from math import prod
 from typing import Any, Callable
@@ -8,6 +10,23 @@ from typing import Any, Callable
 
 class SweepValidationError(ValueError):
     """Raised for any sweep spec problem caught before materialization runs."""
+
+
+def load_sweep_spec_schema() -> dict[str, Any]:
+    """The versioned JSON Schema a `sweep.json` document validates against.
+
+    Phase 2 Task 11 (docs/superpowers/plans/2026-09-20-phase2-one-write-channel.md):
+    ships inside the installed package (``omnidriver.schemas``, the same
+    resource package ``run-document.json`` already uses -- see
+    ``core/runtime/run_model.py``), not a repository-only ``schemas/``
+    directory, which is absent from every wheel.
+    """
+    payload = (
+        resources.files("omnidriver.schemas")
+        .joinpath("sweep-spec.schema.json")
+        .read_text()
+    )
+    return json.loads(payload)
 
 
 @dataclass(frozen=True)

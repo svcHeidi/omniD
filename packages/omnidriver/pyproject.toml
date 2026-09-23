@@ -46,7 +46,7 @@ where = ["src"]
 include = ["omnidriver*"]
 
 [tool.setuptools.package-data]
-"omnidriver.schemas" = ["run-document.json"]
+"omnidriver.schemas" = ["run-document.json", "sweep-spec.schema.json"]
 # run_case.sh is data, not a module: setuptools ships the package but not
 # the .sh unless it is declared here. Without this line
 # RUN_CASE_SCRIPT_RELPATH resolves to a file that exists in a checkout

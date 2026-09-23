@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omnidriver.dev/schemas/sweep-spec.schema.json/v1",
+  "title": "SweepSpec",
+  "description": "A sweep.json document as consumed by omnidriver.core.sweep.sweep_expansion.expand_sweep and omnidriver.core.runtime.sweep_runner.sweep_plan/sweep_run. Enumerated from what that code actually reads (Phase 2 Task 11, docs/superpowers/plans/2026-09-20-phase2-one-write-channel.md), not from documentation: 'base' is opaque adapter/entry vocabulary core never validates, and the cross-field rules expand_sweep enforces (no forward references among dependent entries, no name collisions, path-safe caseId, equal-length zip axes) are semantic and left to expand_sweep itself rather than duplicated here.",
+  "type": "object",
+  "required": ["sweep"],
+  "properties": {
+    "base": {
+      "type": "object",
+      "description": "Fixed values applied to every case, routed by the selected adapter (route_case_values/route_entry_case_values). Core imposes no shape on this object -- it is read only with base.get(...); an unrecognized key is the adapter's own concern, not a schema violation.",
+      "additionalProperties": true
+    },
+    "sweep": {
+      "type": "object",
+      "description": "The expansion block sweep_expansion.expand_sweep reads.",
+      "required": ["mode", "independent"],
+      "properties": {
+        "mode": {
+          "enum": ["cross_product", "zip"],
+          "description": "sweep_expansion._mode: any other value raises SweepValidationError."
+        },
+        "independent": {
+          "type": "object",
+          "description": "sweep_expansion._independent_axes: axis name -> list of resolved values. Must be non-empty; each axis's list must be non-empty.",
+          "minProperties": 1,
+          "propertyNames": { "minLength": 1 },
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 1
+          }
+        },
+        "dependent": {
+          "type": "array",
+          "description": "sweep_expansion._validate_dependent_declarations/expand_sweep: derived values, evaluated in order. 'of' names must already be an independent axis or an earlier dependent entry (no forward references) -- enforced by expand_sweep, not expressible here.",
+          "items": {
+            "type": "object",
+            "required": ["name", "derive", "of"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "derive": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Looked up via the get_derivation callable passed to expand_sweep; not a closed enum here because the lookup is caller-supplied."
+              },
+              "of": {
+                "description": "A single referenced name, or several.",
+                "oneOf": [
+                  { "type": "string", "minLength": 1 },
+                  {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string", "minLength": 1 }
+                  }
+                ]
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
