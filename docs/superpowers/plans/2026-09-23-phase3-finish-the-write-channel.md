@@ -37,7 +37,10 @@ Suite `0 failed` in all four shapes; both static gates pass.
 
 ## Status
 
-Tasks 1–5 done. Tasks 6–11 not started.
+**Corrected 2026-09-23:** this line was stale -- Tasks 6 and 6b (see the
+"After Task 6b" section below) had already landed when Task 7 started. Tasks
+1–7 done (7's commit is pending -- see its own Status row and "Findings").
+Tasks 8–11 not started.
 
 | task | what it closes | state | commit |
 |---|---|---|---|
@@ -47,7 +50,7 @@ Tasks 1–5 done. Tasks 6–11 not started.
 | 4 · `replace_block_mesh_resolutions` | 8 calls, the special case | done | `746f9c0` |
 | 5 · `--apply` joins the channel | **bypass 4** | done | `b6fe66f`, `7eb919d` |
 | 6 · the eleven tutorials follow through | **bypass 1** (most of it) | pending | — |
-| 7 · source artifacts and sidecars, classified | **bypass 1** (remainder) | pending | — |
+| 7 · source artifacts and sidecars, classified | **bypass 1** (remainder) | done | `85fc504`, `8594422`, `e85784c`, `2c3939c`, `570abfa`, `0b7d337`, and this doc's own commit |
 | 8 · `generic_case.py` | **bypass 2** | pending | — |
 | 9 · the `describe` seam | the unmet second payoff | pending | — |
 | 10 · `Allrun`, and delete what is unreachable | **bypass 5** | pending | — |
@@ -1419,7 +1422,7 @@ is now the explicit way to create.
 Not every write in a tutorial is a parameter. From the measured surface:
 7 `shutil.copy`/`copy2`, 4 `write_text`, 1 `json.dump`, 1 `subprocess.run`.
 
-- [ ] **Step 1: Classify each, and route by class, not by uniformity**
+- [x] **Step 1: Classify each, and route by class, not by uniformity**
 
 - **A copied mesh or graph file is a source artifact**, not a parameter. It
   belongs in `synthesize`'s `source_artifacts`, declared and digested, not
@@ -1435,6 +1438,229 @@ Not every write in a tutorial is a parameter. From the measured surface:
   author `constant/polyMesh`. A framework-invoked utility authoring a case
   *input* is not a declared workflow output. Decide: does it become a declared
   workflow step in the DAG, or a channel-committed artifact? Argue it.
+
+### Findings, 2026-09-23
+
+**Full inventory, all 13 measured writes plus 2 more found by widening the
+grep to `open(` (per this task's own instruction: "the previous close-out
+established that the grep this programme used could not see `open(...)`
+writes").** One line of justification each; classes match Task 11's own
+taxonomy (declared workflow output, standalone export, source artifact,
+framework bookkeeping, framework-authored case input).
+
+| site | class | justification |
+|---|---|---|
+| `heart_solver_comparison.py` `_apply_case`'s two `shutil.copy` calls (4 files: `electroProperties`, `fvSchemes`, `fvSolution`, `controlDict`) | **framework-authored case input → `RenderedFile`, migrated** | Small, hand-editable OpenFOAM documents cardiacFoam reads exactly as any other tutorial's version of the same document -- not opaque, not large. `plan_verbatim_content` + a new `"content"` target on `render_patch_case_files` (Phase 3 Task 7) route them through `commit_case_write`; `source_artifacts` names which solver-variant template supplied the bytes, since the request assigns zero `ParameterAssignment`s. |
+| `manufactured_purkinje_graph.py` `_apply_case`'s `shutil.copy2` (`purkinjeGraph.<id>` → `purkinjeGraph`) | **source artifact, blocked on missing artifact staging (corrected 2026-09-24, see below)** | Large geometric data (the class `RenderedFile`'s own docstring calls out as "referenced by digest, never embedded"), not a small dictionary key -- same class `manufactured_monodomain_1d3d`'s identical copy already has. Stays a direct write: this tutorial's *only* write is this copy, and a channel commit whose sole content is a source-artifact declaration would build a `CaseWritePlan` with zero `RenderedFile`s, which `CaseWritePlan.__post_init__` itself refuses ("a plan must render at least one file") -- a guard this task may not weaken. |
+| `manufactured_monodomain_1d3d.py`'s `shutil.copy2` (identical `purkinjeGraph.<id>` → `purkinjeGraph`) | **source artifact, blocked on missing artifact staging (corrected 2026-09-24, see below)** | Same reasoning as above. Not a declared exception in the same sense -- this tutorial's *other* edits (hex rewrite, electro overrides, controlDict) already reach `commit_case_write` via its own `_plan_case`, so the copy sits beside a real channel commit rather than replacing the tutorial's only one. |
+| `manufactured_monodomain_1d3d.py`'s `block_mesh_active.write_text(block_mesh_dict.read_text())` (`blockMeshDict.3D` → `.active`) | **case input, blocked on missing artifact staging (corrected 2026-09-24, see below)** | Decides *which* document the channel will subsequently patch; carries no value of its own. Predates Task 7 and is outside its mandate to revisit. |
+| `manufactured_bath_bidomain.py` / `manufactured_eikonal_ecg.py` / `manufactured_monodomain_pseudo_ecg.py`'s tet-branch numerics-profile overlay `shutil.copy` (`overlay_name` resolves to `"fvSolution"`, replacing `system/fvSolution` wholesale) | **framework-authored case input, same class as `heart_solver_comparison` -- classification corrected, migration deferred** | Task 6 labelled these "source artifacts, Task 7's domain"; checked against `defaults.TET_NUMERICS_PROFILES`/`_NUMERICS_PROFILES` (found, not assumed) and they are small hand-authored numerics documents, not mesh/graph data -- the identical class `plan_verbatim_content` now serves. Corrected with a dated note in all three tutorials' own `_plan_case` docstrings. **Not migrated**: these three tutorials are outside Task 7's two assigned ones, and migrating a third party's tet branch is real, additional scope, not a corollary of fixing a misclassification comment. Tracked as a follow-up. |
+| `cable_1d_restitution.py`'s `(case_root / ".driverfoam_case_id").write_text(case.case_id)` | **marker / framework bookkeeping, not migrated (by design)** | Intra-run sentinel so `Allrun.post` (`postProcessing_cableRestitution.py`'s `__main__`) can recover the sweep's semantic case id without a `--case-id` argument threading through the `workflow_dag`. Not read by cardiacFoam; not a result a scientist inspects. Named `CASE_ID_SENTINEL_FILENAME`, documented at its definition, with the exact reader cited. |
+| `cable_1d_restitution.py`'s `(case_root / ".cardiacfoam_protocol.json").write_text(json.dumps(...))` (also the task's one `json.dump`-class write) | **standalone export, not migrated (by design)** | Not a `ParameterAssignment` (no key in an existing document) and not a source artifact (nothing was consumed to produce it). Read **by name** by `postProcessing_cableRestitution.py`'s own `PROTOCOL_METADATA`/`load_protocol_metadata` -- found by reading that reader before changing anything, per this task's own instruction. Named `PROTOCOL_SIDECAR_FILENAME`, with its full schema and reader stated in a module-level docstring. |
+| `niederer_2012.py`'s `target_file.write_text(rendered)` (`.geo` template, `__LC__` substituted) | **framework-authored case input, same RenderedFile-eligible class -- classification corrected, migration deferred** | Small hand-authored gmsh geometry text with one substitution, downstream-used exactly like `heart_solver_comparison`'s templates. Already named "Task 7's domain, not Task 6's" in its own docstring. **Not migrated**: outside Task 7's two assigned tutorials, and it additionally duplicates `omnidriver.openfoam.tet_mesh_provisioning.render_tet_geo` (the shared helper three *other* tutorials already call for the identical operation) instead of reusing it -- a second, larger reuse fix a follow-up should do together with the migration, not two separate patches. |
+| `manufactured_purkinje_graph.py::_ensure_mesh` (the task's one `subprocess.run`, plus its own `log.blockMesh` `open("w")` -- found by widening the grep) | **dead code, deleted** | Zero callers anywhere in this repository (confirmed by `grep -rn "_ensure_mesh"` before deletion, matching only its own definition) and duplicates the "mesh" `workflow_dag` step *already declared* in this same module's `make_spec` -- the real, executed mesh-authoring mechanism (`workflow_orchestrator.py`/`workflow_runner.py`). There was nothing live to migrate, so it is deleted rather than turned into a declared step or a channel-committed artifact -- both already exist or are inapplicable. |
+| `niederer_2012.py`'s `_update_end_time`'s hand-rolled `control_dict_path.open("w")` (found by widening the grep) | **framework-authored case input, already parameter machinery -- not Task 7's domain** | This is `endTime`, exactly what `plan_end_time`/`ParameterAssignment` already cover; `_plan_case`'s hex-family path uses `plan_end_time`, and this hand-rolled writer survives only inside `_apply_case`, kept for byte-parity proof per Task 2/3/6's own "keep both until parity is proven, then collapse" convention. Not "outside the parameter machinery" in the sense this task addresses -- it is that machinery's own pre-Task-6-collapse leftover. |
+
+**`_ensure_mesh`'s `blockMesh` subprocess -- the question answered, not
+assumed.** It becomes **neither** a new declared workflow step nor a
+channel-committed artifact: `manufactured_purkinje_graph.py`'s own
+`make_spec` **already** declares a `"mesh"` step
+(`{"id": "mesh", "command": "blockMesh", "args": [...], "depends_on": []}`,
+with `"solve"` depending on it), executed by the real, live
+`workflow_dag` dispatch mechanism (confirmed executed, not merely present,
+by finding `workflow_orchestrator.py`/`workflow_runner.py` consuming
+`workflow_dag` steps, and by the identical, already-live pattern in
+`manufactured_eikonal_ecg.py`'s own comment: "this lives on the
+workflow_dag path, which is the mechanism sweep-run actually executes").
+`_ensure_mesh` predates that convention, was never wired to any caller
+(`grep -rn "_ensure_mesh"` found only its own definition, in this module,
+before this task's deletion), and would have been the same authoring
+twice over two different mechanisms had it ever been called. The plan's own
+framing ("a native utility producing its own files is ordinarily a declared
+workflow output -- the question is whether this one ... is different")
+resolves cleanly here: it is not different in kind, it is simply
+**redundant** with a step that already exists -- so the honest action is
+deletion with a dated correction note, not migration.
+
+**`heart_solver_comparison`'s whole-file copies -- argued from downstream
+usage, per this task's own instruction.** `RenderedFile`, not a source
+artifact. `plan_verbatim_content`'s docstring (`openfoam/utils.py`) carries
+the full argument; in short: a source artifact is a *reference* to
+something external a mutation consumed (a mesh, an opaque asset,
+un-path-checked because it may live outside the case) that this channel
+never itself commits. These four documents are the opposite -- small,
+hand-editable OpenFOAM dictionaries that *become* `case_root`'s actual
+`electroProperties`/`fvSchemes`/`fvSolution`/`controlDict`, read downstream
+by cardiacFoam exactly the way every other tutorial's version of the same
+document is read. Routing them as source artifacts would carry them out of
+the channel's own audit trail (no `content_digest`, no journal-recorded
+before/after bytes) for no reason but their own authoring granularity
+(whole-document swap vs. key-level edit). `CaseMutationRequest`'s
+"clone_and_patch assigns at least one parameter" invariant (Task 1, kept on
+"no caller needs this relaxed") is widened, not dropped, to "a parameter or
+a source artifact" -- `heart_solver_comparison` is the real caller Task 1
+did not yet have; see the dated correction on that type's own docstring and
+`test_a_clone_and_patch_request_with_no_parameters_but_a_source_artifact_is_accepted`.
+
+**The protocol sidecar's reader, found before anything was changed, per this
+task's own instruction.** `.cardiacfoam_protocol.json` and
+`.driverfoam_case_id` are both read by the *native* tutorial tree's own
+postprocessor -- not by anything in this repository --
+`~/noFrontendCardiacFoam_minor_errors/tutorials/electrophysiologyProtocols/
+cableProtocol/monodomain1DCableCV/setup/postProcessing_cableRestitution.py`,
+invoked as `Allrun.post`'s own command (`python3
+setup/postProcessing_cableRestitution.py`, the `workflow_dag`'s `extract_cv`
+step). That script declares `PROTOCOL_METADATA = ".cardiacfoam_protocol.json"`
+and reads it with `load_protocol_metadata(case_dir) = json.loads((case_dir /
+PROTOCOL_METADATA).read_text())`; its `__main__` falls back to
+`case_dir / ".driverfoam_case_id"` for the case id when `--case-id` is not
+supplied. Both filenames are now named constants
+(`PROTOCOL_SIDECAR_FILENAME`, `CASE_ID_SENTINEL_FILENAME`) in
+`cable_1d_restitution.py`, each with a module-level docstring stating its
+contract (schema, reader, and the "changing this silently breaks
+postprocessing" warning) -- the "own stated artifact contract" this task
+asked for. Not modelled as a `DataArtifact`: that vocabulary is for a raw
+data *output* a run or utility produces (`expected_artifacts`'
+`cable_probes`/`restitution_event_summary`/etc., each claimed by a
+`workflow_dag` step's `produces`), and both files are written directly by
+`_plan_case`/`_apply_case` at case-materialization time, before any step
+runs -- forcing them into `expected_artifacts` would trip
+`test_every_required_artifact_is_claimed_by_the_step_that_writes_it`'s own
+guard for a file no step actually produces.
+
+**Whether any tutorial still writes outside `commit_case_write` after this
+task.** `heart_solver_comparison` now does not (it commits through the
+channel with zero parameters and a declared source artifact).
+`manufactured_purkinje_graph` still makes zero `commit_case_write` calls --
+see the corrected framing immediately below; this is not the same shape as
+`write_cell_set`. Every other tutorial's status is unchanged by this task.
+
+### Corrections from review, 2026-09-24
+
+**The three graph/mesh-adjacent copies (rows above: `manufactured_purkinje_graph`'s
+`purkinjeGraph` copy, `manufactured_monodomain_1d3d`'s identical copy, and
+its `blockMeshDict.3D` → `.active` copy) are not "declared exceptions" and
+are not two unrelated shapes ("source artifact" vs. "routing convention").
+Corrected: all three are blocked on one missing channel capability,
+**artifact staging**, not on three separate settled decisions.**
+
+`CaseMutationRequest.source_artifacts` (and the `source_artifact`
+`Precondition` kind) let the channel *reference* an artifact -- name it,
+digest it, refuse to commit if it drifted. Neither gives the channel a way
+to *place* that artifact's bytes at a case-relative destination.
+`RenderedFile` places bytes, but only the small, hand-editable-document
+class this phase's own rule excludes large assets from (`RenderedFile`'s
+docstring: "the global 'large assets are referenced by digest, never
+embedded' rule is about meshes and VTU output"). So a mesh or graph copy has
+a reference mechanism and an embedding mechanism, and needs neither -- it
+needs a third one, **staging**, that this phase never built. Phase 2's own
+plan named both halves ("large assets referenced by digest **and staged**");
+only the referencing half was ever implemented.
+
+This reframes all three sites:
+
+- `manufactured_purkinje_graph`'s `purkinjeGraph` copy and
+  `manufactured_monodomain_1d3d`'s identical copy are the same missing
+  capability, not "a declared exception" (`manufactured_purkinje_graph`) and
+  "not migrated, Task 6's classification" (`manufactured_monodomain_1d3d`)
+  as two different resting states. Neither was ever *decided* to stay
+  outside the channel; both are *blocked* until artifact staging exists.
+- `manufactured_monodomain_1d3d`'s `blockMeshDict.3D` → `.active` copy is a
+  **case input**, not bookkeeping: `system/blockMeshDict.3D.active` is what
+  the `mesh` workflow step actually reads. Calling it "a routing convention,
+  not a parameter or source artifact" was accurate about what it is not, but
+  did not say what it is: the same staging operation as the graph copies
+  (an existing file's bytes, placed at a new case-relative destination, with
+  no key/value edit), just with an in-case rather than external source.
+
+**Why this distinction matters for Task 11.** `write_cell_set` is a genuine
+declared exception: a real format decision (invent a `cellSet` renderer, or
+don't) deferred until a second consumer justifies building one. These three
+are not a decision at all -- they are work no one has done yet, on a
+capability whose need was anticipated in Phase 2's own plan and never
+closed. Task 11's inventory should list "artifact staging: missing" as its
+own line, separate from `write_cell_set`'s "declared, single-consumer,
+revisit on a second one" -- conflating the two would make a buildable gap
+look like a considered, stable design choice.
+
+**Not fixed here.** Designing and building an artifact-staging primitive
+(what it references, what precondition it checks, how `commit_case_write`
+places bytes it never rendered) is out of this review correction's scope --
+it is exactly the kind of capability work this plan's own Task 11 close-out
+should surface explicitly, which is why it is named here rather than
+attempted. The three call sites' own docstrings
+(`manufactured_purkinje_graph.py::_apply_case`,
+`manufactured_monodomain_1d3d.py::_plan_case`) carry a dated correction with
+this same reframing.
+
+**Also from the same review: the `"content"` target's own test coverage,
+and a misleading helper name.** `plan_verbatim_content`/`render_patch_case_files`'s
+`"content"` branch had exactly one exerciser --
+`test_heart_solver_comparison_write_channel.py`, in cardiacFoam's own suite
+-- for format behaviour OpenFOAM owns, the same way Task 4's `hex (` rewrite
+is pinned in `omnidriver-openfoam/tests/core/test_block_mesh_resolution_channel.py`.
+Added `omnidriver-openfoam/tests/core/test_content_target_channel.py`:
+a content target renders exactly the given bytes; two content targets on
+one document are refused; a content target authors a document that does not
+exist yet, while an ordinary value edit against a missing document is still
+refused (`test_block_mesh_resolution_channel.py`'s own
+`test_the_renderer_refuses_a_missing_block_mesh_dict` stayed green,
+confirmed, not assumed); a content target plus a value edit on the same
+document lands the edit atop the content; before-digest and mode are
+preserved when the document already existed. Verified by reverting
+`case_rendering.py`/`utils.py`: the new file fails to collect at all
+(`ImportError: cannot import name 'plan_verbatim_content'`), while
+`test_block_mesh_resolution_channel.py`'s existing 12 tests are unaffected
+either way.
+
+`plan_verbatim_content`, `plan_block_mesh_resolution`, and `plan_dict_block`
+all called a helper named `_hex_patch_format()` merely to look up
+`case_rendering.FORMAT` (deferred to call time to avoid a module cycle) --
+a name that named only its first caller and would have misled a reader of
+`plan_dict_block` or `plan_verbatim_content` into thinking they reused a
+hex-specific helper for no reason. Renamed to `_patch_format()`; it has no
+other callers, so this is a pure rename with a dated note at its definition,
+not a behaviour change.
+
+**Characterization tests, and the revert-to-confirm result.**
+`test_heart_solver_comparison_write_channel.py` pins `_apply_case`'s exact
+output by content digest per solver variant (four documents × four
+variants) and proves `_plan_case` reproduces it byte-for-byte; also asserts
+the committed request carries zero parameters and the expected
+`source_artifacts` entry. Verified by reverting
+`heart_solver_comparison.py` alone (`git stash`): the characterization test
+(`test_characterization_apply_case_current_bytes`) still passes unchanged
+(the pre-Task-7 direct-copy `_apply_case` wrote the identical bytes), while
+every `test_plan_case_*` test fails with `AttributeError: module ... has no
+attribute '_plan_case'` -- restoring the change returns all to green.
+`test_manufactured_purkinje_graph_write_channel.py` is new coverage (this
+tutorial's `_apply_case` had none before this task) plus a lock-in that
+`_ensure_mesh` no longer exists and the `"mesh"` step it duplicated is still
+declared.
+
+**No test deleted.** This task added tests; it retired no function that had
+existing test coverage (`_ensure_mesh` had zero callers and zero tests), so
+there is no "map each behaviour to a surviving test" bookkeeping to do here.
+
+**All four shapes: 0 failed** (the documented environmental `ensurepip`
+abort in `test_every_core_module_imports_from_a_wheel` aside, present before
+this task and unrelated to it -- confirmed absent from the wheel-install
+shape's own run). Both static gates pass.
+
+**What this task got wrong in its own brief, corrected here.** "It belongs
+in `synthesize`'s `source_artifacts`" (Step 1's first bullet) does not hold
+literally: every real source-artifact copy this task found
+(`manufactured_purkinje_graph`, `manufactured_monodomain_1d3d`) is a
+`clone_and_patch` mutation, not `synthesize` -- `dict_builder.py`'s
+synthesis path is still `source_artifacts`'s only production populator, and
+neither tutorial's mesh/graph copy is routed through it or through any
+other channel mechanism (both stay direct writes, as argued above).
+`CaseMutationRequest.source_artifacts` itself is mode-agnostic already (only
+`synthesize` requires it non-empty), and this task's own
+`heart_solver_comparison` change is the first real `clone_and_patch` caller
+to populate it -- but that is a provenance declaration alongside a real
+`RenderedFile` commit, not a case of the graph/mesh classification "landing
+in" that field the way the brief implied.
 
 ---
 
