@@ -36,12 +36,19 @@ from itertools import product
 
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 from omnidriver.cardiacfoam.overrides import (
+    PLUGIN_ID,
     apply_electro_property_overrides,
+    commit_case_overrides,
+    merge_assignments,
+    resolve_entry_overrides,
 )
 from omnidriver.core.specs.common import (
     resolve_spec_paths,
 )
 from omnidriver.openfoam.utils import (
+    plan_block_mesh_resolution,
+    plan_delta_t,
+    plan_end_time,
     replace_block_mesh_resolutions,
     set_delta_t,
 )
@@ -109,6 +116,61 @@ def _apply_case(
     # The actual execution is handled by the generic executor running the workflow_dag
 
 
+def _plan_case(
+    case_root: Path,
+    case: CaseConfig,
+    *,
+    electro_property_overrides: dict[str, object] | None = None,
+    end_time: float | None = None,
+):
+    """`TutorialSpec.plan_case` (Phase 3 Task 6). The `blockMeshDict.3D` ->
+    `.active` copy convention stays a direct write -- it is not a parameter,
+    it decides which document the channel will patch -- and runs first, same
+    as `_apply_case`; only the `replace_block_mesh_resolutions` rewrite that
+    follows it moves to the channel, addressing the `.active` copy this step
+    just created. The `purkinjeGraph.<id>` -> `purkinjeGraph` copy is a
+    source artifact (Task 7's classification, not this task's), left as a
+    direct `shutil.copy2` exactly as `_apply_case` still does it.
+    """
+    graph_id = str(case.params["graph_id"])
+    cells = int(case.params["cells"])
+    dt_value = float(case.params["dt"])
+
+    block_mesh_dict = case_root / "system" / "blockMeshDict.3D"
+    block_mesh_active = case_root / "system" / "blockMeshDict.3D.active"
+    block_mesh_active.write_text(block_mesh_dict.read_text())
+    block_mesh_document = "system/blockMeshDict.3D.active"
+    block_mesh_target = plan_block_mesh_resolution(
+        block_mesh_document, f"{cells} {cells} {cells}",
+    )
+
+    source_graph = case_root / "constant" / f"purkinjeGraph.{graph_id}"
+    destination_graph = case_root / "constant" / "purkinjeGraph"
+    if not source_graph.exists():
+        raise FileNotFoundError(f"Missing graph file: {source_graph}")
+    shutil.copy2(source_graph, destination_graph)
+
+    control_dict_parameters = [plan_delta_t(dt_value, owner=PLUGIN_ID)]
+    if end_time is not None:
+        control_dict_parameters.append(plan_end_time(end_time, owner=PLUGIN_ID))
+
+    electro_properties = case_root / "constant" / "electroProperties"
+    electro_parameters = resolve_entry_overrides(
+        electro_properties, electro_property_overrides,
+        document="constant/electroProperties", electro_properties_path=electro_properties,
+    ) if electro_property_overrides else ()
+
+    parameters = merge_assignments(control_dict_parameters, electro_parameters)
+
+    return commit_case_overrides(
+        case_root,
+        parameters=parameters,
+        extra_targets=(block_mesh_target,),
+        extra_effects=(f"rewrite hex blocks in {block_mesh_document}",),
+        workflow="manufactured_monodomain_1d3d",
+        requested_by="cardiacfoam.tutorials.manufactured_monodomain_1d3d",
+    )
+
 
 def make_spec(
     *,
@@ -148,6 +210,11 @@ def make_spec(
         ),
         apply_case=partial(
             _apply_case,
+            electro_property_overrides=electro_property_overrides,
+            end_time=end_time,
+        ),
+        plan_case=partial(
+            _plan_case,
             electro_property_overrides=electro_property_overrides,
             end_time=end_time,
         ),
