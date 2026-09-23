@@ -41,7 +41,7 @@ Task 1 done. Tasks 2–11 not started.
 
 | task | what it closes | state | commit |
 |---|---|---|---|
-| 1 · cut the surface before migrating onto it | over-modelled contract | done | (this task's commit) |
+| 1 · cut the surface before migrating onto it | over-modelled contract | done | `f476a13` |
 | 2 · `apply_entry_overrides` becomes a resolver | the chokepoint, 28 calls | pending | — |
 | 3 · `controlDict` setters become resolvers | 11 calls | pending | — |
 | 4 · `replace_block_mesh_resolutions` | 8 calls, the special case | pending | — |
