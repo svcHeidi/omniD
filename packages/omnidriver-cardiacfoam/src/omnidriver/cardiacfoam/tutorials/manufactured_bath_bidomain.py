@@ -370,9 +370,17 @@ def _plan_case(
     not cover) stay direct writes, the same precedent
     `manufactured_eikonal_ecg` already established for the identical shape
     of override. The `mesh_family == "tet"` branch (`render_tet_geo`/
-    numerics-profile overlay copies) stays direct too -- source-artifact
-    renders and copies, Task 7's classification, the same as every other
-    partially-hex-only tutorial.
+    numerics-profile overlay copies) stays direct too.
+
+    **Corrected 2026-09-23 (Phase 3 Task 7):** this was classified as
+    "source-artifact renders and copies" -- wrong, per the identical
+    correction on `manufactured_eikonal_ecg._plan_case`'s own docstring:
+    `_TET_NUMERICS_PROFILES`'s overlay names resolve to real `fvSchemes`/
+    `fvSolution` documents, small hand-authored numerics variants replaced
+    wholesale -- `heart_solver_comparison`'s class (`plan_verbatim_content`),
+    not a mesh/graph source artifact. Left unmigrated regardless: real,
+    additional work on a tutorial outside Task 7's two assigned ones,
+    tracked as a follow-up rather than done here.
 
     `set_delta_t`/`set_end_time`/`replace_block_mesh_resolutions` are not
     called here at all; `plan_delta_t`/`plan_end_time`/`plan_write_interval`/

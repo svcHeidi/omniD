@@ -350,15 +350,29 @@ def _plan_case(
     """`TutorialSpec.plan_case` (Phase 3 Task 6). Covers the hex-family
     path only: the electro/physics overrides and the block-mesh rewrite.
     `mesh_family == "tet"` (a `.geo` template render plus overlay
-    `shutil.copy`s -- source artifacts, Task 7's domain) and the optional
-    `grad_scheme`/`fv_scheme_overrides`/`fv_solution_overrides` (raw edits
-    to `fvSchemes`/`fvSolution`, documents this package's catalog does not
-    cover at all) are left as direct writes, unconditionally, exactly as
-    `_apply_case` still makes them -- they touch files disjoint from the
-    ones this function channel-commits, so there is no write-ordering
-    conflict between the two. `wired into make_spec only when
-    mesh_family == "hex"` (see `make_spec`, mirroring `niederer_2012`'s own
-    scoping decision).
+    `shutil.copy`s) and the optional `grad_scheme`/`fv_scheme_overrides`/
+    `fv_solution_overrides` (raw edits to `fvSchemes`/`fvSolution`, documents
+    this package's catalog does not cover at all) are left as direct writes,
+    unconditionally, exactly as `_apply_case` still makes them -- they touch
+    files disjoint from the ones this function channel-commits, so there is
+    no write-ordering conflict between the two. `wired into make_spec only
+    when mesh_family == "hex"` (see `make_spec`, mirroring `niederer_2012`'s
+    own scoping decision).
+
+    **Corrected 2026-09-23 (Phase 3 Task 7):** the overlay `shutil.copy`s
+    above were classified here as "source artifacts, Task 7's domain" --
+    wrong, found by execution when Task 7 checked what `overlay_name`
+    actually resolves to (`defaults.TET_NUMERICS_PROFILES`:
+    `{"eikonal_tet": ("fvSolution",)}`). This copy replaces `system/fvSolution`
+    wholesale with a small, hand-authored numerics variant -- the same class
+    of content as `heart_solver_comparison`'s own whole-template swap
+    (`plan_verbatim_content`'s docstring has the full downstream-usage
+    argument), not a mesh/graph source artifact. Left unmigrated here
+    regardless: this tutorial is not one of Task 7's two assigned
+    ("`heart_solver_comparison`"/"`manufactured_purkinje_graph`"), and
+    migrating it is real, additional work on a third tutorial's tet branch,
+    not a corollary of correcting a misclassification comment. Tracked as a
+    follow-up, not fixed here.
     """
     dimension = str(case.params["dimension"])
     cells = int(case.params["cells"])

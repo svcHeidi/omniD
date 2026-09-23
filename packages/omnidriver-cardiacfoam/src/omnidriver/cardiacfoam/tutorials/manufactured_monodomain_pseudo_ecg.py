@@ -326,12 +326,23 @@ def _plan_case(
     `n_nonorthogonal_correctors`/`fv_scheme_overrides`/`fv_solution_overrides`/
     `control_dict_overrides` (uncataloged `fvSchemes`/`fvSolution`/
     `controlDict` edits this package's catalog does not cover) and the
-    `mesh_family == "tet"` branch (source-artifact renders/copies, Task 7's
-    domain) still stay direct writes, in their original relative order.
-    `control_dict_overrides` runs its own direct writes to `controlDict`
-    strictly after this function's channel commit finishes (same relative
-    order `_apply_case` uses), so there is no ordering conflict between the
-    two mechanisms touching the same file.
+    `mesh_family == "tet"` branch (a `.geo` template render plus overlay
+    `shutil.copy`s) still stay direct writes, in their original relative
+    order. `control_dict_overrides` runs its own direct writes to
+    `controlDict` strictly after this function's channel commit finishes
+    (same relative order `_apply_case` uses), so there is no ordering
+    conflict between the two mechanisms touching the same file.
+
+    **Corrected 2026-09-23 (Phase 3 Task 7):** the tet branch's overlay
+    copies were classified here as "source-artifact renders/copies, Task 7's
+    domain" -- wrong, per the identical correction on
+    `manufactured_eikonal_ecg._plan_case`'s own docstring: `overlay_name`
+    resolves to `"fvSolution"` (`_NUMERICS_PROFILES`), so this replaces
+    `system/fvSolution` wholesale with a small, hand-authored document --
+    `heart_solver_comparison`'s class (`plan_verbatim_content`), not a
+    mesh/graph source artifact. Left unmigrated regardless, for the same
+    reason: real, additional work on a tutorial outside Task 7's two
+    assigned ones, tracked as a follow-up rather than done here.
     """
     dimension = str(case.params["dimension"])
     solver = str(case.params["solver"])
