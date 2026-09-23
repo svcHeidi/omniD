@@ -515,6 +515,152 @@ One exception is legitimate and must be stated rather than absorbed: if a real
 override genuinely cannot be expressed after both gaps close, report it and stop.
 Do not reintroduce a general fallback for a specific unsolved case.
 
+### Findings, 2026-09-23
+
+**Commit 1 — the parser.** `omnidriver.openfoam.literals` (new module)
+parses both magnitude shapes the real catalog declares: a bare scalar
+(`stimulusIntensity`: `"[0 -3 0 0 0 1 0] 75000"`) and a parenthesised tensor
+(`conductivity`: `"[-1 -3 3 0 0 2 0] (0.2 0 0 0.03 0 0.03)"`). Round-tripped
+over every dimensioned literal actually found in this repository (the
+catalog's own `typical_value` strings, the tutorials' default
+conductivities, and the literals real tests pass as overrides —
+`packages/omnidriver-openfoam/tests/test_literals.py`'s
+`REAL_DIMENSIONED_LITERALS`), not a fixture invented for this task.
+
+**The round trip is value-identical for all of them, and byte-identical for
+all but three, found and named rather than hidden**
+(`KNOWN_BYTE_ROUND_TRIP_EXCEPTIONS`): two whole-number magnitudes spelled
+with an explicit `.0` (`"2.0"`, `"1.0"`) that a float cannot distinguish
+from `"2"`/`"1"`, and one literal
+(`test_manufactured_eikonal_ecg_tet.py`'s conductivity override) that also
+pads its brackets with spaces. This repository's own real literals use both
+the with-decimal and without-decimal convention for a whole-number
+magnitude, so no single renderer reproduces both — confirming, on this
+task's own evidence, F1b's point (Phase 2's decision) that comparing
+*spellings* rather than *values* is the wrong axis. `apply_entry_overrides`
+therefore keeps the original spelling as `ParameterAssignment.evidence_refs`
+("the raw spelling is still evidence") and writes it back verbatim,
+rather than a re-rendering, whenever one was parsed from text — proven by
+`test_tet_apply_case_forwards_conductivity_and_advection_approach`, which
+asserts the exact original string appears in the written file.
+
+**Three corollary gaps, found while closing Gap 2, not anticipated by
+either decision.** Making the ecgDomains dynamic path resolve at all
+exposed that its `vector3` entry (`electrodePositions.<electrode>`) has the
+same "adapter never parses the rendered string" defect Gap 1 named for the
+dimensioned kinds — a real test (`test_dict_entries_catalog.py`) passes
+`"(1 2 3)"`, not a tuple. Running the fix further exposed the same for
+`integer_list` (`verificationModel.checkQuadratureOrders`: `"(6 12 24 48)"`)
+and `boolean` (`eikonalAdvectionDiffusionApproach`: `"false"`, an OpenFOAM
+`Switch` spelling, not a Python `bool`). All three handled the same way, in
+the same module, with their own round-trip tests
+(`test_literals.py`); `word_list`/`scalar_list`/`vector3_list` added
+alongside `integer_list` on the same reasoning even though no real caller
+happens to exercise them today, since leaving three of four list kinds
+unparsed for no principled reason would just relocate this same defect to
+whichever one is used next.
+
+**The `boolean` formatter is deliberately NOT used to re-render an
+already-typed value.** `mutators._format_value` already renders a plain
+Python `bool` correctly (`"yes"`/`"no"`), and several real overrides pass
+one directly (`verificationModel.enabled`, `verificationModel.anisotropic`
+below) — using `format_boolean_literal` there instead would have written
+`"true"`/`"false"` and broken every currently-passing test asserting
+`"yes"`/`"no"`. Found by running the suite (`test_tet_mesh_family_works_with_ecg_enabled`
+failed first), not assumed; `overrides.py` keeps two separate dispatch
+tables (`_TEXT_PARSERS`, used for parsing; `_CONTAINER_FORMATTERS`, used
+for re-rendering an already-typed value with no preserved evidence) for
+exactly this reason.
+
+**Commit 2 — the open-domain mechanism.** `DictEntry.allowed_bindings`'s
+value type widened to `tuple[str, ...] | None`; `None` is an explicitly
+open domain, distinct from the placeholder being absent from the mapping
+altogether. `__post_init__`'s empty-domain refusal now exempts `None`
+(`if domain is not None and not domain`) while every other check (partial
+declaration, unknown placeholder, static-path bindings) is unchanged.
+`omnidriver-cardiacfoam`'s `overrides.py` gained a real matcher for it: a
+concrete override that fails both exact lookups is tried against every
+`dynamic_path` catalog entry via `omnidriver.openfoam.dict_builder.match_dynamic_entry`
+(added there — reused, not duplicated, alongside that module's existing
+`is_known_override_driver_path`, which already had the same wildcard regex
+convention for a bare membership check), and each captured placeholder is
+validated against `entry.allowed_bindings` by `_validate_dynamic_binding`:
+absent → refused; `None` → validated as a word plus
+`mutators.check_dictionary_word_is_safe`'s `;`/`#`/newline refusal (new
+public function, reusing `_format_value`'s existing checks rather than
+duplicating them, because a binding becomes a **key**, and `_format_value`
+only ever inspects a written **value**); a closed tuple → membership.
+
+**Every entry declared, not just the two named ones.** All 78
+`dynamic_path` declarations in `dict_entries_catalog.py` (not only
+`ecgDomains`) now state their placeholder's domain explicitly: `<name>`
+(`ecgDomains`, `conductionNetworkDomains`, `domainCouplings`), `<electrode>`,
+`<patch>` (`bathPotentialDomain`'s ground/surface-current patch maps),
+`<region_name>` (`ionicHeterogeneity`), `<constant_name>` and `<state_name>`
+(model-specific constant/state names enumerated by a *different* catalog
+this one cannot reach) are all open (`None`) — genuinely case- or
+model-author-chosen, with no closed enumeration this catalog itself can
+state. One placeholder turned out to have a real closed domain instead:
+`<scope>` (`ionicConstantOverrides.<scope>.{scale,set}.<constant_name>`) is
+declared `("global", "epicardialCells", "mCells", "endocardialCells",
+"myocyte")` — the entries' own pre-existing `constraints` text already
+named this exact list (citing `ionicModelIO.C:182-189`), so this is a
+correction from silently-open to correctly-closed, not a new open
+declaration.
+
+**Found, out of scope for this task, not fixed:** `omnidriver-cardiaccore`'s
+`catalogs/inputs.py` declares `$PURKINJE_SCAR.regions.<region_id>.*` (four
+entries) as `dynamic_path=True` with no `allowed_bindings` at all — the
+same undeclared-placeholder shape Gap 2 closed here, in the sibling
+package. Not touched: cardiaccore's own matcher
+(`workflows/overrides.py::_template_for`) does not consult
+`allowed_bindings` for matching at all (it hardcodes `VENT_KEYS` instead),
+so this is a purely declarative gap there, unconnected to the mechanism
+this task changed, and cardiaccore is outside Task 2/3's mandate.
+
+**Commit 3 — the fallback is gone.** `apply_entry_overrides`'s
+`try/except ValueError` and its duplicated pre-Task-2 write loop are
+deleted; it now calls `resolve_entry_overrides` unconditionally and refuses
+exactly what that function refuses. Verified by reverting: temporarily
+restoring the pre-fix `dict_entries_catalog.py` reproduces the ecgDomains
+failure with `_catalog_entry_for` returning no match; temporarily emptying
+`_TEXT_PARSERS` reproduces exactly the six tests Task 2 named, no more and
+no fewer.
+
+**The six previously-failing cases, all passing strictly:**
+
+| case | fix |
+|---|---|
+| `ecgDomains.ECG.electrodePositions.V1` (dynamic identifier) | Gap 2 (dynamic match) + vector3 corollary |
+| `test_dict_entries_catalog.py`'s conductivity/stimulusIntensity literals | Gap 1 (dimensioned parser) |
+| `test_tet_apply_case_forwards_conductivity_and_advection_approach` (eikonal) | Gap 1 + boolean corollary |
+| `test_conductivity_shorthand_updates_monodomain_tensor` (pseudo-ecg) | Gap 1 |
+| `test_tet_mesh_family_works_with_ecg_enabled` / `test_ecg_disabled_removes_block_from_a_reused_entry_case` | integer_list corollary + one catalog gap (below) |
+| `test_tet_apply_case_renders_geo_installs_overlay_and_grad_scheme` | catalog gap (below) |
+
+**One test failure was a genuine catalog gap, corrected with a dated
+note, not a test correction** (per this task's own instruction: "if a
+currently-passing test then fails, that test is the finding"). Four tests
+failed with "override
+`...verificationModel.anisotropic` is not declared" —
+`dict_entries_catalog.py` had never declared this key, even though
+`manufacturedPseudoECGVerifier.C:420`
+(`cfg.lookupOrDefault<Switch>("anisotropic", false)`, checked against the
+authoritative native tree,
+`~/noFrontendCardiacFoam_minor_errors/src/verificationModels/ecgVerification/manufacturedPseudoECGVerifier.C`)
+genuinely reads it, and `manufactured_monodomain_pseudo_ecg.py`'s
+`_apply_case` has written it unconditionally whenever `ecgDomains.ECG` is
+configured since before this task. Added the missing `DictEntry` (dated
+correction comment in place), scoped to `manufacturedPseudoECGVerifier`
+only via `applicable_when` (confirmed by source: `manufacturedEikonalECGVerifier.C`/
+`manufacturedBathBidomainECGVerifier.C` do not read it). No test needed a
+behaviour correction — the four tests' own assertions were already correct;
+only the catalog was missing the declaration they depended on.
+
+**All four required shapes: 0 failed** (aside from the documented
+environmental `ensurepip` abort in `test_every_core_module_imports_from_a_wheel`,
+present before this task and unrelated to it). Both static gates pass.
+
 ## Task 3: The `controlDict` setters become resolvers
 
 **Files:**

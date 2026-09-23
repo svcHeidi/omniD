@@ -1072,6 +1072,32 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             value_kind='enum', enum_values=('1D', '2D', '3D'), dynamic_path=True, allowed_bindings={"<name>": None},
             applicable_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.type": ('manufacturedPseudoECGVerifier', 'manufacturedEikonalECGVerifier')},
         ),
+        # Corrected 2026-09-23 (Phase 3, closing Task 2's fallback): missing
+        # from this catalog entirely -- found because deleting the fallback
+        # in cardiacfoam/overrides.py made
+        # test_manufactured_monodomain_pseudo_ecg_tet.py's
+        # test_tet_apply_case_renders_geo_installs_overlay_and_grad_scheme
+        # (and three siblings that share its ecg_enabled path) fail with
+        # "override ... verificationModel.anisotropic is not declared". Real,
+        # native-read key: manufacturedPseudoECGVerifier.C:420
+        # `anisotropic_ = cfg.lookupOrDefault<Switch>("anisotropic", false)`,
+        # a Switch this driver's tutorial has written unconditionally
+        # whenever ecgDomains.ECG is configured since before this task. Only
+        # manufacturedPseudoECGVerifier reads it (manufacturedEikonalECGVerifier.C
+        # and manufacturedBathBidomainECGVerifier.C do not: `grep -rl
+        # anisotropic src/verificationModels/ecgVerification/` finds only the
+        # pseudo-ECG verifier's .C/.H pair), so applicable_when is narrower
+        # than its dimension/referenceQuadratureOrder siblings above.
+        DictEntry(
+            driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.anisotropic',
+            phases=frozenset({'physics'}),
+            description="Whether the manufactured pseudo-ECG reference uses its anisotropic solution branch (the sin^2(pi x)*sin^2(pi y)*sin^2(pi z) field), rather than the isotropic default. 3D-only: the solver raises a FatalError if this is set true while verificationModel.dimension resolves to anything but 3D.",
+            source_refs=('src/verificationModels/ecgVerification/manufacturedPseudoECGVerifier.C',),
+            value_kind='boolean', dynamic_path=True, allowed_bindings={"<name>": None},
+            typical_value='false',
+            constraints=('Only read by manufacturedPseudoECGVerifier. Native FatalError if true and verificationModel.dimension is not 3D.',),
+            applicable_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.type": ('manufacturedPseudoECGVerifier',)},
+        ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.referenceQuadratureOrder',
             phases=frozenset({'physics'}), description='Reference quadrature order for pseudo- or eikonal-ECG manufactured verification.',
