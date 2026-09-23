@@ -159,6 +159,32 @@ def test_one_provider_supplying_both_is_accepted():
     _compose(both)   # must not raise
 
 
+def test_resolve_and_supported_modes_must_come_from_one_provider():
+    """Reclassified 2026-09-23 (R2 finding 2): `get_supported_mutation_modes`
+    was `set`-shaped (union across the stack) while `resolve_case_mutation` is
+    `single`-shaped (most specific only). A stack where one provider declared
+    supported modes and a DIFFERENT, more specific provider implemented the
+    resolver composed to the union of both providers' declared modes, so
+    `resolve()` could pass a mode into a resolver that never claimed to accept
+    it. Reclassified to `single` and paired here, the same guarantee
+    `apply_overrides`/`get_override_target_paths` already give.
+    """
+    a = _Provider("org.a", get_supported_mutation_modes=lambda: frozenset({"synthesize"}))
+    b = _Provider("org.b", requires=("org.a",),
+                  resolve_case_mutation=lambda *a, **k: None)
+    with pytest.raises(ValueError, match="get_supported_mutation_modes"):
+        _compose(a, b)
+
+
+def test_one_provider_supplying_both_modes_and_resolver_is_accepted():
+    both = _Provider(
+        "org.both",
+        resolve_case_mutation=lambda *a, **k: None,
+        get_supported_mutation_modes=lambda: frozenset({"clone_and_patch"}),
+    )
+    _compose(both)  # must not raise
+
+
 def test_override_scopes_concatenate_across_providers():
     """`get_override_scopes` fits none of the original six shapes.
 

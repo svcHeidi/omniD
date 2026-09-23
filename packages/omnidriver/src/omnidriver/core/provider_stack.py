@@ -170,7 +170,6 @@ _SHAPE: dict[str, str] = {
     "get_auxiliary_commands": "set",
     "get_environment_commands": "set",
     "get_solve_step_commands": "set",
-    "get_supported_mutation_modes": "set",
     "get_rendered_formats": "set",
     # -- tutorial_catalog ----------------------------------------------------
     "get_tutorial_catalog": "tutorial_catalog",
@@ -208,6 +207,7 @@ _SHAPE: dict[str, str] = {
     # -- single ------------------------------------------------------------
     "get_capabilities": "single",
     "resolve_case_mutation": "single",
+    "get_supported_mutation_modes": "single",
     "get_selected_start_time": "single",
     "get_config_value_reader": "single",
     "get_dict_key_scanner": "single",
@@ -239,8 +239,19 @@ _SHAPE: dict[str, str] = {
 #: without declaring what it touched is a data-loss risk, and splitting the
 #: pair across two providers reintroduces exactly that risk while satisfying
 #: "exactly one" for each member on its own. Spike finding #2, 2026-09-20.
+#: Corrected 2026-09-23 (R2 finding 2): ``get_supported_mutation_modes`` was
+#: classified ``set`` while ``resolve_case_mutation`` is ``single``. A stack
+#: where one provider declared only ``synthesize`` support and a *different*,
+#: more specific provider implemented the resolver composed to the union of
+#: both providers' modes, so ``resolve()`` could pass a mode into a resolver
+#: that never claimed to accept it. Reclassified to ``single`` -- matching
+#: ``resolve_case_mutation``'s own shape, so the same most-specific-provider
+#: overrides the whole pair rather than only one half of it -- and paired
+#: here so the two halves are enforced to come from one provider, the same
+#: guarantee ``apply_overrides``/``get_override_target_paths`` already gives.
 _CROSS_MEMBER_PAIRS: tuple[tuple[str, str], ...] = (
     ("apply_overrides", "get_override_target_paths"),
+    ("resolve_case_mutation", "get_supported_mutation_modes"),
 )
 
 
