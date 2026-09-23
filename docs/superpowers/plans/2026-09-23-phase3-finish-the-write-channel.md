@@ -509,6 +509,23 @@ Passing a flat qualified id instead raises
 overrides are not merely unmatched — every factory rejects them. No path in this
 codebase produces catalog-shaped overrides from a real invocation.
 
+**`ResolvedMutation.expected_effects` is the other half of this gap.** Task 1
+found it computed by both producers — `cardiaccore/workflows/overrides.py` and
+`cardiacfoam/dict_builder.py` — and read by nothing: `CaseWritePlan` has no such
+field. It was designed in Phase 2 as "what the semantic owner expects this edit
+to change", which is exactly what `proposed_changes` needs and cannot currently
+get.
+
+So do not treat these as two problems. The kwarg→qualified-id seam answers
+*which parameters the caller named*; `expected_effects` answers *what their
+owner says will change*. An agent approving a mutation wants both. Give
+`expected_effects` a consumer here rather than dropping it as dead — a field
+with no reader and a payoff with no data are the same hole from two sides.
+
+If after building the seam `expected_effects` is still redundant, say so with
+evidence and remove it; that is a fine outcome. What is not fine is leaving it
+computed and unread.
+
 - [ ] **Step 1: Add the seam, not a mapping in core**
 
 Both vocabularies are cardiac, and core may not hardcode a mapping between them.
