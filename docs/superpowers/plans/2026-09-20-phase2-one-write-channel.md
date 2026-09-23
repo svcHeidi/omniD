@@ -248,6 +248,82 @@ grammar/R1 handoff:
 | `describe` scope gap | `proposed_changes` cannot populate for any current tutorial factory's real overrides (key-space mismatch, not the previously-documented "no adapter resolve()" limit) | G4 |
 | environment trap | nested `venv.create(with_pip=True)` SIGABRTs on this machine's `uv` CPython 3.11.15; `DYLD_LIBRARY_PATH` workaround recorded above | whoever runs the core-alone shape next |
 
+## Review R4, 2026-09-23: the inventory is complete, and what it costs to finish
+
+R4 re-derived the mutation inventory independently rather than checking the
+close-out's table against itself, deliberately widening past the literal grep
+because bypass 4 (`--apply`, an in-place `foamlib` mutation) proved that
+`write_text` cannot see every write. It audited every `open(...)` call site in
+any mode, every `foamlib` `FoamFile(` use outside `foam_backend.py`/`mutators.py`
+for hidden `__setitem__`/`del`, every `subprocess.run/Popen` for a
+framework-invoked utility authoring a case *input*, plus symlinks, `os.replace`,
+`Path.rename` and serialiser dumps.
+
+**It arrived at the same five bypasses and found no sixth.** That negative
+result is the most load-bearing thing in this close-out; R4 rates it
+moderate-confidence, not certain.
+
+### The audit technique has a blind spot that happened not to change the answer
+
+Task 14 Step 2's documented grep does not include `open(` at all.
+`openfoam/utils.py`'s `replace_block_mesh_resolutions`, `set_delta_t` and
+`set_end_time`, and `niederer_2012.py::_update_end_time`, all write via
+`path.open("w")` plus a line-rewrite loop and are invisible to it. Every caller
+is one of the twelve tutorials already counted under bypass 1, so the count
+stands — but the next inventory must widen the script, not repeat it.
+`manufactured_purkinje_graph.py::_ensure_mesh` shells out to `blockMesh` to
+author `constant/polyMesh`, which is a framework-invoked utility producing a case
+input rather than a declared workflow output; also subsumed under bypass 1.
+
+### Dead code beside a live route
+
+`cardiacfoam/mesh_provisioning.provision_mesh`'s `BLOCK_MESH_SOLVERS` branch has
+**zero production callers** — its only exerciser is `test_solver_mesh_provisioning.py`
+calling it directly. The `MESHLESS_SOLVERS` branch beside it is live, though only
+via the test-only `ionic_catalog_verification.py`. "Obsolete routes removed" is
+therefore understated rather than wrong: unreachable production code sits inside
+the same function as a live route, undifferentiated.
+
+### Sizing: the twelve tutorials are bespoke, but they share a foundation
+
+R4 read four in full. They are genuinely tutorial-specific and no single shared
+resolver covers them: `single_cell` has no mesh at all;
+`cable_1d_restitution` carries S1/S2 pacing arithmetic in two distinct modes, a
+`.driverfoam_case_id` marker and a `.cardiacfoam_protocol.json` sidecar that
+postprocessing depends on **by name**; `manufactured_monodomain_1d3d` uses a
+different blockMeshDict convention entirely (`blockMeshDict.3D` copied to
+`.active`, then resolution-patched in place) and bakes a two-step
+`mesh`→`solve` DAG into metadata; `manufactured_purkinje_graph` copies a graph
+file and shells out to `blockMesh`.
+
+**But four or five of them call the same low-level primitives** —
+`openfoam/utils.py`'s three setters, and `cardiacfoam/overrides.py`'s
+`apply_electro_property_overrides`/`apply_physics_property_overrides`, which wrap
+`mutators.update_foam_entry`. Migrating those primitives **once** into a
+`plan_case`-compatible resolver reduces most of the per-tutorial work to swapping
+a primitive call while keeping the bespoke orchestration around it. Twelve files
+must still be touched; the marginal cost per file is much lower than
+twelve-from-scratch. Do the foundation first.
+
+### `describe`'s empty `proposed_changes` is a contract gap, not a bug
+
+Reproduced. `_write_surface` matches supplied keys against catalog qualified ids,
+but the CLI hands it raw factory kwargs (`ionic_model`, `electro_property_overrides`).
+R4 checked the reverse too: passing a flat qualified id as a `--config` key raises
+`TypeError: make_spec() got an unexpected keyword argument`, so catalog-shaped
+overrides are not merely unmatched — every real factory rejects them. No path in
+this codebase produces catalog-shaped overrides from a real invocation.
+
+The fix cannot live in `introspection.py`. Both vocabularies are cardiac, and
+core may not hardcode a mapping between them, so this needs a **new declared
+seam**: the tutorial spec or adapter surfacing a kwarg→qualified-id mapping for
+`describe` to consult. Changing factory conventions alone will not do it —
+every existing call site depends on the current kwarg surface.
+
+Consequence: Phase 2's second claimed payoff — "an agent can see the complete
+proposed change before approving it" — does not work end to end today. Record
+that as unmet rather than letting the 171-entry `mutable` list imply otherwise.
+
 ## What "one write channel" does and does not mean
 
 It means: **one auditable transaction channel for framework-authored case
