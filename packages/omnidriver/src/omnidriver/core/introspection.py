@@ -111,6 +111,132 @@ def _describe_spec(spec: TutorialSpec) -> dict[str, Any]:
     }
 
 
+def _consumed_paths(spec: TutorialSpec) -> tuple[str, ...]:
+    """Read dependencies a spec's own declared workflow already names.
+
+    Not a new concept: every `TutorialSpec` with a `workflow_dag` in its
+    `metadata` already declares each step's `consumes` list (see
+    `cardiaccore/workflows/preprocessing.py`'s specs, or
+    `run_workflow`/`validate_workflow_commands`, which already read this same
+    structure). Reusing it here is what keeps "consumed" from being a second,
+    hand-maintained description of the same facts.
+    """
+    steps = spec.metadata.get("workflow_dag", {}).get("steps", [])
+    if not isinstance(steps, list):
+        return ()
+    consumed: set[str] = set()
+    for step in steps:
+        if isinstance(step, dict):
+            consumed.update(str(path) for path in step.get("consumes", ()))
+    return tuple(sorted(consumed))
+
+
+def _mutable_entries(
+    catalog_entries: tuple[Any, ...], overrides: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """One item per entry `dictionary_catalog.entries()` declares -- the same
+    flat, adapter-agnostic `DictEntry` tuple `validate_value_shape` is
+    checked against elsewhere. Not `override_schema.dict_entry_catalog()`:
+    that capability's own docstring says its shape is adapter-declared and
+    nested differently per adapter, so core cannot walk it generically to
+    recover qualified ids.
+
+    `source` is drawn from `VALUE_SOURCES` (`core.case_write`) for every
+    item: `"case"` when the caller's `overrides` supplies a value for this
+    entry, `"template"` when the entry declares a non-empty `typical_value`
+    and no override does, otherwise `"call_site_default"` -- this function
+    never invents `"effective"` or `"recommendation"`, which describe a
+    resolved run's actual value or a solver's own advice, neither of which a
+    static catalog entry carries.
+    """
+    supplied = dict(overrides or {})
+    items = []
+    for entry in catalog_entries:
+        driver_path = getattr(entry, "driver_path", None)
+        if driver_path is None:
+            continue
+        if driver_path in supplied:
+            source = "case"
+        elif getattr(entry, "typical_value", ""):
+            source = "template"
+        else:
+            source = "call_site_default"
+        items.append({
+            "qualified_id": driver_path,
+            "value_kind": getattr(entry, "value_kind", ""),
+            "unit": getattr(entry, "unit", ""),
+            "source": source,
+        })
+    return items
+
+
+def _write_surface(
+    *,
+    driver_context: "DriverContext",
+    spec: TutorialSpec,
+    overrides: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """The write channel's complete proposed surface for this entry (Phase 2
+    Task 13, docs/superpowers/plans/2026-09-20-phase2-one-write-channel.md).
+
+    Generated from the same contracts validation uses, not a second
+    hand-maintained description: `mutable` comes from
+    `dictionary_catalog.entries()` (see `_mutable_entries`); `consumed` comes
+    from the spec's own declared `workflow_dag` (see `_consumed_paths`);
+    `modes` comes from `case_writer.supported_modes()`.
+
+    **Scope limit, stated rather than hidden:** `proposed_changes` lists the
+    `mutable` entries the caller's `overrides` actually set, validated
+    against the catalog -- it does not invoke a real adapter's `resolve()`,
+    because core cannot construct an adapter-specific `CaseMutationRequest`
+    (document/key_path addressing is adapter vocabulary) generically. A
+    literal resolve/render preview is future work.
+    """
+    from .case_write import MUTATION_MODES
+
+    catalog_entries = tuple(driver_context.capabilities.dictionaries.entries())
+    mutable = _mutable_entries(catalog_entries, overrides)
+    mutable_ids = {item["qualified_id"] for item in mutable}
+
+    try:
+        supported = driver_context.capabilities.case_writer.supported_modes()
+        modes_error: str | None = None
+    except Exception as exc:  # noqa: BLE001 -- reported as a reason, not raised
+        supported = frozenset()
+        modes_error = str(exc)
+
+    modes: dict[str, Any] = {}
+    for mode in sorted(MUTATION_MODES):
+        is_supported = mode in supported
+        if is_supported:
+            reason = ""
+        elif modes_error is not None:
+            reason = (
+                f"case_writer.supported_modes() could not be read: {modes_error}"
+            )
+        else:
+            reason = (
+                f"{mode!r} is not reported by this stack's "
+                f"CaseWriterCapability.supported_modes() "
+                f"({sorted(supported)!r}); no resolver for it is composed "
+                f"into this stack"
+            )
+        modes[mode] = {"supported": is_supported, "reason": reason}
+
+    supplied = dict(overrides or {})
+    proposed_changes = [
+        item for item in mutable
+        if item["qualified_id"] in supplied and item["qualified_id"] in mutable_ids
+    ]
+
+    return {
+        "mutable": mutable,
+        "consumed": list(_consumed_paths(spec)),
+        "modes": modes,
+        "proposed_changes": proposed_changes,
+    }
+
+
 def _dict_entry_catalog(driver_context: "DriverContext") -> dict[str, Any]:
     # The document names and their shape are plugin vocabulary; core only
     # serializes whatever structure the plugin declares.
@@ -268,6 +394,9 @@ def describe_entry(
         ),
         "dict_entries": _dict_entry_catalog(driver_context),
         "plugin_catalogs": _plugin_catalogs(driver_context),
+        "write_surface": _write_surface(
+            driver_context=driver_context, spec=spec, overrides=overrides,
+        ),
         "strict_launch": _run_launch_description(
             resolution["resolved_name"],
             resolve_execution_context(spec),
