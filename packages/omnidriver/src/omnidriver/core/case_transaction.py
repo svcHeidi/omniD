@@ -118,6 +118,20 @@ def _read_journal(case_root: Path) -> dict[str, Any] | None:
         ) from exc
     if not isinstance(payload, dict):
         raise CaseTransactionError(f"case transaction journal is malformed: {path}")
+    # R3 finding 5 (2026-09-23): `TRANSACTION_STATES` was declared but never
+    # checked -- any `state` value was accepted. Rollback is unconditional on
+    # this field today, so an unrecognised state was not silently treated as
+    # "nothing to recover"; but the invariant was dead, and a corrupted or
+    # hand-edited journal with a bogus state would have been read as though
+    # it were legitimate. Matches
+    # `remediation_transaction.read_remediation_transaction`'s own
+    # status-validation pattern.
+    if payload.get("state") not in TRANSACTION_STATES:
+        raise CaseTransactionError(
+            f"case transaction journal at {path} has state "
+            f"{payload.get('state')!r}, not one of {TRANSACTION_STATES}; "
+            f"refusing to treat an unrecognised journal as recoverable"
+        )
     return payload
 
 

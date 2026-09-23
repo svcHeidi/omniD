@@ -85,6 +85,22 @@ def test_an_interrupted_transaction_is_recoverable(tmp_path, monkeypatch):
     assert not case_transaction.pending_transaction(tmp_path)
 
 
+def test_a_journal_with_an_unrecognised_state_is_refused(tmp_path):
+    """R3 finding 5 (2026-09-23): `TRANSACTION_STATES` was declared but never
+    validated by `_read_journal` -- any `state` value was accepted.
+    Behaviour was safe today (rollback is unconditional on this field), but
+    the invariant was dead. Matches
+    `remediation_transaction.read_remediation_transaction`'s own
+    status-validation pattern."""
+    (tmp_path / ".omnidriver").mkdir(parents=True, exist_ok=True)
+    case_transaction._write_journal(tmp_path, {
+        "transaction_id": "t-bogus", "state": "definitely_not_a_real_state",
+        "plan_digest": "0" * 64, "before_images": [],
+    })
+    with pytest.raises(case_transaction.CaseTransactionError, match="definitely_not_a_real_state"):
+        case_transaction.pending_transaction(tmp_path)
+
+
 def test_an_unrecovered_journal_blocks_a_new_commit(tmp_path):
     (tmp_path / ".omnidriver").mkdir(parents=True, exist_ok=True)
     case_transaction._write_journal(tmp_path, {
