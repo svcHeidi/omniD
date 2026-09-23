@@ -158,3 +158,75 @@ def test_a_value_not_matching_its_declared_kind_is_refused():
         _assignment(
             qualified_id="$ELECTRO.ionicModel", value=1.0, value_kind="word",
         )
+
+
+# --- R2 finding 7: each mode's stated prerequisite is enforced, not merely
+# documented. Decided per mode: `generated_input` means exactly one document
+# (zero parameters is zero documents, also refused); `clone_and_patch` means
+# at least one parameter (a patch that patches nothing is not a creation, it
+# is a no-op masquerading as one); `synthesize` already required a non-empty
+# source_artifacts, and now every declared artifact must be a real,
+# non-whitespace identifier -- an empty string names nothing. ---
+
+
+def test_a_patch_with_no_parameters_is_refused():
+    with pytest.raises(ValueError, match="at least one"):
+        case_write.CaseMutationRequest(
+            mode="clone_and_patch", case_root=Path("/tmp/case"),
+            adapter_id="org.a", workflow="w", source_artifacts=(),
+            parameters=(), requested_by="test",
+        )
+
+
+def test_generated_input_with_no_parameters_is_refused():
+    """Zero parameters is zero documents authored, not one."""
+    with pytest.raises(ValueError, match="exactly one"):
+        case_write.CaseMutationRequest(
+            mode="generated_input", case_root=Path("/tmp/case"),
+            adapter_id="org.a", workflow="w", source_artifacts=(),
+            parameters=(), requested_by="test",
+        )
+
+
+def test_generated_input_with_more_than_one_document_is_refused():
+    """Documented as "one input file is authored by an operation"; a request
+    naming three documents violated that with no check catching it."""
+    with pytest.raises(ValueError, match="exactly one"):
+        case_write.CaseMutationRequest(
+            mode="generated_input", case_root=Path("/tmp/case"),
+            adapter_id="org.a", workflow="w", source_artifacts=(),
+            parameters=(
+                _assignment(document="constant/a"),
+                _assignment(qualified_id="$CARDIAC_CONDUCTIVITY.g", document="constant/b"),
+            ),
+            requested_by="test",
+        )
+
+
+def test_generated_input_with_exactly_one_document_is_accepted():
+    request = case_write.CaseMutationRequest(
+        mode="generated_input", case_root=Path("/tmp/case"),
+        adapter_id="org.a", workflow="w", source_artifacts=(),
+        parameters=(_assignment(),), requested_by="test",
+    )
+    assert request.mode == "generated_input"
+
+
+def test_an_empty_source_artifact_is_refused():
+    """`source_artifacts=("",)` satisfied the non-empty-tuple guard while
+    naming nothing."""
+    with pytest.raises(ValueError, match="non-empty"):
+        case_write.CaseMutationRequest(
+            mode="synthesize", case_root=Path("/tmp/case"),
+            adapter_id="org.a", workflow="w", source_artifacts=("",),
+            parameters=(_assignment(),), requested_by="test",
+        )
+
+
+def test_a_whitespace_only_source_artifact_is_refused():
+    with pytest.raises(ValueError, match="non-empty"):
+        case_write.CaseMutationRequest(
+            mode="synthesize", case_root=Path("/tmp/case"),
+            adapter_id="org.a", workflow="w", source_artifacts=("   ",),
+            parameters=(_assignment(),), requested_by="test",
+        )

@@ -16,6 +16,16 @@ import pytest
 from omnidriver.core import case_write, plugin_capabilities, provider_stack
 
 
+def _assignment(**overrides):
+    fields = dict(
+        qualified_id="$E.ionicModel", owner="org.a",
+        document="constant/electroProperties", key_path=("ionicModel",),
+        binding={}, value="TT06", value_kind="word", source="case",
+    )
+    fields.update(overrides)
+    return case_write.ParameterAssignment(**fields)
+
+
 class _Profile:
     def __init__(self, requires=()):
         self.requires = tuple(requires)
@@ -115,7 +125,8 @@ def test_resolution_must_not_touch_the_filesystem(tmp_path, monkeypatch):
     capabilities = plugin_capabilities.adapt_plugin_capabilities(_ImpureAdapter())
     request = case_write.CaseMutationRequest(
         mode="clone_and_patch", case_root=tmp_path, adapter_id="org.impure",
-        workflow="w", source_artifacts=(), parameters=(), requested_by="test",
+        workflow="w", source_artifacts=(), parameters=(_assignment(),),
+        requested_by="test",
     )
     with pytest.raises(ValueError, match="pure"):
         capabilities.case_writer.resolve(request, driver_context=object())
@@ -135,7 +146,8 @@ def test_an_adapter_with_no_writer_hooks_refuses_by_name():
     capabilities = plugin_capabilities.adapt_plugin_capabilities(_Bare())
     request = case_write.CaseMutationRequest(
         mode="clone_and_patch", case_root=Path("/tmp/case"), adapter_id="org.bare",
-        workflow="w", source_artifacts=(), parameters=(), requested_by="test",
+        workflow="w", source_artifacts=(), parameters=(_assignment(),),
+        requested_by="test",
     )
     with pytest.raises(ValueError, match="org.bare"):
         capabilities.case_writer.resolve(request, driver_context=object())

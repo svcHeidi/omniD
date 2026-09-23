@@ -233,7 +233,21 @@ def _json_value(value: Any) -> Any:
 
 @dataclass(frozen=True)
 class CaseMutationRequest:
-    """An explicit request to author case inputs, in a declared mode."""
+    """An explicit request to author case inputs, in a declared mode.
+
+    Each mode's declared prerequisite is enforced, not merely documented (R2
+    finding 7): ``generated_input`` authors exactly one document,
+    ``clone_and_patch`` assigns at least one parameter, and ``synthesize``
+    names at least one non-empty source artifact.
+
+    ``source_artifacts`` are opaque identifiers -- a path, a digest, a URI --
+    naming something a synthesis consumed, and are deliberately NOT
+    case-relative-checked the way ``ParameterAssignment.document`` and
+    ``RenderedFile.path`` are: a mesh a synthesis reads from may legitimately
+    live outside the case (an externally supplied source), where a document
+    this framework writes into never should. Only non-empty,
+    non-whitespace-only is enforced here.
+    """
 
     mode: str
     case_root: Path
@@ -256,12 +270,33 @@ class CaseMutationRequest:
                 f"unsupported creation mode {self.mode!r}; supported modes are "
                 f"{sorted(MUTATION_MODES)}"
             )
+        for artifact in self.source_artifacts:
+            if not isinstance(artifact, str) or not artifact.strip():
+                raise ValueError(
+                    f"a source artifact must be a non-empty, non-whitespace "
+                    f"identifier; got {artifact!r}. An empty string declares "
+                    f"a source naming nothing"
+                )
         if self.mode == "synthesize" and not self.source_artifacts:
             raise ValueError(
                 "a synthesize request must name at least one source artifact; a "
                 "case built from no declared source is not a supported creation "
                 "mode"
             )
+        if self.mode == "clone_and_patch" and not self.parameters:
+            raise ValueError(
+                "a clone_and_patch request must assign at least one "
+                "parameter; a patch that patches nothing is not a supported "
+                "creation mode"
+            )
+        if self.mode == "generated_input":
+            documents = sorted({parameter.document for parameter in self.parameters})
+            if len(documents) != 1:
+                raise ValueError(
+                    f"a generated_input request must author exactly one "
+                    f"input document; got {documents}. generated_input means "
+                    f"one operation authors one file"
+                )
         seen: dict[str, str] = {}
         for parameter in self.parameters:
             slot = parameter.slot()
