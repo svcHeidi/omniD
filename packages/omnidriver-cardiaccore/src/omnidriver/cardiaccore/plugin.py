@@ -233,3 +233,15 @@ class CardiacCorePlugin:
         del artifact_format
         return None
 
+    # -- CaseWriterCapability -------------------------------------------------
+    def get_supported_mutation_modes(self) -> "frozenset[str]":
+        return frozenset({"clone_and_patch"})
+
+    def resolve_case_mutation(self, request: Any, *, driver_context: Any) -> Any:
+        """Delegate to ``workflows.overrides``, this package's one semantic
+        owner of a case mutation (Phase 2 Task 8)."""
+        from .workflows.overrides import resolve_patch_mutation
+
+        del driver_context
+        return resolve_patch_mutation(request)
+

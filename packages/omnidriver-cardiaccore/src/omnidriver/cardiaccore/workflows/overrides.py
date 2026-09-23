@@ -22,17 +22,30 @@ no-op -- the one failure the solver cannot report and this layer can.
 
 from __future__ import annotations
 
+import datetime
 import math
 import re
+import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from numbers import Integral, Real
 from pathlib import Path
 from typing import Any
 
+from omnidriver.core.case_write import (
+    CaseMutationRequest,
+    CaseWritePlan,
+    CaseWriteRecord,
+    ParameterAssignment,
+    ResolvedMutation,
+)
+from omnidriver.openfoam import case_rendering
 from omnidriver.openfoam.mutators import update_foam_entry
 
 from ..catalogs.inputs import CATALOG, DOCUMENTS, VENT_KEYS
+
+#: This adapter's identity on every request and resolution it produces.
+PLUGIN_ID = "org.omnidriver.cardiaccore"
 
 #: Path segment standing for a ventricle block in a declared path.
 VENT_KEY_PLACEHOLDER = "<ventKey>"
@@ -244,16 +257,146 @@ def validate_input_overrides(
     return validated
 
 
-def apply_input_overrides(case_root: Path, overrides: Mapping[str, Any] | None) -> None:
-    for driver_path, value in validate_input_overrides(overrides).items():
+def _typed_value(value_kind: str, value: Any) -> Any:
+    """Parse rendered text into the typed data a `ParameterAssignment` value
+    must be (2026-09-23 decision: never rendered text). ``_check_value``
+    already accepted a `vector3` as either a "(x y z)" string or three
+    numbers; this is the adapter's job the decision assigns -- it owns what
+    the parameter means, so it parses the string form here rather than
+    letting it travel into the plan as text."""
+    if value_kind == "vector3" and isinstance(value, str):
+        match = _VECTOR_TEXT.match(value.strip())
+        return tuple(float(component) for component in match.groups())
+    if value_kind == "vector3" and isinstance(value, Sequence) and not isinstance(value, str):
+        return tuple(float(component) for component in value)
+    return value
+
+
+def _parameters_for(validated: Mapping[str, Any]) -> tuple[ParameterAssignment, ...]:
+    """Build one addressed, typed `ParameterAssignment` per validated override."""
+    parameters = []
+    for driver_path, value in validated.items():
         target = resolve_override_target(driver_path)
-        # A declared key the selected case leaves unset relies on the
-        # compiled default; setting it means writing it in. The declaration
-        # is what makes this safe -- the key is one a native utility reads.
-        update_foam_entry(
-            case_root / target.file_relpath, target.key, value,
-            scope=target.scope or None, add_if_missing=True,
+        template = _template_for(driver_path)
+        entry = _ENTRIES[template]
+        key_path = target.scope + (target.key,)
+        parameters.append(ParameterAssignment(
+            qualified_id=driver_path, owner=PLUGIN_ID,
+            document=target.file_relpath, key_path=key_path, binding={},
+            value=_typed_value(entry.value_kind, value), value_kind=entry.value_kind,
+            source="case",
+        ))
+    return tuple(parameters)
+
+
+def resolve_patch_mutation(request: CaseMutationRequest) -> ResolvedMutation:
+    """The semantic owner's answer for a `clone_and_patch` request.
+
+    Pure: every parameter this touches was already addressed (document,
+    key_path, typed value) when the caller built the request -- see
+    `_parameters_for`, this module's only place that resolves a declared
+    ``$SCOPE`` path against the catalog. This just repackages that addressing
+    into a `ResolvedMutation`; it reads and writes nothing.
+    """
+    if request.mode != "clone_and_patch":
+        raise ValueError(
+            f"cardiacCore's overrides workflow resolves clone_and_patch "
+            f"requests only, not {request.mode!r}"
         )
+    targets = tuple(
+        {
+            "qualified_id": parameter.qualified_id,
+            "document": parameter.document,
+            "expanded_key_path": list(parameter.expanded_key_path()),
+            "value": parameter.value,
+            "format": "openfoam_dictionary",
+        }
+        for parameter in request.parameters
+    )
+    expected_effects = tuple(
+        f"set {parameter.qualified_id!r} in {parameter.document}"
+        for parameter in request.parameters
+    )
+    return ResolvedMutation(
+        request=request, targets=targets, preconditions=(),
+        expected_effects=expected_effects, semantic_owner_id=PLUGIN_ID,
+    )
+
+
+def _default_driver_context() -> Any:
+    # Deferred: `..plugin` -> `.workflows.preprocessing` -> `.workflows.overrides`
+    # is a real import cycle at module scope (this module is imported by
+    # `workflows/preprocessing.py`, which `plugin.py` imports); resolving it
+    # here, at call time, is what every other caller in this package that
+    # needs a composed stack already does (see workflows/run_config.py).
+    from omnidriver.core.plugin_interface import driver_context as make_driver_context
+    from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
+
+    from ..plugin import CardiacCorePlugin
+
+    return make_driver_context(
+        OpenFOAMEnvironmentPlugin(), CardiacCorePlugin(),
+        source="adapter:cardiaccore.overrides",
+    )
+
+
+def apply_input_overrides_planned(
+    case_root: Path,
+    overrides: Mapping[str, Any] | None,
+    *,
+    driver_context: Any | None = None,
+    execution_env: Any | None = None,
+) -> CaseWriteRecord | None:
+    """Route `apply_input_overrides` through the case-write channel.
+
+    Returns the committed `CaseWriteRecord`, or `None` when there was nothing
+    to write -- `clone_and_patch` requires at least one parameter, and an
+    override mapping that resolves to nothing is a no-op, not a mutation with
+    zero effects.
+    """
+    from omnidriver.core.case_transaction import commit_case_write
+
+    validated = validate_input_overrides(overrides)
+    if not validated:
+        return None
+
+    parameters = _parameters_for(validated)
+    if driver_context is None:
+        driver_context = _default_driver_context()
+
+    request = CaseMutationRequest(
+        mode="clone_and_patch", case_root=Path(case_root), adapter_id=PLUGIN_ID,
+        workflow="preprocessing", source_artifacts=(), parameters=parameters,
+        requested_by="cardiaccore.overrides",
+    )
+    resolved = driver_context.capabilities.case_writer.resolve(
+        request, driver_context=driver_context,
+    )
+    with tempfile.TemporaryDirectory(prefix="omnidriver-case-render-") as scratch:
+        snapshot_root = Path(scratch)
+        rendered = driver_context.capabilities.case_writer.render(
+            resolved, snapshot_root=snapshot_root, driver_context=driver_context,
+            execution_env=execution_env,
+        )
+        preconditions = resolved.preconditions + case_rendering.patch_preconditions(
+            resolved, case_root=Path(case_root), execution_env=execution_env,
+        )
+        identity = getattr(driver_context, "identity", None)
+        stack_identity = (
+            identity.capability_digest if identity is not None else "0" * 64
+        )
+        plan = CaseWritePlan(
+            request=request, files=rendered, preconditions=preconditions,
+            semantic_owner_id=resolved.semantic_owner_id,
+            stack_identity=stack_identity,
+            created_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        )
+    return commit_case_write(plan, driver_context=driver_context, execution_env=execution_env)
+
+
+def apply_input_overrides(case_root: Path, overrides: Mapping[str, Any] | None) -> None:
+    apply_input_overrides_planned(case_root, overrides)
+    return None
 
 
 def read_input_values(

@@ -223,6 +223,35 @@ class OpenFOAMEnvironmentPlugin:
         del spec
         return {}, ()
 
+    # -- CaseWriterCapability: format ownership -------------------------------
+    def get_rendered_formats(self) -> "frozenset[str]":
+        return frozenset({"openfoam_dictionary"})
+
+    def render_case_files(
+        self, resolved, *, snapshot_root, driver_context, execution_env=None,
+    ):
+        """Render this provider's declared format for whichever mode
+        ``resolved`` carries. ``clone_and_patch`` is Task 8; ``synthesize``
+        is Task 9."""
+        mode = resolved.request.mode
+        if mode == "clone_and_patch":
+            from .case_rendering import render_patch_case_files
+
+            return render_patch_case_files(
+                resolved, snapshot_root=snapshot_root, driver_context=driver_context,
+                execution_env=execution_env, renderer_id=self.plugin_id,
+            )
+        if mode == "synthesize":
+            from .case_rendering import render_synthesis_case_files
+
+            return render_synthesis_case_files(
+                resolved, snapshot_root=snapshot_root, driver_context=driver_context,
+                execution_env=execution_env, renderer_id=self.plugin_id,
+            )
+        raise ValueError(
+            f"OpenFOAM environment renders no case files for creation mode {mode!r}"
+        )
+
 
 def openfoam_environment_context():
     """Build the explicit OpenFOAM environment context for local callers."""
