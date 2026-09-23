@@ -67,11 +67,11 @@ four installation shapes and both static gates pass. Phase 2 may begin at G1.
 | G2 | 7 · the conformance suite | done | `e13f085` +R3 fixes |
 | G2 | 8 · vertical slice A — one patch path | done | `dc7fbef` |
 | G2 | 9 · vertical slice B — one synthesis path | done | `8721f21` +R3 fixes |
-| G3 | 10 · entry cases migrate | pending | — |
-| G3 | 11 · sweeps migrate, and the sweep spec gets a versioned schema | pending | — |
-| G3 | 12 · cardiacCore operations and remediation migrate | pending | — |
-| G3 | 13 · `describe` shows the write surface | pending | — |
-| G3 | 14 · four shapes, the mutation inventory, and the close-out | pending | — |
+| G3 | 10 · entry cases migrate | done (partial -- cardiacfoam specs not migrated, see report) | `255a34a` |
+| G3 | 11 · sweeps migrate, and the sweep spec gets a versioned schema | done | `2480f3f` |
+| G3 | 12 · cardiacCore operations and remediation migrate | done (partial -- `write_cell_set` classified, not migrated, see report) | `5e350eb` |
+| G3 | 13 · `describe` shows the write surface | done | `b0ac9dd` |
+| G3 | 14 · four shapes, the mutation inventory, and the close-out | pending -- not this batch | — |
 
 **G1 closed 2026-09-23.** Review R2 returned *not closed* on twelve findings —
 including proposal defect W1 fixed on one field and left open on every other,
