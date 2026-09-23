@@ -35,13 +35,20 @@ from pathlib import Path
 
 from omnidriver.cardiacfoam.tutorials.defaults import niederer_2012 as defaults
 from omnidriver.cardiacfoam.overrides import (
+    PLUGIN_ID,
     apply_electro_property_overrides,
     apply_physics_property_overrides,
+    commit_case_overrides,
+    merge_assignments,
+    resolve_entry_overrides,
 )
 from omnidriver.core.specs.common import (
     resolve_spec_paths,
 )
 from omnidriver.openfoam.utils import (
+    plan_block_mesh_resolution,
+    plan_delta_t,
+    plan_end_time,
     replace_block_mesh_resolutions,
     set_delta_t,
 )
@@ -199,6 +206,97 @@ def _apply_case(
     apply_physics_property_overrides(physics_properties, physics_property_overrides)
 
 
+def _plan_case(
+    case_root: Path,
+    case: CaseConfig,
+    *,
+    mesh_family: str = "hex",
+    tet_geo_template_relpath: Path = Path("setup/studies/tetConvergence/slab.geo.template"),
+    electro_properties_scope: str = defaults.ELECTRO_PROPERTIES_SCOPE,
+    control_dict_relpath: Path = defaults.CONTROL_DICT_RELPATH,
+    block_mesh_dict_relpath: Path = defaults.BLOCK_MESH_DICT_RELPATH,
+    electro_properties_relpath: Path = defaults.ELECTRO_PROPERTIES_RELPATH,
+    physics_properties_relpath: Path = Path("constant/physicsProperties"),
+    electro_property_overrides: Mapping[str, object] | Sequence[Mapping[str, object]] | None = None,
+    physics_property_overrides: Mapping[str, object] | Sequence[Mapping[str, object]] | None = None,
+    slab_size_mm: Sequence[float] = defaults.SLAB_SIZE_MM,
+    end_time_by_dx: Mapping[float, float] = defaults.END_TIME_BY_DX,
+):
+    """`TutorialSpec.plan_case` (Phase 3 Task 6). Migrates the hex-family
+    path only: `deltaT`/`endTime`, the block-mesh rewrite, and the electro/
+    physics overrides. The `mesh_family == "tet"` branch (a `.geo` template
+    substitution, `target_file.write_text(rendered)`) is a content-authoring
+    step, not a parameter set -- Task 7's domain, not Task 6's -- and is not
+    reachable from this function; a caller requesting `mesh_family="tet"`
+    must still use `_apply_case`/`apply_case` (`invoke_case_mutation` only
+    prefers `plan_case` when this spec supplies one, and nothing here
+    requires every spec to).
+
+    **`_update_end_time`'s bespoke writer replaced with `plan_end_time`,
+    proven byte-identical, not assumed.** The pre-existing helper hand-rolled
+    its own `endTime` line rewrite (`re.compile`, `open("w")`) instead of
+    calling `set_end_time`/`update_foam_entry` -- this function's own
+    characterization test (`test_niederer_2012_write_channel.py`) proves
+    `plan_end_time` reproduces its exact bytes for the common case (the key
+    already present). `_update_end_time`'s silent-append-if-absent behaviour
+    (no `set_end_time`/`plan_end_time` caller in this package relies on) is
+    not reproduced by `plan_end_time`, which addresses an existing key the
+    same strict way `plan_delta_t`/`plan_end_time` always have -- untested by
+    any real caller (every real `controlDict` template already declares
+    `endTime`), so not preserved here as a deliberate simplification, not an
+    oversight.
+    """
+    electro_properties = case_root / electro_properties_relpath
+    physics_properties = case_root / physics_properties_relpath
+
+    dx_mm = float(case.params["dx_mm"])
+    dt_ms = float(case.params["dt_ms"])
+    tissue = str(case.params["tissue"])
+    ionic_model = str(case.params["ionicModel"])
+    solver = str(case.params["solver"])
+    case_overrides = {
+        f"{electro_properties_scope}.tissue": tissue,
+        f"{electro_properties_scope}.ionicModel": ionic_model,
+        f"{electro_properties_scope}.solutionAlgorithm": solver,
+    }
+
+    axis_cell_counts = [str(count) for count in cell_counts_from_dx(dx_mm, slab_size_mm)]
+    block_mesh_document = str(block_mesh_dict_relpath)
+    block_mesh_target = plan_block_mesh_resolution(
+        block_mesh_document, " ".join(axis_cell_counts),
+    )
+
+    key = _closest_key(dict(end_time_by_dx), dx_mm)
+    end_time_value = end_time_by_dx[key]
+
+    electro_document = str(electro_properties_relpath)
+    physics_document = str(physics_properties_relpath)
+    parameters = merge_assignments(
+        (plan_delta_t(dt_ms * 1.0e-3, owner=PLUGIN_ID),),
+        (plan_end_time(end_time_value, owner=PLUGIN_ID),),
+        resolve_entry_overrides(
+            electro_properties, case_overrides, document=electro_document,
+            electro_properties_path=electro_properties,
+        ),
+        resolve_entry_overrides(
+            electro_properties, electro_property_overrides, document=electro_document,
+            electro_properties_path=electro_properties,
+        ),
+        resolve_entry_overrides(
+            physics_properties, physics_property_overrides, document=physics_document,
+        ),
+    )
+
+    return commit_case_overrides(
+        case_root,
+        parameters=parameters,
+        extra_targets=(block_mesh_target,),
+        extra_effects=(f"rewrite hex blocks in {block_mesh_document}",),
+        workflow="niederer_2012",
+        requested_by="cardiacfoam.tutorials.niederer_2012",
+    )
+
+
 def make_spec(
     *,
     cases_root: Path | None = None,
@@ -290,6 +388,27 @@ def make_spec(
             physics_property_overrides=physics_property_overrides,
             slab_size_mm=slab_size_mm_list,
             end_time_by_dx=end_time_by_dx_map,
+        ),
+        # `_plan_case` only covers the `mesh_family == "hex"` path (see its
+        # own docstring); a `"tet"` spec keeps `apply_case` as its only
+        # mutation route, and `invoke_case_mutation` falls back to it with a
+        # `DeprecationWarning`, exactly as any not-yet-migrated spec does.
+        plan_case=(
+            partial(
+                _plan_case,
+                mesh_family=mesh_family,
+                tet_geo_template_relpath=tet_geo_template_path,
+                electro_properties_scope=electro_properties_scope,
+                control_dict_relpath=control_dict_path,
+                block_mesh_dict_relpath=block_mesh_dict_path,
+                electro_properties_relpath=electro_properties_path,
+                physics_properties_relpath=physics_properties_path,
+                electro_property_overrides=electro_property_overrides,
+                physics_property_overrides=physics_property_overrides,
+                slab_size_mm=slab_size_mm_list,
+                end_time_by_dx=end_time_by_dx_map,
+            )
+            if mesh_family == "hex" else None
         ),
         metadata={
             "notes": (
