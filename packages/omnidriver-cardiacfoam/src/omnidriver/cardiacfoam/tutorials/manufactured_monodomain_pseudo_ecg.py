@@ -37,11 +37,8 @@ from pathlib import Path
 from omnidriver.cardiacfoam.tutorials.defaults import manufactured_monodomain_pseudo_ecg as defaults
 from omnidriver.cardiacfoam.overrides import (
     PLUGIN_ID,
-    apply_electro_property_overrides,
-    apply_physics_property_overrides,
     commit_case_overrides,
     merge_assignments,
-    remove_electro_property_dict,
     resolve_electro_property_ensure,
     resolve_entry_overrides,
 )
@@ -54,12 +51,9 @@ from omnidriver.openfoam.utils import (
     plan_block_mesh_resolution,
     plan_delta_t,
     plan_dict_block,
-    replace_block_mesh_resolutions,
-    set_delta_t,
 )
 from omnidriver.openfoam.utils import (
     plan_end_time,
-    set_end_time,
 )
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 from omnidriver.openfoam.mutators import update_foam_entry
@@ -239,348 +233,46 @@ def _apply_case(
     fv_solution_overrides: Sequence[Mapping[str, object]] | None = None,
     control_dict_overrides: Sequence[Mapping[str, object]] | None = None,
 ) -> None:
-    dimension = str(case.params["dimension"])
-    solver = str(case.params["solver"])
-    cells = int(case.params["cells"])
-    dt_value = float(case.params["dt"])
-
-    control_dict = case_root / control_dict_relpath
-    electro_properties = case_root / electro_properties_relpath
-    physics_properties = case_root / physics_properties_relpath
-    block_mesh_dict = case_root / Path(block_mesh_dict_template.format(dimension=dimension))
-    case_overrides = {
-        f"{electro_properties_scope}.dimension": f'"{dimension}"',
-        f"{electro_properties_scope}.solutionAlgorithm": solver,
-        f"{electro_properties_scope}.verificationModel.type": verification_model_type,
-    }
-    if conductivity is not None:
-        case_overrides[f"{electro_properties_scope}.conductivity"] = conductivity
-
-    ecg_scope = f"{electro_properties_scope}.ecgDomains.ECG"
-    if ecg_enabled:
-        try:
-            electrodes = ecg_electrodes_by_dimension[dimension]
-        except KeyError as exc:
-            raise ValueError(f"Missing ECG electrode set for dimension '{dimension}'") from exc
-
-        case_overrides.update(
-            {
-                f"{ecg_scope}.ecgSolver": "pseudoECG",
-                f"{ecg_scope}.verificationModel.enabled": True,
-                f"{ecg_scope}.verificationModel.dimension": f'"{dimension}"',
-                f"{ecg_scope}.verificationModel.anisotropic": (
-                    verification_model_type
-                    == "manufacturedAnisotropicMonodomainVerifier"
-                ),
-                f"{ecg_scope}.verificationModel.referenceQuadratureOrder": int(
-                    ecg_reference_quadrature_order
-                ),
-                f"{ecg_scope}.verificationModel.checkQuadratureOrders": "("
-                + " ".join(str(int(value)) for value in ecg_check_quadrature_orders)
-                + ")",
-            }
-        )
-    if mesh_family == "tet":
-        # Render-only: substitutes __LC__ and writes overlay files. gmsh/
-        # gmshToFoam/checkMesh are workflow_dag steps, not run here -- see
-        # _workflow_dag_for's docstring.
-        #
-        # The .geo output and any numerics-profile overlay files (fvSchemes/
-        # fvSolution) are siblings of the template, wherever the caller has
-        # placed it -- not hardcoded to setup/studies/tetConvergence/, since different
-        # tutorials co-locate their tet mesh with different studies. Always
-        # named "box.geo" regardless of the template's own filename: template
-        # variants exist (e.g. bidomain's own box.geo.template),
-        # but they all render into the same transient, gitignored .geo name.
-        tet_geo_relpath = tet_geo_template_relpath.parent / "box.geo"
-        render_tet_geo(case_root, cells, template_relpath=tet_geo_template_relpath, geo_relpath=tet_geo_relpath)
-        for overlay_name in _NUMERICS_PROFILES.get(numerics_profile or "", ()):
-            overlay_source = case_root / tet_geo_template_relpath.parent / overlay_name
-            shutil.copy(overlay_source, case_root / "system" / overlay_name)
-    else:
-        try:
-            cell_counts = defaults.BLOCK_MESH_RESOLUTION_BY_DIMENSION[dimension].format(cells=cells)
-        except KeyError as exc:
-            raise ValueError(f"Unsupported dimension: {dimension}") from exc
-        replace_block_mesh_resolutions(block_mesh_dict, cell_counts)
-
-    set_delta_t(control_dict, dt_value)
-    if end_time is not None:
-        set_end_time(control_dict, end_time)
-    if grad_scheme is not None:
-        update_foam_entry(
-            case_root / "system" / "fvSchemes",
-            "default",
-            _GRAD_SCHEME_TOKENS[grad_scheme],
-            scope=["gradSchemes"],
-        )
-    if phi_tolerance is not None:
-        update_foam_entry(
-            case_root / "system" / "fvSolution",
-            "tolerance",
-            phi_tolerance,
-            scope=["solvers", '"phiE|phiEFinal|phiI|phiIFinal"'],
-        )
-    if n_outer_correctors is not None:
-        update_foam_entry(
-            case_root / "system" / "fvSolution",
-            "nOuterCorrectors", n_outer_correctors,
-            scope=["PIMPLE"],
-        )
-    if n_nonorthogonal_correctors is not None:
-        update_foam_entry(
-            case_root / "system" / "fvSolution",
-            "nNonOrthogonalCorrectors", n_nonorthogonal_correctors,
-            scope=["PIMPLE"], add_if_missing=True,
-        )
-    for entry in fv_scheme_overrides or ():
-        update_foam_entry(
-            case_root / "system" / "fvSchemes", entry["key"], entry["value"],
-            scope=entry.get("scope"),
-        )
-    for entry in fv_solution_overrides or ():
-        update_foam_entry(
-            case_root / "system" / "fvSolution", entry["key"], entry["value"],
-            scope=entry.get("scope"),
-        )
-    for entry in control_dict_overrides or ():
-        update_foam_entry(
-            control_dict, entry["key"], entry["value"],
-            scope=entry.get("scope"),
-        )
-
-    apply_electro_property_overrides(electro_properties, case_overrides)
-    if ecg_enabled:
-        # Electrode names are data owned by this cardiac case, and the
-        # selected tutorial's distance-shell study expands that named set.
-        # The generic override path quite properly refuses to invent an
-        # unknown dictionary entry.  Here the cardiac adapter explicitly
-        # declares the dynamic mutation target, so a compact reusable case
-        # template and the full tutorial both receive the same positions.
-        electrode_scope = (
-            electro_properties_scope,
-            "ecgDomains",
-            "ECG",
-            "electrodePositions",
-        )
-        for electrode_name, electrode_position in electrodes.items():
-            update_foam_entry(
-                electro_properties,
-                electrode_name,
-                electrode_position,
-                scope=electrode_scope,
-                add_if_missing=True,
-            )
-    if not ecg_enabled:
-        # Entry sweeps reuse one physical tutorial directory. Remove an ECG
-        # block left by a preceding ECG-enabled case: the system builder does
-        # not route an explicit ecgSolver=none provider.
-        remove_electro_property_dict(
-            electro_properties,
-            "ecgDomains",
-            scope=electro_properties_scope,
-            missing_ok=True,
-        )
-    apply_electro_property_overrides(electro_properties, electro_property_overrides)
-    apply_physics_property_overrides(physics_properties, physics_property_overrides)
-
-
-def _plan_case(
-    case_root: Path,
-    case: CaseConfig,
-    *,
-    electro_properties_scope: str = defaults.ELECTRO_PROPERTIES_SCOPE,
-    control_dict_relpath: Path = defaults.CONTROL_DICT_RELPATH,
-    electro_properties_relpath: Path = defaults.ELECTRO_PROPERTIES_RELPATH,
-    physics_properties_relpath: Path = Path("constant/physicsProperties"),
-    electro_property_overrides: Sequence[dict[str, object]] | dict[str, object] | None = None,
-    physics_property_overrides: Sequence[dict[str, object]] | dict[str, object] | None = None,
-    verification_model_type: str = defaults.VERIFICATION_MODEL_TYPE,
-    conductivity: str | None = None,
-    ecg_enabled: bool = defaults.ECG_ENABLED,
-    ecg_reference_quadrature_order: int = defaults.ECG_REFERENCE_QUADRATURE_ORDER,
-    ecg_check_quadrature_orders: Sequence[int] = defaults.ECG_CHECK_QUADRATURE_ORDERS,
-    ecg_electrodes_by_dimension: Mapping[str, Mapping[str, str]] = defaults.ECG_ELECTRODES_BY_DIMENSION,
-    block_mesh_dict_template: str = defaults.BLOCK_MESH_DICT_TEMPLATE,
-    mesh_family: str = "hex",
-    tet_geo_template_relpath: Path = Path("setup/studies/tetConvergence/box.geo.template"),
-    numerics_profile: str | None = None,
-    grad_scheme: str | None = None,
-    phi_tolerance: float | None = None,
-    n_outer_correctors: int | None = None,
-    n_nonorthogonal_correctors: int | None = None,
-    end_time: float | None = None,
-    fv_scheme_overrides: Sequence[Mapping[str, object]] | None = None,
-    fv_solution_overrides: Sequence[Mapping[str, object]] | None = None,
-    control_dict_overrides: Sequence[Mapping[str, object]] | None = None,
-):
-    """`TutorialSpec.plan_case` (Phase 3 Task 6) -- **partial migration,
-    reported rather than forced**: only `deltaT`/`endTime` and the
-    hex-family block-mesh rewrite move onto the channel. This tutorial's
-    electroProperties edits genuinely resist the clone_and_patch/
-    ParameterAssignment contract -- the ECG electrode positions are written
-    `add_if_missing=True` (an upsert, not a set) and, when `ecg_enabled` is
-    False, an entire `ecgDomains` dict is conditionally *removed*
-    (`remove_electro_property_dict`) to clean up a block a previous,
-    ECG-enabled case run against the same reused `case_root` may have left
-    behind. Neither an upsert nor a conditional dict removal is a value a
-    `ParameterAssignment` can describe (it describes a SET at a key that
-    already exists); forcing them through `resolve_entry_overrides` would
-    either invent a new contract mid-task or silently drop the cleanup
-    behaviour a stateful, reused case_root genuinely depends on. Left as
-    direct writes, in their original relative order, same as
-    `grad_scheme`/`phi_tolerance`/`n_outer_correctors`/
-    `n_nonorthogonal_correctors`/`fv_scheme_overrides`/`fv_solution_overrides`/
-    `control_dict_overrides` (uncataloged `fvSchemes`/`fvSolution`/
-    `controlDict` edits this package's catalog does not cover) and the
-    `mesh_family == "tet"` branch (source-artifact renders/copies, Task 7's
-    domain). `control_dict_overrides` runs its own direct writes to
-    `controlDict` strictly after this function's channel commit finishes
-    (same relative order `_apply_case` uses), so there is no ordering
-    conflict between the two mechanisms touching the same file.
+    """`TutorialSpec.apply_case` -- thin wrapper over `_plan_case` (Phase 3
+    Task 6's completion, 2026-09-23 decision, "a parameter asserts a final
+    state, not only a value"). The independent direct-write implementation
+    this function used to be is retired now that its byte parity with
+    `_plan_case` has been proven (this tutorial's own characterization
+    test) -- collapsing it earlier would have made that proof circular
+    (Task 6's own report). `TutorialSpec.apply_case` still has no default
+    (`core/runtime/models.py`), so every spec must still supply a callable
+    here regardless; `invoke_case_mutation` never calls this one in
+    production once `plan_case` is set (it prefers `plan_case`
+    unconditionally), so this exists only for a caller that still invokes
+    `apply_case` directly (e.g. this tutorial's own characterization test).
     """
-    dimension = str(case.params["dimension"])
-    solver = str(case.params["solver"])
-    cells = int(case.params["cells"])
-    dt_value = float(case.params["dt"])
-
-    control_dict = case_root / control_dict_relpath
-    electro_properties = case_root / electro_properties_relpath
-    physics_properties = case_root / physics_properties_relpath
-    block_mesh_dict = case_root / Path(block_mesh_dict_template.format(dimension=dimension))
-    case_overrides = {
-        f"{electro_properties_scope}.dimension": f'"{dimension}"',
-        f"{electro_properties_scope}.solutionAlgorithm": solver,
-        f"{electro_properties_scope}.verificationModel.type": verification_model_type,
-    }
-    if conductivity is not None:
-        case_overrides[f"{electro_properties_scope}.conductivity"] = conductivity
-
-    ecg_scope = f"{electro_properties_scope}.ecgDomains.ECG"
-    if ecg_enabled:
-        try:
-            electrodes = ecg_electrodes_by_dimension[dimension]
-        except KeyError as exc:
-            raise ValueError(f"Missing ECG electrode set for dimension '{dimension}'") from exc
-
-        case_overrides.update(
-            {
-                f"{ecg_scope}.ecgSolver": "pseudoECG",
-                f"{ecg_scope}.verificationModel.enabled": True,
-                f"{ecg_scope}.verificationModel.dimension": f'"{dimension}"',
-                f"{ecg_scope}.verificationModel.anisotropic": (
-                    verification_model_type
-                    == "manufacturedAnisotropicMonodomainVerifier"
-                ),
-                f"{ecg_scope}.verificationModel.referenceQuadratureOrder": int(
-                    ecg_reference_quadrature_order
-                ),
-                f"{ecg_scope}.verificationModel.checkQuadratureOrders": "("
-                + " ".join(str(int(value)) for value in ecg_check_quadrature_orders)
-                + ")",
-            }
-        )
-    if mesh_family == "tet":
-        tet_geo_relpath = tet_geo_template_relpath.parent / "box.geo"
-        render_tet_geo(case_root, cells, template_relpath=tet_geo_template_relpath, geo_relpath=tet_geo_relpath)
-        for overlay_name in _NUMERICS_PROFILES.get(numerics_profile or "", ()):
-            overlay_source = case_root / tet_geo_template_relpath.parent / overlay_name
-            shutil.copy(overlay_source, case_root / "system" / overlay_name)
-        block_mesh_target = None
-        block_mesh_document = None
-    else:
-        try:
-            cell_counts = defaults.BLOCK_MESH_RESOLUTION_BY_DIMENSION[dimension].format(cells=cells)
-        except KeyError as exc:
-            raise ValueError(f"Unsupported dimension: {dimension}") from exc
-        block_mesh_document = str(Path(block_mesh_dict_template.format(dimension=dimension)))
-        block_mesh_target = plan_block_mesh_resolution(block_mesh_document, cell_counts)
-
-    control_dict_parameters = [plan_delta_t(dt_value, owner=PLUGIN_ID)]
-    if end_time is not None:
-        control_dict_parameters.append(plan_end_time(end_time, owner=PLUGIN_ID))
-
-    record = commit_case_overrides(
-        case_root,
-        parameters=control_dict_parameters,
-        extra_targets=(block_mesh_target,) if block_mesh_target is not None else (),
-        extra_effects=(
-            (f"rewrite hex blocks in {block_mesh_document}",)
-            if block_mesh_target is not None else ()
-        ),
-        workflow="manufactured_monodomain_pseudo_ecg",
-        requested_by="cardiacfoam.tutorials.manufactured_monodomain_pseudo_ecg",
+    _plan_case(
+        case_root, case,
+        electro_properties_scope=electro_properties_scope,
+        control_dict_relpath=control_dict_relpath,
+        electro_properties_relpath=electro_properties_relpath,
+        physics_properties_relpath=physics_properties_relpath,
+        electro_property_overrides=electro_property_overrides,
+        physics_property_overrides=physics_property_overrides,
+        verification_model_type=verification_model_type,
+        conductivity=conductivity,
+        ecg_enabled=ecg_enabled,
+        ecg_reference_quadrature_order=ecg_reference_quadrature_order,
+        ecg_check_quadrature_orders=ecg_check_quadrature_orders,
+        ecg_electrodes_by_dimension=ecg_electrodes_by_dimension,
+        block_mesh_dict_template=block_mesh_dict_template,
+        mesh_family=mesh_family,
+        tet_geo_template_relpath=tet_geo_template_relpath,
+        numerics_profile=numerics_profile,
+        grad_scheme=grad_scheme,
+        phi_tolerance=phi_tolerance,
+        n_outer_correctors=n_outer_correctors,
+        n_nonorthogonal_correctors=n_nonorthogonal_correctors,
+        end_time=end_time,
+        fv_scheme_overrides=fv_scheme_overrides,
+        fv_solution_overrides=fv_solution_overrides,
+        control_dict_overrides=control_dict_overrides,
     )
-
-    if grad_scheme is not None:
-        update_foam_entry(
-            case_root / "system" / "fvSchemes",
-            "default",
-            _GRAD_SCHEME_TOKENS[grad_scheme],
-            scope=["gradSchemes"],
-        )
-    if phi_tolerance is not None:
-        update_foam_entry(
-            case_root / "system" / "fvSolution",
-            "tolerance",
-            phi_tolerance,
-            scope=["solvers", '"phiE|phiEFinal|phiI|phiIFinal"'],
-        )
-    if n_outer_correctors is not None:
-        update_foam_entry(
-            case_root / "system" / "fvSolution",
-            "nOuterCorrectors", n_outer_correctors,
-            scope=["PIMPLE"],
-        )
-    if n_nonorthogonal_correctors is not None:
-        update_foam_entry(
-            case_root / "system" / "fvSolution",
-            "nNonOrthogonalCorrectors", n_nonorthogonal_correctors,
-            scope=["PIMPLE"], add_if_missing=True,
-        )
-    for entry in fv_scheme_overrides or ():
-        update_foam_entry(
-            case_root / "system" / "fvSchemes", entry["key"], entry["value"],
-            scope=entry.get("scope"),
-        )
-    for entry in fv_solution_overrides or ():
-        update_foam_entry(
-            case_root / "system" / "fvSolution", entry["key"], entry["value"],
-            scope=entry.get("scope"),
-        )
-    for entry in control_dict_overrides or ():
-        update_foam_entry(
-            control_dict, entry["key"], entry["value"],
-            scope=entry.get("scope"),
-        )
-
-    apply_electro_property_overrides(electro_properties, case_overrides)
-    if ecg_enabled:
-        electrode_scope = (
-            electro_properties_scope,
-            "ecgDomains",
-            "ECG",
-            "electrodePositions",
-        )
-        for electrode_name, electrode_position in electrodes.items():
-            update_foam_entry(
-                electro_properties,
-                electrode_name,
-                electrode_position,
-                scope=electrode_scope,
-                add_if_missing=True,
-            )
-    if not ecg_enabled:
-        remove_electro_property_dict(
-            electro_properties,
-            "ecgDomains",
-            scope=electro_properties_scope,
-            missing_ok=True,
-        )
-    apply_electro_property_overrides(electro_properties, electro_property_overrides)
-    apply_physics_property_overrides(physics_properties, physics_property_overrides)
-
-    return record
 
 
 def _plan_case(
@@ -789,8 +481,6 @@ def _plan_case(
         )
 
     return record
-
-
 
 
 def make_spec(

@@ -1,12 +1,17 @@
 """Phase 3 Task 3: `set_delta_t`/`set_end_time` grow a resolver each.
 
-Two characterization tests pin the exact bytes today's writers produce
-(content digests, not existence -- an existence check passes for an empty
-file). They must pass before this task's change and be unchanged after it,
-because `set_delta_t`/`set_end_time` keep writing until Task 6 migrates their
-callers.
+Characterization tests pin the exact bytes today's writers produce (content
+digests, not existence -- an existence check passes for an empty file).
 
-The rest are the failing-then-passing tests for the new pure planners,
+**Corrected 2026-09-23 (Phase 3 Task 6's completion):** `set_end_time` is
+retired -- Task 6 migrated its last caller onto `plan_end_time`, and
+`grep -rn "set_end_time(" packages/*/src/` (excluding this module's own
+former definition) returns zero. `set_delta_t`'s own characterization stays:
+it keeps one caller, `niederer_2012.py`'s `mesh_family == "tet"` branch
+(a source-artifact route that never migrates onto the channel), so it is not
+yet retired.
+
+The rest are the failing-then-passing tests for the pure planners,
 `plan_delta_t`/`plan_end_time`: they must address `system/controlDict`'s real
 `deltaT`/`endTime` keys, refuse a non-finite value at construction (the same
 guard every other `ParameterAssignment` gets, per the Phase 2 decision that
@@ -22,7 +27,7 @@ import math
 import pytest
 
 from omnidriver.core.case_write import ParameterAssignment
-from omnidriver.openfoam.utils import set_delta_t, set_end_time
+from omnidriver.openfoam.utils import set_delta_t
 
 try:
     # Imported this way, rather than folded into the module-level import
@@ -76,9 +81,6 @@ def _snapshot(directory) -> dict:
 _EXPECTED_AFTER_DELTA_T = _CONTROL_DICT_TEMPLATE.replace(
     "deltaT          1e-06;", "deltaT    0.001;"
 )
-_EXPECTED_AFTER_END_TIME = _CONTROL_DICT_TEMPLATE.replace(
-    "endTime         1;", "endTime    250.0;"
-)
 
 
 def test_set_delta_t_characterization_spelled_as_exponent(tmp_path):
@@ -115,13 +117,6 @@ def test_both_spellings_of_the_same_float_write_identical_bytes_today(tmp_path):
     set_delta_t(path_b, 0.001)
 
     assert _digest(path_a.read_text()) == _digest(path_b.read_text())
-
-
-def test_set_end_time_characterization(tmp_path):
-    path = tmp_path / "controlDict"
-    path.write_text(_CONTROL_DICT_TEMPLATE)
-    set_end_time(path, 250.0)
-    assert _digest(path.read_text()) == _digest(_EXPECTED_AFTER_END_TIME)
 
 
 # ---------------------------------------------------------------------------

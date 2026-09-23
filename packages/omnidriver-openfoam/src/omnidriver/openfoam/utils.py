@@ -16,11 +16,15 @@ _CONTROL_DICT_DOCUMENT = "system/controlDict"
 
 
 def set_delta_t(control_dict_path: Path, delta_t_seconds: float) -> None:
+    """Not yet retired (Phase 3 Task 6's completion, 2026-09-23): still has
+    one caller, `niederer_2012.py`'s `mesh_family == "tet"` branch -- a
+    source-artifact/mesh path that never migrates onto the channel (Task 7's
+    classification, same as every other tet branch in this package). Its
+    sibling `set_end_time` and `replace_block_mesh_resolutions` retired in
+    this same commit, both having lost their last caller when the eleven
+    tutorials completed their migration; this one stays until that one
+    caller either migrates or is itself retired."""
     update_foam_entry(control_dict_path, "deltaT", delta_t_seconds)
-
-
-def set_end_time(control_dict_path: Path, t_s: float) -> None:
-    update_foam_entry(control_dict_path, "endTime", t_s)
 
 
 def plan_delta_t(delta_t_seconds: float, *, owner: str) -> ParameterAssignment:
@@ -168,41 +172,16 @@ def _rewrite_hex_block_lines(
     return "".join(rewritten)
 
 
-def replace_block_mesh_resolutions(
-    block_mesh_dict_path: Path,
-    cell_counts_str: str,
-    *,
-    expected_blocks: int = 1,
-) -> None:
-    """Rewrite lines starting with ``hex (`` in an existing `block_mesh_dict_path`.
-    Replaces the cell counts portion of the hex definition with `cell_counts_str`.
-    Validates that exactly `expected_blocks` were replaced.
-
-    **Not yet retired (Phase 3 Task 4).** Kept, unchanged in behaviour,
-    beside the pure resolver `plan_block_mesh_resolution` below -- the same
-    "both are retired together, in the same commit that removes the last
-    caller" pattern Task 3 established for `set_delta_t`/`set_end_time`. Its
-    eight tutorial callers migrate onto the render/commit channel in Task 6.
-
-    **Corrected 2026-09-23 (Phase 3 Task 4):** the pre-Task-4 version wrote
-    each line to `block_mesh_dict_path` as it iterated, so a mismatched
-    `expected_blocks` still raised, but only *after* the file had already
-    been overwritten with the (wrong-count) rewrite -- an incidental,
-    undocumented side effect no test pinned (checked:
-    `test_missing_hex_line_raises` never reads the file back). Refactored
-    onto `_rewrite_hex_block_lines`, which computes the full rewritten text
-    in memory first; a raised `KeyError` now leaves the file untouched. No
-    currently-passing test asserted the old partial-write behaviour, so this
-    is a correction, not a silently accepted regression.
-    """
-    if not block_mesh_dict_path.exists():
-        raise FileNotFoundError(f"Missing mesh dictionary: {block_mesh_dict_path}")
-
-    rewritten = _rewrite_hex_block_lines(
-        block_mesh_dict_path.read_text(), cell_counts_str, expected_blocks,
-        label=str(block_mesh_dict_path),
-    )
-    block_mesh_dict_path.write_text(rewritten)
+#: **`replace_block_mesh_resolutions` retired 2026-09-23 (Phase 3 Task 6's
+#: completion).** It used to live here, beside `plan_block_mesh_resolution`
+#: below, as the direct writer `_apply_case` called until its callers
+#: migrated onto the channel (Task 3's "both are retired together, in the
+#: same commit that removes the last caller" pattern). Task 6 migrated all
+#: eight of its tutorial callers; `grep -rn "replace_block_mesh_resolutions("
+#: packages/*/src/` (excluding this module's own former definition) returns
+#: zero. `_rewrite_hex_block_lines` above -- the shared grammar both this
+#: function and `render_patch_case_files` used -- stays: the renderer is
+#: still a real caller.
 
 
 def plan_block_mesh_resolution(

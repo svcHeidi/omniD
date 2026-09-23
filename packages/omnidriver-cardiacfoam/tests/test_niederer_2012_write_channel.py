@@ -85,6 +85,43 @@ class TestNiederer2012WriteChannel(unittest.TestCase):
         self.assertIsInstance(record, CaseWriteRecord)
         self.assertEqual(digests(plan_root, *_RELPATHS), digests(apply_root, *_RELPATHS))
 
+    def test_apply_case_with_mesh_family_tet_renders_geo_and_skips_block_mesh(self) -> None:
+        """`_apply_case`'s `mesh_family == "tet"` branch has no `_plan_case`
+        counterpart to delegate to (that function's own docstring: "migrates
+        the hex-family path only") -- `make_spec` only wires
+        `TutorialSpec.plan_case` when `mesh_family == "hex"`, so
+        `apply_case` stays this branch's only route, unchanged since before
+        Task 6's write-channel migration touched this tutorial at all.
+        Added 2026-09-23 (Phase 3 Commit 3): the *hex* path's collapse to a
+        thin `_plan_case` wrapper was mechanical, but a first, unconditional
+        attempt at it would have silently broken this branch (confirmed
+        against `manufactured_eikonal_ecg`'s identical shape, which had a
+        real test to catch it; niederer_2012 had none, so this test closes
+        that gap rather than leaving the fix unverified).
+        """
+        root = self.tmp / "apply_tet"
+        write_electro_properties(root)
+        write_physics_properties(root)
+        write_control_dict(root)
+        # No blockMeshDict at all: a tet call must never try to touch it.
+        template_dir = root / "setup" / "studies" / "tetConvergence"
+        template_dir.mkdir(parents=True, exist_ok=True)
+        (template_dir / "slab.geo.template").write_text(
+            "lc = __LC__;\nBox(1) = {0, 0, 0, 1, 1, 1};\n"
+        )
+
+        tut._apply_case(
+            root, _case(), mesh_family="tet",
+            tet_geo_template_relpath=Path("setup/studies/tetConvergence/slab.geo.template"),
+        )
+
+        geo_text = (template_dir / "slab.geo").read_text()
+        self.assertIn("lc = 0.0002;", geo_text)  # dx_mm=0.2 -> 0.2e-3 m
+        self.assertFalse((root / "system" / "blockMeshDict").exists())
+        electro_text = (root / "constant" / "electroProperties").read_text()
+        self.assertIn("myocyte", electro_text)
+        self.assertIn("implicit", electro_text)
+
 
 if __name__ == "__main__":
     unittest.main()

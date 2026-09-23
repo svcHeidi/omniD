@@ -100,36 +100,78 @@ def test_the_di90_sweep_axis_produces_one_case_per_requested_value():
     assert [c.params["requestedDI90_ms"] for c in cases] == boundaries
 
 
+#: A real, catalog-valid electroProperties fixture -- byte-for-byte the same
+#: shape `test_cable_1d_restitution_write_channel.py` already uses as this
+#: tutorial's own write-channel characterization fixture. Needed since
+#: 2026-09-23 (Phase 3 Commit 3): `_apply_case` collapsed to a thin wrapper
+#: over `_plan_case` (the decision "a parameter asserts a final state, not
+#: only a value"), so it now drives a real `commit_case_overrides` channel
+#: commit -- monkeypatching `replace_block_mesh_resolutions`/`set_delta_t`/
+#: `set_end_time`/`apply_electro_property_overrides` (this test's old
+#: mechanism) no longer intercepts anything, since none of those direct
+#: writers are called any more. A real fixture is simpler than mocking the
+#: channel's own resolver/renderer chain, and it is what this tutorial's own
+#: characterization test already proves round-trips correctly.
+_ELECTRO_TEXT = "\n".join(
+    [
+        "myocardiumSolver monodomainSolver;",
+        "",
+        "monodomainSolverCoeffs",
+        "{",
+        "    ionicModel Stewart;",
+        "    tissue myocyte;",
+        "    conductivity [-1 -3 3 0 0 2 0] (0.1 0 0 0.1 0 0.1);",
+        "    solutionAlgorithm explicit;",
+        "    externalStimulus",
+        "    {",
+        "        stimulusStartTimeList (0);",
+        "        stimulusLocationMinList ((0 0 0));",
+        "        stimulusLocationMaxList ((0 0 0));",
+        "        stimulusDurationList (0);",
+        "        stimulusIntensityList (0);",
+        "    }",
+        "}",
+        "",
+    ]
+)
+
+_BLOCK_MESH_TEXT = (
+    "FoamFile\n{\n    object blockMeshDict;\n}\n"
+    "blocks\n(\n"
+    "    hex (0 1 2 3 4 5 6 7) (10 1 1) simpleGrading (1 1 1)\n"
+    ");\n"
+)
+
+
+def _write_real_case(tmp_path) -> None:
+    from write_channel_test_support import write_control_dict, write_physics_properties
+
+    (tmp_path / "constant").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "constant" / "electroProperties").write_text(_ELECTRO_TEXT)
+    write_physics_properties(tmp_path)
+    write_control_dict(tmp_path)
+    (tmp_path / "system").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "system" / "blockMeshDict").write_text(_BLOCK_MESH_TEXT)
+
+
 def _apply(tmp_path, case, **kwargs):
     """Drive _apply_case far enough to read back its protocol sidecar."""
     from omnidriver.cardiacfoam.tutorials import cable_1d_restitution as spec
 
-    written: dict[str, object] = {}
-
-    def _capture(_path, overrides):
-        if isinstance(overrides, dict):
-            written.update(overrides)
-
-    # The dictionary writers and mesh helpers touch a real OpenFOAM case; this
-    # test is about the schedule, so stub the case-mutating edges only.
-    originals = (
-        spec.replace_block_mesh_resolutions, spec.set_delta_t, spec.set_end_time,
-        spec.apply_electro_property_overrides, spec.apply_physics_property_overrides,
-    )
-    spec.replace_block_mesh_resolutions = lambda *a, **k: None
-    spec.set_delta_t = lambda *a, **k: None
-    spec.set_end_time = lambda *a, **k: None
-    spec.apply_electro_property_overrides = _capture
-    spec.apply_physics_property_overrides = lambda *a, **k: None
-    try:
-        spec._apply_case(tmp_path, case, **kwargs)
-    finally:
-        (
-            spec.replace_block_mesh_resolutions, spec.set_delta_t, spec.set_end_time,
-            spec.apply_electro_property_overrides, spec.apply_physics_property_overrides,
-        ) = originals
+    _write_real_case(tmp_path)
+    spec._apply_case(tmp_path, case, **kwargs)
     sidecar = json.loads((tmp_path / ".cardiacfoam_protocol.json").read_text())
+    electro_text = (tmp_path / "constant" / "electroProperties").read_text()
+    written = {"...externalStimulus.stimulusStartTimeList": _read_stimulus_start_time_list(electro_text)}
     return sidecar, written
+
+
+def _read_stimulus_start_time_list(electro_text: str) -> str:
+    for line in electro_text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("stimulusStartTimeList"):
+            return stripped.removeprefix("stimulusStartTimeList").strip().rstrip(";").strip()
+    raise AssertionError("stimulusStartTimeList not found in rendered electroProperties")
 
 
 def test_di90_scheduling_places_S2_at_the_reference_plus_the_requested_interval(tmp_path):

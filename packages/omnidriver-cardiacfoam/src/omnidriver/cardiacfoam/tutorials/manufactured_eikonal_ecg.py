@@ -51,8 +51,6 @@ from omnidriver.core.specs.common import (
 )
 from omnidriver.openfoam.utils import (
     plan_block_mesh_resolution,
-    replace_block_mesh_resolutions,
-    set_delta_t,
 )
 from omnidriver.openfoam.tet_mesh_provisioning import render_tet_geo
 
@@ -209,12 +207,58 @@ def _apply_case(
     fv_scheme_overrides: Sequence[Mapping[str, object]] | None = None,
     fv_solution_overrides: Sequence[Mapping[str, object]] | None = None,
 ) -> None:
+    """`TutorialSpec.apply_case` -- **conditionally** a thin wrapper over
+    `_plan_case` (Phase 3 Task 6's completion, 2026-09-23 decision, "a
+    parameter asserts a final state, not only a value").
+
+    **Corrected 2026-09-23, found while collapsing this function
+    mechanically and caught by `test_manufactured_eikonal_ecg_tet.py`
+    (reverted and confirmed: an unconditional delegate raised `KeyError:
+    "Expected to update 1 hex blocks in system/blockMeshDict.3D, but found
+    0"` for every `mesh_family="tet"` call).** `_plan_case` "covers the
+    hex-family path only" by its own, pre-existing docstring -- it always
+    resolves a block-mesh target, with no `mesh_family` branch of its own,
+    and `make_spec` already only wires `TutorialSpec.plan_case` when
+    `mesh_family == "hex"` (`plan_case=... if mesh_family == "hex" else
+    None`), leaving `apply_case` as the ONLY mutation route for
+    `mesh_family="tet"` (`invoke_case_mutation` falls back to it with a
+    `DeprecationWarning`, same as any not-yet-migrated spec). An
+    unconditional collapse silently broke that route. `niederer_2012.py`
+    documents the identical scoping decision and has the identical gap; both
+    are fixed the same way here: hex delegates to `_plan_case`; tet keeps
+    its own independent implementation, unchanged from before Task 6's
+    write-channel migration, and does not attempt to run through
+    `_plan_case`, which cannot serve it.
+    """
+    if mesh_family == "hex":
+        _plan_case(
+            case_root, case,
+            electro_properties_scope=electro_properties_scope,
+            electro_properties_relpath=electro_properties_relpath,
+            physics_properties_relpath=physics_properties_relpath,
+            electro_property_overrides=electro_property_overrides,
+            physics_property_overrides=physics_property_overrides,
+            verification_model_type=verification_model_type,
+            conductivity=conductivity,
+            eikonal_advection_diffusion_approach=eikonal_advection_diffusion_approach,
+            ecg_reference_quadrature_order=ecg_reference_quadrature_order,
+            ecg_check_quadrature_orders=ecg_check_quadrature_orders,
+            ecg_electrodes_by_dimension=ecg_electrodes_by_dimension,
+            block_mesh_dict_template=block_mesh_dict_template,
+            mesh_family=mesh_family,
+            tet_geo_template_relpath=tet_geo_template_relpath,
+            numerics_profile=numerics_profile,
+            grad_scheme=grad_scheme,
+            fv_scheme_overrides=fv_scheme_overrides,
+            fv_solution_overrides=fv_solution_overrides,
+        )
+        return
+
     dimension = str(case.params["dimension"])
     cells = int(case.params["cells"])
 
     electro_properties = case_root / electro_properties_relpath
     physics_properties = case_root / physics_properties_relpath
-    block_mesh_dict = case_root / Path(block_mesh_dict_template.format(dimension=dimension))
     ecg_scope = f"{electro_properties_scope}.ecgDomains.ECG"
 
     try:
@@ -242,26 +286,19 @@ def _apply_case(
             electrode_position
         )
 
-    if mesh_family == "tet":
-        # The .geo output and any numerics-profile overlay files (e.g.
-        # fvSolution) are siblings of the template, wherever the caller has
-        # placed it -- co-located with the study that drives it
-        # (setup/studies/tetConvergence/), matching bidomain/monodomainPseudoECG.
-        tet_geo_relpath = tet_geo_template_relpath.parent / "box.geo"
-        render_tet_geo(
-            case_root, cells,
-            template_relpath=tet_geo_template_relpath,
-            geo_relpath=tet_geo_relpath,
-        )
-        for overlay_name in defaults.TET_NUMERICS_PROFILES.get(numerics_profile or "", ()):
-            overlay_source = case_root / tet_geo_template_relpath.parent / overlay_name
-            shutil.copy(overlay_source, case_root / "system" / overlay_name)
-    else:
-        try:
-            cell_counts = defaults.BLOCK_MESH_RESOLUTION_BY_DIMENSION[dimension].format(cells=cells)
-        except KeyError as exc:
-            raise ValueError(f"Unsupported dimension: {dimension}") from exc
-        replace_block_mesh_resolutions(block_mesh_dict, cell_counts)
+    # The .geo output and any numerics-profile overlay files (e.g.
+    # fvSolution) are siblings of the template, wherever the caller has
+    # placed it -- co-located with the study that drives it
+    # (setup/studies/tetConvergence/), matching bidomain/monodomainPseudoECG.
+    tet_geo_relpath = tet_geo_template_relpath.parent / "box.geo"
+    render_tet_geo(
+        case_root, cells,
+        template_relpath=tet_geo_template_relpath,
+        geo_relpath=tet_geo_relpath,
+    )
+    for overlay_name in defaults.TET_NUMERICS_PROFILES.get(numerics_profile or "", ()):
+        overlay_source = case_root / tet_geo_template_relpath.parent / overlay_name
+        shutil.copy(overlay_source, case_root / "system" / overlay_name)
 
     if grad_scheme is not None:
         update_foam_entry(

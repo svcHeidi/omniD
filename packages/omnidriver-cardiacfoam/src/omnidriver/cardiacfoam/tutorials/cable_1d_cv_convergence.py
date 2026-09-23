@@ -38,8 +38,6 @@ from omnidriver.cardiacfoam.tutorials.defaults import cable_1d_cv_convergence as
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 from omnidriver.cardiacfoam.overrides import (
     PLUGIN_ID,
-    apply_electro_property_overrides,
-    apply_physics_property_overrides,
     commit_case_overrides,
     merge_assignments,
     resolve_entry_overrides,
@@ -53,9 +51,6 @@ from omnidriver.openfoam.utils import (
     plan_block_mesh_resolution,
     plan_delta_t,
     plan_end_time,
-    replace_block_mesh_resolutions,
-    set_delta_t,
-    set_end_time,
 )
 from omnidriver.openfoam.mesh_provisioning import cell_counts_from_dx
 
@@ -111,28 +106,32 @@ def _apply_case(
     cross_section_cell_counts: Sequence[int] = defaults.CROSS_SECTION_CELL_COUNTS,
     end_time_s: float = defaults.END_TIME_S,
 ) -> None:
-    control_dict = case_root / control_dict_relpath
-    block_mesh_dict = case_root / block_mesh_dict_relpath
-    electro_properties = case_root / electro_properties_relpath
-    physics_properties = case_root / physics_properties_relpath
-
-    (x_cells,) = cell_counts_from_dx(float(case.params["dx_mm"]), (cable_length_mm,))
-    cell_counts_str = f"{x_cells} {int(cross_section_cell_counts[0])} {int(cross_section_cell_counts[1])}"
-    replace_block_mesh_resolutions(block_mesh_dict, cell_counts_str)
-    set_delta_t(control_dict, float(case.params["dt_ms"]) * 1.0e-3)
-    set_end_time(control_dict, end_time_s)
-
-    case_overrides = {
-        f"{electro_properties_scope}.conductivity": str(case.params["conductivity"]),
-    }
-    if electro_properties_scope != "eikonalSolverCoeffs":
-        case_overrides[f"{electro_properties_scope}.tissue"] = str(case.params["tissue"])
-        case_overrides[f"{electro_properties_scope}.ionicModel"] = str(case.params["ionicModel"])
-        case_overrides[f"{electro_properties_scope}.solutionAlgorithm"] = str(case.params["solver"])
-
-    apply_electro_property_overrides(electro_properties, case_overrides)
-    apply_electro_property_overrides(electro_properties, electro_property_overrides)
-    apply_physics_property_overrides(physics_properties, physics_property_overrides)
+    """`TutorialSpec.apply_case` -- thin wrapper over `_plan_case` (Phase 3
+    Task 6's completion, 2026-09-23 decision, "a parameter asserts a final
+    state, not only a value"). The independent direct-write implementation
+    this function used to be is retired now that its byte parity with
+    `_plan_case` has been proven (this tutorial's own characterization
+    test) -- collapsing it earlier would have made that proof circular
+    (Task 6's own report). `TutorialSpec.apply_case` still has no default
+    (`core/runtime/models.py`), so every spec must still supply a callable
+    here regardless; `invoke_case_mutation` never calls this one in
+    production once `plan_case` is set (it prefers `plan_case`
+    unconditionally), so this exists only for a caller that still invokes
+    `apply_case` directly (e.g. this tutorial's own characterization test).
+    """
+    _plan_case(
+        case_root, case,
+        electro_properties_scope=electro_properties_scope,
+        control_dict_relpath=control_dict_relpath,
+        block_mesh_dict_relpath=block_mesh_dict_relpath,
+        electro_properties_relpath=electro_properties_relpath,
+        physics_properties_relpath=physics_properties_relpath,
+        electro_property_overrides=electro_property_overrides,
+        physics_property_overrides=physics_property_overrides,
+        cable_length_mm=cable_length_mm,
+        cross_section_cell_counts=cross_section_cell_counts,
+        end_time_s=end_time_s,
+    )
 
 
 def _plan_case(

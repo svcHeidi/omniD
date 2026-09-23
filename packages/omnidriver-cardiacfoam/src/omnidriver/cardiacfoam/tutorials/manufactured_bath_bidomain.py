@@ -40,12 +40,7 @@ from omnidriver.openfoam.parallel_execution import solve_steps
 from omnidriver.cardiacfoam.overrides import (
     PLUGIN_ID,
     apply_electro_property_overrides,
-    apply_physics_property_overrides,
     commit_case_overrides,
-    ensure_electro_property_dict,
-    remove_electro_property_dict,
-    ensure_electro_property_entry,
-    remove_electro_property_entry,
     merge_assignments,
     resolve_electro_property_ensure,
     resolve_electro_property_removal,
@@ -62,9 +57,6 @@ from omnidriver.openfoam.utils import (
     plan_dict_block,
     plan_end_time,
     plan_write_interval,
-    replace_block_mesh_resolutions,
-    set_delta_t,
-    set_end_time,
 )
 from omnidriver.openfoam.tet_mesh_provisioning import render_tet_geo
 from .manufactured_monodomain_pseudo_ecg import _build_cases
@@ -233,22 +225,6 @@ def _workflow_dag_for(
     return {"steps": mesh_steps + steps}
 
 
-def _ensure_patch_entry(
-    electro_properties: Path,
-    electro_properties_scope: str,
-    patch_list: str,
-    patch_name: str,
-    value: float,
-) -> None:
-    """Set one bath boundary patch entry, adding it if absent."""
-    ensure_electro_property_entry(
-        electro_properties,
-        patch_name,
-        value,
-        scope=[electro_properties_scope, "bathPotentialDomain", patch_list],
-    )
-
-
 def _apply_case(
     case_root: Path,
     case: CaseConfig,
@@ -273,181 +249,41 @@ def _apply_case(
     fv_solution_overrides: Sequence[Mapping[str, object]] | None = None,
     tet_geo_template_relpath: Path = Path("setup/studies/tetConvergence/three_domain_box.geo.template"),
 ) -> None:
-    dimension = str(case.params["dimension"])
-    solver = str(case.params["solver"])
-    cells = int(case.params["cells"])
-    dt_value = float(case.params["dt"])
-
-    control_dict = case_root / control_dict_relpath
-    electro_properties = case_root / electro_properties_relpath
-    physics_properties = case_root / physics_properties_relpath
-    block_mesh_dict = case_root / Path(block_mesh_dict_template.format(dimension=dimension))
-
-    case_overrides = {
-        f"{electro_properties_scope}.dimension": f'"{dimension}"',
-        f"{electro_properties_scope}.solutionAlgorithm": solver,
-        f"{electro_properties_scope}.bathPredictorCorrector": bool(
-            bath_predictor_corrector
-        ),
-        f"{electro_properties_scope}.verificationModel.type": verification_model_type,
-        f"{electro_properties_scope}.verificationModel.fdaBathVariant": fda_bath_variant,
-        f"{electro_properties_scope}.manufacturedBidomain.fdaBathVariant": fda_bath_variant,
-    }
-
-    if fda_bath_variant not in ("groundElectrode", "electrodePair"):
-        raise ValueError(
-            "fda_bath_variant must be 'groundElectrode' or 'electrodePair', "
-            f"got {fda_bath_variant!r}"
-        )
-
-    if mesh_family == "tet":
-        render_tet_geo(
-            case_root,
-            cells,
-            template_relpath=tet_geo_template_relpath,
-            geo_relpath=Path("setup/studies/tetConvergence/three_domain_box.geo"),
-        )
-        # No electroProperties copy here. The tet path used to overwrite
-        # constant/electroProperties with a full duplicate dictionary shipped
-        # under setup/mesh/tet/. Everything that duplicate carried is either
-        # cosmetic, per-run state this function sets anyway (dimension,
-        # fdaBathVariant, the patch blocks), or numerical precision -- and the
-        # precision has been restored into constant/electroProperties, which
-        # is now the single source. manufactured_bidomain.py has never needed
-        # such a copy.
-        for overlay_name in _TET_NUMERICS_PROFILES.get(numerics_profile or "", ()):
-            shutil.copy(
-                case_root / "setup" / "studies" / "tetConvergence" / overlay_name,
-                case_root / "system" / overlay_name,
-            )
-    else:
-        try:
-            cell_counts = defaults.BLOCK_MESH_RESOLUTION_BY_DIMENSION[dimension].format(cells=cells)
-        except KeyError as exc:
-            raise ValueError(f"Unsupported dimension: {dimension}") from exc
-        replace_block_mesh_resolutions(block_mesh_dict, cell_counts, expected_blocks=3)
-
-    # The two FDA bidomain-with-bath variants differ in their outer bath
-    # boundary conditions, and the dictionary has to follow the verifier or the
-    # reported norms describe a different problem than the one solved.
-    #   groundElectrode: Dirichlet phiE = 0 at x = -1, I_E = +alpha at x = 2.
-    #   electrodePair:   I_E = -alpha at x = -1 and +alpha at x = 2, no ground.
-    #                    The integral of I_E over the boundary is zero so the
-    #                    problem is solvable, but phiE floats and needs a
-    #                    reference point to pin the constant.
-    bath_scope = f"{electro_properties_scope}.bathPotentialDomain"
-    if fda_bath_variant == "electrodePair":
-        # groundPatches and surfaceCurrentPatches are mutually exclusive per
-        # patch (extracellularPotentialDomain.C rejects a patch listed in
-        # both). The committed electroProperties records whichever variant
-        # ran last -- the shared case_root entry-based sweeps mutate in
-        # place -- so it may carry groundPatches.xMin; switching variants
-        # must remove it, not just add surfaceCurrentPatches.xMin.
-        # xMin is a scalar entry, so this needs the entry remover: the
-        # dict remover rejects it for having no opening brace, and
-        # missing_ok covers only absence, not a shape mismatch.
-        remove_electro_property_entry(
-            electro_properties,
-            "xMin",
-            scope=[electro_properties_scope, "bathPotentialDomain", "groundPatches"],
-            missing_ok=True,
-        )
-        ref_y, ref_z = _phi_e_ref_point_yz(dimension, cells)
-        # Patch entries are upserts, not updates: which list holds a patch
-        # depends on the variant the case was last written for, so the key may
-        # legitimately be absent. Everything else stays a strict update.
-        _ensure_patch_entry(
-            electro_properties, electro_properties_scope,
-            "surfaceCurrentPatches", "xMin", -defaults.FDA_ALPHA,
-        )
-        _ensure_patch_entry(
-            electro_properties, electro_properties_scope,
-            "surfaceCurrentPatches", "xMax", defaults.FDA_ALPHA,
-        )
-        case_overrides.update(
-            {
-                f"{bath_scope}.phiERefPoint": f"(-0.9 {ref_y} {ref_z})",
-                f"{bath_scope}.phiEReferenceValue": 0.0,
-            }
-        )
-    else:
-        # Symmetric cleanup: a prior electrodePair case sharing this
-        # case_root may have left surfaceCurrentPatches.xMin behind, which
-        # would collide with groundPatches.xMin below the same way.
-        remove_electro_property_entry(
-            electro_properties,
-            "xMin",
-            scope=[electro_properties_scope, "bathPotentialDomain", "surfaceCurrentPatches"],
-            missing_ok=True,
-        )
-        _ensure_patch_entry(
-            electro_properties, electro_properties_scope,
-            "groundPatches", "xMin", 0.0,
-        )
-        _ensure_patch_entry(
-            electro_properties, electro_properties_scope,
-            "surfaceCurrentPatches", "xMax", defaults.FDA_ALPHA,
-        )
-
-    if ecg_enabled:
-        ensure_electro_property_dict(
-            electro_properties,
-            "ecgDomains",
-            _DEFAULT_ECG_DOMAINS_BLOCK,
-            scope=electro_properties_scope,
-        )
-        case_overrides.update(
-            {
-                f"{electro_properties_scope}.ecgDomains.bodyECG.ecgSolver": "torsoECG",
-                f"{electro_properties_scope}.ecgDomains.bodyECG.ecgVerificationModel":
-                    "bathECGManufacturedVerifier",
-                f"{electro_properties_scope}.ecgDomains.pseudoECGSignals.ecgSolver": "pseudoECG",
-            }
-        )
-
-    set_delta_t(control_dict, dt_value)
-    if end_time is not None:
-        update_foam_entry(control_dict, "endTime", end_time)
-        # writeControl is adjustableRunTime (time-based, not step-count-based)
-        # so every case in a temporal-convergence sweep writes a
-        # reconstructable time regardless of how few steps its deltaT takes
-        # to reach endTime; writeInterval must track an overridden endTime
-        # or it stays pinned to the checked-in default and stops matching.
-        update_foam_entry(control_dict, "writeInterval", end_time)
-    if grad_scheme is not None:
-        update_foam_entry(
-            case_root / "system" / "fvSchemes",
-            "default",
-            _GRAD_SCHEME_TOKENS[grad_scheme],
-            scope=["gradSchemes"],
-        )
-    if phi_tolerance is not None:
-        update_foam_entry(
-            case_root / "system" / "fvSolution",
-            "tolerance",
-            phi_tolerance,
-            scope=["solvers", '"phiE|phiEFinal|phiI|phiIFinal"'],
-        )
-    for entry in fv_scheme_overrides or ():
-        update_foam_entry(
-            case_root / "system" / "fvSchemes", entry["key"], entry["value"],
-            scope=entry.get("scope"),
-        )
-    for entry in fv_solution_overrides or ():
-        update_foam_entry(
-            case_root / "system" / "fvSolution", entry["key"], entry["value"],
-            scope=entry.get("scope"),
-        )
-    apply_electro_property_overrides(electro_properties, case_overrides)
-    if not ecg_enabled:
-        remove_electro_property_dict(
-            electro_properties,
-            "ecgDomains",
-            scope=electro_properties_scope,
-            missing_ok=True,
-        )
-    apply_electro_property_overrides(electro_properties, electro_property_overrides)
-    apply_physics_property_overrides(physics_properties, physics_property_overrides)
+    """`TutorialSpec.apply_case` -- thin wrapper over `_plan_case` (Phase 3
+    Task 6's completion, 2026-09-23 decision, "a parameter asserts a final
+    state, not only a value"). The independent direct-write implementation
+    this function used to be is retired now that its byte parity with
+    `_plan_case` has been proven (this tutorial's own characterization
+    test) -- collapsing it earlier would have made that proof circular
+    (Task 6's own report). `TutorialSpec.apply_case` still has no default
+    (`core/runtime/models.py`), so every spec must still supply a callable
+    here regardless; `invoke_case_mutation` never calls this one in
+    production once `plan_case` is set (it prefers `plan_case`
+    unconditionally), so this exists only for a caller that still invokes
+    `apply_case` directly (e.g. this tutorial's own characterization test).
+    """
+    _plan_case(
+        case_root, case,
+        electro_properties_scope=electro_properties_scope,
+        control_dict_relpath=control_dict_relpath,
+        electro_properties_relpath=electro_properties_relpath,
+        physics_properties_relpath=physics_properties_relpath,
+        electro_property_overrides=electro_property_overrides,
+        physics_property_overrides=physics_property_overrides,
+        verification_model_type=verification_model_type,
+        ecg_enabled=ecg_enabled,
+        block_mesh_dict_template=block_mesh_dict_template,
+        bath_predictor_corrector=bath_predictor_corrector,
+        fda_bath_variant=fda_bath_variant,
+        mesh_family=mesh_family,
+        numerics_profile=numerics_profile,
+        grad_scheme=grad_scheme,
+        phi_tolerance=phi_tolerance,
+        end_time=end_time,
+        fv_scheme_overrides=fv_scheme_overrides,
+        fv_solution_overrides=fv_solution_overrides,
+        tet_geo_template_relpath=tet_geo_template_relpath,
+    )
 
 
 def _plan_case(
@@ -718,8 +554,6 @@ def _plan_case(
     apply_electro_property_overrides(electro_properties, uncataloged_case_overrides)
 
     return record
-
-
 
 
 def make_spec(

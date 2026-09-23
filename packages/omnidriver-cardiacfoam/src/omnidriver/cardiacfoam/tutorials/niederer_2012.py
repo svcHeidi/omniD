@@ -49,7 +49,6 @@ from omnidriver.openfoam.utils import (
     plan_block_mesh_resolution,
     plan_delta_t,
     plan_end_time,
-    replace_block_mesh_resolutions,
     set_delta_t,
 )
 from omnidriver.openfoam.mesh_provisioning import cell_counts_from_dx
@@ -171,8 +170,45 @@ def _apply_case(
     slab_size_mm: Sequence[float] = defaults.SLAB_SIZE_MM,
     end_time_by_dx: Mapping[float, float] = defaults.END_TIME_BY_DX,
 ) -> None:
+    """`TutorialSpec.apply_case` -- **conditionally** a thin wrapper over
+    `_plan_case` (Phase 3 Task 6's completion, 2026-09-23 decision, "a
+    parameter asserts a final state, not only a value").
+
+    **Corrected 2026-09-23, found while collapsing this function
+    mechanically (the identical gap `manufactured_eikonal_ecg.py` had,
+    caught there by a real test failure; fixed proactively here before it
+    could hide the same way -- this tutorial had no equivalent direct-tet
+    test to catch it, confirmed by running the full suite against an
+    unconditional collapse and finding none red).** `_plan_case`'s own,
+    pre-existing docstring already says it "migrates the hex-family path
+    only" and "is not reachable" for `mesh_family="tet"`; `make_spec`
+    already only wires `TutorialSpec.plan_case` when `mesh_family == "hex"`
+    (`plan_case=... if mesh_family == "hex" else None`), leaving
+    `apply_case` as the only mutation route for `mesh_family="tet"`
+    (`invoke_case_mutation` falls back to it with a `DeprecationWarning`,
+    same as any not-yet-migrated spec). An unconditional collapse would
+    have silently broken that route the first time it ran. Hex delegates to
+    `_plan_case`; tet keeps its own independent implementation, unchanged
+    from before Task 6's write-channel migration.
+    """
+    if mesh_family == "hex":
+        _plan_case(
+            case_root, case,
+            mesh_family=mesh_family,
+            tet_geo_template_relpath=tet_geo_template_relpath,
+            electro_properties_scope=electro_properties_scope,
+            control_dict_relpath=control_dict_relpath,
+            block_mesh_dict_relpath=block_mesh_dict_relpath,
+            electro_properties_relpath=electro_properties_relpath,
+            physics_properties_relpath=physics_properties_relpath,
+            electro_property_overrides=electro_property_overrides,
+            physics_property_overrides=physics_property_overrides,
+            slab_size_mm=slab_size_mm,
+            end_time_by_dx=end_time_by_dx,
+        )
+        return
+
     control_dict = case_root / control_dict_relpath
-    block_mesh_dict = case_root / block_mesh_dict_relpath
     electro_properties = case_root / electro_properties_relpath
     physics_properties = case_root / physics_properties_relpath
 
@@ -187,17 +223,14 @@ def _apply_case(
         f"{electro_properties_scope}.solutionAlgorithm": solver,
     }
 
-    if mesh_family == "tet":
-        template_file = case_root / tet_geo_template_relpath
-        if not template_file.exists():
-            raise FileNotFoundError(f"Missing tet geo template: {template_file}")
-        lc_m = dx_mm * 1e-3
-        rendered = template_file.read_text().replace("__LC__", str(lc_m))
-        target_file = case_root / "setup" / "studies" / "tetConvergence" / "slab.geo"
-        target_file.write_text(rendered)
-    else:
-        axis_cell_counts = [str(count) for count in cell_counts_from_dx(dx_mm, slab_size_mm)]
-        replace_block_mesh_resolutions(block_mesh_dict, " ".join(axis_cell_counts))
+    template_file = case_root / tet_geo_template_relpath
+    if not template_file.exists():
+        raise FileNotFoundError(f"Missing tet geo template: {template_file}")
+    lc_m = dx_mm * 1e-3
+    rendered = template_file.read_text().replace("__LC__", str(lc_m))
+    target_file = case_root / "setup" / "studies" / "tetConvergence" / "slab.geo"
+    target_file.write_text(rendered)
+
     # Input dt is provided in milliseconds in the JSON/spec settings.
     set_delta_t(control_dict, dt_ms * 1.0e-3)
     _update_end_time(control_dict, dx_mm, end_time_by_dx=end_time_by_dx)

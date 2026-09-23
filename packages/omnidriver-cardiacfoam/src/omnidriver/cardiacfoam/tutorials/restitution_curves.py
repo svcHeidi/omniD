@@ -37,8 +37,6 @@ from pathlib import Path
 from omnidriver.cardiacfoam.tutorials.defaults import restitution_curves as defaults
 from omnidriver.cardiacfoam.overrides import (
     PLUGIN_ID,
-    apply_electro_property_overrides,
-    apply_physics_property_overrides,
     commit_case_overrides,
     merge_assignments,
     resolve_entry_overrides,
@@ -49,7 +47,6 @@ from omnidriver.core.specs.common import (
 )
 from omnidriver.openfoam.utils import (
     plan_end_time,
-    set_end_time,
 )
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 
@@ -97,33 +94,34 @@ def _apply_case(
     electro_property_overrides: Mapping[str, object] | Sequence[Mapping[str, object]] | None = None,
     physics_property_overrides: Mapping[str, object] | Sequence[Mapping[str, object]] | None = None,
 ) -> None:
-    ionic_model = case.params["ionicModel"]
-    tissue = case.params["tissue"]
-    s2_interval_ms = case.params["s2Interval"]
-
-    if ionic_model not in stimulus_map:
-        raise KeyError(f"Missing stimulus amplitude for ionic model '{ionic_model}'")
-
-    electro_properties_file = case_root / electro_properties_relpath
-    control_dict_file = case_root / control_dict_relpath
-    physics_properties_file = case_root / physics_properties_relpath
-    case_overrides = {
-        f"{electro_properties_scope}.tissue": tissue,
-        f"{electro_properties_scope}.ionicModel": ionic_model,
-        f"{electro_properties_scope}.singleCellStimulus.stim_amplitude": stimulus_map[ionic_model],
-        f"{electro_properties_scope}.singleCellStimulus.stim_period_S1": s1_interval_ms,
-        f"{electro_properties_scope}.singleCellStimulus.nstim1": n_s1,
-        f"{electro_properties_scope}.singleCellStimulus.stim_period_S2": s2_interval_ms,
-        f"{electro_properties_scope}.singleCellStimulus.nstim2": n_s2,
-        f"{electro_properties_scope}.writeAfterTime": write_after_time_s,
-    }
-
-    # controlDict: endTime = (S1*n_S1 + S2*n_S2) / 1000 + buffer
-    end_time = (s1_interval_ms * (n_s1 - 1) + s2_interval_ms * n_s2) / 1000.0 + end_time_buffer_s
-    set_end_time(control_dict_file, end_time)
-    apply_electro_property_overrides(electro_properties_file, case_overrides)
-    apply_electro_property_overrides(electro_properties_file, electro_property_overrides)
-    apply_physics_property_overrides(physics_properties_file, physics_property_overrides)
+    """`TutorialSpec.apply_case` -- thin wrapper over `_plan_case` (Phase 3
+    Task 6's completion, 2026-09-23 decision, "a parameter asserts a final
+    state, not only a value"). The independent direct-write implementation
+    this function used to be is retired now that its byte parity with
+    `_plan_case` has been proven (this tutorial's own characterization
+    test) -- collapsing it earlier would have made that proof circular
+    (Task 6's own report). `TutorialSpec.apply_case` still has no default
+    (`core/runtime/models.py`), so every spec must still supply a callable
+    here regardless; `invoke_case_mutation` never calls this one in
+    production once `plan_case` is set (it prefers `plan_case`
+    unconditionally), so this exists only for a caller that still invokes
+    `apply_case` directly (e.g. this tutorial's own characterization test).
+    """
+    _plan_case(
+        case_root, case,
+        stimulus_map=stimulus_map,
+        s1_interval_ms=s1_interval_ms,
+        n_s1=n_s1,
+        n_s2=n_s2,
+        write_after_time_s=write_after_time_s,
+        end_time_buffer_s=end_time_buffer_s,
+        electro_properties_scope=electro_properties_scope,
+        electro_properties_relpath=electro_properties_relpath,
+        control_dict_relpath=control_dict_relpath,
+        physics_properties_relpath=physics_properties_relpath,
+        electro_property_overrides=electro_property_overrides,
+        physics_property_overrides=physics_property_overrides,
+    )
 
 
 def _plan_case(

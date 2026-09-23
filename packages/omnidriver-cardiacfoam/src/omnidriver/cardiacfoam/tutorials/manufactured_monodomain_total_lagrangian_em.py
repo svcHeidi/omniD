@@ -38,9 +38,7 @@ from omnidriver.cardiacfoam.tutorials.defaults import manufactured_monodomain_to
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 from omnidriver.cardiacfoam.overrides import (
     PLUGIN_ID,
-    apply_electro_property_overrides,
     apply_entry_overrides,
-    apply_physics_property_overrides,
     commit_case_overrides,
     merge_assignments,
     resolve_entry_overrides,
@@ -52,8 +50,6 @@ from omnidriver.core.specs.common import (
 from omnidriver.openfoam.utils import (
     plan_block_mesh_resolution,
     plan_delta_t,
-    replace_block_mesh_resolutions,
-    set_delta_t,
 )
 from .manufactured_monodomain_pseudo_ecg import (
     _build_cases,
@@ -87,46 +83,32 @@ def _apply_case(
     physics_property_overrides: Sequence[dict[str, object]] | dict[str, object] | None = None,
     verification_model_type: str = defaults.ELECTROMECHANICAL_VERIFICATION_MODEL_TYPE,
 ) -> None:
-    dimension = str(case.params["dimension"])
-    solver = str(case.params["solver"])
-    cells = int(case.params["cells"])
-    dt_value = float(case.params["dt"])
-
-    control_dict = case_root / control_dict_relpath
-    electro_properties = case_root / electro_properties_relpath
-    electromechanical_properties = case_root / electromechanical_properties_relpath
-    physics_properties = case_root / physics_properties_relpath
-    block_mesh_dict = case_root / Path(block_mesh_dict_template.format(dimension=dimension))
-
-    try:
-        cell_counts = defaults.BLOCK_MESH_RESOLUTION_BY_DIMENSION[dimension].format(cells=cells)
-    except KeyError as exc:
-        raise ValueError(f"Unsupported dimension: {dimension}") from exc
-    replace_block_mesh_resolutions(block_mesh_dict, cell_counts)
-    set_delta_t(control_dict, dt_value)
-
-    apply_electro_property_overrides(
-        electro_properties,
-        {
-            f"{electro_properties_scope}.dimension": f'"{dimension}"',
-            f"{electro_properties_scope}.solutionAlgorithm": solver,
-        },
+    """`TutorialSpec.apply_case` -- thin wrapper over `_plan_case` (Phase 3
+    Task 6's completion, 2026-09-23 decision, "a parameter asserts a final
+    state, not only a value"). The independent direct-write implementation
+    this function used to be is retired now that its byte parity with
+    `_plan_case` has been proven (this tutorial's own characterization
+    test) -- collapsing it earlier would have made that proof circular
+    (Task 6's own report). `TutorialSpec.apply_case` still has no default
+    (`core/runtime/models.py`), so every spec must still supply a callable
+    here regardless; `invoke_case_mutation` never calls this one in
+    production once `plan_case` is set (it prefers `plan_case`
+    unconditionally), so this exists only for a caller that still invokes
+    `apply_case` directly (e.g. this tutorial's own characterization test).
+    """
+    _plan_case(
+        case_root, case,
+        electro_properties_scope=electro_properties_scope,
+        control_dict_relpath=control_dict_relpath,
+        electro_properties_relpath=electro_properties_relpath,
+        electromechanical_properties_relpath=electromechanical_properties_relpath,
+        physics_properties_relpath=physics_properties_relpath,
+        block_mesh_dict_template=block_mesh_dict_template,
+        electro_property_overrides=electro_property_overrides,
+        electromechanical_property_overrides=electromechanical_property_overrides,
+        physics_property_overrides=physics_property_overrides,
+        verification_model_type=verification_model_type,
     )
-    apply_electro_property_overrides(electro_properties, electro_property_overrides)
-    apply_entry_overrides(
-        electromechanical_properties,
-        {
-            (
-                "sequentialElectroMechanicalCoeffs."
-                "electromechanicalVerificationModel.type"
-            ): verification_model_type,
-        },
-    )
-    apply_entry_overrides(
-        electromechanical_properties,
-        electromechanical_property_overrides,
-    )
-    apply_physics_property_overrides(physics_properties, physics_property_overrides)
 
 
 def _plan_case(

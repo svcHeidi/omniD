@@ -37,7 +37,6 @@ from itertools import product
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 from omnidriver.cardiacfoam.overrides import (
     PLUGIN_ID,
-    apply_electro_property_overrides,
     commit_case_overrides,
     merge_assignments,
     resolve_entry_overrides,
@@ -49,8 +48,6 @@ from omnidriver.openfoam.utils import (
     plan_block_mesh_resolution,
     plan_delta_t,
     plan_end_time,
-    replace_block_mesh_resolutions,
-    set_delta_t,
 )
 from omnidriver.openfoam.mutators import update_foam_entry
 
@@ -84,33 +81,24 @@ def _apply_case(
     electro_property_overrides: dict[str, object] | None = None,
     end_time: float | None = None,
 ) -> None:
-    graph_id = str(case.params["graph_id"])
-    cells = int(case.params["cells"])
-    dt_value = float(case.params["dt"])
-
-    # 1. 3D blockMesh resolution
-    block_mesh_dict = case_root / "system" / "blockMeshDict.3D"
-    block_mesh_active = case_root / "system" / "blockMeshDict.3D.active"
-    block_mesh_active.write_text(block_mesh_dict.read_text())
-    replace_block_mesh_resolutions(block_mesh_active, f"{cells} {cells} {cells}")
-
-    # 2. 1D graph selection
-    source_graph = case_root / "constant" / f"purkinjeGraph.{graph_id}"
-    destination_graph = case_root / "constant" / "purkinjeGraph"
-    if not source_graph.exists():
-        raise FileNotFoundError(f"Missing graph file: {source_graph}")
-    shutil.copy2(source_graph, destination_graph)
-
-    # 3. ControlDict deltaT and endTime
-    control_dict = case_root / "system" / "controlDict"
-    set_delta_t(control_dict, dt_value)
-    if end_time is not None:
-        update_foam_entry(control_dict, "endTime", end_time)
-
-    # 4. ElectroProperties overrides (rPvj, couplingMode, etc)
-    if electro_property_overrides:
-        electro_properties = case_root / "constant" / "electroProperties"
-        apply_electro_property_overrides(electro_properties, electro_property_overrides)
+    """`TutorialSpec.apply_case` -- thin wrapper over `_plan_case` (Phase 3
+    Task 6's completion, 2026-09-23 decision, "a parameter asserts a final
+    state, not only a value"). The independent direct-write implementation
+    this function used to be is retired now that its byte parity with
+    `_plan_case` has been proven (this tutorial's own characterization
+    test) -- collapsing it earlier would have made that proof circular
+    (Task 6's own report). `TutorialSpec.apply_case` still has no default
+    (`core/runtime/models.py`), so every spec must still supply a callable
+    here regardless; `invoke_case_mutation` never calls this one in
+    production once `plan_case` is set (it prefers `plan_case`
+    unconditionally), so this exists only for a caller that still invokes
+    `apply_case` directly (e.g. this tutorial's own characterization test).
+    """
+    _plan_case(
+        case_root, case,
+        electro_property_overrides=electro_property_overrides,
+        end_time=end_time,
+    )
 
 
     # The actual execution is handled by the generic executor running the workflow_dag

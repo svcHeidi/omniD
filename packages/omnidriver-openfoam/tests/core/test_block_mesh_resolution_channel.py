@@ -39,9 +39,9 @@ import pytest
 from omnidriver.core.case_write import CaseMutationRequest, ParameterAssignment, ResolvedMutation
 from omnidriver.openfoam import case_rendering
 from omnidriver.openfoam.utils import (
+    _rewrite_hex_block_lines,
     plan_block_mesh_resolution,
     plan_delta_t,
-    replace_block_mesh_resolutions,
 )
 
 # Transcribed byte-for-byte from the authoritative native tree (see module
@@ -143,21 +143,56 @@ def test_real_content_is_not_reproducible_by_the_generic_synthesis_template():
 
 
 # --------------------------------------------------------------------------
-# Characterization: the direct writer against the real fixture, captured
-# before Task 4's change and asserted unchanged after.
+# Characterization: `_rewrite_hex_block_lines` against the real fixture.
+#
+# **Corrected 2026-09-23 (Phase 3 Task 6's completion).** These two tests
+# used to drive `replace_block_mesh_resolutions` -- the direct writer this
+# module characterized before Task 4's change. That writer is now retired
+# (Task 6 migrated its last caller, `grep -rn
+# "replace_block_mesh_resolutions(" packages/*/src/` returns zero), so these
+# drive `_rewrite_hex_block_lines` directly instead -- the shared pure
+# grammar both the retired writer and `render_patch_case_files` always
+# called; the writer added only a file read/write around it. Same fixture,
+# same assertions: the behaviour these tests pin has not moved, only the
+# entry point has. (`test_common_blockmesh_resize.py`, the direct writer's
+# OWN dedicated unit tests, is deleted in the same commit as the writer --
+# its four cases were the 3D/1D replace and the missing-file/missing-hex-line
+# raises; the replace and wrong-count-raise behaviour survive here and in
+# `test_the_renderer_still_refuses_the_wrong_expected_blocks` below, the 1D
+# case gets its own test just below, and "missing file" has no successor
+# because nothing in this codebase takes a bare block-mesh path any more --
+# `render_patch_case_files` checks document existence against a case root,
+# a different, already-covered shape of check.)
 # --------------------------------------------------------------------------
 
 
-def test_characterizes_the_direct_writer_against_the_real_fixture(tmp_path):
-    path = tmp_path / "blockMeshDict"
-    path.write_text(REAL_BATH_BIDOMAIN_BLOCK_MESH_DICT_3D)
-    replace_block_mesh_resolutions(path, "40 40 40", expected_blocks=3)
-    text = path.read_text()
+def test_rewrite_hex_block_lines_against_the_real_fixture(tmp_path):
+    text = _rewrite_hex_block_lines(
+        REAL_BATH_BIDOMAIN_BLOCK_MESH_DICT_3D, "40 40 40", 3, label="blockMeshDict",
+    )
     expected = REAL_BATH_BIDOMAIN_BLOCK_MESH_DICT_3D.replace(
         "(80 80 80) simpleGrading", "(40 40 40) simpleGrading",
     )
     assert text == expected
     assert text.count("(40 40 40) simpleGrading") == 3
+
+
+def test_rewrite_hex_block_lines_against_a_1d_single_block_fixture():
+    """The other real shape every migrated tutorial's block mesh actually
+    has: a single `hex (` line, not three. Closes the gap
+    `test_common_blockmesh_resize.py`'s own `test_replaces_single_hex_block_for_1d`
+    used to cover for the now-retired direct writer -- same cell-counts
+    string shape (`"50 1 1"`, a 1D cable), same one-block fixture shape
+    every 1D tutorial's real `blockMeshDict` has (see e.g.
+    `test_cable_1d_restitution_write_channel.py`'s own fixture)."""
+    text = _rewrite_hex_block_lines(
+        "FoamFile\n{\n    object blockMeshDict;\n}\n"
+        "blocks\n(\n"
+        "    hex (0 1 2 3 4 5 6 7) (10 1 1) simpleGrading (1 1 1)\n"
+        ");\n",
+        "50 1 1", 1, label="blockMeshDict",
+    )
+    assert "hex (0 1 2 3 4 5 6 7) (50 1 1) simpleGrading (1 1 1)" in text
 
 
 def test_wrong_expected_blocks_still_refuses_against_the_real_fixture(tmp_path):
@@ -166,15 +201,10 @@ def test_wrong_expected_blocks_still_refuses_against_the_real_fixture(tmp_path):
     against real content with a genuine multi-block count, not a
     single-block fixture that could not distinguish 1 from "the wrong
     number"."""
-    path = tmp_path / "blockMeshDict"
-    path.write_text(REAL_BATH_BIDOMAIN_BLOCK_MESH_DICT_3D)
     with pytest.raises(KeyError, match="Expected to update 1 hex blocks"):
-        replace_block_mesh_resolutions(path, "40 40 40", expected_blocks=1)
-    # Corrected 2026-09-23 (Phase 3 Task 4): the file is left untouched on a
-    # mismatch (see `replace_block_mesh_resolutions`'s docstring) -- the
-    # pre-Task-4 version would have already overwritten it with the
-    # (wrong-count) rewrite by the time this raised.
-    assert path.read_text() == REAL_BATH_BIDOMAIN_BLOCK_MESH_DICT_3D
+        _rewrite_hex_block_lines(
+            REAL_BATH_BIDOMAIN_BLOCK_MESH_DICT_3D, "40 40 40", 1, label="blockMeshDict",
+        )
 
 
 # --------------------------------------------------------------------------
@@ -260,9 +290,13 @@ def test_the_renderer_produces_a_file_per_document_including_the_hex_patch(tmp_p
     assert b"0.0001" in by_path["system/controlDict"].content
 
 
-def test_the_renderer_is_byte_identical_to_the_direct_writer(tmp_path):
-    """The migration proof: the same real content, the same requested
-    resolution, through both paths, must produce the same bytes."""
+def test_the_renderer_is_byte_identical_to_rewrite_hex_block_lines(tmp_path):
+    """The migration proof, Task 4's own framing, updated 2026-09-23 (Task
+    6's completion) now that the once-independent direct writer is retired:
+    the renderer must still produce exactly what `_rewrite_hex_block_lines`
+    -- the shared grammar both used, and the only one of the two still
+    standing -- computes directly over the same real content and the same
+    requested resolution."""
     case_root = _real_case(tmp_path)
     resolved = _resolved_for(case_root)
     rendered = case_rendering.render_patch_case_files(
@@ -271,13 +305,11 @@ def test_the_renderer_is_byte_identical_to_the_direct_writer(tmp_path):
     )
     via_renderer = next(f for f in rendered if f.path == "system/blockMeshDict").content
 
-    direct_path = tmp_path / "direct" / "blockMeshDict"
-    direct_path.parent.mkdir()
-    direct_path.write_text(REAL_BATH_BIDOMAIN_BLOCK_MESH_DICT_3D)
-    replace_block_mesh_resolutions(direct_path, "40 40 40", expected_blocks=3)
-    via_direct_writer = direct_path.read_bytes()
+    via_direct_call = _rewrite_hex_block_lines(
+        REAL_BATH_BIDOMAIN_BLOCK_MESH_DICT_3D, "40 40 40", 3, label="blockMeshDict",
+    ).encode()
 
-    assert via_renderer == via_direct_writer
+    assert via_renderer == via_direct_call
     assert via_renderer.count(b"(40 40 40) simpleGrading") == 3
 
 

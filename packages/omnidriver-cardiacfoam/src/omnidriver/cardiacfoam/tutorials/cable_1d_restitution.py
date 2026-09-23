@@ -12,8 +12,6 @@ from omnidriver.cardiacfoam.tutorials.defaults import cable_1d_restitution as de
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec, DataArtifact
 from omnidriver.cardiacfoam.overrides import (
     PLUGIN_ID,
-    apply_electro_property_overrides,
-    apply_physics_property_overrides,
     commit_case_overrides,
     merge_assignments,
     resolve_entry_overrides,
@@ -27,9 +25,6 @@ from omnidriver.openfoam.utils import (
     plan_block_mesh_resolution,
     plan_delta_t,
     plan_end_time,
-    replace_block_mesh_resolutions,
-    set_delta_t,
-    set_end_time,
 )
 from omnidriver.cardiacfoam.spatial_pacing import generate_spatial_stimulus_lists
 from omnidriver.openfoam.mesh_provisioning import cell_counts_from_dx
@@ -124,95 +119,34 @@ def _apply_case(
     cable_length_mm: float = defaults.CABLE_LENGTH_MM,
     cross_section_cell_counts: Sequence[int] = defaults.CROSS_SECTION_CELL_COUNTS,
 ) -> None:
-    control_dict = case_root / control_dict_relpath
-    block_mesh_dict = case_root / block_mesh_dict_relpath
-    electro_properties = case_root / electro_properties_relpath
-    physics_properties = case_root / physics_properties_relpath
-
-    (cells,) = cell_counts_from_dx(float(case.params["dx_mm"]), (cable_length_mm,))
-    cell_counts_str = f"{cells} {int(cross_section_cell_counts[0])} {int(cross_section_cell_counts[1])}"
-    replace_block_mesh_resolutions(block_mesh_dict, cell_counts_str)
-
-    set_delta_t(control_dict, float(case.params["dt_ms"]) * 1.0e-3)
-    
-    s1_times_s = [i * (s1_interval_ms / 1000.0) for i in range(n_s1)]
-    last_s1_time_s = s1_times_s[-1] if s1_times_s else 0.0
-    if case.params.get("pacingMode") == "requested_di90":
-        # The whole point of this mode: S2 is scheduled from a *measured*
-        # repolarization90 time, so the swept axis is a real diastolic
-        # interval rather than a stimulus coupling interval that only
-        # resembles one. Do not reconstruct this by subtracting a nominal APD.
-        if n_s2 != 1:
-            raise ValueError("requested DI90 scheduling currently requires n_s2 == 1")
-        s2_times_s = [
-            float(case.params["referenceRepolarization90_s"])
-            + float(case.params["requestedDI90_ms"]) / 1000.0
-        ]
-        end_time = s2_times_s[-1] + end_time_buffer_s
-    else:
-        s2_times_s = [
-            last_s1_time_s + (i + 1) * (float(case.params["s2Interval"]) / 1000.0)
-            for i in range(n_s2)
-        ]
-        end_time = (s1_interval_ms * n_s1 + float(case.params["s2Interval"]) * n_s2) / 1000.0 + end_time_buffer_s
-    set_end_time(control_dict, end_time)
-
-    # Explicit absolute times, not a cycle length and a count: the legacy
-    # stimulus implementation used inclusive pulse indices (k <= nstim1), and a
-    # derived S2 time does not survive being reconstructed from an interval.
-    stimulus_arrays = generate_spatial_stimulus_lists(
-        times_s=s1_times_s + s2_times_s,
-        bounds_min=STIMULUS_BOUNDS_MIN, bounds_max=STIMULUS_BOUNDS_MAX,
-        duration_s=STIMULUS_DURATION_S, intensity=STIMULUS_INTENSITY,
-    )
-
-    case_overrides = {
-        f"{electro_properties_scope}.conductivity": str(case.params["conductivity"]),
-        f"{electro_properties_scope}.tissue": str(case.params["tissue"]),
-        f"{electro_properties_scope}.ionicModel": str(case.params["ionicModel"]),
-        f"{electro_properties_scope}.solutionAlgorithm": str(case.params["solver"]),
-    }
-    for k, v in stimulus_arrays.items():
-        case_overrides[f"{electro_properties_scope}.externalStimulus.{k}"] = v
-
-    apply_electro_property_overrides(electro_properties, case_overrides)
-    apply_electro_property_overrides(electro_properties, electro_property_overrides)
-    apply_physics_property_overrides(physics_properties, physics_property_overrides)
-
-    # Write sentinel so Allrun.post can discover the case_id without template substitution.
-    (case_root / ".driverfoam_case_id").write_text(case.case_id)
-
-    # The protocol sidecar. Postprocessing reads the applied schedule from here
-    # rather than inferring it from the case name; without it the cable
-    # postprocessor falls back to selecting the last activation, which is the
-    # path whose beat-association defect once reported an automaticity beat as
-    # a captured S2.
-    protocol_metadata = {
-        "schema_version": 1,
-        "case_id": case.case_id,
-        "ionic_model": str(case.params["ionicModel"]),
-        "tissue": str(case.params["tissue"]),
-        "dt_s": float(case.params["dt_ms"]) * 1.0e-3,
-        "dx_m": float(case.params["dx_mm"]) * 1.0e-3,
-        "s1_interval_s": s1_interval_ms / 1000.0,
-        "n_s1": n_s1,
-        "n_s2": n_s2,
-        "pacing_mode": str(case.params.get("pacingMode", "coupling_interval")),
-        "s2_coupling_interval_s": None if not s2_times_s else s2_times_s[0] - last_s1_time_s,
-        "requested_di90_s": None if "requestedDI90_ms" not in case.params else float(case.params["requestedDI90_ms"]) / 1000.0,
-        "reference_repolarization90_s": case.params.get("referenceRepolarization90_s"),
-        "s1_stimulus_times_s": s1_times_s,
-        "s2_stimulus_times_s": s2_times_s,
-        "stimulus_times_s": s1_times_s + s2_times_s,
-        "stimulus_location_min": STIMULUS_BOUNDS_MIN,
-        "stimulus_location_max": STIMULUS_BOUNDS_MAX,
-        "stimulus_duration_s": float(STIMULUS_DURATION_S),
-        "stimulus_intensity": float(STIMULUS_INTENSITY),
-        "end_time_s": end_time,
-    }
-    (case_root / ".cardiacfoam_protocol.json").write_text(
-        json.dumps(protocol_metadata, indent=2) + "\n",
-        encoding="ascii",
+    """`TutorialSpec.apply_case` -- thin wrapper over `_plan_case` (Phase 3
+    Task 6's completion, 2026-09-23 decision, "a parameter asserts a final
+    state, not only a value"). The independent direct-write implementation
+    this function used to be is retired now that its byte parity with
+    `_plan_case` has been proven (this tutorial's own characterization
+    test) -- collapsing it earlier would have made that proof circular
+    (Task 6's own report). `TutorialSpec.apply_case` still has no default
+    (`core/runtime/models.py`), so every spec must still supply a callable
+    here regardless; `invoke_case_mutation` never calls this one in
+    production once `plan_case` is set (it prefers `plan_case`
+    unconditionally), so this exists only for a caller that still invokes
+    `apply_case` directly (e.g. this tutorial's own characterization test).
+    """
+    _plan_case(
+        case_root, case,
+        s1_interval_ms=s1_interval_ms,
+        n_s1=n_s1,
+        n_s2=n_s2,
+        end_time_buffer_s=end_time_buffer_s,
+        electro_properties_scope=electro_properties_scope,
+        control_dict_relpath=control_dict_relpath,
+        block_mesh_dict_relpath=block_mesh_dict_relpath,
+        electro_properties_relpath=electro_properties_relpath,
+        physics_properties_relpath=physics_properties_relpath,
+        electro_property_overrides=electro_property_overrides,
+        physics_property_overrides=physics_property_overrides,
+        cable_length_mm=cable_length_mm,
+        cross_section_cell_counts=cross_section_cell_counts,
     )
 
 

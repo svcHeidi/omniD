@@ -35,8 +35,6 @@ from pathlib import Path
 
 from omnidriver.cardiacfoam.tutorials.defaults import single_cell as defaults
 from omnidriver.cardiacfoam.overrides import (
-    apply_electro_property_overrides,
-    apply_physics_property_overrides,
     commit_case_overrides,
     merge_assignments,
     resolve_entry_overrides,
@@ -79,23 +77,28 @@ def _apply_case(
     electro_property_overrides: Mapping[str, object] | Sequence[Mapping[str, object]] | None = None,
     physics_property_overrides: Mapping[str, object] | Sequence[Mapping[str, object]] | None = None,
 ) -> None:
-    tissue = case.params["tissue"]
-    ionic_model = case.params["ionicModel"]
-
-    if ionic_model not in stimulus_map:
-        raise KeyError(f"Missing stimulus amplitude for ionic model '{ionic_model}'")
-
-    electro_properties_file = case_root / electro_properties_relpath
-    physics_properties_file = case_root / physics_properties_relpath
-    case_overrides = {
-        f"{electro_properties_scope}.tissue": tissue,
-        f"{electro_properties_scope}.ionicModel": ionic_model,
-        f"{electro_properties_scope}.singleCellStimulus.stim_amplitude": stimulus_map[ionic_model],
-    }
-
-    apply_electro_property_overrides(electro_properties_file, case_overrides)
-    apply_electro_property_overrides(electro_properties_file, electro_property_overrides)
-    apply_physics_property_overrides(physics_properties_file, physics_property_overrides)
+    """`TutorialSpec.apply_case` -- thin wrapper over `_plan_case` (Phase 3
+    Task 6's completion, 2026-09-23 decision, "a parameter asserts a final
+    state, not only a value"). The independent direct-write implementation
+    this function used to be is retired now that its byte parity with
+    `_plan_case` has been proven (this tutorial's own characterization
+    test) -- collapsing it earlier would have made that proof circular
+    (Task 6's own report). `TutorialSpec.apply_case` still has no default
+    (`core/runtime/models.py`), so every spec must still supply a callable
+    here regardless; `invoke_case_mutation` never calls this one in
+    production once `plan_case` is set (it prefers `plan_case`
+    unconditionally), so this exists only for a caller that still invokes
+    `apply_case` directly (e.g. this tutorial's own characterization test).
+    """
+    _plan_case(
+        case_root, case,
+        stimulus_map=stimulus_map,
+        electro_properties_scope=electro_properties_scope,
+        electro_properties_relpath=electro_properties_relpath,
+        physics_properties_relpath=physics_properties_relpath,
+        electro_property_overrides=electro_property_overrides,
+        physics_property_overrides=physics_property_overrides,
+    )
 
 
 def _plan_case(
