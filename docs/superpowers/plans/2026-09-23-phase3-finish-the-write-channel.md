@@ -446,6 +446,75 @@ report for the exact commands and counts).
 
 ---
 
+## Decision, 2026-09-23: close the two gaps Task 2 hit, then delete its fallback
+
+Task 2 delivered the resolver but had to add a blanket `except ValueError` in
+`apply_entry_overrides` that reverts to the pre-Task-2 unchecked write. Its
+reasoning was sound under its mandate — "keeps its exact signature and write
+behaviour" left no room to newly refuse a currently-passing override — and it
+documented the fallback honestly rather than hiding it.
+
+**But the effect is that all 28 existing call sites gain zero strictness.** Any
+refusal falls back, including a genuine typo or a `nan`. That is the
+compatibility-fallback pattern this repository guards with
+`test_fallback_census.py` and `test_no_fallback_reaches_cardiac_code_at_all`.
+It cannot survive into Task 6, where eleven tutorials migrate onto the strict
+resolver.
+
+Both root causes are mine, from Phase 2. Neither is Task 2's fault.
+
+### Gap 1 — the parser I asserted exists, does not
+
+Phase 2's "a parameter value is typed data, never rendered text" decision said:
+"Where an adapter currently holds a rendered string, the adapter parses it when
+building the request." **No such parser was ever written.** `mutators._format_value`
+renders typed data *to* OpenFOAM text and performs security checks; nothing
+reads text back. So five tutorials passing
+`"[-1 -3 3 0 0 2 0] (0.2 0 0 0.03 0 0.03)"` for a `dimensioned_tensor` hit a
+validator that requires `{"value": ..., "dimensions": ...}` and always will.
+
+**Fix: write the inverse of `_format_value`, in `omnidriver-openfoam`.** OpenFOAM
+owns dimensioned-literal syntax; core must never learn it. Parse
+`[d0 d1 d2 d3 d4 d5 d6] <magnitude>` into
+`{"value": <scalar or tuple>, "dimensions": (d0..d6)}`, with the seven-exponent
+count enforced. A literal that does not parse is refused, not guessed.
+
+Keep the rendered spelling reachable — F1b established that comparing values as
+text is wrong but that **the raw spelling is still evidence**. Round-tripping
+parse→render must reproduce the original for every literal in the catalog;
+prove it over the real entries, not a fixture.
+
+### Gap 2 — `allowed_bindings` assumed every dynamic segment has a closed domain
+
+`<ventKey>` is `("lv", "rv")` — closed, enumerable, correct. But the catalog also
+declares `$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.ecgSolver` and
+`...ecgDomains.electrodePositions.<electrode>`, where `<name>` is a user-chosen
+domain name and `<electrode>` a user-chosen label. **The case defines them; the
+catalog cannot enumerate them.** Phase 2's model has no way to say so, so
+`DictEntry.__post_init__` refuses to declare them at all.
+
+**Fix: let a binding domain be declared open, explicitly.** `allowed_bindings`
+gains a way to say "any valid OpenFOAM word" — for example `None` as the domain,
+distinct from an absent key. The distinction that matters is not
+open-versus-closed; it is **declared** versus **silently unconstrained**. Audit
+finding S1 was that `banana` passed as a ventricle because nothing was declared.
+An explicitly open domain is a stated fact an agent can read; an undeclared one
+is a hole. A binding against an open domain is still validated as a word —
+non-empty, no whitespace, and `_format_value`'s existing `;`/`#` refusals apply.
+
+### Then delete the fallback
+
+With both gaps closed, `apply_entry_overrides` refuses what
+`resolve_entry_overrides` refuses. Remove the `try/except ValueError` and the
+duplicated write loop. **If a currently-passing test then fails, that test is the
+finding** — it encodes an override the catalog does not declare, and this
+repository's rule is to correct it with a dated note and add a test for the
+corrected behaviour, not to restore the fallback.
+
+One exception is legitimate and must be stated rather than absorbed: if a real
+override genuinely cannot be expressed after both gaps close, report it and stop.
+Do not reintroduce a general fallback for a specific unsolved case.
+
 ## Task 3: The `controlDict` setters become resolvers
 
 **Files:**
