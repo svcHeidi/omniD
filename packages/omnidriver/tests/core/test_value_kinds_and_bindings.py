@@ -137,6 +137,42 @@ def test_an_undeclared_dynamic_path_is_accepted():
     assert entry.allowed_bindings == {}
 
 
+def test_an_explicitly_open_domain_is_declared_not_absent():
+    """Corrected 2026-09-23 (Phase 3, the decision closing Task 2's Gap 2):
+    `None` is a legal domain, distinct from the placeholder being absent
+    from `allowed_bindings` altogether -- it is the STATED fact that this
+    placeholder has no closed domain, not silence about it."""
+    entry = dictionary.DictEntry(
+        driver_path="$A.<name>.x", description="",
+        value_kind="scalar", dynamic_path=True,
+        allowed_bindings={"<name>": None},
+    )
+    assert entry.allowed_bindings == {"<name>": None}
+    assert "<name>" in entry.allowed_bindings  # declared, not merely defaulted
+
+
+def test_an_open_domain_does_not_trip_the_empty_domain_refusal():
+    """`None` (open, declared) must not be confused with `()` (closed, and
+    therefore impossible to satisfy) -- the refusal below exists only for
+    the latter."""
+    entry = dictionary.DictEntry(
+        driver_path="$A.<ventKey>.<name>.x", description="",
+        value_kind="scalar", dynamic_path=True,
+        allowed_bindings={"<ventKey>": ("lv", "rv"), "<name>": None},
+    )
+    assert entry.allowed_bindings["<ventKey>"] == ("lv", "rv")
+    assert entry.allowed_bindings["<name>"] is None
+
+
+def test_a_closed_empty_domain_is_still_refused_even_alongside_an_open_one():
+    with pytest.raises(ValueError, match="empty domain"):
+        dictionary.DictEntry(
+            driver_path="$A.<ventKey>.<name>.x", description="",
+            value_kind="scalar", dynamic_path=True,
+            allowed_bindings={"<ventKey>": (), "<name>": None},
+        )
+
+
 def test_declared_bindings_on_a_static_path_are_refused():
     with pytest.raises(ValueError, match="dynamic_path"):
         dictionary.DictEntry(

@@ -32,6 +32,26 @@ def _format_value(value: Any) -> str:
     return text
 
 
+def check_dictionary_word_is_safe(word: str) -> str:
+    """Apply `_format_value`'s `;`/`#`/newline security refusals to a word
+    that will become a dictionary **key or sub-block name**, not a value.
+
+    Added 2026-09-23 (Phase 3, closing Task 2's Gap 2). A dynamic-path
+    binding bound against an explicitly *open* domain (see
+    `contracts.dictionary.DictEntry.allowed_bindings`) is validated as a
+    word by its caller (``omnidriver-cardiacfoam``'s ``overrides.py``) and
+    then becomes a segment of the key or scope passed to `update_foam_entry`
+    / `ensure_foam_dict` -- and those functions' own security check, right
+    above in `_format_value`, only ever inspects the right-hand-side
+    *value*, never the `key`/`scope` argument. Without this, an open
+    binding could carry a `;` or `#` into a newly-created sub-block name
+    (via `add_if_missing`/`ensure_foam_dict`) that nothing else refuses. See
+    SECURITY.md; this must not weaken -- only reuse -- that existing
+    refusal.
+    """
+    return _format_value(word)
+
+
 def _strip_inline_comment(line: str) -> str:
     # Whole-file block comments are handled before line scanning. Preserve
     # comment-like text inside strings (for example a URL).

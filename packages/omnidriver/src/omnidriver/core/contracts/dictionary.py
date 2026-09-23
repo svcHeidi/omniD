@@ -190,15 +190,39 @@ class DictEntry:
     # on every member of the group to make the relation symmetric.
     co_required_with: tuple[str, ...] = ()
     # A dynamic path's declared domain per placeholder, e.g.
-    # ``{"<ventKey>": ("lv", "rv")}``. Optional: most placeholders in this
-    # catalog (``<name>``, ``<electrode>``, ``<region_name>``, ...) are
-    # open-ended, case-author-chosen instance identifiers with no closed
-    # domain to declare, and leaving them undeclared is honest, not
-    # "unchecked" -- there is nothing to check. What is refused is a *partial*
-    # declaration: naming some of an entry's placeholders and silently
-    # omitting another, which is how ``<ventKey>`` accepted ``"banana"``
-    # while a sibling placeholder went unchecked (audit finding S1).
-    allowed_bindings: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    # ``{"<ventKey>": ("lv", "rv")}``. Most placeholders in this catalog
+    # (``<name>``, ``<electrode>``, ``<region_name>``, ...) are open-ended,
+    # case-author-chosen instance identifiers with no closed domain to
+    # declare. Leaving `allowed_bindings` entirely empty (the default) for
+    # such an entry is still accepted -- there is nothing to check for an
+    # open identifier that is never even named here -- but
+    # `omnidriver.cardiacfoam.dict_entries_catalog`'s ecgDomains/
+    # conductionNetworkDomains/domainCouplings entries instead declare it
+    # explicitly, with ``None`` as the placeholder's domain:
+    #
+    #     allowed_bindings={"<name>": None}
+    #
+    # Corrected 2026-09-23 (Phase 3, the decision closing Task 2's Gap 2).
+    # ``None`` and "key absent" both mean "no closed domain", so neither
+    # constrains what value can bind -- but they are not the same STATEMENT.
+    # An entry that omits the key says nothing about the placeholder; an
+    # entry that maps it to ``None`` says, explicitly, "this is open, and
+    # that was decided, not overlooked". Audit finding S1 was that nothing
+    # was declared for ``<ventKey>`` at all; the fix docstring above already
+    # distinguished "no closed domain to declare" from "unchecked" for the
+    # open case, but had no way to WRITE that distinction down -- every
+    # open placeholder was, textually, indistinguishable from one nobody had
+    # audited yet. A caller resolving a binding against an explicitly open
+    # domain still validates it as a word (non-empty, no whitespace) and
+    # still applies every other syntax refusal a written key must pass
+    # (`;`/`#`/newline -- see `omnidriver.openfoam.mutators`); only a fully
+    # *closed* domain additionally restricts membership. What is refused
+    # unconditionally, for both an open and a closed domain, is still a
+    # *partial* declaration: naming some of an entry's placeholders (open or
+    # closed) and silently omitting a sibling, which is how ``<ventKey>``
+    # accepted ``"banana"`` while a sibling placeholder went unchecked
+    # (audit finding S1).
+    allowed_bindings: dict[str, tuple[str, ...] | None] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.value_kind not in VALUE_KINDS:
@@ -249,9 +273,13 @@ class DictEntry:
                     f"declared binding is how an undeclared placeholder went "
                     f"unchecked"
                 )
+            # `None` is the explicitly-open domain (see the field's own
+            # comment above) and is deliberately exempt from this check: it
+            # is a stated fact, not an empty one. Only `()` -- a *closed*
+            # domain with no members -- can never be satisfied.
             empty = sorted(
                 placeholder for placeholder, domain in self.allowed_bindings.items()
-                if not domain
+                if domain is not None and not domain
             )
             if empty:
                 raise ValueError(

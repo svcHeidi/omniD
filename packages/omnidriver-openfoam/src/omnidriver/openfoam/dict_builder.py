@@ -274,6 +274,39 @@ def is_known_override_driver_path(
     return False
 
 
+def match_dynamic_entry(
+    key: str, entries,
+) -> "tuple[DictEntry, dict[str, str]] | None":
+    """Match ``key`` against a ``dynamic_path`` entry's template, returning
+    the entry and the concrete value each placeholder captured.
+
+    Added 2026-09-23 (Phase 3, the decision closing Task 2's two gaps).
+    ``is_known_override_driver_path`` above already answers *whether*
+    ``key`` names something the catalog declares; a caller that must also
+    validate *what was bound* -- e.g. a per-case ``ecgDomains`` name against
+    its entry's declared binding domain -- needs the captured groups
+    themselves, not a bare membership bool. Same wildcard convention as that
+    function (any ``<placeholder>`` segment matches one ``.``-free run of
+    characters, prefix-agnostic via `slot_key`), so a path that
+    `is_known_override_driver_path` accepts is exactly one this also
+    matches. Returns the first match; the catalog has no two dynamic
+    entries whose templates collide at the same segment length today (a
+    real collision would be a catalog defect worth its own test, not a
+    silent pick between candidates).
+    """
+    normalized = slot_key(key)
+    for entry in entries:
+        if not getattr(entry, "dynamic_path", False):
+            continue
+        entry_key = slot_key(entry.driver_path)
+        placeholders = _PLACEHOLDER_RE.findall(entry_key)
+        pattern = _PLACEHOLDER_RE.sub(r"([^.]+)", _re.escape(entry_key))
+        match = _re.fullmatch(pattern, normalized)
+        if match:
+            return entry, dict(zip(placeholders, match.groups()))
+    return None
+
+
 def _set_nested(node: dict, path: list[str], value: Any) -> None:
     """Insert `value` at `path` inside the nested dict `node`, creating
     intermediate sub-dicts as needed. A leaf already present is
