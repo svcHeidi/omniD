@@ -99,6 +99,14 @@ def render_patch_case_files(
     ``CaseWritePlan`` refuses two ``RenderedFile``s claiming one path (the
     ``repeated_edits_to_one_file`` conformance case).
 
+    **A target may instead carry ``"content"``** (Phase 3 Task 7,
+    :func:`utils.plan_verbatim_content`) -- a whole document's exact bytes,
+    supplied by the caller rather than assembled from a key/value edit. See
+    the inline comment where it is applied, below, for the full reasoning;
+    the short version is that this mirrors :func:`render_synthesis_case_files`'s
+    own ``"content"`` target, widened to a mode whose document may already
+    exist.
+
     **A target may instead carry ``"hex_cell_counts"``** (Phase 3 Task 4,
     :func:`utils.plan_block_mesh_resolution`) rather than
     ``"expanded_key_path"``/``"value"``: a structural rewrite of every
@@ -167,21 +175,54 @@ def render_patch_case_files(
     snapshot_root = Path(snapshot_root)
     rendered: list[RenderedFile] = []
     for document, edits in sorted(_document_edits(resolved).items()):
+        content_edits = [edit for edit in edits if "content" in edit]
+        if len(content_edits) > 1:
+            raise ValueError(
+                f"patch target {document!r} carries {len(content_edits)} "
+                f"whole-document contents; a document's body is authored "
+                f"once, by one target"
+            )
+        remaining_edits = [edit for edit in edits if "content" not in edit]
+
         source = case_root / document
         exists_before = source.is_file()
-        if not exists_before:
+
+        if content_edits:
+            # **A target may instead carry ``"content"`` (Phase 3 Task 7)** --
+            # a whole document's exact bytes, supplied by the caller rather
+            # than composed from a key/value edit -- e.g.
+            # `heart_solver_comparison`'s solver-variant template files,
+            # copied in verbatim rather than patched key by key. Mirrors
+            # `render_synthesis_case_files`'s own ``"content"`` target
+            # (this module carries no cardiac vocabulary and does not author
+            # that text, only turns it into bytes), widened to `clone_and_patch`
+            # because the document here may or may not already exist under
+            # `case_root` -- unlike every other patch target, which always
+            # edits a document already there. `mode` is only known when the
+            # document already existed; a freshly authored one gets none, the
+            # same as synthesis.
+            body = content_edits[0]["content"]
+            if isinstance(body, str):
+                body = body.encode()
+            before_digest = _digest_bytes(source.read_bytes()) if exists_before else None
+            mode = (source.stat().st_mode & 0o7777) if exists_before else None
+            snapshot_path = snapshot_root / document
+            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            snapshot_path.write_bytes(body)
+        elif not exists_before:
             raise ValueError(
                 f"patch target {document!r} does not exist under {case_root}; "
                 f"clone_and_patch edits a document that already exists"
             )
-        before_digest = _digest_bytes(source.read_bytes())
-        mode = source.stat().st_mode & 0o7777
-        snapshot_path = _snapshot_copy(case_root, snapshot_root, document)
+        else:
+            before_digest = _digest_bytes(source.read_bytes())
+            mode = source.stat().st_mode & 0o7777
+            snapshot_path = _snapshot_copy(case_root, snapshot_root, document)
 
-        hex_edits = [edit for edit in edits if "hex_cell_counts" in edit]
-        dict_edits = [edit for edit in edits if "dict_operation" in edit]
+        hex_edits = [edit for edit in remaining_edits if "hex_cell_counts" in edit]
+        dict_edits = [edit for edit in remaining_edits if "dict_operation" in edit]
         value_edits = [
-            edit for edit in edits
+            edit for edit in remaining_edits
             if "hex_cell_counts" not in edit and "dict_operation" not in edit
         ]
         if len(hex_edits) > 1:
@@ -235,7 +276,7 @@ def render_patch_case_files(
                 )
         rendered.append(RenderedFile(
             path=document, content=snapshot_path.read_bytes(), mode=mode,
-            exists_before=True, before_digest=before_digest,
+            exists_before=exists_before, before_digest=before_digest,
             renderer_id=renderer_id, format=FORMAT,
         ))
     return tuple(rendered)

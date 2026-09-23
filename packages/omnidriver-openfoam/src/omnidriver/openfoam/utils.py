@@ -239,7 +239,7 @@ def plan_block_mesh_resolution(
     """
     return {
         "document": document,
-        "format": _hex_patch_format(),
+        "format": _patch_format(),
         "hex_cell_counts": _format_value(cell_counts_str),
         "expected_blocks": expected_blocks,
     }
@@ -298,7 +298,7 @@ def plan_dict_block(
         )
     target: dict[str, Any] = {
         "document": document,
-        "format": _hex_patch_format(),
+        "format": _patch_format(),
         "dict_operation": operation,
         "dict_name": dict_name,
         "scope": list(scope) if scope else None,
@@ -308,14 +308,77 @@ def plan_dict_block(
     return target
 
 
+def plan_verbatim_content(document: str, content: str) -> Mapping[str, Any]:
+    """Resolve a whole document's exact bytes into a
+    ``render_patch_case_files``/``render_synthesis_case_files`` ``"content"``
+    target (Phase 3 Task 7).
 
-def _hex_patch_format() -> str:
-    """`case_rendering.FORMAT`, imported lazily to avoid a module cycle:
-    `case_rendering.py` imports `_rewrite_hex_block_lines` from this module
-    at its own module level, so this module cannot import `case_rendering`
-    at ITS module level in turn -- deferred to call time instead, the same
-    way `dict_builder.py` defers several of its own cross-module imports for
-    the same reason.
+    **Why this is not a `ParameterAssignment`.** A `ParameterAssignment`
+    addresses one key inside a document whose surrounding structure the
+    framework does not touch. `heart_solver_comparison` (this function's
+    first caller) has no key-level edit at all: its four solver-variant
+    documents (``electroProperties``, ``fvSchemes``, ``fvSolution``,
+    ``controlDict``) are whole, hand-authored templates swapped in verbatim
+    -- the differences between solver stacks are entire structural blocks,
+    not values at existing keys. Inventing a `value_kind` to carry "this
+    document's whole body" through `ParameterAssignment` would give one key
+    path a value that is actually the entire file, which is not what that
+    type asserts.
+
+    **Not a source artifact either.** A source artifact (see
+    `CaseMutationRequest.source_artifacts`) is a *reference* to something a
+    mutation consumed -- deliberately opaque and undigested by core, because
+    the referenced thing (a mesh, a large asset) may legitimately live
+    outside the case and is never itself committed through this channel. A
+    template file destined to become `case_root`'s actual
+    `electroProperties`/`fvSchemes`/`fvSolution`/`controlDict` is different
+    in kind: it is a small, hand-editable OpenFOAM dictionary, exactly the
+    class of content this channel already owns end to end (every other
+    tutorial's `electroProperties`/`controlDict` reaches `case_root` as a
+    `RenderedFile`, not a reference) -- and cardiacFoam reads it downstream
+    exactly the way it reads every other tutorial's version of that same
+    document. Declaring it a source artifact would carry it out of the
+    channel's audit trail (no `content_digest`, no journal-recorded
+    before/after bytes) for no reason but its own authoring granularity.
+
+    `document`/`content` become a raw ``{"document", "format", "content"}``
+    target -- no `source` field, matching `plan_block_mesh_resolution`'s and
+    `plan_dict_block`'s own reasoning: a target that assigns no key/value has
+    nothing for `VALUE_SOURCES` to classify.
+
+    **`content` must be `str`, not `bytes` -- checked by running it, not
+    assumed.** `ResolvedMutation.__post_init__` deep-freezes every target
+    through `case_write._freeze`, which keeps a target JSON-shaped (so a
+    resolved plan stays digestible before any renderer runs) and refuses
+    `bytes` outright with `TypeError` -- a caller holding raw bytes must
+    decode them first (`Path.read_text(encoding="utf-8")` for a UTF-8
+    template). The renderer encodes the `str` back with `.encode()` the same
+    way `render_synthesis_case_files` already does, so this round-trips
+    exactly for any template that was valid UTF-8 to begin with.
+    """
+    return {
+        "document": document,
+        "format": _patch_format(),
+        "content": content,
+    }
+
+
+def _patch_format() -> str:
+    """`case_rendering.FORMAT` -- the one dictionary format every raw
+    `render_patch_case_files` target in this module declares, whichever kind
+    of edit it carries (`hex_cell_counts`, `dict_operation`, `content`).
+    **Renamed from `_hex_patch_format` 2026-09-23 (Phase 3 Task 7 review):**
+    the old name named only its first caller
+    (`plan_block_mesh_resolution`), which would have misled a reader of
+    `plan_dict_block` or `plan_verbatim_content` into thinking they reused a
+    hex-specific helper for no reason, rather than the shared format lookup
+    it actually is.
+
+    Imported lazily to avoid a module cycle: `case_rendering.py` imports
+    `_rewrite_hex_block_lines` from this module at its own module level, so
+    this module cannot import `case_rendering` at ITS module level in turn --
+    deferred to call time instead, the same way `dict_builder.py` defers
+    several of its own cross-module imports for the same reason.
     """
     from .case_rendering import FORMAT
 
