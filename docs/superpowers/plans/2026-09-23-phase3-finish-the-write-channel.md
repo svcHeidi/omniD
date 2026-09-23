@@ -37,12 +37,12 @@ Suite `0 failed` in all four shapes; both static gates pass.
 
 ## Status
 
-Task 1 done. Tasks 2–11 not started.
+Tasks 1–2 done. Tasks 3–11 not started.
 
 | task | what it closes | state | commit |
 |---|---|---|---|
 | 1 · cut the surface before migrating onto it | over-modelled contract | done | `f476a13` |
-| 2 · `apply_entry_overrides` becomes a resolver | the chokepoint, 28 calls | pending | — |
+| 2 · `apply_entry_overrides` becomes a resolver | the chokepoint, 28 calls | done | `7830529` |
 | 3 · `controlDict` setters become resolvers | 11 calls | pending | — |
 | 4 · `replace_block_mesh_resolutions` | 8 calls, the special case | pending | — |
 | 5 · `--apply` joins the channel | **bypass 4** | pending | — |
@@ -273,7 +273,7 @@ there; left unmodified.
 **This is the task that makes the rest cheap.** 28 of the tutorials' calls reach
 here through `apply_electro_property_overrides` / `apply_physics_property_overrides`.
 
-- [ ] **Step 1: Read what `normalize_entry_overrides` already gives you**
+- [x] **Step 1: Read what `normalize_entry_overrides` already gives you**
 
 ```bash
 grep -n "def normalize_entry_overrides" -A 40 packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/overrides.py
@@ -290,13 +290,13 @@ read from a tutorial's own defaults is `template`. Getting this wrong
 re-creates finding F4, where catalog examples were promoted into generated
 inputs. If you cannot tell which a value is, that is a finding — report it.
 
-- [ ] **Step 2: Write the characterization test first**
+- [x] **Step 2: Write the characterization test first**
 
 Capture the exact bytes `apply_electro_property_overrides` produces today for a
 representative override set, including a scoped nested key. That test must pass
 before your change and unchanged after.
 
-- [ ] **Step 3: Write the failing test for the resolver**
+- [x] **Step 3: Write the failing test for the resolver**
 
 Assert: the returned assignments carry qualified ids that round-trip to the same
 document and key the old path wrote; a value whose kind the catalog declares is
@@ -304,7 +304,7 @@ validated (a `nan` for a `scalar` must raise, since `ParameterAssignment`
 validates at construction); and **no file is touched** — assert on a directory
 snapshot, because purity is what makes a dry run free.
 
-- [ ] **Step 4: Implement, keeping the old entry point working**
+- [x] **Step 4: Implement, keeping the old entry point working**
 
 `apply_entry_overrides` becomes `resolve_entry_overrides(...)` followed by a
 `commit_case_write`. Its signature and return type do not change — a caller
@@ -312,7 +312,137 @@ outside this repository must not break in the commit that changes the mechanism
 underneath it. Add a dated deprecation note naming the removal condition: "when
 no in-tree caller writes through it."
 
-- [ ] **Step 5: Run, including both adapter suites, and commit**
+- [x] **Step 5: Run, including both adapter suites, and commit**
+
+### Findings, 2026-09-23
+
+**Step 1 — what `normalize_entry_overrides` actually produces.** Confirmed
+against current source (`overrides.py:32-94`):
+- `overrides is None` → `[]`.
+- **Mapping form** (`{"a.b.c": value}`): every key is dot-split, each token
+  resolved through `_resolve_scope_tokens` (which expands the literal token
+  `"$ELECTRO_MODEL_COEFFS"` to the case's real active `<solver>Coeffs` block
+  name via `detect_electro_coeffs_scope`, and passes any other token through
+  unchanged). One part → `{"key": part, "scope": None}`. More than one part →
+  `{"key": parts[-1], "scope": parts[:-1]}`. A nested scoped key, e.g.
+  `"$ELECTRO_MODEL_COEFFS.singleCellStimulus.stim_period_S1"` against a case
+  whose active block is `singleCellSolverCoeffs`, yields
+  `{"key": "stim_period_S1", "scope": ("singleCellSolverCoeffs", "singleCellStimulus")}`.
+- **`Sequence[Mapping]` form**: each item needs `"key"`/`"value"`. **Found, not
+  assumed:** this form only dot-splits `"key"` when the item has **no**
+  `"scope"` field at all (it then falls back to the same
+  `normalize_from_key_value` the mapping form uses). If the item names
+  `"scope"` explicitly — even `None` — `"key"` is taken **literally**, not
+  dot-split. This asymmetry is real, not a bug this task fixes; the resolver
+  preserves it by building on `normalize_entry_overrides` rather than
+  re-deriving key/scope splitting itself.
+
+**Step 1 — `value_kind`/`qualified_id`, and the plan-claim correction that
+follows from them.** `value_kind` is looked up against the same catalogues
+`cardiacfoam_plugin.py` aggregates (`ELECTRO_PROPERTY_ENTRY_GROUPS`,
+`PHYSICS_PROPERTY_ENTRIES`) — never guessed — via `_catalog_entry_for`,
+tried literally first (`singleCellSolverCoeffs.tissue`, what every real
+tutorial call site writes) and, only for an electroProperties lookup with a
+non-empty scope, against the catalog's own templated form (first scope
+segment replaced by the literal `$ELECTRO_MODEL_COEFFS` token, since that is
+how every scoped entry is actually declared). `qualified_id` is the
+**concrete** dotted path (`".".join(key_path)`), matching how
+`cardiacCore.workflows.overrides._parameters_for` keeps its caller's own
+concrete `driver_path` as `qualified_id` rather than an abstract template —
+not a bare unqualified leaf key, which is what S1/S3 fixed.
+
+**An override naming a key the catalog does not declare: found, and
+refused, not inferred.** `resolve_entry_overrides` raises `ValueError`
+(matching the precedent already set by
+`cardiaccore.workflows.overrides.validate_input_overrides`) when neither
+lookup matches. A real, in-tree instance: `manufactured_bath_bidomain.py`'s
+`_apply_case` unconditionally submits
+`<solver>Coeffs.manufacturedBidomain.fdaBathVariant`, a key
+`dict_entries_catalog.py`'s own 2026-09-19 correction note says was
+**deliberately removed** because no native code reads it under
+`<solver>Coeffs`. Covered by `test_an_undeclared_key_is_refused_not_silently_written`.
+
+**`source` — determined, not picked, and found to be constant at this
+layer.** Every `ParameterAssignment` `resolve_entry_overrides` builds has
+`source="case"`. Verified this is correct, not a default-by-omission, by
+finding the actual `case`-vs-`template` precedent in this same package
+(`dict_builder.py`'s synthesis resolver: `source="case" if delta_t is not
+None else "template"`, i.e. `template` names a value **this module itself**
+falls back to when its caller supplied none). `overrides.py` has no fallback
+of its own anywhere in this call path — every value it sees already arrived
+as a concrete entry in the caller's `overrides` argument, with no signal
+distinguishing "a real per-case choice" from "a tutorial's own hardcoded
+default that happened to be passed in here." That distinction is real (it is
+finding F4), but it is not resolvable at this layer; it belongs to each
+tutorial's own `_apply_case`, the same place `dict_builder.py` makes it, and
+is therefore Task 6's decision per call site, not this task's.
+
+**Plan-claim correction: Step 4's "followed by a `commit_case_write`" does
+not hold, and was not implemented that way.** `commit_case_write`
+(`case_transaction.py`) requires a full `CaseWritePlan` — an absolute
+`case_root`, a `driver_context`, rendered `RenderedFile` bytes (produced by
+`case_rendering.py`, not this module), a write lease, and journal recovery.
+`apply_entry_overrides` receives a bare `file_path` with no case root and no
+driver context; there is nothing to build a `CaseWritePlan` from, and doing
+so would mean this transitional wrapper newly depends on machinery none of
+its current callers supply. Implemented instead as `resolve_entry_overrides`
+followed by the **same direct `update_foam_entry` calls this function
+already made**, driven by the resolved assignments' `key_path`/`value`
+rather than by `normalize_entry_overrides`'s raw dicts — i.e. "a commit" in
+the sense of "apply what was resolved," not a call to
+`case_transaction.commit_case_write`. `update_foam_entry` staying legitimate
+only inside a renderer is unchanged in intent: this is the one call site the
+plan itself keeps for "one transitional release," not a new one.
+
+**Found during verification, not assumed: a fully strict resolver breaks
+real, currently-passing tests today**, before Task 6 touches anything.
+Running the full `omnidriver-cardiacfoam` suite against a first
+implementation that made `apply_entry_overrides` delegate unconditionally
+(no fallback) failed six tests:
+`test_dict_entries_catalog.py::test_apply_electro_property_overrides_updates_dimensioned_and_dynamic_entries`,
+and five in `test_manufactured_eikonal_ecg_tet.py` /
+`test_manufactured_monodomain_pseudo_ecg_tet.py`. Root cause, confirmed by
+reading the failures: real, currently-accepted overrides do not fit the
+catalog's typed-data contract yet —
+1. a dynamic per-case identifier the catalog cannot enumerate, e.g.
+   `$ELECTRO_MODEL_COEFFS.ecgDomains.ECG.electrodePositions.V1` (`V1` is a
+   caller-chosen electrode name, not a declared suffix), and
+2. a `dimensioned_scalar`/`dimensioned_tensor` catalog entry (`conductivity`,
+   `stimulusIntensity`) whose real callers always pass an **already-rendered
+   OpenFOAM literal string** (e.g. `"[-1 -3 3 0 0 2 0] (0.2 0 0 0.03 0 0.03)"`),
+   never the `{"value": ..., "dimensions": ...}` mapping
+   `validate_value_shape` requires for that kind. Confirmed no parser from
+   that literal syntax into typed data exists anywhere in this repository
+   (`grep -rl dimensioned_tensor packages/*/src/` finds only the declaration
+   site and the generic shape validator) — this is the same tension Task 4
+   names for `replace_block_mesh_resolutions` ("inventing a value kind for
+   it would be the `openfoam_literal` layering mistake again"), showing up
+   one task early.
+
+   This also means five real tutorials (`cable_1d_cv_convergence.py`,
+   `cable_1d_restitution.py`, `manufactured_bath_bidomain.py`,
+   `manufactured_monodomain_pseudo_ecg.py`, `manufactured_eikonal_ecg.py`)
+   pass a `conductivity` override as a raw string against a
+   `dimensioned_tensor` catalog declaration; that gap is real and unresolved
+   by this task, and Task 6 will hit it directly for those five tutorials
+   unless a parser (or a reconsidered value contract for `conductivity`)
+   lands first.
+
+Neither is a catalog-declaration gap this task's mandate covers (that would
+be a `dict_entries_catalog.py` change, or a new parser in
+`omnidriver-openfoam`/`omnidriver-cardiacfoam`, either well past "the
+chokepoint becomes a resolver"), and "keeps its exact signature and write
+behaviour for one transitional release" leaves no room to newly refuse
+either while eleven tutorials still call through it. Resolved by having
+`apply_entry_overrides` catch `resolve_entry_overrides`'s `ValueError` and
+fall back to the **exact pre-Task-2 per-item loop** for the whole batch in
+that case (safe because `resolve_entry_overrides` is pure — nothing has
+been written yet when it raises). `resolve_entry_overrides` itself stays
+strict with no fallback: a direct caller (Task 6) gets the real refusal and
+must resolve the gap before migrating a tutorial that hits it. Full suite
+re-run after adding the fallback: 872 passed, 103 skipped (`omnidriver-cardiacfoam`
+alone); 0 failed in all four required shapes for this task (see the
+report for the exact commands and counts).
 
 ---
 
