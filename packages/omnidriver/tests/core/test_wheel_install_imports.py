@@ -195,16 +195,60 @@ print("embedded RunDocument resume evidence rejected after input drift")
 """
 
 
+def _fail_environment(what: str, detail: str) -> None:
+    """Fail loudly, and say the failure is the harness rather than the wheel.
+
+    Added 2026-09-23. Everything before the final assertion builds this test's
+    own environment; none of it says anything about the wheel under test. When
+    that construction broke, it surfaced as a bare CalledProcessError -- and
+    because every step here passes ``check=True, capture_output=True``, the
+    exception carried no output whatsoever. Reading it as a finding about the
+    packaging cost real time. Name the phase and print what the subprocess
+    actually said.
+    """
+    pytest.fail(
+        f"test environment could not be built ({what}); this is an "
+        f"infrastructure failure, not a defect in the wheel:\n{detail}"
+    )
+
+
+def _create_environment(env_dir: Path) -> Path:
+    """Create the throwaway venv this test builds and installs the wheel into.
+
+    ``symlinks=True`` is load-bearing, not tidiness. 2026-09-23: ``venv.create``
+    defaults to ``symlinks=False``, which *copies* the interpreter. A copied
+    uv-managed CPython cannot resolve ``@rpath/libpython3.11.dylib``, so dyld
+    aborts and ``ensurepip`` dies with SIGABRT about 0.65 s in -- before any
+    repository code is imported. Because this test is ``@pytest.mark.slow`` it
+    is deselected by every ``-m "not slow"`` run, so that abort was invisible
+    and the test had never once executed on such an interpreter. Symlinking
+    leaves the interpreter where its loader paths still resolve.
+    """
+    try:
+        venv.create(env_dir, with_pip=True, symlinks=True)
+    except subprocess.CalledProcessError as error:
+        _fail_environment(
+            "venv.create",
+            f"{error}\n{error.stdout or ''}{error.stderr or ''}",
+        )
+    return env_dir / "bin" / "python"
+
+
+def _run_environment_step(command: list[str], what: str) -> None:
+    """Run one environment-construction step, reporting its output on failure."""
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode:
+        _fail_environment(what, result.stdout + result.stderr)
+
+
 @pytest.mark.slow
 @skip_without_repo
 def test_every_core_module_imports_from_a_wheel(tmp_path) -> None:
-    env_dir = tmp_path / "venv"
-    venv.create(env_dir, with_pip=True)
-    python = env_dir / "bin" / "python"
+    python = _create_environment(tmp_path / "venv")
 
-    subprocess.run(
+    _run_environment_step(
         [str(python), "-m", "pip", "install", "-q", "build"],
-        check=True, capture_output=True,
+        "pip install build",
     )
     # setuptools keeps a build/lib cache in the package directory and reuses
     # it, so a module deleted or MOVED since the last build is still packaged
@@ -215,15 +259,15 @@ def test_every_core_module_imports_from_a_wheel(tmp_path) -> None:
     # in the other direction and pass a wheel that is missing something.
     # build/ is gitignored, so nothing else cleans it.
     shutil.rmtree(_REPO_ROOT / "packages" / "omnidriver" / "build", ignore_errors=True)
-    subprocess.run(
+    _run_environment_step(
         [str(python), "-m", "build", "--wheel",
          str(_REPO_ROOT / "packages" / "omnidriver"), "-o", str(tmp_path / "dist")],
-        check=True, capture_output=True,
+        "python -m build",
     )
     wheel = next((tmp_path / "dist").glob("*.whl"))
-    subprocess.run(
+    _run_environment_step(
         [str(python), "-m", "pip", "install", "-q", f"{wheel}[post]"],
-        check=True, capture_output=True,
+        "pip install the built wheel",
     )
 
     # cwd must not be the repo: it would put the source tree back on sys.path

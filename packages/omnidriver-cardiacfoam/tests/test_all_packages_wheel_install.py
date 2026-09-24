@@ -49,7 +49,14 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
         shutil.copytree(_REPOSITORY_ROOT / "packages" / package, source_root / package)
 
     environment_root = tmp_path / "venv"
-    venv.create(environment_root, with_pip=True)
+    # symlinks=True is load-bearing. 2026-09-23: venv.create defaults to
+    # symlinks=False, which *copies* the interpreter, and a copied uv-managed
+    # CPython cannot resolve @rpath/libpython3.11.dylib -- dyld aborts and
+    # ensurepip dies with SIGABRT before any repository code is imported. Both
+    # wheel tests are @pytest.mark.slow, so that abort was invisible to every
+    # `-m "not slow"` run. See Core's test_wheel_install_imports.py, where the
+    # same default had kept the test from ever executing on such a machine.
+    venv.create(environment_root, with_pip=True, symlinks=True)
     python = environment_root / "bin" / "python"
     _run([str(python), "-m", "pip", "install", "-q", "build"], cwd=tmp_path)
 
