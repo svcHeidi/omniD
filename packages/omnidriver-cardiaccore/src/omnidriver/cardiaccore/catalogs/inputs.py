@@ -23,6 +23,26 @@ are staged this way, through ``workflows/preprocessing.py``'s
 utilities yet, so no ``active_input_paths`` names their entries -- see
 ``catalogs/support_boundary.py``'s ``SUPPORT_BOUNDARY["pending"]`` for that
 boundary.
+
+**Corrected 2026-09-23.** The paragraph above explains the two scar
+utilities as declared-but-unscheduled, which reads as "wired up later". The
+stronger fact, not previously written down anywhere in this package: they
+are **not on cardiacCore's main at all**. Commit ``c53a0d7`` (2026-09-18,
+"refactor(scar): remove scar and scar-Purkinje-coupling code from main")
+deleted ``src/setCardiacScar/`` and ``src/setPurkinjeScar/``; they survive
+on the ``scar`` branch, and main's ``src/Allwmake`` builds neither. Note
+that ``origin/scar`` is an *ancestor* of ``origin/main`` -- main merged it
+and then removed the files -- so an ancestry check ("is scar merged?")
+answers yes and is misleading; ``git ls-tree origin/main`` is what shows
+the truth. Consequently the first paragraph's claim that every entry is
+backed by a scan over ``cardiacCoreStandalone/src`` holds for main only for
+the NON-scar entries; the scar ones were scanned on that branch, and each
+of their ``source_refs`` now carries a ``scar-branch:`` prefix saying so
+rather than reading as a mainline path an agent would fail to find.
+Unlike ``omnidriver-cardiacfoam``, this package has no
+``test_source_refs_exist``-style drift guard resolving refs against the
+native tree, which is why the relocation went unnoticed; the prefix is a
+label, not that guard.
 """
 
 from __future__ import annotations
@@ -38,11 +58,18 @@ _CONDUCTIVITY_SOURCE = "src/setCardiacConductivity/setCardiacConductivity.C"
 _ANATOMY_SOURCE = "src/setCardiacAnatomy/setCardiacAnatomy.C"
 _SLAB_SOURCE = "src/setPurkinjeSlab/setPurkinjeSlab.C"
 _MORPHOMETRY_SOURCE = "src/setPurkinjeMorphometry/setPurkinjeMorphometry.C"
-_SCAR_SOURCE = "src/setCardiacScar/setCardiacScar.C"
-_SCAR_SEVERITY_SOURCE = "src/setCardiacScar/scarSeverityFn.H"
-_SCAR_README = "src/setCardiacScar/README.md"
-_PURKINJE_SCAR_SOURCE = "src/setPurkinjeScar/setPurkinjeScar.C"
-_PURKINJE_SCAR_README = "src/setPurkinjeScar/README.md"
+#: The five scar citations, prefixed because they do NOT resolve on
+#: cardiacCore's main -- see this module's dated docstring correction. The
+#: prefix is part of the string an agent reads, not a comment, because a
+#: comment does not travel with the entry. Defined once here so all 39
+#: citing entries inherit it; guarded by
+#: `test_every_scar_source_ref_names_the_branch_it_resolves_on`.
+_SCAR_BRANCH_PREFIX = "scar-branch:"
+_SCAR_SOURCE = _SCAR_BRANCH_PREFIX + "src/setCardiacScar/setCardiacScar.C"
+_SCAR_SEVERITY_SOURCE = _SCAR_BRANCH_PREFIX + "src/setCardiacScar/scarSeverityFn.H"
+_SCAR_README = _SCAR_BRANCH_PREFIX + "src/setCardiacScar/README.md"
+_PURKINJE_SCAR_SOURCE = _SCAR_BRANCH_PREFIX + "src/setPurkinjeScar/setPurkinjeScar.C"
+_PURKINJE_SCAR_README = _SCAR_BRANCH_PREFIX + "src/setPurkinjeScar/README.md"
 _COORDINATES_CONVENTION_SOURCE = "src/coordinatesConvention/coordinatesConvention.H"
 _TREE_SOURCE = "src/generatePurkinjeTree/generatePurkinjeTree.C"
 _TREE_README = "src/generatePurkinjeTree/README.md"
@@ -476,6 +503,26 @@ SCAR_ENTRIES: Final[tuple[DictEntry, ...]] = (
 #
 # Same status as setCardiacScarDict: not present in bivCase, no `_TARGETS`
 # row, declared knowledge only.
+#: Evidence for the ``<region_id>`` binding domain, carried by all four
+#: ``$PURKINJE_SCAR.regions.<region_id>.*`` entries so an agent reading any
+#: one of them learns what may bind there without reading the other three.
+_REGION_ID_CONSTRAINT = (
+    "The <region_id> sub-block name is the decimal spelling of a ScarRegionID "
+    "label, not a case-author-chosen word: setPurkinjeScar.C's policyForRegion "
+    "looks it up with Foam::name(region), where region is the integer read from "
+    "the configured regionField (README: 'regions { 3 { ... } }'). That set is "
+    "unbounded, so the placeholder declares an explicitly open binding domain "
+    "rather than a closed one. Healthy cells written by setCardiacScar carry "
+    "region -1 and select no override (README). "
+    "PROVENANCE (2026-09-23): this evidence is read from the cardiacCore "
+    "'scar' BRANCH, not from main. Commit c53a0d7 (2026-09-18, 'refactor(scar): "
+    "remove scar and scar-Purkinje-coupling code from main') deleted "
+    "src/setPurkinjeScar/ and src/setCardiacScar/; main's src/Allwmake builds "
+    "neither utility. Every _PURKINJE_SCAR_SOURCE / _SCAR_SOURCE path in this "
+    "module resolves only on that branch. An unmerged source can still change, "
+    "which is a further reason this domain is declared open rather than closed."
+)
+
 PURKINJE_SCAR_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
         driver_path="$PURKINJE_SCAR.severityField",
@@ -538,13 +585,37 @@ PURKINJE_SCAR_ENTRIES: Final[tuple[DictEntry, ...]] = (
     # `<id>` (setPurkinjeScar.C, policyForRegion/readRegionPolicy).
     # `<id>` is an open-ended region ID, so this is a genuine dynamic_path
     # block, modelled the same way as generatePurkinjeTree's <ventKey> below.
+    #
+    # Added 2026-09-23: `allowed_bindings={"<region_id>": None}` on all four.
+    # They previously declared nothing, which is audit finding S1's shape --
+    # a placeholder no fact is stated about, indistinguishable from one
+    # nobody has audited. The domain was decided on evidence rather than
+    # assumed: unlike <ventKey>, whose two members the native source
+    # enumerates by hand, `policyForRegion` looks the sub-block up by
+    # `Foam::name(region)` for an integer `label`, so the set is unbounded
+    # and the honest declaration is *explicitly open*, not a closed tuple.
+    # See `_REGION_ID_CONSTRAINT` for the citation, which now travels with
+    # every one of the four entries.
+    #
+    # Corrected the same day, before landing: that citation first named
+    # `src/setPurkinjeScar/setPurkinjeScar.C` as though it were mainline. It
+    # is not -- `c53a0d7` (2026-09-18) removed the scar utilities from main
+    # and they survive only on the `scar` branch. The evidence itself stands
+    # (it was read from that branch's source, not from a fixture); what was
+    # wrong was the label on it. `_REGION_ID_CONSTRAINT` now says so, and
+    # `test_the_region_id_domain_is_declared_open_on_evidence` asserts the
+    # branch is named, so the qualifier cannot be quietly dropped again.
     DictEntry(
         driver_path="$PURKINJE_SCAR.regions.<region_id>.conductanceReduction",
         description="Region-specific override of conductanceReduction for edges/PVJs whose region ID matches <region_id>.",
         source_refs=(_PURKINJE_SCAR_SOURCE, _PURKINJE_SCAR_README),
         value_kind="scalar",
         dynamic_path=True,
-        constraints=("Falls back to purkinjeScarPolicy.conductanceReduction when omitted; validated with the same [0,1] range.",),
+        allowed_bindings={"<region_id>": None},
+        constraints=(
+            "Falls back to purkinjeScarPolicy.conductanceReduction when omitted; validated with the same [0,1] range.",
+            _REGION_ID_CONSTRAINT,
+        ),
     ),
     DictEntry(
         driver_path="$PURKINJE_SCAR.regions.<region_id>.conductanceBlockThreshold",
@@ -552,7 +623,11 @@ PURKINJE_SCAR_ENTRIES: Final[tuple[DictEntry, ...]] = (
         source_refs=(_PURKINJE_SCAR_SOURCE, _PURKINJE_SCAR_README),
         value_kind="scalar",
         dynamic_path=True,
-        constraints=("Falls back to purkinjeScarPolicy.conductanceBlockThreshold when omitted; validated with the same [0,1] range.",),
+        allowed_bindings={"<region_id>": None},
+        constraints=(
+            "Falls back to purkinjeScarPolicy.conductanceBlockThreshold when omitted; validated with the same [0,1] range.",
+            _REGION_ID_CONSTRAINT,
+        ),
     ),
     DictEntry(
         driver_path="$PURKINJE_SCAR.regions.<region_id>.basePvjResistance",
@@ -560,7 +635,11 @@ PURKINJE_SCAR_ENTRIES: Final[tuple[DictEntry, ...]] = (
         source_refs=(_PURKINJE_SCAR_SOURCE, _PURKINJE_SCAR_README),
         value_kind="scalar",
         dynamic_path=True,
-        constraints=("Falls back to purkinjeScarPolicy.basePvjResistance when omitted; validated as positive.",),
+        allowed_bindings={"<region_id>": None},
+        constraints=(
+            "Falls back to purkinjeScarPolicy.basePvjResistance when omitted; validated as positive.",
+            _REGION_ID_CONSTRAINT,
+        ),
     ),
     DictEntry(
         driver_path="$PURKINJE_SCAR.regions.<region_id>.resistanceMultiplier",
@@ -568,7 +647,11 @@ PURKINJE_SCAR_ENTRIES: Final[tuple[DictEntry, ...]] = (
         source_refs=(_PURKINJE_SCAR_SOURCE, _PURKINJE_SCAR_README),
         value_kind="scalar",
         dynamic_path=True,
-        constraints=("Falls back to purkinjeScarPolicy.resistanceMultiplier when omitted; validated as non-negative.",),
+        allowed_bindings={"<region_id>": None},
+        constraints=(
+            "Falls back to purkinjeScarPolicy.resistanceMultiplier when omitted; validated as non-negative.",
+            _REGION_ID_CONSTRAINT,
+        ),
     ),
 )
 

@@ -641,6 +641,26 @@ package. Not touched: cardiaccore's own matcher
 so this is a purely declarative gap there, unconnected to the mechanism
 this task changed, and cardiaccore is outside Task 2/3's mandate.
 
+*Closed 2026-09-23*, in separate work outside this plan's task list — the
+paragraph above is left standing because it is an accurate record of what
+*this* task did and did not do. Both halves were fixed together, because
+the declarative half alone would have been unreachable: the four
+`$PURKINJE_SCAR.regions.<region_id>.*` entries now declare
+`{"<region_id>": None}` (open **on evidence** — `policyForRegion` looks the
+sub-block up by `Foam::name(region)` for an integer `label` read from the
+`regionField`, so the set is unbounded; the citation travels in each
+entry's own `constraints`), and `workflows/overrides.py` now matches
+through `match_dynamic_entry` and checks each capture against the matched
+entry's `allowed_bindings`, the same three outcomes as the cardiacFoam
+`_validate_dynamic_binding` this task added. `VENT_KEYS` is no longer
+consulted when matching; `<ventKey>` is policed by its own declaration.
+Two consequences beyond the declaration: a legitimate
+`$PURKINJE_SCAR.regions.3.*` override, previously refused as "not
+declared", is now accepted, and `read_input_values` no longer reports
+`regions.<region_id>....` — a parameter address no case has — as a readable
+value. The `VENT_KEYS` regression tests in
+`tests/test_qualified_addressing.py` were not weakened and still pass.
+
 **Commit 3 — the fallback is gone.** `apply_entry_overrides`'s
 `try/except ValueError` and its duplicated pre-Task-2 write loop are
 deleted; it now calls `resolve_entry_overrides` unconditionally and refuses
