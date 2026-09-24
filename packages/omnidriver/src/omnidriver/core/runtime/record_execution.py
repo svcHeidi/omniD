@@ -186,6 +186,13 @@ def _resolve_and_split(
             "declares no case-value comparator (get_case_value_comparator); "
             "whether a patch is unchanged cannot be determined"
         )
+    read_current_value = driver_context.capabilities.config_value.reader()
+    if read_current_value is None:
+        raise TutorialRecordError(
+            f"tutorial record {record.name!r} cannot run: the composed stack "
+            "declares no config-value reader (get_config_value_reader); "
+            "whether a patch is unchanged cannot be determined"
+        )
     study_by_source, reserved_values = _extract_reserved_names(study_by_source)
     workflow_step_ids = _resolve_workflow_step_ids(record, reserved_values)
     # No fallback for axes either, but an absent axis catalog IS a neutral
@@ -200,7 +207,6 @@ def _resolve_and_split(
         staged_case_root=staged_case_root,
         direct_key_validator=validator,
     )
-    read_current_value = driver_context.capabilities.config_value.reader()
     to_write, unchanged = split_unchanged(
         combined,
         case_root=staged_case_root,

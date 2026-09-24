@@ -981,6 +981,25 @@ def _record_known_catalog_validator(document: str, key_path: tuple, value):
     raise KeyError(f"{document}:{'.'.join(key_path)} not in this test's catalog")
 
 
+def _record_read_current_value(document_path: Path, key_path: tuple):
+    """Mirror the real reader's contract: a KEY-PATH TUPLE in, the current
+    value (or None) out -- matching test_tutorial_records.py's own toy
+    reader. Needed so this file's own "committed"/"unchanged" assertions
+    (M1) prove a real change from a real no-op, rather than relying on
+    split_unchanged's "no reader -> report everything changed" default."""
+    if not document_path.exists():
+        return None
+    node = json.loads(document_path.read_text())
+    *scope, key = key_path
+    for segment in scope:
+        if not isinstance(node, dict) or segment not in node:
+            return None
+        node = node[segment]
+    if not isinstance(node, dict) or key not in node:
+        return None
+    return node[key]
+
+
 def _record_typed_agree(value_kind: str, requested, current) -> bool:
     if current is None:
         return False
@@ -1058,6 +1077,9 @@ class _RecordSweepWriterPlugin(MinimalTestPlugin):
 
     def get_case_value_comparator(self):
         return _record_typed_agree
+
+    def get_config_value_reader(self):
+        return _record_read_current_value
 
 
 def _toy_record() -> TutorialRecord:
@@ -1200,6 +1222,87 @@ def test_sweep_run_refuses_retry_failed_for_a_record_entry(tmp_path):
         sweep_run(
             spec_path, output_dir=tmp_path / "out", retry_failed=True, driver_context=ctx,
         )
+
+
+def test_sweep_run_over_a_record_entry_refuses_to_resume_an_existing_manifest(tmp_path):
+    """B2: a record-entry sweep does not support resume -- re-running
+    sweep_run against an output directory that already holds a manifest
+    (and no --fresh) must refuse by name rather than silently restage and
+    rerun every case from scratch."""
+    cases_root = _native_toy_case(tmp_path)
+    spec_path = tmp_path / "sweep.json"
+    spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root)))
+    ctx = _record_driver_context()
+
+    def fake_subprocess_run(cmd, **kwargs):
+        run_doc_path = Path(cmd[cmd.index("--run-document") + 1])
+        run_doc = json.loads(run_doc_path.read_text())
+        case_root = Path(run_doc["launch"]["caseRoot"])
+        (case_root / "solved.marker").write_text("")
+        workflow_state_path = Path(run_doc["launch"]["outputDir"]) / "workflow_state.json"
+        workflow_state_path.parent.mkdir(parents=True, exist_ok=True)
+        workflow_state_path.write_text(json.dumps({"status": "completed"}))
+        return mock.Mock(returncode=0, stdout="", stderr="")
+
+    with mock.patch(
+        "omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run,
+    ):
+        sweep_run(spec_path, output_dir=tmp_path / "out", driver_context=ctx)
+
+    with pytest.raises(TutorialRecordError, match="does not support resume"):
+        with mock.patch(
+            "omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run,
+        ):
+            sweep_run(spec_path, output_dir=tmp_path / "out", driver_context=ctx)
+
+
+def test_sweep_run_over_a_record_entry_refuses_a_changed_spec_against_the_same_output_dir(tmp_path):
+    """B2's spec-hash half: the same 'sweep.json changed' refusal the
+    factory branch already gives, reused here rather than silently accepting
+    the new spec and leaving stale case directories from the old one."""
+    cases_root = _native_toy_case(tmp_path)
+    spec_path = tmp_path / "sweep.json"
+    spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root, values=(2, 3))))
+    ctx = _record_driver_context()
+
+    def fake_subprocess_run(cmd, **kwargs):
+        run_doc_path = Path(cmd[cmd.index("--run-document") + 1])
+        run_doc = json.loads(run_doc_path.read_text())
+        case_root = Path(run_doc["launch"]["caseRoot"])
+        (case_root / "solved.marker").write_text("")
+        workflow_state_path = Path(run_doc["launch"]["outputDir"]) / "workflow_state.json"
+        workflow_state_path.parent.mkdir(parents=True, exist_ok=True)
+        workflow_state_path.write_text(json.dumps({"status": "completed"}))
+        return mock.Mock(returncode=0, stdout="", stderr="")
+
+    with mock.patch(
+        "omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run,
+    ):
+        sweep_run(spec_path, output_dir=tmp_path / "out", driver_context=ctx)
+
+    spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root, values=(4,))))
+    with pytest.raises(SweepValidationError, match="hash mismatch"):
+        with mock.patch(
+            "omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run,
+        ):
+            sweep_run(spec_path, output_dir=tmp_path / "out", driver_context=ctx)
+
+
+def test_sweep_plan_over_a_record_entry_resolves_a_relative_output_dir(tmp_path, monkeypatch):
+    """M4: a relative --output-dir used to reach commit_record_case
+    unresolved (`case_root must be absolute`) -- resolved before staging,
+    matching the factory branch's own CLI-resolved --output-dir."""
+    cases_root = _native_toy_case(tmp_path)
+    spec_path = tmp_path / "sweep.json"
+    spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root)))
+    ctx = _record_driver_context()
+    monkeypatch.chdir(tmp_path)
+
+    result = sweep_plan(spec_path, output_dir=Path("relout"), driver_context=ctx)
+
+    assert result["case_count"] == 2
+    for case in result["cases"]:
+        assert case["status"] == "ok", case
 
 
 def test_sweep_record_is_never_dispatched_for_a_factory_entry(tmp_path):

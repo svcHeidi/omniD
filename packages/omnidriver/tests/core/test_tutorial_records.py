@@ -914,6 +914,24 @@ def test_describe_entry_previews_a_tutorial_record_instead_of_refusing(tmp_path)
     assert "write_surface" not in described
 
 
+def test_describe_entry_refuses_a_tutorial_record_preview_without_cases_root(tmp_path):
+    """M3: no `Path.cwd()` default -- a case root has no ambient truth
+    (CLAUDE.md's "supplied versus discovered"). Before this fix, omitting
+    `cases_root` from `overrides` silently previewed the record against
+    whatever directory the caller happened to be standing in."""
+    from omnidriver.core.introspection import describe_entry
+
+    record = _record()
+    plugin = _RecordCaseWriterPlugin(
+        tutorial_records={"toyTutorial": record},
+        record_key_validator=_known_catalog_validator,
+    )
+    context = driver_context(plugin, source="test:describe-record-no-root")
+
+    with pytest.raises(TutorialRecordError, match="cases_root"):
+        describe_entry("toyTutorial", overrides={}, driver_context=context)
+
+
 def test_describe_tutorial_output_for_a_factory_tutorial_is_unchanged(tmp_path):
     """Item 1's own instruction: "keep factory tutorials' describe output
     unchanged." A factory-tutorial describe (the case_folder path, exercised
@@ -1184,6 +1202,10 @@ class _NoComparatorPlugin(_RecordCaseWriterPlugin):
     get_case_value_comparator = None
 
 
+class _NoReaderPlugin(_RecordCaseWriterPlugin):
+    get_config_value_reader = None
+
+
 def test_commit_record_case_refuses_when_the_stack_has_no_record_key_validator(tmp_path):
     _native_case(tmp_path, {"constant/electro.json": {"ionicModel": "TT06"}})
     record = _record(allowed_axes=frozenset())
@@ -1226,6 +1248,44 @@ def test_commit_record_case_refuses_when_the_stack_has_no_case_value_comparator(
             record,
             cases_root=tmp_path / "cases",
             staged_case_root=tmp_path / "staged",
+            study_by_source={"base": {"constant/electro.json:ionicModel": "TT06"}},
+            driver_context=context,
+        )
+
+
+def test_commit_record_case_refuses_when_the_stack_has_no_config_value_reader(tmp_path):
+    """M1: `_resolve_and_split` must refuse a missing config-value reader
+    exactly like a missing validator/comparator -- before this fix, a stack
+    with no reader silently reported every patch "changed" (split_unchanged's
+    own no-reader default) and committed it, unable to ever report a real
+    no-op."""
+    _native_case(tmp_path, {"constant/electro.json": {"ionicModel": "TT06"}})
+    record = _record(allowed_axes=frozenset())
+    context = driver_context(
+        _NoReaderPlugin(record_key_validator=_known_catalog_validator),
+        source="test:no-reader",
+    )
+    with pytest.raises(TutorialRecordError, match="no config-value reader"):
+        record_execution.commit_record_case(
+            record,
+            cases_root=tmp_path / "cases",
+            staged_case_root=tmp_path / "staged",
+            study_by_source={"base": {"constant/electro.json:ionicModel": "TT06"}},
+            driver_context=context,
+        )
+
+
+def test_preview_record_case_refuses_when_the_stack_has_no_config_value_reader(tmp_path):
+    _native_case(tmp_path, {"constant/electro.json": {"ionicModel": "TT06"}})
+    record = _record(allowed_axes=frozenset())
+    context = driver_context(
+        _NoReaderPlugin(record_key_validator=_known_catalog_validator),
+        source="test:no-reader",
+    )
+    with pytest.raises(TutorialRecordError, match="no config-value reader"):
+        record_execution.preview_record_case(
+            record,
+            cases_root=tmp_path / "cases",
             study_by_source={"base": {"constant/electro.json:ionicModel": "TT06"}},
             driver_context=context,
         )

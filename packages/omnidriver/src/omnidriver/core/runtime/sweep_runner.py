@@ -704,8 +704,11 @@ def sweep_plan(
 
     record, cases_root = _sweep_record(sweep_spec, driver_context=driver_context)
     if record is not None:
+        # M4: resolved to absolute before staging -- see sweep_run's own
+        # record branch for why (a relative --output-dir otherwise reaches
+        # commit_record_case unresolved).
         return _record_sweep_plan(
-            record, cases_root, sweep_spec, output_dir=output_dir,
+            record, cases_root, sweep_spec, output_dir=Path(output_dir).resolve(),
             driver_context=driver_context,
         )
 
@@ -856,6 +859,12 @@ def sweep_run(
 
     record, cases_root = _sweep_record(sweep_spec, driver_context=driver_context)
     if record is not None:
+        # M4: resolved to absolute BEFORE staging, matching the factory
+        # branch's own `--output-dir` (which the CLI already resolves) --
+        # a relative one used to reach `commit_record_case`
+        # (`CaseMutationRequest.case_root must be absolute`) unresolved,
+        # since this branch never went through the CLI's own resolution.
+        output_dir = Path(output_dir).resolve()
         # Scope, item 2 (see _record_sweep_run's own docstring): no
         # manifest-based resume/retry across separate invocations yet.
         # Refused BY NAME rather than silently ignored -- CLAUDE.md's
@@ -870,6 +879,33 @@ def sweep_run(
         )
         if fresh_error is not None:
             raise SweepValidationError(fresh_error)
+        # B2: a record-entry sweep does not support resume (see
+        # `_record_sweep_run`'s own scope note) -- an existing manifest in
+        # this output directory (not cleared by --fresh) is refused by name
+        # rather than silently restaged and rerun from scratch, which used
+        # to both waste the prior run's work AND -- when the spec itself had
+        # changed -- leave stale case directories from the old spec sitting
+        # alongside the new ones with no warning at all. The SAME spec-hash
+        # check the factory branch below runs gives the more specific answer
+        # when the spec truly changed.
+        manifest_path = output_dir / "sweep_manifest.json"
+        if manifest_path.exists():
+            existing = read_manifest(manifest_path)
+            spec_hash = compute_spec_hash(sweep_spec)
+            if existing.sweep_spec_hash != spec_hash:
+                raise SweepValidationError(
+                    "sweep.json has changed since this output directory was "
+                    f"created (hash mismatch: expected {existing.sweep_spec_hash}, "
+                    f"got {spec_hash}); spec changed — use a fresh --output-dir "
+                    "or resolve the mismatch."
+                )
+            raise TutorialRecordError(
+                f"tutorial record {record.name!r} sweep cannot resume: "
+                f"{output_dir} already holds a sweep manifest from a prior run "
+                "and a record-entry sweep does not support resume across "
+                "invocations yet -- pass --fresh to start over, or use a new "
+                "--output-dir"
+            )
         return _record_sweep_run(
             record, cases_root, sweep_spec, output_dir=output_dir,
             case_timeout_s=case_timeout_s, task=task, driver_context=driver_context,

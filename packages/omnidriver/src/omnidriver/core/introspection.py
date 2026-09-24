@@ -532,10 +532,24 @@ def _describe_tutorial_record(
     be for a factory tutorial.
     """
     from .runtime.record_execution import preview_record_case
+    from .tutorial_records import TutorialRecordError
 
     record = resolution["record"]
     incoming_overrides = dict(overrides or {})
-    cases_root = Path(incoming_overrides.pop("cases_root", None) or Path.cwd())
+    cases_root_value = incoming_overrides.pop("cases_root", None)
+    if cases_root_value is None:
+        # M3: no ambient default (CLAUDE.md's "supplied versus discovered"
+        # -- a case root has no ambient truth). A bare `Path.cwd()` fallback
+        # here used to let `describe` preview a record against whatever
+        # directory the caller happened to be standing in, silently -- the
+        # same class of defect this design's own record dispatch elsewhere
+        # already refuses by name.
+        raise TutorialRecordError(
+            f"tutorial record {entry!r} cannot be previewed: 'overrides' "
+            "must supply 'cases_root' naming where its native case lives "
+            "(there is no ambient cases root to discover)"
+        )
+    cases_root = Path(cases_root_value)
     entry_catalog = list_entries(cases_root, driver_context=driver_context)
     preview = preview_record_case(
         record,
