@@ -437,6 +437,31 @@ def test_resolve_case_patches_validates_axis_produced_patches_too():
         )
 
 
+def test_resolve_case_patches_refuses_an_axis_that_writes_the_staged_case(tmp_path):
+    """M2: axis purity enforced at RUNTIME, not merely documented. An axis
+    that writes directly to the staged case (bypassing the one
+    commit_case_write channel entirely) is refused by name -- before this
+    fix, nothing checked the axis contract's own "reads the staged case,
+    must not write it" invariant at all."""
+    staged_case_root = tmp_path / "staged"
+    staged_case_root.mkdir()
+
+    def rogue(value, case_root: Path):
+        (case_root / "sneaky.txt").write_text("not through the channel")
+        return AxisResult()
+
+    axis = AxisContract(name="rogue", value_kind="word", resolve=rogue)
+    record = _record(allowed_axes=frozenset({"rogue"}))
+    with pytest.raises(TutorialRecordError, match="rogue.*not pure"):
+        resolve_case_patches(
+            record,
+            study_by_source={"base": {"rogue": "x"}},
+            axis_catalog={"rogue": axis},
+            staged_case_root=staged_case_root,
+            direct_key_validator=_known_catalog_validator,
+        )
+
+
 def test_resolve_case_patches_validates_all_direct_keys_before_any_axis_runs():
     """Minor m2: a direct key that the catalog will refuse must be caught
     before any axis (even a well-formed, allowed one) is given a chance to

@@ -461,6 +461,32 @@ def combine_patches(patches: Sequence[SourcedPatch]) -> tuple[SourcedPatch, ...]
 # ---------------------------------------------------------------------------
 
 
+def _case_root_digest(case_root: Path) -> str:
+    """A content digest over every file's path AND bytes under ``case_root``
+    -- the read-only invariant an axis's ``resolve`` must never break
+    (review finding M2, "axis purity enforced at runtime").
+
+    Reuses ``case_write._digest_bytes`` for each file's own digest (the same
+    helper a rendered file's ``content_digest`` already uses), then combines
+    every (relative path, digest) pair, sorted for determinism, into one
+    digest over the whole tree -- the design's own axis contract already
+    documents this as an invariant nothing mechanically enforced; this is
+    that enforcement.
+    """
+    import hashlib
+
+    from .case_write import _digest_bytes
+
+    entries = []
+    if case_root.is_dir():
+        for path in sorted(case_root.rglob("*")):
+            if path.is_file():
+                relpath = path.relative_to(case_root).as_posix()
+                entries.append(f"{relpath}:{_digest_bytes(path.read_bytes())}")
+    encoded = "\n".join(entries).encode()
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
 DirectKeyValidator = Callable[[str, tuple[str, ...], Any], tuple[str, bool]]
 
 
@@ -557,7 +583,22 @@ def resolve_case_patches(
     for source, name, sorted_name, value in axis_entries:
         del source  # an axis patch is sourced by the axis's own name, below
         axis = sorted_name.axis
+        # M2: axis purity enforced at runtime, not merely documented. An
+        # axis's own contract (AxisFunction's docstring) says it reads the
+        # staged case and must not write it -- nothing mechanically enforced
+        # that before this, so a misbehaving axis (or one that imports a
+        # writer by mistake) could mutate the staged case directly, outside
+        # the one commit_case_write channel, and nothing here would notice.
+        before_digest = _case_root_digest(staged_case_root)
         result = axis.resolve(value, staged_case_root)
+        after_digest = _case_root_digest(staged_case_root)
+        if after_digest != before_digest:
+            raise TutorialRecordError(
+                f"axis {name!r} is not pure: it modified the staged case "
+                "while resolving. An axis may only READ the staged case "
+                "and return patches/command arguments; only "
+                "commit_case_write may write a case."
+            )
         for patch in result.patches:
             value_kind, validated = _validate_or_wrap(
                 direct_key_validator, patch.document, patch.key_path, patch.value,
