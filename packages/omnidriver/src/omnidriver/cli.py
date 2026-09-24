@@ -581,7 +581,7 @@ def _context_from_entry(
             return None, 1
     if stage_for_execution and config_path is not None:
         try:
-            replan_overrides = _materialize_entry_case(
+            replan_entry, replan_overrides = _materialize_entry_case(
                 replan_entry,
                 replan_overrides,
                 driver_context=driver_context,

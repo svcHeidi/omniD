@@ -11,6 +11,7 @@ import pytest
 
 from omnidriver import cli
 from omnidriver.cli import _load_spec_overrides
+from omnidriver.core.runtime.sweep_runner import MaterializedEntry
 
 
 def test_direct_config_uses_the_selected_plugin_context(tmp_path: Path) -> None:
@@ -53,7 +54,9 @@ def test_execution_materializes_registered_entry_before_final_plan(tmp_path: Pat
          mock.patch.object(
              cli,
              "_materialize_entry_case",
-             return_value={"cases_root": str(tmp_path)},
+             return_value=MaterializedEntry(
+                 "registeredTutorial", {"cases_root": str(tmp_path)},
+             ),
          ) as materialize, \
          mock.patch.object(cli, "is_launchable", return_value=SimpleNamespace(structural_ok=True)), \
          mock.patch.object(cli, "repo_root_or_none", return_value=None):

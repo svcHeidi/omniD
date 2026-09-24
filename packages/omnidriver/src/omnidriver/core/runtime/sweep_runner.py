@@ -9,7 +9,7 @@ import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from omnidriver.core.strict_planning import strict_plan, _strict_plan_for_spec
 from omnidriver.core.plugin_profile import decomposition_dirname_prefix
@@ -468,20 +468,31 @@ def _clean_stale_time_directories(case_root: Path, *, conventions) -> None:
             shutil.rmtree(child)
 
 
+class MaterializedEntry(NamedTuple):
+    """The entry and overrides that name one materialized sweep case.
+
+    Plan and run with both. A case-path entry names its case by the path
+    itself, so staging it changes the entry, not just the overrides.
+    """
+
+    entry: str
+    overrides: dict[str, Any]
+
+
 def _materialize_entry_case(
     entry: str,
     routed: dict[str, Any],
     *,
     staging_root: Path | None = None,
     driver_context=None,
-) -> dict[str, Any]:
+) -> MaterializedEntry:
     """Materialize one entry-based sweep case via the tutorial's own spec.
 
-    Entry-based sweeps target an existing registered tutorial whose
-    apply_case()/build_cases() mutate a case root in place.  That root must be
-    a disposable staging copy, never the checked-in tutorial directory.  The
-    returned overrides point the entry at that staged case so strict planning
-    and execution use exactly the same paths.
+    Entry-based sweeps target an existing registered tutorial or case path
+    whose apply_case()/build_cases() mutate a case root in place.  That root
+    must be a disposable staging copy, never the checked-in tutorial or the
+    user's case directory.  The returned entry and overrides point at that
+    staged case so strict planning and execution use exactly the same paths.
 
     ``staging_root`` is optional for compatibility with low-level callers and
     tests that provide an already-isolated fake spec.  Real sweep callers
@@ -491,17 +502,26 @@ def _materialize_entry_case(
     case -- the sweep model is one case per resolved axis combination.
     """
     spec = load_entry_spec(entry, overrides=routed, driver_context=driver_context)
+    effective_entry = entry
     effective_routed = dict(routed)
     if staging_root is not None and spec.case_root.exists():
         source_case_root = Path(spec.case_root).resolve()
         staged_case_root = Path(staging_root).resolve()
         _stage_entry_case(source_case_root, staged_case_root, driver_context=driver_context)
-        # ``make_spec`` resolves case_root as cases_root/case_dir_name.
-        # Redirect both values together; changing only cases_root would
-        # leave a nested original case_dir_name and recreate the source tree
-        # below the scratch directory.
-        effective_routed["cases_root"] = str(staged_case_root.parent)
-        effective_routed["case_dir_name"] = staged_case_root.name
+        if spec.metadata["resolution"] == "case_path":
+            # A case path names its case by the path itself; resolve_entry
+            # refuses a case_dir_name that contradicts it. The staged copy is
+            # a case at its own path, so it becomes the entry. Until 7d672f1
+            # the staged name was silently dropped and the SOURCE case was
+            # mutated; from then until this fix it raised (2026-09-24).
+            effective_entry = str(staged_case_root)
+        else:
+            # ``make_spec`` resolves case_root as cases_root/case_dir_name.
+            # Redirect both values together; changing only cases_root would
+            # leave a nested original case_dir_name and recreate the source
+            # tree below the scratch directory.
+            effective_routed["cases_root"] = str(staged_case_root.parent)
+            effective_routed["case_dir_name"] = staged_case_root.name
         # Staging already isolates this one case at staged_case_root, so
         # whatever output_dir_name the sweep spec's own "dependent" template
         # derived (typically the case id again, e.g. for per-case archiving
@@ -515,13 +535,14 @@ def _materialize_entry_case(
         # missing. "." tells resolve_spec_paths there is nothing to append.
         effective_routed["output_dir_name"] = "."
         staged_spec = load_entry_spec(
-            entry, overrides=effective_routed, driver_context=driver_context,
+            effective_entry, overrides=effective_routed, driver_context=driver_context,
         )
         # A real registered factory consumes cases_root/case_dir_name and
         # therefore returns the staged path.  Keep compatibility with test
         # doubles and third-party factories that intentionally return their
         # own fixed spec regardless of overrides.
         if Path(staged_spec.case_root).resolve() != staged_case_root:
+            effective_entry = entry
             effective_routed = dict(routed)
         else:
             spec = staged_spec
@@ -540,7 +561,7 @@ def _materialize_entry_case(
     )
     _clean_stale_time_directories(spec.case_root, conventions=conventions)
     invoke_case_mutation(spec, spec.case_root, cases[0])
-    return effective_routed
+    return MaterializedEntry(effective_entry, effective_routed)
 
 
 def _stage_entry_case(
@@ -802,7 +823,7 @@ def sweep_plan(
         try:
             if entry is not None:
                 routed = route_entry_case_values(base=base, resolved_axis_values=case.resolved_axis_values)
-                routed = _materialize_entry_case(
+                plan_entry, routed = _materialize_entry_case(
                     entry,
                     routed,
                     staging_root=output_dir / "cases" / case.case_id,
@@ -838,7 +859,7 @@ def sweep_plan(
             continue
 
         if entry is not None:
-            report = strict_plan(entry, overrides=routed, driver_context=driver_context)
+            report = strict_plan(plan_entry, overrides=routed, driver_context=driver_context)
         else:
             report = strict_plan(
                 case.case_id,
@@ -1086,13 +1107,13 @@ def sweep_run(
                 status = "failed"
                 try:
                     if entry is not None:
-                        routed = _materialize_entry_case(
+                        plan_entry, routed = _materialize_entry_case(
                             entry,
                             routed,
                             staging_root=output_dir / "cases" / case.case_id,
                             driver_context=driver_context,
                         )
-                        report = strict_plan(entry, overrides=routed, driver_context=driver_context)
+                        report = strict_plan(plan_entry, overrides=routed, driver_context=driver_context)
                     else:
                         materialize_case(case_dir=case_dir, routed=routed, driver_context=driver_context)
                         report = strict_plan(
@@ -1142,13 +1163,13 @@ def sweep_run(
             status = "failed"
             try:
                 if entry is not None:
-                    routed = _materialize_entry_case(
+                    plan_entry, routed = _materialize_entry_case(
                         entry,
                         routed,
                         staging_root=output_dir / "cases" / case.case_id,
                         driver_context=driver_context,
                     )
-                    report = strict_plan(entry, overrides=routed, driver_context=driver_context)
+                    report = strict_plan(plan_entry, overrides=routed, driver_context=driver_context)
                 else:
                     materialize_case(
                         case_dir=case_dir,

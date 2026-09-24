@@ -308,6 +308,9 @@ def test_sweep_plan_entry_mode_materializes_via_apply_case_and_audits(tmp_path):
     fake_case_config = mock.Mock(case_id="implicit_TNNP_DX0.5")
     fake_spec = mock.Mock()
     fake_spec.plan_case = None
+    # load_entry_spec always records how the entry resolved; a staged
+    # case re-resolves differently for a case path than for a tutorial.
+    fake_spec.metadata = {"resolution": "registered"}
     fake_spec.case_root = tmp_path / "case_root"
     fake_spec.build_cases.return_value = [fake_case_config]
 
@@ -350,6 +353,7 @@ def test_sweep_plan_entry_mode_rejects_axis_combination_resolving_to_multiple_ca
 
     fake_spec = mock.Mock()
     fake_spec.plan_case = None
+    fake_spec.metadata = {"resolution": "registered"}
     fake_spec.case_root = tmp_path / "case_root"
     fake_spec.build_cases.return_value = [mock.Mock(), mock.Mock()]
 
@@ -375,6 +379,7 @@ def test_sweep_run_entry_mode_executes_run_document_sequentially(tmp_path):
     fake_case_config = mock.Mock(case_id="implicit_TNNP")
     fake_spec = mock.Mock()
     fake_spec.plan_case = None
+    fake_spec.metadata = {"resolution": "registered"}
     fake_spec.case_root = tmp_path / "case_root"
     fake_spec.build_cases.return_value = [fake_case_config]
     fake_spec.apply_case.side_effect = lambda *a, **k: call_order.append("apply_case")
@@ -440,6 +445,7 @@ def test_sweep_run_archives_each_case_postprocessing_output_when_configured(tmp_
     fake_case_config = mock.Mock(case_id="dx0.5")
     fake_spec = mock.Mock()
     fake_spec.plan_case = None
+    fake_spec.metadata = {"resolution": "registered"}
     fake_spec.case_root = case_root
     fake_spec.build_cases.return_value = [fake_case_config]
     fake_spec.apply_case.side_effect = lambda *a, **k: call_order.append("apply_case")
@@ -504,6 +510,7 @@ def test_sweep_run_archives_each_case_postprocessing_output_by_default(tmp_path)
     fake_case_config = mock.Mock(case_id="dx0.5")
     fake_spec = mock.Mock()
     fake_spec.plan_case = None
+    fake_spec.metadata = {"resolution": "registered"}
     fake_spec.case_root = case_root
     fake_spec.build_cases.return_value = [fake_case_config]
     fake_spec.apply_case.side_effect = lambda *a, **k: call_order.append("apply_case")
