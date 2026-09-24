@@ -603,6 +603,17 @@ class CaseWritePlan:
     The plan holds no execution state. Before-*images* live in the journal
     (:mod:`omnidriver.core.case_transaction`); before-*digests* live here,
     because a conflict check is part of what a reviewer approves.
+
+    ``expected_effects`` (added 2026-09-24, Phase 3 Task 9, "the `describe`
+    seam"): threaded straight from the ``ResolvedMutation`` every producer
+    already builds before constructing this plan. Task 1 (2026-09-23) found
+    this same data computed by both producers and read by nothing --
+    ``CaseWritePlan`` had no field for it, so it was discarded on every real
+    call. This gives it its first consumer: ``commit_case_write`` copies it
+    onto the returned ``CaseWriteRecord``, which is how ``describe`` (Task 9)
+    reads what a real ``plan_case`` invocation, run against a disposable
+    staged clone, actually proposes to change -- without core inventing a
+    second, hand-maintained description of the same facts.
     """
 
     request: CaseMutationRequest
@@ -612,6 +623,7 @@ class CaseWritePlan:
     stack_identity: str
     created_at: str
     schema_version: int = PLAN_SCHEMA_VERSION
+    expected_effects: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         # Coerced before the duplicate-path check below reads them (R2
@@ -621,6 +633,7 @@ class CaseWritePlan:
         # comment on ParameterAssignment.
         object.__setattr__(self, "files", tuple(self.files))
         object.__setattr__(self, "preconditions", tuple(self.preconditions))
+        object.__setattr__(self, "expected_effects", tuple(self.expected_effects))
         # R2 finding 12: schema_version was checked only in from_json, so a
         # plan constructed directly (not read back from a persisted payload)
         # with schema_version=99 was accepted outright. And a plan with zero
@@ -654,6 +667,7 @@ class CaseWritePlan:
             "semantic_owner_id": self.semantic_owner_id,
             "stack_identity": self.stack_identity,
             "created_at": self.created_at,
+            "expected_effects": list(self.expected_effects),
         }
 
     @property
@@ -679,6 +693,12 @@ class CaseWritePlan:
             payload["request"]["parameters"],
             key=lambda p: f"{p['document']}::{'.'.join(p['expanded_key_path'])}",
         )
+        # Same reasoning as the two sorts above, extended 2026-09-24 (Task 9):
+        # `expected_effects` is positionally aligned with `targets`/
+        # `parameters` at construction time, not a keyed structure -- two
+        # plans differing only in that construction order would otherwise
+        # digest differently for no semantic reason.
+        payload["expected_effects"] = sorted(payload["expected_effects"])
         return payload
 
     @property
@@ -703,12 +723,31 @@ class CaseWritePlan:
             stack_identity=payload["stack_identity"],
             created_at=payload["created_at"],
             schema_version=version,
+            # Absent in a plan payload written before this field existed
+            # (schema_version unchanged -- the same "no field means the
+            # prior, only behaviour" reasoning `ParameterAssignment.from_json`
+            # already uses for `operation`): an empty tuple is the neutral,
+            # honest default, not a guess at what an old plan expected.
+            expected_effects=tuple(payload.get("expected_effects", ())),
         )
 
 
 @dataclass(frozen=True)
 class CaseWriteRecord:
-    """What a committed transaction actually did. Not part of the plan."""
+    """What a committed transaction actually did. Not part of the plan.
+
+    ``parameters`` and ``expected_effects`` (added 2026-09-24, Phase 3
+    Task 9): copied from the committed ``CaseWritePlan`` by
+    ``commit_case_write`` -- ``parameters`` is
+    ``[p.to_json() for p in plan.request.parameters]`` (the same validated
+    ``ParameterAssignment``s the channel wrote from, not a second
+    description of them), ``expected_effects`` is ``plan.expected_effects``
+    unchanged. This is ``expected_effects``'s first real consumer: Task 1
+    found it computed by every producer and read by nothing.  ``describe``
+    reads both off a real ``plan_case`` invocation run against a disposable
+    staged case clone (see ``core.introspection``) to answer "what will this
+    change" without core inventing a parallel, adapter-specific mapping.
+    """
 
     transaction_id: str
     plan_id: str
@@ -716,6 +755,8 @@ class CaseWriteRecord:
     committed: tuple[Mapping[str, Any], ...]
     evidence: tuple[Mapping[str, Any], ...]
     status: str
+    parameters: tuple[Mapping[str, Any], ...] = ()
+    expected_effects: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         # R2 finding 3: `rec.committed[0]["a"] = 999` worked, because these
@@ -724,6 +765,8 @@ class CaseWriteRecord:
         # `ResolvedMutation.targets` now is.
         object.__setattr__(self, "committed", tuple(_freeze(entry) for entry in self.committed))
         object.__setattr__(self, "evidence", tuple(_freeze(entry) for entry in self.evidence))
+        object.__setattr__(self, "parameters", tuple(_freeze(entry) for entry in self.parameters))
+        object.__setattr__(self, "expected_effects", tuple(self.expected_effects))
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -733,6 +776,15 @@ class CaseWriteRecord:
             "committed": [dict(entry) for entry in self.committed],
             "evidence": [dict(entry) for entry in self.evidence],
             "status": self.status,
+            # `dict(entry)` (the shallow unfreeze `committed`/`evidence` use
+            # below) only un-wraps the outermost `MappingProxyType`; a
+            # parameter's own nested `binding`/`allowed_bindings` mappings
+            # would still be frozen underneath it and fail JSON
+            # serialization. `_json_value` already recurses through every
+            # `Mapping` (a `MappingProxyType` included) and `tuple`, which is
+            # exactly what `_freeze`'s deep-freeze needs undone by.
+            "parameters": [_json_value(entry) for entry in self.parameters],
+            "expected_effects": list(self.expected_effects),
         }
 
 

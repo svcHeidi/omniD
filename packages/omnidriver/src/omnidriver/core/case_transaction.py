@@ -187,6 +187,11 @@ def _record_from_completed(payload: Mapping[str, Any]) -> CaseWriteRecord:
         committed=tuple(payload.get("committed", ())),
         evidence=tuple(payload.get("evidence", ())),
         status=payload.get("status", "committed"),
+        # Absent in a record persisted before these fields existed -- the
+        # same "no field means the prior, only behaviour" default every
+        # other `.get(...)` here already uses.
+        parameters=tuple(payload.get("parameters", ())),
+        expected_effects=tuple(payload.get("expected_effects", ())),
     )
 
 
@@ -625,6 +630,14 @@ def commit_case_write(
             committed=tuple(committed),
             evidence=(),
             status="committed",
+            # 2026-09-24 (Phase 3 Task 9): `expected_effects`'s first real
+            # consumer -- copied from the plan unchanged, alongside the same
+            # validated `ParameterAssignment`s the channel wrote from
+            # (`plan.request.parameters`, not a second description of them).
+            parameters=tuple(
+                parameter.to_json() for parameter in plan.request.parameters
+            ),
+            expected_effects=plan.expected_effects,
         )
         _persist_completed(case_root, record)
         return record

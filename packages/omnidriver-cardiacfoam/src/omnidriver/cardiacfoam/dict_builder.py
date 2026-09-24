@@ -1308,6 +1308,7 @@ def build_case(
             request=request, files=rendered, preconditions=resolved.preconditions,
             semantic_owner_id=resolved.semantic_owner_id, stack_identity=stack_identity,
             created_at=_datetime.datetime.now(_datetime.timezone.utc).isoformat(),
+            expected_effects=resolved.expected_effects,
         )
     return plan
 

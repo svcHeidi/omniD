@@ -413,6 +413,7 @@ def apply_input_overrides_planned(
             semantic_owner_id=resolved.semantic_owner_id,
             stack_identity=stack_identity,
             created_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            expected_effects=resolved.expected_effects,
         )
     return commit_case_write(plan, driver_context=driver_context, execution_env=execution_env)
 

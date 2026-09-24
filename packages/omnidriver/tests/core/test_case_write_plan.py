@@ -8,6 +8,8 @@ A plan is reviewable only if what an agent reads is what will be written, and
 stable only if the bytes it hashes cannot change afterwards.
 """
 
+import dataclasses
+import json
 from pathlib import Path
 
 import pytest
@@ -285,6 +287,61 @@ def test_a_committed_entry_is_frozen_not_a_live_dict():
         record.committed[0]["digest"] = "9" * 64
     with pytest.raises(TypeError):
         record.evidence[0]["source"] = "tampered"
+
+
+def test_a_plans_expected_effects_round_trips_through_json():
+    """Phase 3 Task 9: `expected_effects` threaded onto `CaseWritePlan` --
+    Task 1 found it computed by every producer and read by nothing;
+    `to_json`/`from_json` must carry it, the same as every other field."""
+    plan = _plan()
+    with_effects = dataclasses.replace(
+        plan, expected_effects=("set 'x' in y", "remove 'z' in y"),
+    )
+    restored = case_write.CaseWritePlan.from_json(with_effects.to_json())
+    assert restored.expected_effects == with_effects.expected_effects
+    assert restored.plan_digest == with_effects.plan_digest
+
+
+def test_a_plan_payload_written_before_expected_effects_existed_defaults_to_empty():
+    plan = _plan()
+    payload = plan.to_json()
+    del payload["expected_effects"]
+    restored = case_write.CaseWritePlan.from_json(payload)
+    assert restored.expected_effects == ()
+
+
+def test_expected_effects_order_does_not_change_the_digest():
+    """The same "order is not semantically meaningful" reasoning R2 finding
+    12 already applies to `files`/`request.parameters` -- `expected_effects`
+    is positionally aligned with construction-time target order, not a
+    keyed structure."""
+    plan = _plan()
+    forward = dataclasses.replace(plan, expected_effects=("a", "b"))
+    reversed_effects = dataclasses.replace(plan, expected_effects=("b", "a"))
+    assert forward.plan_digest == reversed_effects.plan_digest
+
+
+def test_a_case_write_record_carries_its_committed_parameters_and_expected_effects():
+    """Phase 3 Task 9: `expected_effects`'s first real consumer --
+    `commit_case_write` copies it, and the plan's own validated
+    `ParameterAssignment`s, onto the returned record. `describe`'s
+    `_resolve_proposed_changes` reads exactly this."""
+    plan = _plan()
+    record = case_write.CaseWriteRecord(
+        transaction_id="t1", plan_id=plan.plan_id, plan_digest=plan.plan_digest,
+        committed=(), evidence=(), status="committed",
+        parameters=tuple(p.to_json() for p in plan.request.parameters),
+        expected_effects=("set 'ionicModel' in constant/electroProperties",),
+    )
+    assert record.parameters[0]["qualified_id"] == plan.request.parameters[0].qualified_id
+    assert record.expected_effects == ("set 'ionicModel' in constant/electroProperties",)
+    # Round-trips through JSON without a nested-mappingproxy serialization
+    # failure -- a parameter's own `binding`/`allowed_bindings` mappings are
+    # frozen one level deeper than `committed`/`evidence` ever were.
+    payload = json.loads(json.dumps(record.to_json()))
+    assert payload["parameters"][0]["qualified_id"] == plan.request.parameters[0].qualified_id
+    with pytest.raises(TypeError):
+        record.parameters[0]["qualified_id"] = "tampered"
 
 
 def test_a_resolved_mutation_target_is_frozen_not_a_live_dict():

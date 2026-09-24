@@ -425,6 +425,7 @@ def apply_overrides(
             request=request, files=tuple(rendered), preconditions=preconditions,
             semantic_owner_id=_OWNER, stack_identity=stack_identity,
             created_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            expected_effects=resolved.expected_effects,
         )
 
     try:
