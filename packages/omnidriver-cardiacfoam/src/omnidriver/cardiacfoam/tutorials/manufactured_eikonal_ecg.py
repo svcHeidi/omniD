@@ -27,7 +27,6 @@
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 from collections.abc import Mapping, Sequence
 from functools import partial
@@ -39,8 +38,6 @@ from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 from omnidriver.openfoam.mutators import update_foam_entry
 from omnidriver.openfoam.parallel_execution import solve_steps
 from omnidriver.cardiacfoam.overrides import (
-    apply_electro_property_overrides,
-    apply_physics_property_overrides,
     commit_case_overrides,
     merge_assignments,
     resolve_entry_overrides,
@@ -51,6 +48,7 @@ from omnidriver.core.specs.common import (
 )
 from omnidriver.openfoam.utils import (
     plan_block_mesh_resolution,
+    plan_verbatim_content,
 )
 from omnidriver.openfoam.tet_mesh_provisioning import render_tet_geo
 
@@ -229,97 +227,35 @@ def _apply_case(
     its own independent implementation, unchanged from before Task 6's
     write-channel migration, and does not attempt to run through
     `_plan_case`, which cannot serve it.
+
+    **Superseded 2026-09-24 (Phase 3 Task 7 follow-up): unconditional
+    again.** `_plan_case` now has a tet branch of its own (see its
+    docstring), so the reason for the split above is gone. The independent
+    tet implementation is retired. Its bytes were pinned first, from the
+    unmodified code, in `test_manufactured_eikonal_ecg_write_channel.py`'s
+    tet characterization, and `_plan_case` reproduces them.
     """
-    if mesh_family == "hex":
-        _plan_case(
-            case_root, case,
-            electro_properties_scope=electro_properties_scope,
-            electro_properties_relpath=electro_properties_relpath,
-            physics_properties_relpath=physics_properties_relpath,
-            electro_property_overrides=electro_property_overrides,
-            physics_property_overrides=physics_property_overrides,
-            verification_model_type=verification_model_type,
-            conductivity=conductivity,
-            eikonal_advection_diffusion_approach=eikonal_advection_diffusion_approach,
-            ecg_reference_quadrature_order=ecg_reference_quadrature_order,
-            ecg_check_quadrature_orders=ecg_check_quadrature_orders,
-            ecg_electrodes_by_dimension=ecg_electrodes_by_dimension,
-            block_mesh_dict_template=block_mesh_dict_template,
-            mesh_family=mesh_family,
-            tet_geo_template_relpath=tet_geo_template_relpath,
-            numerics_profile=numerics_profile,
-            grad_scheme=grad_scheme,
-            fv_scheme_overrides=fv_scheme_overrides,
-            fv_solution_overrides=fv_solution_overrides,
-        )
-        return
-
-    dimension = str(case.params["dimension"])
-    cells = int(case.params["cells"])
-
-    electro_properties = case_root / electro_properties_relpath
-    physics_properties = case_root / physics_properties_relpath
-    ecg_scope = f"{electro_properties_scope}.ecgDomains.ECG"
-
-    try:
-        electrodes = ecg_electrodes_by_dimension[dimension]
-    except KeyError as exc:
-        raise ValueError(f"Missing ECG electrode set for dimension '{dimension}'") from exc
-
-    case_overrides = {
-        f"{electro_properties_scope}.verificationModel.type": verification_model_type,
-        f"{ecg_scope}.ecgSolver": "eikonalECG",
-        f"{ecg_scope}.verificationModel.enabled": True,
-        f"{ecg_scope}.verificationModel.referenceQuadratureOrder":
-            int(ecg_reference_quadrature_order),
-        f"{ecg_scope}.verificationModel.checkQuadratureOrders": "("
-        + " ".join(str(int(value)) for value in ecg_check_quadrature_orders)
-        + ")",
-    }
-    if conductivity is not None:
-        case_overrides[f"{electro_properties_scope}.conductivity"] = conductivity
-    if eikonal_advection_diffusion_approach is not None:
-        case_overrides[f"{electro_properties_scope}.eikonalAdvectionDiffusionApproach"] = eikonal_advection_diffusion_approach
-
-    for electrode_name, electrode_position in electrodes.items():
-        case_overrides[f"{ecg_scope}.electrodePositions.{electrode_name}"] = (
-            electrode_position
-        )
-
-    # The .geo output and any numerics-profile overlay files (e.g.
-    # fvSolution) are siblings of the template, wherever the caller has
-    # placed it -- co-located with the study that drives it
-    # (setup/studies/tetConvergence/), matching bidomain/monodomainPseudoECG.
-    tet_geo_relpath = tet_geo_template_relpath.parent / "box.geo"
-    render_tet_geo(
-        case_root, cells,
-        template_relpath=tet_geo_template_relpath,
-        geo_relpath=tet_geo_relpath,
+    _plan_case(
+        case_root, case,
+        electro_properties_scope=electro_properties_scope,
+        electro_properties_relpath=electro_properties_relpath,
+        physics_properties_relpath=physics_properties_relpath,
+        electro_property_overrides=electro_property_overrides,
+        physics_property_overrides=physics_property_overrides,
+        verification_model_type=verification_model_type,
+        conductivity=conductivity,
+        eikonal_advection_diffusion_approach=eikonal_advection_diffusion_approach,
+        ecg_reference_quadrature_order=ecg_reference_quadrature_order,
+        ecg_check_quadrature_orders=ecg_check_quadrature_orders,
+        ecg_electrodes_by_dimension=ecg_electrodes_by_dimension,
+        block_mesh_dict_template=block_mesh_dict_template,
+        mesh_family=mesh_family,
+        tet_geo_template_relpath=tet_geo_template_relpath,
+        numerics_profile=numerics_profile,
+        grad_scheme=grad_scheme,
+        fv_scheme_overrides=fv_scheme_overrides,
+        fv_solution_overrides=fv_solution_overrides,
     )
-    for overlay_name in defaults.TET_NUMERICS_PROFILES.get(numerics_profile or "", ()):
-        overlay_source = case_root / tet_geo_template_relpath.parent / overlay_name
-        shutil.copy(overlay_source, case_root / "system" / overlay_name)
-
-    if grad_scheme is not None:
-        update_foam_entry(
-            case_root / "system" / "fvSchemes",
-            "default",
-            defaults.GRAD_SCHEME_TOKENS[grad_scheme],
-            scope=["gradSchemes"],
-        )
-    for entry in fv_scheme_overrides or ():
-        update_foam_entry(
-            case_root / "system" / "fvSchemes", entry["key"], entry["value"],
-            scope=entry.get("scope"),
-        )
-    for entry in fv_solution_overrides or ():
-        update_foam_entry(
-            case_root / "system" / "fvSolution", entry["key"], entry["value"],
-            scope=entry.get("scope"),
-        )
-    apply_electro_property_overrides(electro_properties, case_overrides)
-    apply_electro_property_overrides(electro_properties, electro_property_overrides)
-    apply_physics_property_overrides(physics_properties, physics_property_overrides)
 
 
 def _plan_case(
@@ -373,6 +309,29 @@ def _plan_case(
     migrating it is real, additional work on a third tutorial's tet branch,
     not a corollary of correcting a misclassification comment. Tracked as a
     follow-up, not fixed here.
+
+    **Extended 2026-09-24 (that follow-up): the tet family too.** This
+    function is no longer hex-only. For `mesh_family == "tet"` it renders
+    the `.geo` directly and resolves no block-mesh target, since a tet case
+    has no `blockMeshDict.3D` to rewrite. `render_tet_geo` stays a direct
+    write, and `tet_mesh_provisioning`'s module docstring says why. It also
+    folds each `defaults.TET_NUMERICS_PROFILES` overlay into the same
+    commit as a `plan_verbatim_content` target instead of copying it.
+    `make_spec` now wires `plan_case` for both families, so a tet case
+    reaches `commit_case_write` like a hex case does.
+
+    **Ordering changed with it, and the change is load-bearing.** The
+    `grad_scheme`/`fv_*_overrides` direct edits used to run *before* the
+    commit. That was harmless while they and the commit touched disjoint
+    documents. Now the commit can replace `system/fvSolution` wholesale, so
+    an edit made first would be silently overwritten. They now run after
+    the commit, as `manufactured_bath_bidomain`/
+    `manufactured_monodomain_pseudo_ecg` already did. For hex this moves
+    nothing byte-wise (disjoint documents still). For tet it restores the
+    order the retired `_apply_case` branch had: overlay first, then edits
+    (`test_tet_fv_solution_override_lands_on_the_overlay`). `shutil.copy` also
+    copied the overlay's permission bits; a channel target keeps the
+    destination's own mode instead.
     """
     dimension = str(case.params["dimension"])
     cells = int(case.params["cells"])
@@ -406,13 +365,61 @@ def _plan_case(
             electrode_position
         )
 
-    try:
-        cell_counts = defaults.BLOCK_MESH_RESOLUTION_BY_DIMENSION[dimension].format(cells=cells)
-    except KeyError as exc:
-        raise ValueError(f"Unsupported dimension: {dimension}") from exc
-    block_mesh_document = str(Path(block_mesh_dict_template.format(dimension=dimension)))
-    block_mesh_target = plan_block_mesh_resolution(block_mesh_document, cell_counts)
+    extra_targets: list[Mapping[str, object]] = []
+    extra_effects: list[str] = []
+    if mesh_family == "tet":
+        # The .geo output and any numerics-profile overlay files (e.g.
+        # fvSolution) are siblings of the template, wherever the caller has
+        # placed it -- co-located with the study that drives it
+        # (setup/studies/tetConvergence/), matching bidomain/monodomainPseudoECG.
+        render_tet_geo(
+            case_root, cells,
+            template_relpath=tet_geo_template_relpath,
+            geo_relpath=tet_geo_template_relpath.parent / "box.geo",
+        )
+        for overlay_name in defaults.TET_NUMERICS_PROFILES.get(numerics_profile or "", ()):
+            overlay_document = f"system/{overlay_name}"
+            extra_targets.append(plan_verbatim_content(
+                overlay_document,
+                (case_root / tet_geo_template_relpath.parent / overlay_name).read_text(encoding="utf-8"),
+            ))
+            extra_effects.append(f"install tet numerics overlay {overlay_document}")
+    else:
+        try:
+            cell_counts = defaults.BLOCK_MESH_RESOLUTION_BY_DIMENSION[dimension].format(cells=cells)
+        except KeyError as exc:
+            raise ValueError(f"Unsupported dimension: {dimension}") from exc
+        block_mesh_document = str(Path(block_mesh_dict_template.format(dimension=dimension)))
+        extra_targets.append(plan_block_mesh_resolution(block_mesh_document, cell_counts))
+        extra_effects.append(f"rewrite hex blocks in {block_mesh_document}")
 
+    electro_document = str(electro_properties_relpath)
+    physics_document = str(physics_properties_relpath)
+    parameters = merge_assignments(
+        resolve_entry_overrides(
+            electro_properties, case_overrides, document=electro_document,
+            electro_properties_path=electro_properties,
+        ),
+        resolve_entry_overrides(
+            electro_properties, electro_property_overrides, document=electro_document,
+            electro_properties_path=electro_properties,
+        ),
+        resolve_entry_overrides(
+            physics_properties, physics_property_overrides, document=physics_document,
+        ),
+    )
+
+    record = commit_case_overrides(
+        case_root,
+        parameters=parameters,
+        extra_targets=tuple(extra_targets),
+        extra_effects=tuple(extra_effects),
+        workflow="manufactured_eikonal_ecg",
+        requested_by="cardiacfoam.tutorials.manufactured_eikonal_ecg",
+    )
+
+    # After the commit, never before it: an overlay above may have just
+    # replaced the very document these edit (see this function's docstring).
     if grad_scheme is not None:
         update_foam_entry(
             case_root / "system" / "fvSchemes",
@@ -431,30 +438,7 @@ def _plan_case(
             scope=entry.get("scope"),
         )
 
-    electro_document = str(electro_properties_relpath)
-    physics_document = str(physics_properties_relpath)
-    parameters = merge_assignments(
-        resolve_entry_overrides(
-            electro_properties, case_overrides, document=electro_document,
-            electro_properties_path=electro_properties,
-        ),
-        resolve_entry_overrides(
-            electro_properties, electro_property_overrides, document=electro_document,
-            electro_properties_path=electro_properties,
-        ),
-        resolve_entry_overrides(
-            physics_properties, physics_property_overrides, document=physics_document,
-        ),
-    )
-
-    return commit_case_overrides(
-        case_root,
-        parameters=parameters,
-        extra_targets=(block_mesh_target,),
-        extra_effects=(f"rewrite hex blocks in {block_mesh_document}",),
-        workflow="manufactured_eikonal_ecg",
-        requested_by="cardiacfoam.tutorials.manufactured_eikonal_ecg",
-    )
+    return record
 
 
 
@@ -558,32 +542,29 @@ def make_spec(
             fv_scheme_overrides=fv_scheme_overrides,
             fv_solution_overrides=fv_solution_overrides,
         ),
-        # `_plan_case` covers the `mesh_family == "hex"` path only -- see
-        # its own docstring; a `"tet"` spec keeps `apply_case` as its only
-        # mutation route (mirrors `niederer_2012`'s identical scoping).
-        plan_case=(
-            partial(
-                _plan_case,
-                electro_properties_scope=electro_properties_scope,
-                electro_properties_relpath=Path(electro_properties_relpath),
-                physics_properties_relpath=Path(physics_properties_relpath),
-                electro_property_overrides=electro_property_overrides,
-                physics_property_overrides=physics_property_overrides,
-                verification_model_type=verification_model_type,
-                conductivity=conductivity,
-                eikonal_advection_diffusion_approach=eikonal_advection_diffusion_approach,
-                ecg_reference_quadrature_order=ecg_reference_quadrature_order,
-                ecg_check_quadrature_orders=ecg_check_quadrature_orders,
-                ecg_electrodes_by_dimension=ecg_electrodes_by_dimension,
-                block_mesh_dict_template=block_mesh_dict_template,
-                mesh_family=mesh_family,
-                tet_geo_template_relpath=tet_geo_template_path,
-                numerics_profile=numerics_profile,
-                grad_scheme=grad_scheme,
-                fv_scheme_overrides=fv_scheme_overrides,
-                fv_solution_overrides=fv_solution_overrides,
-            )
-            if mesh_family == "hex" else None
+        # Both mesh families since 2026-09-24 -- `_plan_case` gained a tet
+        # branch (see its docstring). Until then this was `... if
+        # mesh_family == "hex" else None`, leaving tet on `apply_case`.
+        plan_case=partial(
+            _plan_case,
+            electro_properties_scope=electro_properties_scope,
+            electro_properties_relpath=Path(electro_properties_relpath),
+            physics_properties_relpath=Path(physics_properties_relpath),
+            electro_property_overrides=electro_property_overrides,
+            physics_property_overrides=physics_property_overrides,
+            verification_model_type=verification_model_type,
+            conductivity=conductivity,
+            eikonal_advection_diffusion_approach=eikonal_advection_diffusion_approach,
+            ecg_reference_quadrature_order=ecg_reference_quadrature_order,
+            ecg_check_quadrature_orders=ecg_check_quadrature_orders,
+            ecg_electrodes_by_dimension=ecg_electrodes_by_dimension,
+            block_mesh_dict_template=block_mesh_dict_template,
+            mesh_family=mesh_family,
+            tet_geo_template_relpath=tet_geo_template_path,
+            numerics_profile=numerics_profile,
+            grad_scheme=grad_scheme,
+            fv_scheme_overrides=fv_scheme_overrides,
+            fv_solution_overrides=fv_solution_overrides,
         ),
         metadata={
             "notes": "Manufactured eikonal activation and ECG benchmark",

@@ -27,7 +27,6 @@
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 from collections.abc import Mapping, Sequence
 from functools import partial
@@ -56,6 +55,7 @@ from omnidriver.openfoam.utils import (
     plan_delta_t,
     plan_dict_block,
     plan_end_time,
+    plan_verbatim_content,
     plan_write_interval,
 )
 from omnidriver.openfoam.tet_mesh_provisioning import render_tet_geo
@@ -382,6 +382,20 @@ def _plan_case(
     additional work on a tutorial outside Task 7's two assigned ones,
     tracked as a follow-up rather than done here.
 
+    **Migrated 2026-09-24 (that follow-up):** the overlay copy is now a
+    `plan_verbatim_content` target in `extra_targets`, committed with the
+    rest of this case, and the claim above that it "stays direct" is
+    superseded. The overlay's text is read at plan time and replaces
+    `system/fvSchemes` inside the transaction. `grad_scheme`/
+    `fv_scheme_overrides` still edit that same document directly *after* the
+    commit, so they land on the overlay's text, the same relative order the
+    `shutil.copy` had (pinned by this tutorial's tet write-channel test). One
+    difference, deliberate: `shutil.copy` also copied the overlay's
+    permission bits, but a channel target keeps the destination's own mode,
+    the same as every other patched document. The `render_tet_geo` call
+    stays a direct write -- `tet_mesh_provisioning`'s module docstring says
+    why (a format the patch renderer cannot yet declare honestly).
+
     `set_delta_t`/`set_end_time`/`replace_block_mesh_resolutions` are not
     called here at all; `plan_delta_t`/`plan_end_time`/`plan_write_interval`/
     `plan_block_mesh_resolution` replace them, same as every other migrated
@@ -429,10 +443,13 @@ def _plan_case(
             geo_relpath=Path("setup/studies/tetConvergence/three_domain_box.geo"),
         )
         for overlay_name in _TET_NUMERICS_PROFILES.get(numerics_profile or "", ()):
-            shutil.copy(
-                case_root / "setup" / "studies" / "tetConvergence" / overlay_name,
-                case_root / "system" / overlay_name,
-            )
+            overlay_document = f"system/{overlay_name}"
+            extra_targets.append(plan_verbatim_content(
+                overlay_document,
+                (case_root / "setup" / "studies" / "tetConvergence" / overlay_name)
+                .read_text(encoding="utf-8"),
+            ))
+            extra_effects.append(f"install tet numerics overlay {overlay_document}")
     else:
         try:
             cell_counts = defaults.BLOCK_MESH_RESOLUTION_BY_DIMENSION[dimension].format(cells=cells)

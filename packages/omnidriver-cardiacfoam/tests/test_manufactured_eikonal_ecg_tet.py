@@ -203,6 +203,17 @@ def test_tet_apply_case_renders_geo_installs_overlay_and_grad_scheme(tmp_path):
     assert "leastSquares;" in (case_root / "system" / "fvSchemes").read_text()
 
 
+def test_tet_spec_mutates_through_plan_case(tmp_path):
+    """Since 2026-09-24 `_plan_case` serves the tet family too, so a tet spec
+    must supply it. Otherwise `invoke_case_mutation` falls back to
+    `apply_case` with a `DeprecationWarning`, and the case never reaches
+    `commit_case_write`, which is what this tutorial's tet branch did before."""
+    spec = _make_spec(tmp_path, mesh_family="tet", numerics_profile="eikonal_tet")
+    assert spec.plan_case is not None
+    record = spec.plan_case(spec.case_root, spec.build_cases()[0])
+    assert "system/fvSolution" in {entry["path"] for entry in record.committed}
+
+
 def test_tet_apply_case_forwards_conductivity_and_advection_approach(tmp_path):
     case_root = _write_case(tmp_path)
     conductivity = "[ -1 -3 3 0 0 2 0 ] (0.111 0 0 0.122 0 0.030)"

@@ -27,7 +27,6 @@
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 from collections.abc import Mapping, Sequence
 from functools import partial
@@ -54,6 +53,7 @@ from omnidriver.openfoam.utils import (
 )
 from omnidriver.openfoam.utils import (
     plan_end_time,
+    plan_verbatim_content,
 )
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 from omnidriver.openfoam.mutators import update_foam_entry
@@ -343,6 +343,21 @@ def _plan_case(
     mesh/graph source artifact. Left unmigrated regardless, for the same
     reason: real, additional work on a tutorial outside Task 7's two
     assigned ones, tracked as a follow-up rather than done here.
+
+    **Migrated 2026-09-24 (that follow-up), and one fact above corrected:**
+    `_NUMERICS_PROFILES` maps `bidomain_tet` to `("fvSchemes",)` and
+    `monodomain_tet` to `("fvSchemes", "fvSolution")`, so the overlays
+    replace `system/fvSchemes` and, for monodomain, `system/fvSolution` too,
+    not `fvSolution` alone. Each is now a `plan_verbatim_content` target in
+    `extra_targets`, committed with the rest of this case, which supersedes
+    the "still stay direct writes" claim above for the overlays. The `grad_scheme`/`phi_tolerance`/
+    `n_*_correctors`/`fv_*_overrides` direct edits still run *after* the
+    commit, so they land on the overlays' text, the same relative order the
+    `shutil.copy`s had (pinned by this tutorial's tet write-channel test).
+    One difference, deliberate: `shutil.copy` also copied each overlay's
+    permission bits, but a channel target keeps the destination's own mode.
+    `render_tet_geo` stays a direct write -- `tet_mesh_provisioning`'s
+    module docstring says why.
     """
     dimension = str(case.params["dimension"])
     solver = str(case.params["solver"])
@@ -400,8 +415,12 @@ def _plan_case(
         tet_geo_relpath = tet_geo_template_relpath.parent / "box.geo"
         render_tet_geo(case_root, cells, template_relpath=tet_geo_template_relpath, geo_relpath=tet_geo_relpath)
         for overlay_name in _NUMERICS_PROFILES.get(numerics_profile or "", ()):
-            overlay_source = case_root / tet_geo_template_relpath.parent / overlay_name
-            shutil.copy(overlay_source, case_root / "system" / overlay_name)
+            overlay_document = f"system/{overlay_name}"
+            extra_targets.append(plan_verbatim_content(
+                overlay_document,
+                (case_root / tet_geo_template_relpath.parent / overlay_name).read_text(encoding="utf-8"),
+            ))
+            extra_effects.append(f"install tet numerics overlay {overlay_document}")
     else:
         try:
             cell_counts = defaults.BLOCK_MESH_RESOLUTION_BY_DIMENSION[dimension].format(cells=cells)

@@ -51,6 +51,7 @@ Tasks 8–11 not started.
 | 5 · `--apply` joins the channel | **bypass 4** | done | `b6fe66f`, `7eb919d` |
 | 6 · the eleven tutorials follow through | **bypass 1** (most of it) | pending | — |
 | 7 · source artifacts and sidecars, classified | **bypass 1** (remainder) | done | `85fc504`, `8594422`, `e85784c`, `2c3939c`, `570abfa`, `0b7d337`, and this doc's own commit |
+| 7 follow-up · tet overlays onto the channel; niederer's `.geo` reuses the shared renderer | **bypass 1** (remainder) | done | this follow-up's own commit |
 | 8 · `generic_case.py` | **bypass 2** | done | this doc's own commit |
 | 9 · the `describe` seam | the unmet second payoff | pending | — |
 | 10 · `Allrun`, and delete what is unreachable | **bypass 5** | pending | — |
@@ -1454,10 +1455,10 @@ framework bookkeeping, framework-authored case input).
 | `manufactured_purkinje_graph.py` `_apply_case`'s `shutil.copy2` (`purkinjeGraph.<id>` → `purkinjeGraph`) | **source artifact, blocked on missing artifact staging (corrected 2026-09-24, see below)** | Large geometric data (the class `RenderedFile`'s own docstring calls out as "referenced by digest, never embedded"), not a small dictionary key -- same class `manufactured_monodomain_1d3d`'s identical copy already has. Stays a direct write: this tutorial's *only* write is this copy, and a channel commit whose sole content is a source-artifact declaration would build a `CaseWritePlan` with zero `RenderedFile`s, which `CaseWritePlan.__post_init__` itself refuses ("a plan must render at least one file") -- a guard this task may not weaken. |
 | `manufactured_monodomain_1d3d.py`'s `shutil.copy2` (identical `purkinjeGraph.<id>` → `purkinjeGraph`) | **source artifact, blocked on missing artifact staging (corrected 2026-09-24, see below)** | Same reasoning as above. Not a declared exception in the same sense -- this tutorial's *other* edits (hex rewrite, electro overrides, controlDict) already reach `commit_case_write` via its own `_plan_case`, so the copy sits beside a real channel commit rather than replacing the tutorial's only one. |
 | `manufactured_monodomain_1d3d.py`'s `block_mesh_active.write_text(block_mesh_dict.read_text())` (`blockMeshDict.3D` → `.active`) | **case input, blocked on missing artifact staging (corrected 2026-09-24, see below)** | Decides *which* document the channel will subsequently patch; carries no value of its own. Predates Task 7 and is outside its mandate to revisit. |
-| `manufactured_bath_bidomain.py` / `manufactured_eikonal_ecg.py` / `manufactured_monodomain_pseudo_ecg.py`'s tet-branch numerics-profile overlay `shutil.copy` (`overlay_name` resolves to `"fvSolution"`, replacing `system/fvSolution` wholesale) | **framework-authored case input, same class as `heart_solver_comparison` -- classification corrected, migration deferred** | Task 6 labelled these "source artifacts, Task 7's domain"; checked against `defaults.TET_NUMERICS_PROFILES`/`_NUMERICS_PROFILES` (found, not assumed) and they are small hand-authored numerics documents, not mesh/graph data -- the identical class `plan_verbatim_content` now serves. Corrected with a dated note in all three tutorials' own `_plan_case` docstrings. **Not migrated**: these three tutorials are outside Task 7's two assigned ones, and migrating a third party's tet branch is real, additional scope, not a corollary of fixing a misclassification comment. Tracked as a follow-up. |
+| `manufactured_bath_bidomain.py` / `manufactured_eikonal_ecg.py` / `manufactured_monodomain_pseudo_ecg.py`'s tet-branch numerics-profile overlay `shutil.copy` (`overlay_name` resolves to `"fvSolution"`, replacing `system/fvSolution` wholesale) | **framework-authored case input, same class as `heart_solver_comparison` -- classification corrected, migration deferred** | Task 6 labelled these "source artifacts, Task 7's domain"; checked against `defaults.TET_NUMERICS_PROFILES`/`_NUMERICS_PROFILES` (found, not assumed) and they are small hand-authored numerics documents, not mesh/graph data -- the identical class `plan_verbatim_content` now serves. Corrected with a dated note in all three tutorials' own `_plan_case` docstrings. **Not migrated**: these three tutorials are outside Task 7's two assigned ones, and migrating a third party's tet branch is real, additional scope, not a corollary of fixing a misclassification comment. Tracked as a follow-up. **Done 2026-09-24**, and "resolves to `"fvSolution"`" was only true for `manufactured_eikonal_ecg` -- see "Follow-up, 2026-09-24" below. |
 | `cable_1d_restitution.py`'s `(case_root / ".driverfoam_case_id").write_text(case.case_id)` | **marker / framework bookkeeping, not migrated (by design)** | Intra-run sentinel so `Allrun.post` (`postProcessing_cableRestitution.py`'s `__main__`) can recover the sweep's semantic case id without a `--case-id` argument threading through the `workflow_dag`. Not read by cardiacFoam; not a result a scientist inspects. Named `CASE_ID_SENTINEL_FILENAME`, documented at its definition, with the exact reader cited. |
 | `cable_1d_restitution.py`'s `(case_root / ".cardiacfoam_protocol.json").write_text(json.dumps(...))` (also the task's one `json.dump`-class write) | **standalone export, not migrated (by design)** | Not a `ParameterAssignment` (no key in an existing document) and not a source artifact (nothing was consumed to produce it). Read **by name** by `postProcessing_cableRestitution.py`'s own `PROTOCOL_METADATA`/`load_protocol_metadata` -- found by reading that reader before changing anything, per this task's own instruction. Named `PROTOCOL_SIDECAR_FILENAME`, with its full schema and reader stated in a module-level docstring. |
-| `niederer_2012.py`'s `target_file.write_text(rendered)` (`.geo` template, `__LC__` substituted) | **framework-authored case input, same RenderedFile-eligible class -- classification corrected, migration deferred** | Small hand-authored gmsh geometry text with one substitution, downstream-used exactly like `heart_solver_comparison`'s templates. Already named "Task 7's domain, not Task 6's" in its own docstring. **Not migrated**: outside Task 7's two assigned tutorials, and it additionally duplicates `omnidriver.openfoam.tet_mesh_provisioning.render_tet_geo` (the shared helper three *other* tutorials already call for the identical operation) instead of reusing it -- a second, larger reuse fix a follow-up should do together with the migration, not two separate patches. |
+| `niederer_2012.py`'s `target_file.write_text(rendered)` (`.geo` template, `__LC__` substituted) | **framework-authored case input, same RenderedFile-eligible class -- classification corrected, migration deferred** | Small hand-authored gmsh geometry text with one substitution, downstream-used exactly like `heart_solver_comparison`'s templates. Already named "Task 7's domain, not Task 6's" in its own docstring. **Not migrated**: outside Task 7's two assigned tutorials, and it additionally duplicates `omnidriver.openfoam.tet_mesh_provisioning.render_tet_geo` (the shared helper three *other* tutorials already call for the identical operation) instead of reusing it -- a second, larger reuse fix a follow-up should do together with the migration, not two separate patches. **Reuse fixed 2026-09-24; migration deliberately not done** -- see "Follow-up, 2026-09-24" below for why. |
 | `manufactured_purkinje_graph.py::_ensure_mesh` (the task's one `subprocess.run`, plus its own `log.blockMesh` `open("w")` -- found by widening the grep) | **dead code, deleted** | Zero callers anywhere in this repository (confirmed by `grep -rn "_ensure_mesh"` before deletion, matching only its own definition) and duplicates the "mesh" `workflow_dag` step *already declared* in this same module's `make_spec` -- the real, executed mesh-authoring mechanism (`workflow_orchestrator.py`/`workflow_runner.py`). There was nothing live to migrate, so it is deleted rather than turned into a declared step or a channel-committed artifact -- both already exist or are inapplicable. |
 | `niederer_2012.py`'s `_update_end_time`'s hand-rolled `control_dict_path.open("w")` (found by widening the grep) | **framework-authored case input, already parameter machinery -- not Task 7's domain** | This is `endTime`, exactly what `plan_end_time`/`ParameterAssignment` already cover; `_plan_case`'s hex-family path uses `plan_end_time`, and this hand-rolled writer survives only inside `_apply_case`, kept for byte-parity proof per Task 2/3/6's own "keep both until parity is proven, then collapse" convention. Not "outside the parameter machinery" in the sense this task addresses -- it is that machinery's own pre-Task-6-collapse leftover. |
 
@@ -1661,6 +1662,69 @@ other channel mechanism (both stay direct writes, as argued above).
 to populate it -- but that is a provenance declaration alongside a real
 `RenderedFile` commit, not a case of the graph/mesh classification "landing
 in" that field the way the brief implied.
+
+### Follow-up, 2026-09-24: the tet overlays and niederer's `.geo`
+
+The two rows above marked "migration deferred" were picked up as a separate
+follow-up.
+
+**The tet numerics overlays are on the channel in all three tutorials.**
+Each overlay is now a `plan_verbatim_content` target in the same
+`commit_case_overrides` call as the rest of the case, read with
+`read_text(encoding="utf-8")`. One fact in the row above was wrong. Only
+`manufactured_eikonal_ecg`'s profile resolves to `fvSolution`.
+`manufactured_bath_bidomain`'s `bath_bidomain_tet` resolves to `fvSchemes`,
+and `manufactured_monodomain_pseudo_ecg`'s `bidomain_tet` resolves to
+`fvSchemes` while `monodomain_tet` resolves to both documents.
+
+- `manufactured_eikonal_ecg` needed more than a swapped call. Its
+  `_plan_case` had no tet branch at all: `make_spec` wired `plan_case` only
+  for hex, so a tet case never reached `commit_case_write`, and the
+  `shutil.copy` sat in `_apply_case`'s independent tet implementation.
+  `_plan_case` now branches on `mesh_family` (tet: render the `.geo` and
+  resolve no block-mesh target), `make_spec` wires `plan_case` for both
+  families, and `_apply_case` is an unconditional thin wrapper again. The
+  Task 6 table's "hex-family only" for this tutorial is superseded.
+- **An ordering hazard came with it.** Eikonal's `_plan_case` made its
+  direct `grad_scheme`/`fv_*_overrides` edits *before* its commit. That was
+  harmless while they touched documents disjoint from the commit's. Once the
+  overlay is a channel target, an edit made first is silently overwritten.
+  They now run after the commit, as the other two tutorials' already did
+  (`test_tet_fv_solution_override_lands_on_the_overlay`).
+- One accepted difference: `shutil.copy` also copied the overlay's
+  permission bits, but a channel target keeps the destination's own mode.
+
+**Characterization.** The tet bytes were pinned by content digest from the
+unmodified code before any source changed (`_TET_DIGESTS_BEFORE` in each of
+the three `test_*_write_channel.py` files; bath bidomain's tet case still
+ends in its dead-key `ValueError`, so its record is captured by wrapping
+`commit_case_overrides`). `record.committed` proves each overlay is inside
+the transaction. Verified by reverting each tutorial's source to HEAD: every
+characterization test stayed green, and every channel test went red.
+
+**niederer_2012 now reuses the shared `.geo` renderer, and this was a real
+bug, not only a reuse gap.** The real `slab.geo.template` (native tree
+`noFrontendCardiacFoam_minor_errors`, `e34024e0`) names `__LC__` in an
+explanatory comment. The hand-rolled `str.replace` rewrote that comment to
+"placeholder 0.0002 is substituted by"; `render_tet_geo` substitutes only
+the code side of each line. `render_tet_geo` could not be called as-is,
+because it hard-codes `lc = 1/n` for a unit cube, while niederer's `lc` is
+`dx_mm * 1e-3`. The fix splits out `render_tet_geo_at_length(case_root, lc,
+...)`, which `render_tet_geo` now delegates to. The code line's bytes are
+unchanged.
+
+**The rendered `.geo` stays a direct write, for all four tutorials.** By
+classification it belongs on the channel. A consumer that is `gmsh` rather
+than cardiacFoam changes nothing: `blockMeshDict`, read only by `blockMesh`,
+is already a channel target. What blocks it is the format.
+`render_patch_case_files` stamps every file `format="openfoam_dictionary"`,
+checked against the provider's `get_rendered_formats()`, so routing a gmsh
+script through it would record something false. That needs a per-target
+format and a declared gmsh-geometry format, which is new vocabulary. The
+full argument is in `tet_mesh_provisioning`'s module docstring. Niederer's
+tet branch otherwise stays in `_apply_case` (`set_delta_t`,
+`_update_end_time`, the `apply_*_overrides` calls), because its `_plan_case`
+has no tet branch; migrating that is a separate piece of work.
 
 ---
 

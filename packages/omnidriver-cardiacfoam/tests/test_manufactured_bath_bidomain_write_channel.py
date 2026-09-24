@@ -42,6 +42,16 @@ byte-for-byte identical `system/controlDict`/`system/blockMeshDict.2D`
 (both fully migrated and untouched by this bug). `constant/electroProperties`
 is instead characterized directly, against expected values, not against
 `_apply_case`'s broken output.
+
+**Extended 2026-09-24 (Phase 3 Task 7 follow-up): `mesh_family="tet"`.**
+The tet branch's `bath_bidomain_tet` numerics overlay (a wholesale
+replacement of `system/fvSchemes`) was a `shutil.copy` beside the channel
+commit; Task 7 reclassified it as a `RenderedFile` (`plan_verbatim_content`),
+not a source artifact, and it is now an `extra_targets` entry of the same
+`commit_case_overrides` call. The dead-key raise above still ends every
+call, so `_plan_case` never returns its record: the tet test captures it by
+wrapping `commit_case_overrides`, which has already returned by the time the
+direct dead-key write raises.
 """
 
 from __future__ import annotations
@@ -50,6 +60,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from omnidriver.cardiacfoam.tutorials import manufactured_bath_bidomain as tut
 from omnidriver.core.runtime.models import CaseConfig
@@ -270,6 +281,115 @@ class TestManufacturedBathBidomainWriteChannel(unittest.TestCase):
         self.assertIn("torsoECG", content)
         self.assertIn("bathECGManufacturedVerifier", content)
         self.assertIn("pseudoECG", content)
+
+
+
+# --- mesh_family="tet" (2026-09-24) -----------------------------------------
+
+_TET_DIR = Path("setup/studies/tetConvergence")
+
+_TET_RELPATHS = (
+    "constant/electroProperties",
+    "constant/physicsProperties",
+    "system/controlDict",
+    "system/fvSchemes",
+    str(_TET_DIR / "three_domain_box.geo"),
+)
+
+_FV_SCHEMES_TEXT = (
+    "FoamFile\n{\n    object fvSchemes;\n}\n"
+    "gradSchemes\n{\n    default Gauss linear;\n}\n"
+)
+
+# Structurally different from the hex fvSchemes it replaces, so a digest can
+# tell "overlaid" from "patched".
+_TET_FV_SCHEMES_OVERLAY_TEXT = (
+    "FoamFile\n{\n    object fvSchemes;\n}\n"
+    "gradSchemes\n{\n    default leastSquares;\n}\n"
+    "laplacianSchemes\n{\n    default Gauss linear corrected;\n}\n"
+)
+
+# Captured 2026-09-24 against HEAD 6bfe26e, from the pre-migration
+# `_plan_case` (overlay installed by `shutil.copy` before the channel commit;
+# `grad_scheme` a direct `update_foam_entry` after it; then the dead-key
+# raise).
+_TET_DIGESTS_BEFORE = {
+    "constant/electroProperties": "88e024f5596ae509e1e43ef1b9d1820e8a19f7784f6e89fca547683edc9e024f",
+    "constant/physicsProperties": "d09035a6fd22b88cca40153cc5a9f041943fc0e62232b2186895bac7d6713a0b",
+    "system/controlDict": "e3aff377cbd21b809f6e7f307abe1cefc83d19f05c4fa10fefd1e6f28db94112",
+    "system/fvSchemes": "9dcbd30b18e001311c8a3009d36ae4468f23d82d5005f163d97d67459ab5c062",
+    str(_TET_DIR / "three_domain_box.geo"): "1fdac6262213ffd774b19ed4644cc37e25d0ceda7c14bc82269222833b518948",
+}
+
+
+def _tet_digests(root: Path) -> dict:
+    import hashlib
+    return {r: hashlib.sha256((root / r).read_bytes()).hexdigest() for r in _TET_RELPATHS}
+
+
+def _write_tet_case(root: Path) -> None:
+    (root / "constant").mkdir(parents=True, exist_ok=True)
+    (root / "constant" / "electroProperties").write_text(_ELECTRO_TEXT)
+    write_physics_properties(root)
+    (root / "system").mkdir(parents=True, exist_ok=True)
+    (root / "system" / "controlDict").write_text(_CONTROL_DICT_TEXT)
+    (root / "system" / "fvSchemes").write_text(_FV_SCHEMES_TEXT)
+    # No blockMeshDict.3D at all: a tet case must never try to touch it.
+    (root / _TET_DIR).mkdir(parents=True, exist_ok=True)
+    (root / _TET_DIR / "three_domain_box.geo.template").write_text(
+        "lc = __LC__;\nBox(1) = {0, 0, 0, 1, 1, 1};\n"
+    )
+    (root / _TET_DIR / "fvSchemes").write_text(_TET_FV_SCHEMES_OVERLAY_TEXT)
+
+
+def _tet_case() -> CaseConfig:
+    return CaseConfig(
+        case_id="3D_10_implicit", params={"dimension": "3D", "solver": "implicit", "cells": 10, "dt": 0.001},
+    )
+
+
+# A direct edit to the document the overlay replaced: it must land on the
+# overlay's text, after the commit that installs it.
+_TET_KWARGS = dict(
+    mesh_family="tet", numerics_profile="bath_bidomain_tet", grad_scheme="gauss_linear",
+    end_time=0.02, physics_property_overrides={"type": "electroMechanicalModel"},
+)
+
+
+class TestManufacturedBathBidomainTetWriteChannel(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp(prefix="omnidriver-bath-bidomain-tet-channel-"))
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+
+    def test_characterization_tet_current_bytes(self) -> None:
+        root = self.tmp / "tet"
+        _write_tet_case(root)
+        with self.assertRaisesRegex(ValueError, _DEAD_KEY_MESSAGE_FRAGMENT):
+            tut._plan_case(root, _tet_case(), **_TET_KWARGS)
+        self.assertEqual(_tet_digests(root), _TET_DIGESTS_BEFORE)
+
+    def test_tet_plan_case_commits_the_overlay_through_the_channel(self) -> None:
+        root = self.tmp / "tet_record"
+        _write_tet_case(root)
+        records = []
+        real_commit = tut.commit_case_overrides
+
+        def capture(*args, **kwargs):
+            record = real_commit(*args, **kwargs)
+            records.append(record)
+            return record
+
+        with mock.patch.object(tut, "commit_case_overrides", side_effect=capture):
+            with self.assertRaisesRegex(ValueError, _DEAD_KEY_MESSAGE_FRAGMENT):
+                tut._plan_case(root, _tet_case(), **_TET_KWARGS)
+
+        self.assertEqual(len(records), 1)
+        committed = {entry["path"] for entry in records[0].committed}
+        self.assertIn("system/fvSchemes", committed)
+        self.assertFalse((root / "system" / "blockMeshDict.3D").exists())
+        fv_schemes = (root / "system" / "fvSchemes").read_text()
+        self.assertIn("laplacianSchemes", fv_schemes)
+        self.assertNotIn("leastSquares", fv_schemes)
 
 
 if __name__ == "__main__":

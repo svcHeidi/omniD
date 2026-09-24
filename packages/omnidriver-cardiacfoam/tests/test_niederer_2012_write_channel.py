@@ -122,6 +122,38 @@ class TestNiederer2012WriteChannel(unittest.TestCase):
         self.assertIn("myocyte", electro_text)
         self.assertIn("implicit", electro_text)
 
+    def test_tet_geo_render_keeps_a_comment_that_names_the_placeholder(self) -> None:
+        """Added 2026-09-24. `_apply_case`'s tet branch hand-rolled its own
+        `.geo` substitution (`template.read_text().replace("__LC__", ...)`)
+        instead of the shared `tet_mesh_provisioning` renderer the other
+        three tet tutorials use. A blind `str.replace` also rewrites the
+        placeholder's *name* where a comment mentions it -- and the real
+        template does: the comment line below is copied verbatim from
+        `tutorials/NiedererEtAl2011/NiedererEtAl2011verification/setup/studies/
+        tetConvergence/slab.geo.template` in the native cardiacFoam tree
+        (`noFrontendCardiacFoam_minor_errors`, e34024e0). Pre-fix, the
+        rendered `slab.geo` read "The characteristic length placeholder
+        0.0002 is substituted by ..." (confirmed by running this test
+        against the hand-rolled substitution); the shared renderer
+        substitutes only the code portion of each line."""
+        root = self.tmp / "apply_tet_comment"
+        write_electro_properties(root)
+        write_physics_properties(root)
+        write_control_dict(root)
+        template_dir = root / "setup" / "studies" / "tetConvergence"
+        template_dir.mkdir(parents=True, exist_ok=True)
+        comment = "// The characteristic length placeholder __LC__ is substituted by\n"
+        (template_dir / "slab.geo.template").write_text(
+            comment + "lc = __LC__;\nBox(1) = {0, 0, 0, 0.020, 0.003, 0.007};\n"
+        )
+
+        tut._apply_case(root, _case(), mesh_family="tet")
+
+        self.assertEqual(
+            (template_dir / "slab.geo").read_text(),
+            comment + "lc = 0.0002;\nBox(1) = {0, 0, 0, 0.020, 0.003, 0.007};\n",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

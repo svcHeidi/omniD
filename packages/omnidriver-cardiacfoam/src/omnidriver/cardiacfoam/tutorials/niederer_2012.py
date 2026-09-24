@@ -52,6 +52,7 @@ from omnidriver.openfoam.utils import (
     set_delta_t,
 )
 from omnidriver.openfoam.mesh_provisioning import cell_counts_from_dx
+from omnidriver.openfoam.tet_mesh_provisioning import render_tet_geo_at_length
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 
 
@@ -190,6 +191,22 @@ def _apply_case(
     have silently broken that route the first time it ran. Hex delegates to
     `_plan_case`; tet keeps its own independent implementation, unchanged
     from before Task 6's write-channel migration.
+
+    **Changed 2026-09-24:** "unchanged" no longer holds for the `.geo`
+    render. It hand-rolled its own `__LC__` substitution
+    (`read_text().replace(...)`, then `write_text`) instead of the shared
+    `tet_mesh_provisioning` renderer the other three tet tutorials use, and
+    a blind `replace` also rewrote the placeholder's name in the real
+    `slab.geo.template`'s explanatory comment. It now calls
+    `render_tet_geo_at_length`. The code line's bytes are unchanged, since
+    both forms substitute `str(dx_mm * 1e-3)`. The comment now survives
+    intact, and a template with zero or two code-side placeholders now
+    raises instead of rendering silently. The `.geo` stays a direct write,
+    not a channel target; `tet_mesh_provisioning`'s module docstring says
+    why. The rest of this branch (`set_delta_t`, `_update_end_time`, the
+    `apply_*_overrides` calls) is still off the channel, since `_plan_case`
+    has no tet branch here. That is a separate migration, not part of this
+    render fix.
     """
     if mesh_family == "hex":
         _plan_case(
@@ -223,13 +240,13 @@ def _apply_case(
         f"{electro_properties_scope}.solutionAlgorithm": solver,
     }
 
-    template_file = case_root / tet_geo_template_relpath
-    if not template_file.exists():
-        raise FileNotFoundError(f"Missing tet geo template: {template_file}")
-    lc_m = dx_mm * 1e-3
-    rendered = template_file.read_text().replace("__LC__", str(lc_m))
-    target_file = case_root / "setup" / "studies" / "tetConvergence" / "slab.geo"
-    target_file.write_text(rendered)
+    # The characteristic length is the nominal dx in metres, not
+    # `render_tet_geo`'s unit-cube `1/n` -- hence the explicit-length form.
+    render_tet_geo_at_length(
+        case_root, dx_mm * 1e-3,
+        template_relpath=tet_geo_template_relpath,
+        geo_relpath=Path("setup/studies/tetConvergence/slab.geo"),
+    )
 
     # Input dt is provided in milliseconds in the JSON/spec settings.
     set_delta_t(control_dict, dt_ms * 1.0e-3)

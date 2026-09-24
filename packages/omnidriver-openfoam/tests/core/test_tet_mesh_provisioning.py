@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from omnidriver.openfoam.tet_mesh_provisioning import render_tet_geo
+from omnidriver.openfoam.tet_mesh_provisioning import render_tet_geo, render_tet_geo_at_length
 
 
 def _write_template(root: Path, *, relpath: str = "setup/studies/tetConvergence/box.geo.template", body: str = "lc = __LC__;\nBox(1) = {0, 0, 0, 1, 1, 1};\n") -> None:
@@ -78,3 +78,49 @@ def test_comment_mentioning_the_placeholder_by_name_does_not_count(tmp_path):
     text = geo_path.read_text()
     assert "lc = 0.1;" in text
     assert "// The characteristic length placeholder __LC__ is substituted here." in text
+
+
+# --- render_tet_geo_at_length (2026-09-24) ----------------------------------
+# An explicit characteristic length, for a geometry whose sweep is a physical
+# dx rather than a unit-cube cell count (niederer_2012's metre-sized slab).
+
+def test_at_length_substitutes_lc_itself(tmp_path):
+    _write_template(tmp_path)
+    geo_path = render_tet_geo_at_length(tmp_path, 0.0002)
+    assert geo_path.read_text() == "lc = 0.0002;\nBox(1) = {0, 0, 0, 1, 1, 1};\n"
+
+
+def test_render_tet_geo_is_at_length_with_the_reciprocal(tmp_path):
+    _write_template(tmp_path)
+    by_n = render_tet_geo(tmp_path, 8).read_text()
+    by_length = render_tet_geo_at_length(tmp_path, 1.0 / 8).read_text()
+    assert by_n == by_length
+
+
+def test_at_length_keeps_a_comment_naming_the_placeholder(tmp_path):
+    _write_template(
+        tmp_path,
+        body="// The characteristic length placeholder __LC__ is substituted by\nlc = __LC__;\n",
+    )
+    text = render_tet_geo_at_length(tmp_path, 0.0005).read_text()
+    assert text == "// The characteristic length placeholder __LC__ is substituted by\nlc = 0.0005;\n"
+
+
+@pytest.mark.parametrize("lc", [0, 0.0, -1e-4, float("inf"), float("nan")])
+def test_at_length_rejects_non_finite_or_non_positive_lc(tmp_path, lc):
+    _write_template(tmp_path)
+    with pytest.raises(ValueError, match="finite and positive"):
+        render_tet_geo_at_length(tmp_path, lc)
+
+
+@pytest.mark.parametrize("lc", [True, "0.1", None])
+def test_at_length_rejects_a_non_number(tmp_path, lc):
+    _write_template(tmp_path)
+    with pytest.raises(TypeError, match="real number"):
+        render_tet_geo_at_length(tmp_path, lc)
+
+
+def test_at_length_still_refuses_a_template_with_two_placeholders(tmp_path):
+    _write_template(tmp_path, body="lc = __LC__;\nlc2 = __LC__;\n")
+    with pytest.raises(ValueError, match="__LC__"):
+        render_tet_geo_at_length(tmp_path, 0.1)
