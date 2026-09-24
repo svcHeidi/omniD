@@ -20,9 +20,9 @@
 #
 # Description
 #     Phase 3 Task 7: `manufactured_purkinje_graph` is the second tutorial
-#     Task 6 could not migrate. Unlike `heart_solver_comparison`, its own
-#     write (a `purkinjeGraph.<id>` -> `purkinjeGraph` copy) is classified as
-#     a genuine source artifact, not a `RenderedFile` -- see `_apply_case`'s
+#     Task 6 could not migrate. Its own write (a `purkinjeGraph.<id>` ->
+#     `purkinjeGraph` copy) is classified as a genuine source artifact, not
+#     a `RenderedFile` -- see `_apply_case`'s
 #     own docstring for the argument -- and correctly stays a direct write
 #     with zero `commit_case_write` calls, a declared exception rather than
 #     an open bypass.

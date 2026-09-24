@@ -12,6 +12,5 @@ class CardiacTutorialID(str, Enum):
     MANUFACTURED_MONODOMAIN_TOTAL_LAGRANGIAN_EM = "manufacturedMonodomainTotalLagrangianEM"
     MANUFACTURED_MONODOMAIN_1D3D = "manufacturedMonodomain1D3D"
     MANUFACTURED_PURKINJE_GRAPH = "manufacturedPurkinjeGraph"
-    HEART_SOLVER_COMPARISON = "heartSolverComparison"
     RESTITUTION_CURVES = "restitutionCurves"
     CABLE_1D_RESTITUTION = "cable1DRestitution"

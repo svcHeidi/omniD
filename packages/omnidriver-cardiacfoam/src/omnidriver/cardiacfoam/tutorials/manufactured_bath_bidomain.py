@@ -377,7 +377,7 @@ def _plan_case(
     correction on `manufactured_eikonal_ecg._plan_case`'s own docstring:
     `_TET_NUMERICS_PROFILES`'s overlay names resolve to real `fvSchemes`/
     `fvSolution` documents, small hand-authored numerics variants replaced
-    wholesale -- `heart_solver_comparison`'s class (`plan_verbatim_content`),
+    wholesale -- a whole-template-file swap's class (`plan_verbatim_content`),
     not a mesh/graph source artifact. Left unmigrated regardless: real,
     additional work on a tutorial outside Task 7's two assigned ones,
     tracked as a follow-up rather than done here.

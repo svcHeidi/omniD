@@ -5,12 +5,11 @@ join the resolve/render channel -- Phase 3 Task 7
 This format behaviour (a whole document's exact bytes, supplied by the
 caller rather than assembled from a key/value edit) is owned by OpenFOAM, the
 same way Task 4's ``hex (`` rewrite is -- so it is pinned here, in
-``omnidriver-openfoam``'s own suite, not only through
-``heart_solver_comparison``'s cardiacFoam-side characterization test
-(``test_heart_solver_comparison_write_channel.py``). Before this file, the
-`"content"` branch in `render_patch_case_files` had exactly one exerciser;
-changing or removing that one adapter test would have left the renderer
-itself untested.
+``omnidriver-openfoam``'s own suite, not only through a cardiacFoam-side
+adapter test. Before this file, the `"content"` branch in
+`render_patch_case_files` had exactly one exerciser (a now-deleted
+cardiacFoam tutorial's own characterization test); changing or removing that
+one adapter test would have left the renderer itself untested.
 
 Mirrors `test_block_mesh_resolution_channel.py`'s own structure and fixture
 conventions (a real `CaseMutationRequest`/`ResolvedMutation` pair, built
@@ -33,7 +32,7 @@ _TEMPLATE_TEXT = "FoamFile\n{\n}\ntype electroModel;\n"
 
 def _request(case_root: Path) -> CaseMutationRequest:
     """A zero-parameter `clone_and_patch` request, declaring a source
-    artifact instead -- `heart_solver_comparison`'s own shape, and the real
+    artifact instead -- a whole-template-file swap's own shape, and the real
     reason `CaseMutationRequest`'s "clone_and_patch needs a parameter"
     invariant was widened (2026-09-23, Phase 3 Task 7) to accept a source
     artifact in its place.
@@ -94,9 +93,9 @@ def test_two_content_targets_on_one_document_are_refused(tmp_path):
 
 def test_a_content_target_can_author_a_document_that_does_not_exist_yet(tmp_path):
     """Unlike every other patch target, `"content"` does not require the
-    document to already exist under `case_root` -- `heart_solver_comparison`
-    reuses one `case_root` across all four solver variants, and the very
-    first `apply_case` call has nothing at `constant/electroProperties` yet."""
+    document to already exist under `case_root` -- a whole-template-file
+    swap that reuses one `case_root` across several variants finds nothing
+    at the destination document on its very first `apply_case` call."""
     case_root = tmp_path / "case"
     (case_root / "constant").mkdir(parents=True)
     assert not (case_root / "constant" / "electroProperties").exists()
@@ -187,7 +186,7 @@ def test_a_content_target_plus_a_value_edit_on_the_same_document_lands_on_top(tm
 
 def test_before_digest_and_mode_are_preserved_when_the_document_already_existed(tmp_path):
     """A `"content"` target against a document that *does* already exist
-    (e.g. re-running `heart_solver_comparison` for a second solver variant
+    (e.g. re-running a whole-template-file swap for a second variant
     against the same reused `case_root`) must still carry a real
     `before_digest`/`mode` for the commit's own conflict check and journal --
     exactly like every other patch target, not the `None`/`None` a freshly

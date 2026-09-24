@@ -8,6 +8,12 @@ parallel solve changes the DAG's shape and the rank count cannot be invented.
 Those 4 already failed identically before this work, since this repository has
 no tutorials/ tree at all.
 
+**Corrected 2026-09-24:** `heartSolverComparison` (2 of the original 26
+entries -- itself and its case-folded alias) was deleted; it pointed at a
+native case that does not exist in the authoritative native tree. 16 of the
+remaining 24 catalog entries now build under an arbitrary empty base; the
+other 8's identity is unchanged.
+
 Both halves are pinned so the distinction stops being rediscovered.
 """
 from __future__ import annotations
@@ -54,9 +60,10 @@ def test_every_serial_tutorial_builds_under_any_base(tmp_path: Path) -> None:
         except Exception as exc:  # noqa: BLE001 -- report, do not mask
             failed.append(f"{name}: {type(exc).__name__}: {exc}")
     assert failed == [], "tutorials that stopped building under a plain base:\n" + "\n".join(failed)
-    # Measured 2026-09-04. A sweep that silently covered zero tutorials would
-    # otherwise assert nothing.
-    assert built == 18, f"expected 18 buildable catalog entries, got {built}"
+    # Measured 2026-09-04; 16 after `heartSolverComparison`'s 2026-09-24
+    # deletion removed 2 entries. A sweep that silently covered zero
+    # tutorials would otherwise assert nothing.
+    assert built == 16, f"expected 16 buildable catalog entries, got {built}"
 
 
 @pytest.mark.parametrize("name", sorted(_NEEDS_CASE_CONTENT))

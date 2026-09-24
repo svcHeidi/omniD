@@ -347,6 +347,16 @@ class CaseMutationRequest:
     artifact -- the same "you must declare what you did" shape `synthesize`
     already has, rather than accepting a request that does neither.
 
+    **Corrected 2026-09-24:** `heart_solver_comparison` was deleted (it
+    pointed at a native case that does not exist -- see
+    `docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md`
+    §2/§7). The rule stays widened regardless: `synthesize`'s own "declare
+    what you did" shape is the one this mirrors, and a future
+    `clone_and_patch` whole-file swap (the same class of mutation, tracked
+    for the tutorials still to migrate) would need it again. Weakening a
+    validation invariant is not a corollary of deleting the one caller that
+    happened to motivate it.
+
     ``source_artifacts`` are opaque identifiers -- a path, a digest, a URI --
     naming something a mutation consumed (a synthesis, per the original
     design, but now also a `clone_and_patch` whose only content is a declared
@@ -410,13 +420,21 @@ class CaseMutationRequest:
         # **Corrected 2026-09-23 (Phase 3 Task 7).** This used to require at
         # least one `ParameterAssignment` outright. Task 1 kept that rule
         # after finding "no caller needs this rule relaxed" -- true at the
-        # time, false now: `heart_solver_comparison`'s whole-template-file
-        # swap and `manufactured_purkinje_graph`'s (source-artifact-only)
-        # copies are real `clone_and_patch` mutations with zero key/value
+        # time, false then: `heart_solver_comparison`'s whole-template-file
+        # swap was a real `clone_and_patch` mutation with zero key/value
         # assignments. Widened to mirror `synthesize`'s own "you must declare
         # what you did" invariant: a clone_and_patch request now satisfies it
         # with a parameter OR a named source artifact -- not neither. A
         # request with both empty still patches nothing and is still refused.
+        #
+        # **Corrected 2026-09-24:** `heart_solver_comparison` was deleted --
+        # it pointed at no native case. `manufactured_purkinje_graph`'s own
+        # `purkinjeGraph.<id>` copy, once floated here as a second example,
+        # stays a direct write outside this channel entirely (no artifact
+        # staging primitive yet -- see that tutorial's own `_apply_case`
+        # docstring), so it does not actually exercise this branch. The rule
+        # stays widened anyway: it mirrors `synthesize`'s own invariant, and
+        # a future `clone_and_patch` whole-file swap would need it again.
         if self.mode == "clone_and_patch" and not self.parameters and not self.source_artifacts:
             raise ValueError(
                 "a clone_and_patch request must assign at least one "

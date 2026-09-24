@@ -190,9 +190,9 @@ def render_patch_case_files(
         if content_edits:
             # **A target may instead carry ``"content"`` (Phase 3 Task 7)** --
             # a whole document's exact bytes, supplied by the caller rather
-            # than composed from a key/value edit -- e.g.
-            # `heart_solver_comparison`'s solver-variant template files,
-            # copied in verbatim rather than patched key by key. Mirrors
+            # than composed from a key/value edit -- e.g. a whole
+            # solver-variant template file, copied in verbatim rather than
+            # patched key by key. Mirrors
             # `render_synthesis_case_files`'s own ``"content"`` target
             # (this module carries no cardiac vocabulary and does not author
             # that text, only turns it into bytes), widened to `clone_and_patch`

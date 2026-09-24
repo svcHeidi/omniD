@@ -339,7 +339,7 @@ def _plan_case(
     `manufactured_eikonal_ecg._plan_case`'s own docstring: `overlay_name`
     resolves to `"fvSolution"` (`_NUMERICS_PROFILES`), so this replaces
     `system/fvSolution` wholesale with a small, hand-authored document --
-    `heart_solver_comparison`'s class (`plan_verbatim_content`), not a
+    a whole-template-file swap's class (`plan_verbatim_content`), not a
     mesh/graph source artifact. Left unmigrated regardless, for the same
     reason: real, additional work on a tutorial outside Task 7's two
     assigned ones, tracked as a follow-up rather than done here.

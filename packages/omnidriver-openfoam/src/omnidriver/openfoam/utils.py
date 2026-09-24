@@ -323,21 +323,22 @@ def plan_verbatim_content(
     document that does not exist yet, matching this environment's standard
     022 umask; the existing file's own mode, OR'd with those same bits,
     when one is already there) -- see the ``mode`` computation in each
-    renderer for the exact rule. Defaults ``False`` so every existing
-    caller (the dictionary templates ``heart_solver_comparison`` swaps in
-    verbatim) is unaffected.
+    renderer for the exact rule. Defaults ``False`` so every pre-existing
+    non-executable caller (a dictionary template swapped in verbatim) is
+    unaffected.
 
     **Why this is not a `ParameterAssignment`.** A `ParameterAssignment`
     addresses one key inside a document whose surrounding structure the
-    framework does not touch. `heart_solver_comparison` (this function's
-    first caller) has no key-level edit at all: its four solver-variant
-    documents (``electroProperties``, ``fvSchemes``, ``fvSolution``,
-    ``controlDict``) are whole, hand-authored templates swapped in verbatim
-    -- the differences between solver stacks are entire structural blocks,
-    not values at existing keys. Inventing a `value_kind` to carry "this
-    document's whole body" through `ParameterAssignment` would give one key
-    path a value that is actually the entire file, which is not what that
-    type asserts.
+    framework does not touch. This function's original motivating case
+    (a solver-comparison tutorial, since deleted -- see
+    `docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md`)
+    had no key-level edit at all: its whole-variant documents (e.g.
+    ``fvSchemes``, ``fvSolution``, ``controlDict``) were whole, hand-authored
+    templates swapped in verbatim -- the differences between variants were
+    entire structural blocks, not values at existing keys. Inventing a
+    `value_kind` to carry "this document's whole body" through
+    `ParameterAssignment` would give one key path a value that is actually
+    the entire file, which is not what that type asserts.
 
     **Not a source artifact either.** A source artifact (see
     `CaseMutationRequest.source_artifacts`) is a *reference* to something a

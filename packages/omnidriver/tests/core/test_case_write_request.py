@@ -209,12 +209,16 @@ def test_a_patch_with_no_parameters_is_refused():
     zero-parameter patch. No caller needs this rule relaxed.
 
     **Corrected 2026-09-23 (Phase 3 Task 7):** that last sentence no longer
-    holds -- `heart_solver_comparison` is a real zero-parameter
+    holds -- `heart_solver_comparison` was a real zero-parameter
     `clone_and_patch` caller (see
     `test_a_clone_and_patch_request_with_no_parameters_but_a_source_artifact_is_accepted`
     below). The rule was widened, not dropped: a request with *neither* a
     parameter *nor* a source artifact -- this test -- still names nothing it
-    did, and is still refused."""
+    did, and is still refused.
+
+    **Corrected 2026-09-24:** `heart_solver_comparison` was deleted (it
+    pointed at no native case); the widened rule stays regardless, since a
+    future `clone_and_patch` whole-file swap would need it again."""
     with pytest.raises(ValueError, match="at least one"):
         case_write.CaseMutationRequest(
             mode="clone_and_patch", case_root=Path("/tmp/case"),
@@ -226,16 +230,17 @@ def test_a_patch_with_no_parameters_is_refused():
 def test_a_clone_and_patch_request_with_no_parameters_but_a_source_artifact_is_accepted():
     """Phase 3 Task 7's widened invariant: a `clone_and_patch` request that
     assigns no `ParameterAssignment` at all still declares a real mutation
-    when it names a source artifact -- `heart_solver_comparison`'s own shape
-    (four whole template files copied in verbatim, no key/value edits)."""
+    when it names a source artifact -- the shape the now-deleted
+    `heart_solver_comparison` motivated this widening with (whole template
+    files copied in verbatim, no key/value edits)."""
     request = case_write.CaseMutationRequest(
         mode="clone_and_patch", case_root=Path("/tmp/case"),
         adapter_id="org.a", workflow="w",
-        source_artifacts=("heart_solver_comparison.solverVariants:eikonal",),
+        source_artifacts=("example.solverVariants:eikonal",),
         parameters=(), requested_by="test",
     )
     assert request.parameters == ()
-    assert request.source_artifacts == ("heart_solver_comparison.solverVariants:eikonal",)
+    assert request.source_artifacts == ("example.solverVariants:eikonal",)
 
 
 def test_an_empty_source_artifact_is_refused():

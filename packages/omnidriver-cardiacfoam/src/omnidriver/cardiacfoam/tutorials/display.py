@@ -141,21 +141,6 @@ TUTORIALS: tuple[TutorialDisplay, ...] = (
         },
     ),
     TutorialDisplay(
-        id="heartSolverComparison",
-        title="Heart solver comparison (eikonal / monodomain / bidomain)",
-        summary=(
-            "Compares whole solver stacks -- eikonal, monodomain, bidomain, "
-            "and a mixed monodomain-tissue/eikonal-Purkinje variant -- over "
-            "one shared real heart anatomy (mesh + Purkinje graph)."
-        ),
-        thumbnail="/tutorials/heart-solver-comparison.png",
-        tags=("real-anatomy", "purkinje", "eikonal", "monodomain", "bidomain", "solver-comparison"),
-        preset={
-            "anatomy.mesh": "heart-purkinje-graph",
-        },
-    ),
-
-    TutorialDisplay(
         id="restitutionCurves",
         title="Restitution curves (S1–S2 protocol)",
         summary=(

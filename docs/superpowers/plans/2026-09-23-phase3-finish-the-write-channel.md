@@ -71,6 +71,14 @@ here rather than left stale for the next reader.
 `write_cell_set` (**bypass 3**) is **deliberately out of scope** — see "What this
 plan does not do".
 
+**Added 2026-09-24:** `heartSolverComparison` (the tutorial this table's Task
+7 row cites via `8594422`, its whole-template-file swap) was deleted — it
+pointed at a native case (`heartSim3D-1D/eikonalHeart`) that does not exist
+in the authoritative native tree, and `describe` failed on it under every
+config. Per `docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md`
+§2/§7 step 1. `plan_verbatim_content`/the `"content"` target this task added
+stays: `dict_builder.py`'s `Allrun` write is still a real caller.
+
 ## What this plan does not do, and why
 
 **`cardiaccore/operations/vtu_selection.py::write_cell_set`.** It writes a

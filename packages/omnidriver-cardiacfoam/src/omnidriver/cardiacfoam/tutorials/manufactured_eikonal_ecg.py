@@ -365,12 +365,12 @@ def _plan_case(
     actually resolves to (`defaults.TET_NUMERICS_PROFILES`:
     `{"eikonal_tet": ("fvSolution",)}`). This copy replaces `system/fvSolution`
     wholesale with a small, hand-authored numerics variant -- the same class
-    of content as `heart_solver_comparison`'s own whole-template swap
+    of content as a whole-template-file swap
     (`plan_verbatim_content`'s docstring has the full downstream-usage
     argument), not a mesh/graph source artifact. Left unmigrated here
     regardless: this tutorial is not one of Task 7's two assigned
-    ("`heart_solver_comparison`"/"`manufactured_purkinje_graph`"), and
-    migrating it is real, additional work on a third tutorial's tet branch,
+    (`heart_solver_comparison`, since deleted, and `manufactured_purkinje_graph`),
+    and migrating it is real, additional work on a third tutorial's tet branch,
     not a corollary of correcting a misclassification comment. Tracked as a
     follow-up, not fixed here.
     """

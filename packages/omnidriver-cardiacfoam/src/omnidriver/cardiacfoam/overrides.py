@@ -820,8 +820,8 @@ def commit_case_overrides(
     cannot build because it has no `ParameterAssignment` to build it from --
     `omnidriver.openfoam.utils.plan_block_mesh_resolution`'s block-mesh
     rewrite (Phase 3 Task 4) and `plan_verbatim_content`'s whole-document
-    content target (Phase 3 Task 7, `heart_solver_comparison`'s own shape:
-    zero parameters, all content). Folded into the resolution returned by the
+    content target (Phase 3 Task 7's whole-template-file swap shape: zero
+    parameters, all content). Folded into the resolution returned by the
     generic dispatch above by constructing a new `ResolvedMutation` that
     carries both -- `render_case_files` only ever iterates `resolved.targets`
     and never assumes every one came from a `ParameterAssignment`.

@@ -16,9 +16,6 @@ from omnidriver.cardiacfoam.tutorials.manufactured_monodomain_1d3d import (
 from omnidriver.cardiacfoam.tutorials.manufactured_purkinje_graph import (
     make_spec as make_manufactured_purkinje_graph_spec,
 )
-from omnidriver.cardiacfoam.tutorials.heart_solver_comparison import (
-    make_spec as make_heart_solver_comparison_spec,
-)
 from omnidriver.cardiacfoam.tutorials.cable_1d_cv_convergence import (
     make_spec as make_cable_1d_cv_convergence_spec,
 )
@@ -54,8 +51,6 @@ SPEC_FACTORIES = {
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_1D3D.value.lower(): make_manufactured_monodomain_1d3d_spec,
     CardiacTutorialID.MANUFACTURED_PURKINJE_GRAPH.value: make_manufactured_purkinje_graph_spec,
     CardiacTutorialID.MANUFACTURED_PURKINJE_GRAPH.value.lower(): make_manufactured_purkinje_graph_spec,
-    CardiacTutorialID.HEART_SOLVER_COMPARISON.value: make_heart_solver_comparison_spec,
-    CardiacTutorialID.HEART_SOLVER_COMPARISON.value.lower(): make_heart_solver_comparison_spec,
     CardiacTutorialID.RESTITUTION_CURVES.value: make_restitution_curves_spec,
     CardiacTutorialID.RESTITUTION_CURVES.value.lower(): make_restitution_curves_spec,
     CardiacTutorialID.CABLE_1D_RESTITUTION.value: make_cable_1d_restitution_spec,
@@ -73,7 +68,6 @@ REGISTERED_TUTORIALS = (
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_TOTAL_LAGRANGIAN_EM.value,
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_1D3D.value,
     CardiacTutorialID.MANUFACTURED_PURKINJE_GRAPH.value,
-    CardiacTutorialID.HEART_SOLVER_COMPARISON.value,
     CardiacTutorialID.RESTITUTION_CURVES.value,
     CardiacTutorialID.CABLE_1D_RESTITUTION.value,
 )
