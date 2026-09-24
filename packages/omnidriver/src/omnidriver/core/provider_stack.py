@@ -180,6 +180,8 @@ _SHAPE: dict[str, str] = {
     "get_dict_entry_catalog": "map",
     "get_samplable_fields": "map",
     "resolve_case_models": "map",
+    "get_tutorial_records": "map",
+    "get_axis_catalog": "map",
     # -- catalog -----------------------------------------------------------
     "get_dictionary_catalog": "catalog",
     # -- sequence ----------------------------------------------------------
@@ -211,6 +213,8 @@ _SHAPE: dict[str, str] = {
     "get_selected_start_time": "single",
     "get_config_value_reader": "single",
     "get_dict_key_scanner": "single",
+    "get_record_key_validator": "single",
+    "get_case_value_comparator": "single",
     "get_case_runtime_conventions": "single",
     "get_config_resolution_description": "single",
     "get_override_schema": "single",

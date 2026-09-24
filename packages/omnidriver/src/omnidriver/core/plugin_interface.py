@@ -557,6 +557,63 @@ class SolverPluginOptionalHooks(Protocol):
         the neutral scanner that reports no drift."""
         ...
 
+    # -- TutorialRecordCapability ---------------------------------------------
+    def get_tutorial_records(self) -> dict[str, Any]:
+        """This plugin's tutorial records, keyed by name.
+
+        A record (``core.tutorial_records.TutorialRecord``) is inert data --
+        a native case path, its allowed axes, its workflow steps -- not a
+        callable factory. Distinct from ``get_tutorial_catalog()``'s
+        ``spec_factories``, which core calls; a record is core data core
+        never calls into the plugin to build. Absent -> ``{}``, the ordinary
+        case for a plugin that has not migrated any tutorial onto this shape
+        yet (design doc ``docs/superpowers/specs/2026-09-24-tutorials-are-
+        pointers-design.md``)."""
+        ...
+
+    # -- AxisCapability --------------------------------------------------------
+    def get_axis_catalog(self) -> dict[str, Any]:
+        """This plugin's named axes, keyed by name.
+
+        An axis (``core.tutorial_records.AxisContract``) is a name, the value
+        kind it accepts, and a pure function ``(value, staged_case_root) ->
+        AxisResult``. Core defines the contract and ships none itself. Absent
+        -> ``{}``: a study naming a bare axis this plugin does not provide is
+        then refused by name, same as one it never declared."""
+        ...
+
+    # -- RecordKeyValidationCapability ------------------------------------------
+    def get_record_key_validator(self):
+        """Return a ``(document, key_path, value) -> (value_kind, validated)``
+        callable that checks a tutorial-record study's direct ``document:key``
+        name against this plugin's own dictionary catalog.
+
+        Raises ``KeyError`` (or any exception) for a name the catalog does
+        not recognise -- refusing it is this hook's own choice (design §5:
+        "a cardiacFOAM key absent from the catalog... never bypassed"); an
+        adapter that instead wants to accept an undeclared key unchecked
+        (the OpenFOAM-owned-key exception, keys with no full catalog yet)
+        returns ``(inferred_kind, False)`` rather than raising -- both are
+        legitimate, adapter-owned answers core does not choose between.
+        Absent -> every direct key is refused (there is no catalog to check
+        it against)."""
+        ...
+
+    # -- CaseValueComparisonCapability -------------------------------------------
+    def get_case_value_comparator(self):
+        """Return a ``(value_kind, requested, current) -> bool`` callable, or
+        ``None``.
+
+        Typed comparison, mirroring ``effective_values_agree``
+        (``omnidriver-openfoam/apply_overrides.py``): ``"1e-3" == "0.001"`` is
+        ``False`` in Python but the same value in every dictionary format this
+        framework writes, so a tutorial-record patch's "is this unchanged"
+        check (``core.tutorial_records``) must never fall back to string or
+        Python ``==`` equality. Absent -> ``None``, meaning "no adapter-owned
+        comparison is available"; callers must treat that as "cannot
+        determine", not as "assume unchanged"."""
+        ...
+
     # -- DictionaryCatalogCapability ------------------------------------------
     def get_phases(self) -> tuple[str, ...]:
         """This plugin's dictionary editing phases, in order.

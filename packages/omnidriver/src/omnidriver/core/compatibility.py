@@ -511,3 +511,64 @@ def legacy_dict_regeneration_scopes(plugin) -> tuple:
 
     del plugin
     return ()
+
+
+@_instrumented
+def legacy_tutorial_records(plugin) -> dict:
+    """Predates get_tutorial_records() (2026-09-24, tutorial-record design).
+
+    A plugin declaring no tutorial records has none -- `runtime.registry`'s
+    record-dispatch branch simply finds nothing here and falls through to the
+    factory registry / case-path resolution exactly as it always has. Neutral
+    for every existing plugin, none of which declares any record yet."""
+
+    del plugin
+    return {}
+
+
+@_instrumented
+def legacy_axis_catalog(plugin) -> dict:
+    """Predates get_axis_catalog() (2026-09-24, tutorial-record design).
+
+    Core ships no axes itself (design doc §3: "Core defines the contract and
+    ships no solver axes"), so a plugin declaring none is the ordinary case,
+    not a degraded one -- a bare name in a study is then refused by
+    `tutorial_records.sort_study_name` as an axis no composed adapter
+    provides, which is the correct outcome regardless of whether that is
+    because no plugin implements this hook or because the implementing
+    plugin's own catalog simply does not name it."""
+
+    del plugin
+    return {}
+
+
+@_instrumented
+def legacy_record_key_validation(plugin, document: str, key_path: tuple, value) -> tuple:
+    """Predates get_record_key_validator() (2026-09-24, tutorial-record design).
+
+    Unlike the two fallbacks above, this one cannot be neutral: a direct
+    `document:key` study name needs *some* answer for what shape its value
+    must have, and "assume it is valid" is exactly the silent-acceptance
+    failure mode `dict_entries_catalog`'s own "never bypassed" rule exists to
+    prevent (design doc §5). Refuses by name, naming the plugin, so a study
+    naming a direct key against a plugin with no catalog answer for it fails
+    loudly rather than writing an unchecked value that looks checked."""
+
+    del key_path, value
+    raise ValueError(
+        f"plugin {getattr(plugin, 'plugin_id', plugin)!r} declares no "
+        f"record-key validator; cannot decide whether {document!r} is a "
+        f"key its own catalog recognises"
+    )
+
+
+@_instrumented
+def legacy_case_value_comparator(plugin):
+    """Predates get_case_value_comparator() (2026-09-24, tutorial-record
+    design). Returns ``None``: "no adapter-owned typed comparison is
+    available", which callers (`tutorial_records`'s unchanged-detection step)
+    must treat as "cannot determine whether this patch is unchanged" -- never
+    as "assume unchanged", which would silently drop a real write."""
+
+    del plugin
+    return None

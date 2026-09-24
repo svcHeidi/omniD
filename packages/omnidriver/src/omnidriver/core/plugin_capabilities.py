@@ -841,6 +841,111 @@ class DictKeyScannerCapability(Protocol):
     ) -> Any: ...
 
 
+class TutorialRecordCapability(Protocol):
+    """The tutorial records this plugin registers -- data, not factories.
+
+    A record (``core.tutorial_records.TutorialRecord``) names a native case
+    path relative to the environment's own cases root, the axis names it
+    allows, and its workflow steps. Distinct from ``TutorialCatalogCapability
+    .catalog()``'s ``spec_factories``, which builds a ``TutorialSpec`` by
+    calling plugin code: resolving a record calls no plugin code at all,
+    until an axis it names actually runs (design doc
+    ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md``
+    §3). ``runtime.registry.resolve_entry`` dispatches on this catalog
+    explicitly, alongside the factory registry and a bare case path -- never
+    trying one and falling back to another.
+
+    :adapts: get_tutorial_records
+    :consumed-by: omnidriver/core/runtime/registry.py
+    :fallback: legacy_tutorial_records
+    :status: optional-neutral
+    """
+
+    def catalog(self) -> dict[str, Any]: ...
+
+
+class AxisCapability(Protocol):
+    """The named axes this plugin provides for a tutorial-record study.
+
+    An axis (``core.tutorial_records.AxisContract``) is a name, the value
+    kind it accepts, and a pure function ``(value, staged_case_root) ->
+    AxisResult`` deriving patches and workflow-step command arguments. Core
+    defines the contract and ships none itself (design doc §3: "Core defines
+    the contract and ships no solver axes") -- a bare study name not found in
+    a record's ``allowed_axes`` *and* in this catalog is refused by
+    ``tutorial_records.sort_study_name`` before anything runs.
+
+    :adapts: get_axis_catalog
+    :consumed-by: omnidriver/core/runtime/record_execution.py
+    :fallback: legacy_axis_catalog
+    :status: optional-neutral
+    """
+
+    def catalog(self) -> dict[str, Any]: ...
+
+
+class RecordKeyValidationCapability(Protocol):
+    """Whether a tutorial-record study's direct ``document:key`` name is one
+    this adapter's own catalog recognises, and what value shape it declares.
+
+    Tutorial-record studies name a document key literally
+    (``document:dotted.path``); core sorts that shape out
+    (``tutorial_records.sort_study_name``) but owns no vocabulary of its own
+    to say whether, e.g., ``constant/electroProperties:ionicModel`` is a real
+    key an adapter's C++ reads, or what Python shape its value must have --
+    that is ``dict_entries_catalog``'s job for cardiacFOAM, and a
+    similarly-shaped catalog's job for any other plugin.
+
+    ``validate(document, key_path, value)`` returns ``(value_kind,
+    validated)`` for a name the catalog recognises, or raises for one it does
+    not -- refusing an undeclared key outright (design §5: "a cardiacFOAM key
+    absent from the catalog... never bypassed") is the adapter's own choice.
+    An adapter that instead accepts an undeclared key unchecked (the
+    OpenFOAM-owned-key exception -- ``system/fvSchemes`` and kin, which have
+    no full catalog yet) returns ``(inferred_kind, False)`` rather than
+    raising; core does not choose between those two answers, and takes no
+    closed list of "validated document prefixes" of its own.
+
+    The fallback cannot be neutral: an adapter with no validator has no
+    catalog to check a direct key against, so every direct key is refused
+    rather than silently accepted as validated.
+
+    :adapts: get_record_key_validator
+    :consumed-by: omnidriver/core/runtime/record_execution.py
+    :fallback: legacy_record_key_validation
+    :status: optional-refusing
+    """
+
+    def validate(
+        self, document: str, key_path: tuple[str, ...], value: Any,
+    ) -> tuple[str, bool]: ...
+
+
+class CaseValueComparisonCapability(Protocol):
+    """Whether a proposed patch value already matches the case's current one.
+
+    A tutorial-record patch equal to the staged case's current value is
+    reported ``unchanged`` and not written (design §4 step 7). Never Python
+    ``==``/string equality: ``effective_values_agree``
+    (``omnidriver-openfoam/apply_overrides.py``) exists precisely because a
+    requested ``1e-3`` and a case's resolved ``0.001`` are the same OpenFOAM
+    value but unequal Python strings. This capability delegates that typed
+    judgement entirely to the adapter; core only calls it.
+
+    ``comparator()`` returns a ``(value_kind, requested, current) -> bool``
+    callable, or ``None`` when the adapter offers no such comparison --
+    treated by every caller as "cannot determine", never as "assume
+    unchanged" (a wrong "unchanged" silently drops a real write).
+
+    :adapts: get_case_value_comparator
+    :consumed-by: omnidriver/core/runtime/record_execution.py
+    :fallback: legacy_case_value_comparator
+    :status: optional-neutral
+    """
+
+    def comparator(self) -> Any: ...
+
+
 class CaseWriterCapability(Protocol):
     """How a framework-authored case mutation becomes reviewable bytes.
 
@@ -1699,6 +1804,61 @@ class _DictKeyScannerAdapter:
         return scanner(source_root, allowlist_path=allowlist_path, entries=entries)
 
 
+@dataclass(frozen=True)
+class _TutorialRecordAdapter:
+    plugin: "SolverPlugin"
+
+    def catalog(self) -> dict[str, Any]:
+        hook = getattr(self.plugin, "get_tutorial_records", None)
+        if callable(hook):
+            return dict(hook())
+        from .compatibility import legacy_tutorial_records
+
+        return legacy_tutorial_records(self.plugin)
+
+
+@dataclass(frozen=True)
+class _AxisAdapter:
+    plugin: "SolverPlugin"
+
+    def catalog(self) -> dict[str, Any]:
+        hook = getattr(self.plugin, "get_axis_catalog", None)
+        if callable(hook):
+            return dict(hook())
+        from .compatibility import legacy_axis_catalog
+
+        return legacy_axis_catalog(self.plugin)
+
+
+@dataclass(frozen=True)
+class _RecordKeyValidationAdapter:
+    plugin: "SolverPlugin"
+
+    def validate(
+        self, document: str, key_path: tuple[str, ...], value: Any,
+    ) -> tuple[str, bool]:
+        hook = getattr(self.plugin, "get_record_key_validator", None)
+        validator = hook() if callable(hook) else None
+        if validator is None:
+            from .compatibility import legacy_record_key_validation
+
+            return legacy_record_key_validation(self.plugin, document, key_path, value)
+        return validator(document, key_path, value)
+
+
+@dataclass(frozen=True)
+class _CaseValueComparisonAdapter:
+    plugin: "SolverPlugin"
+
+    def comparator(self) -> Any:
+        hook = getattr(self.plugin, "get_case_value_comparator", None)
+        if callable(hook):
+            return hook()
+        from .compatibility import legacy_case_value_comparator
+
+        return legacy_case_value_comparator(self.plugin)
+
+
 def _resolved_purely(hook, request, *, driver_context):
     """Run a resolution hook and refuse one that touched the case.
 
@@ -1963,6 +2123,10 @@ class PluginCapabilities:
     config_value: ConfigValueCapability
     dict_key_scanner: DictKeyScannerCapability
     case_writer: CaseWriterCapability
+    tutorial_records: TutorialRecordCapability
+    axes: AxisCapability
+    record_key_validation: RecordKeyValidationCapability
+    case_value_comparison: CaseValueComparisonCapability
 
 
 def adapt_plugin_capabilities(plugin: "SolverPlugin") -> PluginCapabilities:
@@ -2003,4 +2167,8 @@ def adapt_plugin_capabilities(plugin: "SolverPlugin") -> PluginCapabilities:
         config_value=_ConfigValueAdapter(plugin),
         dict_key_scanner=_DictKeyScannerAdapter(plugin),
         case_writer=_CaseWriterAdapter(plugin),
+        tutorial_records=_TutorialRecordAdapter(plugin),
+        axes=_AxisAdapter(plugin),
+        record_key_validation=_RecordKeyValidationAdapter(plugin),
+        case_value_comparison=_CaseValueComparisonAdapter(plugin),
     )
