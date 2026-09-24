@@ -26,8 +26,11 @@ from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 
 # Phase 2 Task 5b / test-ownership split: this file used to require
 # omnidriver-cardiacfoam (its specs were cardiac vocabulary throughout --
-# niederer2012, ionic models, electro/physics selectors) and was hidden
-# from core's collection behind an importorskip. The 11 tests that genuinely
+# a real tutorial entry name, ionic models, electro/physics selectors) and
+# was hidden from core's collection behind an importorskip. The remaining
+# fixture names below are now neutral placeholders (review's own vocabulary
+# cleanup, 2026-09-24) -- they never named real cardiac routing to begin
+# with. The 11 tests that genuinely
 # exercise real cardiac routing/materialization moved to
 # packages/omnidriver-cardiacfoam/tests/test_sweep_runner.py, where they run
 # against the real plugin. What remains here either never reaches routing at
@@ -74,15 +77,15 @@ def _write_spec(path: Path, models=("TNNP", "BuenoOrovio")):
         },
         "sweep": {
             "mode": "cross_product",
-            "independent": {"ionicModel": list(models)},
-            "dependent": [{"name": "caseId", "derive": "case_id_template", "of": ["ionicModel"]}],
+            "independent": {"modelName": list(models)},
+            "dependent": [{"name": "caseId", "derive": "case_id_template", "of": ["modelName"]}],
         },
     }
     path.write_text(json.dumps(spec))
     return spec
 
 
-def _write_entry_spec(path, entry="niederer2012", values=(0.5, 0.2)):
+def _write_entry_spec(path, entry="sampleTutorial", values=(0.5, 0.2)):
     spec = {
         "base": {"entry": entry},
         "sweep": {
@@ -295,7 +298,7 @@ def test_entry_case_staging_recovers_prior_case_after_interrupted_promotion(tmp_
 def test_sweep_plan_entry_mode_materializes_via_apply_case_and_audits(tmp_path):
     # Entry-based sweeps target an existing registered tutorial whose
     # apply_case()/build_cases() mutate its own shared case_root in place
-    # (confirmed empirically for niederer2012 -- it is not a from-scratch
+    # (confirmed empirically for sampleTutorial -- it is not a from-scratch
     # case_folder). sweep_plan must call spec.build_cases() + spec.apply_case()
     # directly instead of materialize_case()/build_and_launch, then audit via
     # strict_plan with the same routed overrides.
@@ -324,7 +327,7 @@ def test_sweep_plan_entry_mode_materializes_via_apply_case_and_audits(tmp_path):
     assert mock_load.call_count == 2
     for call in mock_load.call_args_list:
         args, kwargs = call
-        assert args[0] == "niederer2012"
+        assert args[0] == "sampleTutorial"
         assert "dx_values" in kwargs["overrides"]
         assert "caseId" not in kwargs["overrides"]
     fake_spec.apply_case.assert_has_calls(
@@ -411,7 +414,7 @@ def test_sweep_run_entry_mode_executes_run_document_sequentially(tmp_path):
 def test_sweep_run_archives_each_case_postprocessing_output_when_configured(tmp_path):
     # base.archive_dir_name opts an entry-mode sweep into the generic
     # snapshot/diff collection (output_collection.py): real bug this
-    # reproduces -- hex workflow_dags have no "clean" step, so
+    # reproduces -- some workflow_dags have no "clean" step, so
     # case_root/postProcessing/ persists and accumulates across sequential
     # cases sharing one case_root. Each case's own new/changed file must land
     # inside that case's own output_dir_name folder (workflow_state_path's
@@ -420,7 +423,7 @@ def test_sweep_run_archives_each_case_postprocessing_output_when_configured(tmp_
     # bespoke staging code or a separate cache location.
     spec_path = tmp_path / "sweep.json"
     spec = {
-        "base": {"entry": "niederer2012", "archive_dir_name": "sweepCases"},
+        "base": {"entry": "sampleTutorial", "archive_dir_name": "sweepCases"},
         "sweep": {
             "mode": "cross_product",
             "independent": {"dx_values": [[0.5], [0.2]]},
@@ -484,7 +487,7 @@ def test_sweep_run_archives_each_case_postprocessing_output_by_default(tmp_path)
     # happen, using the built-in default name, not be skipped entirely.
     spec_path = tmp_path / "sweep.json"
     spec = {
-        "base": {"entry": "niederer2012"},
+        "base": {"entry": "sampleTutorial"},
         "sweep": {
             "mode": "cross_product",
             "independent": {"dx_values": [[0.5], [0.2]]},
@@ -573,7 +576,7 @@ def test_sweep_run_accepts_over_cap_with_explicit_override(tmp_path):
     spec = {
         "base": {"electro_selectors": {"myocardiumSolver": "singleCellSolver", "tissue": "epicardialCells"},
                  "physics_selectors": {"type": "electroModel"}},
-        "sweep": {"mode": "cross_product", "independent": {"ionicModel": ["TNNP"] * 250}, "dependent": []},
+        "sweep": {"mode": "cross_product", "independent": {"modelName": ["TNNP"] * 250}, "dependent": []},
     }
     spec_path = tmp_path / "sweep.json"
     spec_path.write_text(json.dumps(spec))

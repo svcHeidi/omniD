@@ -105,6 +105,15 @@ class TutorialRecord:
     allowed_axes: frozenset[str]
     workflow_steps: tuple[WorkflowStep, ...]
     workflow_variants: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    #: The reserved study name that selects among ``workflow_variants`` --
+    #: DECLARED BY THE RECORD (item 4's vocabulary fix), never a name core
+    #: invents. Core used to reserve the literal name ``"mesh"``
+    #: (``MESH_SELECTOR_NAME``, deleted) for every record alike, which is
+    #: itself solver vocabulary core has no business naming; a record that
+    #: declares ``workflow_variants`` must now declare its own selector name
+    #: (cardiacFOAM's records declare ``"mesh"`` themselves, step 4).
+    #: ``None`` when the record declares no variants to select among.
+    variant_selector: str | None = None
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -142,6 +151,12 @@ class TutorialRecord:
                     f"{selector!r} names undeclared step id(s) {unknown}"
                 )
         object.__setattr__(self, "workflow_variants", variants)
+        if variants and not self.variant_selector:
+            raise TutorialRecordError(
+                f"tutorial record {self.name!r} declares workflow_variants "
+                f"{sorted(variants)} but no variant_selector name to select "
+                "among them"
+            )
 
     def step_ids(self) -> tuple[str, ...]:
         return tuple(step.step_id for step in self.workflow_steps)
@@ -245,38 +260,48 @@ class AxisContract:
 # record's own declared workflow steps run for this case.
 # ---------------------------------------------------------------------------
 
-#: The one selector core defines today. Generic and core-owned, unlike the
-#: values it selects among (a record's own `workflow_variants` keys, e.g. an
-#: adapter's "hex"/"tet") -- core imposes no vocabulary on THOSE, only on the
-#: fact that exactly one reserved name chooses among them. `dimension` is a
-#: cardiac AXIS in the design (docs/superpowers/specs/2026-09-24-tutorials-
-#: are-pointers-design.md §3), not a selector, and is deliberately not named
-#: here -- core ships no cardiac vocabulary, including this one.
-MESH_SELECTOR_NAME = "mesh"
+#: Core defines the SELECTOR MECHANISM only, no selector name of its own
+#: (item 4's vocabulary fix, 2026-09-24): a literal core-owned
+#: ``MESH_SELECTOR_NAME = "mesh"`` used to be reserved for every record
+#: alike, which is itself solver vocabulary core has no business naming.
+#: Each record now declares its OWN reserved name via
+#: ``TutorialRecord.variant_selector`` -- cardiacFOAM's records declare
+#: ``"mesh"`` themselves (step 4). `dimension` is a cardiac AXIS in the
+#: design (docs/superpowers/specs/2026-09-24-tutorials-are-pointers-
+#: design.md §3), not a selector, and stays adapter-owned either way.
 
 
-def resolve_mesh_selector(record: TutorialRecord, value: Any) -> tuple[str, ...]:
-    """Resolve the reserved ``mesh`` selector to one variant's step ids.
+def resolve_variant_selector(record: TutorialRecord, value: Any) -> tuple[str, ...]:
+    """Resolve the record's own declared ``variant_selector`` name to one
+    variant's step ids.
 
     A selector, not an axis (item 4): it produces no :class:`AxisPatch` at
     all, only which of ``record.workflow_variants`` runs for this case.
-    Refused BY NAME when the record declares no variants to select among, or
-    when ``value`` does not name one it declares.
+    Refused BY NAME when the record declares no variants to select among,
+    when ``value`` is ``None`` (a null selector value is never a valid
+    choice), or when ``value`` does not name a declared variant EXACTLY --
+    no ``str()`` coercion: an integer ``1`` must not silently match a
+    variant literally named ``"1"``, nor ``True`` one named ``"True"``.
     """
     if not record.workflow_variants:
         raise TutorialRecordError(
             f"tutorial record {record.name!r} declares no workflow_variants; "
-            f"{MESH_SELECTOR_NAME!r} selects among variants and has nothing "
-            "to select"
+            f"{record.variant_selector!r} selects among variants and has "
+            "nothing to select"
         )
-    key = str(value)
-    if key not in record.workflow_variants:
+    if value is None:
+        raise TutorialRecordError(
+            f"{record.variant_selector!r} was given a null value; it must "
+            f"name one of tutorial record {record.name!r}'s declared "
+            f"variants ({sorted(record.workflow_variants)})"
+        )
+    if value not in record.workflow_variants:
         raise TutorialRecordError(
             f"{value!r} is not a workflow variant tutorial record "
             f"{record.name!r} declares (declared variants: "
             f"{sorted(record.workflow_variants)})"
         )
-    return record.workflow_variants[key]
+    return record.workflow_variants[value]
 
 
 # ---------------------------------------------------------------------------

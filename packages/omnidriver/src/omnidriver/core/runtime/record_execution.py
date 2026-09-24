@@ -29,13 +29,13 @@ from ..case_transaction import commit_case_write
 from ..case_write import CaseMutationRequest, CaseWritePlan, CaseWriteRecord
 from ..sweep.sweep_derivation_catalog import NAMING_OUTPUT_KEYS
 from ..tutorial_records import (
-    MESH_SELECTOR_NAME,
     SourcedPatch,
     TutorialRecord,
     TutorialRecordError,
+    _strictly_equal,
     patches_to_parameters,
     resolve_case_patches,
-    resolve_mesh_selector,
+    resolve_variant_selector,
     split_unchanged,
 )
 
@@ -91,17 +91,26 @@ def _stage(
     _stage_entry_case(native_case_root, staged_case_root, driver_context=driver_context)
 
 
-#: Reserved study names that name neither a document key nor an axis, and
-#: must never reach ``sort_study_name`` (item 3, item 4): the two sweep
-#: naming-derivation outputs (``NAMING_OUTPUT_KEYS`` -- pure sweep-machinery
-#: bookkeeping, never case content) and the ``mesh`` selector (a variant
-#: choice, never a patch). The set is explicit, matching CLAUDE.md's "no
-#: fallback" standard -- nothing here is inferred from shape.
-_RESERVED_STUDY_NAMES: frozenset[str] = NAMING_OUTPUT_KEYS | frozenset({MESH_SELECTOR_NAME})
+def _reserved_study_names(record: TutorialRecord) -> frozenset[str]:
+    """Reserved study names that name neither a document key nor an axis,
+    and must never reach ``sort_study_name`` (item 3, item 4): the two sweep
+    naming-derivation outputs (``NAMING_OUTPUT_KEYS`` -- pure sweep-machinery
+    bookkeeping, never case content) and THIS RECORD'S OWN
+    ``variant_selector`` name, if it declares one (a variant choice, never a
+    patch). Explicit, matching CLAUDE.md's "no fallback" standard -- nothing
+    here is inferred from shape, and core reserves no selector name of its
+    own (item 4's vocabulary fix: ``MESH_SELECTOR_NAME`` was deleted; each
+    record declares its own).
+    """
+    if record.variant_selector is None:
+        return NAMING_OUTPUT_KEYS
+    return NAMING_OUTPUT_KEYS | frozenset({record.variant_selector})
 
 
 def _extract_reserved_names(
     study_by_source: Mapping[str, Mapping[str, Any]],
+    *,
+    reserved_names: frozenset[str],
 ) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
     """Strip every reserved name out of every source, refusing a value that
     conflicts across sources by name (item 3 + item 4's selector).
@@ -109,17 +118,24 @@ def _extract_reserved_names(
     Returns ``(stripped_study_by_source, reserved_values)`` -- the latter
     maps each reserved name actually present in the study to its one agreed
     value.
+
+    Conflict is checked with strict same-type equality (``_strictly_equal``,
+    shared with ``tutorial_records.combine_patches``'s own patch-conflict
+    check), not plain ``==`` -- ``1`` and ``True`` compare equal under
+    Python's numeric tower but come from two callers who each meant a
+    different value, and a plain ``!=`` would silently let the second (a
+    real conflict) through as "agreement".
     """
     stripped: dict[str, dict[str, Any]] = {}
     reserved_values: dict[str, Any] = {}
     reserved_source: dict[str, str] = {}
     for source, values in study_by_source.items():
         remaining = dict(values)
-        for name in _RESERVED_STUDY_NAMES:
+        for name in reserved_names:
             if name not in remaining:
                 continue
             candidate = remaining.pop(name)
-            if name in reserved_values and reserved_values[name] != candidate:
+            if name in reserved_values and not _strictly_equal(reserved_values[name], candidate):
                 raise TutorialRecordError(
                     f"{name!r} is set to different values by "
                     f"{reserved_source[name]!r} ({reserved_values[name]!r}) "
@@ -137,21 +153,23 @@ def _resolve_workflow_step_ids(
     """Item 4: the record's own steps, or one selected variant's steps.
 
     A record that declares ``workflow_variants`` REQUIRES the study to name
-    ``mesh`` -- no silent default among declared variants. A record with no
-    variants at all requires the study NOT to name ``mesh`` (refused via
-    ``resolve_mesh_selector`` itself: "declares no workflow_variants").
+    its own ``variant_selector`` -- no silent default among declared
+    variants. A record with no variants at all requires the study NOT to
+    name one (refused via ``resolve_variant_selector`` itself: "declares no
+    workflow_variants").
     """
-    mesh_value = reserved_values.get(MESH_SELECTOR_NAME)
+    selector_name = record.variant_selector
+    selector_value = reserved_values.get(selector_name) if selector_name is not None else None
     if record.workflow_variants:
-        if mesh_value is None:
+        if selector_value is None:
             raise TutorialRecordError(
                 f"tutorial record {record.name!r} declares workflow_variants "
                 f"{sorted(record.workflow_variants)}; the study must supply "
-                f"{MESH_SELECTOR_NAME!r} to select one"
+                f"{selector_name!r} to select one"
             )
-        return resolve_mesh_selector(record, mesh_value)
-    if mesh_value is not None:
-        return resolve_mesh_selector(record, mesh_value)  # raises: no variants
+        return resolve_variant_selector(record, selector_value)
+    if selector_value is not None:
+        return resolve_variant_selector(record, selector_value)  # raises: no variants
     return record.step_ids()
 
 
@@ -193,7 +211,9 @@ def _resolve_and_split(
             "declares no config-value reader (get_config_value_reader); "
             "whether a patch is unchanged cannot be determined"
         )
-    study_by_source, reserved_values = _extract_reserved_names(study_by_source)
+    study_by_source, reserved_values = _extract_reserved_names(
+        study_by_source, reserved_names=_reserved_study_names(record),
+    )
     workflow_step_ids = _resolve_workflow_step_ids(record, reserved_values)
     # No fallback for axes either, but an absent axis catalog IS a neutral
     # state here (design §3: "Core... ships no solver axes" -- most stacks
@@ -369,8 +389,9 @@ def _workflow_dag_for_record(
     """The record's selected steps, in the exact ``{"steps": [...]}`` shape
     ``generic_case._workflow_dag_for`` already produces for factory
     tutorials: one entry per step, ``command``/``args`` split, chained by
-    ``depends_on`` in declaration order (design's own worked example runs
-    ``blockMesh``, ``gmsh``, ``cardiacFoam`` one after another).
+    ``depends_on`` in declaration order (design's own worked example runs a
+    meshing step then a solve step, one after another -- core knows neither
+    tool by name).
 
     An axis's command arguments for a step (``AxisResult.command_arguments``,
     already merged and conflict-checked by ``resolve_case_patches``, M6) are

@@ -1285,10 +1285,6 @@ def main(argv: list[str] | None = None) -> int:
             case_timeout_s=args.case_timeout_s,
             fresh=args.fresh,
             driver_context=driver_context,
-            # M5: forward the SAME --plugin selection (or None) this process
-            # itself was invoked with to every spawned run-document child --
-            # never let it fall back to its own default_driver_context().
-            plugin_target=args.plugin,
         )
         print(json.dumps(result, indent=2))
         return 1 if result["failed_count"] > 0 else 0

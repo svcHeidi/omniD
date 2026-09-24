@@ -25,7 +25,6 @@ from omnidriver.core.tutorial_records import (
     AxisPatch,
     AxisResult,
     DocumentKeyName,
-    MESH_SELECTOR_NAME,
     SourcedPatch,
     TutorialRecord,
     TutorialRecordError,
@@ -33,7 +32,7 @@ from omnidriver.core.tutorial_records import (
     combine_patches,
     patches_to_parameters,
     resolve_case_patches,
-    resolve_mesh_selector,
+    resolve_variant_selector,
     sort_study_name,
     split_unchanged,
 )
@@ -162,8 +161,8 @@ def _known_catalog_validator(document: str, key_path: tuple, value):
     environment-owned-key exception (unvalidated, but accepted) for
     another."""
     catalog = {
-        ("constant/electro.json", ("ionicModel",)): "word",
-        ("constant/electro.json", ("cellZone",)): "word",
+        ("constant/physics.json", ("modelName",)): "word",
+        ("constant/physics.json", ("cellZone",)): "word",
         ("constant/mesh.json", ("cells",)): "integer",
     }
     if (document, key_path) in catalog:
@@ -234,10 +233,10 @@ def test_tutorial_record_refuses_a_native_case_relpath_that_escapes_the_case():
 
 def test_sort_study_name_classifies_a_document_key():
     result = sort_study_name(
-        "constant/electro.json:a.b", allowed_axes=frozenset(), axis_catalog={},
+        "constant/physics.json:a.b", allowed_axes=frozenset(), axis_catalog={},
     )
     assert isinstance(result, DocumentKeyName)
-    assert result.document == "constant/electro.json"
+    assert result.document == "constant/physics.json"
     assert result.key_path == ("a", "b")
 
 
@@ -283,7 +282,7 @@ def test_sort_study_name_refuses_an_unknown_document():
 
 def test_sort_study_name_refuses_an_empty_key_path_segment():
     with pytest.raises(TutorialRecordError, match="empty segment"):
-        sort_study_name("constant/electro.json:a..b", allowed_axes=frozenset(), axis_catalog={})
+        sort_study_name("constant/physics.json:a..b", allowed_axes=frozenset(), axis_catalog={})
 
 
 # ---------------------------------------------------------------------------
@@ -373,7 +372,7 @@ def test_resolve_case_patches_runs_axes_and_direct_keys_together():
     combined, command_args = resolve_case_patches(
         record,
         study_by_source={
-            "base": {"constant/electro.json:ionicModel": "TT06"},
+            "base": {"constant/physics.json:modelName": "modelAlpha"},
             "sweep": {"number_cells": 5},
         },
         axis_catalog=axis_catalog,
@@ -381,7 +380,7 @@ def test_resolve_case_patches_runs_axes_and_direct_keys_together():
         direct_key_validator=_known_catalog_validator,
     )
     by_slot = {p.slot(): p for p in combined}
-    assert by_slot["constant/electro.json::ionicModel"].patch.value == "TT06"
+    assert by_slot["constant/physics.json::modelName"].patch.value == "modelAlpha"
     assert by_slot["constant/mesh.json::cells"].patch.value == 5
     assert command_args["mesh"] == ("-N", "5")
 
@@ -394,7 +393,7 @@ def test_resolve_case_patches_refuses_a_direct_key_absent_from_the_catalog():
     with pytest.raises(TutorialRecordError, match="unknownKey"):
         resolve_case_patches(
             record,
-            study_by_source={"base": {"constant/electro.json:unknownKey": "x"}},
+            study_by_source={"base": {"constant/physics.json:unknownKey": "x"}},
             axis_catalog={},
             staged_case_root=Path("/nonexistent"),
             direct_key_validator=_known_catalog_validator,
@@ -422,7 +421,7 @@ def test_resolve_case_patches_validates_axis_produced_patches_too():
     against `direct_key_validator` at all."""
     def rogue(value, staged_case_root):
         return AxisResult(
-            patches=(AxisPatch("constant/electro.json", ("notInCatalog",), value, "word"),),
+            patches=(AxisPatch("constant/physics.json", ("notInCatalog",), value, "word"),),
         )
 
     axis = AxisContract(name="rogue", value_kind="word", resolve=rogue)
@@ -481,7 +480,7 @@ def test_resolve_case_patches_validates_all_direct_keys_before_any_axis_runs():
             record,
             study_by_source={
                 "sweep": {"number_cells": 3},
-                "base": {"constant/electro.json:unknownKey": "x"},
+                "base": {"constant/physics.json:unknownKey": "x"},
             },
             axis_catalog={"number_cells": axis},
             staged_case_root=Path("/nonexistent"),
@@ -583,47 +582,84 @@ def test_resolve_case_patches_refuses_before_running_any_axis():
 
 
 # ---------------------------------------------------------------------------
-# The `mesh` selector (item 4): picks a workflow_variant, produces no
+# The variant selector (item 4): picks a workflow_variant, produces no
 # patches. Not an axis -- refused by name when unknown, and refused when the
-# record declares no variants at all.
+# record declares no variants at all. The selector's NAME is declared by the
+# record itself (`variant_selector`), never a core-owned constant (item 4's
+# vocabulary fix, 2026-09-24 -- `MESH_SELECTOR_NAME` was core-owned solver
+# vocabulary and is deleted).
 # ---------------------------------------------------------------------------
 
 
-def test_resolve_mesh_selector_picks_a_declared_variant():
+def test_resolve_variant_selector_picks_a_declared_variant():
     record = _record(
         workflow_steps=(
-            WorkflowStep(step_id="hexMesh", command=("blockMesh",)),
-            WorkflowStep(step_id="tetMesh", command=("gmsh",)),
-            WorkflowStep(step_id="solve", command=("cardiacFoam",)),
+            WorkflowStep(step_id="meshA", command=("toolA",)),
+            WorkflowStep(step_id="meshB", command=("toolB",)),
+            WorkflowStep(step_id="solve", command=("solverBinary",)),
         ),
         workflow_variants={
-            "hex": ("hexMesh", "solve"),
-            "tet": ("tetMesh", "solve"),
+            "variantA": ("meshA", "solve"),
+            "variantB": ("meshB", "solve"),
         },
+        variant_selector="variant",
     )
-    assert resolve_mesh_selector(record, "hex") == ("hexMesh", "solve")
-    assert resolve_mesh_selector(record, "tet") == ("tetMesh", "solve")
+    assert resolve_variant_selector(record, "variantA") == ("meshA", "solve")
+    assert resolve_variant_selector(record, "variantB") == ("meshB", "solve")
 
 
-def test_resolve_mesh_selector_refuses_an_unknown_variant_by_name():
+def test_resolve_variant_selector_refuses_an_unknown_variant_by_name():
     record = _record(
-        workflow_steps=(WorkflowStep(step_id="hexMesh", command=("blockMesh",)),),
-        workflow_variants={"hex": ("hexMesh",)},
+        workflow_steps=(WorkflowStep(step_id="meshA", command=("toolA",)),),
+        workflow_variants={"variantA": ("meshA",)},
+        variant_selector="variant",
     )
-    with pytest.raises(TutorialRecordError, match="quad"):
-        resolve_mesh_selector(record, "quad")
+    with pytest.raises(TutorialRecordError, match="unknownVariant"):
+        resolve_variant_selector(record, "unknownVariant")
 
 
-def test_resolve_mesh_selector_refuses_a_record_with_no_variants():
+def test_resolve_variant_selector_refuses_a_null_value():
+    """Minor: a null selector value is refused, never silently coerced into
+    the string ``"None"`` (which could spuriously match a variant literally
+    named that)."""
+    record = _record(
+        workflow_steps=(WorkflowStep(step_id="meshA", command=("toolA",)),),
+        workflow_variants={"variantA": ("meshA",)},
+        variant_selector="variant",
+    )
+    with pytest.raises(TutorialRecordError, match="null"):
+        resolve_variant_selector(record, None)
+
+
+def test_resolve_variant_selector_does_not_coerce_the_value_with_str():
+    """Minor: no str() coercion -- an integer 1 must not silently match a
+    variant literally named "1", nor True one named "True"."""
+    record = _record(
+        workflow_steps=(WorkflowStep(step_id="meshA", command=("toolA",)),),
+        workflow_variants={"1": ("meshA",), "True": ("meshA",)},
+        variant_selector="variant",
+    )
+    with pytest.raises(TutorialRecordError, match="not a workflow variant"):
+        resolve_variant_selector(record, 1)
+    with pytest.raises(TutorialRecordError, match="not a workflow variant"):
+        resolve_variant_selector(record, True)
+
+
+def test_resolve_variant_selector_refuses_a_record_with_no_variants():
     record = _record()  # no workflow_variants declared
     with pytest.raises(TutorialRecordError, match="no workflow_variants"):
-        resolve_mesh_selector(record, "hex")
+        resolve_variant_selector(record, "variantA")
 
 
-def test_mesh_selector_name_is_reserved_and_produces_no_patches():
-    """The selector name itself is a fixed, generic reserved word -- core's,
-    not a solver's -- and resolving it never yields any AxisPatch."""
-    assert MESH_SELECTOR_NAME == "mesh"
+def test_tutorial_record_refuses_workflow_variants_without_a_variant_selector():
+    """A record declaring workflow_variants but no variant_selector name has
+    nothing that could ever select among them -- refused at construction,
+    not discovered later as a silently-unreachable variant."""
+    with pytest.raises(TutorialRecordError, match="variant_selector"):
+        _record(
+            workflow_steps=(WorkflowStep(step_id="meshA", command=("toolA",)),),
+            workflow_variants={"variantA": ("meshA",)},
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -636,18 +672,18 @@ def test_split_unchanged_separates_changed_from_unchanged():
         # Contract: always a tuple (review finding B1) -- this toy reader,
         # like the real one, is the one that knows how to use it.
         assert isinstance(key_path, tuple)
-        return {"cells": "5", "ionicModel": "TT06"}.get(key_path[-1])
+        return {"cells": "5", "modelName": "modelAlpha"}.get(key_path[-1])
 
     patches = [
         SourcedPatch(patch=AxisPatch("constant/mesh.json", ("cells",), 5, "integer"), source="sweep", validated=True),
-        SourcedPatch(patch=AxisPatch("constant/electro.json", ("ionicModel",), "LR91", "word"), source="base", validated=True),
+        SourcedPatch(patch=AxisPatch("constant/physics.json", ("modelName",), "modelBeta", "word"), source="base", validated=True),
     ]
     to_write, unchanged = split_unchanged(
         patches, case_root=Path("/whatever"),
         read_current_value=reader, values_agree=_typed_agree,
     )
     assert [p.patch.value for p in unchanged] == [5]
-    assert [p.patch.value for p in to_write] == ["LR91"]
+    assert [p.patch.value for p in to_write] == ["modelBeta"]
 
 
 def test_split_unchanged_treats_an_undeterminable_patch_as_changed():
@@ -935,7 +971,7 @@ def test_describe_entry_previews_a_tutorial_record_instead_of_refusing(tmp_path)
     from omnidriver.core.introspection import describe_entry
 
     _native_case(tmp_path, {
-        "constant/electro.json": {"ionicModel": "TT06"},
+        "constant/physics.json": {"modelName": "modelAlpha"},
         "constant/mesh.json": {"cells": "5"},
     })
     record = _record()
@@ -950,7 +986,7 @@ def test_describe_entry_previews_a_tutorial_record_instead_of_refusing(tmp_path)
         "toyTutorial",
         overrides={
             "cases_root": str(tmp_path / "cases"),
-            "constant/electro.json:ionicModel": "LR91",
+            "constant/physics.json:modelName": "modelBeta",
             "number_cells": 5,
         },
         driver_context=context,
@@ -959,9 +995,9 @@ def test_describe_entry_previews_a_tutorial_record_instead_of_refusing(tmp_path)
     assert described["entry"]["entry_kind"] == "tutorial_record"
     preview = described["record_preview"]
     by_document = {p["document"]: p for p in preview["patches"]}
-    assert by_document["constant/electro.json"]["value"] == "LR91"
-    assert by_document["constant/electro.json"]["status"] == "changed"
-    assert by_document["constant/electro.json"]["validated"] is True
+    assert by_document["constant/physics.json"]["value"] == "modelBeta"
+    assert by_document["constant/physics.json"]["status"] == "changed"
+    assert by_document["constant/physics.json"]["validated"] is True
     assert by_document["constant/mesh.json"]["status"] == "unchanged"
     assert preview["command_arguments"]["mesh"] == ["-N", "5"]
     # write_surface (the factory-tutorial section this sits beside) makes no
@@ -1027,7 +1063,7 @@ def _context_with_writer(tutorial_records=None, axis_catalog=None):
 
 def test_preview_record_case_lists_each_patch_with_status_and_validated(tmp_path):
     _native_case(tmp_path, {
-        "constant/electro.json": {"ionicModel": "TT06"},
+        "constant/physics.json": {"modelName": "modelAlpha"},
         "constant/mesh.json": {"cells": "5"},
     })
     record = _record()
@@ -1037,14 +1073,14 @@ def test_preview_record_case_lists_each_patch_with_status_and_validated(tmp_path
         record,
         cases_root=tmp_path / "cases",
         study_by_source={
-            "base": {"constant/electro.json:ionicModel": "LR91"},
+            "base": {"constant/physics.json:modelName": "modelBeta"},
             "sweep": {"number_cells": 5},
         },
         driver_context=context,
     )
     by_document = {p["document"]: p for p in preview["patches"]}
-    assert by_document["constant/electro.json"]["status"] == "changed"
-    assert by_document["constant/electro.json"]["validated"] is True
+    assert by_document["constant/physics.json"]["status"] == "changed"
+    assert by_document["constant/physics.json"]["validated"] is True
     assert by_document["constant/mesh.json"]["status"] == "unchanged"
     assert preview["command_arguments"]["mesh"] == ["-N", "5"]
 
@@ -1075,6 +1111,32 @@ def test_preview_record_case_ignores_sweep_naming_output_keys(tmp_path):
     assert documents == {"constant/mesh.json"}
 
 
+def test_extract_reserved_names_refuses_a_conflicting_value_across_sources():
+    """`reserved_conflict_later_wins` mutation: two sources naming the SAME
+    reserved name with different values must be refused, never silently
+    resolved by "later source wins". Strict same-type comparison (like
+    `combine_patches`'s own `_strictly_equal`): `1` (base) and `True`
+    (sweep) must conflict even though Python's `1 == True`."""
+    from omnidriver.core.runtime.record_execution import _extract_reserved_names
+
+    with pytest.raises(TutorialRecordError, match="caseId"):
+        _extract_reserved_names(
+            {"base": {"caseId": 1}, "sweep": {"caseId": True}},
+            reserved_names=frozenset({"caseId"}),
+        )
+
+
+def test_extract_reserved_names_allows_the_same_value_restated_across_sources():
+    from omnidriver.core.runtime.record_execution import _extract_reserved_names
+
+    stripped, reserved = _extract_reserved_names(
+        {"base": {"caseId": "case_0001"}, "sweep": {"caseId": "case_0001", "x": 1}},
+        reserved_names=frozenset({"caseId"}),
+    )
+    assert reserved == {"caseId": "case_0001"}
+    assert stripped == {"base": {}, "sweep": {"x": 1}}
+
+
 # ---------------------------------------------------------------------------
 # The `mesh` selector, wired end to end through preview/commit (item 4)
 # ---------------------------------------------------------------------------
@@ -1086,14 +1148,15 @@ def _record_with_variants(**overrides) -> TutorialRecord:
         native_case_relpath="toyTutorial",
         allowed_axes=frozenset(),
         workflow_steps=(
-            WorkflowStep(step_id="hexMesh", command=("blockMesh",)),
-            WorkflowStep(step_id="tetMesh", command=("gmsh",)),
-            WorkflowStep(step_id="solve", command=("cardiacFoam",)),
+            WorkflowStep(step_id="meshA", command=("toolA",)),
+            WorkflowStep(step_id="meshB", command=("toolB",)),
+            WorkflowStep(step_id="solve", command=("solverBinary",)),
         ),
         workflow_variants={
-            "hex": ("hexMesh", "solve"),
-            "tet": ("tetMesh", "solve"),
+            "variantA": ("meshA", "solve"),
+            "variantB": ("meshB", "solve"),
         },
+        variant_selector="mesh",
     )
     fields.update(overrides)
     return TutorialRecord(**fields)
@@ -1107,21 +1170,21 @@ def test_preview_record_case_reports_the_selected_variants_steps(tmp_path):
     preview = record_execution.preview_record_case(
         record,
         cases_root=tmp_path / "cases",
-        study_by_source={"base": {"mesh": "tet"}},
+        study_by_source={"base": {"mesh": "variantB"}},
         driver_context=context,
     )
-    assert preview["workflow_step_ids"] == ["tetMesh", "solve"]
+    assert preview["workflow_step_ids"] == ["meshB", "solve"]
 
 
 def test_preview_record_case_refuses_an_unknown_mesh_variant(tmp_path):
     _native_case(tmp_path, {})
     record = _record_with_variants()
     context = _context_with_writer()
-    with pytest.raises(TutorialRecordError, match="quad"):
+    with pytest.raises(TutorialRecordError, match="unknownVariant"):
         record_execution.preview_record_case(
             record,
             cases_root=tmp_path / "cases",
-            study_by_source={"base": {"mesh": "quad"}},
+            study_by_source={"base": {"mesh": "unknownVariant"}},
             driver_context=context,
         )
 
@@ -1148,14 +1211,14 @@ def test_commit_record_case_reports_the_selected_variants_steps(tmp_path):
         record,
         cases_root=tmp_path / "cases",
         staged_case_root=tmp_path / "staged",
-        study_by_source={"base": {"mesh": "hex"}},
+        study_by_source={"base": {"mesh": "variantA"}},
         driver_context=context,
     )
-    assert result.workflow_step_ids == ("hexMesh", "solve")
+    assert result.workflow_step_ids == ("meshA", "solve")
 
 
 def test_commit_record_case_writes_one_case_with_validated_flags_in_the_record(tmp_path):
-    _native_case(tmp_path, {"constant/electro.json": {"ionicModel": "TT06"}})
+    _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
     record = _record(allowed_axes=frozenset())
     context = _context_with_writer()
 
@@ -1165,7 +1228,7 @@ def test_commit_record_case_writes_one_case_with_validated_flags_in_the_record(t
         staged_case_root=tmp_path / "staged",
         study_by_source={
             "base": {
-                "constant/electro.json:ionicModel": "LR91",
+                "constant/physics.json:modelName": "modelBeta",
                 "system/unowned.json:endTime": 0.02,
             },
         },
@@ -1177,7 +1240,7 @@ def test_commit_record_case_writes_one_case_with_validated_flags_in_the_record(t
     assert write_record is not None
     assert write_record.status == "committed"
     by_qualified_id = {p["qualified_id"]: p for p in write_record.parameters}
-    assert by_qualified_id["constant/electro.json::ionicModel"]["validated"] is True
+    assert by_qualified_id["constant/physics.json::modelName"]["validated"] is True
     assert by_qualified_id["system/unowned.json::endTime"]["validated"] is False
     # Minor m1: the owner comes from the context's own identity resolutions
     # (which provider actually answers `case_writer` for this stack), not a
@@ -1186,18 +1249,18 @@ def test_commit_record_case_writes_one_case_with_validated_flags_in_the_record(t
     # present) nor a `providers[-1].id` guess that can name the wrong
     # provider in a multi-provider stack.
     assert (
-        by_qualified_id["constant/electro.json::ionicModel"]["owner"]
+        by_qualified_id["constant/physics.json::modelName"]["owner"]
         == context.identity.resolutions["case_writer"]
     )
-    written = json.loads((tmp_path / "staged" / "constant" / "electro.json").read_text())
-    assert written["ionicModel"] == "LR91"
+    written = json.loads((tmp_path / "staged" / "constant" / "physics.json").read_text())
+    assert written["modelName"] == "modelBeta"
 
 
 def test_commit_record_case_writes_nothing_when_every_patch_is_unchanged(tmp_path):
     """M5: the result states "everything was unchanged" explicitly -- a bare
     None told a caller nothing happened, but not WHY, or what the unchanged
     patches even were."""
-    _native_case(tmp_path, {"constant/electro.json": {"ionicModel": "TT06"}})
+    _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
     record = _record(allowed_axes=frozenset())
     context = _context_with_writer()
 
@@ -1205,12 +1268,12 @@ def test_commit_record_case_writes_nothing_when_every_patch_is_unchanged(tmp_pat
         record,
         cases_root=tmp_path / "cases",
         staged_case_root=tmp_path / "staged",
-        study_by_source={"base": {"constant/electro.json:ionicModel": "TT06"}},
+        study_by_source={"base": {"constant/physics.json:modelName": "modelAlpha"}},
         driver_context=context,
     )
     assert result.write_record is None
     assert result.status == "unchanged"
-    assert [p.patch.value for p in result.unchanged] == ["TT06"]
+    assert [p.patch.value for p in result.unchanged] == ["modelAlpha"]
 
 
 def test_commit_record_case_refuses_when_the_native_case_is_missing(tmp_path):
@@ -1227,7 +1290,7 @@ def test_commit_record_case_refuses_when_the_native_case_is_missing(tmp_path):
 
 
 def test_commit_record_case_refuses_a_conflict_between_base_and_sweep(tmp_path):
-    _native_case(tmp_path, {"constant/electro.json": {"ionicModel": "TT06"}})
+    _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
     record = _record(allowed_axes=frozenset())
     context = _context_with_writer()
     with pytest.raises(TutorialRecordError):
@@ -1236,8 +1299,8 @@ def test_commit_record_case_refuses_a_conflict_between_base_and_sweep(tmp_path):
             cases_root=tmp_path / "cases",
             staged_case_root=tmp_path / "staged",
             study_by_source={
-                "base": {"constant/electro.json:ionicModel": "LR91"},
-                "sweep": {"constant/electro.json:ionicModel": "TT06"},
+                "base": {"constant/physics.json:modelName": "modelBeta"},
+                "sweep": {"constant/physics.json:modelName": "modelAlpha"},
             },
             driver_context=context,
         )
@@ -1263,7 +1326,7 @@ class _NoReaderPlugin(_RecordCaseWriterPlugin):
 
 
 def test_commit_record_case_refuses_when_the_stack_has_no_record_key_validator(tmp_path):
-    _native_case(tmp_path, {"constant/electro.json": {"ionicModel": "TT06"}})
+    _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
     record = _record(allowed_axes=frozenset())
     context = driver_context(_NoValidatorPlugin(), source="test:no-validator")
     with pytest.raises(TutorialRecordError, match="no record-key validator"):
@@ -1271,20 +1334,20 @@ def test_commit_record_case_refuses_when_the_stack_has_no_record_key_validator(t
             record,
             cases_root=tmp_path / "cases",
             staged_case_root=tmp_path / "staged",
-            study_by_source={"base": {"constant/electro.json:ionicModel": "LR91"}},
+            study_by_source={"base": {"constant/physics.json:modelName": "modelBeta"}},
             driver_context=context,
         )
 
 
 def test_preview_record_case_refuses_when_the_stack_has_no_record_key_validator(tmp_path):
-    _native_case(tmp_path, {"constant/electro.json": {"ionicModel": "TT06"}})
+    _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
     record = _record(allowed_axes=frozenset())
     context = driver_context(_NoValidatorPlugin(), source="test:no-validator")
     with pytest.raises(TutorialRecordError, match="no record-key validator"):
         record_execution.preview_record_case(
             record,
             cases_root=tmp_path / "cases",
-            study_by_source={"base": {"constant/electro.json:ionicModel": "LR91"}},
+            study_by_source={"base": {"constant/physics.json:modelName": "modelBeta"}},
             driver_context=context,
         )
 
@@ -1293,7 +1356,7 @@ def test_commit_record_case_refuses_when_the_stack_has_no_case_value_comparator(
     """Before this fix (E8): a stack with no comparator reported every
     patch, including a genuine no-op, as 'changed' and committed it. M4/M1
     now refuse outright instead."""
-    _native_case(tmp_path, {"constant/electro.json": {"ionicModel": "TT06"}})
+    _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
     record = _record(allowed_axes=frozenset())
     context = driver_context(
         _NoComparatorPlugin(record_key_validator=_known_catalog_validator),
@@ -1304,7 +1367,7 @@ def test_commit_record_case_refuses_when_the_stack_has_no_case_value_comparator(
             record,
             cases_root=tmp_path / "cases",
             staged_case_root=tmp_path / "staged",
-            study_by_source={"base": {"constant/electro.json:ionicModel": "TT06"}},
+            study_by_source={"base": {"constant/physics.json:modelName": "modelAlpha"}},
             driver_context=context,
         )
 
@@ -1315,7 +1378,7 @@ def test_commit_record_case_refuses_when_the_stack_has_no_config_value_reader(tm
     with no reader silently reported every patch "changed" (split_unchanged's
     own no-reader default) and committed it, unable to ever report a real
     no-op."""
-    _native_case(tmp_path, {"constant/electro.json": {"ionicModel": "TT06"}})
+    _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
     record = _record(allowed_axes=frozenset())
     context = driver_context(
         _NoReaderPlugin(record_key_validator=_known_catalog_validator),
@@ -1326,13 +1389,13 @@ def test_commit_record_case_refuses_when_the_stack_has_no_config_value_reader(tm
             record,
             cases_root=tmp_path / "cases",
             staged_case_root=tmp_path / "staged",
-            study_by_source={"base": {"constant/electro.json:ionicModel": "TT06"}},
+            study_by_source={"base": {"constant/physics.json:modelName": "modelAlpha"}},
             driver_context=context,
         )
 
 
 def test_preview_record_case_refuses_when_the_stack_has_no_config_value_reader(tmp_path):
-    _native_case(tmp_path, {"constant/electro.json": {"ionicModel": "TT06"}})
+    _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
     record = _record(allowed_axes=frozenset())
     context = driver_context(
         _NoReaderPlugin(record_key_validator=_known_catalog_validator),
@@ -1342,7 +1405,7 @@ def test_preview_record_case_refuses_when_the_stack_has_no_config_value_reader(t
         record_execution.preview_record_case(
             record,
             cases_root=tmp_path / "cases",
-            study_by_source={"base": {"constant/electro.json:ionicModel": "TT06"}},
+            study_by_source={"base": {"constant/physics.json:modelName": "modelAlpha"}},
             driver_context=context,
         )
 
@@ -1435,8 +1498,8 @@ def test_record_case_spec_builds_the_generic_workflow_dag_shape(tmp_path):
         native_case_relpath="toyTutorial",
         allowed_axes=frozenset(),
         workflow_steps=(
-            WorkflowStep(step_id="mesh", command=("blockMesh", "-dict")),
-            WorkflowStep(step_id="solve", command=("cardiacFoam",)),
+            WorkflowStep(step_id="mesh", command=("toolA", "-dict")),
+            WorkflowStep(step_id="solve", command=("solverBinary",)),
         ),
     )
     staged = tmp_path / "case"
@@ -1456,11 +1519,11 @@ def test_record_case_spec_builds_the_generic_workflow_dag_shape(tmp_path):
     assert workflow_dag == {
         "steps": [
             {
-                "id": "mesh", "command": "blockMesh", "args": ["-dict", "-N", "20"],
+                "id": "mesh", "command": "toolA", "args": ["-dict", "-N", "20"],
                 "depends_on": [],
             },
             {
-                "id": "solve", "command": "cardiacFoam", "args": [],
+                "id": "solve", "command": "solverBinary", "args": [],
                 "depends_on": ["mesh"],
             },
         ]
