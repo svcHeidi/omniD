@@ -1351,16 +1351,31 @@ def test_sweep_record_refuses_when_shadowed_by_a_cwd_case_path(tmp_path, monkeyp
 
 
 def test_sweep_record_refuses_when_shadowed_by_a_case_folder_under_cases_root(tmp_path):
-    """B1/M6: the same ambiguity as above, but against a case folder under
-    the sweep's own `cases_root` (not cwd) -- this one was never refused
-    ANYWHERE before this fix, not even through `resolve_entry`/`describe`
-    directly (`_match_entry`'s own tutorial_record exclusion meant a record
-    resolution was returned first, the case-folder match never consulted)."""
-    cases_root = _native_toy_case(tmp_path)
+    """B1/M6: the same ambiguity as above, but against a DIFFERENT, same-
+    NAMED case folder under the sweep's own `cases_root` (not cwd, and not
+    the record's own native case, which sits elsewhere here on purpose --
+    see test_sweep_record_does_not_confuse_a_records_own_native_case right
+    below for why that one specific case must NOT be flagged). This one was
+    never refused ANYWHERE before this fix, not even through
+    `resolve_entry`/`describe` directly (`_match_entry`'s own
+    tutorial_record exclusion meant a record resolution was returned first,
+    the case-folder match never consulted)."""
+    cases_root = tmp_path / "cases"
+    (cases_root / "nativeCases" / "toyTutorial" / "constant").mkdir(parents=True)
+    (cases_root / "nativeCases" / "toyTutorial" / "constant" / "mesh.json").write_text(
+        json.dumps({"cells": "1"})
+    )
+    (cases_root / "toyTutorial").mkdir(parents=True)
     (cases_root / "toyTutorial" / "run-test-case").write_text("#!/bin/sh\n")
+    record = TutorialRecord(
+        name="toyTutorial",
+        native_case_relpath="nativeCases/toyTutorial",
+        allowed_axes=frozenset({"number_cells"}),
+        workflow_steps=(WorkflowStep(step_id="solve", command=("touch", "solved.marker")),),
+    )
     plugin = _RecordSweepWriterPlugin(
         solver_commands=frozenset({"touch"}),
-        tutorial_records={"toyTutorial": _toy_record()},
+        tutorial_records={"toyTutorial": record},
         axis_catalog={"number_cells": _record_number_cells_axis()},
         record_key_validator=_record_known_catalog_validator,
         entrypoint="run-test-case",
@@ -1371,3 +1386,23 @@ def test_sweep_record_refuses_when_shadowed_by_a_case_folder_under_cases_root(tm
 
     with pytest.raises(KeyError, match="ambiguous"):
         sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=ctx)
+
+
+def test_sweep_record_does_not_confuse_a_records_own_native_case(tmp_path):
+    """The refinement the test above depends on: a record's OWN native case
+    is routinely ALSO independently recognizable as a plain case_folder (a
+    real adapter's entrypoint/marker declaration knows its own format, which
+    the native case obviously satisfies -- e.g. E2ERecordPlugin's
+    has_case_marker checking for its own constant/mesh.json) -- that is the
+    SAME directory discovered twice by two different catalogs, not a naming
+    collision, and must not block the sweep."""
+    cases_root = _native_toy_case(tmp_path)
+    ctx = _record_driver_context()
+    spec_path = tmp_path / "sweep.json"
+    spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root)))
+
+    result = sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=ctx)
+
+    assert result["case_count"] == 2
+    for case in result["cases"]:
+        assert case["status"] == "ok", case

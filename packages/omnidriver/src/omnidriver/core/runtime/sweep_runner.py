@@ -74,6 +74,29 @@ def _load_spec(spec_path: str | Path) -> dict[str, Any]:
     return json.loads(Path(spec_path).read_text())
 
 
+def _run_document_command(
+    run_document_path: Path, *, plugin_target: str | None,
+) -> list[str]:
+    """The child ``omnidriver run --run-document`` argv this sweep spawns.
+
+    ``plugin_target`` is the SAME ``--plugin`` selector (or ``None``) the
+    parent process itself was invoked with, forwarded explicitly (review
+    finding M5): the child is a fresh process with no access to the
+    parent's in-memory ``driver_context``, so it re-resolves one of its own
+    -- ``default_driver_context()`` when no ``--plugin`` reaches it, which is
+    silently a DIFFERENT (or no) provider stack whenever the parent's own
+    selection was explicit. CLAUDE.md's "an explicitly-contexted operation
+    never falls back to the default" applies here exactly the same way it
+    applies inside one process: the child must never guess.
+    """
+    command = [
+        sys.executable, "-m", "omnidriver", "run", "--run-document", str(run_document_path),
+    ]
+    if plugin_target is not None:
+        command.extend(["--plugin", plugin_target])
+    return command
+
+
 def _entry_name(sweep_spec: dict[str, Any]) -> str | None:
     return sweep_spec.get("base", {}).get("entry")
 
@@ -198,7 +221,7 @@ def _record_sweep_plan(
 def _record_sweep_run(
     record: Any, cases_root: Path, sweep_spec: dict[str, Any], *,
     output_dir: Path, case_timeout_s: float | None, task: str,
-    driver_context: "DriverContext",
+    driver_context: "DriverContext", plugin_target: str | None = None,
 ) -> dict[str, Any]:
     """The record-entry counterpart of ``sweep_run``'s factory-entry branch.
 
@@ -266,7 +289,7 @@ def _record_sweep_run(
                 if workflow_state_path.exists():
                     workflow_state_path.unlink()
                 result = _run_case_process(
-                    [sys.executable, "-m", "omnidriver", "run", "--run-document", str(run_document_path)],
+                    _run_document_command(run_document_path, plugin_target=plugin_target),
                     env=execution_environment,
                     timeout=case_timeout_s,
                 )
@@ -841,12 +864,20 @@ def sweep_run(
     fresh: bool = False,
     task: str = "summarize",
     driver_context: "DriverContext",
+    plugin_target: str | None = None,
 ) -> dict[str, Any]:
     """`task` plays no part in the sweep loop itself -- expanding, routing,
     materializing, and running cases is fully deterministic and has no use
     for it. It is only consumed at the very end, handed to
     run_postprocessing_module: the sweep is task(sweep), no reasoning
     involved; the postprocess hand-off is where a task actually matters.
+
+    `plugin_target` is the same `--plugin` string (or None) the CALLER
+    itself was invoked with (review finding M5) -- forwarded to every
+    spawned `omnidriver run --run-document` child so it resolves the exact
+    same provider stack, rather than each child re-resolving its own via
+    `default_driver_context()`, which the parent's own explicit selection
+    must never silently fall back to (CLAUDE.md).
     """
     execution_environment = driver_context.capabilities.environment_preflight.configure(
         os.environ,
@@ -909,6 +940,7 @@ def sweep_run(
         return _record_sweep_run(
             record, cases_root, sweep_spec, output_dir=output_dir,
             case_timeout_s=case_timeout_s, task=task, driver_context=driver_context,
+            plugin_target=plugin_target,
         )
 
     fresh_error = ensure_fresh_output_dir(
@@ -1029,7 +1061,7 @@ def sweep_run(
                         if workflow_state_path.exists():
                             workflow_state_path.unlink()
                         result = _run_case_process(
-                            [sys.executable, "-m", "omnidriver", "run", "--run-document", str(run_document_path)],
+                            _run_document_command(run_document_path, plugin_target=plugin_target),
                             env=execution_environment,
                             timeout=case_timeout_s,
                         )
@@ -1118,7 +1150,7 @@ def sweep_run(
                         if workflow_state_path.exists():
                             workflow_state_path.unlink()
                         result = _run_case_process(
-                            [sys.executable, "-m", "omnidriver", "run", "--run-document", str(run_document_path)],
+                            _run_document_command(run_document_path, plugin_target=plugin_target),
                             env=execution_environment,
                             timeout=case_timeout_s,
                         )

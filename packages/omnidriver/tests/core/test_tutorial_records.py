@@ -805,15 +805,21 @@ def test_resolve_entry_refuses_a_name_that_is_both_a_record_and_a_case_path(tmp_
 
 def test_resolve_entry_refuses_a_name_that_is_both_a_record_and_a_case_folder_under_cases_root(tmp_path):
     """B1/M6: the third ambiguity `classify_entry` refuses -- a record
-    shadowed by a same-named case folder under `cases_root` (not cwd). This
-    one was not refused ANYWHERE before this fix: `resolve_entry`'s
-    tutorial_record branch returned before `_match_entry` was ever consulted,
-    so the case-folder match was simply never looked at."""
+    shadowed by a DIFFERENT, same-NAMED case folder under `cases_root` (not
+    cwd, and not the record's own native case -- see the test right below
+    this one for why that specific case must NOT be flagged). This one was
+    not refused ANYWHERE before this fix: `resolve_entry`'s tutorial_record
+    branch returned before `_match_entry` was ever consulted, so the
+    case-folder match was simply never looked at."""
     cases_root = tmp_path / "cases"
+    # The record's real native case lives elsewhere...
+    (cases_root / "nativeCases" / "toyTutorial").mkdir(parents=True)
+    # ...but an UNRELATED directory happens to sit directly under cases_root
+    # with the exact name the record is registered under.
     case_dir = cases_root / "toyTutorial"
     case_dir.mkdir(parents=True)
     (case_dir / "run-test-case").write_text("#!/bin/sh\n")
-    record = _record(name="toyTutorial", native_case_relpath="toyTutorial")
+    record = _record(name="toyTutorial", native_case_relpath="nativeCases/toyTutorial")
     plugin = MinimalTestPlugin(
         entrypoint="run-test-case", tutorial_records={"toyTutorial": record},
     )
@@ -824,6 +830,31 @@ def test_resolve_entry_refuses_a_name_that_is_both_a_record_and_a_case_folder_un
             "toyTutorial", overrides={"cases_root": str(cases_root)},
             driver_context=context,
         )
+
+
+def test_resolve_entry_does_not_confuse_a_records_own_independently_recognizable_native_case(tmp_path):
+    """The refinement the test above depends on: a record's OWN native case
+    is routinely ALSO independently recognizable as a plain case_folder (a
+    real adapter's has_case_marker/entrypoint declaration knows its own
+    format, which the native case obviously satisfies) -- that is the SAME
+    directory discovered twice by two different catalogs, not a naming
+    collision with anything else, and must resolve as a record exactly like
+    it would if the directory were unrecognizable as a case at all."""
+    cases_root = tmp_path / "cases"
+    native = cases_root / "toyTutorial"
+    native.mkdir(parents=True)
+    (native / "run-test-case").write_text("#!/bin/sh\n")
+    record = _record(name="toyTutorial", native_case_relpath="toyTutorial")
+    plugin = MinimalTestPlugin(
+        entrypoint="run-test-case", tutorial_records={"toyTutorial": record},
+    )
+    context = driver_context(plugin, source="test:record-self-recognizable")
+
+    resolution = registry.resolve_entry(
+        "toyTutorial", overrides={"cases_root": str(cases_root)},
+        driver_context=context,
+    )
+    assert resolution["resolution"] == "tutorial_record"
 
 
 def test_resolve_entry_never_resolves_a_records_own_relpath_as_a_case_folder(tmp_path):

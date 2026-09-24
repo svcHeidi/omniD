@@ -491,12 +491,23 @@ def classify_entry(
     if is_record and cases_root is not None:
         matched_case_folder = _match_entry(key, "case_folder", cases_root, driver_context)
         if matched_case_folder is not None:
-            raise KeyError(
-                f"Entry '{key}' is ambiguous: it is registered as a "
-                "tutorial record AND names an existing case folder under "
-                f"cases_root ({cases_root / str(matched_case_folder['entry_path'])}); "
-                "one name must not name both"
-            )
+            matched_path = (cases_root / str(matched_case_folder["entry_path"])).resolve()
+            own_native_case = (cases_root / record.native_case_relpath).resolve()
+            # A record's OWN native case is routinely ALSO independently
+            # recognizable as a plain case_folder (a real adapter's
+            # has_case_marker knows its own dictionary format, which the
+            # native case obviously has) -- that is not a naming collision
+            # with anything, it is the same directory discovered twice by
+            # two different catalogs. Only a DIFFERENT directory that
+            # happens to share this name is the real ambiguity design means
+            # ("one name must not name both").
+            if matched_path != own_native_case:
+                raise KeyError(
+                    f"Entry '{key}' is ambiguous: it is registered as a "
+                    "tutorial record AND names an existing case folder "
+                    f"under cases_root ({matched_path}); one name must not "
+                    "name both"
+                )
 
     if case_path is not None:
         return EntryClassification(kind="case_path", case_path=case_path)
