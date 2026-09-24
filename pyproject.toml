@@ -14,6 +14,13 @@ markers = [
     # other, and an unregistered marker is one typo away from silently
     # selecting nothing.
     "slow: builds a wheel in a throwaway venv; minutes, not seconds",
+    # Needs the real native cardiacFOAM tutorials tree, supplied ONLY via
+    # OMNIDRIVER_NATIVE_TUTORIALS (never discovered -- CLAUDE.md's "supplied
+    # versus discovered" rule). Unlike `slow`, a native-marked test FAILS,
+    # rather than skips, when that variable is unset: the point is to catch
+    # a run that meant to exercise the real tree but forgot to supply it, not
+    # to quietly pass over it. Deselect explicitly with -m "not native".
+    "native: needs OMNIDRIVER_NATIVE_TUTORIALS; fails (not skips) if unset",
 ]
 addopts = "--import-mode=importlib"
 pythonpath = [

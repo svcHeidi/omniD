@@ -13,6 +13,30 @@ from .command_authorization import is_installed_openfoam_application, openfoam_r
 from .profile import load_openfoam_profile
 
 
+def _read_config_value_by_key_path(file_path: Path, key_path):
+    """Adapt core's ``ConfigValueCapability`` contract to ``read_foam_entry``.
+
+    Core (``tutorial_records.split_unchanged``) always calls this with a
+    KEY-PATH TUPLE -- never a dotted string -- e.g.
+    ``("bidomainSolverCoeffs", "conductivitySource")`` for a nested key, or a
+    one-element tuple such as ``("myocardiumSolver",)`` for a top-level one.
+    ``read_foam_entry(file_path, key, *, scope=None)`` itself takes a plain
+    leaf key plus a separate scope, so this is the split: every segment but
+    the last is the scope, the last is the key.
+
+    Before this existed, ``get_config_value_reader()`` handed back
+    ``read_foam_entry`` unwrapped, so a caller passing a tuple silently
+    handed it a ``key`` that was never a string at all (review finding B1).
+    """
+    from .mutators import read_foam_entry
+
+    segments = tuple(key_path)
+    if not segments:
+        raise ValueError("a config value read needs a non-empty key path")
+    *scope, key = segments
+    return read_foam_entry(file_path, key, scope=list(scope) if scope else None)
+
+
 class OpenFOAMEnvironmentPlugin:
     """OpenFOAM conventions, without any solver scientific configuration."""
 
@@ -117,9 +141,7 @@ class OpenFOAMEnvironmentPlugin:
         )
 
     def get_config_value_reader(self):
-        from .mutators import read_foam_entry
-
-        return read_foam_entry
+        return _read_config_value_by_key_path
 
     def get_selected_start_time(self, case_root, resolved_case) -> str:
         del resolved_case

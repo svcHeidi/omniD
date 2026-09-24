@@ -34,6 +34,13 @@ mesh = ["gmsh>=4.15.2"]
 testpaths = ["tests"]
 pythonpath = ["tests"]
 addopts = "--import-mode=importlib"
+markers = [
+    # Duplicated in the root/omnidriver/omnidriver-cardiacfoam pyprojects on
+    # purpose -- see packages/omnidriver-cardiacfoam/pyproject.toml's comment
+    # on why: a per-package run resolves this file, a whole-repo run resolves
+    # the root one.
+    "native: needs OMNIDRIVER_NATIVE_TUTORIALS; fails (not skips) if unset",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

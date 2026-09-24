@@ -95,7 +95,9 @@ def _read_control_dict_values(
 
     for entry in CONTROL_DICT_ENTRIES:
         key = entry.driver_path
-        value = read_value(control_dict_path, key)
+        # ConfigValueCapability's reader always takes a key path AS A TUPLE
+        # (review finding B1) -- the adapter itself splits scope from key.
+        value = read_value(control_dict_path, (key,))
         if value is None:
             diagnostics.append(diagnostic(
                 "error",

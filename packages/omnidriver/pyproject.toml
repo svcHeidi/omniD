@@ -39,6 +39,7 @@ pythonpath = ["tests"]
 addopts = "--import-mode=importlib"
 markers = [
     "slow: builds a wheel in a throwaway venv; minutes, not seconds",
+    "native: needs OMNIDRIVER_NATIVE_TUTORIALS; fails (not skips) if unset",
 ]
 
 [tool.setuptools.packages.find]

@@ -43,9 +43,10 @@ uv venv --python 3.11 /tmp/odcore && VIRTUAL_ENV=/tmp/odcore uv pip install -q \
 
 | shape | command | catches |
 |---|---|---|
-| all four | `python -m pytest packages/ -q -m "not slow"` | ordinary regressions |
+| all four | `python -m pytest packages/ -q -m "not slow and not native"` | ordinary regressions |
 | core alone | `python -m pytest packages/omnidriver/tests -q` | core reaching into a sibling package |
 | **installed wheel** | see below | core reading repo-relative state at import time |
+| native tree | `OMNIDRIVER_NATIVE_TUTORIALS=<path> python -m pytest packages/ -q -m native` | drift against the real native cardiacFOAM tutorials tree; supplied only via that variable (never discovered) — a `native`-marked test FAILS, not skips, when it is unset |
 | static gates | `python3 scripts/check-import-boundaries.py` and `scripts/export-capability-seams.py --check` | import direction; a stale generated table |
 
 The wheel shape is the one people skip and the one that found the worst
