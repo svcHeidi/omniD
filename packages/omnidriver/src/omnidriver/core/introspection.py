@@ -269,6 +269,12 @@ def _resolve_proposed_changes(
         # to determine what it writes.
         return [], (), ""
 
+    # Read the record's JSON form, not `record.parameters`: the record
+    # deep-freezes `parameters` (`case_write._freeze`), so a nested value --
+    # a dimensioned tensor's `{"dimensions": ..., "value": ...}` -- is a
+    # `MappingProxyType` of tuples there, and `describe`'s `json.dumps`
+    # refused it (found 2026-09-24 on cable1DCVConvergence).
+    # `CaseWriteRecord.to_json` is the record's own unfreeze.
     proposed_changes = [
         {
             "qualified_id": item["qualified_id"],
@@ -277,7 +283,7 @@ def _resolve_proposed_changes(
             "source": item["source"],
             "operation": item.get("operation", "set"),
         }
-        for item in record.parameters
+        for item in record.to_json()["parameters"]
     ]
     return proposed_changes, record.expected_effects, ""
 

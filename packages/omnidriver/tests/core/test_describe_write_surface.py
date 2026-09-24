@@ -243,3 +243,73 @@ def test_a_real_case_write_record_is_read_into_proposed_changes():
         },
     ]
     assert effects == ("set '$FAKE.deltaT' in system/controlDict",)
+
+
+def test_a_nested_parameter_value_reaches_describe_as_plain_json(tmp_path, monkeypatch):
+    """Found 2026-09-24: `describe --entry cable1DCVConvergence` exited 1 with
+    ``Object of type mappingproxy is not JSON serializable`` at the CLI's
+    ``json.dumps(describe_entry(...))``. `CaseWriteRecord.__post_init__`
+    deep-freezes ``parameters`` (`_freeze`), so a nested value -- a dimensioned
+    tensor, ``{"dimensions": ..., "value": ...}`` -- is a `MappingProxyType`
+    of tuples on the record; `_resolve_proposed_changes` read
+    ``record.parameters`` directly instead of ``record.to_json()``, the form
+    that undoes the freeze. A scalar value (the test above) cannot see this.
+
+    Runs the real public edge -- `describe_entry` then `json.dumps`, exactly
+    the CLI's call -- under a `MinimalTestPlugin` whose tutorial catalog
+    supplies the spec, so nothing here is cardiac.
+    """
+    from pathlib import Path
+    import json
+
+    from omnidriver.core.introspection import describe_entry
+    from omnidriver.core.plugin_interface import driver_context
+    from plugins.minimal_plugin import MinimalTestPlugin
+
+    monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
+    monkeypatch.setenv("SKIP_MESH_DIAGNOSTICS", "1")
+    nested_value = {"dimensions": [0, 1, -1], "value": [1.5, 0.0, 2.5]}
+
+    def _plan_case(case_root, case):
+        return CaseWriteRecord(
+            transaction_id="t", plan_id="p", plan_digest="d",
+            committed=(), evidence=(), status="committed",
+            parameters=(
+                {
+                    "qualified_id": "$GENERIC.tensor", "document": "system/generic",
+                    "value": nested_value, "source": "case", "operation": "set",
+                },
+            ),
+            expected_effects=("set '$GENERIC.tensor' in system/generic",),
+        )
+
+    def _make_spec(*, cases_root: str | Path) -> TutorialSpec:
+        return TutorialSpec(
+            name="nestedValue",
+            case_root=Path(cases_root) / "nestedValue",
+            setup_root=Path(cases_root) / "nestedValue",
+            output_dir=Path(cases_root) / "outputs",
+            build_cases=lambda: [CaseConfig(case_id="only", params={})],
+            plan_case=_plan_case,
+        )
+
+    class _NestedValuePlugin(MinimalTestPlugin):
+        def get_tutorial_catalog(self):
+            return {
+                "registered_tutorials": ("nestedValue",),
+                "spec_factories": {"nestedValue": _make_spec},
+            }
+
+    payload = describe_entry(
+        "nestedValue",
+        overrides={"cases_root": str(tmp_path)},
+        driver_context=driver_context(_NestedValuePlugin(), source="test"),
+    )
+    surface = json.loads(json.dumps(payload))["write_surface"]
+    assert surface["proposed_changes_reason"] == ""
+    assert surface["proposed_changes"] == [
+        {
+            "qualified_id": "$GENERIC.tensor", "document": "system/generic",
+            "value": nested_value, "source": "case", "operation": "set",
+        },
+    ]
