@@ -58,8 +58,15 @@ task's scope, per its own instruction: "Do NOT do Tasks 10-11").
 | 7 · source artifacts and sidecars, classified | **bypass 1** (remainder) | done | `85fc504`, `8594422`, `e85784c`, `2c3939c`, `570abfa`, `0b7d337`, and this doc's own commit |
 | 8 · `generic_case.py` | **bypass 2** | done | this doc's own commit |
 | 9 · the `describe` seam | the unmet second payoff | done | `76957fd`, `ee34d5b` |
-| 10 · `Allrun`, and delete what is unreachable | **bypass 5** | pending | — |
-| 11 · close-out, with a widened inventory | G3 | pending | — |
+| 10 · `Allrun`, and delete what is unreachable | **bypass 5** | done | `2fd2499`, `d033399` |
+| 11 · close-out, with a widened inventory | G3 | done — **G3 does not close** | this doc's own commit |
+
+**Corrected 2026-09-24 (Task 11 close-out):** the two rows above were still
+"pending" in this table at the start of Task 11, even though `2fd2499` and
+`d033399` were already on `HEAD` (`d033399` is `HEAD` itself). Task 10's own
+checkboxes below were also still unchecked. The work was real and complete;
+only this table and those boxes had not caught up. Checked and backfilled
+here rather than left stale for the next reader.
 
 `write_cell_set` (**bypass 3**) is **deliberately out of scope** — see "What this
 plan does not do".
@@ -1188,6 +1195,30 @@ lesson).
 | `manufactured_bath_bidomain` | **resists — not migrated** (see below) | — |
 | `heart_solver_comparison` | **resists — not migrated** (see below) | — |
 
+**Corrected 2026-09-24 (Task 11 close-out).** The `manufactured_bath_bidomain`
+and `manufactured_monodomain_pseudo_ecg` rows above are stale: commit
+`ca11a25` (after this task, implementing the "a parameter asserts a final
+state" decision below) gave both tutorials a real `_plan_case` that migrates
+their electroProperties edits (`resolve_electro_property_ensure`/`_removal`,
+`plan_dict_block`), and `e3f5d08` then collapsed `_apply_case` to a thin
+wrapper for both. Measured directly against `HEAD` (`d033399`) for Task 11:
+both now have a working `_plan_case` covering **both** mesh families
+(unlike `manufactured_eikonal_ecg`/`niederer_2012`, which still branch tet to
+an independent `_apply_case`). But in both tutorials' own `_plan_case`, the
+uncataloged `fvSchemes`/`fvSolution`/`controlDict` passthrough
+(`grad_scheme`, `phi_tolerance`, `n_outer_correctors`,
+`n_nonorthogonal_correctors`, `fv_scheme_overrides`, `fv_solution_overrides`,
+`control_dict_overrides`) still calls `update_foam_entry` directly against
+the real `case_root`, and — for `manufactured_bath_bidomain` only — an
+`uncataloged_case_overrides` dict carrying the dead
+`manufacturedBidomain.fdaBathVariant` key (kept only because nothing reads
+it, not because it is needed) is still written via the pre-channel
+`apply_electro_property_overrides`. Both tutorials' tet branches
+(`render_tet_geo` plus the numerics overlay `shutil.copy`) are also still
+direct, inside the now-migrated `_plan_case`. See Task 11's own inventory
+below for the full, current accounting; this note exists so a reader of
+this table does not mistake "resists — not migrated" for today's state.
+
 **Two tutorials report as resisting the pattern, per this task's own
 escape hatch, rather than inventing a variant:**
 
@@ -1850,6 +1881,29 @@ Two follow-up branches, both unmerged, edit `manufactured_bath_bidomain.py` and
 | `claude/compassionate-gates-967e8d` | tet-branch overlay copies join the channel; `niederer_2012` reuses the `.geo` renderer | committed as `df0a059` on `9d159fa`, green in all four shapes |
 | `claude/sharp-cannon-7e5e7c` | corrects `manufacturedBidomain.fdaBathVariant` to `verificationModel.fdaBathVariant`, and the same class of bug in `manufactured_monodomain_total_lagrangian_em` | uncommitted as of this note; **no venv built from its worktree was found**, so any green it reports may be main's |
 
+**Corrected 2026-09-24 (Task 11 close-out).** `claude/sharp-cannon-7e5e7c`'s
+branch *ref* (`c3d12a3`) is not unmerged — `git merge-base main
+claude/sharp-cannon-7e5e7c` returns `c3d12a3` itself, i.e. it is an ancestor
+of `main` with zero commits unique to it. But its **worktree**
+(`.claude/worktrees/sharp-cannon-7e5e7c`) still carries real uncommitted
+changes to exactly the two files this note describes
+(`manufactured_bath_bidomain.py`, `manufactured_monodomain_total_lagrangian_em.py`,
+plus three test files) — so the note's substance holds: that work never
+reached any commit, on this branch or on `main`. Measured directly:
+`manufactured_bath_bidomain`'s `fdaBathVariant` defect is **not** in the
+state this note describes any more — `main` (as of `ca11a25`) already writes
+the catalog-declared `verificationModel.fdaBathVariant` as a real
+`ParameterAssignment` through the channel, and keeps the dead
+`manufacturedBidomain.fdaBathVariant` key as a separate, explicitly-named
+`uncataloged_case_overrides` direct write (see Task 11's inventory: this is
+now its own small, deliberate open bypass, not the "every call raises"
+defect `ca11a25` first found). `manufactured_monodomain_total_lagrangian_em`'s
+sibling bug (`electromechanicalVerificationModel.type`, should be
+`verificationModel.type`) is **still open on `main`**, confirmed by reading
+its current source — the uncommitted worktree fix for that file never
+landed. Do not read "uncommitted" as "therefore irrelevant": the
+total_lagrangian_em fix genuinely has not happened anywhere in git history.
+
 **A clean text merge will still fail.** `df0a059`'s
 `TestManufacturedBathBidomainTetWriteChannel` characterizes the tutorial *as it
 is today*, so two of its tests assert that `_plan_case` raises the dead-key
@@ -2242,12 +2296,12 @@ silently substituted.
 
 ## Task 10: `Allrun`, and delete what is unreachable
 
-- [ ] **Step 1: Route `sweep.py::materialize_case`'s `Allrun` write — bypass 5**
+- [x] **Step 1: Route `sweep.py::materialize_case`'s `Allrun` write — bypass 5**
 
 It calls `build_and_launch(..., dry_run=True)` — already channel-routed — then
 writes `Allrun` with a bare `write_text` outside it. Smallest bypass; fold it in.
 
-- [ ] **Step 2: Delete `provision_mesh`'s unreachable branch**
+- [x] **Step 2: Delete `provision_mesh`'s unreachable branch**
 
 R4 established the `BLOCK_MESH_SOLVERS` branch has **zero production callers** —
 its only exerciser is `test_solver_mesh_provisioning.py` calling it directly. I
@@ -2258,11 +2312,45 @@ reader mistakes one for the other.
 
 **Before deleting, re-run the caller check** — Task 6 may have added one.
 
+### Findings, 2026-09-24 (backfilled by Task 11 — this task's own checkboxes and
+the Status table above were still unchecked/"pending" when Task 11 started,
+even though both commits below were already on `HEAD`)
+
+**Step 1 (`2fd2499`).** `build_case`/`build_and_launch` gained
+`include_allrun` (default `False`, so every other caller is unaffected); when
+`True`, `resolve_synthesis_mutation` folds `Allrun` in as one more content
+target (a new `plan_verbatim_content` `executable=True` flag) in the same
+`CaseWritePlan`, committed by the same one `commit_case_write` call.
+`materialize_case` now passes `include_allrun=True` and does no direct
+filesystem write of its own. The trap named in the commit: a content
+target's mode previously hardcoded `mode=None` (non-executable); an
+"executable" content target now writes `(existing mode | 0o111)` when the
+document already existed, or `0o755` fresh, reproducing the pre-migration
+`write_text` + `chmod` behaviour exactly, characterized on both a fresh case
+and one with a pre-existing `Allrun`.
+
+**Step 2 (`d033399`).** Re-verified R4's caller-count claim after Tasks 6–9:
+`provision_mesh(` still has exactly one production call site
+(`ionic_catalog_verification.py`, hardcoding `singleCellSolver` — always the
+`MESHLESS_SOLVERS` branch). Deleted the `BLOCK_MESH_SOLVERS` branch and its
+two tests that exercised only it, mapping each pinned behaviour to a
+survivor: "`dx` controls cell count" survives in
+`omnidriver-openfoam/tests/test_mesh_provisioning.py` and
+`test_dict_builder.py::test_dx_kwarg_controls_generated_block_mesh_resolution`
+(the live channel path); "`dry_run` does not write `blockMeshDict` for a
+spatial solver" does not survive anywhere and is correctly gone — it was a
+property of the dead branch specifically, and the live path's `blockMeshDict`
+content target has never been `dry_run`-gated.
+
+Both commits' full rationale, including their own revert-to-confirm
+evidence, is in their commit messages (`git show 2fd2499`, `git show
+d033399`) rather than restated here.
+
 ---
 
 ## Task 11: Close-out, with a widened inventory
 
-- [ ] **Step 1: Widen the inventory script — this is the point**
+- [x] **Step 1: Widen the inventory script — this is the point**
 
 Phase 2's Task 14 grep did **not** include `open(`, so `openfoam/utils.py`'s
 setters, which write via `path.open("w")` and a line-rewrite loop, were invisible
@@ -2279,7 +2367,7 @@ FoamFile(  subprocess.run  subprocess.Popen
 the two classes a naive grep cannot see. Bypass 4 hid behind the first for the
 whole of Phase 2.
 
-- [ ] **Step 2: Classify every hit, and list open bypasses explicitly**
+- [x] **Step 2: Classify every hit, and list open bypasses explicitly**
 
 Classes: framework-authored case input (bypass if not through
 `commit_case_write`), declared workflow output, standalone export, source
@@ -2289,7 +2377,7 @@ line of justification each.
 **A bookkeeping file a later run reads as input is not bookkeeping.** R4
 spot-checked five and found none miscategorised; check the ones this phase adds.
 
-- [ ] **Step 3: Four shapes, both gates**
+- [x] **Step 3: Four shapes, both gates**
 
 ```bash
 rm -rf /tmp/od311 /tmp/odcore /tmp/wheeltest /tmp/wheelenv
@@ -2309,7 +2397,7 @@ because `venv.create(with_pip=True)` copies uv's portable CPython whose `@rpath`
 cannot resolve from the copy. `symlinks=True` fixes it; a separate session owns
 that.
 
-- [ ] **Step 4: Answer the four G3 exit criteria, one line of evidence each**
+- [x] **Step 4: Answer the four G3 exit criteria, one line of evidence each**
 
 "Entry/sweep/remediation semantic parity on supported modes; no framework-authored
 input bypasses; unsupported modes refuse explicitly; obsolete routes removed."
@@ -2320,3 +2408,347 @@ known bypasses converts a known gap into a believed guarantee.
 
 `write_cell_set` is expected to remain open by design. State it as a declared
 exception with its reason, not as an oversight.
+
+### Findings, 2026-09-24: G3 close-out
+
+**Everything below was executed, not assumed.** Grep output, git history
+(`git log`, `git show`, `git merge-base`), and direct file reads are cited by
+command or path throughout. No test run is claimed that was not actually
+run; no CLI output is pasted that was not actually produced.
+
+#### Step 1 — the widened inventory script
+
+```bash
+grep -rnE 'write_text|write_bytes|open\(|shutil\.copy|shutil\.copytree|os\.replace|\.rename\(|\.touch\(|\.chmod\(|os\.symlink|os\.link|json\.dump|yaml\.dump|pickle\.dump|FoamFile\(|subprocess\.run|subprocess\.Popen' \
+  packages/*/src/ --include='*.py' | grep -v '/build/' | grep -v '__pycache__'
+```
+
+(`.chmod(` was added to the plan's own list — Task 10's `Allrun` executable-bit
+handling reads/writes mode via `os.chmod` in `transaction_mechanics.py`, so
+leaving it out would have re-created exactly the class of blind spot this
+step exists to close.) 180 hits, `packages/*/src/`, `.py` only,
+`/build/`/`__pycache__` excluded. Two classes the grep cannot see, per the
+plan's own instruction, were closed by direct reading rather than by
+grep: every `FoamFile(` construction site outside
+`openfoam/foam_backend.py`/`openfoam/mutators.py` (11 sites — all read-only,
+`[...]`/`.get(...)`, no `__setitem__`/`del`, confirmed by reading each one),
+and every `subprocess.run`/`Popen` call (13 sites — none author a case
+input; see the table below).
+
+#### Step 2 — classification
+
+One line of justification each. Sites sharing one file and one class are
+grouped into one row; individual line numbers are given where more than one
+class applies within a file.
+
+| site(s) | class | justification |
+|---|---|---|
+| `core/case_transaction.py` (`_atomic_write_bytes` calls, `_write_one`/`_restore_one`) | transaction mechanics | this **is** `commit_case_write`'s own atomic-replace/journal-recovery primitive — the channel itself, not a caller of it |
+| `core/runtime/transaction_mechanics.py`, `sweep_manifest.py`, `postprocess_phase.py`, `attempt_lease.py`, `provenance.py`, `remediation_audit.py`, `repair_loop.py`, `workflow_state.py`, `reconciler.py`, `resume.py`, `failure_context.py`, `remediation_transaction.py` (all, incl. its rollback `_atomic_write_bytes` at line 269 — restores exactly the prior bytes, authors nothing new) | transaction mechanics / framework bookkeeping | leases, journals, manifests, provenance snapshots, remediation before-images and audit logs — all in the framework's own bookkeeping locations, none read by a native OpenFOAM solver as case configuration |
+| `core/runtime/sweep_runner.py` (staging `shutil.copytree`/`os.replace`, `_write_staging_journal`) | transaction mechanics | verbatim relocation of an already-existing, user/tutorial-authored case to a private sibling then an atomic rename — copies content, authors none |
+| `core/runtime/sweep_runner.py` (`run_document_path.write_text(...)`) | framework bookkeeping | `run_document.json` lives in the sweep's own `output_dir`, not `case_root` — its own comment: "unrelated to the tutorial's real `case_root`"; drives the orchestrator's next `omnidriver run` invocation, never read by a solver |
+| `core/runtime/workflow_runner.py` (log file `open("w")`, `subprocess.Popen`) | declared workflow output / transaction mechanics | executes a workflow step's own declared command (`blockMesh`, `Allrun`, …) and logs its stdout/stderr — the live, legitimate execution mechanism Task 7 already established for `_ensure_mesh`'s redundant duplicate, not a bypass of it |
+| `core/runtime/output_collection.py` (`shutil.copy2`) | declared workflow output | archives solver-produced results after a run (`OutputCollisionError` on a content mismatch) — collects outputs, authors no input |
+| `postprocessing/table_writer.py` | declared workflow output | writes CSV/HTML result tables from run data |
+| `cli.py` (all ~20 hits) | not a write at all | every hit is `print(json.dumps(...))` to stdout, or `json.dumps(...).encode()` for a digest — no file write in this module |
+| `core/provider_identity.py`, `core/plugin_profile.py`, `core/case_write.py`, `core/provider_stack.py`, `core/plugin_interface.py` | not a write at all | `json.dumps(...)` used to build a canonical byte string for hashing/comparison, never passed to a file write |
+| `core/utility_catalog.py` (`toml_path.open("rb")`) | not a write | reads a catalog TOML, read-only |
+| `openfoam/case_rendering.py` (`_snapshot_copy`'s `shutil.copy2`; `snapshot_path.write_bytes`/`write_text`) | transaction mechanics | the renderer's own private-snapshot mechanism — reads the real case once, writes only inside `snapshot_root`, per its own docstring: "the one read of the real case a patch renderer performs" |
+| `openfoam/mutators.py` (`update_foam_entry`/`remove_foam_dict`/etc.'s `write_text` calls) + `openfoam/foam_backend.py` (`FoamFile.__setitem__`, `del foam_file[path]`, `write_text`) | transaction mechanics (the format owner) | `foam_backend.py`'s `__setitem__`/`del` — the two operations the plan specifically warned a grep cannot see — are called **only** from `mutators.py` (confirmed: `grep -rn "foam_backend\." packages/*/src/` outside `mutators.py` returns nothing); `mutators.py`'s own public functions are called from `case_rendering.py` (legitimate), `apply_overrides.py` (legitimate, see below), and a bounded, named set of direct tutorial callers (see the open-bypass list) |
+| `openfoam/apply_overrides.py` (`update_foam_entry` × 3) | transaction mechanics | confirmed by direct read: every call targets `snapshot_root / ...`, never `case_root` — Task 5's migration holds; `case_root` is provably never touched until `commit_case_write`'s own atomic replace |
+| `openfoam/openfoam_environment.py` (`subprocess.run`, `open(err_file)`) | not a case input | environment discovery (sourcing `bashrc`, probing `PATH`) — ambient truth per this repo's supplied-vs-discovered rule, not case authorship |
+| `openfoam/effective_dictionary.py` (`subprocess.run` of real `foamDictionary`) | not a case input | F1b's readback comparison — reads a value back through the native binary, writes nothing |
+| `openfoam/mesh_geometry.py`, `function_object_fields.py`, `case_dict_keys.py`, `cardiacfoam/detection.py`, `runtime_evidence.py`, `run_document_config.py`, `validation.py`, `dict_builder.py:452` | not a write | every `FoamFile(...)` here is a getitem/`.get`/`.keys()` read chain, confirmed by direct reading (no `[...] =`, no `del`) |
+| `openfoam/tet_mesh_provisioning.py::render_tet_geo` | **framework-authored case input — open bypass** | writes `box.geo` (a gmsh mesh template with `__LC__` substituted) directly into `case_root`; called from three tutorials' tet paths, none through the channel (see list below) |
+| `cardiacfoam/dict_builder.py` (`regenerate_electro_properties`, lines 800/821/823) | transaction mechanics | confirmed by tracing its one caller, `overrides.electro_properties_regeneration_scope`, into `apply_overrides.py`'s `regen_scope.regenerate(snapshot_root / ...)` — this is Task 5's own "regeneration scope," already migrated, running on the snapshot |
+| `cardiaccore/operations/electrodes.py` (`write_reference_offset_bundle`, `write_electrode_positions`) | standalone export (Phase 2 classification, unchanged) | both functions carry their own 2026-09-23 Phase 2 Task 12 classification comment in source: a coordinate bundle for cross-tool consumption, no dictionary key |
+| `cardiaccore/operations/vtu_selection.py::write_cell_set` | **declared exception** | unchanged from Phase 2 — writes a `cellSet` format no renderer understands; single consumer, revisit when a second appears |
+| `cardiacfoam/mesh_provisioning.py::provision_mesh` (`shutil.copyfile`) + `cardiacfoam/ionic_catalog_verification.py` (all hits: 3× `write_text`, `provision_mesh`, `subprocess.run`) | test scaffolding / drift-gate tooling | `provision_mesh`'s **only** production caller is `ionic_catalog_verification.py` (confirmed: `grep -rn "provision_mesh(" packages/*/src/` outside its own definition), which authors a throwaway scratch case per ionic model solely to run the real `listCellModelsVariables` utility and diff its output against the static catalog — a maintainer drift-gate, invoked only from `tests/test_ionic_catalog_live_verification.py`/`test_ionic_catalog_verification.py`, no CLI entry point, no tutorial or workflow reachability; the case it authors is never a real user's case |
+| `cardiacfoam/runtime_profile.py` (`subprocess.run` × 3, `manifest_path.write_text`, `artifact_path.open("rb")`) | framework bookkeeping | a build/runtime evidence manifest (library digests, `WM_PROJECT_VERSION`, …), not case configuration |
+| `cardiacfoam/tutorials/cable_1d_restitution.py` (`.driverfoam_case_id`, `.cardiacfoam_protocol.json`) | framework bookkeeping / standalone export (Task 7 classification, unchanged) | reader traced in Task 7 to the native tree's own `postProcessing_cableRestitution.py`; unchanged, re-confirmed present in current source |
+| `cardiacfoam/tutorials/manufactured_purkinje_graph.py` (`shutil.copy2`), `manufactured_monodomain_1d3d.py` (`shutil.copy2`, `block_mesh_active.write_text`) | **blocked on artifact staging** (Task 7 correction, unchanged) | re-confirmed present, unfixed, in current source — see the dedicated list below |
+| `cardiacfoam/tutorials/{manufactured_bath_bidomain,manufactured_eikonal_ecg,manufactured_monodomain_pseudo_ecg}.py` (tet overlay `shutil.copy`, `render_tet_geo` calls) | **framework-authored case input — open bypass on `main`** | fixed on unmerged `claude/compassionate-gates-967e8d` (`df0a059`); open on `main` as measured — see the list below |
+| `cardiacfoam/tutorials/{manufactured_bath_bidomain,manufactured_eikonal_ecg,manufactured_monodomain_pseudo_ecg}.py` (uncataloged `fvSchemes`/`fvSolution`/`controlDict` passthrough: `grad_scheme`, `phi_tolerance`, `n_outer_correctors`, `n_nonorthogonal_correctors`, `fv_scheme_overrides`, `fv_solution_overrides`, `control_dict_overrides`) | **framework-authored case input — open bypass, newly surfaced by this audit** | direct `update_foam_entry` calls against the real `case_root`, inside the now-"migrated" `_plan_case` for all three tutorials — not fixed by either unmerged branch; see below |
+| `cardiacfoam/tutorials/manufactured_bath_bidomain.py::_plan_case` (`uncataloged_case_overrides` → `apply_electro_property_overrides`, line 562) | **framework-authored case input — open bypass** | writes the dead `manufacturedBidomain.fdaBathVariant` key via the pre-channel direct applier, deliberately, unconditionally; see below |
+| `cardiacfoam/tutorials/niederer_2012.py` (`control_dict_path.open("w")`, `target_file.write_text` for `.geo`, plus its own `apply_electro_property_overrides`/`apply_physics_property_overrides` calls) | **framework-authored case input — open bypass on `main`** | entire `mesh_family=="tet"` branch (`_apply_case`); `.geo` write fixed on `claude/compassionate-gates-967e8d`, open on `main` |
+| `cardiacfoam/generic_case_mutation.py::apply_case_mutation` | **framework-authored case input — open bypass, resolved from "unknown" by this audit** | Task 8 flagged cardiacFoam's own generic-case adapter callback as a write whose channel status core "cannot see" and left "tracked separately, not fixed here." Read directly: it calls `apply_electro_property_overrides`/`apply_physics_property_overrides` on the real `case_root`, no channel. Confirmed live and reachable via `cardiacfoam_plugin.py`'s import of `tutorials.generic_case`, not dead code. |
+
+**Bookkeeping-file-read-as-input check, per the plan's own warning.** The
+Phase-3-era additions this warning targets are `cable_1d_restitution`'s two
+sidecars (already traced to a real, named native reader in Task 7 — not
+re-litigated here) and Task 10's `run_document.json`. Checked
+`run_document.json`'s only consumer: `sweep_runner.py`'s own
+`_run_case_process` passes it right back to `omnidriver run
+--run-document <path>` as the next process's *orchestration* input (which
+step to run, in what order) — never unpacked into a case's `constant/`/
+`system/` directory. Not a case input.
+
+#### The three explicit categories
+
+**Open bypasses (framework-authored case input, not through
+`commit_case_write`), measured on `main` (`d033399`):**
+
+1. `manufactured_eikonal_ecg.py::_apply_case` (lines 185–324, the entire
+   `mesh_family=="tet"` route): `render_tet_geo` (294), the numerics-overlay
+   `shutil.copy` (301), three direct `update_foam_entry` calls for
+   `grad_scheme`/`fv_scheme_overrides`/`fv_solution_overrides` (304–316),
+   and `apply_electro_property_overrides` × 2 +
+   `apply_physics_property_overrides` (320–322). Fixed on
+   `claude/compassionate-gates-967e8d` for the `render_tet_geo`/overlay part
+   only.
+2. `manufactured_eikonal_ecg.py::_plan_case` (lines 417–429): the same three
+   `update_foam_entry` calls (`grad_scheme`/`fv_scheme_overrides`/
+   `fv_solution_overrides`), direct, **inside the already-"migrated" hex
+   path**. Not fixed on either unmerged branch.
+3. `manufactured_bath_bidomain.py::_plan_case` (lines 424–432): tet branch
+   (`render_tet_geo`, overlay `shutil.copy`), direct. Fixed on
+   `claude/compassionate-gates-967e8d`.
+4. `manufactured_bath_bidomain.py::_plan_case` (lines 538–557): the
+   `grad_scheme`/`phi_tolerance`/`fv_scheme_overrides`/`fv_solution_overrides`
+   passthrough, direct, unconditional. Not fixed on either unmerged branch.
+5. `manufactured_bath_bidomain.py::_plan_case` (line 562):
+   `apply_electro_property_overrides(electro_properties,
+   uncataloged_case_overrides)` — writes the dead
+   `manufacturedBidomain.fdaBathVariant` key, unconditionally, via the
+   pre-channel direct applier. Low-stakes (nothing native reads this key)
+   but a real write outside the channel. Not addressed by either unmerged
+   branch (a different fix — dropping the dead key rather than keeping it —
+   is what the uncommitted `sharp-cannon-7e5e7c` worktree apparently
+   intended, per the Merge note correction above, but it never landed).
+6. `manufactured_monodomain_pseudo_ecg.py::_plan_case` (lines ~398–404): tet
+   branch (`render_tet_geo`, overlay `shutil.copy`), direct. Fixed on
+   `claude/compassionate-gates-967e8d`.
+7. `manufactured_monodomain_pseudo_ecg.py::_plan_case` (lines 452–489): the
+   `grad_scheme`/`phi_tolerance`/`n_outer_correctors`/
+   `n_nonorthogonal_correctors`/`fv_scheme_overrides`/`fv_solution_overrides`/
+   `control_dict_overrides` passthrough, direct, unconditional. Not fixed on
+   either unmerged branch.
+8. `niederer_2012.py::_apply_case` (the entire `mesh_family=="tet"` route):
+   hand-rolled `endTime` writer (`control_dict_path.open("w")`, line 74),
+   `.geo` `write_text` (line 232, duplicating rather than reusing
+   `render_tet_geo`), and `apply_electro_property_overrides` × 2 +
+   `apply_physics_property_overrides` (237–239). The `.geo`
+   duplication is fixed (by reuse) on `claude/compassionate-gates-967e8d`;
+   the rest is not.
+9. `cardiacfoam/generic_case_mutation.py::apply_case_mutation` — cardiacFoam's
+   real generic-case adapter callback, live and reachable via
+   `cardiacfoam_plugin.py`, writes `electroProperties`/`physicsProperties`
+   directly via the pre-channel appliers whenever a cardiacFoam-recognized
+   generic case (with a case marker) is materialized. Task 8 named this
+   branch's channel status as unknown to core; this audit confirms it is, in
+   fact, unmigrated. Not addressed by either unmerged branch.
+
+Items 1, 3, 6, 8's `render_tet_geo`/overlay portions are fixed on
+`claude/compassionate-gates-967e8d` (unmerged — see Step 3/the
+main-vs-unmerged accounting). Items 2, 4, 5, 7, 9 are not addressed by
+**either** unmerged branch and were not previously named as a discrete open
+bypass anywhere in this plan; they are this audit's own finding, surfaced
+precisely because migrating a tutorial's *addressable* overrides
+(Task 6/`ca11a25`) left its *unaddressable* ones — the ones the catalog
+never declared — exactly where they were.
+
+**Blocked on artifact staging** (the missing capability Task 7's review
+correction named; the channel can reference a source artifact by digest but
+cannot place one in a case):
+
+- `manufactured_purkinje_graph.py::_apply_case`'s `purkinjeGraph.<id>` →
+  `purkinjeGraph` copy.
+- `manufactured_monodomain_1d3d.py`'s identical `purkinjeGraph` copy.
+- `manufactured_monodomain_1d3d.py`'s `blockMeshDict.3D` → `.active` copy
+  (a case input — decides which document the channel's own patch
+  subsequently addresses — not bookkeeping).
+
+**Declared exceptions:**
+
+- `cardiaccore/operations/vtu_selection.py::write_cell_set` — a `cellSet`
+  format no renderer understands; single consumer; revisit when a second
+  appears. Unchanged from earlier tasks.
+
+#### Step 3 — main-vs-unmerged accounting
+
+`claude/compassionate-gates-967e8d` (`df0a059`, on `9d159fa`): confirmed
+**not** an ancestor of `main` (`git merge-base --is-ancestor df0a059 main` →
+false; `git log main..claude/compassionate-gates-967e8d` shows exactly
+`df0a059`). Its tet-overlay-copy and `.geo`-reuse fixes are real but not on
+`main`; open bypasses 1/3/6/8 above are reported as open **on `main`**, per
+this task's own instruction to measure main as it is.
+
+`claude/sharp-cannon-7e5e7c` (`c3d12a3`): confirmed its branch *ref* **is**
+an ancestor of `main` (`git merge-base main claude/sharp-cannon-7e5e7c` →
+`c3d12a3` itself, zero unique commits) — so it is not "unmerged" in the
+sense of carrying commits `main` lacks. Its **worktree**
+(`.claude/worktrees/sharp-cannon-7e5e7c`) still has real uncommitted changes
+to `manufactured_bath_bidomain.py`, `manufactured_monodomain_total_lagrangian_em.py`,
+and three test files (`git status --short` confirmed), so the plan's
+original characterization ("uncommitted... any green it reports may be
+main's") holds for its substance even though the branch pointer itself is
+stale. See the dated correction on the Merge note section above for the
+full accounting, including which half of its intended fix (bath_bidomain)
+is already independently resolved on `main` via `ca11a25`, and which half
+(`manufactured_monodomain_total_lagrangian_em`) is not.
+
+#### Step 4 — four shapes and both gates
+
+Ran fresh: `ps aux | grep -c "od311/bin/python"` showed no other process
+actually using `/tmp/od311` (the count of 2 was `grep` matching its own
+command-line argument, confirmed by a second, more specific check returning
+empty) — so `/tmp/od311`/`/tmp/odcore`/`/tmp/wheeltest`/`/tmp/wheelenv`
+were rebuilt at their standard paths, not `-closeout` variants.
+
+| shape | command | result |
+|---|---|---|
+| all four, not slow | `/tmp/od311/bin/python -m pytest packages/ -q -m "not slow"` | 2565 passed, 259 skipped, 2 deselected, 0 failed |
+| core alone | `/tmp/odcore/bin/python -m pytest packages/omnidriver/tests -q` | 1126 passed, 94 skipped, **1 failed**: `test_every_core_module_imports_from_a_wheel`, `SIGABRT` in its own disposable venv's `ensurepip` — the documented, pre-existing environmental failure named in this plan's own Step 3, not a defect from this task |
+| wheel artifact gate | `/tmp/od311/bin/python -m build --outdir /tmp/wheeltest packages/omnidriver` then `/tmp/wheelenv/bin/python scripts/check-wheel-artifact.py` (installed via `uv pip install -q "/tmp/wheeltest/omnidriver-0.1.0-py3-none-any.whl[post]" pytest` — the plan's own glob form, `omnidriver-*.whl[post]`, is not shell-expanded inside quotes and fails with `uv`; substituted the literal built filename) | `modules imported: 81/81`; `Wheel artifact OK: core installs and runs standalone.` exit 0 |
+| wheel suite | `/tmp/wheelenv/bin/python -m pytest packages/omnidriver/tests -q` | 959 passed, 262 skipped, 0 failed |
+| gate: import boundaries | `/tmp/od311/bin/python scripts/check-import-boundaries.py` | exit 0 |
+| gate: capability seams | `/tmp/od311/bin/python scripts/export-capability-seams.py --check` | exit 0 |
+
+**Plan-command correction, 2026-09-24.** The plan's own Step 3 command block
+quotes the wheel glob (`"/tmp/wheeltest/omnidriver-*.whl[post]"`), which
+`uv pip install` does not shell-expand — it fails with `error: The wheel
+filename "omnidriver-*.whl" is invalid: Must have a Python tag`. Worked
+around by installing the literal built filename instead; recorded here since
+the plan's command as written does not run.
+
+The durable claim, per this plan's own rule: **0 failed** in every shape
+except the one documented, pre-existing environmental failure. No suite
+total is otherwise quoted as a permanent fact.
+
+#### Step 5 — the four G3 exit criteria
+
+> "Entry/sweep/remediation semantic parity on supported modes; no
+> framework-authored input bypasses; unsupported modes refuse explicitly;
+> obsolete routes removed."
+
+- **Entry/sweep/remediation semantic parity on supported modes: met, on
+  what has actually migrated.** Task 5's `--apply` migration and Task 6/6b's
+  ten fully-collapsed tutorials each carry their own byte-for-byte
+  characterization tests proving parity against pre-migration output,
+  verified by reverting (per-task findings, unchanged by this audit).
+  `remediation_transaction.py`, read directly for this close-out, performs
+  only backup/restore/archive around whatever wrote the values — it is not
+  itself a second writer, so it inherits whatever the underlying write path
+  (now largely channel-routed) already proved. **Not met for the three
+  tutorials in the open-bypass list**: `manufactured_bath_bidomain`,
+  `manufactured_eikonal_ecg`, `manufactured_monodomain_pseudo_ecg`, and
+  `niederer_2012`'s tet route still have a real second writer
+  (`update_foam_entry`/`apply_electro_property_overrides` direct calls)
+  whose parity with the channel path is not a settled question — it *is*
+  the channel path, running unaudited, beside a channel commit in the same
+  function.
+- **No framework-authored input bypasses: not met.** Nine open-bypass sites
+  measured above, on `main`, right now — four newly surfaced by this
+  audit (bypasses 2, 4, 7, 9) that were not previously named anywhere in
+  this plan as a discrete bypass.
+- **Unsupported modes refuse explicitly: met.** `generated_input` is gone
+  (Task 1); `resolve_entry_overrides`/`CaseMutationRequest` refuse an
+  undeclared key or an unresolvable dynamic binding by raising, not by
+  silently writing (Task 2's Gap 1/Gap 2 closure, re-confirmed unchanged in
+  current source); `describe`'s `_write_surface` now reports `unknown`
+  rather than a misleading empty `proposed_changes` list when a preview
+  cannot run (Task 9, Defect 1, unchanged).
+- **Obsolete routes removed: met, for what Task 6b/10 actually retired.**
+  `set_end_time`/`replace_block_mesh_resolutions` retired with their last
+  callers (`e3f5d08`); `provision_mesh`'s unreachable `BLOCK_MESH_SOLVERS`
+  branch deleted (`d033399`). **Not fully met**: `apply_electro_property_
+  overrides`/`apply_physics_property_overrides`/`update_foam_entry`-as-a-
+  direct-caller are all still live, real, non-obsolete routes for the nine
+  open-bypass sites above — "obsolete" does not yet describe them, because
+  they are still load-bearing for real tutorial behaviour today.
+
+#### Can G3 close?
+
+**No.** Three of the four criteria are only partially met, and "no
+framework-authored input bypasses" is the one this gate exists to guarantee
+— it is not met, on `main`, as measured directly against current source and
+confirmed by two independent checks (the widened grep, and direct reading of
+every `FoamFile`/`subprocess` site the grep cannot classify by itself). This
+matches Phase 2's own precedent for this situation: report the gap plainly
+rather than let a close-out convert a known bypass into a believed
+guarantee.
+
+**What remains, and roughly what each item involves:**
+
+1. **The uncataloged `fvSchemes`/`fvSolution`/`controlDict` passthrough**
+   (bypasses 2, 4, 7) in `manufactured_eikonal_ecg`, `manufactured_bath_bidomain`,
+   `manufactured_monodomain_pseudo_ecg`. Each is a handful of direct
+   `update_foam_entry` calls for keys the catalog does not declare (arbitrary
+   caller-supplied key/value pairs, not fixed catalog entries). Closing this
+   needs either a catalog extension (declaring these as real entries, if
+   they have a genuine closed shape) or a new `ParameterAssignment`-shaped
+   "uncataloged/raw entry" address that the channel can carry without
+   requiring catalog membership — a real design decision, not a mechanical
+   migration.
+2. **The three tet-branch open bypasses** (1, 3, 6, 8's `render_tet_geo`/
+   overlay portions) are **already fixed** on `claude/compassionate-gates-967e8d`
+   (`df0a059`) — this is a merge decision, not new work, but the merge
+   itself has a real semantic conflict (see the Merge note) that needs
+   resolving, not a fast-forward.
+3. **The dead-key write** (bypass 5, `manufactured_bath_bidomain`'s
+   `uncataloged_case_overrides`) — smallest item here: either drop the dead
+   key outright (nothing reads it) or, if some external consumer is
+   genuinely unknown and the key must be kept for safety, give it a real,
+   channel-routed home.
+4. **`generic_case_mutation.py::apply_case_mutation`** (bypass 9) — needs
+   its own design pass, the same kind Task 8 gave core's `generic_case.py`:
+   cardiacFoam's adapter callback has real catalog vocabulary available (it
+   is cardiacFoam-specific, not core), so this is more tractable than
+   Task 8's core-side branch, but it is unstarted.
+5. **Artifact staging** (the missing capability) — see the handoff item
+   below; blocks three more sites even once the above five are closed.
+6. **`manufactured_monodomain_total_lagrangian_em`'s wrong-scope key**
+   (`electromechanicalVerificationModel.type`) — a correctness bug, not a
+   channel bypass per se (the tutorial's own default call already raises
+   before any write), but it blocks that tutorial from ever exercising its
+   real write path until fixed. Already tracked (`task_7eca39be`).
+
+#### Handoff — every known follow-up, recorded so the next phase inherits it
+
+- **Artifact staging.** The channel can reference a source artifact by
+  digest (`source_artifacts`) but cannot place one at a case-relative
+  destination. Blocks: `manufactured_purkinje_graph`'s `purkinjeGraph`
+  copy, `manufactured_monodomain_1d3d`'s identical copy, and
+  `manufactured_monodomain_1d3d`'s `blockMeshDict.3D` → `.active` copy.
+  Design surface: what it references, what precondition it checks, how
+  `commit_case_write` places bytes it never rendered. Named, not designed,
+  by Task 7's 2026-09-24 review correction; still unbuilt.
+- **The provenance audit across every tutorial's `_plan_case`.** A value
+  computed from a tutorial's own defaults (not the immediate caller's
+  argument) must be `source="template"`, not `source="case"`, when folded
+  into `resolve_entry_overrides`. Worked example: `single_cell`'s
+  `stim_amplitude`, fixed in `136112a`. The other ten migrated tutorials
+  are unaudited for this — Task 9's own "owed, not done here" note,
+  unchanged by this audit (this task did not re-run that audit; it is
+  orthogonal to the bypass inventory above, which tracks *where* a write
+  lands, not what `source` label it carries once it does).
+- **`generic_case.py`'s adapter-callback branch** (core, Task 8) — left on
+  the deprecated `apply_case` fallback because core cannot see whether the
+  callback writes through the channel. This audit resolves the cardiacFoam
+  instance of that question (see bypass 9: it does not), but the core-level
+  branch itself — the general mechanism for *any* adapter's callback, not
+  just cardiacFoam's — is still unaudited for other adapters and still
+  structurally unable to see into an opaque callback.
+- **The two unmerged branches, and their semantic merge conflict.**
+  `claude/compassionate-gates-967e8d` (`df0a059`, real unmerged commits)
+  fixes bypasses 1/3/6/8's tet-overlay portions; merging it into
+  `main` will hit the semantic conflict the Merge note describes
+  (`_TET_DIGESTS_BEFORE`'s two `assertRaisesRegex` tests, now stale because
+  `main` already fixed the dead-key raise via `ca11a25`) — the note's own
+  four-step resolution still applies, adjusted for `main`'s current state.
+  `claude/sharp-cannon-7e5e7c`'s branch ref is already an ancestor of
+  `main`, but its **worktree**'s uncommitted fix for
+  `manufactured_monodomain_total_lagrangian_em` never landed anywhere;
+  that fix (not a branch merge) is what is still needed. The merge order
+  and disposition are the owner's decision.
+- **The `cases_root` CLI footgun.** A config-supplied `cases_root` is
+  silently overwritten (`cli.py`, from `99f3168`, 2026-09-04). Named by
+  Task 9's coordinator review (Defect 1's root cause) as tracked
+  separately, not this plan's to fix. Unchanged by this audit.
+- **The duplicated placeholder grammar** (Phase 2's G4 handoff). Not
+  re-investigated by this task — out of the write-channel scope this plan
+  covers (G3, not G4) — and not re-confirmed present or absent here; carry
+  it forward as an open question for whoever owns G4.
+- **The nine open bypasses this close-out found**, items 1–9 above, are
+  themselves the primary handoff: none were fixed by this task per its own
+  "measure and record only, do not migrate" rule.
