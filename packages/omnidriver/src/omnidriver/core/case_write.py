@@ -167,19 +167,26 @@ class ParameterAssignment:
     #: Whether the adapter that resolved this key checked it against a real
     #: catalog. Added 2026-09-24 for tutorial-record studies (design doc
     #: ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md``
-    #: §5): a solver-owned key (cardiacFOAM's, checked against
-    #: ``dict_entries_catalog``) is ``True``; an environment-owned key with no
-    #: full catalog yet (``system/fvSchemes``, ``fvSolution``, ...) is written
-    #: anyway, flagged ``False`` -- "no check invented in place of a catalog".
+    #: §5): a solver-owned key (checked against that solver's own dictionary
+    #: catalog) is ``True``; an environment-owned key with no full catalog
+    #: yet is written anyway, flagged ``False`` -- "no check invented in
+    #: place of a catalog".
     #: Core never decides this itself; whichever adapter resolves the key
     #: (``core.tutorial_records.resolve_case_patches``'s ``direct_key_validator``,
-    #: or an ``AxisContract.resolve`` building an ``AxisPatch``) does. Defaults
-    #: ``True``, the same "no field means the prior, only behaviour" reasoning
-    #: ``operation``/``evidence_refs``/``expected_effects`` already use --
-    #: every assignment built before this field existed came from a channel
-    #: that already implied a real catalog check, so schema version stays
-    #: unchanged here too, matching that precedent.
-    validated: bool = True
+    #: via ``RecordKeyValidationCapability``) does.
+    #:
+    #: **Tri-state, not a default-True boolean (review finding M2, corrected
+    #: 2026-09-24).** This originally defaulted to ``True`` on the same "no
+    #: field means the prior, only behaviour" reasoning ``operation``/
+    #: ``evidence_refs`` use -- but unlike those fields, a validation OPINION
+    #: that was never actually formed is not the same as one that passed:
+    #: defaulting True asserted a catalog check for every one of the
+    #: thousands of pre-existing constructor sites that never touched this
+    #: field at all. ``None`` now means "not stated" -- neither validated nor
+    #: known-unvalidated -- and is the default; ``bool`` means an adapter
+    #: actually answered. ``from_json`` of a payload written before this
+    #: field existed deserializes as ``None``, never ``True``.
+    validated: bool | None = None
 
     def __post_init__(self) -> None:
         # Coerced to a tuple before anything below reads it (R2 finding 3): a
@@ -202,6 +209,18 @@ class ParameterAssignment:
                 f"parameter {self.qualified_id!r} declares operation "
                 f"{self.operation!r}; known operations are "
                 f"{sorted(PARAMETER_OPERATIONS)}"
+            )
+        # `validated` is tri-state (`bool | None`), not merely truthy: a
+        # caller passing the STRING "false" must be refused rather than
+        # silently accepted as a non-empty, truthy string (review finding
+        # M2). `isinstance(True, int)` is also true in Python, but `bool` is
+        # checked directly here rather than excluding `int`, since there is
+        # no legitimate integer input to this field at all.
+        if self.validated is not None and not isinstance(self.validated, bool):
+            raise TypeError(
+                f"parameter {self.qualified_id!r} declares validated="
+                f"{self.validated!r}; must be a bool or None (not stated), "
+                f"got {type(self.validated).__name__}"
             )
         # 2026-09-23 decision ("a parameter asserts a final state, not only a
         # value"): `remove` asserts absence, which is a different claim from
@@ -323,10 +342,10 @@ class ParameterAssignment:
             # only behaviour" reasoning `unit`/`evidence_refs` already use.
             operation=payload.get("operation", "set"),
             evidence_refs=tuple(payload.get("evidence_refs", ())),
-            # Same "no field means the prior, only behaviour" default as
-            # `operation` above -- absent in a plan written before this field
-            # existed.
-            validated=payload.get("validated", True),
+            # `None` ("not stated"), never `True`, for a plan payload written
+            # before this field existed (review finding M2) -- absence must
+            # not be read as an assertion that a catalog check happened.
+            validated=payload.get("validated"),
         )
 
 

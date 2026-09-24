@@ -1,8 +1,9 @@
 """A tutorial record: data, not a factory -- and the axis contract it draws on.
 
 Design: ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md``
-§3 ("Components and ownership"), §4 ("One case, step by step"), §5
-("Refusals, the OpenFOAM-key exception, and enforcement").
+§3 ("Components and ownership"), §4 ("One case, step by step"), §5 (refusals,
+and the exception for a key an environment owns but has no full catalog for
+yet).
 
 **Why this is a separate module from ``core.case_write``.** A tutorial
 record's native case is never written in place (§4 step 3: "The native tree
@@ -16,9 +17,17 @@ the two: it promotes a merged, conflict-checked set of ``SourcedPatch``
 into real ``ParameterAssignment``s, once, right before the single
 ``commit_case_write`` call (§4 step 7, "One case, step by step").
 
-Zero cardiac or OpenFOAM vocabulary lives here, and none may be added --
-``scripts/check-import-boundaries.py`` and the core vocabulary tests guard
-that the same way they guard every other core module.
+Zero solver-specific vocabulary lives here, and none may be added --
+``scripts/check-import-boundaries.py`` enforces that on the import side, the
+same way it guards every other core module.
+
+**Corrected 2026-09-24 (review finding m5):** this used to also claim "the
+core vocabulary tests" guard this module. No test does: the two tests that
+name is short for (``test_core_declares_no_phase_vocabulary``,
+``test_core_exports_no_phase_vocabulary``) each check one specific,
+different module (``contracts.dictionary``, ``runtime.run_model``,
+``dict_entries``) for a leftover ``Phase`` re-export, and neither imports or
+scans this module at all.
 """
 
 from __future__ import annotations
@@ -52,8 +61,9 @@ class WorkflowStep:
     ``command`` is the step's base argv; an axis may contribute additional
     arguments for a step it names (``AxisResult.command_arguments``),
     appended in axis-declaration order (see ``resolve_case_patches``). Core
-    does not know what any of these strings mean -- ``cardiacFoam``,
-    ``blockMesh -dict ...`` are the adapter's own vocabulary.
+    does not know what any of these strings mean -- the solver binary's own
+    name, or a mesh-generation tool's flags, are the adapter's own
+    vocabulary.
     """
 
     step_id: str
@@ -85,9 +95,9 @@ class TutorialRecord:
 
     ``workflow_steps`` are keyed by ``step_id``, for ``workflow_variants``
     and for axes that contribute command arguments to a named step.
-    ``workflow_variants`` maps a selector value (e.g. cardiacFoam's
-    ``hex``/``tet`` mesh choice) to the ordered tuple of step ids that
-    variant runs; a record with one meshing route leaves this empty.
+    ``workflow_variants`` maps a selector value (e.g. an adapter's choice
+    between two mesh-generation routes) to the ordered tuple of step ids
+    that variant runs; a record with one route leaves this empty.
     """
 
     name: str
@@ -103,6 +113,14 @@ class TutorialRecord:
             raise TutorialRecordError(
                 f"tutorial record {self.name!r} must declare a native_case_relpath"
             )
+        # Case-relative, like every other case-addressing string this module
+        # checks (a patch's document, a study name's document) -- a record's
+        # native case lives under the environment's cases root, never at an
+        # absolute path or one that escapes it (minor m4).
+        _check_case_relative(
+            f"tutorial record {self.name!r}'s native_case_relpath",
+            self.native_case_relpath,
+        )
         object.__setattr__(self, "allowed_axes", frozenset(self.allowed_axes))
         object.__setattr__(self, "workflow_steps", tuple(self.workflow_steps))
         step_ids = [step.step_id for step in self.workflow_steps]
@@ -140,21 +158,25 @@ class AxisPatch:
 
     Deliberately its own type, not ``case_write.ParameterAssignment``: an
     axis is pure and knows nothing about ``owner``/``workflow``/bindings --
-    only a document, a key path, a value, and how validated the resolving
-    adapter considers it. ``patches_to_parameters`` promotes a merged,
-    conflict-checked set of these into real ``ParameterAssignment``s.
+    only a document, a key path, and a value. ``patches_to_parameters``
+    promotes a merged, conflict-checked set of these into real
+    ``ParameterAssignment``s.
 
-    ``validated`` mirrors ``case_write.ParameterAssignment.validated``
-    exactly (design §5's OpenFOAM-owned-key exception): ``True`` for a key
-    checked against a real catalog, ``False`` for one written because the
-    study asked, with no catalog to check it against.
+    **No ``validated`` field here (review finding M2).** Whether a patch is
+    validated is not this patch's own opinion to state -- an axis is not the
+    record-key catalog, and a self-reported ``validated=True`` default let an
+    axis-produced patch for a key absent from any catalog reach a commit
+    unchecked (M3's defect). ``resolve_case_patches`` now runs EVERY patch,
+    axis-produced or a direct study key alike, through
+    ``RecordKeyValidationCapability.validate`` and carries the answer on
+    ``SourcedPatch.validated`` instead -- the validator decides, never the
+    patch.
     """
 
     document: str
     key_path: tuple[str, ...]
     value: Any
     value_kind: str
-    validated: bool = True
 
     def __post_init__(self) -> None:
         _check_case_relative("a patch's document", self.document)
@@ -189,8 +211,8 @@ class AxisResult:
 
 #: An axis's resolution function: the study value, and a read-only view of
 #: the staged case (its root -- an axis reads through it, e.g. an existing
-#: ``blockMeshDict``'s extents, and must not write it; nothing here enforces
-#: that mechanically, see the design's §5 static-gate note).
+#: mesh-description file's extents, and must not write it; nothing here
+#: enforces that mechanically, see the design's §5 static-gate note).
 AxisFunction = Callable[[Any, Path], AxisResult]
 
 
@@ -246,7 +268,7 @@ def sort_study_name(
 
     A name containing ``:`` is a ``document:dotted.path`` literal key (design
     §3): the document is the substring before the FIRST colon (itself may
-    contain ``/``, e.g. ``constant/electroProperties``), the rest is a
+    contain ``/``, e.g. ``constant/someProperties``), the rest is a
     dot-joined key path. Its document is checked for shape only (case-
     relative, no ``..`` escape, non-empty) -- whether the key itself is one a
     real catalog recognises is adapter work, resolved later by
@@ -298,13 +320,39 @@ def sort_study_name(
 
 @dataclass(frozen=True)
 class SourcedPatch:
-    """One patch, tagged with where it came from -- for conflict messages."""
+    """One patch, tagged with where it came from, and how validated the
+    record-key catalog considers it.
+
+    ``validated`` lives HERE, not on ``AxisPatch`` (review finding M2): it is
+    always ``RecordKeyValidationCapability.validate``'s own answer for this
+    exact ``(document, key_path, value)``, computed uniformly for a direct
+    study key or an axis-produced patch alike (M3) -- never a value a patch
+    invented about itself. There is deliberately no default: every call site
+    that builds one states an explicit answer.
+    """
 
     patch: AxisPatch
     source: str
+    validated: bool
 
     def slot(self) -> str:
         return self.patch.slot()
+
+
+def _strictly_equal(first: Any, second: Any) -> bool:
+    """Same Python type AND ``==`` (review finding M7).
+
+    Plain ``==`` alone agrees that ``1 == True`` and ``1 == 1.0`` -- both
+    real conflicts here, since they come from two DIFFERENT declared
+    ``value_kind``s (an "integer" and a "boolean", or an "integer" and a
+    "scalar") that only coincidentally compare equal under Python's numeric
+    tower. ``combine_patches`` never reaches this on two values it already
+    knows have differing kinds, but a same-kind conflict (e.g. two "integer"
+    patches whose values happen to be ``1`` and ``True`` under a validator
+    that mis-declares a boolean as an integer) must still be caught, so the
+    type check is strict here too rather than assumed from the kind check.
+    """
+    return type(first) is type(second) and first == second
 
 
 def combine_patches(patches: Sequence[SourcedPatch]) -> tuple[SourcedPatch, ...]:
@@ -313,10 +361,21 @@ def combine_patches(patches: Sequence[SourcedPatch]) -> tuple[SourcedPatch, ...]
     Two sources naming the same (document, key) slot are fine when they
     agree on the value -- e.g. a study restates a base default explicitly --
     and refused, BY NAME, naming both sources, when they do not. This is the
-    tutorial-record replacement for ``cardiacfoam.overrides.merge_assignments``'s
-    "later write wins": that behaviour is left exactly as it is for old
-    factory tutorials (design §4 step 6's own instruction), which never call
-    this function.
+    tutorial-record replacement for an adapter's own pre-existing override-
+    merging convention's "later write wins": that older behaviour is left
+    exactly as it is for old factory tutorials (design §4 step 6's own
+    instruction), which never call this function.
+
+    "Agree" is checked two ways (review finding M7), both refusing:
+
+    - a differing ``value_kind`` is a conflict even when the raw values
+      happen to compare equal (``1`` and ``1.0`` under "integer" vs
+      "scalar") -- two sources cannot both be right about what KIND of
+      value a slot holds while disagreeing on the kind itself;
+    - same-kind values are compared with strict same-type equality
+      (:func:`_strictly_equal`), not plain ``==``, so ``1`` and ``True``
+      conflict rather than silently agreeing the way Python's ``1 == True``
+      would suggest.
     """
     by_slot: dict[str, SourcedPatch] = {}
     for sourced in patches:
@@ -325,7 +384,14 @@ def combine_patches(patches: Sequence[SourcedPatch]) -> tuple[SourcedPatch, ...]
         if existing is None:
             by_slot[slot] = sourced
             continue
-        if existing.patch.value != sourced.patch.value:
+        if existing.patch.value_kind != sourced.patch.value_kind:
+            raise TutorialRecordError(
+                f"{slot!r} is set to different value kinds by "
+                f"{existing.source!r} ({existing.patch.value_kind!r}, "
+                f"{existing.patch.value!r}) and {sourced.source!r} "
+                f"({sourced.patch.value_kind!r}, {sourced.patch.value!r})"
+            )
+        if not _strictly_equal(existing.patch.value, sourced.patch.value):
             raise TutorialRecordError(
                 f"{slot!r} is set to different values by {existing.source!r} "
                 f"({existing.patch.value!r}) and {sourced.source!r} "
@@ -335,7 +401,7 @@ def combine_patches(patches: Sequence[SourcedPatch]) -> tuple[SourcedPatch, ...]
         # exactly one of the two is -- an adapter-validated agreement is
         # strictly more informative than an unvalidated one that happens to
         # match it.
-        if sourced.patch.validated and not existing.patch.validated:
+        if sourced.validated and not existing.validated:
             by_slot[slot] = sourced
     return tuple(by_slot.values())
 
@@ -346,6 +412,31 @@ def combine_patches(patches: Sequence[SourcedPatch]) -> tuple[SourcedPatch, ...]
 
 
 DirectKeyValidator = Callable[[str, tuple[str, ...], Any], tuple[str, bool]]
+
+
+def _validate_or_wrap(
+    direct_key_validator: DirectKeyValidator,
+    document: str,
+    key_path: tuple[str, ...],
+    value: Any,
+) -> tuple[str, bool]:
+    """Call ``direct_key_validator``, wrapping any exception it raises in a
+    ``TutorialRecordError`` naming the document and key (minor m6).
+
+    An adapter's validator may raise anything -- a deliberate ``KeyError``
+    for an unrecognised key, or an unrelated bug -- and its own message may
+    not mention which key was being checked at all. This function is the one
+    place that always knows, so it names it, regardless of what the
+    validator itself said (the original exception is chained via ``from``,
+    never discarded).
+    """
+    try:
+        return direct_key_validator(document, key_path, value)
+    except Exception as exc:
+        dotted = ".".join(key_path)
+        raise TutorialRecordError(
+            f"validating {document}:{dotted} raised {type(exc).__name__}: {exc}"
+        ) from exc
 
 
 def resolve_case_patches(
@@ -366,6 +457,19 @@ def resolve_case_patches(
     running a single axis, so a bad name anywhere in the study is refused
     before any axis has a side-effect-free chance to run either.
 
+    Every DIRECT key is then validated, in full, BEFORE any axis runs (minor
+    m2): a study whose direct keys include one the catalog will refuse must
+    never let a well-formed, allowed axis run first and have its (pure, but
+    still real) resolution wasted, or worse, its command arguments collected
+    into a result that is about to be thrown away anyway. Only once every
+    direct key has passed does the first axis run.
+
+    Every patch -- a direct key's OR an axis's OUTPUT -- then goes through
+    the SAME ``direct_key_validator`` (review finding M3): an axis is not a
+    back door around the record-key catalog. ``AxisPatch`` carries no
+    ``validated`` opinion of its own (M2); the validator's answer becomes
+    each patch's ``SourcedPatch.validated``.
+
     Returns ``(combined_patches, command_arguments_by_step)`` -- the latter
     is every axis's ``AxisResult.command_arguments``, merged by step id in
     axis-resolution order (design's "workflow steps with axis-provided
@@ -379,24 +483,40 @@ def resolve_case_patches(
             )
             classified.append((source, name, sorted_name, value))
 
-    sourced_patches: list[SourcedPatch] = []
-    command_arguments: dict[str, list[str]] = {}
-    for source, name, sorted_name, value in classified:
-        if isinstance(sorted_name, DocumentKeyName):
-            value_kind, validated = direct_key_validator(
-                sorted_name.document, sorted_name.key_path, value,
-            )
-            patch = AxisPatch(
-                document=sorted_name.document, key_path=sorted_name.key_path,
-                value=value, value_kind=value_kind, validated=validated,
-            )
-            sourced_patches.append(SourcedPatch(patch=patch, source=source))
-            continue
+    direct_entries = [
+        entry for entry in classified if isinstance(entry[2], DocumentKeyName)
+    ]
+    axis_entries = [
+        entry for entry in classified if isinstance(entry[2], AxisMatch)
+    ]
 
+    sourced_patches: list[SourcedPatch] = []
+    for source, _name, sorted_name, value in direct_entries:
+        value_kind, validated = _validate_or_wrap(
+            direct_key_validator, sorted_name.document, sorted_name.key_path, value,
+        )
+        patch = AxisPatch(
+            document=sorted_name.document, key_path=sorted_name.key_path,
+            value=value, value_kind=value_kind,
+        )
+        sourced_patches.append(SourcedPatch(patch=patch, source=source, validated=validated))
+
+    command_arguments: dict[str, list[str]] = {}
+    for source, name, sorted_name, value in axis_entries:
+        del source  # an axis patch is sourced by the axis's own name, below
         axis = sorted_name.axis
         result = axis.resolve(value, staged_case_root)
         for patch in result.patches:
-            sourced_patches.append(SourcedPatch(patch=patch, source=name))
+            value_kind, validated = _validate_or_wrap(
+                direct_key_validator, patch.document, patch.key_path, patch.value,
+            )
+            revalidated = AxisPatch(
+                document=patch.document, key_path=patch.key_path,
+                value=patch.value, value_kind=value_kind,
+            )
+            sourced_patches.append(
+                SourcedPatch(patch=revalidated, source=name, validated=validated)
+            )
         for step_id, extra_args in result.command_arguments.items():
             command_arguments.setdefault(step_id, []).extend(extra_args)
 
@@ -422,10 +542,18 @@ def split_unchanged(
     ``CaseValueComparisonCapability``) against the staged case's current
     value (``read_current_value``, sourced from ``ConfigValueCapability``) --
     never Python ``==``/string equality (see ``CaseValueComparisonCapability``'s
-    docstring for why). A patch this function cannot evaluate -- no reader,
-    no comparator, an unreadable current value, or a comparator that itself
-    reports it cannot tell -- is treated as CHANGED, never silently dropped:
-    an "unchanged" claim this function cannot back is not made.
+    docstring for why). ``read_current_value`` is always called with the
+    patch's ``key_path`` AS A TUPLE (``patch.key_path`` itself, never a
+    dotted string): a real adapter's reader may split that tuple into a
+    scope and a leaf key of its own file format's shape (review finding B1)
+    -- this function does not know, or need to know, how any adapter's
+    reader turns a key path into a scope.
+
+    When there is no reader or no comparator, every patch is reported
+    CHANGED, never silently dropped: an "unchanged" claim this function
+    cannot back is not made. When a reader or comparator IS present but
+    raises for a particular patch, that exception propagates -- it is not
+    caught and reinterpreted as "changed" here.
     """
     if read_current_value is None or values_agree is None:
         return tuple(patches), ()
@@ -434,7 +562,7 @@ def split_unchanged(
     for sourced in patches:
         patch = sourced.patch
         document_path = Path(case_root) / patch.document
-        current = read_current_value(document_path, ".".join(patch.key_path))
+        current = read_current_value(document_path, patch.key_path)
         if current is not None and values_agree(patch.value_kind, patch.value, current):
             unchanged.append(sourced)
         else:
@@ -459,8 +587,8 @@ def patches_to_parameters(
 
     ``source="case"`` for every assignment: each one is a genuine per-case
     choice (a direct study key, or an axis's derived value), the same
-    reasoning ``cardiacfoam.overrides.resolve_entry_overrides`` documents for
-    its own ``source="case"`` assignments.
+    reasoning an adapter's own override-resolution path uses for its own
+    ``source="case"`` assignments.
     """
     from .case_write import ParameterAssignment
 
@@ -474,7 +602,7 @@ def patches_to_parameters(
             value=sourced.patch.value,
             value_kind=sourced.patch.value_kind,
             source="case",
-            validated=sourced.patch.validated,
+            validated=sourced.validated,
         )
         for sourced in patches
     )
