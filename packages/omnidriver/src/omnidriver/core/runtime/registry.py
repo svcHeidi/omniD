@@ -192,7 +192,7 @@ def _entry_catalog_for_root(
     ]
     entries.extend(
         _tutorial_record_entry(name, record)
-        for name, record in driver_context.capabilities.tutorial_records.catalog().items()
+        for name, record in (driver_context.capabilities.tutorial_records.catalog() or {}).items()
     )
     known_registered = {tutorial.casefold() for tutorial in list_tutorials(driver_context)}
     for case_root in _iter_case_directories_recursive(cases_root, driver_context):
@@ -267,7 +267,9 @@ def load_tutorial_spec(
     driver_context: "DriverContext | None" = None,
 ) -> TutorialSpec:
     resolution = resolve_tutorial(name, overrides=overrides, driver_context=driver_context)
-    spec = _materialize_resolved_entry(resolution, driver_context=driver_context)
+    spec = _materialize_resolved_entry(
+        resolution, driver_context=driver_context, consumer="load_tutorial_spec",
+    )
     return _with_entry_metadata(spec, resolution, driver_context=driver_context)
 
 
@@ -284,7 +286,9 @@ def load_entry_spec(
         overrides=overrides,
         driver_context=driver_context,
     )
-    spec = _materialize_resolved_entry(resolution, driver_context=driver_context)
+    spec = _materialize_resolved_entry(
+        resolution, driver_context=driver_context, consumer="load_entry_spec",
+    )
     return _with_entry_metadata(spec, resolution, driver_context=driver_context)
 
 
@@ -292,8 +296,25 @@ def _materialize_resolved_entry(
     resolution: dict[str, object],
     *,
     driver_context: "DriverContext | None",
+    consumer: str,
 ) -> TutorialSpec:
-    """Build a resolved entry while preserving its environment declaration."""
+    """Build a resolved entry while preserving its environment declaration.
+
+    Review finding B2: a ``tutorial_record`` resolution carries no
+    ``factory``/``factory_overrides`` at all (it is inert data, not a
+    factory -- design doc §3), so every consumer of a ``resolve_entry``
+    result must check the resolution kind EXPLICITLY and refuse by name
+    before reaching for either key. Wiring a record through ``describe``/
+    sweep is the next step's job (docs/superpowers/specs/2026-09-24-
+    tutorials-are-pointers-design.md); this only makes the refusal explicit,
+    naming the caller, instead of an opaque ``KeyError('factory_overrides')``.
+    """
+    if resolution["resolution"] == "tutorial_record":
+        from ..tutorial_records import TutorialRecordError
+
+        raise TutorialRecordError(
+            f"tutorial records are not yet runnable through {consumer}"
+        )
 
     factory_overrides = dict(resolution["factory_overrides"])
     if resolution["entry_kind"] == "case_folder":
@@ -344,7 +365,16 @@ def _match_entry(
         entry
         for entry in list_entries(cases_root, driver_context=driver_context)
         if (
-            normalized_name in {
+            # A tutorial-record entry is never a `_match_entry` candidate
+            # (review finding B2): it carries no factory of its own, and
+            # matching one here (e.g. by its `native_case_relpath`) used to
+            # let `resolve_entry` build a "case_folder" resolution out of a
+            # dict that also claimed `entry_kind: "tutorial_record"` --
+            # neither a record (no `record` key) nor a clean case_folder. A
+            # record dispatches ONLY through the explicit tutorial_records
+            # catalog check above, never through here.
+            str(entry["entry_kind"]) != "tutorial_record"
+            and normalized_name in {
                 str(entry["entry_name"]).casefold(),
                 str(entry["entry_path"]).casefold(),
             }
@@ -383,6 +413,19 @@ def resolve_entry(
     key = name.strip()
     normalized_key = key.casefold()
     normalized_registry = _normalized_registry(driver_context)
+    # Computed early (review finding M8), not only where it was dispatched
+    # before: a case-path resolution below must also refuse a name that is
+    # ALSO a registered tutorial record, the same ambiguity this design
+    # already refuses between a record and a factory tutorial -- a record
+    # must never be silently shadowed by a same-named case path either.
+    # `.catalog()` has no fallback (review finding M1): ``None`` means this
+    # stack dispatches no tutorial records at all, same as an empty one here.
+    normalized_records = {
+        record_name.casefold(): record
+        for record_name, record in (
+            driver_context.capabilities.tutorial_records.catalog() or {}
+        ).items()
+    }
     incoming_overrides = dict(overrides or {})
 
     if entry_kind is not None and entry_kind not in ENTRY_KIND_VALUES:
@@ -398,6 +441,12 @@ def resolve_entry(
         if not candidate.is_absolute():
             candidate = Path.cwd() / candidate
         if candidate.is_dir() and _is_case_directory(candidate, driver_context):
+            if normalized_key in normalized_records:
+                raise KeyError(
+                    f"Entry '{key}' is ambiguous: it is registered as a "
+                    "tutorial record AND names an existing case path "
+                    f"({candidate}); one name must not name both"
+                )
             # The path names the case, so a differing `case_dir_name` is a
             # contradiction. Refuse it rather than overwrite it below: that
             # overwrite silently dropped a `--config` value, and discarded a
@@ -451,10 +500,6 @@ def resolve_entry(
     # the same "no try-one-then-the-other fallback" instruction that governs
     # every other refusal this design makes.
     if entry_kind in {None, "tutorial_record"}:
-        normalized_records = {
-            record_name.casefold(): record
-            for record_name, record in driver_context.capabilities.tutorial_records.catalog().items()
-        }
         if normalized_key in normalized_records:
             if normalized_key in normalized_registry:
                 raise KeyError(

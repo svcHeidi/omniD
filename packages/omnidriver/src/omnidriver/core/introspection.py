@@ -520,7 +520,9 @@ def describe_entry(
     )
     from .runtime.registry import _materialize_resolved_entry
 
-    spec = _materialize_resolved_entry(resolution, driver_context=driver_context)
+    spec = _materialize_resolved_entry(
+        resolution, driver_context=driver_context, consumer="describe_entry",
+    )
     cases_root = Path(
         resolution["factory_overrides"].get("cases_root", spec.case_root.parent)
     )

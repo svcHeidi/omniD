@@ -855,13 +855,20 @@ class TutorialRecordCapability(Protocol):
     explicitly, alongside the factory registry and a bare case path -- never
     trying one and falling back to another.
 
+    **No fallback (review finding M1).** ``catalog()`` returns ``None``, not
+    ``{}``, when the plugin declares no ``get_tutorial_records`` hook at all
+    -- distinct from a plugin that implements the hook and simply registers
+    no records yet. ``runtime.registry.resolve_entry`` treats ``None`` as
+    "this stack dispatches no tutorial records", skipping record dispatch
+    explicitly rather than iterating a fabricated empty mapping.
+
     :adapts: get_tutorial_records
     :consumed-by: omnidriver/core/runtime/registry.py
-    :fallback: legacy_tutorial_records
+    :fallback: none
     :status: optional-neutral
     """
 
-    def catalog(self) -> dict[str, Any]: ...
+    def catalog(self) -> dict[str, Any] | None: ...
 
 
 class AxisCapability(Protocol):
@@ -875,13 +882,19 @@ class AxisCapability(Protocol):
     a record's ``allowed_axes`` *and* in this catalog is refused by
     ``tutorial_records.sort_study_name`` before anything runs.
 
+    **No fallback (review finding M1).** ``catalog()`` returns ``None`` when
+    the plugin declares no ``get_axis_catalog`` hook -- callers (currently
+    only ``record_execution._resolve_and_split``) treat that the same as an
+    empty catalog: no fallback need branch on it, since a bare study name
+    refuses identically either way.
+
     :adapts: get_axis_catalog
     :consumed-by: omnidriver/core/runtime/record_execution.py
-    :fallback: legacy_axis_catalog
+    :fallback: none
     :status: optional-neutral
     """
 
-    def catalog(self) -> dict[str, Any]: ...
+    def catalog(self) -> dict[str, Any] | None: ...
 
 
 class RecordKeyValidationCapability(Protocol):
@@ -891,34 +904,39 @@ class RecordKeyValidationCapability(Protocol):
     Tutorial-record studies name a document key literally
     (``document:dotted.path``); core sorts that shape out
     (``tutorial_records.sort_study_name``) but owns no vocabulary of its own
-    to say whether, e.g., ``constant/electroProperties:ionicModel`` is a real
-    key an adapter's C++ reads, or what Python shape its value must have --
-    that is ``dict_entries_catalog``'s job for cardiacFOAM, and a
-    similarly-shaped catalog's job for any other plugin.
+    to say whether, e.g., ``constant/someProperties:someModel`` is a real key
+    an adapter's own source reads, or what Python shape its value must have
+    -- that is a solver-specific key catalog's job, one per plugin.
 
-    ``validate(document, key_path, value)`` returns ``(value_kind,
-    validated)`` for a name the catalog recognises, or raises for one it does
-    not -- refusing an undeclared key outright (design §5: "a cardiacFOAM key
-    absent from the catalog... never bypassed") is the adapter's own choice.
-    An adapter that instead accepts an undeclared key unchecked (the
-    OpenFOAM-owned-key exception -- ``system/fvSchemes`` and kin, which have
-    no full catalog yet) returns ``(inferred_kind, False)`` rather than
-    raising; core does not choose between those two answers, and takes no
-    closed list of "validated document prefixes" of its own.
+    ``validator()`` returns a ``(document, key_path, value) -> (value_kind,
+    validated)`` callable, or ``None`` when the plugin declares no
+    ``get_record_key_validator`` hook. Called, that callable returns
+    ``(value_kind, validated)`` for a name the catalog recognises, or raises
+    for one it does not -- refusing an undeclared key outright (design §5: "a
+    [solver]-owned key absent from the catalog... never bypassed") is the
+    adapter's own choice. An adapter that instead accepts an undeclared key
+    unchecked (the environment-owned-key exception -- a key some underlying
+    format reads but this plugin has no full catalog for yet) returns
+    ``(inferred_kind, False)`` rather than raising; core does not choose
+    between those two answers, and takes no closed list of "validated
+    document prefixes" of its own.
 
-    The fallback cannot be neutral: an adapter with no validator has no
-    catalog to check a direct key against, so every direct key is refused
-    rather than silently accepted as validated.
+    **No fallback (review finding M1).** A stack with no validator has no
+    catalog to check ANY direct key -- or, since ``resolve_case_patches`` now
+    validates axis-produced patches too (M3), any axis output -- against.
+    ``record_execution._resolve_and_split`` reads ``validator() is None`` and
+    REFUSES BY NAME before running a record case at all, rather than letting
+    every key silently through unchecked the way ``legacy_record_key
+    _validation`` used to (by raising only once a direct key was actually
+    looked up, which an axis-only study could dodge entirely).
 
     :adapts: get_record_key_validator
     :consumed-by: omnidriver/core/runtime/record_execution.py
-    :fallback: legacy_record_key_validation
-    :status: optional-refusing
+    :fallback: none
+    :status: optional-neutral
     """
 
-    def validate(
-        self, document: str, key_path: tuple[str, ...], value: Any,
-    ) -> tuple[str, bool]: ...
+    def validator(self) -> Any | None: ...
 
 
 class CaseValueComparisonCapability(Protocol):
@@ -926,20 +944,29 @@ class CaseValueComparisonCapability(Protocol):
 
     A tutorial-record patch equal to the staged case's current value is
     reported ``unchanged`` and not written (design §4 step 7). Never Python
-    ``==``/string equality: ``effective_values_agree``
-    (``omnidriver-openfoam/apply_overrides.py``) exists precisely because a
-    requested ``1e-3`` and a case's resolved ``0.001`` are the same OpenFOAM
-    value but unequal Python strings. This capability delegates that typed
-    judgement entirely to the adapter; core only calls it.
+    ``==``/string equality: an adapter's own typed comparison exists
+    precisely because a requested ``1e-3`` and a case's resolved ``0.001``
+    can be the same underlying value while being unequal Python strings.
+    This capability delegates that typed judgement entirely to the adapter;
+    core only calls it.
 
     ``comparator()`` returns a ``(value_kind, requested, current) -> bool``
-    callable, or ``None`` when the adapter offers no such comparison --
-    treated by every caller as "cannot determine", never as "assume
-    unchanged" (a wrong "unchanged" silently drops a real write).
+    callable, or ``None`` when the adapter offers no such comparison.
+    ``tutorial_records.split_unchanged``, called directly, still treats
+    ``None`` as "cannot determine" and reports everything changed -- but
+    ``record_execution._resolve_and_split`` (review finding M1/M4) reads
+    ``comparator() is None`` first and REFUSES BY NAME before running a
+    record case at all: a stack that cannot tell "unchanged" from "changed"
+    must not silently report every no-op as a change and commit it, which is
+    what happened before this capability had no fallback of its own
+    (``legacy_case_value_comparator`` quietly returned ``None`` from a plugin
+    that never declared an opinion either way, and nothing upstream refused).
+
+    **No fallback (review finding M1).**
 
     :adapts: get_case_value_comparator
     :consumed-by: omnidriver/core/runtime/record_execution.py
-    :fallback: legacy_case_value_comparator
+    :fallback: none
     :status: optional-neutral
     """
 
@@ -1808,42 +1835,34 @@ class _DictKeyScannerAdapter:
 class _TutorialRecordAdapter:
     plugin: "SolverPlugin"
 
-    def catalog(self) -> dict[str, Any]:
+    def catalog(self) -> dict[str, Any] | None:
+        """``None`` when the plugin declares no hook (review finding M1) --
+        not ``{}``, which would be indistinguishable from a plugin that
+        implements the hook and simply registers nothing."""
         hook = getattr(self.plugin, "get_tutorial_records", None)
-        if callable(hook):
-            return dict(hook())
-        from .compatibility import legacy_tutorial_records
-
-        return legacy_tutorial_records(self.plugin)
+        return dict(hook()) if callable(hook) else None
 
 
 @dataclass(frozen=True)
 class _AxisAdapter:
     plugin: "SolverPlugin"
 
-    def catalog(self) -> dict[str, Any]:
+    def catalog(self) -> dict[str, Any] | None:
+        """``None`` when the plugin declares no hook (review finding M1)."""
         hook = getattr(self.plugin, "get_axis_catalog", None)
-        if callable(hook):
-            return dict(hook())
-        from .compatibility import legacy_axis_catalog
-
-        return legacy_axis_catalog(self.plugin)
+        return dict(hook()) if callable(hook) else None
 
 
 @dataclass(frozen=True)
 class _RecordKeyValidationAdapter:
     plugin: "SolverPlugin"
 
-    def validate(
-        self, document: str, key_path: tuple[str, ...], value: Any,
-    ) -> tuple[str, bool]:
+    def validator(self) -> Any | None:
+        """The plugin's own validator callable, or ``None`` (review finding
+        M1) -- no compatibility fallback stands in for a missing one; the
+        caller (``record_execution._resolve_and_split``) refuses by name."""
         hook = getattr(self.plugin, "get_record_key_validator", None)
-        validator = hook() if callable(hook) else None
-        if validator is None:
-            from .compatibility import legacy_record_key_validation
-
-            return legacy_record_key_validation(self.plugin, document, key_path, value)
-        return validator(document, key_path, value)
+        return hook() if callable(hook) else None
 
 
 @dataclass(frozen=True)
@@ -1852,11 +1871,7 @@ class _CaseValueComparisonAdapter:
 
     def comparator(self) -> Any:
         hook = getattr(self.plugin, "get_case_value_comparator", None)
-        if callable(hook):
-            return hook()
-        from .compatibility import legacy_case_value_comparator
-
-        return legacy_case_value_comparator(self.plugin)
+        return hook() if callable(hook) else None
 
 
 def _resolved_purely(hook, request, *, driver_context):

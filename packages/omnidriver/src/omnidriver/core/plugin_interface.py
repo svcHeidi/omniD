@@ -589,14 +589,16 @@ class SolverPluginOptionalHooks(Protocol):
         name against this plugin's own dictionary catalog.
 
         Raises ``KeyError`` (or any exception) for a name the catalog does
-        not recognise -- refusing it is this hook's own choice (design §5:
-        "a cardiacFOAM key absent from the catalog... never bypassed"); an
-        adapter that instead wants to accept an undeclared key unchecked
-        (the OpenFOAM-owned-key exception, keys with no full catalog yet)
-        returns ``(inferred_kind, False)`` rather than raising -- both are
+        not recognise -- refusing it is this hook's own choice (design §5: "a
+        [solver]-owned key absent from the catalog... never bypassed"); an
+        adapter that instead wants to accept an undeclared key unchecked (the
+        environment-owned-key exception, a key some underlying format reads
+        but this plugin has no full catalog for yet) returns
+        ``(inferred_kind, False)`` rather than raising -- both are
         legitimate, adapter-owned answers core does not choose between.
-        Absent -> every direct key is refused (there is no catalog to check
-        it against)."""
+        Absent -> ``None`` (review finding M1): a stack with no validator
+        REFUSES a record case outright (``record_execution
+        ._resolve_and_split``) rather than checking no direct key at all."""
         ...
 
     # -- CaseValueComparisonCapability -------------------------------------------
@@ -604,14 +606,14 @@ class SolverPluginOptionalHooks(Protocol):
         """Return a ``(value_kind, requested, current) -> bool`` callable, or
         ``None``.
 
-        Typed comparison, mirroring ``effective_values_agree``
-        (``omnidriver-openfoam/apply_overrides.py``): ``"1e-3" == "0.001"`` is
-        ``False`` in Python but the same value in every dictionary format this
-        framework writes, so a tutorial-record patch's "is this unchanged"
-        check (``core.tutorial_records``) must never fall back to string or
-        Python ``==`` equality. Absent -> ``None``, meaning "no adapter-owned
-        comparison is available"; callers must treat that as "cannot
-        determine", not as "assume unchanged"."""
+        Typed comparison: a requested ``"1e-3"`` and a case's resolved
+        ``"0.001"`` are ``False`` under Python ``==`` but the same value in
+        every dictionary format this framework writes, so a tutorial-record
+        patch's "is this unchanged" check (``core.tutorial_records``) must
+        never fall back to string or Python ``==`` equality. Absent ->
+        ``None`` (review finding M1): a stack with no comparator REFUSES a
+        record case outright rather than reporting every patch "changed" and
+        committing it."""
         ...
 
     # -- DictionaryCatalogCapability ------------------------------------------

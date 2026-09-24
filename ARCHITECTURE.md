@@ -358,10 +358,10 @@ fallback cannot be neutral and refuses by hook name instead.
 | `config_value` | `ConfigValueCapability` | `get_config_value_reader` | `omnidriver/cardiacfoam/run_document_config.py` | none | optional-neutral |
 | `dict_key_scanner` | `DictKeyScannerCapability` | `get_dict_key_scanner` | `omnidriver/core/strict_planning.py` | `legacy_dict_key_scanner` | optional-neutral |
 | `case_writer` | `CaseWriterCapability` | `resolve_case_mutation`, `get_supported_mutation_modes`, `get_rendered_formats`, `render_case_files` | none | none | resolve_case_mutation=optional-refusing, get_supported_mutation_modes=optional-refusing, get_rendered_formats=optional-refusing, render_case_files=optional-refusing |
-| `tutorial_records` | `TutorialRecordCapability` | `get_tutorial_records` | `omnidriver/core/runtime/registry.py` | `legacy_tutorial_records` | optional-neutral |
-| `axes` | `AxisCapability` | `get_axis_catalog` | `omnidriver/core/runtime/record_execution.py` | `legacy_axis_catalog` | optional-neutral |
-| `record_key_validation` | `RecordKeyValidationCapability` | `get_record_key_validator` | `omnidriver/core/runtime/record_execution.py` | `legacy_record_key_validation` | optional-refusing |
-| `case_value_comparison` | `CaseValueComparisonCapability` | `get_case_value_comparator` | `omnidriver/core/runtime/record_execution.py` | `legacy_case_value_comparator` | optional-neutral |
+| `tutorial_records` | `TutorialRecordCapability` | `get_tutorial_records` | `omnidriver/core/runtime/registry.py` | none | optional-neutral |
+| `axes` | `AxisCapability` | `get_axis_catalog` | `omnidriver/core/runtime/record_execution.py` | none | optional-neutral |
+| `record_key_validation` | `RecordKeyValidationCapability` | `get_record_key_validator` | `omnidriver/core/runtime/record_execution.py` | none | optional-neutral |
+| `case_value_comparison` | `CaseValueComparisonCapability` | `get_case_value_comparator` | `omnidriver/core/runtime/record_execution.py` | none | optional-neutral |
 
 31 capability seams.
 

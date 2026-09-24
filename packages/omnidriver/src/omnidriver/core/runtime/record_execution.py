@@ -21,6 +21,7 @@ preview." ``commit_record_case`` performs all four steps.
 from __future__ import annotations
 
 import datetime
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
 
@@ -37,6 +38,29 @@ from ..tutorial_records import (
 
 if TYPE_CHECKING:
     from ..plugin_interface import DriverContext
+
+
+@dataclass(frozen=True)
+class RecordCommitResult:
+    """The outcome of :func:`commit_record_case` (review finding M5).
+
+    Before this existed, "every patch was unchanged" and "something was
+    committed" were told apart only by a bare ``CaseWriteRecord | None`` --
+    a caller seeing ``None`` learned that nothing was written, but not that
+    this was because every patch already matched, nor what those unchanged
+    patches even were. ``status`` says which case this is, explicitly;
+    ``unchanged`` carries the patches themselves either way (design §4 step
+    7 already reports them in ``preview_record_case``'s preview -- this is
+    the same information on the commit path).
+    """
+
+    write_record: CaseWriteRecord | None
+    unchanged: tuple[SourcedPatch, ...]
+    command_arguments: dict[str, tuple[str, ...]]
+
+    @property
+    def status(self) -> str:
+        return "committed" if self.write_record is not None else "unchanged"
 
 
 def _native_case_root(record: TutorialRecord, *, cases_root: Path) -> Path:
@@ -66,21 +90,45 @@ def _resolve_and_split(
     staged_case_root: Path,
     driver_context: "DriverContext",
 ) -> tuple[tuple[SourcedPatch, ...], tuple[SourcedPatch, ...], dict[str, tuple[str, ...]]]:
-    axis_catalog = driver_context.capabilities.axes.catalog()
+    # M1: neither of these two capabilities has a compatibility fallback any
+    # more (`:fallback: none`, matching ConfigValueCapability/
+    # CaseWriterCapability) -- a stack that composes no record-key validator
+    # or no case-value comparator cannot run a tutorial-record case at all,
+    # and must say so BY NAME rather than silently accepting every key
+    # unchecked or reporting every no-op patch as "changed" and writing it
+    # (review finding M4/E8).
+    validator = driver_context.capabilities.record_key_validation.validator()
+    if validator is None:
+        raise TutorialRecordError(
+            f"tutorial record {record.name!r} cannot run: the composed stack "
+            "declares no record-key validator (get_record_key_validator); a "
+            "record case's keys cannot be checked against any catalog"
+        )
+    comparator = driver_context.capabilities.case_value_comparison.comparator()
+    if comparator is None:
+        raise TutorialRecordError(
+            f"tutorial record {record.name!r} cannot run: the composed stack "
+            "declares no case-value comparator (get_case_value_comparator); "
+            "whether a patch is unchanged cannot be determined"
+        )
+    # No fallback for axes either, but an absent axis catalog IS a neutral
+    # state here (design §3: "Core... ships no solver axes" -- most stacks
+    # provide none at all), not a refusal: `sort_study_name` already refuses
+    # any bare study name by name when no adapter provides that axis.
+    axis_catalog = driver_context.capabilities.axes.catalog() or {}
     combined, command_arguments = resolve_case_patches(
         record,
         study_by_source=study_by_source,
         axis_catalog=axis_catalog,
         staged_case_root=staged_case_root,
-        direct_key_validator=driver_context.capabilities.record_key_validation.validate,
+        direct_key_validator=validator,
     )
     read_current_value = driver_context.capabilities.config_value.reader()
-    values_agree = driver_context.capabilities.case_value_comparison.comparator()
     to_write, unchanged = split_unchanged(
         combined,
         case_root=staged_case_root,
         read_current_value=read_current_value,
-        values_agree=values_agree,
+        values_agree=comparator,
     )
     return to_write, unchanged, command_arguments
 
@@ -119,7 +167,7 @@ def preview_record_case(
                 "key_path": list(sourced.patch.key_path),
                 "value": sourced.patch.value,
                 "value_kind": sourced.patch.value_kind,
-                "validated": sourced.patch.validated,
+                "validated": sourced.validated,
                 "source": sourced.source,
                 "status": "changed",
             }
@@ -130,7 +178,7 @@ def preview_record_case(
                 "key_path": list(sourced.patch.key_path),
                 "value": sourced.patch.value,
                 "value_kind": sourced.patch.value_kind,
-                "validated": sourced.patch.validated,
+                "validated": sourced.validated,
                 "source": sourced.source,
                 "status": "unchanged",
             }
@@ -154,7 +202,7 @@ def commit_record_case(
     driver_context: "DriverContext",
     execution_env: Any | None = None,
     requested_by: str = "tutorial_record",
-) -> tuple[CaseWriteRecord | None, dict[str, tuple[str, ...]]]:
+) -> RecordCommitResult:
     """Design §4 steps 1-8's write half: stage, resolve, and commit ONE case
     in ONE ``commit_case_write`` call (step 7's own words: "everything goes
     in one ``commit_case_write``").
@@ -163,27 +211,35 @@ def commit_record_case(
     ``preview_record_case``'s scratch clone) -- it is the sweep's real,
     per-case staging directory, the same one a later workflow-step run reads.
 
-    Returns ``(record_or_none, command_arguments_by_step)``. ``record`` is
-    ``None`` when every patch was already unchanged (design §4 step 7:
-    "unchanged... not written") -- a legitimate no-op, not a failure, so
-    nothing is committed and no transaction is created.
+    Returns a :class:`RecordCommitResult` (review finding M5). Its
+    ``write_record`` is ``None`` when every patch was already unchanged
+    (design §4 step 7: "unchanged... not written") -- a legitimate no-op, not
+    a failure, so nothing is committed and no transaction is created -- but
+    ``result.status``/``result.unchanged`` say so explicitly rather than
+    leaving a bare ``None`` for the caller to interpret.
     """
     _stage(
         record, cases_root=cases_root, staged_case_root=staged_case_root,
         driver_context=driver_context,
     )
-    to_write, _unchanged, command_arguments = _resolve_and_split(
+    to_write, unchanged, command_arguments = _resolve_and_split(
         record, study_by_source=study_by_source,
         staged_case_root=staged_case_root, driver_context=driver_context,
     )
     if not to_write:
-        return None, command_arguments
+        return RecordCommitResult(
+            write_record=None, unchanged=unchanged, command_arguments=command_arguments,
+        )
 
-    identity = getattr(driver_context, "identity", None)
-    # `identity.providers[-1]` is the most specific provider in the composed
-    # stack -- the same "last is most specific" convention
-    # `provider_stack._ComposedProvider.plugin_id` itself uses.
-    adapter_id = identity.providers[-1].id if identity is not None else record.name
+    # `DriverContext.identity` has no default -- it is always present, never
+    # a defensive `getattr(..., None)` away from missing (minor m1: that
+    # fallback, and the "0" * 64 digest placeholder it justified, were dead
+    # code). `identity.resolutions["case_writer"]` names whichever provider
+    # in the composed stack actually answers `case_writer` -- correct even
+    # when that is not the most specific provider, unlike the
+    # `providers[-1].id` guess this replaces.
+    identity = driver_context.identity
+    adapter_id = identity.resolutions["case_writer"]
     parameters = patches_to_parameters(to_write, owner=adapter_id)
     request = CaseMutationRequest(
         mode="clone_and_patch", case_root=staged_case_root, adapter_id=adapter_id,
@@ -197,14 +253,15 @@ def commit_record_case(
         resolved, snapshot_root=staged_case_root, driver_context=driver_context,
         execution_env=execution_env,
     )
-    stack_identity = identity.capability_digest if identity is not None else "0" * 64
     plan = CaseWritePlan(
         request=request, files=tuple(rendered), preconditions=resolved.preconditions,
-        semantic_owner_id=resolved.semantic_owner_id, stack_identity=stack_identity,
+        semantic_owner_id=resolved.semantic_owner_id, stack_identity=identity.capability_digest,
         created_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         expected_effects=resolved.expected_effects,
     )
     record_ = commit_case_write(
         plan, driver_context=driver_context, execution_env=execution_env,
     )
-    return record_, command_arguments
+    return RecordCommitResult(
+        write_record=record_, unchanged=unchanged, command_arguments=command_arguments,
+    )
