@@ -173,7 +173,7 @@ def load_discovered_plugin(name: str):
     providers, sources = _expand_with_requirements(
         plugin_class(), _entry_point_source(entry_point),
     )
-    return driver_context(*providers, source=sources)
+    return driver_context(*providers, source=sources, plugin_selector=name)
 
 
 def _entry_point_source(entry_point) -> str:

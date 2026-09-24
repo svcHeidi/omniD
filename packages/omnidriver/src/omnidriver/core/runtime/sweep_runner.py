@@ -5,7 +5,6 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,6 +29,7 @@ from .record_execution import (
     _serialize_sourced_patch,
 )
 from .registry import load_entry_spec
+from .run_command import omnidriver_run_command
 from .run_document_exec import _allowed_runs_root, load_run_document
 from .resume import validate_resume
 from .workflow_state import workflow_state_from_json
@@ -341,7 +341,7 @@ def _record_sweep_run(
                 if workflow_state_path.exists():
                     workflow_state_path.unlink()
                 result = _run_case_process(
-                    [sys.executable, "-m", "omnidriver", "run", "--run-document", str(run_document_path)],
+                    omnidriver_run_command(driver_context, "--run-document", str(run_document_path)),
                     env=execution_environment,
                     timeout=case_timeout_s,
                 )
@@ -1138,7 +1138,7 @@ def sweep_run(
                         if workflow_state_path.exists():
                             workflow_state_path.unlink()
                         result = _run_case_process(
-                            [sys.executable, "-m", "omnidriver", "run", "--run-document", str(run_document_path)],
+                            omnidriver_run_command(driver_context, "--run-document", str(run_document_path)),
                             env=execution_environment,
                             timeout=case_timeout_s,
                         )
@@ -1227,7 +1227,7 @@ def sweep_run(
                         if workflow_state_path.exists():
                             workflow_state_path.unlink()
                         result = _run_case_process(
-                            [sys.executable, "-m", "omnidriver", "run", "--run-document", str(run_document_path)],
+                            omnidriver_run_command(driver_context, "--run-document", str(run_document_path)),
                             env=execution_environment,
                             timeout=case_timeout_s,
                         )

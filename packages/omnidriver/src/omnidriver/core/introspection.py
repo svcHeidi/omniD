@@ -673,6 +673,7 @@ def describe_entry(
         "strict_launch": _run_launch_description(
             resolution["resolved_name"],
             resolve_execution_context(spec),
+            driver_context=driver_context,
             entry_kind=resolution["entry_kind"],
             config_path=config_path,
         ),

@@ -40,7 +40,7 @@ import hashlib
 import json
 import re
 from dataclasses import asdict, is_dataclass
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property
 from importlib import import_module
 from typing import Any, Protocol, Sequence, TYPE_CHECKING, runtime_checkable
@@ -281,6 +281,18 @@ class DriverContext:
 
     providers: tuple[SolverPlugin, ...]
     identity: "StackIdentity"
+    # The ``--plugin`` value that rebuilds this context in another process,
+    # recorded where a selector becomes a context (``load_plugin_context``,
+    # ``load_discovered_plugin``) and ``None`` everywhere else: a hand-built
+    # or default context was produced by no selector, and inventing one would
+    # be a guess. Added 2026-09-24: sweep_run's per-case ``python -m
+    # omnidriver run`` child was never told which plugin its parent had, so
+    # it resolved the entry-point default -- which refuses whenever two
+    # solver-tier adapters are installed. Excluded from equality because it
+    # says how to rebuild a context, not what the context is, and from
+    # ``identity`` for the same reason ``ProviderIdentity.source`` is kept out
+    # of ``capability_digest``.
+    plugin_selector: str | None = field(default=None, compare=False)
 
     @cached_property
     def capabilities(self) -> "PluginCapabilities":
@@ -854,7 +866,9 @@ def _provider_identity(provider: SolverPlugin, *, source: str) -> "ProviderIdent
 
 
 def driver_context(
-    *providers: SolverPlugin, source: str | Sequence[str],
+    *providers: SolverPlugin,
+    source: str | Sequence[str],
+    plugin_selector: str | None = None,
 ) -> DriverContext:
     """Create a validated immutable context for an ordered provider stack.
 
@@ -878,6 +892,9 @@ def driver_context(
     provenance for every provider but one -- that was
     :func:`~omnidriver.core.plugin_discovery.default_discovered_context`'s
     bug before it started passing one source per provider explicitly.
+
+    ``plugin_selector`` is passed only by the loaders that turn a ``--plugin``
+    value into a context; see :attr:`DriverContext.plugin_selector`.
     """
 
     if not providers:
@@ -912,7 +929,9 @@ def driver_context(
         providers=provider_identities,
         resolutions=resolutions(ordered),
     )
-    context = DriverContext(providers=ordered, identity=identity)
+    context = DriverContext(
+        providers=ordered, identity=identity, plugin_selector=plugin_selector,
+    )
     # Eager, not lazy: touching .capabilities here runs provider_stack.compose
     # now, at construction, so a packaging error (the single-declarer rule
     # over case_files, two providers claiming the same exclusive hook, ...)
@@ -983,7 +1002,7 @@ def load_plugin_context(target: str) -> DriverContext:
     providers, sources = _expand_with_requirements(
         plugin_class(), f"trusted-import:{target}",
     )
-    return driver_context(*providers, source=sources)
+    return driver_context(*providers, source=sources, plugin_selector=target)
 
 
 def default_driver_context() -> DriverContext:

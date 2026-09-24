@@ -60,6 +60,37 @@ def test_a_discovered_id_wins_only_when_there_is_no_colon(monkeypatch) -> None:
     assert context.identity.providers[0].source.startswith("trusted-import:")
 
 
+def test_a_loaded_context_records_the_selector_that_rebuilds_it(monkeypatch) -> None:
+    """A child process can only rebuild a context from the selector string.
+
+    ``sweep_run`` executes each case as ``python -m omnidriver run``; before
+    the context recorded this, the child got no ``--plugin`` at all and fell
+    back to the entry-point default, which refuses outright whenever two
+    solver-tier adapters are installed.
+    """
+    monkeypatch.setattr(
+        plugin_discovery, "_entry_points", lambda: (_FakeEntryPoint(),)
+    )
+    target = "plugins.minimal_plugin:MinimalTestPlugin"
+    assert load_plugin_context(target).plugin_selector == target
+    assert load_plugin_context("fakeplugin").plugin_selector == "fakeplugin"
+
+
+def test_a_hand_built_context_claims_no_selector() -> None:
+    """No selector string produced it, so it must not pretend one would."""
+    from omnidriver.core.plugin_interface import driver_context
+
+    context = driver_context(MinimalTestPlugin(), source="test:hand-built")
+    assert context.plugin_selector is None
+
+
+def test_the_selector_is_not_part_of_context_equality() -> None:
+    """It says how to rebuild a context, not what the context is."""
+    context = load_plugin_context("plugins.minimal_plugin:MinimalTestPlugin")
+    rebuilt = dataclasses.replace(context, plugin_selector=None)
+    assert rebuilt == context
+
+
 def test_discovery_is_empty_by_default_and_does_not_raise() -> None:
     # No third-party plugin is installed in this repository's environment.
     assert isinstance(plugin_discovery.discover_plugins(), dict)

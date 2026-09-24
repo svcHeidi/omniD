@@ -48,6 +48,37 @@ def test_plain_case_plans_with_declared_neutral_environment(tmp_path: Path) -> N
     assert report.workflow_dag["steps"][0]["produces"] == []
 
 
+def test_the_advertised_run_command_rebuilds_the_planning_context(tmp_path: Path) -> None:
+    """strict_plan hands back a `run --strict --entry` command for another
+    process to execute. It must carry the `--plugin` selector the planning
+    context was built from, or that process resolves the entry-point default
+    -- a different stack, or a refusal when two adapters are installed. A
+    context built by no selector advertises no flag rather than a guessed one.
+    """
+    case_root = tmp_path / "plainCase"
+    case_root.mkdir()
+    (case_root / "run-test-case").write_text("#!/bin/sh\nexit 0\n")
+    selector = "plugins.declared_case_plugin:DeclaredCasePlugin"
+
+    selected = strict_plan(
+        "plainCase",
+        overrides={"cases_root": str(tmp_path)},
+        driver_context=driver_context(
+            DeclaredCasePlugin(), source="test", plugin_selector=selector,
+        ),
+    )
+    unselected = strict_plan(
+        "plainCase",
+        overrides={"cases_root": str(tmp_path)},
+        driver_context=driver_context(DeclaredCasePlugin(), source="test"),
+    )
+
+    command = selected.launch["command"]
+    assert command[command.index("--plugin") + 1] == selector
+    assert command[command.index("run") + 1 :].count("--strict") == 1
+    assert "--plugin" not in unselected.launch["command"]
+
+
 def test_plain_case_uses_the_selected_declared_context(tmp_path: Path) -> None:
     case_root = tmp_path / "plainCase"
     case_root.mkdir()
@@ -66,6 +97,46 @@ def test_plain_case_uses_the_selected_declared_context(tmp_path: Path) -> None:
     assert report.plugin["providers"][0]["id"] == "org.driverfoam.test-minimal"
     assert report.run_document is not None
     assert report.run_document.plugin == report.plugin
+
+
+def test_a_relative_cases_root_plans_a_document_its_reader_places_identically(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """The run document is read by another process under its own rule.
+
+    `build_execution_inputs` reads a relative `launch.outputDir` as relative
+    to `caseRoot`, and a relative `caseRoot` as relative to the reader's
+    working directory. Planning used to write both already joined and still
+    relative (`caseRoot='cases/plainCase'`,
+    `outputDir='cases/plainCase/outputs'`), so the reader nested the output
+    dir twice -- and a sweep parent looking where the document said found no
+    workflow state for a case that had completed.
+    """
+    from omnidriver.core.runtime.run_document_exec import build_execution_inputs
+
+    case_root = tmp_path / "cases" / "plainCase"
+    case_root.mkdir(parents=True)
+    (case_root / "run-test-case").write_text("#!/bin/sh\nexit 0\n")
+    monkeypatch.chdir(tmp_path)
+    context = driver_context(DeclaredCasePlugin(), source="test")
+
+    report = strict_plan(
+        "plainCase", overrides={"cases_root": "cases"}, driver_context=context,
+    )
+    assert report.status == "ok"
+    launch = report.run_document.launch
+    for key in ("caseRoot", "setupRoot", "outputDir", "workflowStatePath"):
+        assert Path(launch[key]).is_absolute(), (key, launch[key])
+
+    inputs, diagnostics = build_execution_inputs(
+        report.run_document, driver_context=context,
+    )
+    assert inputs is not None, diagnostics
+    assert inputs.case_root == case_root.resolve()
+    assert inputs.output_dir == (case_root / "outputs").resolve()
+    assert Path(launch["workflowStatePath"]).resolve() == (
+        inputs.output_dir / "workflow_state.json"
+    )
 
 
 def test_unresolved_configuration_blocks_normal_plan_but_is_explicitly_explorable(

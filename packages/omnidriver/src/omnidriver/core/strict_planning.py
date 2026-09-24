@@ -3,7 +3,6 @@ from __future__ import annotations
 import fnmatch
 import os
 import shlex
-import sys
 from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
 from pathlib import PurePosixPath
@@ -19,6 +18,7 @@ from .runtime.artifacts import predict_data_artifacts
 from .runtime.execution_context import resolve_execution_context
 from .runtime.models import DataArtifact
 from .runtime.registry import load_entry_spec
+from .runtime.run_command import omnidriver_run_command
 from .runtime.run_document_adapter import _run_document_from_case
 from .runtime.run_model import RunDocument
 from .runtime.strict_audit import _build_simulation_audit
@@ -401,6 +401,7 @@ def _run_launch_description(
     entry: str,
     context,
     *,
+    driver_context: "DriverContext",
     entry_kind: str | None,
     config_path: str | Path | None,
     allow_unresolved_configuration: bool = False,
@@ -414,8 +415,18 @@ def _run_launch_description(
     sim/post/all CLI at all -- to describe_launch's action vocabulary.
     `run --strict --entry` is the command that actually executes this exact
     plan today.
+
+    The four paths are written absolute. They become the run document's
+    ``launch`` block, which another process reads under its own rule
+    (``run_document_exec.build_execution_inputs``: a relative ``outputDir`` is
+    under ``caseRoot``, a relative ``caseRoot`` is under the reader's working
+    directory). These paths arrive already joined under a possibly relative
+    ``cases_root``, so written as-is the reader nested ``outputDir`` twice.
+    Added 2026-09-24, after ``sweep-run --output-dir out`` recorded a completed
+    case as "pending". Anchoring here resolves a supplied relative path at the
+    moment it was supplied; it invents no root.
     """
-    command = [sys.executable, "-m", "omnidriver", "run", "--strict", "--entry", entry]
+    command = omnidriver_run_command(driver_context, "--strict", "--entry", entry)
     if entry_kind is not None:
         command.extend(["--entry-kind", entry_kind])
     if config_path is not None:
@@ -426,10 +437,10 @@ def _run_launch_description(
         "action": "run",
         "command": command,
         "command_display": shlex.join(command),
-        "workflow_state_path": str(context.workflow_state_path),
-        "case_root": str(context.case_root),
-        "setup_root": str(context.setup_root),
-        "output_dir": str(context.output_dir),
+        "workflow_state_path": str(Path(context.workflow_state_path).absolute()),
+        "case_root": str(Path(context.case_root).absolute()),
+        "setup_root": str(Path(context.setup_root).absolute()),
+        "output_dir": str(Path(context.output_dir).absolute()),
     }
 
 
@@ -493,6 +504,7 @@ def _strict_plan_for_spec(
     launch = _run_launch_description(
         entry,
         execution_context,
+        driver_context=driver_context,
         entry_kind=entry_kind,
         config_path=config_path,
         allow_unresolved_configuration=allow_unresolved_configuration,

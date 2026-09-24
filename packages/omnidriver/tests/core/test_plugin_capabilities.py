@@ -98,7 +98,15 @@ def test_context_exposes_focused_adapters_without_replacing_public_plugin(
     reconstructed = DriverContext((plugin,), context.identity)
     assert reconstructed.providers == (plugin,)
     assert reconstructed.capabilities.tutorials.catalog() == plugin.get_tutorial_catalog()
-    assert [item.name for item in fields(reconstructed)] == ["providers", "identity"]
+    # 2026-09-24: `plugin_selector` added deliberately -- the `--plugin` value
+    # a child process needs to rebuild this context (sweep_run's per-case
+    # subprocess). It is optional and trailing, so the positional
+    # (providers, identity) constructor above is unchanged, and it holds a
+    # string, not a provider, so nothing is hidden behind the adapters.
+    assert [item.name for item in fields(reconstructed)] == [
+        "providers", "identity", "plugin_selector",
+    ]
+    assert reconstructed.plugin_selector is None
 
 
 def test_non_cardiac_plugin_does_not_inherit_cardiac_case_evidence(

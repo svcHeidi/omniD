@@ -615,6 +615,95 @@ def test_sweep_run_archives_each_case_postprocessing_output_by_default(tmp_path)
     assert (case_output_dirs[2] / "collectedOutput" / "case_2.dat").read_text() == "result 2"
 
 
+def test_case_run_command_forwards_the_selector_the_sweep_was_given():
+    from omnidriver.core.plugin_interface import load_plugin_context
+    from omnidriver.core.runtime.run_command import omnidriver_run_command
+
+    selector = "plugins.sweepable_plugin:SweepablePlugin"
+    command = omnidriver_run_command(
+        load_plugin_context(selector), "--run-document", "doc.json",
+    )
+    assert command == [
+        sys.executable, "-m", "omnidriver", "run",
+        "--plugin", selector, "--run-document", "doc.json",
+    ]
+
+
+def test_case_run_command_adds_no_selector_a_context_never_had():
+    """A hand-built context has no selector; inventing one would be a guess.
+
+    The child then resolves the default, and the run document's plugin
+    identity check refuses it loudly if that default is a different stack.
+    """
+    from omnidriver.core.runtime.run_command import omnidriver_run_command
+
+    command = omnidriver_run_command(_CTX, "--run-document", "doc.json")
+    assert "--plugin" not in command
+
+
+def test_sweep_run_child_process_rebuilds_the_parent_context(tmp_path, monkeypatch):
+    """Not mocked: each case really runs in a `python -m omnidriver` child.
+
+    Before the child was handed the parent's --plugin selector it resolved
+    the entry-point default instead, which refuses with no adapter installed
+    (core alone) and with two solver-tier adapters installed (all four
+    packages) -- so every case failed in both shapes.
+    """
+    import plugins.sweepable_plugin
+    from omnidriver.core.plugin_interface import load_plugin_context
+
+    # `plugins` is a namespace package (no __file__); anchor on the module.
+    tests_root = str(Path(plugins.sweepable_plugin.__file__).resolve().parents[1])
+    inherited = os.environ.get("PYTHONPATH")
+    monkeypatch.setenv(
+        "PYTHONPATH", tests_root if not inherited else f"{tests_root}{os.pathsep}{inherited}",
+    )
+    ctx = load_plugin_context("plugins.sweepable_plugin:SweepablePlugin")
+    spec_path = tmp_path / "sweep.json"
+    spec_path.write_text(json.dumps({
+        "base": {},
+        "sweep": {"mode": "zip", "independent": {"axisA": ["valueA", "valueB"]}},
+    }))
+
+    result = sweep_run(spec_path, output_dir=tmp_path / "out", driver_context=ctx)
+
+    assert [case["status"] for case in result["cases"]] == ["completed", "completed"], result
+    assert result["failed_count"] == 0
+
+
+def test_sweep_run_with_a_relative_output_dir_finds_its_completed_case(tmp_path, monkeypatch):
+    """Not mocked: `--output-dir out` must mean what `--output-dir /abs/out` does.
+
+    Planning wrote the run document's launch paths relative and already
+    joined (`caseRoot='out/case_0001'`, `outputDir='out/case_0001/outputs'`).
+    The child reads a relative outputDir under caseRoot, so it wrote its state
+    to out/case_0001/out/case_0001/outputs; the parent read outputDir against
+    its own working directory, found nothing, and recorded a completed case
+    as "pending" with failed_count 1.
+    """
+    import plugins.sweepable_plugin
+    from omnidriver.core.plugin_interface import load_plugin_context
+
+    tests_root = str(Path(plugins.sweepable_plugin.__file__).resolve().parents[1])
+    inherited = os.environ.get("PYTHONPATH")
+    monkeypatch.setenv(
+        "PYTHONPATH", tests_root if not inherited else f"{tests_root}{os.pathsep}{inherited}",
+    )
+    ctx = load_plugin_context("plugins.sweepable_plugin:SweepablePlugin")
+    (tmp_path / "sweep.json").write_text(json.dumps({
+        "base": {},
+        "sweep": {"mode": "zip", "independent": {"axisA": ["valueA"]}},
+    }))
+    monkeypatch.chdir(tmp_path)
+
+    result = sweep_run("sweep.json", output_dir="out", driver_context=ctx)
+
+    assert [case["status"] for case in result["cases"]] == ["completed"], result
+    assert result["failed_count"] == 0
+    assert (tmp_path / "out" / "case_0001" / "outputs" / "workflow_state.json").is_file()
+    assert not (tmp_path / "out" / "case_0001" / "out").exists()
+
+
 def test_sweep_plan_refuses_over_cap_without_expanding(tmp_path):
     spec = {
         "base": {"electro_selectors": {"myocardiumSolver": "singleCellSolver", "tissue": "epicardialCells"},

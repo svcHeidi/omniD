@@ -14,15 +14,11 @@ test instead proves the real, unmocked round trip end to end using the
 existing zero-argument-constructible ``plugins.e2e_record_plugin
 :E2ERecordPlugin`` fixture, over a 2-case record study.
 
-**Blocked, skipped, not deleted (coordinator instruction, mid-session):**
-the actual ``--plugin`` forwarding fix this test proves is being built in a
-separate, dedicated session ("Forward --plugin to sweep_run's spawned
-run-document subprocess") to avoid two competing implementations. This
-file's own ``sweep_runner.py`` changes for that forwarding were reverted
-back to their pre-fix state; this test is kept, written, and ready, but
-marked skip until that other session's fix lands. Un-skip it then -- it
-should pass unmodified once ``sweep_run``/the CLI forward the parent's
-``--plugin`` selection to the spawned child.
+**Un-skipped 2026-09-25 (consolidation).** It was skipped while the
+``--plugin`` forwarding lived in a separate session. That work
+(``DriverContext.plugin_selector``, recorded where a ``--plugin`` value
+becomes a context) is now integrated, and every child command is built by
+``core.runtime.run_command.omnidriver_run_command``, record sweeps included.
 """
 
 from __future__ import annotations
@@ -46,10 +42,6 @@ def _native_toy_case(tmp_path: Path) -> Path:
     return native.parent
 
 
-@pytest.mark.skip(
-    reason="M5 (--plugin forwarding to the sweep's spawned run-document "
-    "child) is being fixed in a separate session; un-skip once that lands."
-)
 def test_sweep_run_cli_propagates_the_plugin_to_its_spawned_children(tmp_path):
     cases_root = _native_toy_case(tmp_path)
     spec = {
