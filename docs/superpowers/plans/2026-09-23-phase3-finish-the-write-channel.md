@@ -2097,6 +2097,139 @@ adds, nothing else. `git stash pop` restored the change; all now pass.
 environmental `ensurepip` abort in `test_every_core_module_imports_from_a_wheel`,
 present before this task and unrelated to it). Both static gates pass.
 
+**Correction, 2026-09-24 (coordinator review).** This section's own report
+overstated `test_describe_proposed_changes.py`'s proof: calling it "real
+fixture, real CLI invocation" is wrong on both halves.
+`TestSingleCellProposedChangesEndToEnd` writes a small, hand-authored
+`electroProperties`/`physicsProperties` into a fresh temp directory --
+plausible, catalog-valid text, not bytes sourced from the native tutorial
+tree -- and calls `_write_surface` directly, never through
+`packages/omnidriver/src/omnidriver/cli.py`. "Real" there meant only "a
+real directory on disk, not a mock/patch", which is not what "real fixture,
+real CLI invocation" claims to a reader. The coordinator's own run --
+`describe` through the actual `omnidriver` CLI entry point, against a copy
+of the actual native `singleCell` tutorial case (not this session's
+invented text) -- is the genuine end-to-end proof of this task's Step 2 and
+is what actually found Defect 1 below; this module's own unit tests could
+not have found it, because none of them drives the CLI. This programme's
+rule is that a report must not claim more than was executed; recorded here
+with a date rather than silently edited, per house style.
+
+## Corrections from coordinator review, 2026-09-24: two real defects found by running the real CLI against a real case
+
+Both were found by the coordinator running `describe` through the actual
+CLI against a copy of the real native `singleCell` tutorial case -- neither
+was visible from this task's own unit tests, which is itself the finding
+above.
+
+### Defect 1: a failed preview reported as "no changes", not as "unknown"
+
+With `cases_root` supplied inside `--config` rather than as `--cases-root`
+(a pre-existing `cli.py:1180` behaviour, `99f3168`, 2026-09-04 -- **not this
+task's to fix**; `resolve_cases_root` deliberately has no config-file tier,
+`ENVIRONMENT_CONTRACT.md` §12; the coordinator is tracking it separately),
+the CLI resolves a different root than the caller intended. The staged
+preview then genuinely cannot find `constant/electroProperties` and raises.
+Before this correction, `_write_surface` caught that failure inside
+`_resolve_proposed_changes`, then fell through to the **naive key-match
+fallback regardless of why the resolver-based path failed** -- which
+computes `[]` for a raw factory-kwargs `overrides` dict (its own condition,
+"the qualified id is already a key in `overrides`", is essentially never
+true for one), reporting **the same shape as a legitimate no-op**. `describe`
+still exited 0 and an agent reading `proposed_changes: []` would conclude
+nothing would change, when the true state is "could not be determined".
+
+**Fixed in `core/introspection.py::_write_surface`**, not by adding a new
+exception path but by narrowing which failure gets the naive fallback at
+all: the fallback now applies **only** when `spec.plan_case is None` (no
+resolver exists for this spec, ever -- the original, stated Phase 2 Task 13
+scope limit). Every other reason `_resolve_proposed_changes` returns `None`
+-- an ambiguous sweep, or the staged preview itself raising -- now yields
+`proposed_changes: null` (`None`) and `proposed_changes_source: "unknown"`,
+a third answer a consumer cannot mistake for an empty list of changes.
+`proposed_changes_reason` still names the underlying error either way.
+
+**Exit code: left at 0, argued, not left implicit.** `describe` is used
+before a case is materialized as often as after -- an ordinary situation,
+not a caller error -- and the rest of its payload (the catalog, `modes`,
+the config schema, the tutorial contract) stays valid and useful when the
+write-channel preview specifically cannot run. Failing the whole command
+over one sub-feature would make `describe` markedly less useful as a
+discovery tool for exactly the situation it is most needed in. The
+distinction an agent needs -- "this preview is unknown, not empty" -- is
+carried in the payload's own `proposed_changes`/`proposed_changes_source`
+fields, the same way `modes` already reports "not supported: `<reason>`"
+without failing the call.
+
+**Verified against the real regression, not only a synthetic test.**
+Reproduced the coordinator's exact scenario (`case_root` existing but
+missing `constant/electroProperties`) both as a new unit test
+(`test_a_staged_preview_that_raises_reports_unknown_not_an_empty_list`,
+`test_describe_proposed_changes.py`) and by running the real CLI: before
+the fix, `proposed_changes: []`; after, `proposed_changes: null`,
+`proposed_changes_source: "unknown"`, `proposed_changes_reason: "the
+staged plan_case preview raised: patch target 'constant/electroProperties'
+does not exist under ..."`, exit code still `0`, and the (deliberately
+empty) case directory left with no file created by the failed attempt.
+Verified by reverting `introspection.py` alone: the new test fails
+(`AssertionError: '[]' is not None`-shaped), confirming it would have
+caught this before the fix; restoring returns it to green.
+
+### Defect 2: a tutorial default reported as `source="case"`
+
+`single_cell._plan_case` folded `stim_amplitude` -- looked up from this
+tutorial's own default `stimulus_map` table, keyed by the caller's
+`ionic_model` choice, not itself supplied by the immediate caller -- into
+the same `case_overrides` dict as `tissue`/`ionicModel` (values the caller
+genuinely did choose via `case.params`), and `resolve_entry_overrides`
+marks every entry it resolves `source="case"` unconditionally. `describe`
+is what made this externally visible for the first time; it is not new
+behaviour `describe` introduced. Audit finding F4 again: a tutorial default
+presented as though the case had asked for it.
+
+**Fixed, in `single_cell` only**, per the coordinator's explicit scope
+limit (`manufactured_bath_bidomain`, `manufactured_eikonal_ecg`,
+`manufactured_monodomain_pseudo_ecg`, `niederer_2012`,
+`manufactured_monodomain_total_lagrangian_em` are being edited by parallel
+sessions right now and are not touched). `stim_amplitude` is now resolved
+separately from `case_overrides`, via a new small public function,
+`cardiacfoam/overrides.py::resolve_electro_property_set` (the ordinary-`set`
+counterpart to `resolve_electro_property_ensure`/`_removal`, added because
+neither existing single-key resolver lets a caller declare a `source` other
+than the `"case"` `resolve_entry_overrides` always assigns), with
+`source="case"` only when `stimulus_map` is not `defaults.STIMULUS_MAP`
+itself (the `make_spec` caller replaced the whole table -- a deliberate
+choice, even if the replacement's values happen to equal the default's) and
+`"template"` otherwise -- the same rule `dict_builder.py`'s synthesis
+resolver already applies (`source="case" if delta_t is not None else
+"template"`). An explicit `electro_property_overrides` entry for
+`stim_amplitude` still wins (`merge_assignments`'s unchanged "second write
+wins" order) and is still `"case"` -- a genuine caller-supplied value.
+Three new tests in `test_single_cell_write_channel.py` cover all three
+cases; verified against the real CLI: `stim_amplitude` now reports
+`source: "template"` for the default table and `"case"` for either an
+explicit `stimulus_map` replacement or an explicit `electro_property_overrides`
+entry. Byte-for-byte output is unchanged (`source` is metadata, never
+rendered) -- confirmed by the unmodified pre-existing characterization
+tests staying green.
+
+**Owed, not done here: the same provenance audit across every other
+tutorial's `_plan_case`.** `single_cell` is very unlikely to be the only
+one folding a tutorial-computed default into a `resolve_entry_overrides`
+call and reporting it `source="case"` -- `stim_amplitude` is the worked
+example, not a special case. Per the coordinator's explicit instruction,
+this is **not** audited or fixed for any other tutorial in this task,
+because five of the eleven migrated tutorials are mid-edit in two parallel
+branches right now. Tracked here as owed work, to be done once those
+branches merge: re-check every `_plan_case` for a value it computed from
+its own defaults (not the immediate caller's argument) folded into a
+`resolve_entry_overrides`/`case_overrides` dict, and give it an explicit
+`source` the same way, using this same rule and `resolve_electro_property_set`.
+
+**All four required shapes, on the tree with both defects fixed: 0 failed**
+(aside from the documented environmental `ensurepip` abort). Both static
+gates pass.
+
 **What this task's own brief got wrong.** Step 1's literal instruction ("The
 adapter or the tutorial spec must declare its kwarg → qualified-id mapping")
 described the seam the plan expected to need; the evaluation this same
