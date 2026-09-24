@@ -7,6 +7,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+import pytest
+
 from omnidriver import cli
 from omnidriver.cli import _load_spec_overrides
 
@@ -74,3 +76,35 @@ def test_execution_materializes_registered_entry_before_final_plan(tmp_path: Pat
     )
     assert strict_plan.call_count == 2
     assert strict_plan.call_args.kwargs["overrides"] == {"cases_root": str(tmp_path)}
+
+
+@pytest.mark.parametrize("wrapped", [False, True], ids=["flat", "entry-section"])
+def test_config_supplied_cases_root_is_refused_by_name(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], wrapped: bool,
+) -> None:
+    # `cases_root` is a real make_spec keyword, so it reads as a valid config
+    # key -- but resolve_cases_root has no config-file tier (explicit ->
+    # OMNIDRIVER_CASES_ROOT -> cwd, ENVIRONMENT_CONTRACT.md §12). It used to be
+    # accepted and then silently overwritten by that chain; it must be refused
+    # instead, naming the two supported ways to supply it.
+    section = {"cases_root": str(tmp_path / "elsewhere"), "number_cells": [10]}
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({"someEntry": section} if wrapped else section))
+    context = SimpleNamespace(
+        capabilities=SimpleNamespace(
+            tutorials=SimpleNamespace(catalog=lambda: {"registered_tutorials": ()})
+        )
+    )
+
+    with mock.patch(
+        "omnidriver.core.plugin_interface.default_driver_context", return_value=context,
+    ), mock.patch.object(cli, "describe_entry", return_value={}) as describe_entry:
+        with pytest.raises(SystemExit) as excinfo:
+            cli.main(["describe", "--entry", "someEntry", "--config", str(config_path)])
+
+    assert excinfo.value.code == 2
+    stderr = capsys.readouterr().err
+    assert "cases_root" in stderr
+    assert "--cases-root" in stderr
+    assert "OMNIDRIVER_CASES_ROOT" in stderr
+    describe_entry.assert_not_called()
