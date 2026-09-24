@@ -1177,6 +1177,17 @@ def main(argv: list[str] | None = None) -> int:
     # core invented.
     if overrides is None:
         overrides = {}
+    # `cases_root` is a genuine make_spec keyword, so it reads as a valid
+    # config key -- but resolve_cases_root deliberately has no config-file
+    # tier, and the assignment below would overwrite it. Refuse it by name
+    # rather than drop it silently (99f3168 did the latter until 2026-09-24).
+    if "cases_root" in overrides:
+        parser.error(
+            f"--config {args.config} sets 'cases_root', which is not read from "
+            "a config file; supply it with --cases-root or the "
+            "OMNIDRIVER_CASES_ROOT environment variable "
+            "(future/ENVIRONMENT_CONTRACT.md §12)"
+        )
     overrides["cases_root"] = str(resolve_cases_root(args.cases_root))
 
     if args.action == "describe":
