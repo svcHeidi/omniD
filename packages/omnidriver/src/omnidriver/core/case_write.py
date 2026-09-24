@@ -164,6 +164,22 @@ class ParameterAssignment:
     unit: str = ""
     evidence_refs: tuple[str, ...] = ()
     operation: str = "set"
+    #: Whether the adapter that resolved this key checked it against a real
+    #: catalog. Added 2026-09-24 for tutorial-record studies (design doc
+    #: ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md``
+    #: §5): a solver-owned key (cardiacFOAM's, checked against
+    #: ``dict_entries_catalog``) is ``True``; an environment-owned key with no
+    #: full catalog yet (``system/fvSchemes``, ``fvSolution``, ...) is written
+    #: anyway, flagged ``False`` -- "no check invented in place of a catalog".
+    #: Core never decides this itself; whichever adapter resolves the key
+    #: (``core.tutorial_records.resolve_case_patches``'s ``direct_key_validator``,
+    #: or an ``AxisContract.resolve`` building an ``AxisPatch``) does. Defaults
+    #: ``True``, the same "no field means the prior, only behaviour" reasoning
+    #: ``operation``/``evidence_refs``/``expected_effects`` already use --
+    #: every assignment built before this field existed came from a channel
+    #: that already implied a real catalog check, so schema version stays
+    #: unchanged here too, matching that precedent.
+    validated: bool = True
 
     def __post_init__(self) -> None:
         # Coerced to a tuple before anything below reads it (R2 finding 3): a
@@ -281,6 +297,7 @@ class ParameterAssignment:
             "unit": self.unit,
             "evidence_refs": list(self.evidence_refs),
             "operation": self.operation,
+            "validated": self.validated,
         }
 
     @classmethod
@@ -306,6 +323,10 @@ class ParameterAssignment:
             # only behaviour" reasoning `unit`/`evidence_refs` already use.
             operation=payload.get("operation", "set"),
             evidence_refs=tuple(payload.get("evidence_refs", ())),
+            # Same "no field means the prior, only behaviour" default as
+            # `operation` above -- absent in a plan written before this field
+            # existed.
+            validated=payload.get("validated", True),
         )
 
 
