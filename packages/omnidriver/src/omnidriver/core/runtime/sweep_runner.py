@@ -15,7 +15,7 @@ from omnidriver.core.strict_planning import strict_plan, _strict_plan_for_spec
 from omnidriver.core.plugin_profile import decomposition_dirname_prefix
 from omnidriver.core.sweep.sweep_derivation_catalog import get_derivation
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError, check_case_count_cap, expand_sweep
-from omnidriver.core.tutorial_records import TutorialRecordError
+from omnidriver.core.tutorial_records import TutorialRecordError, sort_study_name
 from omnidriver.sweep_materialize import materialize_case
 from omnidriver.sweep_routing import route_case_values, route_entry_case_values
 from .fresh import ensure_fresh_output_dir
@@ -23,7 +23,7 @@ from .attempt_lease import acquire_case_staging_lease
 from .models import data_artifact_from_json, invoke_case_mutation
 from .output_collection import collect_new_output_tree, snapshot_output_tree
 from .postprocess_phase import build_sweep_context, run_postprocessing_module
-from .record_execution import commit_record_case, record_case_spec
+from .record_execution import commit_record_case, record_case_spec, _reserved_study_names
 from .registry import load_entry_spec
 from .run_document_exec import _allowed_runs_root, load_run_document
 from .resume import validate_resume
@@ -151,10 +151,66 @@ def _record_case_study_by_source(
     return {"base": stripped_base, "sweep": dict(resolved_axis_values)}
 
 
+def _validate_record_sweep_upfront(
+    record: Any, sweep_spec: dict[str, Any], *, driver_context: "DriverContext",
+) -> None:
+    """Study-name and capability refusals happen ONCE, up front, for the
+    WHOLE sweep -- before any case is staged (minor).
+
+    Before this fix, a missing capability (no record-key validator, case-
+    value comparator, or config-value reader) or a bad study name surfaced
+    independently for EVERY case in the sweep, each reported as its own
+    per-case ``materialization_error`` -- the same refusal, restated N
+    times, only after N cases had already been staged. Both kinds of
+    refusal are the same for every case in one sweep: the composed stack
+    either has these three capabilities or it does not, and a name's SHAPE
+    (a ``document:key`` literal vs an axis) never varies across cases even
+    when a swept axis's VALUE does -- only ``base``'s own direct-key
+    VALUES and each case's own axis VALUES differ, which is exactly what
+    stays per-case (the catalog/purity checks that need an actual value,
+    ``resolve_case_patches``'s own job, per staged case).
+    """
+    if driver_context.capabilities.record_key_validation.validator() is None:
+        raise TutorialRecordError(
+            f"tutorial record {record.name!r} cannot run: the composed stack "
+            "declares no record-key validator (get_record_key_validator); a "
+            "record case's keys cannot be checked against any catalog"
+        )
+    if driver_context.capabilities.case_value_comparison.comparator() is None:
+        raise TutorialRecordError(
+            f"tutorial record {record.name!r} cannot run: the composed stack "
+            "declares no case-value comparator (get_case_value_comparator); "
+            "whether a patch is unchanged cannot be determined"
+        )
+    if driver_context.capabilities.config_value.reader() is None:
+        raise TutorialRecordError(
+            f"tutorial record {record.name!r} cannot run: the composed stack "
+            "declares no config-value reader (get_config_value_reader); "
+            "whether a patch is unchanged cannot be determined"
+        )
+
+    axis_catalog = driver_context.capabilities.axes.catalog() or {}
+    reserved = _reserved_study_names(record)
+    base = sweep_spec.get("base", {})
+    sweep_section = sweep_spec.get("sweep", {})
+    independent = sweep_section.get("independent", {}) if isinstance(sweep_section, dict) else {}
+    dependent = sweep_section.get("dependent", []) if isinstance(sweep_section, dict) else []
+    names = set(base) | set(independent)
+    names.update(
+        item["name"] for item in dependent
+        if isinstance(item, dict) and isinstance(item.get("name"), str)
+    )
+    names -= reserved
+    names -= _RECORD_NON_STUDY_BASE_KEYS
+    for name in names:
+        sort_study_name(name, allowed_axes=record.allowed_axes, axis_catalog=axis_catalog)
+
+
 def _record_sweep_plan(
     record: Any, cases_root: Path, sweep_spec: dict[str, Any], *,
     output_dir: Path, driver_context: "DriverContext",
 ) -> dict[str, Any]:
+    _validate_record_sweep_upfront(record, sweep_spec, driver_context=driver_context)
     resolved_cases = expand_sweep(sweep_spec, get_derivation=get_derivation)
     base = sweep_spec.get("base", {})
     case_reports: list[dict[str, Any]] = []
@@ -210,6 +266,7 @@ def _record_sweep_run(
     output directory carries the same bookkeeping shape a factory-entry
     sweep's does.
     """
+    _validate_record_sweep_upfront(record, sweep_spec, driver_context=driver_context)
     execution_environment = driver_context.capabilities.environment_preflight.configure(
         os.environ, driver_context,
     )

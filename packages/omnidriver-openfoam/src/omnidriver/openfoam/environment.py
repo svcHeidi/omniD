@@ -27,9 +27,24 @@ def _read_config_value_by_key_path(file_path: Path, key_path):
     Before this existed, ``get_config_value_reader()`` handed back
     ``read_foam_entry`` unwrapped, so a caller passing a tuple silently
     handed it a ``key`` that was never a string at all (review finding B1).
+
+    **Refuses a bare string outright (minor), rather than splitting it into
+    characters.** ``tuple("myKey")`` silently produces
+    ``('m', 'y', 'K', 'e', 'y')`` -- a caller that passed a single string
+    instead of a one-element tuple would have every character treated as
+    its own nested scope segment, reading nothing and returning ``None``
+    with no error at all. The contract requires a tuple; a string (which
+    Python happily iterates character-by-character) is refused by name
+    instead of silently misinterpreted.
     """
     from .mutators import read_foam_entry
 
+    if isinstance(key_path, str):
+        raise TypeError(
+            f"a config value read needs a key-path TUPLE, not a bare string "
+            f"({key_path!r}) -- iterating a string yields one scope segment "
+            "per CHARACTER, which is never what a caller means"
+        )
     segments = tuple(key_path)
     if not segments:
         raise ValueError("a config value read needs a non-empty key path")

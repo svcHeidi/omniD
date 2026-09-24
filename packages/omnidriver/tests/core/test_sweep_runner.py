@@ -1122,6 +1122,43 @@ def _record_driver_context():
     return _driver_context(plugin, source="test:record-sweep")
 
 
+def test_sweep_plan_over_a_record_entry_refuses_a_bad_axis_name_upfront_before_staging_any_case(tmp_path):
+    """Minor: study-name/capability refusals happen ONCE, up front, for the
+    whole sweep -- before this fix, a bad axis name reached
+    resolve_case_patches independently for every case, each staging its own
+    case directory before failing. Confirmed here: NO case directory exists
+    after the refusal, for a 2-case sweep."""
+    cases_root = _native_toy_case(tmp_path)
+    spec = _record_sweep_spec(cases_root=cases_root)
+    spec["sweep"]["independent"]["not_a_real_axis"] = [1, 2]
+    spec_path = tmp_path / "sweep.json"
+    spec_path.write_text(json.dumps(spec))
+    ctx = _record_driver_context()
+
+    with pytest.raises(TutorialRecordError, match="not_a_real_axis"):
+        sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=ctx)
+
+    assert not (tmp_path / "out" / "cases").exists()
+
+
+def test_sweep_run_over_a_record_entry_refuses_a_missing_capability_upfront_before_staging_any_case(tmp_path):
+    cases_root = _native_toy_case(tmp_path)
+    spec_path = tmp_path / "sweep.json"
+    spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root)))
+    plugin = _RecordSweepWriterPlugin(
+        solver_commands=frozenset({"touch"}),
+        tutorial_records={"toyTutorial": _toy_record()},
+        axis_catalog={"number_cells": _record_number_cells_axis()},
+        record_key_validator=None,  # no validator declared at all
+    )
+    ctx = _driver_context(plugin, source="test:record-sweep-no-validator")
+
+    with pytest.raises(TutorialRecordError, match="no record-key validator"):
+        sweep_run(spec_path, output_dir=tmp_path / "out", driver_context=ctx)
+
+    assert not (tmp_path / "out").exists()
+
+
 def test_sweep_plan_over_a_record_entry_previews_every_case_without_running(tmp_path):
     cases_root = _native_toy_case(tmp_path)
     spec_path = tmp_path / "sweep.json"

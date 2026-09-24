@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 from .case_write import _check_case_relative
+from .contracts.dictionary import validate_value_shape
 
 
 class TutorialRecordError(ValueError):
@@ -73,6 +74,11 @@ class WorkflowStep:
         object.__setattr__(self, "command", tuple(self.command))
         if not self.step_id:
             raise TutorialRecordError("a workflow step must have a non-empty step_id")
+        if not self.command:
+            raise TutorialRecordError(
+                f"workflow step {self.step_id!r} must have a non-empty "
+                "command -- there is nothing to run"
+            )
 
 
 @dataclass(frozen=True)
@@ -608,6 +614,20 @@ def resolve_case_patches(
     for source, name, sorted_name, value in axis_entries:
         del source  # an axis patch is sourced by the axis's own name, below
         axis = sorted_name.axis
+        # Minor: the axis's OWN declared value_kind is checked against the
+        # study's value BEFORE resolve ever runs -- an axis's `resolve` is
+        # arbitrary adapter code, and a value that does not fit the shape
+        # the axis itself declares (e.g. a non-integer string for an
+        # "integer" axis) used to reach that code unchecked, surfacing as
+        # whatever native exception the adapter's own coercion happened to
+        # raise (a bare ValueError naming neither the axis nor the study).
+        value_kind_reasons = validate_value_shape(axis.value_kind, value)
+        if value_kind_reasons:
+            raise TutorialRecordError(
+                f"axis {name!r} declares value_kind {axis.value_kind!r}, "
+                f"but the value {value!r} does not fit it: "
+                f"{'; '.join(value_kind_reasons)}"
+            )
         # M2: axis purity enforced at runtime, not merely documented. An
         # axis's own contract (AxisFunction's docstring) says it reads the
         # staged case and must not write it -- nothing mechanically enforced

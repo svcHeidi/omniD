@@ -1,12 +1,27 @@
 import pytest
-from omnidriver.core.sweep.sweep_derivation_catalog import get_derivation, SWEEP_DERIVATION_CATALOG
+from omnidriver.core.sweep.sweep_derivation_catalog import (
+    NAMING_OUTPUT_KEYS,
+    SWEEP_DERIVATION_CATALOG,
+    get_derivation,
+)
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError
 
 
 def test_case_id_template_joins_named_values():
     fn = get_derivation("case_id_template")
-    result = fn({"ionicModel": "TNNP", "deltaT": 1e-6})
-    assert result == {"caseId": "TNNP_1e-06"}
+    result = fn({"modelName": "modelAlpha", "deltaT": 1e-6})
+    assert result == {"caseId": "modelAlpha_1e-06"}
+
+
+def test_naming_output_keys_matches_the_catalog():
+    """NAMING_OUTPUT_KEYS's own comment claims it is "kept in sync with
+    _case_id_template/_output_dir_name_template" -- this is that check,
+    written where the comment already said it lived (it did not exist
+    before this fix, a false citation)."""
+    produced = set()
+    for derivation in SWEEP_DERIVATION_CATALOG.values():
+        produced.update(derivation({"x": "y"}).keys())
+    assert produced == NAMING_OUTPUT_KEYS
 
 
 def test_case_id_template_is_registered():
@@ -21,7 +36,7 @@ def test_get_derivation_rejects_unknown_name():
 def test_case_id_template_rejects_path_unsafe_values():
     fn = get_derivation("case_id_template")
     with pytest.raises(SweepValidationError, match="path-safe|caseId"):
-        fn({"ionicModel": "../TNNP"})
+        fn({"modelName": "../modelAlpha"})
 
 
 def test_get_derivation_rejects_non_string_name():

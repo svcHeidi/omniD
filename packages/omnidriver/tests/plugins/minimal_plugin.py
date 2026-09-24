@@ -34,9 +34,12 @@ class MinimalTestPlugin:
     _telemetry_globs: dict[str, tuple[str, ...]] = {}
     #: Tutorial-record test seams (2026-09-24, tutorial-record design). Empty
     #: by default: a plugin declaring no records/axes/validator/comparator is
-    #: the ordinary case (``compatibility.legacy_tutorial_records`` and kin
-    #: already return the same neutral values), so most tests never need
-    #: these constructor arguments at all.
+    #: the ordinary case -- this plugin still implements all four hooks
+    #: (returning the empty/None defaults below), which is why the four
+    #: capabilities' OWN adapters (not a legacy fallback: those were deleted
+    #: outright, review finding M1 -- ``compatibility.legacy_tutorial_records``
+    #: and kin no longer exist) see a declared hook and call it -- so most
+    #: tests never need these constructor arguments at all.
     _tutorial_records: dict = {}
     _axis_catalog: dict = {}
     _record_key_validator = None

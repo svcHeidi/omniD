@@ -398,8 +398,14 @@ class SolverPluginOptionalHooks(Protocol):
 
     # -- ConfigValueCapability ------------------------------------------------
     def get_config_value_reader(self):
-        """Return a ``(path, key) -> str | None`` reader for this adapter's
-        configuration format. Absent -> no format-specific reader."""
+        """Return a ``(path, key_path_tuple) -> value | None`` reader for
+        this adapter's configuration format -- ``key_path_tuple`` is always
+        a TUPLE (e.g. ``("bidomainSolverCoeffs", "conductivitySource")`` for
+        a nested key, or a one-element tuple for a top-level one), never a
+        single string; an adapter's own reader splits it into whatever
+        scope/leaf-key shape its file format needs (see
+        ``openfoam.environment._read_config_value_by_key_path`` for the
+        reference split). Absent -> no format-specific reader."""
         ...
 
     # -- EnvironmentPreflightCapability -----------------------------------------
@@ -565,7 +571,9 @@ class SolverPluginOptionalHooks(Protocol):
         a native case path, its allowed axes, its workflow steps -- not a
         callable factory. Distinct from ``get_tutorial_catalog()``'s
         ``spec_factories``, which core calls; a record is core data core
-        never calls into the plugin to build. Absent -> ``{}``, the ordinary
+        never calls into the plugin to build. Absent -> ``None``, not
+        ``{}`` (review finding M1: distinct from a plugin that implements
+        this hook and simply registers no records yet) -- the ordinary
         case for a plugin that has not migrated any tutorial onto this shape
         yet (design doc ``docs/superpowers/specs/2026-09-24-tutorials-are-
         pointers-design.md``)."""
@@ -578,8 +586,10 @@ class SolverPluginOptionalHooks(Protocol):
         An axis (``core.tutorial_records.AxisContract``) is a name, the value
         kind it accepts, and a pure function ``(value, staged_case_root) ->
         AxisResult``. Core defines the contract and ships none itself. Absent
-        -> ``{}``: a study naming a bare axis this plugin does not provide is
-        then refused by name, same as one it never declared."""
+        -> ``None``, not ``{}`` (review finding M1) -- callers treat that the
+        same as an empty catalog either way: a study naming a bare axis this
+        plugin does not provide is refused by name, same as one it never
+        declared."""
         ...
 
     # -- RecordKeyValidationCapability ------------------------------------------

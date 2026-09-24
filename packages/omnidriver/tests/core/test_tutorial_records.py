@@ -226,6 +226,19 @@ def test_tutorial_record_refuses_a_native_case_relpath_that_escapes_the_case():
         _record(native_case_relpath="../outside")
 
 
+def test_workflow_step_refuses_an_empty_command():
+    """Minor: a step with no command has nothing to run -- refused at
+    construction, rather than surfacing later as an IndexError when
+    `_workflow_dag_for_record` tries `argv[0]` on an empty list."""
+    with pytest.raises(TutorialRecordError, match="non-empty command"):
+        WorkflowStep(step_id="s", command=())
+
+
+def test_workflow_step_refuses_an_empty_step_id():
+    with pytest.raises(TutorialRecordError, match="non-empty step_id"):
+        WorkflowStep(step_id="", command=("x",))
+
+
 # ---------------------------------------------------------------------------
 # Name sorting (design §3, §4 step 4)
 # ---------------------------------------------------------------------------
@@ -431,6 +444,29 @@ def test_resolve_case_patches_validates_axis_produced_patches_too():
             record,
             study_by_source={"base": {"rogue": "x"}},
             axis_catalog={"rogue": axis},
+            staged_case_root=Path("/nonexistent"),
+            direct_key_validator=_known_catalog_validator,
+        )
+
+
+def test_resolve_case_patches_refuses_a_value_that_does_not_fit_the_axis_value_kind():
+    """Minor: AxisContract.value_kind is checked against the study's value
+    BEFORE resolve ever runs, wrapped as a TutorialRecordError naming the
+    axis -- before this fix, a bad value reached the axis's own resolve
+    code unchecked and surfaced as whatever native exception it happened to
+    raise trying to coerce it."""
+    def resolve(value, staged_case_root):
+        return AxisResult(patches=(
+            AxisPatch("constant/mesh.json", ("cells",), int(value), "integer"),
+        ))
+
+    axis = AxisContract(name="number_cells", value_kind="integer", resolve=resolve)
+    record = _record(allowed_axes=frozenset({"number_cells"}))
+    with pytest.raises(TutorialRecordError, match="number_cells"):
+        resolve_case_patches(
+            record,
+            study_by_source={"base": {"number_cells": "not-a-number"}},
+            axis_catalog={"number_cells": axis},
             staged_case_root=Path("/nonexistent"),
             direct_key_validator=_known_catalog_validator,
         )

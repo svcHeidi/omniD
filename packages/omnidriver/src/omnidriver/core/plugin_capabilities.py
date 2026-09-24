@@ -805,7 +805,7 @@ class ConfigValueCapability(Protocol):
     capability needs no compatibility fallback.
 
     :adapts: get_config_value_reader
-    :consumed-by: omnidriver/cardiacfoam/run_document_config.py
+    :consumed-by: omnidriver/cardiacfoam/run_document_config.py, omnidriver/core/runtime/record_execution.py
     :fallback: none
     :status: optional-neutral
     """
