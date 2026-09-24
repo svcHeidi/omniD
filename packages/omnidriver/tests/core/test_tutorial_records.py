@@ -952,6 +952,111 @@ def test_preview_record_case_lists_each_patch_with_status_and_validated(tmp_path
     assert preview["command_arguments"]["mesh"] == ["-N", "5"]
 
 
+def test_preview_record_case_ignores_sweep_naming_output_keys(tmp_path):
+    """Item 3: `caseId`/`output_dir_name` (sweep.dependent's own naming
+    derivations) are sweep-naming bookkeeping, never case content and never
+    an axis -- they must not reach `sort_study_name` and be refused as an
+    unrecognized bare name, which is what happened before this fix."""
+    _native_case(tmp_path, {"constant/mesh.json": {"cells": "1"}})
+    record = _record()
+    context = _context_with_writer(axis_catalog={"number_cells": _number_cells_axis()})
+
+    preview = record_execution.preview_record_case(
+        record,
+        cases_root=tmp_path / "cases",
+        study_by_source={
+            "base": {},
+            "sweep": {
+                "number_cells": 5,
+                "caseId": "case_0001",
+                "output_dir_name": "case_0001",
+            },
+        },
+        driver_context=context,
+    )
+    documents = {p["document"] for p in preview["patches"]}
+    assert documents == {"constant/mesh.json"}
+
+
+# ---------------------------------------------------------------------------
+# The `mesh` selector, wired end to end through preview/commit (item 4)
+# ---------------------------------------------------------------------------
+
+
+def _record_with_variants(**overrides) -> TutorialRecord:
+    fields = dict(
+        name="toyTutorial",
+        native_case_relpath="toyTutorial",
+        allowed_axes=frozenset(),
+        workflow_steps=(
+            WorkflowStep(step_id="hexMesh", command=("blockMesh",)),
+            WorkflowStep(step_id="tetMesh", command=("gmsh",)),
+            WorkflowStep(step_id="solve", command=("cardiacFoam",)),
+        ),
+        workflow_variants={
+            "hex": ("hexMesh", "solve"),
+            "tet": ("tetMesh", "solve"),
+        },
+    )
+    fields.update(overrides)
+    return TutorialRecord(**fields)
+
+
+def test_preview_record_case_reports_the_selected_variants_steps(tmp_path):
+    _native_case(tmp_path, {})
+    record = _record_with_variants()
+    context = _context_with_writer()
+
+    preview = record_execution.preview_record_case(
+        record,
+        cases_root=tmp_path / "cases",
+        study_by_source={"base": {"mesh": "tet"}},
+        driver_context=context,
+    )
+    assert preview["workflow_step_ids"] == ["tetMesh", "solve"]
+
+
+def test_preview_record_case_refuses_an_unknown_mesh_variant(tmp_path):
+    _native_case(tmp_path, {})
+    record = _record_with_variants()
+    context = _context_with_writer()
+    with pytest.raises(TutorialRecordError, match="quad"):
+        record_execution.preview_record_case(
+            record,
+            cases_root=tmp_path / "cases",
+            study_by_source={"base": {"mesh": "quad"}},
+            driver_context=context,
+        )
+
+
+def test_preview_record_case_refuses_a_missing_mesh_when_record_has_variants(tmp_path):
+    _native_case(tmp_path, {})
+    record = _record_with_variants()
+    context = _context_with_writer()
+    with pytest.raises(TutorialRecordError, match="mesh"):
+        record_execution.preview_record_case(
+            record,
+            cases_root=tmp_path / "cases",
+            study_by_source={"base": {}},
+            driver_context=context,
+        )
+
+
+def test_commit_record_case_reports_the_selected_variants_steps(tmp_path):
+    _native_case(tmp_path, {})
+    record = _record_with_variants()
+    context = _context_with_writer()
+
+    result = record_execution.commit_record_case(
+        record,
+        cases_root=tmp_path / "cases",
+        staged_case_root=tmp_path / "staged",
+        study_by_source={"base": {"mesh": "hex"}},
+        driver_context=context,
+    )
+    assert result.workflow_step_ids == ("hexMesh", "solve")
+
+
 def test_commit_record_case_writes_one_case_with_validated_flags_in_the_record(tmp_path):
     _native_case(tmp_path, {"constant/electro.json": {"ionicModel": "TT06"}})
     record = _record(allowed_axes=frozenset())

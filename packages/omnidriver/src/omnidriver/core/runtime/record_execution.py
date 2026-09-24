@@ -27,12 +27,15 @@ from typing import TYPE_CHECKING, Any, Mapping
 
 from ..case_transaction import commit_case_write
 from ..case_write import CaseMutationRequest, CaseWritePlan, CaseWriteRecord
+from ..sweep.sweep_derivation_catalog import NAMING_OUTPUT_KEYS
 from ..tutorial_records import (
+    MESH_SELECTOR_NAME,
     SourcedPatch,
     TutorialRecord,
     TutorialRecordError,
     patches_to_parameters,
     resolve_case_patches,
+    resolve_mesh_selector,
     split_unchanged,
 )
 
@@ -57,6 +60,11 @@ class RecordCommitResult:
     write_record: CaseWriteRecord | None
     unchanged: tuple[SourcedPatch, ...]
     command_arguments: dict[str, tuple[str, ...]]
+    #: Item 4/item 2: the ordered step ids this case's workflow actually
+    #: runs -- the record's own steps, or one selected variant's, per
+    #: `_resolve_workflow_step_ids`. The caller that runs the workflow (sweep
+    #: dispatch) needs this alongside `command_arguments` to build the DAG.
+    workflow_step_ids: tuple[str, ...]
 
     @property
     def status(self) -> str:
@@ -83,13 +91,80 @@ def _stage(
     _stage_entry_case(native_case_root, staged_case_root, driver_context=driver_context)
 
 
+#: Reserved study names that name neither a document key nor an axis, and
+#: must never reach ``sort_study_name`` (item 3, item 4): the two sweep
+#: naming-derivation outputs (``NAMING_OUTPUT_KEYS`` -- pure sweep-machinery
+#: bookkeeping, never case content) and the ``mesh`` selector (a variant
+#: choice, never a patch). The set is explicit, matching CLAUDE.md's "no
+#: fallback" standard -- nothing here is inferred from shape.
+_RESERVED_STUDY_NAMES: frozenset[str] = NAMING_OUTPUT_KEYS | frozenset({MESH_SELECTOR_NAME})
+
+
+def _extract_reserved_names(
+    study_by_source: Mapping[str, Mapping[str, Any]],
+) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+    """Strip every reserved name out of every source, refusing a value that
+    conflicts across sources by name (item 3 + item 4's selector).
+
+    Returns ``(stripped_study_by_source, reserved_values)`` -- the latter
+    maps each reserved name actually present in the study to its one agreed
+    value.
+    """
+    stripped: dict[str, dict[str, Any]] = {}
+    reserved_values: dict[str, Any] = {}
+    reserved_source: dict[str, str] = {}
+    for source, values in study_by_source.items():
+        remaining = dict(values)
+        for name in _RESERVED_STUDY_NAMES:
+            if name not in remaining:
+                continue
+            candidate = remaining.pop(name)
+            if name in reserved_values and reserved_values[name] != candidate:
+                raise TutorialRecordError(
+                    f"{name!r} is set to different values by "
+                    f"{reserved_source[name]!r} ({reserved_values[name]!r}) "
+                    f"and {source!r} ({candidate!r})"
+                )
+            reserved_values[name] = candidate
+            reserved_source[name] = source
+        stripped[source] = remaining
+    return stripped, reserved_values
+
+
+def _resolve_workflow_step_ids(
+    record: TutorialRecord, reserved_values: Mapping[str, Any],
+) -> tuple[str, ...]:
+    """Item 4: the record's own steps, or one selected variant's steps.
+
+    A record that declares ``workflow_variants`` REQUIRES the study to name
+    ``mesh`` -- no silent default among declared variants. A record with no
+    variants at all requires the study NOT to name ``mesh`` (refused via
+    ``resolve_mesh_selector`` itself: "declares no workflow_variants").
+    """
+    mesh_value = reserved_values.get(MESH_SELECTOR_NAME)
+    if record.workflow_variants:
+        if mesh_value is None:
+            raise TutorialRecordError(
+                f"tutorial record {record.name!r} declares workflow_variants "
+                f"{sorted(record.workflow_variants)}; the study must supply "
+                f"{MESH_SELECTOR_NAME!r} to select one"
+            )
+        return resolve_mesh_selector(record, mesh_value)
+    if mesh_value is not None:
+        return resolve_mesh_selector(record, mesh_value)  # raises: no variants
+    return record.step_ids()
+
+
 def _resolve_and_split(
     record: TutorialRecord,
     *,
     study_by_source: Mapping[str, Mapping[str, Any]],
     staged_case_root: Path,
     driver_context: "DriverContext",
-) -> tuple[tuple[SourcedPatch, ...], tuple[SourcedPatch, ...], dict[str, tuple[str, ...]]]:
+) -> tuple[
+    tuple[SourcedPatch, ...], tuple[SourcedPatch, ...],
+    dict[str, tuple[str, ...]], tuple[str, ...],
+]:
     # M1: neither of these two capabilities has a compatibility fallback any
     # more (`:fallback: none`, matching ConfigValueCapability/
     # CaseWriterCapability) -- a stack that composes no record-key validator
@@ -111,6 +186,8 @@ def _resolve_and_split(
             "declares no case-value comparator (get_case_value_comparator); "
             "whether a patch is unchanged cannot be determined"
         )
+    study_by_source, reserved_values = _extract_reserved_names(study_by_source)
+    workflow_step_ids = _resolve_workflow_step_ids(record, reserved_values)
     # No fallback for axes either, but an absent axis catalog IS a neutral
     # state here (design §3: "Core... ships no solver axes" -- most stacks
     # provide none at all), not a refusal: `sort_study_name` already refuses
@@ -130,7 +207,7 @@ def _resolve_and_split(
         read_current_value=read_current_value,
         values_agree=comparator,
     )
-    return to_write, unchanged, command_arguments
+    return to_write, unchanged, command_arguments, workflow_step_ids
 
 
 def preview_record_case(
@@ -157,7 +234,7 @@ def preview_record_case(
             record, cases_root=cases_root, staged_case_root=staged_case_root,
             driver_context=driver_context,
         )
-        to_write, unchanged, command_arguments = _resolve_and_split(
+        to_write, unchanged, command_arguments, workflow_step_ids = _resolve_and_split(
             record, study_by_source=study_by_source,
             staged_case_root=staged_case_root, driver_context=driver_context,
         )
@@ -190,6 +267,7 @@ def preview_record_case(
             "command_arguments": {
                 step: list(args) for step, args in command_arguments.items()
             },
+            "workflow_step_ids": list(workflow_step_ids),
         }
 
 
@@ -222,13 +300,14 @@ def commit_record_case(
         record, cases_root=cases_root, staged_case_root=staged_case_root,
         driver_context=driver_context,
     )
-    to_write, unchanged, command_arguments = _resolve_and_split(
+    to_write, unchanged, command_arguments, workflow_step_ids = _resolve_and_split(
         record, study_by_source=study_by_source,
         staged_case_root=staged_case_root, driver_context=driver_context,
     )
     if not to_write:
         return RecordCommitResult(
             write_record=None, unchanged=unchanged, command_arguments=command_arguments,
+            workflow_step_ids=workflow_step_ids,
         )
 
     # `DriverContext.identity` has no default -- it is always present, never
@@ -264,4 +343,5 @@ def commit_record_case(
     )
     return RecordCommitResult(
         write_record=record_, unchanged=unchanged, command_arguments=command_arguments,
+        workflow_step_ids=workflow_step_ids,
     )

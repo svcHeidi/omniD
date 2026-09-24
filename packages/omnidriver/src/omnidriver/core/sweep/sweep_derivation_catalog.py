@@ -60,6 +60,21 @@ SWEEP_DERIVATION_CATALOG: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] 
     "output_dir_name_template": _output_dir_name_template,
 }
 
+#: The output keys the two naming derivations above produce -- explicit and
+#: hand-listed, not "every dependent output" (item 3, docs/superpowers/specs/
+#: 2026-09-24-tutorials-are-pointers-design.md §4's worked example): a
+#: sweep's ``dependent`` block derives names such as ``caseId`` purely for
+#: the sweep machinery's own case/output-directory naming, never for case
+#: content and never an axis. A tutorial-record study resolves its bare
+#: names against a record's declared axes (``tutorial_records
+#: .sort_study_name``); handing it one of these two keys unfiltered is
+#: refused as an unrecognized axis, which is exactly the bug this constant
+#: fixes -- the record pipeline strips these keys before classifying study
+#: names, rather than growing a fallback that accepts any unrecognized bare
+#: name. Kept in sync with ``_case_id_template``/``_output_dir_name_template``
+#: by test_sweep_derivation_naming_output_keys_matches_the_catalog below.
+NAMING_OUTPUT_KEYS: frozenset[str] = frozenset({"caseId", "output_dir_name"})
+
 
 def get_derivation(name: str) -> Callable[[dict[str, Any]], dict[str, Any]]:
     """Fixed-registry lookup. No getattr/eval/dynamic import off agent input."""
