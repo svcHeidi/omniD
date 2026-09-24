@@ -12,6 +12,7 @@ import pytest
 
 from omnidriver.core.runtime.sweep_runner import (
     _completed_case_is_reusable,
+    _materialize_entry_case,
     _run_case_process,
     _stage_entry_case,
     sweep_plan,
@@ -67,6 +68,35 @@ class _PostProcessingOutputPlugin(DeclaredCasePlugin):
 
 _STAGING_CTX = _driver_context(_StagingConventionPlugin(), source="test:staging")
 _POSTPROCESSING_CTX = _driver_context(_PostProcessingOutputPlugin(), source="test:postprocessing")
+
+
+def _load_entry_spec_like_a_factory(fake_spec):
+    """A ``load_entry_spec`` double that honours staging, as a real factory does.
+
+    A registered factory builds case_root from the cases_root/case_dir_name it
+    is given, so a staged re-resolution returns the staged copy. A double
+    that returned one fixed root used to be tolerated by silently mutating
+    the source instead; that is now refused (2026-09-24). Every returned spec
+    shares ``fake_spec``'s hooks, so call assertions on it still see all calls.
+    """
+
+    def load(entry, *, overrides=None, driver_context=None):
+        del entry, driver_context
+        overrides = overrides or {}
+        spec = mock.Mock()
+        spec.name = fake_spec.name
+        spec.plan_case = fake_spec.plan_case
+        spec.metadata = fake_spec.metadata
+        spec.build_cases = fake_spec.build_cases
+        spec.apply_case = fake_spec.apply_case
+        spec.case_root = (
+            Path(overrides["cases_root"]) / overrides["case_dir_name"]
+            if "cases_root" in overrides
+            else fake_spec.case_root
+        )
+        return spec
+
+    return load
 
 
 def _write_spec(path: Path, models=("TNNP", "BuenoOrovio")):
@@ -342,6 +372,32 @@ def test_sweep_plan_entry_mode_materializes_via_apply_case_and_audits(tmp_path):
         assert case["status"] == "ok"
 
 
+def test_a_factory_that_ignores_the_staging_overrides_is_refused(tmp_path):
+    # Staging re-resolves the entry with cases_root/case_dir_name pointed at
+    # the staged copy. A factory that ignores them returns its SOURCE
+    # case_root again; mutating that is exactly what staging exists to
+    # prevent, so it is refused -- before any mutation -- rather than
+    # silently mutating the source in place (2026-09-24).
+    source_case_root = tmp_path / "case_root"
+    source_case_root.mkdir()
+    (source_case_root / "authored").write_text("input\n")
+    fake_spec = mock.Mock()
+    fake_spec.plan_case = None
+    fake_spec.metadata = {"resolution": "registered"}
+    fake_spec.case_root = source_case_root
+    fake_spec.build_cases.return_value = [mock.Mock()]
+    staged = tmp_path / "out" / "cases" / "case_0001"
+
+    with mock.patch("omnidriver.core.runtime.sweep_runner.load_entry_spec", return_value=fake_spec), \
+         pytest.raises(ValueError, match="staged") as excinfo:
+        _materialize_entry_case("fixedRootTutorial", {}, staging_root=staged, driver_context=_CTX)
+
+    assert "fixedRootTutorial" in str(excinfo.value)
+    assert str(source_case_root.resolve()) in str(excinfo.value)
+    fake_spec.apply_case.assert_not_called()
+    assert sorted(p.name for p in source_case_root.iterdir()) == ["authored"]
+
+
 def test_sweep_plan_entry_mode_rejects_axis_combination_resolving_to_multiple_cases(tmp_path):
     # sweep-run's per-axis-combination model assumes exactly one case per
     # resolved combination (see route_entry_case_values docstring); a
@@ -371,6 +427,10 @@ def test_sweep_run_entry_mode_executes_run_document_sequentially(tmp_path):
     # in parallel) -- already guaranteed by sweep_run's plain synchronous
     # for-loop, verified here by asserting apply_case/subprocess.run calls
     # happen in resolved-case order.
+    # Corrected 2026-09-24: apply_case no longer mutates a shared case_root;
+    # each case is staged and mutated in its own copy, and a factory that
+    # ignores staging is refused. Sequential order still matters and is what
+    # this asserts.
     spec_path = tmp_path / "sweep.json"
     _write_entry_spec(spec_path)
     output_dir = tmp_path / "out"
@@ -405,7 +465,10 @@ def test_sweep_run_entry_mode_executes_run_document_sequentially(tmp_path):
         workflow_state_path.write_text(json.dumps({"status": "completed"}))
         return mock.Mock(returncode=0, stdout="", stderr="")
 
-    with mock.patch("omnidriver.core.runtime.sweep_runner.load_entry_spec", return_value=fake_spec), \
+    with mock.patch(
+             "omnidriver.core.runtime.sweep_runner.load_entry_spec",
+             side_effect=_load_entry_spec_like_a_factory(fake_spec),
+         ), \
          mock.patch("omnidriver.core.runtime.sweep_runner.strict_plan", return_value=fake_report), \
          mock.patch("omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run):
         result = sweep_run(spec_path, output_dir=output_dir, driver_context=_CTX)
@@ -473,7 +536,10 @@ def test_sweep_run_archives_each_case_postprocessing_output_when_configured(tmp_
         (case_root / "postProcessing" / f"case_{n}.dat").write_text(f"result {n}")
         return mock.Mock(returncode=0, stdout="", stderr="")
 
-    with mock.patch("omnidriver.core.runtime.sweep_runner.load_entry_spec", return_value=fake_spec), \
+    with mock.patch(
+             "omnidriver.core.runtime.sweep_runner.load_entry_spec",
+             side_effect=_load_entry_spec_like_a_factory(fake_spec),
+         ), \
          mock.patch("omnidriver.core.runtime.sweep_runner.strict_plan", return_value=fake_report), \
          mock.patch("omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run):
         result = sweep_run(spec_path, output_dir=output_dir, driver_context=_POSTPROCESSING_CTX)
@@ -536,7 +602,10 @@ def test_sweep_run_archives_each_case_postprocessing_output_by_default(tmp_path)
         (case_root / "postProcessing" / f"case_{n}.dat").write_text(f"result {n}")
         return mock.Mock(returncode=0, stdout="", stderr="")
 
-    with mock.patch("omnidriver.core.runtime.sweep_runner.load_entry_spec", return_value=fake_spec), \
+    with mock.patch(
+             "omnidriver.core.runtime.sweep_runner.load_entry_spec",
+             side_effect=_load_entry_spec_like_a_factory(fake_spec),
+         ), \
          mock.patch("omnidriver.core.runtime.sweep_runner.strict_plan", return_value=fake_report), \
          mock.patch("omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run):
         result = sweep_run(spec_path, output_dir=output_dir, driver_context=_POSTPROCESSING_CTX)

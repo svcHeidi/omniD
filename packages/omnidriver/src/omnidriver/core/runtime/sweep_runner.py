@@ -537,15 +537,22 @@ def _materialize_entry_case(
         staged_spec = load_entry_spec(
             effective_entry, overrides=effective_routed, driver_context=driver_context,
         )
-        # A real registered factory consumes cases_root/case_dir_name and
-        # therefore returns the staged path.  Keep compatibility with test
-        # doubles and third-party factories that intentionally return their
-        # own fixed spec regardless of overrides.
+        # A real registered factory consumes cases_root/case_dir_name, and a
+        # case path resolves to itself, so either returns the staged path.
+        # A factory that returns its own fixed root instead would have the
+        # SOURCE mutated below. That used to be kept "for compatibility with
+        # test doubles" by silently reverting to the unstaged overrides; it
+        # is refused instead (2026-09-24).
         if Path(staged_spec.case_root).resolve() != staged_case_root:
-            effective_entry = entry
-            effective_routed = dict(routed)
-        else:
-            spec = staged_spec
+            raise ValueError(
+                f"entry '{entry}' did not re-resolve to its staged copy "
+                f"'{staged_case_root}'; its factory returned "
+                f"'{Path(staged_spec.case_root).resolve()}' (source "
+                f"'{source_case_root}'). Mutating that would change the source "
+                "case, so the factory must build case_root from the "
+                "cases_root/case_dir_name it is given."
+            )
+        spec = staged_spec
     cases = spec.build_cases()
     if len(cases) != 1:
         raise ValueError(
