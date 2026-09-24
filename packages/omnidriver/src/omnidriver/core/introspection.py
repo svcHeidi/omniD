@@ -306,15 +306,36 @@ def _write_surface(
     (`set`/`ensure`/`remove`), not only a `set` a caller happened to name
     with a catalog-shaped key.
 
-    **The naive match survives as the stated fallback**, not a silent
-    default: a spec with no `plan_case` at all (not yet migrated onto the
-    channel) has no resolver to call, so `proposed_changes` falls back to
+    **The naive match survives as the stated fallback, but only when there is
+    no resolver at all.** A spec with no `plan_case` (not yet migrated onto
+    the channel) has no resolver to call, so `proposed_changes` falls back to
     the `mutable` entries whose qualified id the caller's raw `overrides`
     happens to name directly -- correct only for a caller sophisticated
     enough to pass catalog-shaped keys, which is the exact limitation Task 9
-    closes for every migrated tutorial. `proposed_changes_reason` states
-    which path produced the result and why, rather than leaving a reader to
-    guess.
+    closes for every migrated tutorial. `proposed_changes_source` is
+    `"supplied_qualified_ids_only"` for this path.
+
+    **A resolver that exists but could not run is `None` (JSON `null`), never
+    an empty list (corrected 2026-09-24, found by running `describe` against
+    a real fixture through the real CLI, not this module's own tests).** An
+    ambiguous sweep (`build_cases()` not resolving to one case) or the staged
+    preview itself raising (commonly: no case is materialized at this path
+    yet -- `describe` is used before a case exists, not only after) are both
+    genuine failures to determine what would change, not "nothing would
+    change". Silently falling back to the naive match here would have
+    reported `[]` -- correct-looking, and wrong: the naive match's own
+    condition (a caller-supplied key that is already a catalog-shaped
+    qualified id) is essentially never true for a raw factory-kwargs
+    `overrides` dict, so it degrades to an empty list on every such failure,
+    indistinguishable from a real no-op. `proposed_changes_source` is
+    `"unknown"` for this path, and `describe` still exits 0: it remains a
+    best-effort introspection command whose other fields (the catalog,
+    `modes`, the config schema, the tutorial contract) are still valid and
+    useful when a case does not exist yet, which is an ordinary situation
+    for `describe`, not a caller error.
+
+    `proposed_changes_reason` states which path produced the result and why,
+    in all three cases, rather than leaving a reader to guess.
     """
     from .case_write import MUTATION_MODES
 
@@ -354,13 +375,30 @@ def _write_surface(
     if resolved_changes is not None:
         proposed_changes = resolved_changes
         proposed_changes_source = "plan_case_preview"
-    else:
+    elif spec.plan_case is None:
+        # The only reason `_resolve_proposed_changes` returns `None` without
+        # ever attempting a preview: no resolver exists for this spec at
+        # all. The naive key match is the stated, pre-existing scope limit
+        # (Phase 2 Task 13's own contract) -- a real, if incomplete, answer,
+        # not a failure.
         proposed_changes = [
             {**item, "operation": "set"}
             for item in mutable
             if item["qualified_id"] in supplied and item["qualified_id"] in mutable_ids
         ]
         proposed_changes_source = "supplied_qualified_ids_only"
+    else:
+        # A resolver exists, but the attempt to run it could not complete
+        # (an ambiguous sweep, or the staged preview itself raising --
+        # found by running `describe` against a real fixture through the
+        # real CLI, 2026-09-24: a missing case document mid-preview reached
+        # here and the naive match below coincidentally computed `[]`,
+        # which reads as "nothing will change" when the true state is
+        # "could not be determined"). `None` here is JSON `null` -- an
+        # explicit, distinct third answer a consumer cannot mistake for an
+        # empty list of changes.
+        proposed_changes = None
+        proposed_changes_source = "unknown"
 
     return {
         "mutable": mutable,

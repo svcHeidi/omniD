@@ -156,17 +156,56 @@ class TestSingleCellProposedChangesEndToEnd(unittest.TestCase):
             ["electrophysiologyProtocols"],
         )
 
-    def test_a_sweep_that_has_not_collapsed_to_one_case_reports_a_reason(self) -> None:
+    def test_a_sweep_that_has_not_collapsed_to_one_case_reports_unknown_not_empty(self) -> None:
         """No override collapses `ionic_models`/`ionic_model_tissue_map` to a
         single case here -- `build_cases()` enumerates the whole catalog.
-        `proposed_changes` must fall back honestly, stating why, not go
-        silently empty."""
+        `single_cell` *does* have a `plan_case` -- a resolver exists, it
+        just could not run for this request -- so the result must be
+        `None` (unknown), stating why, never a silently empty list that
+        would read as "nothing will change" (corrected 2026-09-24, found by
+        running `describe` through the real CLI)."""
         spec = self._spec({})
+        self.assertIsNotNone(spec.plan_case)
         self.assertGreater(len(spec.build_cases()), 1)
         described = _write_surface(driver_context=_CTX, spec=spec, overrides={})
-        self.assertEqual(described["proposed_changes_source"], "supplied_qualified_ids_only")
+        self.assertEqual(described["proposed_changes_source"], "unknown")
+        self.assertIsNone(described["proposed_changes"])
         self.assertIn("resolved to", described["proposed_changes_reason"])
         self.assertIn("cases", described["proposed_changes_reason"])
+
+    def test_a_staged_preview_that_raises_reports_unknown_not_an_empty_list(self) -> None:
+        """Defect found by the coordinator running `describe` through the
+        real CLI against a real case (2026-09-24), not by this module's own
+        tests: with `case_root` existing but missing
+        `constant/electroProperties` (an ordinary situation -- `describe` is
+        used before a case is materialized, not only after), the staged
+        preview raises `patch target 'constant/electroProperties' does not
+        exist`. Before this fix, `_write_surface` swallowed that into the
+        naive fallback, which computed `[]` for a raw factory-kwargs
+        `overrides` dict -- indistinguishable from "nothing will change".
+        `proposed_changes` must be `None` (JSON `null`) instead, and
+        `describe` must not raise -- it stays a best-effort command whose
+        other fields are still useful when a case does not exist yet."""
+        cases_root = Path(tempfile.mkdtemp(prefix="omnidriver-describe-missing-case-"))
+        self.addCleanup(shutil.rmtree, cases_root, ignore_errors=True)
+        empty_case_root = cases_root / "electrophysiologyProtocols" / "singleCell"
+        empty_case_root.mkdir(parents=True)
+        overrides = dict(
+            ionic_model="BuenoOrovio", tissue="epicardialCells",
+            cases_root=cases_root,
+        )
+        spec = single_cell.make_spec(**overrides)
+        self.assertIsNotNone(spec.plan_case)
+
+        described = _write_surface(driver_context=_CTX, spec=spec, overrides=overrides)
+
+        self.assertIsNone(described["proposed_changes"])
+        self.assertEqual(described["proposed_changes_source"], "unknown")
+        self.assertIn("does not exist", described["proposed_changes_reason"])
+        # describe itself must not raise, and the real case_root (still
+        # missing the file, on purpose) is untouched -- no file was created
+        # by the failed preview attempt.
+        self.assertEqual(list(empty_case_root.iterdir()), [])
 
 
 class TestWholeDictRemovalSurfacesAsAnExpectedEffectNotAQualifiedChange(unittest.TestCase):
