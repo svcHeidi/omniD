@@ -382,6 +382,20 @@ def resolve_entry(
         if not candidate.is_absolute():
             candidate = Path.cwd() / candidate
         if candidate.is_dir() and _is_case_directory(candidate, driver_context):
+            # The path names the case, so a differing `case_dir_name` is a
+            # contradiction. Refuse it rather than overwrite it below: that
+            # overwrite silently dropped a `--config` value, and discarded a
+            # case-path sweep entry's staged name so _materialize_entry_case
+            # mutated the source case (2026-09-24). A value that restates the
+            # path's own name is not a conflict.
+            supplied_name = incoming_overrides.get("case_dir_name")
+            if supplied_name is not None and str(supplied_name) != candidate.name:
+                raise ValueError(
+                    f"Entry '{key}' is a case path, which already names its case "
+                    f"'{candidate.name}'; the supplied case_dir_name "
+                    f"'{supplied_name}' contradicts it. Remove case_dir_name, or "
+                    "pass the path of the case you mean as the entry."
+                )
             case_overrides = dict(incoming_overrides)
             case_overrides["cases_root"] = str(candidate.parent)
             case_overrides["case_dir_name"] = candidate.name

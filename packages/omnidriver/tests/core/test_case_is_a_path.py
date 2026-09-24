@@ -51,6 +51,42 @@ def test_a_relative_path_resolves_against_the_working_directory(
     assert resolution["entry_name"] == "mycase"
 
 
+def test_a_conflicting_case_dir_name_is_refused_not_dropped(tmp_path: Path) -> None:
+    """The path already names the case, so a supplied `case_dir_name` that
+    differs is a contradiction. It used to be overwritten by the path's own
+    name without a word -- a `--config` value vanished, and a case-path sweep
+    entry's staged name was discarded so the source case was mutated in
+    place. Same defect shape as the config-supplied `cases_root` refusal."""
+    ctx = driver_context(MinimalTestPlugin(entrypoint="run-case"), source="test:case-path")
+    case = _case(tmp_path)
+
+    with pytest.raises(ValueError, match="case_dir_name") as excinfo:
+        resolve_entry(
+            str(case),
+            entry_kind="case_folder",
+            overrides={"case_dir_name": "someOtherName"},
+            driver_context=ctx,
+        )
+    assert "someOtherName" in str(excinfo.value)
+    assert "mycase" in str(excinfo.value)
+
+
+def test_a_case_dir_name_that_restates_the_path_is_accepted(tmp_path: Path) -> None:
+    """The contrast: refusing every supplied value would also pass the test
+    above. Only a contradiction is refused."""
+    ctx = driver_context(MinimalTestPlugin(entrypoint="run-case"), source="test:case-path")
+    case = _case(tmp_path)
+
+    resolution = resolve_entry(
+        str(case),
+        entry_kind="case_folder",
+        overrides={"case_dir_name": "mycase"},
+        driver_context=ctx,
+    )
+
+    assert resolution["factory_overrides"]["case_dir_name"] == "mycase"
+
+
 def test_a_directory_that_is_not_a_case_is_still_refused(tmp_path: Path) -> None:
     """The contrast is the point: if any path resolved, the assertions above
     would pass for a directory with nothing in it."""
