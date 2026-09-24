@@ -1835,6 +1835,42 @@ branch as fixed.
 
 ---
 
+## Merge note, 2026-09-24: two unmerged branches conflict semantically, not just textually
+
+Two follow-up branches, both unmerged, edit `manufactured_bath_bidomain.py` and
+`tests/test_manufactured_bath_bidomain_write_channel.py`:
+
+| branch | work | state |
+|---|---|---|
+| `claude/compassionate-gates-967e8d` | tet-branch overlay copies join the channel; `niederer_2012` reuses the `.geo` renderer | committed as `df0a059` on `9d159fa`, green in all four shapes |
+| `claude/sharp-cannon-7e5e7c` | corrects `manufacturedBidomain.fdaBathVariant` to `verificationModel.fdaBathVariant`, and the same class of bug in `manufactured_monodomain_total_lagrangian_em` | uncommitted as of this note; **no venv built from its worktree was found**, so any green it reports may be main's |
+
+**A clean text merge will still fail.** `df0a059`'s
+`TestManufacturedBathBidomainTetWriteChannel` characterizes the tutorial *as it
+is today*, so two of its tests assert that `_plan_case` raises the dead-key
+`ValueError` (`assertRaisesRegex(..., _DEAD_KEY_MESSAGE_FRAGMENT)`), and they pin
+`_TET_DIGESTS_BEFORE`, whose `constant/electroProperties` digest is captured at
+the moment of that raise. The wrong-scope fix removes the raise. So those tests
+break once both branches are merged, whichever lands second.
+
+**Resolution, for whichever branch lands second**, per the tet-overlay session's
+own analysis:
+
+1. Drop the `assertRaisesRegex(ValueError, _DEAD_KEY_MESSAGE_FRAGMENT)` in those
+   two tests.
+2. Read the committed record from `_plan_case`'s return value, not through the
+   `commit_case_overrides` wrapper.
+3. Re-capture **only** the `constant/electroProperties` digest in
+   `_TET_DIGESTS_BEFORE`.
+4. **Leave the `fvSchemes`, `controlDict` and `.geo` digests untouched.** They
+   are the overlay migration's evidence, and the dead-key fix does not change
+   them. If re-capturing moves any of them, one of the two changes is wrong.
+   Stop and investigate rather than accepting the new digest.
+
+This supersedes the coordinating session's earlier advice to "keep both sets of
+assertions". That advice was wrong, because one set asserts exactly the failure
+the other set fixes.
+
 ## Task 9: The `describe` seam — the unmet second payoff
 
 **Files:** `packages/omnidriver/src/omnidriver/core/introspection.py`, plus a new
