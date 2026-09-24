@@ -1177,6 +1177,52 @@ def test_sweep_plan_over_a_record_entry_previews_every_case_without_running(tmp_
                     for case in result["cases"])
 
 
+def test_sweep_plan_over_a_record_entry_persists_unchanged_patches_per_case(tmp_path):
+    """M5-of-2a: a patch that already matched the case (native cells="1",
+    swept number_cells=1) is real per-case information -- persisted in the
+    sweep summary, not discarded the moment commit_record_case returns."""
+    cases_root = _native_toy_case(tmp_path)
+    spec_path = tmp_path / "sweep.json"
+    spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root, values=(1, 3))))
+    ctx = _record_driver_context()
+
+    result = sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=ctx)
+
+    by_case_id = {c["case_id"]: c for c in result["cases"]}
+    noop_case = by_case_id["1"]
+    assert [p["value"] for p in noop_case["unchanged_patches"]] == [1]
+    assert noop_case["unchanged_patches"][0]["status"] == "unchanged"
+    changed_case = by_case_id["3"]
+    assert changed_case["unchanged_patches"] == []
+
+
+def test_sweep_run_over_a_record_entry_persists_unchanged_patches_in_the_manifest(tmp_path):
+    cases_root = _native_toy_case(tmp_path)
+    spec_path = tmp_path / "sweep.json"
+    spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root, values=(1,))))
+    ctx = _record_driver_context()
+
+    def fake_subprocess_run(cmd, **kwargs):
+        run_doc_path = Path(cmd[cmd.index("--run-document") + 1])
+        run_doc = json.loads(run_doc_path.read_text())
+        case_root = Path(run_doc["launch"]["caseRoot"])
+        (case_root / "solved.marker").write_text("")
+        workflow_state_path = Path(run_doc["launch"]["outputDir"]) / "workflow_state.json"
+        workflow_state_path.parent.mkdir(parents=True, exist_ok=True)
+        workflow_state_path.write_text(json.dumps({"status": "completed"}))
+        return mock.Mock(returncode=0, stdout="", stderr="")
+
+    with mock.patch(
+        "omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run,
+    ):
+        result = sweep_run(spec_path, output_dir=tmp_path / "out", driver_context=ctx)
+
+    assert [p["value"] for p in result["cases"][0]["unchanged_patches"]] == [1]
+
+    manifest = json.loads((tmp_path / "out" / "sweep_manifest.json").read_text())
+    assert [p["value"] for p in manifest["cases"][0]["unchanged_patches"]] == [1]
+
+
 def test_sweep_plan_over_a_record_entry_refuses_without_cases_root(tmp_path):
     cases_root = _native_toy_case(tmp_path)
     spec = _record_sweep_spec(cases_root=cases_root)

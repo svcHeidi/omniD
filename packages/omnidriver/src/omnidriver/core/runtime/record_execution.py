@@ -236,6 +236,22 @@ def _resolve_and_split(
     return to_write, unchanged, command_arguments, workflow_step_ids
 
 
+def _serialize_sourced_patch(sourced: SourcedPatch, *, status: str) -> dict[str, Any]:
+    """One patch's JSON shape, shared by ``preview_record_case``'s preview
+    and (M5-of-2a) the sweep manifest/summary's own per-case
+    ``unchanged_patches`` -- one definition of "what a patch looks like on
+    the wire", not two independently maintained ones."""
+    return {
+        "document": sourced.patch.document,
+        "key_path": list(sourced.patch.key_path),
+        "value": sourced.patch.value,
+        "value_kind": sourced.patch.value_kind,
+        "validated": sourced.validated,
+        "source": sourced.source,
+        "status": status,
+    }
+
+
 def preview_record_case(
     record: TutorialRecord,
     *,
@@ -265,27 +281,9 @@ def preview_record_case(
             staged_case_root=staged_case_root, driver_context=driver_context,
         )
         patches = [
-            {
-                "document": sourced.patch.document,
-                "key_path": list(sourced.patch.key_path),
-                "value": sourced.patch.value,
-                "value_kind": sourced.patch.value_kind,
-                "validated": sourced.validated,
-                "source": sourced.source,
-                "status": "changed",
-            }
-            for sourced in to_write
+            _serialize_sourced_patch(sourced, status="changed") for sourced in to_write
         ] + [
-            {
-                "document": sourced.patch.document,
-                "key_path": list(sourced.patch.key_path),
-                "value": sourced.patch.value,
-                "value_kind": sourced.patch.value_kind,
-                "validated": sourced.validated,
-                "source": sourced.source,
-                "status": "unchanged",
-            }
-            for sourced in unchanged
+            _serialize_sourced_patch(sourced, status="unchanged") for sourced in unchanged
         ]
         return {
             "entry_name": record.name,

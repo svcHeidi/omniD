@@ -23,7 +23,12 @@ from .attempt_lease import acquire_case_staging_lease
 from .models import data_artifact_from_json, invoke_case_mutation
 from .output_collection import collect_new_output_tree, snapshot_output_tree
 from .postprocess_phase import build_sweep_context, run_postprocessing_module
-from .record_execution import commit_record_case, record_case_spec, _reserved_study_names
+from .record_execution import (
+    commit_record_case,
+    record_case_spec,
+    _reserved_study_names,
+    _serialize_sourced_patch,
+)
 from .registry import load_entry_spec
 from .run_document_exec import _allowed_runs_root, load_run_document
 from .resume import validate_resume
@@ -247,6 +252,14 @@ def _record_sweep_plan(
             "status": report.status,
             "plan": report.to_json(),
             "record_commit_status": commit_result.status,
+            # M5-of-2a: a patch that already matched the case is real
+            # information about this case (design §4 step 7 already reports
+            # it in describe's own preview) -- persisted here too, not
+            # discarded the moment commit_record_case returns.
+            "unchanged_patches": [
+                _serialize_sourced_patch(sourced, status="unchanged")
+                for sourced in commit_result.unchanged
+            ],
         })
     return {"case_count": len(resolved_cases), "cases": case_reports}
 
@@ -300,12 +313,17 @@ def _record_sweep_run(
         plan_error = None
         timeout_error = None
         commit_status = None
+        unchanged_patches: list[dict[str, Any]] = []
         try:
             commit_result = commit_record_case(
                 record, cases_root=cases_root, staged_case_root=staged_case_root,
                 study_by_source=study_by_source, driver_context=driver_context,
             )
             commit_status = commit_result.status
+            unchanged_patches = [
+                _serialize_sourced_patch(sourced, status="unchanged")
+                for sourced in commit_result.unchanged
+            ]
             spec = record_case_spec(
                 record, case_id=case.case_id, staged_case_root=staged_case_root,
                 workflow_step_ids=commit_result.workflow_step_ids,
@@ -356,6 +374,11 @@ def _record_sweep_run(
         }
         if commit_status is not None:
             case_summary["record_commit_status"] = commit_status
+        if unchanged_patches:
+            # M5-of-2a: persisted here, not discarded the moment
+            # commit_record_case returns -- a patch that already matched
+            # the case is real information about this case.
+            case_summary["unchanged_patches"] = unchanged_patches
         if materialization_error is not None:
             case_summary["materialization_error"] = materialization_error
         if plan_error is not None:
@@ -376,6 +399,7 @@ def _record_sweep_run(
                 started_at=_now(),
                 updated_at=_now(),
                 case_record_path=_relative_or_absolute(case_record_path, output_dir),
+                unchanged_patches=tuple(unchanged_patches),
             )
         )
         manifest.updated_at = _now()

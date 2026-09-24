@@ -20,6 +20,11 @@ class CaseManifestEntry:
     started_at: str | None
     updated_at: str
     case_record_path: str = ""
+    #: A tutorial-record case's patches that already matched the case and
+    #: were never written (M5-of-2a) -- each one the same JSON shape
+    #: `record_execution._serialize_sourced_patch` produces. Always `()`
+    #: for a factory-entry case, which has no such concept.
+    unchanged_patches: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass
