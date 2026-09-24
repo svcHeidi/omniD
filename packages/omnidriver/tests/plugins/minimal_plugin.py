@@ -32,6 +32,15 @@ class MinimalTestPlugin:
     #: resolve them.
     _solver_commands: frozenset[str] = frozenset()
     _telemetry_globs: dict[str, tuple[str, ...]] = {}
+    #: Tutorial-record test seams (2026-09-24, tutorial-record design). Empty
+    #: by default: a plugin declaring no records/axes/validator/comparator is
+    #: the ordinary case (``compatibility.legacy_tutorial_records`` and kin
+    #: already return the same neutral values), so most tests never need
+    #: these constructor arguments at all.
+    _tutorial_records: dict = {}
+    _axis_catalog: dict = {}
+    _record_key_validator = None
+    _case_value_comparator = None
 
     def __init__(
         self,
@@ -39,6 +48,10 @@ class MinimalTestPlugin:
         entrypoint: str | None = None,
         solver_commands: frozenset[str] | set[str] | None = None,
         telemetry_globs: dict[str, tuple[str, ...]] | None = None,
+        tutorial_records: dict | None = None,
+        axis_catalog: dict | None = None,
+        record_key_validator=None,
+        case_value_comparator=None,
     ) -> None:
         """Declare just enough for a test to be non-vacuous.
 
@@ -62,6 +75,14 @@ class MinimalTestPlugin:
             self._solver_commands = frozenset(solver_commands)
         if telemetry_globs is not None:
             self._telemetry_globs = dict(telemetry_globs)
+        if tutorial_records is not None:
+            self._tutorial_records = dict(tutorial_records)
+        if axis_catalog is not None:
+            self._axis_catalog = dict(axis_catalog)
+        if record_key_validator is not None:
+            self._record_key_validator = record_key_validator
+        if case_value_comparator is not None:
+            self._case_value_comparator = case_value_comparator
 
     @property
     def plugin_name(self) -> str:
@@ -191,6 +212,18 @@ class MinimalTestPlugin:
     def get_run_document_config_schema(self) -> dict:
         """No solver semantics means no constraint on the config shape."""
         return {"type": "object", "additionalProperties": True}
+
+    def get_tutorial_records(self) -> dict:
+        return dict(self._tutorial_records)
+
+    def get_axis_catalog(self) -> dict:
+        return dict(self._axis_catalog)
+
+    def get_record_key_validator(self):
+        return self._record_key_validator
+
+    def get_case_value_comparator(self):
+        return self._case_value_comparator
 
 
 # Compatibility alias for Core tests that have not yet been migrated.  New
