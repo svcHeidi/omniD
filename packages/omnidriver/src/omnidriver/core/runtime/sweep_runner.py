@@ -11,10 +11,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from omnidriver.core.strict_planning import strict_plan
+from omnidriver.core.strict_planning import strict_plan, _strict_plan_for_spec
 from omnidriver.core.plugin_profile import decomposition_dirname_prefix
 from omnidriver.core.sweep.sweep_derivation_catalog import get_derivation
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError, check_case_count_cap, expand_sweep
+from omnidriver.core.tutorial_records import TutorialRecordError
 from omnidriver.sweep_materialize import materialize_case
 from omnidriver.sweep_routing import route_case_values, route_entry_case_values
 from .fresh import ensure_fresh_output_dir
@@ -22,6 +23,7 @@ from .attempt_lease import acquire_case_staging_lease
 from .models import data_artifact_from_json, invoke_case_mutation
 from .output_collection import collect_new_output_tree, snapshot_output_tree
 from .postprocess_phase import build_sweep_context, run_postprocessing_module
+from .record_execution import commit_record_case, record_case_spec
 from .registry import load_entry_spec
 from .run_document_exec import _allowed_runs_root, load_run_document
 from .resume import validate_resume
@@ -74,6 +76,278 @@ def _load_spec(spec_path: str | Path) -> dict[str, Any]:
 
 def _entry_name(sweep_spec: dict[str, Any]) -> str | None:
     return sweep_spec.get("base", {}).get("entry")
+
+
+# ---------------------------------------------------------------------------
+# Item 2: a study whose "entry" names a tutorial_record dispatches through a
+# dedicated path -- staged from the record's native case, one
+# commit_record_case per case, then the record's own workflow steps run
+# through the SAME strict-plan/run-document/workflow-runner pipeline a
+# factory entry's spec runs through (record_execution.record_case_spec maps
+# the record onto the same workflow_dag shape). Never tried as a factory
+# entry first and reinterpreted -- resolve_entry's own explicit dispatch
+# (design §3/registry.resolve_entry) decides which this is, once, up front.
+# ---------------------------------------------------------------------------
+
+#: `entry`/`cases_root` are sweep-dispatch bookkeeping in `base`, not case
+#: content, a document key, or an axis -- stripped before a record's study
+#: values are resolved, the same treatment `sweep_routing
+#: ._ENTRY_NON_ROUTABLE_KEYS` already gives `entry`/`archive_dir_name` for a
+#: factory entry's own routing.
+_RECORD_NON_STUDY_BASE_KEYS: frozenset[str] = frozenset({"entry", "cases_root"})
+
+
+def _sweep_record(
+    sweep_spec: dict[str, Any], *, driver_context: "DriverContext",
+) -> tuple[Any, Path] | tuple[None, None]:
+    """Return ``(record, cases_root)`` when ``base.entry`` names a tutorial
+    record, else ``(None, None)`` -- a factory tutorial or no entry at all.
+
+    Checks the ``tutorial_records`` catalog directly (the same one
+    ``registry.resolve_entry``'s own record branch consults), rather than
+    calling ``resolve_entry`` itself: that function also probes ``entry``
+    against the filesystem as a possible case path (design's own case-path
+    resolution, ``registry.resolve_entry``'s ``case_folder`` branch) before
+    it ever reaches the record branch -- a probe every EXISTING factory-
+    entry sweep would now pay for and, in a test that mocks
+    ``load_entry_spec``/``strict_plan`` directly without registering a real
+    factory, spuriously fail. A bare tutorial-record lookup needs none of
+    that; the ambiguity refusal between a record and a same-named factory
+    (design's "one name must not name both") is reproduced here directly
+    instead, matching ``resolve_entry``'s own precedence.
+
+    A record has no ambient cases root (CLAUDE.md's "supplied versus
+    discovered"): ``base.cases_root`` must name it explicitly whenever
+    ``entry`` resolves to a record, refused by name otherwise.
+    """
+    entry = _entry_name(sweep_spec)
+    if entry is None:
+        return None, None
+    normalized_key = entry.strip().casefold()
+    catalog = driver_context.capabilities.tutorial_records.catalog() or {}
+    normalized_records = {name.casefold(): rec for name, rec in catalog.items()}
+    record = normalized_records.get(normalized_key)
+    if record is None:
+        return None, None
+    from .registry import _normalized_registry
+
+    if normalized_key in _normalized_registry(driver_context):
+        raise KeyError(
+            f"Entry '{entry}' is ambiguous: it is registered as both a "
+            "tutorial record and a factory tutorial (spec_factories); "
+            "one name must not name both"
+        )
+    base = sweep_spec.get("base", {})
+    cases_root_value = base.get("cases_root")
+    if cases_root_value is None:
+        raise TutorialRecordError(
+            f"tutorial record {entry!r} cannot be swept: sweep.json's "
+            "'base' must supply 'cases_root' naming where its native case "
+            "lives (there is no ambient cases root to discover)"
+        )
+    return record, Path(cases_root_value)
+
+
+def _record_case_study_by_source(
+    *, base: dict[str, Any], resolved_axis_values: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    stripped_base = {
+        key: value for key, value in base.items()
+        if key not in _RECORD_NON_STUDY_BASE_KEYS
+    }
+    return {"base": stripped_base, "sweep": dict(resolved_axis_values)}
+
+
+def _record_sweep_plan(
+    record: Any, cases_root: Path, sweep_spec: dict[str, Any], *,
+    output_dir: Path, driver_context: "DriverContext",
+) -> dict[str, Any]:
+    resolved_cases = expand_sweep(sweep_spec, get_derivation=get_derivation)
+    base = sweep_spec.get("base", {})
+    case_reports: list[dict[str, Any]] = []
+    for case in resolved_cases:
+        staged_case_root = output_dir / "cases" / case.case_id
+        study_by_source = _record_case_study_by_source(
+            base=base, resolved_axis_values=case.resolved_axis_values,
+        )
+        try:
+            commit_result = commit_record_case(
+                record, cases_root=cases_root, staged_case_root=staged_case_root,
+                study_by_source=study_by_source, driver_context=driver_context,
+            )
+            spec = record_case_spec(
+                record, case_id=case.case_id, staged_case_root=staged_case_root,
+                workflow_step_ids=commit_result.workflow_step_ids,
+                command_arguments=commit_result.command_arguments,
+            )
+            report = _strict_plan_for_spec(record.name, spec, driver_context=driver_context)
+        except Exception as exc:
+            # Same broad-catch reasoning sweep_plan's factory-entry branch
+            # already uses just below: one bad case costs one case, not the
+            # whole command.
+            case_reports.append({
+                "case_id": case.case_id,
+                "resolved_axis_values": case.resolved_axis_values,
+                "status": "failed",
+                "materialization_error": f"{type(exc).__name__}: {exc}",
+            })
+            continue
+        case_reports.append({
+            "case_id": case.case_id,
+            "resolved_axis_values": case.resolved_axis_values,
+            "status": report.status,
+            "plan": report.to_json(),
+            "record_commit_status": commit_result.status,
+        })
+    return {"case_count": len(resolved_cases), "cases": case_reports}
+
+
+def _record_sweep_run(
+    record: Any, cases_root: Path, sweep_spec: dict[str, Any], *,
+    output_dir: Path, case_timeout_s: float | None, task: str,
+    driver_context: "DriverContext",
+) -> dict[str, Any]:
+    """The record-entry counterpart of ``sweep_run``'s factory-entry branch.
+
+    Scope, deliberately narrower than the factory-entry path for this first
+    cut: every case is planned and run fresh, sequentially -- no manifest-
+    based resume/retry/skip across separate invocations yet (each of those
+    reads a prior run's SAVED workflow checkpoint, which a record case does
+    not yet have a settled shape for). A manifest is still written, so the
+    output directory carries the same bookkeeping shape a factory-entry
+    sweep's does.
+    """
+    execution_environment = driver_context.capabilities.environment_preflight.configure(
+        os.environ, driver_context,
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    resolved_cases = expand_sweep(sweep_spec, get_derivation=get_derivation)
+    base = sweep_spec.get("base", {})
+
+    manifest_path = output_dir / "sweep_manifest.json"
+    spec_hash = compute_spec_hash(sweep_spec)
+    manifest = SweepManifest(
+        schema_version="1.0", sweep_spec_hash=spec_hash,
+        created_at=_now(), updated_at=_now(), cases=[],
+    )
+
+    completed_count = 0
+    failed_count = 0
+    case_summaries: list[dict[str, Any]] = []
+
+    for case in resolved_cases:
+        staged_case_root = output_dir / "cases" / case.case_id
+        case_dir = output_dir / case.case_id
+        run_document_path = case_dir / "run_document.json"
+        workflow_state_path = case_dir / "workflow_state.json"
+        case_record_path = case_dir / "case_record.json"
+        study_by_source = _record_case_study_by_source(
+            base=base, resolved_axis_values=case.resolved_axis_values,
+        )
+
+        status = "failed"
+        materialization_error = None
+        plan_error = None
+        timeout_error = None
+        commit_status = None
+        try:
+            commit_result = commit_record_case(
+                record, cases_root=cases_root, staged_case_root=staged_case_root,
+                study_by_source=study_by_source, driver_context=driver_context,
+            )
+            commit_status = commit_result.status
+            spec = record_case_spec(
+                record, case_id=case.case_id, staged_case_root=staged_case_root,
+                workflow_step_ids=commit_result.workflow_step_ids,
+                command_arguments=commit_result.command_arguments,
+            )
+            report = _strict_plan_for_spec(record.name, spec, driver_context=driver_context)
+            payload = report.to_json()
+            if report.status != "ok":
+                plan_error = "strict_plan reported failed status"
+            else:
+                run_document = payload["run_document"]
+                workflow_state_path = _workflow_state_path_from_run_document(run_document)
+                run_document_path.parent.mkdir(parents=True, exist_ok=True)
+                run_document_path.write_text(json.dumps(run_document, indent=2))
+                if workflow_state_path.exists():
+                    workflow_state_path.unlink()
+                result = _run_case_process(
+                    [sys.executable, "-m", "omnidriver", "run", "--run-document", str(run_document_path)],
+                    env=execution_environment,
+                    timeout=case_timeout_s,
+                )
+                if workflow_state_path.exists():
+                    status = json.loads(workflow_state_path.read_text()).get("status", "pending")
+                elif result.returncode != 0:
+                    status = "failed"
+                else:
+                    status = "pending"
+        except subprocess.TimeoutExpired as exc:
+            timeout_error = (
+                f"case exceeded timeout of {case_timeout_s}s and was terminated: {exc}"
+            )
+        except (OSError, ValueError) as exc:
+            materialization_error = str(exc)
+        except Exception as exc:
+            plan_error = str(exc)
+
+        if status == "completed":
+            completed_count += 1
+        else:
+            failed_count += 1
+
+        case_summary: dict[str, Any] = {
+            "case_id": case.case_id,
+            "status": status,
+            "outcome": "fresh",
+            "run_document_path": _relative_or_absolute(run_document_path, output_dir),
+            "workflow_state_path": _relative_or_absolute(workflow_state_path, output_dir),
+        }
+        if commit_status is not None:
+            case_summary["record_commit_status"] = commit_status
+        if materialization_error is not None:
+            case_summary["materialization_error"] = materialization_error
+        if plan_error is not None:
+            case_summary["plan_error"] = plan_error
+        if timeout_error is not None:
+            case_summary["timeout_error"] = timeout_error
+        case_summaries.append(case_summary)
+
+        manifest.cases.append(
+            CaseManifestEntry(
+                case_id=case.case_id,
+                resolved_axis_values=case.resolved_axis_values,
+                override_hash=compute_override_hash(study_by_source.get("sweep", {})),
+                run_document_path=_relative_or_absolute(run_document_path, output_dir),
+                workflow_state_path=_relative_or_absolute(workflow_state_path, output_dir),
+                status=status,
+                outcome="fresh",
+                started_at=_now(),
+                updated_at=_now(),
+                case_record_path=_relative_or_absolute(case_record_path, output_dir),
+            )
+        )
+        manifest.updated_at = _now()
+        write_manifest(manifest_path, manifest)
+
+    context = build_sweep_context(output_dir, persist_case_records=True)
+    if failed_count == 0:
+        postprocess = run_postprocessing_module(context, task=task).to_json()
+    else:
+        postprocess = {
+            "status": "skipped",
+            "message": f"sweep had {failed_count} failed case(s); postprocess not run",
+        }
+
+    return {
+        "case_count": len(resolved_cases),
+        "completed_count": completed_count,
+        "failed_count": failed_count,
+        "skipped_count": 0,
+        "cases": case_summaries,
+        "postprocess": postprocess,
+    }
 
 
 def _relative_or_absolute(path: Path, base: Path) -> str:
@@ -434,6 +708,14 @@ def sweep_plan(
     check_case_count_cap(sweep_spec, max_cases=max_cases)
 
     output_dir = Path(output_dir)
+
+    record, cases_root = _sweep_record(sweep_spec, driver_context=driver_context)
+    if record is not None:
+        return _record_sweep_plan(
+            record, cases_root, sweep_spec, output_dir=output_dir,
+            driver_context=driver_context,
+        )
+
     resolved_cases = expand_sweep(sweep_spec, get_derivation=get_derivation)
     base = sweep_spec.get("base", {})
     entry = _entry_name(sweep_spec)
@@ -578,6 +860,28 @@ def sweep_run(
     check_case_count_cap(sweep_spec, max_cases=max_cases)
 
     output_dir = Path(output_dir)
+
+    record, cases_root = _sweep_record(sweep_spec, driver_context=driver_context)
+    if record is not None:
+        # Scope, item 2 (see _record_sweep_run's own docstring): no
+        # manifest-based resume/retry across separate invocations yet.
+        # Refused BY NAME rather than silently ignored -- CLAUDE.md's
+        # "explicitly-contexted operation never falls back to the default".
+        if retry_failed:
+            raise TutorialRecordError(
+                "--retry-failed is not yet supported for a tutorial-record "
+                "sweep entry"
+            )
+        fresh_error = ensure_fresh_output_dir(
+            output_dir, fresh=fresh, allowed_root=_allowed_runs_root(),
+        )
+        if fresh_error is not None:
+            raise SweepValidationError(fresh_error)
+        return _record_sweep_run(
+            record, cases_root, sweep_spec, output_dir=output_dir,
+            case_timeout_s=case_timeout_s, task=task, driver_context=driver_context,
+        )
+
     fresh_error = ensure_fresh_output_dir(
         output_dir, fresh=fresh, allowed_root=_allowed_runs_root(),
     )

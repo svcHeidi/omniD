@@ -948,3 +948,268 @@ def test_spec_hash_mismatch_is_refused(tmp_path):
     from omnidriver.core.runtime.sweep_runner import sweep_run
     with pytest.raises(SweepValidationError, match="hash|spec changed"):
         sweep_run(spec_path, output_dir=output_dir, driver_context=_CTX)
+
+
+# ---------------------------------------------------------------------------
+# Item 2: a study whose "entry" names a tutorial record dispatches through
+# _record_sweep_plan/_record_sweep_run, never the factory-entry path.
+# ---------------------------------------------------------------------------
+
+
+from omnidriver.core.case_write import RenderedFile, ResolvedMutation, _digest_bytes
+from omnidriver.core.tutorial_records import (
+    AxisContract,
+    AxisPatch,
+    AxisResult,
+    TutorialRecord,
+    TutorialRecordError,
+    WorkflowStep,
+)
+from plugins.minimal_plugin import MinimalTestPlugin
+
+
+def _record_deep_set(node: dict, key_path: list, value: str) -> None:
+    for segment in key_path[:-1]:
+        node = node.setdefault(segment, {})
+    node[key_path[-1]] = value
+
+
+def _record_known_catalog_validator(document: str, key_path: tuple, value):
+    catalog = {("constant/mesh.json", ("cells",)): "integer"}
+    if (document, key_path) in catalog:
+        return catalog[(document, key_path)], True
+    raise KeyError(f"{document}:{'.'.join(key_path)} not in this test's catalog")
+
+
+def _record_typed_agree(value_kind: str, requested, current) -> bool:
+    if current is None:
+        return False
+    try:
+        if value_kind == "integer":
+            return int(requested) == int(current)
+    except (TypeError, ValueError):
+        return False
+    return str(requested) == str(current)
+
+
+def _record_number_cells_axis() -> AxisContract:
+    def resolve(value, staged_case_root):
+        return AxisResult(
+            patches=(
+                AxisPatch(
+                    document="constant/mesh.json", key_path=("cells",),
+                    value=int(value), value_kind="integer",
+                ),
+            ),
+        )
+
+    return AxisContract(name="number_cells", value_kind="integer", resolve=resolve)
+
+
+class _RecordSweepWriterPlugin(MinimalTestPlugin):
+    """A toy JSON case_writer, matching test_tutorial_records.py's
+    ``_RecordCaseWriterPlugin`` -- duplicated locally rather than imported to
+    keep this file's existing zero-cardiac-dependency test isolation."""
+
+    def get_supported_mutation_modes(self):
+        return frozenset({"clone_and_patch"})
+
+    def resolve_case_mutation(self, request, *, driver_context):
+        targets = tuple(
+            {
+                "qualified_id": p.qualified_id,
+                "document": p.document,
+                "expanded_key_path": list(p.expanded_key_path()),
+                "value": p.value,
+                "format": "sweep_test_json",
+            }
+            for p in request.parameters
+        )
+        expected_effects = tuple(
+            f"set {p.qualified_id} in {p.document}" for p in request.parameters
+        )
+        return ResolvedMutation(
+            request=request, targets=targets, preconditions=(),
+            expected_effects=expected_effects, semantic_owner_id=self.plugin_id,
+        )
+
+    def get_rendered_formats(self):
+        return frozenset({"sweep_test_json"})
+
+    def render_case_files(self, resolved, *, snapshot_root, driver_context, execution_env=None):
+        by_document: dict = {}
+        for target in resolved.targets:
+            by_document.setdefault(target["document"], []).append(target)
+        rendered = []
+        for document, targets in by_document.items():
+            path = Path(snapshot_root) / document
+            exists_before = path.exists()
+            before_digest = _digest_bytes(path.read_bytes()) if exists_before else None
+            content_obj = json.loads(path.read_text()) if exists_before else {}
+            for target in targets:
+                _record_deep_set(content_obj, target["expanded_key_path"], str(target["value"]))
+            content = (json.dumps(content_obj, sort_keys=True) + "\n").encode()
+            rendered.append(RenderedFile(
+                path=document, content=content, mode=None,
+                exists_before=exists_before, before_digest=before_digest,
+                renderer_id=self.plugin_id, format="sweep_test_json",
+            ))
+        return tuple(rendered)
+
+    def get_case_value_comparator(self):
+        return _record_typed_agree
+
+
+def _toy_record() -> TutorialRecord:
+    return TutorialRecord(
+        name="toyTutorial",
+        native_case_relpath="toyTutorial",
+        allowed_axes=frozenset({"number_cells"}),
+        workflow_steps=(WorkflowStep(step_id="solve", command=("touch", "solved.marker")),),
+    )
+
+
+def _native_toy_case(tmp_path: Path) -> Path:
+    native = tmp_path / "native" / "toyTutorial"
+    (native / "constant").mkdir(parents=True)
+    (native / "constant" / "mesh.json").write_text(json.dumps({"cells": "1"}))
+    return native.parent
+
+
+def _record_sweep_spec(*, cases_root: Path, values=(2, 3)) -> dict:
+    return {
+        "base": {"entry": "toyTutorial", "cases_root": str(cases_root)},
+        "sweep": {
+            "mode": "cross_product",
+            "independent": {"number_cells": list(values)},
+            "dependent": [{"name": "caseId", "derive": "case_id_template", "of": ["number_cells"]}],
+        },
+    }
+
+
+def _record_driver_context():
+    plugin = _RecordSweepWriterPlugin(
+        solver_commands=frozenset({"touch"}),
+        tutorial_records={"toyTutorial": _toy_record()},
+        axis_catalog={"number_cells": _record_number_cells_axis()},
+        record_key_validator=_record_known_catalog_validator,
+    )
+    return _driver_context(plugin, source="test:record-sweep")
+
+
+def test_sweep_plan_over_a_record_entry_previews_every_case_without_running(tmp_path):
+    cases_root = _native_toy_case(tmp_path)
+    spec_path = tmp_path / "sweep.json"
+    spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root)))
+    ctx = _record_driver_context()
+
+    result = sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=ctx)
+
+    assert result["case_count"] == 2
+    for case in result["cases"]:
+        assert case["status"] == "ok", case
+        assert case["record_commit_status"] == "committed"
+    # sweep-plan never runs the workflow -- only strict_plan's non-mutating
+    # report, matching the factory-entry branch's own contract.
+    assert not any((tmp_path / "out" / case["case_id"] / "solved.marker").exists()
+                    for case in result["cases"])
+
+
+def test_sweep_plan_over_a_record_entry_refuses_without_cases_root(tmp_path):
+    cases_root = _native_toy_case(tmp_path)
+    spec = _record_sweep_spec(cases_root=cases_root)
+    del spec["base"]["cases_root"]
+    spec_path = tmp_path / "sweep.json"
+    spec_path.write_text(json.dumps(spec))
+    ctx = _record_driver_context()
+
+    with pytest.raises(TutorialRecordError, match="cases_root"):
+        sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=ctx)
+
+
+def test_sweep_run_over_a_record_entry_commits_and_runs_two_cases(tmp_path):
+    """Item 2's own end-to-end shape: a 2-case record study gets exactly one
+    commit_record_case per case, and the record's workflow steps run through
+    the same run-document/workflow-runner machinery a factory entry uses.
+
+    The spawned ``omnidriver run --run-document`` subprocess is faked here
+    the same way this suite's OWN factory-entry equivalent
+    (``test_sweep_run_entry_mode_executes_run_document_sequentially``) and
+    cardiacfoam's ``test_sweep_run_writes_run_documents_and_continues_past_
+    failure`` both already do: a fresh ``python -m omnidriver run
+    --run-document`` process resolves its plugin via ``--plugin``/entry-point
+    default resolution, never the in-process ``driver_context`` a test
+    builds, so asserting the CHILD PROCESS'S OWN observable behavior (which
+    run-document path it was given, that it's the one this sweep just built)
+    is what a fake can prove; a real spawn is exercised separately (manual
+    CLI proof, see this task's report)."""
+    cases_root = _native_toy_case(tmp_path)
+    spec_path = tmp_path / "sweep.json"
+    spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root)))
+    ctx = _record_driver_context()
+
+    commits = []
+    real_commit_record_case = __import__(
+        "omnidriver.core.runtime.record_execution", fromlist=["commit_record_case"],
+    ).commit_record_case
+
+    def tracking_commit(*args, **kwargs):
+        result = real_commit_record_case(*args, **kwargs)
+        commits.append(result)
+        return result
+
+    def fake_subprocess_run(cmd, **kwargs):
+        run_doc_path = Path(cmd[cmd.index("--run-document") + 1])
+        run_doc = json.loads(run_doc_path.read_text())
+        assert run_doc["workflowDag"]["steps"][0]["command"] == "touch"
+        assert run_doc["workflowDag"]["steps"][0]["args"] == ["solved.marker"]
+        case_root = Path(run_doc["launch"]["caseRoot"])
+        (case_root / "solved.marker").write_text("")
+        workflow_state_path = Path(run_doc["launch"]["outputDir"]) / "workflow_state.json"
+        workflow_state_path.parent.mkdir(parents=True, exist_ok=True)
+        workflow_state_path.write_text(json.dumps({"status": "completed"}))
+        return mock.Mock(returncode=0, stdout="", stderr="")
+
+    with mock.patch(
+        "omnidriver.core.runtime.sweep_runner.commit_record_case", side_effect=tracking_commit,
+    ), mock.patch(
+        "omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run,
+    ):
+        result = sweep_run(spec_path, output_dir=tmp_path / "out", driver_context=ctx)
+
+    assert result["case_count"] == 2
+    assert result["completed_count"] == 2
+    assert result["failed_count"] == 0
+    assert len(commits) == 2
+    assert {c.write_record.transaction_id for c in commits if c.write_record} .__len__() == 2
+    for case in result["cases"]:
+        assert case["status"] == "completed"
+        assert case["record_commit_status"] == "committed"
+        staged_case_root = tmp_path / "out" / "cases" / case["case_id"]
+        assert (staged_case_root / "solved.marker").exists()
+        assert json.loads((staged_case_root / "constant" / "mesh.json").read_text())["cells"] in ("2", "3")
+
+
+def test_sweep_run_refuses_retry_failed_for_a_record_entry(tmp_path):
+    cases_root = _native_toy_case(tmp_path)
+    spec_path = tmp_path / "sweep.json"
+    spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root)))
+    ctx = _record_driver_context()
+
+    with pytest.raises(TutorialRecordError, match="retry-failed"):
+        sweep_run(
+            spec_path, output_dir=tmp_path / "out", retry_failed=True, driver_context=ctx,
+        )
+
+
+def test_sweep_record_is_never_dispatched_for_a_factory_entry(tmp_path):
+    """A study naming an ordinary factory tutorial (no tutorial_records
+    catalog entry) is completely unaffected -- _sweep_record returns
+    (None, None), so sweep_plan/sweep_run fall straight through to the
+    unchanged factory-entry branch."""
+    from omnidriver.core.runtime.sweep_runner import _sweep_record
+
+    spec = {"base": {"entry": "niederer2012"}, "sweep": {"mode": "cross_product", "independent": {}}}
+    record, cases_root = _sweep_record(spec, driver_context=_CTX)
+    assert record is None
+    assert cases_root is None

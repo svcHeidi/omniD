@@ -443,13 +443,52 @@ def strict_plan(
     allow_unresolved_configuration: bool = False,
     driver_context: "DriverContext",
 ) -> StrictPlanReport:
-    """Build a non-mutating strict simulation plan report."""
+    """Build a non-mutating strict simulation plan report.
+
+    Resolves ``entry`` to a spec via ``load_entry_spec`` (which refuses a
+    tutorial_record by name -- B2), then delegates every diagnostic/
+    run-document assembly step to :func:`_strict_plan_for_spec`. A caller
+    that already HAS a spec built some other way (item 2: a tutorial-record
+    case, whose spec ``record_execution.record_case_spec`` builds directly,
+    with no registry entry to resolve at all) calls
+    :func:`_strict_plan_for_spec` itself instead of going through here --
+    reusing the exact same diagnostics/run-document pipeline, not a second
+    one.
+    """
     spec = load_entry_spec(
         entry,
         entry_kind=entry_kind,
         overrides=overrides,
         driver_context=driver_context,
     )
+    return _strict_plan_for_spec(
+        entry,
+        spec,
+        entry_kind=entry_kind,
+        explicit_bashrc=explicit_bashrc,
+        allow_unresolved_configuration=allow_unresolved_configuration,
+        driver_context=driver_context,
+        config_path=config_path,
+    )
+
+
+def _strict_plan_for_spec(
+    entry: str,
+    spec: Any,
+    *,
+    entry_kind: str | None = None,
+    config_path: str | Path | None = None,
+    explicit_bashrc: str | Path | None = None,
+    allow_unresolved_configuration: bool = False,
+    driver_context: "DriverContext",
+) -> StrictPlanReport:
+    """The diagnostics/run-document assembly ``strict_plan`` performs, taking
+    an already-resolved ``spec`` directly rather than resolving ``entry``
+    itself. Extracted from ``strict_plan`` (2026-09-24, item 2) so a caller
+    with a spec that did not come from the registry (a tutorial-record case)
+    can reuse this pipeline verbatim -- "map onto the same shape... through
+    the existing workflow runner. do not build a second runner."
+    """
     execution_context = resolve_execution_context(spec)
     launch = _run_launch_description(
         entry,

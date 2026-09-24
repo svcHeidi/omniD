@@ -345,3 +345,95 @@ def commit_record_case(
         write_record=record_, unchanged=unchanged, command_arguments=command_arguments,
         workflow_step_ids=workflow_step_ids,
     )
+
+
+# ---------------------------------------------------------------------------
+# Item 2: running a committed record case's workflow through the SAME
+# workflow-DAG shape and the SAME planning/run machinery a factory tutorial
+# uses -- no second runner.
+# ---------------------------------------------------------------------------
+
+
+def _workflow_dag_for_record(
+    record: TutorialRecord,
+    *,
+    workflow_step_ids: tuple[str, ...],
+    command_arguments: Mapping[str, tuple[str, ...]],
+) -> dict[str, Any]:
+    """The record's selected steps, in the exact ``{"steps": [...]}`` shape
+    ``generic_case._workflow_dag_for`` already produces for factory
+    tutorials: one entry per step, ``command``/``args`` split, chained by
+    ``depends_on`` in declaration order (design's own worked example runs
+    ``blockMesh``, ``gmsh``, ``cardiacFoam`` one after another).
+
+    An axis's command arguments for a step (``AxisResult.command_arguments``,
+    already merged and conflict-checked by ``resolve_case_patches``, M6) are
+    appended after the step's own declared ``command`` tail.
+    """
+    steps_by_id = {step.step_id: step for step in record.workflow_steps}
+    dag_steps: list[dict[str, Any]] = []
+    depends_on: list[str] = []
+    for step_id in workflow_step_ids:
+        step = steps_by_id[step_id]
+        argv = list(step.command) + list(command_arguments.get(step_id, ()))
+        dag_steps.append({
+            "id": step_id,
+            "command": argv[0],
+            "args": argv[1:],
+            "depends_on": list(depends_on),
+        })
+        depends_on = [step_id]
+    return {"steps": dag_steps}
+
+
+def record_case_spec(
+    record: TutorialRecord,
+    *,
+    case_id: str,
+    staged_case_root: Path,
+    workflow_step_ids: tuple[str, ...],
+    command_arguments: Mapping[str, tuple[str, ...]],
+) -> Any:
+    """Build the ``TutorialSpec`` a committed record case's workflow runs
+    through -- the same ``strict_planning._strict_plan_for_spec``/run-
+    document/workflow-runner pipeline a factory tutorial's ``case_folder``
+    spec runs through (item 2: "map the record's steps onto the same
+    workflow DAG shape factory tutorials use... through the existing
+    workflow runner. do not build a second runner").
+
+    The case's content was already written by ``commit_record_case`` before
+    this is ever called -- design §4 step 7 (commit) happens strictly before
+    step 8 (run). This spec's own case mutation is therefore a genuine no-op
+    (``plan_case`` returning ``None``), never a second write: there is
+    nothing left for it to do.
+
+    ``metadata["generic_case"] = True`` matches ``generic_case.make_spec``'s
+    own convention for a spec with no solver-specific config to validate --
+    correct here for the same reason: a tutorial record is core-owned data,
+    not a solver's config vocabulary, so there is no plugin config schema to
+    validate a record spec's (empty) ``config`` against.
+    """
+    from .models import CaseConfig, TutorialSpec
+
+    case_root = Path(staged_case_root)
+    workflow_dag = _workflow_dag_for_record(
+        record, workflow_step_ids=workflow_step_ids, command_arguments=command_arguments,
+    )
+    return TutorialSpec(
+        name=case_id,
+        case_root=case_root,
+        setup_root=case_root,
+        output_dir=case_root,
+        build_cases=lambda: [CaseConfig(case_id=case_id, params={})],
+        plan_case=lambda root, case: None,
+        metadata={
+            "entry_name": record.name,
+            "entry_kind": "tutorial_record",
+            "entry_path": record.native_case_relpath,
+            "source_type": "tutorial_record",
+            "workflow_family": None,
+            "resolution": "tutorial_record",
+            "workflow_dag": workflow_dag,
+            "generic_case": True,
+        },
+    )

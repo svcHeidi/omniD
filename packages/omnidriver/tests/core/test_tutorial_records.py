@@ -1282,3 +1282,50 @@ def test_a_sweep_over_a_record_entry_produces_one_commit_per_case(tmp_path):
         for case in resolved_cases
     }
     assert cells_by_case == {"case_0001": "2", "case_0002": "3"}
+
+
+# ---------------------------------------------------------------------------
+# record_case_spec: mapping a committed record case onto the same
+# workflow_dag shape a factory tutorial's spec carries (item 2).
+# ---------------------------------------------------------------------------
+
+
+def test_record_case_spec_builds_the_generic_workflow_dag_shape(tmp_path):
+    record = TutorialRecord(
+        name="toyTutorial",
+        native_case_relpath="toyTutorial",
+        allowed_axes=frozenset(),
+        workflow_steps=(
+            WorkflowStep(step_id="mesh", command=("blockMesh", "-dict")),
+            WorkflowStep(step_id="solve", command=("cardiacFoam",)),
+        ),
+    )
+    staged = tmp_path / "case"
+    staged.mkdir()
+    spec = record_execution.record_case_spec(
+        record,
+        case_id="case_0001",
+        staged_case_root=staged,
+        workflow_step_ids=("mesh", "solve"),
+        command_arguments={"mesh": ("-N", "20")},
+    )
+    assert spec.name == "case_0001"
+    assert spec.case_root == staged
+    assert spec.metadata["generic_case"] is True
+    assert spec.metadata["entry_kind"] == "tutorial_record"
+    workflow_dag = spec.metadata["workflow_dag"]
+    assert workflow_dag == {
+        "steps": [
+            {
+                "id": "mesh", "command": "blockMesh", "args": ["-dict", "-N", "20"],
+                "depends_on": [],
+            },
+            {
+                "id": "solve", "command": "cardiacFoam", "args": [],
+                "depends_on": ["mesh"],
+            },
+        ]
+    }
+    # The case was already committed by commit_record_case; this spec's own
+    # mutation is a genuine no-op.
+    assert spec.plan_case(staged, spec.build_cases()[0]) is None
