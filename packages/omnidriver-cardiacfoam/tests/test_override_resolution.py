@@ -221,12 +221,17 @@ class TestResolveEntryOverrides(unittest.TestCase):
             self.assertEqual(before, _dir_snapshot(Path(temp_dir)))
 
     def test_an_undeclared_key_is_refused_not_silently_written(self) -> None:
-        """`manufacturedBidomain.fdaBathVariant` (used by the checked-in
-        `manufactured_bath_bidomain` tutorial) is exactly this case in
-        production -- see this task's report. The catalog's own 2026-09-19
-        note records that no native utility reads that key under
-        `<solver>Coeffs`; writing it is a silent no-op the OLD unchecked
-        `apply_entry_overrides` could not detect and the resolver now can.
+        """`manufacturedBidomain.fdaBathVariant` was, until 2026-09-23, an
+        unconditional write the checked-in `manufactured_bath_bidomain`
+        tutorial made in production -- exactly this case, and the reason
+        that tutorial's `_apply_case`/`_plan_case` always raised (see
+        `manufactured_bath_bidomain.py`'s corrected `_plan_case` docstring
+        and `test_manufactured_bath_bidomain_write_channel.py`). The catalog's
+        own 2026-09-19 note records that no native utility reads that key
+        under `<solver>Coeffs`; writing it is a silent no-op the OLD unchecked
+        `apply_entry_overrides` could not detect and the resolver now can --
+        this test exercises that general mechanism directly, independent of
+        the tutorial, which no longer writes this key at all.
         """
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "electroProperties"

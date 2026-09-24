@@ -11,37 +11,43 @@ now (`operation="ensure"`/`"remove"`), plus a `plan_dict_block` raw target
 for the whole-`ecgDomains`-block insert/removal, which is not a
 `ParameterAssignment` at all (see `_plan_case`'s own docstring).
 
-**A second, previously undocumented production bug, found while writing
-this test, out of this task's mandate to fix** -- the same class of defect
-`manufactured_monodomain_total_lagrangian_em` has for a different key
-(Task 6's own report): `case_overrides` unconditionally includes
-`f"{electro_properties_scope}.manufacturedBidomain.fdaBathVariant"`, a key
-`dict_entries_catalog.py` does not declare anywhere (confirmed by grep, not
-assumed -- that module's own 2026-09-19 correction note explains why:
-"native reads that block only at electroProperties top level, for ECG
-inheritance, never under `<solver>Coeffs`" -- removed from the catalog that
-day; this tutorial's write of it was never updated to match). Since this key
-is unconditional -- not gated behind any parameter -- **`_apply_case` raises
-`ValueError` for every call, with no way to avoid it**, confirmed by running
-it with the tutorial's own default arguments against a real fixture. This
-means true byte-for-byte parity against `_apply_case` is not achievable for
-this tutorial's `constant/electroProperties` output (nothing `_apply_case`
-writes there past the raise can be a ground truth, because it never gets
-there): `_apply_case`'s own `case_overrides` call fails immediately, atomically
--- `resolve_entry_overrides` raises mid-iteration before returning anything,
-so *none* of that dict's keys are written, including the ones the catalog
-does declare (`dimension`, `solutionAlgorithm`, `verificationModel.type`,
-...). `_plan_case` classifies the dead key separately (`uncataloged_case_overrides`,
-written last, directly, matching the established "uncataloged key stays
-direct" pattern every other migrated tutorial already uses for a key the
-catalog does not declare) rather than bundling it with the catalog-valid
-keys the way `_apply_case` does -- so `_plan_case`'s channel commit succeeds
-in full before it too fails on the same dead key. The two are proven
-identical exactly as far as that is meaningful: the same exception, and
-byte-for-byte identical `system/controlDict`/`system/blockMeshDict.2D`
-(both fully migrated and untouched by this bug). `constant/electroProperties`
-is instead characterized directly, against expected values, not against
-`_apply_case`'s broken output.
+**Corrected 2026-09-23 (later same day).** This module used to characterize
+a *bug*: `_plan_case` unconditionally also wrote
+`bidomainSolverCoeffs.manufacturedBidomain.fdaBathVariant`, a key
+`dict_entries_catalog.py` does not declare anywhere (confirmed by grep --
+that module's own 2026-09-19 correction note explains why: "native reads
+that block only at electroProperties top level, for ECG inheritance, never
+under `<solver>Coeffs`" -- removed from the catalog that day; this
+tutorial's write of it was never updated to match). Since that write was
+unconditional, `_apply_case`/`_plan_case` raised `ValueError` for *every*
+call, with no way to avoid it -- confirmed by running the tutorial with its
+own default arguments against a real fixture, and this module used to
+characterize exactly that: identical exceptions, and byte parity limited to
+the two documents (`controlDict`, `blockMeshDict.2D`) the dead key's raise
+never reached.
+
+The dead write is now removed (`manufactured_bath_bidomain.py`'s own
+docstring records the correction): the authoritative native tree
+(`~/noFrontendCardiacFoam_minor_errors/tutorials/manufacturedSolutions/
+bathBidomain/constant/electroProperties`) has no `manufacturedBidomain`
+block at all, and `manufacturedFDABathBidomainVerifier.C` reads the variant
+from `verificationModel.fdaBathVariant` -- exactly the catalog-declared key
+(`$ELECTRO_MODEL_COEFFS.verificationModel.fdaBathVariant`) this tutorial's
+`case_overrides` already wrote alongside the dead one. Removing the dead
+write therefore changes nothing about which *value* reaches the solver; it
+only stops the tutorial from raising before that value's write (and every
+other catalog-valid write in the same batch) ever lands. This module now
+characterizes the fixed behaviour directly: `_apply_case` and `_plan_case`
+succeed (no raise) and produce byte-identical output on every document,
+`verificationModel.fdaBathVariant` carries the requested variant (including
+the non-default `groundElectrode`, exercised explicitly below), and no
+`manufacturedBidomain` block is ever written.
+
+**Regression check performed while writing this test:** reverting
+`manufactured_bath_bidomain.py`'s fix (re-adding the unconditional
+`manufacturedBidomain.fdaBathVariant` write) makes every test below fail --
+`_apply_case`/`_plan_case` raise `ValueError` again instead of returning a
+record, since `assertRaises` is no longer used here.
 """
 
 from __future__ import annotations
@@ -62,6 +68,10 @@ _RELPATHS = (
     "system/blockMeshDict.2D",
 )
 
+# Matches the authoritative native tree's own fixture shape
+# (~/noFrontendCardiacFoam_minor_errors/tutorials/manufacturedSolutions/
+# bathBidomain/constant/electroProperties): no `manufacturedBidomain` block
+# -- native never reads one there, and this tutorial no longer writes one.
 _ELECTRO_TEXT = "\n".join(
     [
         "myocardiumSolver bidomainSolver;",
@@ -74,10 +84,6 @@ _ELECTRO_TEXT = "\n".join(
         "    verificationModel",
         "    {",
         "        type manufacturedFDAMonodomainVerifier;",
-        "        fdaBathVariant groundElectrode;",
-        "    }",
-        "    manufacturedBidomain",
-        "    {",
         "        fdaBathVariant groundElectrode;",
         "    }",
         "    bathPotentialDomain",
@@ -114,10 +120,6 @@ _BLOCK_MESH_2D_TEXT = (
     ");\n"
 )
 
-_DEAD_KEY_MESSAGE_FRAGMENT = (
-    "bidomainSolverCoeffs.manufacturedBidomain.fdaBathVariant"
-)
-
 
 def _digests(root: Path) -> dict:
     import hashlib
@@ -139,20 +141,17 @@ def _case() -> CaseConfig:
     )
 
 
-# Captured 2026-09-23 against HEAD 26f2090, from the unmodified `_apply_case`
-# -- the default call: fda_bath_variant="electrodePair" (removes the
+# fda_bath_variant="electrodePair" (the tutorial's own default): removes the
 # fixture's leftover groundPatches.xMin, upserts surfaceCurrentPatches.xMin/
-# xMax), ecg_enabled=False (ecgDomains removal is a no-op -- the fixture
-# never had one). Raises on the dead key before ever reaching case_overrides'
-# valid entries or the two calls after it (ecgDomains removal,
-# electro_property_overrides, physics_property_overrides) -- see module
-# docstring.
+# xMax.
 _ELECTRODE_PAIR_KWARGS = dict(end_time=0.02, physics_property_overrides={"type": "electroMechanicalModel"})
 
-# fda_bath_variant="groundElectrode" (ensures groundPatches.xMin again and
-# surfaceCurrentPatches.xMax fresh; removes nothing new), ecg_enabled=True
-# (inserts the whole ecgDomains block, then sets three keys inside it --
-# the load-bearing dict-then-value order this migration depends on).
+# fda_bath_variant="groundElectrode" (the non-default variant a caller could
+# never actually get before this fix -- see manufactured_bath_bidomain.py's
+# own corrected docstring): ensures groundPatches.xMin again and
+# surfaceCurrentPatches.xMax fresh; removes nothing new. ecg_enabled=True
+# (inserts the whole ecgDomains block, then sets three keys inside it -- the
+# load-bearing dict-then-value order this migration depends on).
 _GROUND_ELECTRODE_ECG_KWARGS = dict(
     end_time=0.02, fda_bath_variant="groundElectrode", ecg_enabled=True,
 )
@@ -163,63 +162,39 @@ class TestManufacturedBathBidomainWriteChannel(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp(prefix="omnidriver-bath-bidomain-channel-"))
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
 
-    # **Corrected 2026-09-23 (Commit 3, same task):** this class used to carry
-    # two tests here characterizing `_apply_case` raising after a *partial*,
-    # independent set of writes (`_ELECTRODE_PAIR_APPLY_DIGESTS`/
-    # `_GROUND_ELECTRODE_ECG_APPLY_DIGESTS`, captured before Commit 3
-    # collapsed `_apply_case` to a thin wrapper over `_plan_case`). Once
-    # `_apply_case` *is* `_plan_case`, those digests are simply
-    # `_plan_case`'s own -- proven by running this file against the collapsed
-    # source, which failed exactly those two tests with `_apply_case`'s
-    # digest now equal to `_plan_case`'s. Removed rather than updated to
-    # assert a now-tautological "`_apply_case` matches `_apply_case`"; the
-    # dead-key raise is still characterized below, where it is meaningful
-    # (`_plan_case` raising it, `_apply_case` -- now the same code --
-    # matching).
-
-    # --- _plan_case raises the identical error, and matches _apply_case
-    # byte-for-byte on every document the dead key's bug does not corrupt
-    # (trivially so post-collapse -- see the note above -- but this also
-    # still stands as the direct characterization of what `_apply_case`,
-    # i.e. `_plan_case`, actually does). ---
-
-    def test_electrode_pair_plan_case_raises_identically_and_matches_where_comparable(self) -> None:
-        apply_root = self.tmp / "apply_ep2"
+    def test_electrode_pair_apply_case_and_plan_case_succeed_and_match_byte_for_byte(self) -> None:
+        apply_root = self.tmp / "apply_ep"
         plan_root = self.tmp / "plan_ep"
         _write_case(apply_root)
         _write_case(plan_root)
 
-        with self.assertRaises(ValueError) as apply_exc:
-            tut._apply_case(apply_root, _case(), **_ELECTRODE_PAIR_KWARGS)
-        with self.assertRaises(ValueError) as plan_exc:
-            tut._plan_case(plan_root, _case(), **_ELECTRODE_PAIR_KWARGS)
-        self.assertEqual(str(apply_exc.exception), str(plan_exc.exception))
+        tut._apply_case(apply_root, _case(), **_ELECTRODE_PAIR_KWARGS)
+        tut._plan_case(plan_root, _case(), **_ELECTRODE_PAIR_KWARGS)
 
         apply_digests = _digests(apply_root)
         plan_digests = _digests(plan_root)
-        # Untouched by the dead-key bug in either path -- true byte parity.
-        self.assertEqual(
-            plan_digests["system/controlDict"], apply_digests["system/controlDict"],
-        )
-        self.assertEqual(
-            plan_digests["system/blockMeshDict.2D"], apply_digests["system/blockMeshDict.2D"],
-        )
+        for relpath in _RELPATHS:
+            self.assertEqual(
+                plan_digests[relpath], apply_digests[relpath],
+                f"{relpath} differs between _apply_case and _plan_case",
+            )
 
-    def test_electrode_pair_plan_case_electro_properties_is_correct(self) -> None:
-        """Not comparable to `_apply_case` (see module docstring) --
-        characterized directly instead. The channel commit succeeds in full
-        before the separate, direct dead-key write raises, so every
-        catalog-valid override this tutorial makes actually lands."""
+    def test_electrode_pair_electro_properties_carries_the_default_variant_at_the_correct_scope(self) -> None:
         root = self.tmp / "plan_ep_direct"
         _write_case(root)
-        with self.assertRaises(ValueError):
-            tut._plan_case(root, _case(), **_ELECTRODE_PAIR_KWARGS)
+        tut._plan_case(root, _case(), **_ELECTRODE_PAIR_KWARGS)
 
         content = (root / "constant" / "electroProperties").read_text()
         self.assertIn('dimension    "2D"', content)
         self.assertIn("solutionAlgorithm    implicit", content)
         self.assertIn("type    manufacturedFDABathBidomainVerifier", content)
+        # The value the native verifier actually reads
+        # (verificationModel.fdaBathVariant) carries the requested variant --
+        # this is the fix: it used to be shadowed by a second, dead write to
+        # bidomainSolverCoeffs.manufacturedBidomain.fdaBathVariant, a key
+        # nothing in the native tree ever reads (see module docstring).
         self.assertIn("fdaBathVariant    electrodePair", content)
+        self.assertNotIn("manufacturedBidomain", content)
         self.assertIn("phiERefPoint    (-0.9 0.525 0.025)", content)
         self.assertIn("phiEReferenceValue    0.0", content)
         self.assertIn("xMin    -0.01", content)
@@ -231,35 +206,36 @@ class TestManufacturedBathBidomainWriteChannel(unittest.TestCase):
         physics_content = (root / "constant" / "physicsProperties").read_text()
         self.assertIn("electroMechanicalModel", physics_content)
 
-    def test_ground_electrode_with_ecg_plan_case_raises_identically_and_matches_where_comparable(self) -> None:
-        apply_root = self.tmp / "apply_ge2"
+    def test_ground_electrode_with_ecg_apply_case_and_plan_case_succeed_and_match_byte_for_byte(self) -> None:
+        apply_root = self.tmp / "apply_ge"
         plan_root = self.tmp / "plan_ge"
         _write_case(apply_root)
         _write_case(plan_root)
 
-        with self.assertRaises(ValueError) as apply_exc:
-            tut._apply_case(apply_root, _case(), **_GROUND_ELECTRODE_ECG_KWARGS)
-        with self.assertRaises(ValueError) as plan_exc:
-            tut._plan_case(plan_root, _case(), **_GROUND_ELECTRODE_ECG_KWARGS)
-        self.assertEqual(str(apply_exc.exception), str(plan_exc.exception))
+        tut._apply_case(apply_root, _case(), **_GROUND_ELECTRODE_ECG_KWARGS)
+        tut._plan_case(plan_root, _case(), **_GROUND_ELECTRODE_ECG_KWARGS)
 
         apply_digests = _digests(apply_root)
         plan_digests = _digests(plan_root)
-        self.assertEqual(
-            plan_digests["system/controlDict"], apply_digests["system/controlDict"],
-        )
-        self.assertEqual(
-            plan_digests["system/blockMeshDict.2D"], apply_digests["system/blockMeshDict.2D"],
-        )
+        for relpath in _RELPATHS:
+            self.assertEqual(
+                plan_digests[relpath], apply_digests[relpath],
+                f"{relpath} differs between _apply_case and _plan_case",
+            )
 
-    def test_ground_electrode_with_ecg_plan_case_electro_properties_is_correct(self) -> None:
+    def test_ground_electrode_electro_properties_carries_the_non_default_variant_at_the_correct_scope(self) -> None:
+        """The variant a caller requesting `groundElectrode` through this
+        tutorial has never actually gotten before this fix (see
+        `manufactured_bath_bidomain.py`'s corrected `_plan_case` docstring):
+        the old unconditional dead write always raised before this value's
+        catalog-valid write could ever reach disk."""
         root = self.tmp / "plan_ge_direct"
         _write_case(root)
-        with self.assertRaises(ValueError):
-            tut._plan_case(root, _case(), **_GROUND_ELECTRODE_ECG_KWARGS)
+        tut._plan_case(root, _case(), **_GROUND_ELECTRODE_ECG_KWARGS)
 
         content = (root / "constant" / "electroProperties").read_text()
         self.assertIn("fdaBathVariant    groundElectrode", content)
+        self.assertNotIn("manufacturedBidomain", content)
         self.assertIn("xMin    0.0", content)
         self.assertIn("xMax    0.01", content)
         # The ecgDomains block exists, and the case-specific overrides landed
