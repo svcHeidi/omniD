@@ -13,10 +13,10 @@ and 9). Two creation modes land here:
 Reuses :func:`mutators.update_foam_entry` for every key/value edit; this module
 does not implement a second dictionary writer. **Corrected 2026-09-23 (Phase 3
 Task 4):** a `clone_and_patch` edit is not always a key/value set -- a target
-carrying ``"hex_cell_counts"`` (see :func:`utils.plan_block_mesh_resolution`)
+carrying ``"hex_cell_counts"`` (see :func:`case_planning.plan_block_mesh_resolution`)
 is a structural rewrite of an existing document's ``hex (`` block
 declarations instead, and :func:`render_patch_case_files` reuses
-:func:`utils._rewrite_hex_block_lines` for it the same way it reuses
+:func:`case_planning._rewrite_hex_block_lines` for it the same way it reuses
 `update_foam_entry` for everything else -- one implementation of the ``hex (``
 grammar, not a second one living beside this module's key/value path.
 
@@ -52,7 +52,7 @@ from omnidriver.core.case_write import Precondition, RenderedFile, _digest_bytes
 
 from .effective_dictionary import _inspect_source_closure
 from .mutators import ensure_foam_dict, remove_foam_dict, remove_foam_entry, update_foam_entry
-from .utils import _rewrite_hex_block_lines
+from .case_planning import _rewrite_hex_block_lines
 
 #: The one format this module renders. Declared truthfully by whichever
 #: provider composes it in (``OpenFOAMEnvironmentPlugin.get_rendered_formats``)
@@ -100,7 +100,7 @@ def render_patch_case_files(
     ``repeated_edits_to_one_file`` conformance case).
 
     **A target may instead carry ``"content"``** (Phase 3 Task 7,
-    :func:`utils.plan_verbatim_content`) -- a whole document's exact bytes,
+    :func:`case_planning.plan_verbatim_content`) -- a whole document's exact bytes,
     supplied by the caller rather than assembled from a key/value edit. See
     the inline comment where it is applied, below, for the full reasoning;
     the short version is that this mirrors :func:`render_synthesis_case_files`'s
@@ -108,10 +108,10 @@ def render_patch_case_files(
     exist.
 
     **A target may instead carry ``"hex_cell_counts"``** (Phase 3 Task 4,
-    :func:`utils.plan_block_mesh_resolution`) rather than
+    :func:`case_planning.plan_block_mesh_resolution`) rather than
     ``"expanded_key_path"``/``"value"``: a structural rewrite of every
     ``hex (`` block declaration in the document, not a key/value edit.
-    Applied via :func:`utils._rewrite_hex_block_lines` -- reused, the same
+    Applied via :func:`case_planning._rewrite_hex_block_lines` -- reused, the same
     grammar `replace_block_mesh_resolutions` still writes directly today --
     instead of ``update_foam_entry``, and validated against that target's
     own ``expected_blocks`` the same way that function always has: silently

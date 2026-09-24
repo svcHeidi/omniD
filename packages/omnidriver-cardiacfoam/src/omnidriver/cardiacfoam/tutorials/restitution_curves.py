@@ -45,7 +45,7 @@ from omnidriver.core.specs.common import (
     resolve_run_script_path,
     resolve_spec_paths,
 )
-from omnidriver.openfoam.utils import (
+from omnidriver.openfoam.case_planning import (
     plan_end_time,
 )
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec

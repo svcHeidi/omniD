@@ -38,7 +38,7 @@ import pytest
 
 from omnidriver.core.case_write import CaseMutationRequest, ParameterAssignment, ResolvedMutation
 from omnidriver.openfoam import case_rendering
-from omnidriver.openfoam.utils import (
+from omnidriver.openfoam.case_planning import (
     _rewrite_hex_block_lines,
     plan_block_mesh_resolution,
     plan_delta_t,

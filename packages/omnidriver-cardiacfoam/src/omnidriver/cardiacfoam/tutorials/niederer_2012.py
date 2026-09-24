@@ -45,12 +45,12 @@ from omnidriver.cardiacfoam.overrides import (
 from omnidriver.core.specs.common import (
     resolve_spec_paths,
 )
-from omnidriver.openfoam.utils import (
+from omnidriver.openfoam.case_planning import (
     plan_block_mesh_resolution,
     plan_delta_t,
     plan_end_time,
-    set_delta_t,
 )
+from omnidriver.openfoam.utils import set_delta_t
 from omnidriver.openfoam.mesh_provisioning import cell_counts_from_dx
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 

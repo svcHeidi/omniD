@@ -25,7 +25,7 @@ import pytest
 
 from omnidriver.core.case_write import CaseMutationRequest, ResolvedMutation
 from omnidriver.openfoam import case_rendering
-from omnidriver.openfoam.utils import plan_delta_t, plan_verbatim_content
+from omnidriver.openfoam.case_planning import plan_delta_t, plan_verbatim_content
 
 _TEMPLATE_TEXT = "FoamFile\n{\n}\ntype electroModel;\n"
 

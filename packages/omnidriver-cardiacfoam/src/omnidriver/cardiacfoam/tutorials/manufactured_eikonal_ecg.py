@@ -49,7 +49,7 @@ from omnidriver.core.specs.common import (
     resolve_run_script_path,
     resolve_spec_paths,
 )
-from omnidriver.openfoam.utils import (
+from omnidriver.openfoam.case_planning import (
     plan_block_mesh_resolution,
 )
 from omnidriver.openfoam.tet_mesh_provisioning import render_tet_geo

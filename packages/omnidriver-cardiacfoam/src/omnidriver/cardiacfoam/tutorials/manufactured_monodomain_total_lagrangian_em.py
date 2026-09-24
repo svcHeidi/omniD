@@ -47,7 +47,7 @@ from omnidriver.core.specs.common import (
     resolve_run_script_path,
     resolve_spec_paths,
 )
-from omnidriver.openfoam.utils import (
+from omnidriver.openfoam.case_planning import (
     plan_block_mesh_resolution,
     plan_delta_t,
 )

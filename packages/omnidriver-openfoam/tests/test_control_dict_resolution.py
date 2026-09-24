@@ -37,7 +37,7 @@ try:
     # change, not merely after it. See this task's report for the revert
     # that confirms exactly the planner tests fail without `utils.py`'s
     # change, no more and no fewer.
-    from omnidriver.openfoam.utils import plan_delta_t, plan_end_time
+    from omnidriver.openfoam.case_planning import plan_delta_t, plan_end_time
 except ImportError:
     plan_delta_t = plan_end_time = None
 

@@ -1096,7 +1096,7 @@ def resolve_synthesis_mutation(request: CaseMutationRequest) -> ResolvedMutation
         # call as every other document here. Never `skip_if_present`: the
         # pre-migration code always re-wrote Allrun's content unconditionally
         # on every call, reused case_root or not.
-        from omnidriver.openfoam.utils import plan_verbatim_content
+        from omnidriver.openfoam.case_planning import plan_verbatim_content
 
         allrun_body = "#!/bin/sh\n" + (
             "blockMesh\ncardiacFoam\n" if needs_block_mesh else "cardiacFoam\n"
