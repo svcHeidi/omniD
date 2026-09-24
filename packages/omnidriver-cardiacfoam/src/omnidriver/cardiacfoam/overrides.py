@@ -449,6 +449,7 @@ def _resolve_single_catalog_assignment(
     document: str,
     electro_properties_path: Path | None,
     operation: str,
+    source: str = "case",
 ) -> ParameterAssignment:
     """One catalog-addressed key, resolved into a typed `ParameterAssignment`
     carrying an explicit `operation` (Phase 3 Task 6's completion,
@@ -465,6 +466,19 @@ def _resolve_single_catalog_assignment(
     duplicated. `value` is ignored for `operation="remove"` (there is
     nothing to type or preserve evidence for -- `ParameterAssignment` itself
     refuses a value alongside `remove`).
+
+    `source` (added 2026-09-24, Phase 3 Task 9's `describe` review, audit
+    finding F4 again): defaults to `"case"`, matching `resolve_entry_overrides`
+    -- correct for every existing caller (`resolve_electro_property_ensure`/
+    `resolve_electro_property_removal`), where the value genuinely is
+    whatever the immediate caller passed. It is NOT always correct for a
+    caller (`single_cell._plan_case`, see `resolve_electro_property_set`)
+    that computed the value from its own default table rather than from
+    anything the caller of `_plan_case` supplied -- that is `"template"`,
+    the same distinction `dict_builder.py`'s synthesis resolver already
+    draws (`source="case" if delta_t is not None else "template"`). Passed
+    through unchanged, not re-derived here: this function has no way to
+    know which case applies for its own caller.
     """
     is_electro = electro_properties_path is not None
     resolved_scope: tuple[str, ...] = ()
@@ -502,7 +516,7 @@ def _resolve_single_catalog_assignment(
         binding={},
         value=typed_value,
         value_kind=entry.value_kind,
-        source="case",
+        source=source,
         evidence_refs=evidence_refs,
         operation=operation,
     )
@@ -547,6 +561,41 @@ def resolve_electro_property_removal(
     return _resolve_single_catalog_assignment(
         entry_name, scope, None, document=document,
         electro_properties_path=electro_properties_path, operation="remove",
+    )
+
+
+def resolve_electro_property_set(
+    electro_properties_path: Path,
+    entry_name: str,
+    value: Any,
+    *,
+    document: str,
+    scope: str | Sequence[str] | None = None,
+    source: str = "case",
+) -> ParameterAssignment:
+    """Pure, channel-routed single-key counterpart of `resolve_entry_overrides`
+    for a caller that already knows exactly which key it means and needs to
+    declare a `source` other than the constant `"case"`
+    `resolve_entry_overrides` always assigns.
+
+    Added 2026-09-24 (Phase 3 Task 9's `describe` review): running the real
+    `describe` seam against a real fixture surfaced audit finding F4 again --
+    `single_cell._plan_case` folded `stim_amplitude`, looked up from this
+    tutorial's own default `stimulus_map` (keyed by the caller's
+    `ionic_model` choice, but not itself supplied by the immediate caller),
+    into the same `case_overrides` dict as `tissue`/`ionicModel` (values the
+    caller genuinely did choose), and `resolve_entry_overrides` marks every
+    entry it resolves `source="case"` unconditionally. An agent reading
+    `describe`'s `proposed_changes` would see `stim_amplitude` as something
+    the caller asked for, when it is a tutorial default the caller's
+    `ionic_model` choice happened to select -- `source="template"`, the
+    same distinction `dict_builder.py`'s synthesis resolver already draws.
+    See `single_cell._plan_case`'s own call site for how `source` is
+    determined there."""
+    return _resolve_single_catalog_assignment(
+        entry_name, scope, value, document=document,
+        electro_properties_path=electro_properties_path, operation="set",
+        source=source,
     )
 
 

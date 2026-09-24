@@ -37,6 +37,7 @@ from omnidriver.cardiacfoam.tutorials.defaults import single_cell as defaults
 from omnidriver.cardiacfoam.overrides import (
     commit_case_overrides,
     merge_assignments,
+    resolve_electro_property_set,
     resolve_entry_overrides,
 )
 from omnidriver.core.specs.common import (
@@ -119,6 +120,25 @@ def _plan_case(
     `commit_case_overrides` (`overrides.py`), not through two direct
     `apply_electro_property_overrides` calls. Returns the committed
     `CaseWriteRecord`, or `None` when there was nothing to write.
+
+    **`stim_amplitude`'s `source`, corrected 2026-09-24 (Phase 3 Task 9's
+    `describe` review, audit finding F4 again).** Running the real
+    `describe` seam against a real fixture showed `stim_amplitude` reported
+    as `source="case"` -- wrong: its value is looked up from this
+    tutorial's own default `stimulus_map` table, keyed by the caller's
+    `ionic_model` choice, not itself something the immediate caller of
+    `_plan_case` supplied, unless it replaced the whole `stimulus_map`.
+    Folding it into `case_overrides` (resolved via `resolve_entry_overrides`,
+    which marks every entry it resolves `source="case"` unconditionally --
+    correct for `tissue`/`ionicModel`, genuinely the caller's own choice via
+    `case.params`) reported a tutorial default as though the case had asked
+    for it. Resolved separately, via `resolve_electro_property_set`, with an
+    explicit `source` that matches `dict_builder.py`'s own precedent
+    (`source="case" if delta_t is not None else "template"`): `"case"` only
+    when `stimulus_map` is not this tutorial's own default object -- i.e.
+    the `make_spec` caller replaced the whole table -- `"template"`
+    otherwise, same as if a caller never mentioned amplitude and this
+    module's own default supplied it.
     """
     tissue = case.params["tissue"]
     ionic_model = case.params["ionicModel"]
@@ -131,22 +151,30 @@ def _plan_case(
     case_overrides = {
         f"{electro_properties_scope}.tissue": tissue,
         f"{electro_properties_scope}.ionicModel": ionic_model,
-        f"{electro_properties_scope}.singleCellStimulus.stim_amplitude": stimulus_map[ionic_model],
     }
 
     electro_document = str(electro_properties_relpath)
     physics_document = str(physics_properties_relpath)
 
-    # `case_overrides` first, `electro_property_overrides` second -- the
-    # same order `_apply_case` applies them in, so a key both sets name
-    # resolves to the caller-supplied override, matching that function's
-    # "second write wins" behaviour exactly (merge_assignments's own
-    # docstring).
+    stim_amplitude_source = "case" if stimulus_map is not defaults.STIMULUS_MAP else "template"
+    stim_amplitude_parameter = resolve_electro_property_set(
+        electro_properties_file, "stim_amplitude", stimulus_map[ionic_model],
+        document=electro_document,
+        scope=(electro_properties_scope, "singleCellStimulus"),
+        source=stim_amplitude_source,
+    )
+
+    # `case_overrides` first, then the computed `stim_amplitude`, then
+    # `electro_property_overrides` -- the same relative order `_apply_case`
+    # applied all three keys in before this split, so a key any later set
+    # also names still resolves to that later, more-specific override,
+    # matching `merge_assignments`'s "second write wins" behaviour exactly.
     electro_parameters = merge_assignments(
         resolve_entry_overrides(
             electro_properties_file, case_overrides, document=electro_document,
             electro_properties_path=electro_properties_file,
         ),
+        [stim_amplitude_parameter],
         resolve_entry_overrides(
             electro_properties_file, electro_property_overrides, document=electro_document,
             electro_properties_path=electro_properties_file,

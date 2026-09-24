@@ -47,6 +47,7 @@ import unittest
 from pathlib import Path
 
 from omnidriver.cardiacfoam.tutorials import single_cell
+from omnidriver.cardiacfoam.tutorials.defaults import single_cell as single_cell_defaults
 from omnidriver.core.case_write import CaseWriteRecord
 from omnidriver.core.runtime.models import CaseConfig
 
@@ -155,6 +156,61 @@ class TestSingleCellWriteChannelTemplate(unittest.TestCase):
             root, _case(), stimulus_map=_STIMULUS_MAP,
         )
         self.assertIsInstance(record, CaseWriteRecord)
+
+    def test_stim_amplitude_is_a_template_value_when_stimulus_map_is_the_tutorials_own_default(
+        self,
+    ) -> None:
+        """Phase 3 Task 9's `describe` review, 2026-09-24 (audit finding F4
+        again): `stim_amplitude` is looked up from `stimulus_map`, not
+        supplied by `_plan_case`'s immediate caller, unless that caller
+        replaces the whole table. Using this tutorial's own default table
+        (the same object `make_spec`'s own default argument is) must report
+        `source="template"`, not `"case"` -- the caller asked for an ionic
+        model, not for this specific amplitude."""
+        root = self.tmp / "template_amplitude"
+        _write_case(root)
+        record = single_cell._plan_case(
+            root, _case(), stimulus_map=single_cell_defaults.STIMULUS_MAP,
+        )
+        by_id = {p["qualified_id"]: p for p in record.parameters}
+        self.assertEqual(
+            by_id["singleCellSolverCoeffs.singleCellStimulus.stim_amplitude"]["source"],
+            "template",
+        )
+
+    def test_stim_amplitude_is_a_case_value_when_the_caller_replaces_the_whole_stimulus_map(
+        self,
+    ) -> None:
+        """A caller that explicitly hands `make_spec`/`_plan_case` its own
+        `stimulus_map` (even one with the same values, since a copy is a
+        different object) has made a deliberate choice -- `source="case"`."""
+        root = self.tmp / "case_amplitude"
+        _write_case(root)
+        custom_map = dict(single_cell_defaults.STIMULUS_MAP)
+        record = single_cell._plan_case(root, _case(), stimulus_map=custom_map)
+        by_id = {p["qualified_id"]: p for p in record.parameters}
+        self.assertEqual(
+            by_id["singleCellSolverCoeffs.singleCellStimulus.stim_amplitude"]["source"],
+            "case",
+        )
+
+    def test_an_explicit_stim_amplitude_override_still_wins_and_is_a_case_value(self) -> None:
+        """`electro_property_overrides` naming `stim_amplitude` explicitly
+        must still win over the computed default (unchanged "second write
+        wins" behaviour) and must itself be `source="case"` -- a genuine
+        caller-supplied value, not a lookup."""
+        root = self.tmp / "override_amplitude"
+        _write_case(root)
+        record = single_cell._plan_case(
+            root, _case(), stimulus_map=single_cell_defaults.STIMULUS_MAP,
+            electro_property_overrides={
+                "singleCellSolverCoeffs.singleCellStimulus.stim_amplitude": 0.9,
+            },
+        )
+        by_id = {p["qualified_id"]: p for p in record.parameters}
+        changed = by_id["singleCellSolverCoeffs.singleCellStimulus.stim_amplitude"]
+        self.assertEqual(changed["source"], "case")
+        self.assertEqual(changed["value"], 0.9)
 
 
 if __name__ == "__main__":
