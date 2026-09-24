@@ -504,6 +504,79 @@ def _matching_workflow(
     return None
 
 
+def _describe_tutorial_record(
+    entry: str,
+    resolution: dict[str, Any],
+    *,
+    overrides: dict[str, Any] | None,
+    driver_context: "DriverContext",
+) -> dict[str, Any]:
+    """Item 1: describe's own preview of a tutorial_record entry.
+
+    Replaces the B2 refusal ``describe_entry`` used to raise for every
+    ``resolve_entry`` kind alike -- for describe only (design doc
+    ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md``
+    §4's own words: "``describe`` performs steps 1-7 without committing:
+    that is the preview"). Every other B2 consumer (``load_tutorial_spec``,
+    ``load_entry_spec``, and therefore ``strict_plan``/``step``/``run``
+    through ``--entry``) still refuses a tutorial_record by name -- there is
+    no ``TutorialSpec`` here to build one from, only the record's own
+    preview.
+
+    A record has no ``spec``, so most of ``describe_entry``'s spec-derived
+    sections (``spec``, ``tutorial_contract``, ``strict_launch``,
+    ``config_schema``, ``write_surface``) do not apply and are simply
+    absent, never a fabricated empty answer. ``record_preview`` -- each
+    patch's document/key/value/status/validated flag, plus the command
+    arguments per workflow step -- sits beside where ``write_surface`` would
+    be for a factory tutorial.
+    """
+    from .runtime.record_execution import preview_record_case
+
+    record = resolution["record"]
+    incoming_overrides = dict(overrides or {})
+    cases_root = Path(incoming_overrides.pop("cases_root", None) or Path.cwd())
+    entry_catalog = list_entries(cases_root, driver_context=driver_context)
+    preview = preview_record_case(
+        record,
+        cases_root=cases_root,
+        study_by_source={"base": incoming_overrides},
+        driver_context=driver_context,
+    )
+    return {
+        "requested_entry": entry,
+        "resolution": resolution["resolution"],
+        "resolved_name": resolution["resolved_name"],
+        "entry": {
+            "entry_name": resolution["entry_name"],
+            "entry_kind": resolution["entry_kind"],
+            "entry_path": resolution["entry_path"],
+            "is_runnable": resolution["is_runnable"],
+            "source_type": resolution["source_type"],
+            "workflow_family": resolution["workflow_family"],
+        },
+        "entry_kind": resolution["entry_kind"],
+        "entry_catalog": _serialize(entry_catalog),
+        "is_runnable": resolution["is_runnable"],
+        "registered_tutorials": list_tutorials(driver_context),
+        "special_tutorial_aliases": list(SPECIAL_TUTORIAL_ALIASES),
+        "available_tutorials": list_available_tutorials(
+            cases_root, driver_context=driver_context,
+        ),
+        "case_directories": list_case_directories(
+            cases_root, driver_context=driver_context,
+        ),
+        "common_override_keys": list(COMMON_OVERRIDE_KEYS),
+        "dict_entries": _dict_entry_catalog(driver_context),
+        "plugin_catalogs": _plugin_catalogs(driver_context),
+        "record_preview": preview,
+        "capability_manifest": _serialize({
+            **dict(driver_context.capabilities.manifest.manifest()),
+            "plugin_identity": driver_context.identity.to_json(),
+        }),
+    }
+
+
 def describe_entry(
     entry: str,
     *,
@@ -518,6 +591,10 @@ def describe_entry(
         overrides=overrides,
         driver_context=driver_context,
     )
+    if resolution["resolution"] == "tutorial_record":
+        return _describe_tutorial_record(
+            entry, resolution, overrides=overrides, driver_context=driver_context,
+        )
     from .runtime.registry import _materialize_resolved_entry
 
     spec = _materialize_resolved_entry(

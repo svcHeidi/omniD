@@ -848,16 +848,70 @@ def test_load_entry_spec_refuses_a_tutorial_record_by_name(tmp_path):
         )
 
 
-def test_describe_entry_refuses_a_tutorial_record_by_name(tmp_path):
+def test_describe_entry_previews_a_tutorial_record_instead_of_refusing(tmp_path):
+    """Item 1: describe_entry's own B2 refusal is replaced, for describe
+    only, with a real preview through record_execution.preview_record_case.
+    Every other B2 consumer (load_tutorial_spec, load_entry_spec -- see the
+    two tests directly above) still refuses a tutorial_record by name."""
     from omnidriver.core.introspection import describe_entry
 
+    _native_case(tmp_path, {
+        "constant/electro.json": {"ionicModel": "TT06"},
+        "constant/mesh.json": {"cells": "5"},
+    })
     record = _record()
-    plugin = MinimalTestPlugin(tutorial_records={"toyTutorial": record})
-    context = driver_context(plugin, source="test:b2")
-    with pytest.raises(TutorialRecordError, match="describe_entry"):
-        describe_entry(
-            "toyTutorial", overrides={"cases_root": str(tmp_path)}, driver_context=context,
-        )
+    plugin = _RecordCaseWriterPlugin(
+        tutorial_records={"toyTutorial": record},
+        axis_catalog={"number_cells": _number_cells_axis()},
+        record_key_validator=_known_catalog_validator,
+    )
+    context = driver_context(plugin, source="test:describe-record")
+
+    described = describe_entry(
+        "toyTutorial",
+        overrides={
+            "cases_root": str(tmp_path / "cases"),
+            "constant/electro.json:ionicModel": "LR91",
+            "number_cells": 5,
+        },
+        driver_context=context,
+    )
+    assert described["resolution"] == "tutorial_record"
+    assert described["entry"]["entry_kind"] == "tutorial_record"
+    preview = described["record_preview"]
+    by_document = {p["document"]: p for p in preview["patches"]}
+    assert by_document["constant/electro.json"]["value"] == "LR91"
+    assert by_document["constant/electro.json"]["status"] == "changed"
+    assert by_document["constant/electro.json"]["validated"] is True
+    assert by_document["constant/mesh.json"]["status"] == "unchanged"
+    assert preview["command_arguments"]["mesh"] == ["-N", "5"]
+    # write_surface (the factory-tutorial section this sits beside) makes no
+    # sense for a record -- there is no spec, no plan_case -- and is simply
+    # absent rather than a fabricated empty answer.
+    assert "write_surface" not in described
+
+
+def test_describe_tutorial_output_for_a_factory_tutorial_is_unchanged(tmp_path):
+    """Item 1's own instruction: "keep factory tutorials' describe output
+    unchanged." A factory-tutorial describe (the case_folder path, exercised
+    throughout the rest of this suite indirectly) must still carry
+    write_surface, never the new record_preview key."""
+    from omnidriver.core.introspection import describe_entry
+
+    case_dir = tmp_path / "plainCase"
+    case_dir.mkdir()
+    (case_dir / "run-test-case").write_text("#!/bin/sh\n")
+    plugin = MinimalTestPlugin(entrypoint="run-test-case")
+    context = driver_context(plugin, source="test:describe-factory")
+
+    described = describe_entry(
+        str(case_dir),
+        overrides={"cases_root": str(tmp_path), "output_dir_name": "output"},
+        driver_context=context,
+    )
+    assert described["resolution"] == "case_path"
+    assert "write_surface" in described
+    assert "record_preview" not in described
 
 
 # ---------------------------------------------------------------------------
