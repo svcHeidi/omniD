@@ -39,7 +39,6 @@ from omnidriver.openfoam.mutators import update_foam_entry
 from omnidriver.openfoam.parallel_execution import solve_steps
 from omnidriver.cardiacfoam.overrides import (
     PLUGIN_ID,
-    apply_electro_property_overrides,
     commit_case_overrides,
     merge_assignments,
     resolve_electro_property_ensure,
@@ -341,20 +340,22 @@ def _plan_case(
       `ecg_enabled`, the block must exist before the `set`s below it
       (`ecgDomains.bodyECG.ecgSolver` and siblings, part of `case_overrides`)
       can find their scope at all.
-    - `manufacturedBidomain.fdaBathVariant` is **not** declared anywhere in
-      `dict_entries_catalog.py` -- confirmed by grep, not assumed; that
-      module's own 2026-09-19 correction note says exactly why ("native
-      reads that block only at electroProperties top level, for ECG
-      inheritance, never under `<solver>Coeffs`" -- removed from the catalog
-      that day). Routing it through `resolve_entry_overrides` raises
-      `ValueError`, the catalog-strictness Task 2 gave every override. This
-      tutorial's own write of that key was never updated to match, the same
-      class of stale-key defect `manufactured_monodomain_total_lagrangian_em`
-      has for a different key -- fixing it is a correctness change to this
-      tutorial's arithmetic, not a write-channel migration, and out of this
-      task's mandate the same way that one is. It stays a direct write
-      (`uncataloged_case_overrides` below), run after the channel commit,
-      in its original relative position.
+    - **Corrected 2026-09-23 (later same day):** this docstring used to carry
+      an *additional* unconditional write of
+      `manufacturedBidomain.fdaBathVariant`, kept as a direct write
+      (`uncataloged_case_overrides`) on the theory that fixing it was "a
+      correctness change ... out of this task's mandate". It was in scope --
+      that write reached no native code. The authoritative native tree
+      (`~/noFrontendCardiacFoam_minor_errors/tutorials/manufacturedSolutions/
+      bathBidomain/constant/electroProperties`) has no `manufacturedBidomain`
+      block at all; `manufacturedFDABathBidomainVerifier.C` reads the variant
+      via `dict().subDict("verificationModel").getOrDefault("fdaBathVariant",
+      ...)`. That scope, `verificationModel.fdaBathVariant`, is exactly what
+      `case_overrides` below already writes (catalog-declared,
+      `$ELECTRO_MODEL_COEFFS.verificationModel.fdaBathVariant`) -- so the dead
+      write was pure redundancy, not a second fact to preserve. Removed
+      outright, along with the now-unused `apply_electro_property_overrides`
+      import.
 
     Every other `case_overrides` key (`dimension`, `solutionAlgorithm`,
     `bathPredictorCorrector`, `verificationModel.type`,
@@ -398,10 +399,6 @@ def _plan_case(
         ),
         f"{electro_properties_scope}.verificationModel.type": verification_model_type,
         f"{electro_properties_scope}.verificationModel.fdaBathVariant": fda_bath_variant,
-    }
-    # See this function's own docstring: not catalog-declared, stays direct.
-    uncataloged_case_overrides = {
-        f"{electro_properties_scope}.manufacturedBidomain.fdaBathVariant": fda_bath_variant,
     }
 
     if fda_bath_variant not in ("groundElectrode", "electrodePair"):
@@ -550,8 +547,6 @@ def _plan_case(
             case_root / "system" / "fvSolution", entry["key"], entry["value"],
             scope=entry.get("scope"),
         )
-
-    apply_electro_property_overrides(electro_properties, uncataloged_case_overrides)
 
     return record
 

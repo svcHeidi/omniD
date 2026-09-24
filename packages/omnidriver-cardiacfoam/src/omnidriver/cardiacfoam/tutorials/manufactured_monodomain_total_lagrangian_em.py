@@ -38,7 +38,6 @@ from omnidriver.cardiacfoam.tutorials.defaults import manufactured_monodomain_to
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 from omnidriver.cardiacfoam.overrides import (
     PLUGIN_ID,
-    apply_entry_overrides,
     commit_case_overrides,
     merge_assignments,
     resolve_entry_overrides,
@@ -47,6 +46,7 @@ from omnidriver.core.specs.common import (
     resolve_run_script_path,
     resolve_spec_paths,
 )
+from omnidriver.openfoam.mutators import update_foam_entry
 from omnidriver.openfoam.utils import (
     plan_block_mesh_resolution,
     plan_delta_t,
@@ -127,13 +127,47 @@ def _plan_case(
     verification_model_type: str = defaults.ELECTROMECHANICAL_VERIFICATION_MODEL_TYPE,
 ):
     """`TutorialSpec.plan_case` (Phase 3 Task 6). Same arithmetic as
-    `_apply_case`. `electromechanical_properties` is addressed through
-    `resolve_entry_overrides` with the real case-relative
-    `electromechanical_properties_relpath` as its `document` -- unlike
-    `apply_entry_overrides` (which, having no case root, falls back to
-    `Path(file_path).name`), this function has a real `case_root` and so
-    supplies the genuine relative path the renderer needs to locate the
-    file, not a bare filename.
+    `_apply_case`.
+
+    **Corrected 2026-09-23:** `verification_model_type` used to be folded
+    into the same `resolve_entry_overrides` batch as the `electroProperties`
+    keys, under
+    ``sequentialElectroMechanicalCoeffs.electromechanicalVerificationModel.type``.
+    That key matches nothing the native solver reads, and the mismatch was
+    two-fold, not one: (1) the leaf name is wrong --
+    `electromechanicalVerificationModel.C`'s `New`/`configured` read
+    `dict.subDict("verificationModel")` then `.lookup("type")`, never a
+    `electromechanicalVerificationModel` sub-dict (confirmed against
+    `~/noFrontendCardiacFoam_minor_errors/src/verificationModels/
+    electromechanicsVerification/electromechanicalVerificationModel.C`, and
+    against the tutorial's own
+    `tutorials/manufacturedSolutions/monodomainTotalLagrangianEM/constant/
+    electroMechanicalProperties`, which carries `verificationModel { type
+    manufacturedElectromechanicsVerifier; ... }` -- no
+    `electromechanicalVerificationModel` block at all); and (2) the *document*
+    was wrong too -- this key lives in `electroMechanicalProperties`, which
+    `dict_key_allowlist.json`'s own waiver notes explicitly own outside
+    `dict_entries_catalog.py` ("belong to electroMechanicalProperties or the
+    MMS verifiers, not to electroProperties"). Routing it through
+    `resolve_entry_overrides`/`is_electro=False` validated it against the
+    *physicsProperties* catalog (`_PHYSICS_ENTRIES_BY_PATH`, which only
+    declares `type`), so the call was unconditionally doomed regardless of
+    the leaf name -- fixing the typo alone would not have made it pass. Since
+    no catalog in this package claims `electroMechanicalProperties`, this
+    write goes through `update_foam_entry` directly, after the channel
+    commit, the same "uncataloged document stays a direct write" pattern
+    `manufactured_bath_bidomain`'s `grad_scheme`/`phi_tolerance` already
+    establish -- not a regression to the pre-Task-2 fallback, since this
+    document was never catalog-addressable to begin with.
+
+    `electromechanical_properties` (for `electromechanical_property_overrides`,
+    a caller-supplied passthrough, currently unused by any in-tree caller) is
+    still addressed through `resolve_entry_overrides` with the real
+    case-relative `electromechanical_properties_relpath` as its `document`;
+    that call is a no-op today (nothing passes a non-`None` override) but
+    would hit the identical catalog gap the moment something did -- flagged
+    here rather than fixed, since fixing an unused parameter's plumbing is
+    not part of this correction.
     """
     dimension = str(case.params["dimension"])
     solver = str(case.params["solver"])
@@ -171,16 +205,6 @@ def _plan_case(
             electro_properties_path=electro_properties,
         ),
         resolve_entry_overrides(
-            electromechanical_properties,
-            {
-                (
-                    "sequentialElectroMechanicalCoeffs."
-                    "electromechanicalVerificationModel.type"
-                ): verification_model_type,
-            },
-            document=electromechanical_document,
-        ),
-        resolve_entry_overrides(
             electromechanical_properties, electromechanical_property_overrides,
             document=electromechanical_document,
         ),
@@ -189,7 +213,7 @@ def _plan_case(
         ),
     )
 
-    return commit_case_overrides(
+    record = commit_case_overrides(
         case_root,
         parameters=parameters,
         extra_targets=(block_mesh_target,),
@@ -197,6 +221,18 @@ def _plan_case(
         workflow="manufactured_monodomain_total_lagrangian_em",
         requested_by="cardiacfoam.tutorials.manufactured_monodomain_total_lagrangian_em",
     )
+
+    # See this function's own docstring: electroMechanicalProperties has no
+    # catalog in this package, so this write is direct, not channel-routed --
+    # and lands at verificationModel.type (electromechanicalVerificationModel.C's
+    # actual read), not the electromechanicalVerificationModel.type this used
+    # to write.
+    update_foam_entry(
+        electromechanical_properties, "type", verification_model_type,
+        scope=["sequentialElectroMechanicalCoeffs", "verificationModel"],
+    )
+
+    return record
 
 
 
