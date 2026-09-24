@@ -42,6 +42,11 @@ Suite `0 failed` in all four shapes; both static gates pass.
 1–7 done (7's commit is pending -- see its own Status row and "Findings").
 Tasks 8–11 not started.
 
+**Corrected 2026-09-24:** this line was stale again -- Task 8 had already
+landed (see its own Status row and "Findings", committed `9d159fa`) before
+Task 9 started. Tasks 1–9 done. Tasks 10–11 not started (explicitly not this
+task's scope, per its own instruction: "Do NOT do Tasks 10-11").
+
 | task | what it closes | state | commit |
 |---|---|---|---|
 | 1 · cut the surface before migrating onto it | over-modelled contract | done | `f476a13` |
@@ -52,7 +57,7 @@ Tasks 8–11 not started.
 | 6 · the eleven tutorials follow through | **bypass 1** (most of it) | pending | — |
 | 7 · source artifacts and sidecars, classified | **bypass 1** (remainder) | done | `85fc504`, `8594422`, `e85784c`, `2c3939c`, `570abfa`, `0b7d337`, and this doc's own commit |
 | 8 · `generic_case.py` | **bypass 2** | done | this doc's own commit |
-| 9 · the `describe` seam | the unmet second payoff | pending | — |
+| 9 · the `describe` seam | the unmet second payoff | done | `76957fd`, `ee34d5b` |
 | 10 · `Allrun`, and delete what is unreachable | **bypass 5** | pending | — |
 | 11 · close-out, with a widened inventory | G3 | pending | — |
 
@@ -1901,19 +1906,204 @@ If after building the seam `expected_effects` is still redundant, say so with
 evidence and remove it; that is a fine outcome. What is not fine is leaving it
 computed and unread.
 
-- [ ] **Step 1: Add the seam, not a mapping in core**
+- [x] **Step 1: Add the seam, not a mapping in core**
 
 Both vocabularies are cardiac, and core may not hardcode a mapping between them.
 The adapter or the tutorial spec must declare its kwarg → qualified-id mapping
 for `describe` to consult. Generate it from the same catalog entries validation
 uses — a second hand-maintained mapping is a second source of truth.
 
-- [ ] **Step 2: Prove the payoff end to end**
+- [x] **Step 2: Prove the payoff end to end**
 
 `describe --plugin cardiacfoam --entry singleCell --config <real overrides>`
 must return non-empty `proposed_changes` naming the qualified ids that will
 change and their values. **Paste the output in your report.** Until this passes,
 Phase 2's second claimed payoff is unmet, and this task is what closes it.
+
+### Findings, 2026-09-24
+
+**Evaluated before building anything, per this task's own instruction: reusing
+`spec.plan_case` beats a declared kwarg→qualified-id seam, and needs no mapping
+at all.** `describe_entry` already builds `spec` via
+`_materialize_resolved_entry(resolution, ...)`, which calls the real factory
+(`make_spec(**factory_overrides)`) with the caller's raw overrides -- so
+`spec.plan_case` is already the tutorial's own bound resolution closure,
+carrying every kwarg the caller named (`ionic_model`, `electro_property_overrides`,
+...). Calling it needs no second, hand-maintained mapping, and no per-tutorial
+edit at all: every migrated tutorial's `plan_case` already has the same
+two-argument shape (`PlanCaseFn`). A declared kwarg-mapping seam (Step 1's own
+literal wording) would have been strictly worse on both counts this repository's
+rules care about most -- a second source of truth (the mapping could drift from
+the catalog `resolve_entry_overrides` actually validates against), and thirteen
+per-tutorial edits at exactly the moment two other sessions are editing five of
+those same files.
+
+**What calling it actually touches -- established, not assumed, before writing
+`_resolve_proposed_changes`.** `plan_case` is not a pure resolver: every
+migrated tutorial's `plan_case` calls `commit_case_overrides`/
+`apply_input_overrides_planned`, which really commits through
+`commit_case_write` (journal, atomic replace into `case_root`). Calling it
+against the real `spec.case_root` from a read-only `describe` would be an
+unaudited write. So `_resolve_proposed_changes`
+(`core/introspection.py`) never passes `spec.case_root` itself: when it
+exists, it stages a disposable clone into a fresh `tempfile.TemporaryDirectory`
+using `sweep_runner._stage_entry_case` -- the exact mechanism a real sweep run
+already uses to isolate one case before mutating it, reused rather than
+duplicated -- and calls `plan_case` against the clone; when it does not exist
+(a case not yet materialized), it hands `plan_case` an empty scratch directory.
+Either way the real `case_root` is only ever *read* (by the staging copy, when
+it runs) and never written. This is proven, not merely argued:
+`packages/omnidriver-cardiacfoam/tests/test_describe_proposed_changes.py`
+hashes every file under the real fixture `case_root` before and after calling
+`_write_surface`/`describe_entry` and asserts the digests are identical, and
+that no stray staging/journal file was left beside it either.
+
+**The other half: `expected_effects` given its first real consumer.** Task 1
+found it computed by every producer (`cardiaccore/workflows/overrides.py`,
+`cardiacfoam/overrides.py`, `cardiacfoam/dict_builder.py`) and read by nothing
+-- `CaseWritePlan` had no field for it. Closed, not removed: `CaseWritePlan`
+gained an `expected_effects: tuple[str, ...] = ()` field, threaded from
+`ResolvedMutation.expected_effects` at all **four** `CaseWritePlan(...)`
+construction sites (the three above, plus `openfoam/apply_overrides.py`, found
+by `grep -n "CaseWritePlan(" packages/*/src/omnidriver/*/*.py
+packages/*/src/omnidriver/*/*/*.py` -- one site the module docstring's own
+enumeration had not named). `commit_case_write` copies it, and the plan's own
+validated `request.parameters` (`ParameterAssignment.to_json()` each), onto the
+returned `CaseWriteRecord` (two new fields, `expected_effects` and
+`parameters`, both defaulted to `()` so every existing constructor call and
+every persisted-completed replay payload written before this change reads back
+unchanged). `describe`'s `_resolve_proposed_changes` reads exactly this pair:
+`record.parameters` for the structured, qualified-id-bearing `proposed_changes`
+entries; `record.expected_effects` for the human-readable superset that also
+covers a raw (non-`ParameterAssignment`) target -- a whole-dict removal, a
+hex-line rewrite -- that has no single qualified id to carry, by construction
+(the 2026-09-23 decision, "a parameter asserts a final state, not only a
+value", left exactly this shape outside `ParameterAssignment`'s vocabulary).
+**Not found to be redundant**: it is the only field that survives for a target
+with no addressable qualified id, so it keeps its consumer rather than being
+dropped.
+
+**A serialization corollary of freezing `parameters`, found by running the new
+tests, not assumed.** `CaseWriteRecord.__post_init__` deep-freezes each
+`parameters` entry the same way `committed`/`evidence` already are (R2 finding
+3's convention) -- but unlike those two, a `ParameterAssignment.to_json()`
+dict nests further mappings (`binding`, `allowed_bindings`), so the existing
+`[dict(entry) for entry in self.evidence]` shallow-unfreeze pattern left an
+inner `MappingProxyType` un-thawed, and `json.dumps` on the result raised
+`TypeError: Object of type mappingproxy is not JSON serializable`. Fixed by
+reusing `_json_value` (already defined in this module for exactly this shape,
+`ParameterAssignment.to_json()`'s own `value` field) instead of a second,
+shallower unfreeze helper.
+
+**The pasted `describe` output for `singleCell`** (`/tmp/od311/bin/python -m
+omnidriver describe --plugin cardiacfoam --entry singleCell --config
+<config>`, `config` = `{"ionic_model": "BuenoOrovio", "tissue":
+"epicardialCells", "electro_property_overrides":
+{"singleCellSolverCoeffs.singleCellStimulus.stim_period_S1": 900},
+"physics_property_overrides": {"type": "electroMechanicalModel"}}`, against a
+real fixture `case_root` with `constant/electroProperties`/
+`physicsProperties`, per this task's own "paste it" instruction — see the
+report for the exact commands and the real fixture bytes). `write_surface`:
+
+```
+proposed_changes_source: plan_case_preview
+proposed_changes_reason: (empty)
+expected_effects: [
+  "set 'singleCellSolverCoeffs.tissue' in constant/electroProperties",
+  "set 'singleCellSolverCoeffs.ionicModel' in constant/electroProperties",
+  "set 'singleCellSolverCoeffs.singleCellStimulus.stim_amplitude' in constant/electroProperties",
+  "set 'singleCellSolverCoeffs.singleCellStimulus.stim_period_S1' in constant/electroProperties",
+  "set 'type' in constant/physicsProperties"
+]
+proposed_changes (5):
+  {qualified_id: singleCellSolverCoeffs.tissue, document: constant/electroProperties, value: epicardialCells, source: case, operation: set}
+  {qualified_id: singleCellSolverCoeffs.ionicModel, document: constant/electroProperties, value: BuenoOrovio, source: case, operation: set}
+  {qualified_id: singleCellSolverCoeffs.singleCellStimulus.stim_amplitude, document: constant/electroProperties, value: 0.4, source: case, operation: set}
+  {qualified_id: singleCellSolverCoeffs.singleCellStimulus.stim_period_S1, document: constant/electroProperties, value: 900, source: case, operation: set}
+  {qualified_id: type, document: constant/physicsProperties, value: electroMechanicalModel, source: case, operation: set}
+```
+
+Non-empty, real qualified ids, real values, real sources -- Phase 2's second
+claimed payoff, closed.
+
+**A removal, as a proposed change -- with an honest limit stated, not
+papered over.** `manufactured_monodomain_pseudo_ecg`'s conditional `ecgDomains`
+removal (this task's own suggested example) is a `plan_dict_block` **raw
+target**, not a `ParameterAssignment` -- Task 6/7's own finding: "not a
+`ParameterAssignment` at all... a whole sub-dictionary has no single
+`key_path`". Run against a real fixture (`ecg_enabled=False`, its default),
+`describe`'s `expected_effects` names it verbatim: `"remove ecgDomains block
+from constant/electroProperties"`. It does **not** appear in the structured
+`proposed_changes` list, and cannot: there genuinely is no single qualified id
+for a whole-dict removal to carry, the same reason `ParameterAssignment`
+could not express it in the first place. This is the honest, stated
+distinction `_resolve_proposed_changes`'s own docstring draws between the two
+return values, not a gap this task papered over.
+
+The one real tutorial that calls `resolve_electro_property_removal`
+(`manufactured_bath_bidomain`, the qualified-id-bearing kind) cannot
+demonstrate the structured case end to end today: an unrelated,
+pre-existing, separately-tracked bug (`bidomainSolverCoeffs.
+manufacturedBidomain.fdaBathVariant`, an undeclared key written
+unconditionally) makes **every** real invocation of its `plan_case` raise
+before returning, confirmed by running it against a real fixture -- and per
+this task's own escape hatch ("if its in-flight state blocks you, say so and
+pick another"), this file is also one of the two "wrong-scope key" tutorials
+a parallel session owns right now (see the "Merge note, 2026-09-24" section
+above), so it is not fixed here. Picked another: a minimal, self-contained
+`plan_case` built only for
+`test_describe_proposed_changes.py::TestAParameterShapedRemovalIsAStructuredProposedChange`,
+calling the same real, unmodified production functions
+(`resolve_electro_property_removal` -> `commit_case_overrides`) against a
+synthetic fixture, isolating the *mechanism* from that tutorial's own,
+unrelated bug:
+
+```
+_resolve_proposed_changes(...) ->
+  proposed_changes = [{
+    "qualified_id": "bidomainSolverCoeffs.bathPotentialDomain.groundPatches.xMin",
+    "document": "constant/electroProperties",
+    "value": None,
+    "source": "case",
+    "operation": "remove",
+  }]
+  expected_effects = (
+    "remove 'bidomainSolverCoeffs.bathPotentialDomain.groundPatches.xMin' "
+    "in constant/electroProperties",
+  )
+```
+
+A qualified-id-bearing removal, with a null value and `operation: "remove"`,
+as a structured proposed change -- proven against real, unmodified production
+code, with the real fixture's directory snapshot unchanged before and after.
+
+**Purity evidence.** Every test in `test_describe_proposed_changes.py` hashes
+the real fixture `case_root`'s full file tree before and after calling
+`_write_surface`/`_resolve_proposed_changes`, and asserts the digests match
+and no stray file was left beside it. The manual CLI proof above was checked
+the same way directly (`sha256sum` on the fixture files before and after the
+`omnidriver describe` invocation): unchanged.
+
+**Revert-to-confirm.** `git stash push` on the seven touched source files
+(`core/case_write.py`, `core/case_transaction.py`, `core/introspection.py`,
+and the four `CaseWritePlan(...)` producer sites) reproduces two collection
+failures (`ImportError: cannot import name '_resolve_proposed_changes'`) for
+both new test modules, and four direct failures in
+`test_case_write_plan.py` (`TypeError: ... got an unexpected keyword argument
+'expected_effects'` / `'parameters'`) -- exactly the new behaviour this task
+adds, nothing else. `git stash pop` restored the change; all now pass.
+
+**All four required shapes: 0 failed** (aside from the documented
+environmental `ensurepip` abort in `test_every_core_module_imports_from_a_wheel`,
+present before this task and unrelated to it). Both static gates pass.
+
+**What this task's own brief got wrong.** Step 1's literal instruction ("The
+adapter or the tutorial spec must declare its kwarg → qualified-id mapping")
+described the seam the plan expected to need; the evaluation this same
+section asked for first found a cheaper, more honest alternative (reuse
+`plan_case` itself) that needs no such mapping at all -- recorded here as the
+task's own "Evaluate this before building anything" section anticipated, not
+silently substituted.
 
 ---
 
