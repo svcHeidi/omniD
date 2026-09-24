@@ -1203,13 +1203,68 @@ def test_sweep_run_refuses_retry_failed_for_a_record_entry(tmp_path):
 
 
 def test_sweep_record_is_never_dispatched_for_a_factory_entry(tmp_path):
-    """A study naming an ordinary factory tutorial (no tutorial_records
-    catalog entry) is completely unaffected -- _sweep_record returns
-    (None, None), so sweep_plan/sweep_run fall straight through to the
-    unchanged factory-entry branch."""
+    """A study naming an ordinary factory tutorial that is NOT in the
+    stack's tutorial_records catalog is completely unaffected -- even when
+    the same stack registers OTHER, unrelated records -- _sweep_record
+    returns (None, None), so sweep_plan/sweep_run fall straight through to
+    the unchanged factory-entry branch."""
     from omnidriver.core.runtime.sweep_runner import _sweep_record
 
-    spec = {"base": {"entry": "niederer2012"}, "sweep": {"mode": "cross_product", "independent": {}}}
-    record, cases_root = _sweep_record(spec, driver_context=_CTX)
+    ctx = _record_driver_context()  # registers "toyTutorial" as a record
+    spec = {
+        "base": {"entry": "someFactoryTutorial"},
+        "sweep": {"mode": "cross_product", "independent": {}},
+    }
+    record, cases_root = _sweep_record(spec, driver_context=ctx)
     assert record is None
     assert cases_root is None
+
+
+def test_sweep_record_refuses_when_shadowed_by_a_cwd_case_path(tmp_path, monkeypatch):
+    """B1/M6: `_sweep_record` used to carry only a duplicated copy of the
+    record-vs-factory ambiguity check, missing the record-vs-cwd-case-path
+    one `resolve_entry`/`describe` already refuse -- a sweep over a record
+    name shadowed by a real case directory under cwd used to silently run
+    the record. Both now share one classifier (`registry.classify_entry`)."""
+    cases_root = _native_toy_case(tmp_path)
+    plugin = _RecordSweepWriterPlugin(
+        solver_commands=frozenset({"touch"}),
+        tutorial_records={"toyTutorial": _toy_record()},
+        axis_catalog={"number_cells": _record_number_cells_axis()},
+        record_key_validator=_record_known_catalog_validator,
+        entrypoint="run-test-case",
+    )
+    ctx = _driver_context(plugin, source="test:record-sweep-shadow-cwd")
+    cwd = tmp_path / "cwd"
+    (cwd / "toyTutorial").mkdir(parents=True)
+    (cwd / "toyTutorial" / "run-test-case").write_text("#!/bin/sh\n")
+    monkeypatch.chdir(cwd)
+
+    spec_path = tmp_path / "sweep.json"
+    spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root)))
+
+    with pytest.raises(KeyError, match="ambiguous"):
+        sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=ctx)
+
+
+def test_sweep_record_refuses_when_shadowed_by_a_case_folder_under_cases_root(tmp_path):
+    """B1/M6: the same ambiguity as above, but against a case folder under
+    the sweep's own `cases_root` (not cwd) -- this one was never refused
+    ANYWHERE before this fix, not even through `resolve_entry`/`describe`
+    directly (`_match_entry`'s own tutorial_record exclusion meant a record
+    resolution was returned first, the case-folder match never consulted)."""
+    cases_root = _native_toy_case(tmp_path)
+    (cases_root / "toyTutorial" / "run-test-case").write_text("#!/bin/sh\n")
+    plugin = _RecordSweepWriterPlugin(
+        solver_commands=frozenset({"touch"}),
+        tutorial_records={"toyTutorial": _toy_record()},
+        axis_catalog={"number_cells": _record_number_cells_axis()},
+        record_key_validator=_record_known_catalog_validator,
+        entrypoint="run-test-case",
+    )
+    ctx = _driver_context(plugin, source="test:record-sweep-shadow-folder")
+    spec_path = tmp_path / "sweep.json"
+    spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root)))
+
+    with pytest.raises(KeyError, match="ambiguous"):
+        sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=ctx)

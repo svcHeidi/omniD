@@ -803,6 +803,29 @@ def test_resolve_entry_refuses_a_name_that_is_both_a_record_and_a_case_path(tmp_
         os.chdir(old_cwd)
 
 
+def test_resolve_entry_refuses_a_name_that_is_both_a_record_and_a_case_folder_under_cases_root(tmp_path):
+    """B1/M6: the third ambiguity `classify_entry` refuses -- a record
+    shadowed by a same-named case folder under `cases_root` (not cwd). This
+    one was not refused ANYWHERE before this fix: `resolve_entry`'s
+    tutorial_record branch returned before `_match_entry` was ever consulted,
+    so the case-folder match was simply never looked at."""
+    cases_root = tmp_path / "cases"
+    case_dir = cases_root / "toyTutorial"
+    case_dir.mkdir(parents=True)
+    (case_dir / "run-test-case").write_text("#!/bin/sh\n")
+    record = _record(name="toyTutorial", native_case_relpath="toyTutorial")
+    plugin = MinimalTestPlugin(
+        entrypoint="run-test-case", tutorial_records={"toyTutorial": record},
+    )
+    context = driver_context(plugin, source="test:record-vs-case-folder")
+
+    with pytest.raises(KeyError, match="ambiguous"):
+        registry.resolve_entry(
+            "toyTutorial", overrides={"cases_root": str(cases_root)},
+            driver_context=context,
+        )
+
+
 def test_resolve_entry_never_resolves_a_records_own_relpath_as_a_case_folder(tmp_path):
     """B2 (second half): a tutorial-record entry must never be a `_match_entry`
     candidate. Before this fix, looking up a record's own

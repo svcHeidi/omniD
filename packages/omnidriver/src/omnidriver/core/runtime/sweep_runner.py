@@ -103,49 +103,42 @@ def _sweep_record(
     """Return ``(record, cases_root)`` when ``base.entry`` names a tutorial
     record, else ``(None, None)`` -- a factory tutorial or no entry at all.
 
-    Checks the ``tutorial_records`` catalog directly (the same one
-    ``registry.resolve_entry``'s own record branch consults), rather than
-    calling ``resolve_entry`` itself: that function also probes ``entry``
-    against the filesystem as a possible case path (design's own case-path
-    resolution, ``registry.resolve_entry``'s ``case_folder`` branch) before
-    it ever reaches the record branch -- a probe every EXISTING factory-
-    entry sweep would now pay for and, in a test that mocks
-    ``load_entry_spec``/``strict_plan`` directly without registering a real
-    factory, spuriously fail. A bare tutorial-record lookup needs none of
-    that; the ambiguity refusal between a record and a same-named factory
-    (design's "one name must not name both") is reproduced here directly
-    instead, matching ``resolve_entry``'s own precedence.
+    Classification -- including every record-vs-(factory/case-path/case-
+    folder) ambiguity refusal -- is `registry.classify_entry`'s job, the
+    SAME function `registry.resolve_entry` calls (review findings B1/M6):
+    this used to carry its own duplicated copy of only the factory-ambiguity
+    check, which caught neither a record shadowed by a real case directory
+    under cwd nor one shadowed by a same-named case folder under
+    `cases_root` -- both now refuse identically here and through
+    `resolve_entry`/`describe`.
 
     A record has no ambient cases root (CLAUDE.md's "supplied versus
     discovered"): ``base.cases_root`` must name it explicitly whenever
-    ``entry`` resolves to a record, refused by name otherwise.
+    ``entry`` resolves to a record, refused by name otherwise. When
+    ``cases_root`` is absent, `classify_entry` is still called (so the
+    record-vs-factory/record-vs-cwd-case-path ambiguities are still caught),
+    just with no root to check the case-folder ambiguity against.
     """
     entry = _entry_name(sweep_spec)
     if entry is None:
         return None, None
-    normalized_key = entry.strip().casefold()
-    catalog = driver_context.capabilities.tutorial_records.catalog() or {}
-    normalized_records = {name.casefold(): rec for name, rec in catalog.items()}
-    record = normalized_records.get(normalized_key)
-    if record is None:
-        return None, None
-    from .registry import _normalized_registry
+    from .registry import classify_entry
 
-    if normalized_key in _normalized_registry(driver_context):
-        raise KeyError(
-            f"Entry '{entry}' is ambiguous: it is registered as both a "
-            "tutorial record and a factory tutorial (spec_factories); "
-            "one name must not name both"
-        )
     base = sweep_spec.get("base", {})
     cases_root_value = base.get("cases_root")
-    if cases_root_value is None:
+    cases_root = Path(cases_root_value) if cases_root_value is not None else None
+    classification = classify_entry(
+        entry, entry_kind=None, cases_root=cases_root, driver_context=driver_context,
+    )
+    if classification.kind != "tutorial_record":
+        return None, None
+    if cases_root is None:
         raise TutorialRecordError(
             f"tutorial record {entry!r} cannot be swept: sweep.json's "
             "'base' must supply 'cases_root' naming where its native case "
             "lives (there is no ambient cases root to discover)"
         )
-    return record, Path(cases_root_value)
+    return classification.record, cases_root
 
 
 def _record_case_study_by_source(
