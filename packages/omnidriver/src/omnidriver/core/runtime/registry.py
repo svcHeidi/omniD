@@ -36,6 +36,7 @@ SpecFactory = Callable[..., TutorialSpec]
 ENTRY_KIND_VALUES = (
     "registered_tutorial",
     "case_folder",
+    "tutorial_record",
 )
 
 _entrypoint_relpaths = entrypoint_relpaths
@@ -170,6 +171,17 @@ def _classify_case_entry(
     }
 
 
+def _tutorial_record_entry(name: str, record: object) -> dict[str, object]:
+    return {
+        "entry_name": name,
+        "entry_kind": "tutorial_record",
+        "entry_path": record.native_case_relpath,
+        "is_runnable": True,
+        "source_type": "tutorial_record",
+        "workflow_family": None,
+    }
+
+
 def _entry_catalog_for_root(
     cases_root: Path,
     driver_context: "DriverContext",
@@ -178,6 +190,10 @@ def _entry_catalog_for_root(
         _registered_tutorial_entry(tutorial, cases_root, driver_context)
         for tutorial in list_tutorials(driver_context)
     ]
+    entries.extend(
+        _tutorial_record_entry(name, record)
+        for name, record in driver_context.capabilities.tutorial_records.catalog().items()
+    )
     known_registered = {tutorial.casefold() for tutorial in list_tutorials(driver_context)}
     for case_root in _iter_case_directories_recursive(cases_root, driver_context):
         classified = _classify_case_entry(case_root, cases_root, driver_context)
@@ -426,6 +442,40 @@ def resolve_entry(
             }
 
     cases_root = Path(incoming_overrides.get("cases_root", Path.cwd()))
+
+    # Tutorial records (docs/superpowers/specs/2026-09-24-tutorials-are-
+    # pointers-design.md §3) are dispatched EXPLICITLY, alongside the factory
+    # registry and a bare case path -- never tried as one kind and silently
+    # reinterpreted as another. A name registered as both a record and a
+    # factory is refused outright rather than picking one by search order,
+    # the same "no try-one-then-the-other fallback" instruction that governs
+    # every other refusal this design makes.
+    if entry_kind in {None, "tutorial_record"}:
+        normalized_records = {
+            record_name.casefold(): record
+            for record_name, record in driver_context.capabilities.tutorial_records.catalog().items()
+        }
+        if normalized_key in normalized_records:
+            if normalized_key in normalized_registry:
+                raise KeyError(
+                    f"Entry '{key}' is ambiguous: it is registered as both a "
+                    "tutorial record and a factory tutorial (spec_factories); "
+                    "one name must not name both"
+                )
+            record = normalized_records[normalized_key]
+            return {
+                "resolution": "tutorial_record",
+                "requested_name": key,
+                "requested_entry_kind": entry_kind,
+                "resolved_name": record.name,
+                "record": record,
+                "entry_name": record.name,
+                "entry_kind": "tutorial_record",
+                "entry_path": record.native_case_relpath,
+                "is_runnable": True,
+                "source_type": "tutorial_record",
+                "workflow_family": None,
+            }
 
     if entry_kind in {None, "registered_tutorial"} and normalized_key in normalized_registry:
         return {
