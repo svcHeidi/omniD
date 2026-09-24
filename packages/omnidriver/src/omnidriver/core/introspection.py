@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from .plugin_interface import DriverContext
 
 
-from .runtime.models import CaseConfig, TutorialSpec
+from .runtime.models import CaseConfig, TutorialSpec, invoke_case_mutation
 from .runtime.registry import (
     list_entries,
     list_available_tutorials,
@@ -170,6 +170,118 @@ def _mutable_entries(
     return items
 
 
+def _resolve_proposed_changes(
+    *,
+    driver_context: "DriverContext",
+    spec: TutorialSpec,
+) -> tuple[list[dict[str, Any]] | None, tuple[str, ...], str]:
+    """The unmet second payoff's actual seam (Phase 3 Task 9,
+    docs/superpowers/plans/2026-09-23-phase3-finish-the-write-channel.md).
+
+    R4 found the gap is that the CLI hands `_write_surface` raw factory
+    kwargs (`ionic_model`, `electro_property_overrides`), never
+    catalog-shaped qualified ids -- so a naive key match against
+    `dictionary_catalog.entries()` (`_mutable_entries`) can only ever see a
+    caller sophisticated enough to pass flat qualified ids directly, which
+    no real invocation in this codebase does. Both vocabularies are cardiac,
+    so core may not hardcode a mapping between them (the plan's own
+    constraint).
+
+    **Evaluated, not assumed: reusing `spec.plan_case` beats a declared
+    kwarg-to-qualified-id seam.** `spec` here is already the resolved,
+    materialized spec `describe_entry` built from the caller's real
+    overrides (`_materialize_resolved_entry`) -- `spec.plan_case` is already
+    the tutorial's own bound resolution closure, carrying every kwarg the
+    caller named. Calling it needs no second, hand-maintained mapping at
+    all, and no per-tutorial edit: every migrated tutorial's `plan_case`
+    already has this exact two-argument shape (`PlanCaseFn`).
+
+    **The purity question this evaluation had to answer first: what does
+    calling it actually touch?** `plan_case` is not a pure resolver -- it
+    calls `commit_case_overrides`/`apply_input_overrides_planned`, which
+    really commits through `commit_case_write` (journal, atomic replace).
+    Calling it against the real `spec.case_root` would be a real, unaudited
+    write from a read-only command. So this never passes `spec.case_root`
+    itself: it stages a disposable clone in a fresh temporary directory
+    (reusing `sweep_runner._stage_entry_case`, the exact mechanism a real
+    sweep run already uses to isolate one case before mutating it -- not a
+    second copy of that logic) and calls `plan_case` against the clone. The
+    real `case_root` is read only by the staging copy step (when it exists
+    at all) and is never written; the caller of this function is expected
+    to (and this module's own tests do) prove that with a directory
+    snapshot, not merely assert it.
+
+    Returns ``(proposed_changes, expected_effects, reason)``:
+
+    - ``proposed_changes`` is ``None`` when this could not be computed --
+      ``reason`` names why (no `plan_case`, a sweep that has not collapsed
+      to one case, or the staged preview itself raising), the same "state a
+      reason, never omit silently" policy `modes` already applies below.
+      An empty list is the legitimate, different answer "resolved cleanly,
+      and there is nothing to write" (`plan_case` returning `None` -- the
+      same no-op contract `commit_case_overrides` documents).
+    - ``expected_effects`` is `ResolvedMutation.expected_effects` (Task 1's
+      finding: computed by every producer, read by nothing until this) as
+      copied onto the committed `CaseWriteRecord`, covering targets with no
+      single qualified id at all (a whole-block removal, a hex-line
+      rewrite) that `proposed_changes` itself cannot address.
+    """
+    if spec.plan_case is None:
+        return (
+            None, (),
+            "this spec has no plan_case; only apply_case, which does not "
+            "report what it writes (or whether it goes through the case-write "
+            "channel at all)",
+        )
+    try:
+        cases = spec.build_cases()
+    except Exception as exc:  # noqa: BLE001 -- reported as a reason, not raised
+        return None, (), f"spec.build_cases() raised: {exc}"
+    if len(cases) != 1:
+        return (
+            None, (),
+            f"build_cases() resolved to {len(cases)} cases; a proposed-changes "
+            f"preview needs exactly one case (add enough overrides to collapse "
+            f"the sweep to a single case)"
+        )
+    case = cases[0]
+
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="omnidriver-describe-preview-") as scratch:
+        staged_case_root = Path(scratch) / "case"
+        try:
+            if Path(spec.case_root).exists():
+                from .runtime.sweep_runner import _stage_entry_case
+
+                _stage_entry_case(
+                    Path(spec.case_root), staged_case_root, driver_context=driver_context,
+                )
+            else:
+                staged_case_root.mkdir(parents=True, exist_ok=True)
+            record = invoke_case_mutation(spec, staged_case_root, case)
+        except Exception as exc:  # noqa: BLE001 -- reported as a reason, not raised
+            return None, (), f"the staged plan_case preview raised: {exc}"
+
+    if record is None:
+        # A genuine, legitimate no-op (`commit_case_overrides`'s own
+        # contract) -- there is nothing this mutation writes, not a failure
+        # to determine what it writes.
+        return [], (), ""
+
+    proposed_changes = [
+        {
+            "qualified_id": item["qualified_id"],
+            "document": item["document"],
+            "value": item.get("value"),
+            "source": item["source"],
+            "operation": item.get("operation", "set"),
+        }
+        for item in record.parameters
+    ]
+    return proposed_changes, record.expected_effects, ""
+
+
 def _write_surface(
     *,
     driver_context: "DriverContext",
@@ -185,12 +297,24 @@ def _write_surface(
     from the spec's own declared `workflow_dag` (see `_consumed_paths`);
     `modes` comes from `case_writer.supported_modes()`.
 
-    **Scope limit, stated rather than hidden:** `proposed_changes` lists the
-    `mutable` entries the caller's `overrides` actually set, validated
-    against the catalog -- it does not invoke a real adapter's `resolve()`,
-    because core cannot construct an adapter-specific `CaseMutationRequest`
-    (document/key_path addressing is adapter vocabulary) generically. A
-    literal resolve/render preview is future work.
+    **`proposed_changes` (Phase 3 Task 9, 2026-09-24): reuses the spec's own
+    `plan_case`, run against a disposable staged clone -- see
+    `_resolve_proposed_changes`.** When that succeeds, its output -- the
+    same validated `ParameterAssignment`s the real channel would write from
+    -- replaces the naive key-match below entirely, because it is strictly
+    more complete: it carries the actual value, and every `operation`
+    (`set`/`ensure`/`remove`), not only a `set` a caller happened to name
+    with a catalog-shaped key.
+
+    **The naive match survives as the stated fallback**, not a silent
+    default: a spec with no `plan_case` at all (not yet migrated onto the
+    channel) has no resolver to call, so `proposed_changes` falls back to
+    the `mutable` entries whose qualified id the caller's raw `overrides`
+    happens to name directly -- correct only for a caller sophisticated
+    enough to pass catalog-shaped keys, which is the exact limitation Task 9
+    closes for every migrated tutorial. `proposed_changes_reason` states
+    which path produced the result and why, rather than leaving a reader to
+    guess.
     """
     from .case_write import MUTATION_MODES
 
@@ -224,16 +348,28 @@ def _write_surface(
         modes[mode] = {"supported": is_supported, "reason": reason}
 
     supplied = dict(overrides or {})
-    proposed_changes = [
-        item for item in mutable
-        if item["qualified_id"] in supplied and item["qualified_id"] in mutable_ids
-    ]
+    resolved_changes, expected_effects, reason = _resolve_proposed_changes(
+        driver_context=driver_context, spec=spec,
+    )
+    if resolved_changes is not None:
+        proposed_changes = resolved_changes
+        proposed_changes_source = "plan_case_preview"
+    else:
+        proposed_changes = [
+            {**item, "operation": "set"}
+            for item in mutable
+            if item["qualified_id"] in supplied and item["qualified_id"] in mutable_ids
+        ]
+        proposed_changes_source = "supplied_qualified_ids_only"
 
     return {
         "mutable": mutable,
         "consumed": list(_consumed_paths(spec)),
         "modes": modes,
         "proposed_changes": proposed_changes,
+        "proposed_changes_source": proposed_changes_source,
+        "proposed_changes_reason": reason,
+        "expected_effects": list(expected_effects),
     }
 
 

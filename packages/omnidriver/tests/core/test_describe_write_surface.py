@@ -12,9 +12,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from omnidriver.core import plugin_capabilities
-from omnidriver.core.case_write import MUTATION_MODES, VALUE_SOURCES
+from omnidriver.core.case_write import CaseWriteRecord, MUTATION_MODES, VALUE_SOURCES
 from omnidriver.core.contracts.dictionary import DictEntry
-from omnidriver.core.introspection import _write_surface
+from omnidriver.core.introspection import _resolve_proposed_changes, _write_surface
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 
 
@@ -138,3 +138,108 @@ def test_consumed_is_empty_for_a_spec_with_no_workflow_dag():
     context = _context(_PluginNoWriter())
     described = _write_surface(driver_context=context, spec=_spec(), overrides=None)
     assert described["consumed"] == []
+
+
+def test_a_spec_with_no_plan_case_falls_back_with_a_stated_reason():
+    """Phase 3 Task 9: `_resolve_proposed_changes` requires `spec.plan_case`
+    to reuse the real resolver; this fake spec (like every fake spec in this
+    core-only test module) supplies only `apply_case`. The naive key-match
+    fallback must still run -- and say why it, not the richer path,
+    produced the result -- rather than going silently empty."""
+    context = _context(_PluginNoWriter())
+    described = _write_surface(
+        driver_context=context, spec=_spec(), overrides={"$FAKE.deltaT": 1e-4},
+    )
+    assert described["proposed_changes_source"] == "supplied_qualified_ids_only"
+    assert "no plan_case" in described["proposed_changes_reason"]
+    assert described["expected_effects"] == []
+    # The fallback path's own items are enriched with an explicit "operation"
+    # (Task 9) -- previously absent, since a flat qualified-id match can only
+    # ever represent a "set".
+    assert described["proposed_changes"][0]["operation"] == "set"
+
+
+def _spec_with_plan_case(plan_case, *, case_root=None):
+    return TutorialSpec(
+        name="fake-with-plan-case",
+        case_root=case_root or __import__("pathlib").Path(
+            "/tmp/fake-plan-case-root-does-not-exist",
+        ),
+        setup_root=__import__("pathlib").Path("/tmp/fake-setup-root-not-touched"),
+        output_dir=__import__("pathlib").Path("/tmp/fake-output-dir-not-touched"),
+        build_cases=lambda: [CaseConfig(case_id="only", params={})],
+        plan_case=plan_case,
+    )
+
+
+def test_a_sweep_that_has_not_collapsed_to_one_case_reports_a_reason():
+    def _build_cases():
+        return [
+            CaseConfig(case_id="a", params={}),
+            CaseConfig(case_id="b", params={}),
+        ]
+
+    spec = TutorialSpec(
+        name="fake-multi-case",
+        case_root=__import__("pathlib").Path("/tmp/fake-plan-case-root-does-not-exist"),
+        setup_root=__import__("pathlib").Path("/tmp/fake-setup-root-not-touched"),
+        output_dir=__import__("pathlib").Path("/tmp/fake-output-dir-not-touched"),
+        build_cases=_build_cases,
+        plan_case=lambda case_root, case: None,
+    )
+    context = _context(_PluginNoWriter())
+    proposed, effects, reason = _resolve_proposed_changes(driver_context=context, spec=spec)
+    assert proposed is None
+    assert effects == ()
+    assert "resolved to 2 cases" in reason
+
+
+def test_a_staged_plan_case_that_raises_reports_a_reason_not_a_crash():
+    def _plan_case(case_root, case):
+        raise ValueError("this tutorial's own resolution refused something")
+
+    spec = _spec_with_plan_case(_plan_case)
+    context = _context(_PluginNoWriter())
+    proposed, effects, reason = _resolve_proposed_changes(driver_context=context, spec=spec)
+    assert proposed is None
+    assert effects == ()
+    assert "this tutorial's own resolution refused something" in reason
+
+
+def test_a_plan_case_no_op_is_an_empty_list_not_a_reason():
+    """`plan_case` returning `None` is the documented no-op contract
+    (`commit_case_overrides`'s own docstring) -- a legitimate, different
+    answer from "could not be determined"."""
+    spec = _spec_with_plan_case(lambda case_root, case: None)
+    context = _context(_PluginNoWriter())
+    proposed, effects, reason = _resolve_proposed_changes(driver_context=context, spec=spec)
+    assert proposed == []
+    assert effects == ()
+    assert reason == ""
+
+
+def test_a_real_case_write_record_is_read_into_proposed_changes():
+    def _plan_case(case_root, case):
+        return CaseWriteRecord(
+            transaction_id="t", plan_id="p", plan_digest="d",
+            committed=(), evidence=(), status="committed",
+            parameters=(
+                {
+                    "qualified_id": "$FAKE.deltaT", "document": "system/controlDict",
+                    "value": 1e-4, "source": "case", "operation": "set",
+                },
+            ),
+            expected_effects=("set '$FAKE.deltaT' in system/controlDict",),
+        )
+
+    spec = _spec_with_plan_case(_plan_case)
+    context = _context(_PluginNoWriter())
+    proposed, effects, reason = _resolve_proposed_changes(driver_context=context, spec=spec)
+    assert reason == ""
+    assert proposed == [
+        {
+            "qualified_id": "$FAKE.deltaT", "document": "system/controlDict",
+            "value": 1e-4, "source": "case", "operation": "set",
+        },
+    ]
+    assert effects == ("set '$FAKE.deltaT' in system/controlDict",)
