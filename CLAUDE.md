@@ -47,7 +47,7 @@ uv venv --python 3.11 /tmp/odcore && VIRTUAL_ENV=/tmp/odcore uv pip install -q \
 | core alone | `python -m pytest packages/omnidriver/tests -q` | core reaching into a sibling package |
 | **installed wheel** | see below | core reading repo-relative state at import time |
 | native tree | `OMNIDRIVER_NATIVE_TUTORIALS=<path> python -m pytest packages/ -q -m native` | drift against the real native cardiacFOAM tutorials tree; supplied only via that variable (never discovered) — a `native`-marked test FAILS, not skips, when it is unset |
-| static gates | `python3 scripts/check-import-boundaries.py` and `scripts/export-capability-seams.py --check` | import direction; a stale generated table |
+| static gates | `python3 scripts/check-import-boundaries.py`, `scripts/export-capability-seams.py --check`, and `scripts/check-case-writes.py` | import direction; a stale generated table; a tutorial-record/axis module writing a case directly instead of through `commit_case_write` |
 
 The wheel shape is the one people skip and the one that found the worst
 defects. Rebuild it after **every** source change or it tests stale code:
@@ -79,6 +79,7 @@ A skip here hides exactly what the guard exists to find.
 | an explicitly-contexted operation never falls back to the default | `test_fallback_census.py` |
 | no compatibility fallback reaches cardiac code | `test_no_fallback_reaches_cardiac_code_at_all` |
 | the capability-seam table matches the docstrings | `scripts/export-capability-seams.py --check` |
+| a tutorial record/axis module never writes a case directly | `scripts/check-case-writes.py` (empty waiver list, scoped to `openfoam/axes/` and `cardiacfoam/records/`) |
 
 ## Two rules that were learned the hard way
 

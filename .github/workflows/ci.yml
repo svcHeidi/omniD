@@ -175,6 +175,9 @@ jobs:
       - name: Check core/openfoam/cardiac stay decoupled
         run: python3 scripts/check-import-boundaries.py
 
+      - name: Check tutorial-record/axis modules write nothing
+        run: python3 scripts/check-case-writes.py
+
       # The seam table in ARCHITECTURE.md is generated from the capability
       # Protocol docstrings. It went stale silently before this gate existed.
       - name: Install omnidriver (the generator imports it)
