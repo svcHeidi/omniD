@@ -205,7 +205,18 @@ def render_patch_case_files(
             if isinstance(body, str):
                 body = body.encode()
             before_digest = _digest_bytes(source.read_bytes()) if exists_before else None
-            mode = (source.stat().st_mode & 0o7777) if exists_before else None
+            if content_edits[0].get("executable"):
+                # Phase 3 Task 10: a script (``Allrun``) rather than a
+                # dictionary -- fold the execute bits onto whatever mode
+                # the file already had (a reused case_root), or 0o755 for
+                # one authored fresh (0o644, this environment's standard
+                # 022-umask default for a new file, with the same bits
+                # added) -- matching sweep.py's pre-migration
+                # `write_text` + `chmod(mode | S_IEXEC|S_IXGRP|S_IXOTH)`.
+                base_mode = (source.stat().st_mode & 0o7777) if exists_before else 0o644
+                mode = base_mode | 0o111
+            else:
+                mode = (source.stat().st_mode & 0o7777) if exists_before else None
             snapshot_path = snapshot_root / document
             snapshot_path.parent.mkdir(parents=True, exist_ok=True)
             snapshot_path.write_bytes(body)
@@ -360,6 +371,16 @@ def render_synthesis_case_files(
                 body = body.encode()
             exists_before = file_exists
             before_digest = _digest_bytes(source.read_bytes()) if file_exists else None
+            if content_edit.get("executable"):
+                # Phase 3 Task 10: same rule as render_patch_case_files's
+                # own "executable" content target -- a synthesized script
+                # (``Allrun``) gets the execute bits folded onto whatever
+                # mode a reused case_root's file already had, or 0o755 for
+                # one authored fresh.
+                base_mode = (source.stat().st_mode & 0o7777) if file_exists else 0o644
+                mode = base_mode | 0o111
+            else:
+                mode = None
             snapshot_path = snapshot_root / document
             snapshot_path.parent.mkdir(parents=True, exist_ok=True)
             snapshot_path.write_bytes(body)
@@ -376,6 +397,7 @@ def render_synthesis_case_files(
             exists_before = True
             before_digest = _digest_bytes(source.read_bytes())
             snapshot_path = _snapshot_copy(case_root, snapshot_root, document)
+            mode = None
 
         for edit in patch_edits:
             key_path = tuple(edit["expanded_key_path"])
@@ -397,7 +419,7 @@ def render_synthesis_case_files(
             )
 
         rendered.append(RenderedFile(
-            path=document, content=snapshot_path.read_bytes(), mode=None,
+            path=document, content=snapshot_path.read_bytes(), mode=mode,
             exists_before=exists_before, before_digest=before_digest,
             renderer_id=renderer_id, format=FORMAT,
         ))

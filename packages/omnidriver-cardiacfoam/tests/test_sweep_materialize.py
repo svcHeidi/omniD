@@ -74,6 +74,56 @@ def test_materialize_case_writes_dict_files_and_allrun_only(tmp_path):
     assert not (case_dir / "workflow_contract.json").exists()
 
 
+def test_materialize_case_allrun_mode_on_a_fresh_case_is_0o755(tmp_path):
+    """Characterization, ahead of Phase 3 Task 10 folding this write into
+    the channel: pin the exact mode (not just "has some execute bit") and
+    the exact content, on a case_dir that does not exist yet. Captured
+    against the pre-Task-10 sweep.py::materialize_case, which write_text's
+    Allrun then ORs S_IEXEC|S_IXGRP|S_IXOTH onto whatever mode resulted
+    from that write -- under this environment's umask (022), a fresh file
+    is created 0o644, so 0o644 | 0o111 == 0o755. A mode-only or digest-only
+    check would miss either half of the trap Task 10 names."""
+    case_dir = tmp_path / "fresh_case"
+    materialize_case(
+        case_dir=case_dir,
+        routed={
+            "electro_selectors": {"myocardiumSolver": "singleCellSolver", "tissue": "epicardialCells", "ionicModel": "TNNP"},
+            "physics_selectors": {"type": "electroModel"},
+            "electro_overrides": {}, "physics_overrides": {},
+            "delta_t": None, "end_time": None,
+        },
+        driver_context=_CTX,
+    )
+    allrun = case_dir / "Allrun"
+    assert allrun.stat().st_mode & 0o777 == 0o755
+    assert allrun.read_text() == "#!/bin/sh\ncardiacFoam\n"
+
+
+def test_materialize_case_allrun_mode_when_allrun_already_existed(tmp_path):
+    """Same trap, the other half: a case_dir reused for a second
+    materialize_case call (sweep.py always passes overwrite=True to
+    build_and_launch) must preserve whatever read/write bits the existing
+    Allrun already carried, only adding the execute bits -- not silently
+    reset to a fixed mode regardless of what was there."""
+    case_dir = tmp_path / "reused_case"
+    case_dir.mkdir()
+    allrun = case_dir / "Allrun"
+    allrun.write_text("#!/bin/sh\nold\n")
+    allrun.chmod(0o700)
+    materialize_case(
+        case_dir=case_dir,
+        routed={
+            "electro_selectors": {"myocardiumSolver": "singleCellSolver", "tissue": "epicardialCells", "ionicModel": "TNNP"},
+            "physics_selectors": {"type": "electroModel"},
+            "electro_overrides": {}, "physics_overrides": {},
+            "delta_t": None, "end_time": None,
+        },
+        driver_context=_CTX,
+    )
+    assert allrun.stat().st_mode & 0o777 == 0o711  # 0o700 | 0o111
+    assert allrun.read_text() == "#!/bin/sh\ncardiacFoam\n"
+
+
 def test_materialize_case_two_cases_do_not_collide(tmp_path):
     materialize_case(
         case_dir=tmp_path / "caseA",

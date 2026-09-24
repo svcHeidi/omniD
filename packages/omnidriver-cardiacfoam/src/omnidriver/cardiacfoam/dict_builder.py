@@ -985,6 +985,7 @@ def resolve_synthesis_mutation(request: CaseMutationRequest) -> ResolvedMutation
     dx: float | None = None
     overwrite = False
     include_meshless_polymesh = False
+    include_allrun = False
 
     for parameter in request.parameters:
         key = parameter.key_path[-1]
@@ -1011,6 +1012,8 @@ def resolve_synthesis_mutation(request: CaseMutationRequest) -> ResolvedMutation
                 overwrite = bool(parameter.value)
             elif key == "include_meshless_polymesh":
                 include_meshless_polymesh = bool(parameter.value)
+            elif key == "include_allrun":
+                include_allrun = bool(parameter.value)
             else:
                 raise ValueError(
                     f"synthesis parameter {parameter.qualified_id!r} names "
@@ -1065,7 +1068,8 @@ def resolve_synthesis_mutation(request: CaseMutationRequest) -> ResolvedMutation
             "document": _CONTROL_DOCUMENT, "format": _SYNTHESIS_FORMAT,
             "expanded_key_path": ["endTime"], "value": control_values["endTime_patch"],
         })
-    if myocardium_solver in _block_mesh_solvers():
+    needs_block_mesh = myocardium_solver in _block_mesh_solvers()
+    if needs_block_mesh:
         from omnidriver.openfoam.mesh_provisioning import default_block_mesh_dict_text
 
         targets.append({
@@ -1079,6 +1083,25 @@ def resolve_synthesis_mutation(request: CaseMutationRequest) -> ResolvedMutation
             # same file, already there either way).
             "skip_if_present": True,
         })
+
+    if include_allrun:
+        # Phase 3 Task 10 (bypass 5): sweep.py::materialize_case used to
+        # write this with a bare `write_text` + `chmod` after
+        # `build_and_launch` had already returned -- a second, unaudited
+        # write outside the channel, and a second transaction for one case
+        # materialization (a failure between the two left inputs with no
+        # runnable Allrun). Folded into this same plan instead: same body
+        # (`needs_block_mesh` -- computed once, above -- decides whether
+        # `blockMesh` runs before `cardiacFoam`), same one `commit_case_write`
+        # call as every other document here. Never `skip_if_present`: the
+        # pre-migration code always re-wrote Allrun's content unconditionally
+        # on every call, reused case_root or not.
+        from omnidriver.openfoam.utils import plan_verbatim_content
+
+        allrun_body = "#!/bin/sh\n" + (
+            "blockMesh\ncardiacFoam\n" if needs_block_mesh else "cardiacFoam\n"
+        )
+        targets.append(plan_verbatim_content("Allrun", allrun_body, executable=True))
 
     if myocardium_solver in _meshless_solvers() and include_meshless_polymesh:
         # Task 12 (batch P2-H): the bundled single-cell polyMesh fixture,
@@ -1147,6 +1170,7 @@ def build_case(
     end_time: "float | str | None" = None,
     dx: "float | None" = None,
     dry_run: bool = False,
+    include_allrun: bool = False,
     driver_context: "Any | None" = None,
 ) -> Any:
     """Resolve and render a from-scratch cardiacFoam case as one reviewable
@@ -1173,7 +1197,16 @@ def build_case(
     solver, and the partial-mesh precheck below, both still run
     unconditionally: validation is not part of the filesystem effect a dry
     run skips (same reasoning `provision_mesh`'s own docstring already
-    states for its `dx_m` rejection)."""
+    states for its `dx_m` rejection).
+
+    `include_allrun` (Phase 3 Task 10, bypass 5): when True, a hand-runnable
+    ``Allrun`` joins this same plan -- see `resolve_synthesis_mutation`'s own
+    handling of the `$CARDIACFOAM.synthesis.include_allrun` meta parameter
+    this sets below. Unlike `include_meshless_polymesh`, this is not
+    `dry_run`-gated: `sweep.py::materialize_case` is the one production
+    caller and always wants the script written whether or not the case is
+    also being launched immediately, and `Allrun` is a case input, not part
+    of the filesystem effect a dry run exists to skip."""
     from pathlib import Path as _Path
     import datetime as _datetime
     import tempfile as _tempfile
@@ -1260,6 +1293,13 @@ def build_case(
             value=bool(include_meshless_polymesh), value_kind="boolean",
             source="case",
         ),
+        ParameterAssignment(
+            qualified_id="$CARDIACFOAM.synthesis.include_allrun",
+            owner=PLUGIN_ID, document=_SYNTHESIS_META_DOCUMENT,
+            key_path=("include_allrun",), binding={},
+            value=bool(include_allrun), value_kind="boolean",
+            source="case",
+        ),
     )
     if delta_t is not None:
         parameters = (*parameters, ParameterAssignment(
@@ -1327,6 +1367,7 @@ def build_and_launch(
     delta_t: "float | str | None" = None,
     end_time: "float | str | None" = None,
     dx: "float | None" = None,
+    include_allrun: bool = False,
     driver_context: "Any | None" = None,
 ) -> dict:
     """Build both dicts, write them to ``case_dir/constant/``, and (if
@@ -1358,6 +1399,13 @@ def build_and_launch(
             Meaningless for real anatomical meshes imported via
             ``vtkUnstructuredToFoam`` -- this only controls the generic
             default slab.
+        include_allrun: when True (Phase 3 Task 10, bypass 5), a
+            hand-runnable ``Allrun`` joins the same committed plan as the
+            dictionaries above -- see ``build_case``'s own docstring for
+            the exact rule. ``sweep.py::materialize_case`` is the one
+            production caller and always passes True; every other caller
+            (tests, a direct launch with no sweep involved) keeps the
+            pre-existing default of no ``Allrun`` at all.
 
     Returns:
         A dict carrying ``case_dir`` (str) and either
@@ -1420,7 +1468,7 @@ def build_and_launch(
         electro_selectors, physics_selectors=physics_selectors, case_dir=case_dir,
         electro_overrides=electro_overrides, physics_overrides=physics_overrides,
         overwrite=overwrite, delta_t=delta_t, end_time=end_time, dx=dx,
-        dry_run=dry_run, driver_context=write_context,
+        dry_run=dry_run, include_allrun=include_allrun, driver_context=write_context,
     )
     commit_case_write(plan, driver_context=write_context, execution_env=None)
 
@@ -1436,9 +1484,15 @@ def build_and_launch(
     # (as `skip_if_present` synthesis targets, excluded under `dry_run` --
     # see its docstring), so this branch has nothing left to do:
     # `commit_case_write` just wrote them, journaled, the same way it wrote
-    # every other case document. `provision_mesh` itself is unchanged and
-    # still the right tool for `ionic_catalog_verification.py`'s direct use,
-    # which does not go through `build_and_launch`.
+    # every other case document. `provision_mesh` is still the right tool
+    # for `ionic_catalog_verification.py`'s direct use, which does not go
+    # through `build_and_launch`. **Corrected 2026-09-24 (Phase 3 Task 10):**
+    # "provision_mesh itself is unchanged" no longer holds -- its
+    # BLOCK_MESH_SOLVERS branch (dead: `ionic_catalog_verification.py`
+    # always calls it with `myocardium_solver="singleCellSolver"`) was
+    # deleted. `ionic_catalog_verification.py`'s own call is unaffected,
+    # since it only ever takes the MESHLESS_SOLVERS branch, which this
+    # task did not touch.
 
     if dry_run:
         return {

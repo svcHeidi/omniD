@@ -308,10 +308,24 @@ def plan_dict_block(
     return target
 
 
-def plan_verbatim_content(document: str, content: str) -> Mapping[str, Any]:
+def plan_verbatim_content(
+    document: str, content: str, *, executable: bool = False,
+) -> Mapping[str, Any]:
     """Resolve a whole document's exact bytes into a
     ``render_patch_case_files``/``render_synthesis_case_files`` ``"content"``
     target (Phase 3 Task 7).
+
+    **`executable`** (Phase 3 Task 10): the one property a dictionary
+    content target never needed and a hand-runnable script (``Allrun``)
+    always does. Both renderers already compute a ``mode`` for a content
+    target from the pre-existing file when there is one; ``executable=True``
+    tells them to also fold in ``S_IEXEC|S_IXGRP|S_IXOTH`` (0o755 for a
+    document that does not exist yet, matching this environment's standard
+    022 umask; the existing file's own mode, OR'd with those same bits,
+    when one is already there) -- see the ``mode`` computation in each
+    renderer for the exact rule. Defaults ``False`` so every existing
+    caller (the dictionary templates ``heart_solver_comparison`` swaps in
+    verbatim) is unaffected.
 
     **Why this is not a `ParameterAssignment`.** A `ParameterAssignment`
     addresses one key inside a document whose surrounding structure the
@@ -356,11 +370,14 @@ def plan_verbatim_content(document: str, content: str) -> Mapping[str, Any]:
     way `render_synthesis_case_files` already does, so this round-trips
     exactly for any template that was valid UTF-8 to begin with.
     """
-    return {
+    target: dict[str, Any] = {
         "document": document,
         "format": _patch_format(),
         "content": content,
     }
+    if executable:
+        target["executable"] = True
+    return target
 
 
 def _patch_format() -> str:

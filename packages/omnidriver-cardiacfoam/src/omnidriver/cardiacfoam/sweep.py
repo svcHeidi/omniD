@@ -21,7 +21,6 @@ format at this seam.
 
 from __future__ import annotations
 
-import stat
 from pathlib import Path
 from typing import Any
 
@@ -107,8 +106,18 @@ def materialize_case(*, case_dir: Path, routed: dict[str, Any]) -> None:
     ``Allrun`` only. Agent-visible execution intent/state is persisted later as
     driver-owned ``run_document.json`` and ``workflow_state.json`` under the
     sweep output tree.
+
+    **Corrected 2026-09-24 (Phase 3 Task 10, bypass 5):** ``Allrun`` used to
+    be written here with a bare ``write_text`` + ``chmod`` call, after
+    ``build_and_launch`` had already committed everything else through the
+    channel -- a second, unaudited write, and a second transaction for one
+    case materialization (a failure between the two left a case with inputs
+    but no runnable ``Allrun``). ``include_allrun=True`` folds it into the
+    same plan ``build_and_launch`` commits in its one ``commit_case_write``
+    call instead; see ``dict_builder.build_case``'s docstring for the exact
+    body/mode rule.
     """
-    result = build_and_launch(
+    build_and_launch(
         electro_selectors=routed["electro_selectors"],
         physics_selectors=routed["physics_selectors"],
         case_dir=case_dir,
@@ -119,11 +128,5 @@ def materialize_case(*, case_dir: Path, routed: dict[str, Any]) -> None:
         dx=routed.get("dx"),
         dry_run=True,
         overwrite=True,
-    )
-
-    allrun_body = "blockMesh\ncardiacFoam\n" if result.get("needs_block_mesh") else "cardiacFoam\n"
-    allrun_path = case_dir / "Allrun"
-    allrun_path.write_text("#!/bin/sh\n" + allrun_body)
-    allrun_path.chmod(
-        allrun_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH
+        include_allrun=True,
     )

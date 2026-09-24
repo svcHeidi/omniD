@@ -135,6 +135,51 @@ def test_controldict_is_rendered_once_with_both_effects(tmp_path):
     assert "0.5" in content
 
 
+def test_allrun_joins_the_same_plan_build_case_returns(tmp_path):
+    """Phase 3 Task 10 (bypass 5): `Allrun` is not a second write bolted on
+    after `build_and_launch` returns -- `include_allrun=True` makes it one
+    more `RenderedFile` in the exact same `CaseWritePlan` `build_case`
+    resolves and renders, alongside the dictionaries, so `build_and_launch`'s
+    one `commit_case_write` call commits both in the same transaction. A
+    failure between two separate writes -- the pre-migration shape, a bare
+    `write_text` after `build_and_launch` had already returned -- could leave
+    a case with inputs but no runnable `Allrun`; a single `CaseWritePlan`
+    cannot leave that half-written state, since `commit_case_write` commits
+    every one of its `files` together."""
+    from omnidriver.cardiacfoam.own_context import own_driver_context
+
+    plan = build_case(
+        {"myocardiumSolver": "monodomainSolver", "ionicModel": "TNNP", "tissue": "epicardialCells"},
+        physics_selectors={"type": "electroModel"}, case_dir=tmp_path,
+        include_allrun=True, driver_context=own_driver_context(),
+    )
+    paths = {f.path for f in plan.files}
+    assert "Allrun" in paths
+    assert paths == {
+        "constant/electroProperties", "constant/physicsProperties",
+        "system/fvSchemes", "system/fvSolution", "system/controlDict",
+        "system/blockMeshDict", "Allrun",
+    }
+    allrun_file = next(f for f in plan.files if f.path == "Allrun")
+    assert allrun_file.content == b"#!/bin/sh\nblockMesh\ncardiacFoam\n"
+    assert allrun_file.mode == 0o755
+    assert allrun_file.exists_before is False
+
+
+def test_build_case_without_include_allrun_does_not_author_it(tmp_path):
+    """Default `include_allrun=False` -- every existing caller of `build_case`
+    (this test module's own characterizations, direct callers other than
+    `sweep.py::materialize_case`) is unaffected."""
+    from omnidriver.cardiacfoam.own_context import own_driver_context
+
+    plan = build_case(
+        {"myocardiumSolver": "monodomainSolver", "ionicModel": "TNNP", "tissue": "epicardialCells"},
+        physics_selectors={"type": "electroModel"}, case_dir=tmp_path,
+        driver_context=own_driver_context(),
+    )
+    assert "Allrun" not in {f.path for f in plan.files}
+
+
 def test_an_existing_case_is_not_silently_overwritten(tmp_path):
     """`overwrite=False` raises FileExistsError, preserved exactly (see
     `build_case`'s docstring): the pre-existing regression test
@@ -179,10 +224,18 @@ def test_a_failed_synthesis_leaves_no_partial_case(tmp_path, monkeypatch):
 def test_build_case_keeps_the_signature_build_and_launch_needs(tmp_path):
     signature = inspect.signature(build_and_launch)
     # Unchanged from before this migration.
+    # Corrected 2026-09-24 (Phase 3 Task 10, bypass 5): `include_allrun`
+    # added, keyword-only, defaulting False -- sweep.py::materialize_case
+    # is the one caller that sets it, folding its Allrun write into this
+    # same commit. Every parameter this test originally pinned is still
+    # here, in the same order; only the new one is added, before
+    # `driver_context` (which stays last, matching every other call site's
+    # `build_case`/`build_and_launch` keyword-argument ordering).
     assert list(signature.parameters) == [
         "electro_selectors", "physics_selectors", "case_dir", "electro_overrides",
         "physics_overrides", "overwrite", "dry_run", "pre_solve_commands",
-        "openfoam_bashrc", "delta_t", "end_time", "dx", "driver_context",
+        "openfoam_bashrc", "delta_t", "end_time", "dx", "include_allrun",
+        "driver_context",
     ]
 
 
