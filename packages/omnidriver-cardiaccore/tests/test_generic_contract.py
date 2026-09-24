@@ -131,3 +131,121 @@ def test_every_ventkey_entry_declares_its_allowed_bindings() -> None:
     assert len(vent_key_entries) == 21, len(vent_key_entries)
     for entry in vent_key_entries:
         assert entry.allowed_bindings.get("<ventKey>") == tuple(VENT_KEYS), entry.driver_path
+
+
+def test_every_dynamic_entry_declares_a_domain_for_every_placeholder() -> None:
+    """Generalises `test_every_ventkey_entry_declares_its_allowed_bindings`.
+
+    That test closed R2 finding 9 for `<ventKey>` only. The same hole stayed
+    open for `$PURKINJE_SCAR.regions.<region_id>.*`, whose four entries
+    declared no domain at all -- which is audit finding S1's shape exactly:
+    a placeholder nothing states a fact about. `DictEntry.__post_init__`
+    already refuses a *partial* declaration; it cannot refuse a wholly
+    absent one, because an entry with no dynamic segment to constrain is
+    legitimate. This asserts the catalog-wide property instead: every
+    placeholder of every `dynamic_path` entry names a domain, closed
+    (a tuple) or explicitly open (`None`).
+    """
+    import re
+
+    placeholder_re = re.compile(r"<[A-Za-z_][A-Za-z0-9_]*>")
+    entries = list(
+        driver_context(OpenFOAMEnvironmentPlugin(), CardiacCorePlugin(), source="test")
+        .capabilities.dictionaries.entries()
+    )
+    dynamic = [e for e in entries if e.dynamic_path]
+    assert dynamic, "the catalog declares no dynamic_path entry at all"
+    undeclared = sorted(
+        f"{entry.driver_path} {placeholder}"
+        for entry in dynamic
+        for placeholder in placeholder_re.findall(entry.driver_path)
+        if placeholder not in entry.allowed_bindings
+    )
+    assert undeclared == [], undeclared
+
+
+def test_the_region_id_domain_is_declared_open_on_evidence() -> None:
+    """`<region_id>` is an *integer label*, not a case-author-chosen word.
+
+    `setPurkinjeScar.C`'s `policyForRegion` looks the sub-block up by
+    `Foam::name(region)` where `region` is a `label` read from the
+    `regionField` (`ScarRegionID`) volScalarField -- so the key is the
+    decimal spelling of whatever integer that field carries, and the README
+    shows `regions { 3 { ... } }`. That is an unbounded set, so the domain
+    is open (`None`) rather than a closed tuple -- but it is now *declared*
+    open, which is a fact an agent can read, and the evidence for it is
+    cited in the entries' own constraints.
+    """
+    entries = {
+        e.driver_path: e
+        for e in driver_context(
+            OpenFOAMEnvironmentPlugin(), CardiacCorePlugin(), source="test",
+        ).capabilities.dictionaries.entries()
+    }
+    region_entries = [
+        entry for path, entry in entries.items()
+        if path.startswith("$PURKINJE_SCAR.regions.<region_id>.")
+    ]
+    assert len(region_entries) == 4, sorted(e.driver_path for e in region_entries)
+    for entry in region_entries:
+        assert entry.allowed_bindings == {"<region_id>": None}, entry.driver_path
+        joined = " ".join(entry.constraints) + " " + (entry.notes or "")
+        assert "ScarRegionID" in joined, entry.driver_path
+        # The evidence is not on main. `c53a0d7` (2026-09-18, "refactor(scar):
+        # remove scar and scar-Purkinje-coupling code from main") deleted
+        # `src/setPurkinjeScar/` and `src/setCardiacScar/`; `origin/scar`
+        # preserves them, and main's `src/Allwmake` builds neither. A
+        # `source_refs` path that reads as mainline but only resolves on an
+        # unmerged branch is a citation that cannot be checked, so the
+        # branch must be named where the claim is made.
+        assert "scar" in joined and "branch" in joined, entry.driver_path
+
+
+def test_every_scar_source_ref_names_the_branch_it_resolves_on() -> None:
+    """A citation an agent cannot check is worse than no citation.
+
+    `c53a0d7` (2026-09-18, "refactor(scar): remove scar and
+    scar-Purkinje-coupling code from main") deleted `src/setCardiacScar/` and
+    `src/setPurkinjeScar/` from cardiacCore's main; they survive only on the
+    `scar` branch, and main's `src/Allwmake` builds neither. Written as bare
+    `src/setCardiacScar/...` these read as mainline paths -- the same shape as
+    every other `source_refs` entry in this module, none of which need a
+    qualifier -- so an agent following one finds nothing and cannot tell
+    whether the catalog is wrong or its checkout is.
+
+    The sibling package has a real drift guard for this class
+    (`omnidriver-cardiacfoam/tests/test_source_refs_exist.py`, which resolves
+    every ref against the native tree); cardiacCore has none, which is why
+    these went stale-by-relocation unnoticed. This is the narrower check:
+    not "does the file exist" but "does the citation say where to look".
+    """
+    entries = list(
+        driver_context(OpenFOAMEnvironmentPlugin(), CardiacCorePlugin(), source="test")
+        .capabilities.dictionaries.entries()
+    )
+    scar_dirs = ("setCardiacScar/", "setPurkinjeScar/")
+    cited = [
+        (entry.driver_path, ref)
+        for entry in entries
+        for ref in entry.source_refs
+        if any(directory in ref for directory in scar_dirs)
+    ]
+    assert cited, "no entry cites a scar source at all -- has the catalog changed?"
+    unqualified = sorted(
+        f"{driver_path} -> {ref}"
+        for driver_path, ref in cited
+        if not ref.startswith("scar-branch:")
+    )
+    assert unqualified == [], unqualified
+
+
+def test_the_catalog_records_that_the_scar_utilities_are_off_main() -> None:
+    """The module docstring explains scar being declared-only as a *workflow
+    scheduling* fact ("no workflow below runs those utilities yet"), which
+    reads as "wired up later". The stronger fact is that main cannot build
+    them at all. Both are true; only one of them was written down."""
+    from omnidriver.cardiaccore.catalogs import inputs
+
+    doc = inputs.__doc__ or ""
+    assert "c53a0d7" in doc, "the removal commit is not cited in the module docstring"
+    assert "scar" in doc and "branch" in doc

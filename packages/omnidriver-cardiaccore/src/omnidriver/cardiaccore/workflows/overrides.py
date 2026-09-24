@@ -39,15 +39,26 @@ from omnidriver.core.case_write import (
     ParameterAssignment,
     ResolvedMutation,
 )
+from omnidriver.core.contracts.dictionary import validate_value_shape
 from omnidriver.openfoam import case_rendering
-from omnidriver.openfoam.mutators import update_foam_entry
+from omnidriver.openfoam.dict_builder import match_dynamic_entry
+from omnidriver.openfoam.mutators import check_dictionary_word_is_safe, update_foam_entry
 
-from ..catalogs.inputs import CATALOG, DOCUMENTS, VENT_KEYS
+# ``VENT_KEYS`` is imported for re-export only, and is deliberately not
+# used below any more -- see ``VENT_KEY_PLACEHOLDER``'s comment.
+from ..catalogs.inputs import CATALOG, DOCUMENTS, VENT_KEYS  # noqa: F401
 
 #: This adapter's identity on every request and resolution it produces.
 PLUGIN_ID = "org.omnidriver.cardiaccore"
 
 #: Path segment standing for a ventricle block in a declared path.
+#:
+#: Kept as documentation of how the placeholder is spelled, and re-exported
+#: alongside ``VENT_KEYS`` for callers that already import both from here.
+#: **Neither is consulted when matching a path any more** (2026-09-23): the
+#: domain a dynamic segment must satisfy comes from the matched entry's own
+#: ``allowed_bindings``, so ``<ventKey>`` is checked by the same mechanism as
+#: ``<region_id>`` rather than by a constant this module happens to import.
 VENT_KEY_PLACEHOLDER = "<ventKey>"
 
 
@@ -95,31 +106,95 @@ def qualified_slot_key(driver_path: str) -> str:
     return driver_path
 
 
+def _declared_match(driver_path: str) -> "tuple[Any, dict[str, str]] | None":
+    """The declared entry this concrete path instantiates, and what each of
+    its placeholders captured -- **without** checking the captures.
+
+    Corrected 2026-09-23: this used to walk the path looking for a segment
+    that appeared in ``VENT_KEYS``, which made one placeholder's domain the
+    matcher's own hardcoded knowledge. Two things followed. A second
+    placeholder -- ``$PURKINJE_SCAR.regions.<region_id>`` -- matched nothing,
+    so a legitimate region override was refused as "not declared". And
+    ``<ventKey>`` was policed by a constant rather than by its entry, so the
+    fix for audit finding S1 protected exactly the one placeholder someone
+    had thought about. The match is now positional and domain-blind
+    (`omnidriver.openfoam.dict_builder.match_dynamic_entry`, reused rather
+    than re-implemented); `validate_dynamic_binding` below is where a capture
+    is checked, against the entry's own ``allowed_bindings``.
+
+    Candidates are filtered to the path's own ``$SCOPE`` token first, because
+    `match_dynamic_entry` normalises through `slot_key`, which *strips* that
+    token -- and this adapter's documents deliberately share leaf names
+    (audit finding S3, see `qualified_slot_key`). Filtering first keeps a
+    templated match as qualified as a literal one.
+    """
+    if driver_path in _ENTRIES:
+        return _ENTRIES[driver_path], {}
+    scope_token = driver_path.partition(".")[0]
+    candidates = [
+        entry for path, entry in _ENTRIES.items()
+        if path.partition(".")[0] == scope_token
+    ]
+    return match_dynamic_entry(driver_path, candidates)
+
+
+def validate_dynamic_binding(entry: Any, placeholder: str, bound_value: str) -> None:
+    """Refuse a dynamic-path binding the entry's own declaration does not
+    sanction. Same three outcomes as ``omnidriver-cardiacfoam``'s
+    ``overrides._validate_dynamic_binding``, deliberately:
+
+    - the placeholder is absent from ``allowed_bindings`` -- refused, because
+      an *undeclared* placeholder is audit finding S1's hole itself, not a
+      stated fact an agent can read;
+    - the domain is ``None`` (explicitly open) -- validated as a word, and
+      put through `check_dictionary_word_is_safe`, since the binding becomes
+      a sub-block *name* and `update_foam_entry`'s own security check only
+      ever inspects a written value;
+    - the domain is a closed tuple -- membership is checked directly.
+    """
+    if placeholder not in entry.allowed_bindings:
+        raise ValueError(
+            f"{entry.driver_path!r} declares no binding domain for "
+            f"{placeholder!r}; refusing to accept {bound_value!r} rather than "
+            f"silently treating an undeclared placeholder as unconstrained"
+        )
+    domain = entry.allowed_bindings[placeholder]
+    if domain is None:
+        reasons = validate_value_shape("word", bound_value)
+        if reasons:
+            raise ValueError(
+                f"input override binds {placeholder!r} to {bound_value!r} in "
+                f"{entry.driver_path!r}, which is not a valid word: "
+                f"{'; '.join(reasons)}"
+            )
+        check_dictionary_word_is_safe(bound_value)
+        return
+    if bound_value not in domain:
+        raise ValueError(
+            f"input override binds {placeholder!r} to {bound_value!r} where "
+            f"{entry.driver_path!r} declares one of {sorted(domain)}"
+        )
+
+
 def _template_for(driver_path: str) -> str | None:
     """The declared path this concrete path instantiates, if any.
 
-    A declared ``<ventKey>`` entry covers every key in ``VENT_KEYS``, so the
-    concrete path is matched back to its template to find the declaration that
-    describes it.
-
-    Corrected 2026-09-22 (audit finding S1): the segment was previously
-    substituted without being checked, so ``$PURKINJE_TREE.banana.seed`` matched
-    ``$PURKINJE_TREE.<ventKey>.seed`` and was written into a ``banana`` block no
-    native utility reads. A dynamic segment is now valid only when it is one of
-    the bindings the placeholder declares.
+    Non-raising by contract: `preprocessing._reject_unstaged` compares the
+    result against the paths a workflow stages, and an unmatched path must
+    read as "not this workflow's" rather than blowing up there.
+    `validate_input_overrides` re-does the match so it can report *why* a
+    binding was refused.
     """
-    if driver_path in _ENTRIES:
-        return driver_path
-    parts = driver_path.split(".")
-    for index in range(1, len(parts)):
-        if parts[index] not in VENT_KEYS:
-            continue
-        candidate = ".".join(
-            [*parts[:index], VENT_KEY_PLACEHOLDER, *parts[index + 1:]]
-        )
-        if candidate in _ENTRIES:
-            return candidate
-    return None
+    match = _declared_match(driver_path)
+    if match is None:
+        return None
+    entry, binding = match
+    for placeholder, bound_value in binding.items():
+        try:
+            validate_dynamic_binding(entry, placeholder, bound_value)
+        except ValueError:
+            return None
+    return entry.driver_path
 
 
 def declared_path_template(driver_path: str) -> str | None:
@@ -229,23 +304,21 @@ def validate_input_overrides(
         if not isinstance(driver_path, str):
             raise TypeError("input override paths must be strings")
         resolve_override_target(driver_path)
-        template = _template_for(driver_path)
-        if template is None:
-            parts = driver_path.split(".")
-            for index in range(1, len(parts)):
-                probe = ".".join(
-                    [*parts[:index], VENT_KEY_PLACEHOLDER, *parts[index + 1:]]
-                )
-                if probe in _ENTRIES:
-                    raise ValueError(
-                        f"input override {driver_path!r} binds "
-                        f"{parts[index]!r} where {probe!r} declares one of "
-                        f"{sorted(VENT_KEYS)}"
-                    )
+        match = _declared_match(driver_path)
+        if match is None:
             raise ValueError(
                 f"input override {driver_path!r} is not declared; no native utility reads "
                 "that key, and OpenFOAM would ignore it rather than report it"
             )
+        entry, binding = match
+        # A bad binding is reported here, by the reason the entry's own
+        # declaration gives, rather than collapsing into the generic "not
+        # declared" refusal above -- the path IS declared; what it bound is
+        # not. (Before 2026-09-23 this was a hand-rolled probe loop that
+        # could only ever re-discover a `<ventKey>`.)
+        for placeholder, bound_value in binding.items():
+            validate_dynamic_binding(entry, placeholder, bound_value)
+        template = entry.driver_path
         if allowed_paths is not None and template not in allowed_paths and driver_path not in allowed_paths:
             known = ", ".join(allowed_paths)
             raise ValueError(
@@ -410,6 +483,42 @@ def apply_input_overrides(case_root: Path, overrides: Mapping[str, Any] | None) 
     return None
 
 
+def _enumerate_declared_path(declared_path: str) -> tuple[str, ...]:
+    """Every concrete path a declared path stands for, in a case.
+
+    A static path stands for itself. A ``dynamic_path`` entry stands for one
+    path per member of each placeholder's declared domain -- which is only
+    enumerable when every one of those domains is *closed*.
+
+    An **open** domain has no members to enumerate, so this returns nothing
+    rather than the template. Corrected 2026-09-23: the old expansion
+    substituted ``VENT_KEYS`` into a ``<ventKey>`` path and left every other
+    template alone, so ``$PURKINJE_SCAR.regions.<region_id>.*`` was read
+    literally and recorded as a value at a parameter address no case has --
+    a placeholder invented as a key. Reporting nothing for a domain whose
+    members only the case knows is the supplied-vs-discovered rule
+    (``future/ENVIRONMENT_CONTRACT.md`` §12) applied here: this layer has no
+    ambient truth about which region IDs a case defines, so it must not
+    answer as if it did.
+    """
+    entry = _ENTRIES.get(declared_path)
+    if entry is None or not getattr(entry, "dynamic_path", False):
+        return (declared_path,)
+    expanded = [declared_path]
+    for placeholder, domain in entry.allowed_bindings.items():
+        if not domain:  # None (explicitly open) or, defensively, empty
+            return ()
+        expanded = [
+            path.replace(placeholder, member)
+            for path in expanded
+            for member in domain
+        ]
+    # An undeclared placeholder leaves its own spelling behind; that is a
+    # catalog gap (`test_every_dynamic_entry_declares_a_domain_for_every_placeholder`)
+    # and must not be reported as a readable parameter either.
+    return tuple(path for path in expanded if "<" not in path)
+
+
 def read_input_values(
     case_root: Path, *, paths: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
@@ -418,21 +527,18 @@ def read_input_values(
     selected = tuple(_ENTRIES) if paths is None else paths
     values: dict[str, Any] = {}
     for declared_path in selected:
-        # A <ventKey> path names one value per ventricle, so it is recorded
-        # once per block the case actually defines. read_foam_entry returns
-        # None for an absent scope, so a case that declares only one
-        # ventricle records only that one rather than inventing the other.
-        concrete_paths = (
-            tuple(declared_path.replace(VENT_KEY_PLACEHOLDER, vent) for vent in VENT_KEYS)
-            if VENT_KEY_PLACEHOLDER in declared_path
-            else (declared_path,)
-        )
+        # A dynamic path names one value per binding, so it is recorded once
+        # per block the case actually defines. read_foam_entry returns None
+        # for an absent scope, so a case that declares only one ventricle
+        # records only that one rather than inventing the other.
+        concrete_paths = _enumerate_declared_path(declared_path)
+        is_dynamic = concrete_paths != (declared_path,)
         for driver_path in concrete_paths:
             target = resolve_override_target(driver_path)
             value = read_foam_entry(
                 case_root / target.file_relpath, target.key, scope=target.scope or None,
             )
-            if value is None and VENT_KEY_PLACEHOLDER in declared_path:
+            if value is None and is_dynamic:
                 continue
             values[driver_path] = value
     return values
