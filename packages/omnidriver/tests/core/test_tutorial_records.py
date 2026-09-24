@@ -25,6 +25,7 @@ from omnidriver.core.tutorial_records import (
     AxisPatch,
     AxisResult,
     DocumentKeyName,
+    MESH_SELECTOR_NAME,
     SourcedPatch,
     TutorialRecord,
     TutorialRecordError,
@@ -32,6 +33,7 @@ from omnidriver.core.tutorial_records import (
     combine_patches,
     patches_to_parameters,
     resolve_case_patches,
+    resolve_mesh_selector,
     sort_study_name,
     split_unchanged,
 )
@@ -317,14 +319,25 @@ def test_combine_patches_allows_two_sources_agreeing_on_one_value():
     assert combined[0].patch.value == "one"
 
 
-def test_combine_patches_prefers_the_validated_agreeing_patch():
+def test_combine_patches_keeps_the_first_agreeing_patch_regardless_of_validated_flag():
+    """Item 6: the "prefer the validated agreeing patch" tie-break is dead
+    code and has been removed. `resolve_case_patches` now runs EVERY patch --
+    direct key or axis output alike -- through the SAME validator for the
+    SAME (document, key_path, value) (M3), so two agreeing SourcedPatch
+    values reaching combine_patches always carry the same `validated` answer
+    already; the tie-break could only ever fire on a hand-built pair like
+    this one that resolve_case_patches itself could never produce. With the
+    branch gone, the first-seen source simply wins -- proven here by feeding
+    combine_patches a (contradictory, hand-built) pair where the SECOND is
+    validated and confirming it is NOT promoted."""
     patches = [
         _sourced("constant/a.json", "k", "one", source="base", validated=False),
         _sourced("constant/a.json", "k", "one", source="axis", validated=True),
     ]
     combined = combine_patches(patches)
     assert len(combined) == 1
-    assert combined[0].validated is True
+    assert combined[0].source == "base"
+    assert combined[0].validated is False
 
 
 def test_combine_patches_refuses_a_value_kind_mismatch_even_when_values_are_equal():
@@ -452,6 +465,73 @@ def test_resolve_case_patches_validates_all_direct_keys_before_any_axis_runs():
     assert calls == []
 
 
+def test_resolve_case_patches_refuses_command_arguments_for_an_undeclared_step():
+    """M6: an axis contributing command arguments to a step id the record
+    does not declare in its `workflow_steps` is refused by name -- the
+    record's `workflow_steps` is the only place step ids come from."""
+    def rogue(value, staged_case_root):
+        return AxisResult(command_arguments={"not_a_real_step": ("-x",)})
+
+    axis = AxisContract(name="rogue_step", value_kind="integer", resolve=rogue)
+    record = _record(allowed_axes=frozenset({"rogue_step"}))
+    with pytest.raises(TutorialRecordError, match="not_a_real_step"):
+        resolve_case_patches(
+            record,
+            study_by_source={"base": {"rogue_step": 1}},
+            axis_catalog={"rogue_step": axis},
+            staged_case_root=Path("/nonexistent"),
+            direct_key_validator=_known_catalog_validator,
+        )
+
+
+def test_resolve_case_patches_refuses_conflicting_command_arguments_for_one_step():
+    """M6: two axes contributing DIFFERENT arguments to the SAME declared
+    step is refused by name -- no concatenation, no later-wins."""
+    def axis_one(value, staged_case_root):
+        return AxisResult(command_arguments={"mesh": ("-N", "5")})
+
+    def axis_two(value, staged_case_root):
+        return AxisResult(command_arguments={"mesh": ("-N", "9")})
+
+    record = _record(allowed_axes=frozenset({"one", "two"}))
+    axis_catalog = {
+        "one": AxisContract(name="one", value_kind="integer", resolve=axis_one),
+        "two": AxisContract(name="two", value_kind="integer", resolve=axis_two),
+    }
+    with pytest.raises(TutorialRecordError, match="mesh"):
+        resolve_case_patches(
+            record,
+            study_by_source={"base": {"one": 1, "two": 2}},
+            axis_catalog=axis_catalog,
+            staged_case_root=Path("/nonexistent"),
+            direct_key_validator=_known_catalog_validator,
+        )
+
+
+def test_resolve_case_patches_allows_identical_command_arguments_for_one_step():
+    """M6: two axes contributing the SAME arguments to the same step agree,
+    and the arguments are not concatenated (duplicated) either."""
+    def axis_one(value, staged_case_root):
+        return AxisResult(command_arguments={"mesh": ("-N", "5")})
+
+    def axis_two(value, staged_case_root):
+        return AxisResult(command_arguments={"mesh": ("-N", "5")})
+
+    record = _record(allowed_axes=frozenset({"one", "two"}))
+    axis_catalog = {
+        "one": AxisContract(name="one", value_kind="integer", resolve=axis_one),
+        "two": AxisContract(name="two", value_kind="integer", resolve=axis_two),
+    }
+    _, command_args = resolve_case_patches(
+        record,
+        study_by_source={"base": {"one": 1, "two": 2}},
+        axis_catalog=axis_catalog,
+        staged_case_root=Path("/nonexistent"),
+        direct_key_validator=_known_catalog_validator,
+    )
+    assert command_args["mesh"] == ("-N", "5")
+
+
 def test_resolve_case_patches_refuses_before_running_any_axis():
     """Design §4 step 4: names are sorted BEFORE any axis runs. A bad name
     anywhere in the study must be caught before a well-formed axis's
@@ -475,6 +555,50 @@ def test_resolve_case_patches_refuses_before_running_any_axis():
             direct_key_validator=_known_catalog_validator,
         )
     assert calls == []
+
+
+# ---------------------------------------------------------------------------
+# The `mesh` selector (item 4): picks a workflow_variant, produces no
+# patches. Not an axis -- refused by name when unknown, and refused when the
+# record declares no variants at all.
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_mesh_selector_picks_a_declared_variant():
+    record = _record(
+        workflow_steps=(
+            WorkflowStep(step_id="hexMesh", command=("blockMesh",)),
+            WorkflowStep(step_id="tetMesh", command=("gmsh",)),
+            WorkflowStep(step_id="solve", command=("cardiacFoam",)),
+        ),
+        workflow_variants={
+            "hex": ("hexMesh", "solve"),
+            "tet": ("tetMesh", "solve"),
+        },
+    )
+    assert resolve_mesh_selector(record, "hex") == ("hexMesh", "solve")
+    assert resolve_mesh_selector(record, "tet") == ("tetMesh", "solve")
+
+
+def test_resolve_mesh_selector_refuses_an_unknown_variant_by_name():
+    record = _record(
+        workflow_steps=(WorkflowStep(step_id="hexMesh", command=("blockMesh",)),),
+        workflow_variants={"hex": ("hexMesh",)},
+    )
+    with pytest.raises(TutorialRecordError, match="quad"):
+        resolve_mesh_selector(record, "quad")
+
+
+def test_resolve_mesh_selector_refuses_a_record_with_no_variants():
+    record = _record()  # no workflow_variants declared
+    with pytest.raises(TutorialRecordError, match="no workflow_variants"):
+        resolve_mesh_selector(record, "hex")
+
+
+def test_mesh_selector_name_is_reserved_and_produces_no_patches():
+    """The selector name itself is a fixed, generic reserved word -- core's,
+    not a solver's -- and resolving it never yields any AxisPatch."""
+    assert MESH_SELECTOR_NAME == "mesh"
 
 
 # ---------------------------------------------------------------------------

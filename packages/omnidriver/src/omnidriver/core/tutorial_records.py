@@ -239,6 +239,47 @@ class AxisContract:
 
 
 # ---------------------------------------------------------------------------
+# Selectors (item 4): a reserved study name that picks among a record's
+# declared `workflow_variants` rather than naming a document key or an axis.
+# A selector produces no patches at all -- it only chooses which of the
+# record's own declared workflow steps run for this case.
+# ---------------------------------------------------------------------------
+
+#: The one selector core defines today. Generic and core-owned, unlike the
+#: values it selects among (a record's own `workflow_variants` keys, e.g. an
+#: adapter's "hex"/"tet") -- core imposes no vocabulary on THOSE, only on the
+#: fact that exactly one reserved name chooses among them. `dimension` is a
+#: cardiac AXIS in the design (docs/superpowers/specs/2026-09-24-tutorials-
+#: are-pointers-design.md §3), not a selector, and is deliberately not named
+#: here -- core ships no cardiac vocabulary, including this one.
+MESH_SELECTOR_NAME = "mesh"
+
+
+def resolve_mesh_selector(record: TutorialRecord, value: Any) -> tuple[str, ...]:
+    """Resolve the reserved ``mesh`` selector to one variant's step ids.
+
+    A selector, not an axis (item 4): it produces no :class:`AxisPatch` at
+    all, only which of ``record.workflow_variants`` runs for this case.
+    Refused BY NAME when the record declares no variants to select among, or
+    when ``value`` does not name one it declares.
+    """
+    if not record.workflow_variants:
+        raise TutorialRecordError(
+            f"tutorial record {record.name!r} declares no workflow_variants; "
+            f"{MESH_SELECTOR_NAME!r} selects among variants and has nothing "
+            "to select"
+        )
+    key = str(value)
+    if key not in record.workflow_variants:
+        raise TutorialRecordError(
+            f"{value!r} is not a workflow variant tutorial record "
+            f"{record.name!r} declares (declared variants: "
+            f"{sorted(record.workflow_variants)})"
+        )
+    return record.workflow_variants[key]
+
+
+# ---------------------------------------------------------------------------
 # Study name sorting (design §3, §4 step 4)
 # ---------------------------------------------------------------------------
 
@@ -397,12 +438,21 @@ def combine_patches(patches: Sequence[SourcedPatch]) -> tuple[SourcedPatch, ...]
                 f"({existing.patch.value!r}) and {sourced.source!r} "
                 f"({sourced.patch.value!r})"
             )
-        # Same value from two sources: prefer whichever is validated, if
-        # exactly one of the two is -- an adapter-validated agreement is
-        # strictly more informative than an unvalidated one that happens to
-        # match it.
-        if sourced.validated and not existing.validated:
-            by_slot[slot] = sourced
+        # Same value from two sources: keep whichever was seen first. There
+        # used to be a tie-break here preferring whichever of the two was
+        # validated, on the theory that an adapter-validated agreement is
+        # more informative than an unvalidated one that happens to match it.
+        # That branch is dead code (item 6, 2026-09-24): every patch reaching
+        # this function -- a direct key's or an axis's, alike -- was already
+        # run through the SAME `direct_key_validator` for this SAME
+        # (document, key_path, value) by `resolve_case_patches` (M3), so two
+        # SourcedPatch values that pass the equality check directly above
+        # always carry the SAME `validated` answer too; there is no
+        # "exactly one of the two is validated" case left for the branch to
+        # catch. See test_combine_patches_keeps_the_first_agreeing_patch_
+        # regardless_of_validated_flag, which proves the removal by feeding
+        # combine_patches a hand-built pair (impossible via the real
+        # pipeline) and confirming the second, validated one is NOT promoted.
     return tuple(by_slot.values())
 
 
@@ -501,7 +551,9 @@ def resolve_case_patches(
         )
         sourced_patches.append(SourcedPatch(patch=patch, source=source, validated=validated))
 
-    command_arguments: dict[str, list[str]] = {}
+    known_step_ids = frozenset(record.step_ids())
+    command_arguments: dict[str, tuple[str, ...]] = {}
+    command_argument_source: dict[str, str] = {}
     for source, name, sorted_name, value in axis_entries:
         del source  # an axis patch is sourced by the axis's own name, below
         axis = sorted_name.axis
@@ -518,10 +570,36 @@ def resolve_case_patches(
                 SourcedPatch(patch=revalidated, source=name, validated=validated)
             )
         for step_id, extra_args in result.command_arguments.items():
-            command_arguments.setdefault(step_id, []).extend(extra_args)
+            # M6, first rule: a step id the record does not declare in its
+            # own `workflow_steps` is refused by name -- an axis contributing
+            # arguments to a step that will never run (or never existed) is
+            # a defect, not a no-op.
+            if step_id not in known_step_ids:
+                raise TutorialRecordError(
+                    f"axis {name!r} contributes command arguments to step "
+                    f"{step_id!r}, which tutorial record {record.name!r} "
+                    f"does not declare (declared steps: {sorted(known_step_ids)})"
+                )
+            extra_args = tuple(extra_args)
+            existing_args = command_arguments.get(step_id)
+            if existing_args is None:
+                command_arguments[step_id] = extra_args
+                command_argument_source[step_id] = name
+                continue
+            # M6, second rule: two axes contributing to the SAME step is
+            # fine when they agree byte-for-byte, and refused BY NAME
+            # (naming both axes and the step) otherwise -- no concatenation,
+            # no later-wins. An agreeing second axis contributes nothing
+            # further; the arguments are not duplicated either.
+            if existing_args != extra_args:
+                raise TutorialRecordError(
+                    f"step {step_id!r} receives conflicting command arguments "
+                    f"from axis {command_argument_source[step_id]!r} "
+                    f"({list(existing_args)}) and axis {name!r} ({list(extra_args)})"
+                )
 
     combined = combine_patches(sourced_patches)
-    return combined, {step: tuple(args) for step, args in command_arguments.items()}
+    return combined, dict(command_arguments)
 
 
 # ---------------------------------------------------------------------------
