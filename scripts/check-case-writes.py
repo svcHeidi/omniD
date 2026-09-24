@@ -368,9 +368,18 @@ def _check_file(path: Path, root: Path) -> list[tuple[str, str]]:
                     ))
             if name in FORBIDDEN_CALL_NAMES:
                 key = f"{path.relative_to(root)}:{node.lineno}:call:{name}"
-                violations.append((
-                    key, f"{path}:{node.lineno}: call to writer {name!r}(...)",
-                ))
+                receiver = _call_receiver_name(node)
+                # A specific `receiver.name` spelling when the receiver is
+                # literally `os`/`json` (the common, unaliased shape) --
+                # keeps the message's own wording backward-compatible for
+                # callers that grep it (e.g. "os.replace", "json.dump");
+                # an aliased or otherwise-shaped call still gets the generic
+                # message just below, which is still refused all the same.
+                if receiver in {"os", "json"}:
+                    message = f"{path}:{node.lineno}: call to {receiver}.{name}(...)"
+                else:
+                    message = f"{path}:{node.lineno}: call to writer {name!r}(...)"
+                violations.append((key, message))
             elif name is not None and _OVERRIDES_CALL_PATTERN.match(name):
                 key = f"{path.relative_to(root)}:{node.lineno}:call:{name}"
                 violations.append((
