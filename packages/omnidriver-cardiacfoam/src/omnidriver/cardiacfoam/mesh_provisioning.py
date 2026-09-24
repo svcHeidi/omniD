@@ -33,21 +33,28 @@ static trivial 1-cell `constant/polyMesh/`. Neither `build_and_launch` nor
 `sweep_runner.materialize_case` provisioned any mesh for a from-scratch
 `case_folder` before this module existed.
 
-Two provisioning strategies, chosen by `myocardiumSolver`:
-  - `singleCellSolver` has no real spatial geometry: copy the bundled static
-    1-cell polyMesh fixture directly into `constant/polyMesh/`.
-  - `monodomainSolver`/`bidomainSolver`/`eikonalSolver` need real geometry:
-    write the generic default `system/blockMeshDict` that
-    `specs/mesh_provisioning.py` renders (a small slab, "walls" patch) and let
-    `blockMesh` generate the mesh at run time. This is a sane generic default,
-    not a scientifically tuned geometry for any specific tutorial -- callers
-    that need particular dimensions should still author their own
-    blockMeshDict (this only fills the gap for a case built purely from
-    selectors/overrides, which have no geometry concept at all today).
+`singleCellSolver` has no real spatial geometry: `provision_mesh` below copies
+the bundled static 1-cell polyMesh fixture directly into `constant/polyMesh/`.
 
-Which solver needs which strategy is cardiacFoam vocabulary, so it lives here;
-the solver-neutral halves -- rendering the default `blockMeshDict` and the
-`dx`-to-cell-count arithmetic -- stay in `specs/mesh_provisioning.py`.
+**Corrected 2026-09-24 (Phase 3 Task 10):** this docstring used to describe a
+second strategy here too -- `monodomainSolver`/`bidomainSolver`/`eikonalSolver`
+writing the generic default `system/blockMeshDict` via `provision_mesh`'s own
+`BLOCK_MESH_SOLVERS` branch. Review R4 found that branch had zero production
+callers (`ionic_catalog_verification.py`, the only real caller, hardcodes
+`myocardium_solver="singleCellSolver"`), and `build_and_launch`'s own spatial
+case-building had already moved to `dict_builder.build_case`'s own
+`CaseWritePlan` (folding in `omnidriver.openfoam.mesh_provisioning`'s
+`default_block_mesh_dict_text` directly, gated on `_block_mesh_solvers()`
+membership -- see that module's docstring), same as this module's own header
+comment already said for the meshless fixture. The dead branch is deleted;
+`BLOCK_MESH_SOLVERS` itself stays, since `dict_builder._block_mesh_solvers()`
+still reads it for that live decision.
+
+`provision_mesh` today implements the one strategy above; the solver-neutral
+half of the strategy this docstring used to also describe -- rendering the
+default `blockMeshDict` and the `dx`-to-cell-count arithmetic -- always lived
+in, and still lives in, `omnidriver.openfoam.mesh_provisioning`, called
+directly by `dict_builder.build_case` rather than through this function.
 """
 
 from __future__ import annotations
@@ -55,12 +62,14 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from omnidriver.openfoam.mesh_provisioning import default_block_mesh_dict_text
-
 _FIXTURES_DIR = Path(__file__).parent / "fixtures"
 _SINGLE_CELL_POLYMESH_DIR = _FIXTURES_DIR / "single_cell_polymesh"
 
 MESHLESS_SOLVERS = frozenset({"singleCellSolver"})
+#: Not read by any code in this module since 2026-09-24 (Phase 3 Task 10
+#: deleted `provision_mesh`'s own dead branch over it) -- kept because
+#: `dict_builder._block_mesh_solvers()` still imports and reads it for
+#: `build_case`'s live blockMeshDict decision.
 BLOCK_MESH_SOLVERS = frozenset({"monodomainSolver", "bidomainSolver", "eikonalSolver"})
 
 _POLYMESH_FILES = ("points", "faces", "owner", "neighbour", "boundary")
@@ -72,10 +81,17 @@ def provision_mesh(
 ) -> bool:
     """Provision whatever mesh `myocardium_solver` needs under `case_dir`.
 
-    Returns True if the case now needs a `blockMesh` run before solving
-    (a `system/blockMeshDict` was written or already exists), False if a
-    concrete mesh was copied directly (or the solver needs no mesh at all,
-    which no current solver does).
+    Returns False: either the solver is in `MESHLESS_SOLVERS` and a concrete
+    mesh was copied directly (or already present), or the solver is unknown
+    to this function and mesh provisioning is left to the caller.
+
+    **Corrected 2026-09-24 (Phase 3 Task 10):** this used to also return True
+    for a `BLOCK_MESH_SOLVERS` member, having written a generic default
+    `system/blockMeshDict` for it -- deleted as dead code (see the module
+    docstring's own dated correction); this function can no longer return
+    True. `dict_builder.build_case` is the live source of that same decision
+    now (`needs_block_mesh = myocardium_solver in _block_mesh_solvers()`),
+    and it is not this function's caller.
 
     Unlike `build_and_launch`'s other generated files, a mesh is never
     clobbered on a repeat call regardless of that call's own `overwrite`
@@ -84,12 +100,10 @@ def provision_mesh(
     blockMeshDict/polyMesh must never be silently replaced by this generic
     default.
 
-    `dx_m` (metres) only means something for the generic default
-    `blockMeshDict` (`BLOCK_MESH_SOLVERS`) -- it is meaningless for
-    `MESHLESS_SOLVERS` (no spatial geometry at all) and rejected outright
-    rather than silently having no effect, and it has no bearing on real
-    anatomical meshes imported via `vtkUnstructuredToFoam`, which this
-    function never touches.
+    `dx_m` (metres) is meaningless for `MESHLESS_SOLVERS` (no spatial
+    geometry at all) and rejected outright rather than silently having no
+    effect, and it has no bearing on real anatomical meshes imported via
+    `vtkUnstructuredToFoam`, which this function never touches.
 
     `dry_run` (2026-09-23, R3 finding 8): validation (the `dx_m` rejection
     above) still runs unconditionally -- a dry run that silently skipped it
@@ -135,13 +149,6 @@ def provision_mesh(
             for name in _POLYMESH_FILES:
                 shutil.copyfile(_SINGLE_CELL_POLYMESH_DIR / name, poly_mesh_dir / name)
         return False
-
-    if myocardium_solver in BLOCK_MESH_SOLVERS:
-        block_mesh_dict = case_dir / "system" / "blockMeshDict"
-        if not block_mesh_dict.exists() and not dry_run:
-            block_mesh_dict.parent.mkdir(parents=True, exist_ok=True)
-            block_mesh_dict.write_text(default_block_mesh_dict_text(dx_m=dx_m))
-        return True
 
     # Unknown/future solver: leave mesh provisioning to the caller.
     return False

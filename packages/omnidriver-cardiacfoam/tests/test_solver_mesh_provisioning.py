@@ -22,30 +22,43 @@
 #     Tests the myocardiumSolver-keyed mesh provisioning strategy for
 #     from-scratch case_folder cases.
 #
+#     Corrected 2026-09-24 (Phase 3 Task 10): two tests deleted here,
+#     `test_provision_mesh_spatial_solver_honours_dx` and
+#     `test_provision_mesh_dry_run_writes_nothing_for_a_spatial_solver`,
+#     exercised only `provision_mesh`'s own `BLOCK_MESH_SOLVERS` branch,
+#     which had zero production callers and was deleted alongside them (see
+#     `mesh_provisioning.py`'s own dated correction). Per this phase's rule
+#     of mapping every deleted test's behaviour to a surviving test or
+#     stating it is gone:
+#       - "dx controls the generated blockMeshDict's cell count for a
+#         spatial solver" survives, at the pure-function level, in
+#         `omnidriver-openfoam/tests/core/test_mesh_provisioning.py::
+#         test_dx_controls_cell_count_finer_mesh_for_smaller_dx`, and, at
+#         the write-path level (the live channel this behaviour actually
+#         reaches production through), in `test_dict_builder.py::
+#         test_dx_kwarg_controls_generated_block_mesh_resolution`.
+#       - "dry_run does not write blockMeshDict for a spatial solver" does
+#         NOT survive anywhere, and is correctly gone, not merely
+#         unmapped: it was a property of `provision_mesh`'s own dead
+#         branch specifically. The live path,
+#         `dict_builder.build_case`/`resolve_synthesis_mutation`, has never
+#         had this property -- its `blockMeshDict` content target is
+#         unconditional on `dry_run` (only the meshless polyMesh fixture is
+#         `dry_run`-gated there, via `include_meshless_polymesh`), and
+#         `test_dx_kwarg_controls_generated_block_mesh_resolution` itself
+#         calls `build_and_launch(..., dry_run=True, ...)` and asserts
+#         `system/blockMeshDict` WAS written -- the opposite of what the
+#         deleted test pinned. No test should assert the deleted
+#         behaviour, because it was never true of the code that is
+#         actually reachable.
+#
 # Author
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-import re
-
 import pytest
 
 from omnidriver.cardiacfoam.mesh_provisioning import provision_mesh
-from omnidriver.openfoam.mesh_provisioning import default_block_mesh_dict_text
-
-
-def _cell_counts(text: str) -> tuple[int, int, int]:
-    match = re.search(r"hex \([^)]*\)\s*\((\d+)\s+(\d+)\s+(\d+)\)", text)
-    assert match is not None, text
-    return tuple(int(g) for g in match.groups())
-
-
-def test_provision_mesh_spatial_solver_honours_dx(tmp_path):
-    case_dir = tmp_path / "case"
-    provision_mesh(case_dir=case_dir, myocardium_solver="monodomainSolver", dx_m=0.0004)
-    text = (case_dir / "system" / "blockMeshDict").read_text()
-    default_cells = _cell_counts(default_block_mesh_dict_text())
-    assert _cell_counts(text)[0] > default_cells[0]
 
 
 def test_provision_mesh_rejects_dx_for_meshless_solver(tmp_path):
@@ -88,15 +101,6 @@ def test_provision_mesh_dry_run_writes_nothing_for_a_meshless_solver(tmp_path):
     )
     assert needs_block_mesh is False
     assert not (case_dir / "constant" / "polyMesh").exists()
-
-
-def test_provision_mesh_dry_run_writes_nothing_for_a_spatial_solver(tmp_path):
-    case_dir = tmp_path / "case"
-    needs_block_mesh = provision_mesh(
-        case_dir=case_dir, myocardium_solver="monodomainSolver", dry_run=True,
-    )
-    assert needs_block_mesh is True
-    assert not (case_dir / "system" / "blockMeshDict").exists()
 
 
 def test_provision_mesh_dry_run_still_rejects_dx_for_meshless_solver(tmp_path):
