@@ -13,7 +13,7 @@ from .catalog import load_catalog, template_name
 from .environment import AUXILIARY_COMMANDS, REDACTION_PATTERNS, SOLVER_COMMANDS, opencarp_environment_diagnostics
 from .par_format import ParFormatError, format_value, patch_par, read_raw, unquote, values_agree
 from .records import AXIS_CATALOG, TUTORIAL_RECORDS
-from .validation import check_indices, record_key_validator
+from .validation import check_indices, read_documents, record_key_validator
 
 _FORMAT = "opencarp_par"
 
@@ -184,13 +184,24 @@ class OpenCARPPlugin:
 
     # -- record surface (C10, Task 10a)
     def get_record_key_catalog(self, case_root):
+        # Review I1 (2026-09-25): was every ``*.par`` in the case against the
+        # binary's whole parameter list. Now only a document some record step
+        # passes with ``+F`` (the only ones openCARP reads), minus the keys a
+        # record's command line assigns after it (F14: silently overridden) --
+        # the same facts record_key_validator refuses by, from the same
+        # records. A template one of whose instances the command line owns
+        # (``imp_region[Int].im_sv_init``) is omitted whole: the catalogue has
+        # no "every index but 0" form, and listing a key the validator refuses
+        # is the defect I1 names.
         entries = []
-        for par in sorted(Path(case_root).glob("*.par")):
+        documents = read_documents(TUTORIAL_RECORDS)
+        for document in sorted(d for d in documents if (Path(case_root) / d).is_file()):
+            owned_templates = {template_name(key) for key in documents[document]}
             for spec in load_catalog().parameters.values():
-                if spec.value_kind is None:
+                if spec.value_kind is None or spec.name in owned_templates:
                     continue
                 entries.append({
-                    "document": par.name, "key": spec.name, "value_kind": spec.value_kind,
+                    "document": document, "key": spec.name, "value_kind": spec.value_kind,
                     "default": spec.default, "description": spec.description,
                     "minimum": spec.minimum, "maximum": spec.maximum, "menu": list(spec.menu),
                 })
