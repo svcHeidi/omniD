@@ -293,3 +293,67 @@ by name (before `resolve` ever runs) when a declared name is absent from
 the study, the same "refuse by name before anything runs" posture every
 other axis refusal already has. Not built here: step 5 decides it, once a
 cardiac record actually needs it.
+
+## Step 4b (added 2026-09-25): the pilot, `restitutionCurves`
+
+Done, verified in all four suite shapes plus the three static gates, all
+0 failed (core-only venv, the installed wheel, `-m native` against the real
+`noFrontendCardiacFoam_minor_errors` tutorials tree, and the rest).
+
+| what | commits (omniD / native) |
+|---|---|
+| core: `mapping` value_kind for an axis whose own study value is a small parameter set | `3fdf9f5` |
+| core: fix `commit_record_case` rendering into the case root itself (found running this pilot end to end against the real OpenFOAM renderer) | `86a110e` |
+| cardiacfoam: single-cell stimulus amplitude migrated into the ionic model catalog, `STIMULUS_MAP` deleted | `986bede` |
+| cardiacfoam: `restitutionCurves` tutorial record (`ionicModel`/`s1s2Protocol` axes), old factory tutorial deleted in the same commit | `46bd2f0` |
+| native: `driver_config.json` rewritten as `setup/studies/tworldS1S2Restitution/sweep.json` | `38a451c4` |
+
+**Every write the old `_plan_case` made, accounted for** (9 total, matching
+§1's own 9/9 measurement): `tissue` is a direct study key; `ionicModel` and
+`singleCellStimulus.stim_amplitude` come from the new `ionicModel` axis
+(the amplitude from the ionic model catalog's migrated field);
+`stim_period_S1`/`nstim1`/`stim_period_S2`/`nstim2`/`writeAfterTime`/
+`system/controlDict:endTime` come from the new `s1s2Protocol` axis, whose
+own study value is one mapping (`s1_interval_ms`/`n_s1`/`s2_interval_ms`/
+`n_s2`) -- taken as a whole, not read back off the staged case, per §4's own
+"an axis must not silently read case values the same study could also patch
+directly." `electro_property_overrides`/`physics_property_overrides` were
+always `None` by default (no write) and are simply gone.
+
+**Workflow steps corrected against the real native `Allrun`**: `mesh`
+(`blockMesh`) then `solve` (`cardiacFoam`) -- the old factory's DAG declared
+`solve` only. `plotVoltage` is conditional (skipped by default via
+`CF_SKIP_PLOTS`) and is not one of this record's steps either, matching what
+`Allrun` actually runs by default.
+
+**Parity** (before the old module was deleted, per this step's own
+instruction): a scratch harness restored the old module's content from git
+history (never committed), ran both paths over every case the new native
+study expands to (TWorld, S1=1000ms/10 beats, S2 from 1500ms down to 250ms --
+19 cases), and compared every flat key in `electroProperties` and
+`controlDict` (both directions' key union, 779 keys total across all cases)
+plus a byte-identical check on the untouched `blockMeshDict`. Zero
+differences.
+
+**The zero-changes design test (§6)**: `describe --entry restitutionCurves
+--cases-root <native tutorials>` with no study values shows zero patches
+against the real native case (`test_restitution_curves_record_native.py`,
+`@pytest.mark.native`).
+
+**Design gap found, not worked around (this step's own instruction)**: real
+execution of a generic-case/tutorial-record `RunDocument` (`omnidriver run
+--run-document ...`, `core/runtime/run_document_exec.py`) runs `validate_run`
+unconditionally, with no `generic_case` exemption -- unlike
+`run_document_adapter.py`'s planning-time skip, and contrary to that
+module's own comment ("a generic case's all-empty config satisfies the
+plugin schemas in-tree regardless"), which is false for cardiacFOAM's own
+schema (`endTime`, `myocardiumSolver`, and others are `required`). This was
+never caught before because no in-tree test ran a real, schema-enforcing
+plugin's generic-case `RunDocument` through actual execution -- only through
+planning, where the exemption already exists. It blocks `sweep-run`'s actual
+solver launch for EVERY generic-case or tutorial-record entry today, not
+only `restitutionCurves`; commit/staging themselves are unaffected (proven
+correct via the native test and the parity check above). Left to the owner:
+whether execution-time `validate_run` should gain the same exemption
+planning-time already has, and how a `RunDocument` would carry that marker
+forward (today it does not, per that module's own comment).
