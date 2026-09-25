@@ -72,6 +72,13 @@ class WorkflowStep:
     artifacts; ``consumes`` becomes the step's DAG ``consumes``, which
     provenance fingerprints. Paths here, never artifact ids: the ids are
     derived (``record_execution.record_artifact_id``).
+
+    Each is a tuple of non-empty, case-relative ``str`` paths (fix round 1
+    M1, 2026-09-25): a bare ``str`` is refused rather than exploded into
+    one-character paths; ``""`` and ``"."`` (the case root itself) are
+    refused; so are ``{`` and ``}``, because a ``produces`` path becomes an
+    artifact ``path_pattern`` that core ``str.format``-s -- the
+    ``{case_id}``/``{time}`` placeholders are not supported here.
     """
 
     step_id: str
@@ -81,8 +88,14 @@ class WorkflowStep:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "command", tuple(self.command))
-        object.__setattr__(self, "produces", tuple(self.produces))
-        object.__setattr__(self, "consumes", tuple(self.consumes))
+        for field_name in ("produces", "consumes"):
+            value = getattr(self, field_name)
+            if isinstance(value, str):
+                raise TutorialRecordError(
+                    f"workflow step {self.step_id!r} {field_name} must be a sequence "
+                    f"of paths, not the bare string {value!r}"
+                )
+            object.__setattr__(self, field_name, tuple(value))
         if not self.step_id:
             raise TutorialRecordError("a workflow step must have a non-empty step_id")
         if not self.command:
@@ -92,12 +105,17 @@ class WorkflowStep:
             )
         for field_name in ("produces", "consumes"):
             for path in getattr(self, field_name):
+                label = f"workflow step {self.step_id!r} {field_name} {path!r}"
+                if not isinstance(path, str):
+                    raise TutorialRecordError(f"{label} must be a str, not {type(path).__name__}")
+                if "{" in path or "}" in path:
+                    raise TutorialRecordError(f"{label} must not contain '{{' or '}}': placeholders are not supported")
                 try:
-                    _check_case_relative(f"workflow step {self.step_id!r} {field_name} {path!r}", path)
+                    parts = _check_case_relative("the path", path).parts
                 except ValueError as exc:
-                    raise TutorialRecordError(
-                        f"workflow step {self.step_id!r} {field_name} {path!r} must be case-relative: {exc}"
-                    ) from exc
+                    raise TutorialRecordError(f"{label} must be case-relative: {exc}") from exc
+                if not parts:
+                    raise TutorialRecordError(f"{label} must name a path inside the case, not the case root")
 
 
 @dataclass(frozen=True)
