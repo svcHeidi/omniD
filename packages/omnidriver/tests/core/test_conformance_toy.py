@@ -214,3 +214,22 @@ def test_an_absent_required_artifact_fails_both_run_checks(check_id, tmp_path, m
     verdict = run_check(check_id, toy_conformance_target(tmp_path))
     assert not verdict.passed
     assert "record.solve.0" in verdict.detail
+
+
+@pytest.mark.parametrize(("message", "name", "named"), [
+    ("'cell_count' is neither a 'document:dotted.path' key nor an axis", "cell_count", True),
+    ("validating constant/mesh.json:nope raised KeyError", "constant/mesh.json:nope", True),
+    ('unknown key "constant/mesh.json:nope".', "constant/mesh.json:nope", True),
+    ("unknown study name `x`", "x", True),
+    ("refused constant/mesh.json:nope.", "constant/mesh.json:nope", True),
+    # M6: a bare substring is not naming it.
+    ("refused: 'xy' is not an axis", "x", False),
+    ("cell_count_v2 is unknown", "cell_count", False),
+    ("refused constant/mesh.json:nopes", "constant/mesh.json:nope", False),
+    ("refused other/constant/mesh.json:nope", "constant/mesh.json:nope", False),
+    ("refused constant/mesh.json:nope.inner", "constant/mesh.json:nope", False),
+])
+def test_c3_requires_the_refusal_to_name_the_unknown_study_exactly(message, name, named):
+    from omnidriver.conformance.checks import _names
+
+    assert _names(message, name) is named

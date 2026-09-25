@@ -13,6 +13,7 @@ import contextlib
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -115,6 +116,19 @@ def check_describe_noop(target: ConformanceTarget) -> CheckVerdict:
     return _verdict("C2", True, "no changes proposed")
 
 
+def _names(message: str, name: str) -> bool:
+    """Whether ``message`` names ``name`` as a whole token, not merely
+    contains it (fix round 1 M6, 2026-09-25): a short unknown name such as
+    ``"x"`` is a substring of almost any message. Quoted (``'n'``, ``"n"``,
+    `` `n` ``) always counts; otherwise ``name`` must not continue into a
+    longer identifier or ``document:dotted.path`` on either side. A
+    sentence-ending ``.`` does not continue a token; ``.inner`` does."""
+    if any(f"{q}{name}{q}" in message for q in ("'", '"', "`")):
+        return True
+    token = rf"(?<![\w.:/\-]){re.escape(name)}(?![\w:/\-]|\.\w)"
+    return re.search(token, message) is not None
+
+
 def check_refuses_unknown(target: ConformanceTarget) -> CheckVerdict:
     """C3: an unknown study name is refused, by that name, before anything runs."""
     ctx = _context(target)
@@ -123,7 +137,7 @@ def check_refuses_unknown(target: ConformanceTarget) -> CheckVerdict:
         with _scratch_environment(target):
             describe_entry(target.record, overrides=overrides, driver_context=ctx)
     except (TutorialRecordError, KeyError, ValueError) as exc:
-        named = target.unknown_name in str(exc)
+        named = _names(str(exc), target.unknown_name)
         return _verdict("C3", named, f"refused: {exc}" if named else f"refused without naming {target.unknown_name!r}: {exc}")
     return _verdict("C3", False, f"{target.unknown_name!r} was accepted")
 
