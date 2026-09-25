@@ -18,7 +18,7 @@ import subprocess
 import sys
 import threading
 from pathlib import Path, PurePosixPath
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Iterator, Mapping
 
 from omnidriver.core.introspection import describe_entry
 from omnidriver.core.plugin_interface import load_plugin_context
@@ -223,6 +223,16 @@ def check_strict_plan(target: ConformanceTarget) -> CheckVerdict:
     return _verdict("C5", not problems, "; ".join(problems) or f"ok; launch {command}")
 
 
+def _missing_required(reconciliation: Mapping[str, Any]) -> list[str]:
+    """Ids of the non-optional artifacts a reconciliation found missing. One
+    rule for C6 and C7: an absent optional artifact fails neither (fix round
+    1 M3, 2026-09-25; C7 used to count ``missing_count``, optional included)."""
+    return [
+        a["artifact_id"] for a in reconciliation.get("artifacts", ())
+        if a["status"] == "missing" and not a.get("optional")
+    ]
+
+
 def _execute(target: ConformanceTarget, ctx, report) -> tuple[subprocess.CompletedProcess, dict[str, Any] | None]:
     # Never hand-build a run command (main, 2026-09-25): the canonical builder
     # carries --plugin from ctx.plugin_selector, set by load_plugin_context.
@@ -252,7 +262,7 @@ def check_run(target: ConformanceTarget) -> CheckVerdict:
     reconciliation = payload.get("artifact_reconciliation") or {}
     artifacts = reconciliation.get("artifacts", ())
     declared = [a for a in artifacts if a["artifact_id"].startswith("record.")]
-    missing = [a["artifact_id"] for a in artifacts if a["status"] == "missing" and not a.get("optional")]
+    missing = _missing_required(reconciliation)
     problems = []
     if proc.returncode != 0 or payload.get("status") != "ok":
         problems.append(f"run status {payload.get('status')!r}, rc={proc.returncode}")
@@ -309,8 +319,8 @@ def check_sweep(target: ConformanceTarget) -> CheckVerdict:
         rec = case.get("artifact_reconciliation")
         if rec is None:
             problems.append(f"case {case.get('case_id')} has no artifact reconciliation")
-        elif rec.get("missing_count"):
-            problems.append(f"case {case.get('case_id')} is missing {rec.get('missing_count')} artifact(s)")
+        elif missing := _missing_required(rec):
+            problems.append(f"case {case.get('case_id')} is missing artifacts {missing}")
     if _tree_digest(native) != before:
         problems.append(f"the native case {native} changed")
     return _verdict("C7", not problems, "; ".join(problems) or "2 cases completed and reconciled; native tree unchanged")

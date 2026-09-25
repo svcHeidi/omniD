@@ -160,3 +160,57 @@ def test_a_scratch_root_inside_the_native_tree_is_refused(inside, tmp_path):
         dataclasses.replace(target, scratch_root=scratch)
     assert str(scratch) in str(excinfo.value)
     assert str(target.cases_root) in str(excinfo.value)
+
+
+_RECONCILIATION_WITH_AN_ABSENT_OPTIONAL = {
+    "missing_count": 1,
+    "artifacts": [
+        {"artifact_id": "record.solve.0", "status": "matched", "optional": False},
+        {"artifact_id": "extra.optional", "status": "missing", "optional": True},
+    ],
+}
+_CANNED_CHILD_OUTPUT = {
+    "C6": {"status": "ok", "artifact_reconciliation": _RECONCILIATION_WITH_AN_ABSENT_OPTIONAL},
+    "C7": {"completed_count": 2, "failed_count": 0, "cases": [
+        {"case_id": case_id, "artifact_reconciliation": _RECONCILIATION_WITH_AN_ABSENT_OPTIONAL}
+        for case_id in ("a", "b")
+    ]},
+}
+
+
+@pytest.mark.parametrize("check_id", ["C6", "C7"])
+def test_an_absent_optional_artifact_fails_neither_run_check(check_id, tmp_path, monkeypatch):
+    """M3: C6 and C7 treat optional artifacts the same way."""
+    import json
+    import subprocess
+
+    from omnidriver.conformance import checks
+
+    def canned(argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 0, stdout=json.dumps(_CANNED_CHILD_OUTPUT[check_id]), stderr="")
+
+    monkeypatch.setattr(checks.subprocess, "run", canned)
+    verdict = run_check(check_id, toy_conformance_target(tmp_path))
+    assert verdict.passed, verdict.detail
+
+
+@pytest.mark.parametrize("check_id", ["C6", "C7"])
+def test_an_absent_required_artifact_fails_both_run_checks(check_id, tmp_path, monkeypatch):
+    import copy
+    import json
+    import subprocess
+
+    from omnidriver.conformance import checks
+
+    output = copy.deepcopy(_CANNED_CHILD_OUTPUT[check_id])
+    for rec in [output.get("artifact_reconciliation")] + [c["artifact_reconciliation"] for c in output.get("cases", ())]:
+        if rec is not None:
+            rec["artifacts"][0]["status"] = "missing"
+
+    def canned(argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 0, stdout=json.dumps(output), stderr="")
+
+    monkeypatch.setattr(checks.subprocess, "run", canned)
+    verdict = run_check(check_id, toy_conformance_target(tmp_path))
+    assert not verdict.passed
+    assert "record.solve.0" in verdict.detail
