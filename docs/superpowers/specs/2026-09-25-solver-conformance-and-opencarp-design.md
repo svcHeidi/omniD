@@ -1,8 +1,11 @@
 # Solver conformance, and openCARP as the first solver outside OpenFOAM
 
-**Date:** 2026-09-25 · **Status:** direction and §4 (the conformance suite)
-approved by the owner in conversation. §§3, 5–9 are written from those decisions
-and await the owner's review of this written form before an implementation plan.
+**Date:** 2026-09-25 · **Status:** implemented. Plan Tasks 1–13 are landed on
+`main` (see the Status table at the end of this document for commits); Tasks
+14 (the cardiacFoam target) and 15 (per-layer file ownership, which forces K3)
+wait for `tutorials-are-pointers` step 5. The dated corrections below record
+where the implementation settled differently from this document's original
+text.
 
 **Reasoning and evidence:** `docs/audits/2026-09-25-generality-and-landscape.md`.
 **Builds on:** `2026-09-24-tutorials-are-pointers-design.md` (tutorial records,
@@ -404,3 +407,165 @@ The first five:
 - The cardiac names in core's `dict_entries.py` that the vocabulary gate misses
   (audit §2). This is a separate small fix.
 - carputils, and openCARP's Python experiment scripts as native cases.
+
+## Status
+
+Plan: `docs/superpowers/plans/2026-09-25-solver-conformance-and-opencarp.md`.
+Ledger of the working sessions (parallel tracks, review rounds): the (session-
+local) `progress-solver-conformance.md` and `task-*-report.md`/`track*-report.md`
+files this plan's execution produced.
+
+| task | what | commit(s) |
+|---|---|---|
+| 1 | conformance skeleton, C1–C3 over the toy target | `5efd986` |
+| 2 | C4, a patch preserves its siblings | `9149ac2` |
+| 3 | K4 (`WorkflowStep.produces`/`consumes`); C5, C6 | `022688f`, amended `09d205c`/`dbf6692` (fix round: union with utility-manifest `produces`; malformed-field refusal) |
+| 4 | K8 (sweep keeps each case's `artifact_reconciliation`); C7 | `e14906b` |
+| 5 | C8, consumed inputs are fingerprinted | `0aea2da`, amended `00fcf8f` (fix round: only real fingerprints count) |
+| 6 | C9, environment preflight names a missing solver | `4be1e0f` |
+| — | Tasks 1–6 fix round (review): a check that cannot run is a failed verdict, native-tree guard, timeouts, C3 name-token matching, bite tests | `d9686c9`, `c40e972`, `ddce4d1`, `b9f17e9`, `95f6716`, `bb7399c`, `d7e5622`, `db2c096`, `d63bbf5` |
+| 7 | the core shape gate, `check-core-shape.py` | `dae4585`, amended `8615c59`/`17fa42f` (fix round: normalized/snake_case token matching, `--write-baseline` preserves reasons) |
+| 8 | `omnidriver-opencarp` package skeleton, the `.par` format | `383d73f` |
+| 9 | the parameter catalog (generated, drift-gated); K6 (`string` value kind) | `0ed15dc` |
+| 10 | record-key validator, index-bound check | `b1a065e` |
+| — | Tasks 8–10 fix round (review): broken entry point refused by name, import-boundary list derived, CI job + CLAUDE.md line brought forward, string-menu quoting, injection refusal, F10–F13 quoting settled by real runs | `b686817`, `6da2783`, `b3ecc23`, `5bb2da5`, `cc16455`, `bb9daf3`, `688bd93` |
+| 10a | the record surface (`record_surface` capability); C10 | `47f2de7` |
+| 11 | `OpenCARPPlugin`, `niedererNVersion`; C1–C10 pass against the real openCARP v18.1 binary | `e4bc873` |
+| 12 | K9, step logs are redacted by plugin-declared patterns before they are kept | `7e0d11f`, native proof `e9c448c` |
+| — | Tasks 10a/11/12 fix round (wave-2 review): command-owned keys refused by name (F14), a case-writer refusal reaches `plan --strict` as JSON, redaction replaces the whole match, a record run carrying its steps is runnable without asking the adapter | `5bf06c0`, `29530d2`, `483408b`, `b7cdaf3`, `458824f`, `ad11256`, `c2a9448` |
+| 13 | this document's Status table; CI; CLAUDE.md (this task) | — |
+| 14 | cardiacFoam `restitutionCurves` conformance target | waiting for `tutorials-are-pointers` step 5 |
+| 15 | per-layer file ownership (forces K3) | waiting for `tutorials-are-pointers` step 5 |
+
+### Dated corrections (2026-09-25)
+
+**K5 (demote the dictionary trio to optional) was not made.** No check forces
+it: `OpenCARPPlugin` stubs `get_dict_entries`, `get_dict_groups` and
+`get_dictionary_catalog` exactly as `MinimalTestPlugin` already did, and C1
+passes with the members still required-but-stubbed. Per §5's own rule ("a
+K-change no check forces is not made here"), K5 stays deferred.
+
+**K3 (core declares its own bookkeeping names) moved to Task 15, forced by a
+guard, not by a conformance check.** No check in C1–C10 fails without it:
+records name their inputs through `consumes` (K4, Task 3), so provenance never
+walks core's own bookkeeping files (`workflow_state.json`,
+`run_document.json`, and the rest) in the first place, and nothing here
+exercises that path. The owner's 2026-09-25 gap-2 decision adds a guard in
+Task 15 — one role namespace per stack, no plugin declaring core's own files —
+and K3 lands there once that guard is what forces it.
+
+**K7 was reduced to extending the existing lists**, not the single declared
+`scripts/adapters.toml` this document originally proposed. `omnidriver-opencarp`
+was added directly to each existing enumeration instead:
+`check-import-boundaries.py`'s forbidden-import list is now *derived*
+(`foamlib`, plus every `packages/*/src/omnidriver/<pkg>` outside core's own
+distribution) rather than hand-listed, with a per-adapter `adapter_rules` block
+that fails the gate by name if an adapter package has none (`6da2783`);
+`check-case-writes.py`'s `SCANNED_ROOTS` and the root `pyproject.toml`'s
+`pythonpath` each gained the new package's paths directly (`383d73f`). No
+single source-of-truth file was introduced.
+
+**New K8: the sweep runner keeps each case's artifact reconciliation.**
+`sweep_runner._record_sweep_run` used to discard the child `run
+--run-document`'s `artifact_reconciliation` along with the rest of its stdout;
+C7 needs it per case to check both a sweep's cases actually produced their
+declared outputs. `_child_reconciliation` parses it out and folds it into
+`case_summary["artifact_reconciliation"]` (`e14906b`).
+
+**New K9: step logs are redacted by plugin-declared patterns before they are
+kept.** openCARP's build header prints a CI token on every run, and omniD keeps
+solver stdout under `workflow_logs/` verbatim, so that credential would be
+copied into every run record. `RuntimeEvidenceCapability` gained
+`log_redaction_patterns()`; `workflow_runner.redact_step_logs` applies them to
+a step's stdout/stderr right after the process ends (`7e0d11f`). **The
+contract later changed** (wave-2 review I3, `b7cdaf3`/`458824f`): the original
+implementation kept a pattern's first capture group, so the conventional
+`password=(\S+)` kept the secret and dropped only its label. Every match is now
+replaced whole by `[REDACTED]`, and both the toy's and openCARP's patterns
+became lookaround-only (`(?<=://)[^/\s@]+(?=@)`) so they match just the
+credential.
+
+**C4 checks the `untouched` key only, not every key in the document.**
+`check_patch_preserves` reads back exactly `target.untouched` (one
+`(document, key)` pair the target supplies) and compares it before and after
+the patch; it does not enumerate every other key in the document. Sibling
+enumeration is format-specific (a `.par`'s keys are not a dictionary's
+entries), and one sibling is enough to catch the P2 class of defect (a
+renderer that replaces the whole document instead of patching it) — proven by
+`ReplacingRendererPlugin` in the toy suite.
+
+**C8 is defined over `consumes`, and requires a real fingerprint.**
+`check_provenance` walks `report.workflow_dag`'s per-step `consumes` lists (the
+K4-derived DAG field, not the record's raw `WorkflowStep.consumes`) and checks
+each consumed path is fingerprinted in the provenance snapshot. The fix round
+(review I1, `00fcf8f`) narrowed what counts as fingerprinted: a path only
+counts when a provenance component has `kind in {"case_file",
+"external_link"}` and `strength != "unavailable"` — listing a path is not the
+same as fingerprinting it, and a `GhostConsumesPlugin` test proves the check
+bites a consumed file that does not exist.
+
+**C10 (agent discovery) was added**, beyond this document's original C1–C9.
+`describe` on any record now returns `record_surface`: the record's axes with
+value kinds, a catalogue of the keys it can address, the plugin's agent
+guidance, and the case's own documentation (files with role
+`case.documentation`). `check_discoverable` (C10) checks that this surface
+actually names the target's patched key, among other things. Task 10a
+(`47f2de7`); openCARP declares both hooks and passes C10 against the real
+binary in Task 11 (`e4bc873`). cardiacFOAM does not declare them yet, so C10
+fails for that stack until Task 14.
+
+**Core fixes found by the reviews, beyond K1–K9:**
+- **A broken plugin entry point is refused by name**, not left to break
+  discovery for every other stack. Before this fix, one unimportable entry
+  under `omnidriver.plugins` (openCARP's, mid-development, before `plugin.py`
+  existed) raised a bare `ModuleNotFoundError` out of default selection and out
+  of an explicit `--plugin` for an unrelated, working stack.
+  `plugin_discovery.BrokenPluginError` names the entry point, its
+  distribution, its target and the original error (`b686817`).
+- **A case writer's refusal reaches `plan --strict` as structured JSON, not a
+  traceback.** A validator refusal already reached the CLI as JSON, but a
+  renderer refusal (openCARP's F2 index-bound check, raised as
+  `ParFormatError` at render time) escaped as a bare traceback with empty
+  stdout. `record_execution.commit_record_case` now turns a `ValueError` the
+  case writer raises while resolving or rendering into a `TutorialRecordError`
+  naming the record and the document(s), chained `from` the original (wave-2
+  review I2, `29530d2`).
+- **A record run carrying its own steps is runnable without asking the
+  adapter.** `run_document_exec` used to gate every run document, including a
+  tutorial record's, through the adapter's `is_case_runnable_without_workflow`
+  — a question meant for a bare case folder without driver-owned workflow
+  metadata. A record run's document *is* that metadata. `_is_record_run_with_steps`
+  exempts a document whose planner-stated `resolvedEntry.entryKind ==
+  "tutorial_record"` carries a non-empty `workflowDag.steps` from that gate
+  (wave-2 review I4, `ad11256`); the now-unnecessary hook was deleted from
+  `OpenCARPPlugin` and the toy `E2ERecordPlugin` (`c2a9448`). cardiacFOAM keeps
+  its own hook, which still serves non-record case folders.
+
+**P1 and P2 landed upstream**, on the `tutorials-are-pointers` branch, before
+this plan's Task 1: P1 (records reach `plan --strict`/`run --strict`) as
+`156b80d`; P2 (a render snapshot is seeded from the real case, and
+`case_transaction` refuses a disk/`exists_before` contradiction) as `56d89d7`.
+Task 1 Step 1 verified both were present before any of this plan's own work
+began.
+
+**Evidence F10–F14** (`docs/solver-learning/opencarp.md`), each driving a
+concrete change:
+- **F10** (an unquoted value containing `=` is silently truncated at the first
+  `=`): the config reader now refuses rather than reports a wrong raw value —
+  `get_config_value_reader` raises `ParFormatError` for a `string`-kind key
+  whose unquoted native value contains `=`.
+- **F11** (`""` is the empty string, quotes removed): confirms `format_value`
+  can always quote a string without changing what a native `""` already meant.
+- **F12** (`#` starts a comment even inside quotes, leaving an unbalanced
+  quote): `format_value` refuses to write a string containing `#`, by name.
+- **F13** (a balanced pair of quotes is otherwise transparent — model names,
+  `.sv` paths, multi-word values all round-trip byte-identical): licenses
+  `format_value`'s F10/F12-driven "always quote" rule as safe for every
+  existing shipped `.par` value, not just the ones that need it.
+- **F14** (openCARP reads its arguments in order; the last assignment wins,
+  silently, whether from a `.par` or a command-line flag after `+F`):
+  ownership of a key is positional, not per-document. `validation.read_documents`
+  derives, from each record step's own command, which `+F` document and which
+  `-<key>` flags after it are command-owned; the record-key validator refuses a
+  study naming a command-owned key by name, and `get_record_key_catalog` omits
+  it from the discoverable catalogue.

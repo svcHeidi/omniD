@@ -18,6 +18,7 @@ A solver-agnostic orchestrator, split into four packages under `packages/`:
 | `omnidriver-openfoam` | `foamlib`, dictionaries, meshing, MPI decomposition | cardiology |
 | `omnidriver-cardiacfoam` | electrophysiology, ionic models, the cardiac plugin | — |
 | `omnidriver-cardiaccore` | evidence-backed cardiacCore preprocessing workflows | cardiacFoam solver semantics |
+| `omnidriver-opencarp` | the openCARP binary, `.par` format, `mesher`, IGB/LAT outputs | OpenFOAM, cardiacFoam |
 
 Core containing **zero** cardiac vocabulary is not aspirational — it is
 enforced. `scripts/check-import-boundaries.py` exits non-zero on any cardiac
@@ -48,6 +49,7 @@ uv venv --python 3.11 /tmp/odcore && VIRTUAL_ENV=/tmp/odcore uv pip install -q \
 | core alone | `python -m pytest packages/omnidriver/tests -q` | core reaching into a sibling package |
 | **installed wheel** | see below | core reading repo-relative state at import time |
 | native tree | `OMNIDRIVER_NATIVE_TUTORIALS=<path> python -m pytest packages/ -q -m native` | drift against the real native cardiacFOAM tutorials tree; supplied only via that variable (never discovered) — a `native`-marked test FAILS, not skips, when it is unset |
+| native openCARP | `OMNIDRIVER_OPENCARP_TUTORIALS=<path> DYLD_LIBRARY_PATH=<lib> python -m pytest packages/omnidriver-opencarp/tests -m native` | drift against the real openCARP binary and its tutorials tree; `DYLD_LIBRARY_PATH` is required on macOS or the binary fails to load `libsundials_cvode`, supplied, never discovered |
 | static gates | `python3 scripts/check-import-boundaries.py`, `scripts/export-capability-seams.py --check`, `scripts/check-case-writes.py`, and `scripts/check-core-shape.py` | import direction; a stale generated table; a tutorial-record/axis module writing a case directly instead of through `commit_case_write`; core gaining a new OpenFOAM layout token or growing its recorded debt |
 
 The wheel shape is the one people skip and the one that found the worst
@@ -82,6 +84,7 @@ A skip here hides exactly what the guard exists to find.
 | the capability-seam table matches the docstrings | `scripts/export-capability-seams.py --check` |
 | a tutorial record/axis module never writes a case directly | `scripts/check-case-writes.py` (empty waiver list, scoped to `openfoam/axes/`, `cardiacfoam/records/` and the writer-free planner module `openfoam/case_planning.py`; relative imports are resolved before matching) |
 | core names no OpenFOAM layout beyond its recorded, shrinking debt | `scripts/check-core-shape.py` (baseline `scripts/core-shape-baseline.txt`; new tokens never added) |
+| any solver plugin passes C1-C10 | `omnidriver.conformance`, parametrized per package (toy in core; openCARP native) |
 
 ## Two rules that were learned the hard way
 
