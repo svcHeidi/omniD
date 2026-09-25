@@ -89,8 +89,10 @@ def test_exporter_writes_versioned_tutorial_list(tmp_path):
 
 def test_every_registered_tutorial_is_exported(tmp_path):
     """The display catalog cannot ship a tutorial card whose backend
-    factory does not exist, and cannot omit a registered tutorial.
-    Either drift makes the catalog lie about what the backend can run."""
+    (a factory OR a tutorial record -- design doc docs/superpowers/specs/
+    2026-09-24-tutorials-are-pointers-design.md, step 4b) does not exist,
+    and cannot omit one that does. Either drift makes the catalog lie about
+    what the backend can run."""
     from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
     from omnidriver.core.plugin_interface import driver_context as _driver_context
     from omnidriver.core.runtime.registry import list_tutorials, _normalized_registry
@@ -103,10 +105,12 @@ def test_every_registered_tutorial_is_exported(tmp_path):
     data = _run(tmp_path / "t.json")
     exported = {t["id"] for t in data["tutorials"]}
     registered = set(list_tutorials(context))
-    assert exported == registered, (
-        f"exported vs registered mismatch — only-in-exported: "
-        f"{exported - registered}, only-in-registered: "
-        f"{registered - exported}"
+    record_ids = set((context.capabilities.tutorial_records.catalog() or {}).keys())
+    known_backend = registered | record_ids
+    assert exported == known_backend, (
+        f"exported vs known-backend mismatch — only-in-exported: "
+        f"{exported - known_backend}, only-in-known-backend: "
+        f"{known_backend - exported}"
     )
 
 

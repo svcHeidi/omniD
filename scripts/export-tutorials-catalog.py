@@ -63,25 +63,40 @@ def build_catalog(plugin: str | None = None) -> dict:
     selected = context.providers[-1]
     display_ids = {t.id for t in selected.get_tutorial_displays()}
     registry_ids = set(list_tutorials(context))
+    # A tutorial's backend is EITHER a factory (`registry_ids`, above) OR a
+    # tutorial record (design doc docs/superpowers/specs/2026-09-24-
+    # tutorials-are-pointers-design.md) -- `restitutionCurves` (step 4b, the
+    # pilot) is the first display row backed by a record rather than a
+    # factory. `list_tutorials()` deliberately only ever names factories
+    # (`registry.py`'s own `list_tutorials` docstring/callers), so this
+    # exporter -- not core -- treats the union as "has a real backend",
+    # since it is the one place that already knows both catalogs need
+    # checking here.
+    record_ids = set((context.capabilities.tutorial_records.catalog() or {}).keys())
+    known_backend_ids = registry_ids | record_ids
 
-    only_in_display = display_ids - registry_ids
-    only_in_registry = registry_ids - display_ids
-    if only_in_display or only_in_registry:
+    only_in_display = display_ids - known_backend_ids
+    only_in_backend = known_backend_ids - display_ids
+    if only_in_display or only_in_backend:
         raise SystemExit(
             "default plugin get_tutorial_displays() is out of sync with "
-            "list_tutorials(). "
+            "list_tutorials()/tutorial_records. "
             f"only-in-display={sorted(only_in_display)} "
-            f"only-in-registry={sorted(only_in_registry)}. "
+            f"only-in-backend={sorted(only_in_backend)}. "
             "Either add a TutorialDisplay row or remove it; both "
             "sets must match exactly."
         )
 
-    # Stable order: keep list_tutorials()' declared order so the
-    # JSON is reproducible regardless of get_tutorial_displays() tuple order.
+    # Stable order: keep list_tutorials()' declared factory order first
+    # (unchanged from before tutorial records existed), then any
+    # record-backed ids not already a factory, sorted -- reproducible
+    # regardless of get_tutorial_displays()'s or the record catalog's own
+    # dict order.
     by_id = {t.id: t for t in selected.get_tutorial_displays()}
+    ordered_ids = list(list_tutorials(context)) + sorted(record_ids - registry_ids)
     return {
         "version": "1",
-        "tutorials": [to_record(by_id[name]) for name in list_tutorials(context)],
+        "tutorials": [to_record(by_id[name]) for name in ordered_ids],
     }
 
 

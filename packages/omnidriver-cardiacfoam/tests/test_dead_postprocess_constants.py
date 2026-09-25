@@ -3,7 +3,10 @@ import importlib
 import pytest
 
 _MODULES = [
-    "omnidriver.cardiacfoam.tutorials.defaults.restitution_curves",
+    # restitution_curves's defaults module was deleted 2026-09-25: the
+    # tutorial migrated onto a tutorial record (docs/superpowers/specs/
+    # 2026-09-24-tutorials-are-pointers-design.md), which has no defaults
+    # module to carry these dead constants at all.
     "omnidriver.cardiacfoam.tutorials.defaults.manufactured_eikonal_ecg",
     "omnidriver.cardiacfoam.tutorials.defaults.manufactured_bath_bidomain",
     "omnidriver.cardiacfoam.tutorials.defaults.manufactured_monodomain_pseudo_ecg",

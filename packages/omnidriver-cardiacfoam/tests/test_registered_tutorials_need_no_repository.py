@@ -61,9 +61,14 @@ def test_every_serial_tutorial_builds_under_any_base(tmp_path: Path) -> None:
             failed.append(f"{name}: {type(exc).__name__}: {exc}")
     assert failed == [], "tutorials that stopped building under a plain base:\n" + "\n".join(failed)
     # Measured 2026-09-04; 16 after `heartSolverComparison`'s 2026-09-24
-    # deletion removed 2 entries. A sweep that silently covered zero
+    # deletion removed 2 entries; 14 after `restitutionCurves`'s 2026-09-25
+    # migration onto a tutorial record (docs/superpowers/specs/2026-09-24-
+    # tutorials-are-pointers-design.md, step 4b) removed its own 2 (the
+    # tutorial and its case-folded alias) from SPEC_FACTORIES -- it is no
+    # longer a factory tutorial at all, so it is absent from `_factories()`
+    # here, not merely unbuildable. A sweep that silently covered zero
     # tutorials would otherwise assert nothing.
-    assert built == 16, f"expected 16 buildable catalog entries, got {built}"
+    assert built == 14, f"expected 14 buildable catalog entries, got {built}"
 
 
 @pytest.mark.parametrize("name", sorted(_NEEDS_CASE_CONTENT))

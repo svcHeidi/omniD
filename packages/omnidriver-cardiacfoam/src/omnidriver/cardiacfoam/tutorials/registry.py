@@ -21,7 +21,13 @@ from omnidriver.cardiacfoam.tutorials.cable_1d_cv_convergence import (
 )
 from omnidriver.cardiacfoam.tutorials.manufactured_monodomain_pseudo_ecg import make_spec as make_manufactured_monodomain_pseudo_ecg_spec
 from omnidriver.cardiacfoam.tutorials.niederer_2012 import make_spec as make_niederer_2012_spec
-from omnidriver.cardiacfoam.tutorials.restitution_curves import make_spec as make_restitution_curves_spec
+# restitution_curves's factory make_spec was deleted 2026-09-25: the
+# tutorial migrated onto a tutorial record (records/restitution_curves.py,
+# docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md, step
+# 4b) -- it is no longer one of SPEC_FACTORIES/REGISTERED_TUTORIALS below,
+# by design: `classify_entry` refuses a name that is registered as both a
+# tutorial record and a factory tutorial, so removing it here happens in
+# the same commit as registering the record.
 from omnidriver.cardiacfoam.tutorials.single_cell import make_spec as make_single_cell_spec
 from omnidriver.cardiacfoam.tutorials.cable_1d_restitution import (
     make_spec as make_cable_1d_restitution_spec,
@@ -51,8 +57,6 @@ SPEC_FACTORIES = {
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_1D3D.value.lower(): make_manufactured_monodomain_1d3d_spec,
     CardiacTutorialID.MANUFACTURED_PURKINJE_GRAPH.value: make_manufactured_purkinje_graph_spec,
     CardiacTutorialID.MANUFACTURED_PURKINJE_GRAPH.value.lower(): make_manufactured_purkinje_graph_spec,
-    CardiacTutorialID.RESTITUTION_CURVES.value: make_restitution_curves_spec,
-    CardiacTutorialID.RESTITUTION_CURVES.value.lower(): make_restitution_curves_spec,
     CardiacTutorialID.CABLE_1D_RESTITUTION.value: make_cable_1d_restitution_spec,
     CardiacTutorialID.CABLE_1D_RESTITUTION.value.lower(): make_cable_1d_restitution_spec,
 }
@@ -68,6 +72,5 @@ REGISTERED_TUTORIALS = (
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_TOTAL_LAGRANGIAN_EM.value,
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_1D3D.value,
     CardiacTutorialID.MANUFACTURED_PURKINJE_GRAPH.value,
-    CardiacTutorialID.RESTITUTION_CURVES.value,
     CardiacTutorialID.CABLE_1D_RESTITUTION.value,
 )

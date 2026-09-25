@@ -128,12 +128,20 @@ def test_default_single_cell_tissue_map_uses_native_tissues_only():
     assert IONIC_MODEL_TISSUE_MAP["Gaur"] == ("myocyte",)
 
 
-def test_default_restitution_tissue_map_uses_native_tissues_only():
-    from omnidriver.cardiacfoam.tutorials.defaults.restitution_curves import IONIC_MODEL_TISSUE_MAP
-    assert IONIC_MODEL_TISSUE_MAP["TNNP"] == (
+def test_planning_tissues_uses_native_tissues_only_for_other_models():
+    """`restitutionCurves`'s own defaults module (which used to duplicate
+    `single_cell`'s `IONIC_MODEL_TISSUE_MAP` construction verbatim) was
+    deleted 2026-09-25 when that tutorial migrated onto a tutorial record
+    (docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md) --
+    its `restitutionCurvesIonicModelAxis` now derives `tissue` from the same
+    `planning_tissues()` helper directly. This proves that helper's own
+    behaviour for two more models (`TNNP`/`Courtemanche`) the test above
+    does not cover, independent of any tutorial-specific module."""
+    from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG, planning_tissues
+    assert planning_tissues(IONIC_MODEL_CATALOG["TNNP"]) == (
         "epicardialCells", "mCells", "endocardialCells",
     )
-    assert IONIC_MODEL_TISSUE_MAP["Courtemanche"] == ("myocyte",)
+    assert planning_tissues(IONIC_MODEL_CATALOG["Courtemanche"]) == ("myocyte",)
 
 
 def test_transmural_only_models_do_not_support_apex_base_heterogeneity():
