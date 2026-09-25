@@ -15,8 +15,8 @@ not OpenFOAM at all.
 | step | what | state | commits |
 |---|---|---|---|
 | 1–5.0 | design, deletion of heartSolverComparison, core records/axes/channel/gate, blockMesh axis, the restitutionCurves pilot, P1/P2 | done (see the design's Status) | up to `0cf5bfb` |
-| M | merge into `main` (§4) | waiting for the openCARP session to reach a stopping point | — |
-| 5.4a | manufacturedBathBidomain (hardest first) | not started | — |
+| M | merge into `main` (§4) | done 2026-09-25: `main` fast-forwarded to this branch (local; push pending the owner's go-ahead) | see `git log main` |
+| 5.4a | manufacturedBathBidomain (hardest first; see §5a) | next | — |
 | 5.4b | manufacturedBidomain, manufacturedMonodomainPseudoECG, manufacturedEikonalECG, niederer2012 | not started; pseudo-ECG also waits on the owner's uncommitted `box.geo.template` and six temporal sweeps | — |
 | 5.1 | singleCell | not started | — |
 | 5.2 | cable1DRestitution (post-processing reads the case plus omniD's case record; both sidecars deleted) | not started | — |
@@ -128,6 +128,56 @@ Once the last migratable tutorial is done:
     no running session uses. Never in a checkout another agent is working in.
   - Before a push, `origin/<branch>` is checked to be an ancestor of what is
     pushed.
+
+## 5a. Next: step 5.4a, manufacturedBathBidomain
+
+Chosen first because it is the hardest; it stresses more of the core than any
+other tutorial. The seven sub-steps of §2, concretely:
+
+1. **Record.**
+   - Native case: `manufacturedSolutions/bathBidomain`.
+   - Workflow steps, from its `Allrun`: `blockMesh -dict
+     system/blockMeshDict.<dim>` → `topoSet` → `setTorsoOrganConductivityField`
+     → `cardiacFoam`.
+   - The parallel route (`decomposePar` → `cardiacFoam -parallel` →
+     `reconstructPar`) is a second workflow variant.
+   - The expected hex-block count, 3, is stated in the record.
+2. **Axes**, all in this tutorial's own cardiac record (the owner decisions of
+   2026-09-25):
+   - `dimension` sets `bidomainSolverCoeffs.dimension` and the mesh step's `-dict
+     system/blockMeshDict.<dim>` together.
+   - N patches all three `blockMeshDict.<dim>` files. It puts the same counts
+     on every hex block and keeps each file's own directions at 1.
+   - `phiERefPoint` is derived from the chosen `blockMeshDict`'s extents, read
+     from the file with no copied table.
+   - The tet route: `lc = 1/N` as the gmsh step's `-setnumber lc <value>`. Its
+     real-binary test moves here from step 3.
+3. **Native changes**, on the native branch:
+   - `DefineConstant[ lc = ... ];` in
+     `setup/studies/tetConvergence/three_domain_box.geo.template`.
+   - The nine `setup/studies/*/sweep*.json` rewritten to real keys: the
+     gradient-scheme studies become plain `system/fvSchemes:...` keys.
+   - The tet numerics-overlay copy is dropped, because the overlay is
+     byte-identical to the case's own `system/fvSchemes`.
+   - The case's own `bathPredictorCorrector yes` is the default; a study that
+     wants `false` states it.
+4. **Parity:** every case of those nine studies, new output against the old
+   module's.
+5. **Delete:**
+   - the 724-line module, `tutorials/defaults/manufactured_bath_bidomain.py` and
+     their tests;
+   - everything they were the last caller of: `render_tet_geo`'s file write,
+     the overlay-copy code, and the direct `update_foam_entry` loops for
+     `grad_scheme` / `phi_tolerance` / `fv_*_overrides`.
+6. **Proof:** zero changes with no study values, and one real solver run at a
+   coarse N set through the study.
+7. **Numbers:** lines before and after, source and tests.
+
+**Open for the owner during 5.4a:**
+- whether the parallel route should be a workflow variant (as above) or be
+  dropped from the record;
+- whether any of the nine bath studies are obsolete and should be deleted rather
+  than rewritten.
 
 ## 5. Generality log
 
