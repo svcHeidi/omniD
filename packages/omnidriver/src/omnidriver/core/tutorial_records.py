@@ -65,13 +65,24 @@ class WorkflowStep:
     does not know what any of these strings mean -- the solver binary's own
     name, or a mesh-generation tool's flags, are the adapter's own
     vocabulary.
+
+    ``produces`` and ``consumes`` are case-relative paths the step writes
+    and reads (K4, docs/superpowers/specs/2026-09-25-solver-conformance-
+    and-opencarp-design.md §5). ``produces`` becomes the record's expected
+    artifacts; ``consumes`` becomes the step's DAG ``consumes``, which
+    provenance fingerprints. Paths here, never artifact ids: the ids are
+    derived (``record_execution.record_artifact_id``).
     """
 
     step_id: str
     command: tuple[str, ...]
+    produces: tuple[str, ...] = ()
+    consumes: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "command", tuple(self.command))
+        object.__setattr__(self, "produces", tuple(self.produces))
+        object.__setattr__(self, "consumes", tuple(self.consumes))
         if not self.step_id:
             raise TutorialRecordError("a workflow step must have a non-empty step_id")
         if not self.command:
@@ -79,6 +90,14 @@ class WorkflowStep:
                 f"workflow step {self.step_id!r} must have a non-empty "
                 "command -- there is nothing to run"
             )
+        for field_name in ("produces", "consumes"):
+            for path in getattr(self, field_name):
+                try:
+                    _check_case_relative(f"workflow step {self.step_id!r} {field_name} {path!r}", path)
+                except ValueError as exc:
+                    raise TutorialRecordError(
+                        f"workflow step {self.step_id!r} {field_name} {path!r} must be case-relative: {exc}"
+                    ) from exc
 
 
 @dataclass(frozen=True)

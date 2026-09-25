@@ -1685,11 +1685,11 @@ def test_record_case_spec_builds_the_generic_workflow_dag_shape(tmp_path):
         "steps": [
             {
                 "id": "mesh", "command": "toolA", "args": ["-dict", "-N", "20"],
-                "depends_on": [],
+                "depends_on": [], "produces": [], "consumes": [],
             },
             {
                 "id": "solve", "command": "solverBinary", "args": [],
-                "depends_on": ["mesh"],
+                "depends_on": ["mesh"], "produces": [], "consumes": [],
             },
         ]
     }

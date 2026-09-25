@@ -4,17 +4,27 @@ check that cannot run is a failure saying why."""
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
 from omnidriver.core.introspection import describe_entry
 from omnidriver.core.plugin_interface import load_plugin_context
 from omnidriver.core.runtime.record_execution import commit_record_case
+from omnidriver.core.runtime.run_command import omnidriver_run_command
+from omnidriver.core.strict_planning import strict_plan
 from omnidriver.core.tutorial_records import TutorialRecordError
 
 from .target import CheckVerdict, ConformanceTarget
+
+_PLAN_DIAGNOSTIC_GROUPS = (
+    "validation_diagnostics", "workflow_diagnostics", "catalog_coverage_errors",
+    "artifact_diagnostics", "mesh_geometry_diagnostics", "configuration_diagnostics",
+)
 
 _SCRATCH_VARIABLE = "OMNIDRIVER_SCRATCH_DIR"
 
@@ -147,11 +157,95 @@ def check_patch_preserves(target: ConformanceTarget) -> CheckVerdict:
     return _verdict("C4", not problems, "; ".join(problems) or "patched one key; its sibling is unchanged")
 
 
+def _plan(target: ConformanceTarget, ctx):
+    with _scratch_environment(target):
+        return strict_plan(
+            target.record,
+            overrides={"cases_root": str(target.cases_root), **dict(target.base_study)},
+            driver_context=ctx,
+        )
+
+
+def _plan_errors(report) -> list[str]:
+    payload = report.to_json()
+    return [
+        f"{d.get('code')}: {d.get('message')}"
+        for group in _PLAN_DIAGNOSTIC_GROUPS
+        for d in payload.get(group, ()) or ()
+        if d.get("level") == "error"
+    ]
+
+
+def _child_env(target: ConformanceTarget) -> dict[str, str]:
+    env = dict(os.environ)
+    env.update(target.environment)
+    env[_SCRATCH_VARIABLE] = str(target.scratch_root)
+    return env
+
+
+def _run_document_path(report) -> Path:
+    return Path(report.launch["output_dir"]) / "run_document.json"
+
+
+def check_strict_plan(target: ConformanceTarget) -> CheckVerdict:
+    """C5: plan --strict on the record has no errors, and its launch command is runnable as written."""
+    report = _plan(target, _context(target))
+    errors = _plan_errors(report)
+    command = list(report.launch.get("command") or ())
+    problems = list(errors)
+    if report.status != "ok":
+        problems.append(f"plan status {report.status!r}")
+    if "--run-document" not in command:
+        problems.append(f"launch command {command} does not run the planned document")
+    elif not _run_document_path(report).is_file():
+        problems.append(f"launch names {_run_document_path(report)}, which was not written")
+    return _verdict("C5", not problems, "; ".join(problems) or f"ok; launch {command}")
+
+
+def _execute(target: ConformanceTarget, ctx, report) -> tuple[subprocess.CompletedProcess, dict[str, Any] | None]:
+    # Never hand-build a run command (main, 2026-09-25): the canonical builder
+    # carries --plugin from ctx.plugin_selector, set by load_plugin_context.
+    proc = subprocess.run(
+        omnidriver_run_command(ctx, "--run-document", str(_run_document_path(report))),
+        capture_output=True, text=True, env=_child_env(target),
+    )
+    try:
+        payload = json.loads(proc.stdout)
+    except ValueError:
+        payload = None
+    return proc, payload
+
+
+def check_run(target: ConformanceTarget) -> CheckVerdict:
+    """C6: the planned document runs, and every artifact the record declares is present."""
+    ctx = _context(target)
+    report = _plan(target, ctx)
+    if report.status != "ok":
+        return _verdict("C6", False, f"cannot run: plan failed: {_plan_errors(report)}")
+    proc, payload = _execute(target, ctx, report)
+    if payload is None:
+        return _verdict("C6", False, f"run printed no JSON (rc={proc.returncode}); stderr tail: {proc.stderr[-800:]}")
+    reconciliation = payload.get("artifact_reconciliation") or {}
+    artifacts = reconciliation.get("artifacts", ())
+    declared = [a for a in artifacts if a["artifact_id"].startswith("record.")]
+    missing = [a["artifact_id"] for a in artifacts if a["status"] == "missing" and not a.get("optional")]
+    problems = []
+    if proc.returncode != 0 or payload.get("status") != "ok":
+        problems.append(f"run status {payload.get('status')!r}, rc={proc.returncode}")
+    if not declared:
+        problems.append("the record declares no artifacts (no step `produces`), so a run proves nothing about outputs")
+    if missing:
+        problems.append(f"missing artifacts {missing}")
+    return _verdict("C6", not problems, "; ".join(problems) or f"{len(declared)} declared artifact(s) present")
+
+
 CHECKS: dict[str, Callable[[ConformanceTarget], CheckVerdict]] = {
     "C1": check_load,
     "C2": check_describe_noop,
     "C3": check_refuses_unknown,
     "C4": check_patch_preserves,
+    "C5": check_strict_plan,
+    "C6": check_run,
 }
 
 

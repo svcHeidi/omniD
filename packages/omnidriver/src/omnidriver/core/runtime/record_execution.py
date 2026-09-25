@@ -24,11 +24,12 @@ import datetime
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Mapping
+from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
 from ..case_transaction import commit_case_write
 from ..case_write import CaseMutationRequest, CaseWritePlan, CaseWriteRecord
 from ..sweep.sweep_derivation_catalog import NAMING_OUTPUT_KEYS
+from .models import DataArtifact
 from ..tutorial_records import (
     SourcedPatch,
     TutorialRecord,
@@ -468,14 +469,41 @@ def _workflow_dag_for_record(
     for step_id in workflow_step_ids:
         step = steps_by_id[step_id]
         argv = list(step.command) + list(command_arguments.get(step_id, ()))
-        dag_steps.append({
+        step_entry: dict[str, Any] = {
             "id": step_id,
             "command": argv[0],
             "args": argv[1:],
             "depends_on": list(depends_on),
-        })
+        }
+        record_step = steps_by_id[step_id]
+        step_entry["produces"] = [record_artifact_id(step_id, i) for i in range(len(record_step.produces))]
+        step_entry["consumes"] = list(record_step.consumes)
+        dag_steps.append(step_entry)
         depends_on = [step_id]
     return {"steps": dag_steps}
+
+
+def record_artifact_id(step_id: str, index: int) -> str:
+    """The artifact id a record step's ``index``-th ``produces`` path gets."""
+    return f"record.{step_id}.{index}"
+
+
+def record_step_artifacts(record: TutorialRecord, workflow_step_ids: Sequence[str]) -> tuple[DataArtifact, ...]:
+    """The record's expected artifacts: one per ``produces`` path of each selected step (K4)."""
+    selected = set(workflow_step_ids)
+    artifacts: list[DataArtifact] = []
+    for step in record.workflow_steps:
+        if step.step_id not in selected:
+            continue
+        for index, path in enumerate(step.produces):
+            artifacts.append(DataArtifact(
+                artifact_id=record_artifact_id(step.step_id, index),
+                path_pattern=path,
+                format="file",
+                description=f"{record.name} step {step.step_id!r} writes {path}",
+                produced_by=step.step_id,
+            ))
+    return tuple(artifacts)
 
 
 def commit_and_build_record_spec(
@@ -565,5 +593,6 @@ def record_case_spec(
             "resolution": "tutorial_record",
             "workflow_dag": workflow_dag,
             "generic_case": True,
+            "expected_artifacts": record_step_artifacts(record, workflow_step_ids),
         },
     )

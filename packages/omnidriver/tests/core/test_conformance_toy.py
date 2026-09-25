@@ -11,7 +11,7 @@ from omnidriver.conformance import run_check
 from plugins.conformance_toy import REPLACING_PLUGIN, toy_conformance_target
 
 
-@pytest.mark.parametrize("check_id", ["C1", "C2", "C3"])
+@pytest.mark.parametrize("check_id", ["C1", "C2", "C3", "C5", "C6"])
 def test_toy_passes(check_id, tmp_path):
     verdict = run_check(check_id, toy_conformance_target(tmp_path))
     assert verdict.passed, verdict.detail

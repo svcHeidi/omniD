@@ -68,7 +68,10 @@ _TOY_RECORD = TutorialRecord(
     name="toyTutorial",
     native_case_relpath="toyTutorial",
     allowed_axes=frozenset({"number_cells"}),
-    workflow_steps=(WorkflowStep(step_id="solve", command=("touch", "solved.marker")),),
+    workflow_steps=(WorkflowStep(
+        step_id="solve", command=("touch", "solved.marker"),
+        consumes=("constant/mesh.json",), produces=("solved.marker",),
+    ),),
 )
 
 
