@@ -5,9 +5,11 @@ also get a deliberately broken plugin, to prove the check bites.
 """
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
-from omnidriver.conformance import run_check
+from omnidriver.conformance import CHECKS, run_check
 from omnidriver.core.runtime.sweep_runner import _child_reconciliation
 from plugins.conformance_toy import NO_CONSUMES_PLUGIN, REPLACING_PLUGIN, toy_conformance_target
 
@@ -40,3 +42,18 @@ def test_c4_bites_a_renderer_that_replaces_the_document(tmp_path):
     verdict = run_check("C4", toy_conformance_target(tmp_path, plugin=REPLACING_PLUGIN))
     assert not verdict.passed
     assert "label" in verdict.detail
+
+
+@pytest.mark.parametrize("check_id", sorted(CHECKS))
+def test_a_check_that_cannot_run_is_a_failed_verdict(check_id, tmp_path):
+    """I3: a misnamed record yields a failed verdict naming why, never a raise
+    that would abort a runner looping over CHECKS."""
+    target = dataclasses.replace(toy_conformance_target(tmp_path), record="nope")
+    verdict = run_check(check_id, target)
+    assert not verdict.passed
+    assert "nope" in verdict.detail
+
+
+def test_an_unknown_check_id_still_raises(tmp_path):
+    with pytest.raises(KeyError, match="C99"):
+        run_check("C99", toy_conformance_target(tmp_path))

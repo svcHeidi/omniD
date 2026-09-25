@@ -67,16 +67,16 @@ def check_load(target: ConformanceTarget) -> CheckVerdict:
 
     A provider no one requires (for example an OpenFOAM environment layer a
     non-FOAM solver never asked for) means the stack depends on something
-    it does not declare."""
-    try:
-        ctx = _context(target)
-    except Exception as exc:  # the verdict names every load failure
-        return _verdict("C1", False, f"stack did not load: {type(exc).__name__}: {exc}")
+    it does not declare. The loaded stack must also serve the target's
+    record: a stack that loads but lacks the record is not the stack the
+    target names (added 2026-09-25, fix round 1 I3)."""
+    ctx = _context(target)
     ids = [provider.plugin_id for provider in ctx.providers]
     required = {rid for provider in ctx.providers for rid in provider.get_profile().requires}
     roots = [pid for pid in ids if pid not in required]
     if len(roots) != 1:
         return _verdict("C1", False, f"stack {ids} has {len(roots)} unrequired providers {roots}; expected exactly one root")
+    _record(ctx, target.record)
     return _verdict("C1", True, f"stack {ids}, root {roots[0]}")
 
 
@@ -350,6 +350,13 @@ CHECKS: dict[str, Callable[[ConformanceTarget], CheckVerdict]] = {
 
 
 def run_check(check_id: str, target: ConformanceTarget) -> CheckVerdict:
+    """Run one check. An unknown ``check_id`` is the caller's error and
+    raises ``KeyError``; a check that cannot run (a stack that does not
+    load, a misnamed record, a plan refusal) is a failed verdict naming why,
+    so a runner looping over ``CHECKS`` always gets one verdict per check."""
     if check_id not in CHECKS:
         raise KeyError(f"no conformance check {check_id!r}; known: {sorted(CHECKS)}")
-    return CHECKS[check_id](target)
+    try:
+        return CHECKS[check_id](target)
+    except Exception as exc:  # the verdict names every failure to run
+        return _verdict(check_id, False, f"could not run: {type(exc).__name__}: {exc}")
