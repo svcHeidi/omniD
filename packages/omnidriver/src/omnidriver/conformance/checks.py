@@ -10,7 +10,7 @@ import os
 import shutil
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Iterator
 
 from omnidriver.core.introspection import describe_entry
@@ -290,18 +290,35 @@ def check_sweep(target: ConformanceTarget) -> CheckVerdict:
     return _verdict("C7", not problems, "; ".join(problems) or "2 cases completed and reconciled; native tree unchanged")
 
 
+#: Component kinds that fingerprint a file the case reads: an ordinary case
+#: file, or a symlink out of the case (fingerprinted through its target).
+_FILE_KINDS = frozenset({"case_file", "external_link"})
+
+
+def _posix(path: str) -> str:
+    return PurePosixPath(path).as_posix()
+
+
 def check_provenance(target: ConformanceTarget) -> CheckVerdict:
-    """C8: every file a planned step consumes is fingerprinted."""
+    """C8: every file a planned step consumes is fingerprinted.
+
+    Listed is not fingerprinted: ``enumerate_case_inputs`` adds every
+    consumed path unconditionally, and a missing one becomes a component
+    with strength ``unavailable`` (fix round 1 I1, 2026-09-25). Only a
+    component carrying a real fingerprint counts."""
     ctx = _context(target)
     report = _plan(target, ctx)
     if report.status != "ok" or report.workflow_dag is None:
         return _verdict("C8", False, f"cannot check: plan failed: {_plan_errors(report)}")
-    consumed = sorted({str(e) for s in report.workflow_dag.get("steps", ()) for e in s.get("consumes", ()) or ()})
+    consumed = sorted({_posix(str(e)) for s in report.workflow_dag.get("steps", ()) for e in s.get("consumes", ()) or ()})
     if not consumed:
         return _verdict("C8", False, "no step declares `consumes`, so provenance cannot be shown to cover the record's inputs")
     case_root = Path(report.launch["case_root"])
     components = enumerate_case_inputs(case_root, workflow_dag=report.workflow_dag, driver_context=ctx, env=_child_env(target))
-    fingerprinted = {c.path for c in components if c.kind == "case_file"}
+    fingerprinted = {
+        _posix(c.path) for c in components
+        if c.kind in _FILE_KINDS and c.strength != "unavailable"
+    }
     missing = [p for p in consumed if p not in fingerprinted]
     return _verdict("C8", not missing, f"consumed but not fingerprinted: {missing}" if missing else f"{len(consumed)} consumed file(s) fingerprinted")
 

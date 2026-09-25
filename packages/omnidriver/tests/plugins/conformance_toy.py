@@ -83,3 +83,20 @@ class NoConsumesPlugin(E2ERecordPlugin):
             workflow_steps=(WorkflowStep(step_id="solve", command=("touch", "solved.marker"),
                                          produces=("solved.marker",)),),
         )}
+
+
+GHOST_CONSUMES_PLUGIN = "plugins.conformance_toy:GhostConsumesPlugin"
+
+
+class GhostConsumesPlugin(E2ERecordPlugin):
+    """Declares it consumes a file the native case does not have. Provenance
+    still lists the path (as ``unavailable``); C8 must not count that."""
+
+    def get_tutorial_records(self):
+        return {"toyTutorial": TutorialRecord(
+            name="toyTutorial", native_case_relpath="toyTutorial",
+            allowed_axes=frozenset({"number_cells"}),
+            workflow_steps=(WorkflowStep(step_id="solve", command=("touch", "solved.marker"),
+                                         consumes=("constant/mesh.json", "does/not/exist.json"),
+                                         produces=("solved.marker",)),),
+        )}
