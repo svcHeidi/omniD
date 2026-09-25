@@ -98,6 +98,7 @@ def _document_json(config: dict) -> dict:
         "name": "ingested",
         "status": "planned",
         "config": config,
+        "configurationSource": "document",
         "launch": {"caseRoot": "/nonexistent/case", "outputDir": "/nonexistent/case/out"},
         "workflowDag": {
             "schema_version": "1",

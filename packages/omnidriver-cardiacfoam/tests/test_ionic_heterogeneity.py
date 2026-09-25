@@ -309,7 +309,7 @@ def test_default_build_omits_heterogeneity_block():
 
 def _run(physics: dict) -> RunDocument:
     config = {"anatomy": {}, "physics": physics, "stimulus": {}, "solver": {}}
-    return RunDocument(id="r1", name="r", status="draft", config=config)
+    return RunDocument(id="r1", name="r", status="draft", config=config, configurationSource="document")
 
 
 def test_heterogeneity_with_incapable_model_is_error():

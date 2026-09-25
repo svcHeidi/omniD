@@ -193,6 +193,7 @@ def _hand_authored_document(
         "name": "hand-authored",
         "status": "planned",
         "config": config,
+        "configurationSource": "document",
         "launch": launch if launch is not None else {
             "caseRoot": str(case_root),
             "outputDir": str(case_root / "driverfoam-output"),

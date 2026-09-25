@@ -56,6 +56,7 @@ def _valid_run_dict():
             "stimulus": {},
             "solver": {},
         },
+        "configurationSource": "document",
         "validation": {},
         "resolvedEntry": None,
         "workflowDag": None,

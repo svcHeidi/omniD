@@ -127,6 +127,7 @@ def test_run_document_with_bad_dag_surfaces_diagnostics() -> None:
             "name": "bad",
             "status": "planned",
             "config": {"anatomy": {}, "physics": {}, "stimulus": {}, "solver": {}},
+            "configurationSource": "document",
             "launch": {},
             "workflowDag": None,
         }))
@@ -152,6 +153,7 @@ def test_run_document_rejects_unknown_command() -> None:
             "name": "danger",
             "status": "planned",
             "config": {"anatomy": {}, "physics": {}, "stimulus": {}, "solver": {}},
+            "configurationSource": "document",
             "launch": {"caseRoot": temp_dir, "outputDir": temp_dir},
             "workflowDag": {
                 "schema_version": "1",
@@ -315,6 +317,7 @@ def invalid_run_document_report() -> dict:
                 "stimulus": {},
                 "solver": {},
             },
+            "configurationSource": "document",
             "launch": {},
             "workflowDag": None,
         }))

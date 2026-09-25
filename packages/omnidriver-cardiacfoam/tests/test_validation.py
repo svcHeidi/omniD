@@ -79,7 +79,7 @@ def _blank_run(**overrides) -> RunDocument:
     }
     for ph, slice_ in overrides.get("config", {}).items():
         config.setdefault(ph, {}).update(slice_)
-    return RunDocument(id="r1", name="r", status="draft", config=config)
+    return RunDocument(id="r1", name="r", status="draft", config=config, configurationSource="document")
 
 
 class TestSlotKeyScopeTokenStripping:
@@ -144,7 +144,7 @@ def _filled_run(**overrides) -> RunDocument:
         entry = IONIC_MODEL_CATALOG.get(model)
         if entry and entry.compatible_tissues and phys["tissue"] not in entry.compatible_tissues:
             phys["tissue"] = entry.compatible_tissues[0]
-    return RunDocument(id="r1", name="r", status="draft", config=config)
+    return RunDocument(id="r1", name="r", status="draft", config=config, configurationSource="document")
 
 
 def test_empty_run_reports_missing_required_fields_per_phase():
@@ -544,7 +544,7 @@ def _coupling_run(myocardium: str, *,
         config["physics"][
             f"domainCouplings.{coupling_name}.conductionNetworkDomain"
         ] = network_name
-    return RunDocument(id="r1", name="r", status="draft", config=config)
+    return RunDocument(id="r1", name="r", status="draft", config=config, configurationSource="document")
 
 
 def test_solver_coupling_silent_when_no_purkinje_pairing():
@@ -757,7 +757,7 @@ def test_block_reference_flags_dangling_target():
     config["physics"][
         "domainCouplings.lvCoupling.conductionNetworkDomain"
     ] = "ghostNet"   # never declared under conductionNetworkDomains.ghostNet.*
-    run = RunDocument(id="r1", name="r", status="draft", config=config)
+    run = RunDocument(id="r1", name="r", status="draft", config=config, configurationSource="document")
 
     errors = validate_run(run, entries=[], driver_context=_CTX)
     dangling = [
@@ -793,7 +793,7 @@ def test_dynamic_required_field_flags_missing_value_scoped_to_its_own_network():
         ".conductionSystemSolver"
     ] = "monodomain1DSolver"
     # networkB never needs purkinjeCV under this solver.
-    run = RunDocument(id="r1", name="r", status="draft", config=config)
+    run = RunDocument(id="r1", name="r", status="draft", config=config, configurationSource="document")
 
     errors = validate_run(run, entries=[], driver_context=_CTX)
     cv_errors = [e for e in errors if "purkinjeCV" in e.message]
@@ -914,7 +914,7 @@ def _filled_run_for_solver(myocardium_solver: str, **extra_config) -> RunDocumen
     for ph, slice_ in extra_config.items():
         config.setdefault(ph, {}).update(slice_)
 
-    return RunDocument(id="r1", name="r", status="draft", config=config)
+    return RunDocument(id="r1", name="r", status="draft", config=config, configurationSource="document")
 
 
 # ---------------------------------------------------------------------------

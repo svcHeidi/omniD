@@ -187,6 +187,7 @@ def test_run_document_embedded_completed_state_refuses_changed_inputs(tmp_path) 
         "lastModified": "",
         "status": "planned",
         "config": {},
+        "configurationSource": "document",
         "resolvedEntry": None,
         "workflowDag": workflow_dag,
         "workflowState": state.to_json(),

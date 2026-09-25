@@ -164,6 +164,7 @@ with tempfile.TemporaryDirectory() as raw:
     document = {
         "version": "3", "id": "wheel-resume", "name": "wheel-resume",
         "createdAt": "", "lastModified": "", "status": "planned", "config": {},
+        "configurationSource": "document",
         "resolvedEntry": None, "workflowDag": dag, "workflowState": initial.to_json(),
         "launch": {"caseRoot": str(case_root), "outputDir": "output"},
         "expectedArtifacts": [], "validation": {},

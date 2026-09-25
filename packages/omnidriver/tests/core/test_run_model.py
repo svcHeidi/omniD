@@ -44,6 +44,7 @@ def _valid_run_dict():
             "stimulus": {},
             "solver": {},
         },
+        "configurationSource": "document",
         "validation": {},
         "resolvedEntry": None,
         "workflowDag": None,
@@ -335,6 +336,32 @@ def test_run_document_config_accepts_arbitrary_non_cardiac_keys() -> None:
         name="non-cardiac-entry",
         status="draft",
         config={"mesh": {"type": "tet"}, "material": {"model": "neoHookean"}},
+        configurationSource="document",
     )
     payload = doc.to_json()
     assert payload["config"] == {"mesh": {"type": "tet"}, "material": {"model": "neoHookean"}}
+
+
+def test_schema_rejects_missing_configuration_source(schema):
+    """Step 4c: a document that omits `configurationSource` is refused by
+    name, not silently treated as any particular source."""
+    bad = _valid_run_dict()
+    del bad["configurationSource"]
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(bad, schema)
+
+
+def test_schema_rejects_unknown_configuration_source(schema):
+    """An agent-authored value outside the closed enum is refused, not
+    coerced or ignored -- there is no third source and no default."""
+    bad = _valid_run_dict()
+    bad["configurationSource"] = "somewhere-else"
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(bad, schema)
+
+
+def test_from_json_refuses_a_document_missing_configuration_source():
+    bad = _valid_run_dict()
+    del bad["configurationSource"]
+    with pytest.raises(jsonschema.ValidationError):
+        RunDocument.from_json(bad)

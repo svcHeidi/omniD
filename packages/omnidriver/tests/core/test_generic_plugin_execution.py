@@ -53,6 +53,7 @@ def test_run_document_validation_uses_the_selected_plugin(tmp_path: Path) -> Non
         status="planned",
         plugin=context.identity.to_json(),
         config={"anatomy": {}, "physics": {}, "stimulus": {}, "solver": {}},
+        configurationSource="document",
         workflowDag={
             "steps": [{"id": "run", "command": "run-test-case", "depends_on": []}],
         },
@@ -87,6 +88,7 @@ def test_run_document_rejects_a_mismatched_supplied_plugin(tmp_path: Path) -> No
         status="planned",
         plugin=planned_plugin,
         config={"anatomy": {}, "physics": {}, "stimulus": {}, "solver": {}},
+        configurationSource="document",
         workflowDag={"steps": [{"id": "run", "command": "run-test-case", "depends_on": []}]},
         launch={
             "caseRoot": str(case_root),
@@ -153,6 +155,7 @@ def test_cli_context_from_run_document_rejects_a_mismatched_supplied_plugin(
         status="planned",
         plugin=planned_plugin,
         config={"anatomy": {}, "physics": {}, "stimulus": {}, "solver": {}},
+        configurationSource="document",
     )
     doc_path = tmp_path / "run_document.json"
     doc_path.write_text(json.dumps(run_doc.to_json()))
