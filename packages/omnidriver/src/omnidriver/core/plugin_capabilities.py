@@ -572,7 +572,7 @@ class EnvironmentPreflightCapability(Protocol):
     ``test_openfoam_bashrc_kwarg_is_no_longer_accepted`` both disprove.
 
     :adapts: get_environment_diagnostics, get_configured_environment, get_loaded_environment
-    :consumed-by: omnidriver/core/strict_planning.py, omnidriver/core/runtime/sweep_runner.py, omnidriver/cli.py
+    :consumed-by: omnidriver/core/strict_planning.py, omnidriver/core/runtime/sweep_runner.py, omnidriver/cli.py, omnidriver/conformance/checks.py
     :fallback: legacy_environment_diagnostics, legacy_configured_environment, legacy_load_environment
     :status: optional-neutral
     """
@@ -630,7 +630,7 @@ class RuntimeEvidenceCapability(Protocol):
     capability needs no compatibility fallback.
 
     :adapts: get_artifact_value_reader, get_extra_provenance_paths, get_log_redaction_patterns, get_solve_step_commands, get_telemetry_source_globs
-    :consumed-by: omnidriver/core/runtime/provenance_inputs.py
+    :consumed-by: omnidriver/core/runtime/provenance_inputs.py, omnidriver/core/runtime/workflow_runner.py
     :fallback: none
     :status: optional-neutral
     """
@@ -829,7 +829,7 @@ class ConfigValueCapability(Protocol):
     capability needs no compatibility fallback.
 
     :adapts: get_config_value_reader
-    :consumed-by: omnidriver/cardiacfoam/run_document_config.py, omnidriver/core/runtime/record_execution.py
+    :consumed-by: omnidriver/cardiacfoam/run_document_config.py, omnidriver/core/runtime/record_execution.py, omnidriver/conformance/checks.py
     :fallback: none
     :status: optional-neutral
     """
@@ -887,7 +887,7 @@ class TutorialRecordCapability(Protocol):
     explicitly rather than iterating a fabricated empty mapping.
 
     :adapts: get_tutorial_records
-    :consumed-by: omnidriver/core/runtime/registry.py
+    :consumed-by: omnidriver/core/runtime/registry.py, omnidriver/conformance/checks.py
     :fallback: none
     :status: optional-neutral
     """
@@ -955,7 +955,7 @@ class RecordKeyValidationCapability(Protocol):
     looked up, which an axis-only study could dodge entirely).
 
     :adapts: get_record_key_validator
-    :consumed-by: omnidriver/core/runtime/record_execution.py
+    :consumed-by: omnidriver/core/runtime/record_execution.py, omnidriver/conformance/checks.py
     :fallback: none
     :status: optional-neutral
     """
@@ -989,7 +989,7 @@ class CaseValueComparisonCapability(Protocol):
     **No fallback (review finding M1).**
 
     :adapts: get_case_value_comparator
-    :consumed-by: omnidriver/core/runtime/record_execution.py
+    :consumed-by: omnidriver/core/runtime/record_execution.py, omnidriver/conformance/checks.py
     :fallback: none
     :status: optional-neutral
     """
