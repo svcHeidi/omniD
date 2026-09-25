@@ -12,7 +12,8 @@ import pytest
 from omnidriver.conformance import CHECKS, run_check
 from omnidriver.core.runtime.sweep_runner import _child_reconciliation
 from plugins.conformance_toy import (
-    GHOST_CONSUMES_PLUGIN, NO_CONSUMES_PLUGIN, REPLACING_PLUGIN, toy_conformance_target,
+    GHOST_CONSUMES_PLUGIN, NATIVE_WRITING_PLUGIN, NO_CONSUMES_PLUGIN, REPLACING_PLUGIN,
+    STRAY_NAME, STRAY_ROOT_VARIABLE, toy_conformance_target,
 )
 
 
@@ -105,3 +106,15 @@ def test_scratch_environment_is_serialised_across_threads(tmp_path, monkeypatch)
     waiter.join(5)
     assert seen == [str(second.scratch_root)]
     assert _SCRATCH_VARIABLE not in os.environ
+
+
+def test_a_write_into_the_native_cases_root_fails_the_check(tmp_path):
+    """I4: the suite-wide guard watches all of cases_root, not only the
+    record's subtree that C7 digests."""
+    target = toy_conformance_target(tmp_path, plugin=NATIVE_WRITING_PLUGIN)
+    target = dataclasses.replace(
+        target, environment={**target.environment, STRAY_ROOT_VARIABLE: str(target.cases_root)},
+    )
+    verdict = run_check("C7", target)
+    assert not verdict.passed
+    assert STRAY_NAME in verdict.detail

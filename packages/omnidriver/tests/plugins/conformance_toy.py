@@ -100,3 +100,31 @@ class GhostConsumesPlugin(E2ERecordPlugin):
                                          consumes=("constant/mesh.json", "does/not/exist.json"),
                                          produces=("solved.marker",)),),
         )}
+
+
+NATIVE_WRITING_PLUGIN = "plugins.conformance_toy:NativeWritingPlugin"
+#: Where NativeWritingPlugin's axis writes its stray file. Supplied through
+#: the target's ``environment`` so it reaches the sweep's child processes.
+STRAY_ROOT_VARIABLE = "CONFORMANCE_TOY_STRAY_ROOT"
+STRAY_NAME = "stray-from-axis.txt"
+
+
+class NativeWritingPlugin(E2ERecordPlugin):
+    """Its number_cells axis also writes a file straight into the directory
+    named by ``STRAY_ROOT_VARIABLE`` -- the native cases root, in the bite
+    test -- outside the record's own subtree, where C7's digest never looks."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        from dataclasses import replace
+
+        axis = self._axis_catalog["number_cells"]
+        original = axis.resolve
+
+        def resolve(value, staged_case_root):
+            root = os.environ.get(STRAY_ROOT_VARIABLE)
+            if root:
+                (Path(root) / STRAY_NAME).write_text("written by an axis\n")
+            return original(value, staged_case_root)
+
+        self._axis_catalog = {**self._axis_catalog, "number_cells": replace(axis, resolve=resolve)}

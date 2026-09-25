@@ -385,14 +385,59 @@ CHECKS: dict[str, Callable[[ConformanceTarget], CheckVerdict]] = {
 }
 
 
+_StatEntry = tuple[bool, int, int]
+
+
+def _tree_stat(root: Path) -> dict[str, _StatEntry]:
+    """``relpath -> (is_dir, size, mtime_ns)`` for every file and directory
+    under ``root``, the root itself included as ``"."``. Stat, not bytes:
+    a real native tutorials tree is large, and this runs around every
+    check. An absent root is an empty snapshot, so its creation shows."""
+    if not root.exists():
+        return {}
+    snapshot: dict[str, _StatEntry] = {}
+    for path in (root, *root.rglob("*")):
+        info = path.lstat()
+        snapshot[path.relative_to(root).as_posix()] = (path.is_dir() and not path.is_symlink(), info.st_size, info.st_mtime_ns)
+    return snapshot
+
+
+def _tree_changes(before: dict[str, _StatEntry], after: dict[str, _StatEntry]) -> list[str]:
+    return sorted(p for p in before.keys() | after.keys() if before.get(p) != after.get(p))
+
+
+def _guarded(verdict: CheckVerdict, changed: list[str], cases_root: Path) -> CheckVerdict:
+    if not changed:
+        return verdict
+    shown = changed[:20] + ([f"... {len(changed) - 20} more"] if len(changed) > 20 else [])
+    guard = f"the native tree {cases_root} changed during the check: {shown}"
+    if verdict.passed:
+        return _verdict(verdict.check_id, False, guard)
+    return _verdict(verdict.check_id, False, f"{verdict.detail}; {guard}")
+
+
 def run_check(check_id: str, target: ConformanceTarget) -> CheckVerdict:
     """Run one check. An unknown ``check_id`` is the caller's error and
     raises ``KeyError``; a check that cannot run (a stack that does not
     load, a misnamed record, a plan refusal) is a failed verdict naming why,
-    so a runner looping over ``CHECKS`` always gets one verdict per check."""
+    so a runner looping over ``CHECKS`` always gets one verdict per check.
+
+    Every check runs inside one suite-wide native guard (fix round 1 I4,
+    2026-09-25): a stat snapshot of the whole ``target.cases_root``, taken
+    before and after. Any difference fails the verdict and names the
+    changed paths, whatever the check itself concluded."""
     if check_id not in CHECKS:
         raise KeyError(f"no conformance check {check_id!r}; known: {sorted(CHECKS)}")
     try:
-        return CHECKS[check_id](target)
+        before = _tree_stat(target.cases_root)
     except Exception as exc:  # the verdict names every failure to run
-        return _verdict(check_id, False, f"could not run: {type(exc).__name__}: {exc}")
+        return _verdict(check_id, False, f"could not run: cannot snapshot the native tree {target.cases_root}: {type(exc).__name__}: {exc}")
+    try:
+        verdict = CHECKS[check_id](target)
+    except Exception as exc:  # the verdict names every failure to run
+        verdict = _verdict(check_id, False, f"could not run: {type(exc).__name__}: {exc}")
+    try:
+        changed = _tree_changes(before, _tree_stat(target.cases_root))
+    except Exception as exc:  # the verdict names every failure to run
+        return _verdict(check_id, False, f"{verdict.detail}; could not re-snapshot the native tree {target.cases_root}: {type(exc).__name__}: {exc}")
+    return _guarded(verdict, changed, target.cases_root)
