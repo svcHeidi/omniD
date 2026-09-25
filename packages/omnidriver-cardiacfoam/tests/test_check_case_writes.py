@@ -73,7 +73,12 @@ def test_the_real_axes_and_records_trees_pass_the_gate():
 def test_scanned_roots_are_exactly_the_axes_records_and_planner_paths():
     """Corrected 2026-09-25: this asserted the two directories only. The
     writer-free planner module axes import (``openfoam/case_planning.py``)
-    is scanned too, since it was found importing from ``mutators``."""
+    is scanned too, since it was found importing from ``mutators``.
+
+    Corrected again 2026-09-25 (solver-conformance Task 8): openCARP's own
+    records tree (``omnidriver-opencarp/.../records``) joined the scan --
+    the same "records and axes write nothing" rule applies to every solver
+    adapter, not only cardiacFOAM's."""
     gate = _load_gate_module()
     relpaths = {
         str(root.relative_to(_REPO_ROOT)) for root in gate.SCANNED_ROOTS
@@ -82,6 +87,7 @@ def test_scanned_roots_are_exactly_the_axes_records_and_planner_paths():
         "packages/omnidriver-openfoam/src/omnidriver/openfoam/axes",
         "packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/records",
         "packages/omnidriver-openfoam/src/omnidriver/openfoam/case_planning.py",
+        "packages/omnidriver-opencarp/src/omnidriver/opencarp/records",
     }
 
 

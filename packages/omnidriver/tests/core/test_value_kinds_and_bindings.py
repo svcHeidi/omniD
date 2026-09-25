@@ -250,3 +250,12 @@ def test_value_kind_is_mandatory():
     a mandatory field cannot be missed the same way."""
     with pytest.raises(TypeError, match="value_kind"):
         dictionary.DictEntry(driver_path="$A.x", description="")
+
+
+def test_string_value_kind_K6():
+    """K6 (spec 2026-09-25 §5): openCARP's String/RFile/WFile parameters may
+    be empty or contain spaces; `word` refuses both."""
+    assert "string" in dictionary.VALUE_KINDS
+    assert dictionary.validate_value_shape("string", "") == ()
+    assert dictionary.validate_value_shape("string", "two words") == ()
+    assert dictionary.validate_value_shape("string", 3) == ("must be a string",)

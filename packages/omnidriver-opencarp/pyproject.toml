@@ -9,8 +9,21 @@ description = "openCARP cardiac electrophysiology plugin for OmniD, driven as bi
 requires-python = ">=3.11"
 dependencies = ["omnidriver>=0.1.0"]
 
-[project.entry-points."omnidriver.plugins"]
-opencarp = "omnidriver.opencarp.plugin:OpenCARPPlugin"
+# Deferred to Task 11 (2026-09-25): registering this entry point before
+# omnidriver.opencarp.plugin exists breaks EVERY package's default plugin
+# discovery, not just this one's tests. plugin_discovery._requires_graph
+# calls entry_point.load()() for every unambiguous name unconditionally,
+# uncached exceptions are ModuleNotFoundError (not LookupError/ValueError),
+# and packages/omnidriver/tests/conftest.py's _default_adapter_resolves()
+# only catches the latter two -- so the whole omnidriver/tests collection
+# aborted the moment this package was installed editable, in every venv
+# shape (all packages; core alone with this package added; the wheel).
+# Verified by installing with the entry point active and running
+# `pytest packages/omnidriver/tests -q`: ModuleNotFoundError during conftest
+# collection, for every test in the package, not merely opencarp's own.
+# Restore this table in Task 11, once OpenCARPPlugin exists.
+# [project.entry-points."omnidriver.plugins"]
+# opencarp = "omnidriver.opencarp.plugin:OpenCARPPlugin"
 
 [tool.setuptools.packages.find]
 where = ["src"]

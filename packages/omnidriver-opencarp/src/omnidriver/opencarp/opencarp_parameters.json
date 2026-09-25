@@ -1,0 +1,2837 @@
+{
+ "opencarp": {
+  "hash": "6eaa147d18b69a6037d05a90b841e23301048a59",
+  "tag": "v18.1"
+ },
+ "parameters": [
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "If set outputs all the parameters.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "output_setup",
+   "type": "Flag"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Define a list of tags forming a mesh region.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "phys_region[Int].ID[Int]",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": null,
+   "description": "",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "phys_region[Int].ID",
+   "type": "{ phys_region[PrMelem1].num_IDs x Int }"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Defines the number of IDs (equivalent to element tags) listed under 'ID'.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "phys_region[Int].num_IDs",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Symbolic name for the physics region",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "phys_region[Int].name",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Defines the type of physics.",
+   "maximum": null,
+   "menu": [
+    "5",
+    "2",
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "phys_region[Int].ptype",
+   "type": "Int"
+  },
+  {
+   "allocates": [
+    "phys_region"
+   ],
+   "default": "0",
+   "description": "The number of physics regions",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0",
+   "name": "num_phys_regions",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "-60.",
+   "description": "Defines the threshold to determine if element wich was activated recovered back to its steadystate. The magnitude is used from the signal to be thresholded.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "recovery_thresh",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "30.",
+   "description": "Defines the threshold to determine if element was activated, e.g the threshold where an action potential was triggered. The magnitude is used from the signal to be thresholded.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "actthresh",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "PrMFALSE",
+   "description": "Defines if the actionpotential duration should be computed - If is set to 1 = computes action potential durations - If is set to 0 = action potential durations are not calculated",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "compute_APD",
+   "type": "Flag"
+  },
+  {
+   "allocates": [],
+   "default": "-1",
+   "description": "Sentinel will check the LAT ID specified here as a reference to quit or continue the simulation.",
+   "maximum": "num_LATs-1",
+   "menu": [],
+   "minimum": null,
+   "name": "sentinel_ID",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "0.",
+   "description": "Defines the time instant when checking for quiescence is started",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "t_sentinel_start",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "-1.",
+   "description": "Sentinel checks for activations, based on LATs. If none are found, exits simulation, else continues. t_sentinel should always be >0 . t_sentinel describes the time sentinel is run for from the t_sentinel_start time. If during this time period no lats[] are detected, savequit() cleanly.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "t_sentinel",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "lats[PrMelem1].measurand ? LAT_ID[1] : LAT_ID[0]",
+   "description": "Defines the output filename.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "lats[Int].ID",
+   "type": "WFile"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Defines the quantity to measure, e.g. the signal (transmembrane voltage or extracellular potential) to use the thresholds on.",
+   "maximum": null,
+   "menu": [
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "lats[Int].measurand",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "1",
+   "description": "Defines that all activations should be detected (1) or only the first one (0). Detecting 'all' is the default.",
+   "maximum": "1",
+   "menu": [],
+   "minimum": "0",
+   "name": "lats[Int].all",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Toggles between detecting max derivative or positive(+) slope threshold crossing and detecting minimum derivative and negative(-) slope threshold crossing.",
+   "maximum": null,
+   "menu": [
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "lats[Int].mode",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "-10.",
+   "description": "Defines the crossing threshold (for method 1) or maximum derivative threshold (for method 2)",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "lats[Int].threshold",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "1",
+   "description": "Describes the method used to determine the instant of local activation. Define the threshold using structure.threshold. Choose if you want to evaluate during the rising or falling slope of the signal using structure.mode.",
+   "maximum": null,
+   "menu": [
+    "2",
+    "1"
+   ],
+   "minimum": null,
+   "name": "lats[Int].method",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "60.0",
+   "description": "Stimulation strength for single cells during prepacing.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "prepacing_stimstr",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "1.0",
+   "description": "Stimulation duration for single cells during prepacing.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "prepacing_stimdur",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "0.",
+   "description": "Sets the basic cycle length for the prepacing stimulus.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "prepacing_bcl",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Defines the number of beats to pre-pace using a single-cell model. Prepacing of a single cell is used to put the single-cell models into a preconditioned state. This state is then given all cells in a tissue simulation as a better initial starting point than a completly unstimulated cell",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "prepacing_beats",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Tissue activation times to guide state set-up for prepacing",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "prepacing_lats",
+   "type": "RFile"
+  },
+  {
+   "allocates": [
+    "lats"
+   ],
+   "default": "0",
+   "description": "Defines the number of local activation measurements.",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0",
+   "name": "num_LATs",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "\"vm_act\"",
+   "description": "a variable",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "LAT_ID[Int]",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": null,
+   "description": "",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "LAT_ID",
+   "type": "{ 4 x String }"
+  },
+  {
+   "allocates": [],
+   "default": "100000000",
+   "description": "Defines the dump buffer size",
+   "maximum": null,
+   "menu": [],
+   "minimum": "1000",
+   "name": "state_dump_buffer",
+   "type": "Long"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Defines the path to file where info should be dumped when openCARP receives SIGIO (in general, this should be a named pipe)",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "shrimp_pipe",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "168.",
+   "description": "Defines the reserved queue time when running in batch mode",
+   "maximum": "168.",
+   "menu": [],
+   "minimum": "0.",
+   "name": "queue_time",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "tend",
+   "description": "Defines the time to stop interval-based checkpointing (saving of the simulation progress).",
+   "maximum": "tend",
+   "menu": [],
+   "minimum": "0.",
+   "name": "chkpt_stop",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "0.",
+   "description": "Defines the interval for checkpointing (saving of the simulation progress) in ms. 0 means no checkpointing.",
+   "maximum": "tend",
+   "menu": [],
+   "minimum": "0.",
+   "name": "chkpt_intv",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "0.",
+   "description": "Defines the start time to trigger interval-based checkpointing (saving of the simulation progress).",
+   "maximum": "tend",
+   "menu": [],
+   "minimum": "0.",
+   "name": "chkpt_start",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Loads a statefile and continues the simulation from there.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "start_statef",
+   "type": "RFile"
+  },
+  {
+   "allocates": [],
+   "default": "\"state\"",
+   "description": "Defines the basename of the output file in which to write a single saved state. Each saved state will have a timestamp appended to the basename.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "write_statef",
+   "type": "WFile"
+  },
+  {
+   "allocates": [],
+   "default": "opencarp::stringify(tsav[PrMelem1])",
+   "description": "Defines the filename for each saved state file. For multiple save states of the simulation, add the names for all savetimes in respective order to this array.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "tsav_ext[Int]",
+   "type": "WFile"
+  },
+  {
+   "allocates": [],
+   "default": null,
+   "description": "",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "tsav_ext",
+   "type": "{ num_tsav x WFile }"
+  },
+  {
+   "allocates": [],
+   "default": "tend-dt/1000.",
+   "description": "Defines the times at which to save the simulation state. Multiple saves for different times can be defined by adding the times to this array.",
+   "maximum": "num_tsav>1?tend:1.0e50",
+   "menu": [],
+   "minimum": "0.",
+   "name": "tsav[Int]",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": null,
+   "description": "",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "tsav",
+   "type": "{ num_tsav x Double }"
+  },
+  {
+   "allocates": [
+    "tsav",
+    "tsav_ext"
+   ],
+   "default": "0",
+   "description": "Defines the number of states to be saved. Each time instant of the simulation progression needs to be specified in 'tsav'.",
+   "maximum": "50",
+   "menu": [],
+   "minimum": "0",
+   "name": "num_tsav",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "100.",
+   "description": "Defines the default cell length.",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0.",
+   "name": "cell_length",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Flag to dump auxiliary simulation data. Can be combined (summed) to dump multiple data entries. 0 = Turned off. 1 = Dump membrance currents as Iion.igb and Ic.igb [uA/cm^2] to the simulation folder. 2 = Dump volumetric current, i.e. Ki Vm, as Ivol.igb [uA] to the simulation folder. 4 = Dump activating current, i.e. Ki Phie_i, as Iact.igb [uA] to the simulation folder.",
+   "maximum": "7",
+   "menu": [],
+   "minimum": "0",
+   "name": "dump_data",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Turns on/off displaying memory malloc info.",
+   "maximum": null,
+   "menu": [
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "display_meminfo",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "100.",
+   "description": "Defines the spatial tolerance when searching for a node.",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0.",
+   "name": "spacetol",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "1.",
+   "description": "Defines the temporal interval between progress updates made to the terminal. (For informational purposes only).",
+   "maximum": "tend",
+   "menu": [],
+   "minimum": "dt/1000.",
+   "name": "timedt",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "3.",
+   "description": "Defines the temporal interval to output data to files. It can only be as small as 'dt/1000'. For long simulations outputting every single calculated value, would yield terrabytes of data. So here you can reduce the outputted values.",
+   "maximum": "tend",
+   "menu": [],
+   "minimum": "dt/1000.",
+   "name": "spacedt",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "if option dataout_e == 3, extracellular output is restricted to the provided vertices.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "dataout_e_vtx",
+   "type": "RFile"
+  },
+  {
+   "allocates": [],
+   "default": "2",
+   "description": "Defines how extracellular grid data is outputted.",
+   "maximum": null,
+   "menu": [
+    "3",
+    "2",
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "dataout_e",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "if option dataout_i == 3, intracellular output is restricted to the provided vertices.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "dataout_i_vtx",
+   "type": "RFile"
+  },
+  {
+   "allocates": [],
+   "default": "2",
+   "description": "Defines how intracellular grid data is outputted.",
+   "maximum": null,
+   "menu": [
+    "3",
+    "2",
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "dataout_i",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "If not 0, writes partition index of each element as .dat file in simulation directory.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "gridout_p",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Defines if extracellular grid is outputted in simulation directory. Settings: 0=none, 1=surface, 2=volumetric mesh, 3=surface & volumetric mesh.",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0",
+   "name": "gridout_e",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Defines if intracellular grid is outputted in simulation directory. Settings: 0=none, 1=surface, 2=volumetric mesh, 3=surface & volumetric mesh.",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0",
+   "name": "gridout_i",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "\"phie_i\"",
+   "description": "IGB formatted file of extracellular potential (phie) on intracellular grid (only in presence of bath required).",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "phieifile",
+   "type": "WFile"
+  },
+  {
+   "allocates": [],
+   "default": "\"phie\"",
+   "description": "IGB formatted file of extracellular potential (phi).",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "phiefile",
+   "type": "WFile"
+  },
+  {
+   "allocates": [],
+   "default": "\"vm\"",
+   "description": "IGB formatted file of transmembrane voltages.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "vofile",
+   "type": "WFile"
+  },
+  {
+   "allocates": [],
+   "default": "\"MatLabDump\"",
+   "description": "Defines the basename for dumped files. Different endings will be attached to specify different variables: - _Ki & _Kie  ... for the intra- & extracellular stiffness matrices - _Mi & _Me   ... for the intra- & extracellular mass matrices - _i2e & _e2i ... for the intracellular-to-extracellular and vice-versa mappings - _Itr & _Ie  ... for the transmembrane- & extracellular currents",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "dump_basename",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Dumps stiffness and mass matrices, mappings and stimulation vectors to be used with MatLab to the simulation folder",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "dump2MatLab",
+   "type": "Flag"
+  },
+  {
+   "allocates": [],
+   "default": "1",
+   "description": "Defines the level of verbosity [0, 10] to the terminal output. 0 is considered minimal feedback to the user on the terminal.",
+   "maximum": "10",
+   "menu": [],
+   "minimum": "0",
+   "name": "output_level",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "PrMFALSE",
+   "description": "(deprecated) the build info is now shown by default. hence this flag has no effect.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "buildinfo",
+   "type": "Flag"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "The number of nodes to dedicate to doing IO",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "num_io_nodes",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "100.",
+   "description": "Defines the point in time when the simulation stops. To get a rough estimation for 'tend', multiply the number of stimulation pulses 'stimulation.npls' with the basic cycle length 'stimulation.bcl'. 'tend' then needs to be larger than 'stimulation.npls * stimulation.bcl' to cover your entire stimulation protocol.",
+   "maximum": null,
+   "menu": [],
+   "minimum": "dt/1000.",
+   "name": "tend",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "5.",
+   "description": "Defines the time step size to solve the numeric equations for. Check the first chapters of the openCARP manual for a comprehensive explanation on how to choose 'dt'.",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0.",
+   "name": "dt",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "\"OUTPUT_DIR\"",
+   "description": "Defines the Simulation ID to generate output directory. A good practice is to include date and time of the simulation in the 'simID'to avoid overwriting simulations. If 'simID' already exists, e.g the directory was created in a previous run, the user needs to decide on how to proceed (overwrite, append, abort) the simulation.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "simID",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Treat strengths as total current (uA)",
+   "maximum": "1",
+   "menu": [],
+   "minimum": "0",
+   "name": "stim[Int].crct.total_current",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "-1",
+   "description": "Defines whether the electrode is balancing another electrode. The balance value is interpreted as the electrode index to balance. The waveform is mirrored, but with opposite polarity. The volume/surface current is balanced exactly independent of the specific element arrangement around the stimulus node(s). If the balance value is -1, no balancing is applied.",
+   "maximum": "num_stim-1",
+   "menu": [],
+   "minimum": "-1",
+   "name": "stim[Int].crct.balance",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Defines the physics of the actual source used for stimulation and in some cases also the wiring of the electric stimulation circuit.",
+   "maximum": null,
+   "menu": [
+    "9",
+    "6",
+    "5",
+    "4",
+    "3",
+    "2",
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "stim[Int].crct.type",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "For volume based electrode definitions, vertices of this electrode are dumped to a file.",
+   "maximum": "1",
+   "menu": [],
+   "minimum": "0",
+   "name": "stim[Int].elec.dump_vtx_file",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "2",
+   "description": "This value defines the geometry used for the electrode. For now only predefined geometries are supported.",
+   "maximum": null,
+   "menu": [
+    "5",
+    "4",
+    "3",
+    "2",
+    "1"
+   ],
+   "minimum": null,
+   "name": "stim[Int].elec.geom_type",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "100.",
+   "description": "Used to describe the profile chosen in electrode.geom_type. - If sphere was chosen, this value is sets the radius of the sphere. - If box was chosen, this value is not necessary/ignored. Use TagRegion.p1 & TagRegion.p0 instead. - If cylinder was chosen, this value is sets the radius of the cylinder.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stim[Int].elec.radius",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "cell_length",
+   "description": "Used to describe the profile chosen in electrode.geom_type. - If sphere was chosen, this value is not necessary/ignored. Use TagRegion.radius instead. - If box was chosen, this value describes the upper right corner of box. - If cylinder was chosen, this value describes the end of the cylinders main axis. - For sphere & cylinder the additional parameter electrode.radius is needed. - For box & cylinder the additional parameter electrode.p0 is needed.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stim[Int].elec.p1[Int]",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": null,
+   "description": "",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stim[Int].elec.p1",
+   "type": "{ 3 x Float }"
+  },
+  {
+   "allocates": [],
+   "default": "0.",
+   "description": "Used to describe the profile chosen in electrode.geom_type. - If sphere was chosen, this value describes the center of the sphere. - If box was chosen, this value describes the lower left corner of box. - If cylinder was chosen, this value describes the start of the cylinders main axis. - For sphere & cylinder the additional parameter electrode.radius is needed. - For box & cylinder the additional parameter electrode.p1 is needed.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stim[Int].elec.p0[Int]",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": null,
+   "description": "",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stim[Int].elec.p0",
+   "type": "{ 3 x Float }"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Whether the electrode is spatially constant (homogenous) or varying (inhomogenous).Spatially inhomogenous stimulations need to be defined via a .vtx file that includes nodes and nodal scaling.",
+   "maximum": null,
+   "menu": [
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "stim[Int].elec.vtx_fcn",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "File name allowing a vertex based electrode definition. Using a non-empty stringswitches to vertex-based definition and ignores other settings. For file format specifications check the first chapters of the openCARP manual.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stim[Int].elec.vtx_file",
+   "type": "RFile"
+  },
+  {
+   "allocates": [],
+   "default": "1",
+   "description": "tissue domains affected",
+   "maximum": null,
+   "menu": [
+    "3",
+    "2",
+    "1"
+   ],
+   "minimum": null,
+   "name": "stim[Int].elec.domain",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "-1",
+   "description": "region ID defining an electrode's geometry, standard block defs are used if set to -1.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stim[Int].elec.geomID",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "List of activation times (float), defining the stim protocol. Entries are separated by a comma (,). The list should be surrounded by quotes. An activation time can also be expressed as an increment to the previous activation, by starting with a '+', e.g.: '0,+240'",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stim[Int].ptcl.stimlist",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "tend-stim[PrMelem1].ptcl.start",
+   "description": "Defines the basic cycle length for repetitive stimulation. protocol.duration must be smaller than protocol.bcl, as it specifies the duration of a single stimulation event.The full protocol duration is protocol.npls * protocol.bcl. This is derived automatically from the user input.",
+   "maximum": "tend-stim[PrMelem1].ptcl.start",
+   "menu": [],
+   "minimum": "stim[PrMelem1].ptcl.duration",
+   "name": "stim[Int].ptcl.bcl",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "tend > 0 ? 1 : 0",
+   "description": "Defines the number of pulses in the stimulation protocol. The period of pulses can be set with bcl in ms.If set to 0, the stimulus will have a single instance.",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0",
+   "name": "stim[Int].ptcl.npls",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "tend-stim[PrMelem1].ptcl.start",
+   "description": "Defines the duration of one a single stimulation event.",
+   "maximum": "tend-stim[PrMelem1].ptcl.start",
+   "menu": [],
+   "minimum": "0.",
+   "name": "stim[Int].ptcl.duration",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "0.",
+   "description": "Defines the start time of the stimulation protocol",
+   "maximum": "tend",
+   "menu": [],
+   "minimum": "0.",
+   "name": "stim[Int].ptcl.start",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Label of protocol used (S1-S2, restitution, etc). This helps with structuring extensive parameter lists and makes them more human readable.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stim[Int].ptcl.name",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "1.",
+   "description": "Defines the frequency (not angular frequency!) of the sine wave when used with pulse.shape = 2.",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0.00001",
+   "name": "stim[Int].pulse.freq",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "0.",
+   "description": "Defines the phase shift of the sine wave when used with pulse.shape = 2. Phase shift is calculated by `pulse.phase/180*PI`.",
+   "maximum": "2*3.1415926",
+   "menu": [],
+   "minimum": "0.",
+   "name": "stim[Int].pulse.phase",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "0.25",
+   "description": "Defines the time relative to ptcl.start at which the square wave is triggered (pulse.shape = 0).",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0.",
+   "name": "stim[Int].pulse.trig",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "0.",
+   "description": "Defines a constant term which is added to the stimulus pulse.shape = 1.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stim[Int].pulse.bias",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "1000.",
+   "description": "Defines a time constant governing plateau of pulse (>10^5 is infinite). A larger tau_plateau will result in a longer plateauphase. Further parameters to define biphasic stimuli are: pulse.d1, pulse.s2, pulse.tau_edge, pulse.strength, pulse.bias, ptcl.duration",
+   "maximum": "1000000.",
+   "menu": [],
+   "minimum": "0.1",
+   "name": "stim[Int].pulse.tau_plateau",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "0.01",
+   "description": "Defines the time constant governing leading and trailing edge of pulse. The formulation used resembles the equation: Amp * (1 - exp( -t/tau_edge)) * exp( -t/tau_plateau ). A larger tau_edge will result in a fast drop, while a smaller tau_edge will have a longer exponentialy decreasing flank. Further parameters to define biphasic stimuli are: pulse.d1, pulse.s2, pulse.tau_plateau, pulse.strength, pulse.bias, ptcl.duration",
+   "maximum": "1000.",
+   "menu": [],
+   "minimum": "0.",
+   "name": "stim[Int].pulse.tau_edge",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "0.",
+   "description": "This value is only used for defining a biphasic pulse. This value is a relative value and defines the stimulus strength of the trailing pulse (after 0 crossing) relative to leading pulse (from start to 0 crossing). Giving the value 0 will result in a flip of polarity. Further parameters to define biphasic stimuli are: pulse.d1, pulse.tau_edge, pulse.tau_plateau, pulse.strength, pulse.bias, ptcl.duration",
+   "maximum": "10.",
+   "menu": [],
+   "minimum": "0.",
+   "name": "stim[Int].pulse.s2",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "1.0",
+   "description": "This parameter is used to introduce biphasic stimulation pulses. It specifies the duration of the first part of the pulse relative to the duration of the entire pulse (1.0 = monophasic). Further parameters to define biphasic stimuli are: pulse.s2, pulse.tau_edge, pulse.tau_plateau, pulse.strength, pulse.bias, ptcl.duration",
+   "maximum": "1.0",
+   "menu": [],
+   "minimum": "0.",
+   "name": "stim[Int].pulse.d1",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "0.",
+   "description": "Defines strength of prescribed stimulation. Strength is defined as amplitude of signal. If dealing with currents it is defined as uA/volume. If dealing with voltages it is defined as mV. To create a stimulation the minimum requirement is a given ptcl.duration and pulse.strength",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stim[Int].pulse.strength",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Reads in pulse definition from external file. Strength of external pulse shape definition can be adjusted with pulse.strength. For file format specifications check the first chapters of the openCARP manual.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stim[Int].pulse.file",
+   "type": "RFile"
+  },
+  {
+   "allocates": [],
+   "default": "1",
+   "description": "Defines the shape of the prescribed pulse if an implemented pulseform is chosen (see choices below). To impose a manually created stimulus use the pulse.file functionality. By default, the pulse shape is defined as a monophasic pulse of square-like shape of a certain duration and strength. There are two time constants: - tau_edge, governs the leading and trailing edges of the pulse. - tau_plateau, governs the plateau phase. By default, these time constants are set to yield essentially a square-like pulse shape, but can be easily adjusted to generate truncated exponential-like pulses. Biphasic shapes are specified by two additional parameters, the duration of the first part of the pulse relative to the duration of the entire pulse (specified by pulse.d1 in range of [0,1] ), and the strength of the second part of the pulse relative to the strength of the first part (specified by pulse.s2 in range of [0,1] ). To create a stimulation the minimum requirement is a given ptcl.duration and pulse.strength",
+   "maximum": null,
+   "menu": [
+    "2",
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "stim[Int].pulse.shape",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Definition of the Label for the prescribed pulse waveform",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stim[Int].pulse.name",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Definition of the label for a single electrode",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stim[Int].name",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Set true to specify stimulation strengths on a nodal basis. The specific values need to be provided in the stimulus.vtx_file. For file format specifications check the first chapters of the openCARP manual. !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stimulus[Int].vtx_fcn",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Stimulus dependent auxiliary data. Used for presribed takeoff and prescribed phie. !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stimulus[Int].data_file",
+   "type": "RFile"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Reads in pulse definition from an external file. For file format specifications check the first chapters of the openCARP manual. !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stimulus[Int].pulse_file",
+   "type": "RFile"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Treat strengths as total current (uA) and not density !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": "1",
+   "menu": [],
+   "minimum": "0",
+   "name": "stimulus[Int].total_current",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "-1",
+   "description": "Defines whether the electrode is balancing another electrode. The balance value is interpreted as the electrode index to balance. The waveform is mirrored, but with opposite polarity. If the balance value is -1, no balancing is applied. !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": "num_stim-1",
+   "menu": [],
+   "minimum": "-1",
+   "name": "stimulus[Int].balance",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Defines the stimulus type. Closed loop stimuli return to ground (0 mV) when expired. Open loop stimuli are removed entirely when expired. !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": null,
+   "menu": [
+    "9",
+    "6",
+    "5",
+    "4",
+    "3",
+    "2",
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "stimulus[Int].stimtype",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "0.0",
+   "description": "Defines a constant term which is added to the stimuluspulse. !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stimulus[Int].bias",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "1000.",
+   "description": "Defines a time constant governing plateau of pulse (>10^5 is infinite) A larger tau_plateau will result in a longer plateauphase. Other important parameters for stimulus form definition are: stimulus.tau_edge, stimulus.tau_plateau, stimulus.strength, stimulus.duration !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": "1000000.",
+   "menu": [],
+   "minimum": "0.1",
+   "name": "stimulus[Int].tau_plateau",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "0.01",
+   "description": "Defines the time constant governing leading and trailing edge of pulse. The formulation used resembles the equation: Amp * (1 - exp( -t/tau_edge)) * exp( -t/tau_plateau ). A larger tau_edge will result in a fast drop, while a smaller tau_edge will have a longer exponentialy decreasing flank. Other important parameters for stimulus form definition are: stimulus.tau_edge, stimulus.tau_plateau, stimulus.strength, stimulus.duration !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": "1000.",
+   "menu": [],
+   "minimum": "0.",
+   "name": "stimulus[Int].tau_edge",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "0.",
+   "description": "This value is only used for defining a biphasic pulse. This value is a relative value and defines the stimulus strength of the trailing pulse (after zero crossing) relative to leading pulse (from start to zero crossing). Giving the value 0 will result in a flip of polarity Other important parameters for stimulus form definition are: stimulus.tau_edge, stimulus.tau_plateau, stimulus.strength, stimulus.duration !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": "10.",
+   "menu": [],
+   "minimum": "0.",
+   "name": "stimulus[Int].s2",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "0.",
+   "description": "Defines strength of prescribed stimulation. Strength is defined as amplitude of signal. If dealing with currents it is defined as uA/volume. If dealing with voltages it is defined as mV. To create a stimulation the minimum requirement is a given stimulus.duration and stimulus.strength. This creates a monophasic stimulus. For biphasic stimuli check stimulus.s2 and stimulus.d1. For more advanced pulsesignals introduce them using a pulse file with stimulus.pulse_file !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stimulus[Int].strength",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "1.0",
+   "description": "This parameter is used to introduce biphasic stimulation pulses. It specifies the duration of the first part of the pulse relative to the duration of the entire pulse (1.0 = monophasic). Further parameters to define biphasic stimuli are: stimulus.strength, stimulus.s2, stimulus.tau_edge and stimulus.tau_plateau !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": "1.0",
+   "menu": [],
+   "minimum": "0.",
+   "name": "stimulus[Int].d1",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "tend-stimulus[PrMelem1].start",
+   "description": "Defines the duration of one a single stimulation event. !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": "tend-stimulus[PrMelem1].start",
+   "menu": [],
+   "minimum": "0.",
+   "name": "stimulus[Int].duration",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "tend > 0 ? 1 : 0",
+   "description": "Defines the number of pulses in the stimulation protocol. The period of pulses can be set with bcl in ms. If set to 0, the stimulus will have a single instance. !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": "tend > 0 ? 1+tend/stimulus[PrMelem1].bcl : 0",
+   "menu": [],
+   "minimum": "0",
+   "name": "stimulus[Int].npls",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "tend-stimulus[PrMelem1].start",
+   "description": "Defines the basic cycle length for repetitive stimulation. Duration must be smaller than bcl, as it specifies the duration of a single stimulation event. The full protocol duration is npls * bcl. This is derived automatically from the user input. !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": "tend-stimulus[PrMelem1].start",
+   "menu": [],
+   "minimum": "stimulus[PrMelem1].duration",
+   "name": "stimulus[Int].bcl",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "0.",
+   "description": "Defines the start time when the stimulationpulse is introduced !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": "tend",
+   "menu": [],
+   "minimum": "0.",
+   "name": "stimulus[Int].start",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "-1",
+   "description": "Refers to a region ID to be used as geometry definition for the stimulus electrode !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stimulus[Int].geometry",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "setting this to 1 yields limits in the form of [x0-xd/2,x0+xd/2] for x,y and z. Setting to 0 yields [x0,x0+xd] for x,y and z. !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stimulus[Int].ctr_def",
+   "type": "Flag"
+  },
+  {
+   "allocates": [],
+   "default": "cell_length",
+   "description": "z dimension of electrode volume. This will give the limits [z0,z0+zd]. To change this to [z0-zd/2,z0+zd/2] use stimulus.ctr_def !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0.",
+   "name": "stimulus[Int].zd",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "cell_length",
+   "description": "y dimension of electrode volume. This will give the limits [y0,y0+yd]. To change this to [y0-yd/2,y0+yd/2] use stimulus.ctr_def !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0.",
+   "name": "stimulus[Int].yd",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "cell_length",
+   "description": "x dimension of electrode volume. This will give the limits [x0,x0+xd]. To change this to [x0-xd/2,x0+xd/2] use stimulus.ctr_def !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0.",
+   "name": "stimulus[Int].xd",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "0.",
+   "description": "Lower z ordinate of electrode volume (zd defines the spatial electrode extension in z) !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stimulus[Int].z0",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "0.",
+   "description": "Lower y ordinate of electrode volume (yd defines the spatial electrode extension in y) !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stimulus[Int].y0",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "0.",
+   "description": "Lower x ordinate of electrode volume (xd defines the spatial electrode extension in x) !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stimulus[Int].x0",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "For volume based electrode definitions, vertices of this electrode are dumped to a file. The output file name is electrode_num.stim !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": "1",
+   "menu": [],
+   "minimum": "0",
+   "name": "stimulus[Int].dump_vtx_file",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "File name allowing a vertex based electrode definition. Using a non-empty string switches to vertex-based definition and ignores other settings. For file format specifications check the first chapters of the openCARP manual. !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stimulus[Int].vtx_file",
+   "type": "RFile"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Definition of the label for a single electrode. !!!! The stimulus[] parameter was declared legacy. Please use stim[] !!!!",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stimulus[Int].name",
+   "type": "String"
+  },
+  {
+   "allocates": [
+    "stim",
+    "stimulus"
+   ],
+   "default": "2",
+   "description": "Defines the number of stimuli.",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0",
+   "name": "num_stim",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "1",
+   "description": "toggles operator splitting",
+   "maximum": null,
+   "menu": [
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "operator_splitting",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "1",
+   "description": "toggles mass matrix lumping",
+   "maximum": null,
+   "menu": [
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "mass_lumping",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "27",
+   "description": "Assumed average number of entries per PETSc matrix row timportant for memory preallocation. !!!! This parameter is unsupported in openCARP, but kept for compatibility with CARPentry !!!!",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "mat_entries_per_row",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "2",
+   "description": "Defines the preconditioning method to ensure fast convergence of the conjugate gradient method.",
+   "maximum": null,
+   "menu": [
+    "3",
+    "2",
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "cg_precond",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Choose solvers for the parabolic PDE from: - PETSc, then set to 0, or - PT, then set to 1.",
+   "maximum": "1",
+   "menu": [],
+   "minimum": "0",
+   "name": "parab_use_pt",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "100",
+   "description": "maximum number of iterations for iterative solver of parabolic PDE.",
+   "maximum": "1000",
+   "menu": [],
+   "minimum": "0",
+   "name": "cg_maxit_parab",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Pick a norm for checking convergence of parabolic solve (PETSc solvers only, ignored with PT)",
+   "maximum": null,
+   "menu": [
+    "3",
+    "2",
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "cg_norm_parab",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "1.0e-8",
+   "description": "conjugate gradient solver tolerance for parabolic problem",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "cg_tol_parab",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Choose solvers for the elliptic PDE from: - PETSc, then set to 0, or - PT, then set to 1.",
+   "maximum": "1",
+   "menu": [],
+   "minimum": "0",
+   "name": "ellip_use_pt",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "500",
+   "description": "Defines the maximum number of iterations for iterative solver of elliptic PDE.",
+   "maximum": "10000",
+   "menu": [],
+   "minimum": "0",
+   "name": "cg_maxit_ellip",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Pick a norm for checking convergence of elliptic solve for PETSc solvers",
+   "maximum": null,
+   "menu": [
+    "3",
+    "2",
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "cg_norm_ellip",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "1.0e-8",
+   "description": "conjugate gradient solver tolerance for elliptic problem",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "cg_tol_ellip",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "When bidomain mode is turned off, i.e. '-bidomain=0', set phi_e to be utterly determined by the extracellular stimuli.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "extracell_monodomain_stim",
+   "type": "Flag"
+  },
+  {
+   "allocates": [],
+   "default": "1",
+   "description": "Defines the number of ode solves per global dt",
+   "maximum": "10",
+   "menu": [],
+   "minimum": "1",
+   "name": "ode_fac",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "1",
+   "description": "Defines the number of parabolic solves per global dt",
+   "maximum": "100",
+   "menu": [],
+   "minimum": "1",
+   "name": "par_fac",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "1",
+   "description": "Defines the number of Vm solves per phi_e solve",
+   "maximum": "1000",
+   "menu": [],
+   "minimum": "1",
+   "name": "vm_per_phie",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "0.",
+   "description": "Time after stimulus ends to continue FEM solve.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "stimactivedelay",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "1",
+   "description": "Use monodomain conductivities that are equivalent to the bidomain.",
+   "maximum": null,
+   "menu": [
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "bidm_eqv_mono",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "File containing PETSc or Ginkgo options for parabolic solver",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "parab_options_file",
+   "type": "RFile"
+  },
+  {
+   "allocates": [],
+   "default": "0.5",
+   "description": "Defines the weight given to solution at t(n+1) when using Crank-Nicolson (theta) method",
+   "maximum": "0.99",
+   "menu": [],
+   "minimum": "0.1",
+   "name": "theta",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "1",
+   "description": "Defines the solution method for the parabolic problem",
+   "maximum": null,
+   "menu": [
+    "2",
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "parab_solve",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Reference node which is clamped to zero for elliptic solve prior to shifting phie average to zero. !!!! This parameter is unsupported in openCARP, but kept for compatibility with CARPentry !!!!",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0",
+   "name": "floating_ground_refnode",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Enforces average extracellular potential to be zero. !!!! This parameter is unsupported in openCARP, but kept for compatibility with CARPentry !!!!",
+   "maximum": "1",
+   "menu": [],
+   "minimum": "0",
+   "name": "floating_ground",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "File containing PETSc or Ginkgo options for elliptic solver. For all available PETSc options refer to the PETSc documentation.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "ellip_options_file",
+   "type": "RFile"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Device ID used for the Ginkgo backend.",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0",
+   "name": "device_id",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "\"ref\"",
+   "description": "Defines the hardware backend used by Ginkgo.",
+   "maximum": null,
+   "menu": [
+    "\"dpcpp\"",
+    "\"hip\"",
+    "\"cuda\"",
+    "\"omp\"",
+    "\"ref\""
+   ],
+   "minimum": null,
+   "name": "ginkgo_exec",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "\"petsc\"",
+   "description": "String defining the backend to be used",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "flavor",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Defines the solving method for elliptic problems. - Direct is typically more accurate but memory consuming. - Iterative methods are more suitable for large problems.",
+   "maximum": null,
+   "menu": [
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "ellip_solve",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "1.0001",
+   "description": "Amount of imbalance to tolerate in parmetis partitioning",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "pstrat_imbalance",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "1",
+   "description": "Defines the partitioning strategy for the intracellular grid !!!! This parameter is unsupported in openCARP, but kept for compatibility with CARPentry !!!!",
+   "maximum": null,
+   "menu": [
+    "2",
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "pstrat_i",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "2",
+   "description": "Defines the partitioning strategy.",
+   "maximum": null,
+   "menu": [
+    "2",
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "pstrat",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Defines if the simulation is solved using the monodomain, bidomain or pseudo-bidomain approach. - Monodomain model (less costly). Dervied from bidomain under the assumption that intracellular and extracellular tensors are related. - Bidomain model solves for both the intra- & extracellular space. - Pseudo-bidomain model (monodomain model with adjustments to account for bath loading effects).",
+   "maximum": null,
+   "menu": [
+    "2",
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "bidomain",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Post-processing Options, add up option numbers to use multiple options",
+   "maximum": null,
+   "menu": [
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "post_processing_opts",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Defines how the simulation will be solved and what will be outputted",
+   "maximum": null,
+   "menu": [
+    "4",
+    "3",
+    "2",
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "experiment",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "\"POSTPROC_DIR\"",
+   "description": "Defines the name of the output directory in post processing mode. - It comes into play when choosing 'experiment 4'. - If it is specified, it must not already exist. - A folder with the default name will be created, if it is not specified.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "ppID",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Defines an output file storing the element labels after applying all 'dynamic' tagreg choices to the input mesh.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "retagfile",
+   "type": "WFile"
+  },
+  {
+   "allocates": [],
+   "default": "100.",
+   "description": "Used to describe the profile chosen in tagregion.type in more detail. - If sphere was chosen, this value is the radius of the sphere. - If box was chosen, this value is not necessary/ignored. Use tagregion.p0 & tagregion.p1 instead. - If cylinder was chosen, this value is the radius of the cylinder.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "tagreg[Int].radius",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "0.",
+   "description": "Used to describe the profile chosen in tagregion.type in more detail. - If sphere was chosen, this value is not necessary/ignored. Use tagregion.radius instead. - If box was chosen, this value describes the upper right corner of the box. - If cylinder was chosen, this value describes the center of the cylinders' top. - For sphere & cylinder the additional parameter tagregion.radius is needed. - For box & cylinder the additional parameter tagregion.p0 is needed.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "tagreg[Int].p1[Int]",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": null,
+   "description": "",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "tagreg[Int].p1",
+   "type": "{ 3 x Float }"
+  },
+  {
+   "allocates": [],
+   "default": "0.",
+   "description": "Used to describe the profile chosen in tagregion.type in more detail. - If sphere was chosen, this value describes the center of the sphere. - If box was chosen, this value describes the lower left corner of the box. - If cylinder was chosen, this value describes the center of the cylinders' base. - For sphere & cylinder the additional parameter tagregion.radius is needed. - For box & cylinder the additional parameter tagregion.p1 is needed.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "tagreg[Int].p0[Int]",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": null,
+   "description": "",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "tagreg[Int].p0",
+   "type": "{ 3 x Float }"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Name of file with list of elements to be assigned to this region. The file needs the extension .regele with the format being the number of elements followed by one element number per line",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "tagreg[Int].elemfile",
+   "type": "RFile"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Defines whether a mesh element needs to be fully enclosed by the tagreg.type definition to become part of this region. 1 = all nodes of each element need to be fully contained inside tagreg.type 0 = a single node of an element within tagreg.type is sufficient to become a member of this region",
+   "maximum": "1",
+   "menu": [],
+   "minimum": "0",
+   "name": "tagreg[Int].no_elem_split",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "1",
+   "description": "Defines profile of region. 1-3 are predefined shapes while 4 can be used to create own region profile.",
+   "maximum": null,
+   "menu": [
+    "4",
+    "3",
+    "2",
+    "1"
+   ],
+   "minimum": null,
+   "name": "tagreg[Int].type",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Label for a region in the mesh. This helps with structuring extensive parameter lists and makes them more human readable.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "tagreg[Int].name",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "321",
+   "description": "New tag for a region in the mesh. Each element in this region is re-assigned this tag. In general, each element in a mesh is designated as part of a region. Electrical or mechanical properties are assigned based on region definitions.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "tagreg[Int].tag",
+   "type": "Int"
+  },
+  {
+   "allocates": [
+    "tagreg"
+   ],
+   "default": "0",
+   "description": "Defines the number of regions to retag",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0",
+   "name": "numtagreg",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "2",
+   "description": "Mesh format ID",
+   "maximum": null,
+   "menu": [
+    "2",
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "meshformat",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Basename for .lon file holding orthotropy data that is used for output purposed, e.g. strain in this fiber direction. !!!! This parameter is unsupported in openCARP, but kept for compatibility with CARPentry !!!!",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "orthoname_output",
+   "type": "WFile"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Toggle automatic fiber orthogonalization",
+   "maximum": "1",
+   "menu": [],
+   "minimum": "0",
+   "name": "orthogonalize",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Basename for lon file holding orthotropy data !!!! This parameter is unsupported in openCARP, but kept for compatibility with CARPentry !!!!",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "orthoname",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "\"project\"",
+   "description": "Defines the basename for mesh files",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "meshname",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "PrMFALSE",
+   "description": "Compute mesh statistic parameters (only edge lengths at this point).",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "mesh_statistics",
+   "type": "Flag"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Dump nodal adjustments for state variables for display on intra grid",
+   "maximum": "1",
+   "menu": [],
+   "minimum": "0",
+   "name": "adjustment[Int].dump",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Defines the filename filled with nodal adjustments for the state variable",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "adjustment[Int].file",
+   "type": "RFile"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Defines the name of the variable that should be adjusted on initialization. The variable name should be defined as an external variable like 'Lambda', or an ionic model variable like 'LR1.tau_f_factor' in the cellmodel file.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "adjustment[Int].variable",
+   "type": "String"
+  },
+  {
+   "allocates": [
+    "adjustment"
+   ],
+   "default": "0",
+   "description": "Size of the adjustment array.",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0",
+   "name": "num_adjustments",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "0.",
+   "description": "Defines the conductivity fluctuation in percent.",
+   "maximum": "100.0",
+   "menu": [],
+   "minimum": "0.0",
+   "name": "fluct",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "1",
+   "description": "Defines the seed for the random generator",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "rseed",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "flag controling whether to dump nodal ionic region indices. output file name is 'imp_region.dat'",
+   "maximum": null,
+   "menu": [
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "dump_imp_region",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "0.22",
+   "description": "Parameter 'c_i' of triple Gaussian: 'sum_i (a_i exp(-(x - b_i)^2/c_i^2)) i = 1,2,3'",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "imp_region[Int].dream.Idiff.gamma_i[Int]",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": null,
+   "description": "",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "imp_region[Int].dream.Idiff.gamma_i",
+   "type": "{ 3 x Double }"
+  },
+  {
+   "allocates": [],
+   "default": "2.383",
+   "description": "Parameter 'b_i' of triple Gaussian: 'sum_i (a_i exp(-(x - b_i)^2/c_i^2)) i = 1,2,3'",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "imp_region[Int].dream.Idiff.beta_i[Int]",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": null,
+   "description": "",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "imp_region[Int].dream.Idiff.beta_i",
+   "type": "{ 3 x Double }"
+  },
+  {
+   "allocates": [],
+   "default": "149.5",
+   "description": "Parameter 'a_i' of triple Gaussian: 'sum_i (a_i exp(-(x - b_i)^2/c_i^2)) i = 1,2,3'",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "imp_region[Int].dream.Idiff.alpha_i[Int]",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": null,
+   "description": "",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "imp_region[Int].dream.Idiff.alpha_i",
+   "type": "{ 3 x Double }"
+  },
+  {
+   "allocates": [],
+   "default": "-30.",
+   "description": "Intrinsic excitation threshold of the cellular dynamics model used for foot current",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "imp_region[Int].dream.Idiff.V_th",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "0.25",
+   "description": "Time constant tau_F of the foot current '-A_F/tau_F exp((t - t_a)/tau_F) e_on e_off'",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "imp_region[Int].dream.Idiff.tau_F",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "0.91",
+   "description": "Constant A_F of the foot current '-A_F/tau_F exp((t - t_a)/tau_F) e_on e_off'",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "imp_region[Int].dream.Idiff.A_F",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Defines the equation used for diffusion current approximation in reaction-eikonal or DREAM models. - Foot current: '-A_F/tau_F exp((t - t_a)/tau_F) e_on e_off' - Triple Gaussian: 'sum_i (a_i exp(-((t - t_a) - b_i)^2/c_i^2)) i = 1,2,3'",
+   "maximum": null,
+   "menu": [
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "imp_region[Int].dream.Idiff.model",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "159.",
+   "description": "Defines the parameter psi of the CV restitution formula: 'v_ref * (1 - rho * exp(-log(rho)/psi * (DI + kappa))), if DI > theta'",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0.",
+   "name": "imp_region[Int].dream.CVrest.psi",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "137.",
+   "description": "Defines the parameter theta of the CV restitution formula: 'v_ref * (1 - rho * exp(-log(rho)/psi * (DI + kappa))), if DI > theta'",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0.",
+   "name": "imp_region[Int].dream.CVrest.theta",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "53.",
+   "description": "Defines the parameter kappa of the CV restitution formula: 'v_ref * (1 - rho * exp(-log(rho)/psi * (DI + kappa))), if DI > theta'",
+   "maximum": null,
+   "menu": [],
+   "minimum": "-100000.",
+   "name": "imp_region[Int].dream.CVrest.kappa",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "811.",
+   "description": "Defines the parameter rho of the CV restitution formula: 'v_ref * (1 - rho * exp(-log(rho)/psi * (DI + kappa))), if DI > theta'",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0.",
+   "name": "imp_region[Int].dream.CVrest.rho",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "0.14",
+   "description": "Defines the default single cell surface-to-volume-ratio used if it is not specified by the ionic model plugin (IMP).",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0.",
+   "name": "imp_region[Int].cellSurfVolRatio",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "1.",
+   "description": "Defines the portion of the volume occupied by cells.",
+   "maximum": "1.",
+   "menu": [],
+   "minimum": "0.",
+   "name": "imp_region[Int].volFrac",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "User can modify the values for various ionic model parameters. Every PARAMETER=VALUE modification needs to be separated with a comma.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "imp_region[Int].plug_param",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "This produces a colon separated lists of state variables of a plugin to dump (use bench --imp=XXX --plug-in=YYY --imp-info to get a list of SVs for imp XXX and plug-in YYY)",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "imp_region[Int].plug_sv_dumps",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Specify a comma separated list of state variables of an ionic model to be dumped into the simulation folder. Use bench --imp=XXX --imp-info to get a list of SVs for imp XXX.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "imp_region[Int].im_sv_dumps",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "strcmp(imp_region[PrMelem1].im,TO_STRING(DiFranNoble))?                               TO_STRING():TO_STRING(G_Na*3)",
+   "description": "Specify a comma separated list of changes from default values, e.g. 'APDshorten*4,Gks*1.29,...'.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "imp_region[Int].im_param",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "-1",
+   "description": "Array of non-negative element tags associated with this model region.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "imp_region[Int].ID[Int]",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": null,
+   "description": "",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "imp_region[Int].ID",
+   "type": "{ imp_region[PrMelem1].num_IDs x Int }"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Number of elements tags listed in 'imp_region[].ID[]'.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "imp_region[Int].num_IDs",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "strncmp(TO_STRING(imp_region[PrMelem1]),TO_STRING(PurkIon),7)?                            TO_STRING(Myocardium):TO_STRING(Purkinje)",
+   "description": "Defines the symbolic name of region. This helps with structuring extensive parameter lists and makes them more human readable.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "imp_region[Int].name",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Specify a colon separated list of plug-ins to use with the ionic model. Query for available plug-ins by calling 'bench --plugin-outputs'.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "imp_region[Int].plugins",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Name of the file containing the initial of state variable values.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "imp_region[Int].im_sv_init",
+   "type": "RFile"
+  },
+  {
+   "allocates": [],
+   "default": "TO_STRING(LuoRudy91)",
+   "description": "Defines the ionic model to be used in the simulation. Query for available ionic models by calling 'bench' with the command list-imps.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "imp_region[Int].im",
+   "type": "String"
+  },
+  {
+   "allocates": [
+    "imp_region"
+   ],
+   "default": "1",
+   "description": "Number of different region definitions.",
+   "maximum": null,
+   "menu": [],
+   "minimum": "1",
+   "name": "num_imp_regions",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "0.",
+   "description": "Set to 1 if the state variable is not in a region.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "gvec[Int].bogus",
+   "type": "Float"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "If the state variable is defined in a plugin, specify the plugin name here.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "gvec[Int].imp",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Units of the state variables to be written in the header of the ouput igb file.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "gvec[Int].units",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "gvec[PrMelem1].name",
+   "description": "Defines the list of state variable names in a region, which are combined into a global vector. For example gvec[0].ID[0] = 'Cai'",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "gvec[Int].ID[Int]",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": null,
+   "description": "",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "gvec[Int].ID",
+   "type": "{ num_imp_regions x String }"
+  },
+  {
+   "allocates": [],
+   "default": "\"sv\"",
+   "description": "Defines the name of the output file for the global state variable.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "gvec[Int].name",
+   "type": "WFile"
+  },
+  {
+   "allocates": [
+    "gvec"
+   ],
+   "default": "0",
+   "description": "Specify the number of global state variable vector definitions.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "num_gvecs",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Path to element-wise vector for conduction velocity scaling",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "cv_scale_vec",
+   "type": "RFile"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Path to element-wise vector with extra-cellular conductivity scaling",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "ge_scale_vec",
+   "type": "RFile"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Path to element-wise vector with intra-cellular conductivity scaling",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "gi_scale_vec",
+   "type": "RFile"
+  },
+  {
+   "allocates": [],
+   "default": "400.",
+   "description": "Defines the normal conduction velocity for the eikonal model.",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0.",
+   "name": "gregion[Int].dream.vel_n",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "600.",
+   "description": "Defines the transversal conduction velocity for the eikonal model.",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0.",
+   "name": "gregion[Int].dream.vel_t",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "1000.",
+   "description": "Defines the conduction velocity along the fiber direction (longitudinal) for the eikonal model",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0.",
+   "name": "gregion[Int].dream.vel_l",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "-1",
+   "description": "Specify a list of model regions (equivalent to mesh element tags, non-negative) using this conductivity setting.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "gregion[Int].ID[Int]",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": null,
+   "description": "",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "gregion[Int].ID",
+   "type": "{ gregion[PrMelem1].num_IDs x Int }"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Shows how many model regions use this conductivity setting",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "gregion[Int].num_IDs",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Symbolic description of this conductive region (e.g. bath, cavity etc.)",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "gregion[Int].name",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "1.",
+   "description": "Defines the isotropic conductivity for non-myocardium domain, e.g blood. The absence of anisotropy is assumed for this region. If anisotropy is required use a negative tag for the mesh elements in the .elem file and set fibre direction in the .lon file.",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0.",
+   "name": "gregion[Int].g_bath",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "0.236",
+   "description": "Defines the extracellular conductivity in the sheet-normal direction (normal).",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0.",
+   "name": "gregion[Int].g_en",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "0.019",
+   "description": "Defines the intracellular conductivity in the sheet-normal direction (normal).",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0.",
+   "name": "gregion[Int].g_in",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "0.236",
+   "description": "Defines the extracellular conductivity in sheet direction (transversal).",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0.",
+   "name": "gregion[Int].g_et",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "0.019",
+   "description": "Defines the intracellular conductivity in sheet direction (transversal).",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0.",
+   "name": "gregion[Int].g_it",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "0.625",
+   "description": "Defines the extracellular conductivity along the fiber direction (longitudinal).",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0.",
+   "name": "gregion[Int].g_el",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "0.174",
+   "description": "Defines the intracellular conductivity along the fiber direction (longitudinal).",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0.",
+   "name": "gregion[Int].g_il",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "1.0",
+   "description": "Defines the factor by which all conductivities in the region should be multiplied (after all other modifications are performed).",
+   "maximum": null,
+   "menu": [],
+   "minimum": "0.",
+   "name": "gregion[Int].g_mult",
+   "type": "Float"
+  },
+  {
+   "allocates": [
+    "gregion"
+   ],
+   "default": "1",
+   "description": "Defines the total number of regions with respectively different conductivity settings.",
+   "maximum": null,
+   "menu": [],
+   "minimum": "1",
+   "name": "num_gregions",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "strlen(phie_rec_ptf)>0?0:1",
+   "description": "Dump recovered phie data from nodes stored in 'phie_rec_ptf'. The stated node file may contain arbitrary nodes of interest. In the case of an ecg recording, the spatial coordinates of LA, RA, LF, V1-V6 need to be provided.",
+   "maximum": "1",
+   "menu": [],
+   "minimum": "0",
+   "name": "dump_ecg_leads",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "1",
+   "description": "Defines the method for recovering phie with monodomain runs.",
+   "maximum": null,
+   "menu": [
+    "3",
+    "2",
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "phie_rec_meth",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "\"phie_recovery\"",
+   "description": "Defines the file name used to output recovered extracellular potentials. Output granularity is defined by 'spacedt'.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "phie_recovery_file",
+   "type": "WFile"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Defines the basename for the phie recovery file. This file specifies the phie recovery points. Use the same convention and format as for the mesh points file (see the first chapters of the openCARP manual file format section). Provide the filename without extension.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "phie_rec_ptf",
+   "type": "WFile"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "If set to 1, the overall stimulation protocol will be outputted as a trace file.",
+   "maximum": "1",
+   "menu": [],
+   "minimum": "0",
+   "name": "dump_protocol",
+   "type": "Short"
+  },
+  {
+   "allocates": [],
+   "default": "timedt",
+   "description": "Time resolution to print out trace info.",
+   "maximum": null,
+   "menu": [],
+   "minimum": "dt/1000.",
+   "name": "tracedt",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "0",
+   "description": "Nodes at which to gather trace information.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "trace_node[Int]",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": null,
+   "description": "",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "trace_node",
+   "type": "{ num_trace x Int }"
+  },
+  {
+   "allocates": [
+    "trace_node"
+   ],
+   "default": "0",
+   "description": "Number of nodes at which to gather trace info.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "num_trace",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Gives colon separated list of parameters for objects",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "rt_lib_args",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Gives a colon separated list of runtime shared object libraries",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "rt_lib",
+   "type": "String"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "Defines external imp modules to read into openCARP. Multiple imps can be grouped using a comma seperated list which can be used here.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "external_imp[Int]",
+   "type": "RFile"
+  },
+  {
+   "allocates": [],
+   "default": null,
+   "description": "",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "external_imp",
+   "type": "{ num_external_imp x RFile }"
+  },
+  {
+   "allocates": [
+    "external_imp"
+   ],
+   "default": "0",
+   "description": "Defines the number of models to read in from external libraries",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "num_external_imp",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "-1",
+   "description": "Log detailed solver data for specified node ID. Should only be used for debugging.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "dream.output.debugNode",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "\"\"",
+   "description": "IGB formatted file of approx. diffusion current (optional). Output is foot current or triple gaussian NOT actual diffusion.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "dream.output.idifffile",
+   "type": "WFile"
+  },
+  {
+   "allocates": [],
+   "default": "\"rpt\"",
+   "description": "IGB formatted file of recovery times. Updated only after every eikonal cycle, hence 'time steps' in the file should be interpreted as cycles.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "dream.output.rtfile",
+   "type": "WFile"
+  },
+  {
+   "allocates": [],
+   "default": "\"act\"",
+   "description": "IGB formatted file of activation times. Updated only after every eikonal cycle, hence 'time steps' in the file should be interpreted as cycles.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "dream.output.atfile",
+   "type": "WFile"
+  },
+  {
+   "allocates": [],
+   "default": "5",
+   "description": "Maximum number of allowed coherence iterations (DREAM only).",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "dream.fim.max_coh",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "50",
+   "description": "Maximum number of times a node can be added to the list per cycle (DREAM only).",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "dream.fim.max_addpt",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "50",
+   "description": "Eikonal/RE: maximum number of FIM iterations. Larger, more complex meshes need more iterations. Otherwise, there might be non-activated nodes left. DREAM: maximum number of list iterations that each node is allowed to stay in the list per cycle.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "dream.fim.max_iter",
+   "type": "Int"
+  },
+  {
+   "allocates": [],
+   "default": "0.1",
+   "description": "Fast iterative method solver tolerance for eikonal problem.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "dream.fim.tol",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "-40.",
+   "description": "Threshold for annotating repolarization time when crossed with negative slope",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "dream.repol_time_thresh",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "10.0",
+   "description": "Maximum allowed difference of activation time values among nodes in the active list of fast iterative method.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "dream.tau_max",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "100.0",
+   "description": "Maximum allowed increment of min activation time in every DREAM cycle.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "dream.tau_inc",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "10.0",
+   "description": "Minimum allowed difference between min activation time and simulation time.",
+   "maximum": null,
+   "menu": [],
+   "minimum": null,
+   "name": "dream.tau_s",
+   "type": "Double"
+  },
+  {
+   "allocates": [],
+   "default": "2",
+   "description": "Defines if the simulation is solved using the eikonal model, reaction-eikonal+ model, reaction-eikonal- model or DREAM. - Eikonal. Fast solver for activation times. - Reaction-eikonal+. Diffusion is taken into account. Depolarization is initiated by a foot current. Only available with parabolic solver. - Reaction-eikonal-. Diffusion is neglected. Depolarization is initiated by a foot current. Only available with parabolic solver. - Diffusion reaction eikonal alternant model (DREAM). Enables reactivation of nodes in the eikonal solver and supports reentries.",
+   "maximum": null,
+   "menu": [
+    "3",
+    "2",
+    "1",
+    "0"
+   ],
+   "minimum": null,
+   "name": "dream.solve",
+   "type": "Short"
+  }
+ ]
+}

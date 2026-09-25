@@ -32,6 +32,7 @@ appear in output are redacted.
 | B6 | `openCARP +Default +Save defaults.par` | nothing written, exit 1 | no defaults export by this route |
 | B8 | `openCARP +Help 'phys_region[0].ID'`, `'phys_region[Int].ID'`; then `'phys_region[0].ID[0]'` | the first two print the general list; the element prints a full detail block (`type: Int`, `default: (Int)(0)`) | **a whole-array shorthand (type `{ N x T }`) has no detail block under any spelling; only its elements do.** The catalog records a shorthand from its list line alone |
 | B9 | the planned `catalog_generation.build_catalog()`, run against the binary (plan Task 9 dry run) | 266 parameters in about 35 s; identity `v18.1` + hash, no URL; 16 shorthands; 11 count keys (e.g. `num_stim → stim, stimulus`, `num_LATs → lats`); `compute_APD` default `PrMFALSE`; `spacedt` max `tend` | the generator's parse matches every value Task 9's tests expect |
+| B7 | `DYLD_LIBRARY_PATH=/opt/homebrew/lib /tmp/odconf-trackB/bin/python scripts/generate-opencarp-catalog.py` (Task 9, 2026-09-25) | 266 parameters in 36.3 s (`time`, user+sys); identity `{tag: v18.1, hash: 6eaa147d...}`, no URL; type histogram 53 Float, 52 Int, 40 Short, 35 Double, 30 String, 18 RFile, 14 WFile, 7 Flag, 1 Long, plus 16 whole-array shorthand forms (266 total); 11 count keys | matches B9's dry run exactly; `grep -i "gitlab\|token"` on the committed JSON finds nothing (G3 held); committed and drift-gated by `test_catalog_native.py` |
 
 ## C. Native examples
 

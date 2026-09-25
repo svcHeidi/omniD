@@ -76,8 +76,9 @@ def test_the_scan_root_resolves() -> None:
         "omnidriver",
         "omnidriver-cardiaccore",
         "omnidriver-cardiacfoam",
+        "omnidriver-opencarp",
         "omnidriver-openfoam",
-    ], "all four packages must be scanned, or this guard proves nothing"
+    ], "all five packages must be scanned, or this guard proves nothing"
 
 
 def test_no_shipped_module_imports_the_pre_migration_package() -> None:

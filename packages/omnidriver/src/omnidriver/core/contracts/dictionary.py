@@ -56,7 +56,7 @@ VALUE_KINDS = frozenset({
     "scalar", "integer", "boolean", "word", "enum", "vector3",
     "dimensioned_scalar", "dimensioned_tensor",
     "word_list", "scalar_list", "vector3_list", "integer_list",
-    "mapping",
+    "mapping", "string",
 })
 
 #: Element shape for each typed-list kind, reusing the singular check.
@@ -98,6 +98,10 @@ def validate_value_shape(kind: str, value: Any) -> tuple[str, ...]:
         return ()
     if kind == "boolean":
         return () if isinstance(value, bool) else ("must be a boolean",)
+    if kind == "string":
+        # K6 (spec 2026-09-25 §5): any text, including empty or with spaces.
+        # openCARP's String/RFile/WFile parameters need it; ``word`` refuses both.
+        return () if isinstance(value, str) else ("must be a string",)
     if kind in {"word", "enum"}:
         if not isinstance(value, str) or not value:
             return ("must be a non-empty word",)
