@@ -100,6 +100,16 @@ at 0.5; with a plain `lc = 0.5;` assignment the flag is ignored (45 nodes).
 (`plan_block_mesh_resolution` plus the per-dimension formula), N → gmsh
 `-setnumber lc`, the dt unit conversion (`plan_delta_t`).
 
+> **Corrected 2026-09-25 (owner, step 3 scope change).** OpenFOAM owns only
+> the blockMesh-resolution axis (`block_mesh_resolution_axis`, built on
+> `plan_block_mesh_resolution`). gmsh is not part of OpenFOAM: its `lc ->
+> -setnumber` derivation is a derived function of whichever cardiac record
+> meshes with gmsh (step 5), not this package's. The dt unit conversion is
+> not needed at all -- it existed only because the old Python kwargs spoke
+> milliseconds; studies now name real keys directly (e.g.
+> `system/controlDict:deltaT` in seconds), so there is nothing left to
+> convert.
+
 **cardiacFOAM package.**
 
 - A tutorial is a data record: name, native case path, allowed axes, workflow
@@ -210,7 +220,9 @@ close-out search.
 2. Core: the axis contract, name sorting, conflict refusal, "unchanged"
    reporting, the `unvalidated` flag, the static gate (on from the start,
    scoped to the new registration and axis modules).
-3. OpenFOAM package: the generic axes.
+3. OpenFOAM package: the generic axes. **Corrected 2026-09-25 (owner):**
+   this is `block_mesh_resolution_axis` only -- gmsh `lc` and the dt unit
+   conversion moved out of this step; see §3's own dated correction.
 4. Pilot `cable1DRestitution`: registration, axes, rewritten native study;
    match the old module's output on the real case; then delete the old module,
    its defaults and its tests.
@@ -233,3 +245,32 @@ close-out search.
 - Artifact staging (placing a source file such as a Purkinje graph into a
   case). `manufacturedPurkinjeGraph` and `manufacturedMonodomain1D3D` still
   need it; they are migrated last, or wait for it.
+
+## Status (added 2026-09-25)
+
+Steps 1-3 of §7's order of work are done, each verified in all four suite
+shapes (`packages/ -q -m "not slow and not native"`, core alone, the
+installed wheel, and `-m native` against the real
+`noFrontendCardiacFoam_minor_errors` tutorials tree) plus the three static
+gates (`check-import-boundaries.py`, `export-capability-seams.py --check`,
+`check-case-writes.py`), all 0 failed.
+
+| step | what | commits |
+|---|---|---|
+| 1 | Delete `heartSolverComparison` | `4ee4354` |
+| 2 | Core: axis contract, name sorting, conflict refusal, "unchanged" reporting, `unvalidated` flag, the static gate | `4ee4354..2c6c964` (`git log 0edb21e..HEAD`) |
+| 3 | OpenFOAM package: the generic axes -- scope-changed by the owner (2026-09-25) to `block_mesh_resolution_axis` only; see §3/§7's own dated corrections above for why gmsh `lc` and the dt unit conversion moved out | `f178f1a` (core: pin the axis-map duplicate-name refusal), `3fa1170` (openfoam: `block_mesh_resolution_axis` + unit/native tests) |
+
+Step 3's own note for step 5: multi-dimension tutorials will need an axis
+that reads a SECOND study value (e.g. `N` together with `dimension`, to pick
+which `blockMeshDict.<dim>` document to patch) -- `AxisFunction` today is
+`Callable[[value, staged_case_root], AxisResult]` and sees only the one
+value it was invoked with. The minimal contract change: let an
+`AxisContract` declare the OTHER study names it reads (e.g.
+`reads_also: frozenset[str] = frozenset()`), and have
+`resolve_case_patches` resolve those named values from the same
+`study_by_source` and pass them alongside the axis's own value -- refused
+by name (before `resolve` ever runs) when a declared name is absent from
+the study, the same "refuse by name before anything runs" posture every
+other axis refusal already has. Not built here: step 5 decides it, once a
+cardiac record actually needs it.
