@@ -37,6 +37,7 @@ def _read_config_value_by_key_path(file_path: Path, key_path):
     Python happily iterates character-by-character) is refused by name
     instead of silently misinterpreted.
     """
+    from .case_planning import HEX_CELL_COUNTS_KEY_PATH, read_hex_cell_counts
     from .mutators import read_foam_entry
 
     if isinstance(key_path, str):
@@ -48,8 +49,42 @@ def _read_config_value_by_key_path(file_path: Path, key_path):
     segments = tuple(key_path)
     if not segments:
         raise ValueError("a config value read needs a non-empty key path")
+    if segments == HEX_CELL_COUNTS_KEY_PATH:
+        # The one synthetic key path this reader answers specially (step 4a,
+        # 2026-09-25): `plan_block_mesh_resolution`'s own target shape has no
+        # single literal dictionary key (module docstring), so
+        # `read_hex_cell_counts` parses the `hex (` grammar directly rather
+        # than going through `read_foam_entry`'s scope/key split below.
+        return read_hex_cell_counts(file_path)
     *scope, key = segments
     return read_foam_entry(file_path, key, scope=list(scope) if scope else None)
+
+
+def _case_value_agree(value_kind: str, requested, current) -> bool:
+    """``CaseValueComparisonCapability``'s one answer for a whole OpenFOAM-
+    owned stack (design doc
+    ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md``
+    §5, step 4a).
+
+    ``get_case_value_comparator`` is a ``single``-shape composed member
+    (``provider_stack._SHAPE["get_case_value_comparator"] == "single"``):
+    this is the ONLY implementation on a real stack today (no cardiacFOAM
+    plugin declares its own), so it must be correct for every
+    ``value_kind`` a study might name, cardiac or OpenFOAM-owned alike --
+    and it is, because it does not attempt to dispatch on ``value_kind`` at
+    all. ``effective_values_agree`` (``apply_overrides.py``) already
+    dispatches purely on the REQUESTED value's own Python type (a bool
+    compares as a bool, a number as a float, a list/tuple/parenthesised
+    vector as a tuple of floats, anything else as text) -- exactly the
+    "typed, not string equality" comparison design step 4a asks for, reused
+    rather than re-implemented. ``value_kind`` is accepted only to satisfy
+    the capability's own contract (``(value_kind, requested, current) ->
+    bool``); nothing here branches on it.
+    """
+    from .apply_overrides import effective_values_agree
+
+    del value_kind
+    return effective_values_agree(requested, current)
 
 
 class OpenFOAMEnvironmentPlugin:
@@ -157,6 +192,9 @@ class OpenFOAMEnvironmentPlugin:
 
     def get_config_value_reader(self):
         return _read_config_value_by_key_path
+
+    def get_case_value_comparator(self):
+        return _case_value_agree
 
     def get_selected_start_time(self, case_root, resolved_case) -> str:
         del resolved_case

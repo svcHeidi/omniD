@@ -68,14 +68,18 @@ from typing import Any, Callable
 
 from omnidriver.core.tutorial_records import AxisContract, AxisPatch, AxisResult
 
-from ..case_planning import plan_block_mesh_resolution
+from ..case_planning import HEX_CELL_COUNTS_KEY_PATH, plan_block_mesh_resolution
 
 #: The synthetic key path every patch this axis produces carries -- not a
 #: literal ``blockMeshDict`` dictionary key (there is none for "every hex
 #: block's cell counts"), but the same field name
 #: ``plan_block_mesh_resolution``'s own target dict already uses for this
-#: edit, reused rather than re-named.
-_HEX_CELL_COUNTS_KEY_PATH = ("hex_cell_counts",)
+#: edit. Owned by ``case_planning.py`` (step 4a, 2026-09-25) -- imported
+#: here, not redeclared, so this axis and the ``ConfigValueCapability``
+#: reader for the same key (``case_planning.read_hex_cell_counts``, wired
+#: through ``environment._read_config_value_by_key_path``) share one
+#: spelling of the convention.
+_HEX_CELL_COUNTS_KEY_PATH = HEX_CELL_COUNTS_KEY_PATH
 
 
 def _validate_cell_counts(

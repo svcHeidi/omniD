@@ -46,6 +46,11 @@ provides:
   - override_scopes
   - config_value
   - dict_key_scanner
+  # Added step 4a (2026-09-25, tutorial-records design doc §5):
+  # get_case_value_comparator returns `_case_value_agree`, a real
+  # (non-stub) typed comparison delegating to `apply_overrides
+  # .effective_values_agree` -- not a constant, not an unconditional `None`.
+  - case_value_comparison
 case_profile:
   dictionaries:
     - path: system/controlDict

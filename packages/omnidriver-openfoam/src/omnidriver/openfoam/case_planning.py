@@ -14,11 +14,24 @@ entirely from that directory, but this module is never named there.
 """
 
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any, Mapping
 
 from omnidriver.core.case_write import ParameterAssignment
 
 from .literals import _format_value
+
+#: The synthetic key path a ``blockMeshDict``'s hex-block cell counts are
+#: addressed at -- design's own words: "there is no single ``key_path`` a
+#: caller could name" for rewriting every ``hex (`` line, so this stands in
+#: for one (see :func:`plan_block_mesh_resolution`'s docstring). Owned here,
+#: beside the planner that defines the ``"hex_cell_counts"`` field name
+#: itself, so :mod:`.axes.block_mesh_resolution` (the axis that produces a
+#: patch at this key path) and :func:`read_hex_cell_counts`/
+#: :func:`.environment._read_config_value_by_key_path` (the reader that
+#: answers "what is it now") share ONE spelling of the convention rather than
+#: three independently-typed copies of the literal ``("hex_cell_counts",)``.
+HEX_CELL_COUNTS_KEY_PATH: tuple[str, ...] = ("hex_cell_counts",)
 
 #: `system/controlDict` is a fixed, case-relative location -- the same for
 #: every OpenFOAM case, never derived from a caller-supplied path. Unlike
@@ -227,6 +240,63 @@ def plan_block_mesh_resolution(
         "hex_cell_counts": _format_value(cell_counts_str),
         "expected_blocks": expected_blocks,
     }
+
+
+def read_hex_cell_counts(
+    document_path: Path, *, expected_blocks: int = 1,
+) -> str | None:
+    """``ConfigValueCapability``'s reader for the synthetic
+    ``HEX_CELL_COUNTS_KEY_PATH`` -- the current cell counts of a
+    ``blockMeshDict``'s (single) ``hex (`` block, in the exact same string
+    shape :func:`plan_block_mesh_resolution`'s own patch value carries (e.g.
+    ``"80 80 80"``), so a study restating the case's own current resolution
+    is reported ``unchanged`` by ``tutorial_records.split_unchanged`` rather
+    than compared against a differently-shaped answer.
+
+    Mirrors ``_rewrite_hex_block_lines``'s own grammar (a non-comment line
+    stripped-starting with ``"hex ("``, split on ``") ("`` then
+    ``") simpleGrading"``) rather than sharing code with it: that function
+    REWRITES every matching line as it goes and raises through its own
+    ``expected_blocks`` check; this one only ever READS, and is called from a
+    different capability (`ConfigValueCapability`, not the case-writer
+    render path) with no case-relative ``label`` to name in an error the way
+    the renderer's caller does. A change to one's grammar must be mirrored in
+    the other's.
+
+    ``None`` when ``document_path`` does not exist -- design's own
+    "unchanged... never silently reported without a reader to back it"
+    posture: an absent document is "cannot determine", not "zero blocks",
+    and ``split_unchanged`` already treats a ``None`` current value as
+    "changed", never as a false "unchanged".
+
+    Refuses BY NAME (raises ``KeyError``) when other than exactly
+    ``expected_blocks`` real ``hex (`` lines are found -- consistent with the
+    renderer's own default (``plan_block_mesh_resolution``'s
+    ``expected_blocks=1``): a document meant to carry more than one hex block
+    (e.g. bathBidomain's three-block ``blockMeshDict.3D``) has no single
+    "the" current resolution this reader could report, and reporting one
+    block's count while silently ignoring the others would be worse than
+    refusing.
+    """
+    path = Path(document_path)
+    if not path.is_file():
+        return None
+    text = path.read_text()
+    counts: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("hex (") and not stripped.startswith("//"):
+            _prefix, _, suffix = line.partition(") (")
+            if not suffix:
+                continue
+            counts_text, _, _trailing = suffix.partition(") simpleGrading")
+            counts.append(counts_text)
+    if len(counts) != expected_blocks:
+        raise KeyError(
+            f"expected {expected_blocks} hex ( block(s) in {path}, found "
+            f"{len(counts)}"
+        )
+    return counts[0]
 
 
 def plan_dict_block(
