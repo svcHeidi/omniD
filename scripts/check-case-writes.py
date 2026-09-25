@@ -62,7 +62,12 @@ RECORDS_SRC = (
 PLANNERS_SRC = (
     REPO_ROOT / "packages/omnidriver-openfoam/src/omnidriver/openfoam/case_planning.py"
 )
-SCANNED_ROOTS: tuple[Path, ...] = (AXES_SRC, RECORDS_SRC, PLANNERS_SRC)
+# openCARP's own record modules (Task 11 onward), scoped narrowly the same
+# way: records address a study key and return a patch, they never write one.
+OPENCARP_RECORDS_SRC = (
+    REPO_ROOT / "packages/omnidriver-opencarp/src/omnidriver/opencarp/records"
+)
+SCANNED_ROOTS: tuple[Path, ...] = (AXES_SRC, RECORDS_SRC, PLANNERS_SRC, OPENCARP_RECORDS_SRC)
 
 # Forbidden by full or partial dotted module name: importing ANY name from
 # these modules is a writer import, regardless of which name is imported
@@ -81,6 +86,10 @@ FORBIDDEN_IMPORT_MODULES: tuple[str, ...] = (
     "omnidriver.openfoam.apply_overrides",
     "omnidriver.core.case_transaction",
     "omnidriver.cardiacfoam.overrides",
+    # openCARP's plugin module holds the renderer (patch_par/write): a record
+    # or axis module that reaches it would be a write path this gate cannot
+    # see through the plugin's own indirection.
+    "omnidriver.opencarp.plugin",
 )
 
 # Forbidden by imported/bound NAME, regardless of which module it came from

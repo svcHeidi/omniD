@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "omnidriver-opencarp"
+version = "0.1.0"
+description = "openCARP cardiac electrophysiology plugin for OmniD, driven as binary + .par + mesh."
+requires-python = ">=3.11"
+dependencies = ["omnidriver>=0.1.0"]
+
+[project.entry-points."omnidriver.plugins"]
+opencarp = "omnidriver.opencarp.plugin:OpenCARPPlugin"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"omnidriver.opencarp" = ["opencarp.yaml", "opencarp_parameters.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests"]
+addopts = "--import-mode=importlib"
+markers = [
+    "native: needs OMNIDRIVER_OPENCARP_TUTORIALS and the openCARP binary; fails (not skips) if unset",
+]

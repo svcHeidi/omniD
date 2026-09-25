@@ -20,7 +20,9 @@ markers = [
     # rather than skips, when that variable is unset: the point is to catch
     # a run that meant to exercise the real tree but forgot to supply it, not
     # to quietly pass over it. Deselect explicitly with -m "not native".
-    "native: needs OMNIDRIVER_NATIVE_TUTORIALS; fails (not skips) if unset",
+    # openCARP's native tests need OMNIDRIVER_OPENCARP_TUTORIALS instead (its
+    # own tutorials tree and the real binary), under the same rule.
+    "native: needs OMNIDRIVER_NATIVE_TUTORIALS or OMNIDRIVER_OPENCARP_TUTORIALS; fails (not skips) if unset",
 ]
 addopts = "--import-mode=importlib"
 pythonpath = [
@@ -35,4 +37,5 @@ pythonpath = [
     "packages/omnidriver-openfoam/tests",
     "packages/omnidriver-cardiacfoam/tests",
     "packages/omnidriver-cardiaccore/tests",
+    "packages/omnidriver-opencarp/tests",
 ]

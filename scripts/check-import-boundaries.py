@@ -48,6 +48,10 @@ OPENFOAM_SRC = REPO_ROOT / "packages/omnidriver-openfoam/src/omnidriver/openfoam
 # dependency of the other -- the producer/consumer seam between them is meant
 # to be declared and mediated, not imported.
 CARDIACCORE_SRC = REPO_ROOT / "packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore"
+# openCARP is a fifth, independent adapter (packages/omnidriver-opencarp):
+# neither OpenFOAM nor either cardiac adapter's vocabulary belongs in it, and
+# it must not import foamlib either -- it drives a different binary entirely.
+OPENCARP_SRC = REPO_ROOT / "packages/omnidriver-opencarp/src/omnidriver/opencarp"
 
 # Waived pre-existing violations. This list may only SHRINK. A new violation
 # fails the gate; a waiver that no longer matches anything also fails it, so
@@ -150,6 +154,13 @@ def main() -> int:
             path,
             ("omnidriver.cardiacfoam",),
             CARDIACCORE_SRC,
+        ))
+
+    for path in OPENCARP_SRC.rglob("*.py"):
+        found.extend(_check_file(
+            path,
+            ("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam", "omnidriver.cardiaccore"),
+            OPENCARP_SRC,
         ))
 
     waived = {key for key, _ in found if key in KNOWN_VIOLATIONS}
