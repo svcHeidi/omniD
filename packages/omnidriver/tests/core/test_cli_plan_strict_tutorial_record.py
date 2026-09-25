@@ -169,3 +169,35 @@ def test_a_config_reader_refusal_comes_back_as_structured_json_naming_document_a
     assert payload["status"] == "failed"
     assert "constant/mesh.json:cells" in payload["error"]
     assert TOY_REFUSAL in payload["error"]
+
+
+def test_plan_strict_against_a_read_only_tree_without_a_scratch_dir_refuses_as_json_S_I3(
+    tmp_path, capsys, monkeypatch,
+):
+    """Final review S-I3: a record's scratch defaults to
+    ``<cases_root>/.omnidriver``. Against a read-only tutorials tree (openCARP's
+    installer leaves its tree root-owned) with ``OMNIDRIVER_SCRATCH_DIR``
+    unset, ``plan --strict`` died with a ``PermissionError`` traceback and
+    empty stdout. The default itself is the owner's pending decision; the
+    refusal is now JSON naming the variable to set."""
+    import os
+    import stat
+
+    cases_root = _native_toy_case(tmp_path)
+    monkeypatch.delenv("OMNIDRIVER_SCRATCH_DIR", raising=False)
+    cases_root.chmod(stat.S_IRUSR | stat.S_IXUSR)
+    try:
+        if os.access(cases_root, os.W_OK):
+            pytest.fail("cannot make a read-only cases root here (running as root?); this test needs one")
+        exit_code = main([
+            "plan", "--strict", "--plugin", "plugins.e2e_record_plugin:E2ERecordPlugin",
+            "--entry", "toyTutorial", "--cases-root", str(cases_root),
+        ])
+    finally:
+        cases_root.chmod(stat.S_IRWXU)
+    assert exit_code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "failed"
+    assert "OMNIDRIVER_SCRATCH_DIR" in payload["error"]
+    assert str(cases_root / ".omnidriver") in payload["error"]
+    assert not (cases_root / ".omnidriver").exists()

@@ -586,14 +586,28 @@ def _strict_plan_for_record(
         "sweep": {},
     }
     staged_case_root = scratch_root(cases_root) / "records" / record.name
-    _commit_result, spec = commit_and_build_record_spec(
-        record,
-        case_id=record.name,
-        cases_root=cases_root,
-        staged_case_root=staged_case_root,
-        study_by_source=study_by_source,
-        driver_context=driver_context,
-    )
+    try:
+        _commit_result, spec = commit_and_build_record_spec(
+            record,
+            case_id=record.name,
+            cases_root=cases_root,
+            staged_case_root=staged_case_root,
+            study_by_source=study_by_source,
+            driver_context=driver_context,
+        )
+    except PermissionError as exc:
+        # Final review S-I3 (2026-09-25): the default scratch is
+        # <cases_root>/.omnidriver, so against a read-only native tree (as
+        # openCARP's installer leaves its tutorials) staging died with a bare
+        # traceback. Where the default should point is the owner's pending
+        # decision; this only makes the failure a refusal that says what to
+        # supply.
+        raise TutorialRecordError(
+            f"tutorial record {entry!r} cannot be staged under {staged_case_root}: {exc}. "
+            "Planning a record against a read-only or native tutorials tree needs "
+            "OMNIDRIVER_SCRATCH_DIR set to a writable directory outside it (the default "
+            "is <cases_root>/.omnidriver)"
+        ) from exc
     report = _strict_plan_for_spec(
         entry,
         spec,

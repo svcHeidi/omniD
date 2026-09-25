@@ -1,6 +1,12 @@
 # openCARP through omniD
 
 Study keys are `<file>.par:<parameter>`, e.g. `nversion.par:gregion[0].g_il`.
+
+Before `plan`/`run` against openCARP's tutorials tree, set
+`OMNIDRIVER_SCRATCH_DIR` to a writable directory outside it. A record stages
+its case under `<cases_root>/.omnidriver` by default, which in an installed
+tree is root-owned (the plan is refused) and in a source build would write
+into the native tree (final review S-I3).
 `describe` lists every parameter with its type, default and bounds.
 
 - Flags: write `true`/`false` in a study; omniD writes `1`/`0`. openCARP reads
