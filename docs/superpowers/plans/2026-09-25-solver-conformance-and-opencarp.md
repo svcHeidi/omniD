@@ -3140,10 +3140,13 @@ The owner's gaps 1 and 3 (2026-09-25). Without this, `describe` shows cardiacFOA
 
 - [ ] **Step 3: Declare the observed paths on the record's steps.** Re-run: C6 and C8 should now pass, and C10 should fail with "no key catalogue".
 
-- [ ] **Step 4: cardiacFOAM's record surface (C10).** On `CardiacFoamPlugin`:
-  - `get_record_key_catalog(case_root)` returns one entry per `DictEntry` in its existing catalogue whose document exists under `case_root`. Map fields as: `document`, `key` = the entry's key path joined with `.`, `value_kind`, `default` = `typical_value`, `description`. Read the `DictEntry` field names first with `grep -n "class DictEntry" -A 30 packages/omnidriver/src/omnidriver/core/contracts/dictionary.py`, and map exactly what they are. The catalogue is the one source; this only re-shapes it.
-  - `get_agent_guidance()` returns cardiacFOAM's solver-level notes. These are the rules its validator and catalogues already enforce, stated for a reader (e.g. which `system/*` keys are written `unvalidated`). No new facts.
-  - The case README reaches agents through the `case.documentation` role that cardiacFOAM's profile already declares.
+- [ ] **Step 4: cardiacFOAM's record surface (C10).** *Corrected 2026-09-25 (Wave 2 review, I5): re-shaping `DictEntry` directly cannot pass C10.* `DictEntry` has no document field, its `driver_path` carries `$ELECTRO_MODEL_COEFFS`, and dynamic entries carry named segments such as `regions.<region_name>.baseline`. Four decisions follow, all made here, before this step starts:
+  1. **Concretise tokens from the case.** `CardiacFoamPlugin.get_record_key_catalog(case_root)` replaces `$ELECTRO_MODEL_COEFFS` with the case's own `<solver>Coeffs`, reusing `record_key_validation`'s existing substitution. It reads `myocardiumSolver` from `case_root`, and never keeps a second list. The document comes from the entry's catalogue partition.
+  2. **Core's key-template grammar gains one named-segment placeholder** (a core change, with its own commit and generality-log row). In a catalogue key, `[Int]` stands for any index and `<name>` for any single dot-free segment. C10 compiles a listed key to a pattern on that basis, replacing its `_ANY_INDEX` normalisation. Document both forms in the `get_record_key_catalog` docstring and the record-surface docs, with tests for each.
+  3. **Honest open documents.** A catalogue may list a document-level entry `{"document": "system/controlDict", "key": "<any>", "validated": False}` for a document whose keys are written but have no catalogue (OpenFOAM keys; memory: OpenFOAM keys uncatalogued). C10 accepts an entry without `value_kind` only when `validated` is `False`. A patch key matches such an entry only through its document.
+  4. **One canonical catalogue for records.** For a tutorial record, `describe` carries keys only in `record_surface.keys`, and drops `dict_entries` from that record's payload (a core change in `introspection._describe_tutorial_record`, with a generality-log row). Factory and case-folder entries keep `dict_entries` until the factory path is deleted.
+  
+  `get_agent_guidance()` returns cardiacFOAM's solver-level notes: the rules its validator and catalogues already enforce, stated for a reader, with no new facts. The case README reaches agents through the `case.documentation` role cardiacFOAM's profile already declares.
 
   Re-run until C1–C10 pass, then commit:
   ```bash
