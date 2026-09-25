@@ -180,7 +180,7 @@ class OpenCARPPlugin:
         return dict(env)
 
     def get_log_redaction_patterns(self):
-        return REDACTION_PATTERNS     # consumed once Task 12 lands; harmless before
+        return REDACTION_PATTERNS     # consumed by core's redact_step_logs (K9); corrected 2026-09-25, was "once Task 12 lands"
 
     # -- record surface (C10, Task 10a)
     def get_record_key_catalog(self, case_root):

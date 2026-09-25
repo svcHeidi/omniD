@@ -14,10 +14,13 @@ SOLVER_COMMANDS = frozenset({"openCARP"})
 AUXILIARY_COMMANDS = frozenset({"mesher", "igbextract", "igbhead"})
 # G3: every openCARP run prints its build header, whose repository line
 # embeds a CI token. The whole credential part of any such URL is replaced.
-# Consumed by Task 12's log redaction (core workflow_runner / runtime_evidence);
-# declaring it here is harmless before that lands (get_log_redaction_patterns
-# is not yet called by anything, so this pattern is not yet exercised).
-REDACTION_PATTERNS = (r"(https?://)[^/\s@]+(?=@)",)
+# Core's workflow_runner.redact_step_logs replaces every match whole, so the
+# pattern matches only the credential (review I3, 2026-09-25: it was
+# ``(https?://)[^/\s@]+(?=@)``, relying on a keep-group-1 rule core no
+# longer has). Corrected 2026-09-25: this said the pattern was not yet called
+# by anything; Task 12 consumes it, and test_conformance_native.py's
+# test_no_token_survives_in_workflow_logs exercises it on the real binary.
+REDACTION_PATTERNS = (r"(?<=://)[^/\s@]+(?=@)",)
 
 
 def opencarp_environment_diagnostics(workflow_dag: Mapping[str, Any], env: Mapping[str, str]) -> tuple[StrictDiagnostic, ...]:
