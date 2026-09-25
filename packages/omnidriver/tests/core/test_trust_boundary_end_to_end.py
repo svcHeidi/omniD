@@ -838,7 +838,7 @@ def test_override_values_containing_a_coded_entry_are_rejected() -> None:
     """Asserts the *mitigated* behaviour: `step --apply` refuses an override
     whose value smuggles executable OpenFOAM code into a case dictionary.
 
-    `mutators._format_value` (tier 1, the path almost every override takes)
+    `literals._format_value` (tier 1, the path almost every override takes)
     now rejects any override value containing `#`, `;`, or a newline before
     it is ever written to a case dictionary file. See SECURITY.md.
 

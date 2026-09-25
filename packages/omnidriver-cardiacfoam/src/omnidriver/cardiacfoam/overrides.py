@@ -202,7 +202,7 @@ _TEXT_PARSERS: dict[str, Any] = {
 #: `apply_entry_overrides`'s transitional writer **only** when it has a
 #: typed value with no preserved raw-text evidence (see that function).
 #: Deliberately narrower than `_TEXT_PARSERS`: `boolean` is excluded, because
-#: `mutators._format_value` already renders a plain Python `bool` correctly
+#: `literals._format_value` already renders a plain Python `bool` correctly
 #: ("yes"/"no") -- unlike a dimensioned mapping, a vector3 tuple, or a list
 #: tuple, which it renders wrong (`str(...)` on the container itself). Adding
 #: `boolean` here would change what an already-typed `True`/`False` (e.g.
