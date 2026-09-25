@@ -147,3 +147,42 @@ session scratchpad, never in the native tree.
 - **G5:** `run.py`'s example flow passes `-dt`, `-tend` and `-mass_lumping` on
   the command line. They are ordinary `.par` parameters, so omniD writes them
   into the staged `nversion.par`, keeping one source of values: the case.
+
+## H. omniD drives openCARP
+
+Task 11: `OpenCARPPlugin` (`packages/omnidriver-opencarp/src/omnidriver/opencarp/plugin.py`)
+and the `niedererNVersion` record (`.../records/niederer_n_version.py`), run
+against the real `openCARP` v18.1 binary and its own
+`02_EP_tissue/03E_study_resolution` tutorial. All ten conformance checks
+(`omnidriver.conformance.CHECKS`) pass, with `base_study = {dx: 1000.0,
+nversion.par:tend: 10.0, nversion.par:dt: 50.0}` (G7: pinned for a short run).
+No core file changed (`packages/omnidriver/src` untouched by this task); see
+the generality log's 2026-09-25 "no core change needed" row.
+
+| check | verdict detail |
+|---|---|
+| C1 | stack `['org.omnidriver.opencarp']`, root `org.omnidriver.opencarp` |
+| C2 | no changes proposed |
+| C3 | refused: validating `nversion.par:gregion[0].g_ill` raised `TutorialRecordError`: `nversion.par:gregion[0].g_ill` is not an openCARP v18.1 parameter |
+| C4 | patched one key; its sibling is unchanged |
+| C5 | ok; launch `['.../bin/python', '-m', 'omnidriver', 'run', '--plugin', 'opencarp', '--run-document', '.../scratch/records/niedererNVersion/run_document.json']` |
+| C6 | 5 declared artifact(s) present |
+| C7 | 2 cases completed and reconciled; native tree unchanged |
+| C8 | 2 consumed file(s) fingerprinted |
+| C9 | clean; names the missing solver |
+| C10 | 1 axes, 250 keys, 1 guidance item(s) |
+
+Each check's own suite run (fresh scratch dirs under `/tmp`, sequential):
+6.40 s total for all ten. The full native `pytest -m native` suite for this
+package (the ten checks plus `test_committed_catalog_matches_the_binary` and
+`test_every_shipped_par_round_trips`) took 39.57 s wall time.
+
+**C6/C7 needed one addition the brief flagged as conditional:** without
+`is_case_runnable_without_workflow`, `run_document_exec` refused every staged
+case with `case_root_not_a_runnable_case` before it reached the solver
+(`legacy_case_runnable_without_workflow`'s default is `False`, and this
+plugin declares no `case_compatibility` capability member otherwise). Added
+`is_case_runnable_without_workflow(self, case_root)` returning whether
+`nversion.par` is present in the staged case -- the same shape as the
+`E2ERecordPlugin` example the brief names. This is a plugin-side addition,
+not a core change.

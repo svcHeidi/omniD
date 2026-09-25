@@ -28,14 +28,16 @@ dependencies = ["omnidriver>=0.1.0"]
 # and no longer breaks an explicit --plugin for another stack. The deferral
 # still stands: an active entry with no module would make the implicit
 # default refuse, by name, in every venv that installs this package.
-# [project.entry-points."omnidriver.plugins"]
-# opencarp = "omnidriver.opencarp.plugin:OpenCARPPlugin"
+# Enabled 2026-09-25 (Task 11): omnidriver.opencarp.plugin:OpenCARPPlugin now
+# exists, so the entry point no longer names a missing module.
+[project.entry-points."omnidriver.plugins"]
+opencarp = "omnidriver.opencarp.plugin:OpenCARPPlugin"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-"omnidriver.opencarp" = ["opencarp.yaml", "opencarp_parameters.json"]
+"omnidriver.opencarp" = ["opencarp.yaml", "opencarp_parameters.json", "guidance.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -36,3 +36,25 @@ def require_opencarp_binary() -> None:
     if "GIT tag" not in proc.stdout:
         pytest.fail("openCARP cannot start (on macOS, set DYLD_LIBRARY_PATH to the directory "
                     "holding libsundials_cvode; evidence A4-A6): " + proc.stderr[-400:])
+
+
+from omnidriver.conformance import ConformanceTarget
+
+
+def niederer_conformance_target(tmp_path: Path) -> ConformanceTarget:
+    """Coarse and short, so the native tier stays seconds long (G4, G7)."""
+    require_opencarp_binary()
+    return ConformanceTarget(
+        plugin="opencarp",
+        record="niedererNVersion",
+        cases_root=opencarp_tutorials_root(),
+        scratch_root=tmp_path / "scratch",
+        base_study={"dx": 1000.0, "nversion.par:tend": 10.0, "nversion.par:dt": 50.0},
+        patch=("nversion.par:gregion[0].g_il", 0.2),
+        untouched=("nversion.par", ("gregion[0]", "g_it")),
+        sweep_name="dx",
+        sweep_values=(1000.0, 500.0),
+        unknown_name="nversion.par:gregion[0].g_ill",
+        solver_command="openCARP",
+        environment={},
+    )

@@ -1,0 +1,40 @@
+"""Preflight and log redaction (evidence A4-A8, G3).
+
+openCARP's whole environment is its binaries plus one library path, supplied
+ambiently (A6): nothing here sources a shell profile or searches for one."""
+from __future__ import annotations
+
+import shutil
+import subprocess
+from typing import Any, Mapping
+
+from omnidriver.core.planning_types import StrictDiagnostic
+
+SOLVER_COMMANDS = frozenset({"openCARP"})
+AUXILIARY_COMMANDS = frozenset({"mesher", "igbextract", "igbhead"})
+# G3: every openCARP run prints its build header, whose repository line
+# embeds a CI token. The whole credential part of any such URL is replaced.
+# Consumed by Task 12's log redaction (core workflow_runner / runtime_evidence);
+# declaring it here is harmless before that lands (get_log_redaction_patterns
+# is not yet called by anything, so this pattern is not yet exercised).
+REDACTION_PATTERNS = (r"(https?://)[^/\s@]+(?=@)",)
+
+
+def opencarp_environment_diagnostics(workflow_dag: Mapping[str, Any], env: Mapping[str, str]) -> tuple[StrictDiagnostic, ...]:
+    path = env.get("PATH", "")
+    commands = sorted({step.get("command") for step in (workflow_dag or {}).get("steps", ()) if step.get("command")})
+    diagnostics = [
+        StrictDiagnostic(level="error", code="opencarp_command_not_found",
+                         message=f"{command!r} is not on PATH={path!r}")
+        for command in commands if shutil.which(command, path=path) is None
+    ]
+    solver = shutil.which("openCARP", path=path)
+    if solver is not None and "openCARP" in commands:
+        proc = subprocess.run([solver, "-buildinfo"], capture_output=True, text=True, env=dict(env), timeout=60)
+        if "GIT tag" not in proc.stdout:
+            diagnostics.append(StrictDiagnostic(
+                level="error", code="opencarp_binary_unloadable",
+                message="'openCARP' is on PATH but cannot start; on macOS set DYLD_LIBRARY_PATH to the "
+                        "directory holding libsundials_cvode (A4-A6): " + proc.stderr.strip()[-300:],
+            ))
+    return tuple(diagnostics)

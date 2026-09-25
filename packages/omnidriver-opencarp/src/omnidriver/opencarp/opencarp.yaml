@@ -1,0 +1,14 @@
+# openCARP is its own environment and solver: no requires (spec §7; C1).
+schema_version: 1
+plugin:
+  id: org.omnidriver.opencarp
+  api_version: "2"
+provides:
+  - config_value
+  - case_value_comparison
+  - environment_preflight
+  - command_authorization
+  - case_writer
+  - record_surface
+case_profile:
+  dictionaries: []
