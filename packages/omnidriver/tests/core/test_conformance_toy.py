@@ -149,3 +149,14 @@ def test_the_sweep_passes_the_timeout_per_case(tmp_path, monkeypatch):
     [(argv, kwargs)] = calls
     assert kwargs["timeout"] == 42.0
     assert argv[argv.index("--case-timeout-s") + 1] == "42.0"
+
+
+@pytest.mark.parametrize("inside", [".", "scratch", "toyTutorial/scratch"])
+def test_a_scratch_root_inside_the_native_tree_is_refused(inside, tmp_path):
+    """M8: every stage, plan and rmtree lands under scratch_root."""
+    target = toy_conformance_target(tmp_path)
+    scratch = target.cases_root / inside
+    with pytest.raises(ValueError) as excinfo:
+        dataclasses.replace(target, scratch_root=scratch)
+    assert str(scratch) in str(excinfo.value)
+    assert str(target.cases_root) in str(excinfo.value)

@@ -45,6 +45,17 @@ class ConformanceTarget:
     #: I5, 2026-09-25).
     timeout_s: float = 600.0
 
+    def __post_init__(self) -> None:
+        # M8 (fix round 1, 2026-09-25): every stage, plan and rmtree a check
+        # makes lands under scratch_root, so one inside cases_root would do
+        # all of it inside the native tree.
+        scratch, cases = Path(self.scratch_root), Path(self.cases_root)
+        if scratch.resolve().is_relative_to(cases.resolve()):
+            raise ValueError(
+                f"scratch_root {scratch} is inside cases_root {cases}: every stage, "
+                "plan and sweep would write the native tree"
+            )
+
 
 @dataclass(frozen=True)
 class CheckVerdict:
