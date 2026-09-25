@@ -357,3 +357,99 @@ correct via the native test and the parity check above). Left to the owner:
 whether execution-time `validate_run` should gain the same exemption
 planning-time already has, and how a `RunDocument` would carry that marker
 forward (today it does not, per that module's own comment).
+
+## Step 4c (added 2026-09-25): planning/execution agreement, and the pilot's real run
+
+Done, verified in all four suite shapes plus the three static gates, all
+0 failed (core-only venv, the installed wheel, `-m native` against the real
+`noFrontendCardiacFoam_minor_errors` tutorials tree, and the rest), **plus**
+a real, unmocked solver run of the `restitutionCurves` pilot.
+
+**The fix, per the owner's rules (explicit, not inferred; one rule for both
+paths; no fallback; no exemption heuristic).** `schemas/run-document.json`
+gains a required, no-default `configurationSource` (`"document"` |
+`"case"`) field. `core.runtime.configuration_source
+.resolve_configuration_source` is the one function both
+`run_document_adapter._run_document_from_case` (planning) and
+`run_document_exec.build_execution_inputs` (execution) call to decide
+whether `validate_run`/the plugin's declared config schema apply to a
+document's `config`. Planning still reads `spec.metadata["generic_case"]`
+(legitimately available only there) to SET the field to `"case"` for a
+generic case or tutorial record, `"document"` otherwise; execution now
+reads the field the document itself carries, rather than re-inferring
+anything. The deleted `generic_case` boolean and the false "a generic
+case's all-empty config satisfies the plugin schemas in-tree regardless"
+comment are gone from both modules.
+
+A `"case"`-sourced document whose `config` is not structurally empty (every
+leaf absent -- a phase-shell of empty sub-dicts counts as empty; a real
+value anywhere does not) is refused by name
+(`case_configuration_source_carries_config`) at both planning and
+execution -- an ingested, agent-authored document cannot declare `"case"`
+to smuggle unvalidated document config past the plugin schema check, and
+the existing plugin-identity gate applies regardless of source. A missing
+or unrecognized source is refused by the schema itself (required, closed
+enum, no default) and, independently, by
+`resolve_configuration_source`'s own `unknown_configuration_source`
+diagnostic for a `RunDocument` constructed in-process rather than loaded
+from JSON.
+
+**What validates a `"case"`-sourced document's case files.** Nothing new:
+`validate_configuration` (the `ConfigurationValidatorCapability`) and the
+record key validator (`RecordKeyValidationCapability`, step 4a) already ran
+at plan/commit time, before this document was ever built -- execution runs
+the workflow steps against an already-validated, already-committed case. No
+execution-time case validator was invented in this step, per the owner's
+instruction.
+
+| what | commits |
+|---|---|
+| core: `configurationSource` field (schema + packaged copy), `RunDocument` dataclass, the shared `resolve_configuration_source` decision, both producers wired to it | `dbc9043` |
+| openfoam: mechanical fix for `dict_builder`'s own synthetic `RunDocument` (forced by the new required field) | `06ceca8` |
+| tests: `configurationSource` added to every existing `RunDocument` fixture across core/cardiacfoam/openfoam, plus the schema-level missing/unknown-source refusal tests | `0630cd1` |
+| tests: configuration-source agreement across all three entry kinds (factory/generic-case/tutorial-record), the smuggling refusal, and the shared-function unit contract | `abd440c` |
+| tests: a `native`+`slow` regression gate running `restitutionCurves` end to end through the real CLI, cardiacFoam binary, and OpenFOAM v2412 runtime | `106f71f` |
+
+**The real run.** A scratch copy of the native tutorials tree (never the
+native tree itself), narrowed to one case of the real
+`tworldS1S2Restitution/sweep.json` study (TWorld, S1=1000ms x10 beats,
+S2=1500ms x2 -- the sweep's own first point, unchanged) via a scratch
+`scratch_sweep.json` alongside the native one, run through
+`omnidriver --plugin cardiacfoam sweep-run --spec <scratch>/.../scratch_sweep.json
+--output-dir <scratch>/out` (`--cases-root` is rejected by the CLI's own
+argument validation for `sweep-run`/`sweep-plan` -- `cases_root` is instead
+supplied inside the spec's own `base`, an absolute path to the scratch
+tutorials copy). OpenFOAM v2412 and the native `cardiacFoam` build were
+both found ambiently (`openfoam.openfoam_environment
+.discover_openfoam_bashrc` -> `/Volumes/OpenFOAM-v2412/etc/bashrc`;
+`cardiacFoam` from `$WM_PROJECT_USER_DIR`), exactly as a real developer
+environment would supply them -- nothing scratch-supplied stood in for
+either. The scratch copy's `system/blockMeshDict` was switched to the
+tutorial's own smallest documented mesh alternative (40x6x14 = 3360 cells,
+one of three resolutions the file already documents as commented-out
+options, deltaX 0.5/0.2/0.1mm) instead of the checked-in default
+(200x30x70 = 420000 cells), solely so the real solve finishes in seconds
+rather than tens of minutes on this developer machine -- physics
+(`deltaT`, ionic model, protocol timing) were left exactly as the real
+study specifies.
+
+Result: `workflow_state.status == "completed"`, both steps (`mesh`,
+`solve`) `completed` with `exit_code 0`, in ~24-27s wall time (measured
+across three runs, well inside the ~2 minute budget). The committed case's
+`run_document.json` carries `"configurationSource": "case"` with the
+expected empty phase-shell `config`
+(`{"anatomy": {}, "physics": {}, "stimulus": {}, "solver": {}}`) -- exactly
+the document shape that, before this step's fix, `run_document_exec` would
+have refused outright with `plugin_config_schema_violation` (missing
+`myocardiumSolver`, `endTime`, and the rest of cardiacFOAM's required
+config fields). cardiacFoam's own real solver log shows `Time = 14` (the
+protocol's derived `endTime`, `(1000*9 + 1500*2)/1000 + 2.0 = 14.0`) and
+`ExecutionTime = 20.7 s`; its post-processing trace file
+(`TWorld_epicardialCells_S1_1000_S2_1500.txt`) has 700001 lines of real
+`[time Vm]` samples. The `native`+`slow` regression test above pins this
+exact result (`workflow_state.status`, both steps' `exit_code`, the
+committed document's `configurationSource`, and a non-trivial trace file)
+so it does not silently regress.
+
+No design gap was found this step -- the gap step 4b recorded is what this
+step closes.
