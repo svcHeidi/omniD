@@ -326,7 +326,11 @@ entries.
 6. Record the result in this document's status table, with commit hashes.
 
 **Evidence still to take from the real binary** (decided by running it, never
-by assumption):
+by assumption). These are tracked, with the runs that settle them, as F1–F7 in
+`docs/solver-learning/opencarp.md`, which also holds the evidence behind §7;
+the method is `docs/solver-learning/method.md`. Two were added after this list
+was written: F6 (the LAT file's first column) and F7 (`num_stim` defaults to 2).
+The first five:
 - how a `Flag` parameter is written in a `.par`;
 - what openCARP does with an indexed key beyond its count, such as `stim[1].*`
   when `num_stim = 1`. If it silently ignores the key, the validator refuses
