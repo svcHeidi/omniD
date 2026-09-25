@@ -303,3 +303,15 @@ def test_c10_bites_a_catalogue_entry_without_a_value_kind(tmp_path):
     verdict = run_check("C10", toy_conformance_target(tmp_path, plugin=KINDLESS_KEY_PLUGIN))
     assert not verdict.passed
     assert "'key': 'label'" in verdict.detail
+
+
+@pytest.mark.parametrize("check_id", ["C5", "C6", "C7"])
+def test_a_record_plugin_without_the_runnable_hook_passes_I4(check_id, tmp_path):
+    """Wave-2 review I4: core's run-document gate asked the plugin whether a
+    case "without driver-owned workflow metadata" is runnable -- the wrong
+    question for a record run, whose document carries the record's own
+    steps. openCARP and the toy answered it only to get past the gate."""
+    from plugins.conformance_toy import NO_RUNNABLE_HOOK_PLUGIN
+
+    verdict = run_check(check_id, toy_conformance_target(tmp_path, plugin=NO_RUNNABLE_HOOK_PLUGIN))
+    assert verdict.passed, verdict.detail

@@ -38,6 +38,29 @@ if TYPE_CHECKING:
     from ..plugin_interface import DriverContext
 
 
+def _is_record_run_with_steps(run_doc: RunDocument) -> bool:
+    """A tutorial-record run whose document carries the record's steps.
+
+    Such a case is runnable because the record declares its steps: the
+    workflow DAG is the driver-owned workflow metadata, so the adapter's
+    ``is_case_runnable_without_workflow`` -- whether a case WITHOUT that
+    metadata is runnable -- is the wrong question, and core does not ask it
+    (wave-2 review I4, 2026-09-25). Before this, openCARP and the toy record
+    plugin each declared that hook only to get past this gate, and
+    cardiacFOAM's records passed it only because their native case holds an
+    ``Allrun`` the record never uses.
+
+    ``resolvedEntry.entryKind`` is stated by the planner
+    (``run_document_adapter`` copies it from the record spec's metadata,
+    ``record_execution.record_case_spec``), the same way
+    ``configurationSource`` is stated rather than inferred. A hand-authored
+    document claiming it gains nothing beyond this gate: its DAG is still
+    normalized and every command still goes through the allowlist above."""
+    resolved = run_doc.resolvedEntry if isinstance(run_doc.resolvedEntry, dict) else {}
+    dag = run_doc.workflowDag if isinstance(run_doc.workflowDag, dict) else {}
+    return resolved.get("entryKind") == "tutorial_record" and bool(dag.get("steps"))
+
+
 @dataclass(frozen=True)
 class RunDocumentExecutionInputs:
     """Everything the strict executor needs, derived from a RunDocument."""
@@ -294,7 +317,7 @@ def build_execution_inputs(
                 field="launch.caseRoot",
             ))
             resolved_case_root = None
-        elif not _case_is_runnable(
+        elif not _is_record_run_with_steps(run_doc) and not _case_is_runnable(
             resolved_case_root, driver_context=driver_context,
         ):
             diagnostics.append(diagnostic(

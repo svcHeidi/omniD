@@ -182,14 +182,11 @@ class E2ERecordPlugin(MinimalTestPlugin):
         ``constant/mesh.json`` instead."""
         return (Path(case_root) / "constant" / "mesh.json").exists()
 
-    def is_case_runnable_without_workflow(self, case_root) -> bool:
-        """A tutorial-record case's workflow_dag names its own explicit
-        steps directly (no case-script entrypoint at all) -- the same
-        reason a real cardiacfoam case can be runnable without one. Gated
-        on the same marker as ``has_case_marker`` rather than an
-        unconditional ``True``, so this only recognizes this fixture's own
-        cases."""
-        return self.has_case_marker(case_root)
+    # No ``is_case_runnable_without_workflow`` (removed 2026-09-25, wave-2
+    # review I4): it existed only to get this fixture's record runs past
+    # run_document_exec's runnable-case gate, which core no longer applies
+    # to a record run carrying its own steps
+    # (``run_document_exec._is_record_run_with_steps``).
 
     def get_environment_diagnostics(self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None) -> tuple:
         """The toy's one real check: its solver command resolves on the supplied PATH."""

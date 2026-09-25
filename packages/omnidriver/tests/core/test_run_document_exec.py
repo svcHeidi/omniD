@@ -209,6 +209,38 @@ class TestCaseRootValidation(unittest.TestCase):
             codes = {d.code for d in diagnostics}
             self.assertIn("case_root_not_a_runnable_case", codes)
 
+    def test_a_record_run_carrying_its_steps_is_runnable_without_asking_the_adapter_I4(self) -> None:
+        """Wave-2 review I4: a tutorial-record run's document carries the
+        record's steps, so the case is runnable without the adapter's
+        ``is_case_runnable_without_workflow`` -- which is never consulted."""
+        with tempfile.TemporaryDirectory() as temp:
+            empty = Path(temp) / "empty"
+            empty.mkdir()
+            launch = {"caseRoot": str(empty), "outputDir": str(empty / "out")}
+            record_doc = _minimal_doc(launch=launch, resolvedEntry={"entry": "toy", "entryKind": "tutorial_record"})
+            with mock.patch(
+                "omnidriver.core.runtime.run_document_exec._case_is_runnable",
+                side_effect=AssertionError("the adapter was asked"),
+            ):
+                _inputs, diagnostics = build_execution_inputs(record_doc, driver_context=_CTX)
+            self.assertNotIn("case_root_not_a_runnable_case", {d.code for d in diagnostics})
+
+    def test_any_other_run_still_asks_the_adapter_I4(self) -> None:
+        """The record exemption does not loosen the gate for anything else,
+        nor for a record document that carries no steps."""
+        with tempfile.TemporaryDirectory() as temp:
+            empty = Path(temp) / "empty"
+            empty.mkdir()
+            launch = {"caseRoot": str(empty), "outputDir": str(empty / "out")}
+            for doc in (
+                _minimal_doc(launch=launch, resolvedEntry={"entry": "x", "entryKind": "case_folder"}),
+                _minimal_doc(launch=launch, resolvedEntry={"entry": "toy", "entryKind": "tutorial_record"},
+                             workflowDag=None),
+            ):
+                inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
+                self.assertIsNone(inputs)
+                self.assertIn("case_root_not_a_runnable_case", {d.code for d in diagnostics})
+
     def test_canonical_paths_are_resolved_and_stored(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             case = _make_runnable_case(Path(temp))

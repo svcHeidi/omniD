@@ -264,3 +264,14 @@ class RefusingResolverPlugin(E2ERecordPlugin):
 
     def resolve_case_mutation(self, request, *, driver_context):
         raise ToyFormatError(TOY_REFUSAL)
+
+
+NO_RUNNABLE_HOOK_PLUGIN = "plugins.conformance_toy:NoRunnableHookPlugin"
+
+
+class NoRunnableHookPlugin(E2ERecordPlugin):
+    """Declares no ``is_case_runnable_without_workflow``, explicitly, whatever
+    its base does. A record run is runnable because the record declares its
+    steps (wave-2 review I4); core must not ask the plugin to vouch for it."""
+
+    is_case_runnable_without_workflow = None
