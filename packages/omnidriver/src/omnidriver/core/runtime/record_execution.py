@@ -320,6 +320,8 @@ def commit_record_case(
     ``result.status``/``result.unchanged`` say so explicitly rather than
     leaving a bare ``None`` for the caller to interpret.
     """
+    import tempfile
+
     _stage(
         record, cases_root=cases_root, staged_case_root=staged_case_root,
         driver_context=driver_context,
@@ -352,10 +354,24 @@ def commit_record_case(
     resolved = driver_context.capabilities.case_writer.resolve(
         request, driver_context=driver_context,
     )
-    rendered = driver_context.capabilities.case_writer.render(
-        resolved, snapshot_root=staged_case_root, driver_context=driver_context,
-        execution_env=execution_env,
-    )
+    # `snapshot_root` MUST be a directory distinct from `request.case_root`
+    # (module docstring of `openfoam.case_rendering`: "the real case is read
+    # only to seed [a] copy" under `snapshot_root` -- never the same
+    # directory). Passing `staged_case_root` for both used to make every
+    # real (non-test-double) renderer's seeding copy a no-op `shutil.copy2`
+    # of a file onto itself, raising `shutil.SameFileError` the first time
+    # this path ever ran against the real OpenFOAM dictionary renderer
+    # (found running `restitutionCurves`'s pilot sweep end to end, step 4b:
+    # every existing test of this function used a toy case_writer test
+    # double whose own renderer does not perform that seeding copy, so nothing
+    # caught it earlier). A fresh scratch directory, discarded once `rendered`
+    # is captured, matches `cardiacfoam.overrides.commit_case_overrides`'s own
+    # established pattern exactly.
+    with tempfile.TemporaryDirectory(prefix="omnidriver-record-render-") as scratch:
+        rendered = driver_context.capabilities.case_writer.render(
+            resolved, snapshot_root=Path(scratch), driver_context=driver_context,
+            execution_env=execution_env,
+        )
     plan = CaseWritePlan(
         request=request, files=tuple(rendered), preconditions=resolved.preconditions,
         semantic_owner_id=resolved.semantic_owner_id, stack_identity=identity.capability_digest,

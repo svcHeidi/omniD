@@ -130,6 +130,23 @@ class _RecordCaseWriterPlugin(MinimalTestPlugin):
         return frozenset({_FORMAT})
 
     def render_case_files(self, resolved, *, snapshot_root, driver_context, execution_env=None):
+        # Regression pin (step 4b, the restitutionCurves pilot): a real
+        # renderer (omnidriver.openfoam.case_rendering) reads the real case
+        # ONLY to seed a copy under `snapshot_root` -- the two must never be
+        # the same directory, or its seeding copy becomes a no-op copy of a
+        # file onto itself (`shutil.SameFileError`, found running this
+        # pilot's sweep end to end against the real OpenFOAM dictionary
+        # renderer; this toy renderer's own read-from-snapshot_root shape
+        # never exercised that failure mode, so this assertion is the one
+        # thing in this test double that would have caught
+        # `commit_record_case` regressing back to passing `staged_case_root`
+        # for both).
+        case_root = Path(resolved.request.case_root)
+        assert Path(snapshot_root) != case_root, (
+            f"render_case_files was called with snapshot_root == case_root "
+            f"({case_root}); a renderer must seed a copy under a directory "
+            "distinct from the real case"
+        )
         by_document: dict[str, list] = {}
         for target in resolved.targets:
             by_document.setdefault(target["document"], []).append(target)
