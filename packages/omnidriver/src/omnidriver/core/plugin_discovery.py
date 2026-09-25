@@ -97,6 +97,45 @@ def discover_plugins() -> dict[str, Any]:
     }
 
 
+class BrokenPluginError(LookupError):
+    """An installed entry point whose target cannot be imported or built.
+
+    Raised by name -- entry-point name, distribution, ``module:Class`` target
+    and the underlying error -- never skipped. **Added 2026-09-25
+    (solver-conformance B-I1).** Before this, one half-installed third-party
+    distribution anywhere in the group raised a bare ``ModuleNotFoundError``
+    out of default selection *and* out of an explicit ``--plugin`` for an
+    unrelated, working stack, contradicting :func:`discover_plugins`'s own
+    promise. A broken entry is refused rather than dropped because it may be
+    the very root the user meant: silently composing the others would change
+    which stack runs.
+    """
+
+
+def _describe_entry_point(entry_point) -> str:
+    return (
+        f"{entry_point.name!r} ({_origin(entry_point)}, "
+        f"target {getattr(entry_point, 'value', '<unknown>')!r})"
+    )
+
+
+def _instantiate(entry_point):
+    """Load ``entry_point`` and build its plugin, or raise :class:`BrokenPluginError`.
+
+    Catches ``Exception`` deliberately: importing a third-party module can
+    raise anything, and whatever it raises means the same thing here -- this
+    entry cannot supply a plugin. The original error is chained and quoted.
+    """
+    try:
+        return entry_point.load()()
+    except Exception as exc:
+        raise BrokenPluginError(
+            f"omnidriver plugin entry point {_describe_entry_point(entry_point)} "
+            f"in group {ENTRY_POINT_GROUP!r} cannot be loaded: "
+            f"{type(exc).__name__}: {exc}"
+        ) from exc
+
+
 def _find_installed_provider(plugin_id: str):
     """The installed, unambiguous provider answering ``plugin_id``, if any.
 
@@ -104,12 +143,29 @@ def _find_installed_provider(plugin_id: str):
     no id-keyed index, only the name-keyed one ``discover_plugins()``
     returns. Only ever called to resolve a `requires:` declaration, which is
     a CLI-startup-frequency operation, not a hot loop.
+
+    **Corrected 2026-09-25 (solver-conformance B-I1).** A broken entry point
+    used to abort this scan on the spot, so the answer depended on whether it
+    sorted before the provider actually needed. Load failures are now
+    collected: the loadable provider answering ``plugin_id`` is returned
+    whatever the order, and only if none answers is the refusal raised,
+    naming every broken entry as a possible provider.
     """
+    broken: list[BrokenPluginError] = []
     for entry_point in discover_plugins().values():
-        plugin_class = entry_point.load()
-        candidate = plugin_class()
+        try:
+            candidate = _instantiate(entry_point)
+        except BrokenPluginError as exc:
+            broken.append(exc)
+            continue
         if candidate.plugin_id == plugin_id:
             return candidate, _entry_point_source(entry_point)
+    if broken:
+        raise BrokenPluginError(
+            f"no loadable installed plugin provides the required id {plugin_id!r}, "
+            "and these entry points, which might, cannot be loaded: "
+            + "; ".join(str(exc) for exc in broken)
+        )
     return None
 
 
@@ -169,9 +225,8 @@ def load_discovered_plugin(name: str):
             f"No installed omnidriver plugin named {name!r} in entry-point "
             f"group {ENTRY_POINT_GROUP!r}"
         )
-    plugin_class = entry_point.load()
     providers, sources = _expand_with_requirements(
-        plugin_class(), _entry_point_source(entry_point),
+        _instantiate(entry_point), _entry_point_source(entry_point),
     )
     return driver_context(*providers, source=sources, plugin_selector=name)
 
@@ -320,13 +375,33 @@ def _requires_graph(unambiguous: dict[str, Any]) -> tuple[dict[str, str], dict[s
     snapshot (the caller, :func:`_default_selection`, is itself cached), so
     it costs one extra instantiation per installed adapter at CLI-startup
     frequency, not a hot loop.
+
+    **Corrected 2026-09-25 (solver-conformance B-I1).** A candidate that
+    cannot be loaded used to escape as a bare ``ModuleNotFoundError``. It is
+    now refused by name (:class:`BrokenPluginError`), every broken candidate
+    at once, and never skipped: it may be the root the caller meant, so
+    choosing a default without it would silently change which stack runs.
     """
     id_by_name: dict[str, str] = {}
     requires_by_id: dict[str, tuple[str, ...]] = {}
+    broken: list[BrokenPluginError] = []
     for name, entry_point in unambiguous.items():
-        instance = entry_point.load()()
+        try:
+            instance = _instantiate(entry_point)
+        except BrokenPluginError as exc:
+            broken.append(exc)
+            continue
         id_by_name[name] = instance.plugin_id
         requires_by_id[instance.plugin_id] = tuple(instance.get_profile().requires)
+    if broken:
+        raise BrokenPluginError(
+            "No DriverContext was supplied, and the implicit default cannot be "
+            "chosen while an installed entry point is broken (it may be the "
+            "stack you meant): "
+            + "; ".join(str(exc) for exc in broken)
+            + ". Repair or uninstall it, or select a working plugin with "
+            "--plugin or an explicit DriverContext."
+        )
     return id_by_name, requires_by_id
 
 

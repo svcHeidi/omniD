@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+from importlib.metadata import EntryPoint
 
 import pytest
 
@@ -222,3 +223,76 @@ def test_two_independent_solver_tier_plugins_are_refused_by_name(monkeypatch) ->
         plugin_discovery.default_discovered_context()
     assert "test.solver-b" in str(excinfo.value)
     assert "--plugin" in str(excinfo.value)
+
+
+# -- A broken entry point is refused by name (solver-conformance B-I1) --------
+#
+# A real ``importlib.metadata.EntryPoint`` whose target module does not exist,
+# so ``load()`` raises the genuine ``ModuleNotFoundError`` a half-installed
+# third-party distribution would. Before this, one such entry anywhere in the
+# group aborted default selection and even an explicit ``--plugin`` for an
+# unrelated, working stack, with a bare ``ModuleNotFoundError``.
+
+_BROKEN_TARGET = "no_such_module_omnidriver_test.plugin:Plugin"
+
+
+def _broken_entry_point(name: str = "aaa-broken"):
+    return EntryPoint(name, _BROKEN_TARGET, plugin_discovery.ENTRY_POINT_GROUP)
+
+
+def test_a_working_named_plugin_loads_beside_a_broken_sibling(monkeypatch) -> None:
+    """The broken entry sorts first, so an order-dependent scan would hit it
+    before the provider the named plugin's ``requires:`` actually needs."""
+    monkeypatch.setattr(
+        plugin_discovery,
+        "_entry_points",
+        lambda: (_broken_entry_point(), _env_entry_point(), _solver_entry_point("test.solver")),
+    )
+
+    context = plugin_discovery.load_discovered_plugin("test.solver")
+
+    assert {p.id for p in context.identity.providers} == {_ENV_ID, "test.solver"}
+
+
+def test_loading_the_broken_plugin_refuses_by_name(monkeypatch) -> None:
+    monkeypatch.setattr(
+        plugin_discovery, "_entry_points", lambda: (_broken_entry_point(), _env_entry_point()),
+    )
+    with pytest.raises(LookupError, match="aaa-broken") as excinfo:
+        plugin_discovery.load_discovered_plugin("aaa-broken")
+    message = str(excinfo.value)
+    assert _BROKEN_TARGET in message
+    assert "No module named 'no_such_module_omnidriver_test'" in message
+
+
+def test_an_unmet_requirement_names_broken_entries_as_possible_providers(monkeypatch) -> None:
+    """Nothing loadable answers the required id; the broken entry might have,
+    so the refusal names it rather than letting ``order_providers`` report a
+    plain 'missing' that hides the likely cause."""
+    monkeypatch.setattr(
+        plugin_discovery,
+        "_entry_points",
+        lambda: (_broken_entry_point(), _solver_entry_point("test.solver")),
+    )
+    with pytest.raises(LookupError, match=_ENV_ID) as excinfo:
+        plugin_discovery.load_discovered_plugin("test.solver")
+    assert "aaa-broken" in str(excinfo.value)
+    assert _BROKEN_TARGET in str(excinfo.value)
+
+
+def test_default_selection_refuses_a_broken_entry_by_name(monkeypatch) -> None:
+    """Refused, not skipped: the broken entry may be the root the user meant,
+    so silently composing the others would change which stack runs."""
+    monkeypatch.setattr(
+        plugin_discovery,
+        "_entry_points",
+        lambda: (_broken_entry_point(), _env_entry_point(), _solver_entry_point("test.solver")),
+    )
+    plugin_discovery._default_selection.cache_clear()
+
+    with pytest.raises(LookupError, match="aaa-broken") as excinfo:
+        plugin_discovery.default_discovered_context()
+    message = str(excinfo.value)
+    assert _BROKEN_TARGET in message
+    assert "No module named 'no_such_module_omnidriver_test'" in message
+    assert "--plugin" in message
