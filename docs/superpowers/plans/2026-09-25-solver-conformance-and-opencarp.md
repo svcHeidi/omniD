@@ -41,6 +41,14 @@
   
   The durable claim is **0 failed**. Suite totals are never quoted.
 - Every commit message ends with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- **Working beside the tutorial stream** (the briefing from `main` at `eb47f6e`, 2026-09-25):
+  - Core files are shared ground: `tutorial_records.py`, `record_execution.py`, `registry.py`, `sweep_runner.py`, `strict_planning.py`, `plugin_capabilities.py`, `case_transaction.py`. `WorkflowStep` is this plan's to change; the tutorial stream rebases on it.
+  - Every core change here lands on `main` as its own small commit, soon after review. Each one also adds a row to the generality log (`docs/superpowers/plans/2026-09-25-tutorials-are-pointers-remaining.md` §5): stream `openCARP`, what the change is, why, and a verdict.
+  - Never hand-build an `omnidriver run` command; use `core.runtime.run_command.omnidriver_run_command(ctx, *args)`.
+  - Run documents carry the required `configurationSource`. Record runs are `"case"` with an empty config. `strict_plan` sets it, so nothing here builds a run document by hand.
+  - Record execution refuses without a key validator, value comparator and config reader, and there are no fallbacks. openCARP provides all three.
+  - `main` changes only by fast-forward, never force. Nothing goes to `origin` without the owner's go-ahead.
+- **One venv per worktree.** A shared venv imports another checkout and gives false greens. Each executing agent builds `/tmp/odconf-<worktree-name>` (all packages) and `/tmp/odconfcore-<worktree-name>` (core only) from its own worktree, and uses them wherever this plan writes `/tmp/odconf` and `/tmp/odconfcore`.
 - **Sequencing.** Start only after `claude/festive-cray-9d30ca` (tutorials-are-pointers) is merged into `main`; P1 and P2 landed there as `156b80d` and `56d89d7`. Task 14 (the cardiacFoam target) starts only after that branch's step 5 is finished, because its records are owned there until then.
 
 ## Spec items and where they land
@@ -776,6 +784,7 @@ packages/omnidriver-opencarp/
   import subprocess
   import sys
 
+  from omnidriver.core.runtime.run_command import omnidriver_run_command
   from omnidriver.core.strict_planning import strict_plan
 
   _PLAN_DIAGNOSTIC_GROUPS = (
@@ -829,10 +838,11 @@ packages/omnidriver-opencarp/
       return _verdict("C5", not problems, "; ".join(problems) or f"ok; launch {command}")
 
 
-  def _execute(target: ConformanceTarget, report) -> tuple[subprocess.CompletedProcess, dict[str, Any] | None]:
+  def _execute(target: ConformanceTarget, ctx, report) -> tuple[subprocess.CompletedProcess, dict[str, Any] | None]:
+      # Never hand-build a run command (main, 2026-09-25): the canonical builder
+      # carries --plugin from ctx.plugin_selector, set by load_plugin_context.
       proc = subprocess.run(
-          [sys.executable, "-m", "omnidriver", "run", "--plugin", target.plugin,
-           "--run-document", str(_run_document_path(report))],
+          omnidriver_run_command(ctx, "--run-document", str(_run_document_path(report))),
           capture_output=True, text=True, env=_child_env(target),
       )
       try:
@@ -844,10 +854,11 @@ packages/omnidriver-opencarp/
 
   def check_run(target: ConformanceTarget) -> CheckVerdict:
       """C6: the planned document runs, and every artifact the record declares is present."""
-      report = _plan(target, _context(target))
+      ctx = _context(target)
+      report = _plan(target, ctx)
       if report.status != "ok":
           return _verdict("C6", False, f"cannot run: plan failed: {_plan_errors(report)}")
-      proc, payload = _execute(target, report)
+      proc, payload = _execute(target, ctx, report)
       if payload is None:
           return _verdict("C6", False, f"run printed no JSON (rc={proc.returncode}); stderr tail: {proc.stderr[-800:]}")
       reconciliation = payload.get("artifact_reconciliation") or {}
