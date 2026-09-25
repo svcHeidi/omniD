@@ -5,11 +5,13 @@ from __future__ import annotations
 
 import contextlib
 import os
+import shutil
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
 from omnidriver.core.introspection import describe_entry
 from omnidriver.core.plugin_interface import load_plugin_context
+from omnidriver.core.runtime.record_execution import commit_record_case
 from omnidriver.core.tutorial_records import TutorialRecordError
 
 from .target import CheckVerdict, ConformanceTarget
@@ -95,10 +97,61 @@ def check_refuses_unknown(target: ConformanceTarget) -> CheckVerdict:
     return _verdict("C3", False, f"{target.unknown_name!r} was accepted")
 
 
+def _stage(target: ConformanceTarget, record, label: str) -> Path:
+    """A fresh copy of the record's native case under scratch_root."""
+    staged = target.scratch_root / "conformance" / label / record.name
+    if staged.exists():
+        shutil.rmtree(staged)
+    shutil.copytree(target.cases_root / record.native_case_relpath, staged)
+    return staged
+
+
+def _split_study_key(name: str) -> tuple[str, tuple[str, ...]]:
+    document, separator, dotted = name.partition(":")
+    if not separator or not dotted:
+        raise ValueError(f"{name!r} is not a document:key study name")
+    return document, tuple(dotted.split("."))
+
+
+def check_patch_preserves(target: ConformanceTarget) -> CheckVerdict:
+    """C4: a one-key patch changes that key and leaves ``untouched`` as it was."""
+    ctx = _context(target)
+    record = _record(ctx, target.record)
+    staged = _stage(target, record, "C4")
+    reader = ctx.capabilities.config_value.reader()
+    comparator = ctx.capabilities.case_value_comparison.comparator()
+    validator = ctx.capabilities.record_key_validation.validator()
+    if reader is None or comparator is None or validator is None:
+        return _verdict("C4", False, "the stack lacks a config reader, comparator or key validator")
+    untouched_doc, untouched_key = target.untouched
+    before = reader(staged / untouched_doc, untouched_key)
+    if before is None:
+        return _verdict("C4", False, f"target misconfigured: {untouched_doc}:{'.'.join(untouched_key)} is absent from the native case")
+    patch_name, patch_value = target.patch
+    patch_doc, patch_key = _split_study_key(patch_name)
+    value_kind, _validated = validator(patch_doc, patch_key, patch_value)
+    if comparator(value_kind, patch_value, reader(staged / patch_doc, patch_key)):
+        return _verdict("C4", False, f"target misconfigured: the native case already holds {patch_name} = {patch_value!r}")
+    with _scratch_environment(target):
+        commit_record_case(
+            record, cases_root=target.cases_root, staged_case_root=staged,
+            study_by_source={"base": {patch_name: patch_value}}, driver_context=ctx,
+        )
+    after_patched = reader(staged / patch_doc, patch_key)
+    after_untouched = reader(staged / untouched_doc, untouched_key)
+    problems = []
+    if not comparator(value_kind, patch_value, after_patched):
+        problems.append(f"{patch_name} reads {after_patched!r} after patching it to {patch_value!r}")
+    if after_untouched != before:
+        problems.append(f"{untouched_doc}:{'.'.join(untouched_key)} changed from {before!r} to {after_untouched!r}")
+    return _verdict("C4", not problems, "; ".join(problems) or "patched one key; its sibling is unchanged")
+
+
 CHECKS: dict[str, Callable[[ConformanceTarget], CheckVerdict]] = {
     "C1": check_load,
     "C2": check_describe_noop,
     "C3": check_refuses_unknown,
+    "C4": check_patch_preserves,
 }
 
 

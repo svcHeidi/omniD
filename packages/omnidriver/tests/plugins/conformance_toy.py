@@ -16,6 +16,34 @@ from omnidriver.conformance import ConformanceTarget
 TESTS_ROOT = Path(__file__).resolve().parents[1]
 TOY_PLUGIN = "plugins.e2e_record_plugin:E2ERecordPlugin"
 
+import json as _json
+
+from omnidriver.core.case_write import RenderedFile, _digest_bytes
+
+from plugins.e2e_record_plugin import E2ERecordPlugin, _FORMAT, _deep_set
+
+REPLACING_PLUGIN = "plugins.conformance_toy:ReplacingRendererPlugin"
+
+
+class ReplacingRendererPlugin(E2ERecordPlugin):
+    """Truthful about exists_before, but writes a document holding only the
+    patched keys. case_transaction accepts it; only C4 can catch it."""
+
+    def render_case_files(self, resolved, *, snapshot_root, driver_context, execution_env=None):
+        rendered = []
+        for target in resolved.targets:
+            path = Path(snapshot_root) / target["document"]
+            exists_before = path.exists()
+            content_obj: dict = {}
+            _deep_set(content_obj, target["expanded_key_path"], str(target["value"]))
+            rendered.append(RenderedFile(
+                path=target["document"], content=(_json.dumps(content_obj) + "\n").encode(),
+                mode=None, exists_before=exists_before,
+                before_digest=_digest_bytes(path.read_bytes()) if exists_before else None,
+                renderer_id=self.plugin_id, format=_FORMAT,
+            ))
+        return tuple(rendered)
+
 
 def write_toy_native_case(cases_root: Path) -> Path:
     native = cases_root / "toyTutorial"
