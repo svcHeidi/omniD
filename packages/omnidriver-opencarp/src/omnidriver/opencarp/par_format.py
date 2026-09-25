@@ -11,6 +11,7 @@ taken from the binary (docs/solver-learning/opencarp.md):
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -71,6 +72,10 @@ def patch_par(text: str, values: Mapping[str, str]) -> str:
     lines = text.splitlines(keepends=True)
     appended: list[str] = []
     for key, new_value in values.items():
+        if _breaks_a_line(new_value):
+            # Review B-I5, defence in depth: values arrive already spelled,
+            # and one with a line break would write a second assignment.
+            raise ParFormatError(f"{key}: the value {new_value!r} contains a line break; refusing to write it")
         found = by_key.get(key, [])
         if len(found) > 1:
             raise ParFormatError(
@@ -96,6 +101,15 @@ def patch_par(text: str, values: Mapping[str, str]) -> str:
     return "".join(lines)
 
 
+def _breaks_a_line(text: str) -> bool:
+    """Whether ``text`` holds anything ``str.splitlines`` -- and so ``parse_par`` -- splits on."""
+    return len(f"x{text}x".splitlines()) > 1
+
+
+def _control_characters(text: str) -> list[str]:
+    return [c for c in text if unicodedata.category(c) in ("Cc", "Zl", "Zp")]
+
+
 def format_value(value: Any, value_kind: str) -> str:
     if value_kind == "boolean":
         if not isinstance(value, bool):
@@ -111,6 +125,15 @@ def format_value(value: Any, value_kind: str) -> str:
         return repr(float(value))
     if value_kind == "string":
         text = str(value)
+        if _control_characters(text):
+            # Review B-I5: "x\nnum_stim = 0" was spelled '"x\nnum_stim = 0"',
+            # and patch_par then wrote a second assignment. No run settles how
+            # openCARP reads a control character inside a value, so none is
+            # written.
+            raise ParFormatError(
+                f"a .par string cannot contain a control character "
+                f"({', '.join(repr(c) for c in _control_characters(text))}): {text!r}"
+            )
         if '"' in text:
             raise ParFormatError(f"a .par string cannot contain a double quote: {text!r}")
         return f'"{text}"' if (not text or "#" in text or any(c.isspace() for c in text)) else text

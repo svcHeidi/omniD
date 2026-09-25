@@ -83,3 +83,28 @@ def test_values_agree_numerically_and_unquoted():
 
 def test_unquote():
     assert unquote('"S1"') == "S1" and unquote("S1") == "S1"
+
+
+@pytest.mark.parametrize("text", ["x\nnum_stim = 0", "x\rnum_stim = 0", "a\tb", "nul\x00", "bell\x07", "del\x7f"])
+def test_format_refuses_a_control_character_B_I5(text):
+    # A study value (an RFile name, say) must not be able to add a .par line:
+    # "x\nnum_stim = 0" used to be spelled '"x\nnum_stim = 0"', and patch_par
+    # then wrote a second assignment, num_stim = 0".
+    with pytest.raises(ParFormatError, match="control character") as excinfo:
+        format_value(text, "string")
+    assert repr(text) in str(excinfo.value)
+
+
+def test_the_num_stim_injection_no_longer_reaches_the_case_B_I5():
+    with pytest.raises(ParFormatError):
+        patch_par(TEXT, {"stim[0].name": format_value("x\nnum_stim = 0", "string")})
+    assert read_raw(TEXT, "num_stim") == "1"
+
+
+@pytest.mark.parametrize("spelled", ["2\nc = 3", "2\rc = 3", '"x\nnum_stim = 0"'])
+def test_patch_refuses_a_value_with_a_line_break_B_I5(spelled):
+    # Defence in depth: patch_par takes values already spelled, so it checks too.
+    with pytest.raises(ParFormatError, match="line break"):
+        patch_par("b = 1\n", {"b": spelled})
+    with pytest.raises(ParFormatError, match="line break"):
+        patch_par("b = 1\n", {"absent": spelled})
