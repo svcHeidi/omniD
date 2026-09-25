@@ -163,7 +163,12 @@ class SolverPlugin(Protocol):
 
     def get_log_redaction_patterns(self) -> tuple[str, ...]:
         """Regular expressions whose matches are replaced in kept step logs
-        (for example a credential a solver prints in its build header)."""
+        (for example a credential a solver prints in its build header).
+
+        Every match is replaced whole by ``[REDACTED]``; capture groups are
+        not kept (clarified 2026-09-25, wave-2 review I3). Match only the
+        secret, using lookarounds for any context it needs, e.g.
+        ``(?<=://)[^/\\s@]+(?=@)`` for a URL's credential."""
         ...
 
     def get_telemetry_source_globs(self, command: str) -> tuple[str, ...]:

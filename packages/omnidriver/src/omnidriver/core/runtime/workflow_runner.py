@@ -263,9 +263,14 @@ def _has_live_group_members(process: subprocess.Popen[Any]) -> bool:
 
 
 def redact_step_logs(paths: Any, patterns: Any) -> None:
-    """Replace every match of each pattern with its first capture group (if
-    it has one) followed by ``[REDACTED]`` (K9). So ``(https?://)[^/\\s@]+(?=@)``
-    keeps the scheme and the ``@``, and drops the credential between them."""
+    """Replace every match of each pattern, whole, with ``[REDACTED]`` (K9).
+
+    Corrected 2026-09-25 (wave-2 review I3): this used to keep capture group
+    1 and replace the rest, so the conventional capture-the-secret pattern
+    ``password=(\\S+)`` kept the secret and dropped its label. Groups now mean
+    nothing here; a pattern that must keep context around the secret says so
+    with lookarounds, e.g. ``(?<=://)[^/\\s@]+(?=@)`` matches only a URL's
+    credential."""
     compiled = [re.compile(p) for p in patterns]
     if not compiled:
         return
@@ -275,7 +280,7 @@ def redact_step_logs(paths: Any, patterns: Any) -> None:
         text = Path(path).read_text(errors="replace")
         redacted = text
         for pattern in compiled:
-            redacted = pattern.sub(lambda m: ((m.group(1) or "") if m.re.groups else "") + "[REDACTED]", redacted)
+            redacted = pattern.sub(lambda _match: "[REDACTED]", redacted)
         if redacted != text:
             Path(path).write_text(redacted)
 

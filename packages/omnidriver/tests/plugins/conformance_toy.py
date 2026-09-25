@@ -238,7 +238,7 @@ class LogRedactingPlugin(E2ERecordPlugin):
         )}
 
     def get_log_redaction_patterns(self):
-        return (r"(https?://)[^/\s@]+(?=@)",)
+        return (r"(?<=://)[^/\s@]+(?=@)",)      # only the credential; every match is replaced whole (I3)
 
 
 REFUSING_RENDERER_PLUGIN = "plugins.conformance_toy:RefusingRendererPlugin"
