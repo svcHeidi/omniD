@@ -160,7 +160,7 @@ def _require_file(file_path: Path) -> None:
 
 
 def _reject_directive_shaped(value: Any) -> None:
-    """Mirror ``mutators._format_value``'s tier-1 guard on this tier too.
+    """Mirror ``literals._format_value``'s tier-1 guard on this tier too.
 
     Without this, tier 2 relies solely on foamlib's own type-strictness to
     reject dangerous values -- which is narrower than tier 1's explicit
@@ -173,7 +173,7 @@ def _reject_directive_shaped(value: Any) -> None:
     SECURITY.md actually true.
 
     The stringify below is unconditional -- applied to every value type, not
-    just ``str`` -- exactly like ``mutators._format_value``. An earlier
+    just ``str`` -- exactly like ``literals._format_value``. An earlier
     version special-cased non-``str`` inputs and returned immediately for
     them (``if not isinstance(value, str): return``), which let a container
     value bypass the guard entirely: ``update_foam_entry``'s delegation

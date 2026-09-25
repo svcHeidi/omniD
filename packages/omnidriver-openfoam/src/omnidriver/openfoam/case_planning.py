@@ -14,12 +14,11 @@ entirely from that directory, but this module is never named there.
 """
 
 from collections.abc import Sequence
-from pathlib import Path
 from typing import Any, Mapping
 
 from omnidriver.core.case_write import ParameterAssignment
 
-from .mutators import _format_value
+from .literals import _format_value
 
 #: `system/controlDict` is a fixed, case-relative location -- the same for
 #: every OpenFOAM case, never derived from a caller-supplied path. Unlike
@@ -214,7 +213,7 @@ def plan_block_mesh_resolution(
     rewrite and the count it must satisfy. There is nothing here for
     `source` to classify.
 
-    `cell_counts_str` is passed through `mutators._format_value` for its
+    `cell_counts_str` is passed through `literals._format_value` for its
     existing `;`/`#`/newline security refusal (SECURITY.md) -- the same
     refusal every other value this channel writes into a dictionary already
     gets, and one the retired direct writer never applied. Reused, not

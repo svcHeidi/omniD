@@ -4,7 +4,7 @@ Phase 2's "a parameter value is typed data, never rendered text" decision
 (``docs/superpowers/plans/2026-09-20-phase2-one-write-channel.md``) asserted:
 "Where an adapter currently holds a rendered string, the adapter parses it
 when building the request." No such parser was ever written anywhere in this
-repository -- ``mutators._format_value`` renders typed data *to* text (and
+repository -- ``literals._format_value`` renders typed data *to* text (and
 performs the SECURITY.md security checks) but nothing before this module ever
 read a dimensioned literal like ``"[-1 -3 3 0 0 2 0] (0.2 0 0 0.03 0 0.03)"``
 back into the ``{"value": ..., "dimensions": (...)}`` shape
@@ -151,7 +151,7 @@ def format_dimensioned_literal(value: Mapping[str, Any]) -> str:
 
     The inverse of `parse_dimensioned_literal`, and -- Phase 2's "a
     parameter value is typed data" decision believed this direction already
-    existed in `mutators._format_value`. It does not: that function has
+    existed in `literals._format_value`. It does not: that function has
     never handled a mapping, and nothing before this module ever produced
     the typed ``{"value", "dimensions"}`` shape to render in the first
     place. See the module docstring on why this does not guarantee a
@@ -310,3 +310,32 @@ def parse_vector3_list_literal(text: str) -> tuple[tuple[float, float, float], .
 
 def format_vector3_list_literal(value: Sequence[Sequence[Any]]) -> str:
     return "(" + " ".join(format_vector3_literal(item) for item in value) + ")"
+
+# Moved here from `mutators` 2026-09-25 (consolidation): it is pure -- it
+# renders a typed value to dictionary text and applies SECURITY.md's `;`/`#`
+# refusals -- and `case_planning`, the writer-free module axes import, needs
+# it. Leaving it in `mutators` made that "pure" module depend on the module
+# that writes live case files.
+def _format_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+
+    text = str(value)
+
+    # Override values arrive verbatim from sweep.json and the CLI and are
+    # written straight into a case dictionary, so a value carrying a `;` can
+    # append a second entry, and a `#`-directive becomes code OpenFOAM will
+    # compile and run. Neither is a legitimate scalar override; refuse both
+    # rather than trusting the caller. See SECURITY.md.
+    if ";" in text or "\n" in text:
+        raise ValueError(
+            f"override value {text!r} contains a statement separator; "
+            "a value may not introduce additional dictionary entries"
+        )
+    if "#" in text:
+        raise ValueError(
+            f"override value {text!r} contains an OpenFOAM directive; "
+            "directives are not permitted in override values"
+        )
+
+    return text

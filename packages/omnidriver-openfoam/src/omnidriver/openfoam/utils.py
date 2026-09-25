@@ -13,7 +13,6 @@ for a tutorial-record axis module to import from
 
 from pathlib import Path
 
-from .case_planning import _CONTROL_DICT_DOCUMENT
 from .mutators import update_foam_entry
 
 

@@ -518,7 +518,7 @@ def override_target_paths(
 
 def _effective_value_text(value: Any) -> str:
     """Render an override as the scalar text the native query must observe."""
-    from .mutators import _format_value
+    from .literals import _format_value
 
     return _format_value(value).strip()
 

@@ -224,7 +224,7 @@ def test_the_resolver_is_pure_and_shapes_a_target_case_rendering_understands():
 
 
 def test_the_resolver_refuses_a_cell_count_string_carrying_a_directive():
-    # Reused, not re-implemented: `mutators._format_value`'s existing
+    # Reused, not re-implemented: `literals._format_value`'s existing
     # `;`/`#`/newline security refusal (SECURITY.md), which
     # `replace_block_mesh_resolutions` itself never applied.
     with pytest.raises(ValueError, match="directive"):
