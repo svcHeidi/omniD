@@ -28,6 +28,18 @@ an OpenFOAM case**, and that is not checked:
 So "solver-agnostic" is today a claim, not a property. Audit §2 has the full
 inventory.
 
+**Purpose (owner, 2026-09-25): prove it works.** The end goal is a benchmarker
+agent that runs the same study on two solvers (cardiacFoam and openCARP) and
+compares the results. This spec is step 1 of three:
+
+1. omniD can drive openCARP at all.
+2. omniD reads both solvers' results as the same quantities, such as Niederer
+   activation times at P1–P9 (§10).
+3. The benchmarker compares them.
+
+openCARP is its own environment and solver, so it is one package with no
+OpenFOAM layer beneath it. Check C1 proves exactly that.
+
 This design turns the claim into an executable definition: a **solver
 conformance suite** that any plugin must pass. **openCARP** is the first solver
 made to pass it without going through the OpenFOAM layer. Each core change is
