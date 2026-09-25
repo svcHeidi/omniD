@@ -355,6 +355,16 @@ class CardiacFoamPlugin:
 
         return (electro_properties_regeneration_scope(),)
 
+    def get_record_key_validator(self):
+        """This plugin's one ``RecordKeyValidationCapability`` answer for a
+        cardiac stack (design doc
+        ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md``
+        §5, step 4a). See ``record_key_validation.py``'s module docstring
+        for the three rules it implements."""
+        from omnidriver.cardiacfoam.record_key_validation import record_key_validator
+
+        return record_key_validator
+
     def get_tutorial_catalog(self) -> dict:
         from omnidriver.cardiacfoam.tutorials.registry import SPEC_FACTORIES, REGISTERED_TUTORIALS
         from omnidriver.cardiacfoam.tutorials.generic_case import (

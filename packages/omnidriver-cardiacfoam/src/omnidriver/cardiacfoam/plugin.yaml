@@ -83,6 +83,12 @@ provides:
   - run_document_configuration
   - run_semantic_validator
   - sweep_materializer
+  # Added step 4a (2026-09-25, tutorial-records design doc §5): the sole
+  # member get_record_key_validator adapts (record_key_validation) is real,
+  # not a stub -- record_key_validation.record_key_validator answers for
+  # every document a cardiac stack might see (its own module docstring has
+  # the three rules), never a constant or an unconditionally-empty return.
+  - record_key_validation
 runtime:
   openfoam:
     bashrc_env: OPENFOAM_BASHRC
