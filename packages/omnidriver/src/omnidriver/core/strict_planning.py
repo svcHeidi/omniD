@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import fnmatch
+import json
 import os
 import shlex
 from dataclasses import asdict, dataclass, field, is_dataclass
@@ -17,7 +18,8 @@ import shutil
 from .runtime.artifacts import predict_data_artifacts
 from .runtime.execution_context import resolve_execution_context
 from .runtime.models import DataArtifact
-from .runtime.registry import load_entry_spec
+from .runtime.record_execution import commit_and_build_record_spec
+from .runtime.registry import classify_entry, load_entry_spec
 from .runtime.run_command import omnidriver_run_command
 from .runtime.run_document_adapter import _run_document_from_case
 from .runtime.run_model import RunDocument
@@ -37,6 +39,8 @@ from omnidriver.core.planning_types import (
     diagnostic as _diagnostic,
 )
 from .contracts.catalogue_paths import catalogued_paths as _catalogued_paths
+from .specs.paths import scratch_root
+from .tutorial_records import TutorialRecordError
 
 
 @dataclass(frozen=True)
@@ -405,6 +409,7 @@ def _run_launch_description(
     entry_kind: str | None,
     config_path: str | Path | None,
     allow_unresolved_configuration: bool = False,
+    is_tutorial_record: bool = False,
 ) -> dict[str, Any]:
     """Describe the modern `run --strict --entry` invocation for this plan.
 
@@ -425,14 +430,35 @@ def _run_launch_description(
     Added 2026-09-24, after ``sweep-run --output-dir out`` recorded a completed
     case as "pending". Anchoring here resolves a supplied relative path at the
     moment it was supplied; it invents no root.
+
+    P1 fix (docs/superpowers/specs/2026-09-24-tutorials-are-pointers-
+    design.md, "Owner decisions" dated 2026-09-25): a tutorial record has no
+    ``load_entry_spec`` resolution at all (it is inert data, not a factory --
+    ``registry._materialize_resolved_entry`` refuses it by name), so
+    ``run --strict --entry <record>`` can never re-resolve the way a factory
+    entry's launch command does. A record's own case was already committed
+    once, by the caller that built this plan (``strict_plan``'s own
+    tutorial_record branch, or a sweep case) -- the launch command instead
+    points at the run document THIS PLAN becomes, once its caller persists it
+    at this exact path (``output_dir/run_document.json``, matching the
+    existing "sweep-run writes run_document.json right before running"
+    convention). ``entry_kind``/``config_path``/``allow_unresolved_
+    configuration`` name a ``load_entry_spec`` re-resolution that a record
+    never performs, so none of them apply to this branch.
     """
-    command = omnidriver_run_command(driver_context, "--strict", "--entry", entry)
-    if entry_kind is not None:
-        command.extend(["--entry-kind", entry_kind])
-    if config_path is not None:
-        command.extend(["--config", str(config_path)])
-    if allow_unresolved_configuration:
-        command.append("--allow-unresolved-configuration")
+    if is_tutorial_record:
+        run_document_path = str(
+            Path(context.output_dir).absolute() / "run_document.json"
+        )
+        command = omnidriver_run_command(driver_context, "--run-document", run_document_path)
+    else:
+        command = omnidriver_run_command(driver_context, "--strict", "--entry", entry)
+        if entry_kind is not None:
+            command.extend(["--entry-kind", entry_kind])
+        if config_path is not None:
+            command.extend(["--config", str(config_path)])
+        if allow_unresolved_configuration:
+            command.append("--allow-unresolved-configuration")
     return {
         "action": "run",
         "command": command,
@@ -466,6 +492,29 @@ def strict_plan(
     reusing the exact same diagnostics/run-document pipeline, not a second
     one.
     """
+    incoming_overrides = dict(overrides or {})
+    cases_root_value = incoming_overrides.get("cases_root")
+    cases_root = Path(cases_root_value) if cases_root_value is not None else None
+    # P1 fix: a tutorial record is dispatched EXPLICITLY, the same way
+    # `sweep_runner._sweep_record` already dispatches one out of a sweep --
+    # never tried as a factory/case-folder entry first via `load_entry_spec`
+    # (which refuses a record by name; see `registry
+    # ._materialize_resolved_entry`'s own docstring, review finding B2).
+    classification = classify_entry(
+        entry, entry_kind=entry_kind, cases_root=cases_root, driver_context=driver_context,
+    )
+    if classification.kind == "tutorial_record":
+        return _strict_plan_for_record(
+            classification.record,
+            entry=entry,
+            entry_kind=entry_kind,
+            cases_root=cases_root,
+            overrides=incoming_overrides,
+            config_path=config_path,
+            explicit_bashrc=explicit_bashrc,
+            allow_unresolved_configuration=allow_unresolved_configuration,
+            driver_context=driver_context,
+        )
     spec = load_entry_spec(
         entry,
         entry_kind=entry_kind,
@@ -481,6 +530,83 @@ def strict_plan(
         driver_context=driver_context,
         config_path=config_path,
     )
+
+
+def _strict_plan_for_record(
+    record: Any,
+    *,
+    entry: str,
+    entry_kind: str | None,
+    cases_root: Path | None,
+    overrides: dict[str, Any],
+    config_path: str | Path | None,
+    explicit_bashrc: str | Path | None,
+    allow_unresolved_configuration: bool,
+    driver_context: "DriverContext",
+) -> StrictPlanReport:
+    """Plan (and commit) one tutorial-record case for `plan --strict --entry
+    <record>` / `step`/`run --entry <record>` -- P1 fix.
+
+    A record has no ambient cases root (CLAUDE.md's "supplied versus
+    discovered"; the same refusal `sweep_runner._sweep_record` already
+    raises for a swept record). Everything in ``overrides`` other than
+    ``cases_root`` is this single, non-swept case's own study values
+    (``base``, no ``sweep`` values -- "the way a one-case sweep does": one
+    resolved case, no axis expansion). The case is staged and committed via
+    the ONE shared ``commit_and_build_record_spec`` sequence sweep_runner
+    also calls -- design's own "no duplicate" instruction.
+
+    Where this stages: "supplied, not invented" (CLAUDE.md) -- there is no
+    sweep output_dir here to stage under, so this uses the repository's own
+    scratch rule, `core.specs.paths.scratch_root`, anchored at the SUPPLIED
+    cases_root, under a `records/<name>` subdirectory (parallel to
+    `cli._context_from_entry`'s own `runs/<name>` staging for a case-folder
+    entry -- a different subdirectory name because a record and a same-named
+    case folder must never collide, `registry.classify_entry`'s own
+    invariant).
+
+    The plan this returns commits the record's case as a side effect (the
+    same thing `sweep_runner._record_sweep_plan`, i.e. `sweep-plan` over a
+    record entry, already does at plan time) and persists the resulting
+    `RunDocument` to `<output_dir>/run_document.json` -- the exact path
+    `_run_launch_description`'s record branch advertises as `run
+    --run-document <path>` -- so that advertised command is immediately
+    runnable, not a promise of a file nothing wrote yet.
+    """
+    if cases_root is None:
+        raise TutorialRecordError(
+            f"tutorial record {entry!r} cannot be planned: 'cases_root' must "
+            "name where its native case lives (there is no ambient cases "
+            "root to discover); supply --cases-root or OMNIDRIVER_CASES_ROOT"
+        )
+    study_by_source = {
+        "base": {
+            key: value for key, value in overrides.items() if key != "cases_root"
+        },
+        "sweep": {},
+    }
+    staged_case_root = scratch_root(cases_root) / "records" / record.name
+    _commit_result, spec = commit_and_build_record_spec(
+        record,
+        case_id=record.name,
+        cases_root=cases_root,
+        staged_case_root=staged_case_root,
+        study_by_source=study_by_source,
+        driver_context=driver_context,
+    )
+    report = _strict_plan_for_spec(
+        entry,
+        spec,
+        entry_kind=entry_kind,
+        config_path=config_path,
+        explicit_bashrc=explicit_bashrc,
+        allow_unresolved_configuration=allow_unresolved_configuration,
+        driver_context=driver_context,
+    )
+    run_document_path = Path(report.launch["output_dir"]) / "run_document.json"
+    run_document_path.parent.mkdir(parents=True, exist_ok=True)
+    run_document_path.write_text(json.dumps(report.run_document.to_json(), indent=2))
+    return report
 
 
 def _strict_plan_for_spec(
@@ -501,6 +627,9 @@ def _strict_plan_for_spec(
     the existing workflow runner. do not build a second runner."
     """
     execution_context = resolve_execution_context(spec)
+    is_tutorial_record = bool(
+        spec.metadata and spec.metadata.get("resolution") == "tutorial_record"
+    )
     launch = _run_launch_description(
         entry,
         execution_context,
@@ -508,6 +637,7 @@ def _strict_plan_for_spec(
         entry_kind=entry_kind,
         config_path=config_path,
         allow_unresolved_configuration=allow_unresolved_configuration,
+        is_tutorial_record=is_tutorial_record,
     )
     artifacts = tuple(
         predict_data_artifacts(

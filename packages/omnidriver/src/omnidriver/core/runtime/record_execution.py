@@ -478,6 +478,44 @@ def _workflow_dag_for_record(
     return {"steps": dag_steps}
 
 
+def commit_and_build_record_spec(
+    record: TutorialRecord,
+    *,
+    case_id: str,
+    cases_root: Path,
+    staged_case_root: Path,
+    study_by_source: Mapping[str, Mapping[str, Any]],
+    driver_context: "DriverContext",
+    execution_env: Any | None = None,
+    requested_by: str = "tutorial_record",
+) -> tuple[RecordCommitResult, Any]:
+    """Stage, commit, and build the ``TutorialSpec`` for one record case --
+    design §4 steps 1-8's write half plus the spec that maps the committed
+    case onto the factory-tutorial workflow shape (``record_case_spec``).
+
+    This is the ONE "stage + commit + spec" sequence a record case needs
+    before it can be planned/run through ``strict_planning
+    ._strict_plan_for_spec`` -- both ``sweep_runner`` (one case out of a
+    sweep) and ``strict_planning.strict_plan`` (a single ``plan --strict
+    --entry <record>`` invocation) call this, never each keeping its own
+    copy (P1 fix, docs/superpowers/specs/2026-09-24-tutorials-are-pointers-
+    design.md, "Owner decisions" dated 2026-09-25: "Factor the shared
+    'stage + commit + spec' sequence into ONE function that both
+    sweep_runner and strict_plan call. No duplicate.").
+    """
+    commit_result = commit_record_case(
+        record, cases_root=cases_root, staged_case_root=staged_case_root,
+        study_by_source=study_by_source, driver_context=driver_context,
+        execution_env=execution_env, requested_by=requested_by,
+    )
+    spec = record_case_spec(
+        record, case_id=case_id, staged_case_root=staged_case_root,
+        workflow_step_ids=commit_result.workflow_step_ids,
+        command_arguments=commit_result.command_arguments,
+    )
+    return commit_result, spec
+
+
 def record_case_spec(
     record: TutorialRecord,
     *,

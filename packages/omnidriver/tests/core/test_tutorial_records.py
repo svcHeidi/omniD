@@ -1533,6 +1533,83 @@ def test_tutorial_record_capability_seams_call_no_legacy_fallback_when_absent():
 
 
 # ---------------------------------------------------------------------------
+# P1 fix (docs/superpowers/specs/2026-09-24-tutorials-are-pointers-
+# design.md, "Owner decisions" dated 2026-09-25): `strict_plan` handles a
+# tutorial_record resolution directly (stage + commit + spec, the same
+# shared sequence a sweep case uses), rather than refusing by name through
+# `load_entry_spec`. The CLI end-to-end path lives in
+# `test_cli_plan_strict_tutorial_record.py`; these are the direct, in-
+# process unit tests of `strict_plan` itself.
+# ---------------------------------------------------------------------------
+
+
+def test_strict_plan_over_a_tutorial_record_refuses_without_cases_root():
+    """A record has no ambient cases root (CLAUDE.md's "supplied versus
+    discovered") -- the same refusal `sweep_runner._sweep_record` already
+    raises for a swept record. Unreachable through the CLI (which always
+    supplies SOME `cases_root`, defaulting to cwd), so this exercises
+    `strict_plan` directly with no `cases_root` override at all."""
+    from omnidriver.core.strict_planning import strict_plan
+
+    record = _record()
+    context = _context_with_writer(
+        tutorial_records={"toyTutorial": record},
+        axis_catalog={"number_cells": _number_cells_axis()},
+    )
+    with pytest.raises(TutorialRecordError, match="cases_root"):
+        strict_plan("toyTutorial", driver_context=context)
+
+
+def test_strict_plan_over_a_tutorial_record_commits_and_plans_with_a_working_run_document(
+    tmp_path,
+):
+    """`plan --strict --entry <record>`'s own pipeline, in process: commits
+    the record's case (the same thing `sweep-plan` over a record entry
+    already does at plan time), and persists a `run_document.json` at the
+    exact path its own advertised `run --run-document <path>` command
+    names.
+
+    Uses `plugins.e2e_record_plugin.E2ERecordPlugin` (rather than this
+    file's own `_RecordCaseWriterPlugin`/`_context_with_writer`) because it
+    is the first test in this file to run a record spec through the FULL
+    `strict_plan` diagnostics pipeline (workflow-command authorization,
+    environment diagnostics, ...), which `_RecordCaseWriterPlugin` -- built
+    only for `commit_record_case`/`preview_record_case` -- does not declare
+    enough of a `MinimalTestPlugin` to satisfy; `E2ERecordPlugin` already
+    does, for exactly this reason (its own docstring: "for the manual
+    end-to-end CLI proof").
+    """
+    from omnidriver.core.plugin_interface import driver_context as _dc
+    from omnidriver.core.strict_planning import strict_plan
+    from plugins.e2e_record_plugin import E2ERecordPlugin
+
+    native = tmp_path / "cases" / "toyTutorial" / "constant"
+    native.mkdir(parents=True)
+    (native / "mesh.json").write_text(json.dumps({"cells": "1"}))
+    context = _dc(E2ERecordPlugin(), source="test:strict-plan-record")
+
+    report = strict_plan(
+        "toyTutorial",
+        overrides={
+            "cases_root": str(tmp_path / "cases"),
+            "constant/mesh.json:cells": 7,
+        },
+        driver_context=context,
+    )
+
+    assert report.status == "ok", report.to_json()
+    command = report.launch["command"]
+    assert "--run-document" in command
+    assert "--strict" not in command
+    run_document_path = Path(command[command.index("--run-document") + 1])
+    assert run_document_path.is_file()
+    persisted = json.loads(run_document_path.read_text())
+    assert persisted == report.run_document.to_json()
+    case_root = Path(report.launch["case_root"])
+    assert json.loads((case_root / "constant" / "mesh.json").read_text())["cells"] == "7"
+
+
+# ---------------------------------------------------------------------------
 # A sweep over a record entry: one commit per case
 # ---------------------------------------------------------------------------
 

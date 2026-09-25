@@ -41,6 +41,7 @@ from .core.runtime.execution_context import (
     ReplannedExecution as _ReplannedExecution,
     StepExecutionContext as _ExecutionContext,
 )
+from .core.tutorial_records import TutorialRecordError
 
 
 if TYPE_CHECKING:
@@ -500,15 +501,23 @@ def _context_from_entry(
     replan_entry = selected_entry
     replan_entry_kind = entry_kind
     replan_overrides = dict(overrides or {})
-    report = strict_plan(
-        selected_entry,
-        entry_kind=entry_kind,
-        overrides=overrides,
-        config_path=config_path,
-        explicit_bashrc=explicit_bashrc,
-        allow_unresolved_configuration=allow_unresolved_configuration,
-        driver_context=driver_context,
-    )
+    try:
+        report = strict_plan(
+            selected_entry,
+            entry_kind=entry_kind,
+            overrides=overrides,
+            config_path=config_path,
+            explicit_bashrc=explicit_bashrc,
+            allow_unresolved_configuration=allow_unresolved_configuration,
+            driver_context=driver_context,
+        )
+    except TutorialRecordError as exc:
+        print(json.dumps({
+            "status": "failed",
+            "entry": selected_entry,
+            "error": str(exc),
+        }, indent=2))
+        return None, 1
     readiness = is_launchable(
         plan_status=report.status,
         environment_diagnostics=report.environment_diagnostics,
@@ -563,15 +572,23 @@ def _context_from_entry(
             replan_entry = "genericcase"
             replan_entry_kind = "case_folder"
         replan_overrides = staged_overrides
-        report = strict_plan(
-            replan_entry,
-            entry_kind=replan_entry_kind,
-            overrides=staged_overrides,
-            config_path=config_path,
-            explicit_bashrc=explicit_bashrc,
-            allow_unresolved_configuration=allow_unresolved_configuration,
-            driver_context=driver_context,
-        )
+        try:
+            report = strict_plan(
+                replan_entry,
+                entry_kind=replan_entry_kind,
+                overrides=staged_overrides,
+                config_path=config_path,
+                explicit_bashrc=explicit_bashrc,
+                allow_unresolved_configuration=allow_unresolved_configuration,
+                driver_context=driver_context,
+            )
+        except TutorialRecordError as exc:
+            print(json.dumps({
+                "status": "failed",
+                "entry": selected_entry,
+                "error": str(exc),
+            }, indent=2))
+            return None, 1
         readiness = is_launchable(
             plan_status=report.status,
             environment_diagnostics=report.environment_diagnostics,
@@ -595,7 +612,7 @@ def _context_from_entry(
                 allow_unresolved_configuration=allow_unresolved_configuration,
                 driver_context=driver_context,
             )
-        except (OSError, ValueError) as exc:
+        except (OSError, ValueError, TutorialRecordError) as exc:
             print(json.dumps({
                 "status": "failed",
                 "entry": selected_entry,
@@ -1208,15 +1225,24 @@ def main(argv: list[str] | None = None) -> int:
     if args.action == "plan":
         if not args.strict:
             parser.error("action=plan currently requires --strict")
-        report = strict_plan(
-            selected_entry,
-            entry_kind=args.entry_kind,
-            overrides=overrides,
-            config_path=args.config,
-            explicit_bashrc=args.environment_bashrc,
-            allow_unresolved_configuration=args.allow_unresolved_configuration,
-            driver_context=driver_context,
-        )
+        try:
+            report = strict_plan(
+                selected_entry,
+                entry_kind=args.entry_kind,
+                overrides=overrides,
+                config_path=args.config,
+                explicit_bashrc=args.environment_bashrc,
+                allow_unresolved_configuration=args.allow_unresolved_configuration,
+                driver_context=driver_context,
+            )
+        except TutorialRecordError as exc:
+            print(json.dumps({
+                "status": "failed",
+                "entry": selected_entry,
+                "action": "plan",
+                "error": str(exc),
+            }, indent=2))
+            return 1
         print(json.dumps(report.to_json(), indent=2))
         readiness = is_launchable(
             plan_status=report.status,

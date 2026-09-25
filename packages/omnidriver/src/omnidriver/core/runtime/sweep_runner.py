@@ -23,8 +23,7 @@ from .models import data_artifact_from_json, invoke_case_mutation
 from .output_collection import collect_new_output_tree, snapshot_output_tree
 from .postprocess_phase import build_sweep_context, run_postprocessing_module
 from .record_execution import (
-    commit_record_case,
-    record_case_spec,
+    commit_and_build_record_spec,
     _reserved_study_names,
     _serialize_sourced_patch,
 )
@@ -225,14 +224,10 @@ def _record_sweep_plan(
             base=base, resolved_axis_values=case.resolved_axis_values,
         )
         try:
-            commit_result = commit_record_case(
-                record, cases_root=cases_root, staged_case_root=staged_case_root,
-                study_by_source=study_by_source, driver_context=driver_context,
-            )
-            spec = record_case_spec(
-                record, case_id=case.case_id, staged_case_root=staged_case_root,
-                workflow_step_ids=commit_result.workflow_step_ids,
-                command_arguments=commit_result.command_arguments,
+            commit_result, spec = commit_and_build_record_spec(
+                record, case_id=case.case_id, cases_root=cases_root,
+                staged_case_root=staged_case_root, study_by_source=study_by_source,
+                driver_context=driver_context,
             )
             report = _strict_plan_for_spec(record.name, spec, driver_context=driver_context)
         except Exception as exc:
@@ -315,20 +310,16 @@ def _record_sweep_run(
         commit_status = None
         unchanged_patches: list[dict[str, Any]] = []
         try:
-            commit_result = commit_record_case(
-                record, cases_root=cases_root, staged_case_root=staged_case_root,
-                study_by_source=study_by_source, driver_context=driver_context,
+            commit_result, spec = commit_and_build_record_spec(
+                record, case_id=case.case_id, cases_root=cases_root,
+                staged_case_root=staged_case_root, study_by_source=study_by_source,
+                driver_context=driver_context,
             )
             commit_status = commit_result.status
             unchanged_patches = [
                 _serialize_sourced_patch(sourced, status="unchanged")
                 for sourced in commit_result.unchanged
             ]
-            spec = record_case_spec(
-                record, case_id=case.case_id, staged_case_root=staged_case_root,
-                workflow_step_ids=commit_result.workflow_step_ids,
-                command_arguments=commit_result.command_arguments,
-            )
             report = _strict_plan_for_spec(record.name, spec, driver_context=driver_context)
             payload = report.to_json()
             if report.status != "ok":

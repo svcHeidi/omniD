@@ -1402,7 +1402,8 @@ def test_sweep_plan_over_a_record_entry_refuses_without_cases_root(tmp_path):
 
 def test_sweep_run_over_a_record_entry_commits_and_runs_two_cases(tmp_path):
     """Item 2's own end-to-end shape: a 2-case record study gets exactly one
-    commit_record_case per case, and the record's workflow steps run through
+    commit_and_build_record_spec (stage + commit + spec, P1's shared
+    function) per case, and the record's workflow steps run through
     the same run-document/workflow-runner machinery a factory entry uses.
 
     The spawned ``omnidriver run --run-document`` subprocess is faked here
@@ -1422,14 +1423,15 @@ def test_sweep_run_over_a_record_entry_commits_and_runs_two_cases(tmp_path):
     ctx = _record_driver_context()
 
     commits = []
-    real_commit_record_case = __import__(
-        "omnidriver.core.runtime.record_execution", fromlist=["commit_record_case"],
-    ).commit_record_case
+    real_commit_and_build_record_spec = __import__(
+        "omnidriver.core.runtime.record_execution",
+        fromlist=["commit_and_build_record_spec"],
+    ).commit_and_build_record_spec
 
     def tracking_commit(*args, **kwargs):
-        result = real_commit_record_case(*args, **kwargs)
-        commits.append(result)
-        return result
+        commit_result, spec = real_commit_and_build_record_spec(*args, **kwargs)
+        commits.append(commit_result)
+        return commit_result, spec
 
     def fake_subprocess_run(cmd, **kwargs):
         run_doc_path = Path(cmd[cmd.index("--run-document") + 1])
@@ -1444,7 +1446,8 @@ def test_sweep_run_over_a_record_entry_commits_and_runs_two_cases(tmp_path):
         return mock.Mock(returncode=0, stdout="", stderr="")
 
     with mock.patch(
-        "omnidriver.core.runtime.sweep_runner.commit_record_case", side_effect=tracking_commit,
+        "omnidriver.core.runtime.sweep_runner.commit_and_build_record_spec",
+        side_effect=tracking_commit,
     ), mock.patch(
         "omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run,
     ):
