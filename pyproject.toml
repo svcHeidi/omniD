@@ -20,9 +20,18 @@ markers = [
     # rather than skips, when that variable is unset: the point is to catch
     # a run that meant to exercise the real tree but forgot to supply it, not
     # to quietly pass over it. Deselect explicitly with -m "not native".
-    # openCARP's native tests need OMNIDRIVER_OPENCARP_TUTORIALS instead (its
-    # own tutorials tree and the real binary), under the same rule.
-    "native: needs OMNIDRIVER_NATIVE_TUTORIALS or OMNIDRIVER_OPENCARP_TUTORIALS; fails (not skips) if unset",
+    # Corrected 2026-09-25 (final review S-I1): this marker also covered
+    # openCARP's native tests, so the documented repo-wide `-m native` run
+    # failed 15 openCARP tests on any machine without openCARP. openCARP's
+    # native tests now carry `native_opencarp` below, and `native` means the
+    # cardiacFOAM native tree only.
+    "native: needs OMNIDRIVER_NATIVE_TUTORIALS (the cardiacFOAM native tree); fails (not skips) if unset",
+    # Needs openCARP's tutorials tree, supplied ONLY via
+    # OMNIDRIVER_OPENCARP_TUTORIALS, and the real openCARP binary (on macOS
+    # with DYLD_LIBRARY_PATH). Same rule as `native`: FAILS, not skips, when
+    # unset. Also registered in packages/omnidriver-opencarp/pyproject.toml
+    # for a per-package run.
+    "native_opencarp: needs OMNIDRIVER_OPENCARP_TUTORIALS and the openCARP binary; fails (not skips) if unset",
 ]
 addopts = "--import-mode=importlib"
 pythonpath = [

@@ -17,10 +17,10 @@ def opencarp_tutorials_root() -> Path:
     value = os.environ.get("OMNIDRIVER_OPENCARP_TUTORIALS")
     if not value:
         pytest.fail(
-            "OMNIDRIVER_OPENCARP_TUTORIALS is not set. A @pytest.mark.native openCARP test "
+            "OMNIDRIVER_OPENCARP_TUTORIALS is not set. A @pytest.mark.native_opencarp test "
             "needs openCARP's tutorials tree supplied explicitly, e.g.\n"
             "  OMNIDRIVER_OPENCARP_TUTORIALS=/usr/local/lib/opencarp/share/tutorials "
-            "DYLD_LIBRARY_PATH=/opt/homebrew/lib pytest -m native"
+            "DYLD_LIBRARY_PATH=/opt/homebrew/lib pytest packages/omnidriver-opencarp/tests -m native_opencarp"
         )
     root = Path(value)
     if not (root / NIEDERER_RELPATH / "nversion.par").is_file():

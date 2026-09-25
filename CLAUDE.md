@@ -45,11 +45,11 @@ uv venv --python 3.11 /tmp/odcore && VIRTUAL_ENV=/tmp/odcore uv pip install -q \
 
 | shape | command | catches |
 |---|---|---|
-| all four | `python -m pytest packages/ -q -m "not slow and not native"` | ordinary regressions |
+| all packages | `python -m pytest packages/ -q -m "not slow and not native and not native_opencarp"` | ordinary regressions |
 | core alone | `python -m pytest packages/omnidriver/tests -q` | core reaching into a sibling package |
 | **installed wheel** | see below | core reading repo-relative state at import time |
 | native tree | `OMNIDRIVER_NATIVE_TUTORIALS=<path> python -m pytest packages/ -q -m native` | drift against the real native cardiacFOAM tutorials tree; supplied only via that variable (never discovered) — a `native`-marked test FAILS, not skips, when it is unset |
-| native openCARP | `OMNIDRIVER_OPENCARP_TUTORIALS=<path> DYLD_LIBRARY_PATH=<lib> python -m pytest packages/omnidriver-opencarp/tests -m native` | drift against the real openCARP binary and its tutorials tree; `DYLD_LIBRARY_PATH` is required on macOS or the binary fails to load `libsundials_cvode`, supplied, never discovered |
+| native openCARP | `OMNIDRIVER_OPENCARP_TUTORIALS=<path> DYLD_LIBRARY_PATH=<lib> python -m pytest packages/omnidriver-opencarp/tests -m native_opencarp` | drift against the real openCARP binary and its tutorials tree; `DYLD_LIBRARY_PATH` is required on macOS or the binary fails to load `libsundials_cvode`, supplied, never discovered — a `native_opencarp`-marked test FAILS, not skips, when either is missing |
 | static gates | `python3 scripts/check-import-boundaries.py`, `scripts/export-capability-seams.py --check`, `scripts/check-case-writes.py`, and `scripts/check-core-shape.py` | import direction; a stale generated table; a tutorial-record/axis module writing a case directly instead of through `commit_case_write`; core gaining a new OpenFOAM layout token or growing its recorded debt |
 
 The wheel shape is the one people skip and the one that found the worst
@@ -63,6 +63,13 @@ VIRTUAL_ENV=/tmp/wheelenv uv pip install -q "/tmp/wheeltest/omnidriver-*.whl[pos
 /tmp/wheelenv/bin/python scripts/check-wheel-artifact.py          # artifact gate
 /tmp/wheelenv/bin/python -m pytest packages/omnidriver/tests -q   # 0 failed
 ```
+
+**Corrected 2026-09-25 (final review S-I1):** openCARP's native tests used to
+share the `native` marker, so the `native tree` row above also collected 15
+openCARP tests and failed them on any machine without openCARP. They now
+carry `native_opencarp`: `-m native` collects cardiacFOAM's native tests
+only, and the all-packages row (named "all four" until then) excludes both
+markers.
 
 Do not quote suite totals from documentation — they rot within days. Run the
 command. The only durable claim is **0 failed**.

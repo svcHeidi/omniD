@@ -137,9 +137,10 @@ jobs:
 
   # openCARP drives a different binary entirely and needs no OpenFOAM, so this
   # job installs core and the opencarp adapter only -- which also proves the
-  # package declares every dependency it uses. Its `native` tests need the
-  # openCARP binary and OMNIDRIVER_OPENCARP_TUTORIALS, and fail (not skip)
-  # without them, so they are deselected here explicitly.
+  # package declares every dependency it uses. Its `native_opencarp` tests
+  # need the openCARP binary and OMNIDRIVER_OPENCARP_TUTORIALS, and fail (not
+  # skip) without them, so they are deselected here explicitly. (Marker was
+  # `native` until 2026-09-25, final review S-I1.)
   test-opencarp:
     name: test-opencarp (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -165,7 +166,7 @@ jobs:
                       pytest
 
       - name: Run tests
-        run: python -m pytest packages/omnidriver-opencarp/tests -m "not native" -q
+        run: python -m pytest packages/omnidriver-opencarp/tests -m "not native_opencarp" -q
 
   test-all-package-wheels:
     name: test-all-package-wheels (py3.11)

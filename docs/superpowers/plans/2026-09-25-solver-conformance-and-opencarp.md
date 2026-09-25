@@ -24,6 +24,7 @@
 - Python floor 3.11; CI matrixes 3.11/3.12/3.13.
 - Core names no solver or physics: `scripts/check-import-boundaries.py` has an empty waiver list, and after Task 7 `scripts/check-core-shape.py` accepts no new token.
 - No skips. A check that cannot run is a **failure that names why**. `native` tests **fail, not skip**, when their environment variable is unset.
+  - **Corrected 2026-09-25 (final review S-I1):** openCARP's native tests carry `native_opencarp`, not `native`, so a repo-wide `-m native` (cardiacFOAM's tree) no longer collects and fails them. The task steps below that write `pytest.mark.native` or `-m native` for an openCARP test predate the rename; the verification commands were updated.
 - Supplied, never discovered:
   - native trees come from `OMNIDRIVER_OPENCARP_TUTORIALS` (openCARP) and `OMNIDRIVER_NATIVE_TUTORIALS` (cardiacFOAM);
   - openCARP's library path comes from the ambient `DYLD_LIBRARY_PATH`;
@@ -36,7 +37,7 @@
   - all packages;
   - core alone;
   - the installed wheel;
-  - `-m native`;
+  - `-m native` (cardiacFOAM) and `-m native_opencarp` (openCARP);
   - static gates.
   
   The durable claim is **0 failed**. Suite totals are never quoted.
@@ -2928,9 +2929,9 @@ The owner's gaps 1 and 3 (2026-09-25). Without this, `describe` shows cardiacFOA
 
   ```bash
   VIRTUAL_ENV=/tmp/odconf uv pip install -q -e packages/omnidriver-opencarp
-  /tmp/odconf/bin/python -m pytest packages/omnidriver-opencarp/tests -q -m "not native"
+  /tmp/odconf/bin/python -m pytest packages/omnidriver-opencarp/tests -q -m "not native_opencarp"
   export OMNIDRIVER_OPENCARP_TUTORIALS=/usr/local/lib/opencarp/share/tutorials DYLD_LIBRARY_PATH=/opt/homebrew/lib
-  /tmp/odconf/bin/python -m pytest packages/omnidriver-opencarp/tests -v -m native
+  /tmp/odconf/bin/python -m pytest packages/omnidriver-opencarp/tests -v -m native_opencarp
   python3 scripts/check-import-boundaries.py && python3 scripts/check-case-writes.py && python3 scripts/check-core-shape.py && /tmp/odconf/bin/python scripts/export-capability-seams.py --check
   ```
   Expected: all ten checks pass for `niedererNVersion` (C10 included), and every gate exits 0.
@@ -3076,7 +3077,7 @@ The owner's gaps 1 and 3 (2026-09-25). Without this, `describe` shows cardiacFOA
 
   In `.github/workflows/ci.yml`, add a job `test-opencarp`, modelled on `test-cardiaccore`:
   - install `packages/omnidriver` and `packages/omnidriver-opencarp` only (**no** `omnidriver-openfoam`: this is C1 as an install fact);
-  - run `python -m pytest packages/omnidriver-opencarp/tests -m "not native" -q`.
+  - run `python -m pytest packages/omnidriver-opencarp/tests -m "not native_opencarp" -q`.
   
   Add the new package to `test-all-package-wheels`' install line and to the `cache-dependency-path` lists.
 
@@ -3084,7 +3085,7 @@ The owner's gaps 1 and 3 (2026-09-25). Without this, `describe` shows cardiacFOA
 
   - Add `omnidriver-opencarp` to the package table: may know "openCARP binary, .par, mesher, IGB/LAT outputs", must not know "OpenFOAM, cardiacFoam".
   - Add `-e packages/omnidriver-opencarp` to the all-packages venv line.
-  - Add a native row: `OMNIDRIVER_OPENCARP_TUTORIALS=<path> DYLD_LIBRARY_PATH=<lib> python -m pytest packages/omnidriver-opencarp/tests -m native`.
+  - Add a native row: `OMNIDRIVER_OPENCARP_TUTORIALS=<path> DYLD_LIBRARY_PATH=<lib> python -m pytest packages/omnidriver-opencarp/tests -m native_opencarp`.
   - Add an invariant row: `| any solver plugin passes C1-C10 | omnidriver.conformance, parametrized per package (toy in core; openCARP native) |`.
 
 - [ ] **Step 3: The spec's status and its dated corrections**
@@ -3100,12 +3101,12 @@ The owner's gaps 1 and 3 (2026-09-25). Without this, `describe` shows cardiacFOA
 - [ ] **Step 4: Full verification, then commit**
 
   ```bash
-  /tmp/odconf/bin/python -m pytest packages/ -q -m "not slow and not native"
+  /tmp/odconf/bin/python -m pytest packages/ -q -m "not slow and not native and not native_opencarp"
   /tmp/odconfcore/bin/python -m pytest packages/omnidriver/tests -q
   rm -rf /tmp/wheeltest /tmp/wheelenv && /tmp/odconf/bin/python -m build --outdir /tmp/wheeltest packages/omnidriver
   uv venv --python 3.11 /tmp/wheelenv && VIRTUAL_ENV=/tmp/wheelenv uv pip install -q "/tmp/wheeltest/omnidriver-*.whl[post]" pytest
   /tmp/wheelenv/bin/python scripts/check-wheel-artifact.py && /tmp/wheelenv/bin/python -m pytest packages/omnidriver/tests -q
-  OMNIDRIVER_OPENCARP_TUTORIALS=/usr/local/lib/opencarp/share/tutorials DYLD_LIBRARY_PATH=/opt/homebrew/lib /tmp/odconf/bin/python -m pytest packages/omnidriver-opencarp/tests -q -m native
+  OMNIDRIVER_OPENCARP_TUTORIALS=/usr/local/lib/opencarp/share/tutorials DYLD_LIBRARY_PATH=/opt/homebrew/lib /tmp/odconf/bin/python -m pytest packages/omnidriver-opencarp/tests -q -m native_opencarp
   python3 scripts/check-import-boundaries.py && python3 scripts/check-case-writes.py && python3 scripts/check-core-shape.py && /tmp/odconf/bin/python scripts/export-capability-seams.py --check
   ```
   Expected: 0 failed in every shape; every gate exits 0. The wheel shape matters here: `omnidriver.conformance` ships in the wheel, and C1–C10 over the toy run from it.
@@ -3287,7 +3288,7 @@ Owner decision 2026-09-25. It waits for step 5 because it edits cardiacFOAM's `p
 
   ```bash
   /tmp/odconf/bin/python -m pytest packages/omnidriver/tests/core/test_layer_ownership.py -v
-  /tmp/odconf/bin/python -m pytest packages/ -q -m "not slow and not native"
+  /tmp/odconf/bin/python -m pytest packages/ -q -m "not slow and not native and not native_opencarp"
   OMNIDRIVER_NATIVE_TUTORIALS=/Users/simaocastro/noFrontendCardiacFoam_minor_errors/tutorials /tmp/odconf/bin/python -m pytest packages/ -q -m native
   python3 scripts/check-core-shape.py
   ```

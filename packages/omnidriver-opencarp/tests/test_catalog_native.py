@@ -9,7 +9,7 @@ import pytest
 from omnidriver.opencarp.catalog_generation import build_catalog
 from opencarp_native import require_opencarp_binary
 
-pytestmark = pytest.mark.native
+pytestmark = pytest.mark.native_opencarp
 
 
 def test_committed_catalog_matches_the_binary():

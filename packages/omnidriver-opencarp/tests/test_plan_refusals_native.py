@@ -14,7 +14,7 @@ import pytest
 from omnidriver.cli import main
 from opencarp_native import opencarp_tutorials_root
 
-pytestmark = pytest.mark.native
+pytestmark = pytest.mark.native_opencarp
 
 
 def _plan(tmp_path, monkeypatch, capsys, study):

@@ -6,7 +6,7 @@ import pytest
 from omnidriver.opencarp.par_format import parse_par, patch_par
 from opencarp_native import opencarp_tutorials_root
 
-pytestmark = pytest.mark.native
+pytestmark = pytest.mark.native_opencarp
 
 
 def test_every_shipped_par_round_trips():

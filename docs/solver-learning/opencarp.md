@@ -183,7 +183,7 @@ generality-log row.
 | C10 | 1 axes, 250 keys, 1 guidance item(s) |
 
 Each check's own suite run (fresh scratch dirs under `/tmp`, sequential):
-6.40 s total for all ten. The full native `pytest -m native` suite for this
+6.40 s total for all ten. The full native `pytest -m native` (since 2026-09-25, final review S-I1: `-m native_opencarp`) suite for this
 package (the ten checks plus `test_committed_catalog_matches_the_binary` and
 `test_every_shipped_par_round_trips`) took 39.57 s wall time.
 

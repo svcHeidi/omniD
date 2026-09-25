@@ -43,6 +43,10 @@ where = ["src"]
 testpaths = ["tests"]
 pythonpath = ["tests"]
 addopts = "--import-mode=importlib"
+# Registered here and in the root pyproject.toml (a whole-repo run resolves
+# its config there, a per-package run here). Its own marker, not `native`,
+# since final review S-I1 (2026-09-25): `native` means the cardiacFOAM
+# native tree, and a repo-wide `-m native` must not collect openCARP tests.
 markers = [
-    "native: needs OMNIDRIVER_OPENCARP_TUTORIALS and the openCARP binary; fails (not skips) if unset",
+    "native_opencarp: needs OMNIDRIVER_OPENCARP_TUTORIALS and the openCARP binary; fails (not skips) if unset",
 ]

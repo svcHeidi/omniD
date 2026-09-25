@@ -6,7 +6,7 @@ import pytest
 from omnidriver.conformance import CHECKS, run_check
 from opencarp_native import niederer_conformance_target
 
-pytestmark = pytest.mark.native
+pytestmark = pytest.mark.native_opencarp
 
 
 @pytest.mark.parametrize("check_id", sorted(CHECKS))

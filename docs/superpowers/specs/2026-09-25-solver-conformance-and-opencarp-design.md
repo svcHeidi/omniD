@@ -167,7 +167,9 @@ class ConformanceTarget:
 
 **Tiers.**
 - C1–C4 need the native case files, not the solver binary.
-- C5–C9 need the real binary and carry the `native` marker.
+- C5–C9 need the real binary and carry the `native` marker. **Corrected
+  2026-09-25 (final review S-I1):** openCARP's carry `native_opencarp`, so a
+  repo-wide `-m native` (the cardiacFOAM tree) does not collect them.
 - Native trees are supplied by environment variable: the existing
   `OMNIDRIVER_NATIVE_TUTORIALS`, plus `OMNIDRIVER_OPENCARP_TUTORIALS`. As with
   today's `native` tests, they **fail, not skip**, when unset. openCARP solves
@@ -179,7 +181,7 @@ class ConformanceTarget:
 |---|---|---|
 | `E2ERecordPlugin` / `toyTutorial` | core tests | all four, including core-alone and wheel; C4 fails on it first (P2), by design |
 | cardiacFoam `restitutionCurves` | cardiacfoam tests | all four + native |
-| openCARP `niedererNVersion` (§7) | opencarp tests | all four + native |
+| openCARP `niedererNVersion` (§7) | opencarp tests | all four + native (`native_opencarp` since 2026-09-25) |
 
 **Deliberately excluded:** checks on result *values* (the QoI topic), HPC,
 agent-facing tools.
@@ -353,7 +355,9 @@ These supersede the corresponding details above.
   added to the all-packages environment. The conformance module must import and
   pass from the **installed wheel**: it ships in core, so it must not read
   repository-relative state.
-- **The native tier:** `-m native` with both native-tree variables set. The
+- **The native tier:** `-m native` with both native-tree variables set
+  (corrected 2026-09-25, S-I1: `-m native` for cardiacFOAM's tree and
+  `-m native_opencarp` for openCARP's, each with its own variable). The
   openCARP targets need the real binary, per "fixtures can't settle external
   claims".
 - **Static gates:** the existing three, plus `check-core-shape.py`.
