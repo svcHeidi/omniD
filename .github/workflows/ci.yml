@@ -175,6 +175,9 @@ jobs:
       - name: Check core/openfoam/cardiac stay decoupled
         run: python3 scripts/check-import-boundaries.py
 
+      - name: Check core names no OpenFOAM layout beyond its recorded, shrinking debt
+        run: python3 scripts/check-core-shape.py
+
       - name: Check tutorial-record/axis modules write nothing
         run: python3 scripts/check-case-writes.py
 
