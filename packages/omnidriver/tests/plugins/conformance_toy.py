@@ -19,10 +19,12 @@ TOY_PLUGIN = "plugins.e2e_record_plugin:E2ERecordPlugin"
 import json as _json
 
 from omnidriver.core.case_write import RenderedFile, _digest_bytes
+from omnidriver.core.tutorial_records import TutorialRecord, WorkflowStep
 
 from plugins.e2e_record_plugin import E2ERecordPlugin, _FORMAT, _deep_set
 
 REPLACING_PLUGIN = "plugins.conformance_toy:ReplacingRendererPlugin"
+NO_CONSUMES_PLUGIN = "plugins.conformance_toy:NoConsumesPlugin"
 
 
 class ReplacingRendererPlugin(E2ERecordPlugin):
@@ -71,3 +73,13 @@ def toy_conformance_target(tmp_path: Path, *, plugin: str = TOY_PLUGIN) -> Confo
             "PYTHONPATH": os.pathsep.join([str(TESTS_ROOT), os.environ.get("PYTHONPATH", "")]),
         },
     )
+
+
+class NoConsumesPlugin(E2ERecordPlugin):
+    def get_tutorial_records(self):
+        return {"toyTutorial": TutorialRecord(
+            name="toyTutorial", native_case_relpath="toyTutorial",
+            allowed_axes=frozenset({"number_cells"}),
+            workflow_steps=(WorkflowStep(step_id="solve", command=("touch", "solved.marker"),
+                                         produces=("solved.marker",)),),
+        )}

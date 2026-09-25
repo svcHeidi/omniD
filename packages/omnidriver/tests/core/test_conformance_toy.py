@@ -9,13 +9,19 @@ import pytest
 
 from omnidriver.conformance import run_check
 from omnidriver.core.runtime.sweep_runner import _child_reconciliation
-from plugins.conformance_toy import REPLACING_PLUGIN, toy_conformance_target
+from plugins.conformance_toy import NO_CONSUMES_PLUGIN, REPLACING_PLUGIN, toy_conformance_target
 
 
-@pytest.mark.parametrize("check_id", ["C1", "C2", "C3", "C5", "C6", "C7"])
+@pytest.mark.parametrize("check_id", ["C1", "C2", "C3", "C5", "C6", "C7", "C8"])
 def test_toy_passes(check_id, tmp_path):
     verdict = run_check(check_id, toy_conformance_target(tmp_path))
     assert verdict.passed, verdict.detail
+
+
+def test_c8_bites_a_record_that_declares_no_inputs(tmp_path):
+    verdict = run_check("C8", toy_conformance_target(tmp_path, plugin=NO_CONSUMES_PLUGIN))
+    assert not verdict.passed
+    assert "consumes" in verdict.detail
 
 
 def test_child_reconciliation_reads_the_run_payload():

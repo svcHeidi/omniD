@@ -15,6 +15,7 @@ from typing import Any, Callable, Iterator
 
 from omnidriver.core.introspection import describe_entry
 from omnidriver.core.plugin_interface import load_plugin_context
+from omnidriver.core.runtime.provenance_inputs import enumerate_case_inputs
 from omnidriver.core.runtime.record_execution import commit_record_case
 from omnidriver.core.runtime.run_command import omnidriver_run_command
 from omnidriver.core.strict_planning import strict_plan
@@ -289,6 +290,22 @@ def check_sweep(target: ConformanceTarget) -> CheckVerdict:
     return _verdict("C7", not problems, "; ".join(problems) or "2 cases completed and reconciled; native tree unchanged")
 
 
+def check_provenance(target: ConformanceTarget) -> CheckVerdict:
+    """C8: every file a planned step consumes is fingerprinted."""
+    ctx = _context(target)
+    report = _plan(target, ctx)
+    if report.status != "ok" or report.workflow_dag is None:
+        return _verdict("C8", False, f"cannot check: plan failed: {_plan_errors(report)}")
+    consumed = sorted({str(e) for s in report.workflow_dag.get("steps", ()) for e in s.get("consumes", ()) or ()})
+    if not consumed:
+        return _verdict("C8", False, "no step declares `consumes`, so provenance cannot be shown to cover the record's inputs")
+    case_root = Path(report.launch["case_root"])
+    components = enumerate_case_inputs(case_root, workflow_dag=report.workflow_dag, driver_context=ctx, env=_child_env(target))
+    fingerprinted = {c.path for c in components if c.kind == "case_file"}
+    missing = [p for p in consumed if p not in fingerprinted]
+    return _verdict("C8", not missing, f"consumed but not fingerprinted: {missing}" if missing else f"{len(consumed)} consumed file(s) fingerprinted")
+
+
 CHECKS: dict[str, Callable[[ConformanceTarget], CheckVerdict]] = {
     "C1": check_load,
     "C2": check_describe_noop,
@@ -297,6 +314,7 @@ CHECKS: dict[str, Callable[[ConformanceTarget], CheckVerdict]] = {
     "C5": check_strict_plan,
     "C6": check_run,
     "C7": check_sweep,
+    "C8": check_provenance,
 }
 
 
