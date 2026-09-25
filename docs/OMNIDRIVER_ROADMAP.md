@@ -1,5 +1,7 @@
 # omniD: roadmap for an agent-ready simulation framework
 
+**Current review, 2026-09-22:** See the [architecture decision and implementation roadmap](audits/2026-09-22-implementation-roadmap.md) for the four-package baseline and the decision to revise Phase 2 before implementation. It includes reproduced findings, team ownership, and acceptance gates. The dated assessments below remain historical evidence and must not be read as a current defect inventory. That revision is now written: gate G0 is [the Phase 2 prerequisites plan](superpowers/plans/2026-09-22-phase2-prerequisites.md) and gates G1-G3 are the rewritten [one-write-channel plan](superpowers/plans/2026-09-20-phase2-one-write-channel.md). G4 and G5 have no plan yet; the roadmap's gate table is their specification.
+
 **Test-scope update, 2026-09-10:** [Cardiac reconciliation plan](CARDIACFOAM_RECONCILIATION_PLAN.md) records T1b, H1, T6, and T7 as complete. DriverFOAM owns orchestration and adapter-contract tests and reuses solver-owned scientific regressions; tutorial/paper content is not frozen by ordinary Core tests. The first installed experiment interface and adapter-owned staging/output convention extraction are complete. Continue incrementally with remaining OpenFOAM interpretation rather than reopening the architecture.
 
 **Current implementation review:** [September 8 reassessment](roadmap-audit-2026-09-08.md) records completed lifecycle/repair work and the remaining core/OpenFOAM acceptance gates at `bea21d4`. The audit findings below describe the September 5 baseline.
