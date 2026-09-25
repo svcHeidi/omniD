@@ -232,8 +232,15 @@ def _populated_to_run(
     for key, val in populated.items():
         if key not in placed:
             config[default_phase][key] = val
+    # This document is an ephemeral, in-memory value used only to run
+    # validate_run's dictionary/semantic checks over the values `synthesize`
+    # just populated -- it is never serialized via to_json() or executed.
+    # `config` is exactly the configuration being checked, so
+    # configurationSource is "document" as a statement of fact about this
+    # value, not a change to synthesize's own (frozen) behavior.
     return RunDocument(id="dict_builder", name="dict_builder",
-                       status="draft", config=config)
+                       status="draft", config=config,
+                       configurationSource="document")
 
 
 import re as _re
