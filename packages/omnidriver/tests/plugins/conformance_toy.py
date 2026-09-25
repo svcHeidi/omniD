@@ -128,3 +128,27 @@ class NativeWritingPlugin(E2ERecordPlugin):
             return original(value, staged_case_root)
 
         self._axis_catalog = {**self._axis_catalog, "number_cells": replace(axis, resolve=resolve)}
+
+
+NO_PRODUCES_PLUGIN = "plugins.conformance_toy:NoProducesPlugin"
+SILENT_PREFLIGHT_PLUGIN = "plugins.conformance_toy:SilentPreflightPlugin"
+
+
+class NoProducesPlugin(E2ERecordPlugin):
+    """Its record declares no outputs, so a run proves nothing about them."""
+
+    def get_tutorial_records(self):
+        return {"toyTutorial": TutorialRecord(
+            name="toyTutorial", native_case_relpath="toyTutorial",
+            allowed_axes=frozenset({"number_cells"}),
+            workflow_steps=(WorkflowStep(step_id="solve", command=("touch", "solved.marker"),
+                                         consumes=("constant/mesh.json",)),),
+        )}
+
+
+class SilentPreflightPlugin(E2ERecordPlugin):
+    """A preflight that ignores its ``env`` and never reports anything."""
+
+    def get_environment_diagnostics(self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None) -> tuple:
+        del workflow_dag, env, explicit_bashrc, driver_context
+        return ()

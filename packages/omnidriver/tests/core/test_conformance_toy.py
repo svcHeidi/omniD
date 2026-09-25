@@ -12,7 +12,8 @@ import pytest
 from omnidriver.conformance import CHECKS, run_check
 from omnidriver.core.runtime.sweep_runner import _child_reconciliation
 from plugins.conformance_toy import (
-    GHOST_CONSUMES_PLUGIN, NATIVE_WRITING_PLUGIN, NO_CONSUMES_PLUGIN, REPLACING_PLUGIN,
+    GHOST_CONSUMES_PLUGIN, NATIVE_WRITING_PLUGIN, NO_CONSUMES_PLUGIN, NO_PRODUCES_PLUGIN,
+    REPLACING_PLUGIN, SILENT_PREFLIGHT_PLUGIN,
     STRAY_NAME, STRAY_ROOT_VARIABLE, toy_conformance_target,
 )
 
@@ -233,3 +234,17 @@ def test_c3_requires_the_refusal_to_name_the_unknown_study_exactly(message, name
     from omnidriver.conformance.checks import _names
 
     assert _names(message, name) is named
+
+
+def test_c6_bites_a_record_that_declares_no_outputs(tmp_path):
+    """M7."""
+    verdict = run_check("C6", toy_conformance_target(tmp_path, plugin=NO_PRODUCES_PLUGIN))
+    assert not verdict.passed
+    assert "produces" in verdict.detail
+
+
+def test_c9_bites_a_preflight_that_never_reports_a_missing_solver(tmp_path):
+    """M7."""
+    verdict = run_check("C9", toy_conformance_target(tmp_path, plugin=SILENT_PREFLIGHT_PLUGIN))
+    assert not verdict.passed
+    assert "'touch' off PATH" in verdict.detail
