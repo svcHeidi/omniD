@@ -261,6 +261,7 @@ gates (`check-import-boundaries.py`, `export-capability-seams.py --check`,
 | 2 | Core: axis contract, name sorting, conflict refusal, "unchanged" reporting, `unvalidated` flag, the static gate | `4ee4354..2c6c964` (`git log 0edb21e..HEAD`) |
 | 3 | OpenFOAM package: the generic axes -- scope-changed by the owner (2026-09-25) to `block_mesh_resolution_axis` only; see §3/§7's own dated corrections above for why gmsh `lc` and the dt unit conversion moved out | `f178f1a` (core: pin the axis-map duplicate-name refusal), `3fa1170` (openfoam: `block_mesh_resolution_axis` + unit/native tests) |
 | 4a | The cardiac stack support every tutorial record needs before the first real record exists: cardiacFOAM's `RecordKeyValidationCapability` (`record_key_validation.py`, catalog-checked for `constant/electroProperties`/`constant/physicsProperties`, accepted-unvalidated for `system/...`, refused otherwise), OpenFOAM's `CaseValueComparisonCapability` (`_case_value_agree`, delegating to the existing `apply_overrides.effective_values_agree`) and its `ConfigValueCapability` reader for the synthetic `hex_cell_counts` key (`case_planning.read_hex_cell_counts`). No core contract change: `DirectKeyValidator` stays `(document, key_path, value) -> (value_kind, validated)` -- the `<solver>Coeffs` first-segment substitution the validator needs is syntactic and catalog-vocabulary-derived, never a read of the staged case's actual `myocardiumSolver` value, so no staged-case-root parameter was needed. Verified against the real `electrophysiologyProtocols/restitutionCurves_s1s2Protocol` case (`myocardiumSolver singleCellSolver`, `stim_amplitude 0.4`, `system/controlDict` `deltaT 1e-5`, one real `hex (` block `(200 30 70)`) through `record_execution.preview_record_case` on the real cardiac stack (`load_discovered_plugin("cardiacfoam")`), with a test-only `TutorialRecord` and no test doubles for validator, comparator or reader. | `9759fb2` (cardiacfoam: the record-key validator), `8d4a08d` (openfoam: the case-value comparator and hex-cell-counts reader), `d3b7afb` (cardiacfoam: native evidence) |
+| 5.0 | Two solver-independent defects fixed before any more tutorials migrate: a tutorial record could not reach `plan`/`run --strict` (only `sweep-run` worked; every other path raised `TutorialRecordError`, uncaught, as a raw traceback), and a committed record's render snapshot was seeded empty, a latent silent-data-loss path for any renderer that takes `render_case_files`'s own "isolated copy core provides" contract at its word. Found by tracing a record through `describe`/`plan`/`run`/`sweep-*` on this branch at `19d826a` and recorded as prerequisites in main's `6066a3d` solver-conformance-and-opencarp design (§3); this branch did them first, as that design's own text anticipated. See "Step 5.0" below for the full account. | `56d89d7` (core: seed the render snapshot from the real case; the `exists_before` transaction guard), `156b80d` (core: `plan`/`run`/`step --entry <record>`; the shared stage+commit+spec function; `cli.main`'s structured error), `73d780e` (cardiacfoam: the real-solver regression gate) |
 
 ## Owner decisions, 2026-09-25 (recorded alongside step 4a)
 
@@ -293,6 +294,34 @@ by name (before `resolve` ever runs) when a declared name is absent from
 the study, the same "refuse by name before anything runs" posture every
 other axis refusal already has. Not built here: step 5 decides it, once a
 cardiac record actually needs it.
+
+(c) **The case files stay as they are.** omniD keeps the blockMesh
+resolution axis (`openfoam.axes.block_mesh_resolution_axis`, already built
+on `plan_block_mesh_resolution` -- step 3's own scope-narrowing); no native
+case restructuring is needed for a multi-dimension tutorial to use it.
+
+(d) **The N axis patches EVERY `blockMeshDict.<dim>` a tutorial has**, not
+one dimension's file alone -- reading which directions are refined FROM
+EACH FILE ITSELF (a direction whose current count is 1 stays 1; there is no
+per-dimension table naming which axes a given tutorial refines, which would
+restate what each `blockMeshDict.<dim>` already says). It sets the same
+resolved count on every `hex (` block the file declares, with the expected
+block count stated in the record itself (bath: 3), and refuses a mismatch
+by name -- the same "silently replacing the wrong number of blocks" failure
+`case_planning._rewrite_hex_block_lines`'s own `expected_blocks` check
+already exists to prevent (§5's `hex_cell_counts` target), applied per file
+here instead of once.
+
+(e) **A `dimension` axis, declared in the manufactured tutorials' own
+cardiac record** (not core), sets the `dimension` key and the mesh step's
+own `-dict system/blockMeshDict.<dim>` command argument together, from one
+study value -- no core change for it. This is the "second study value" case
+step 3's note above anticipated, but resolved without the `reads_also`
+contract change: `dimension` is not a second value an N axis reads, it is
+its OWN axis, independent of N, whose job is choosing WHICH document set
+(d)'s N axis then patches and which `-dict` argument the mesh command
+receives -- two axes agreeing on a shared underlying choice, not one axis
+reading another's study value.
 
 ## Step 4b (added 2026-09-25): the pilot, `restitutionCurves`
 
@@ -487,3 +516,182 @@ anticipated. All four suite shapes plus the three static gates are 0
 failed with these fixes in place, and the real run reaches `completed`
 with the committed `blockMeshDict`'s active `hex (` line reading
 `(40 6 14)`.
+
+## Step 5.0 (added 2026-09-25): two solver-independent defects, fixed before more tutorials migrate
+
+**Status note.** Both defects below (P1, P2) are recorded as prerequisites
+in main's `6066a3d` design doc
+(`docs/superpowers/specs/2026-09-25-solver-conformance-and-opencarp-design.md`
+§3, "Prerequisites found on the in-flight branch"), found by tracing a
+record through `describe`/`plan`/`run`/`sweep-*` on this branch at
+`19d826a`. That design says either branch may fix them first; this one
+did, since the tutorials-are-pointers work was already in flight here.
+Both were re-verified against this branch's CURRENT HEAD (post step 4c)
+before fixing, per that design's own instruction -- both still reproduced
+exactly as described.
+
+**P1: records could not reach `plan --strict`/`run --strict`.** Only
+`sweep-run` worked, through `sweep_runner._sweep_record` ->
+`commit_record_case` -> `record_case_spec`. `registry
+._materialize_resolved_entry` refused a `tutorial_record` resolution by
+name for every other consumer of `load_entry_spec` (`TutorialRecordError`,
+"tutorial records are not yet runnable through load_entry_spec"), and
+`strict_planning._run_launch_description` advertised `run --strict --entry
+<record>` in every record's own run document regardless -- the exact
+command that refuses. `cli.main` did not catch `TutorialRecordError`
+anywhere, so `plan --strict --entry <record>` (and `step`/`run --entry
+<record>`, which share the same `_context_from_entry` -> `strict_plan`
+path) surfaced a raw traceback.
+
+Fix: `strict_plan` now classifies its entry with the SAME
+`registry.classify_entry` `sweep_runner._sweep_record` already uses, and
+for a `tutorial_record` classification stages the native case, commits it,
+and builds its `TutorialSpec` through one new shared function,
+`record_execution.commit_and_build_record_spec` -- the "stage + commit +
+spec" sequence `sweep_runner` used to duplicate across its own plan
+(`_record_sweep_plan`) and run (`_record_sweep_run`) branches; both now
+call the one function, no duplicate. A record's case is committed once, at
+plan time (matching `sweep-plan`'s own already-established behaviour for a
+record entry, `_record_sweep_plan`), so the run document `strict_plan`
+returns is immediately runnable: its `launch.command` is `run
+--run-document <path>`, where `<path>` (`<output_dir>/run_document.json`)
+is a file `strict_plan` itself persists before returning -- never `run
+--strict --entry`, which a record has no stable, re-resolvable shape for
+(a bare `plan --strict --entry <record>` has no sweep spec to re-derive
+axis values from; only the overrides supplied at plan time, treated as the
+one case's own `base` study, "the way a one-case sweep does").
+`_run_launch_description` picks the branch from the spec's own
+`resolution` metadata (`record_case_spec` already sets it to
+`"tutorial_record"`), not a new parameter threaded through every caller.
+
+Where `plan --strict --entry <record>` stages, since there is no sweep
+`output_dir` to place it under: the repository's existing scratch rule,
+`core.specs.paths.scratch_root`, anchored at the SUPPLIED `cases_root`
+(refused by name when absent -- the same "no ambient cases root" refusal
+`sweep_runner._sweep_record` already raises for a swept record), under a
+`records/<name>` subdirectory -- a different subdirectory name than a
+case-folder entry's own `runs/<name>` staging (`cli._context_from_entry`),
+so a record and a same-named case folder can never collide, matching
+`registry.classify_entry`'s own "one name must not name both" invariant.
+
+`step`/`run --entry <record>`: decided by the same principle, not refused
+by name. `_context_from_entry` (which both actions dispatch through)
+already calls `strict_plan` for its own initial plan; once `strict_plan`
+itself stopped refusing a `tutorial_record` classification, `step`/`run
+--entry <record>` started working through that SAME call, with no
+dedicated record-handling code of their own -- verified end to end, not
+merely inferred (`test_run_strict_entry_over_a_tutorial_record_also_works_end_to_end`).
+`_context_from_entry`'s OTHER `strict_plan` calls (the repository-relative
+re-staging branch, and the `--config`-driven materialize-and-replan
+branch) also now convert a `TutorialRecordError` into the same structured
+JSON failure rather than letting it propagate, even though neither branch
+is reachable for a record in the tested configurations (a record's own
+cases_root is ordinarily supplied from outside this checkout) -- "never a
+traceback" is enforced at every call site that COULD reach one, not only
+the ones a specific test happens to exercise.
+
+`cli.main` converts `TutorialRecordError` into the same structured JSON
+failure payload every comparable refusal already produces
+(`{"status": "failed", "entry": ..., "error": ...}`, matching e.g.
+`_context_from_run_document`'s `run_document_unreadable` payload) --
+at the `plan` action's own `strict_plan` call, and at every `strict_plan`
+call inside `_context_from_entry` (shared by `step`/`run`).
+
+**P2: render snapshots were seeded empty, a latent silent-data-loss
+path.** `commit_record_case` passed an EMPTY scratch directory as
+`case_writer.render`'s `snapshot_root` -- contradicting
+`render_case_files`'s own documented contract
+(`plugin_interface.py`: "writes nothing outside `snapshot_root`, an
+isolated copy core provides"). The OpenFOAM renderer was safe only by
+accident: `openfoam.case_rendering` reads `resolved.request.case_root`
+directly for everything it needs (`exists_before`, `before_digest`, prior
+content) and seeds its OWN copy under `snapshot_root` from there
+(`_snapshot_copy`), never trusting core's `snapshot_root` to already hold
+anything. The test fixture `tests/plugins/e2e_record_plugin.py
+::E2ERecordPlugin` -- and `test_sweep_runner.py`'s own
+`_RecordSweepWriterPlugin`, and `test_tutorial_records.py`'s
+`_RecordCaseWriterPlugin` -- all take the documented contract at its word:
+each reads `snapshot_root/<document>`, correctly merges the patched keys
+onto whatever it finds there, and were each fed a lie (always empty) by
+core. A document that already held OTHER keys was silently treated as
+brand new, and the merge then produced a file holding ONLY the
+just-patched keys -- every sibling key discarded the moment the commit
+completed. No existing test noticed, because every toy document these
+fixtures wrote had exactly one key.
+
+Fix: `record_execution._seed_snapshot_root` copies each target document's
+CURRENT bytes from the staged case into `snapshot_root` before
+`case_writer.render` is ever called, keyed off the exact set of documents
+`commit_record_case`'s own `parameters` name (`ParameterAssignment
+.document`) -- a document the case does not yet hold is left unseeded,
+the only legitimate `exists_before=False`. Separately,
+`case_transaction._check_render_exists_before` now rechecks a rendered
+file's `exists_before` claim against the real filesystem before any write
+(the same "recheck against disk before writing" posture
+`_check_preconditions` already applies to a different claim) and refuses
+by name on a mismatch -- a transaction-level guard that would have caught
+this defect even if some future renderer's own seeding disagreed with
+disk for an unrelated reason. Confirmed directly: with only the seeding
+fix reverted, the regression test still fails, but now LOUDLY, via this
+guard, rather than silently losing data.
+
+Decision, made and not left open: `openfoam.case_rendering`'s own
+`_snapshot_copy`-based seeding is NOT removed as "the duplicate". It is
+not a second implementation of core's new "isolated copy" contract --
+`render_patch_case_files`/`render_synthesis_case_files` perform actual
+read-modify-write TEXT editing (`update_foam_entry`,
+`_rewrite_hex_block_lines`, ...) directly against files living under
+`snapshot_root`, which must be populated correctly before those mutators
+run regardless of what core does, and they compute `exists_before`/
+`before_digest`/mode/prior content from `case_root` directly rather than
+ever reading `snapshot_root` for that purpose. Some of the OpenFOAM
+renderer's targets (`extra_targets` appended directly to
+`resolved.targets` by `cardiacfoam.overrides.commit_case_overrides`, a
+`hex_cell_counts` structural target, a whole-document `content` target)
+do not even correspond one-to-one with the `ParameterAssignment`s core's
+generic seeding enumerates -- removing the renderer's own seeding would
+risk under-seeding exactly those. Core's fix and the OpenFOAM renderer's
+own seeding write the identical bytes to the identical location when both
+run (core's copy, then the renderer's own copy of the same file onto
+itself), so this is proved harmless rather than merely argued: the full
+non-slow/non-native suite, the wheel shape, and the `native` suite
+(including the byte-identical step 4b parity check and step 4c's real
+solve) all stayed 0 failed with this fix in place.
+
+`E2ERecordPlugin` needed no logic change: it already read-and-merged
+(never replaced) whatever it found at `snapshot_root/<document>` -- it was
+simply being fed a lie. Its `render_case_files` docstring was updated to
+record the fix and point at the regression test and the transaction-level
+guard, per this repository's "record the correction with a date"
+convention.
+
+**Owner decisions recorded alongside this step** (blockMesh-resolution
+axis, for the multi-dimension tutorials this unblocks): see (c)/(d)/(e)
+in "Owner decisions, 2026-09-25" above.
+
+**Verification.** All four suite shapes plus the three static gates, all
+0 failed: `packages/ -q -m "not slow and not native"` (2797 passed), core
+alone (1277 passed), the installed wheel (artifact gate plus 1086 passed),
+and `-m native` against the real `noFrontendCardiacFoam_minor_errors`
+tutorials tree (18 passed, including the new real-solver gate below).
+
+**The real run.** `omnidriver --plugin cardiacfoam plan --strict --entry
+restitutionCurves --cases-root <scratch copy of the native tutorials>`,
+followed by the `run --run-document <path>` command it advertises and
+persists, over the same single real protocol point step 4c's `sweep-run`
+proof uses (TWorld, S1=1000ms×10, S2=1500ms×2) and the same
+`blockMeshResolution` axis coarsening (`[40, 6, 14]`, never a case-file
+edit) -- `test_restitution_curves_strict_plan_run_document_native.py`,
+`native`+`slow`. Both OpenFOAM v2412 and the native `cardiacFoam` build
+were found ambiently, exactly as step 4c's test finds them. Result:
+`workflow_state.status == "completed"`, both steps (`mesh`, `solve`)
+`exit_code 0`, in ~26s -- comfortably inside the ~2 minute budget.
+Confirmed failing against the pre-fix code first (the same
+`TutorialRecordError` traceback P1 describes, surfacing in ~1.6s, well
+before ever reaching the solver).
+
+| what | commits |
+|---|---|
+| core: seed the render snapshot from the real case (`_seed_snapshot_root`); the `exists_before` transaction guard (`_check_render_exists_before`); regression tests (multi-key preservation, both `exists_before` mismatch directions) | `56d89d7` |
+| core: `strict_plan` handles a `tutorial_record` classification (stage + commit + spec via the new shared `commit_and_build_record_spec`); `_run_launch_description`'s `run --run-document` branch; `cli.main`'s structured `TutorialRecordError` handling; CLI end-to-end tests via `plugins.e2e_record_plugin` | `156b80d` |
+| cardiacfoam: the real-solver regression gate for `plan --strict`/`run --run-document` over `restitutionCurves` | `73d780e` |
