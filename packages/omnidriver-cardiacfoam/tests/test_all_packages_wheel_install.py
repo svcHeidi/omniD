@@ -33,6 +33,9 @@ _PACKAGES = (
     # registers no entry point until its plugin exists (Task 11), so here it
     # proves only that its wheel installs beside the other four and ships its
     # generated catalog -- the location check below covers it too.
+    # Corrected 2026-09-25 (final review S-M5): its entry point has been
+    # active since e4bc873 (Task 11), so this also installs a registered
+    # `opencarp` plugin beside the other four.
     "omnidriver-opencarp",
 )
 

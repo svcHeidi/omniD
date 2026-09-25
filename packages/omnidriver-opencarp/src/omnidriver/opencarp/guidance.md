@@ -7,7 +7,15 @@ Before `plan`/`run` against openCARP's tutorials tree, set
 its case under `<cases_root>/.omnidriver` by default, which in an installed
 tree is root-owned (the plan is refused) and in a source build would write
 into the native tree (final review S-I3).
-`describe` lists every parameter with its type, default and bounds.
+`describe` lists every parameter you may set, with its type, default and
+bounds: only keys of a `.par` the record passes with `+F`, and none the record's
+command line sets.
+
+- The record owns its command-line keys. openCARP reads its arguments in
+  order and the last assignment wins silently, so a `-<key>` after `+F` (for
+  this record `meshname`, `simID`, `imp_region[0].im_sv_init`) overrides the
+  `.par` with no warning (F14). omniD refuses a study key the record sets on
+  its command line, and a `.par` no step passes with `+F`, by name.
 
 - Flags: write `true`/`false` in a study; omniD writes `1`/`0`. openCARP reads
   `no`, `off`, `yes`, `2` all as ON (F1).

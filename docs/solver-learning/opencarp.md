@@ -180,7 +180,7 @@ generality-log row.
 | C7 | 2 cases completed and reconciled; native tree unchanged |
 | C8 | 2 consumed file(s) fingerprinted |
 | C9 | clean; names the missing solver |
-| C10 | 1 axes, 250 keys, 1 guidance item(s) |
+| C10 | 1 axes, 250 keys, 1 guidance item(s) (a dated run record: since wave-2 review I1 the catalogue omits the command-owned keys, and C10 now reports 247; note added 2026-09-25, final review S-M5) |
 
 Each check's own suite run (fresh scratch dirs under `/tmp`, sequential):
 6.40 s total for all ten. The full native `pytest -m native` (since 2026-09-25, final review S-I1: `-m native_opencarp`) suite for this

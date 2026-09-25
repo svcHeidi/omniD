@@ -10,7 +10,9 @@ re-deriving what the last five sessions established.
 
 ## What this is
 
-A solver-agnostic orchestrator, split into four packages under `packages/`:
+A solver-agnostic orchestrator, split into five packages under `packages/`
+(corrected 2026-09-25, final review S-M5: this said four above a five-row
+table once `omnidriver-opencarp` landed):
 
 | package | may know about | must not know about |
 |---|---|---|
@@ -89,9 +91,9 @@ A skip here hides exactly what the guard exists to find.
 | an explicitly-contexted operation never falls back to the default | `test_fallback_census.py` |
 | no compatibility fallback reaches cardiac code | `test_no_fallback_reaches_cardiac_code_at_all` |
 | the capability-seam table matches the docstrings | `scripts/export-capability-seams.py --check` |
-| a tutorial record/axis module never writes a case directly | `scripts/check-case-writes.py` (empty waiver list, scoped to `openfoam/axes/`, `cardiacfoam/records/` and the writer-free planner module `openfoam/case_planning.py`; relative imports are resolved before matching) |
+| a tutorial record/axis module never writes a case directly | `scripts/check-case-writes.py` (empty waiver list, scoped to `openfoam/axes/`, `cardiacfoam/records/`, `opencarp/records/` and the writer-free planner module `openfoam/case_planning.py` — `opencarp/records/` added to this row 2026-09-25, final review S-M5, the gate already scanned it; relative imports are resolved before matching) |
 | core names no OpenFOAM layout beyond its recorded, shrinking debt | `scripts/check-core-shape.py` (baseline `scripts/core-shape-baseline.txt`; new tokens never added) |
-| any solver plugin passes C1-C10 | `omnidriver.conformance`, parametrized per package (toy in core; openCARP native) |
+| every conformance target passes C1-C10 (toy, openCARP; cardiacFOAM from Task 14, which fails C10 today) | `omnidriver.conformance`, parametrized per package (toy in core; openCARP `native_opencarp`). Reworded 2026-09-25 (final review S-M5): it read "any solver plugin", a universal claim cardiacFOAM does not yet meet |
 
 ## Two rules that were learned the hard way
 
