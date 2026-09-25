@@ -152,3 +152,56 @@ class SilentPreflightPlugin(E2ERecordPlugin):
     def get_environment_diagnostics(self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None) -> tuple:
         del workflow_dag, env, explicit_bashrc, driver_context
         return ()
+
+
+SILENT_SURFACE_PLUGIN = "plugins.conformance_toy:SilentSurfacePlugin"
+UNLISTED_KEY_PLUGIN = "plugins.conformance_toy:UnlistedKeyPlugin"
+INDEXED_KEY_PLUGIN = "plugins.conformance_toy:IndexedKeyPlugin"
+DOCUMENTED_PLUGIN = "plugins.conformance_toy:DocumentedCasePlugin"
+
+
+class SilentSurfacePlugin(E2ERecordPlugin):
+    """Implements neither record-surface hook, as a plugin that predates C10
+    would: an agent reading describe learns nothing it may address."""
+
+    get_record_key_catalog = None
+    get_agent_guidance = None
+
+
+class UnlistedKeyPlugin(E2ERecordPlugin):
+    """A catalogue that omits the one key the target's own patch names."""
+
+    def get_record_key_catalog(self, case_root):
+        del case_root
+        return ({"document": "constant/mesh.json", "key": "label", "value_kind": "string"},)
+
+
+class IndexedKeyPlugin(E2ERecordPlugin):
+    """Lists an indexed key in template form only, with ``[Int]``."""
+
+    def get_record_key_catalog(self, case_root):
+        del case_root
+        return ({"document": "constant/mesh.json", "key": "cells[Int].count", "value_kind": "integer"},)
+
+
+class DocumentedCasePlugin(E2ERecordPlugin):
+    """Gives the native case's README.md the core role ``case.documentation``."""
+
+    def get_profile(self):
+        from dataclasses import replace
+
+        from omnidriver.core.plugin_profile import CaseFileRule
+
+        profile = super().get_profile()
+        rule = CaseFileRule(path="README.md", kind="documentation", role="case.documentation", required="conditional")
+        return replace(profile, case_files=(*profile.case_files, rule))
+
+
+KINDLESS_KEY_PLUGIN = "plugins.conformance_toy:KindlessKeyPlugin"
+
+
+class KindlessKeyPlugin(E2ERecordPlugin):
+    """Lists the target's key, but a second entry has no value kind."""
+
+    def get_record_key_catalog(self, case_root):
+        return (*super().get_record_key_catalog(case_root), {"document": "constant/mesh.json", "key": "label"})

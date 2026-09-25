@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol, TYPE_CHECKING
+from typing import Any, Mapping, Protocol, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .plugin_interface import SolverPlugin
@@ -639,6 +639,25 @@ class RuntimeEvidenceCapability(Protocol):
     def telemetry_source_globs(self, command: str) -> tuple[str, ...]: ...
     def extra_provenance_paths(self, case_root: Path) -> tuple[RuntimeDependency, ...]: ...
     def artifact_value_reader(self, artifact_format: str) -> Any | None: ...
+
+
+class RecordSurfaceCapability(Protocol):
+    """What an agent may address in a record, and what it should read first.
+
+    Owner decision 2026-09-25 (spec 2026-09-25 §4, C10): discovering a
+    record's keys and guidance must not depend on knowing which solver is
+    underneath. ``key_catalog`` lists the keys a study may name for a case;
+    ``guidance`` is solver-level advice for agents. Both degrade to empty,
+    which C10 then reports as a failure for a real target.
+
+    :adapts: get_agent_guidance, get_record_key_catalog
+    :consumed-by: omnidriver/core/runtime/record_surface.py
+    :fallback: none
+    :status: optional-neutral
+    """
+
+    def key_catalog(self, case_root: Path) -> tuple[Mapping[str, Any], ...]: ...
+    def guidance(self) -> tuple[Mapping[str, str], ...]: ...
 
 
 class CaseProvenanceCapability(Protocol):
@@ -1645,6 +1664,19 @@ class _RuntimeEvidenceAdapter:
 
 
 @dataclass(frozen=True)
+class _RecordSurfaceAdapter:
+    plugin: "SolverPlugin"
+
+    def key_catalog(self, case_root: Path) -> tuple[Mapping[str, Any], ...]:
+        hook = getattr(self.plugin, "get_record_key_catalog", None)
+        return tuple(hook(case_root)) if callable(hook) else ()
+
+    def guidance(self) -> tuple[Mapping[str, str], ...]:
+        hook = getattr(self.plugin, "get_agent_guidance", None)
+        return tuple(hook()) if callable(hook) else ()
+
+
+@dataclass(frozen=True)
 class _CaseProvenanceAdapter:
     plugin: "SolverPlugin"
 
@@ -2130,6 +2162,7 @@ class PluginCapabilities:
     dict_diagnostics: DictDiagnosticsCapability
     override_schema: OverrideSchemaCapability
     runtime_evidence: RuntimeEvidenceCapability
+    record_surface: RecordSurfaceCapability
     case_provenance: CaseProvenanceCapability
     report_catalog: ReportCatalogCapability
     named_catalogs: NamedCatalogsCapability
@@ -2174,6 +2207,7 @@ def adapt_plugin_capabilities(plugin: "SolverPlugin") -> PluginCapabilities:
         dict_diagnostics=_DictDiagnosticsAdapter(plugin),
         override_schema=_OverrideSchemaAdapter(plugin),
         runtime_evidence=_RuntimeEvidenceAdapter(plugin),
+        record_surface=_RecordSurfaceAdapter(plugin),
         case_provenance=_CaseProvenanceAdapter(plugin),
         report_catalog=_ReportCatalogAdapter(plugin),
         named_catalogs=_NamedCatalogsAdapter(plugin),

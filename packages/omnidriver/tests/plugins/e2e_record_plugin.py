@@ -88,6 +88,14 @@ class E2ERecordPlugin(MinimalTestPlugin):
     def get_supported_mutation_modes(self):
         return frozenset({"clone_and_patch"})
 
+    def get_record_key_catalog(self, case_root):
+        del case_root
+        return ({"document": "constant/mesh.json", "key": "cells", "value_kind": "integer",
+                 "description": "the toy's cell count"},)
+
+    def get_agent_guidance(self):
+        return ({"title": "toy record", "text": "toyTutorial writes solved.marker; number_cells patches constant/mesh.json:cells."},)
+
     def resolve_case_mutation(self, request, *, driver_context):
         targets = tuple(
             {

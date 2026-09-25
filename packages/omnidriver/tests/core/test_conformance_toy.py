@@ -12,13 +12,14 @@ import pytest
 from omnidriver.conformance import CHECKS, run_check
 from omnidriver.core.runtime.sweep_runner import _child_reconciliation
 from plugins.conformance_toy import (
-    GHOST_CONSUMES_PLUGIN, NATIVE_WRITING_PLUGIN, NO_CONSUMES_PLUGIN, NO_PRODUCES_PLUGIN,
-    REPLACING_PLUGIN, SILENT_PREFLIGHT_PLUGIN,
+    DOCUMENTED_PLUGIN, GHOST_CONSUMES_PLUGIN, INDEXED_KEY_PLUGIN, KINDLESS_KEY_PLUGIN, NATIVE_WRITING_PLUGIN,
+    NO_CONSUMES_PLUGIN, NO_PRODUCES_PLUGIN, REPLACING_PLUGIN, SILENT_PREFLIGHT_PLUGIN,
+    SILENT_SURFACE_PLUGIN, UNLISTED_KEY_PLUGIN,
     STRAY_NAME, STRAY_ROOT_VARIABLE, toy_conformance_target,
 )
 
 
-@pytest.mark.parametrize("check_id", ["C1", "C2", "C3", "C5", "C6", "C7", "C8", "C9"])
+@pytest.mark.parametrize("check_id", ["C1", "C2", "C3", "C5", "C6", "C7", "C8", "C9", "C10"])
 def test_toy_passes(check_id, tmp_path):
     verdict = run_check(check_id, toy_conformance_target(tmp_path))
     assert verdict.passed, verdict.detail
@@ -248,3 +249,57 @@ def test_c9_bites_a_preflight_that_never_reports_a_missing_solver(tmp_path):
     verdict = run_check("C9", toy_conformance_target(tmp_path, plugin=SILENT_PREFLIGHT_PLUGIN))
     assert not verdict.passed
     assert "'touch' off PATH" in verdict.detail
+
+
+def test_c10_surface_lists_the_toy_axis_key_and_guidance(tmp_path):
+    from omnidriver.core.introspection import describe_entry
+    from omnidriver.core.plugin_interface import load_plugin_context
+
+    target = toy_conformance_target(tmp_path)
+    payload = describe_entry(target.record, overrides={"cases_root": str(target.cases_root)},
+                             driver_context=load_plugin_context(target.plugin))
+    surface = payload["record_surface"]
+    assert surface["axes"] == [{"name": "number_cells", "value_kind": "integer"}]
+    assert {"document": "constant/mesh.json", "key": "cells", "value_kind": "integer"} in [
+        {k: e[k] for k in ("document", "key", "value_kind")} for e in surface["keys"]]
+    assert surface["guidance"] and surface["guidance"][0]["title"]
+
+
+def test_c10_bites_a_stack_that_declares_no_surface(tmp_path):
+    verdict = run_check("C10", toy_conformance_target(tmp_path, plugin=SILENT_SURFACE_PLUGIN))
+    assert not verdict.passed
+    assert "no key catalogue" in verdict.detail
+    assert "no agent guidance" in verdict.detail
+
+
+def test_c10_bites_a_catalogue_without_the_targets_own_key(tmp_path):
+    verdict = run_check("C10", toy_conformance_target(tmp_path, plugin=UNLISTED_KEY_PLUGIN))
+    assert not verdict.passed
+    assert "constant/mesh.json:cells is not in the catalogue" in verdict.detail
+
+
+def test_c10_matches_a_concrete_index_against_its_int_template(tmp_path):
+    target = dataclasses.replace(
+        toy_conformance_target(tmp_path, plugin=INDEXED_KEY_PLUGIN), patch=("constant/mesh.json:cells[3].count", 7),
+    )
+    verdict = run_check("C10", target)
+    assert verdict.passed, verdict.detail
+
+
+def test_c10_surface_carries_the_cases_own_documentation(tmp_path):
+    from omnidriver.core.introspection import describe_entry
+    from omnidriver.core.plugin_interface import load_plugin_context
+
+    target = toy_conformance_target(tmp_path, plugin=DOCUMENTED_PLUGIN)
+    (target.cases_root / "toyTutorial" / "README.md").write_text("# toyTutorial\nRead me first.\n")
+    payload = describe_entry(target.record, overrides={"cases_root": str(target.cases_root)},
+                             driver_context=load_plugin_context(target.plugin))
+    assert payload["record_surface"]["case_documentation"] == [
+        {"path": "README.md", "text": "# toyTutorial\nRead me first.\n"},
+    ]
+
+
+def test_c10_bites_a_catalogue_entry_without_a_value_kind(tmp_path):
+    verdict = run_check("C10", toy_conformance_target(tmp_path, plugin=KINDLESS_KEY_PLUGIN))
+    assert not verdict.passed
+    assert "'key': 'label'" in verdict.detail

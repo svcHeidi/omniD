@@ -43,7 +43,7 @@ from dataclasses import asdict, is_dataclass
 from dataclasses import dataclass, field
 from functools import cached_property
 from importlib import import_module
-from typing import Any, Protocol, Sequence, TYPE_CHECKING, runtime_checkable
+from typing import Any, Mapping, Protocol, Sequence, TYPE_CHECKING, runtime_checkable
 
 if TYPE_CHECKING:
     from omnidriver.core.plugin_capabilities import PluginCapabilities, RuntimeDependency
@@ -636,6 +636,22 @@ class SolverPluginOptionalHooks(Protocol):
         ``None`` (review finding M1): a stack with no comparator REFUSES a
         record case outright rather than reporting every patch "changed" and
         committing it."""
+        ...
+
+    # -- RecordSurfaceCapability (C10) ------------------------------------------
+    def get_record_key_catalog(self, case_root: "Path") -> tuple[Mapping[str, Any], ...]:
+        """Every key a study may name for this case: document, key, value_kind, and optionally
+        default/description/minimum/maximum/menu. Indexed keys may use ``[Int]`` for any index.
+
+        ``[Int]`` is generic index notation, not a solver's syntax: a key
+        whose path segment carries a concrete index (``stim[0].start``) is
+        matched against its template (``stim[Int].start``). Absent -> no
+        keys, which the conformance check C10 reports as a failure."""
+        ...
+
+    def get_agent_guidance(self) -> tuple[Mapping[str, str], ...]:
+        """Solver-level advice an agent should read before writing a study (title, text).
+        Absent -> none, which C10 reports as a failure."""
         ...
 
     # -- DictionaryCatalogCapability ------------------------------------------

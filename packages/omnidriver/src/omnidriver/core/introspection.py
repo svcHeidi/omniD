@@ -536,8 +536,15 @@ def _describe_tutorial_record(
     patch's document/key/value/status/validated flag, plus the command
     arguments per workflow step -- sits beside where ``write_surface`` would
     be for a factory tutorial.
+
+    ``record_surface`` (C10, 2026-09-25) is what an agent may address and
+    should read first, in one shape for every solver: the record's axes with
+    their value kinds, the stack's key catalogue for the native case, the
+    stack's agent guidance, and the case's own ``case.documentation`` files
+    (``runtime.record_surface.record_surface``).
     """
     from .runtime.record_execution import preview_record_case
+    from .runtime.record_surface import record_surface
     from .tutorial_records import TutorialRecordError
 
     record = resolution["record"]
@@ -562,6 +569,9 @@ def _describe_tutorial_record(
         cases_root=cases_root,
         study_by_source={"base": incoming_overrides},
         driver_context=driver_context,
+    )
+    surface = record_surface(
+        record, native_case_root=cases_root / record.native_case_relpath, driver_context=driver_context,
     )
     return {
         "requested_entry": entry,
@@ -590,6 +600,7 @@ def _describe_tutorial_record(
         "dict_entries": _dict_entry_catalog(driver_context),
         "plugin_catalogs": _plugin_catalogs(driver_context),
         "record_preview": preview,
+        "record_surface": surface,
         "capability_manifest": _serialize({
             **dict(driver_context.capabilities.manifest.manifest()),
             "plugin_identity": driver_context.identity.to_json(),

@@ -403,6 +403,46 @@ def check_environment(target: ConformanceTarget) -> CheckVerdict:
     return _verdict("C9", not problems, "; ".join(problems) or "clean; names the missing solver")
 
 
+#: Generic index notation (``[Int]``, ``get_record_key_catalog``): any
+#: concrete index in a key path segment matches its template.
+_ANY_INDEX = re.compile(r"\[\d+\]")
+
+#: What ``get_record_key_catalog`` requires of every entry.
+_REQUIRED_KEY_FIELDS = ("document", "key", "value_kind")
+
+
+def check_discoverable(target: ConformanceTarget) -> CheckVerdict:
+    """C10: describe tells an agent, the same way for every solver, which axes
+    and keys the record takes, and what to read first."""
+    ctx = _context(target)
+    record = _record(ctx, target.record)
+    with _scratch_environment(target):
+        payload = describe_entry(target.record, overrides={"cases_root": str(target.cases_root)}, driver_context=ctx)
+    surface = payload.get("record_surface")
+    if surface is None:
+        return _verdict("C10", False, "describe has no record_surface")
+    problems = []
+    axis_names = {a["name"] for a in surface["axes"]}
+    if axis_names != set(record.allowed_axes):
+        problems.append(f"axes listed {sorted(axis_names)}, record allows {sorted(record.allowed_axes)}")
+    if any(not a.get("value_kind") for a in surface["axes"]):
+        problems.append("an axis is listed without its value kind")
+    incomplete = [e for e in surface["keys"] if any(not e.get(f) for f in _REQUIRED_KEY_FIELDS)]
+    if not surface["keys"]:
+        problems.append("no key catalogue")
+    elif incomplete:
+        problems.append(f"{len(incomplete)} catalogue entr(ies) lack one of {list(_REQUIRED_KEY_FIELDS)}, e.g. {incomplete[0]}")
+    document, key_path = _split_study_key(target.patch[0])
+    key = ".".join(key_path)
+    listed = {(e.get("document"), e.get("key")) for e in surface["keys"]}
+    if (document, key) not in listed and (document, _ANY_INDEX.sub("[Int]", key)) not in listed:
+        problems.append(f"the target's own patch key {document}:{key} is not in the catalogue")
+    if not surface["guidance"]:
+        problems.append("no agent guidance")
+    return _verdict("C10", not problems, "; ".join(problems) or
+                    f"{len(surface['axes'])} axes, {len(surface['keys'])} keys, {len(surface['guidance'])} guidance item(s)")
+
+
 CHECKS: dict[str, Callable[[ConformanceTarget], CheckVerdict]] = {
     "C1": check_load,
     "C2": check_describe_noop,
@@ -413,6 +453,7 @@ CHECKS: dict[str, Callable[[ConformanceTarget], CheckVerdict]] = {
     "C7": check_sweep,
     "C8": check_provenance,
     "C9": check_environment,
+    "C10": check_discoverable,
 }
 
 

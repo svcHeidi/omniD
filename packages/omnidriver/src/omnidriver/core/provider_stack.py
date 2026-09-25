@@ -206,6 +206,8 @@ _SHAPE: dict[str, str] = {
     "get_override_scopes": "sequence",
     "inspect_effective_configuration": "sequence",
     "render_case_files": "sequence",
+    "get_record_key_catalog": "sequence",
+    "get_agent_guidance": "sequence",
     # -- single ------------------------------------------------------------
     "get_capabilities": "single",
     "resolve_case_mutation": "single",
