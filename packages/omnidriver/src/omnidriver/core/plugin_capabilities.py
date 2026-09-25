@@ -629,7 +629,7 @@ class RuntimeEvidenceCapability(Protocol):
     is the honest answer rather than a solver-shaped guess -- so this
     capability needs no compatibility fallback.
 
-    :adapts: get_artifact_value_reader, get_extra_provenance_paths, get_solve_step_commands, get_telemetry_source_globs
+    :adapts: get_artifact_value_reader, get_extra_provenance_paths, get_log_redaction_patterns, get_solve_step_commands, get_telemetry_source_globs
     :consumed-by: omnidriver/core/runtime/provenance_inputs.py
     :fallback: none
     :status: optional-neutral
@@ -639,6 +639,7 @@ class RuntimeEvidenceCapability(Protocol):
     def telemetry_source_globs(self, command: str) -> tuple[str, ...]: ...
     def extra_provenance_paths(self, case_root: Path) -> tuple[RuntimeDependency, ...]: ...
     def artifact_value_reader(self, artifact_format: str) -> Any | None: ...
+    def log_redaction_patterns(self) -> frozenset[str]: ...
 
 
 class RecordSurfaceCapability(Protocol):
@@ -1661,6 +1662,10 @@ class _RuntimeEvidenceAdapter:
     def artifact_value_reader(self, artifact_format: str):
         hook = getattr(self.plugin, "get_artifact_value_reader", None)
         return hook(artifact_format) if callable(hook) else None
+
+    def log_redaction_patterns(self) -> frozenset[str]:
+        hook = getattr(self.plugin, "get_log_redaction_patterns", None)
+        return frozenset(hook()) if callable(hook) else frozenset()
 
 
 @dataclass(frozen=True)

@@ -262,6 +262,24 @@ def _has_live_group_members(process: subprocess.Popen[Any]) -> bool:
     return True
 
 
+def redact_step_logs(paths: Any, patterns: Any) -> None:
+    """Replace every match of each pattern with its first capture group (if
+    it has one) followed by ``[REDACTED]`` (K9). So ``(https?://)[^/\\s@]+(?=@)``
+    keeps the scheme and the ``@``, and drops the credential between them."""
+    compiled = [re.compile(p) for p in patterns]
+    if not compiled:
+        return
+    for path in paths:
+        if not Path(path).is_file():
+            continue
+        text = Path(path).read_text(errors="replace")
+        redacted = text
+        for pattern in compiled:
+            redacted = pattern.sub(lambda m: ((m.group(1) or "") if m.re.groups else "") + "[REDACTED]", redacted)
+        if redacted != text:
+            Path(path).write_text(redacted)
+
+
 def _wait_for_step_process(
     process: subprocess.Popen[Any],
     *,
@@ -422,6 +440,8 @@ def run_workflow_step(
                 timeout_s=step.get("timeout_s"),
                 cancellation_requested=cancellation_requested,
             )
+        if driver_context is not None:
+            redact_step_logs((stdout_log, stderr_log), driver_context.capabilities.runtime_evidence.log_redaction_patterns())
         if stop_reason == "timeout":
             diagnostics = ({
                 "level": "error",

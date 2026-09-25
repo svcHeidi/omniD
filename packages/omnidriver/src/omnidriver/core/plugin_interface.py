@@ -161,6 +161,11 @@ class SolverPlugin(Protocol):
         """Which commands count as the solve step, for telemetry attribution."""
         ...
 
+    def get_log_redaction_patterns(self) -> tuple[str, ...]:
+        """Regular expressions whose matches are replaced in kept step logs
+        (for example a credential a solver prints in its build header)."""
+        ...
+
     def get_telemetry_source_globs(self, command: str) -> tuple[str, ...]:
         """Where a given command writes the logs telemetry is parsed from."""
         ...

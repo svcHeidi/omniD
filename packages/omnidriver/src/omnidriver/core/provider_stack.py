@@ -170,6 +170,7 @@ _SHAPE: dict[str, str] = {
     "get_auxiliary_commands": "set",
     "get_environment_commands": "set",
     "get_solve_step_commands": "set",
+    "get_log_redaction_patterns": "set",
     "get_rendered_formats": "set",
     # -- tutorial_catalog ----------------------------------------------------
     "get_tutorial_catalog": "tutorial_catalog",

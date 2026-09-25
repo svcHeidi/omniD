@@ -205,3 +205,37 @@ class KindlessKeyPlugin(E2ERecordPlugin):
 
     def get_record_key_catalog(self, case_root):
         return (*super().get_record_key_catalog(case_root), {"document": "constant/mesh.json", "key": "label"})
+
+
+LOG_REDACTION_PLUGIN = "plugins.conformance_toy:LogRedactingPlugin"
+#: The fake credential this plugin's solve step prints, standing in for the
+#: CI token openCARP's build header embeds in every run (K9, G3).
+FAKE_CREDENTIAL_URL = "https://user:SECRET@host/x.git"
+
+
+class LogRedactingPlugin(E2ERecordPlugin):
+    """Its solve step prints a fake credential URL to stdout, the way
+    openCARP's build header embeds a CI token in every real run. Declares
+    ``get_log_redaction_patterns`` so ``workflow_runner`` scrubs the secret
+    from the kept step log (K9)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        # "sh" joins "touch" in the authorized command surface -- the step
+        # below execs "sh" directly; "touch" inside its "-c" script is never
+        # checked against command_authorization on its own.
+        self._solver_commands = frozenset({"touch", "sh"})
+
+    def get_tutorial_records(self):
+        return {"toyTutorial": TutorialRecord(
+            name="toyTutorial", native_case_relpath="toyTutorial",
+            allowed_axes=frozenset({"number_cells"}),
+            workflow_steps=(WorkflowStep(
+                step_id="solve",
+                command=("sh", "-c", f"echo {FAKE_CREDENTIAL_URL}; touch solved.marker"),
+                consumes=("constant/mesh.json",), produces=("solved.marker",),
+            ),),
+        )}
+
+    def get_log_redaction_patterns(self):
+        return (r"(https?://)[^/\s@]+(?=@)",)
