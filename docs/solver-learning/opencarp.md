@@ -30,6 +30,8 @@ appear in output are redacted.
 | B4 | `openCARP +Help 'stim[0].pulse.strength'` | description ("amplitude… uA/volume… mV"), `type: Float` | **a concrete index is required** for detail on indexed names |
 | B5 | `openCARP +Help num_stim` | `type: Int`, `default: (Int)(2)`, `min: (Int)(0)`, `Changes the allocation of: {…}` | **surprising default: 2 stimuli.** Count keys allocate their indexed arrays |
 | B6 | `openCARP +Default +Save defaults.par` | nothing written, exit 1 | no defaults export by this route |
+| B8 | `openCARP +Help 'phys_region[0].ID'`, `'phys_region[Int].ID'`; then `'phys_region[0].ID[0]'` | the first two print the general list; the element prints a full detail block (`type: Int`, `default: (Int)(0)`) | **a whole-array shorthand (type `{ N x T }`) has no detail block under any spelling; only its elements do.** The catalog records a shorthand from its list line alone |
+| B9 | the planned `catalog_generation.build_catalog()`, run against the binary (plan Task 9 dry run) | 266 parameters in about 35 s; identity `v18.1` + hash, no URL; 16 shorthands; 11 count keys (e.g. `num_stim → stim, stimulus`, `num_LATs → lats`); `compute_APD` default `PrMFALSE`; `spacedt` max `tend` | the generator's parse matches every value Task 9's tests expect |
 
 ## C. Native examples
 
@@ -85,6 +87,7 @@ appear in output are redacted.
 | D5 | `cat run1/parameters.par` | git hash; the full command line; `simple.par` verbatim between markers; every command-line override resolved as `key = value` | **the solver records the configuration it was given** (not its defaults) |
 | D6 | `igbhead run1/vm.igb` | `x 81, y 1, z 1, t 21`, `float`, units `mv`, `um` | one file holds all 21 output times (`spacedt = 1` over 20 ms) |
 | D7 | `wc -l run1/act-thresh.dat`; `head -3` | 81 lines; `9 0.382323`, `27 0.382323`, … | one line per mesh point, two columns; the meaning of column 1 is open (F6) |
+| D8 | the planned `par_format.patch_par` on the real `nversion.par` (`tend` 10.0, `dt` 50.0 appended), then `openCARP +F patched.par -meshname slab -simID out_patched -imp_region[0].im_sv_init singlecell.sv` | exit 0; `parameters.par` echoes the marked block and both keys; `vm.igb` has `t dimension: 11` | openCARP accepts the appended omniD block, and the appended `tend` takes effect. The planned parser also round-trips all 26 shipped `.par` files byte for byte (832 assignments) |
 
 ## E. Mapping onto omniD
 
@@ -101,12 +104,41 @@ appear in output are redacted.
 
 ## F. Open questions: each settled only by a run
 
-| id | question | settling run | state |
-|---|---|---|---|
-| F1 | How is a `Flag` parameter written in a `.par`? | set a Flag in a `.par`, then read `parameters.par` and the behaviour | open |
-| F2 | What does openCARP do with an indexed key beyond its count (`stim[1].*` with `num_stim = 1`)? Given B5, is it an allocation error or silently ignored? | a two-line `.par` experiment | open |
-| F3 | Which `mesher` arguments reproduce carputils' `Block(size, resolution, centre)`? | compare point extents from `block.pts` with the tutorial's geometry | open |
-| F4 | Are `run.py`'s `gen_physics_opts` region options needed for a one-tag slab, or do defaults suffice? | run with and without; compare `vm.igb` | open |
-| F5 | How does `imp_region[0].im_sv_init` resolve when given case-relative in a staged clone? | run from a different working directory | open |
-| F6 | What is column 1 of `*-thresh.dat`: a node index, sorted by time? | cross-check against `block.pts` order and a known activation order | open (added from D7) |
-| F7 | Does a `.par` that omits `num_stim` really get two stimuli (B5), and what is the second one? | minimal `.par` without `num_stim`; inspect `parameters.par`/traces | open (added from B5) |
+All settled 2026-09-25 against openCARP v18.1. Scratch cases live in the
+session scratchpad, never in the native tree.
+
+| id | question | run | observed | conclusion |
+|---|---|---|---|---|
+| F1 | How is a `Flag` written in a `.par`? | `compute_APD = <v>` for v in `1 0 yes true no false 2 off`, on the 160-tet block | APD outputs (`vm_activation.dat`, `vm_repolarisation.dat`) appear for `1 yes true no 2 off`; absent for `0 false`; every value exits 0 | **Only `0` and `false` mean off. `no` and `off` silently mean on.** omniD's value kind for a Flag is `boolean`; the writer emits `1`/`0`; the validator refuses any other spelling in a study, and the reader refuses one in a native file |
+| F2 | An indexed key beyond its count (`stim[1].*` with `num_stim = 1`)? | a `.par` with `num_stim = 1` and `stim[1].pulse.strength = 999.0` | exit 5: `*** Index #1 (1) in stim[1].pulse.strength  is out of bounds [0-0]` | the binary refuses. The validator also refuses it by name at plan time, from the count key's value in the staged case after patching, so the refusal comes before a run rather than from one |
+| F3 | Which `mesher` arguments reproduce the benchmark slab? | `mesher -size 2.0 0.7 0.3 -center 1.0 0.35 0.15 -resolution 500 500 500 -mesh slab` (indexed forms, quoted) | 4305 points (41×15×7), 16800 tets; extents x 0–20000, y 0–7000, z 0–3000 µm; `.lon` first row `1 0 0` | `size` and `center` in **cm**, `resolution` in **µm**. This gives the Niederer 20×7×3 mm slab with its corner at the origin, matching the stimulus cube (0–1500 µm) in `nversion.par`. Default fibres run along x, as the benchmark requires. Checked against the benchmark geometry, not against carputils (not installed) |
+| F4 | Are `gen_physics_opts` region options needed? | the full case at dx 500, tend 150, with and without `-num_phys_regions 2` (ptype 0 and 1, both on tag 1) | both exit 0; `vm.igb` and the LAT file **byte-identical**; only the no-region warning differs | not needed for this case; the record omits them. Caveat: the region options were hand-written, because carputils' generator is not installed |
+| F5 | How does `im_sv_init` resolve? | the same case, run from the case directory, then from its parent with `+F stage/nversion.par` | from the case directory: `read_sv(): Initialization using file: singlecell.sv`; from the parent: exit 255, `Unable to access file singlecell.sv` | **relative paths resolve against the process working directory**, not the `.par` location. The solve step runs with the staged case root as its working directory and passes `singlecell.sv` case-relative |
+| F6 | The LAT file's layout? | `wc`, `awk` on `init_acts_vm_act-thresh.dat` (nversion) and `act-thresh.dat` (block run) | nversion (`lats[0].all = 0`): 4305 lines, one column, in point order, `-1` for never activated. Block run (default `all = 1`): two columns | layout depends on `lats[].all`. With `all = 0` it is one value per mesh point in point order, `-1` = not activated; with `all = 1` (the default) it is one line per activation event. File name: `init_acts_<lats[].ID>-thresh.dat`; nversion's ID defaults to `vm_act` |
+| F7 | Does omitting `num_stim` give two stimuli? | a `.par` without `num_stim` | exit 0; `Stimulus_0.trc` and `Stimulus_1.trc`; `Warning: No potential or current stimuli found!` | **yes: two default, zero-strength stimuli.** A study that intends one stimulus must state `num_stim` |
+| F8 | What does openCARP do with a key assigned twice in one `.par`? (raised while designing the parser) | `spacedt = 1` then `spacedt = 2`, tend 5 | exit 0; `igbhead` shows `t dimension: 3` (frames at 0, 2, 4 ms) | **the last assignment wins, silently.** openCARP's own saved `21_reentry_induction/.../parameters.par` repeats `dt`, `spacedt`, `timedt`, `mass_lumping` and `tend`. The reader returns the last assignment; the patcher refuses to patch a repeated key by name rather than guess which occurrence was meant |
+| F9 | Is `key value` (no `=`) valid `.par` syntax? (found by testing the plan's parser on all 832 shipped assignments: `onboarding_notebooks/tissue/0[1-3]_basic_openCARP/ring.par` use it) | `spacedt 2` without `=`, tend 5 | exit 0; `t dimension: 3`; `parameters.par` echoes `spacedt 2` | **the separator is `=` or whitespace.** The parser accepts both; a patch keeps the line's own separator |
+
+## G. Further findings made while settling F
+
+- **G1:** `spacedt` defaults to 3 ms and is bounded by `[dt/1000, tend]`. With
+  `tend = 2` the run fails: `*** spacedt = 3 is above the 2 maximum`. openCARP
+  checks cross-parameter bounds when it reads parameters, and `+Help` shows
+  them as `min:`/`max:` expressions. The catalog keeps those expressions
+  verbatim; the validator evaluates only numeric bounds.
+- **G2:** `dt` is in **µs** and `tend` in ms (`run.py`: `--dt` in µs, and the
+  run header). A study value for `dt` is in µs.
+- **G3:** **every run log starts with the build header, including a CI token**
+  (A8). omniD keeps solver stdout in `workflow_logs/`, so the token would be
+  copied into every run record. The adapter redacts it before logs are written
+  (plan Task 7).
+- **G4, a first benchmark number:** at dx 500 µm and dt 50 µs, with tend 150
+  (as `run.py` uses for dx 500), P1 (the origin, point 0) activates at
+  1.355 ms and P8 (the far corner, point 4304) at **126.45 ms**. All 4305
+  points activate. The run takes 1.7 s. This is evidence for the later
+  benchmarker topic, not a reference value.
+- **G6, the allocation block:** `+Help num_stim` lists, under `Changes the allocation of: {`, the arrays that count sizes: `stim` and `stimulus` (lines without `[`), then their members. This is how a count key maps to its arrays, taken from the binary.
+- **G7, defaults that make an unpinned run slow:** `mesher` resolution defaults to 100 µm (the slab would be about 420k points); `tend` defaults to 100 ms and `dt` to 5 µs. A conformance or test run pins `dx`, `tend` and `dt`.
+- **G5:** `run.py`'s example flow passes `-dt`, `-tend` and `-mass_lumping` on
+  the command line. They are ordinary `.par` parameters, so omniD writes them
+  into the staged `nversion.par`, keeping one source of values: the case.

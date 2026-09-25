@@ -115,6 +115,29 @@ gate, nothing in between".
     design (catalog, validator, record). A question that changes the design
     goes back to the owner.
 
+**Refined 2026-09-25, while settling openCARP's F1–F7:**
+
+18. **Probe the spellings a reader would try, not just the documented one.**
+    For a boolean-like parameter, try `1 0 yes no true false on off 2`.
+    openCARP accepts all of them with exit 0, but only `0` and `false` mean
+    off. The failure mode is silent, so only an output difference shows it
+    (here, whether APD files appear).
+19. **When a probe fails, read why before drawing a conclusion.** Every first
+    Flag probe exited 5. The cause was an unrelated cross-parameter bound
+    (`spacedt = 3 is above the 2 maximum`), not the Flag. A failed probe
+    settles nothing until its error is read.
+20. **Settle a behavioural question by comparing outputs byte for byte.** F4
+    (are the physics-region options needed?) was settled by `cmp` on `vm.igb`
+    and the LAT file with and without them. "It ran both ways" would not have
+    settled it.
+21. **Check geometry against the independent reference, not the solver's
+    wrapper.** F3 compared `mesher` point extents with the benchmark's
+    20×7×3 mm slab and the stimulus cube's position, which carputils is not
+    needed for.
+22. **Check where relative paths resolve.** Run once from the case directory
+    and once from elsewhere (F5). A staged clone moves the case, so this
+    decides the working directory of every step.
+
 ## What this method produced for openCARP
 
 See [`opencarp.md`](opencarp.md): the evidence log, the noun mapping, and the
