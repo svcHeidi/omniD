@@ -70,7 +70,10 @@ def test_the_real_axes_and_records_trees_pass_the_gate():
     assert gate.main() == 0
 
 
-def test_scanned_roots_are_exactly_the_axes_and_records_directories():
+def test_scanned_roots_are_exactly_the_axes_records_and_planner_paths():
+    """Corrected 2026-09-25: this asserted the two directories only. The
+    writer-free planner module axes import (``openfoam/case_planning.py``)
+    is scanned too, since it was found importing from ``mutators``."""
     gate = _load_gate_module()
     relpaths = {
         str(root.relative_to(_REPO_ROOT)) for root in gate.SCANNED_ROOTS
@@ -78,7 +81,29 @@ def test_scanned_roots_are_exactly_the_axes_and_records_directories():
     assert relpaths == {
         "packages/omnidriver-openfoam/src/omnidriver/openfoam/axes",
         "packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/records",
+        "packages/omnidriver-openfoam/src/omnidriver/openfoam/case_planning.py",
     }
+
+
+@pytest.mark.parametrize("source", [
+    "from ..mutators import _format_value\n",
+    "from .. import mutators\n",
+    "from ..utils import set_delta_t as s\n",
+])
+def test_refuses_a_writer_module_reached_by_a_relative_import(tmp_path, source):
+    """A relative import names the same module an absolute one does. The gate
+    used to compare only the literal text (`mutators`), never the resolved
+    `omnidriver.openfoam.mutators`, so any name not on the forbidden-name
+    list -- `_format_value`, or the module itself -- passed. Found 2026-09-25
+    when `case_planning.py`'s `from .mutators import _format_value` was not
+    flagged."""
+    gate = _load_gate_module()
+    axes = tmp_path / "src" / "omnidriver" / "openfoam" / "axes"
+    axes.mkdir(parents=True)
+    module_path = axes / "sample.py"
+    module_path.write_text(source)
+    messages = [msg for _key, msg in gate._check_file(module_path, axes)]
+    assert any("a writer module" in msg for msg in messages), messages
 
 
 def test_known_violations_is_empty():

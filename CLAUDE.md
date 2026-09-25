@@ -79,7 +79,7 @@ A skip here hides exactly what the guard exists to find.
 | an explicitly-contexted operation never falls back to the default | `test_fallback_census.py` |
 | no compatibility fallback reaches cardiac code | `test_no_fallback_reaches_cardiac_code_at_all` |
 | the capability-seam table matches the docstrings | `scripts/export-capability-seams.py --check` |
-| a tutorial record/axis module never writes a case directly | `scripts/check-case-writes.py` (empty waiver list, scoped to `openfoam/axes/` and `cardiacfoam/records/`) |
+| a tutorial record/axis module never writes a case directly | `scripts/check-case-writes.py` (empty waiver list, scoped to `openfoam/axes/`, `cardiacfoam/records/` and the writer-free planner module `openfoam/case_planning.py`; relative imports are resolved before matching) |
 
 ## Two rules that were learned the hard way
 

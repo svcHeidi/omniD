@@ -54,7 +54,15 @@ AXES_SRC = (
 RECORDS_SRC = (
     REPO_ROOT / "packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/records"
 )
-SCANNED_ROOTS: tuple[Path, ...] = (AXES_SRC, RECORDS_SRC)
+# The pure planners axes import (`plan_delta_t`, `plan_block_mesh_resolution`,
+# ...). Split from the writers in `openfoam/utils.py` so an axis never imports
+# a module that writes; scanned too, so that split cannot quietly regress.
+# Added 2026-09-25 (consolidation), when this module was found importing
+# `_format_value` from `mutators`, the live-file writer module.
+PLANNERS_SRC = (
+    REPO_ROOT / "packages/omnidriver-openfoam/src/omnidriver/openfoam/case_planning.py"
+)
+SCANNED_ROOTS: tuple[Path, ...] = (AXES_SRC, RECORDS_SRC, PLANNERS_SRC)
 
 # Forbidden by full or partial dotted module name: importing ANY name from
 # these modules is a writer import, regardless of which name is imported
@@ -188,12 +196,40 @@ def _type_checking_is_shadowed(tree: ast.Module) -> bool:
     return False
 
 
-def _module_names(node: ast.Import | ast.ImportFrom) -> list[str]:
+def _package_of(path: Path) -> tuple[str, ...]:
+    """The dotted package a source file belongs to: the path parts after the
+    last ``src`` directory, minus the file itself (every package here uses a
+    ``src/`` layout)."""
+    parts = path.resolve().parts
+    if "src" not in parts:
+        return ()
+    start = len(parts) - 1 - parts[::-1].index("src") + 1
+    return tuple(parts[start:-1])
+
+
+def _from_module(node: ast.ImportFrom, path: Path) -> str | None:
+    """The absolute module an ``ImportFrom`` reads from.
+
+    A relative import (``from ..mutators import x``, ``from .. import
+    mutators``) names the same module an absolute one does, so it is
+    resolved against the file's own package before any comparison. Added
+    2026-09-25: comparing only the literal text let a relative import of a
+    writer module pass whenever the imported name itself was not forbidden.
+    """
+    if node.level == 0:
+        return node.module
+    package = _package_of(path)
+    if node.level - 1 > len(package):
+        return node.module
+    base = package[: len(package) - (node.level - 1)]
+    return ".".join(base + ((node.module,) if node.module else ()))
+
+
+def _module_names(node: ast.Import | ast.ImportFrom, path: Path) -> list[str]:
     if isinstance(node, ast.Import):
         return [alias.name for alias in node.names]
-    if node.module is None:
-        return []
-    return [node.module]
+    module = _from_module(node, path)
+    return [] if module is None else [module]
 
 
 def _imported_names(node: ast.Import | ast.ImportFrom) -> list[str]:
@@ -314,15 +350,18 @@ def _check_file(path: Path, root: Path) -> list[tuple[str, str]]:
 
     for node in _runtime_nodes(tree, type_checking_shadowed=type_checking_shadowed):
         if isinstance(node, (ast.Import, ast.ImportFrom)):
-            candidate_module_names = list(_module_names(node))
-            if isinstance(node, ast.ImportFrom) and node.module is not None:
+            candidate_module_names = list(_module_names(node, path))
+            from_module = (
+                _from_module(node, path) if isinstance(node, ast.ImportFrom) else None
+            )
+            if from_module is not None:
                 # `from package import submodule` really imports the
                 # dotted name `package.submodule` -- `_module_names` alone
                 # only sees the "from" half (`package`), which misses this
                 # shape entirely (evasion e26: `from omnidriver.openfoam
                 # import utils` naming a forbidden SUBMODULE this way).
                 candidate_module_names.extend(
-                    f"{node.module}.{alias.name}" for alias in node.names
+                    f"{from_module}.{alias.name}" for alias in node.names
                 )
             for module_name in candidate_module_names:
                 if any(
@@ -443,6 +482,9 @@ KNOWN_VIOLATIONS: frozenset[str] = frozenset()
 def main() -> int:
     found: list[tuple[str, str]] = []
     for scanned_root in SCANNED_ROOTS:
+        if scanned_root.is_file():
+            found.extend(_check_file(scanned_root, scanned_root.parent))
+            continue
         if not scanned_root.is_dir():
             print(f"error: scanned root does not exist: {scanned_root}")
             return 1
@@ -486,7 +528,7 @@ def main() -> int:
 
     print(
         "Case-write boundaries OK: no writer import or call in "
-        "openfoam/axes or cardiacfoam/records."
+        "openfoam/axes, cardiacfoam/records or openfoam/case_planning.py."
     )
     return 0
 
