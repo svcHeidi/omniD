@@ -22,6 +22,12 @@ dependencies = ["omnidriver>=0.1.0"]
 # `pytest packages/omnidriver/tests -q`: ModuleNotFoundError during conftest
 # collection, for every test in the package, not merely opencarp's own.
 # Restore this table in Task 11, once OpenCARPPlugin exists.
+# Corrected 2026-09-25 (review B-I1, commit "fix(core): refuse a broken
+# plugin entry point by name"): discovery no longer calls load()() unguarded.
+# A broken entry is now refused by name (BrokenPluginError, a LookupError)
+# and no longer breaks an explicit --plugin for another stack. The deferral
+# still stands: an active entry with no module would make the implicit
+# default refuse, by name, in every venv that installs this package.
 # [project.entry-points."omnidriver.plugins"]
 # opencarp = "omnidriver.opencarp.plugin:OpenCARPPlugin"
 
