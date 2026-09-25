@@ -1,6 +1,12 @@
 """C1-C10. Each check is self-contained: it builds its own context, stages
 its own copy, and returns a verdict naming what it saw. No check skips; a
-check that cannot run is a failure saying why."""
+check that cannot run is a failure saying why.
+
+Checks are not thread-parallel within one process; run targets in separate
+processes. In-process planning reads core's scratch root from the process
+environment (``_scratch_environment``), so every check that plans in
+process holds one module-level lock for as long as it overrides it (fix
+round 1 I2, 2026-09-25)."""
 from __future__ import annotations
 
 import contextlib
@@ -10,6 +16,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Iterator
 
@@ -46,20 +53,32 @@ def _record(ctx, name: str):
     return records[name]
 
 
+#: Held for the whole of every ``_scratch_environment``: the override is
+#: process-global, so two threads interleaving it would plan one target
+#: with no override (writing ``<cases_root>/.omnidriver``) and leave the
+#: variable pointing at the other's scratch. Reentrant so nesting works.
+_SCRATCH_LOCK = threading.RLock()
+
+
 @contextlib.contextmanager
 def _scratch_environment(target: ConformanceTarget) -> Iterator[None]:
     """Point core's scratch space at the target's scratch_root for an
     in-process call. Without it, planning a record writes
-    ``<cases_root>/.omnidriver`` -- inside the caller's native tree."""
-    previous = os.environ.get(_SCRATCH_VARIABLE)
-    os.environ[_SCRATCH_VARIABLE] = str(target.scratch_root)
-    try:
-        yield
-    finally:
-        if previous is None:
-            os.environ.pop(_SCRATCH_VARIABLE, None)
-        else:
-            os.environ[_SCRATCH_VARIABLE] = previous
+    ``<cases_root>/.omnidriver`` -- inside the caller's native tree.
+
+    Checks are not thread-parallel within one process; run targets in
+    separate processes. ``_SCRATCH_LOCK`` serialises concurrent callers
+    rather than letting them corrupt each other's environment."""
+    with _SCRATCH_LOCK:
+        previous = os.environ.get(_SCRATCH_VARIABLE)
+        os.environ[_SCRATCH_VARIABLE] = str(target.scratch_root)
+        try:
+            yield
+        finally:
+            if previous is None:
+                os.environ.pop(_SCRATCH_VARIABLE, None)
+            else:
+                os.environ[_SCRATCH_VARIABLE] = previous
 
 
 def check_load(target: ConformanceTarget) -> CheckVerdict:

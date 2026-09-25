@@ -68,3 +68,40 @@ def test_c8_bites_a_consumed_file_that_does_not_exist(tmp_path):
     assert not verdict.passed
     assert "does/not/exist.json" in verdict.detail
     assert "constant/mesh.json" not in verdict.detail
+
+
+def test_scratch_environment_is_serialised_across_threads(tmp_path, monkeypatch):
+    """I2: the scratch override is process-global. A second thread must wait
+    for the first to leave, and the variable is restored afterwards."""
+    import os
+    import threading
+
+    from omnidriver.conformance.checks import _SCRATCH_VARIABLE, _scratch_environment
+
+    monkeypatch.delenv(_SCRATCH_VARIABLE, raising=False)
+    first = toy_conformance_target(tmp_path / "a")
+    second = toy_conformance_target(tmp_path / "b")
+    first_inside, release_first = threading.Event(), threading.Event()
+    seen: list[str | None] = []
+
+    def hold_first():
+        with _scratch_environment(first):
+            first_inside.set()
+            release_first.wait(5)
+
+    def enter_second():
+        with _scratch_environment(second):
+            seen.append(os.environ.get(_SCRATCH_VARIABLE))
+
+    holder = threading.Thread(target=hold_first)
+    holder.start()
+    assert first_inside.wait(5)
+    waiter = threading.Thread(target=enter_second)
+    waiter.start()
+    waiter.join(0.3)
+    assert waiter.is_alive(), "a second thread entered while the first held the scratch override"
+    release_first.set()
+    holder.join(5)
+    waiter.join(5)
+    assert seen == [str(second.scratch_root)]
+    assert _SCRATCH_VARIABLE not in os.environ

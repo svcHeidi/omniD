@@ -20,6 +20,10 @@ class ConformanceTarget:
     stage, plan and sweep: the native tree under ``cases_root`` is never
     written. ``base_study`` pins values that keep a real run short (for
     openCARP, mesh resolution and time step; evidence G7).
+
+    Checks are not thread-parallel within one process; run targets in
+    separate processes (in-process planning takes core's scratch root from
+    the process environment, so the suite serialises it behind one lock).
     """
 
     plugin: str
