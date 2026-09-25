@@ -236,7 +236,11 @@ criterion is a convergence rate or a tolerance against independent data, never
 - `packages/omnidriver-cardiacfoam/tests/regression_equivalence/dual_run.py::check_protocol`
   uses `omnidriver.__file__`, but the module never imports `omnidriver`
   *(verified)*. Tests monkeypatch the function, so the real path is never
-  exercised. Filed as a separate task.
+  exercised. **Fixed 2026-09-25**, together with a second defect behind it:
+  its loader import `equivalence.protocol` (core's tests tree) did not resolve
+  in the per-package run CI uses. It now locates the protocol by marker and
+  loads core's `protocol.py` from its file. Three `test_check_protocol_*`
+  tests call it without monkeypatching.
 - Two findings on the in-flight branch: records cannot reach `plan --strict` /
   `run --strict`, and render snapshots are seeded empty. Both are carried into
   the spec as prerequisites P1 and P2.

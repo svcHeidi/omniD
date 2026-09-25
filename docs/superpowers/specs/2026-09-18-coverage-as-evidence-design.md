@@ -536,6 +536,9 @@ otherwise be rediscovered.
 - `equivalence_protocol.yaml` has no executed reader. Its consumer computes
   `Path(omnidriver.__file__)` against a PEP 420 namespace package, so it raises
   before doing anything, and both tests that touch it monkeypatch it out.
+  **Fixed 2026-09-25:** `dual_run.check_protocol` now has an executed reader
+  (`load_equivalence_protocol`), exercised unpatched by the
+  `test_check_protocol_*` tests.
 - `check-import-boundaries.py` has no rule naming `cardiaccore` in either
   direction, and there is no `test-cardiaccore` CI job, while CLAUDE.md
   presents that gate as the enforcement behind core's cardiac-freedom.

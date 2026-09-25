@@ -25,6 +25,8 @@ module imports and its pure helpers unit-test anywhere.
 """
 from __future__ import annotations
 
+import functools
+import importlib.util
 import os
 import shutil
 import subprocess
@@ -32,6 +34,7 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 
 from regression_equivalence.tutorials_tree import tutorials_root
 from regression_equivalence.registry import RegressionCase
@@ -333,18 +336,74 @@ def _tail(text: str, *, limit: int = 1500) -> str:
     return text[-limit:] if len(text) > limit else text
 
 
+_PROTOCOL_FILENAME = "equivalence_protocol.yaml"
+
+
+def _omnidriver_checkout_root() -> Path:
+    """The omniD checkout this module sits in, recognised by the protocol it commits.
+
+    Walks up from this file by marker, never by a fixed ``parents[N]`` (see
+    ``repo_root_default``'s docstring for why). Deliberately not
+    ``repo_root_default()`` itself: its first tier returns a *cardiacFoam*
+    monorepo root when one encloses the checkout, and the protocol is omniD's
+    own committed file, at omniD's root.
+    """
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / _PROTOCOL_FILENAME).is_file() and (parent / "packages").is_dir():
+            return parent
+    raise FileNotFoundError(
+        f"no ancestor of {here} holds {_PROTOCOL_FILENAME} beside packages/; "
+        "check_protocol needs an omniD checkout"
+    )
+
+
+@functools.cache
+def _protocol_module() -> ModuleType:
+    """Core's ``tests/equivalence/protocol.py``, loaded from its file.
+
+    It is the one definition of the protocol's row schema, but it lives in
+    *core's* tests tree, which is not importable when this package's tests
+    run on their own (CI's ``pytest packages/omnidriver-cardiacfoam/tests``
+    resolves this package's ``pythonpath = ["tests"]``). Putting core's tests
+    directory on the path would also expose core's ``conftest`` under the bare
+    name this tree's ``from conftest import ...`` relies on. The module
+    imports only the standard library and ``yaml``, so loading it by path is
+    exact.
+    """
+    path = _omnidriver_checkout_root() / "packages" / "omnidriver" / "tests" / "equivalence" / "protocol.py"
+    name = "regression_equivalence._core_equivalence_protocol"
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load the equivalence protocol module from {path}")
+    module = importlib.util.module_from_spec(spec)
+    # Registered before executing: dataclasses resolves string annotations
+    # (``from __future__ import annotations``) through sys.modules.
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_equivalence_protocol():
+    """The committed ``equivalence_protocol.yaml``, parsed by core's loader."""
+    return _protocol_module().load_protocol(_omnidriver_checkout_root() / _PROTOCOL_FILENAME)
+
+
 def check_protocol(case_dir: str, case_path: Path) -> tuple[bool, str]:
     """Check agent outputs under `case_path` against the frozen equivalence protocol.
 
-    Returns (ok, detail). The protocol is loaded from `equivalence_protocol.yaml`.
+    Returns (ok, detail). The protocol is the committed `equivalence_protocol.yaml`.
     Raises NotImplementedError if no rules exist for the case (unsupported).
+
+    **Corrected 2026-09-25:** this located the protocol with
+    ``Path(omnidriver.__file__)``, a name this module never imported (and a
+    PEP 420 namespace package has no ``__file__``), and imported its loader as
+    ``equivalence.protocol``, which does not resolve in a per-package run.
+    Every test that reached it monkeypatched it out, so neither defect ever
+    surfaced; the ``test_check_protocol_*`` tests now call it for real.
     """
-    from equivalence.protocol import load_protocol
-    
-    pkg_root = Path(omnidriver.__file__).resolve().parent.parent
-    protocol_path = pkg_root / "equivalence_protocol.yaml"
-    protocol = load_protocol(protocol_path)
-    
+    protocol = load_equivalence_protocol()
+
     rows = [r for r in protocol.rows if r.case_dir == case_dir]
     metric_rows = [r for r in protocol.metric_rows if r.case_dir == case_dir]
     

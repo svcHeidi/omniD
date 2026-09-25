@@ -243,3 +243,57 @@ def test_verify_reproduction_generic_maps_regression_skip(monkeypatch, tmp_path)
 
     assert result.status == "skipped"
     assert "rc=77" in result.detail
+
+
+# check_protocol is monkeypatched out of every verify_reproduction test above,
+# which is how its real body went unexecuted: it computed
+# Path(omnidriver.__file__) with ``omnidriver`` never imported, and a PEP 420
+# namespace package has no __file__ to compute from anyway (recorded
+# 2026-09-18 in the coverage-as-evidence design's "found, not part of this
+# design" list). These call it for real, against the committed protocol.
+
+_SERIES_CASE = "NiedererEtAl2011/NiedererEtAl2011verification"
+
+
+def _write_series_outputs(case_path, rows) -> None:
+    """Write each protocol row's expected value where the checker reads it.
+
+    One whitespace table per data file: a header of ``time`` plus each
+    variable, then one line per distinct time -- the layout
+    ``read_series_value`` parses.
+    """
+    by_file: dict[str, dict[float, dict[str, float]]] = {}
+    for row in rows:
+        by_file.setdefault(row.data_file, {}).setdefault(row.time, {})[row.variable] = row.expected
+    for data_file, by_time in by_file.items():
+        variables = sorted({v for values in by_time.values() for v in values})
+        lines = [" ".join(["time", *variables])]
+        for time, values in sorted(by_time.items()):
+            lines.append(" ".join([repr(time), *(repr(values.get(v, 0.0)) for v in variables)]))
+        path = case_path / data_file
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("\n".join(lines) + "\n")
+
+
+def test_check_protocol_reports_missing_outputs_against_the_committed_protocol(tmp_path):
+    ok, detail = dual_run.check_protocol(_SERIES_CASE, tmp_path)
+
+    assert not ok
+    assert "missing in agent output" in detail
+
+
+def test_check_protocol_reproduces_outputs_that_match_the_committed_protocol(tmp_path):
+    protocol = dual_run.load_equivalence_protocol()
+    rows = [r for r in protocol.rows if r.case_dir == _SERIES_CASE]
+    assert rows, f"the committed protocol has no series rows for {_SERIES_CASE}"
+    _write_series_outputs(tmp_path, rows)
+
+    ok, detail = dual_run.check_protocol(_SERIES_CASE, tmp_path)
+
+    assert ok, detail
+    assert f"{len(rows)} reference points reproduced" in detail
+
+
+def test_check_protocol_refuses_a_case_the_protocol_does_not_cover(tmp_path):
+    with pytest.raises(NotImplementedError, match="no/such/case"):
+        dual_run.check_protocol("no/such/case", tmp_path)
