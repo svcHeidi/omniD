@@ -7,6 +7,11 @@ taken from the binary (docs/solver-learning/opencarp.md):
 - F8: when a key is assigned twice, openCARP uses the last assignment.
 - F9: the separator is ``=`` or whitespace alone (``spacedt 2``); both are
   read, and a patch keeps whichever the line used.
+- F10-F13 (added 2026-09-25, review B-I6): a string is always written
+  quoted. Unquoted, openCARP drops everything from an ``=`` on, silently
+  (F10); ``""`` is the empty string (F11); ``#`` starts a comment even
+  inside quotes, so a string holding one is refused (F12); quoting changes
+  nothing for a bare word, a file name or a spaced value (F13).
 """
 from __future__ import annotations
 
@@ -136,7 +141,16 @@ def format_value(value: Any, value_kind: str) -> str:
             )
         if '"' in text:
             raise ParFormatError(f"a .par string cannot contain a double quote: {text!r}")
-        return f'"{text}"' if (not text or "#" in text or any(c.isspace() for c in text)) else text
+        if "#" in text:
+            raise ParFormatError(
+                f"a .par string cannot contain '#': openCARP starts a comment there even "
+                f"inside quotes, so '\"a#b\"' is read as '\"a' (F12): {text!r}"
+            )
+        # Always quoted (F13: quoting is transparent for a model name, a file
+        # name, a value with a space). Unquoted, text after an '=' is silently
+        # dropped -- "flags=ENDO" is read as "flags" (F10). '""' is the empty
+        # string (F11).
+        return f'"{text}"'
     raise ParFormatError(f"no .par spelling for value kind {value_kind!r}")
 
 

@@ -61,11 +61,22 @@ def test_unparseable_line_is_refused_by_line_number():
 @pytest.mark.parametrize(("value", "kind", "text"), [
     (True, "boolean", "1"), (False, "boolean", "0"),       # F1: only 0 and false mean off
     (3, "integer", "3"), (0.17, "scalar", "0.17"), (500, "scalar", "500.0"),
-    ("tenTusscherPanfilov", "string", "tenTusscherPanfilov"), ("flags=EPI", "string", "flags=EPI"),
-    ("two words", "string", '"two words"'), ("", "string", '""'),
+    # Every string is quoted (F13: quoting is transparent for a model name, a
+    # file name and a value with a space). Unquoted, "flags=ENDO" is silently
+    # read as "flags" (F10). "" is the empty string (F11).
+    ("tenTusscherPanfilov", "string", '"tenTusscherPanfilov"'), ("flags=EPI", "string", '"flags=EPI"'),
+    ("two words", "string", '"two words"'), ("", "string", '""'), ("singlecell.sv", "string", '"singlecell.sv"'),
 ])
 def test_format_value(value, kind, text):
     assert format_value(value, kind) == text
+
+
+@pytest.mark.parametrize("text", ["a#b", "#", "x # y"])
+def test_format_refuses_a_hash_F12(text):
+    # openCARP reads '"a#b"' as '"a' -- the # starts a comment even inside
+    # quotes (F12) -- so no spelling carries one.
+    with pytest.raises(ParFormatError, match="F12"):
+        format_value(text, "string")
 
 
 def test_format_refuses_a_non_bool_flag():
