@@ -306,6 +306,36 @@ def check_provenance(target: ConformanceTarget) -> CheckVerdict:
     return _verdict("C8", not missing, f"consumed but not fingerprinted: {missing}" if missing else f"{len(consumed)} consumed file(s) fingerprinted")
 
 
+def _levels(diagnostics) -> list[tuple[str, str]]:
+    out = []
+    for d in diagnostics:
+        level = getattr(d, "level", None) or (d.get("level") if isinstance(d, dict) else None)
+        message = getattr(d, "message", None) or (d.get("message") if isinstance(d, dict) else str(d))
+        out.append((level, message))
+    return out
+
+
+def check_environment(target: ConformanceTarget) -> CheckVerdict:
+    """C9: preflight is clean in the supplied environment, and names the
+    solver when the solver cannot be found."""
+    ctx = _context(target)
+    report = _plan(target, ctx)
+    if report.workflow_dag is None:
+        return _verdict("C9", False, f"cannot check: plan failed: {_plan_errors(report)}")
+    preflight = ctx.capabilities.environment_preflight
+    env = _child_env(target)
+    clean = [m for level, m in _levels(preflight.diagnostics(report.workflow_dag, env=env, driver_context=ctx)) if level == "error"]
+    empty = target.scratch_root / "conformance" / "C9-empty-path"
+    empty.mkdir(parents=True, exist_ok=True)
+    broken = [m for level, m in _levels(preflight.diagnostics(report.workflow_dag, env={**env, "PATH": str(empty)}, driver_context=ctx)) if level == "error"]
+    problems = []
+    if clean:
+        problems.append(f"errors in the supplied environment: {clean}")
+    if not any(target.solver_command in m for m in broken):
+        problems.append(f"with {target.solver_command!r} off PATH, preflight said {broken or 'nothing'}")
+    return _verdict("C9", not problems, "; ".join(problems) or "clean; names the missing solver")
+
+
 CHECKS: dict[str, Callable[[ConformanceTarget], CheckVerdict]] = {
     "C1": check_load,
     "C2": check_describe_noop,
@@ -315,6 +345,7 @@ CHECKS: dict[str, Callable[[ConformanceTarget], CheckVerdict]] = {
     "C6": check_run,
     "C7": check_sweep,
     "C8": check_provenance,
+    "C9": check_environment,
 }
 
 

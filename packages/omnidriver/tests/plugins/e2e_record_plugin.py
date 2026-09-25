@@ -183,11 +183,19 @@ class E2ERecordPlugin(MinimalTestPlugin):
         cases."""
         return self.has_case_marker(case_root)
 
-    def get_environment_diagnostics(
-        self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None,
-    ) -> tuple:
-        del workflow_dag, env, explicit_bashrc, driver_context
-        return ()
+    def get_environment_diagnostics(self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None) -> tuple:
+        """The toy's one real check: its solver command resolves on the supplied PATH."""
+        del workflow_dag, explicit_bashrc, driver_context
+        import shutil
+        from omnidriver.core.planning_types import StrictDiagnostic
+
+        path = (env or os.environ).get("PATH", "")
+        return tuple(
+            StrictDiagnostic(level="error", code="e2e_command_not_found",
+                             message=f"{command!r} is not on PATH={path!r}")
+            for command in sorted(self._solver_commands)
+            if shutil.which(command, path=path) is None
+        )
 
     def get_loaded_environment(self, *, explicit_bashrc=None, driver_context=None) -> dict:
         del explicit_bashrc, driver_context
