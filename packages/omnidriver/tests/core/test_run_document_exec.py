@@ -47,6 +47,7 @@ def _minimal_doc(**overrides) -> RunDocument:
         name="doc-one",
         status="planned",
         config=_empty_config(),
+        configurationSource="document",
         launch={"caseRoot": "/tmp/case", "outputDir": "/tmp/case/output"},
         workflowDag={
             "schema_version": "1",
@@ -305,6 +306,72 @@ class TestAllowedRunsRoot(unittest.TestCase):
                 inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
             self.assertIsNotNone(inputs, diagnostics)
             self.assertEqual(inputs.output_dir, separate_out.resolve())
+
+
+class TestConfigurationSource(unittest.TestCase):
+    """Step 4c: planning and execution agree on where a RunDocument's
+    configuration lives, via the one shared decision
+    (``core.runtime.configuration_source.resolve_configuration_source``)."""
+
+    def test_case_source_skips_document_config_validation(self) -> None:
+        """A "case"-sourced document's config is validated by neither
+        `validate_run` nor the plugin's declared JSON Schema -- the case
+        files it points at already carry (and were already validated
+        against) the real configuration."""
+        with tempfile.TemporaryDirectory() as temp:
+            case = _make_runnable_case(Path(temp))
+            doc = _minimal_doc(
+                configurationSource="case",
+                config={},
+                launch={"caseRoot": str(case), "outputDir": str(case / "output")},
+            )
+            with mock.patch(
+                "omnidriver.core.runtime.run_document_exec.validate_run",
+            ) as mock_validate_run:
+                inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
+        mock_validate_run.assert_not_called()
+        codes = {d.code for d in diagnostics}
+        self.assertNotIn("plugin_config_schema_violation", codes)
+        self.assertNotIn("run_validation", codes)
+        self.assertIsNotNone(inputs, diagnostics)
+
+    def test_case_source_with_non_empty_config_is_refused(self) -> None:
+        """A "case"-sourced document must not also carry document config --
+        two claimed sources for one fact is a contradiction, refused by
+        name, not merged or silently ignored (and not smuggled past the
+        plugin schema check by claiming "case")."""
+        doc = _minimal_doc(
+            configurationSource="case",
+            config={"solver": {"endTime": "1"}},
+        )
+        inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
+        self.assertIsNone(inputs)
+        codes = {d.code for d in diagnostics}
+        self.assertIn("case_configuration_source_carries_config", codes)
+
+    def test_case_source_with_empty_shell_config_is_not_refused(self) -> None:
+        """A phase-shell config of entirely empty sub-dicts (what a plugin's
+        own config builder emits for a generic case, e.g. cardiacFoam's
+        `build_config`) is structurally empty, not "non-empty" -- truthy at
+        the top level is not the same as carrying a value."""
+        with tempfile.TemporaryDirectory() as temp:
+            case = _make_runnable_case(Path(temp))
+            doc = _minimal_doc(
+                configurationSource="case",
+                config={"anatomy": {}, "physics": {}, "stimulus": {}, "solver": {}},
+                launch={"caseRoot": str(case), "outputDir": str(case / "output")},
+            )
+            inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
+        codes = {d.code for d in diagnostics}
+        self.assertNotIn("case_configuration_source_carries_config", codes)
+        self.assertIsNotNone(inputs, diagnostics)
+
+    def test_unknown_configuration_source_is_refused(self) -> None:
+        doc = _minimal_doc(configurationSource="somewhere-else")
+        inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
+        self.assertIsNone(inputs)
+        codes = {d.code for d in diagnostics}
+        self.assertIn("unknown_configuration_source", codes)
 
 
 if __name__ == "__main__":
