@@ -25,6 +25,12 @@ from omnidriver.openfoam.apply_overrides import effective_values_agree
     (False, "false"),
     ([1, 2, 3], "(1 2 3)"),
     ("(1 2 3)", "(1 2 3)"),
+    # 2026-09-25: the blockMeshDict hex-cell-counts convention spells its
+    # triple WITHOUT parentheses (`case_planning.read_hex_cell_counts`/
+    # `plan_block_mesh_resolution`) -- a requested tuple must still agree
+    # with that unparenthesised text.
+    ((40, 6, 14), "40 6 14"),
+    ("40 6 14", "40 6 14"),
 ])
 def test_equal_values_agree(requested, resolved):
     assert effective_values_agree(requested, resolved)
@@ -37,6 +43,7 @@ def test_equal_values_agree(requested, resolved):
     (1, "2"),
     ([1, 2, 3], "(1 2 4)"),
     (1e-3, "uniform 0.001"),
+    ((40, 6, 14), "40 6 15"),
 ])
 def test_different_values_do_not_agree(requested, resolved):
     assert not effective_values_agree(requested, resolved)

@@ -12,6 +12,15 @@ its own ``document``/``resolution`` and registers the result under whatever
 name it chooses -- nothing here is registered into any plugin's catalog
 (YAGNI: nothing needs a fixed-name instance yet).
 
+**Corrected 2026-09-25** (``restitutionCurves``'s ``blockMeshResolution``
+axis, a genuine study choice the tutorial's own ``system/blockMeshDict``
+documents as three commented-out alternatives): the builder's ``value_kind``
+was hardcoded to ``"integer"``, which fit only the "one count, expanded by a
+formula" case this module's docstring already described. It is now a
+parameter (default unchanged, ``"integer"``) so a record whose study value
+is already the three cell counts can declare ``value_kind="integer_list"``
+instead -- see :func:`block_mesh_resolution_axis`'s own docstring.
+
 **Why the produced patch is not a ``document:key`` edit.**
 :func:`omnidriver.openfoam.case_planning.plan_block_mesh_resolution`'s own
 docstring already gives the full reasoning: rewriting every ``hex (`` block
@@ -31,6 +40,27 @@ composed stack's own record-key validator answers for this
 ``patches_to_parameters``/``ParameterAssignment`` (whose ``value_kind`` field
 *is* checked against ``VALUE_KINDS``) -- this placeholder is purely
 descriptive and is discarded well before that point.
+
+**Corrected 2026-09-25 (the ``restitutionCurves`` real-run test's own
+regression).** The patch's ``value`` used to be the pre-formatted,
+space-joined TEXT (``plan_block_mesh_resolution``'s own
+``"hex_cell_counts"`` string, e.g. ``"40 6 14"``), built by calling that
+planner right here in ``resolve()``. That is rendered text carried as data
+-- exactly what ``case_write.py``'s own 2026-09-23 decision says a
+``ParameterAssignment`` must never be ("a value is native Python data,
+checked against its declared shape here, not rendered text checked
+nowhere"), and no ``VALUE_KINDS`` member fits an arbitrary string
+containing whitespace (``word``/``enum`` both refuse it by name). This
+axis had no production caller until the ``restitutionCurves`` pilot's real
+run, so the mismatch was never exercised: every prior use only previewed a
+patch or asserted it "unchanged" (``split_unchanged`` never reaches
+``patches_to_parameters``), and neither path ever ran ``value_kind``
+through ``validate_value_shape``. ``resolve()`` now returns the validated
+TUPLE of ints as ``value`` -- a real ``integer_list`` shape, checked
+successfully -- and defers space-joining (and ``plan_block_mesh_resolution``'s
+own security check) to whichever writer actually rewrites bytes for this
+key (``cardiacfoam.overrides._target_for_parameter``, which reuses
+``plan_block_mesh_resolution`` itself, same as this axis used to).
 
 **Why "exactly one hex block" is not checked here.**
 ``plan_block_mesh_resolution`` itself performs no such check either -- by its
@@ -68,7 +98,7 @@ from typing import Any, Callable
 
 from omnidriver.core.tutorial_records import AxisContract, AxisPatch, AxisResult
 
-from ..case_planning import HEX_CELL_COUNTS_KEY_PATH, plan_block_mesh_resolution
+from ..case_planning import HEX_CELL_COUNTS_KEY_PATH
 
 #: The synthetic key path every patch this axis produces carries -- not a
 #: literal ``blockMeshDict`` dictionary key (there is none for "every hex
@@ -117,6 +147,7 @@ def block_mesh_resolution_axis(
     *,
     document: str,
     resolution: Callable[[Any], tuple[int, int, int]],
+    value_kind: str = "integer",
 ) -> AxisContract:
     """Build a named axis mapping a study value to a ``blockMeshDict``'s hex
     block cell counts.
@@ -124,18 +155,28 @@ def block_mesh_resolution_axis(
     ``document`` is the case-relative ``blockMeshDict`` path (e.g.
     ``"system/blockMeshDict.3D"``). ``resolution`` is a pure callable from
     the study value to the three cell counts -- a tutorial record's own
-    formula (e.g. ``lambda n: (n, n, n)`` for an isotropic resolution, or a
-    per-dimension one); this package knows neither the formula nor which
-    document any particular tutorial uses, only how to turn "some cell
-    counts" into a patch once it has them.
+    formula (e.g. ``lambda n: (n, n, n)`` for an isotropic resolution, a
+    per-dimension one, or (as of the ``restitutionCurves`` pilot, 2026-09-25)
+    the identity -- a record whose study already supplies the three counts
+    explicitly, e.g. ``[40, 6, 14]``, with no scaling formula invented);
+    this package knows neither the formula nor which document any
+    particular tutorial uses, only how to turn "some cell counts" into a
+    patch once it has them.
 
-    The axis declares ``value_kind="integer"`` for the STUDY value it
-    accepts (the one concrete study vocabulary the design names for this
-    axis is a bare resolution count, e.g. ``number_cells: 20``) -- checked by
-    ``tutorial_records.resolve_case_patches`` before ``resolution`` ever
-    runs, so a non-integer study value (a string, a float) is refused by
-    core's own generic shape check before reaching this module's code at
-    all.
+    ``value_kind`` declares the shape of the STUDY value this axis's
+    ``resolve`` accepts -- checked by ``tutorial_records.resolve_case_patches``
+    before ``resolution`` ever runs, so a value not fitting that shape is
+    refused by core's own generic shape check before reaching this module's
+    code at all. Defaults to ``"integer"`` (the design's original concrete
+    vocabulary for this axis: a bare resolution count, e.g.
+    ``number_cells: 20``). A record whose study value is the three cell
+    counts themselves (not a single count a formula expands) passes
+    ``value_kind="integer_list"`` instead -- the closest existing
+    ``contracts.dictionary.VALUE_KINDS`` member for "a list of three ints"
+    (no fixed-length-3 kind exists; this axis's own ``_validate_cell_counts``
+    already enforces the exact length and positivity `resolution` must
+    return, so ``integer_list``'s per-element-only check is sufficient here,
+    not a gap).
 
     Refuses by name (module docstring has the full reasoning for each):
 
@@ -156,20 +197,19 @@ def block_mesh_resolution_axis(
                 f"{document!r}, which does not exist in the staged case at "
                 f"{staged_case_root}"
             )
-        cell_counts_str = " ".join(str(count) for count in cell_counts)
-        # Reused, not duplicated: `plan_block_mesh_resolution` both formats
-        # (and security-checks, via `literals._format_value`) the cell-count
-        # string and shapes the target `render_patch_case_files` understands
-        # -- `expected_blocks` stays at its default (1); see module docstring
-        # for why checking it against this document's real content is not
-        # this axis's job.
-        target = plan_block_mesh_resolution(document, cell_counts_str)
+        # `value` is the validated TUPLE of ints, not pre-formatted text
+        # (module docstring's 2026-09-25 correction): typed data, matching
+        # `ParameterAssignment`'s own "never rendered text" rule, and a real
+        # `integer_list` shape `validate_value_shape` actually accepts.
+        # Space-joining into `plan_block_mesh_resolution`'s own
+        # `"hex_cell_counts"` string (and its security check) is deferred to
+        # whichever writer actually rewrites bytes for this key.
         patch = AxisPatch(
-            document=target["document"],
+            document=document,
             key_path=_HEX_CELL_COUNTS_KEY_PATH,
-            value=target["hex_cell_counts"],
+            value=cell_counts,
             value_kind="hex_cell_counts",
         )
         return AxisResult(patches=(patch,))
 
-    return AxisContract(name=name, value_kind="integer", resolve=resolve)
+    return AxisContract(name=name, value_kind=value_kind, resolve=resolve)

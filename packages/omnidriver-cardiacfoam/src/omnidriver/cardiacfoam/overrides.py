@@ -12,6 +12,10 @@ from omnidriver.core.case_write import (
 )
 from omnidriver.core.contracts.dictionary import validate_value_shape
 from omnidriver.openfoam import case_rendering
+from omnidriver.openfoam.case_planning import (
+    HEX_CELL_COUNTS_KEY_PATH,
+    plan_block_mesh_resolution,
+)
 from omnidriver.openfoam.dict_builder import match_dynamic_entry
 from omnidriver.openfoam.literals import (
     format_dimensioned_literal,
@@ -707,6 +711,25 @@ def _target_for_parameter(parameter: ParameterAssignment) -> dict[str, Any]:
     """One `render_patch_case_files` edit target for `parameter` (2026-09-23
     decision, "a parameter asserts a final state, not only a value").
 
+    **The hex-rewrite target (added 2026-09-25, the `restitutionCurves`
+    real-run test's own regression).** A parameter whose `key_path` is
+    `case_planning.HEX_CELL_COUNTS_KEY_PATH` (`block_mesh_resolution_axis`'s
+    synthetic key -- see that module's own docstring) is not an ordinary
+    key/value edit: it is `plan_block_mesh_resolution`'s own structural
+    `"hex_cell_counts"`/`"expected_blocks"` shape, not `"expanded_key_path"`/
+    `"value"`. This is the "future writer" that axis's docstring anticipated
+    ("whichever future writer commits a `hex_cell_counts` patch for real
+    reuses that same already-tested check"); before this, `patches_to_
+    parameters` -> `resolve_case_mutation` had no such case at all, so a
+    tutorial-record commit of this key silently built an ordinary
+    `update_foam_entry` target instead -- one that would have SET a literal
+    top-level dictionary key named `hex_cell_counts`, never rewriting a
+    single `hex (` line. `parameter.value` is the axis's own typed tuple of
+    ints (its docstring's 2026-09-25 correction); this reconstructs the
+    exact space-joined text `plan_block_mesh_resolution` expects, reusing
+    that planner rather than re-implementing its formatting or security
+    check.
+
     A `remove` carries no `"value"` key: there is nothing to format (its
     `value` is `None`, refused as a value to write), and `render_patch_case_files`
     never reads `"value"` for a `remove` edit -- matching the hex-rewrite
@@ -714,6 +737,9 @@ def _target_for_parameter(parameter: ParameterAssignment) -> dict[str, Any]:
     Every other operation keeps writing `_write_value_for_assignment`'s
     result, unchanged from before this field existed.
     """
+    if parameter.key_path == HEX_CELL_COUNTS_KEY_PATH:
+        cell_counts_str = " ".join(str(count) for count in parameter.value)
+        return dict(plan_block_mesh_resolution(parameter.document, cell_counts_str))
     target: dict[str, Any] = {
         "qualified_id": parameter.qualified_id,
         "document": parameter.document,

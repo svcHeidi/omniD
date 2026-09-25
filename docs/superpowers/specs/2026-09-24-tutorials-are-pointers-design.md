@@ -453,3 +453,37 @@ so it does not silently regress.
 
 No design gap was found this step -- the gap step 4b recorded is what this
 step closes.
+
+**Corrected 2026-09-25** (small follow-up): the real-run test's coarse mesh
+used to come from a direct text edit of the scratch copy's `blockMeshDict`
+(swapping which `hex (` line was commented) -- a case edit beside the
+channel. It now comes from the study itself, via a new `blockMeshResolution`
+axis (`openfoam.axes.block_mesh_resolution_axis`, given `value_kind=
+"integer_list"` for the record's explicit `[40, 6, 14]`, no scaling formula
+invented) named in the scratch study's `base`; the test no longer touches
+any case file, and a native test pins the axis reporting the case's own
+active resolution (read from the file) `unchanged`.
+
+This follow-up also found (not worked around) two real defects this axis's
+COMMIT path had never once exercised before (every prior use only
+previewed a patch, or asserted it "unchanged" -- neither reaches
+`patches_to_parameters`): (1) the axis's patch `value` was pre-joined text
+(e.g. `"40 6 14"`), which no `VALUE_KINDS` member accepts (`word`/`enum`
+both refuse embedded whitespace) -- fixed by having `resolve()` return the
+validated typed tuple instead, deferring space-joining to the writer;
+`cardiacfoam.record_key_validation._infer_unvalidated_value_kind` gained a
+`list`/`tuple` branch (`integer_list`/`scalar_list`) to classify it, and
+`apply_overrides._as_comparable_text` gained a branch parsing an
+UNPARENTHESISED all-numeric multi-token string (the hex-cell-counts
+convention) into a tuple, so "unchanged" detection still agrees. (2)
+`cardiacfoam.overrides._target_for_parameter` had no case for
+`case_planning.HEX_CELL_COUNTS_KEY_PATH` at all -- despite its own
+docstring already describing one -- so a real commit would have built an
+ordinary `update_foam_entry` target and literally SET a top-level
+`hex_cell_counts` dictionary key instead of rewriting a `hex (` line; it
+now special-cases that key path and reuses `plan_block_mesh_resolution`,
+the "future writer" `block_mesh_resolution_axis`'s own docstring already
+anticipated. All four suite shapes plus the three static gates are 0
+failed with these fixes in place, and the real run reaches `completed`
+with the committed `blockMeshDict`'s active `hex (` line reading
+`(40 6 14)`.

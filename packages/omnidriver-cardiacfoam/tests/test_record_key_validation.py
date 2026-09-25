@@ -134,6 +134,14 @@ def test_a_dynamic_path_binding_is_checked_against_its_declared_domain():
         (5, "integer"),
         (1e-5, "scalar"),
         ("80 80 80", "word"),
+        # Added 2026-09-25 (`restitutionCurves`'s `blockMeshResolution`
+        # axis): a typed tuple/list of ints infers `integer_list`, the
+        # shape `block_mesh_resolution_axis`'s patch value actually has --
+        # see that module's own docstring for why it is no longer
+        # pre-joined text.
+        ((40, 6, 14), "integer_list"),
+        ([40, 6, 14], "integer_list"),
+        ((1.5, 2.5), "scalar_list"),
     ],
 )
 def test_system_document_key_accepted_unvalidated(value, expected_kind):
@@ -153,10 +161,24 @@ def test_system_control_dict_delta_t_is_unvalidated():
 
 
 def test_system_block_mesh_dict_hex_cell_counts_is_unvalidated():
+    """A direct ``document:key`` study naming this key with pre-joined text
+    (rather than through ``block_mesh_resolution_axis``, which no longer
+    produces this shape -- see that module's own 2026-09-25 correction).
+    """
     value_kind, validated = record_key_validator(
         "system/blockMeshDict", ("hex_cell_counts",), "200 30 70",
     )
     assert value_kind == "word"
+    assert validated is False
+
+
+def test_system_block_mesh_dict_hex_cell_counts_tuple_is_unvalidated():
+    """The shape ``block_mesh_resolution_axis`` actually produces since its
+    2026-09-25 correction (typed data, not pre-joined text)."""
+    value_kind, validated = record_key_validator(
+        "system/blockMeshDict", ("hex_cell_counts",), (200, 30, 70),
+    )
+    assert value_kind == "integer_list"
     assert validated is False
 
 

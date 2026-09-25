@@ -23,6 +23,18 @@ ambiently, the same way the interactive pilot run did -- there is no
 scratch-supplied substitute for either, per CLAUDE.md's "real case or
 native-source drift gate, nothing invented".
 
+**Corrected 2026-09-25.** This test used to coarsen the scratch copy's mesh
+by rewriting ``system/blockMeshDict``'s text directly (swapping which ``hex
+(`` line was commented) -- a direct case edit beside the channel, exactly
+the pattern this whole design removes. The coarse mesh now comes from the
+study itself, via the new ``blockMeshResolution`` axis
+(``records/restitution_curves.py``, built on
+``openfoam.axes.block_mesh_resolution_axis``): the scratch study's ``base``
+names ``"blockMeshResolution": [40, 6, 14]``, the tutorial's own smallest
+documented alternative (taken as given, no scaling formula), and the
+record's normal patch/commit/render channel writes it. This test no longer
+touches any case file itself.
+
 Marked ``slow`` (a real solve, ~20-30s measured on this machine, comfortably
 under the ~2 minute budget this test was only added because it cleared) in
 addition to ``native``.
@@ -66,38 +78,16 @@ def _native_tutorials_root() -> Path:
 
 def _stage_scratch_copy(native_root: Path, scratch_root: Path) -> Path:
     """Copy the native case into a scratch tree (never write the native
-    tree itself) and coarsen its mesh to the tutorial's own smallest
-    documented alternative resolution.
-
-    ``system/blockMeshDict`` documents three uniform resolutions as
-    commented-out alternatives (deltaX 0.5/0.2/0.1 mm); the checked-in
-    default is the finest (200x30x70 = 420000 cells). This test switches to
-    the coarsest, already-documented alternative (40x6x14 = 3360 cells) --
-    not an invented geometry, one of the tutorial's own three options --
-    solely so a real cardiacFoam solve finishes in seconds rather than
-    minutes on this developer machine. Measured interactively (this
-    worktree's step 4c pilot run) at 3360 cells: 202000 timesteps
-    (endTime=2.02, deltaT=1e-5, the protocol values below) completed in
-    well under a second of solver time; the coarser mesh is what keeps the
-    real, unmocked CLI round trip (mesh + solve + case commit + workflow
-    bookkeeping) comfortably inside this test's slow-marked budget.
-    """
+    tree itself, and never edit the copy either -- the coarse mesh is a
+    study value, resolved through the record's own ``blockMeshResolution``
+    axis and committed through the normal render/commit channel, not a text
+    edit here beside it)."""
     native_case = native_root / _RESTITUTION_CURVES_RELPATH
     if not native_case.is_dir():
         pytest.fail(f"native fixture case missing: {native_case}")
 
     scratch_case = scratch_root / "tutorials" / _RESTITUTION_CURVES_RELPATH
     shutil.copytree(native_case, scratch_case)
-
-    block_mesh_dict = scratch_case / "system" / "blockMeshDict"
-    text = block_mesh_dict.read_text()
-    coarse_line = "    // hex (0 1 2 3 4 5 6 7) (40 6 14) simpleGrading (1 1 1)"
-    fine_line = "    hex (0 1 2 3 4 5 6 7) (200 30 70) simpleGrading (1 1 1)"
-    assert coarse_line in text, "the tutorial's own coarse alternative moved or was reworded"
-    assert fine_line in text, "the tutorial's own fine default moved or was reworded"
-    text = text.replace(coarse_line, "    hex (0 1 2 3 4 5 6 7) (40 6 14) simpleGrading (1 1 1)")
-    text = text.replace(fine_line, "    // hex (0 1 2 3 4 5 6 7) (200 30 70) simpleGrading (1 1 1)")
-    block_mesh_dict.write_text(text)
 
     return scratch_root / "tutorials"
 
@@ -111,13 +101,21 @@ def test_restitution_curves_single_case_reaches_completed_via_the_real_cli(
     # A scratch VARIANT of the real study (design's own instruction: narrow
     # to one case, never edit the native file) -- the first S2 value the
     # real tworldS1S2Restitution/sweep.json sweeps, unchanged, so this is a
-    # real protocol point, not an invented one.
+    # real protocol point, not an invented one. `blockMeshResolution` names
+    # the tutorial's own smallest documented mesh alternative
+    # (40x6x14 = 3360 cells, deltaX 0.5mm -- see `system/blockMeshDict`'s own
+    # commented-out alternatives) instead of the checked-in default
+    # (200x30x70 = 420000 cells), solely so the real solve finishes in
+    # seconds rather than minutes on this developer machine; physics
+    # (deltaT, ionic model, protocol timing) are left exactly as the real
+    # study specifies.
     spec = {
         "base": {
             "entry": "restitutionCurves",
             "cases_root": str(cases_root),
             "ionicModel": "TWorld",
             "constant/electroProperties:singleCellSolverCoeffs.tissue": "epicardialCells",
+            "blockMeshResolution": [40, 6, 14],
         },
         "sweep": {
             "mode": "zip",
@@ -176,3 +174,16 @@ def test_restitution_curves_single_case_reaches_completed_via_the_real_cli(
     assert len(trace_lines) > 1000, (
         f"expected a real multi-timestep trace, got {len(trace_lines)} lines"
     )
+
+    # The `blockMeshResolution` axis's own patch actually reached the
+    # committed case, through the normal render/commit channel -- not a
+    # text-swap this test performed itself.
+    block_mesh_dict = (solved_case / "system" / "blockMeshDict").read_text()
+    active_hex_lines = [
+        line.strip() for line in block_mesh_dict.splitlines()
+        if line.strip().startswith("hex (")
+    ]
+    assert len(active_hex_lines) == 1, (
+        f"expected exactly one active hex block, got {active_hex_lines}"
+    )
+    assert "(40 6 14)" in active_hex_lines[0], active_hex_lines[0]

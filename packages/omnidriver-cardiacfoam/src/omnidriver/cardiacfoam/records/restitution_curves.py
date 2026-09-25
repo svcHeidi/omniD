@@ -57,7 +57,10 @@ exactly the two steps ``Allrun`` runs unconditionally: ``mesh``
 
 from __future__ import annotations
 
+from typing import Any, Sequence
+
 from omnidriver.core.tutorial_records import TutorialRecord, WorkflowStep
+from omnidriver.openfoam.axes import block_mesh_resolution_axis
 
 from .ionic_model_axis import ionic_model_axis
 from .s1_s2_protocol_axis import s1_s2_protocol_axis
@@ -72,6 +75,29 @@ _SINGLE_CELL_SOLVER_COEFFS = ("singleCellSolverCoeffs",)
 
 IONIC_MODEL_AXIS_NAME = "ionicModel"
 S1_S2_PROTOCOL_AXIS_NAME = "s1s2Protocol"
+#: Added 2026-09-25, for the real-run regression test's coarse mesh (design
+#: doc step 4c follow-up): ``system/blockMeshDict`` documents three uniform
+#: resolutions as commented-out alternatives (deltaX 0.5/0.2/0.1mm; see that
+#: file's own comments) -- a genuine per-case study choice this tutorial
+#: never exposed before. Before this axis existed, the only way to select
+#: one was a direct text edit of the staged case's ``blockMeshDict`` beside
+#: the channel, exactly the pattern this whole design removes.
+BLOCK_MESH_RESOLUTION_AXIS_NAME = "blockMeshResolution"
+
+_BLOCK_MESH_DICT_DOCUMENT = "system/blockMeshDict"
+
+
+def _explicit_cell_counts(cell_counts: Sequence[Any]) -> tuple[int, int, int]:
+    """No scaling formula: this axis's study value already IS the three hex
+    cell counts (one of ``system/blockMeshDict``'s own three documented
+    resolutions, e.g. ``[40, 6, 14]``), taken as given.
+    ``block_mesh_resolution_axis``'s own ``_validate_cell_counts`` checks the
+    shape (exactly three positive integers) once ``resolution`` returns --
+    this callable only turns the study's list/tuple into the plain tuple
+    that check expects, inventing no formula of its own.
+    """
+    return tuple(cell_counts)
+
 
 #: This record's own axis instances, keyed by the name its study vocabulary
 #: uses -- registered into the cardiac stack's axis catalog by
@@ -84,6 +110,19 @@ AXES = {
     S1_S2_PROTOCOL_AXIS_NAME: s1_s2_protocol_axis(
         S1_S2_PROTOCOL_AXIS_NAME,
         electro_document=_ELECTRO_DOCUMENT, scope=_SINGLE_CELL_SOLVER_COEFFS,
+    ),
+    BLOCK_MESH_RESOLUTION_AXIS_NAME: block_mesh_resolution_axis(
+        BLOCK_MESH_RESOLUTION_AXIS_NAME,
+        document=_BLOCK_MESH_DICT_DOCUMENT,
+        resolution=_explicit_cell_counts,
+        # The study value is already the three cell counts (e.g.
+        # [40, 6, 14]), not a bare count a formula expands -- "integer" (this
+        # builder's default) does not fit a list; "integer_list" is the
+        # closest existing `contracts.dictionary.VALUE_KINDS` member for "a
+        # list of ints" (no fixed-length-3 kind exists, and none is added
+        # here: `_validate_cell_counts` already enforces exactly three
+        # positive integers once `resolution` returns).
+        value_kind="integer_list",
     ),
 }
 

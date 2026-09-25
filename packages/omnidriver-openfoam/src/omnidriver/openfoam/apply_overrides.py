@@ -527,7 +527,24 @@ def _as_comparable_text(text: str):
     """Parse one native scalar/word/vector spelling into a comparable value.
 
     Returns a float for a number, a bool for an OpenFOAM boolean word, a tuple
-    of floats for a parenthesised vector, and the stripped text otherwise.
+    of floats for a parenthesised vector OR an unparenthesised
+    whitespace-separated one, and the stripped text otherwise.
+
+    **Corrected 2026-09-25** (the ``restitutionCurves`` real-run test's own
+    regression, via ``block_mesh_resolution_axis``'s typed-tuple value): a
+    ``blockMeshDict``'s hex-cell-counts convention (``case_planning
+    .read_hex_cell_counts``/``plan_block_mesh_resolution``) spells its
+    vector WITHOUT parentheses (``"40 6 14"``, not ``"(40 6 14)"``) --
+    unlike every other vector this function already parsed. Before this, a
+    real requested value of ``(40, 6, 14)`` compared against that exact
+    text always disagreed (a tuple of floats never equals a plain string),
+    so a study naming the case's own current resolution could never be
+    reported ``"unchanged"``. Added as its own branch, after the
+    parenthesised one and before the single-float attempt, so it only
+    fires for a genuinely all-numeric, multi-token spelling -- anything
+    that fails to parse (``"uniform 0.001"``, a real word with an
+    embedded space) falls through to plain text comparison exactly as
+    before.
     """
     stripped = text.strip().rstrip(";").strip()
     if not stripped:
@@ -538,6 +555,12 @@ def _as_comparable_text(text: str):
         return False
     if stripped.startswith("(") and stripped.endswith(")"):
         parts = stripped[1:-1].split()
+        try:
+            return tuple(float(part) for part in parts)
+        except ValueError:
+            return stripped
+    parts = stripped.split()
+    if len(parts) > 1:
         try:
             return tuple(float(part) for part in parts)
         except ValueError:
@@ -553,8 +576,10 @@ def _as_comparable(value: Any):
     value, dispatching on the Python type actually in hand.
 
     A number becomes a ``float``, an OpenFOAM boolean word or a Python ``bool``
-    stays a ``bool``, a list/tuple and a parenthesised vector string both
-    become a tuple of floats, and anything else is compared as text.
+    stays a ``bool``, a list/tuple and a parenthesised OR unparenthesised
+    (``_as_comparable_text``'s 2026-09-25 addition, for the hex-cell-counts
+    convention) vector string all become a tuple of floats, and anything
+    else is compared as text.
 
     Corrected 2026-09-22 (audit finding F1b, second pass): the first draft
     always rendered the *requested* side through ``_effective_value_text``

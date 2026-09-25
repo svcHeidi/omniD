@@ -81,12 +81,15 @@ def test_resolve_produces_the_planners_hex_cell_counts_patch(tmp_path):
     patch = result.patches[0]
     assert patch.document == "system/blockMeshDict"
     assert patch.key_path == ("hex_cell_counts",)
-    # The exact string `plan_block_mesh_resolution` itself would produce --
-    # reused, not duplicated.
-    assert patch.value == plan_block_mesh_resolution(
-        "system/blockMeshDict", "20 20 20",
-    )["hex_cell_counts"]
-    assert patch.value == "20 20 20"
+    # Typed data (2026-09-25 correction), not `plan_block_mesh_resolution`'s
+    # own pre-joined text -- see the module docstring's dated correction for
+    # why a `ParameterAssignment` must never carry rendered text as a value.
+    assert patch.value == (20, 20, 20)
+    # The writer that actually rewrites bytes reconstructs the exact string
+    # `plan_block_mesh_resolution` would produce from this same tuple.
+    assert plan_block_mesh_resolution(
+        "system/blockMeshDict", " ".join(str(c) for c in patch.value),
+    )["hex_cell_counts"] == "20 20 20"
 
 
 def test_resolve_supports_a_non_isotropic_resolution_formula(tmp_path):
@@ -100,7 +103,7 @@ def test_resolve_supports_a_non_isotropic_resolution_formula(tmp_path):
 
     result = axis.resolve(50, case_root)
 
-    assert result.patches[0].value == "50 1 1"
+    assert result.patches[0].value == (50, 1, 1)
 
 
 # ---------------------------------------------------------------------------
@@ -204,14 +207,15 @@ def test_resolve_succeeds_against_a_document_with_more_than_one_hex_block(tmp_pa
 
     result = axis.resolve(20, case_root)
 
-    assert result.patches[0].value == "20 20 20"
+    assert result.patches[0].value == (20, 20, 20)
 
 
 def test_the_axis_produced_value_still_refuses_the_wrong_block_count_when_rendered(tmp_path):
-    """The patch's value threads straight back into `plan_block_mesh_
-    resolution`'s own default `expected_blocks=1` -- rendering it against the
-    real two-block document above refuses via the SAME reused mechanism,
-    proving the check was deferred, not dropped."""
+    """The patch's value (space-joined the same way the real writer would)
+    threads straight back into `plan_block_mesh_resolution`'s own default
+    `expected_blocks=1` -- rendering it against the real two-block document
+    above refuses via the SAME reused mechanism, proving the check was
+    deferred, not dropped."""
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _TWO_HEX_BLOCK_DICT)
     axis = block_mesh_resolution_axis(
         "number_cells", document="system/blockMeshDict", resolution=lambda n: (n, n, n),
@@ -224,6 +228,7 @@ def test_the_axis_produced_value_still_refuses_the_wrong_block_count_when_render
         workflow="test", source_artifacts=(), parameters=(delta_t,), requested_by="test",
     )
     (case_root / "system" / "controlDict").write_text("FoamFile\n{\n}\ndeltaT 1e-05;\n")
+    cell_counts_str = " ".join(str(count) for count in patch.value)
     resolved = ResolvedMutation(
         request=request,
         targets=(
@@ -233,7 +238,7 @@ def test_the_axis_produced_value_still_refuses_the_wrong_block_count_when_render
                 "value": delta_t.value,
                 "format": "openfoam_dictionary",
             },
-            plan_block_mesh_resolution(patch.document, patch.value),
+            plan_block_mesh_resolution(patch.document, cell_counts_str),
         ),
         preconditions=(), expected_effects=(), semantic_owner_id="org.omnidriver.test",
     )

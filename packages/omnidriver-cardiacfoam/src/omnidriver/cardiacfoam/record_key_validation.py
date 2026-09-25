@@ -59,6 +59,20 @@ Three outcomes, exactly the owner's three rules for this task:
    ``False``) confirms it: this validator checks only the two ``constant/``
    documents above against a catalog, never ``system/controlDict`` against
    ``CONTROL_DICT_ENTRIES``, even though that catalog exists.
+
+   **Corrected 2026-09-25** (the ``restitutionCurves`` real-run test's own
+   regression): ``_infer_unvalidated_value_kind`` only ever handled
+   ``bool``/``int``/``float``, falling back to ``"word"`` for everything
+   else -- including a ``str`` containing whitespace, which ``"word"``'s own
+   shape check refuses. That combination was never exercised until
+   ``block_mesh_resolution_axis`` first produced a real, COMMITTED (not
+   merely previewed) value for a ``system/``-owned key -- previously always
+   a pre-joined space-separated string. The axis itself no longer produces
+   that shape (see its own module docstring); this function now also
+   infers ``integer_list``/``scalar_list`` for a plain ``list``/``tuple``,
+   which is what a typed multi-value ``system/``-owned key actually looks
+   like, keeping the same "type only, no catalog opinion" posture for the
+   new branch.
 3. Anything else -- refused BY NAME (raises). Deliberate, and closes a real
    hole: without it, a typo like ``constant/electroPropertie`` (missing the
    final ``s``) would fall through as "an OpenFOAM-owned key, unvalidated but
@@ -166,6 +180,19 @@ def _infer_unvalidated_value_kind(value: Any) -> str:
         return "integer"
     if isinstance(value, float):
         return "scalar"
+    # Added 2026-09-25 (`restitutionCurves`'s `blockMeshResolution` axis,
+    # the first real caller of this validator carrying a typed tuple/list
+    # value -- `block_mesh_resolution_axis`'s own module docstring on why
+    # its patch value is typed data, not pre-joined text): a list/tuple of
+    # plain ints infers `integer_list`; anything else numeric-shaped infers
+    # `scalar_list` (still element-shape-only, same "no catalog, no
+    # opinion beyond Python type" posture as every other branch here).
+    # `bool` excluded from "int" the same way the module's docstring
+    # already explains for the scalar branches above.
+    if isinstance(value, (list, tuple)):
+        if all(isinstance(item, int) and not isinstance(item, bool) for item in value):
+            return "integer_list"
+        return "scalar_list"
     return "word"
 
 

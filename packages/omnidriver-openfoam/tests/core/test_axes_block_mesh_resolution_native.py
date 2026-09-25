@@ -98,7 +98,9 @@ def test_block_mesh_resolution_axis_against_the_real_bath_bidomain_block_mesh_di
     assert len(result.patches) == 1
     patch = result.patches[0]
     assert patch.document == _BLOCK_MESH_DOCUMENT
-    assert patch.value == "20 20 20"
+    # Typed data (2026-09-25 correction, `axes/block_mesh_resolution.py`'s
+    # own module docstring), not pre-joined text.
+    assert patch.value == (20, 20, 20)
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +130,14 @@ def _hex_cell_counts_validator(document, key_path, value):
 def _hex_cell_counts_agree(value_kind, requested, current) -> bool:
     if current is None:
         return False
-    return str(requested).split() == str(current).split()
+    # `requested` is the axis's own typed tuple of ints (2026-09-25
+    # correction) -- space-join it the same way the real writer would
+    # before comparing token-for-token against `current`'s text.
+    if isinstance(requested, (tuple, list)):
+        requested_text = " ".join(str(item) for item in requested)
+    else:
+        requested_text = str(requested)
+    return requested_text.split() == str(current).split()
 
 
 def _read_current_value(document_path: Path, key_path):
@@ -196,7 +205,7 @@ def test_preview_record_case_reports_the_matching_resolution_as_unchanged():
     patches = preview["patches"]
     assert len(patches) == 1
     assert patches[0]["document"] == _BLOCK_MESH_DOCUMENT
-    assert patches[0]["value"] == "80 80 80"
+    assert patches[0]["value"] == (80, 80, 80)
     assert patches[0]["status"] == "unchanged"
 
 
@@ -231,5 +240,5 @@ def test_preview_record_case_reports_a_different_resolution_as_changed():
 
     patches = preview["patches"]
     assert len(patches) == 1
-    assert patches[0]["value"] == "20 20 20"
+    assert patches[0]["value"] == (20, 20, 20)
     assert patches[0]["status"] == "changed"

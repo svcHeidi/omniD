@@ -19,6 +19,11 @@ make:
    own default case for ``TWorld``, ``restitutionCurves_s1s2Protocol``'s own
    default case for ``BuenoOrovio``), and cross-checked against the
    ``ionicModel`` axis's own output for each.
+
+Added 2026-09-25: the ``blockMeshResolution`` axis (§1b below), the
+counterpart to the zero-changes test for the mesh-resolution study choice
+the real-run test (``test_restitution_curves_real_solver_run_native.py``)
+now drives through the study rather than a direct case edit.
 """
 
 from __future__ import annotations
@@ -32,6 +37,7 @@ import pytest
 from omnidriver.cardiacfoam.records.restitution_curves import AXES, RECORD
 from omnidriver.core.plugin_discovery import load_discovered_plugin
 from omnidriver.core.runtime import record_execution
+from omnidriver.openfoam.case_planning import read_hex_cell_counts
 
 pytestmark = pytest.mark.native
 
@@ -95,6 +101,40 @@ def test_restitution_curves_preview_with_no_study_values_shows_zero_changes():
         f"nothing, got {preview['patches']!r}"
     )
     assert preview["workflow_step_ids"] == ["mesh", "solve"]
+
+
+# ---------------------------------------------------------------------------
+# 1b. The `blockMeshResolution` axis (added 2026-09-25, for the real-run
+#     regression test's coarse mesh): naming the case's OWN active
+#     resolution is reported "unchanged", never written -- read from the
+#     real file, never assumed (CLAUDE.md's "no invented-geometry tests").
+# ---------------------------------------------------------------------------
+
+
+def test_restitution_curves_block_mesh_resolution_axis_reports_the_active_resolution_unchanged():
+    tutorials_root = _native_tutorials_root()
+    case_root = tutorials_root / _RESTITUTION_CURVES_RELPATH
+    assert case_root.is_dir(), f"fixture case missing: {case_root}"
+    context = _cardiac_stack()
+
+    active_text = read_hex_cell_counts(case_root / "system" / "blockMeshDict")
+    assert active_text is not None, "blockMeshDict has no readable active hex block"
+    active_resolution = [int(part) for part in active_text.split()]
+    assert len(active_resolution) == 3
+
+    preview = record_execution.preview_record_case(
+        RECORD, cases_root=tutorials_root,
+        study_by_source={"base": {"blockMeshResolution": active_resolution}},
+        driver_context=context,
+    )
+
+    [patch] = preview["patches"]
+    assert patch["document"] == "system/blockMeshDict"
+    # The axis's own typed tuple (2026-09-25 correction,
+    # `axes/block_mesh_resolution.py`'s module docstring), not the file's
+    # pre-joined text -- compared as the same three ints either way.
+    assert patch["value"] == tuple(active_resolution)
+    assert patch["status"] == "unchanged", preview
 
 
 # ---------------------------------------------------------------------------
