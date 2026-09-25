@@ -47,7 +47,6 @@ import unittest
 from pathlib import Path
 
 from omnidriver.cardiacfoam.tutorials import single_cell
-from omnidriver.cardiacfoam.tutorials.defaults import single_cell as single_cell_defaults
 from omnidriver.core.case_write import CaseWriteRecord
 from omnidriver.core.runtime.models import CaseConfig
 
@@ -170,7 +169,7 @@ class TestSingleCellWriteChannelTemplate(unittest.TestCase):
         root = self.tmp / "template_amplitude"
         _write_case(root)
         record = single_cell._plan_case(
-            root, _case(), stimulus_map=single_cell_defaults.STIMULUS_MAP,
+            root, _case(), stimulus_map=single_cell.STIMULUS_MAP,
         )
         by_id = {p["qualified_id"]: p for p in record.parameters}
         self.assertEqual(
@@ -186,7 +185,7 @@ class TestSingleCellWriteChannelTemplate(unittest.TestCase):
         different object) has made a deliberate choice -- `source="case"`."""
         root = self.tmp / "case_amplitude"
         _write_case(root)
-        custom_map = dict(single_cell_defaults.STIMULUS_MAP)
+        custom_map = dict(single_cell.STIMULUS_MAP)
         record = single_cell._plan_case(root, _case(), stimulus_map=custom_map)
         by_id = {p["qualified_id"]: p for p in record.parameters}
         self.assertEqual(
@@ -202,7 +201,7 @@ class TestSingleCellWriteChannelTemplate(unittest.TestCase):
         root = self.tmp / "override_amplitude"
         _write_case(root)
         record = single_cell._plan_case(
-            root, _case(), stimulus_map=single_cell_defaults.STIMULUS_MAP,
+            root, _case(), stimulus_map=single_cell.STIMULUS_MAP,
             electro_property_overrides={
                 "singleCellSolverCoeffs.singleCellStimulus.stim_amplitude": 0.9,
             },

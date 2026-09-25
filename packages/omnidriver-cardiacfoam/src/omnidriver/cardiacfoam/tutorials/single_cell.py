@@ -34,6 +34,7 @@ from functools import partial
 from pathlib import Path
 
 from omnidriver.cardiacfoam.tutorials.defaults import single_cell as defaults
+from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG
 from omnidriver.cardiacfoam.overrides import (
     commit_case_overrides,
     merge_assignments,
@@ -45,6 +46,31 @@ from omnidriver.core.specs.common import (
     resolve_spec_paths,
 )
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
+
+
+def _stimulus_map_from_catalog() -> dict[str, float]:
+    """The one source for a single-cell stimulus amplitude, per ionic model
+    (2026-09-25): ``IonicModelEntry.single_cell_stimulus_amplitude``, not a
+    restated rule here -- ``ionic_model_catalog.py``'s own field docstring
+    carries the migration note (this module's deleted ``STIMULUS_MAP`` rule)
+    and the native-case confirmation (``TWorld`` 60, ``BuenoOrovio`` 0.4).
+    Excludes a model with no amplitude (manufactured-only, or one the
+    catalog does not know) the same way the deleted rule excluded it."""
+    return {
+        name: entry.single_cell_stimulus_amplitude
+        for name, entry in IONIC_MODEL_CATALOG.items()
+        if entry.single_cell_stimulus_amplitude is not None
+    }
+
+
+#: This module's own default stimulus map, built from the catalog field --
+#: `make_spec`'s default `stimulus_map` argument, and the sentinel
+#: `_plan_case` compares an incoming `stimulus_map` against (identity, not
+#: equality) to decide `stim_amplitude`'s `source` ("template" vs "case").
+#: Was `defaults.STIMULUS_MAP` before that was deleted (2026-09-25); tests
+#: that used to import `defaults.STIMULUS_MAP` for this same identity check
+#: now import THIS constant instead.
+STIMULUS_MAP = _stimulus_map_from_catalog()
 
 
 def _build_cases(
@@ -156,7 +182,7 @@ def _plan_case(
     electro_document = str(electro_properties_relpath)
     physics_document = str(physics_properties_relpath)
 
-    stim_amplitude_source = "case" if stimulus_map is not defaults.STIMULUS_MAP else "template"
+    stim_amplitude_source = "case" if stimulus_map is not STIMULUS_MAP else "template"
     stim_amplitude_parameter = resolve_electro_property_set(
         electro_properties_file, "stim_amplitude", stimulus_map[ionic_model],
         document=electro_document,
@@ -202,7 +228,7 @@ def make_spec(
     ionic_model_tissue_map: Mapping[str, Sequence[str]] = defaults.IONIC_MODEL_TISSUE_MAP,
     ionic_model: str | None = None,
     tissue: str | None = None,
-    stimulus_map: Mapping[str, float] = defaults.STIMULUS_MAP,
+    stimulus_map: Mapping[str, float] = STIMULUS_MAP,
     electro_properties_scope: str = defaults.ELECTRO_PROPERTIES_SCOPE,
     electro_properties_relpath: str | Path = defaults.ELECTRO_PROPERTIES_RELPATH,
     physics_properties_relpath: str | Path = "constant/physicsProperties",

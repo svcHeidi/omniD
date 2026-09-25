@@ -54,16 +54,12 @@ IONIC_MODEL_TISSUE_MAP = {
     if "manufactured" not in entry.compatible_tissues
 }
 
-STIMULUS_MAP = {}
-for name, entry in IONIC_MODEL_CATALOG.items():
-    if "manufactured" in entry.compatible_tissues:
-        continue
-    if name.startswith("Fabbri"):
-        STIMULUS_MAP[name] = 0.0
-    elif entry.model_type == "phenomenological":
-        STIMULUS_MAP[name] = 0.4
-    else:
-        STIMULUS_MAP[name] = 60.0
+# STIMULUS_MAP deleted 2026-09-25: its rule (Fabbri* -> 0.0, phenomenological
+# -> 0.4, else -> 60.0, manufactured -> none) is now
+# IonicModelEntry.single_cell_stimulus_amplitude, the one source
+# (ionic_model_catalog.py's own field docstring has the full migration
+# note). ``omnidriver.cardiacfoam.tutorials.single_cell`` builds its own
+# ``STIMULUS_MAP`` from that field now -- this module no longer restates it.
 ELECTRO_PROPERTIES_SCOPE = "singleCellSolverCoeffs"
 ELECTRO_PROPERTIES_RELPATH = SHARED_ELECTRO_PROPERTIES_RELPATH
 RUN_SCRIPT_RELPATH = RUN_CASE_SCRIPT_RELPATH

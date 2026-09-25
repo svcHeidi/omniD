@@ -96,6 +96,29 @@ class IonicModelEntry:
     full ionic models, ~0.4 for phenomenological) and lives in
     dict_entries.py with model-class guidance in its notes field."""
 
+    single_cell_stimulus_amplitude: float | None = None
+    """This model's default single-cell stimulus amplitude
+    (``constant/electroProperties``'s ``singleCellSolverCoeffs
+    .singleCellStimulus.stim_amplitude``), the one value a single-cell
+    tutorial (``singleCell``, ``restitutionCurves``) needs per ionic model.
+
+    **Migrated 2026-09-25** from ``tutorials/defaults/single_cell.py``'s
+    (and the now-deleted ``tutorials/defaults/restitution_curves.py``'s
+    identical copy of the same) ``STIMULUS_MAP`` rule, deleted once this
+    field became the one source: a model whose name starts with ``Fabbri``
+    got ``0.0``; any other ``model_type="phenomenological"`` model got
+    ``0.4``; every other model got ``60.0``; a ``"manufactured"``-tissue-only
+    model got none at all (there is no single-cell case for it). A batched
+    GPU variant (``dataclasses.replace(parent, ...)``, below) inherits its
+    parent's value unless the ``replace()`` call overrides it, which none
+    do for this field, so e.g. ``TWorldcompactBatched`` reads ``60.0`` too.
+
+    Confirmed against the native cardiacFOAM tutorials tree at migration
+    time (``noFrontendCardiacFoam_minor_errors``, restitutionCurves_s1s2
+    Protocol's default `TWorld` case and singleCell's default `BuenoOrovio`
+    case): ``TWorld`` 60, ``BuenoOrovio`` 0.4 -- matching this rule exactly.
+    """
+
     notes: str = ""
     """Additional notes or warnings."""
 
@@ -142,6 +165,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         recommended_ode_step=1e-3,
         recommended_stimulus_duration=1.0,
         recommended_stimulus_intensity=0.5,
+        single_cell_stimulus_amplitude=0.4,  # migrated 2026-09-25 from STIMULUS_MAP (phenomenological rule)
         notes="Phenomenological; works in any PDE-based or ODE-only solver, same as BuenoOrovio.",
     ),
     "BuenoOrovio": IonicModelEntry(
@@ -162,6 +186,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         recommended_ode_step=1e-3,
         recommended_stimulus_duration=1.0,
         recommended_stimulus_intensity=0.5,
+        single_cell_stimulus_amplitude=0.4,  # migrated 2026-09-25 from STIMULUS_MAP; native BuenoOrovio confirms 0.4
     ),
     "Courtemanche": IonicModelEntry(
         states=("membrane_V", "sodium_Nai", "potassium_Ki", "calcium_Cai", "calcium_CaUp", "calcium_CaRel", "ina_m", "ina_h", "ina_j", "ito_oa", "ito_oi", "ikur_ua", "ikur_ui", "ikr_xr", "iks_xs", "ical_d", "ical_f", "ical_fCa", "cajsr_u", "cajsr_v", "cajsr_w"),
@@ -182,6 +207,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         recommended_ode_step=1e-5,
         recommended_stimulus_duration=0.002,
         recommended_stimulus_intensity=80000.0,
+        single_cell_stimulus_amplitude=60.0,  # migrated 2026-09-25 from STIMULUS_MAP
     ),
     "Fabbri": IonicModelEntry(
         states=("membrane_V", "Na_i", "If_y_gate_y", "INa_m_gate_m", "INa_h_gate_h", "ICaL_dL_gate_dL", "ICaL_fL_gate_fL", "ICaL_fCa_gate_fCa", "ICaT_dT_gate_dT", "ICaT_fT_gate_fT", "SR_R", "SR_O", "SR_I", "SR_RI", "Buffer_fTMM", "Buffer_fCMi", "Buffer_fCMs", "Buffer_fTC", "Buffer_fTMC", "Buffer_fCQ", "Ca_i", "Ca_nsr", "Ca_jsr", "Ca_sub", "IKur_rKur_gate_r_Kur", "IKur_sKur_gate_s_Kur", "Ito_q_gate_q", "Ito_r_gate_r", "IKr_pa_gate_paS", "IKr_pa_gate_paF", "IKr_pi_gate_piy", "IKs_n_gate_n", "IKACh_a_gate_a"),
@@ -202,6 +228,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         recommended_ode_step=1e-5,
         recommended_stimulus_duration=0.002,
         recommended_stimulus_intensity=80000.0,
+        single_cell_stimulus_amplitude=0.0,  # migrated 2026-09-25 from STIMULUS_MAP (Fabbri* rule)
     ),
     "Gaur": IonicModelEntry(
         states=("cell_v", "nai", "nass", "ki", "kss", "cai", "cai2", "cass", "cansr", "cajsr", "cacsr", "I_Na_m", "I_Na_h", "I_Na_j", "INaL_ml", "INaL_hl", "ICaL_d", "ICaL_fca", "IKr_xr", "IKs_xs1", "IKs_xs2", "ITo_aa", "CICR_Jrel2", "CICR_Jrel1", "CaMK_CaMKt", "CICR_tjsrol", "CICR_A", "ICaL_fs", "ICaL_ff"),
@@ -222,6 +249,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         recommended_ode_step=1e-5,
         recommended_stimulus_duration=0.002,
         recommended_stimulus_intensity=80000.0,
+        single_cell_stimulus_amplitude=60.0,  # migrated 2026-09-25 from STIMULUS_MAP
     ),
     "Grandi": IonicModelEntry(
         states=("membrane_V", "Ca_i", "Ca_jn", "Ca_sl", "Ca_sr", "Csqn", "Ical_d", "Ical_f", "Ical_fCaB_jn", "Ical_fCaB_sl", "Ikr_xr", "Iks_xs", "Ikur_ikur_r", "Ikur_s", "Ina_h", "Ina_j", "Ina_m", "Inal_hl", "Inal_ml", "Ito_x", "Ito_y", "K_i", "ryr_i", "ryr_o", "ryr_ryr_r", "Na_i", "Na_jn", "Na_sl", "buffCa_CaM", "buffCa_Myoc", "buffCa_Myom", "buffCa_SLH_jn", "buffCa_SLH_sl", "buffCa_SLL_jn", "buffCa_SLL_sl", "buffCa_SRB", "buffCa_TnCHc", "buffCa_TnCHm", "buffCa_TnCL", "buffNa_NaB_jn", "buffNa_NaB_sl"),
@@ -242,6 +270,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         recommended_ode_step=1e-5,
         recommended_stimulus_duration=0.002,
         recommended_stimulus_intensity=80000.0,
+        single_cell_stimulus_amplitude=60.0,  # migrated 2026-09-25 from STIMULUS_MAP
     ),
     "Stewart": IonicModelEntry(
         states=("membrane_V", "Ihyperpolarization_activated_current_y_gate_y", "Irapid_time_dependent_potassium_current_Xr1_gate_Xr1", "Irapid_time_dependent_potassium_current_Xr2_gate_Xr2", "Islow_time_dependent_potassium_current_Xs_gate_Xs", "Ifast_sodium_current_m_gate_m", "Ifast_sodium_current_h_gate_h", "Ifast_sodium_current_j_gate_j", "IL_type_Ca_current_d_gate_d", "IL_type_Ca_current_f_gate_f", "IL_type_Ca_current_f2_gate_f2", "IL_type_Ca_current_fCass_gate_fCass", "Itransient_outward_current_s_gate_s", "Itransient_outward_current_r_gate_r", "Ca_i", "Ca_SR", "Ca_ss", "R_prime", "Na_i", "K_i"),
@@ -262,6 +291,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         recommended_ode_step=1e-5,
         recommended_stimulus_duration=0.002,
         recommended_stimulus_intensity=80000.0,
+        single_cell_stimulus_amplitude=60.0,  # migrated 2026-09-25 from STIMULUS_MAP
     ),
     "TNNP": IonicModelEntry(
         states=("V", "K_i", "Na_i", "Ca_i", "Xr1", "Xr2", "Xs", "m", "h", "j", "d", "f", "fCa", "s", "r", "Ca_SR", "g"),
@@ -281,6 +311,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         recommended_ode_step=1e-5,
         recommended_stimulus_duration=0.002,
         recommended_stimulus_intensity=50000.0,
+        single_cell_stimulus_amplitude=60.0,  # migrated 2026-09-25 from STIMULUS_MAP
     ),
     "ToRORd_dynCl": IonicModelEntry(
         states=("V", "CaMKt", "Nai", "Nass", "Ki", "Kss", "Cass", "Cansr", "Cajsr", "Cai", "Cli", "Clss", "INa_m", "INa_h", "INa_j", "INa_hp", "INa_jp", "INaL_mL", "INaL_hL", "INaL_hLp", "Ito_a", "Ito_iF", "Ito_iS", "Ito_ap", "Ito_iFp", "Ito_iSp", "ICaL_d", "ICaL_ff", "ICaL_fs", "ICaL_fcaf", "ICaL_fcas", "ICaL_jca", "ICaL_ffp", "ICaL_fcafp", "ICaL_nca_ss", "ICaL_nca_i", "IKr_C1", "IKr_C2", "IKr_C3", "IKr_I", "IKr_O", "IKs_xs1", "IKs_xs2", "Jrel_np", "Jrel_p"),
@@ -300,6 +331,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         recommended_ode_step=1e-5,
         recommended_stimulus_duration=0.002,
         recommended_stimulus_intensity=80000.0,
+        single_cell_stimulus_amplitude=60.0,  # migrated 2026-09-25 from STIMULUS_MAP
     ),
     "Trovato": IonicModelEntry(
         states=("membrane_v", "CaMKt", "Nai", "Nasl", "Nass", "Ki", "Kss", "Ksl", "Cai", "Cass", "Casl", "Cansr", "Cajsr", "Cacsr", "INa_m", "INa_hf", "INa_hs", "INa_j", "INa_hsp", "INa_jp", "INaL_mL", "INaL_hL", "INaL_hLp", "Ito_a", "Ito_i1", "Ito_i2", "ICaL_d", "ICaL_ff", "ICaL_fs", "ICaL_fcaf", "ICaL_fcas", "ICaL_jca", "ICaL_ffp", "ICaL_fcafp", "ICaL_nca", "ICaT_b", "ICaT_g", "IKr_xrf", "IKr_xrs", "IKs_xs1", "IKs_xs2", "If_y", "IK1_xk1", "ryr_Jrel1", "ryr_Jrel2", "IP3_u"),
@@ -320,6 +352,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         recommended_ode_step=1e-5,
         recommended_stimulus_duration=0.002,
         recommended_stimulus_intensity=80000.0,
+        single_cell_stimulus_amplitude=60.0,  # migrated 2026-09-25 from STIMULUS_MAP
     ),
     "TWorld": IonicModelEntry(
         states=("v", "camk_trap", "camk_f_ICaL", "camk_f_RyR", "camk_f_PLB", "casig_serca_trap", "buffers_NaBj", "buffers_NaBsl", "buffers_TnClow", "buffers_TnCHc", "buffers_TnCHm", "buffers_CaM", "buffers_Myosin_ca", "buffers_Myosin_mg", "buffers_SRB", "buffers_SLLj", "buffers_SLLsl", "buffers_SLHj", "buffers_SLHsl", "buffers_Csqn", "naj", "nasl", "nai", "ki", "cli", "casr", "caj", "casl", "cai", "m", "h", "j", "hp", "jp", "m_P", "h_P", "j_P", "hp_P", "jp_P", "mL", "hL", "hLp", "d", "ff", "fs", "fcaf", "fcas", "jca", "ffp", "fcafp", "nca", "nca_i", "d_P", "ff_P", "fs_P", "fcaf_P", "fcas_P", "fBPf", "fcaBPf", "ical_pureCDI_junc", "ical_pureCDI_sl", "xtos", "ytos", "xtof", "ytof", "xtos_p", "xtof_p", "ytos_p", "ytof_p", "C0", "C1", "C2", "I", "O", "xs_junc", "xs_sl", "jrel_icaldep_act", "jrel_icaldep_f1", "jrel_icaldep_f2", "ryr_R", "ryr_O", "ryr_I", "ryr_CaRI", "ryr_R_p", "ryr_O_p", "ryr_I_p", "ryr_CaRI_p", "contraction_TmBlocked", "contraction_XW", "contraction_XS", "contraction_ZETAS", "contraction_ZETAW", "contraction_Ca_TRPN"),
@@ -339,6 +372,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         recommended_ode_step=1e-5,
         recommended_stimulus_duration=0.002,
         recommended_stimulus_intensity=80000.0,
+        single_cell_stimulus_amplitude=60.0,  # migrated 2026-09-25 from STIMULUS_MAP; native TWorld confirms 60
         notes="Contains active-tension states (contraction_*); the contraction subsystem is part of the ionic ODE system — no separate activeTensionModel needed.",
     ),
     "PerisYague": IonicModelEntry(
@@ -360,6 +394,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         recommended_ode_step=1e-5,
         recommended_stimulus_duration=0.002,
         recommended_stimulus_intensity=50000.0,
+        single_cell_stimulus_amplitude=60.0,  # migrated 2026-09-25 from STIMULUS_MAP
     ),
     "monodomainFDAManufactured": IonicModelEntry(
         states=("V", "u1", "u2", "u3"),
@@ -377,6 +412,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         recommended_ode_step=1e-4,
         recommended_stimulus_duration=None,
         recommended_stimulus_intensity=None,
+        single_cell_stimulus_amplitude=None,  # manufactured model: no single-cell case
     ),
     "bidomainFDAManufactured": IonicModelEntry(
         states=("V", "u1", "u2", "u3"),
@@ -394,6 +430,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         recommended_ode_step=1e-4,
         recommended_stimulus_duration=None,
         recommended_stimulus_intensity=None,
+        single_cell_stimulus_amplitude=None,  # manufactured model: no single-cell case
     ),
     "bathBidomainFDAManufactured": IonicModelEntry(
         states=("V", "u1", "u2", "u3"),
@@ -411,6 +448,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         recommended_ode_step=1e-4,
         recommended_stimulus_duration=None,
         recommended_stimulus_intensity=None,
+        single_cell_stimulus_amplitude=None,  # manufactured model: no single-cell case
     ),
 }
 
