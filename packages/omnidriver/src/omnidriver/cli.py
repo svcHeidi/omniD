@@ -1208,18 +1208,25 @@ def main(argv: list[str] | None = None) -> int:
     overrides["cases_root"] = str(resolve_cases_root(args.cases_root))
 
     if args.action == "describe":
-        print(
-            json.dumps(
-                describe_entry(
-                    selected_entry,
-                    entry_kind=args.entry_kind,
-                    overrides=overrides,
-                    config_path=args.config,
-                    driver_context=driver_context,
-                ),
-                indent=2,
+        # A record refusal is JSON here as in `plan --strict` (final review
+        # S-M1, 2026-09-25): it used to escape `describe` as a traceback.
+        try:
+            description = describe_entry(
+                selected_entry,
+                entry_kind=args.entry_kind,
+                overrides=overrides,
+                config_path=args.config,
+                driver_context=driver_context,
             )
-        )
+        except TutorialRecordError as exc:
+            print(json.dumps({
+                "status": "failed",
+                "entry": selected_entry,
+                "action": "describe",
+                "error": str(exc),
+            }, indent=2))
+            return 1
+        print(json.dumps(description, indent=2))
         return 0
 
     if args.action == "plan":

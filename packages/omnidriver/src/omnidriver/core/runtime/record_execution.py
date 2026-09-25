@@ -233,10 +233,37 @@ def _resolve_and_split(
     to_write, unchanged = split_unchanged(
         combined,
         case_root=staged_case_root,
-        read_current_value=read_current_value,
+        read_current_value=_reader_refusing_as_record_error(
+            record, read_current_value, case_root=staged_case_root,
+        ),
         values_agree=comparator,
     )
     return to_write, unchanged, command_arguments, workflow_step_ids
+
+
+def _reader_refusing_as_record_error(
+    record: TutorialRecord, read_current_value: Any, *, case_root: Path,
+) -> Any:
+    """``read_current_value``, with a ``ValueError`` it raises -- the config
+    reader refusing the native value it found, e.g. openCARP's F1/F10
+    ``ParFormatError`` -- turned into a ``TutorialRecordError`` naming the
+    record, the document and the key, the original chained (final review
+    S-M1, 2026-09-25). The reader is the third layer that can refuse a
+    record case, after the key validator and the case writer (I2's
+    :func:`_refusal_as_record_error`); without this its refusal escaped
+    ``plan --strict`` and ``describe`` as a traceback with empty stdout.
+    ``split_unchanged`` still lets the refusal propagate, never reading it as
+    "changed"; only its type and message change."""
+
+    def read_or_refuse(document_path: Path, key_path: Any) -> Any:
+        document = Path(document_path).relative_to(case_root).as_posix()
+        with _refusal_as_record_error(
+            record, frozenset({f"{document}:{'.'.join(key_path)}"}), "reading",
+            refused_by="the config-value reader",
+        ):
+            return read_current_value(document_path, key_path)
+
+    return read_or_refuse
 
 
 def _serialize_sourced_patch(sourced: SourcedPatch, *, status: str) -> dict[str, Any]:
@@ -336,6 +363,7 @@ def preview_record_case(
 @contextlib.contextmanager
 def _refusal_as_record_error(
     record: TutorialRecord, documents: frozenset[str], action: str,
+    *, refused_by: str = "the case writer",
 ) -> Iterator[None]:
     """A ``ValueError`` the plugin's case writer raises while resolving or
     rendering -- its contract's refusal type, e.g. a renderer refusing a
@@ -346,7 +374,11 @@ def _refusal_as_record_error(
     Without this, ``plan --strict`` reported a validator refusal as JSON but a
     renderer refusal as a traceback on stderr with empty stdout: the shape of
     a refusal depended on which layer refused. A non-``ValueError`` is a
-    defect, not a refusal, and still propagates as itself."""
+    defect, not a refusal, and still propagates as itself.
+
+    ``refused_by`` names the layer; the config-value reader uses it too, with
+    ``document:key`` labels (final review S-M1,
+    :func:`_reader_refusing_as_record_error`)."""
     try:
         yield
     except TutorialRecordError:
@@ -354,7 +386,7 @@ def _refusal_as_record_error(
     except ValueError as exc:
         raise TutorialRecordError(
             f"tutorial record {record.name!r}: {action} {', '.join(sorted(documents))} "
-            f"was refused by the case writer ({type(exc).__name__}): {exc}"
+            f"was refused by {refused_by} ({type(exc).__name__}): {exc}"
         ) from exc
 
 

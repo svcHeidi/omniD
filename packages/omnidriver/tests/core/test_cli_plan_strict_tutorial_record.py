@@ -144,3 +144,28 @@ def test_a_renderer_or_resolver_refusal_comes_back_as_structured_json_I2(tmp_pat
     assert payload["status"] == "failed"
     assert "constant/mesh.json" in payload["error"]
     assert TOY_REFUSAL in payload["error"]
+
+
+@pytest.mark.parametrize("action", [["plan", "--strict"], ["describe"]])
+def test_a_config_reader_refusal_comes_back_as_structured_json_naming_document_and_key_S_M1(
+    tmp_path, capsys, action,
+):
+    """Final review S-M1: a refusal the config-value reader raises (openCARP's
+    F1/F10 ``ParFormatError``) is a third refusal layer, reached through
+    ``split_unchanged``. It escaped both ``plan --strict`` and ``describe`` as
+    a traceback with empty stdout; it now comes back as JSON naming the
+    document and key it was reading."""
+    from plugins.conformance_toy import REFUSING_READER_PLUGIN, TOY_REFUSAL
+
+    cases_root = _native_toy_case(tmp_path)
+    config = tmp_path / "study.json"
+    config.write_text(json.dumps({"constant/mesh.json:cells": 7}))
+    exit_code = main([
+        *action, "--plugin", REFUSING_READER_PLUGIN, "--entry", "toyTutorial",
+        "--cases-root", str(cases_root), "--config", str(config),
+    ])
+    assert exit_code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "failed"
+    assert "constant/mesh.json:cells" in payload["error"]
+    assert TOY_REFUSAL in payload["error"]

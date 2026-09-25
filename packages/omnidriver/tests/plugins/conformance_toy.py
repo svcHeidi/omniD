@@ -289,6 +289,20 @@ class RefusingResolverPlugin(E2ERecordPlugin):
         raise ToyFormatError(TOY_REFUSAL)
 
 
+REFUSING_READER_PLUGIN = "plugins.conformance_toy:RefusingReaderPlugin"
+
+
+class RefusingReaderPlugin(E2ERecordPlugin):
+    """Its config-value reader refuses the native value it finds, the way
+    openCARP's refuses a non-0/1 Flag (F1) or an unquoted ``a=b`` (F10)."""
+
+    def get_config_value_reader(self):
+        def _read(document_path, key_path):
+            raise ToyFormatError(TOY_REFUSAL)
+
+        return _read
+
+
 NO_RUNNABLE_HOOK_PLUGIN = "plugins.conformance_toy:NoRunnableHookPlugin"
 
 
