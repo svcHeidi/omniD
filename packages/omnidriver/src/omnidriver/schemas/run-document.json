@@ -3,7 +3,7 @@
   "title": "RunDocument",
   "description": "omnidriver Run document v3. Version 3 is the canonical agent-authored planning contract with an open, plugin-schema-validated config object; version 1 and 2 documents must be migrated explicitly before emission.",
   "type": "object",
-  "required": ["version", "id", "name", "status", "config"],
+  "required": ["version", "id", "name", "status", "config", "configurationSource"],
   "properties": {
     "version": {"const": "3"},
     "id": {"type": "string", "minLength": 1},
@@ -58,6 +58,10 @@
       "type": "object",
       "description": "Plugin-defined configuration. Core imposes no required keys or shape; a plugin declares and validates its own config schema via get_run_document_config_schema().",
       "additionalProperties": true
+    },
+    "configurationSource": {
+      "description": "Where this document's plugin configuration actually lives -- stated explicitly by whoever planned the document, never inferred by whoever executes it (that asymmetry was the defect this field closes: planning could see spec.metadata's generic-case marker, execution could not). 'document': config carries the configuration, and both validate_run and the plugin's declared JSON Schema check it. 'case': the staged/committed case files already hold the configuration (a generic case or a tutorial record); config must then be empty (structurally -- every leaf absent, not just an empty top-level object), and neither validate_run nor the schema check applies to it, since it carries nothing to check. Required, with no default: a document that omits this or names anything else is refused rather than guessed.",
+      "enum": ["document", "case"]
     },
     "resolvedEntry": {
       "type": ["object", "null"],

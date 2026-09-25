@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
 
+from .configuration_source import resolve_configuration_source
 from .models import DataArtifact, data_artifact_from_json
 # _case_is_runnable is a private helper reused as-is: the plan treats this as
 # an accepted pragmatic tradeoff rather than promoting it to a public API
@@ -174,27 +175,42 @@ def build_execution_inputs(
             ))
 
     # 1) Config validity against the selected plugin's live dictionary
-    # catalog and semantic validators. This must use the same immutable
-    # context whose identity was checked by the CLI before execution.
-    # `validate_run` already returns the canonical `StrictDiagnostic` shape
-    # (with `source` carrying the phase), so these pass through unchanged --
-    # previously this folded `err.phase` into the message text and dropped
-    # it as a field, which was the worst of the four diagnostic shapes this
-    # module used to speak.
-    diagnostics.extend(validate_run(run_doc, driver_context=driver_context))
-
-    # 1b) Plugin-declared config schema. run_document_adapter applies this on
-    # the *emission* path (config the plugin just built); an ingested,
-    # agent-authored document is the untrusted counterpart and must clear the
-    # same gate, with the same `plugin_config_schema_violation` code.
+    # catalog and semantic validators, PLUS the plugin-declared config
+    # schema (1b) -- but only when this document's own `config` is the
+    # configuration to check. `run_doc.configurationSource` states that
+    # explicitly (schema-required; see schemas/run-document.json), and
+    # `resolve_configuration_source` is the SAME function
+    # `run_document_adapter._run_document_from_case` calls on the emission
+    # path, so a config the planner would refuse to emit is a config the
+    # executor refuses to ingest -- one rule, not two that can drift.
     #
-    # No generic-case exemption here: unlike run_document_adapter (which reads
-    # spec.metadata["generic_case"]), a RunDocument carries no generic-case
-    # marker -- resolvedEntry.entryKind/sourceType do not distinguish a core
-    # generic case from any other discovered case folder. This mirrors the
-    # unconditional validate_run above, and a generic case's all-empty config
-    # satisfies the plugin schemas in-tree regardless.
-    _validate_config_against_plugin_schema(run_doc, driver_context, diagnostics)
+    # Before this field existed, this ran unconditionally: execution had no
+    # way to see the generic-case marker planning inferred from
+    # `spec.metadata`, so it validated an intentionally-empty generic-case
+    # or tutorial-record config against the plugin schema and refused every
+    # such run (recorded at the end of step 4b). `configurationSource` closes
+    # that gap by making planning state the fact explicitly instead of
+    # execution guessing it.
+    #
+    # An ingested, agent-authored document is untrusted: declaring "case"
+    # is refused outright when `config` is not actually empty
+    # (`resolve_configuration_source`'s own
+    # `case_configuration_source_carries_config` diagnostic) -- an attacker
+    # cannot use "case" to smuggle unvalidated document config past this
+    # gate, and the plugin-identity check just above still applies
+    # regardless of `configurationSource`.
+    source_decision = resolve_configuration_source(
+        getattr(run_doc, "configurationSource", None), run_doc.config,
+    )
+    diagnostics.extend(source_decision.diagnostics)
+    if source_decision.validate_document_config:
+        # `validate_run` already returns the canonical `StrictDiagnostic`
+        # shape (with `source` carrying the phase), so these pass through
+        # unchanged -- previously this folded `err.phase` into the message
+        # text and dropped it as a field, which was the worst of the four
+        # diagnostic shapes this module used to speak.
+        diagnostics.extend(validate_run(run_doc, driver_context=driver_context))
+        _validate_config_against_plugin_schema(run_doc, driver_context, diagnostics)
 
     # 2) Expected artifacts: reconstruct, reporting any malformed entry.
     expected_artifacts: list[DataArtifact] = []

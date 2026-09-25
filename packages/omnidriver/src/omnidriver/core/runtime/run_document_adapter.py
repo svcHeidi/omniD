@@ -6,6 +6,7 @@ from typing import Any
 from omnidriver.core.planning_types import StrictDiagnostic, artifact_to_json, diagnostic
 from omnidriver.core.specs.validation import validate_run
 from ..plugin_capabilities import RunDocumentConfigurationRequest
+from .configuration_source import resolve_configuration_source
 from .models import DataArtifact
 from .run_model import RunDocument
 from .workflow_state import WorkflowRunState
@@ -27,9 +28,22 @@ def _run_document_from_case(
         )
     )
     diagnostics: list[StrictDiagnostic] = list(configuration_diagnostics)
-    generic_case = bool(spec.metadata.get("generic_case")) if spec.metadata else False
 
-    if not generic_case:
+    # Planning is the one place that knows what it actually built: a factory
+    # tutorial's config lives in the document; a generic case or tutorial
+    # record's configuration lives in the case files it already staged or
+    # committed (spec.metadata["generic_case"] is set by
+    # generic_case.make_spec and record_execution.record_case_spec for
+    # exactly those two). That fact is stated explicitly on the document
+    # from here on -- see RunDocument.configurationSource -- rather than
+    # left for execution to re-infer from a spec it never sees.
+    configuration_source = (
+        "case" if spec.metadata and spec.metadata.get("generic_case") else "document"
+    )
+    source_decision = resolve_configuration_source(configuration_source, config)
+    diagnostics.extend(source_decision.diagnostics)
+
+    if source_decision.validate_document_config:
         import jsonschema
 
         config_schema = driver_context.capabilities.run_document_configuration.schema()
@@ -50,6 +64,7 @@ def _run_document_from_case(
         intent={"source": "strict_plan"},
         plugin=driver_context.identity.to_json(),
         config=config,
+        configurationSource=configuration_source,
         resolvedEntry={
             "entry": entry,
             "entryKind": spec.metadata.get("entry_kind"),
@@ -73,9 +88,11 @@ def _run_document_from_case(
         expectedArtifacts=[artifact_to_json(artifact) for artifact in expected_artifacts],
         validation={"status": "not_run", "diagnostics": []},
     )
-    # A core generic case has no solver-specific config to validate. Every
-    # other case uses the explicit planning context rather than an ambient
-    # cardiac compatibility default.
+    # `validate_run` applies only when this document's own `config` is the
+    # configuration to check -- the same `resolve_configuration_source`
+    # decision above, not a second, independent generic-case check (that
+    # duplication -- one inference here, none at all in `run_document_exec`
+    # -- was the defect step 4c closes; see `core.runtime.configuration_source`).
     #
     # `validate_run` already returns the canonical `StrictDiagnostic` shape
     # (code="run_validation", source=<phase>), so these pass straight
@@ -84,8 +101,10 @@ def _run_document_from_case(
     # no `.code` -- into a `StrictDiagnostic` field-for-field; now that
     # `validate_run` speaks the canonical shape itself, that re-wrap was a
     # genuine no-op and is gone.
-    validator_diagnostics = () if generic_case else validate_run(
-        run_doc, driver_context=driver_context,
+    validator_diagnostics = (
+        validate_run(run_doc, driver_context=driver_context)
+        if source_decision.validate_document_config
+        else ()
     )
     diagnostics.extend(validator_diagnostics)
     run_doc.validation = {

@@ -21,6 +21,17 @@ import jsonschema
 # takes that order as a parameter. See test_phases_are_plugin_declared.py.
 Status = Literal["draft", "queued", "planning", "planned", "running", "completed", "failed"]
 
+# Where a RunDocument's plugin configuration lives. See
+# schemas/run-document.json's own "configurationSource" description for the
+# full contract (step 4c, docs/superpowers/specs/
+# 2026-09-24-tutorials-are-pointers-design.md): "document" means `config`
+# itself carries the configuration; "case" means the staged/committed case
+# files do, and `config` must be empty. There is deliberately no third,
+# inferred value -- see `core.runtime.configuration_source`, the one
+# function both `run_document_adapter` (planning) and `run_document_exec`
+# (execution) call to decide what a given source implies.
+ConfigurationSource = Literal["document", "case"]
+
 _SCHEMA = json.loads(
     resources.files("omnidriver.schemas")
     .joinpath("run-document.json")
@@ -45,6 +56,10 @@ class RunDocument:
     # ``specs.validation.validate_run`` enforces the mapping shape and
     # reports violations as diagnostics.
     config: dict[str, Any]
+    #: No default (see the module-level note above): every caller that
+    #: builds a RunDocument -- planning, a test, a hand-authored document --
+    #: must say explicitly where its configuration lives.
+    configurationSource: ConfigurationSource
     version: str = "3"
     createdAt: str = ""
     lastModified: str = ""
@@ -91,6 +106,7 @@ class RunDocument:
             name=data["name"],
             status=data["status"],
             config=data["config"],
+            configurationSource=data["configurationSource"],
             version=data.get("version", "3"),
             createdAt=data.get("createdAt", ""),
             lastModified=data.get("lastModified", ""),
@@ -117,6 +133,16 @@ class RunDocument:
         validation, results, reports, and timestamps, then adds empty v3 planning
         fields. Callers must still run the strict planner to populate
         resolvedEntry, workflowDag, launch, and expectedArtifacts.
+
+        ``configurationSource`` is set to ``"document"`` -- not a fallback
+        default for the *current* contract (schema-required, see the
+        module-level note above), but the correct historical fact about what
+        v1 ever meant: v1 predates the case/document distinction entirely,
+        and its ``config`` was always the inline configuration itself, never
+        a marker that the real values lived in case files. The document this
+        produces is incomplete anyway (``workflowDag``/``launch`` are
+        ``None``) pending re-planning, which is where a fresh, real source
+        gets set.
         """
         if data.get("version") != "1":
             raise ValueError("migrate_v1 expects a RunDocument with version '1'")
@@ -130,6 +156,7 @@ class RunDocument:
             "intent": {},
             "plugin": None,
             "config": data["config"],
+            "configurationSource": "document",
             "resolvedEntry": None,
             "workflowDag": None,
             "workflowState": None,
@@ -153,9 +180,15 @@ class RunDocument:
         config, validation, results, reports, and timestamps carry over
         unchanged, since v2's config already satisfies any v3 plugin schema
         shaped like the (now plugin-owned) v2 constraint.
+
+        ``configurationSource`` is likewise set to ``"document"`` -- v2, like
+        v1, predates the case/document distinction, and its ``config`` was
+        always the inline configuration itself (see ``migrate_v1``'s own
+        docstring for the same reasoning in full).
         """
         if data.get("version") != "2":
             raise ValueError("migrate_v2 expects a RunDocument with version '2'")
         migrated = dict(data)
         migrated["version"] = "3"
+        migrated.setdefault("configurationSource", "document")
         return cls.from_json(migrated)
