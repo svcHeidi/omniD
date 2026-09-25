@@ -20,11 +20,12 @@ preview." ``commit_record_case`` performs all four steps.
 
 from __future__ import annotations
 
+import contextlib
 import datetime
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Iterator, Mapping, Sequence
 
 from ..case_transaction import commit_case_write
 from ..case_write import CaseMutationRequest, CaseWritePlan, CaseWriteRecord
@@ -332,6 +333,31 @@ def preview_record_case(
         }
 
 
+@contextlib.contextmanager
+def _refusal_as_record_error(
+    record: TutorialRecord, documents: frozenset[str], action: str,
+) -> Iterator[None]:
+    """A ``ValueError`` the plugin's case writer raises while resolving or
+    rendering -- its contract's refusal type, e.g. a renderer refusing a
+    value the key validator could not see was wrong -- becomes a
+    ``TutorialRecordError`` naming the record and the document(s), with the
+    original message and the original exception chained (wave-2 review I2).
+
+    Without this, ``plan --strict`` reported a validator refusal as JSON but a
+    renderer refusal as a traceback on stderr with empty stdout: the shape of
+    a refusal depended on which layer refused. A non-``ValueError`` is a
+    defect, not a refusal, and still propagates as itself."""
+    try:
+        yield
+    except TutorialRecordError:
+        raise
+    except ValueError as exc:
+        raise TutorialRecordError(
+            f"tutorial record {record.name!r}: {action} {', '.join(sorted(documents))} "
+            f"was refused by the case writer ({type(exc).__name__}): {exc}"
+        ) from exc
+
+
 def commit_record_case(
     record: TutorialRecord,
     *,
@@ -388,9 +414,11 @@ def commit_record_case(
         workflow=record.name, source_artifacts=(), parameters=parameters,
         requested_by=requested_by,
     )
-    resolved = driver_context.capabilities.case_writer.resolve(
-        request, driver_context=driver_context,
-    )
+    documents = frozenset(parameter.document for parameter in parameters)
+    with _refusal_as_record_error(record, documents, "resolving"):
+        resolved = driver_context.capabilities.case_writer.resolve(
+            request, driver_context=driver_context,
+        )
     # `snapshot_root` MUST be a directory distinct from `request.case_root`
     # (module docstring of `openfoam.case_rendering`: "the real case is read
     # only to seed [a] copy" under `snapshot_root` -- never the same
@@ -417,13 +445,13 @@ def commit_record_case(
     with tempfile.TemporaryDirectory(prefix="omnidriver-record-render-") as scratch:
         snapshot_root = Path(scratch)
         _seed_snapshot_root(
-            snapshot_root, case_root=staged_case_root,
-            documents=frozenset(parameter.document for parameter in parameters),
+            snapshot_root, case_root=staged_case_root, documents=documents,
         )
-        rendered = driver_context.capabilities.case_writer.render(
-            resolved, snapshot_root=snapshot_root, driver_context=driver_context,
-            execution_env=execution_env,
-        )
+        with _refusal_as_record_error(record, documents, "rendering"):
+            rendered = driver_context.capabilities.case_writer.render(
+                resolved, snapshot_root=snapshot_root, driver_context=driver_context,
+                execution_env=execution_env,
+            )
     plan = CaseWritePlan(
         request=request, files=tuple(rendered), preconditions=resolved.preconditions,
         semantic_owner_id=resolved.semantic_owner_id, stack_identity=identity.capability_digest,

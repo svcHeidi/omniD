@@ -239,3 +239,28 @@ class LogRedactingPlugin(E2ERecordPlugin):
 
     def get_log_redaction_patterns(self):
         return (r"(https?://)[^/\s@]+(?=@)",)
+
+
+REFUSING_RENDERER_PLUGIN = "plugins.conformance_toy:RefusingRendererPlugin"
+REFUSING_RESOLVER_PLUGIN = "plugins.conformance_toy:RefusingResolverPlugin"
+#: The refusal text both plugins below raise, so a test can find it verbatim.
+TOY_REFUSAL = "cells = 7 is refused by the toy's own format rule"
+
+
+class ToyFormatError(ValueError):
+    """A plugin's own refusal type, the way openCARP's ``ParFormatError`` is."""
+
+
+class RefusingRendererPlugin(E2ERecordPlugin):
+    """Its renderer refuses a value the key validator accepted, the way
+    openCARP's refuses an index beyond its count (F2) only at render."""
+
+    def render_case_files(self, resolved, *, snapshot_root, driver_context, execution_env=None):
+        raise ToyFormatError(TOY_REFUSAL)
+
+
+class RefusingResolverPlugin(E2ERecordPlugin):
+    """Its resolver refuses, as ``resolve_case_mutation``'s contract allows."""
+
+    def resolve_case_mutation(self, request, *, driver_context):
+        raise ToyFormatError(TOY_REFUSAL)

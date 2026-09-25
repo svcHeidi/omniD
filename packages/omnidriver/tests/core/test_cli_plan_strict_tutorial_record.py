@@ -116,3 +116,31 @@ def test_plan_strict_over_a_tutorial_record_whose_native_case_is_missing_refuses
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "failed"
     assert "toyTutorial" in payload["error"]
+
+
+import pytest
+
+
+@pytest.mark.parametrize("plugin", [
+    "plugins.conformance_toy:RefusingRendererPlugin",
+    "plugins.conformance_toy:RefusingResolverPlugin",
+])
+def test_a_renderer_or_resolver_refusal_comes_back_as_structured_json_I2(tmp_path, capsys, plugin):
+    """Wave-2 review I2: a refusal the plugin's case writer raises (a
+    ``ValueError`` subclass, like openCARP's ``ParFormatError``) used to escape
+    ``plan --strict`` as a traceback with empty stdout, while a validator
+    refusal came back as JSON. Both now take the same path."""
+    from plugins.conformance_toy import TOY_REFUSAL
+
+    cases_root = _native_toy_case(tmp_path)
+    config = tmp_path / "study.json"
+    config.write_text(json.dumps({"constant/mesh.json:cells": 7}))
+    exit_code = main([
+        "plan", "--strict", "--plugin", plugin, "--entry", "toyTutorial",
+        "--cases-root", str(cases_root), "--config", str(config),
+    ])
+    assert exit_code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "failed"
+    assert "constant/mesh.json" in payload["error"]
+    assert TOY_REFUSAL in payload["error"]
