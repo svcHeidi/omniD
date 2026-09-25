@@ -73,6 +73,10 @@ class WorkflowStep:
     provenance fingerprints. Paths here, never artifact ids: the ids are
     derived (``record_execution.record_artifact_id``).
 
+    A step whose command has a utility manifest keeps the manifest's
+    ``produces`` beside its own: ``runtime.workflow.normalize_workflow_dag``
+    takes the union, never a replacement (fix round 1 I6, 2026-09-25).
+
     Each is a tuple of non-empty, case-relative ``str`` paths (fix round 1
     M1, 2026-09-25): a bare ``str`` is refused rather than exploded into
     one-character paths; ``""`` and ``"."`` (the case root itself) are

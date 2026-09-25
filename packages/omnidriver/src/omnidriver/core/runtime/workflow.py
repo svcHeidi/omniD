@@ -259,8 +259,13 @@ def normalize_workflow_dag(
         if consumes_error is not None:
             diagnostics.append(consumes_error)
 
-        if not produces and command in utility_produces:
-            produces = utility_produces[command]
+        # Union, never replace (fix round 1 I6, 2026-09-25): before K4 a
+        # step's own ``produces`` replaced its utility manifest's. Once a
+        # record step could declare ``produces``, that dropped the manifest
+        # ids, left them unclaimed, and the unclaimed branch below credited
+        # them to the last solver step, which then failed for a file it
+        # never writes. No step in packages/*/src relied on replacement.
+        produces = tuple(dict.fromkeys((*produces, *utility_produces.get(command, ()))))
         if produces:
             claimed_artifacts.update(produces)
 

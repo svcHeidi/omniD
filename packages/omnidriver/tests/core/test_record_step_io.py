@@ -80,3 +80,33 @@ def test_a_refusal_names_the_step_once():
     with pytest.raises(TutorialRecordError) as excinfo:
         WorkflowStep(step_id="solve", command=("c",), consumes=("/abs",))
     assert str(excinfo.value).count("workflow step 'solve'") == 1
+
+
+def test_a_step_keeps_its_utility_manifest_produces_beside_its_own():
+    """I6: a step's declared ``produces`` is unioned with its command's
+    utility-manifest ``produces``, never a replacement. Replacing left the
+    manifest ids unclaimed, and the unclaimed branch credited them to the
+    last solver step -- which then failed for a file it never writes."""
+    from omnidriver.core.runtime.workflow import normalize_workflow_dag
+
+    dag, _diagnostics = normalize_workflow_dag(
+        {"steps": [
+            {"id": "solve", "command": "s"},
+            {"id": "post", "command": "u", "depends_on": ["solve"], "produces": ["record.post.0"]},
+        ]},
+        utility_produces={"u": ("u.metrics", "u.series")},
+        driver_context=None,
+    )
+    by_id = {step["id"]: step for step in dag["steps"]}
+    assert by_id["post"]["produces"] == ["record.post.0", "u.metrics", "u.series"]
+    assert by_id["solve"]["produces"] == []
+
+
+def test_a_step_without_its_own_produces_still_takes_the_manifest():
+    from omnidriver.core.runtime.workflow import normalize_workflow_dag
+
+    dag, _diagnostics = normalize_workflow_dag(
+        {"steps": [{"id": "post", "command": "u"}]},
+        utility_produces={"u": ("u.metrics",)}, driver_context=None,
+    )
+    assert dag["steps"][0]["produces"] == ["u.metrics"]
