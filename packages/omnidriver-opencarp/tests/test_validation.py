@@ -42,3 +42,10 @@ def test_count_default_applies_when_absent_F7():
     check_indices("stim[1].pulse.strength = 1\n")          # num_stim defaults to 2
     with pytest.raises(ParFormatError, match="num_stim"):
         check_indices("stim[2].pulse.strength = 1\n")
+
+
+def test_a_string_menu_accepts_its_values_B_I4():
+    # ginkgo_exec is openCARP v18.1's one String parameter with a menu.
+    assert record_key_validator("nversion.par", ("ginkgo_exec",), "ref") == ("string", True)
+    with pytest.raises(TutorialRecordError, match="ginkgo_exec"):
+        record_key_validator("nversion.par", ("ginkgo_exec",), "nope")

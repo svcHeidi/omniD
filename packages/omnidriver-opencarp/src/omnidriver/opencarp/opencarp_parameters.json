@@ -1610,11 +1610,11 @@
    "description": "Defines the hardware backend used by Ginkgo.",
    "maximum": null,
    "menu": [
-    "\"dpcpp\"",
-    "\"hip\"",
-    "\"cuda\"",
-    "\"omp\"",
-    "\"ref\""
+    "dpcpp",
+    "hip",
+    "cuda",
+    "omp",
+    "ref"
    ],
    "minimum": null,
    "name": "ginkgo_exec",

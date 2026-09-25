@@ -32,3 +32,10 @@ def test_whole_array_shorthand_has_no_value_kind():
 
 def test_all_266_parameters():
     assert len(load_catalog().parameters) == 266
+
+
+def test_a_string_menu_holds_values_not_their_quotes():
+    # +Help prints a String menu item as (String)("ref") (review B-I4); the
+    # catalog keeps the value a .par assigns, ref, not the C literal "ref".
+    menu = load_catalog().parameters["ginkgo_exec"].menu
+    assert set(menu) == {"dpcpp", "hip", "cuda", "omp", "ref"}

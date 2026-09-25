@@ -48,6 +48,21 @@ def _typed(value: str | None) -> str | None:
     return match[2] if match else value
 
 
+def _menu_value(item_type: str, spelled: str) -> str:
+    """A menu item as the value a .par assigns, not +Help's source spelling.
+
+    **Added 2026-09-25 (review B-I4).** +Help prints each item as a typed C
+    literal: ``(Short)(1)``, but ``(String)("ref")`` for ``ginkgo_exec``, a
+    String menu, quotes included. Kept verbatim, every legal String value was
+    refused ("ref" is not ``'"ref"'``) and the quoted one was then refused by
+    ``format_value``, so the parameter could not be set at all. The quotes
+    are the C literal's, not part of the value, so a String item drops them.
+    """
+    if item_type == "String" and len(spelled) >= 2 and spelled[0] == spelled[-1] == '"':
+        return spelled[1:-1]
+    return spelled
+
+
 def parse_help_detail(concrete: str, text: str) -> dict[str, Any]:
     lines = text.splitlines()
     try:
@@ -72,7 +87,7 @@ def parse_help_detail(concrete: str, text: str) -> dict[str, Any]:
             fields[m[1]] = m[2].strip()
         elif not fields and line.strip():
             description.append(line.strip())
-    menu = tuple(m[2] for item in blocks.get("menu", []) if (m := _MENU_ITEM.match(item)))
+    menu = tuple(_menu_value(m[1], m[2]) for item in blocks.get("menu", []) if (m := _MENU_ITEM.match(item)))
     allocates = tuple(i.strip() for i in blocks.get("Changes the allocation of", []) if i.strip() and "[" not in i)
     return {
         "default": _typed(fields.get("default")), "minimum": _typed(fields.get("min")),
