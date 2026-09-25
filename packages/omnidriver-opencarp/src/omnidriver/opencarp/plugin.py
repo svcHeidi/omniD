@@ -60,13 +60,10 @@ class OpenCARPPlugin:
     def predict_data_artifacts(self, case_root, spec):
         return ()          # records declare their artifacts through step `produces` (K4)
 
-    def is_case_runnable_without_workflow(self, case_root):
-        # C6/C7 exercised this: without it, run_document_exec refused every
-        # staged case as "not a runnable case" before it ever reached the
-        # solver (legacy_case_runnable_without_workflow's default is False).
-        # A staged niedererNVersion case always has nversion.par (its native
-        # case, C4).
-        return (Path(case_root) / "nversion.par").is_file()
+    # No is_case_runnable_without_workflow (removed 2026-09-25, wave-2 review
+    # I4): it answered, from one record's file (nversion.par), a question core
+    # asked only to gate record runs; core no longer asks it of a record run
+    # carrying its steps (run_document_exec._is_record_run_with_steps).
 
     # -- records
     def get_tutorial_records(self):

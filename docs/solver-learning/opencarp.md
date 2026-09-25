@@ -137,7 +137,12 @@ session scratchpad, never in the native tree.
 - **G3:** **every run log starts with the build header, including a CI token**
   (A8). omniD keeps solver stdout in `workflow_logs/`, so the token would be
   copied into every run record. The adapter redacts it before logs are written
-  (plan Task 7).
+  (plan Task 7). **Corrected 2026-09-25 (wave-2 review M1):** core redacts it
+  (`workflow_runner.redact_step_logs`, K9, Task 12), after the step's process
+  ends and before anything reads the kept log, using the pattern the plugin
+  declares (`environment.REDACTION_PATTERNS`); every match is replaced whole
+  (review I3). `test_no_token_survives_in_workflow_logs` proves it on a real
+  run.
 - **G4, a first benchmark number:** at dx 500 µm and dt 50 µs, with tend 150
   (as `run.py` uses for dx 500), P1 (the origin, point 0) activates at
   1.355 ms and P8 (the far corner, point 4304) at **126.45 ms**. All 4305
@@ -158,7 +163,11 @@ against the real `openCARP` v18.1 binary and its own
 (`omnidriver.conformance.CHECKS`) pass, with `base_study = {dx: 1000.0,
 nversion.par:tend: 10.0, nversion.par:dt: 50.0}` (G7: pinned for a short run).
 No core file changed (`packages/omnidriver/src` untouched by this task); see
-the generality log's 2026-09-25 "no core change needed" row.
+the generality log's 2026-09-25 "no core change needed" row. **Corrected 2026-09-25
+(wave-2 review M1, I4):** true of Task 11 alone, not of the wave: Task 10a
+(the record surface, C10) and Task 12 (K9 log redaction) changed core, and
+the review's fixes changed it three more times (I2, I3, I4); each has its own
+generality-log row.
 
 | check | verdict detail |
 |---|---|
@@ -187,3 +196,10 @@ plugin declares no `case_compatibility` capability member otherwise). Added
 `nversion.par` is present in the staged case -- the same shape as the
 `E2ERecordPlugin` example the brief names. This is a plugin-side addition,
 not a core change.
+
+**Corrected 2026-09-25 (wave-2 review I4):** the addition was a workaround,
+not a fit. The hook's contract is whether a case *without* driver-owned
+workflow metadata is runnable, and a record run's document carries its steps,
+so core should not have asked. Core now exempts such a run from that gate
+(`run_document_exec._is_record_run_with_steps`), and the hook is deleted from
+`OpenCARPPlugin`; all ten checks still pass on the real binary without it.
