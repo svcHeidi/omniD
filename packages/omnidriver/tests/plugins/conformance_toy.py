@@ -154,6 +154,29 @@ class SilentPreflightPlugin(E2ERecordPlugin):
         return ()
 
 
+AUXILIARY_ONLY_PREFLIGHT_PLUGIN = "plugins.conformance_toy:AuxiliaryOnlyPreflightPlugin"
+
+
+class AuxiliaryOnlyPreflightPlugin(E2ERecordPlugin):
+    """With the solver off PATH, reports only an auxiliary command missing,
+    and echoes the PATH it searched -- as openCARP's preflight does for every
+    missing command. It never names the solver, so C9 must fail it even when
+    that echoed PATH (under the scratch root) contains the solver's name
+    (final review S-I2)."""
+
+    def get_environment_diagnostics(self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None) -> tuple:
+        import shutil
+
+        from omnidriver.core.planning_types import StrictDiagnostic
+
+        del workflow_dag, explicit_bashrc, driver_context
+        path = (env if env is not None else os.environ).get("PATH", "")
+        if shutil.which("touch", path=path) is not None:
+            return ()
+        return (StrictDiagnostic(level="error", code="toy_command_not_found",
+                                 message=f"'toy-mesher' is not on PATH={path!r}"),)
+
+
 SILENT_SURFACE_PLUGIN = "plugins.conformance_toy:SilentSurfacePlugin"
 UNLISTED_KEY_PLUGIN = "plugins.conformance_toy:UnlistedKeyPlugin"
 INDEXED_KEY_PLUGIN = "plugins.conformance_toy:IndexedKeyPlugin"

@@ -116,6 +116,12 @@ def check_describe_noop(target: ConformanceTarget) -> CheckVerdict:
     return _verdict("C2", True, "no changes proposed")
 
 
+def _quotes(message: str, name: str) -> bool:
+    """Whether ``message`` quotes ``name`` as a whole token: ``'n'``, ``"n"``
+    or `` `n` ``. :func:`_names`' first rule, and C9's only one."""
+    return any(f"{q}{name}{q}" in message for q in ("'", '"', "`"))
+
+
 def _names(message: str, name: str) -> bool:
     """Whether ``message`` names ``name`` as a whole token, not merely
     contains it (fix round 1 M6, 2026-09-25): a short unknown name such as
@@ -123,7 +129,7 @@ def _names(message: str, name: str) -> bool:
     `` `n` ``) always counts; otherwise ``name`` must not continue into a
     longer identifier or ``document:dotted.path`` on either side. A
     sentence-ending ``.`` does not continue a token; ``.inner`` does."""
-    if any(f"{q}{name}{q}" in message for q in ("'", '"', "`")):
+    if _quotes(message, name):
         return True
     token = rf"(?<![\w.:/\-]){re.escape(name)}(?![\w:/\-]|\.\w)"
     return re.search(token, message) is not None
@@ -384,7 +390,15 @@ def _levels(diagnostics) -> list[tuple[str, str]]:
 
 def check_environment(target: ConformanceTarget) -> CheckVerdict:
     """C9: preflight is clean in the supplied environment, and names the
-    solver when the solver cannot be found."""
+    solver when the solver cannot be found.
+
+    "Names" means quotes the command as a token (:func:`_quotes`), after the
+    empty PATH this check supplied is removed from each message. Corrected
+    2026-09-25 (final review S-I2, A-M5, W2-M2): this matched
+    ``solver_command in m``, and a preflight that echoes the PATH it searched
+    lives under ``scratch_root``, so a preflight that never named the solver
+    passed whenever the scratch path contained its name (``~/openCARP-runs``).
+    """
     ctx = _context(target)
     report = _plan(target, ctx)
     if report.workflow_dag is None:
@@ -398,7 +412,7 @@ def check_environment(target: ConformanceTarget) -> CheckVerdict:
     problems = []
     if clean:
         problems.append(f"errors in the supplied environment: {clean}")
-    if not any(target.solver_command in m for m in broken):
+    if not any(_quotes(m.replace(str(empty), ""), target.solver_command) for m in broken):
         problems.append(f"with {target.solver_command!r} off PATH, preflight said {broken or 'nothing'}")
     return _verdict("C9", not problems, "; ".join(problems) or "clean; names the missing solver")
 

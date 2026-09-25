@@ -26,6 +26,9 @@ REDACTION_PATTERNS = (r"(?<=://)[^/\s@]+(?=@)",)
 def opencarp_environment_diagnostics(workflow_dag: Mapping[str, Any], env: Mapping[str, str]) -> tuple[StrictDiagnostic, ...]:
     path = env.get("PATH", "")
     commands = sorted({step.get("command") for step in (workflow_dag or {}).get("steps", ()) if step.get("command")})
+    # The command is quoted (``!r``): conformance C9 looks for the solver as a
+    # quoted token once the PATH echoed here is removed (final review S-I2),
+    # so an unquoted name, or the name inside a scratch path, never counts.
     diagnostics = [
         StrictDiagnostic(level="error", code="opencarp_command_not_found",
                          message=f"{command!r} is not on PATH={path!r}")

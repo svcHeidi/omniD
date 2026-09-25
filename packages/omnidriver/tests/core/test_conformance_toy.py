@@ -251,6 +251,22 @@ def test_c9_bites_a_preflight_that_never_reports_a_missing_solver(tmp_path):
     assert "'touch' off PATH" in verdict.detail
 
 
+@pytest.mark.parametrize("scratch_dir", ["touch", "my touch runs", "the 'touch' runs", 'a "touch" dir'])
+def test_c9_is_not_satisfied_by_the_solver_name_in_the_echoed_scratch_path_S_I2(tmp_path, scratch_dir):
+    """Final review S-I2 (A-M5, W2-M2): C9 matched ``solver_command in m``, so
+    a preflight that never names the solver passed whenever the PATH it
+    echoed -- under the scratch root -- contained the solver's name, e.g.
+    ``~/openCARP-runs/``. C9 now drops that PATH from each message and
+    requires the command as a quoted token."""
+    from plugins.conformance_toy import AUXILIARY_ONLY_PREFLIGHT_PLUGIN
+
+    target = toy_conformance_target(tmp_path, plugin=AUXILIARY_ONLY_PREFLIGHT_PLUGIN)
+    target = dataclasses.replace(target, scratch_root=tmp_path / scratch_dir / "scratch")
+    verdict = run_check("C9", target)
+    assert not verdict.passed, verdict.detail
+    assert "'touch' off PATH" in verdict.detail
+
+
 def test_c10_surface_lists_the_toy_axis_key_and_guidance(tmp_path):
     from omnidriver.core.introspection import describe_entry
     from omnidriver.core.plugin_interface import load_plugin_context
