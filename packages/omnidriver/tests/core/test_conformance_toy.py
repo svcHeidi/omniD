@@ -118,3 +118,34 @@ def test_a_write_into_the_native_cases_root_fails_the_check(tmp_path):
     verdict = run_check("C7", target)
     assert not verdict.passed
     assert STRAY_NAME in verdict.detail
+
+
+def test_the_default_timeout_keeps_existing_constructions_working(tmp_path):
+    assert toy_conformance_target(tmp_path).timeout_s == 600.0
+
+
+@pytest.mark.parametrize("check_id", ["C6", "C7"])
+def test_a_child_that_outlives_the_timeout_is_a_failed_verdict(check_id, tmp_path):
+    """I5: a hung solver must still yield a verdict, naming the timeout."""
+    target = dataclasses.replace(toy_conformance_target(tmp_path), timeout_s=0.001)
+    verdict = run_check(check_id, target)
+    assert not verdict.passed
+    assert "timed out after 0.001" in verdict.detail
+
+
+def test_the_sweep_passes_the_timeout_per_case(tmp_path, monkeypatch):
+    import subprocess
+
+    from omnidriver.conformance import checks
+
+    calls = []
+
+    def spy(argv, **kwargs):
+        calls.append((argv, kwargs))
+        raise subprocess.TimeoutExpired(argv, kwargs.get("timeout"))
+
+    monkeypatch.setattr(checks.subprocess, "run", spy)
+    run_check("C7", dataclasses.replace(toy_conformance_target(tmp_path), timeout_s=42.0))
+    [(argv, kwargs)] = calls
+    assert kwargs["timeout"] == 42.0
+    assert argv[argv.index("--case-timeout-s") + 1] == "42.0"

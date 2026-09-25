@@ -38,6 +38,12 @@ class ConformanceTarget:
     unknown_name: str
     solver_command: str
     environment: Mapping[str, str]
+    #: Wall-clock bound, in seconds, on each child process a check starts
+    #: (C6's run, C7's sweep-run) and on each sweep case (``sweep-run
+    #: --case-timeout-s``). A child that outlives it is a failed verdict
+    #: naming the timeout, never a check that does not return (fix round 1
+    #: I5, 2026-09-25).
+    timeout_s: float = 600.0
 
 
 @dataclass(frozen=True)

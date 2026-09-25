@@ -228,7 +228,7 @@ def _execute(target: ConformanceTarget, ctx, report) -> tuple[subprocess.Complet
     # carries --plugin from ctx.plugin_selector, set by load_plugin_context.
     proc = subprocess.run(
         omnidriver_run_command(ctx, "--run-document", str(_run_document_path(report))),
-        capture_output=True, text=True, env=_child_env(target),
+        capture_output=True, text=True, env=_child_env(target), timeout=target.timeout_s,
     )
     try:
         payload = json.loads(proc.stdout)
@@ -243,7 +243,10 @@ def check_run(target: ConformanceTarget) -> CheckVerdict:
     report = _plan(target, ctx)
     if report.status != "ok":
         return _verdict("C6", False, f"cannot run: plan failed: {_plan_errors(report)}")
-    proc, payload = _execute(target, ctx, report)
+    try:
+        proc, payload = _execute(target, ctx, report)
+    except subprocess.TimeoutExpired:
+        return _verdict("C6", False, f"run timed out after {target.timeout_s}s (ConformanceTarget.timeout_s)")
     if payload is None:
         return _verdict("C6", False, f"run printed no JSON (rc={proc.returncode}); stderr tail: {proc.stderr[-800:]}")
     reconciliation = payload.get("artifact_reconciliation") or {}
@@ -286,11 +289,15 @@ def check_sweep(target: ConformanceTarget) -> CheckVerdict:
     }
     spec_path = work / "sweep.json"
     spec_path.write_text(json.dumps(spec))
-    proc = subprocess.run(
-        [sys.executable, "-m", "omnidriver", "sweep-run", "--plugin", target.plugin,
-         "--spec", str(spec_path), "--output-dir", str(work / "out")],
-        capture_output=True, text=True, env=_child_env(target),
-    )
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-m", "omnidriver", "sweep-run", "--plugin", target.plugin,
+             "--spec", str(spec_path), "--output-dir", str(work / "out"),
+             "--case-timeout-s", str(target.timeout_s)],
+            capture_output=True, text=True, env=_child_env(target), timeout=target.timeout_s,
+        )
+    except subprocess.TimeoutExpired:
+        return _verdict("C7", False, f"sweep timed out after {target.timeout_s}s (ConformanceTarget.timeout_s)")
     try:
         payload = json.loads(proc.stdout)
     except ValueError:
