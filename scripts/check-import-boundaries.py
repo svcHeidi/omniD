@@ -6,6 +6,16 @@ Rules (see ARCHITECTURE.md "Architectural Rules"):
      or omnidriver.cardiaccore, and must never import foamlib directly.
   2. omnidriver.openfoam must not import omnidriver.cardiacfoam or
      omnidriver.cardiaccore.
+  3. No adapter imports omnidriver.opencarp, and omnidriver.opencarp imports
+     no other adapter nor foamlib.
+
+**Corrected 2026-09-25 (solver-conformance B-I2).** When omnidriver-opencarp
+landed, only its outbound direction was guarded: core, openfoam, cardiacfoam
+and cardiaccore could all import ``omnidriver.opencarp`` and this gate said
+"OK". Core's forbidden list is now *derived* from every adapter package under
+``packages/*/src/omnidriver/`` rather than listed by hand, and any adapter
+package with no block of its own below fails the gate by name -- so a sixth
+package cannot repeat that hole silently.
 
 A cardiac adapter may import omnidriver.openfoam -- that is the direction the
 layering allows, and omnidriver-cardiaccore does exactly that for
@@ -52,6 +62,22 @@ CARDIACCORE_SRC = REPO_ROOT / "packages/omnidriver-cardiaccore/src/omnidriver/ca
 # neither OpenFOAM nor either cardiac adapter's vocabulary belongs in it, and
 # it must not import foamlib either -- it drives a different binary entirely.
 OPENCARP_SRC = REPO_ROOT / "packages/omnidriver-opencarp/src/omnidriver/opencarp"
+CARDIACFOAM_SRC = REPO_ROOT / "packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam"
+
+
+def _adapter_package_roots() -> dict[str, Path]:
+    """Every adapter's ``omnidriver.<name>`` package, found on disk (B-I2).
+
+    An adapter is any ``packages/<dist>/src/omnidriver/<name>/__init__.py``
+    outside core's own distribution. Deriving this, rather than listing it,
+    is what lets core's rule cover a package nobody remembered to add here.
+    """
+    core_dist = CORE_SRC.parent.parent
+    return {
+        f"omnidriver.{init.parent.name}": init.parent
+        for init in sorted(REPO_ROOT.glob("packages/*/src/omnidriver/*/__init__.py"))
+        if init.parent.parent.parent.parent != core_dist
+    }
 
 # Waived pre-existing violations. This list may only SHRINK. A new violation
 # fails the gate; a waiver that no longer matches anything also fails it, so
@@ -129,39 +155,33 @@ def _check_file(
 
 def main() -> int:
     found: list[tuple[str, str]] = []
+    adapters = _adapter_package_roots()
 
+    # Each adapter's own rules. Every adapter found on disk must appear here;
+    # one that does not is refused below rather than silently exempted.
+    adapter_rules: dict[Path, tuple[str, ...]] = {
+        OPENFOAM_SRC: ("omnidriver.cardiacfoam", "omnidriver.cardiaccore", "omnidriver.opencarp"),
+        CARDIACFOAM_SRC: ("omnidriver.opencarp",),
+        CARDIACCORE_SRC: ("omnidriver.cardiacfoam", "omnidriver.opencarp"),
+        OPENCARP_SRC: ("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam", "omnidriver.cardiaccore"),
+    }
+    unruled = sorted(name for name, root in adapters.items() if root not in adapter_rules)
+    if unruled:
+        print(
+            "Adapter packages with no import-boundary block in this script: "
+            + ", ".join(unruled)
+            + "\nAdd a block to adapter_rules in main() stating what each may not import."
+        )
+        return 1
+
+    # Core may import no adapter at all, and never foamlib (derived, B-I2).
+    core_forbidden = ("foamlib", *sorted(adapters))
     for path in CORE_SRC.rglob("*.py"):
-        found.extend(_check_file(
-            path,
-            (
-                "foamlib",
-                "omnidriver.openfoam",
-                "omnidriver.cardiacfoam",
-                "omnidriver.cardiaccore",
-            ),
-            CORE_SRC,
-        ))
+        found.extend(_check_file(path, core_forbidden, CORE_SRC))
 
-    for path in OPENFOAM_SRC.rglob("*.py"):
-        found.extend(_check_file(
-            path,
-            ("omnidriver.cardiacfoam", "omnidriver.cardiaccore"),
-            OPENFOAM_SRC,
-        ))
-
-    for path in CARDIACCORE_SRC.rglob("*.py"):
-        found.extend(_check_file(
-            path,
-            ("omnidriver.cardiacfoam",),
-            CARDIACCORE_SRC,
-        ))
-
-    for path in OPENCARP_SRC.rglob("*.py"):
-        found.extend(_check_file(
-            path,
-            ("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam", "omnidriver.cardiaccore"),
-            OPENCARP_SRC,
-        ))
+    for root, forbidden in adapter_rules.items():
+        for path in root.rglob("*.py"):
+            found.extend(_check_file(path, forbidden, root))
 
     waived = {key for key, _ in found if key in KNOWN_VIOLATIONS}
     violations = [msg for key, msg in found if key not in KNOWN_VIOLATIONS]
@@ -191,9 +211,11 @@ def main() -> int:
         for v in violations:
             print(f"  {v}")
         print(
-            "\nomnidriver.core must not import foamlib, omnidriver.cardiacfoam or "
-            "omnidriver.cardiaccore at runtime. omnidriver.openfoam must not "
-            "import either cardiac package. omnidriver.cardiaccore must not "
+            "\nomnidriver.core must not import foamlib or any adapter package "
+            "at runtime. omnidriver.openfoam must not import either cardiac "
+            "package or omnidriver.opencarp; no adapter imports "
+            "omnidriver.opencarp, and it imports no other adapter. "
+            "omnidriver.cardiaccore must not "
             "import omnidriver.cardiacfoam: the two cardiac adapters are "
             "siblings, and what passes between them is declared, not imported. "
             "A cardiac adapter importing omnidriver.openfoam is allowed -- that "
@@ -208,7 +230,7 @@ def main() -> int:
             "coupling between core, openfoam and cardiac."
         )
     else:
-        print("Import boundaries OK: core/openfoam/cardiac stay decoupled.")
+        print("Import boundaries OK: core and every adapter stay decoupled.")
     return 0
 
 

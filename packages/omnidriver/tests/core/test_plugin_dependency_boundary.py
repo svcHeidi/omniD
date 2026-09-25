@@ -139,6 +139,9 @@ ADAPTER_PACKAGES = (
     "packages/omnidriver-openfoam/src",
     "packages/omnidriver-cardiacfoam/src",
     "packages/omnidriver-cardiaccore/src",
+    # Added 2026-09-25 (solver-conformance B-I2): the fifth package landed
+    # without it, so its Task 11 plugin.py would have been unguarded.
+    "packages/omnidriver-opencarp/src",
 )
 
 
