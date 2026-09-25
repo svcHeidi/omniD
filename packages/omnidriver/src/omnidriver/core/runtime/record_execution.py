@@ -21,6 +21,7 @@ preview." ``commit_record_case`` performs all four steps.
 from __future__ import annotations
 
 import datetime
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
@@ -252,6 +253,41 @@ def _serialize_sourced_patch(sourced: SourcedPatch, *, status: str) -> dict[str,
     }
 
 
+def _seed_snapshot_root(
+    snapshot_root: Path, *, case_root: Path, documents: frozenset[str],
+) -> None:
+    """Copy each target document from the real (staged) case into
+    ``snapshot_root`` before a renderer ever sees it -- P2 fix,
+    docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md,
+    "Owner decisions" dated 2026-09-25.
+
+    ``render_case_files``'s own contract (``plugin_interface.py``) already
+    promises this: "writes nothing outside ``snapshot_root``, an isolated
+    copy core provides." Before this fix, core handed a renderer an EMPTY
+    directory instead -- true for the OpenFOAM renderer only by accident
+    (``openfoam.case_rendering`` reads ``resolved.request.case_root``
+    directly and re-seeds its own copy from there, never trusting core's
+    ``snapshot_root`` to already hold anything), and silently wrong for any
+    renderer that takes the contract at its word (the ``tests/plugins
+    /e2e_record_plugin.py`` fixture: it reads ``snapshot_root/<document>``,
+    finds nothing, and treats an EXISTING multi-key document as brand new --
+    a patch that then holds only the just-touched keys, discarding every
+    sibling key the moment it is committed). A document the case does not
+    yet hold is left unseeded: the renderer legitimately sees it as new,
+    the only situation where ``exists_before=False`` is true, and
+    :func:`omnidriver.core.case_transaction._check_render_exists_before`
+    (the P2 fix's other half) now refuses a renderer that gets this wrong
+    in either direction, before a single byte is written.
+    """
+    for document in sorted(documents):
+        source = Path(case_root) / document
+        if not source.is_file():
+            continue
+        destination = snapshot_root / document
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+
+
 def preview_record_case(
     record: TutorialRecord,
     *,
@@ -367,9 +403,24 @@ def commit_record_case(
     # caught it earlier). A fresh scratch directory, discarded once `rendered`
     # is captured, matches `cardiacfoam.overrides.commit_case_overrides`'s own
     # established pattern exactly.
+    #
+    # P2 fix (2026-09-25): that scratch directory is now SEEDED before the
+    # renderer ever sees it -- `_seed_snapshot_root` copies each target
+    # document's CURRENT bytes in from the staged case, so a renderer that
+    # reads `snapshot_root/<document>` (per `render_case_files`'s own "an
+    # isolated copy core provides" contract) finds the real prior content,
+    # not an always-empty directory. The OpenFOAM renderer does not depend
+    # on this (it reads `resolved.request.case_root` directly and seeds its
+    # own copy from there); this closes the gap for every renderer that
+    # takes the framework's own documented contract at its word instead.
     with tempfile.TemporaryDirectory(prefix="omnidriver-record-render-") as scratch:
+        snapshot_root = Path(scratch)
+        _seed_snapshot_root(
+            snapshot_root, case_root=staged_case_root,
+            documents=frozenset(parameter.document for parameter in parameters),
+        )
         rendered = driver_context.capabilities.case_writer.render(
-            resolved, snapshot_root=Path(scratch), driver_context=driver_context,
+            resolved, snapshot_root=snapshot_root, driver_context=driver_context,
             execution_env=execution_env,
         )
     plan = CaseWritePlan(

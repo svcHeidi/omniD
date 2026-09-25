@@ -310,6 +310,43 @@ def _check_preconditions(
             )
 
 
+def _check_render_exists_before(
+    files: tuple[RenderedFile, ...], targets: Mapping[str, Path],
+) -> None:
+    """Refuse a rendered file whose ``exists_before`` claim contradicts the
+    real filesystem, before any write (P2 fix,
+    docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md,
+    "Owner decisions" dated 2026-09-25).
+
+    ``render_case_files``'s own contract (``plugin_interface.py``) says a
+    renderer "reads the case ... to patch an existing file" through
+    ``snapshot_root``, "an isolated copy core provides". Nothing used to
+    verify that a renderer's ``exists_before``/``before_digest`` claim about
+    a document actually agreed with the real case -- a renderer that
+    (wrongly) believed a document was brand new, when the case already held
+    one with other keys in it, silently produced a ``RenderedFile`` whose
+    committed bytes hold ONLY the keys that renderer touched, discarding
+    every sibling key the moment ``_write_one`` replaces the file. This is
+    the generic, solver-agnostic guard: it does not know what a document
+    means, only whether the claim about its prior existence matches disk,
+    the same "recheck against the filesystem before any write" posture
+    :func:`_check_preconditions` already applies to a different claim.
+    """
+    for rendered in files:
+        target = targets[rendered.path]
+        actually_exists = target.is_file()
+        if rendered.exists_before != actually_exists:
+            raise CaseTransactionError(
+                f"rendered file {rendered.path!r} claims exists_before="
+                f"{rendered.exists_before!r}, but the target "
+                f"{'exists' if actually_exists else 'does not exist'} on "
+                f"disk ({target}); the renderer's snapshot disagreed with "
+                f"the real case -- refusing rather than trusting a wrong "
+                f"'this file is new' claim that would silently discard "
+                f"every other key already in it"
+            )
+
+
 # --------------------------------------------------------------------------
 # Path safety
 # --------------------------------------------------------------------------
@@ -591,6 +628,7 @@ def commit_case_write(
             rendered.path: _resolve_target(case_root, rendered.path)
             for rendered in plan.files
         }
+        _check_render_exists_before(plan.files, targets)
 
         tx_id = transaction_id or str(uuid.uuid4())
         before_images = [

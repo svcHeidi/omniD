@@ -108,6 +108,22 @@ class E2ERecordPlugin(MinimalTestPlugin):
         return frozenset({_FORMAT})
 
     def render_case_files(self, resolved, *, snapshot_root, driver_context, execution_env=None):
+        # P2 fix (docs/superpowers/specs/2026-09-24-tutorials-are-pointers-
+        # design.md, "Owner decisions" dated 2026-09-25): this already reads
+        # whatever is at `snapshot_root/<document>` and merges the patched
+        # keys on top of it -- a PATCH, never a replace. Before the fix, core
+        # (`record_execution.commit_record_case`) handed every renderer an
+        # EMPTY `snapshot_root`, so this code found nothing, treated an
+        # existing multi-key document as brand new, and silently committed a
+        # file holding ONLY the keys it touched -- discarding every sibling
+        # key. Core now seeds `snapshot_root` with the real document before
+        # calling this (`_seed_snapshot_root`), so `path.exists()` here is
+        # finally truthful and this merge is correct. See
+        # `test_commit_record_case_preserves_sibling_keys_in_a_multi_key_document`
+        # (packages/omnidriver/tests/core/test_tutorial_records.py) for the
+        # regression pin, and `case_transaction._check_render_exists_before`
+        # for the transaction-level guard that refuses a renderer whose
+        # `exists_before` claim disagrees with disk.
         by_document: dict[str, list] = {}
         for target in resolved.targets:
             by_document.setdefault(target["document"], []).append(target)

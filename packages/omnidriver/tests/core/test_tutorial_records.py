@@ -1309,6 +1309,41 @@ def test_commit_record_case_writes_one_case_with_validated_flags_in_the_record(t
     assert written["modelName"] == "modelBeta"
 
 
+def test_commit_record_case_preserves_sibling_keys_in_a_multi_key_document(tmp_path):
+    """P2 fix (docs/superpowers/specs/2026-09-24-tutorials-are-pointers-
+    design.md, "Owner decisions" dated 2026-09-25): before this fix,
+    `commit_record_case` handed the renderer an EMPTY `snapshot_root`, so a
+    renderer that patches one key in a document holding others (this test's
+    `_RecordCaseWriterPlugin.render_case_files`, which reads
+    `snapshot_root/<document>` and merges on top of whatever it finds
+    there -- the same shape `tests/plugins/e2e_record_plugin.py
+    ::E2ERecordPlugin` uses) silently treated every pre-existing document as
+    brand new, losing every sibling key the moment its render committed.
+    ``material`` here is that sibling key: never named by the
+    ``number_cells`` axis or by any study value, so it survives ONLY if the
+    renderer was seeded with the real prior content -- proving a patch
+    preserves the other keys, not merely that the touched key changed.
+    """
+    _native_case(tmp_path, {
+        "constant/mesh.json": {"cells": "1", "material": "myocardium"},
+    })
+    record = _record()
+    context = _context_with_writer(axis_catalog={"number_cells": _number_cells_axis()})
+
+    result = record_execution.commit_record_case(
+        record,
+        cases_root=tmp_path / "cases",
+        staged_case_root=tmp_path / "staged",
+        study_by_source={"base": {}, "sweep": {"number_cells": 7}},
+        driver_context=context,
+    )
+
+    assert result.status == "committed"
+    written = json.loads((tmp_path / "staged" / "constant" / "mesh.json").read_text())
+    assert written["cells"] == "7"
+    assert written["material"] == "myocardium"
+
+
 def test_commit_record_case_writes_nothing_when_every_patch_is_unchanged(tmp_path):
     """M5: the result states "everything was unchanged" explicitly -- a bare
     None told a caller nothing happened, but not WHY, or what the unchanged

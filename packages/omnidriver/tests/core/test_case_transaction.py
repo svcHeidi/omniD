@@ -416,3 +416,39 @@ def test_a_missing_case_root_reports_the_real_cause_not_a_held_lease(tmp_path):
     message = str(excinfo.value)
     assert "does not exist" in message
     assert "already held" not in message
+
+
+# ---------------------------------------------------------------------------
+# P2 fix (docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md,
+# "Owner decisions" dated 2026-09-25): a renderer's ``exists_before`` claim is
+# now rechecked against the real filesystem before any write, the same
+# "recheck against disk before writing" posture `_check_preconditions`
+# already applies to a different claim. A renderer that (wrongly) believes a
+# document is brand new when the case already holds one is exactly the
+# latent silent-data-loss path P2 describes: committing that claim verbatim
+# would replace the whole file with only the just-rendered keys.
+# ---------------------------------------------------------------------------
+
+
+def test_commit_refuses_a_render_claiming_new_when_the_target_already_exists_on_disk(tmp_path):
+    (tmp_path / "constant").mkdir()
+    (tmp_path / "constant" / "a").write_text("already here\n")
+    plan = _plan(tmp_path, [
+        _rendered("constant/a", b"replaced\n", exists_before=False),
+    ])
+    with pytest.raises(case_transaction.CaseTransactionError, match="exists_before"):
+        case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
+    # Refused BEFORE any write: the real file is untouched.
+    assert (tmp_path / "constant" / "a").read_text() == "already here\n"
+
+
+def test_commit_refuses_a_render_claiming_existing_when_the_target_is_missing(tmp_path):
+    plan = _plan(tmp_path, [
+        _rendered(
+            "constant/a", b"replaced\n", exists_before=True,
+            before_digest=case_write._digest_bytes(b"whatever was assumed\n"),
+        ),
+    ])
+    with pytest.raises(case_transaction.CaseTransactionError, match="exists_before"):
+        case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
+    assert not (tmp_path / "constant" / "a").exists()
