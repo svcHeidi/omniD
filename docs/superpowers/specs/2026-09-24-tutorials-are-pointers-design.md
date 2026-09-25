@@ -260,6 +260,25 @@ gates (`check-import-boundaries.py`, `export-capability-seams.py --check`,
 | 1 | Delete `heartSolverComparison` | `4ee4354` |
 | 2 | Core: axis contract, name sorting, conflict refusal, "unchanged" reporting, `unvalidated` flag, the static gate | `4ee4354..2c6c964` (`git log 0edb21e..HEAD`) |
 | 3 | OpenFOAM package: the generic axes -- scope-changed by the owner (2026-09-25) to `block_mesh_resolution_axis` only; see §3/§7's own dated corrections above for why gmsh `lc` and the dt unit conversion moved out | `f178f1a` (core: pin the axis-map duplicate-name refusal), `3fa1170` (openfoam: `block_mesh_resolution_axis` + unit/native tests) |
+| 4a | The cardiac stack support every tutorial record needs before the first real record exists: cardiacFOAM's `RecordKeyValidationCapability` (`record_key_validation.py`, catalog-checked for `constant/electroProperties`/`constant/physicsProperties`, accepted-unvalidated for `system/...`, refused otherwise), OpenFOAM's `CaseValueComparisonCapability` (`_case_value_agree`, delegating to the existing `apply_overrides.effective_values_agree`) and its `ConfigValueCapability` reader for the synthetic `hex_cell_counts` key (`case_planning.read_hex_cell_counts`). No core contract change: `DirectKeyValidator` stays `(document, key_path, value) -> (value_kind, validated)` -- the `<solver>Coeffs` first-segment substitution the validator needs is syntactic and catalog-vocabulary-derived, never a read of the staged case's actual `myocardiumSolver` value, so no staged-case-root parameter was needed. Verified against the real `electrophysiologyProtocols/restitutionCurves_s1s2Protocol` case (`myocardiumSolver singleCellSolver`, `stim_amplitude 0.4`, `system/controlDict` `deltaT 1e-5`, one real `hex (` block `(200 30 70)`) through `record_execution.preview_record_case` on the real cardiac stack (`load_discovered_plugin("cardiacfoam")`), with a test-only `TutorialRecord` and no test doubles for validator, comparator or reader. | `9759fb2` (cardiacfoam: the record-key validator), `8d4a08d` (openfoam: the case-value comparator and hex-cell-counts reader), `d3b7afb` (cardiacfoam: native evidence) |
+
+## Owner decisions, 2026-09-25 (recorded alongside step 4a)
+
+(a) **The pilot tutorial (§7 step 4) is `restitutionCurves`, not
+`cable1DRestitution`.** `restitutionCurves` (native path
+`electrophysiologyProtocols/restitutionCurves_s1s2Protocol`) is the first
+tutorial actually migrated onto tutorial records; `cable1DRestitution`
+follows later, per its own post-processing decision below.
+
+(b) **`cable1DRestitution`'s post-processing**, once it migrates: its record
+runs the native `setup/postProcessing_cableRestitution.py` as a workflow
+step, invoked with `--case-id`. The script reads the case's own dictionaries
+plus omniD's per-case case record -- not a Python-side restatement of either.
+Both sidecar files the pre-migration tooling wrote per case
+(`.driverfoam_case_id`, `.cardiacfoam_protocol.json`) and the committed
+`.driverfoam_case_id` are deleted at the point this tutorial migrates (§7
+step 5), not before -- they are retired alongside the code that reads them,
+not left as dead files a later session has to notice separately.
 
 Step 3's own note for step 5: multi-dimension tutorials will need an axis
 that reads a SECOND study value (e.g. `N` together with `dimension`, to pick
