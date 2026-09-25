@@ -56,6 +56,7 @@ VALUE_KINDS = frozenset({
     "scalar", "integer", "boolean", "word", "enum", "vector3",
     "dimensioned_scalar", "dimensioned_tensor",
     "word_list", "scalar_list", "vector3_list", "integer_list",
+    "mapping",
 })
 
 #: Element shape for each typed-list kind, reusing the singular check.
@@ -152,6 +153,19 @@ def validate_value_shape(kind: str, value: Any) -> tuple[str, ...]:
             item_reasons = validate_value_shape(element_kind, item)
             reasons.extend(f"element {index} {r}" for r in item_reasons)
         return tuple(reasons)
+    if kind == "mapping":
+        # Added 2026-09-25 (docs/superpowers/specs/2026-09-24-tutorials-are-
+        # pointers-design.md, step 4b/pilot restitutionCurves): a tutorial-
+        # record axis's OWN study value is not always one of the shapes
+        # above -- an S1-S2 protocol axis takes ONE mapping of named
+        # parameters (e.g. {"s1_interval_ms": ..., "n_s1": ..., ...}) as its
+        # single study value, not a document key's value. Generic shape
+        # only, same posture as every other kind here: a mapping with
+        # arbitrary keys/values, never checked against a specific protocol's
+        # own required keys (the axis's own `resolve` does that, by name).
+        if isinstance(value, (str, bytes)) or not isinstance(value, _Mapping):
+            return ("must be a mapping",)
+        return ()
     raise AssertionError(f"unhandled value kind {kind!r}")  # pragma: no cover
 
 

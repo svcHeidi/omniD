@@ -63,6 +63,7 @@ def test_every_declared_kind_is_accepted(kind):
     ("scalar_list", (1.0, 2.0, 3.0)),
     ("vector3_list", ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0))),
     ("integer_list", (0, 1, 2)),
+    ("mapping", {"s1_interval_ms": 2000, "n_s1": 10}),
 ])
 def test_a_well_shaped_value_passes(kind, value):
     assert dictionary.validate_value_shape(kind, value) == ()
@@ -97,6 +98,8 @@ def test_a_well_shaped_value_passes(kind, value):
     ("vector3", b"abc", "three"),
     ("dimensioned_scalar", {"value": 1.0, "dimensions": b"1234567"}, "seven"),
     ("dimensioned_tensor", {"value": b"123456789", "dimensions": (0,) * 7}, "sequence"),
+    ("mapping", "not a mapping", "mapping"),
+    ("mapping", (1, 2, 3), "mapping"),
 ])
 def test_a_badly_shaped_value_is_reported_with_a_reason(kind, value, reason):
     reasons = dictionary.validate_value_shape(kind, value)
