@@ -74,6 +74,21 @@ def _run_case_process(
     return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
 
 
+def _child_reconciliation(stdout: str) -> dict[str, Any] | None:
+    """The child ``run --run-document``'s artifact reconciliation.
+
+    K8 (docs/superpowers/specs/2026-09-25-solver-conformance-and-opencarp-
+    design.md): the child prints it, and a sweep used to discard it with
+    the rest of the child's stdout, so no record of a sweep said whether a
+    case produced its declared outputs."""
+    try:
+        payload = json.loads(stdout)
+    except (TypeError, ValueError):
+        return None
+    value = payload.get("artifact_reconciliation") if isinstance(payload, dict) else None
+    return value if isinstance(value, dict) else None
+
+
 def _load_spec(spec_path: str | Path) -> dict[str, Any]:
     return json.loads(Path(spec_path).read_text())
 
@@ -309,6 +324,7 @@ def _record_sweep_run(
         timeout_error = None
         commit_status = None
         unchanged_patches: list[dict[str, Any]] = []
+        artifact_reconciliation = None
         try:
             commit_result, spec = commit_and_build_record_spec(
                 record, case_id=case.case_id, cases_root=cases_root,
@@ -336,6 +352,7 @@ def _record_sweep_run(
                     env=execution_environment,
                     timeout=case_timeout_s,
                 )
+                artifact_reconciliation = _child_reconciliation(result.stdout)
                 if workflow_state_path.exists():
                     status = json.loads(workflow_state_path.read_text()).get("status", "pending")
                 elif result.returncode != 0:
@@ -376,6 +393,8 @@ def _record_sweep_run(
             case_summary["plan_error"] = plan_error
         if timeout_error is not None:
             case_summary["timeout_error"] = timeout_error
+        if artifact_reconciliation is not None:
+            case_summary["artifact_reconciliation"] = artifact_reconciliation
         case_summaries.append(case_summary)
 
         manifest.cases.append(

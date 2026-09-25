@@ -4,6 +4,7 @@ check that cannot run is a failure saying why."""
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import os
 import shutil
@@ -239,6 +240,55 @@ def check_run(target: ConformanceTarget) -> CheckVerdict:
     return _verdict("C6", not problems, "; ".join(problems) or f"{len(declared)} declared artifact(s) present")
 
 
+def _tree_digest(root: Path) -> str:
+    digest = hashlib.sha256()
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        digest.update(path.relative_to(root).as_posix().encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def check_sweep(target: ConformanceTarget) -> CheckVerdict:
+    """C7: a two-point sweep stages, runs and reconciles both cases, and
+    leaves the native case byte-identical."""
+    ctx = _context(target)
+    record = _record(ctx, target.record)
+    native = target.cases_root / record.native_case_relpath
+    before = _tree_digest(native)
+    work = target.scratch_root / "conformance" / "C7"
+    if work.exists():
+        shutil.rmtree(work)
+    work.mkdir(parents=True)
+    base = {k: v for k, v in target.base_study.items() if k != target.sweep_name}
+    spec = {
+        "base": {"entry": target.record, "cases_root": str(target.cases_root), **base},
+        "sweep": {"mode": "cross_product", "independent": {target.sweep_name: list(target.sweep_values)}},
+    }
+    spec_path = work / "sweep.json"
+    spec_path.write_text(json.dumps(spec))
+    proc = subprocess.run(
+        [sys.executable, "-m", "omnidriver", "sweep-run", "--plugin", target.plugin,
+         "--spec", str(spec_path), "--output-dir", str(work / "out")],
+        capture_output=True, text=True, env=_child_env(target),
+    )
+    try:
+        payload = json.loads(proc.stdout)
+    except ValueError:
+        return _verdict("C7", False, f"sweep printed no JSON (rc={proc.returncode}); stderr tail: {proc.stderr[-800:]}")
+    problems = []
+    if payload.get("completed_count") != 2 or payload.get("failed_count"):
+        problems.append(f"completed {payload.get('completed_count')}, failed {payload.get('failed_count')}")
+    for case in payload.get("cases", ()):
+        rec = case.get("artifact_reconciliation")
+        if rec is None:
+            problems.append(f"case {case.get('case_id')} has no artifact reconciliation")
+        elif rec.get("missing_count"):
+            problems.append(f"case {case.get('case_id')} is missing {rec.get('missing_count')} artifact(s)")
+    if _tree_digest(native) != before:
+        problems.append(f"the native case {native} changed")
+    return _verdict("C7", not problems, "; ".join(problems) or "2 cases completed and reconciled; native tree unchanged")
+
+
 CHECKS: dict[str, Callable[[ConformanceTarget], CheckVerdict]] = {
     "C1": check_load,
     "C2": check_describe_noop,
@@ -246,6 +296,7 @@ CHECKS: dict[str, Callable[[ConformanceTarget], CheckVerdict]] = {
     "C4": check_patch_preserves,
     "C5": check_strict_plan,
     "C6": check_run,
+    "C7": check_sweep,
 }
 
 
