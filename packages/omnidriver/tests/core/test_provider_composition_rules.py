@@ -82,6 +82,37 @@ def test_an_override_naming_a_provider_that_did_not_declare_it_is_an_error():
         _compose(env, solver).named_catalogs.catalogs()
 
 
+def test_a_duplicate_axis_name_across_two_providers_is_refused():
+    """``get_axis_catalog`` is ``map``-shaped (``provider_stack._SHAPE``), the
+    same generic merge ``test_maps_merge_and_an_unmarked_duplicate_is_an_
+    error`` already proves for ``get_named_catalogs`` -- this pins the SAME
+    mechanism for a real ``AxisContract`` value, not a plain dict.
+
+    ``_override_marker`` reads ``value.get("overrides")`` and treats an
+    ``AttributeError`` (no such method) as "no marker" -- an ``AxisContract``
+    is a frozen dataclass with no ``.get`` at all, so it can NEVER carry an
+    override marker the way a plain-dict catalog entry can. Two providers
+    declaring the same axis name are therefore an UNMARKED duplicate every
+    time, with no override escape hatch -- confirmed here rather than left
+    to the generic dict-shaped test's coincidental coverage, per the step-3
+    instruction to confirm (or fix) this by name.
+    """
+    from omnidriver.core.tutorial_records import AxisContract, AxisResult
+
+    def _resolve(value, staged_case_root):
+        return AxisResult()
+
+    axis_a = AxisContract(name="number_cells", value_kind="integer", resolve=_resolve)
+    axis_b = AxisContract(name="number_cells", value_kind="integer", resolve=_resolve)
+    env = _Provider("org.env", get_axis_catalog=lambda: {"number_cells": axis_a})
+    solver = _Provider(
+        "org.solver", requires=("org.env",),
+        get_axis_catalog=lambda: {"number_cells": axis_b},
+    )
+    with pytest.raises(ValueError, match="number_cells"):
+        _compose(env, solver).axes.catalog()
+
+
 def test_single_values_take_the_most_specific_non_none():
     env = _Provider("org.env", get_config_value_reader=lambda: "env-reader")
     solver = _Provider(
