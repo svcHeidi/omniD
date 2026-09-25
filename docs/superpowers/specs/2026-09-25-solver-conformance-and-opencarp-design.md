@@ -296,6 +296,37 @@ entries.
   - `unknown_name` is a misspelled key;
   - `untouched` is `nversion.par:gregion[0].g_il`.
 
+**Settled 2026-09-25 (evidence: `docs/solver-learning/opencarp.md` F1–F7, G1–G5).**
+These supersede the corresponding details above.
+
+- **Flag (F1).** In a `.par`, only `0` and `false` mean off; `no` and `off`
+  silently mean on. A Flag's value kind is `boolean`, and the writer emits
+  `1`/`0`. The validator refuses any other spelling in a study. The reader
+  refuses a non-`0`/`1` Flag in a native file, naming the key, and never
+  interprets it.
+- **Indexed keys (F2).** openCARP itself refuses `stim[1].*` when
+  `num_stim = 1` (exit 5). The validator refuses it earlier, by name, using the
+  count key's value in the staged `.par` after patching.
+- **Slab (F3).** The `mesh` step runs
+  `mesher -size[0] 2.0 -size[1] 0.7 -size[2] 0.3 -center[0] 1.0 -center[1] 0.35
+  -center[2] 0.15 -mesh slab`, with size and center in cm. The `dx` axis
+  contributes `-resolution[0..2] <dx>` in µm.
+- **Physics regions (F4).** The record adds none; outputs are byte-identical
+  without them.
+- **Working directory (F5).** Relative paths resolve against the working
+  directory, so both steps run with the staged case root as their working
+  directory. The solve step passes `-imp_region[0].im_sv_init singlecell.sv`
+  case-relative, citing `run.py`.
+- **Outputs (F6).** The LAT artifact is `<simID>/init_acts_vm_act-thresh.dat`:
+  one value per mesh point in point order, `-1` for never activated
+  (`lats[0].all = 0` in `nversion.par`).
+- **Stimuli (F7).** `num_stim` defaults to 2; `nversion.par` states
+  `num_stim = 1`, so the native case is safe.
+- **Units (G2).** `dt` is in µs and `tend` in ms.
+- **Secrets (G3).** Every openCARP log starts with a build header containing a
+  CI token. The adapter declares a log redaction rule, and core applies it
+  before writing `workflow_logs/` (plan Task 9).
+
 ## 8. Testing
 
 - **The four suite shapes** from `CLAUDE.md`, with `-e packages/omnidriver-opencarp`
@@ -325,7 +356,7 @@ entries.
 5. Writer, commands, preflight, artifacts: C5–C9 pass in the native tier.
 6. Record the result in this document's status table, with commit hashes.
 
-**Evidence still to take from the real binary** (decided by running it, never
+**Evidence taken from the real binary** (all settled 2026-09-25; see the block above §8) (decided by running it, never
 by assumption). These are tracked, with the runs that settle them, as F1–F7 in
 `docs/solver-learning/opencarp.md`, which also holds the evidence behind §7;
 the method is `docs/solver-learning/method.md`. Two were added after this list
