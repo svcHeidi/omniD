@@ -29,6 +29,11 @@ _PACKAGES = (
     "omnidriver-openfoam",
     "omnidriver-cardiacfoam",
     "omnidriver-cardiaccore",
+    # Added 2026-09-25 (solver-conformance B-I3): the fifth distribution. It
+    # registers no entry point until its plugin exists (Task 11), so here it
+    # proves only that its wheel installs beside the other four and ships its
+    # generated catalog -- the location check below covers it too.
+    "omnidriver-opencarp",
 )
 
 
@@ -119,6 +124,8 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
         assert files("omnidriver.cardiacfoam").joinpath(
             "fixtures/template/constant/electroProperties"
         ).is_file()
+
+        assert files("omnidriver.opencarp").joinpath("opencarp_parameters.json").is_file()
 
         assert "cardiaccore" in discover_plugins()
         # Same migration as the cardiacFoam assertion above.

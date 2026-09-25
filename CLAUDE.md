@@ -36,7 +36,8 @@ of defect is only visible from a wheel.
 # if needed. Build these once; they are not in the repo.
 uv venv --python 3.11 /tmp/od311 && VIRTUAL_ENV=/tmp/od311 uv pip install -q \
   -e "packages/omnidriver[post]" -e packages/omnidriver-openfoam \
-  -e packages/omnidriver-cardiacfoam -e packages/omnidriver-cardiaccore pytest
+  -e packages/omnidriver-cardiacfoam -e packages/omnidriver-cardiaccore \
+  -e packages/omnidriver-opencarp pytest
 uv venv --python 3.11 /tmp/odcore && VIRTUAL_ENV=/tmp/odcore uv pip install -q \
   -e "packages/omnidriver[post]" pytest
 ```

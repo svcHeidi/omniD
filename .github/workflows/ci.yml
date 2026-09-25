@@ -135,6 +135,38 @@ jobs:
       - name: Run tests
         run: python -m pytest packages/omnidriver-cardiaccore/tests -q
 
+  # openCARP drives a different binary entirely and needs no OpenFOAM, so this
+  # job installs core and the opencarp adapter only -- which also proves the
+  # package declares every dependency it uses. Its `native` tests need the
+  # openCARP binary and OMNIDRIVER_OPENCARP_TUTORIALS, and fail (not skip)
+  # without them, so they are deselected here explicitly.
+  test-opencarp:
+    name: test-opencarp (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            packages/omnidriver/pyproject.toml
+            packages/omnidriver-opencarp/pyproject.toml
+
+      - name: Install omnidriver + omnidriver-opencarp
+        run: |
+          pip install -e packages/omnidriver \
+                      -e packages/omnidriver-opencarp \
+                      pytest
+
+      - name: Run tests
+        run: python -m pytest packages/omnidriver-opencarp/tests -m "not native" -q
+
   test-all-package-wheels:
     name: test-all-package-wheels (py3.11)
     runs-on: ubuntu-latest
@@ -150,6 +182,7 @@ jobs:
             packages/omnidriver-openfoam/pyproject.toml
             packages/omnidriver-cardiacfoam/pyproject.toml
             packages/omnidriver-cardiaccore/pyproject.toml
+            packages/omnidriver-opencarp/pyproject.toml
 
       - name: Install test collection dependencies
         run: |
@@ -157,6 +190,7 @@ jobs:
                       -e packages/omnidriver-openfoam \
                       -e packages/omnidriver-cardiacfoam \
                       -e packages/omnidriver-cardiaccore \
+                      -e packages/omnidriver-opencarp \
                       pytest
 
       - name: Build, install, and invoke all package wheels
