@@ -58,6 +58,20 @@ def test_a_shrunk_count_must_be_recorded(tmp_path: Path):
     assert "shrank" in result.stdout
 
 
+def test_a_grown_count_fails(tmp_path: Path):
+    """Track C review c2 (final review: must-fix): "debt can only shrink" is a
+    CLAUDE.md invariant, and nothing failed if the GREW comparison broke. A
+    recorded pair whose count went up fails, naming both counts."""
+    core = tmp_path / "core"
+    core.mkdir()
+    (core / "m.py").write_text('X = "controlDict controlDict"\n')
+    baseline = tmp_path / "baseline.txt"
+    baseline.write_text("m.py\tcontrolDict\t1\ttest debt\n")
+    result = _gate("--core-src", str(core), "--baseline", str(baseline))
+    assert result.returncode == 1
+    assert "GREW   m.py: controlDict 1 -> 2" in result.stdout
+
+
 # --- C-I1: snake_case / other spellings of the same layout token must count too. ---
 
 
