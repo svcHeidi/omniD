@@ -62,6 +62,14 @@ own security check) to whichever writer actually rewrites bytes for this
 key (``cardiacfoam.overrides._target_for_parameter``, which reuses
 ``plan_block_mesh_resolution`` itself, same as this axis used to).
 
+**Corrected 2026-09-25 (later the same day, review B-I7).** "No
+``VALUE_KINDS`` member fits an arbitrary string containing whitespace" stopped
+being true when core gained ``string`` (K6) for openCARP's text-typed
+parameters. The conclusion stands for a different reason: ``"40 6 14"`` is
+three integers rendered as text, and ``string`` is only for values whose
+native type is text (see the note under ``contracts.dictionary.VALUE_KINDS``),
+so ``integer_list`` remains the right shape and ``string`` must not carry it.
+
 **Why "exactly one hex block" is not checked here.**
 ``plan_block_mesh_resolution`` itself performs no such check either -- by its
 own docstring, it "does **not** check ``expected_blocks`` against a real

@@ -52,6 +52,19 @@ from typing import Any
 #: vocabulary and are deliberately absent here: no current ``DictEntry``
 #: declaration has that shape, and the plan's own instructions are not to add
 #: a kind nothing uses.
+#:
+#: ``string`` (**added 2026-09-25, K6; this note added the same day after
+#: review B-I7**) is text whose *native type is text*: an openCARP
+#: ``String``/``RFile``/``WFile`` parameter, which may be empty or contain
+#: spaces, both of which ``word`` refuses. It is **never** a pre-rendered
+#: native literal -- a vector, a list, a dimensioned value or a block-mesh
+#: count spelled out as text. That is the rendered-text-as-data hole
+#: ``case_write``'s 2026-09-23 decision closed and
+#: ``cardiacfoam.dict_builder`` refuses to reopen with a ``literal``/``text``
+#: kind; ``string`` does not reopen it, because a value is ``string`` only
+#: when the solver itself types the parameter as text. A declaration that
+#: reaches for ``string`` to carry rendered syntax is the defect, not this
+#: kind. Its only user today is omnidriver-opencarp's catalog.
 VALUE_KINDS = frozenset({
     "scalar", "integer", "boolean", "word", "enum", "vector3",
     "dimensioned_scalar", "dimensioned_tensor",
