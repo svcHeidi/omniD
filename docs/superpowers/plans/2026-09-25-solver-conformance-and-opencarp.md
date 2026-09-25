@@ -2,8 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Prove that omniD can drive a solver outside OpenFOAM. The proof has three parts:
-- a packaged solver conformance suite (checks C1–C9);
+**Goal:** Prove that omniD can drive a solver outside OpenFOAM, and that an agent can use it without knowing which solver it faces. The proof has three parts:
+- a packaged solver conformance suite (checks C1–C10; C10 is agent discovery);
 - the core changes that suite forces;
 - a shape gate, plus an `omnidriver-opencarp` plugin whose Niederer N-version record passes every check against the real openCARP binary.
 
@@ -48,7 +48,7 @@
 | spec item | where |
 |---|---|
 | P1, P2 (records through strict plan/run; seeded snapshots) | landed upstream; verified in Task 1 Step 1 |
-| §4 suite, C1–C9 | Tasks 1–6 |
+| §4 suite, C1–C9 | Tasks 1–6 (C10: Task 10a) |
 | K4 record steps declare `produces`/`consumes` | Task 3 |
 | new K8: sweep records each case's artifact reconciliation (the digest found `sweep-run` discards it) | Task 4 |
 | K6 `string` value kind | Task 9 |
@@ -58,12 +58,15 @@
 | §7 openCARP package | Tasks 8–11 |
 | §8 testing, CI | Task 13 |
 | cardiacFoam target | Task 14 (after step 5) |
+| **owner, 2026-09-25: agent agnosticism, gap 1**: an agent finds any record's axes and keys the same way | new **C10** + the `record_surface` capability, Task 10a; openCARP passes it in Task 11 |
+| **gap 3**: guidance an installed agent can read, per solver and per case | `record_surface` carries plugin guidance and the case's own documentation (Task 10a); openCARP's `guidance.md` (Task 11) |
+| **gap 2**: every file declared by the layer that reads it | Task 15 (after step 5): two guards force it, and K3 is done there |
 
 **Deliberately not done, by the spec's own rule "a K-change no check forces is not made here":**
-- **K3 (core declares its own bookkeeping names).** Analysis: records name their inputs through `consumes` (Task 3), so provenance never walks core's files. openCARP's native tree has no leftover driver state. So no check fails without K3. It stays shape debt, recorded in the spec.
+- **K3 (core declares its own bookkeeping names)** is *not* deferred any more. Owner decision 2026-09-25 (gap 2): Task 15 adds a guard that forces it. Without that guard no check would fail: records name their inputs through `consumes` (Task 3), so provenance never walks core's files.
 - **K5 (demote the dictionary trio to optional).** The openCARP plugin stubs these members exactly as `MinimalTestPlugin` does, and C1 passes. Deferred.
 
-Task 13 records both as dated corrections in the spec.
+Task 13 records K5 as a dated correction in the spec.
 
 ## File structure
 
@@ -71,7 +74,7 @@ Task 13 records both as dated corrections in the spec.
 packages/omnidriver/src/omnidriver/conformance/
   __init__.py            re-exports ConformanceTarget, CheckVerdict, CHECKS, run_check
   target.py              ConformanceTarget, CheckVerdict (data only)
-  checks.py              C1–C9 and their private helpers (plan once, run once, tree digest)
+  checks.py              C1–C10 and their private helpers (plan once, run once, tree digest)
 packages/omnidriver/src/omnidriver/core/
   tutorial_records.py    MODIFY: WorkflowStep gains produces/consumes (K4)
   runtime/record_execution.py   MODIFY: DAG io + expected_artifacts from record steps (K4)
@@ -83,7 +86,7 @@ packages/omnidriver/src/omnidriver/core/
 packages/omnidriver/tests/
   plugins/e2e_record_plugin.py  MODIFY: step io, real preflight
   plugins/conformance_toy.py    CREATE: toy target + deliberately broken plugins
-  core/test_conformance_toy.py  CREATE: C1–C9 over the toy, plus "the check bites" tests
+  core/test_conformance_toy.py  CREATE: C1–C10 over the toy, plus "the check bites" tests
   core/test_record_step_io.py   CREATE: K4 unit tests
   core/test_check_core_shape.py CREATE: shape-gate tests
 scripts/check-core-shape.py, scripts/core-shape-baseline.txt   CREATE (Task 7)
@@ -110,7 +113,7 @@ packages/omnidriver-opencarp/
     test_catalog_native.py        drift gate against the binary
     test_validation.py            on the committed JSON
     test_plugin_contract.py       C1 in every shape
-    test_conformance_native.py    C1–C9 against the real binary
+    test_conformance_native.py    C1–C10 against the real binary
 ```
 
 ---
@@ -302,7 +305,7 @@ packages/omnidriver-opencarp/
 
   `packages/omnidriver/src/omnidriver/conformance/checks.py`:
   ```python
-  """C1–C9. Each check is self-contained: it builds its own context, stages
+  """C1–C10. Each check is self-contained: it builds its own context, stages
   its own copy, and returns a verdict naming what it saw. No check skips; a
   check that cannot run is a failure saying why."""
   from __future__ import annotations
@@ -2276,7 +2279,214 @@ packages/omnidriver-opencarp/
 
 ---
 
-### Task 11: The plugin and the `niedererNVersion` record, passing C1–C9 against the real binary
+### Task 10a: C10, an agent finds any record's axes, keys and guidance the same way
+
+The owner's gaps 1 and 3 (2026-09-25). Without this, `describe` shows cardiacFOAM's keys (through `dict_entries`) and shows nothing for openCARP, so an agent would have to know which solver it faces. C10 makes discovery part of the contract.
+
+**Files:**
+- Create: `packages/omnidriver/src/omnidriver/core/runtime/record_surface.py`
+- Modify: `core/plugin_capabilities.py` (new `RecordSurfaceCapability`, `_RecordSurfaceAdapter`, the `record_surface` field and its construction)
+- Modify: `core/plugin_interface.py` (two optional hooks), `core/provider_stack.py` (`_SHAPE`)
+- Modify: `core/introspection.py` (`_describe_tutorial_record` adds `record_surface`)
+- Modify: `e2e_record_plugin.py`, `checks.py`, `test_conformance_toy.py`
+- Modify: `ARCHITECTURE.md` (regenerated seam table)
+
+**Interfaces:**
+- Produces:
+  - plugin hook `get_record_key_catalog(case_root: Path) -> tuple[Mapping[str, Any], ...]`: one mapping per addressable key, with required fields `document`, `key`, `value_kind` and optional `default`, `description`, `minimum`, `maximum`, `menu`. An indexed key may be listed in template form, with `[Int]` for any index.
+  - plugin hook `get_agent_guidance() -> tuple[Mapping[str, str], ...]`, each with `title` and `text`.
+  - both composed as `"sequence"`.
+  - `record_surface(record, *, native_case_root, driver_context) -> dict`, with keys `axes`, `keys`, `guidance`, `case_documentation`.
+  - `describe`'s record payload gains `"record_surface"`.
+  - `check_discoverable`, registered as `"C10"`.
+- Consumes: `ctx.capabilities.axes.catalog()` and `ctx.capabilities.case_files.all_rules()`, which returns `CaseFileRule(path, kind, role, required)`. The role `case.documentation` already exists; cardiacFOAM's profile gives it to `README.md`.
+
+- [ ] **Step 1: Write the failing test.** Add `"C10"` to the toy parametrize list. Append:
+  ```python
+  def test_c10_surface_lists_the_toy_axis_key_and_guidance(tmp_path):
+      from omnidriver.core.introspection import describe_entry
+      from omnidriver.core.plugin_interface import load_plugin_context
+
+      target = toy_conformance_target(tmp_path)
+      payload = describe_entry(target.record, overrides={"cases_root": str(target.cases_root)},
+                               driver_context=load_plugin_context(target.plugin))
+      surface = payload["record_surface"]
+      assert surface["axes"] == [{"name": "number_cells", "value_kind": "integer"}]
+      assert {"document": "constant/mesh.json", "key": "cells", "value_kind": "integer"} in [
+          {k: e[k] for k in ("document", "key", "value_kind")} for e in surface["keys"]]
+      assert surface["guidance"] and surface["guidance"][0]["title"]
+  ```
+
+- [ ] **Step 2: Run it to verify it fails.** Expected: `KeyError: 'record_surface'`.
+
+- [ ] **Step 3: The capability**
+
+  In `plugin_capabilities.py`, next to `RuntimeEvidenceCapability`:
+  ```python
+  class RecordSurfaceCapability(Protocol):
+      """What an agent may address in a record, and what it should read first.
+
+      Owner decision 2026-09-25 (spec 2026-09-25 §4, C10): discovering a
+      record's keys and guidance must not depend on knowing which solver is
+      underneath. ``key_catalog`` lists the keys a study may name for a case;
+      ``guidance`` is solver-level advice for agents. Both degrade to empty,
+      which C10 then reports as a failure for a real target.
+
+      :adapts: get_agent_guidance, get_record_key_catalog
+      :consumed-by: omnidriver/core/runtime/record_surface.py
+      :fallback: none
+      :status: optional-neutral
+      """
+
+      def key_catalog(self, case_root: Path) -> tuple[Mapping[str, Any], ...]: ...
+      def guidance(self) -> tuple[Mapping[str, str], ...]: ...
+  ```
+  and:
+  ```python
+  @dataclass(frozen=True)
+  class _RecordSurfaceAdapter:
+      plugin: "SolverPlugin"
+
+      def key_catalog(self, case_root: Path) -> tuple[Mapping[str, Any], ...]:
+          hook = getattr(self.plugin, "get_record_key_catalog", None)
+          return tuple(hook(case_root)) if callable(hook) else ()
+
+      def guidance(self) -> tuple[Mapping[str, str], ...]:
+          hook = getattr(self.plugin, "get_agent_guidance", None)
+          return tuple(hook()) if callable(hook) else ()
+  ```
+  Then add the field and its construction, next to `runtime_evidence`:
+  - in the capabilities dataclass: `record_surface: RecordSurfaceCapability`;
+  - where it is constructed: `record_surface=_RecordSurfaceAdapter(plugin),`.
+  
+  In `plugin_interface.py`'s optional hooks:
+  ```python
+      # -- Record surface (C10) ---------------------------------------------------
+      def get_record_key_catalog(self, case_root: "Path") -> tuple[Mapping[str, Any], ...]:
+          """Every key a study may name for this case: document, key, value_kind, and optionally
+          default/description/minimum/maximum/menu. Indexed keys may use ``[Int]`` for any index."""
+          ...
+
+      def get_agent_guidance(self) -> tuple[Mapping[str, str], ...]:
+          """Solver-level advice an agent should read before writing a study (title, text)."""
+          ...
+  ```
+  In `provider_stack._SHAPE`, add `"get_record_key_catalog": "sequence", "get_agent_guidance": "sequence",`.
+  
+  Confirm how `"sequence"` combines hooks that take an argument: `grep -n '"sequence"' packages/omnidriver/src/omnidriver/core/provider_stack.py`. `get_environment_diagnostics` is sequence-shaped and takes arguments, so it works as the model.
+
+- [ ] **Step 4: The surface, and `describe`**
+
+  `core/runtime/record_surface.py`:
+  ```python
+  """What describe tells an agent about a tutorial record, the same for every solver (C10)."""
+  from __future__ import annotations
+
+  from pathlib import Path
+  from typing import Any
+
+  DOCUMENTATION_ROLE = "case.documentation"
+
+
+  def record_surface(record, *, native_case_root: Path, driver_context) -> dict[str, Any]:
+      axis_catalog = driver_context.capabilities.axes.catalog() or {}
+      axes = [
+          {"name": name, "value_kind": axis_catalog[name].value_kind}
+          for name in sorted(record.allowed_axes) if name in axis_catalog
+      ]
+      surface = driver_context.capabilities.record_surface
+      documentation = []
+      for rule in driver_context.capabilities.case_files.all_rules():
+          path = Path(native_case_root) / rule.path
+          if rule.role == DOCUMENTATION_ROLE and path.is_file():
+              documentation.append({"path": rule.path, "text": path.read_text(errors="replace")})
+      return {
+          "axes": axes,
+          "keys": [dict(entry) for entry in surface.key_catalog(Path(native_case_root))],
+          "guidance": [dict(item) for item in surface.guidance()],
+          "case_documentation": documentation,
+      }
+  ```
+  In `introspection._describe_tutorial_record`, where the payload gets `record_preview`, add:
+  ```python
+      payload["record_surface"] = record_surface(
+          record, native_case_root=Path(cases_root) / record.native_case_relpath, driver_context=driver_context,
+      )
+  ```
+  Use the function's own local names for the record and `cases_root`. It already resolves both to build the preview.
+  
+  With this, the native README becomes agent-readable: the audit's "READMEs are human-only" finding. cardiacFOAM's `README.md` already has the `case.documentation` role.
+
+- [ ] **Step 5: The toy declares its surface**
+
+  In `E2ERecordPlugin`:
+  ```python
+      def get_record_key_catalog(self, case_root):
+          del case_root
+          return ({"document": "constant/mesh.json", "key": "cells", "value_kind": "integer",
+                   "description": "the toy's cell count"},)
+
+      def get_agent_guidance(self):
+          return ({"title": "toy record", "text": "toyTutorial writes solved.marker; number_cells patches constant/mesh.json:cells."},)
+  ```
+
+- [ ] **Step 6: Write C10**
+
+  ```python
+  import re as _re
+
+  _ANY_INDEX = _re.compile(r"\[\d+\]")
+
+
+  def check_discoverable(target: ConformanceTarget) -> CheckVerdict:
+      """C10: describe tells an agent, the same way for every solver, which axes
+      and keys the record takes, and what to read first."""
+      ctx = _context(target)
+      record = _record(ctx, target.record)
+      with _scratch_environment(target):
+          payload = describe_entry(target.record, overrides={"cases_root": str(target.cases_root)}, driver_context=ctx)
+      surface = payload.get("record_surface")
+      if surface is None:
+          return _verdict("C10", False, "describe has no record_surface")
+      problems = []
+      axis_names = {a["name"] for a in surface["axes"]}
+      if axis_names != set(record.allowed_axes):
+          problems.append(f"axes listed {sorted(axis_names)}, record allows {sorted(record.allowed_axes)}")
+      if any(not a.get("value_kind") for a in surface["axes"]):
+          problems.append("an axis is listed without its value kind")
+      if not surface["keys"] or any(not e.get("value_kind") for e in surface["keys"]):
+          problems.append("no key catalogue, or an entry without a value kind")
+      document, key_path = _split_study_key(target.patch[0])
+      key = ".".join(key_path)
+      listed = {(e["document"], e["key"]) for e in surface["keys"]}
+      if (document, key) not in listed and (document, _ANY_INDEX.sub("[Int]", key)) not in listed:
+          problems.append(f"the target's own patch key {document}:{key} is not in the catalogue")
+      if not surface["guidance"]:
+          problems.append("no agent guidance")
+      return _verdict("C10", not problems, "; ".join(problems) or
+                      f"{len(surface['axes'])} axes, {len(surface['keys'])} keys, {len(surface['guidance'])} guidance item(s)")
+  ```
+  Register `"C10": check_discoverable,`.
+
+- [ ] **Step 7: Run every core shape; regenerate the seam table**
+
+  ```bash
+  /tmp/odconf/bin/python -m pytest packages/omnidriver/tests/core/test_conformance_toy.py -v
+  /tmp/odconfcore/bin/python -m pytest packages/omnidriver/tests -q
+  /tmp/odconf/bin/python scripts/export-capability-seams.py && /tmp/odconf/bin/python scripts/export-capability-seams.py --check
+  ```
+  Expected: C1–C10 pass for the toy; 0 failed.
+
+- [ ] **Step 8: Commit**
+
+  ```bash
+  git add -A packages/omnidriver ARCHITECTURE.md
+  git commit -m "feat(core): the record surface -- describe lists any record's axes, keys and guidance; conformance C10"
+  ```
+
+---
+
+### Task 11: The plugin and the `niedererNVersion` record, passing C1–C10 against the real binary
 
 **Files:**
 - Create: `src/omnidriver/opencarp/opencarp.yaml`, `environment.py`, `plugin.py`, `records/__init__.py`, `records/niederer_n_version.py`
@@ -2484,6 +2694,31 @@ packages/omnidriver-opencarp/
       ),
   )
   ```
+  `src/omnidriver/opencarp/guidance.md`, the evidence log distilled for an agent. Every line cites its evidence id:
+  ```markdown
+  # openCARP through omniD
+
+  Study keys are `<file>.par:<parameter>`, e.g. `nversion.par:gregion[0].g_il`.
+  `describe` lists every parameter with its type, default and bounds.
+
+  - Flags: write `true`/`false` in a study; omniD writes `1`/`0`. openCARP reads
+    `no`, `off`, `yes`, `2` all as ON (F1).
+  - Counts size arrays: `stim[1].*` needs `num_stim >= 2`, or openCARP exits (F2).
+    `num_stim` defaults to 2, so a case that omits it gets two stimuli (F7).
+  - Units: `dt` is in microseconds, `tend` in milliseconds (G2). `spacedt` must
+    be <= `tend` (G1). The mesh axis `dx` is in micrometres (F3).
+  - A key assigned twice in a .par takes its last value (F8); omniD refuses to
+    patch such a key.
+  - Relative paths resolve against the case directory, which is every step's
+    working directory (F5).
+  - Defaults that make a run slow: mesher resolution 100 µm, tend 100 ms, dt 5 µs
+    (G7). Pin `dx`, `nversion.par:tend` and `nversion.par:dt` for quick studies.
+  - Outputs: `out/vm.igb` holds every time step; `out/init_acts_vm_act-thresh.dat`
+    holds one activation time per mesh point in point order, -1 if never
+    activated (F6).
+  ```
+  Add `"guidance.md"` to `[tool.setuptools.package-data]` in `packages/omnidriver-opencarp/pyproject.toml`, and `record_surface` to `opencarp.yaml`'s `provides:`.
+
   `src/omnidriver/opencarp/records/__init__.py`:
   ```python
   """openCARP tutorial records. Scanned by scripts/check-case-writes.py: nothing here writes a case."""
@@ -2657,6 +2892,24 @@ packages/omnidriver-opencarp/
 
       def get_log_redaction_patterns(self):
           return REDACTION_PATTERNS     # consumed once Task 12 lands; harmless before
+
+      # -- record surface (C10, Task 10a)
+      def get_record_key_catalog(self, case_root):
+          entries = []
+          for par in sorted(Path(case_root).glob("*.par")):
+              for spec in load_catalog().parameters.values():
+                  if spec.value_kind is None:
+                      continue
+                  entries.append({
+                      "document": par.name, "key": spec.name, "value_kind": spec.value_kind,
+                      "default": spec.default, "description": spec.description,
+                      "minimum": spec.minimum, "maximum": spec.maximum, "menu": list(spec.menu),
+                  })
+          return tuple(entries)
+
+      def get_agent_guidance(self):
+          text = resources.files(__package__).joinpath("guidance.md").read_text()
+          return ({"title": "openCARP: what the binary does that a reader would not guess", "text": text},)
   ```
   Check the profile loads from the package: `/tmp/odconf/bin/python -c "from omnidriver.opencarp.plugin import OpenCARPPlugin as P; print(P().get_profile().plugin_id)"`, which should print `org.omnidriver.opencarp`.
 
@@ -2669,7 +2922,7 @@ packages/omnidriver-opencarp/
   /tmp/odconf/bin/python -m pytest packages/omnidriver-opencarp/tests -v -m native
   python3 scripts/check-import-boundaries.py && python3 scripts/check-case-writes.py && python3 scripts/check-core-shape.py && /tmp/odconf/bin/python scripts/export-capability-seams.py --check
   ```
-  Expected: all nine checks pass for `niedererNVersion`, and every gate exits 0.
+  Expected: all ten checks pass for `niedererNVersion` (C10 included), and every gate exits 0.
 
   If C5 reports that the staged case is not runnable without a workflow, add the hook `E2ERecordPlugin` uses:
   ```python
@@ -2690,7 +2943,7 @@ packages/omnidriver-opencarp/
   Add to `docs/solver-learning/opencarp.md` an `H` section, "omniD drives openCARP". For each check, give its verdict detail, plus the wall time of the native suite.
   ```bash
   git add packages/omnidriver-opencarp docs/solver-learning/opencarp.md
-  git commit -m "feat(opencarp): OpenCARPPlugin and the niedererNVersion record pass conformance C1-C9 against openCARP v18.1"
+  git commit -m "feat(opencarp): OpenCARPPlugin and the niedererNVersion record pass conformance C1-C10 against openCARP v18.1"
   ```
 
 ---
@@ -2821,7 +3074,7 @@ packages/omnidriver-opencarp/
   - Add `omnidriver-opencarp` to the package table: may know "openCARP binary, .par, mesher, IGB/LAT outputs", must not know "OpenFOAM, cardiacFoam".
   - Add `-e packages/omnidriver-opencarp` to the all-packages venv line.
   - Add a native row: `OMNIDRIVER_OPENCARP_TUTORIALS=<path> DYLD_LIBRARY_PATH=<lib> python -m pytest packages/omnidriver-opencarp/tests -m native`.
-  - Add an invariant row: `| any solver plugin passes C1-C9 | omnidriver.conformance, parametrized per package (toy in core; openCARP native) |`.
+  - Add an invariant row: `| any solver plugin passes C1-C10 | omnidriver.conformance, parametrized per package (toy in core; openCARP native) |`.
 
 - [ ] **Step 3: The spec's status and its dated corrections**
 
@@ -2844,7 +3097,7 @@ packages/omnidriver-opencarp/
   OMNIDRIVER_OPENCARP_TUTORIALS=/usr/local/lib/opencarp/share/tutorials DYLD_LIBRARY_PATH=/opt/homebrew/lib /tmp/odconf/bin/python -m pytest packages/omnidriver-opencarp/tests -q -m native
   python3 scripts/check-import-boundaries.py && python3 scripts/check-case-writes.py && python3 scripts/check-core-shape.py && /tmp/odconf/bin/python scripts/export-capability-seams.py --check
   ```
-  Expected: 0 failed in every shape; every gate exits 0. The wheel shape matters here: `omnidriver.conformance` ships in the wheel, and C1–C9 over the toy run from it.
+  Expected: 0 failed in every shape; every gate exits 0. The wheel shape matters here: `omnidriver.conformance` ships in the wheel, and C1–C10 over the toy run from it.
   ```bash
   git add .github/workflows/ci.yml CLAUDE.md docs/superpowers/specs/2026-09-25-solver-conformance-and-opencarp-design.md
   git commit -m "docs,ci: openCARP in CI without OpenFOAM; the conformance invariant; spec status"
@@ -2856,6 +3109,7 @@ packages/omnidriver-opencarp/
 
 **Files:**
 - Modify: `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/records/restitution_curves.py` (step `produces`/`consumes`, read from the real `Allrun` and case)
+- Modify: `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/cardiacfoam_plugin.py` (`get_record_key_catalog`, `get_agent_guidance`)
 - Create: `packages/omnidriver-cardiacfoam/tests/test_conformance_native.py`
 
 - [ ] **Step 1: Read the real case's inputs and outputs.** From `OMNIDRIVER_NATIVE_TUTORIALS/electrophysiologyProtocols/restitutionCurves_s1s2Protocol` and its `Allrun`, list:
@@ -2873,8 +3127,164 @@ packages/omnidriver-opencarp/
   
   Run it with `-m native`. Expected: C6 and C8 fail, because no step declares `produces`/`consumes`.
 
-- [ ] **Step 3: Declare the observed paths on the record's steps**, re-run until C1–C9 pass, then commit:
+- [ ] **Step 3: Declare the observed paths on the record's steps.** Re-run: C6 and C8 should now pass, and C10 should fail with "no key catalogue".
+
+- [ ] **Step 4: cardiacFOAM's record surface (C10).** On `CardiacFoamPlugin`:
+  - `get_record_key_catalog(case_root)` returns one entry per `DictEntry` in its existing catalogue whose document exists under `case_root`. Map fields as: `document`, `key` = the entry's key path joined with `.`, `value_kind`, `default` = `typical_value`, `description`. Read the `DictEntry` field names first with `grep -n "class DictEntry" -A 30 packages/omnidriver/src/omnidriver/core/contracts/dictionary.py`, and map exactly what they are. The catalogue is the one source; this only re-shapes it.
+  - `get_agent_guidance()` returns cardiacFOAM's solver-level notes. These are the rules its validator and catalogues already enforce, stated for a reader (e.g. which `system/*` keys are written `unvalidated`). No new facts.
+  - The case README reaches agents through the `case.documentation` role that cardiacFOAM's profile already declares.
+
+  Re-run until C1–C10 pass, then commit:
   ```bash
-  git commit -m "test(cardiacfoam): restitutionCurves passes conformance C1-C9"
+  git commit -m "test(cardiacfoam): restitutionCurves passes conformance C1-C10"
   ```
   Every other record that migrates in step 5 joins this parametrization as it lands. When all of them pass, the old factory path can be deleted.
+
+---
+
+### Task 15 (after tutorials-are-pointers step 5 is finished): every file declared by the layer that reads it (gap 2, K3)
+
+Owner decision 2026-09-25. It waits for step 5 because it edits cardiacFOAM's `plugin.yaml`. Two guards force the change, so it is made the way every K-change is made: the guard fails first.
+
+**Files:**
+- Create: `packages/omnidriver/tests/core/test_layer_ownership.py`
+- Create: `packages/omnidriver/src/omnidriver/core/runtime_records.py`
+- Modify: `core/plugin_capabilities.py` (`_CaseRuntimeConventionsAdapter.conventions` merges core's names)
+- Modify: `packages/omnidriver-openfoam/src/omnidriver/openfoam/case_runtime_conventions.py` (drops core's names)
+- Modify: `packages/omnidriver-openfoam/src/omnidriver/openfoam/openfoam-environment.yaml` (gains the OpenFOAM-read files)
+- Modify: `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/plugin.yaml` (loses them)
+
+**Interfaces:**
+- Produces:
+  - `CORE_RUNTIME_RECORDS: CaseRuntimeConventions`;
+  - `with_core_runtime_records(conventions) -> CaseRuntimeConventions`;
+  - the guard tests `test_a_role_namespace_has_one_owner_per_stack` and `test_no_plugin_declares_cores_own_files`.
+
+- [ ] **Step 1: Write the failing guards**
+
+  ```python
+  """Every file is declared by the layer that reads it (owner decision 2026-09-25, gap 2)."""
+  from __future__ import annotations
+
+  import pytest
+
+  from omnidriver.core.plugin_discovery import load_discovered_plugin
+  from omnidriver.core.runtime_records import CORE_RUNTIME_RECORDS
+
+  STACKS = ("cardiacfoam", "cardiaccore", "opencarp")
+  GENERIC_NAMESPACES = {"plugin", "case"}
+
+
+  @pytest.mark.parametrize("stack", STACKS)
+  def test_a_role_namespace_has_one_owner_per_stack(stack):
+      """The first provider (in requires order) to use a role namespace owns it.
+
+      So a provider that declares ``openfoam.*`` files in a stack that also
+      holds the OpenFOAM layer is declaring files that layer reads."""
+      ctx = load_discovered_plugin(stack)
+      owner: dict[str, str] = {}
+      violations = []
+      for provider in reversed(ctx.providers):         # most-required first
+          for rule in provider.get_profile().case_files:
+              namespace = rule.role.split(".", 1)[0]
+              if namespace in GENERIC_NAMESPACES:
+                  continue
+              owner.setdefault(namespace, provider.plugin_id)
+              if owner[namespace] != provider.plugin_id:
+                  violations.append(f"{provider.plugin_id} declares {rule.path} as {rule.role}; {owner[namespace]} owns {namespace}.*")
+      assert not violations, violations
+
+
+  @pytest.mark.parametrize("stack", STACKS)
+  def test_no_plugin_declares_cores_own_files(stack):
+      ctx = load_discovered_plugin(stack)
+      core_names = set(CORE_RUNTIME_RECORDS.generated_file_names) | set(CORE_RUNTIME_RECORDS.generated_directory_names)
+      for provider in ctx.providers:
+          hook = getattr(provider, "get_case_runtime_conventions", None)
+          if not callable(hook):
+              continue
+          conventions = hook()
+          declared = set(conventions.generated_file_names) | set(conventions.generated_directory_names)
+          assert not (declared & core_names), f"{provider.plugin_id} declares core's {sorted(declared & core_names)}"
+      merged = ctx.capabilities.case_runtime_conventions.conventions()
+      assert core_names <= set(merged.generated_file_names) | set(merged.generated_directory_names)
+  ```
+  First confirm the order of `ctx.providers`: `grep -n "providers" packages/omnidriver/src/omnidriver/core/provider_stack.py | head`. If the tuple runs most-required-first, iterate it forward instead of `reversed`. The comment must match whichever is true.
+
+- [ ] **Step 2: Run them to verify they fail.**
+  - `ImportError` for `runtime_records`, before Step 3.
+  - After Step 3, the ownership guard names `org.cardiacfoam` declaring `system/fvSchemes`, `system/fvSolution`, `system/decomposeParDict`, `system/blockMeshDict` and `Allclean` under `openfoam.*`.
+  - The core-files guard names `org.omnidriver.openfoam.environment` declaring `workflow_state.json`, `run_document.json`, `sweep_manifest.json` and `workflow_logs`.
+
+- [ ] **Step 3: Core owns its own names (K3)**
+
+  `core/runtime_records.py`:
+  ```python
+  """The files omniD itself writes into a case, declared once, by core (K3).
+
+  They used to be declared by the OpenFOAM layer's conventions, so a stack
+  without that layer did not know them. The adapter that reads a stack's
+  CaseRuntimeConventions merges these in, whatever the plugins declare."""
+  from __future__ import annotations
+
+  from dataclasses import replace
+
+  from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
+
+  CORE_RUNTIME_RECORDS = CaseRuntimeConventions(
+      generated_directory_names=("workflow_logs",),
+      generated_file_names=("workflow_state.json", "run_document.json", "sweep_manifest.json"),
+      generated_case_markers=("workflow_state.json", "workflow_logs", "run_document.json"),
+  )
+
+
+  def _union(first: tuple[str, ...], second: tuple[str, ...]) -> tuple[str, ...]:
+      return first + tuple(name for name in second if name not in first)
+
+
+  def with_core_runtime_records(conventions: CaseRuntimeConventions) -> CaseRuntimeConventions:
+      return replace(
+          conventions,
+          generated_directory_names=_union(conventions.generated_directory_names, CORE_RUNTIME_RECORDS.generated_directory_names),
+          generated_file_names=_union(conventions.generated_file_names, CORE_RUNTIME_RECORDS.generated_file_names),
+          generated_case_markers=_union(conventions.generated_case_markers, CORE_RUNTIME_RECORDS.generated_case_markers),
+      )
+  ```
+  If importing `CaseRuntimeConventions` from `plugin_capabilities` creates an import cycle, move `CORE_RUNTIME_RECORDS` into `plugin_capabilities.py` beside the dataclass, and keep `runtime_records.py` as the documented re-export.
+  
+  In `_CaseRuntimeConventionsAdapter.conventions`, wrap every return value in `with_core_runtime_records(...)`, including the empty-conventions fallback.
+  
+  Before removing anything from OpenFOAM's `openfoam_case_runtime_conventions()`, check whether `driverPostProcessingArchive` is written by core: `grep -rn "driverPostProcessingArchive" packages/omnidriver/src`.
+  - If core writes it, add it to `CORE_RUNTIME_RECORDS.generated_directory_prefixes` (extend `_union` to that field).
+  - If core doesn't write it, leave it with OpenFOAM.
+  
+  Then delete `workflow_logs`, `workflow_state.json`, `run_document.json` and `sweep_manifest.json` from OpenFOAM's lists and markers.
+
+- [ ] **Step 4: The OpenFOAM layer declares what OpenFOAM reads**
+
+  Move the five rules (`system/fvSchemes`, `system/fvSolution`, `system/decomposeParDict`, `system/blockMeshDict`, `Allclean`) verbatim from cardiacFOAM's `plugin.yaml` `case_profile.dictionaries` into `openfoam-environment.yaml`'s, keeping their `kind`, `role` and `required`.
+  
+  Then find every consumer of those roles, and confirm none reads them from the cardiac provider specifically:
+  ```bash
+  grep -rn "openfoam.discretisation\|openfoam.solver_settings\|openfoam.decomposition\|openfoam.mesh_generation\|openfoam.cleanup" packages/*/src
+  ```
+
+- [ ] **Step 5: Run the guards and every shape**
+
+  ```bash
+  /tmp/odconf/bin/python -m pytest packages/omnidriver/tests/core/test_layer_ownership.py -v
+  /tmp/odconf/bin/python -m pytest packages/ -q -m "not slow and not native"
+  OMNIDRIVER_NATIVE_TUTORIALS=/Users/simaocastro/noFrontendCardiacFoam_minor_errors/tutorials /tmp/odconf/bin/python -m pytest packages/ -q -m native
+  python3 scripts/check-core-shape.py
+  ```
+  Expected: 0 failed.
+  
+  The shape gate may now report a **shrunk** count, if core's own names had been spelled through OpenFOAM terms. If it does, edit the baseline down; that is the debt being paid.
+
+- [ ] **Step 6: Commit**
+
+  ```bash
+  git add -A packages scripts/core-shape-baseline.txt
+  git commit -m "refactor: every case file is declared by the layer that reads it; core declares its own records (K3)"
+  ```
+

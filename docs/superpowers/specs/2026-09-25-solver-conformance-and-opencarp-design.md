@@ -105,6 +105,23 @@ branch.
   - `E2ERecordPlugin` is fixed to patch rather than replace.
 - Forced by C4.
 
+**Owner decision, 2026-09-25: the agent must be agnostic too, not only the
+code.** This adds three items; `docs/superpowers/plans/2026-09-25-solver-conformance-and-opencarp.md`
+Tasks 10a, 11, 14 and 15 carry them.
+
+1. **C10, discovery.** `describe` on any record returns `record_surface`: its
+   axes with value kinds, a catalogue of the keys it can address, the plugin's
+   agent guidance, and the case's own documentation (files with role
+   `case.documentation`, e.g. a native `README.md`). The hooks are
+   `get_record_key_catalog` and `get_agent_guidance`. Before this, an agent
+   saw cardiacFOAM's keys through `dict_entries` and nothing for openCARP.
+2. **Guidance per solver.** openCARP ships `guidance.md` (the evidence log
+   distilled, each line citing its F/G id); cardiacFOAM's comes from what its
+   validator and catalogues already enforce.
+3. **Each file declared by the layer that reads it**, after step 5. Two guards
+   force this: a role namespace has one owner per stack, and no plugin declares
+   core's own files. This makes K3, previously deferred, a forced change.
+
 ## 4. The solver conformance suite (approved)
 
 **What it is.** An executable definition of "a solver can plug into omniD":
