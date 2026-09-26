@@ -13,6 +13,7 @@ omnidriver fallbacks.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping, Protocol, TYPE_CHECKING
@@ -124,20 +125,84 @@ class CaseRuntimeConventions:
     case_entrypoints: tuple[str, ...] = ()
     case_script_commands: tuple[str, ...] = ()
     case_discovery_ignored_directory_names: tuple[str, ...] = ()
-    #: fnmatch globs naming a case-root directory that holds one replica of
-    #: the case per parallel rank (OpenFOAM: ``processor*``). Core skips them
-    #: when staging and discovering cases, and looks inside them for an
-    #: instance-indexed output. Empty: the environment declares no replicas.
-    #: Renamed 2026-09-26 from ``decomposition_directory_prefix`` (spec A2).
+    #: fnmatch globs naming a directory, at any depth in the case tree, that
+    #: holds one replica of the case per parallel rank (OpenFOAM:
+    #: ``processor*``). Core skips them when staging and discovering cases
+    #: at every depth, not only at the case root. Empty: the environment
+    #: declares no replicas. Renamed 2026-09-26 from
+    #: ``decomposition_directory_prefix`` (spec A2).
+    #:
+    #: Corrected 2026-09-26 (R2 fix, finding M2): this said "a case-root
+    #: directory" and "looks inside them for an instance-indexed output",
+    #: both wrong. ``_stage_entry_case.ignore_generated`` and ``registry``
+    #: apply the rule at every depth, not only the case root; and only
+    #: ``workflow_runner._artifact_snapshot`` looks inside a replica for an
+    #: instance-indexed output -- ``reconcile_artifacts``, which backs the
+    #: resume completion check and the CLI's reconciliation payload, never
+    #: does. Pre-existing, unchanged by A2 (verified byte-for-byte against
+    #: pre-A2 behaviour); flagged here as a generality-log row for later,
+    #: not fixed by this correction.
     replica_directory_globs: tuple[str, ...] = ()
-    #: Regex a case-root directory name matches when it is one of the
-    #: solver's output instances (OpenFOAM: a time directory). ``None``: the
-    #: environment declares no instances, and core treats no directory as
-    #: one. Renamed 2026-09-26 from ``time_directory_name_pattern`` (spec A2).
+    #: Regex a directory name, at any depth in the case tree, matches when
+    #: it is one of the solver's output instances (OpenFOAM: a time
+    #: directory). ``None``: the environment declares no instances, and core
+    #: treats no directory as one. Renamed 2026-09-26 from
+    #: ``time_directory_name_pattern`` (spec A2). The instance rule also
+    #: applies to files, not only directories -- corrected 2026-09-26 (R2
+    #: fix, finding M2), see ``replica_directory_globs``'s own correction
+    #: above for the same depth/scope caveat.
     instance_directory_pattern: str | None = None
     #: Instance names that are authored input and never cleaned (OpenFOAM:
     #: ``"0"``). Renamed 2026-09-26 from ``preserved_time_directory_names``.
     preserved_instance_names: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        """Refuse a malformed A2 field by name at construction (R2 fix,
+        finding I3), rather than corrupting every staged case silently.
+
+        The field this replaced, ``decomposition_directory_prefix``, was a
+        bare ``str`` -- a plugin author migrating to
+        ``replica_directory_globs`` naturally writes
+        ``replica_directory_globs="processor*"``. ``tuple(...)`` on a bare
+        string explodes it into one-character strings, ``'*'`` among them,
+        so ``is_replica_directory_name`` then matches every name and
+        ``_stage_entry_case`` silently drops every directory at every depth.
+        The same bare-``str`` mistake on ``preserved_instance_names`` gives
+        substring semantics (``name not in "0"``) instead of exact-name
+        membership. Neither is caught anywhere else -- refused here, once,
+        for every construction path (a plugin's own conventions, the merge
+        in ``runtime_records.with_core_runtime_records``, a test fixture).
+        """
+        _require_tuple_of_names(self, "replica_directory_globs", noun="glob strings")
+        _require_tuple_of_names(self, "preserved_instance_names", noun="name strings")
+        if self.instance_directory_pattern is not None:
+            if not isinstance(self.instance_directory_pattern, str):
+                raise TypeError(
+                    f"instance_directory_pattern must be a str or None, got "
+                    f"{type(self.instance_directory_pattern).__name__} "
+                    f"{self.instance_directory_pattern!r}"
+                )
+            try:
+                re.compile(self.instance_directory_pattern)
+            except re.error as exc:
+                raise ValueError(
+                    f"instance_directory_pattern {self.instance_directory_pattern!r} "
+                    f"is not a valid regular expression: {exc}"
+                ) from exc
+
+
+def _require_tuple_of_names(conventions: "CaseRuntimeConventions", field_name: str, *, noun: str) -> None:
+    value = getattr(conventions, field_name)
+    if not isinstance(value, tuple):
+        raise TypeError(
+            f"{field_name} must be a tuple of {noun}, got {type(value).__name__} {value!r}"
+        )
+    for item in value:
+        if not isinstance(item, str) or not item:
+            raise TypeError(
+                f"{field_name} must be a tuple of {noun}, got "
+                f"{type(item).__name__} {item!r} among its items"
+            )
 
 
 @dataclass(frozen=True)

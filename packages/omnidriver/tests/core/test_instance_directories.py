@@ -67,3 +67,30 @@ def test_the_time_vocabulary_is_gone():
     assert expand_path_pattern("{instance}/x", instance="7") == "7/x"
     assert not hasattr(DataArtifact(artifact_id="a", path_pattern="x", format="x"), "time_indexed")
     assert not hasattr(CaseRuntimeConventions(), "time_directory_name_pattern")
+
+
+def test_a_bare_string_preserved_instance_names_is_refused_by_name():
+    """R2 fix, finding I3: a bare ``str`` here would give substring
+    membership (``name not in "0"``) instead of exact-name membership --
+    the same migration mistake as ``replica_directory_globs``, refused the
+    same way."""
+    with pytest.raises(TypeError, match="preserved_instance_names.*tuple of name strings.*str"):
+        CaseRuntimeConventions(preserved_instance_names="0")
+
+
+def test_a_non_string_item_in_preserved_instance_names_is_refused_by_name():
+    with pytest.raises(TypeError, match="preserved_instance_names"):
+        CaseRuntimeConventions(preserved_instance_names=("0", 1))
+
+
+def test_an_invalid_instance_directory_pattern_is_refused_at_construction():
+    """R2 fix, finding I3: an invalid regex used to fail with a raw
+    ``re.error`` mid-staging, wherever the pattern was first compiled --
+    refused at construction instead."""
+    with pytest.raises(ValueError, match="instance_directory_pattern"):
+        CaseRuntimeConventions(instance_directory_pattern="[unclosed")
+
+
+def test_a_non_string_instance_directory_pattern_is_refused_by_name():
+    with pytest.raises(TypeError, match="instance_directory_pattern"):
+        CaseRuntimeConventions(instance_directory_pattern=123)
