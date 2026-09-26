@@ -53,8 +53,10 @@ jobs:
       - name: Install omnidriver + omnidriver-openfoam
         run: pip install -e packages/omnidriver -e packages/omnidriver-openfoam pytest
 
+      # `native` tests need OMNIDRIVER_NATIVE_TUTORIALS and FAIL (not skip)
+      # when it is unset, which it always is here (2026-09-26).
       - name: Run tests
-        run: python -m pytest packages/omnidriver-openfoam/tests -q
+        run: python -m pytest packages/omnidriver-openfoam/tests -m "not native" -q
 
       # This installs exactly one omnidriver.plugins adapter (openfoam-environment),
       # which default_driver_context() needs to resolve an implicit default --
@@ -96,8 +98,11 @@ jobs:
                       -e packages/omnidriver-cardiacfoam \
                       pytest
 
+      # `native` tests need OMNIDRIVER_NATIVE_TUTORIALS and FAIL (not skip)
+      # when it is unset, which it always is here. Corrected 2026-09-26: this
+      # was `-m "not slow"`, which collected and failed them.
       - name: Run tests
-        run: python -m pytest packages/omnidriver-cardiacfoam/tests -m "not slow" -q
+        run: python -m pytest packages/omnidriver-cardiacfoam/tests -m "not slow and not native" -q
 
   # omnidriver-cardiaccore arrived with the 2026-09-18 branch integration and
   # had no job of its own, so its 69 tests ran nowhere. It installs
