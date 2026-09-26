@@ -1,6 +1,6 @@
 {
-  "_comment": "One row per constant/physicsProperties `type`. `regions` maps a role to the entry that names its region inside `names_in` (`{model}` is that document's own `model_key` value). A type with no `regions` is single-region: its documents sit directly under constant/ and system/. The table never copies region names; the case owns them. Added 2026-09-26 (spec 2026-09-26 A7, owner amendment).",
-  "electroModel": {},
+  "_comment": "One row per constant/physicsProperties `type`. A row either names `roles` directly (single-region: its documents sit under constant/) or keeps `names_in`/`model_key`/`regions` (region-split: `regions` maps a role to the entry, inside `names_in`, that names that role's region under constant/<region>/ -- its roles are `regions`'s own keys, so it names no separate `roles` list). `<model>Coeffs` is `names_in`'s own `model_key` value with 'Coeffs' appended, a convention `region_of` applies in code, not a `{model}` template in this table. The table never copies a region name; the case owns it. A case with no constant/physicsProperties at all is handled separately, in physics_layout.py's _IMPLICIT_LAYOUT (role 'electro' only) -- it has no `type` to key a row on. Added 2026-09-26 (spec 2026-09-26 A7, owner amendment); `roles`/implicit-layout/`<model>Coeffs` wording corrected 2026-09-26 (R1 fix, findings I1/M2).",
+  "electroModel": {"roles": ["electro"]},
   "electroMechanicalModel": {
     "names_in": "constant/electroMechanicalProperties",
     "model_key": "electroMechanicalModel",
