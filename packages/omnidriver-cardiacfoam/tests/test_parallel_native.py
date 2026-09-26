@@ -32,7 +32,8 @@ from omnidriver.cardiacfoam.activation_probes import ActivationProbeReader
 from omnidriver.core.quantities import ReadRequest, read_quantities
 from omnidriver.core.runtime.models import data_artifact_from_json
 from omnidriver.core.runtime.postprocess_phase import build_sweep_context
-from cardiacfoam_native import NIEDERER_POINTS_PATH, niederer_sweep, require_sourced_openfoam
+from cardiacfoam_native import niederer_sweep, require_sourced_openfoam
+from omnidriver.cardiacfoam.records import niederer_2011
 
 pytestmark = pytest.mark.native
 
@@ -47,7 +48,7 @@ def _case(output: Path):
     (case,) = build_sweep_context(output).cases
     document = json.loads((output / case.run_document_path).read_text())
     artifact = next(data_artifact_from_json(raw) for raw in document["expectedArtifacts"]
-                    if raw["path_pattern"] == NIEDERER_POINTS_PATH)
+                    if raw["path_pattern"] == niederer_2011.POINTS_PATH)
     case_root = Path(case.case_root)
     quantities = {q.name: q for q in read_quantities(ActivationProbeReader(), case_root, artifact,
                                                      ReadRequest(names=NAMES))}
