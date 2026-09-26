@@ -669,14 +669,18 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.verificationModel.k',
             phases=frozenset({'physics'}),
-            description='Wave vector parameter for the bath-bidomain manufactured analytical solution.',
+            description='Wave vector parameter for the bidomain and bath-bidomain manufactured analytical solutions.',
             source_refs=(
                 'src/verificationModels/bathBidomainVerification/manufacturedFDABathBidomainVerifier.C',
                 'src/verificationModels/bidomainVerification/manufacturedFDABidomainVerifier.C',
             ),
-            notes='Corrected 2026-09-19: this said manufacturedFDABidomainVerifier read k from a manufacturedBidomain sub-dict instead. It does not, and never does now -- manufacturedFDABidomainVerifier::verificationDict() returns dict().subDict("verificationModel"), the same place the bath-bidomain verifier reads it. The manufacturedBidomain entries the old note pointed at were removed the same day: native reads that block only at electroProperties top level, for ECG inheritance, never under <solver>Coeffs. manufacturedFDAMonodomainVerifier reads no k at all.',
+            notes='Corrected 2026-09-19: this said manufacturedFDABidomainVerifier read k from a manufacturedBidomain sub-dict instead. It does not, and never does now -- manufacturedFDABidomainVerifier::verificationDict() returns dict().subDict("verificationModel"), the same place the bath-bidomain verifier reads it. The manufacturedBidomain entries the old note pointed at were removed the same day: native reads that block only at electroProperties top level, for ECG inheritance, never under <solver>Coeffs. manufacturedFDAMonodomainVerifier reads no k at all. Corrected 2026-09-26 (tutorials-are-pointers, 5.4b-B): this entry\'s own source_refs and the note above already said manufacturedFDABidomainVerifier.C reads k, but applicable_when named only manufacturedFDABathBidomainVerifier, refusing the conformance-target patch this tutorial\'s record proof needs. Verified directly against the native source (manufacturedFDABidomainVerifier.C:56: `k_ = cfg.lookupOrDefault<scalar>("k", 1.0/Foam::sqrt(2.0))`, matching the bidomain case\'s own committed `k 0.707107`) -- manufacturedFDABidomainVerifier is added to applicable_when, not invented.',
             value_kind='scalar',
-            applicable_when={"$ELECTRO_MODEL_COEFFS.verificationModel.type": ("manufacturedFDABathBidomainVerifier",)},
+            typical_value='0.707107',
+            applicable_when={"$ELECTRO_MODEL_COEFFS.verificationModel.type": (
+                "manufacturedFDABathBidomainVerifier",
+                "manufacturedFDABidomainVerifier",
+            )},
         ),
 
         DictEntry(

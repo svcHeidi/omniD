@@ -26,7 +26,12 @@ from omnidriver.core.plugin_interface import load_plugin_context
 
 _NEEDS_CASE_CONTENT = {
     "manufacturedbathbidomain",
-    "manufacturedbidomain",
+    # "manufacturedbidomain" removed 2026-09-26: migrated onto a tutorial
+    # record (records/manufactured_bidomain.py, tutorials-are-pointers plan,
+    # step 5.4b-B) -- it is no longer in SPEC_FACTORIES/`_factories()` at
+    # all, so it can neither be skipped here nor asked for a rank count
+    # below; a record run's parallel/serial choice is the OpenFOAM layer's
+    # job (owner Q6), not this factory-era gate's.
     "manufacturedeikonalecg",
     "manufacturedmonodomainpseudoecg",
 }

@@ -26,6 +26,13 @@ class RegressionCase:
     # cases keep electroProperties at constant/electro/, but discovery requires
     # constant/electroProperties).
     generic_addressable: bool = True
+    # `resolve_strict`'s expected `resolution` value for a mapped case
+    # (`runtime.registry.classify_entry`'s own vocabulary): "registered" for
+    # a factory-tutorial entry, "tutorial_record" once that entry migrates
+    # onto a tutorial record (tutorials-are-pointers plan §2 item 5: "each
+    # mapped case changes as it migrates"). Added 2026-09-26 when
+    # `manufacturedBidomain` became the first entry here to migrate.
+    resolution: str = "registered"
 
     @property
     def mapped(self) -> bool:
@@ -54,6 +61,7 @@ _KNOWN_CASES: tuple[RegressionCase, ...] = (
     RegressionCase(
         "manufacturedSolutions/bidomain", "manufacturedBidomain",
         (_ELECTRO, _PHYSICS), "regression/bidomainManufactured.reference",
+        resolution="tutorial_record",
     ),
     RegressionCase(
         "manufacturedSolutions/monodomainPseudoECG", "manufacturedMonodomainPseudoECG",

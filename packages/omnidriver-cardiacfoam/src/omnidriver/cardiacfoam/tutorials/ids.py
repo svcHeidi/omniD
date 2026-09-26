@@ -6,7 +6,12 @@ class CardiacTutorialID(str, Enum):
     CABLE_1D_CV_CONVERGENCE = "cable1DCVConvergence"
     NIEDERER_2011 = "niederer2011"
     MANUFACTURED_MONODOMAIN_PSEUDO_ECG = "manufacturedMonodomainPseudoECG"
-    MANUFACTURED_BIDOMAIN = "manufacturedBidomain"
+    # MANUFACTURED_BIDOMAIN ("manufacturedBidomain") removed 2026-09-26:
+    # migrated onto a tutorial record (records/manufactured_bidomain.py,
+    # tutorials-are-pointers plan, step 5.4b-B), which names itself directly
+    # rather than through this factory-tutorial enum -- a record is data,
+    # not a factory, and this ID existed only to key
+    # SPEC_FACTORIES/REGISTERED_TUTORIALS for the now-deleted factory.
     MANUFACTURED_BATH_BIDOMAIN = "manufacturedBathBidomain"
     MANUFACTURED_EIKONAL_ECG = "manufacturedEikonalECG"
     MANUFACTURED_MONODOMAIN_TOTAL_LAGRANGIAN_EM = "manufacturedMonodomainTotalLagrangianEM"

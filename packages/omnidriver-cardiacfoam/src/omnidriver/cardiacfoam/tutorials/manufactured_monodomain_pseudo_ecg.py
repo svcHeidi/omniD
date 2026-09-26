@@ -72,8 +72,13 @@ _GRAD_SCHEME_TOKENS: dict[str, str] = {
 # tet variant additionally installs an fvSolution overlay that bidomain's
 # does not have. Explicit per case, never inferred from what happens to
 # exist on disk.
+# "bidomain_tet" removed 2026-09-26 (tutorials-are-pointers, 5.4b-B): it
+# named bidomain's own setup/studies/tetConvergence/fvSchemes overlay, which
+# was byte-identical to that case's system/fvSchemes and was deleted
+# natively (owner, plan §5g Q10, native 9cb1213e/72038987) once bidomain's
+# tet route stopped needing it -- the record's tet route uses
+# system/fvSchemes directly. Nothing else named this profile.
 _NUMERICS_PROFILES: dict[str, tuple[str, ...]] = {
-    "bidomain_tet": ("fvSchemes",),
     "monodomain_tet": ("fvSchemes", "fvSolution"),
 }
 

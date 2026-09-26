@@ -341,7 +341,7 @@ def test_tet_run_in_parallel_wraps_solve_after_check_mesh(tmp_path):
 
 def test_apply_case_renders_geo_but_never_calls_gmsh(tmp_path):
     case_root = _write_case(tmp_path)
-    spec = _call_make_spec(tmp_path, mesh_family="tet", numerics_profile="bidomain_tet")
+    spec = _call_make_spec(tmp_path, mesh_family="tet", numerics_profile="monodomain_tet")
     cases = spec.build_cases()
     assert len(cases) == 1
 
@@ -363,7 +363,7 @@ def test_apply_case_can_select_an_optimised_geo_template(tmp_path):
     spec = _call_make_spec(
         tmp_path,
         mesh_family="tet",
-        numerics_profile="bidomain_tet",
+        numerics_profile="monodomain_tet",
         tet_geo_template_relpath="setup/studies/tetConvergence/box.geo.template.optimised",
     )
 
@@ -403,13 +403,15 @@ def test_apply_case_hex_does_not_render_geo(tmp_path):
 
 # --- numerics_profile: case-specific overlay sets ---------------------------
 
-def test_bidomain_tet_profile_installs_fvschemes_only(tmp_path):
-    case_root = _write_case(tmp_path)
-    spec = _call_make_spec(tmp_path, mesh_family="tet", numerics_profile="bidomain_tet")
-    cases = spec.build_cases()
-    spec.apply_case(spec.case_root, cases[0])
-    assert "leastSquares" in (case_root / "system" / "fvSchemes").read_text()
-
+# test_bidomain_tet_profile_installs_fvschemes_only removed 2026-09-26
+# (tutorials-are-pointers, 5.4b-B): it guarded the now-deleted
+# `_NUMERICS_PROFILES["bidomain_tet"]` entry (a single-overlay profile,
+# fvSchemes only) -- bidomain's own byte-identical overlay is gone natively,
+# and no other profile installs a single overlay, so the "one overlay, not
+# two" code path this test distinguished has no real caller left. The
+# generic copy-loop itself (`for overlay_name in _NUMERICS_PROFILES.get(...)`)
+# is unchanged and stays covered by
+# test_monodomain_tet_profile_installs_fvschemes_and_fvsolution below.
 
 def test_monodomain_tet_profile_installs_fvschemes_and_fvsolution(tmp_path):
     case_root = _write_case(tmp_path)
@@ -426,7 +428,7 @@ def test_monodomain_tet_profile_installs_fvschemes_and_fvsolution(tmp_path):
 def test_grad_scheme_gauss_linear_writes_literal_openfoam_token(tmp_path):
     case_root = _write_case(tmp_path)
     spec = _call_make_spec(
-        tmp_path, mesh_family="tet", numerics_profile="bidomain_tet", grad_scheme="gauss_linear",
+        tmp_path, mesh_family="tet", numerics_profile="monodomain_tet", grad_scheme="gauss_linear",
     )
     cases = spec.build_cases()
     spec.apply_case(spec.case_root, cases[0])
@@ -438,7 +440,7 @@ def test_grad_scheme_gauss_linear_writes_literal_openfoam_token(tmp_path):
 def test_grad_scheme_least_squares_writes_literal_openfoam_token(tmp_path):
     case_root = _write_case(tmp_path)
     spec = _call_make_spec(
-        tmp_path, mesh_family="tet", numerics_profile="bidomain_tet", grad_scheme="least_squares",
+        tmp_path, mesh_family="tet", numerics_profile="monodomain_tet", grad_scheme="least_squares",
     )
     cases = spec.build_cases()
     spec.apply_case(spec.case_root, cases[0])
@@ -448,7 +450,7 @@ def test_grad_scheme_least_squares_writes_literal_openfoam_token(tmp_path):
 
 def test_unknown_grad_scheme_name_is_rejected(tmp_path):
     with pytest.raises(ValueError, match="grad_scheme"):
-        _make_case(tmp_path, mesh_family="tet", numerics_profile="bidomain_tet", grad_scheme="GaussLinear")
+        _make_case(tmp_path, mesh_family="tet", numerics_profile="monodomain_tet", grad_scheme="GaussLinear")
 
 
 # --- phi_tolerance -----------------------------------------------------------
@@ -525,7 +527,7 @@ def test_ecg_disabled_removes_block_from_a_reused_entry_case(tmp_path):
 
 def test_end_time_overrides_control_dict(tmp_path):
     case_root = _write_case(tmp_path)
-    spec = _call_make_spec(tmp_path, mesh_family="tet", numerics_profile="bidomain_tet", end_time=0.2)
+    spec = _call_make_spec(tmp_path, mesh_family="tet", numerics_profile="monodomain_tet", end_time=0.2)
     cases = spec.build_cases()
     spec.apply_case(spec.case_root, cases[0])
     assert_foam_entry(case_root / "system" / "controlDict", "endTime", "0.2")

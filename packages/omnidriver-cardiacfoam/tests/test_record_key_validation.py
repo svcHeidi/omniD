@@ -133,7 +133,15 @@ def test_a_dynamic_path_binding_is_checked_against_its_declared_domain():
         (True, "boolean"),
         (5, "integer"),
         (1e-5, "scalar"),
-        ("80 80 80", "word"),
+        # Corrected 2026-09-26 (tutorials-are-pointers, 5.4b-B): this used
+        # to pin "word" for a whitespace-containing string, even though
+        # "word"'s own shape check refuses whitespace -- a value no direct
+        # study key could actually have written. See
+        # `record_key_validation._infer_unvalidated_value_kind`'s own
+        # 2026-09-26 correction.
+        ("80 80 80", "string"),
+        ("Gauss linear", "string"),
+        ("leastSquares", "word"),
         # Added 2026-09-25 (`restitutionCurves`'s `blockMeshResolution`
         # axis): a typed tuple/list of ints infers `integer_list`, the
         # shape `block_mesh_resolution_axis`'s patch value actually has --
@@ -164,11 +172,17 @@ def test_system_block_mesh_dict_hex_cell_counts_is_unvalidated():
     """A direct ``document:key`` study naming this key with pre-joined text
     (rather than through ``block_mesh_resolution_axis``, which no longer
     produces this shape -- see that module's own 2026-09-25 correction).
+
+    Corrected 2026-09-26 (tutorials-are-pointers, 5.4b-B): this pinned
+    ``"word"`` for a whitespace-containing string, which ``"word"``'s own
+    shape check refuses -- see
+    ``record_key_validation._infer_unvalidated_value_kind``'s own
+    2026-09-26 correction.
     """
     value_kind, validated = record_key_validator(
         "system/blockMeshDict", ("hex_cell_counts",), "200 30 70",
     )
-    assert value_kind == "word"
+    assert value_kind == "string"
     assert validated is False
 
 

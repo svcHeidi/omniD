@@ -1,6 +1,10 @@
-from omnidriver.cardiacfoam.tutorials.manufactured_bidomain import (
-    make_spec as make_manufactured_bidomain_spec,
-)
+# manufactured_bidomain's factory make_spec was deleted 2026-09-26: the
+# tutorial migrated onto a tutorial record (records/manufactured_bidomain.py,
+# tutorials-are-pointers plan, step 5.4b-B) -- it is no longer one of
+# SPEC_FACTORIES/REGISTERED_TUTORIALS below, by design: `classify_entry`
+# refuses a name that is registered as both a tutorial record and a factory
+# tutorial, so removing it here happens in the same commit as registering
+# the record.
 from omnidriver.cardiacfoam.tutorials.manufactured_bath_bidomain import (
     make_spec as make_manufactured_bath_bidomain_spec,
 )
@@ -44,8 +48,6 @@ SPEC_FACTORIES = {
     CardiacTutorialID.NIEDERER_2011.value.lower(): make_niederer_2011_spec,
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_PSEUDO_ECG.value: make_manufactured_monodomain_pseudo_ecg_spec,
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_PSEUDO_ECG.value.lower(): make_manufactured_monodomain_pseudo_ecg_spec,
-    CardiacTutorialID.MANUFACTURED_BIDOMAIN.value: make_manufactured_bidomain_spec,
-    CardiacTutorialID.MANUFACTURED_BIDOMAIN.value.lower(): make_manufactured_bidomain_spec,
     CardiacTutorialID.MANUFACTURED_BATH_BIDOMAIN.value: make_manufactured_bath_bidomain_spec,
     CardiacTutorialID.MANUFACTURED_BATH_BIDOMAIN.value.lower(): make_manufactured_bath_bidomain_spec,
     CardiacTutorialID.MANUFACTURED_EIKONAL_ECG.value: make_manufactured_eikonal_ecg_spec,
@@ -65,7 +67,6 @@ REGISTERED_TUTORIALS = (
     CardiacTutorialID.CABLE_1D_CV_CONVERGENCE.value,
     CardiacTutorialID.NIEDERER_2011.value,
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_PSEUDO_ECG.value,
-    CardiacTutorialID.MANUFACTURED_BIDOMAIN.value,
     CardiacTutorialID.MANUFACTURED_BATH_BIDOMAIN.value,
     CardiacTutorialID.MANUFACTURED_EIKONAL_ECG.value,
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_TOTAL_LAGRANGIAN_EM.value,

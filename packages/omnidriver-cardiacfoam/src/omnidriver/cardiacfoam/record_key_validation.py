@@ -208,6 +208,20 @@ def _infer_unvalidated_value_kind(value: Any) -> str:
         if all(isinstance(item, int) and not isinstance(item, bool) for item in value):
             return "integer_list"
         return "scalar_list"
+    # Corrected 2026-09-26 (tutorials-are-pointers, 5.4b-B): this fell
+    # through to "word" for every `str`, including one containing
+    # whitespace -- "word"'s own shape check then refuses it ("must contain
+    # no whitespace"), so a direct study key whose value is genuinely
+    # multi-word OpenFOAM text (e.g. `system/fvSchemes:gradSchemes.default`
+    # = "Gauss linear") could never be written at all. Never exercised until
+    # `manufacturedBidomain`'s grad_scheme studies became the first direct
+    # (not axis-derived) caller to carry one. K6 added "string" (any text,
+    # including spaces) for exactly this shape; used here whenever the
+    # value actually needs it, keeping "word" for a plain token (unchanged
+    # behaviour, and the case-value comparator downstream never reads this
+    # tag anyway -- module docstring).
+    if isinstance(value, str) and value.split() != [value]:
+        return "string"
     return "word"
 
 

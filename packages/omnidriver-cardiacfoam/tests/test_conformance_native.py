@@ -13,12 +13,16 @@ from __future__ import annotations
 import pytest
 
 from omnidriver.conformance import CHECKS, run_check
-from cardiacfoam_native import restitution_curves_conformance_target
+from cardiacfoam_native import (
+    manufactured_bidomain_conformance_target,
+    restitution_curves_conformance_target,
+)
 
 pytestmark = pytest.mark.native
 
 _TARGETS = {
     "restitutionCurves": restitution_curves_conformance_target,
+    "manufacturedBidomain": manufactured_bidomain_conformance_target,
 }
 
 

@@ -37,5 +37,5 @@ def test_non_addressable_case_is_not_discoverable(case):
 @pytest.mark.parametrize("case", MAPPED, ids=lambda c: c.entry_name)
 def test_mapped_entry_resolves_registered(case):
     resolution = resolve_strict(case)
-    assert resolution["resolution"] == "registered", case.entry_name
+    assert resolution["resolution"] == case.resolution, case.entry_name
     assert resolution["is_runnable"] is True, case.entry_name

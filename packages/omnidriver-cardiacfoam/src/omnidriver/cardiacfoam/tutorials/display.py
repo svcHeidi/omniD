@@ -45,7 +45,12 @@ TUTORIALS: tuple[TutorialDisplay, ...] = (
         },
     ),
     TutorialDisplay(
-        id=CardiacTutorialID.MANUFACTURED_BIDOMAIN.value,
+        # A literal string, not `CardiacTutorialID.MANUFACTURED_BIDOMAIN`
+        # (removed 2026-09-26 alongside the factory it keyed): this tutorial
+        # is now a tutorial record (records/manufactured_bidomain.py), which
+        # names itself directly, the same way restitutionCurves's own
+        # display entry does above.
+        id="manufacturedBidomain",
         title="Manufactured solution (bidomain)",
         summary=(
             "Same MMS verification at bidomain resolution. Pairs with "

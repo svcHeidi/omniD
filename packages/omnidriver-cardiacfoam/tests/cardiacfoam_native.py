@@ -85,3 +85,32 @@ def restitution_curves_conformance_target(tmp_path: Path) -> ConformanceTarget:
         solver_command="cardiacFoam",
         environment={},
     )
+
+
+def manufactured_bidomain_conformance_target(tmp_path: Path) -> ConformanceTarget:
+    """``manufacturedBidomain`` at its coarsest hex resolution (a 5x5x5 box,
+    a real run in well under a second -- module docstring evidence: N=5
+    produced ``postProcessing/3D_5_cells.dat`` and ran to completion in the
+    real solver log's own ``ExecutionTime = 0.04 s``)."""
+    require_sourced_openfoam("blockMesh", "cardiacFoam")
+    return ConformanceTarget(
+        plugin="cardiacfoam",
+        record="manufacturedBidomain",
+        cases_root=native_tutorials_root(),
+        scratch_root=tmp_path / "scratch",
+        base_study={"mesh": "hex", "dimension": "1D", "numberCells": 10},
+        # A cataloged enum key (`$ELECTRO_MODEL_COEFFS.verificationModel.k`,
+        # applicable to `manufacturedFDABidomainVerifier` since this
+        # module's own 2026-09-26 catalog correction), read at the native
+        # default 1.0/sqrt(2) when absent (manufacturedFDABidomainVerifier.C).
+        patch=("constant/electroProperties:bidomainSolverCoeffs.verificationModel.k", 0.5),
+        untouched=(
+            "constant/electroProperties",
+            ("bidomainSolverCoeffs", "verificationModel", "type"),
+        ),
+        sweep_name="numberCells",
+        sweep_values=(10, 20),
+        unknown_name="constant/electroProperties:bidomainSolverCoeffs.verificationModel.q",
+        solver_command="cardiacFoam",
+        environment={},
+    )

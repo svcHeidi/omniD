@@ -63,7 +63,6 @@ CARDIAC_MAPPING = CARDIAC_PLUGIN.get_profile().cxx_mapping
 _CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CARDIAC_PLUGIN, source="test:strict_planning")
 
 _SINGLE_CELL_RELPATH = "electrophysiologyProtocols/singleCell"
-_MANUFACTURED_BIDOMAIN_RELPATH = "manufacturedSolutions/bidomain"
 _CABLE_1D_CV_CONVERGENCE_RELPATH = "electrophysiologyProtocols/cableProtocol/monodomain1DCableCV"
 _MANUFACTURED_EM_RELPATH = "manufacturedSolutions/monodomainTotalLagrangianEM"
 
@@ -230,37 +229,22 @@ def test_strict_plan_succeeds_for_single_cell(tmp_path: Path) -> None:
     assert payload["run_document"]["workflowState"] == payload["workflow_state"]
 
 
-def test_strict_plan_succeeds_for_manufactured_tutorial(tmp_path: Path) -> None:
-    cases_root = tmp_path / "cases"
-    _stage_case_dictionaries(_native_tutorials_root(), _MANUFACTURED_BIDOMAIN_RELPATH, cases_root)
-    report = strict_plan(
-        "manufacturedBidomain", driver_context=_CTX, overrides={"cases_root": str(cases_root)},
-    )
-    payload = report.to_json()
-
-    assert payload["status"] == "ok"
-    assert payload["workflow_dag"]["steps"]
-    # Step count is not asserted here -- run_in_parallel defaults to True and
-    # wraps solve with decomposePar/reconstructPar (see parallel_execution.py),
-    # so the exact count is an implementation detail of the real committed
-    # decomposeParDict, not something this test should hardcode.
-    assert [step["status"] for step in payload["workflow_state"]["steps"]] == (
-        ["pending"] * len(payload["workflow_dag"]["steps"])
-    )
-    assert {
-        step["step_id"] for step in payload["workflow_state"]["steps"]
-    } == {
-        step["id"] for step in payload["workflow_dag"]["steps"]
-    }
-    assert any(
-        artifact["artifact_id"] == "verification_error_summary"
-        for artifact in payload["expected_artifacts"]
-    )
-    # Restored 2026-09-26 (final review M7): dropped during the M6
-    # conversion. R2-fix-report.md claimed this tutorial "passes unchanged";
-    # that was not checked -- `probe_m6.py` against the real native tree
-    # confirms `current_step_id == "mesh"` still holds.
-    assert payload["workflow_state"]["current_step_id"] == "mesh"
+# test_strict_plan_succeeds_for_manufactured_tutorial removed 2026-09-26
+# (tutorials-are-pointers, 5.4b-B): `manufacturedBidomain` migrated onto a
+# tutorial record (records/manufactured_bidomain.py), so `strict_plan
+# ("manufacturedBidomain", ...)` now resolves through the record path, not
+# the deleted factory this test exercised. What it checked no longer holds
+# unchanged: the record's own `produces` derive artifact ids through
+# `record_execution.record_artifact_id` (e.g. "record.solve.0"), never the
+# factory's literal "verification_error_summary" (`artifacts_predictor.py`,
+# a factory-only manifest this record path never consults). "plan succeeds"
+# and "declared artifacts are present" are exactly conformance C5/C6, now
+# run against this record's own conformance target
+# (`cardiacfoam_native.manufactured_bidomain_conformance_target`,
+# `test_conformance_native.py`) instead of a bespoke test naming the old
+# artifact id. `current_step_id == "mesh"` is a structural fact of the
+# record's own step ordering (its first declared step, on both variants, is
+# "mesh"/"gmsh"), not independent behaviour this module need verify again.
 
 
 def test_cli_plan_strict_prints_json_and_returns_zero(tmp_path: Path) -> None:

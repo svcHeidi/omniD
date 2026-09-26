@@ -17,9 +17,13 @@ from __future__ import annotations
 
 from .restitution_curves import AXES as _RESTITUTION_CURVES_AXES
 from .restitution_curves import RECORD as _RESTITUTION_CURVES_RECORD
+from .manufactured_bidomain import AXES as _MANUFACTURED_BIDOMAIN_AXES
+from .manufactured_bidomain import RECORD as _MANUFACTURED_BIDOMAIN_RECORD
 
 TUTORIAL_RECORDS = {
     _RESTITUTION_CURVES_RECORD.name: _RESTITUTION_CURVES_RECORD,
+    _MANUFACTURED_BIDOMAIN_RECORD.name: _MANUFACTURED_BIDOMAIN_RECORD,
 }
 
 AXIS_CATALOG = dict(_RESTITUTION_CURVES_AXES)
+AXIS_CATALOG.update(_MANUFACTURED_BIDOMAIN_AXES)
