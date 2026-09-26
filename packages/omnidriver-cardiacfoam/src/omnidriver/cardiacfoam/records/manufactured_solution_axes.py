@@ -73,6 +73,17 @@ MESH_DICT_KEY: tuple[str, ...] = ("-dict",)
 #: The gmsh step's argument the tet axis replaces, likewise.
 GMSH_LC_KEY: tuple[str, ...] = ("-setnumber", "lc")
 
+#: The only dimension a tet route's gmsh template builds: every
+#: ``box.geo.template`` is the unit cube ``Box(1) = {0, 0, 0, 1, 1, 1}``,
+#: meshed with ``gmsh -3``. A record's tet routes admit their ``dimension``
+#: axis only at this value, or unset (``TutorialRecord.variant_constraints``).
+#: This restores the refusal the old pseudo-ECG and eikonalECG ``make_spec``
+#: raised, ``mesh_family='tet' requires dimensions=['3D'] ... (the unit-cube
+#: tet mesh has no 1D/2D variant)``, which the records had lost (review 54b
+#: I3, 2026-09-26): ``dimension`` picks the blockMesh dictionary, which a tet
+#: route never runs.
+TET_DIMENSIONS: tuple[str, ...] = ("3D",)
+
 
 def dimension_axis(
     name: str, *, mesh_step_id: str = "mesh",

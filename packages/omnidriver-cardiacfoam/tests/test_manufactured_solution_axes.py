@@ -88,3 +88,62 @@ def test_every_cardiac_record_resolves_each_of_its_axis_names_to_its_own_contrac
         sort_study_name(
             "ionicModel", axes=_CTX.capabilities.tutorial_records.catalog()["manufacturedBidomain"].axes,
         )
+
+
+#: Every tet route of every record that has a ``dimension`` axis. The old
+#: pseudo-ECG and eikonalECG ``make_spec`` refused ``mesh_family='tet'``
+#: with any dimension but ``3D`` ("the unit-cube tet mesh has no 1D/2D
+#: variant"); review 54b I3 found the records had lost that refusal.
+_TET_ROUTES = [
+    ("manufacturedBidomain", "tet"),
+    ("manufacturedEikonalECG", "tet"),
+    ("manufacturedEikonalECG", "tet-errorLocalisation"),
+    ("manufacturedEikonalECG", "tet-gradientReconstruction"),
+]
+
+
+@pytest.mark.parametrize(("record_name", "variant"), _TET_ROUTES)
+@pytest.mark.parametrize("dimension", ["1D", "2D"])
+def test_a_tet_route_refuses_a_dimension_its_3d_template_cannot_build(record_name, variant, dimension):
+    from omnidriver.core.tutorial_records import check_variant_constraints
+
+    record = _CTX.capabilities.tutorial_records.catalog()[record_name]
+    with pytest.raises(TutorialRecordError) as exc:
+        check_variant_constraints(record, variant, {"base": {"dimension": dimension}})
+    for fragment in (record_name, repr(variant), "'dimension'", "'3D'", repr(dimension)):
+        assert fragment in str(exc.value), (fragment, str(exc.value))
+
+
+@pytest.mark.parametrize(("record_name", "variant"), _TET_ROUTES)
+def test_a_tet_route_admits_3d_or_no_dimension(record_name, variant):
+    from omnidriver.core.tutorial_records import check_variant_constraints
+
+    record = _CTX.capabilities.tutorial_records.catalog()[record_name]
+    check_variant_constraints(record, variant, {"base": {"dimension": "3D"}})
+    check_variant_constraints(record, variant, {"base": {}})
+
+
+@pytest.mark.parametrize("record_name", ["manufacturedBidomain", "manufacturedEikonalECG"])
+@pytest.mark.parametrize("dimension", ["1D", "2D", "3D"])
+def test_the_hex_route_admits_every_dimension(record_name, dimension):
+    from omnidriver.core.tutorial_records import check_variant_constraints
+
+    record = _CTX.capabilities.tutorial_records.catalog()[record_name]
+    check_variant_constraints(record, "hex", {"base": {"dimension": dimension}})
+
+
+def test_every_route_that_skips_the_mesh_step_constrains_dimension():
+    """The relation behind the constraint, checked for every record the
+    stack registers, so a new tet route (bath, pseudo-ECG) cannot forget it:
+    ``dimension`` chooses the blockMesh dictionary, so a route without the
+    ``mesh`` step builds its own geometry, and must admit only the one its
+    template builds."""
+    for record in _CTX.capabilities.tutorial_records.catalog().values():
+        if "dimension" not in record.axis_names():
+            continue
+        for variant, steps in record.workflow_variants.items():
+            if "mesh" in steps:
+                continue
+            assert record.variant_constraints.get(variant, {}).get("dimension") == ("3D",), (
+                record.name, variant,
+            )

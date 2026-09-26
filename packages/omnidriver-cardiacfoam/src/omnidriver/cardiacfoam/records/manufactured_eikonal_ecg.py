@@ -91,7 +91,7 @@ from __future__ import annotations
 from omnidriver.core.tutorial_records import DefaultArgument, TutorialRecord, WorkflowStep
 
 from .manufactured_solution_axes import (
-    BLOCK_MESH_DICT_DOCUMENTS, GMSH_LC_KEY, MESH_DICT_KEY,
+    BLOCK_MESH_DICT_DOCUMENTS, GMSH_LC_KEY, MESH_DICT_KEY, TET_DIMENSIONS,
     dimension_axis, hex_number_cells_axis, tet_number_cells_axis,
 )
 
@@ -192,5 +192,11 @@ RECORD = TutorialRecord(
         "tet-gradientReconstruction": (
             "gmsh", "gmshToFoam", "checkMesh", "solve", "gradientReconstructionOrder",
         ),
+    },
+    # Review 54b I3: a tet route's template is the 3D unit cube, so a 1D/2D
+    # `dimension` is refused rather than silently ignored.
+    variant_constraints={
+        variant: {"dimension": TET_DIMENSIONS}
+        for variant in ("tet", "tet-errorLocalisation", "tet-gradientReconstruction")
     },
 )
