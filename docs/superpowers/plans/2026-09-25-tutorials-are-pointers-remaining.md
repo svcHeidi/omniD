@@ -70,6 +70,27 @@ and the native repo's own log:
 | C | final cleanup (§3); also where conformance Task 14's "delete the old factory path" lands | not started | — |
 | P4 | conformance Task 14, all four steps: `restitutionCurves` passes C1–C12 against the real binary (added 2026-09-26). Branch `tut-p4`, not merged | done on the branch | `8acbce2`, `36c99c1`, `0e736f8`, `a6e79e2`, `a982d6c` |
 
+**Roadmap, 2026-09-26 (current; replaces the rows above where they differ).**
+
+| step | what | state | where |
+|---|---|---|---|
+| R | rename `niederer2012` → `niederer2011` | **done** | omniD `99a6bac`; native `044559d2` |
+| P1 | native base: `feature/spring-supported-slab-tutorial` merged into `omnid/tutorials-are-pointers` in the native worktree `.claude/worktrees/omnid-tutorials-are-pointers` (clean; native `-m native` shape 55 passed against it). **All native migration work happens here**, and `OMNIDRIVER_NATIVE_TUTORIALS` points at its `tutorials/` | **done**, local, not pushed | native `bbdd4a6b` |
+| P2 | `block_mesh_resolution_axis`: several documents, `expected_blocks`, a resolution that sees each file's current counts | **done** | `4193cf5` |
+| P4 | conformance Task 14: cardiacFOAM `restitutionCurves` passes C1–C12 on the real binary | **done** | `8acbce2` … `b9c46eb` |
+| P5 | gmsh facts, from the real binary (`docs/solver-learning/cardiacfoam.md` G1–G6) | **done** | `6c6f93e` |
+| P3 | core record features: `default_variant` (blockMesh is the default route) and replaceable default step arguments; Q6 (parallel through the OpenFOAM layer) investigated only | **in progress** | branch `tut-p3` |
+| NF | native fixes: `DefineConstant` in the five gmsh templates; pseudo-ECG `anisotropic yes`, with a regression re-run; bidomain's never-applied tolerance references deleted; identical tet overlays deleted. Plus, in omniD, the Q11 catalogue relation and its validation | **in progress** | native worktree; omniD branch `q11-catalog` |
+| 5.4a | bath (§5b) | next, after P3 + NF | — |
+| 5.4b | bidomain, eikonalECG, **niederer2011**, then pseudo-ECG (§5c) | after P3 + NF; parallel with 5.4a except pseudo-ECG | — |
+| B7–B8 | topic B: cardiacFOAM's probe reader, then the cross-solver Niederer comparison | after 5.4b-N | — |
+| O15 | conformance Task 15 (the OpenFOAM half of K3) | after P4; not beside step C | — |
+| 5.1–5.3 | singleCell, cable1DRestitution, cable1DCVConvergence | parallel with 5.4 | — |
+| PAR | records running parallel through the OpenFOAM layer (Q6) | after P3's investigation | — |
+| S | supplied inputs (mesh and anatomy) for a record | when the first idealized-heart or cardiacCore case migrates | — |
+| 5.5, TL-EM | Purkinje graph, 1D3D; electromechanics | blocked or deferred, as above | — |
+| C | final cleanup (§3), including deleting the old factory path | last | — |
+
 **Baseline for the cleaning, measured 2026-09-25 at `0cf5bfb`:**
 - tutorial modules plus `tutorials/defaults/`: 5,884 lines;
 - all package source: 53,965 lines;
@@ -1011,6 +1032,13 @@ These answers govern. Where one differs from a recommendation above, the answer 
 - **Q10: keep all 14 bath studies; delete the byte-identical tet overlay files natively.**
 - **Q11: get the physics right.** `ecgDomains.<name>.verificationModel.anisotropic yes` exactly when the tissue verifier is `manufacturedAnisotropicMonodomainVerifier`. The native pseudo-ECG case uses that verifier with `anisotropic no`, which is wrong, so it changes natively to `yes`. The catalog must make the relation clear: the `anisotropic` entry's description states it, and validation refuses a mismatch by name. This models the relation between two existing keys, adding no new key. Re-run the pseudo-ECG `regressionTest.sh`. If its reference numbers move, regenerate the native regression reference and report old against new.
 - **Q12, Q13:** recommendations as above. Q13 is corrected by P4's R4: `withDefaultValues` is declared only by records whose own run writes it.
+- **The pre-processing stage (owner, 2026-09-26, later the same day). This governs how every record gets its starting state.**
+  - What a solver needs before it runs is a **starting state**: a mesh, and possibly fields, graphs or other anatomy. Producing it is the record's **pre-processing stage**: the steps before the solve. There are two kinds of provider, and both give the solve a mesh to start from:
+    - **generated**: the case owns a recipe and each run rebuilds from it. The default is blockMesh, with the OpenFOAM default `system/blockMeshDict`, or the dict the case's own scripts name (e.g. `.3D`, `.1D`). The gmsh tet route (`gmsh -3 <template> -setnumber lc <v>`, then `gmshToFoam`) is an alternative generator, not a different kind;
+    - **supplied**: a finished artifact brought in, not rebuilt. Examples are the idealized heart's shared `../mesh` (mesh plus `0/` fields plus Purkinje graphs) and cardiacCore patient meshes. A path the native case names is native fact. Anything from outside the native tree is supplied by the user or agent, never discovered.
+  - **Keep it general and loose, not tight.** Core knows only steps, inputs and outputs, a default route and replaceable default arguments. The record declares the **default** pre-processing, taken from the native case, and does not enumerate every possible route. An agent reads the native case (`Allrun`, `regressionTest.sh`, the READMEs, the studies) and chooses or composes another route through study values and step arguments. The agent guidance says so. Determinism is kept where it's checkable: what ran, what it read and wrote, and the fingerprints. Choices stay with the agent.
+  - `Allrun` is a convenience for humans. A record mirrors its commands and doesn't call it, because `./Allrun` would hide where the starting state came from. No native `Allrun` change is needed for bidomain or pseudo-ECG: their split (solve only, with the mesh made by the regression test) is already the general shape.
+  - **Supplied inputs for a record are a named later item (S),** designed once when the first idealized-heart or cardiacCore case migrates. They are not built in 5.4, because every 5.4 case generates its mesh.
 - **P4 extras, deferred:**
   - filtering catalogue coefficient keys by `myocardiumSolver`;
   - a guard in the native-tree helper that refuses a dirty git checkout. Recommended soon.
