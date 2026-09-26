@@ -1454,6 +1454,142 @@ def test_commit_record_case_reports_the_selected_variants_steps(tmp_path):
     assert result.workflow_step_ids == ("meshA", "solve")
 
 
+# ---------------------------------------------------------------------------
+# Variant constraints (review 54b I3, 2026-09-26): a route may admit a study
+# name only at some values. A route that builds one shape of case cannot
+# honour a study value asking for another; the value is refused by name
+# before anything is written, not silently written or ignored.
+# ---------------------------------------------------------------------------
+
+
+def _cells_axis() -> AxisContract:
+    """A toy axis that only patches a document (no step contribution), so it
+    fits ``_record_with_variants``'s steps."""
+    def resolve(value, staged_case_root: Path) -> AxisResult:
+        del staged_case_root
+        return AxisResult(patches=(AxisPatch(
+            document="constant/mesh.json", key_path=("cells",),
+            value=int(value), value_kind="integer",
+        ),))
+
+    return AxisContract(name="number_cells", value_kind="integer", resolve=resolve)
+
+
+def _constrained_record(constraints, **overrides) -> TutorialRecord:
+    return _record_with_variants(
+        axes=(_cells_axis(),), variant_constraints=constraints, **overrides,
+    )
+
+
+def test_a_variant_constraint_refuses_a_study_value_it_does_not_admit(tmp_path):
+    _native_case(tmp_path, {"constant/mesh.json": {"cells": "5"}})
+    record = _constrained_record({"variantB": {"number_cells": (5,)}})
+    with pytest.raises(TutorialRecordError) as exc:
+        record_execution.preview_record_case(
+            record, cases_root=tmp_path / "cases",
+            study_by_source={"base": {"mesh": "variantB"}, "sweep": {"number_cells": 7}},
+            driver_context=_context_with_writer(),
+        )
+    message = str(exc.value)
+    for fragment in ("'toyTutorial'", "'variantB'", "'number_cells'", "[5]", "7", "'sweep'"):
+        assert fragment in message, (fragment, message)
+
+
+def test_a_variant_constraint_admits_its_value_and_an_unset_name(tmp_path):
+    _native_case(tmp_path, {"constant/mesh.json": {"cells": "5"}})
+    record = _constrained_record({"variantB": {"number_cells": (5,)}})
+    for study in ({"mesh": "variantB", "number_cells": 5}, {"mesh": "variantB"}):
+        preview = record_execution.preview_record_case(
+            record, cases_root=tmp_path / "cases", study_by_source={"base": study},
+            driver_context=_context_with_writer(),
+        )
+        assert preview["workflow_step_ids"] == ["meshB", "solve"]
+
+
+def test_a_variant_constraint_binds_only_its_own_variant(tmp_path):
+    _native_case(tmp_path, {"constant/mesh.json": {"cells": "5"}})
+    record = _constrained_record({"variantB": {"number_cells": (5,)}})
+    preview = record_execution.preview_record_case(
+        record, cases_root=tmp_path / "cases",
+        study_by_source={"base": {"mesh": "variantA", "number_cells": 7}},
+        driver_context=_context_with_writer(),
+    )
+    assert preview["workflow_step_ids"] == ["meshA", "solve"]
+
+
+def test_a_variant_constraint_binds_the_default_variant_too(tmp_path):
+    """A study that names no route runs the default one, and that route's
+    constraints hold for it exactly as if the study had named it."""
+    _native_case(tmp_path, {"constant/mesh.json": {"cells": "5"}})
+    record = _constrained_record({"variantA": {"number_cells": (5,)}})
+    with pytest.raises(TutorialRecordError, match="'variantA'"):
+        record_execution.preview_record_case(
+            record, cases_root=tmp_path / "cases",
+            study_by_source={"base": {"number_cells": 7}},
+            driver_context=_context_with_writer(),
+        )
+
+
+def test_a_variant_constraint_refuses_before_a_commit_writes_anything(tmp_path):
+    """The same refusal on the commit path (``plan --strict``, a sweep), and
+    nothing is staged into the committed case's place."""
+    _native_case(tmp_path, {"constant/mesh.json": {"cells": "5"}})
+    record = _constrained_record({"variantB": {"number_cells": (5,)}})
+    with pytest.raises(TutorialRecordError, match="'number_cells'"):
+        record_execution.commit_record_case(
+            record, cases_root=tmp_path / "cases", staged_case_root=tmp_path / "staged",
+            study_by_source={"base": {"mesh": "variantB", "number_cells": 7}},
+            driver_context=_context_with_writer(),
+        )
+    staged_mesh = tmp_path / "staged" / "constant" / "mesh.json"
+    assert not staged_mesh.exists() or json.loads(staged_mesh.read_text()) == {"cells": "5"}
+
+
+def test_a_variant_constraint_compares_values_strictly(tmp_path):
+    """``True == 1`` in Python; a constraint admitting ``1`` does not admit
+    ``True`` (the same strict comparison a selector value gets)."""
+    _native_case(tmp_path, {"constant/mesh.json": {"cells": "1"}})
+    record = _constrained_record({"variantB": {"number_cells": (1,)}})
+    with pytest.raises(TutorialRecordError, match="'number_cells'"):
+        record_execution.preview_record_case(
+            record, cases_root=tmp_path / "cases",
+            study_by_source={"base": {"mesh": "variantB", "number_cells": True}},
+            driver_context=_context_with_writer(),
+        )
+
+
+def test_a_variant_constraint_may_name_a_document_key(tmp_path):
+    _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
+    record = _constrained_record({"variantB": {"constant/physics.json:modelName": ("modelAlpha",)}})
+    with pytest.raises(TutorialRecordError, match="constant/physics.json:modelName"):
+        record_execution.preview_record_case(
+            record, cases_root=tmp_path / "cases",
+            study_by_source={"base": {"mesh": "variantB", "constant/physics.json:modelName": "modelBeta"}},
+            driver_context=_context_with_writer(),
+        )
+
+
+@pytest.mark.parametrize(("constraints", "fragment"), [
+    ({"variantC": {"number_cells": (5,)}}, "'variantC'"),
+    ({"variantB": {"mesh": ("variantB",)}}, "selector"),
+    ({"variantB": {"no_such_axis": (5,)}}, "'no_such_axis'"),
+    ({"variantB": {"number_cells": ()}}, "no value"),
+    ({"variantB": {"number_cells": "5"}}, "bare"),
+    ({"variantB": {"number_cells": 5}}, "sequence"),
+    ({"variantB": (("number_cells", (5,)),)}, "mapping"),
+    ((("variantB", {"number_cells": (5,)}),), "mapping"),
+])
+def test_a_variant_constraint_is_refused_at_construction_by_name(constraints, fragment):
+    with pytest.raises(TutorialRecordError, match="variant_constraints") as exc:
+        _constrained_record(constraints)
+    assert fragment in str(exc.value), str(exc.value)
+
+
+def test_variant_constraints_without_variants_are_refused():
+    with pytest.raises(TutorialRecordError, match="variant_constraints"):
+        _record(variant_constraints={"variantA": {"number_cells": (5,)}})
+
+
 def test_commit_record_case_writes_one_case_with_validated_flags_in_the_record(tmp_path):
     _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
     record = _record(axes=())

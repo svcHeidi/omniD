@@ -36,6 +36,7 @@ from ..tutorial_records import (
     TutorialRecord,
     TutorialRecordError,
     _strictly_equal,
+    check_variant_constraints,
     patches_to_parameters,
     resolve_case_patches,
     resolve_variant_selector,
@@ -266,6 +267,9 @@ def _resolve_and_split(
         study_by_source, reserved_names=_reserved_study_names(record),
     )
     workflow_step_ids, workflow_variant = _resolve_workflow_route(record, reserved_values)
+    if workflow_variant is not None:
+        # Review 54b I3: before any axis runs or any patch is proposed.
+        check_variant_constraints(record, workflow_variant["selected"], study_by_source)
     combined, command_arguments = resolve_case_patches(
         record,
         study_by_source=study_by_source,

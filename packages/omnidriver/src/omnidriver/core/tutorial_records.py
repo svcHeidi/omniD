@@ -369,6 +369,20 @@ class TutorialRecord:
     no variants is refused too. Each refusal names the record and the
     declared variants. Core never knows what a route means; the record says
     which one is native.
+
+    ``variant_constraints`` maps a variant to the study values it admits:
+    ``{variant: {study_name: (value, ...)}}``. When that variant runs --
+    named by the study or taken as the default -- a study that sets
+    ``study_name`` must set it to one of the listed values, compared
+    strictly (``_strictly_equal``: ``True`` is not ``1``); leaving it unset
+    is always admitted. Any other value is refused by name before anything is
+    written (``check_variant_constraints``). A route that can build only one
+    shape of case cannot honour a study value that asks for another; without
+    this, the value would be written into documents the route's steps then
+    contradict, or silently have no effect. Added 2026-09-26 (review 54b
+    I3). ``study_name`` is an axis the record declares or a
+    ``document:dotted.path`` key, never the selector itself, and each is
+    checked at construction, by name.
     """
 
     name: str
@@ -389,6 +403,9 @@ class TutorialRecord:
     #: Q2, 2026-09-26; see the class docstring). ``None`` exactly when the
     #: record declares no variants.
     default_variant: str | None = None
+    #: Per variant, the values each constrained study name admits (see the
+    #: class docstring). Added 2026-09-26 (review 54b I3).
+    variant_constraints: Mapping[str, Mapping[str, tuple[Any, ...]]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -467,6 +484,60 @@ class TutorialRecord:
                     f"{self.default_variant!r} is not one of its declared "
                     f"workflow_variants ({sorted(variants)})"
                 )
+        object.__setattr__(self, "variant_constraints", self._checked_variant_constraints(variants))
+
+    def _checked_variant_constraints(
+        self, variants: Mapping[str, tuple[str, ...]],
+    ) -> dict[str, dict[str, tuple[Any, ...]]]:
+        label = f"tutorial record {self.name!r}'s variant_constraints"
+        if not isinstance(self.variant_constraints, Mapping):
+            raise TutorialRecordError(
+                f"{label} must be a mapping of variant -> {{study name: values}}, "
+                f"not {type(self.variant_constraints).__name__}"
+            )
+        checked: dict[str, dict[str, tuple[Any, ...]]] = {}
+        for variant, constraints in self.variant_constraints.items():
+            if not any(_strictly_equal(variant, key) for key in variants):
+                raise TutorialRecordError(
+                    f"{label} name {variant!r}, which is not one of its declared "
+                    f"workflow_variants ({sorted(variants)})"
+                )
+            if not isinstance(constraints, Mapping):
+                raise TutorialRecordError(
+                    f"{label} for {variant!r} must be a mapping of study name -> values, "
+                    f"not {type(constraints).__name__}"
+                )
+            checked[variant] = {}
+            for name, allowed in constraints.items():
+                if name == self.variant_selector:
+                    raise TutorialRecordError(
+                        f"{label} for {variant!r} constrain the selector {name!r} itself; "
+                        "the selector chooses the variant and cannot be constrained by it"
+                    )
+                try:
+                    sort_study_name(name, axes=self.axes)
+                except TutorialRecordError as exc:
+                    raise TutorialRecordError(
+                        f"{label} for {variant!r} name {name!r}, which is not a study name "
+                        f"this record resolves: {exc}"
+                    ) from exc
+                if isinstance(allowed, str):
+                    raise TutorialRecordError(
+                        f"{label} for {variant!r}: {name!r} admits the bare string {allowed!r}; "
+                        "give a sequence of admitted values"
+                    )
+                if not isinstance(allowed, Sequence):
+                    raise TutorialRecordError(
+                        f"{label} for {variant!r}: {name!r} must admit a sequence of values, "
+                        f"not {type(allowed).__name__}"
+                    )
+                if not allowed:
+                    raise TutorialRecordError(
+                        f"{label} for {variant!r}: {name!r} admits no value; a name no "
+                        "value may take is a study name the variant cannot run with at all"
+                    )
+                checked[variant][name] = tuple(allowed)
+        return checked
 
     def step_ids(self) -> tuple[str, ...]:
         return tuple(step.step_id for step in self.workflow_steps)
@@ -621,6 +692,29 @@ def resolve_variant_selector(record: TutorialRecord, value: Any) -> tuple[str, .
             f"{sorted(record.workflow_variants)})"
         )
     return record.workflow_variants[value]
+
+
+def check_variant_constraints(
+    record: TutorialRecord, variant: str,
+    study_by_source: Mapping[str, Mapping[str, Any]],
+) -> None:
+    """Refuse, by name, a study value the running ``variant`` does not admit
+    (``TutorialRecord.variant_constraints``; review 54b I3, 2026-09-26).
+
+    Every source is checked, so the refusal names the source that set the
+    value. A name the study leaves unset is always admitted."""
+    constraints = record.variant_constraints.get(variant, {})
+    for source, values in study_by_source.items():
+        for name, allowed in constraints.items():
+            if name not in values:
+                continue
+            value = values[name]
+            if not any(_strictly_equal(value, admitted) for admitted in allowed):
+                raise TutorialRecordError(
+                    f"tutorial record {record.name!r}'s workflow variant {variant!r} admits "
+                    f"{name!r} only as one of {list(allowed)!r}, or unset; {source!r} sets it "
+                    f"to {value!r}"
+                )
 
 
 # ---------------------------------------------------------------------------
