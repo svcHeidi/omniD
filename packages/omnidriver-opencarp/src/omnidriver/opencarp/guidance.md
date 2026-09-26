@@ -40,3 +40,17 @@ command line sets.
 - Outputs: `out/vm.igb` holds every time step; `out/init_acts_vm_act-thresh.dat`
   holds one activation time per mesh point in point order, -1 if never
   activated (F6).
+
+## Reading activation times as quantities
+
+`out/init_acts_vm_act-thresh.dat` has format `opencarp_lat_per_node`. `omnidriver
+compare` reads it at points you supply in the request (`runs.<name>.points`, any
+length unit; omniD converts to µm). The reader takes the value of the nearest mesh
+node and reports that node's coordinates as `sampled_at`, with rule `node`, unit
+`ms`, and `-1` as `not_reached`. It refuses a point equidistant from two nodes: at
+dx 1000 the slab centre is one. Pick a dx whose nodes include your points (dx 500
+and 250 contain the Niederer corners and centre). The mesh is the one openCARP
+records in `out/parameters.par` (F16). `lats[0].all` must stay `0`: with `1`
+there is no per-node file (F17). openCARP's slab is 0–20000 × 0–7000 × 0–3000 µm
+with the stimulus cube at the origin and fibres along x (F3). That is the frame
+of `benchmarks/niederer2011.json`, so its coordinates are written unchanged.

@@ -10,6 +10,7 @@ from omnidriver.core.plugin_profile import load_plugin_profile
 
 from .catalog import load_catalog, template_name
 from .environment import AUXILIARY_COMMANDS, REDACTION_PATTERNS, SOLVER_COMMANDS, opencarp_environment_diagnostics
+from .lat_reader import LAT_FORMAT, LatPerNodeReader
 from .par_format import ParFormatError, format_value, patch_par, read_raw, unquote, values_agree
 from .records import AXIS_CATALOG, TUTORIAL_RECORDS
 from .validation import check_indices, read_documents, record_key_validator
@@ -194,3 +195,8 @@ class OpenCARPPlugin:
     def get_agent_guidance(self):
         text = resources.files(__package__).joinpath("guidance.md").read_text()
         return ({"title": "openCARP: what the binary does that a reader would not guess", "text": text},)
+
+    # -- results as quantities (results-as-quantities, Task 5)
+    def get_artifact_value_reader(self, artifact_format: str):
+        """The LAT reader for the record's per-node LAT file; no other format is read."""
+        return LatPerNodeReader() if artifact_format == LAT_FORMAT else None

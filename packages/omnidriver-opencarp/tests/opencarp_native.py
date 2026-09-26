@@ -38,7 +38,82 @@ def require_opencarp_binary() -> None:
                     "holding libsundials_cvode; evidence A4-A6): " + proc.stderr[-400:])
 
 
+import json
+import subprocess
+import sys
+from dataclasses import dataclass
+from typing import Any, Mapping
+
+from omnidriver.core.runtime.models import DataArtifact, data_artifact_from_json
+from omnidriver.core.runtime.postprocess_phase import build_sweep_context
+
 from omnidriver.conformance import ConformanceTarget
+
+LAT_PATH = "out/init_acts_vm_act-thresh.dat"
+
+
+def niederer_sweep(tmp_path: Path, *, dx_values: tuple[float, ...], tend: float,
+                   extra: Mapping[str, Any] | None = None) -> Path:
+    """Run niedererNVersion over ``dx_values`` through ``omnidriver sweep-run``
+    (dt 50 us, G4/G7). Returns the sweep's output directory."""
+    require_opencarp_binary()
+    spec = {
+        "base": {"entry": "niedererNVersion", "cases_root": str(opencarp_tutorials_root()),
+                 "nversion.par:tend": tend, "nversion.par:dt": 50.0, **(extra or {})},
+        "sweep": {"mode": "cross_product", "independent": {"dx": list(dx_values)}},
+    }
+    spec_path = tmp_path / "sweep.json"
+    spec_path.write_text(json.dumps(spec))
+    output = tmp_path / "sweep"
+    proc = subprocess.run(
+        [sys.executable, "-m", "omnidriver", "sweep-run", "--plugin", "opencarp", "--spec", str(spec_path),
+         "--output-dir", str(output), "--scratch-dir", str(tmp_path / "scratch")],
+        capture_output=True, text=True, timeout=600,
+    )
+    try:
+        payload = json.loads(proc.stdout)
+    except ValueError:
+        pytest.fail(f"sweep-run printed no JSON (rc={proc.returncode}): {proc.stderr[-2000:]}")
+    for case in payload.get("cases", ()):
+        if case.get("status") == "completed" or _only_a_declared_artifact_is_missing(case):
+            continue
+        pytest.fail(f"sweep-run failed (rc={proc.returncode}): {proc.stdout[-2000:]} {proc.stderr[-2000:]}")
+    if not payload.get("cases"):
+        pytest.fail(f"sweep-run produced no cases (rc={proc.returncode}): {proc.stdout[-2000:]} {proc.stderr[-2000:]}")
+    return output
+
+
+def _only_a_declared_artifact_is_missing(case: Mapping[str, Any]) -> bool:
+    """Whether ``case`` failed for exactly the reason F17 exercises: the solver
+    exited fine, but a declared (non-optional) artifact is absent, so
+    reconciliation -- not a crash, a timeout or a refused patch -- marked the
+    case failed. Anything else (``materialization_error``, ``plan_error``,
+    ``timeout_error``) is a genuine failure and stays fatal, per the
+    no-fallbacks rule: this only widens what counts as an *expected* shape,
+    it never silences an unexplained one."""
+    if case.get("status") != "failed":
+        return False
+    if case.get("materialization_error") or case.get("plan_error") or case.get("timeout_error"):
+        return False
+    reconciliation = case.get("artifact_reconciliation")
+    return bool(reconciliation) and reconciliation.get("missing_count", 0) > 0
+
+
+@dataclass(frozen=True)
+class NiedererRun:
+    output_dir: Path
+    case_id: str
+    case_root: Path
+    lat_artifact: DataArtifact
+
+
+def niederer_run(tmp_path: Path, *, dx: float, tend: float, extra: Mapping[str, Any] | None = None) -> NiedererRun:
+    output = niederer_sweep(tmp_path, dx_values=(dx,), tend=tend, extra=extra)
+    (case,) = build_sweep_context(output).cases
+    document = json.loads((output / case.run_document_path).read_text())
+    artifact = next(data_artifact_from_json(raw) for raw in document["expectedArtifacts"]
+                    if raw["path_pattern"] == LAT_PATH)
+    return NiedererRun(output, case.case_id, Path(case.case_root), artifact)
 
 
 def niederer_conformance_target(tmp_path: Path) -> ConformanceTarget:

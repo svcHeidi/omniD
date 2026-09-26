@@ -13,6 +13,9 @@ each fact verified with the real binary (docs/solver-learning/opencarp.md):
 - no physics-region options: outputs are byte-identical without them (F4).
 ``tend``, ``dt`` and ``mass_lumping`` are ordinary .par keys, so a study
 names them as ``nversion.par:<key>`` (G5).
+
+The LAT file names its format so omniD reads it through `LatPerNodeReader`
+(results as quantities, 2026-09-26).
 """
 from __future__ import annotations
 
@@ -21,8 +24,10 @@ from pathlib import Path
 from typing import Any
 
 from omnidriver.core.tutorial_records import (
-    AxisContract, AxisResult, TutorialRecord, TutorialRecordError, WorkflowStep,
+    AxisContract, AxisResult, ProducedPath, TutorialRecord, TutorialRecordError, WorkflowStep,
 )
+
+from ..lat_reader import LAT_FORMAT
 
 
 def _dx_resolution(value: Any, staged_case_root: Path) -> AxisResult:
@@ -54,7 +59,7 @@ RECORD = TutorialRecord(
             command=("openCARP", "+F", "nversion.par", "-meshname", "slab", "-simID", "out",
                      "-imp_region[0].im_sv_init", "singlecell.sv"),
             consumes=("nversion.par", "singlecell.sv"),
-            produces=("out", "out/vm.igb", "out/init_acts_vm_act-thresh.dat"),   # F6; the whole -simID directory: F15
+            produces=("out", "out/vm.igb", ProducedPath("out/init_acts_vm_act-thresh.dat", format=LAT_FORMAT)),   # F6; the whole -simID directory: F15; LAT format: results as quantities
         ),
     ),
 )
