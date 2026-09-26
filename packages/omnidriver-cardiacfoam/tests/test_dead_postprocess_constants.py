@@ -7,7 +7,6 @@ _MODULES = [
     # tutorial migrated onto a tutorial record (docs/superpowers/specs/
     # 2026-09-24-tutorials-are-pointers-design.md), which has no defaults
     # module to carry these dead constants at all.
-    "omnidriver.cardiacfoam.tutorials.defaults.manufactured_bath_bidomain",
     "omnidriver.cardiacfoam.tutorials.defaults.manufactured_monodomain_pseudo_ecg",
     "omnidriver.cardiacfoam.tutorials.defaults.cable_1d_cv_convergence",
     "omnidriver.cardiacfoam.tutorials.defaults.cable_1d_restitution",

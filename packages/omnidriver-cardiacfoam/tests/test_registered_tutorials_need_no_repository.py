@@ -25,7 +25,9 @@ import pytest
 from omnidriver.core.plugin_interface import load_plugin_context
 
 _NEEDS_CASE_CONTENT = {
-    "manufacturedbathbidomain",
+    # "manufacturedbathbidomain" removed 2026-09-26: migrated onto a tutorial
+    # record (records/manufactured_bath_bidomain.py, step 5.4a), for the same
+    # reason as "manufacturedbidomain" below.
     # "manufacturedbidomain" removed 2026-09-26: migrated onto a tutorial
     # record (records/manufactured_bidomain.py, tutorials-are-pointers plan,
     # step 5.4b-B) -- it is no longer in SPEC_FACTORIES/`_factories()` at
@@ -88,6 +90,8 @@ def test_every_serial_tutorial_builds_under_any_base(tmp_path: Path) -> None:
     # `restitutionCurves`'s were -- but it was one of `_NEEDS_CASE_CONTENT`,
     # so those 2 keys were already excluded from `built`, not counted in it.
     # The count stays 12.
+    # Corrected 2026-09-26 (5.4a, `manufacturedBathBidomain` onto a tutorial
+    # record): likewise one of `_NEEDS_CASE_CONTENT`, so the count stays 12.
     assert built == 12, f"expected 12 buildable catalog entries, got {built}"
 
 

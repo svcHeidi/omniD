@@ -26,20 +26,12 @@ exercise any of this):
    qualified id -- it surfaces in `expected_effects` (Task 1's finding,
    given its first consumer here), not in the structured
    `proposed_changes` list. Stated, not silently dropped.
-3. A genuine `ParameterAssignment`-shaped removal
-   (`resolve_electro_property_removal`, `operation="remove"`) *does* carry a
-   qualified id, and *does* appear in `proposed_changes` with
-   `value: None`. The one real tutorial that calls this function
-   (`manufactured_bath_bidomain`) cannot demonstrate it end-to-end today: an
-   unrelated, pre-existing, separately-tracked bug (an undeclared key,
-   `bidomainSolverCoeffs.manufacturedBidomain.fdaBathVariant`, written
-   unconditionally) makes every real invocation of its `plan_case` raise
-   before returning -- and that tutorial is one of the two "wrong-scope key"
-   files a parallel session owns right now, so it is not fixed here. A
-   minimal, self-contained `plan_case` built for this test isolates the
-   *mechanism* (`resolve_electro_property_removal` +
-   `commit_case_overrides`, both real, unmodified production code) from
-   that unrelated tutorial-specific bug.
+Proof 3 (a `ParameterAssignment(operation="remove")` from
+`resolve_electro_property_removal` appearing in `proposed_changes` with
+`value: None`) was deleted 2026-09-26 with that function (tutorials-are-
+pointers 5.4a): its one caller, `manufactured_bath_bidomain`, migrated onto
+a tutorial record whose studies replace the bath patch maps whole (owner
+Q4), so no production code builds such a removal any more.
 """
 
 from __future__ import annotations
@@ -53,17 +45,13 @@ from pathlib import Path
 from write_channel_test_support import write_physics_properties
 
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
-from omnidriver.cardiacfoam.overrides import (
-    commit_case_overrides,
-    resolve_electro_property_removal,
-)
 from omnidriver.cardiacfoam.tutorials import (
     manufactured_monodomain_pseudo_ecg as pseudo_ecg,
     single_cell,
 )
 from omnidriver.core.introspection import _resolve_proposed_changes, _write_surface
 from omnidriver.core.plugin_interface import driver_context as _driver_context
-from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
+from omnidriver.core.runtime.models import TutorialSpec
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
 _CTX = _driver_context(
@@ -274,92 +262,6 @@ class TestWholeDictRemovalSurfacesAsAnExpectedEffectNotAQualifiedChange(unittest
             "ecgDomains",
             {item["qualified_id"] for item in described["proposed_changes"]},
         )
-        self.assertEqual(before, _tree_digest(self.case_root))
-
-
-def _minimal_removal_plan_case(case_root: Path, case: CaseConfig) -> object:
-    """A self-contained `plan_case`, built only for this test, exercising
-    exactly the same production mechanism `manufactured_bath_bidomain`'s own
-    `_plan_case` uses for its stale-patch-entry cleanup
-    (`resolve_electro_property_removal` -> `commit_case_overrides`) --
-    isolated from that tutorial's own, unrelated, separately-tracked
-    dead-key bug (`bidomainSolverCoeffs.manufacturedBidomain.fdaBathVariant`,
-    a parallel session's file to fix, not this test's)."""
-    electro_document = "constant/electroProperties"
-    electro_properties = case_root / electro_document
-    parameter = resolve_electro_property_removal(
-        electro_properties, "xMin", document=electro_document,
-        scope=["bidomainSolverCoeffs", "bathPotentialDomain", "groundPatches"],
-    )
-    return commit_case_overrides(
-        case_root, parameters=[parameter], workflow="test_minimal_removal",
-        requested_by="test_describe_proposed_changes",
-    )
-
-
-class TestAParameterShapedRemovalIsAStructuredProposedChange(unittest.TestCase):
-    """Proof 3: a genuine `ParameterAssignment(operation="remove")` -- one
-    that *does* carry a qualified id -- appears in `proposed_changes` with
-    `value: None`, `operation: "remove"`."""
-
-    def setUp(self) -> None:
-        self.tmp = Path(tempfile.mkdtemp(prefix="omnidriver-describe-remove-"))
-        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
-        self.case_root = self.tmp / "case"
-        (self.case_root / "constant").mkdir(parents=True)
-        (self.case_root / "constant" / "electroProperties").write_text(
-            "\n".join([
-                "myocardiumSolver bidomainSolver;",
-                "",
-                "bidomainSolverCoeffs",
-                "{",
-                "    bathPotentialDomain",
-                "    {",
-                "        groundPatches",
-                "        {",
-                "            xMin 0;",
-                "        }",
-                "        surfaceCurrentPatches",
-                "        {",
-                "        }",
-                "    }",
-                "}",
-                "",
-            ])
-        )
-
-    def test_removal_appears_with_a_qualified_id_and_a_null_value(self) -> None:
-        spec = TutorialSpec(
-            name="test_minimal_removal_spec",
-            case_root=self.case_root,
-            setup_root=self.case_root / "setup",
-            output_dir=self.case_root,
-            build_cases=lambda: [CaseConfig(case_id="only", params={})],
-            plan_case=_minimal_removal_plan_case,
-        )
-        before = _tree_digest(self.case_root)
-
-        proposed_changes, expected_effects, reason = _resolve_proposed_changes(
-            driver_context=_CTX, spec=spec,
-        )
-
-        self.assertEqual(reason, "")
-        self.assertIsNotNone(proposed_changes)
-        self.assertEqual(len(proposed_changes), 1)
-        change = proposed_changes[0]
-        self.assertEqual(
-            change["qualified_id"],
-            "bidomainSolverCoeffs.bathPotentialDomain.groundPatches.xMin",
-        )
-        self.assertEqual(change["operation"], "remove")
-        self.assertIsNone(change["value"])
-        self.assertEqual(change["source"], "case")
-        self.assertIn(
-            "remove 'bidomainSolverCoeffs.bathPotentialDomain.groundPatches.xMin' "
-            "in constant/electroProperties",
-            expected_effects,
-        )
-        # The real fixture is untouched -- only a staged clone was mutated.
         self.assertEqual(before, _tree_digest(self.case_root))
 
 

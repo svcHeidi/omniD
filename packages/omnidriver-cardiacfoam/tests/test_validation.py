@@ -41,6 +41,8 @@ the test focused on validator behaviour rather than field enumeration.
 
 from __future__ import annotations
 
+import pytest
+
 from omnidriver.dict_entries import DictEntry
 from omnidriver.cardiacfoam.dict_entries import get_electro_property_entry_groups
 from omnidriver.cardiacfoam.common_dict_entries import (
@@ -161,6 +163,21 @@ def test_valid_minimal_run_has_no_errors():
     run = _filled_run()
     errors = [e for e in validate_run(run, driver_context=_CTX) if e.level == "error"]
     assert errors == [], f"expected no errors, got: {errors}"
+
+
+@pytest.mark.parametrize(
+    "write_control",
+    # OpenFOAM v2412 `Foam::Time::writeControlNames` (src/OpenFOAM/db/Time/
+    # Time.C). The native bathBidomain controlDict uses adjustableRunTime,
+    # and a real cardiacFoam run accepts it (docs/solver-learning/
+    # cardiacfoam.md, BB1).
+    ["none", "timeStep", "runTime", "adjustable", "adjustableRunTime", "clockTime", "cpuTime"],
+)
+def test_every_upstream_write_control_is_accepted(write_control):
+    run = _filled_run(config={"solver": {"writeControl": write_control}})
+    errors = [e for e in validate_run(run, driver_context=_CTX)
+              if e.level == "error" and e.field == "writeControl"]
+    assert errors == []
 
 
 def test_personalized_templates_valid_contract_is_accepted():

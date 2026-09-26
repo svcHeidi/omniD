@@ -38,7 +38,11 @@ myocardiumSolver {myocardium_solver};
 # against each verifier's own OFstream call --
 #   3D_19_cells.dat                   manufacturedFDAMonodomainVerifier.C:186
 #   rotatedAnisotropy_3D_19_cells.dat manufacturedAnisotropicMonodomainVerifier.C:416
-#   bathBidomain_3D_19_cells.dat      manufacturedFDABathBidomainVerifier.C:426
+#   3D_19_cells.dat                   manufacturedFDABathBidomainVerifier.C:425
+#     (corrected 2026-09-26, 5.4a: this said bathBidomain_3D_19_cells.dat;
+#     native 7ae47527c dropped the prefix, and a real bath run writes
+#     postProcessing/1D_80_cells.dat -- docs/solver-learning/cardiacfoam.md
+#     BB1)
 #   <dimension>_19_cells.dat          manufacturedFDABidomainVerifier.C:285
 # The previously declared pattern, "*_*_cells_*.dat", required a further
 # "_<token>" between "cells" and ".dat" that none of them have, so a
@@ -54,7 +58,7 @@ _CASES = (
     (
         "bidomainSolver",
         "manufacturedFDABathBidomainVerifier",
-        "bathBidomain_3D_19_cells.dat",
+        "3D_19_cells.dat",
     ),
 )
 

@@ -8,9 +8,11 @@ decision, "a parameter asserts a final state, not only a value"
 ``update_foam_entry``'s own ``add_if_missing``; ``remove`` calls
 ``remove_foam_entry`` instead. A ``dict_operation`` target -- not a
 ``ParameterAssignment`` at all, the same "not a key/value edit" reasoning
-the hex-block target already has -- inserts or deletes a whole named
-sub-dictionary verbatim, needed for `manufactured_bath_bidomain`'s
-``ecgDomains`` block (Task 6's completion).
+the hex-block target already has -- deletes a whole named sub-dictionary.
+Corrected 2026-09-26 (5.4a): it also inserted one verbatim ("ensure", for
+the bath tutorial module's ``ecgDomains`` block); that insert and its two
+tests are deleted with its one caller, and "ensure" is now refused as an
+unknown dict operation (``test_dict_operation_ensure_is_refused``).
 """
 from __future__ import annotations
 
@@ -206,50 +208,6 @@ _ECG_BLOCK = """    ecgDomains
 """
 
 
-def test_dict_operation_ensure_inserts_a_whole_block(tmp_path):
-    case_root = _case(tmp_path)
-    target = {
-        "document": "constant/electroProperties",
-        "dict_operation": "ensure",
-        "dict_name": "ecgDomains",
-        "block_text": _ECG_BLOCK,
-        "scope": None,
-        "format": "openfoam_dictionary",
-    }
-    # `CaseMutationRequest` still requires >=1 real `ParameterAssignment` for
-    # `clone_and_patch` -- paired with an unrelated real edit, the same
-    # `extra_targets` shape `commit_case_overrides` uses in production.
-    parameter = _assignment(key_path=("existingScalar",), value=5, operation="set")
-    resolved = _resolved(case_root, parameter, extra_targets=(target,))
-    content = _render(resolved, tmp_path)
-    assert "ecgDomains" in content
-    assert "torsoECG" in content
-
-
-def test_dict_operation_ensure_then_set_inside_the_new_block_in_one_commit(tmp_path):
-    """The real bath-bidomain ordering: the block must exist before a scoped
-    `set` inside it can find its key at all -- `render_patch_case_files`
-    applies `dict_operation` targets before ordinary value edits precisely
-    so this works in one commit."""
-    case_root = _case(tmp_path)
-    dict_target = {
-        "document": "constant/electroProperties",
-        "dict_operation": "ensure",
-        "dict_name": "ecgDomains",
-        "block_text": _ECG_BLOCK,
-        "scope": None,
-        "format": "openfoam_dictionary",
-    }
-    set_inside_block = _assignment(
-        key_path=("ecgDomains", "bodyECG", "ecgSolver"), value="pseudoECG",
-        value_kind="word", operation="set",
-    )
-    resolved = _resolved(case_root, set_inside_block, extra_targets=(dict_target,))
-    content = _render(resolved, tmp_path)
-    assert "pseudoECG" in content
-    assert "torsoECG" not in content
-
-
 def test_dict_operation_remove_deletes_a_whole_block(tmp_path):
     case_root = _case(tmp_path)
     # First give the fixture a block to remove.
@@ -295,4 +253,20 @@ def test_dict_operation_unknown_kind_is_refused(tmp_path):
     parameter = _assignment(key_path=("existingScalar",), value=5, operation="set")
     resolved = _resolved(case_root, parameter, extra_targets=(target,))
     with pytest.raises(ValueError, match="banana"):
+        _render(resolved, tmp_path)
+
+
+def test_dict_operation_ensure_is_refused(tmp_path):
+    case_root = _case(tmp_path)
+    target = {
+        "document": "constant/electroProperties",
+        "dict_operation": "ensure",
+        "dict_name": "ecgDomains",
+        "block_text": _ECG_BLOCK,
+        "scope": None,
+        "format": "openfoam_dictionary",
+    }
+    parameter = _assignment(key_path=("existingScalar",), value=5, operation="set")
+    resolved = _resolved(case_root, parameter, extra_targets=(target,))
+    with pytest.raises(ValueError, match="'ensure'"):
         _render(resolved, tmp_path)

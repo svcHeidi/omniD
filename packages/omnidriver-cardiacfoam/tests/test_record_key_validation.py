@@ -122,6 +122,41 @@ def test_a_dynamic_path_binding_is_checked_against_its_declared_domain():
         )
 
 
+_BATH = ("bidomainSolverCoeffs", "bathPotentialDomain")
+
+
+@pytest.mark.parametrize("value", [{"xMax": 0.01}, {"xMin": 0}, {}])
+def test_a_whole_patch_map_validates_member_by_member(value):
+    """Owner Q4 (2026-09-26): a study replaces ``groundPatches`` /
+    ``surfaceCurrentPatches`` as whole dictionaries. The catalog declares
+    only their members (``...groundPatches.<patch>``, a scalar), so a map
+    is checked member by member against that entry; the map itself is a
+    ``mapping``. An empty map is a real value (``groundPatches {}`` is the
+    native electrodePair state)."""
+    for name in ("groundPatches", "surfaceCurrentPatches"):
+        assert record_key_validator(
+            "constant/electroProperties", _BATH + (name,), value,
+        ) == ("mapping", True)
+
+
+def test_a_patch_map_member_of_the_wrong_kind_is_refused_by_name():
+    with pytest.raises(ValueError) as excinfo:
+        record_key_validator(
+            "constant/electroProperties", _BATH + ("groundPatches",), {"xMin": "zero"},
+        )
+    assert "groundPatches.xMin" in str(excinfo.value)
+
+
+def test_a_map_at_a_key_with_no_catalogued_members_is_refused():
+    """Only a key whose members the catalog declares takes a map; any other
+    uncatalogued key is still refused by name."""
+    with pytest.raises(KeyError) as excinfo:
+        record_key_validator(
+            "constant/electroProperties", _BATH + ("groundPatchez",), {"xMin": 0},
+        )
+    assert "groundPatchez" in str(excinfo.value)
+
+
 # ---------------------------------------------------------------------------
 # Rule 2: any other document under system/ -- accepted, validated=False.
 # ---------------------------------------------------------------------------

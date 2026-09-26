@@ -23,6 +23,11 @@ enforces; none is new. The last section is about the mesh.
 - **Named segments.** A `<name>` segment in a listed key (for example
   `ecgDomains.<name>.ecgSolver`) is a name the case chooses. Where the
   catalogue gives a closed set of names, a name outside it is refused.
+- **A map replaces a whole sub-dictionary.** Where a listed key ends in a
+  `<name>` segment (`bathPotentialDomain.groundPatches.<patch>`), the key
+  without it takes a map, `{"xMin": 0}`: each member is checked as that
+  entry, and the case's sub-dictionary is replaced by exactly the map's
+  members. This is how a patch moves from one map to another.
 - **OpenFOAM's `system/` documents are open.** `controlDict`, `fvSchemes`,
   `fvSolution`, `blockMeshDict` and any other `system/` document are listed
   once each, with `validated: false`. A key there is written as asked: omniD

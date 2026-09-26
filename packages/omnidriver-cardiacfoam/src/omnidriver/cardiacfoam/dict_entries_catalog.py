@@ -725,7 +725,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.bathPotentialDomain.phiERefPoint',
             phases=frozenset({'physics'}),
-            description='Point used to locate the reference cell for pure-Neumann extracellular-potential boundaries.',
+            description='Point used to locate the reference cell for pure-Neumann extracellular-potential boundaries. Choose a point in a cell interior at every resolution the study uses.',
             value_kind='vector3',
         ),
         DictEntry(

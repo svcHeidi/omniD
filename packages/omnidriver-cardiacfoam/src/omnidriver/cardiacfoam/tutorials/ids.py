@@ -16,7 +16,10 @@ class CardiacTutorialID(str, Enum):
     # rather than through this factory-tutorial enum -- a record is data,
     # not a factory, and this ID existed only to key
     # SPEC_FACTORIES/REGISTERED_TUTORIALS for the now-deleted factory.
-    MANUFACTURED_BATH_BIDOMAIN = "manufacturedBathBidomain"
+    # MANUFACTURED_BATH_BIDOMAIN ("manufacturedBathBidomain") removed
+    # 2026-09-26: migrated onto a tutorial record
+    # (records/manufactured_bath_bidomain.py, tutorials-are-pointers plan
+    # §5b, step 5.4a) -- see RESTITUTION_CURVES's removal note below.
     # MANUFACTURED_EIKONAL_ECG ("manufacturedEikonalECG") removed 2026-09-26:
     # migrated onto a tutorial record (records/manufactured_eikonal_ecg.py,
     # docs/superpowers/plans/2026-09-25-tutorials-are-pointers-remaining.md

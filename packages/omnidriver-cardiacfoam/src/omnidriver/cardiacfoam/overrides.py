@@ -37,7 +37,6 @@ from omnidriver.openfoam.mutators import (
     check_dictionary_word_is_safe,
     ensure_foam_dict,
     remove_foam_dict,
-    remove_foam_entry,
     update_foam_entry,
 )
 from .detection import detect_electro_coeffs_scope
@@ -384,7 +383,10 @@ def resolve_entry_overrides(
     `manufactured_bath_bidomain.py` submits
     ``<solver>Coeffs.manufacturedBidomain.fdaBathVariant``, a key
     `dict_entries_catalog.py`'s own 2026-09-19 correction note says was
-    removed because no native code reads it there.
+    removed because no native code reads it there. Corrected 2026-09-26:
+    that module is deleted (5.4a, the bath tutorial record), and the key is
+    gone from every caller; the bath variant lives at
+    ``verificationModel.fdaBathVariant`` only.
 
     Every assignment's ``source`` is ``"case"``. This function has no
     fallback of its own -- it only ever sees what its caller already decided
@@ -468,14 +470,17 @@ def _resolve_single_catalog_assignment(
     addressing a key the catalog does not declare is refused, not silently
     written -- and the same dynamic-path/binding-validation machinery
     (`_catalog_entry_for`, `_validate_dynamic_binding`), reused rather than
-    duplicated. `value` is ignored for `operation="remove"` (there is
-    nothing to type or preserve evidence for -- `ParameterAssignment` itself
-    refuses a value alongside `remove`).
+    duplicated.
+
+    Corrected 2026-09-26 (tutorials-are-pointers 5.4a): its one removal
+    caller, `resolve_electro_property_removal`, is deleted with
+    `manufactured_bath_bidomain` (the bath record's studies replace
+    `groundPatches`/`surfaceCurrentPatches` whole, owner Q4), so every
+    `operation` here now carries a value.
 
     `source` (added 2026-09-24, Phase 3 Task 9's `describe` review, audit
     finding F4 again): defaults to `"case"`, matching `resolve_entry_overrides`
-    -- correct for every existing caller (`resolve_electro_property_ensure`/
-    `resolve_electro_property_removal`), where the value genuinely is
+    -- correct for `resolve_electro_property_ensure`, where the value genuinely is
     whatever the immediate caller passed. It is NOT always correct for a
     caller (`single_cell._plan_case`, see `resolve_electro_property_set`)
     that computed the value from its own default table rather than from
@@ -509,10 +514,7 @@ def _resolve_single_catalog_assignment(
     entry, binding = match
     for placeholder, bound_value in binding.items():
         _validate_dynamic_binding(entry, placeholder, bound_value)
-    if operation == "remove":
-        typed_value, evidence_refs = None, ()
-    else:
-        typed_value, evidence_refs = _typed_value_for_entry(entry, value)
+    typed_value, evidence_refs = _typed_value_for_entry(entry, value)
     return ParameterAssignment(
         qualified_id=".".join(key_path),
         owner=PLUGIN_ID,
@@ -535,37 +537,15 @@ def resolve_electro_property_ensure(
     document: str,
     scope: str | Sequence[str] | None = None,
 ) -> ParameterAssignment:
-    """Pure, channel-routed counterpart of `ensure_electro_property_entry`
-    (Phase 3 Task 6's completion, 2026-09-23): resolves the same upsert into
-    an `operation="ensure"` `ParameterAssignment` instead of writing it
-    directly. See that function's own docstring for why an upsert is
-    needed -- a bath-boundary patch entry whose presence varies with which
-    boundary variant a reused `case_root` was last written for."""
+    """A catalog-addressed upsert (Phase 3 Task 6's completion, 2026-09-23):
+    an `operation="ensure"` `ParameterAssignment`, for a key whose presence
+    in the case legitimately varies (pseudo-ECG's electrode entries).
+    Corrected 2026-09-26 (5.4a): this was the channel counterpart of
+    `ensure_electro_property_entry`, a direct writer for the bath patch
+    entries that had no caller left and is deleted with the bath module."""
     return _resolve_single_catalog_assignment(
         entry_name, scope, value, document=document,
         electro_properties_path=electro_properties_path, operation="ensure",
-    )
-
-
-def resolve_electro_property_removal(
-    electro_properties_path: Path,
-    entry_name: str,
-    *,
-    document: str,
-    scope: str | Sequence[str] | None = None,
-) -> ParameterAssignment:
-    """Pure, channel-routed counterpart of `remove_electro_property_entry`
-    (Phase 3 Task 6's completion, 2026-09-23): resolves the same removal
-    into an `operation="remove"` `ParameterAssignment` instead of writing it
-    directly. Unlike `remove_electro_property_entry`, this has no
-    `missing_ok` parameter -- there is nothing to be "ok" about at
-    resolution time (this never touches the file); `render_patch_case_files`
-    always applies a `remove` target with `missing_ok=True`, since removal
-    asserts the document's *final* state, not that a deletion action
-    occurred (2026-09-23 decision)."""
-    return _resolve_single_catalog_assignment(
-        entry_name, scope, None, document=document,
-        electro_properties_path=electro_properties_path, operation="remove",
     )
 
 
@@ -981,79 +961,6 @@ def remove_electro_property_dict(
     remove_foam_dict(
         electro_properties_path,
         dict_name,
-        scope=resolved_scope,
-        missing_ok=missing_ok,
-    )
-
-
-def ensure_electro_property_entry(
-    electro_properties_path: Path,
-    entry_name: str,
-    value: Any,
-    *,
-    scope: str | Sequence[str] | None = None,
-) -> None:
-    """Set a scalar entry, adding it if the key is absent.
-
-    The general override path deliberately requires a key to exist already, so
-    that a typo fails loudly instead of silently growing a new entry. That is
-    the right default, but it cannot express a key whose *presence* legitimately
-    varies -- the bath-bidomain patch entries, where which of
-    ``groundPatches``/``surfaceCurrentPatches`` holds a patch depends on the
-    boundary variant the case was last written for.
-
-    Use this only for such entries. Everything else should stay strict.
-    """
-    resolved_scope = None
-    if scope is not None:
-        raw_scope = (scope,) if isinstance(scope, str) else tuple(scope)
-        resolved_scope = tuple(
-            part
-            for token in raw_scope
-            for part in _resolve_scope_tokens(
-                str(token),
-                electro_properties_path=electro_properties_path,
-            )
-        )
-
-    update_foam_entry(
-        electro_properties_path,
-        entry_name,
-        value,
-        scope=resolved_scope,
-        add_if_missing=True,
-    )
-
-
-def remove_electro_property_entry(
-    electro_properties_path: Path,
-    entry_name: str,
-    *,
-    scope: str | Sequence[str] | None = None,
-    missing_ok: bool = False,
-) -> None:
-    """Scalar counterpart of :func:`remove_electro_property_dict`.
-
-    Same ``$TOKEN`` scope resolution; delegates to
-    :func:`~omnidriver.openfoam.mutators.remove_foam_entry` so a
-    ``name value;`` entry can be removed without the block remover rejecting
-    it for having no opening brace.
-    """
-    resolved_scope = None
-    if scope is not None:
-        raw_scope = (scope,) if isinstance(scope, str) else tuple(scope)
-        resolved_scope = tuple(
-            part
-            for token in raw_scope
-            for part in _resolve_scope_tokens(
-                str(token),
-                electro_properties_path=electro_properties_path,
-            )
-        )
-
-    remove_foam_entry(
-        electro_properties_path,
-        entry_name,
         scope=resolved_scope,
         missing_ok=missing_ok,
     )

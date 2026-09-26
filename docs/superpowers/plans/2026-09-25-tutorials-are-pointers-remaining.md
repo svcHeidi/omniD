@@ -83,7 +83,7 @@ and the native repo's own log:
 | P5 | gmsh facts, from the real binary (`docs/solver-learning/cardiacfoam.md` G1–G6) | **done** | `6c6f93e` |
 | P3 | core record features: `default_variant` (blockMesh is the default route) and replaceable default step arguments; Q6 (parallel through the OpenFOAM layer) investigated only | **in progress** | branch `tut-p3` |
 | NF | native fixes: `DefineConstant` in the five gmsh templates; pseudo-ECG `anisotropic yes`, with a regression re-run; bidomain's never-applied tolerance references deleted; identical tet overlays deleted. Plus, in omniD, the Q11 catalogue relation and its validation | **in progress** | native worktree; omniD branch `q11-catalog` |
-| 5.4a | bath (§5b) | next, after P3 + NF | — |
+| 5.4a | bath (§5b) | **done on the branch** (2026-09-26): record `manufacturedBathBidomain`, 14 native studies rewritten, 70-case parity, C1–C12 pass, one real tet run through the record. No core change; Q4 settled by whole-map study keys (BB4/BB5). Open: the tet route accepts a non-3D `dimension` (review 54b I3). Numbers and evidence: `.superpowers/sdd/t54a-bath-report.md`, `docs/solver-learning/cardiacfoam.md` §BB | omniD `t54a-bath`; native `omnid/bath` |
 | 5.4b | bidomain, eikonalECG, **niederer2011**, then pseudo-ECG (§5c) | after P3 + NF; parallel with 5.4a except pseudo-ECG | — |
 | B7–B8 | topic B: cardiacFOAM's probe reader, then the cross-solver Niederer comparison | after 5.4b-N | — |
 | O15 | conformance Task 15 (the OpenFOAM half of K3) | after P4; not beside step C | — |

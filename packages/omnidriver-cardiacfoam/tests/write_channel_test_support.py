@@ -60,17 +60,6 @@ BLOCK_MESH_DICT_TEXT = (
     ");\n"
 )
 
-# manufactured_bath_bidomain uses a 3-block mesh (expected_blocks=3).
-BLOCK_MESH_DICT_TEXT_3_BLOCKS = (
-    "FoamFile\n{\n    object blockMeshDict;\n}\n"
-    "blocks\n(\n"
-    "    hex (0 1 5 4 8 9 13 12) (10 10 10) simpleGrading (1 1 1)\n"
-    "    hex (1 2 6 5 9 10 14 13) (10 10 10) simpleGrading (1 1 1)\n"
-    "    hex (2 3 7 6 10 11 15 14) (10 10 10) simpleGrading (1 1 1)\n"
-    ");\n"
-)
-
-
 def write_electro_properties(root: Path, relpath: str = "constant/electroProperties") -> Path:
     path = root / relpath
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -92,12 +81,10 @@ def write_control_dict(root: Path, relpath: str = "system/controlDict") -> Path:
     return path
 
 
-def write_block_mesh_dict(
-    root: Path, relpath: str = "system/blockMeshDict", *, three_blocks: bool = False,
-) -> Path:
+def write_block_mesh_dict(root: Path, relpath: str = "system/blockMeshDict") -> Path:
     path = root / relpath
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(BLOCK_MESH_DICT_TEXT_3_BLOCKS if three_blocks else BLOCK_MESH_DICT_TEXT)
+    path.write_text(BLOCK_MESH_DICT_TEXT)
     return path
 
 

@@ -51,7 +51,7 @@ from typing import Any, Mapping
 from omnidriver.core.case_write import Precondition, RenderedFile, _digest_bytes
 
 from .effective_dictionary import _inspect_source_closure
-from .mutators import ensure_foam_dict, remove_foam_dict, remove_foam_entry, update_foam_entry
+from .mutators import remove_foam_dict, remove_foam_entry, update_foam_entry
 from .case_planning import _rewrite_hex_block_lines
 
 #: The one format this module renders. Declared truthfully by whichever
@@ -121,32 +121,21 @@ def render_patch_case_files(
     the same duplicate-slot reasoning ``CaseMutationRequest`` already applies
     to ``ParameterAssignment``\\ s.
 
-    **A target may instead carry ``"dict_operation"``** (Phase 3 Task 6's
-    completion, 2026-09-23) -- ``"ensure"`` with a ``"block_text"``, or
-    ``"remove"`` -- a whole sub-dictionary inserted or deleted verbatim,
+    **A target may instead carry ``"dict_operation": "remove"``** (Phase 3
+    Task 6's completion, 2026-09-23) -- a whole named sub-dictionary deleted,
     rather than one key set to one value. Not a ``ParameterAssignment``: like
     the hex rewrite above, there is no single ``key_path`` a typed value sits
-    at -- ``block_text`` is hand-authored OpenFOAM text a tutorial supplies
-    (e.g. an ``ecgDomains`` block with several nested sub-dictionaries), and
-    inventing a ``value_kind`` to carry that through core's vocabulary would
-    be the same layering mistake the hex case's own docstring already
-    rejects. Delegates to :func:`mutators.ensure_foam_dict`/
-    :func:`mutators.remove_foam_dict` -- reused, not reimplemented, same as
-    every other edit this function applies. Applied **before** the ordinary
-    key/value edits below, not after: a real caller
-    (``manufactured_bath_bidomain``'s ``ecgDomains`` block, inserted via this
-    path and then immediately patched at ``ecgDomains.bodyECG.ecgSolver`` by
-    an ordinary ``set`` in the same commit) depends on the block existing
-    before a scoped key inside it can be found at all -- the reverse order
-    would have the ``set`` fail against a scope that does not exist yet. A
-    document whose ``ecgDomains`` block is being *removed* in the same
-    commit never also sets a key inside it (the caller's own branch is
-    exclusive on ``ecg_enabled``), so this fixed order never conflicts with
-    the removal case either. ``remove`` is idempotent -- always applied with
-    ``missing_ok=True`` -- because a `ParameterAssignment`-shaped removal
-    asserts the document's *final* state (the block is gone), not that a
-    deletion action occurred; a block already absent already satisfies that
-    assertion.
+    at. Delegates to :func:`mutators.remove_foam_dict`, applied **before**
+    the ordinary key/value edits below, always with ``missing_ok=True``:
+    a removal asserts the document's *final* state (the block is gone), not
+    that a deletion action occurred.
+
+    Corrected 2026-09-26 (tutorials-are-pointers 5.4a): this also took
+    ``"ensure"`` with a ``"block_text"``, a whole hand-authored block
+    inserted verbatim. Its one caller, the bath tutorial module's
+    ``ecgDomains`` insert, is deleted with that module (the bath record's
+    native case has no ``ecgDomains``), so ``"ensure"`` is refused like any
+    unknown operation.
 
     **A value edit's ``"operation"``** (same 2026-09-23 decision) selects
     which write `mutators.update_foam_entry`/`mutators.remove_foam_entry`
@@ -250,19 +239,15 @@ def render_patch_case_files(
             snapshot_path.write_text(rewritten)
         for edit in dict_edits:
             scope = tuple(edit["scope"]) if edit.get("scope") else None
-            if edit["dict_operation"] == "ensure":
-                ensure_foam_dict(
-                    snapshot_path, edit["dict_name"], edit["block_text"], scope=scope,
-                )
-            elif edit["dict_operation"] == "remove":
+            if edit["dict_operation"] == "remove":
                 remove_foam_dict(
                     snapshot_path, edit["dict_name"], scope=scope, missing_ok=True,
                 )
             else:
                 raise ValueError(
                     f"patch target {document!r} declares dict_operation "
-                    f"{edit['dict_operation']!r}; known operations are "
-                    f"'ensure' and 'remove'"
+                    f"{edit['dict_operation']!r}; the known operation is "
+                    f"'remove'"
                 )
         for edit in value_edits:
             key_path = tuple(edit["expanded_key_path"])

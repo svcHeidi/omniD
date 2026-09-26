@@ -108,8 +108,18 @@ CONTROL_DICT_ENTRIES: Final[tuple[DictEntry, ...]] = (
             "timeStep writes every writeInterval time steps."
         ),
         source_refs=("applications/solvers/cardiacFoam/cardiacFoam.C",),
+        notes=(
+            "Corrected 2026-09-26 (tutorials-are-pointers 5.4a): enum_values "
+            "listed four of upstream OpenFOAM's seven names, so the native "
+            "bathBidomain case's own writeControl adjustableRunTime was "
+            "refused at strict planning. They are now Foam::Time::"
+            "writeControlNames (OpenFOAM v2412 src/OpenFOAM/db/Time/Time.C)."
+        ),
         value_kind="enum",
-        enum_values=("runTime", "timeStep", "clockTime", "cpuTime"),
+        enum_values=(
+            "none", "timeStep", "runTime", "adjustable", "adjustableRunTime",
+            "clockTime", "cpuTime",
+        ),
         required=True,
         typical_value="runTime",
     ),

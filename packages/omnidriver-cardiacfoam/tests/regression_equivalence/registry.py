@@ -76,6 +76,7 @@ _KNOWN_CASES: tuple[RegressionCase, ...] = (
     RegressionCase(
         "manufacturedSolutions/bathBidomain", "manufacturedBathBidomain",
         (_ELECTRO, _PHYSICS), "regression/bathBidomainManufactured.reference",
+        resolution="tutorial_record",
     ),
     # NiedererEtAl2011/electroMechanicalNiedererEtAl2011 removed 2026-09-26
     # (5.4b-N, plan §5d): native 7a04349b deleted that case. Its successor,

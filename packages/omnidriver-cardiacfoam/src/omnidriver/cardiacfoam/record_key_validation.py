@@ -39,7 +39,11 @@ Three outcomes, exactly the owner's three rules for this task:
    matched entry's declared shape, is refused BY NAME (raises, naming the
    document and key) -- never silently written and never silently given an
    invented kind, the same posture ``resolve_entry_overrides`` already
-   established for the override channel.
+   established for the override channel. Added 2026-09-26 (5.4a, owner Q4):
+   a map at a key whose members the catalogue declares as one dynamic
+   ``<name>`` segment (``bathPotentialDomain.groundPatches.<patch>``) is
+   checked member by member against that entry and validates as
+   ``"mapping"``; the writer replaces the whole sub-dictionary with it.
 2. Any other document under ``system/`` -- accepted, ``validated=False``.
    This package owns no OpenFOAM key catalog (design §5's own exception --
    "OpenFOAM-owned keys... have NO catalog today... no partial OpenFOAM
@@ -99,6 +103,7 @@ validator needs to do requires reading the case.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from pathlib import Path
@@ -175,6 +180,22 @@ def _electro_or_physics_match(document: str, key_path: "tuple[str, ...]"):
     return entry, binding
 
 
+def _declares_members(document: str, key_path: "tuple[str, ...]") -> bool:
+    """Whether the catalog declares ``key_path``'s members as one dynamic
+    segment, i.e. has an entry ``<key_path>.<name>``. Checked on the
+    catalog's own paths, so it holds for an empty map too."""
+    if document != _ELECTRO_DOCUMENT:
+        return False
+    parent = ".".join(key_path)
+    if len(key_path) > 1 and key_path[0] in _myocardium_solver_coeffs_names():
+        parent = ".".join((_COEFFS_TOKEN,) + tuple(key_path[1:]))
+    return any(
+        entry.dynamic_path and path.rpartition(".")[0] == parent
+        and path.rpartition(".")[2].startswith("<")
+        for path, entry in _ELECTRO_ENTRIES_BY_PATH.items()
+    )
+
+
 def _infer_unvalidated_value_kind(value: Any) -> str:
     """The best-effort, purely descriptive shape tag for an OpenFOAM-owned
     key this package has no catalog for (rule 2). Never checked against
@@ -235,6 +256,16 @@ def record_key_validator(
     dotted = ".".join(key_path)
     if document in (_ELECTRO_DOCUMENT, _PHYSICS_DOCUMENT):
         match = _electro_or_physics_match(document, key_path)
+        if match is None and isinstance(value, Mapping) and _declares_members(document, key_path):
+            # A whole map at a key whose members the catalog declares as a
+            # dynamic ``<name>`` segment (``bathPotentialDomain.groundPatches
+            # .<patch>``): each member is checked as that entry, and the map
+            # is written whole, replacing the sub-dictionary (owner Q4,
+            # 2026-09-26; the writer replaces rather than merges, logged as
+            # BB4 in docs/solver-learning/cardiacfoam.md).
+            for member, member_value in value.items():
+                record_key_validator(document, key_path + (str(member),), member_value)
+            return "mapping", True
         if match is None:
             catalog_name = (
                 "electroProperties" if document == _ELECTRO_DOCUMENT else "physicsProperties"

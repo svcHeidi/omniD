@@ -64,7 +64,7 @@ TUTORIALS: tuple[TutorialDisplay, ...] = (
         },
     ),
     TutorialDisplay(
-        id=CardiacTutorialID.MANUFACTURED_BATH_BIDOMAIN.value,
+        id="manufacturedBathBidomain",
         title="Manufactured solution (bath bidomain)",
         summary=(
             "FDA bidomain-with-bath manufactured solution with a grounded "

@@ -140,7 +140,9 @@ NON_RTST_DRIVER_PATHS: frozenset[str] = frozenset({
     "$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.couplingMode",
     "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.manufactured.dimension",
     "$ELECTRO_MODEL_COEFFS.verificationModel.fdaBathVariant",
-    "$ELECTRO_MODEL_COEFFS.manufacturedBidomain.fdaBathVariant",
+    # "$ELECTRO_MODEL_COEFFS.manufacturedBidomain.fdaBathVariant" removed
+    # 2026-09-26 (5.4a): a dead key no native code reads, which only the
+    # deleted bath tutorial module ever wrote (overrides.py's own dated note).
     "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>"
     ".purkinjeGraphModelCoeffs.tissue",
     # pvjKernel selects the PVJ spatial-spreading kernel (uniform / ...) via a

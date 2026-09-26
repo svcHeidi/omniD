@@ -150,6 +150,29 @@ def manufactured_bidomain_conformance_target(tmp_path: Path) -> ConformanceTarge
     )
 
 
+def manufactured_bath_bidomain_conformance_target(tmp_path: Path) -> ConformanceTarget:
+    """``manufacturedBathBidomain`` on its default hex route at the coarsest
+    resolution its studies define (``cartesianConvergence``'s 1D ``N=10``:
+    three blocks of ``(10 1 1)``), to the tet studies' ``endTime`` 0.02
+    (36 steps; a real run takes about a second)."""
+    require_sourced_openfoam("blockMesh", "topoSet", "setTorsoOrganConductivityField", "cardiacFoam")
+    return ConformanceTarget(
+        plugin="cardiacfoam",
+        record="manufacturedBathBidomain",
+        cases_root=native_tutorials_root(),
+        scratch_root=tmp_path / "scratch",
+        base_study={"dimension": "1D", "numberCells": 10, "system/controlDict:endTime": 0.02},
+        # A catalogued scalar the bath verifier reads (native 0.01).
+        patch=("constant/electroProperties:bidomainSolverCoeffs.verificationModel.alpha", 0.02),
+        untouched=("constant/electroProperties", ("bidomainSolverCoeffs", "verificationModel", "k")),
+        sweep_name="numberCells",
+        sweep_values=(10, 20),
+        unknown_name="constant/electroProperties:bidomainSolverCoeffs.bathPredictorCorector",
+        solver_command="cardiacFoam",
+        environment={},
+    )
+
+
 def niederer_sweep(tmp_path: Path, *, dx_values: Sequence[float], end_time: float | None = None,
                     extra: Mapping[str, Any] | None = None) -> Path:
     """Run ``niederer2011`` (hex route) at each of ``dx_values`` (metres)
