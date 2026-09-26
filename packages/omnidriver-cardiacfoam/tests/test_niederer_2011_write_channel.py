@@ -1,4 +1,4 @@
-"""Phase 3 Task 6: `niederer_2012`'s hex-family path -- entry overrides,
+"""Phase 3 Task 6: `niederer_2011`'s hex-family path -- entry overrides,
 `deltaT`/`endTime` (the latter previously written by a bespoke hand-rolled
 line rewriter, `_update_end_time`, now proven byte-identical through
 `plan_end_time`), and a block-mesh rewrite.
@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from omnidriver.cardiacfoam.tutorials import niederer_2012 as tut
+from omnidriver.cardiacfoam.tutorials import niederer_2011 as tut
 from omnidriver.core.case_write import CaseWriteRecord
 from omnidriver.core.runtime.models import CaseConfig
 from write_channel_test_support import (
@@ -62,7 +62,7 @@ def _kwargs() -> dict:
     )
 
 
-class TestNiederer2012WriteChannel(unittest.TestCase):
+class TestNiederer2011WriteChannel(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = Path(tempfile.mkdtemp(prefix="omnidriver-niederer-channel-"))
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
@@ -96,7 +96,7 @@ class TestNiederer2012WriteChannel(unittest.TestCase):
         thin `_plan_case` wrapper was mechanical, but a first, unconditional
         attempt at it would have silently broken this branch (confirmed
         against `manufactured_eikonal_ecg`'s identical shape, which had a
-        real test to catch it; niederer_2012 had none, so this test closes
+        real test to catch it; niederer_2011 had none, so this test closes
         that gap rather than leaving the fix unverified).
         """
         root = self.tmp / "apply_tet"

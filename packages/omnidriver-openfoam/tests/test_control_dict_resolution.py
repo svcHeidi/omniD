@@ -7,7 +7,7 @@ digests, not existence -- an existence check passes for an empty file).
 retired -- Task 6 migrated its last caller onto `plan_end_time`, and
 `grep -rn "set_end_time(" packages/*/src/` (excluding this module's own
 former definition) returns zero. `set_delta_t`'s own characterization stays:
-it keeps one caller, `niederer_2012.py`'s `mesh_family == "tet"` branch
+it keeps one caller, `niederer_2011.py`'s `mesh_family == "tet"` branch
 (a source-artifact route that never migrates onto the channel), so it is not
 yet retired.
 

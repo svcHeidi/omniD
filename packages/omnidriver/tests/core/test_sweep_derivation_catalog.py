@@ -62,7 +62,7 @@ def test_output_dir_name_template_rejects_path_unsafe_values():
 
 def test_output_dir_name_template_flattens_list_valued_axes():
     # Entry-based sweep axes are often list-shaped to match a registered
-    # tutorial's own make_spec kwargs directly (e.g. niederer_2012.py's
+    # tutorial's own make_spec kwargs directly (e.g. some_tutorial.py's
     # dx_values=[0.5]) -- str([0.5]) == "[0.5]" is not path-safe, so list/
     # tuple values must be flattened into the label instead of stringified
     # as a Python literal.

@@ -48,8 +48,8 @@ _KNOWN_CASES: tuple[RegressionCase, ...] = (
         (_ELECTRO, _PHYSICS), "regression/singleCell.reference",
     ),
     RegressionCase(
-        "NiedererEtAl2011/NiedererEtAl2011verification", "niederer2012",
-        (_ELECTRO, _PHYSICS), "regression/NiedererEtAl2012.reference",
+        "NiedererEtAl2011/NiedererEtAl2011verification", "niederer2011",
+        (_ELECTRO, _PHYSICS), "regression/NiedererEtAl2011.reference",
     ),
     RegressionCase(
         "manufacturedSolutions/bidomain", "manufacturedBidomain",

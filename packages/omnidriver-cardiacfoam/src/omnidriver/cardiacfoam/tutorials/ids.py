@@ -4,7 +4,7 @@ from enum import Enum
 class CardiacTutorialID(str, Enum):
     SINGLE_CELL = "singleCell"
     CABLE_1D_CV_CONVERGENCE = "cable1DCVConvergence"
-    NIEDERER_2012 = "niederer2012"
+    NIEDERER_2011 = "niederer2011"
     MANUFACTURED_MONODOMAIN_PSEUDO_ECG = "manufacturedMonodomainPseudoECG"
     MANUFACTURED_BIDOMAIN = "manufacturedBidomain"
     MANUFACTURED_BATH_BIDOMAIN = "manufacturedBathBidomain"

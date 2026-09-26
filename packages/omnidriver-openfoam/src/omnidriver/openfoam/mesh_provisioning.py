@@ -18,7 +18,7 @@ pre-existing author file to parse or risk corrupting, so this does not need
 `mutators.py`'s dictionary mutation machinery (that's for patching
 values into an *already-written* file). `dx` (metres, isotropic cell size)
 derives the cell count via `cell_counts_from_dx`, a small pure function
-factored out so `niederer_2012.py`'s own `_replace_blockmesh_resolution`
+factored out so `niederer_2011.py`'s own `_replace_blockmesh_resolution`
 (which *does* patch an existing author-provided file, a genuinely different
 problem) can share the exact same divide-or-error math instead of duplicating
 it.
@@ -111,7 +111,7 @@ def cell_counts_from_dx(dx: float, slab_size: Sequence[float]) -> tuple[int, ...
     Raises `ValueError` if `dx` does not evenly divide every axis length:
     deliberately no rounding. A requested `dx` that doesn't fit the domain is
     a caller error to surface, not something to approximate quietly (mirrors
-    the rigor `niederer_2012.py`'s own `_replace_blockmesh_resolution`
+    the rigor `niederer_2011.py`'s own `_replace_blockmesh_resolution`
     already established for the same problem, on a different domain).
     """
     if dx <= 0:

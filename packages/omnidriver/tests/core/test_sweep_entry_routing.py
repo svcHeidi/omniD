@@ -28,7 +28,7 @@ def test_case_id_bookkeeping_key_is_stripped():
 
 
 def test_nested_object_values_pass_through_unchanged():
-    # niederer_2012.py's own make_spec accepts end_time_by_dx as a
+    # some_tutorial.py's own make_spec accepts end_time_by_dx as a
     # {dx: end_time} mapping -- entry-mode routing must not flatten or
     # otherwise mutate nested object values.
     routed = route_entry_case_values(
@@ -67,7 +67,7 @@ def test_entry_key_in_base_is_not_forwarded():
     # "entry" selects which tutorial to target; it is sweep_runner's own
     # dispatch key, not a make_spec kwarg for that tutorial.
     routed = route_entry_case_values(
-        base={"entry": "niederer2012", "solvers": ["implicit"]},
+        base={"entry": "niederer2011", "solvers": ["implicit"]},
         resolved_axis_values={"dx_values": [0.5]},
     )
     assert "entry" not in routed

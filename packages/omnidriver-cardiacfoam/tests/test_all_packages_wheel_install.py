@@ -161,7 +161,7 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
             "--plugin",
             "cardiacfoam",
             "--entry",
-            "niederer2012",
+            "niederer2011",
             "--cases-root",
             str(cases_root),
         ],
@@ -169,7 +169,7 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
         env=clean_environment,
     )
     payload = json.loads(describe)
-    assert payload["resolved_name"] == "niederer2012"
+    assert payload["resolved_name"] == "niederer2011"
     # `plugin_identity` is `StackIdentity.to_json()` (Task 7's migration,
     # corrected 2026-09-22 here): no top-level `id`, only `providers`, one
     # `ProviderIdentity` per composed provider, ordered least-specific first.

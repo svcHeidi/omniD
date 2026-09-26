@@ -847,7 +847,7 @@ Fixture-to-solver mapping (derived from each spec's defaults.ELECTRO_PROPERTIES_
     manufactured_monodomain_pseudo_ecg     → monodomainSolver  (ionic = monodomainFDAManufactured)
     manufactured_bidomain → bidomainSolver (ionic = bidomainFDAManufactured)
     manufactured_bath_bidomain → bidomainSolver (ionic = bathBidomainFDAManufactured)
-    niederer_2012        → monodomainSolver  (ionic = TNNP, tissue = epicardialCells)
+    niederer_2011        → monodomainSolver  (ionic = TNNP, tissue = epicardialCells)
     restitution_curves   → singleCellSolver  (ionic = TNNP, tissue = epicardialCells)
     generic_case         → monodomainSolver  (representative; generic_case is
                            solver-agnostic, monodomainSolver is the most common)
@@ -966,7 +966,7 @@ _FIXTURE_RUNS = [
         ),
     ),
     (
-        "niederer_2012",
+        "niederer_2011",
         _filled_run_for_solver(
             "monodomainSolver",
             physics={

@@ -1,7 +1,7 @@
 """Registered tutorials must keep working when core stops inventing a root.
 
 Measured 2026-09-04 before the change: 18 of 26 catalog entries build under an
-arbitrary empty base, niederer2012 among them. The other 8 are 4 tutorials
+arbitrary empty base, niederer2011 among them. The other 8 are 4 tutorials
 plus case-folded aliases which read pre-existing case content -- one file and
 one key, <case>/system/decomposeParDict's numberOfSubdomains -- because a
 parallel solve changes the DAG's shape and the rank count cannot be invented.
@@ -38,8 +38,8 @@ def _factories():
     ]
 
 
-def test_niederer2012_builds_under_any_base(tmp_path: Path) -> None:
-    spec = _factories()["niederer2012"](cases_root=tmp_path)
+def test_niederer2011_builds_under_any_base(tmp_path: Path) -> None:
+    spec = _factories()["niederer2011"](cases_root=tmp_path)
     assert Path(spec.case_root).is_relative_to(tmp_path)
 
 
@@ -68,7 +68,14 @@ def test_every_serial_tutorial_builds_under_any_base(tmp_path: Path) -> None:
     # longer a factory tutorial at all, so it is absent from `_factories()`
     # here, not merely unbuildable. A sweep that silently covered zero
     # tutorials would otherwise assert nothing.
-    assert built == 14, f"expected 14 buildable catalog entries, got {built}"
+    # Corrected 2026-09-26 (niederer2012 -> niederer2011 rename): registry.py
+    # carried an extra, undocumented alias key, "niedereretal2012", mapped to
+    # the same factory as CardiacTutorialID.NIEDERER_2012.value/.value.lower()
+    # -- three keys for one tutorial. The rename drops that alias rather than
+    # reproducing it under the new name (the old name must be refused like
+    # any unknown entry, not kept reachable under either spelling), so
+    # SPEC_FACTORIES now holds 13 buildable entries, not 14.
+    assert built == 13, f"expected 13 buildable catalog entries, got {built}"
 
 
 @pytest.mark.parametrize("name", sorted(_NEEDS_CASE_CONTENT))

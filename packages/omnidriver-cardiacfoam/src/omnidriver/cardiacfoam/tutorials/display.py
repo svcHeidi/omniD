@@ -17,13 +17,13 @@ TUTORIALS: tuple[TutorialDisplay, ...] = (
         },
     ),
     TutorialDisplay(
-        id="niederer2012",
-        title="Niederer 2012 verification benchmark",
+        id="niederer2011",
+        title="Niederer 2011 verification benchmark",
         summary=(
-            "The Niederer et al. 2012 N-version benchmark for cardiac "
+            "The Niederer et al. 2011 N-version benchmark for cardiac "
             "tissue electrophysiology. Validates monodomain solvers."
         ),
-        thumbnail="/tutorials/niederer-2012.png",
+        thumbnail="/tutorials/niederer-2011.png",
         tags=("benchmark", "verification", "monodomain"),
         preset={
             "anatomy.mesh": "niederer-slab",

@@ -20,7 +20,7 @@ from omnidriver.cardiacfoam.tutorials.cable_1d_cv_convergence import (
     make_spec as make_cable_1d_cv_convergence_spec,
 )
 from omnidriver.cardiacfoam.tutorials.manufactured_monodomain_pseudo_ecg import make_spec as make_manufactured_monodomain_pseudo_ecg_spec
-from omnidriver.cardiacfoam.tutorials.niederer_2012 import make_spec as make_niederer_2012_spec
+from omnidriver.cardiacfoam.tutorials.niederer_2011 import make_spec as make_niederer_2011_spec
 # restitution_curves's factory make_spec was deleted 2026-09-25: the
 # tutorial migrated onto a tutorial record (records/restitution_curves.py,
 # docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md, step
@@ -40,9 +40,8 @@ SPEC_FACTORIES = {
     CardiacTutorialID.SINGLE_CELL.value.lower(): make_single_cell_spec,
     CardiacTutorialID.CABLE_1D_CV_CONVERGENCE.value: make_cable_1d_cv_convergence_spec,
     CardiacTutorialID.CABLE_1D_CV_CONVERGENCE.value.lower(): make_cable_1d_cv_convergence_spec,
-    CardiacTutorialID.NIEDERER_2012.value: make_niederer_2012_spec,
-    CardiacTutorialID.NIEDERER_2012.value.lower(): make_niederer_2012_spec,
-    "niedereretal2012": make_niederer_2012_spec,
+    CardiacTutorialID.NIEDERER_2011.value: make_niederer_2011_spec,
+    CardiacTutorialID.NIEDERER_2011.value.lower(): make_niederer_2011_spec,
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_PSEUDO_ECG.value: make_manufactured_monodomain_pseudo_ecg_spec,
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_PSEUDO_ECG.value.lower(): make_manufactured_monodomain_pseudo_ecg_spec,
     CardiacTutorialID.MANUFACTURED_BIDOMAIN.value: make_manufactured_bidomain_spec,
@@ -64,7 +63,7 @@ SPEC_FACTORIES = {
 REGISTERED_TUTORIALS = (
     CardiacTutorialID.SINGLE_CELL.value,
     CardiacTutorialID.CABLE_1D_CV_CONVERGENCE.value,
-    CardiacTutorialID.NIEDERER_2012.value,
+    CardiacTutorialID.NIEDERER_2011.value,
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_PSEUDO_ECG.value,
     CardiacTutorialID.MANUFACTURED_BIDOMAIN.value,
     CardiacTutorialID.MANUFACTURED_BATH_BIDOMAIN.value,

@@ -15,7 +15,7 @@ class TableMetadata:
     Attributes
     ----------
     entry:
-        Human-readable entry name, e.g. ``"NiedererEtAl2012"``.
+        Human-readable entry name, e.g. ``"ExampleTutorial2020"``.
     units:
         Mapping of column name → unit string, e.g.
         ``{"elapsedTime": "s", "DX": "mm"}``.
@@ -69,7 +69,7 @@ class TableWriter:
         output_dir:
             Directory into which the files are written.
         filename_stem:
-            Base name without extension, e.g. ``"NiedererEtAl2012_summary"``.
+            Base name without extension, e.g. ``"ExampleTutorial2020_summary"``.
         label:
             Human-readable description used in the artifact entry.
         metadata:

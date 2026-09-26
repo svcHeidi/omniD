@@ -16,10 +16,10 @@
 #     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
 #
 # Module
-#     niederer_2012
+#     niederer_2011
 #
 # Description
-#     Defines configuration template for Niederer 2012 benchmarks.
+#     Defines configuration template for Niederer 2011 benchmarks.
 #
 # Author
 #     Simao Nieto de Castro, UCD.
@@ -41,7 +41,7 @@ from .shared import (
 
 
 
-TUTORIAL_NAME = CardiacTutorialID.NIEDERER_2012.value
+TUTORIAL_NAME = CardiacTutorialID.NIEDERER_2011.value
 CASE_DIR_NAME = "NiedererEtAl2011/NiedererEtAl2011verification"
 SETUP_DIR_NAME = "setup"
 DX_VALUES = (0.5, 0.2, 0.1)  # in mm
@@ -66,11 +66,11 @@ BLOCK_MESH_DICT_RELPATH = Path("system/blockMeshDict")
 # Deliberately NOT here: NIEDERER_POINTS/_LINE_START/_LINE_END/_NUM_POINTS,
 # NIEDERER_POINTS_FUNCTION_OBJECT/_LINE_FUNCTION_OBJECT, NIEDERER_SAMPLED_FIELD,
 # RUN_SCRIPT_RELPATH, and every *_POSTPROCESS_* constant. All of them existed
-# solely to feed niederer_2012.py's _run_case/_export_openfoam_samples --
+# solely to feed niederer_2011.py's _run_case/_export_openfoam_samples --
 # code that TutorialSpec.run_case never actually called, and that duplicated,
 # with hardcoded probe labels, what setup/convert_raw_samples.py now reads
 # directly from the raw OpenFOAM probes file's own header. Removed alongside
-# that dead code in the niederer_2012.py cleanup that follows 32cc29dd.
+# that dead code in the niederer_2011.py cleanup that follows 32cc29dd.
 # TutorialSpec.run_case itself has since been removed entirely.
 __all__ = [
     "TUTORIAL_NAME",

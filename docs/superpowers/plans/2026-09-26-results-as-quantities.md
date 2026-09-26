@@ -57,7 +57,7 @@ reader to start here, and there was no table). Built from `git log`.
 | Task 5: openCARP reads its LAT file as quantities (F16/F17) | `422d549`, `ff6331e` | done |
 | Task 6: openCARP-vs-openCARP proof end to end; docs and CI gate | `5a0778e` | done |
 | Opus review fixes (location guards, pre-registration, unit-carrying reports; M11) | `04a1093`, `206de29`, `9923621` | done |
-| Task 7 (cardiacFOAM's probe reader) | — | **blocked** on the tutorial stream's step 5.4b (`niederer2012` as a record) |
+| Task 7 (cardiacFOAM's probe reader) | — | **blocked** on the tutorial stream's step 5.4b (`niederer2011` as a record; renamed 2026-09-26 from `niederer2012` -- the benchmark is Niederer et al. 2011) |
 | Task 8 (openCARP vs cardiacFOAM end to end) | — | **blocked** on Task 7 |
 
 ## Global Constraints
@@ -85,7 +85,7 @@ reader to start here, and there was no table). Built from `git log`.
   - a changed request is a new report, and the request's digest is in it.
 - Claims about a solver come from the real binary. Every probe goes into its evidence log (command, observed output, conclusion). Fixtures cannot settle a claim about external behaviour, and no test uses invented geometry: openCARP reader tests read files that `mesher` and `openCARP` wrote.
 - The native tree is never written. Every run stages a copy under the scratch root.
-- **Stale cardiacFOAM Niederer references are not fixed here.** The tolerance rows and reference paths in `equivalence_protocol.yaml` and `regression_equivalence/registry.py` belong to the tutorial stream's `niederer2012` migration (its step 5.4b).
+- **Stale cardiacFOAM Niederer references are not fixed here.** The tolerance rows and reference paths in `equivalence_protocol.yaml` and `regression_equivalence/registry.py` belong to the tutorial stream's `niederer2011` migration (its step 5.4b).
 - Evaluate defaults lazily (CLAUDE.md). Name a symbol, not a line number. Correct a docstring or comment claim with a date; do not silently overwrite it.
 - Verify in all shapes before any "done":
   - all packages;
@@ -207,7 +207,7 @@ packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/activation_probes.py 
 - Task 5 (openCARP) can start after Task 2, **in parallel with Task 3**; it touches only `packages/omnidriver-opencarp` and `docs/solver-learning/opencarp.md`.
 - Task 4 needs Task 3's schema; it can run in parallel with Task 5.
 - Task 6 needs 3, 4 and 5.
-- Task 7 is **blocked** until the tutorial stream's step 5.4b has made `niederer2012` a tutorial record on `main`. Task 8 is blocked on Task 7.
+- Task 7 is **blocked** until the tutorial stream's step 5.4b has made `niederer2011` a tutorial record on `main`. Task 8 is blocked on Task 7.
 - An Opus review follows Task 3 (the core contract) and Task 6 (the whole unblocked topic).
 
 ---
@@ -3095,15 +3095,15 @@ packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/activation_probes.py 
 
 ---
 
-### Task 7 (**BLOCKED** until the tutorial stream's step 5.4b lands `niederer2012` as a record): cardiacFOAM's probe reader
+### Task 7 (**BLOCKED** until the tutorial stream's step 5.4b lands `niederer2011` as a record): cardiacFOAM's probe reader
 
-**Why blocked.** `niederer2012` is still a factory tutorial on `main`. The tutorial stream owns its migration to a record (step 5.4b), including the stale Niederer tolerance rows and reference paths, which this plan does not touch. The reader needs a record `produces` entry to carry its format.
+**Why blocked.** `niederer2011` is still a factory tutorial on `main`. The tutorial stream owns its migration to a record (step 5.4b), including the stale Niederer tolerance rows and reference paths, which this plan does not touch. The reader needs a record `produces` entry to carry its format.
 
 **Files (when unblocked):**
 - Create: `packages/omnidriver-openfoam/src/omnidriver/openfoam/probes.py` (the probes layout; OpenFOAM's format, with no field meaning)
 - Create: `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/activation_probes.py` (unit, sentinel and rule for `activationTime` probes)
 - Modify: `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/runtime_evidence.py` (`artifact_value_reader` returns the reader for its format, with a dated correction of its "empty today" docstring)
-- Modify: the `niederer2012` record module that 5.4b creates, so the probe output is a `ProducedPath`
+- Modify: the `niederer2011` record module that 5.4b creates, so the probe output is a `ProducedPath`
 - Create: `packages/omnidriver-cardiacfoam/tests/test_activation_probes_native.py`
 
 **Contract:**
@@ -3134,7 +3134,7 @@ catch. When Step 4 implements this:
   means "expected location", checked against the reported `sampled_at`, and
   never handed to the reader itself.
 - **Open item:** `comparison._artifact` refuses any `path_pattern`
-  containing `{`. If 5.4b's `niederer2012` record ends up declaring the
+  containing `{`. If 5.4b's `niederer2011` record ends up declaring the
   probe artifact with topic A's `{instance}` placeholder, this task needs a
   core change first. Check this at Step 1's unblock check.
 
@@ -3147,8 +3147,8 @@ function is fed). A study that changes one gives a value that compares
 against the same reference with no word in the report. Worth a reader
 enhancement later -- not scoped into Task 7 or Task 8.
 
-- [ ] **Step 1: Unblock check.** `git log main` shows the tutorial stream's 5.4b `niederer2012` record. Read its record module, its coarse study values from its native test, and its step ids. Use those names wherever this task writes `niederer2012`. Build `/tmp/odB-<wt>` fresh.
-- [ ] **Step 2: Settle the facts on a real run.** Run 5.4b's `niederer2012` record through `sweep-run` at its coarse settings with `--scratch-dir`, and inspect `postProcessing/Niedererpoints/0/activationTime`. Log each fact in the cardiacFOAM evidence (or 5.4b's own log), as command, observed and conclusion:
+- [ ] **Step 1: Unblock check.** `git log main` shows the tutorial stream's 5.4b `niederer2011` record. Read its record module, its coarse study values from its native test, and its step ids. Use those names wherever this task writes `niederer2011`. Build `/tmp/odB-<wt>` fresh.
+- [ ] **Step 2: Settle the facts on a real run.** Run 5.4b's `niederer2011` record through `sweep-run` at its coarse settings with `--scratch-dir`, and inspect `postProcessing/Niedererpoints/0/activationTime`. Log each fact in the cardiacFOAM evidence (or 5.4b's own log), as command, observed and conclusion:
   - the header lines;
   - the units, from `activationTime`'s `dimensions` in the run's field file;
   - the `-1` spelling;

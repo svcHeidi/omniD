@@ -34,7 +34,7 @@ def route_entry_case_values(
     """Route a resolved entry-based sweep case's values to make_spec kwargs.
 
     Entry-based sweeps target an existing registered tutorial's own
-    make_spec(**kwargs) (e.g. niederer_2012.py's dx_values/dt_values/
+    make_spec(**kwargs) (e.g. some_tutorial.py's dx_values/dt_values/
     end_time_by_dx), which already validates its own keyword arguments --
     unlike route_case_values's build_and_launch target, there is no fixed
     vocabulary to classify values into here. `base` carries kwargs fixed

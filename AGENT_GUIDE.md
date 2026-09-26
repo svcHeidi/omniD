@@ -308,17 +308,19 @@ A freshly materialized `case_folder` has no author-supplied mesh, so
   "walls" patch — **not** tuned to any specific tutorial's science), and the
   generated `Allrun` runs `blockMesh` before `cardiacFoam`. Sweep this mesh's
   resolution with the `dx` axis (**metres**, isotropic cell size — note this
-  differs from `niederer_2012.py`'s own `DX_VALUES`, which are in
+  differs from `niederer_2011.py`'s own `DX_VALUES`, which are in
   millimetres; the two are unrelated mechanisms, see below). `dx` derives
   the cell count for the fixed default slab size via
   `specs/mesh_provisioning.py::cell_counts_from_dx`, which raises
   `ValueError` if `dx` does not evenly divide the slab size — deliberately
   no silent rounding, matching the same rigor
-  `niederer_2012.py::_replace_blockmesh_resolution` already established for
+  `niederer_2011.py::_replace_blockmesh_resolution` already established for
   its own (different, millimetre, non-cubic) slab; both now share the
   `cell_counts_from_dx` calculation, differing only in how the result gets
   written (`mesh_provisioning.py` generates a fresh file from its own
-  template; `niederer_2012.py` patches an existing author-provided file).
+  template; `niederer_2011.py` patches an existing author-provided file).
+  (Renamed 2026-09-26 from `niederer_2012.py`: the benchmark is Niederer et
+  al. 2011.)
   `dx` is meaningless for `singleCellSolver` (no geometry to resolve) and
   raises `ValueError` rather than silently having no effect. `dx` also has
   nothing to do with real anatomical meshes imported via
@@ -361,18 +363,19 @@ See `omnidriver/core/runtime/sweep_runner.py` for the full implementation.
 ### Sweeping an existing registered tutorial (`base.entry`)
 
 The generic mode above always materializes a fresh, from-scratch `case_folder`
-via `build_and_launch`. Some tutorials (`niederer2012`, `manufacturedMonodomainPseudoECG`, and
+via `build_and_launch`. Some tutorials (`niederer2011`, `manufacturedMonodomainPseudoECG`, and
 others under `omnidriver/specs/tutorials/`) instead expose their own
-`make_spec(**kwargs)` with tutorial-specific parameters (e.g. `niederer2012`'s
+`make_spec(**kwargs)` with tutorial-specific parameters (e.g. `niederer2011`'s
 `dx_values`/`dt_values`/`end_time_by_dx`, in millimetres/milliseconds;
 `manufacturedMonodomainPseudoECG`'s `dimensions`/`number_cells`/`dt_values`). To sweep one of
 these instead of a from-scratch case, set `base.entry` to the tutorial's
-registered name:
+registered name. (`niederer2011` renamed 2026-09-26 from `niederer2012`: the
+benchmark is Niederer et al. 2011.)
 
 ```json
 {
   "base": {
-    "entry": "niederer2012",
+    "entry": "niederer2011",
     "solvers": ["implicit"],
     "end_time_by_dx": {"0.5": 0.2, "0.2": 0.08, "0.1": 0.055}
   },

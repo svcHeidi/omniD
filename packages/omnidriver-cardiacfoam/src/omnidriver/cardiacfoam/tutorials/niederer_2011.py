@@ -16,10 +16,10 @@
 #     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
 #
 # Module
-#     niederer_2012
+#     niederer_2011
 #
 # Description
-#     Defines configuration template for Niederer 2012 benchmarks.
+#     Defines configuration template for Niederer 2011 benchmarks.
 #
 # Author
 #     Simao Nieto de Castro, UCD.
@@ -33,7 +33,7 @@ from functools import partial
 from itertools import product
 from pathlib import Path
 
-from omnidriver.cardiacfoam.tutorials.defaults import niederer_2012 as defaults
+from omnidriver.cardiacfoam.tutorials.defaults import niederer_2011 as defaults
 from omnidriver.cardiacfoam.overrides import (
     PLUGIN_ID,
     apply_electro_property_overrides,
@@ -269,7 +269,7 @@ def _plan_case(
     proven byte-identical, not assumed.** The pre-existing helper hand-rolled
     its own `endTime` line rewrite (`re.compile`, `open("w")`) instead of
     calling `set_end_time`/`update_foam_entry` -- this function's own
-    characterization test (`test_niederer_2012_write_channel.py`) proves
+    characterization test (`test_niederer_2011_write_channel.py`) proves
     `plan_end_time` reproduces its exact bytes for the common case (the key
     already present). `_update_end_time`'s silent-append-if-absent behaviour
     (no `set_end_time`/`plan_end_time` caller in this package relies on) is
@@ -325,8 +325,8 @@ def _plan_case(
         parameters=parameters,
         extra_targets=(block_mesh_target,),
         extra_effects=(f"rewrite hex blocks in {block_mesh_document}",),
-        workflow="niederer_2012",
-        requested_by="cardiacfoam.tutorials.niederer_2012",
+        workflow="niederer_2011",
+        requested_by="cardiacfoam.tutorials.niederer_2011",
     )
 
 
@@ -445,7 +445,7 @@ def make_spec(
         ),
         metadata={
             "notes": (
-                "Niederer Et Al. 2012 slab benchmark sweep "
+                "Niederer Et Al. 2011 slab benchmark sweep "
                 "with OpenFOAM functionObject sampling."
             ),
             "workflow_dag": _workflow_dag_for(mesh_family),

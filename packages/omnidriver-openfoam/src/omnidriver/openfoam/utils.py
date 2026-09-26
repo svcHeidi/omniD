@@ -18,7 +18,7 @@ from .mutators import update_foam_entry
 
 def set_delta_t(control_dict_path: Path, delta_t_seconds: float) -> None:
     """Not yet retired (Phase 3 Task 6's completion, 2026-09-23): still has
-    one caller, `niederer_2012.py`'s `mesh_family == "tet"` branch -- a
+    one caller, `niederer_2011.py`'s `mesh_family == "tet"` branch -- a
     source-artifact/mesh path that never migrates onto the channel (Task 7's
     classification, same as every other tet branch in this package). Its
     sibling `set_end_time` and `replace_block_mesh_resolutions` retired in

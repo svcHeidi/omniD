@@ -223,7 +223,7 @@ def _apply_case(
     None`), leaving `apply_case` as the ONLY mutation route for
     `mesh_family="tet"` (`invoke_case_mutation` falls back to it with a
     `DeprecationWarning`, same as any not-yet-migrated spec). An
-    unconditional collapse silently broke that route. `niederer_2012.py`
+    unconditional collapse silently broke that route. `niederer_2011.py`
     documents the identical scoping decision and has the identical gap; both
     are fixed the same way here: hex delegates to `_plan_case`; tet keeps
     its own independent implementation, unchanged from before Task 6's
@@ -356,7 +356,7 @@ def _plan_case(
     unconditionally, exactly as `_apply_case` still makes them -- they touch
     files disjoint from the ones this function channel-commits, so there is
     no write-ordering conflict between the two. `wired into make_spec only
-    when mesh_family == "hex"` (see `make_spec`, mirroring `niederer_2012`'s
+    when mesh_family == "hex"` (see `make_spec`, mirroring `niederer_2011`'s
     own scoping decision).
 
     **Corrected 2026-09-23 (Phase 3 Task 7):** the overlay `shutil.copy`s
@@ -560,7 +560,7 @@ def make_spec(
         ),
         # `_plan_case` covers the `mesh_family == "hex"` path only -- see
         # its own docstring; a `"tet"` spec keeps `apply_case` as its only
-        # mutation route (mirrors `niederer_2012`'s identical scoping).
+        # mutation route (mirrors `niederer_2011`'s identical scoping).
         plan_case=(
             partial(
                 _plan_case,

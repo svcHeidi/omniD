@@ -27,7 +27,7 @@ def _path_safe_case_id(value: str) -> str:
 def _label_for(value: Any) -> str:
     """Render one axis value as a label fragment.
 
-    List/tuple values (e.g. niederer_2012.py's dx_values=[0.5]) are flattened
+    List/tuple values (e.g. some_tutorial.py's dx_values=[0.5]) are flattened
     element-wise rather than stringified as a Python literal (str([0.5]) ==
     "[0.5]", which is not path-safe).
     """

@@ -28,7 +28,7 @@ def test_cell_counts_from_dx_rejects_non_exact_division():
     # Deliberately no silent rounding: dx that doesn't fit the domain is a
     # caller error, not something to approximate quietly (see
     # project_driverfoam_sweep_bugs_found memory -- this mirrors
-    # niederer_2012.py's own established rigor for the same problem).
+    # niederer_2011.py's own established rigor for the same problem).
     with pytest.raises(ValueError, match="does not evenly divide"):
         cell_counts_from_dx(0.0003, (0.002, 0.002, 0.002))
 

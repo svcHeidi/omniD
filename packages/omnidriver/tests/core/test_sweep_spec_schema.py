@@ -46,7 +46,7 @@ GENERIC_MODE_EXAMPLE = {
 #: AGENT_GUIDE.md, "Sweeping an existing registered tutorial (base.entry)".
 ENTRY_MODE_EXAMPLE = {
     "base": {
-        "entry": "niederer2012",
+        "entry": "niederer2011",
         "solvers": ["implicit"],
         "end_time_by_dx": {"0.5": 0.2, "0.2": 0.08, "0.1": 0.055},
     },
