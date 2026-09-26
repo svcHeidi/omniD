@@ -69,7 +69,7 @@ and the native repo's own log:
 | 5.1–5.3, 5.5, TL-EM | unchanged from the table above | — | — |
 | C | final cleanup (§3); also where conformance Task 14's "delete the old factory path" lands | not started | — |
 | P4 | conformance Task 14, all four steps: `restitutionCurves` passes C1–C12 against the real binary (added 2026-09-26). Branch `tut-p4`, not merged | done on the branch | `8acbce2`, `36c99c1`, `0e736f8`, `a6e79e2`, `a982d6c` |
-| P3 | core record additions (§5g answered): `TutorialRecord.default_variant` (Q2); replaceable default arguments on `WorkflowStep` (Q3/Q7); `reads_also` not built (Q5); Q6 investigated, not built. Branch `tut-p3`, not merged | in progress | — |
+| P3 | core record additions (§5g answered): `TutorialRecord.default_variant` (Q2); replaceable default arguments on `WorkflowStep` (Q3/Q7); `reads_also` not built (Q5); Q6 investigated, not built (answer and smallest change in `.superpowers/sdd/tut-p3-report.md` §3: one optional core hook through which the OpenFOAM layer wraps the solve step, found by `get_solve_step_commands`, in decomposePar → mpirun -np N → reconstructPar, N from the staged `decomposeParDict`). Branch `tut-p3`, not merged | done on the branch | `8737e6a`, `5cea253` |
 
 **Roadmap, 2026-09-26 (current; replaces the rows above where they differ).**
 
