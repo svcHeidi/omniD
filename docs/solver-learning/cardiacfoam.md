@@ -81,6 +81,23 @@ copy (never the native worktree itself), OpenFOAM v2412 sourced.
 | B7 | `record_key_validator("system/fvSchemes", ("gradSchemes","default"), "Gauss linear")` before/after a `record_key_validation.py` fix | before: `_infer_unvalidated_value_kind` returned `"word"` for any `str`, including a whitespace-containing one, which `"word"`'s own shape check then refuses ("must contain no whitespace") -- so a direct study key naming `system/fvSchemes:gradSchemes.default = "Gauss linear"` was refused before ever reaching the OpenFOAM writer (which `test_foam_backend.py::test_update_entry_writes_bare_multiword_scheme_spec` already proves writes such a value correctly). After: a whitespace-containing `str` infers `"string"` (K6), fixing it | a real defect this tutorial's `grad_scheme`-carrying studies (`linearToleranceControl`, `tetConvergence`, `tetTemporalControl`) exposed; fixed in `omnidriver-cardiacfoam` (an adapter package, not core), following the same "Corrected" pattern this file already used once for `block_mesh_resolution_axis`'s tuple/list value |
 | B8 | writing `bidomainSolverCoeffs.dimension = "1D"` (bare, unquoted) through the record channel | `case writer (ValueError): cannot write value '1D' to 'dimension': invalid string: '1D'` (`foamlib`'s own tokenizer: an unquoted `1D` parses as a malformed number, not a word). Pre-quoting the value (`'"1D"'`, literal quote characters -- the old factory code's own `f'"{dimension}"'` convention) writes and reads back correctly | the `dimension` axis's patch value must carry its own quotes; `value_kind="word"`'s shape check (`"1D"'`, no whitespace) is unaffected by the extra quote characters |
 
+**Corrected 2026-09-26 (controller decision, same day as B5/B6): fix it
+natively, not in core.** B5/B6 read `PIMPLE.nNonOrthogonalCorrectors`'s
+absence as a core-adjacent gap in the write channel. The controller's own
+read of the same facts: the native case should state the key its studies
+change, and the write channel's `add_if_missing=False` is *correct* -- a
+study changes keys that exist, and never invents one. Rows B9-B10 are that
+fix, checked directly, not the channel.
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| B9 | `regression/regressionTest.sh`, full `Allrun parallel` + real `cardiacFoam`, in two separate `git archive` copies of native `omnid/54b-bidomain`: one at `5f5692c7` (before), one at `b8ad4ee6` (after adding `nNonOrthogonalCorrectors 0;` to `system/fvSolution`'s `PIMPLE` block, with the OpenFOAM v2412 `solutionControl.C`/cardiacFoam `extracellularPotentialDomain.C` default-0 evidence cited in the file itself) | both runs: `23 checks, 0 failures`, `Regression test PASSED`; `diff` of the two full logs is empty (byte-identical) | stating the native default explicitly changes nothing: the fix is behaviour-neutral, proven, not assumed |
+| B10 | `strict_plan("manufacturedBidomain", ...)` for all 4 `corrector` cases and all 4 `correctorN80` cases (the same cases B6 found refused), then a real `run --run-document` of `corrector`'s coarsest case (`tetNumberCells=10`, `nOuterCorrectors=1`, `nNonOrthogonalCorrectors=0`) | every one of the 8 cases now plans `status="ok"`. The real run: rc 0, `status="ok"`, every declared artifact `"matched"` (`record.gmsh.0`, the 9 `record.gmshToFoam.*` mesh entries, `record.solve.0`/`.1`, `verification_error_summary`, the `bidomain_*_series` traces) | B5/B6's gap is closed by the native fix alone; no core or `omnidriver-cardiacfoam` write-channel change was needed. All 7 rewritten studies now `strict_plan` cleanly (was 5 of 7) |
+
+Native commits for B9/B10: `b8ad4ee6` (the `fvSolution` fix),
+`b203f347` (README corrections to `corrector`/`correctorN80`, reversing
+their own B5/B6-era "open gap" notes).
+
 Native commits: `60805b27` (the five templates), `6eb12863` (Q11,
 `ecgDomains.ECG.verificationModel.anisotropic yes` in
 `monodomainPseudoECG/constant/electroProperties`), `03f02dec` (Q9, drops
