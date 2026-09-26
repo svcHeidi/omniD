@@ -57,8 +57,8 @@ reader to start here, and there was no table). Built from `git log`.
 | Task 5: openCARP reads its LAT file as quantities (F16/F17) | `422d549`, `ff6331e` | done |
 | Task 6: openCARP-vs-openCARP proof end to end; docs and CI gate | `5a0778e` | done |
 | Opus review fixes (location guards, pre-registration, unit-carrying reports; M11) | `04a1093`, `206de29`, `9923621` | done |
-| Task 7 (cardiacFOAM's probe reader) | — | **blocked** on the tutorial stream's step 5.4b (`niederer2011` as a record; renamed 2026-09-26 from `niederer2012` -- the benchmark is Niederer et al. 2011) |
-| Task 8 (openCARP vs cardiacFOAM end to end) | — | **blocked** on Task 7 |
+| Task 7 (cardiacFOAM's probe reader) | `b11da6c` (branch `qoi-b7`) | done 2026-09-26, unmerged; unblocked once 5.4b landed `niederer2011` as a record (`1811e2e`). Departures from its contract: see Task 7's own "Implemented 2026-09-26" block |
+| Task 8 (openCARP vs cardiacFOAM end to end) | — | open; was blocked on Task 7 |
 
 ## Global Constraints
 
