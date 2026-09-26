@@ -64,6 +64,10 @@ class ComparisonRequest:
     ``workflow_digest``, and ``input_provenance_digest``. Core checks those
     identifiers against its durable run record; missing or mismatched evidence
     is reported as an unverified association, not a scientific failure.
+
+    ``run_evidence`` may also be a list of such objects, for a report that
+    compares several runs; the case is verified when exactly one entry
+    matches it (added 2026-09-26).
     """
 
     case_id: str
@@ -407,6 +411,13 @@ def _association_status(
             snapshot.get("aggregate_digest") if isinstance(snapshot, Mapping) else None
         ),
     }
+    if isinstance(evidence, list):
+        # A report comparing several runs (core.quantities, added 2026-09-26)
+        # lists one evidence object per run; this case is verified when
+        # exactly one entry carries all three of its identifiers.
+        matches = [item for item in evidence if isinstance(item, Mapping)
+                   and all(item.get(key) == value for key, value in expected.items())]
+        evidence = matches[0] if len(matches) == 1 else None
     if not isinstance(evidence, Mapping) or any(not isinstance(value, str) for value in expected.values()):
         return "unverified"
     return "run_verified" if all(evidence.get(key) == value for key, value in expected.items()) else "unverified"

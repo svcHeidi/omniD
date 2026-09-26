@@ -642,7 +642,7 @@ class RuntimeEvidenceCapability(Protocol):
     capability needs no compatibility fallback.
 
     :adapts: get_artifact_value_reader, get_extra_provenance_paths, get_log_redaction_patterns, get_solve_step_commands, get_telemetry_source_globs
-    :consumed-by: omnidriver/conformance/checks.py, omnidriver/core/runtime/provenance_inputs.py, omnidriver/core/runtime/workflow_runner.py
+    :consumed-by: omnidriver/conformance/checks.py, omnidriver/core/quantities/comparison.py, omnidriver/core/runtime/provenance_inputs.py, omnidriver/core/runtime/workflow_runner.py
     :fallback: none
     :status: optional-neutral
     """

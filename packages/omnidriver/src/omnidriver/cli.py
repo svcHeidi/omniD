@@ -847,6 +847,20 @@ def _recover_remediation(args) -> int:
     return 0
 
 
+def _compare_quantities(args) -> int:
+    """``compare``: read, compare and report once. The report is the result:
+    exit 0 once it is written, whatever its status; exit 1 on a refusal."""
+    from .core.quantities import QuantityComparisonError, run_quantity_comparison
+
+    try:
+        report = run_quantity_comparison(Path(args.comparison_request), Path(args.report))
+    except QuantityComparisonError as exc:
+        print(json.dumps({"status": "failed", "action": "compare", "error": str(exc)}, indent=2))
+        return 1
+    print(json.dumps(report, indent=2))
+    return 0
+
+
 def resolve_cases_root(explicit: str | Path | None = None) -> Path:
     """Where to look for cases, resolved at the public edge only.
 
@@ -872,7 +886,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "action",
         choices=[
-            "describe", "plan", "step", "run", "recover", "sweep-plan", "sweep-run",
+            "describe", "plan", "step", "run", "recover", "sweep-plan", "sweep-run", "compare",
         ],
         help="Pipeline stage to execute",
     )
@@ -1067,6 +1081,14 @@ def build_parser() -> argparse.ArgumentParser:
             "that exceeds it is marked failed and the sweep continues. Default: none."
         ),
     )
+    parser.add_argument(
+        "--comparison-request",
+        help="For action=compare: an agent's quantity comparison request (JSON; schema omnidriver/schemas/quantity-comparison.schema.json).",
+    )
+    parser.add_argument(
+        "--report",
+        help="For action=compare: where to write the comparison report. Must not exist: a report is written once.",
+    )
 
     return parser
 
@@ -1189,8 +1211,17 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
         parser.error("--case-root/--transaction-id are only valid with action=recover")
     if args.action == "recover" and args.scratch_dir:
         parser.error("--scratch-dir is not valid with action=recover")
+    if args.action == "compare":
+        if not args.comparison_request or not args.report:
+            parser.error("action=compare requires --comparison-request and --report")
+        if any((args.entry, args.run_document, args.config, args.cases_root, args.spec, args.output_dir,
+                args.plugin, args.scratch_dir)):
+            parser.error("--entry/--run-document/--config/--cases-root/--spec/--output-dir/--plugin/--scratch-dir "
+                         "are not valid with action=compare: each run in the request names its own plugin and sweep")
+    elif args.comparison_request or args.report:
+        parser.error("--comparison-request/--report are only valid with action=compare")
     if not args.run_document and not args.entry and args.action not in {
-        "recover", "sweep-plan", "sweep-run"
+        "recover", "sweep-plan", "sweep-run", "compare"
     }:
         parser.error("--entry is required (or use --run-document with action=run/step)")
 
@@ -1223,6 +1254,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.action == "recover":
         return _recover_remediation(args)
+
+    if args.action == "compare":
+        return _compare_quantities(args)
 
     from .core.plugin_interface import default_driver_context, load_plugin_context
     try:

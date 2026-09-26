@@ -281,3 +281,32 @@ def test_comparison_for_unknown_case_is_rejected(tmp_path: Path) -> None:
             reference_version="1",
             report_path="missing.json",
         )])
+
+
+def test_a_report_comparing_several_runs_verifies_each_by_its_own_evidence(tmp_path: Path) -> None:
+    _manifest(tmp_path, [_case(tmp_path, "a", status="completed")])
+    report = tmp_path / "reports" / "multi.json"
+    report.parent.mkdir()
+    report.write_text(json.dumps({"status": "failed", "run_evidence": [
+        {"case_id": "elsewhere", "workflow_digest": "sha256:x", "input_provenance_digest": "sha256:y"},
+        {"case_id": "a", "workflow_digest": "sha256:plan-a", "input_provenance_digest": "sha256:inputs-a"},
+    ]}))
+    experiment = inspect_sweep_experiment(tmp_path, comparisons=[ComparisonRequest(
+        case_id="a", checker_id="omnidriver.quantities", checker_version="1",
+        reference_id="r", reference_version="1", report_path="reports/multi.json",
+    )])
+    assert experiment.cases[0].comparison.association_status == "run_verified"
+
+
+def test_a_run_evidence_list_without_this_case_is_unverified(tmp_path: Path) -> None:
+    _manifest(tmp_path, [_case(tmp_path, "a", status="completed")])
+    report = tmp_path / "reports" / "multi.json"
+    report.parent.mkdir()
+    report.write_text(json.dumps({"status": "passed", "run_evidence": [
+        {"case_id": "a", "workflow_digest": "sha256:another-plan", "input_provenance_digest": "sha256:inputs-a"},
+    ]}))
+    experiment = inspect_sweep_experiment(tmp_path, comparisons=[ComparisonRequest(
+        case_id="a", checker_id="c", checker_version="1", reference_id="r", reference_version="1",
+        report_path="reports/multi.json",
+    )])
+    assert experiment.cases[0].comparison.association_status == "unverified"

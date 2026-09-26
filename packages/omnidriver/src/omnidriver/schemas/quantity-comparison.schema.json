@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "omnidriver/quantity-comparison.schema.json",
+  "title": "Quantity comparison request",
+  "description": "An agent's comparison: which runs, which artifact of each, where to sample, the reference, the pairs, and the tolerance declared before any value is read. Core adds no frame conversion, pairing or tolerance of its own.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "reference", "tolerance", "runs", "pairs"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "reference": {"type": "string", "minLength": 1},
+    "tolerance": {"$ref": "#/$defs/tolerance"},
+    "runs": {"type": "object", "minProperties": 1, "additionalProperties": {"$ref": "#/$defs/run"}},
+    "pairs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/pair"}}
+  },
+  "$defs": {
+    "tolerance": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "value", "rationale"],
+      "properties": {
+        "kind": {"enum": ["absolute", "relative"]},
+        "value": {"type": "number", "minimum": 0},
+        "unit": {"type": "string", "minLength": 1},
+        "rationale": {"type": "string", "minLength": 1}
+      },
+      "if": {"properties": {"kind": {"const": "absolute"}}, "required": ["kind"]},
+      "then": {"required": ["unit"]},
+      "else": {"not": {"required": ["unit"]}}
+    },
+    "run": {
+      "type": "object", "additionalProperties": false,
+      "required": ["plugin", "sweep_output", "case_id", "artifact_id"],
+      "properties": {
+        "plugin": {"type": "string", "minLength": 1},
+        "sweep_output": {"type": "string", "minLength": 1},
+        "case_id": {"type": "string", "minLength": 1},
+        "artifact_id": {"type": "string", "minLength": 1},
+        "points": {
+          "type": "object", "additionalProperties": false, "required": ["unit", "at"],
+          "properties": {
+            "unit": {"type": "string", "minLength": 1},
+            "at": {"type": "object", "minProperties": 1, "additionalProperties": {
+              "type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3
+            }}
+          }
+        },
+        "max_sampling_offset": {"type": "number", "minimum": 0}
+      }
+    },
+    "side": {
+      "type": "object", "additionalProperties": false, "required": ["run", "quantity"],
+      "properties": {"run": {"type": "string", "minLength": 1}, "quantity": {"type": "string", "minLength": 1}}
+    },
+    "pair": {
+      "type": "object", "additionalProperties": false, "required": ["reference_label", "left", "right"],
+      "properties": {
+        "reference_label": {"type": "string", "minLength": 1},
+        "left": {"$ref": "#/$defs/side"},
+        "right": {"$ref": "#/$defs/side"},
+        "tolerance": {"$ref": "#/$defs/tolerance"},
+        "note": {"type": "string"}
+      }
+    }
+  }
+}

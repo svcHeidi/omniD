@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "omnidriver/point-reference.schema.json",
+  "title": "Point-sampling reference",
+  "description": "Named points where one quantity is compared, the frame their coordinates are in, and where every fact came from. Solver-neutral. A point the source does not settle has null coordinates and says why; no comparison may use it. Tolerances are not here: they are pre-registered in each comparison request.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "version", "sources", "quantity", "frame", "points"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "id": {"type": "string", "minLength": 1},
+    "version": {"type": "string", "minLength": 1},
+    "title": {"type": "string"},
+    "sources": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/source"}},
+    "quantity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "definition", "unit", "source"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "definition": {"type": "string", "minLength": 1},
+        "unit": {"type": "string", "minLength": 1},
+        "source": {"$ref": "#/$defs/citation"}
+      }
+    },
+    "frame": {
+      "type": "object", "additionalProperties": false,
+      "required": ["length_unit", "definition", "stated_by_source", "source"],
+      "properties": {
+        "length_unit": {"type": "string", "minLength": 1},
+        "definition": {"type": "string", "minLength": 1},
+        "stated_by_source": {"type": "boolean"},
+        "source": {"$ref": "#/$defs/citation"}
+      }
+    },
+    "points": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/point"}},
+    "published_values": {"type": "array", "items": {"$ref": "#/$defs/published_value"}}
+  },
+  "$defs": {
+    "citation": {
+      "type": "object", "additionalProperties": false, "required": ["source_id", "where"],
+      "properties": {"source_id": {"type": "string", "minLength": 1}, "where": {"type": "string", "minLength": 1}}
+    },
+    "source": {
+      "type": "object", "additionalProperties": false, "required": ["id", "citation", "accessed"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "citation": {"type": "string", "minLength": 1},
+        "doi": {"type": "string"},
+        "url": {"type": "string"},
+        "retrieved": {"type": "string"},
+        "accessed": {"type": "boolean"},
+        "note": {"type": "string"}
+      }
+    },
+    "point": {
+      "type": "object", "additionalProperties": false,
+      "required": ["label", "definition", "coordinates", "source"],
+      "properties": {
+        "label": {"type": "string", "minLength": 1},
+        "definition": {"type": "string", "minLength": 1},
+        "coordinates": {"oneOf": [
+          {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+          {"type": "null"}
+        ]},
+        "unresolved": {"type": "string", "minLength": 1},
+        "source": {"$ref": "#/$defs/citation"}
+      },
+      "if": {"properties": {"coordinates": {"type": "null"}}, "required": ["coordinates"]},
+      "then": {"required": ["unresolved"]},
+      "else": {"not": {"required": ["unresolved"]}}
+    },
+    "published_value": {
+      "type": "object", "additionalProperties": false,
+      "required": ["label", "kind", "unit", "conditions", "source"],
+      "properties": {
+        "label": {"type": "string", "minLength": 1},
+        "kind": {"type": "string", "minLength": 1},
+        "unit": {"type": "string", "minLength": 1},
+        "conditions": {"type": "string", "minLength": 1},
+        "value": {"type": "number"},
+        "range": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
+        "source": {"$ref": "#/$defs/citation"}
+      },
+      "oneOf": [{"required": ["value"]}, {"required": ["range"]}]
+    }
+  }
+}

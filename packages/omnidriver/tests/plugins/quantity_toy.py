@@ -7,17 +7,23 @@ package.
 """
 from __future__ import annotations
 
+import dataclasses
+import json
 import math
 from pathlib import Path
 from typing import Mapping
 
 from omnidriver.core.quantities import RawSample
+from omnidriver.core.runtime.models import DataArtifact
+from omnidriver.core.runtime.sweep_manifest import CaseManifestEntry, SweepManifest, write_manifest
 from omnidriver.core.tutorial_records import ProducedPath, TutorialRecord, WorkflowStep
 
 from plugins.e2e_record_plugin import (
     E2ERecordPlugin, _known_catalog_validator, _number_cells_axis, _typed_agree,
 )
 from plugins.minimal_plugin import MinimalTestPlugin
+
+_CITE = {"source_id": "toy", "where": "this file"}
 
 VALUES_FORMAT = "toy_named_values"
 GRID_FORMAT = "toy_grid_values"
@@ -135,3 +141,55 @@ class BadDeclarationPlugin(UnreadableFormatPlugin):
 
     def get_artifact_value_reader(self, artifact_format: str):
         return _FurlongReader() if artifact_format == "toy_unreadable" else None
+
+
+def write_toy_reference(path: Path, *, quantity_unit: str = "ms") -> Path:
+    path.write_text(json.dumps({
+        "schema_version": 1, "id": "toy-reference", "version": "1",
+        "sources": [{"id": "toy", "citation": "the toy's own definition", "accessed": True}],
+        "quantity": {"name": "first crossing", "definition": "the toy's value", "unit": quantity_unit, "source": _CITE},
+        "frame": {"length_unit": "m", "definition": "the toy's frame", "stated_by_source": True, "source": _CITE},
+        "points": [
+            {"label": "A", "definition": "row a", "coordinates": [0, 0, 0.007], "source": _CITE},
+            {"label": "B", "definition": "row b", "coordinates": [0.02, 0.003, 0], "source": _CITE},
+            {"label": "Q", "definition": "not settled", "coordinates": None, "unresolved": "the toy never says", "source": _CITE},
+        ],
+    }))
+    return path
+
+
+def write_toy_sweep(output_dir: Path, cases: Mapping[str, str | None], *, plugin: str = QUANTITY_TOY_PLUGIN,
+                    status: str = "completed", artifact_format: str = VALUES_FORMAT) -> Path:
+    """A sweep output in the shape sweep_run leaves: manifest, run documents
+    carrying the planning stack's identity, workflow states with digests,
+    and each case's ``values.txt`` (``None``: the run wrote none)."""
+    from omnidriver.core.plugin_interface import load_plugin_context
+
+    identity = load_plugin_context(plugin).identity.to_json()
+    artifact = DataArtifact(artifact_id="record.solve.0", path_pattern="values.txt",
+                            format=artifact_format, produced_by="solve")
+    entries = []
+    for case_id, text in cases.items():
+        case_root = output_dir / "cases" / case_id
+        case_root.mkdir(parents=True)
+        if text is not None:
+            (case_root / "values.txt").write_text(text)
+        (case_root / "run_document.json").write_text(json.dumps({
+            "plugin": identity, "launch": {"caseRoot": str(case_root)},
+            "expectedArtifacts": [dataclasses.asdict(artifact)],
+        }))
+        (case_root / "workflow_state.json").write_text(json.dumps({
+            "status": status, "workflow_digest": f"sha256:plan-{case_id}",
+            "resume_snapshot": {"aggregate_digest": f"sha256:inputs-{case_id}"},
+        }))
+        entries.append(CaseManifestEntry(
+            case_id=case_id, resolved_axis_values={}, override_hash="sha256:none",
+            run_document_path=f"cases/{case_id}/run_document.json",
+            workflow_state_path=f"cases/{case_id}/workflow_state.json",
+            status=status, outcome="fresh", started_at=None, updated_at="2026-09-26T00:00:00+00:00",
+        ))
+    write_manifest(output_dir / "sweep_manifest.json", SweepManifest(
+        schema_version="1.0", sweep_spec_hash="sha256:toy", created_at="2026-09-26T00:00:00+00:00",
+        updated_at="2026-09-26T00:00:00+00:00", cases=entries,
+    ))
+    return output_dir
