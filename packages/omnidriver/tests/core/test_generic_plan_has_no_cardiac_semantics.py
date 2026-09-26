@@ -50,7 +50,7 @@ def _generic_plan(tmp_path: Path) -> dict:
 
 def test_generic_plan_contains_no_cardiac_semantics(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
-    monkeypatch.setenv("SKIP_MESH_DIAGNOSTICS", "1")
+    monkeypatch.setenv("SKIP_GEOMETRY_DIAGNOSTICS", "1")
     blob = json.dumps(_generic_plan(tmp_path))
     leaked = [token for token in _CARDIAC_TOKENS if token in blob]
     assert leaked == [], f"cardiac semantics leaked into a generic plan: {leaked}"
@@ -59,7 +59,7 @@ def test_generic_plan_contains_no_cardiac_semantics(tmp_path, monkeypatch) -> No
 def test_generic_plan_still_produces_a_usable_contract(tmp_path, monkeypatch) -> None:
     """Emptiness is not the goal -- the plan must still be runnable."""
     monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
-    monkeypatch.setenv("SKIP_MESH_DIAGNOSTICS", "1")
+    monkeypatch.setenv("SKIP_GEOMETRY_DIAGNOSTICS", "1")
     payload = _generic_plan(tmp_path)
     assert payload["workflow_dag"]["steps"], "generic plan must have runnable steps"
     assert payload["capability_manifest"]["allowed_commands"]["utilities"] == {}
@@ -74,7 +74,7 @@ def test_generic_describe_override_surface_has_no_cardiac_semantics(
     does not emit them, so gating only on the plan left the one clause naming
     the override surface checked against a payload that cannot contain it."""
     monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
-    monkeypatch.setenv("SKIP_MESH_DIAGNOSTICS", "1")
+    monkeypatch.setenv("SKIP_GEOMETRY_DIAGNOSTICS", "1")
     case = _minimal_case(tmp_path)
     payload = describe_entry(
         str(case.relative_to(tmp_path)),
@@ -107,7 +107,7 @@ def test_generic_spec_metadata_names_dict_files_generically(
     module's own name says has no cardiac semantics. That default is gone; the
     generic plugin declares no dictionary files, so the mapping is empty."""
     monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
-    monkeypatch.setenv("SKIP_MESH_DIAGNOSTICS", "1")
+    monkeypatch.setenv("SKIP_GEOMETRY_DIAGNOSTICS", "1")
     case = _minimal_case(tmp_path)
     payload = describe_entry(
         str(case.relative_to(tmp_path)),

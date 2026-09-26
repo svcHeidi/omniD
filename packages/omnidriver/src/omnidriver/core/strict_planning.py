@@ -23,7 +23,7 @@ from .runtime.registry import classify_entry, load_entry_spec
 from .runtime.run_command import omnidriver_run_command
 from .runtime.run_document_adapter import _run_document_from_case
 from .runtime.run_model import RunDocument
-from .runtime.strict_audit import _build_simulation_audit
+from .runtime.strict_audit import SKIP_GEOMETRY_DIAGNOSTICS_ENV, _build_simulation_audit
 from .runtime.workflow import (
     WorkflowDiagnostic,
     _unwrap_mpi_program,
@@ -301,17 +301,23 @@ def _catalog_diagnostics(driver_context: "DriverContext") -> tuple[StrictDiagnos
     return tuple(diagnostics)
 
 
-def _is_nondimensional_entry(spec, driver_context: "DriverContext") -> bool:
-    """Return True when the SI mesh-scale gate is not meaningful."""
-    entry_name = ""
-    family = ""
-    if spec.metadata:
-        entry_name = str(spec.metadata.get("entry_name", "") or "")
-        family = str(spec.metadata.get("workflow_family", "") or "")
-    haystack = f"{entry_name} {family}".lower()
-    if "manufactured" in haystack or "verification" in haystack:
-        return True
-    return driver_context.capabilities.mesh_diagnostic_policy.is_nondimensional(spec)
+def _mesh_geometry_exempt(spec, driver_context: "DriverContext") -> bool:
+    """Whether the SI mesh-scale gate is not meaningful for this case.
+
+    Two answers only: the plugin's own ``is_nondimensional_case``, read
+    from the case's files, or a generic case, whose conventions core
+    does not know.
+
+    Corrected 2026-09-26 (spec 2026-09-26 A7): a third answer exempted
+    any case whose entry name or workflow family contained
+    "manufactured" or "verification", an exemption by *name*. It is
+    deleted. ``test_every_case_the_name_rule_exempted_is_exempted_by_the_hook``
+    (cardiacfoam, native) proved the hook covers every case it exempted.
+    """
+    return (
+        driver_context.capabilities.mesh_diagnostic_policy.is_nondimensional(spec)
+        or bool(spec.metadata.get("generic_case"))
+    )
 
 
 def _mesh_geometry_diagnostics(
@@ -322,12 +328,13 @@ def _mesh_geometry_diagnostics(
 ) -> tuple[StrictDiagnostic, ...]:
     """Adapt mesh-scale detection into StrictDiagnostics for the report.
 
-    Core classifies every polyMesh region's scale; the active plugin may add
+    The active plugin's base geometry check classifies its mesh regions' scale
+    (corrected 2026-09-26: this said core did); the plugin may add
     checks for point sets that are not mesh regions (cardiacFoam's
     ``constant/purkinjeGraph*``). Both report under the same
     ``mesh_geometry`` source, and both are skipped by the same exemption.
     """
-    if exempt or "SKIP_MESH_DIAGNOSTICS" in os.environ:
+    if exempt or SKIP_GEOMETRY_DIAGNOSTICS_ENV in os.environ:
         return ()
     detected = list(
         driver_context.capabilities.mesh_diagnostic_policy.base_geometry_diagnostics(
@@ -706,10 +713,7 @@ def _strict_plan_for_spec(
     # case whose conventions core does not know) produces the same empty tuple
     # as a mesh that was examined and found clean, and used to be scored the
     # same way.
-    mesh_geometry_exempt = (
-        _is_nondimensional_entry(spec, driver_context)
-        or bool(spec.metadata.get("generic_case"))
-    )
+    mesh_geometry_exempt = _mesh_geometry_exempt(spec, driver_context)
     mesh_diagnostics = _mesh_geometry_diagnostics(
         spec.case_root,
         exempt=mesh_geometry_exempt,

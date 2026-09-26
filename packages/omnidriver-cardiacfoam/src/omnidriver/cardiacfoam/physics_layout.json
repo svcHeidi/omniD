@@ -1,0 +1,9 @@
+{
+  "_comment": "One row per constant/physicsProperties `type`. `regions` maps a role to the entry that names its region inside `names_in` (`{model}` is that document's own `model_key` value). A type with no `regions` is single-region: its documents sit directly under constant/ and system/. The table never copies region names; the case owns them. Added 2026-09-26 (spec 2026-09-26 A7, owner amendment).",
+  "electroModel": {},
+  "electroMechanicalModel": {
+    "names_in": "constant/electroMechanicalProperties",
+    "model_key": "electroMechanicalModel",
+    "regions": {"electro": "electroRegion", "solid": "solidRegion"}
+  }
+}

@@ -47,6 +47,7 @@ include = ["omnidriver*"]
 "omnidriver.cardiacfoam" = [
     "plugin.yaml",
     "dict_key_allowlist.json",
+    "physics_layout.json",
     "fixtures/template/constant/*",
     "utilities/*/utility.manifest.toml",
 ]

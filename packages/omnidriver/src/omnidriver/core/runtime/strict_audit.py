@@ -17,6 +17,13 @@ if TYPE_CHECKING:
     from ..plugin_interface import DriverContext  # noqa: F401
 
 
+#: The operator's switch for declining mesh-scale checks. Renamed from
+#: ``SKIP_MESH_DIAGNOSTICS`` 2026-09-26 (spec 2026-09-26 §2, A7): the checks
+#: are the plugin's ``*_geometry_diagnostics`` hooks, and "mesh" named one
+#: kind of discretisation. The old name is not read.
+SKIP_GEOMETRY_DIAGNOSTICS_ENV = "SKIP_GEOMETRY_DIAGNOSTICS"
+
+
 _READINESS_WEIGHTS = {
     "simulation_generation": 15,
     "case_preparation_files": 15,
@@ -323,19 +330,19 @@ def _build_simulation_audit(
             # same fact: the operator declined the check, the case has no mesh
             # scale to check, or the mesh was examined and was clean.
             outcome=(
-                "not_requested" if "SKIP_MESH_DIAGNOSTICS" in os.environ
+                "not_requested" if SKIP_GEOMETRY_DIAGNOSTICS_ENV in os.environ
                 else NOT_APPLICABLE if mesh_geometry_exempt
                 else EXECUTED
             ),
             uncovered_summary=(
-                "Mesh-scale checks were not requested: SKIP_MESH_DIAGNOSTICS is "
+                "Mesh-scale checks were not requested: SKIP_GEOMETRY_DIAGNOSTICS is "
                 "set, so no mesh geometry was examined."
-                if "SKIP_MESH_DIAGNOSTICS" in os.environ else
+                if SKIP_GEOMETRY_DIAGNOSTICS_ENV in os.environ else
                 "This entry declares no physical mesh scale, so there is no "
                 "mesh geometry to check."
             ),
             evidence={
-                "skipped": "SKIP_MESH_DIAGNOSTICS" in os.environ,
+                "skipped": SKIP_GEOMETRY_DIAGNOSTICS_ENV in os.environ,
                 "exempt": mesh_geometry_exempt,
                 "diagnostic_count": len(mesh_geometry_diagnostics),
             },
