@@ -476,6 +476,77 @@ writing into the checkout.
 Everything else — the manifest, `--retry-failed`, `--case-timeout-s`,
 `--max-cases`, resumability — is identical to generic mode.
 
+## Running a record in parallel
+
+Added 2026-09-26 (PAR, owner Q6). A tutorial record declares its solve step
+once, and serial is the default, as the native `Allrun` is. To run the solve
+in parallel, ask for it; the solver's own layer knows how, and the code checks
+the facts.
+
+**The request.** One reserved study name, `parallel`, in any study source
+(`--config`'s entry, a sweep's `base`, or a sweep axis), or `--parallel` on the
+CLI (`describe`, `plan`/`step`/`run --strict --entry <record>`, `sweep-plan`,
+`sweep-run`). The flag is the same request from its own source: a job script
+adds it without editing the study, and a flag that disagrees with the study's
+value is refused by name, never merged. Absent or `false` is serial. A sweep
+axis `"parallel": [false, true]` runs one case of each.
+
+- `parallel: true` / `--parallel`: the solver layer finds N itself.
+- `parallel: N` / `--parallel N`: also hands it N, for a layer whose case
+  states no count.
+
+What each layer does with it:
+
+| stack | parallel form | where N comes from |
+|---|---|---|
+| OpenFOAM (cardiacFOAM) | `<solve>.decompose` (`decomposePar -force`) → `<solve>` as `mpirun -np N cardiacFoam -parallel` → `<solve>.reconstruct` (`reconstructPar`); the steps after the solve (`postProcess -latestTime`) run on the reconstructed case | the staged case's `system/decomposeParDict:numberOfSubdomains`, read as the run will see it. Set N with that study key; `parallel: N` is refused, because the dictionary already states it. The decompose step consumes the dictionary, so provenance fingerprints it |
+| openCARP | `<solve>` as `mpirun -np N openCARP ...`; outputs keep their names, node order and location (`docs/solver-learning/opencarp.md` I7) | the scheduler's allocation for `parallel: true`, or the `N` you supply. `true` outside a scheduler is refused. The `mpirun` first on PATH must be the launcher of the MPI openCARP was built against; preflight refuses another MPI's (`opencarp_mpi_launcher_mismatch`, I2, I5) |
+
+`describe --entry <record> --parallel` previews the form before anything runs:
+`record_preview.workflow_commands` shows each step's command line, with N as the
+study's uncommitted values would make it, and `record_preview.parallel` the
+request. A run's document carries `resolvedEntry.parallel` (`{"requested": ...,
+"allocation": ...}`), and its DAG differs, so a serial and a parallel run of one
+case are told apart in provenance. A serial run's document has no
+`resolvedEntry.parallel`.
+
+**On a scheduler.** omniD reads the allocation from one declared place,
+`SLURM_NTASKS`, only when a run asks for parallel (a scheduler's allocation is
+an ambient fact: CLAUDE.md, "supplied versus discovered"). It never overrides
+the case, and the case never overrides it: when they disagree the plan is
+refused by name, and you change one of them.
+
+- OpenFOAM: make `numberOfSubdomains` equal the allocation. Put it in the study
+  (`"system/decomposeParDict:numberOfSubdomains": 64`), or request
+  `--ntasks` equal to what the case says.
+- openCARP: `--parallel` with no count uses the allocation.
+
+A Slurm job script for the Niederer campaign:
+
+```bash
+#!/bin/bash
+#SBATCH --ntasks=64
+#SBATCH --time=12:00:00
+source /path/to/OpenFOAM/etc/bashrc            # the solver's environment, as for a serial run
+export OMNIDRIVER_SCRATCH_DIR=$SCRATCH/omnid    # staging is supplied, never invented
+# The study sets system/decomposeParDict:numberOfSubdomains to 64 (or the
+# agent writes it into base); the job adds only the request:
+python -m omnidriver sweep-run --plugin cardiacfoam --spec niederer_dx0.1.json \
+    --output-dir $SCRATCH/niederer_dx0.1 --parallel
+```
+
+`mpirun` inherits the allocation from Slurm. For openCARP the same script
+drops `source` and puts openCARP's own MPI launcher first on `PATH`. A case
+whose count disagrees with `$SLURM_NTASKS` fails at plan time, before any
+solver starts, naming both numbers.
+
+**Refused by name:** a stack with no parallel form (`get_parallel_steps`); a
+record whose selected steps run no declared solve command
+(`get_solve_step_commands`); `parallel: null`; OpenFOAM given a count, or a
+case with no `numberOfSubdomains`; openCARP given `true` with no allocation, or
+a count that disagrees with one; a malformed `SLURM_NTASKS`; `--parallel` for
+an entry that is not a tutorial record, or with `--run-document`.
+
 ## Polling a long-running run
 
 For a run that takes minutes, prefer the async-friendly polling pattern,
@@ -1323,6 +1394,7 @@ Two have no neutral fallback — sweeps fail if they are absent:
 | `get_regeneration_scopes()` | `()` |
 | `get_report_catalog()` | `()` |
 | `get_named_catalogs()` | `{}` |
+| `get_parallel_steps(step, *, request, read_value, allocation)` | a run asking for `parallel` is refused by name; serial runs never call it (added 2026-09-26, PAR) |
 
 ### Entry-point registration
 

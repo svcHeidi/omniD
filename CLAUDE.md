@@ -73,6 +73,20 @@ carry `native_opencarp`: `-m native` collects cardiacFOAM's native tests
 only, and the all-packages row (named "all four" until then) excludes both
 markers.
 
+**Added 2026-09-26 (PAR): both native shapes now run a solver in parallel.**
+`test_parallel_native.py` in each package runs one record serial and parallel
+(N = 2) and compares P1-P9. The native cardiacFOAM shape needs `mpirun`,
+`decomposePar` and `reconstructPar` from the sourced OpenFOAM shell, and takes
+about six minutes longer. The native openCARP shape needs the launcher of the
+MPI openCARP was built against first on `PATH`. Here that is openCARP's bundled
+MPICH, so prefix `PATH=/usr/local/lib/opencarp/lib/petsc/bin:$PATH`. On a
+machine whose host name does not resolve (this one), it also needs
+`HYDRA_IFACE=lo0` (`docs/solver-learning/opencarp.md` I1-I5). Both are
+supplied, never discovered. Without them, preflight refuses the parallel plan
+(`opencarp_mpi_launcher_mismatch`) and the test fails, naming it. Inside a
+Slurm allocation, `SLURM_NTASKS` must equal 2 for these tests, or they are
+refused by name.
+
 **The scratch root is supplied, never invented (2026-09-26).** Anything that
 stages — `plan --strict`/`step`/`run --strict` over a tutorial record (or a
 case-folder entry whose source lies inside this checkout), or a sweep with no

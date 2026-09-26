@@ -88,7 +88,7 @@ and the native repo's own log:
 | B7–B8 | topic B: cardiacFOAM's probe reader, then the cross-solver Niederer comparison | after 5.4b-N | — |
 | O15 | conformance Task 15 (the OpenFOAM half of K3) | after P4; not beside step C | — |
 | 5.1–5.3 | singleCell, cable1DRestitution, cable1DCVConvergence | parallel with 5.4 | — |
-| PAR | records running parallel through the OpenFOAM layer (Q6) | after P3's investigation | — |
+| PAR | records running parallel through their solver layer (Q6). **Done 2026-09-26:** one reserved study name `parallel` (or `--parallel [N]`), one optional core hook `get_parallel_steps`, found through `get_solve_step_commands`; OpenFOAM's form is `decomposePar -force` → `mpirun -np N <solve> -parallel` → `reconstructPar` with N from the staged `system/decomposeParDict`; openCARP's is `mpirun -np N openCARP ...` with N from `SLURM_NTASKS` or supplied, and a preflight check that the launcher is openCARP's own MPI. No record changed. Serial against parallel, real runs: niederer2011 dx 0.5 mm P1-P9 identical as written; niedererNVersion dx 500 P1-P9 within the LAT file's last digit. Report `.superpowers/sdd/par-report.md`. Branch `par`, not merged | **done** on the branch | see report |
 | S | supplied inputs (mesh and anatomy) for a record | when the first idealized-heart or cardiacCore case migrates | — |
 | 5.5, TL-EM | Purkinje graph, 1D3D; electromechanics | blocked or deferred, as above | — |
 | C | final cleanup (§3), including deleting the old factory path | last | — |

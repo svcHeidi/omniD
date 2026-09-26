@@ -582,6 +582,9 @@ way to obtain the count, and it happened at spec-construction time, so
 planning could not proceed without the case already on disk. Addressed
 2026-09-04 by adding an optional `num_subdomains` fallback for when no case
 exists, with the dictionary still authoritative whenever it does.
+**Corrected 2026-09-26 (PAR):** that `num_subdomains` fallback is deleted. No
+caller ever passed it; a record's parallel form reads the dictionary as the
+run will see it, and refuses by name when it is absent.
 
 **Deliberately not built:** a core vocabulary for execution resources
 (`ranks`/`threads`/`devices`). GPU appears in this codebase only as
@@ -590,6 +593,16 @@ and OpenMP appears nowhere, so there is nothing to plumb. Naming a closed set
 of one ecosystem's execution concepts in core for hardware that is not wired
 up is the same mistake as the `Phase` literal removed on 2026-09-03. When a
 real GPU or OpenMP launch path exists, it will show its own shape.
+
+**Corrected 2026-09-26 (PAR, owner Q6):** the MPI launch path now exists for
+tutorial records, and it took the shape predicted below. Core reads exactly
+one execution resource: the scheduler's process allocation, from the place it
+declares (`record_execution.SCHEDULER_ALLOCATION_VARIABLES`, `SLURM_NTASKS`),
+only when a run asks for `parallel`, and hands it to the solver layer, which
+refuses a count that disagrees with it. Core names no rank count of its own and
+gives the request no meaning; the DAG's parallel shape is the solver layer's,
+through the optional `get_parallel_steps` hook, not a factory's. Threads and
+devices are still not built.
 
 When that day comes, note that the two kinds of parallelism differ in *kind*,
 not merely in units, and the seams for them already exist and are different:
