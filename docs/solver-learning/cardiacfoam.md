@@ -303,3 +303,16 @@ Both experiments associate the report as `run_verified`.
   run to every written digit.
 - **The time step moves openCARP only a little.** openCARP's P8 at dt 10 µs
   (126.27 ms) is within 0.2 ms of G4's dt 50 µs value (126.45 ms).
+
+## T. TNNP integration cost (owner question, 2026-09-26: why is cardiacFOAM slower than openCARP?)
+
+Two `git archive` copies of the native `NiedererEtAl2011verification` (branch `omnid/tutorials-are-pointers`), each meshed with its own `blockMeshDict` `(100 15 35)` (Δx 0.2 mm, 52,500 cells). `endTime 0.01`, `deltaT 1e-05` (1,000 steps), serial, on the owner's workstation while other agents were running (load average ~7 on 14 cores).
+
+| # | configuration | observed | conclusion |
+|---|---|---|---|
+| T1 | native: `ionicModel TNNP; solver RKF45; maxSteps 1000000000;`, `solutionAlgorithm implicit` | `ExecutionTime = 526.65 s` (bash-timed wall 530 s) | the native integrator is an adaptive RKF45 in every cell at every step |
+| T2 | the same, with `ionicModel TNNPcompactBatched; batchedIntegrator rushLarsen;` | `ExecutionTime = 93.21 s` (wall 94 s); the log says `Ionic Model : TNNPcompactBatched` | **5.6x faster** |
+| T3 | `Vm` at t = 0.01 s, T1 against T2, all 52,500 cells | the ranges match (−85.23 to 21.84 mV); max abs difference 5.9e-5 V (0.059 mV), mean 6.4e-7 V; 4,021 cells above 0 mV in both | the wavefront is identical at 10 ms. Most of cardiacFOAM's speed gap to openCARP (Task 8: 400 s against 9.6 s, both serial) is the cell-model integrator, not the finite-volume discretisation. openCARP's `tenTusscherPanfilov` uses Rush–Larsen with lookup tables |
+| T4 | `/usr/bin/time cardiacFoam` | `dyld: Library not loaded: @rpath/libOpenFOAM.dylib` (rc 134) | a pitfall: `/usr/bin/time` is a system binary, and macOS strips `DYLD_*` for it. Time with the shell or with OpenFOAM's own `ExecutionTime` |
+| T5 | `otool -L openCARP`; `openCARP +Help pstrat` / `parab_solve` / `ode_fac` | links PETSc, MPI, ParMETIS and METIS; no OpenMP or TBB runtime; `pstrat` 2 = KD-tree (default), 1 = ParMETIS, 0 = linear; `parab_solve` 1 = Crank–Nicolson (default); `ode_fac` = ODE solves per dt | openCARP parallelism is MPI only, with partitioning internal (no decomposition file); one rank is one core. For a fair performance comparison, use equal MPI ranks and one thread per rank |
+
