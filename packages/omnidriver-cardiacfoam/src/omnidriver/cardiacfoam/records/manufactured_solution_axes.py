@@ -94,7 +94,10 @@ def dimension_axis(
     return AxisContract(name=name, value_kind="word", resolve=resolve)
 
 
-def _keep_ones_fixed(n: int, current: tuple[int, int, int]) -> tuple[int, int, int]:
+def _keep_ones_fixed(
+    n: int, current: tuple[int, int, int],
+    extents: tuple[float, float, float] | None = None,
+) -> tuple[int, int, int]:
     """Owner decision (d), design doc's step 4a: a direction whose CURRENT
     cell count is 1 stays 1; every other direction becomes ``n``.
 
@@ -105,7 +108,12 @@ def _keep_ones_fixed(n: int, current: tuple[int, int, int]) -> tuple[int, int, i
     ``.2D`` is ``(640 640 1)``, ``.3D`` is ``(20 20 20)`` -- refining x only,
     x and y, or all three, respectively; real ``blockMesh`` runs against all
     three confirm this reads back unchanged).
+
+    Corrected 2026-09-26 (5.4b-N landing): takes the ``extents`` argument
+    ``block_mesh_resolution_axis`` now passes every resolution; this rule
+    counts cells, so it ignores it.
     """
+    del extents
     return tuple(n if c != 1 else 1 for c in current)  # type: ignore[return-value]
 
 
