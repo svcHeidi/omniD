@@ -1,11 +1,13 @@
-"""cardiacFOAM's tutorial records and their axes (design doc
+"""cardiacFOAM's tutorial records (design doc
 ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md``).
 
-``TUTORIAL_RECORDS``/``AXIS_CATALOG`` aggregate every record/axis this
-package registers -- one dict each, wired to the cardiac stack through
-``CardiacFoamPlugin.get_tutorial_records``/``get_axis_catalog``. Adding a
-new tutorial record means adding it (and its own axes) to both dicts here,
-not touching the plugin itself.
+``TUTORIAL_RECORDS`` aggregates every record this package registers, wired
+to the cardiac stack through ``CardiacFoamPlugin.get_tutorial_records``.
+Each record carries its own axes (``TutorialRecord.axes``), so adding a new
+tutorial record means adding it here, not touching the plugin itself.
+Corrected 2026-09-26 (record-scoped axes): this module also built one
+``AXIS_CATALOG`` from every record's axes with ``dict.update``, so two
+records defining ``dimension`` differently shared whichever came last.
 
 Scanned in full by ``scripts/check-case-writes.py`` (design §5's static
 gate): nothing under this package may import or call a writer. Every record
@@ -15,13 +17,9 @@ and axis is pure data / a pure function; only ``core.case_transaction
 
 from __future__ import annotations
 
-from .niederer_2011 import AXES as _NIEDERER_2011_AXES
 from .niederer_2011 import RECORD as _NIEDERER_2011_RECORD
-from .manufactured_eikonal_ecg import AXES as _MANUFACTURED_EIKONAL_ECG_AXES
 from .manufactured_eikonal_ecg import RECORD as _MANUFACTURED_EIKONAL_ECG_RECORD
-from .restitution_curves import AXES as _RESTITUTION_CURVES_AXES
 from .restitution_curves import RECORD as _RESTITUTION_CURVES_RECORD
-from .manufactured_bidomain import AXES as _MANUFACTURED_BIDOMAIN_AXES
 from .manufactured_bidomain import RECORD as _MANUFACTURED_BIDOMAIN_RECORD
 
 TUTORIAL_RECORDS = {
@@ -30,8 +28,3 @@ TUTORIAL_RECORDS = {
     _NIEDERER_2011_RECORD.name: _NIEDERER_2011_RECORD,
     _MANUFACTURED_EIKONAL_ECG_RECORD.name: _MANUFACTURED_EIKONAL_ECG_RECORD,
 }
-
-AXIS_CATALOG = dict(_RESTITUTION_CURVES_AXES)
-AXIS_CATALOG.update(_MANUFACTURED_BIDOMAIN_AXES)
-AXIS_CATALOG.update(_NIEDERER_2011_AXES)
-AXIS_CATALOG.update(_MANUFACTURED_EIKONAL_ECG_AXES)

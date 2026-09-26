@@ -69,7 +69,10 @@ from __future__ import annotations
 
 from omnidriver.core.tutorial_records import DefaultArgument, TutorialRecord, WorkflowStep
 
-from .manufactured_solution_axes import dimension_axis, hex_number_cells_axis, tet_number_cells_axis
+from .manufactured_solution_axes import (
+    BLOCK_MESH_DICT_DOCUMENTS, GMSH_LC_KEY, MESH_DICT_KEY,
+    dimension_axis, hex_number_cells_axis, tet_number_cells_axis,
+)
 
 #: This tutorial always addresses `myocardiumSolver bidomainSolver`'s own
 #: `bidomainSolverCoeffs` scope -- never varied by this tutorial (the native
@@ -78,31 +81,23 @@ from .manufactured_solution_axes import dimension_axis, hex_number_cells_axis, t
 _ELECTRO_DOCUMENT = "constant/electroProperties"
 _BIDOMAIN_SOLVER_COEFFS = ("bidomainSolverCoeffs",)
 
-DIMENSION_AXIS_NAME = "dimension"
-NUMBER_CELLS_AXIS_NAME = "numberCells"
-TET_NUMBER_CELLS_AXIS_NAME = "tetNumberCells"
-
 _TET_TEMPLATE = "setup/studies/tetConvergence/box.geo.template"
 _TET_MESH = "box.msh"
 
 #: Every step's own default-argument tokens, copied verbatim from
 #: ``regression/regressionTest.sh`` (mesh) and from the module docstring's
 #: real-run evidence (gmsh's own template default, ``lc=0.1``, owner Q8).
-_MESH_DICT_KEY = ("-dict",)
 _MESH_DICT_DEFAULT = "system/blockMeshDict.3D"
-_GMSH_LC_KEY = ("-setnumber", "lc")
 _GMSH_LC_DEFAULT = "0.1"
 
-AXES = {
-    DIMENSION_AXIS_NAME: dimension_axis(
-        DIMENSION_AXIS_NAME,
-        document=_ELECTRO_DOCUMENT, scope=_BIDOMAIN_SOLVER_COEFFS, mesh_step_id="mesh",
+AXES = (
+    dimension_axis(
+        "dimension", mesh_step_id="mesh",
+        solver_coefficients=(_ELECTRO_DOCUMENT, _BIDOMAIN_SOLVER_COEFFS),
     ),
-    NUMBER_CELLS_AXIS_NAME: hex_number_cells_axis(NUMBER_CELLS_AXIS_NAME),
-    TET_NUMBER_CELLS_AXIS_NAME: tet_number_cells_axis(
-        TET_NUMBER_CELLS_AXIS_NAME, gmsh_step_id="gmsh",
-    ),
-}
+    hex_number_cells_axis("numberCells"),
+    tet_number_cells_axis("tetNumberCells", gmsh_step_id="gmsh"),
+)
 
 #: Real ``blockMesh``-observed outputs (module docstring); identical to
 #: ``restitutionCurves``'s own, since both cases' hex ``blockMeshDict``s are
@@ -135,21 +130,18 @@ WITH_DEFAULT_VALUES = f"{_ELECTRO_DOCUMENT}.withDefaultValues"
 RECORD = TutorialRecord(
     name="manufacturedBidomain",
     native_case_relpath="manufacturedSolutions/bidomain",
-    allowed_axes=frozenset(AXES),
+    axes=AXES,
     workflow_steps=(
         WorkflowStep(
             step_id="mesh", command=("blockMesh",),
-            default_arguments=(DefaultArgument(key=_MESH_DICT_KEY, values=(_MESH_DICT_DEFAULT,)),),
-            consumes=(
-                "system/blockMeshDict.1D", "system/blockMeshDict.2D",
-                "system/blockMeshDict.3D", "system/controlDict",
-            ),
+            default_arguments=(DefaultArgument(key=MESH_DICT_KEY, values=(_MESH_DICT_DEFAULT,)),),
+            consumes=BLOCK_MESH_DICT_DOCUMENTS + ("system/controlDict",),
             produces=_HEX_MESH_OUTPUTS,
         ),
         WorkflowStep(
             step_id="gmsh",
             command=("gmsh", "-3", _TET_TEMPLATE, "-o", _TET_MESH, "-format", "msh2"),
-            default_arguments=(DefaultArgument(key=_GMSH_LC_KEY, values=(_GMSH_LC_DEFAULT,)),),
+            default_arguments=(DefaultArgument(key=GMSH_LC_KEY, values=(_GMSH_LC_DEFAULT,)),),
             consumes=(_TET_TEMPLATE,),
             produces=(_TET_MESH,),
         ),

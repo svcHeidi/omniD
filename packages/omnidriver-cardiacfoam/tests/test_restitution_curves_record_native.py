@@ -35,7 +35,8 @@ import pytest
 
 from cardiacfoam_native import native_tutorials_root
 
-from omnidriver.cardiacfoam.records.restitution_curves import AXES, RECORD
+from omnidriver.cardiacfoam.records.restitution_curves import RECORD
+from omnidriver.core.tutorial_records import sort_study_name
 from omnidriver.core.plugin_discovery import load_discovered_plugin
 from omnidriver.core.runtime import record_execution
 from omnidriver.openfoam.case_planning import read_hex_cell_counts
@@ -134,7 +135,7 @@ def test_the_single_cell_native_case_confirms_tworld_sixty():
     native_amplitude = _read_stim_amplitude(case_root)
     assert native_amplitude == 60.0
 
-    axis = AXES["ionicModel"]
+    axis = sort_study_name("ionicModel", axes=RECORD.axes).axis
     result = axis.resolve("TWorld", case_root)
     by_key_path = {patch.key_path: patch for patch in result.patches}
     axis_amplitude = by_key_path[
@@ -151,7 +152,7 @@ def test_the_restitution_curves_native_case_confirms_buenoorovio_zero_point_four
     native_amplitude = _read_stim_amplitude(case_root)
     assert native_amplitude == 0.4
 
-    axis = AXES["ionicModel"]
+    axis = sort_study_name("ionicModel", axes=RECORD.axes).axis
     result = axis.resolve("BuenoOrovio", case_root)
     by_key_path = {patch.key_path: patch for patch in result.patches}
     axis_amplitude = by_key_path[

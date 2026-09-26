@@ -46,7 +46,7 @@ DX_AXIS = AxisContract(name="dx", value_kind="scalar", resolve=_dx_resolution)
 RECORD = TutorialRecord(
     name="niedererNVersion",
     native_case_relpath="02_EP_tissue/03E_study_resolution",
-    allowed_axes=frozenset({"dx"}),
+    axes=(DX_AXIS,),
     workflow_steps=(
         WorkflowStep(
             step_id="mesh",

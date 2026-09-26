@@ -291,15 +291,11 @@ class _RecordTestPlugin(OpenFOAMEnvironmentPlugin):
     hooks this test needs -- see the scaffolding note above for why they are
     supplied here rather than by the real plugin."""
 
-    def __init__(self, record: TutorialRecord, axis) -> None:
+    def __init__(self, record: TutorialRecord) -> None:
         self._record = record
-        self._axis = axis
 
     def get_tutorial_records(self):
         return {self._record.name: self._record}
-
-    def get_axis_catalog(self):
-        return {self._axis.name: self._axis}
 
     def get_record_key_validator(self):
         return _hex_cell_counts_validator
@@ -325,11 +321,11 @@ def test_preview_record_case_reports_the_matching_resolution_as_unchanged():
     record = TutorialRecord(
         name="bathBidomainNativeTest",
         native_case_relpath=_BATH_BIDOMAIN_RELPATH,
-        allowed_axes=frozenset({"number_cells"}),
+        axes=(axis,),
         workflow_steps=(WorkflowStep(step_id="mesh", command=("blockMesh",)),),
     )
     context = driver_context(
-        _RecordTestPlugin(record, axis), source="test:native-block-mesh-preview",
+        _RecordTestPlugin(record), source="test:native-block-mesh-preview",
     )
 
     # The real file's own current resolution, read directly rather than
@@ -364,11 +360,11 @@ def test_preview_record_case_reports_a_different_resolution_as_changed():
     record = TutorialRecord(
         name="bathBidomainNativeTest",
         native_case_relpath=_BATH_BIDOMAIN_RELPATH,
-        allowed_axes=frozenset({"number_cells"}),
+        axes=(axis,),
         workflow_steps=(WorkflowStep(step_id="mesh", command=("blockMesh",)),),
     )
     context = driver_context(
-        _RecordTestPlugin(record, axis), source="test:native-block-mesh-preview-changed",
+        _RecordTestPlugin(record), source="test:native-block-mesh-preview-changed",
     )
 
     preview = record_execution.preview_record_case(

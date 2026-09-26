@@ -112,19 +112,19 @@ def _explicit_cell_counts(
     return tuple(cell_counts)
 
 
-#: This record's own axis instances, keyed by the name its study vocabulary
-#: uses -- registered into the cardiac stack's axis catalog by
-#: ``records/__init__.py``, alongside every other record's own axes.
-AXES = {
-    IONIC_MODEL_AXIS_NAME: ionic_model_axis(
+#: This record's own axes, each named by the name its study vocabulary uses
+#: (``TutorialRecord.axes``; corrected 2026-09-26, record-scoped axes: they
+#: were registered into one stack-wide axis catalog).
+AXES = (
+    ionic_model_axis(
         IONIC_MODEL_AXIS_NAME,
         document=_ELECTRO_DOCUMENT, scope=_SINGLE_CELL_SOLVER_COEFFS,
     ),
-    S1_S2_PROTOCOL_AXIS_NAME: s1_s2_protocol_axis(
+    s1_s2_protocol_axis(
         S1_S2_PROTOCOL_AXIS_NAME,
         electro_document=_ELECTRO_DOCUMENT, scope=_SINGLE_CELL_SOLVER_COEFFS,
     ),
-    BLOCK_MESH_RESOLUTION_AXIS_NAME: block_mesh_resolution_axis(
+    block_mesh_resolution_axis(
         BLOCK_MESH_RESOLUTION_AXIS_NAME,
         documents=(_BLOCK_MESH_DICT_DOCUMENT,),
         resolution=_explicit_cell_counts,
@@ -137,7 +137,7 @@ AXES = {
         # positive integers once `resolution` returns).
         value_kind="integer_list",
     ),
-}
+)
 
 #: What each step reads and writes, as observed in real runs (conformance
 #: Task 14 step 1; ``docs/solver-learning/cardiacfoam.md`` R1-R4). A step
@@ -170,7 +170,7 @@ _MESH_OUTPUTS = (
 RECORD = TutorialRecord(
     name="restitutionCurves",
     native_case_relpath="electrophysiologyProtocols/restitutionCurves_s1s2Protocol",
-    allowed_axes=frozenset(AXES),
+    axes=AXES,
     workflow_steps=(
         WorkflowStep(
             step_id="mesh", command=("blockMesh",),

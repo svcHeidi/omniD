@@ -78,7 +78,7 @@ def _record(*commands):
     from omnidriver.core.tutorial_records import TutorialRecord, WorkflowStep
 
     return TutorialRecord(
-        name="probe", native_case_relpath="probe", allowed_axes=frozenset(),
+        name="probe", native_case_relpath="probe",
         workflow_steps=tuple(WorkflowStep(step_id=f"s{i}", command=c) for i, c in enumerate(commands)),
     )
 

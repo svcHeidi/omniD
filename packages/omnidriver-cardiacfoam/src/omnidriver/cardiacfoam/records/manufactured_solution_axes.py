@@ -1,27 +1,44 @@
-"""Axes shared by the multi-dimension manufactured-solution tutorials
-(bath bidomain, bidomain, eikonalECG, pseudo-ECG -- tutorials-are-pointers
-plan §5c: "Build them once, in a shared `records/` module ... Each record
+"""The axes every multi-dimension manufactured-solution record shares (bath
+bidomain, bidomain, eikonalECG, pseudo-ECG -- tutorials-are-pointers plan
+§5c: "Build them once, in a shared `records/` module ... Each record
 instantiates them with its own `<solver>Coeffs` scope and file set. That is
 reuse, not a second copy.").
 
-Built for ``manufacturedBidomain`` (5.4b-B), the first of these four to
-migrate; a later record imports the same three builders rather than copying
-them. Nothing here is bidomain-specific: every parameter that differs
-between tutorials (the document, the ``<solver>Coeffs`` scope, the workflow
-step ids) is a builder argument, the same shape
-``omnidriver.openfoam.axes.block_mesh_resolution.block_mesh_resolution_axis``
-and this package's own ``ionic_model_axis``/``s1_s2_protocol_axis`` already
-use.
+Each builder takes what differs between records as an argument (the axis
+name, a workflow step id, the optional ``<solver>Coeffs`` document and
+scope), the same shape
+``omnidriver.openfoam.axes.block_mesh_resolution_axis`` and this package's
+``ionic_model_axis``/``s1_s2_protocol_axis`` use. A record puts the axes it
+builds on its own ``TutorialRecord.axes``, so ``dimension`` can mean one
+thing for bidomain and another for eikonalECG.
 
-**Evidence for the conventions below** (real runs against a clean
-``manufacturedSolutions/bidomain`` worktree copy, logged in full in
-``docs/solver-learning/cardiacfoam.md`` under "manufacturedBidomain"):
+**Merged 2026-09-26 (record-scoped axes).** ``manufacturedBidomain`` wrote
+this module, and ``manufacturedEikonalECG`` then wrote
+``mesh_dict_dimension_axis.py`` and ``tet_characteristic_length_axis.py``
+for the same jobs; both are deleted, and both records build from here. The
+two dimension builders differed in three ways, settled as follows:
+
+- the ``<solver>Coeffs.dimension`` patch is optional (``solver_coefficients``),
+  since eikonalECG's ``eikonalSolverCoeffs`` has no ``dimension`` key;
+- the patch value is pre-quoted (``'"1D"'``), bidomain's form, proven
+  against a real staged case: foamlib refuses a bare ``1D`` ("invalid
+  string: '1D'"). eikonalECG's builder wrote it bare, but no record used
+  that branch;
+- the axis's ``value_kind`` is ``"enum"`` (eikonalECG's), since the axis
+  accepts exactly :data:`DIMENSIONS`. bidomain's said ``"word"``.
+  ``validate_value_shape`` checks both kinds identically, so this changes
+  what ``describe`` reports for bidomain's ``dimension``, not any value
+  accepted or refused.
+
+**Evidence for the conventions below** (real runs, logged in
+``docs/solver-learning/cardiacfoam.md`` under "manufacturedBidomain", and
+G1-G9 and section E for eikonalECG):
 
 - ``system/blockMeshDict.<dim>`` (``dim`` one of ``1D``/``2D``/``3D``) is
-  the native naming convention every one of these four cases uses; there is
-  no plain ``system/blockMeshDict`` (owner, plan §5g Q2/Q3).
-- the tet route's gmsh templates now carry
-  ``DefineConstant[ lc = { <default>, Name "lc" } ]`` (owner, plan §5g Q8);
+  the naming convention all four cases use; none has a plain
+  ``system/blockMeshDict`` (owner, plan §5g Q2/Q3);
+- the tet route's gmsh templates carry ``DefineConstant[ lc = { <default>,
+  Name "lc" } ]`` (owner, plan §5g Q8; native commit ``60805b27``);
   ``gmsh -3 <template> -o <mesh>.msh -format msh2 -setnumber lc <v>`` runs
   correctly with ``-setnumber`` trailing every other flag (a real run at
   ``lc=0.2`` then ``lc=0.3`` produced two different meshes, 1203 and 706
@@ -36,62 +53,62 @@ from typing import Any
 from omnidriver.core.tutorial_records import AxisContract, AxisPatch, AxisResult
 from omnidriver.openfoam.axes import block_mesh_resolution_axis
 
-#: The native naming convention all four multi-dimension manufactured cases
-#: share: one ``blockMeshDict`` per dimension, never a plain
-#: ``system/blockMeshDict`` (owner, plan §5g Q2/Q3).
+#: One ``blockMeshDict`` per dimension, never a plain ``system/blockMeshDict``
+#: (owner, plan §5g Q2/Q3).
 DIMENSIONS: tuple[str, ...] = ("1D", "2D", "3D")
 
 
-def _block_mesh_dict_document(dimension: str) -> str:
+def block_mesh_dict_document(dimension: str) -> str:
     return f"system/blockMeshDict.{dimension}"
 
 
+BLOCK_MESH_DICT_DOCUMENTS: tuple[str, ...] = tuple(
+    block_mesh_dict_document(dimension) for dimension in DIMENSIONS
+)
+
+#: The mesh step's argument the dimension axis replaces: a record declares
+#: its native default under this key (``DefaultArgument``, owner Q3/Q7).
+MESH_DICT_KEY: tuple[str, ...] = ("-dict",)
+
+#: The gmsh step's argument the tet axis replaces, likewise.
+GMSH_LC_KEY: tuple[str, ...] = ("-setnumber", "lc")
+
+
 def dimension_axis(
-    name: str, *, document: str, scope: tuple[str, ...], mesh_step_id: str = "mesh",
+    name: str, *, mesh_step_id: str = "mesh",
+    solver_coefficients: tuple[str, tuple[str, ...]] | None = None,
 ) -> AxisContract:
-    """Build a named axis mapping a study's dimension choice (``"1D"``,
-    ``"2D"`` or ``"3D"``) to ``<scope>.dimension`` plus the mesh step's
-    ``-dict system/blockMeshDict.<dim>`` (a :class:`.DefaultArgument`
-    replacement, owner Q3/Q7).
+    """A named axis mapping a dimension (one of :data:`DIMENSIONS`) to the
+    mesh step's ``-dict system/blockMeshDict.<dim>`` (replacing the step's
+    default argument), and, when ``solver_coefficients`` is a ``(document,
+    scope)`` pair, to ``<scope>.dimension`` in that document too.
 
-    ``document`` is the case-relative electroProperties-shaped document the
-    ``<solver>Coeffs`` ``scope`` lives in (bidomain's own
-    ``constant/electroProperties``/``("bidomainSolverCoeffs",)``).
     ``$ELECTRO_MODEL_COEFFS.dimension`` is already catalogued (enum
-    ``1D``/``2D``/``3D``, ``applicable_when`` naming every manufactured ionic
-    model), so this axis derives no catalog fact of its own -- it only turns
-    the study value into the patch and the mesh step's argument.
+    ``1D``/``2D``/``3D``), so this axis derives no catalog fact of its own.
 
-    The axis declares ``value_kind="word"`` (a bare string) -- checked by
-    ``tutorial_records.resolve_case_patches`` before ``resolve`` ever runs.
-    Refuses by name a value that is not one of :data:`DIMENSIONS`: the mesh
-    step's default-argument key is ``("-dict",)``, and a nonsense dimension
-    would otherwise only surface later as blockMesh failing to find a file
-    named after it.
+    Refuses by name a value that is not one of :data:`DIMENSIONS`: a
+    nonsense dimension would otherwise surface only as blockMesh failing to
+    find a file named after it.
     """
 
     def resolve(value: Any, staged_case_root: Path) -> AxisResult:
         del staged_case_root  # this axis reads nothing from the staged case
         if value not in DIMENSIONS:
-            raise ValueError(
-                f"dimension axis {name!r}: {value!r} is not one of {DIMENSIONS}"
-            )
-        # Written pre-quoted (`'"1D"'`, literal quote characters), matching
-        # the native case's own `dimension "3D";` and the old factory
-        # code's identical `f'"{dimension}"'` -- proven necessary against a
-        # real staged case: foamlib's own tokenizer refuses a bare `1D`/`3D`
-        # ("invalid string: '1D'"), since unquoted it looks like a
-        # malformed number, not a word.
-        patch = AxisPatch(
-            document=document, key_path=scope + ("dimension",),
-            value=f'"{value}"', value_kind="word",
-        )
+            raise ValueError(f"dimension axis {name!r}: {value!r} is not one of {DIMENSIONS}")
+        patches: tuple[AxisPatch, ...] = ()
+        if solver_coefficients is not None:
+            document, scope = solver_coefficients
+            # Pre-quoted, matching the native `dimension "3D";` (module docstring).
+            patches = (AxisPatch(
+                document=document, key_path=scope + ("dimension",),
+                value=f'"{value}"', value_kind="word",
+            ),)
         return AxisResult(
-            patches=(patch,),
-            command_arguments={mesh_step_id: ("-dict", _block_mesh_dict_document(value))},
+            patches=patches,
+            command_arguments={mesh_step_id: MESH_DICT_KEY + (block_mesh_dict_document(value),)},
         )
 
-    return AxisContract(name=name, value_kind="word", resolve=resolve)
+    return AxisContract(name=name, value_kind="enum", resolve=resolve)
 
 
 def _keep_ones_fixed(
@@ -101,13 +118,13 @@ def _keep_ones_fixed(
     """Owner decision (d), design doc's step 4a: a direction whose CURRENT
     cell count is 1 stays 1; every other direction becomes ``n``.
 
-    Reused across every hex ``numberCells`` axis this module builds: none of
-    these tutorials' ``blockMeshDict.<dim>`` files invent their own rule for
-    which directions a resolution study actually refines -- each file's own
-    ``hex (`` line already says so (bidomain's own ``.1D`` is ``(1280 1 1)``,
-    ``.2D`` is ``(640 640 1)``, ``.3D`` is ``(20 20 20)`` -- refining x only,
-    x and y, or all three, respectively; real ``blockMesh`` runs against all
-    three confirm this reads back unchanged).
+    Each ``blockMeshDict.<dim>``'s own ``hex (`` line already says which
+    directions a resolution study refines (bidomain's ``.1D`` is
+    ``(1280 1 1)``, ``.2D`` is ``(640 640 1)``, ``.3D`` is ``(20 20 20)``),
+    so no per-dimension table restates it. This is also the rule the
+    deleted ``BLOCK_MESH_RESOLUTION_BY_DIMENSION`` table encoded for
+    eikonalECG (``N=10`` on ``.1D`` gives ``(10 1 1)``, on ``.2D``
+    ``(10 10 1)``).
 
     Corrected 2026-09-26 (5.4b-N landing): takes the ``extents`` argument
     ``block_mesh_resolution_axis`` now passes every resolution; this rule
@@ -117,61 +134,46 @@ def _keep_ones_fixed(
     return tuple(n if c != 1 else 1 for c in current)  # type: ignore[return-value]
 
 
-def hex_number_cells_axis(
-    name: str, *, documents: tuple[str, ...] = tuple(
-        _block_mesh_dict_document(dimension) for dimension in DIMENSIONS
-    ),
-    expected_blocks: int = 1,
-) -> AxisContract:
-    """A named ``numberCells`` axis over every ``blockMeshDict.<dim>``
-    document at once (P2's multi-document ``block_mesh_resolution_axis``),
-    using :func:`_keep_ones_fixed` -- one study value (``N``) patches all
-    three dimension files identically, regardless of which one the
-    ``dimension`` axis actually selects for a given case (the same
-    pattern bath's own ``numberCells`` axis uses, plan §5b T2).
+def hex_number_cells_axis(name: str, *, expected_blocks: int = 1) -> AxisContract:
+    """A named ``numberCells`` axis over every ``blockMeshDict.<dim>`` at
+    once, using :func:`_keep_ones_fixed`: one study value ``N`` patches all
+    three dimension files, whichever one the ``dimension`` axis selects
+    (plan §5b T2).
 
-    ``expected_blocks`` defaults to 1: every one of bidomain's three
-    ``blockMeshDict.<dim>`` files is a single ``hex (`` block (unlike bath's
-    three-domain-block files), confirmed by real ``blockMesh`` runs.
+    ``expected_blocks`` defaults to 1: bidomain's and eikonalECG's
+    ``blockMeshDict.<dim>`` files are each a single ``hex (`` block,
+    confirmed by real ``blockMesh`` runs (bath's have three).
     """
     return block_mesh_resolution_axis(
-        name, documents=documents, resolution=_keep_ones_fixed,
+        name, documents=BLOCK_MESH_DICT_DOCUMENTS, resolution=_keep_ones_fixed,
         expected_blocks=expected_blocks, value_kind="integer",
     )
 
 
 def tet_number_cells_axis(name: str, *, gmsh_step_id: str = "gmsh") -> AxisContract:
-    """A named ``tetNumberCells`` axis: ``N`` becomes the gmsh tet step's
-    ``-setnumber lc <1/N>`` (a :class:`.DefaultArgument` replacement, owner
-    Q3/Q7/Q8), and writes no document patch at all -- unlike the hex
-    ``numberCells`` axis above, there is no ``blockMeshDict`` for a tet case
-    to leave unwritten (the design's own reasoning for a separate axis:
-    "so that a tet case writes nothing into the unused blockMeshDicts, and
-    parity with the old tet route holds").
+    """A named ``tetNumberCells`` axis: ``N`` becomes the gmsh step's
+    ``-setnumber lc <1/N>`` (replacing the step's default argument), and no
+    document patch -- a tet case writes nothing into the unused
+    ``blockMeshDict``s (the design's reason for a separate axis).
 
-    This axis never touches ``setup/studies/tetConvergence/box.geo.template``
-    itself: the template's own ``DefineConstant`` default (``lc = 0.1``,
-    owner Q8's coarsest level) is what a case gets when this axis is not
-    named at all, matching the module docstring's "default the record
-    declares, never the values that may replace it" rule.
+    ``lc = 1/N``, not a study-supplied ``lc``: every native
+    ``.geo.template`` parameterises resolution by a cell count ``N`` along
+    the unit cube's edge (the hex route's vocabulary), and G5/G8's real-gmsh
+    evidence confirms ``-setnumber lc <v>`` overrides the template's
+    ``DefineConstant`` default at any value. With the axis unnamed, a case
+    gets the template's own default.
 
-    Refuses by name a value that is not a positive integer -- ``1/N`` would
-    otherwise be a ``ZeroDivisionError`` (``N=0``) or a nonsensical negative
-    length for a study typo, surfacing at gmsh's own command line instead of
-    naming this axis.
+    Refuses by name a value that is not a positive integer (``bool``
+    excluded): ``1/N`` would otherwise be a ``ZeroDivisionError`` or a
+    negative length surfacing at gmsh's command line.
     """
 
     def resolve(value: Any, staged_case_root: Path) -> AxisResult:
         del staged_case_root  # this axis reads nothing from the staged case
-        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
             raise ValueError(
-                f"tet-number-cells axis {name!r}: N must be a positive "
-                f"integer, got {value!r}"
+                f"tet-number-cells axis {name!r}: N must be a positive integer, got {value!r}"
             )
-        lc = 1.0 / value
-        return AxisResult(
-            patches=(),
-            command_arguments={gmsh_step_id: ("-setnumber", "lc", str(lc))},
-        )
+        return AxisResult(command_arguments={gmsh_step_id: GMSH_LC_KEY + (str(1.0 / value),)})
 
     return AxisContract(name=name, value_kind="integer", resolve=resolve)

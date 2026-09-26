@@ -111,7 +111,6 @@ def _test_record() -> TutorialRecord:
     return TutorialRecord(
         name="restitutionCurvesRecordTest",
         native_case_relpath=_RESTITUTION_CURVES_RELPATH,
-        allowed_axes=frozenset(),
         workflow_steps=(WorkflowStep(step_id="solve", command=("cardiacFoam",)),),
     )
 

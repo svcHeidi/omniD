@@ -12,7 +12,7 @@ from .catalog import load_catalog, template_name
 from .environment import AUXILIARY_COMMANDS, REDACTION_PATTERNS, SOLVER_COMMANDS, opencarp_environment_diagnostics
 from .lat_reader import LAT_FORMAT, LatPerNodeReader
 from .par_format import ParFormatError, format_value, patch_par, read_raw, unquote, values_agree
-from .records import AXIS_CATALOG, TUTORIAL_RECORDS
+from .records import TUTORIAL_RECORDS
 from .validation import check_indices, read_documents, record_key_validator
 
 _FORMAT = "opencarp_par"
@@ -56,9 +56,6 @@ class OpenCARPPlugin:
     # -- records
     def get_tutorial_records(self):
         return dict(TUTORIAL_RECORDS)
-
-    def get_axis_catalog(self):
-        return dict(AXIS_CATALOG)
 
     def get_record_key_validator(self):
         return record_key_validator

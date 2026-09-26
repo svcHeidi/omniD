@@ -161,16 +161,18 @@ def _tet_dx_axis(name: str) -> AxisContract:
     return AxisContract(name=name, value_kind="scalar", resolve=resolve)
 
 
-AXES = {
-    DX_AXIS_NAME: block_mesh_resolution_axis(
+#: This record's own axes (``TutorialRecord.axes``, record-scoped since
+#: 2026-09-26).
+AXES = (
+    block_mesh_resolution_axis(
         DX_AXIS_NAME,
         documents=(_BLOCK_MESH_DICT_DOCUMENT,),
         resolution=_hex_cell_counts_from_dx,
         expected_blocks=1,
         value_kind="scalar",
     ),
-    TET_DX_AXIS_NAME: _tet_dx_axis(TET_DX_AXIS_NAME),
-}
+    _tet_dx_axis(TET_DX_AXIS_NAME),
+)
 
 #: `blockMesh`'s own mesh output, identical across every hex-mesh cardiac
 #: tutorial (`records/restitution_curves.py`'s own `_MESH_OUTPUTS`).
@@ -193,7 +195,7 @@ _DEFAULT_LC_M = "0.0005"
 RECORD = TutorialRecord(
     name="niederer2011",
     native_case_relpath="NiedererEtAl2011verification",
-    allowed_axes=frozenset(AXES),
+    axes=AXES,
     variant_selector=MESH_SELECTOR_NAME,
     default_variant=HEX_VARIANT,
     workflow_variants={

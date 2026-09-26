@@ -391,15 +391,6 @@ class CardiacFoamPlugin:
 
         return TUTORIAL_RECORDS
 
-    def get_axis_catalog(self) -> dict:
-        """This plugin's ``AxisCapability`` answer -- every named axis this
-        package's tutorial records use, aggregated by ``records/__init__
-        .py`` (design §3: "Core defines the contract and ships no solver
-        axes")."""
-        from omnidriver.cardiacfoam.records import AXIS_CATALOG
-
-        return AXIS_CATALOG
-
     def get_tutorial_catalog(self) -> dict:
         from omnidriver.cardiacfoam.tutorials.registry import SPEC_FACTORIES, REGISTERED_TUTORIALS
         from omnidriver.cardiacfoam.tutorials.generic_case import (

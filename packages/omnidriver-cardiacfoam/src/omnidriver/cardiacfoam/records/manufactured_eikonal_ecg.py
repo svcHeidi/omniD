@@ -88,65 +88,25 @@ real ``consumes`` entry the way R3 established the pattern for
 
 from __future__ import annotations
 
-from typing import Any
-
 from omnidriver.core.tutorial_records import DefaultArgument, TutorialRecord, WorkflowStep
-from omnidriver.openfoam.axes import block_mesh_resolution_axis
 
-from .mesh_dict_dimension_axis import mesh_dict_dimension_axis
-from .tet_characteristic_length_axis import tet_characteristic_length_axis
+from .manufactured_solution_axes import (
+    BLOCK_MESH_DICT_DOCUMENTS, GMSH_LC_KEY, MESH_DICT_KEY,
+    dimension_axis, hex_number_cells_axis, tet_number_cells_axis,
+)
 
 _ELECTRO_DOCUMENT = "constant/electroProperties"
-
-DIMENSION_AXIS_NAME = "dimension"
-NUMBER_CELLS_AXIS_NAME = "numberCells"
-TET_NUMBER_CELLS_AXIS_NAME = "tetNumberCells"
-
-_BLOCK_MESH_DICT_DOCUMENTS = (
-    "system/blockMeshDict.1D",
-    "system/blockMeshDict.2D",
-    "system/blockMeshDict.3D",
-)
 _TET_TEMPLATE_RELPATH = "setup/studies/tetConvergence/box.geo.template"
 
-
-def _hex_resolution(
-    value: Any, current: tuple[int, int, int],
-    extents: tuple[float, float, float] | None = None,
-) -> tuple[int, int, int]:
-    """The old module's own per-direction rule
-    (``BLOCK_MESH_RESOLUTION_BY_DIMENSION``, deleted alongside it): a
-    direction whose CURRENT count is 1 (not refined by this case's own
-    ``blockMeshDict.<dim>``) stays 1; every other direction becomes the
-    study's ``N`` (owner decision (d), design doc step 4a -- the same rule
-    ``manufactured_bath_bidomain``'s own ``numberCells`` axis uses).
-    """
-    del extents  # block_mesh_resolution_axis passes it; this rule counts cells
-    return tuple(value if count != 1 else 1 for count in current)
-
-
-#: This record's own axis instances, keyed by the name its study vocabulary
-#: uses -- registered into the cardiac stack's axis catalog by
-#: ``records/__init__.py``.
-AXES = {
-    DIMENSION_AXIS_NAME: mesh_dict_dimension_axis(
-        DIMENSION_AXIS_NAME, mesh_step_id="mesh",
-        # No `dimension_document`/`dimension_scope`: eikonalECG's
-        # `eikonalSolverCoeffs` has no `dimension` key at all (unlike
-        # bidomain/bath's own `<solver>Coeffs.dimension`) -- this axis
-        # contributes the mesh step's `-dict` argument only.
-    ),
-    NUMBER_CELLS_AXIS_NAME: block_mesh_resolution_axis(
-        NUMBER_CELLS_AXIS_NAME,
-        documents=_BLOCK_MESH_DICT_DOCUMENTS,
-        resolution=_hex_resolution,
-        expected_blocks=1,
-        value_kind="integer",
-    ),
-    TET_NUMBER_CELLS_AXIS_NAME: tet_characteristic_length_axis(
-        TET_NUMBER_CELLS_AXIS_NAME, gmsh_step_id="gmsh",
-    ),
-}
+#: This record's own axes. The dimension axis takes no
+#: `solver_coefficients`: eikonalECG's `eikonalSolverCoeffs` has no
+#: `dimension` key (unlike bidomain's and bath's `<solver>Coeffs`), so it
+#: contributes the mesh step's `-dict` argument only.
+AXES = (
+    dimension_axis("dimension", mesh_step_id="mesh"),
+    hex_number_cells_axis("numberCells"),
+    tet_number_cells_axis("tetNumberCells", gmsh_step_id="gmsh"),
+)
 
 #: Settled by a real run (module docstring; ``docs/solver-learning
 #: /cardiacfoam.md`` section E). Shared by the ``mesh`` (blockMesh) and
@@ -176,9 +136,9 @@ _SOLVE_OUTPUTS = (
 _MESH_STEP = WorkflowStep(
     step_id="mesh", command=("blockMesh",),
     default_arguments=(
-        DefaultArgument(key=("-dict",), values=("system/blockMeshDict.3D",)),
+        DefaultArgument(key=MESH_DICT_KEY, values=("system/blockMeshDict.3D",)),
     ),
-    consumes=_BLOCK_MESH_DICT_DOCUMENTS + ("system/controlDict",),
+    consumes=BLOCK_MESH_DICT_DOCUMENTS + ("system/controlDict",),
     produces=_MESH_OUTPUTS,
 )
 _SOLVE_STEP = WorkflowStep(
@@ -193,7 +153,7 @@ _GMSH_STEP = WorkflowStep(
     step_id="gmsh",
     command=("gmsh", "-3", _TET_TEMPLATE_RELPATH, "-o", "box.msh", "-format", "msh2"),
     default_arguments=(
-        DefaultArgument(key=("-setnumber", "lc"), values=("0.1",)),
+        DefaultArgument(key=GMSH_LC_KEY, values=("0.1",)),
     ),
     consumes=(_TET_TEMPLATE_RELPATH,),
 )
@@ -218,7 +178,7 @@ _GRADIENT_RECONSTRUCTION_STEP = WorkflowStep(
 RECORD = TutorialRecord(
     name="manufacturedEikonalECG",
     native_case_relpath="manufacturedSolutions/eikonalECG",
-    allowed_axes=frozenset(AXES),
+    axes=AXES,
     workflow_steps=(
         _MESH_STEP, _SOLVE_STEP, _GMSH_STEP, _GMSH_TO_FOAM_STEP, _CHECK_MESH_STEP,
         _WRITE_CELL_CENTRES_STEP, _GRADIENT_RECONSTRUCTION_STEP,
