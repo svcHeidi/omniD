@@ -302,6 +302,15 @@ class OpenFOAMEnvironmentPlugin:
     def get_solve_step_commands(self) -> frozenset:
         return frozenset()
 
+    def get_parallel_steps(self, step, *, request, read_value, allocation):
+        """A record's solve step in OpenFOAM's parallel form (PAR, owner Q6):
+        ``parallel_execution.parallel_steps_for_record``. The solve command
+        is the solver plugin's (``get_solve_step_commands``); how any
+        OpenFOAM solver runs in parallel is this layer's."""
+        from .parallel_execution import parallel_steps_for_record
+
+        return parallel_steps_for_record(step, request=request, read_value=read_value, allocation=allocation)
+
     def get_telemetry_source_globs(self, command: str) -> tuple:
         del command
         return ()

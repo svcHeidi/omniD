@@ -343,3 +343,18 @@ Two `git archive` copies of the native `NiedererEtAl2011verification` (branch `o
 | T4 | `/usr/bin/time cardiacFoam` | `dyld: Library not loaded: @rpath/libOpenFOAM.dylib` (rc 134) | a pitfall: `/usr/bin/time` is a system binary, and macOS strips `DYLD_*` for it. Time with the shell or with OpenFOAM's own `ExecutionTime` |
 | T5 | `otool -L openCARP`; `openCARP +Help pstrat` / `parab_solve` / `ode_fac` | links PETSc, MPI, ParMETIS and METIS; no OpenMP or TBB runtime; `pstrat` 2 = KD-tree (default), 1 = ParMETIS, 0 = linear; `parab_solve` 1 = Crank–Nicolson (default); `ode_fac` = ODE solves per dt | openCARP parallelism is MPI only, with partitioning internal (no decomposition file); one rank is one core. For a fair performance comparison, use equal MPI ranks and one thread per rank |
 
+## P. niederer2011 in parallel (PAR, owner Q6)
+
+The record unchanged, driven through omniD's new parallel form (`openfoam
+.parallel_execution.parallel_steps_for_record`), against the clean native tree
+(`omnid-tutorials-are-pointers` worktree at native `44037651`), OpenFOAM v2412
+sourced, `mpirun` = Homebrew Open MPI 5.0.9, which OpenFOAM is built against
+(`WM_MPLIB=SYSTEMOPENMPI`, `MPI_ARCH_PATH=/opt/homebrew/Cellar/open-mpi/5.0.9`).
+Runs staged in the session scratchpad and pytest's `tmp_path`.
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| P1 | `describe --plugin cardiacfoam --entry niederer2011 --parallel` with `--config` setting `system/decomposeParDict:numberOfSubdomains: 2` (native: 6) | `record_preview.workflow_commands`: `mesh` `blockMesh`; `solve.decompose` `decomposePar -force`; `solve` `mpirun -np 2 cardiacFoam -parallel`; `solve.reconstruct` `reconstructPar`; then `samplePoints`, `writeCellCentres`, `samplePointCentres`, `sampleLines` unchanged. The patch is reported `validated: false` (OpenFOAM keys are written as asked, uncatalogued) | the preview reads N from the study's uncommitted value, not the native 6 |
+| P2 | `sweep-run` of the record, dx 0.5 mm, `endTime 0.015`, `parallel: true`, `numberOfSubdomains: 2` | completed, every declared artifact matched, 46 s wall. `solve` log: `Exec : cardiacFoam -parallel`, `nProcs : 2`; the decompose log: `Processor 0`, `Processor 1`, 84 processor faces. The case holds `processor0/`, `processor1/` (each with `0.005 0.01 0.015 constant`), the reconstructed `0.005 0.01 0.015` at the root, and `constant/electroProperties.withDefaultValues` **at the root** (not in `processor*/constant`); `samplePoints`' row `0.015 0.00119496 -1 ...`, N3's serial value | a real two-rank run. `.withDefaultValues` stays where the serial record declares it, so the solve step's `produces` needs no parallel variant; the `postProcess -latestTime` steps read the reconstructed case |
+| P3 | `test_parallel_native.py`: two sweeps started together, dx 0.5 mm, `endTime 0.15` (so all nine probes activate, Q7), one serial, one `parallel: true` with `numberOfSubdomains: 2` | both completed, 348 s for the pair. Serial solve `ExecutionTime = 340.48 s`, parallel `181.95 s`. Final `Niedererpoints` rows **identical as written** (`writePrecision 6`): `0.00119496 0.132315 0.0465183 0.142155 0.0359346 0.133633 0.0559661 0.143067 0.0707206`; `Niedererlines/0/activationTime` byte-identical (`cmp`); the reconstructed `0.15/Vm` and `0.15/activationTime` equal the serial ones in all 3360 cells | serial and parallel agree to the precision the case writes. The test's tolerance, 1e-9 s, was fixed before the first comparison and is below that precision, so it requires the written values to be equal. A 1.9x speed-up on two ranks at this size |
+

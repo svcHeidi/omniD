@@ -96,5 +96,8 @@ def test_the_parallel_tutorials_still_ask_for_a_rank_count(name: str, tmp_path: 
     """The contrast is the point: without it, the sweep above would pass even
     if every tutorial had silently become content-dependent."""
     factory = {k.casefold(): v for k, v in _factories().items()}[name]
-    with pytest.raises(ValueError, match="num_subdomains"):
+    # Corrected 2026-09-26 (PAR): matched "num_subdomains", the name of a
+    # fallback count no caller passed; it is deleted, and the refusal names
+    # the file the count is read from.
+    with pytest.raises(ValueError, match="system/decomposeParDict"):
         factory(cases_root=tmp_path)
