@@ -112,9 +112,7 @@ def test_schema_accepts_valid_heterogeneity_block(schema):
         "ionicModel": "BuenoOrovio",
         "tissue": "epicardialCells",
         "ionicHeterogeneity.field": "t",
-        "ionicHeterogeneity.mode": "transmuralBands",
-        "ionicHeterogeneity.endoMInterface": "0.3",
-        "ionicHeterogeneity.mEpiInterface": "0.7",
+        "ionicHeterogeneity.mode": "namedRegions",
         "ionicHeterogeneity.transitionMode": "blend",
         "ionicHeterogeneity.smoothing": "smoothstep",
     }

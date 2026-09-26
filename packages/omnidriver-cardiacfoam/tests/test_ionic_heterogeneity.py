@@ -30,12 +30,24 @@
 Covers the four surfaces wired in Phase 2:
   1. ionic_model_catalog: ``supports_heterogeneity`` and
      ``supports_apex_base_heterogeneity`` flags plus tissue semantics.
-  2. dict_entries: the seven transmural ``ionicHeterogeneity.*`` DictEntries
-     plus the five ``apexBaseBands.*`` entries (12 total, separately gated).
+  2. dict_entries: the five transmural ``ionicHeterogeneity.*`` DictEntries
+     plus the five dynamic ``gradientAxes.<axis_name>.*`` entries (13 total
+     with the three ``regions.<region_name>.*`` entries, separately gated).
   3. dict_builder: build + parse round-trip of a heterogeneity block
      (proves the generic nested-path machinery needs no builder change).
-  4. validation: model-capability gates, endo<mEpi ordering, apex-base
-     numeric constraints, tissue compat.
+  4. validation: model-capability gates, named-region range checks,
+     gradient-axis numeric constraints, tissue compat.
+
+Corrected 2026-09-26 (catalog drift fix, final review AB Q7): this used to
+cover ``apexBaseBands`` and ``endoMInterface``/``mEpiInterface`` plus the
+``transmuralBands`` mode. Native ``3025230b9`` renamed ``apexBaseBands`` to
+the dynamic-name ``gradientAxes`` (any number of named axes, not one fixed
+block); native ``c7d6dd551`` deleted ``endoMInterface``/``mEpiInterface`` and
+the ``transmuralBands`` mode outright, with no replacement -- ``mode`` is now
+``namedRegions`` or ``cellZoneRegions`` only. Every test below that exercised
+a deleted key is deleted, not weakened; every test that exercised
+``apexBaseBands`` is reworked against ``gradientAxes.<axis_name>``, its exact
+native replacement.
 """
 
 from __future__ import annotations
@@ -167,26 +179,27 @@ def _het_entries():
 def _transmural_entries():
     return [
         e for e in _het_entries()
-        if not e.driver_path.startswith("$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.apexBaseBands.")
+        if not e.driver_path.startswith("$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.gradientAxes.")
     ]
 
 
-def _apex_base_entries():
+def _gradient_axes_entries():
     return [
         e for e in _het_entries()
-        if e.driver_path.startswith("$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.apexBaseBands.")
+        if e.driver_path.startswith("$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.gradientAxes.")
     ]
 
 
-def test_all_twelve_heterogeneity_entries_exist():
+def test_all_thirteen_heterogeneity_entries_exist():
     paths = {e.driver_path for e in _het_entries()}
     transmural_leaves = (
-        "field", "mode", "endoMInterface", "mEpiInterface",
-        "transitionWidth", "transitionMode", "smoothing",
+        "field", "mode", "transitionWidth", "transitionMode", "smoothing",
     )
-    ab_leaves = ("apexBaseBands.field", "apexBaseBands.beta",
-                 "apexBaseBands.scalingMin", "apexBaseBands.scalingMax",
-                 "apexBaseBands.variables")
+    ga_leaves = (
+        "gradientAxes.<axis_name>.field", "gradientAxes.<axis_name>.beta",
+        "gradientAxes.<axis_name>.scalingMin", "gradientAxes.<axis_name>.scalingMax",
+        "gradientAxes.<axis_name>.variables",
+    )
     region_leaves = (
         "regions.<region_name>.baseline",
         "regions.<region_name>.cellZone",
@@ -194,7 +207,7 @@ def test_all_twelve_heterogeneity_entries_exist():
     )
     expected = {
         f"$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.{leaf}"
-        for leaf in (*transmural_leaves, *ab_leaves, *region_leaves)
+        for leaf in (*transmural_leaves, *ga_leaves, *region_leaves)
     }
     assert paths == expected
 
@@ -205,15 +218,15 @@ def test_transmural_entries_gated_to_spatial_solvers():
         assert e.applicable_when.get("$ionicHeterogeneity_supported") is True, e.driver_path
 
 
-def test_apex_base_entries_gated_to_monodomain_and_bidomain():
-    """apexBaseBands entries apply to monodomainSolver and bidomainSolver.
+def test_gradient_axes_entries_gated_to_monodomain_and_bidomain():
+    """gradientAxes entries apply to monodomainSolver and bidomainSolver.
 
     Both dispatch through the same myocardiumDomainInterface::New() codepath
-    (myocardiumDomainInterface.C) that parses ionicHeterogeneity.apexBaseBands;
+    (myocardiumDomainInterface.C) that parses ionicHeterogeneity.gradientAxes;
     eikonalSolver returns early from that factory before ionic-model/heterogeneity
     setup runs, and singleCellSolver bypasses the factory entirely.
     """
-    for e in _apex_base_entries():
+    for e in _gradient_axes_entries():
         assert e.applicable_when.get("myocardiumSolver") == (
             "monodomainSolver", "bidomainSolver",
         ), e.driver_path
@@ -221,15 +234,15 @@ def test_apex_base_entries_gated_to_monodomain_and_bidomain():
 
 def test_heterogeneity_enum_values():
     by_leaf = {e.driver_path.rsplit(".", 1)[-1]: e for e in _het_entries()}
-    assert set(by_leaf["mode"].enum_values) == {"transmuralBands", "namedRegions", "cellZoneRegions"}
+    assert set(by_leaf["mode"].enum_values) == {"namedRegions", "cellZoneRegions"}
     assert by_leaf["transitionMode"].enum_values == ("blend", "hard")
     assert by_leaf["smoothing"].enum_values == ("smoothstep",)
 
 
-def test_apex_base_numeric_constraints():
-    by_leaf = {e.driver_path.rsplit(".", 1)[-1]: e for e in _apex_base_entries()}
-    assert any(">" in c for c in by_leaf["beta"].constraints)
+def test_gradient_axes_numeric_constraints():
+    by_leaf = {e.driver_path.rsplit(".", 1)[-1]: e for e in _gradient_axes_entries()}
     assert any("scalingMax" in c for c in by_leaf["scalingMin"].constraints)
+    assert any("> 0" in c for c in by_leaf["scalingMin"].constraints)
 
 
 def test_heterogeneity_entries_are_optional():
@@ -243,9 +256,10 @@ def test_heterogeneity_entries_are_optional():
 
 _HET_OVERRIDES = {
     "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.field": "t",
-    "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.mode": "transmuralBands",
-    "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.endoMInterface": "0.25",
-    "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.mEpiInterface": "0.75",
+    "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.mode": "namedRegions",
+    "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.regions.endocardialCells.range": "(0 0.3)",
+    "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.regions.mCells.range": "(0.3 0.7)",
+    "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.regions.epicardialCells.range": "(0.7 1)",
     "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.transitionWidth": "0.1",
     "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.transitionMode": "blend",
     "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.smoothing": "smoothstep",
@@ -263,7 +277,7 @@ def test_build_emits_nested_heterogeneity_block():
         overrides=_HET_OVERRIDES,
     )
     assert "ionicHeterogeneity" in text
-    assert "endoMInterface 0.25;" in text
+    assert "mode namedRegions;" in text
     assert "transitionMode blend;" in text
 
 
@@ -331,40 +345,16 @@ def test_heterogeneity_with_capable_model_no_het_error():
         "ionicModel": "BuenoOrovio",
         "tissue": "epicardialCells",
         "ionicHeterogeneity.field": "t",
-        "ionicHeterogeneity.mode": "transmuralBands",
-        "ionicHeterogeneity.endoMInterface": "0.3",
-        "ionicHeterogeneity.mEpiInterface": "0.7",
+        "ionicHeterogeneity.mode": "namedRegions",
     })
     het_errors = [e for e in validate_run(run, driver_context=_CTX)
                   if e.level == "error" and "heterogeneity" in e.message.lower()]
     assert het_errors == []
 
 
-def test_endoM_must_be_less_than_mEpi():
-    run = _run({
-        "myocardiumSolver": "monodomainSolver",
-        "ionicModel": "BuenoOrovio",
-        "tissue": "epicardialCells",
-        "ionicHeterogeneity.field": "t",
-        "ionicHeterogeneity.endoMInterface": "0.8",
-        "ionicHeterogeneity.mEpiInterface": "0.3",
-    })
-    errors = [e for e in validate_run(run, driver_context=_CTX)
-              if e.level == "error" and "endoMInterface" in e.message]
-    assert len(errors) == 1
-
-
-def test_endoM_less_than_mEpi_is_silent():
-    run = _run({
-        "myocardiumSolver": "monodomainSolver",
-        "ionicModel": "BuenoOrovio",
-        "tissue": "epicardialCells",
-        "ionicHeterogeneity.field": "t",
-        "ionicHeterogeneity.endoMInterface": "0.3",
-        "ionicHeterogeneity.mEpiInterface": "0.7",
-    })
-    errors = [e for e in validate_run(run, driver_context=_CTX) if "endoMInterface" in e.message]
-    assert errors == []
+# endoMInterface/mEpiInterface ordering tests were deleted 2026-09-26 (catalog
+# drift fix): native c7d6dd551 removed both keys and the transmuralBands mode
+# that used them, with no replacement -- there is nothing left to order.
 
 
 def test_tissue_incompatible_with_model_is_error():
@@ -389,106 +379,112 @@ def test_tissue_compatible_with_model_is_silent():
 
 
 # --------------------------------------------------------------------------
-# 5) Apex-to-base heterogeneity validation
+# 5) Gradient-axis heterogeneity validation
+#
+# Corrected 2026-09-26 (catalog drift fix): reworked from "apex-to-base
+# heterogeneity validation" against the deleted apexBaseBands.* keys onto
+# gradientAxes.<axis_name>.*, its exact native replacement (3025230b9). The
+# beta>0 tests are deleted, not reworked: validateGradientAxisConfig
+# (ionicHeterogeneity.C) never constrained beta, only scalingMin/scalingMax/
+# variables, so that check was never backed by a native read.
 # --------------------------------------------------------------------------
 
-def test_apex_base_with_incapable_model_is_error():
+def test_gradient_axes_with_incapable_model_is_error():
     run = _run({
         "myocardiumSolver": "monodomainSolver",
         "ionicModel": "bidomainFDAManufactured",
         "tissue": "myocyte",
-        "ionicHeterogeneity.apexBaseBands.field": "longitudinal",
-        "ionicHeterogeneity.apexBaseBands.variables": "(g_Ks)",
+        "ionicHeterogeneity.gradientAxes.apicobasal.field": "longitudinal",
+        "ionicHeterogeneity.gradientAxes.apicobasal.variables": "(g_Ks)",
     })
     errors = [e for e in validate_run(run, driver_context=_CTX)
-              if e.level == "error" and "apex-to-base" in e.message]
+              if e.level == "error" and "gradient-axis" in e.message]
     assert len(errors) == 1, [e.message for e in validate_run(run, driver_context=_CTX)]
 
 
-def test_apex_base_with_capable_model_no_error():
+def test_gradient_axes_with_capable_model_no_error():
     run = _run({
         "myocardiumSolver": "monodomainSolver",
         "ionicModel": "TNNP",
         "tissue": "epicardialCells",
-        "ionicHeterogeneity.apexBaseBands.field": "longitudinal",
-        "ionicHeterogeneity.apexBaseBands.beta": "3.0",
-        "ionicHeterogeneity.apexBaseBands.scalingMin": "0.2",
-        "ionicHeterogeneity.apexBaseBands.scalingMax": "5.0",
-        "ionicHeterogeneity.apexBaseBands.variables": "(g_Ks)",
+        "ionicHeterogeneity.gradientAxes.apicobasal.field": "longitudinal",
+        "ionicHeterogeneity.gradientAxes.apicobasal.beta": "3.0",
+        "ionicHeterogeneity.gradientAxes.apicobasal.scalingMin": "0.2",
+        "ionicHeterogeneity.gradientAxes.apicobasal.scalingMax": "5.0",
+        "ionicHeterogeneity.gradientAxes.apicobasal.variables": "(g_Ks)",
     })
-    ab_errors = [e for e in validate_run(run, driver_context=_CTX)
-                 if e.level == "error" and "apex" in e.message.lower()]
-    assert ab_errors == []
+    ga_errors = [e for e in validate_run(run, driver_context=_CTX)
+                 if e.level == "error" and "gradientaxes" in e.message.lower()]
+    assert ga_errors == []
 
 
-def test_apex_base_beta_must_be_positive():
+def test_gradient_axes_negative_beta_is_silent():
+    """beta carries no native constraint (apexBaseScale accepts any value);
+    a negative beta must not be rejected."""
     run = _run({
         "myocardiumSolver": "monodomainSolver",
         "ionicModel": "TNNP",
         "tissue": "epicardialCells",
-        "ionicHeterogeneity.apexBaseBands.field": "longitudinal",
-        "ionicHeterogeneity.apexBaseBands.beta": "-1.0",
-        "ionicHeterogeneity.apexBaseBands.variables": "(g_Ks)",
-    })
-    errors = [e for e in validate_run(run, driver_context=_CTX)
-              if e.level == "error" and "beta" in e.message]
-    assert len(errors) == 1
-
-
-def test_apex_base_positive_beta_is_silent():
-    run = _run({
-        "myocardiumSolver": "monodomainSolver",
-        "ionicModel": "TNNP",
-        "tissue": "epicardialCells",
-        "ionicHeterogeneity.apexBaseBands.field": "longitudinal",
-        "ionicHeterogeneity.apexBaseBands.beta": "3.0",
-        "ionicHeterogeneity.apexBaseBands.variables": "(g_Ks)",
+        "ionicHeterogeneity.gradientAxes.apicobasal.field": "longitudinal",
+        "ionicHeterogeneity.gradientAxes.apicobasal.beta": "-1.0",
+        "ionicHeterogeneity.gradientAxes.apicobasal.variables": "(g_Ks)",
     })
     errors = [e for e in validate_run(run, driver_context=_CTX) if "beta" in e.message]
     assert errors == []
 
 
-def test_apex_base_scalingMin_must_not_exceed_scalingMax():
+def test_gradient_axes_scalingMin_must_not_exceed_scalingMax():
     run = _run({
         "myocardiumSolver": "monodomainSolver",
         "ionicModel": "TNNP",
         "tissue": "epicardialCells",
-        "ionicHeterogeneity.apexBaseBands.field": "longitudinal",
-        "ionicHeterogeneity.apexBaseBands.scalingMin": "8.0",
-        "ionicHeterogeneity.apexBaseBands.scalingMax": "2.0",
-        "ionicHeterogeneity.apexBaseBands.variables": "(g_Ks)",
+        "ionicHeterogeneity.gradientAxes.apicobasal.field": "longitudinal",
+        "ionicHeterogeneity.gradientAxes.apicobasal.scalingMin": "8.0",
+        "ionicHeterogeneity.gradientAxes.apicobasal.scalingMax": "2.0",
+        "ionicHeterogeneity.gradientAxes.apicobasal.variables": "(g_Ks)",
     })
     errors = [e for e in validate_run(run, driver_context=_CTX)
               if e.level == "error" and "scalingMin" in e.message]
     assert len(errors) == 1
 
 
-def test_apex_base_valid_scaling_range_is_silent():
+def test_gradient_axes_valid_scaling_range_is_silent():
     run = _run({
         "myocardiumSolver": "monodomainSolver",
         "ionicModel": "TNNP",
         "tissue": "epicardialCells",
-        "ionicHeterogeneity.apexBaseBands.field": "longitudinal",
-        "ionicHeterogeneity.apexBaseBands.scalingMin": "0.2",
-        "ionicHeterogeneity.apexBaseBands.scalingMax": "5.0",
-        "ionicHeterogeneity.apexBaseBands.variables": "(g_Ks)",
+        "ionicHeterogeneity.gradientAxes.apicobasal.field": "longitudinal",
+        "ionicHeterogeneity.gradientAxes.apicobasal.scalingMin": "0.2",
+        "ionicHeterogeneity.gradientAxes.apicobasal.scalingMax": "5.0",
+        "ionicHeterogeneity.gradientAxes.apicobasal.variables": "(g_Ks)",
     })
     errors = [e for e in validate_run(run, driver_context=_CTX) if "scalingMin" in e.message]
     assert errors == []
 
 
-def test_transmural_and_apex_base_can_coexist():
+def test_gradient_axes_empty_variables_is_error():
+    run = _run({
+        "myocardiumSolver": "monodomainSolver",
+        "ionicModel": "TNNP",
+        "tissue": "epicardialCells",
+        "ionicHeterogeneity.gradientAxes.apicobasal.field": "longitudinal",
+        "ionicHeterogeneity.gradientAxes.apicobasal.variables": "()",
+    })
+    errors = [e for e in validate_run(run, driver_context=_CTX)
+              if e.level == "error" and "variables" in e.message]
+    assert len(errors) == 1
+
+
+def test_transmural_and_gradient_axes_can_coexist():
     run = _run({
         "myocardiumSolver": "monodomainSolver",
         "ionicModel": "TNNP",
         "tissue": "epicardialCells",
         "ionicHeterogeneity.field": "t",
-        "ionicHeterogeneity.mode": "transmuralBands",
-        "ionicHeterogeneity.endoMInterface": "0.3",
-        "ionicHeterogeneity.mEpiInterface": "0.7",
-        "ionicHeterogeneity.apexBaseBands.field": "longitudinal",
-        "ionicHeterogeneity.apexBaseBands.beta": "3.0",
-        "ionicHeterogeneity.apexBaseBands.variables": "(g_Ks)",
+        "ionicHeterogeneity.mode": "namedRegions",
+        "ionicHeterogeneity.gradientAxes.apicobasal.field": "longitudinal",
+        "ionicHeterogeneity.gradientAxes.apicobasal.beta": "3.0",
+        "ionicHeterogeneity.gradientAxes.apicobasal.variables": "(g_Ks)",
     })
     het_errors = [
         e for e in validate_run(run, driver_context=_CTX)

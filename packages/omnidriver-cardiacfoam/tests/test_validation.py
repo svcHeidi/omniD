@@ -170,7 +170,7 @@ def test_personalized_templates_valid_contract_is_accepted():
     template = prefix + "personalizedTemplates."
     context = {
         prefix + "ecgSolver": "eikonalECG",
-        "ionicHeterogeneity.mode": "transmuralBands",
+        "ionicHeterogeneity.mode": "namedRegions",
         template + "ionicModelConfig.ionicModel": "TWorldcompactBatched",
         template + "ionicModelConfig.singleCellStimulus.stim_start": 20,
         template + "ionicModelConfig.singleCellStimulus.stim_period_S1": 1000,

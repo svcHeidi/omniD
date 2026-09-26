@@ -1184,11 +1184,12 @@ class TestEikonalECGHeterogeneity(unittest.TestCase):
         context = resolve_context(selectors={"myocardiumSolver": "eikonalSolver"})
         entries = select_applicable_entries(context)
         paths = {e.driver_path for e in entries}
+        # endoMInterface/mEpiInterface deleted 2026-09-26 (catalog drift fix):
+        # native c7d6dd551 removed both, and the transmuralBands mode that
+        # used them, with no replacement.
         expected = {
             "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.field",
             "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.mode",
-            "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.endoMInterface",
-            "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.mEpiInterface",
             "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.transitionWidth",
             "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.transitionMode",
             "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.smoothing",
@@ -1223,11 +1224,15 @@ class TestEikonalECGHeterogeneity(unittest.TestCase):
                 "$ELECTRO_MODEL_COEFFS.stimulusLocationMin": "(0 0 0)",
                 "$ELECTRO_MODEL_COEFFS.stimulusLocationMax": "(0.01 0.01 0.01)",
                 "$ELECTRO_MODEL_COEFFS.c0": "60",
-                # ionicHeterogeneity block for eikonalECG blend mode
+                # ionicHeterogeneity block for eikonalECG blend mode. mode is
+                # namedRegions, not transmuralBands (deleted 2026-09-26,
+                # catalog drift fix -- native c7d6dd551 removed it along with
+                # endoMInterface/mEpiInterface), with a regions block to match.
                 "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.field": "uvc_transmural",
-                "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.mode": "transmuralBands",
-                "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.endoMInterface": "0.3",
-                "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.mEpiInterface": "0.7",
+                "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.mode": "namedRegions",
+                "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.regions.endocardialCells.range": "(0 0.3)",
+                "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.regions.mCells.range": "(0.3 0.7)",
+                "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.regions.epicardialCells.range": "(0.7 1)",
                 "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.transitionWidth": "0.1",
                 "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.transitionMode": "blend",
                 "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.smoothing": "smoothstep",

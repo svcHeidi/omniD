@@ -383,7 +383,15 @@ def _evaluate_dynamic_required_fields(context: dict[str, Any]) -> list["StrictDi
 
 
 _HETEROGENEITY_PREFIX = "ionicHeterogeneity."
-_APEX_BASE_PREFIX = "ionicHeterogeneity.apexBaseBands."
+# Corrected 2026-09-26 (catalog drift fix, final review AB Q7): native
+# 3025230b9 renamed 'apexBaseBands' to 'gradientAxes' and generalised it from
+# one fixed block into a dynamic-name dictionary of named axes (e.g.
+# 'apicobasal'), so the check below now groups by axis name instead of
+# assuming a single block. Native c7d6dd551 separately removed
+# endoMInterface/mEpiInterface and the transmuralBands mode entirely; the
+# ordering check that used to live here is deleted, not reworked -- there is
+# nothing left to order.
+_GRADIENT_AXES_PREFIX = "ionicHeterogeneity.gradientAxes."
 
 
 def _evaluate_heterogeneity(context: dict[str, Any]) -> list["StrictDiagnostic"]:
@@ -394,8 +402,8 @@ def _evaluate_heterogeneity(context: dict[str, Any]) -> list["StrictDiagnostic"]
 
     from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG
 
-    transmural_keys = [k for k in het_keys if not k.startswith(_APEX_BASE_PREFIX)]
-    ab_keys = [k for k in het_keys if k.startswith(_APEX_BASE_PREFIX)]
+    transmural_keys = [k for k in het_keys if not k.startswith(_GRADIENT_AXES_PREFIX)]
+    ga_keys = [k for k in het_keys if k.startswith(_GRADIENT_AXES_PREFIX)]
 
     model = context.get("ionicModel")
     entry = IONIC_MODEL_CATALOG.get(model) if model is not None else None
@@ -418,24 +426,7 @@ def _evaluate_heterogeneity(context: dict[str, Any]) -> list["StrictDiagnostic"]
             level="error",
         ))
 
-    endo = context.get("ionicHeterogeneity.endoMInterface")
-    mepi = context.get("ionicHeterogeneity.mEpiInterface")
-    if endo is not None and mepi is not None:
-        try:
-            if float(endo) >= float(mepi):
-                errors.append(_diagnostic_from_phase(
-                    phase="physics",
-                    field="$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.endoMInterface",
-                    message=(
-                        f"endoMInterface ({endo}) must be strictly less than "
-                        f"mEpiInterface ({mepi})."
-                    ),
-                    level="error",
-                ))
-        except (TypeError, ValueError):
-            pass
-
-    mode = context.get("ionicHeterogeneity.mode", "transmuralBands")
+    mode = context.get("ionicHeterogeneity.mode")
     if mode == "namedRegions":
         ranges = []
         for k, v in context.items():
@@ -480,7 +471,7 @@ def _evaluate_heterogeneity(context: dict[str, Any]) -> list["StrictDiagnostic"]
                         level="error",
                     ))
 
-    if ab_keys:
+    if ga_keys:
         if entry is not None and not getattr(entry, "supports_apex_base_heterogeneity", False):
             capable_models = sorted(
                 n for n, e in IONIC_MODEL_CATALOG.items()
@@ -489,56 +480,89 @@ def _evaluate_heterogeneity(context: dict[str, Any]) -> list["StrictDiagnostic"]
             )
             errors.append(_diagnostic_from_phase(
                 phase="physics",
-                field="$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.apexBaseBands",
+                field="$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.gradientAxes",
                 message=(
-                    f"ionicHeterogeneity.apexBaseBands is configured but ionicModel "
-                    f"{model!r} does not support apex-to-base heterogeneity. "
+                    f"ionicHeterogeneity.gradientAxes is configured but ionicModel "
+                    f"{model!r} does not support gradient-axis heterogeneity. "
                     f"Supported models: {', '.join(capable_models)} "
                     f"(and their compactBatched variants where available)."
                 ),
                 level="error",
             ))
 
-        beta = context.get("ionicHeterogeneity.apexBaseBands.beta")
-        if beta is not None:
-            try:
-                if float(beta) <= 0:
-                    errors.append(_diagnostic_from_phase(
-                        phase="physics",
-                        field="$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.apexBaseBands.beta",
-                        message=f"apexBaseBands.beta ({beta}) must be > 0.",
-                        level="error",
-                    ))
-            except (TypeError, ValueError):
-                pass
+        # gradientAxes is a dynamic-name dictionary (native 3025230b9): more
+        # than one named axis (e.g. apicobasal, longitudinal) can compose on
+        # the same run, each validated independently.
+        axis_names = sorted({
+            k[len(_GRADIENT_AXES_PREFIX):].split(".", 1)[0]
+            for k in ga_keys
+            if "." in k[len(_GRADIENT_AXES_PREFIX):]
+        })
+        for axis in axis_names:
+            prefix = f"{_GRADIENT_AXES_PREFIX}{axis}."
 
-        scaling_min = context.get("ionicHeterogeneity.apexBaseBands.scalingMin")
-        scaling_max = context.get("ionicHeterogeneity.apexBaseBands.scalingMax")
-        if scaling_min is not None:
-            try:
-                if float(scaling_min) <= 0:
+            # Mirrors ionicHeterogeneity::validateGradientAxisConfig exactly:
+            # 0 < scalingMin <= scalingMax. beta carries no native constraint
+            # (apexBaseScale accepts any value, positive or negative) and is
+            # deliberately not checked here -- the old "beta must be > 0"
+            # check was never backed by a native read and is dropped, not
+            # carried over, with the apexBaseBands -> gradientAxes rename.
+            scaling_min = context.get(prefix + "scalingMin")
+            scaling_max = context.get(prefix + "scalingMax")
+            if scaling_min is not None:
+                try:
+                    if float(scaling_min) <= 0:
+                        errors.append(_diagnostic_from_phase(
+                            phase="physics",
+                            field=f"$ELECTRO_MODEL_COEFFS.{prefix}scalingMin",
+                            message=f"gradientAxes.{axis}.scalingMin ({scaling_min}) must be > 0.",
+                            level="error",
+                        ))
+                except (TypeError, ValueError):
+                    pass
+            if scaling_max is not None:
+                try:
+                    if float(scaling_max) <= 0:
+                        errors.append(_diagnostic_from_phase(
+                            phase="physics",
+                            field=f"$ELECTRO_MODEL_COEFFS.{prefix}scalingMax",
+                            message=f"gradientAxes.{axis}.scalingMax ({scaling_max}) must be > 0.",
+                            level="error",
+                        ))
+                except (TypeError, ValueError):
+                    pass
+            if scaling_min is not None and scaling_max is not None:
+                try:
+                    if float(scaling_max) < float(scaling_min):
+                        errors.append(_diagnostic_from_phase(
+                            phase="physics",
+                            field=f"$ELECTRO_MODEL_COEFFS.{prefix}scalingMin",
+                            message=(
+                                f"gradientAxes.{axis}.scalingMax ({scaling_max}) must be >= "
+                                f"scalingMin ({scaling_min})."
+                            ),
+                            level="error",
+                        ))
+                except (TypeError, ValueError):
+                    pass
+
+            # validateGradientAxisConfig also fatals on an empty 'variables'
+            # list (ionicHeterogeneity.C).
+            variables = context.get(prefix + "variables")
+            if variables is not None:
+                if isinstance(variables, str):
+                    is_empty = not variables.strip("()[] ").strip()
+                elif isinstance(variables, (list, tuple)):
+                    is_empty = len(variables) == 0
+                else:
+                    is_empty = False
+                if is_empty:
                     errors.append(_diagnostic_from_phase(
                         phase="physics",
-                        field="$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.apexBaseBands.scalingMin",
-                        message=f"apexBaseBands.scalingMin ({scaling_min}) must be > 0.",
+                        field=f"$ELECTRO_MODEL_COEFFS.{prefix}variables",
+                        message=f"gradientAxes.{axis}.variables must not be empty.",
                         level="error",
                     ))
-            except (TypeError, ValueError):
-                pass
-        if scaling_min is not None and scaling_max is not None:
-            try:
-                if float(scaling_min) > float(scaling_max):
-                    errors.append(_diagnostic_from_phase(
-                        phase="physics",
-                        field="$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.apexBaseBands.scalingMin",
-                        message=(
-                            f"apexBaseBands.scalingMin ({scaling_min}) must be <= "
-                            f"scalingMax ({scaling_max})."
-                        ),
-                        level="error",
-                    ))
-            except (TypeError, ValueError):
-                pass
 
     return errors
 

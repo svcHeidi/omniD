@@ -177,48 +177,65 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             examples=('t',),
         ),
         DictEntry(
-            driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.apexBaseBands.field',
-            description='Name of the apicobasal-distance field (0=apex, 1=base).',
-            source_refs=('src/ionicModels/ionicModel/ionicHeterogeneity.C',),
+            # Corrected 2026-09-26 (catalog drift fix, final review AB Q7):
+            # 'apexBaseBands' was renamed 'gradientAxes' natively in 3025230b9
+            # and generalised from a single fixed block into a dynamic-name
+            # dictionary of named axes (e.g. 'apicobasal') so more than one
+            # gradient can compose on the same run. The five apexBaseBands.*
+            # entries this replaces are deleted, not aliased -- nothing reads
+            # that name any more (verified against src/, applications/,
+            # modules/).
+            driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.gradientAxes.<axis_name>.field',
+            description='Name of this named gradient axis\'s driving scalar field. Values are clamped to [0, 1] before the exponential scale is applied.',
+            source_refs=('src/electroModels/electroDomains/myocardiumDomain/myocardiumDomainInterface.C', 'src/ionicModels/ionicModel/ionicHeterogeneityOrchestrator.C'),
             value_kind='word',
+            dynamic_path=True, allowed_bindings={"<axis_name>": None},
+            examples=('apicobasal',),
             applicable_when={"myocardiumSolver": ("monodomainSolver", "bidomainSolver")},
         ),
         DictEntry(
-            driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.apexBaseBands.beta',
-            description='Beta parameter.',
-            source_refs=('src/ionicModels/ionicModel/ionicHeterogeneity.C',),
+            driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.gradientAxes.<axis_name>.beta',
+            description='Exponential steepness of this axis\'s scaling profile: scalingMin*(1 + (scalingMax/scalingMin - 1)*exp(-beta*d)).',
+            source_refs=('src/ionicModels/ionicModel/ionicHeterogeneityOrchestrator.C', 'src/ionicModels/ionicModel/ionicHeterogeneity.C'),
+            notes='validateGradientAxisConfig (ionicHeterogeneity.C) constrains scalingMin/scalingMax/variables but not beta; any beta value is accepted.',
             value_kind='scalar',
-            constraints=('Value must be > 0',),
+            dynamic_path=True, allowed_bindings={"<axis_name>": None},
             applicable_when={"myocardiumSolver": ("monodomainSolver", "bidomainSolver")},
         ),
         DictEntry(
-            driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.apexBaseBands.scalingMin',
-            description='Minimum scaling.',
-            source_refs=('src/ionicModels/ionicModel/ionicHeterogeneity.C',),
+            driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.gradientAxes.<axis_name>.scalingMin',
+            description='Scale factor applied at axis value 0.',
+            source_refs=('src/ionicModels/ionicModel/ionicHeterogeneityOrchestrator.C', 'src/ionicModels/ionicModel/ionicHeterogeneity.C'),
             value_kind='scalar',
-            constraints=('Must be < scalingMax',),
+            constraints=('Must be > 0.', 'Must be <= scalingMax.'),
+            dynamic_path=True, allowed_bindings={"<axis_name>": None},
             applicable_when={"myocardiumSolver": ("monodomainSolver", "bidomainSolver")},
         ),
         DictEntry(
-            driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.apexBaseBands.scalingMax',
-            description='Maximum scaling.',
-            source_refs=('src/ionicModels/ionicModel/ionicHeterogeneity.C',),
+            driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.gradientAxes.<axis_name>.scalingMax',
+            description='Scale factor applied at axis value 1.',
+            source_refs=('src/ionicModels/ionicModel/ionicHeterogeneityOrchestrator.C', 'src/ionicModels/ionicModel/ionicHeterogeneity.C'),
             value_kind='scalar',
+            constraints=('Must be > 0.', 'Must be >= scalingMin.'),
+            dynamic_path=True, allowed_bindings={"<axis_name>": None},
             applicable_when={"myocardiumSolver": ("monodomainSolver", "bidomainSolver")},
         ),
         DictEntry(
-            driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.apexBaseBands.variables',
-            description='Variables to scale.',
-            source_refs=('src/ionicModels/ionicModel/ionicHeterogeneity.C',),
+            driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.gradientAxes.<axis_name>.variables',
+            description="Ionic-model constant name(s) this axis scales multiplicatively. Each name must match one of the model's exposed constants (ioConstantNames); an unknown name is a solver FatalError.",
+            source_refs=('src/ionicModels/ionicModel/ionicHeterogeneityOrchestrator.C',),
             value_kind='word_list',
+            constraints=('Must not be empty.',),
+            dynamic_path=True, allowed_bindings={"<axis_name>": None},
             applicable_when={"myocardiumSolver": ("monodomainSolver", "bidomainSolver")},
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.mode',
             description='Heterogeneity application mode.',
-            source_refs=('src/ionicModels/ionicModel/ionicModel.C', 'src/ionicModels/ionicModel/ionicHeterogeneity.C'),
+            source_refs=('src/electroModels/electroDomains/myocardiumDomain/myocardiumDomainInterface.C', 'src/ionicModels/ionicModel/ionicHeterogeneityOrchestrator.C'),
+            notes="Corrected 2026-09-26: 'transmuralBands' was removed from the enum -- native c7d6dd551 dropped that mode along with endoMInterface/mEpiInterface. Only namedRegions and cellZoneRegions remain (ionicHeterogeneityOrchestrator.C: 'mode is required: namedRegions or cellZoneRegions').",
             value_kind='enum',
-            enum_values=('transmuralBands', 'namedRegions', 'cellZoneRegions'),
+            enum_values=('namedRegions', 'cellZoneRegions'),
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.regions.<region_name>.baseline',
@@ -244,25 +261,17 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             dynamic_path=True, allowed_bindings={"<region_name>": None},
             applicable_when={"$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.mode": ("namedRegions",)},
         ),
-        DictEntry(
-            driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.endoMInterface',
-            description='Transmural position of the endocardium/M-cell boundary, normalized in (0, mEpiInterface). Defaults to 0.3 in the solver.',
-            source_refs=('src/ionicModels/ionicModel/ionicModel.C', 'src/ionicModels/ionicModel/ionicHeterogeneity.C'),
-            value_kind='scalar',
-            constraints=('Must be > 0 and < mEpiInterface.',),
-        ),
-        DictEntry(
-            driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.mEpiInterface',
-            description='Transmural position of the M-cell/epicardium boundary, normalized in (endoMInterface, 1). Defaults to 0.7 in the solver.',
-            source_refs=('src/ionicModels/ionicModel/ionicModel.C', 'src/ionicModels/ionicModel/ionicHeterogeneity.C'),
-            value_kind='scalar',
-            constraints=('Must be > endoMInterface and < 1.',),
-        ),
+        # Corrected 2026-09-26 (catalog drift fix, final review AB Q7):
+        # endoMInterface/mEpiInterface and the transmuralBands mode that used
+        # them were removed natively by c7d6dd551. Deleted, not aliased --
+        # zero hits in src/, applications/ or modules/ since that commit.
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.transitionWidth',
-            description='Width of the smooth transition band between tissue regions. 0 selects hard (sharp) transitions. Defaults to 0.1 in the solver.',
-            source_refs=('src/ionicModels/ionicModel/ionicModel.C', 'src/ionicModels/ionicModel/ionicHeterogeneity.C'),
+            description='Width of the smooth transition band between named regions. Required when transitionMode=blend; not read when transitionMode=hard (no longer defaults to 0.1).',
+            source_refs=('src/ionicModels/ionicModel/ionicHeterogeneityOrchestrator.C',),
+            notes="Corrected 2026-09-26: this said 'Defaults to 0.1 in the solver.' ionicHeterogeneityOrchestrator.C fatals if transitionMode=blend and transitionWidth is absent -- there is no default.",
             value_kind='scalar',
+            constraints=('Must be >= 0.',),
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.transitionMode',
