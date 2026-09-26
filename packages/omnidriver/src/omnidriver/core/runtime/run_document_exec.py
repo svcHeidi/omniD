@@ -88,22 +88,53 @@ def load_run_document(path: str | Path) -> RunDocument:
     Version-2 documents are rejected -- callers must migrate them explicitly
     via ``RunDocument.migrate_v2`` before loading. Raises ``ValueError`` /
     ``json.JSONDecodeError`` on malformed input.
+
+    Corrected 2026-09-26 (R2 fix, finding I1): that ``ValueError`` claim was
+    false until this fix -- ``RunDocument.from_json``/``migrate_v1`` validate
+    via ``jsonschema.validate``, whose ``ValidationError`` is not a
+    ``ValueError`` (MRO: ``ValidationError -> _Error -> Exception``), so a
+    schema-invalid document -- for example one from before A2, every
+    artifact still carrying a field the schema has since renamed -- escaped
+    uncaught into ``sweep_run`` and crashed the whole sweep instead of being
+    reported as one non-reusable case. Every schema failure is now re-raised
+    as ``ValueError`` here, at the one boundary between "bytes on disk" and
+    "a RunDocument", so this docstring's claim is true for every caller, not
+    only the ones that happen to catch ``jsonschema.ValidationError``
+    themselves. ``exc.message`` already names the specific offending key
+    from the document itself (e.g. "Additional properties are not allowed
+    ('time_indexed' was unexpected)") -- never restated here as a literal,
+    so this refusal reads correctly for a schema change core has not made
+    yet either.
     """
+    import jsonschema
+
     data = json.loads(Path(path).read_text())
     if not isinstance(data, dict):
         raise ValueError("Run document must be a JSON object")
-    if data.get("version") == "1":
-        return RunDocument.migrate_v1(data)
-    return RunDocument.from_json(data)
+    try:
+        if data.get("version") == "1":
+            return RunDocument.migrate_v1(data)
+        return RunDocument.from_json(data)
+    except jsonschema.exceptions.ValidationError as exc:
+        raise ValueError(
+            f"Run document at {path} failed schema validation: {exc.message}. "
+            f"A document from before a schema rename (see the dated "
+            f"generality-log/spec notes for this document version) carries "
+            f"a field the schema no longer accepts, and is refused here, "
+            f"never silently translated."
+        ) from exc
 
 
 #: Environment variable naming the only tree run outputs may be written to or
-#: deleted from. ``LEGACY_ALLOWED_RUNS_ROOT_ENV`` is the name this carried
-#: before 2026-09-14; it is still read, because silently ignoring an operator's
-#: existing setting would turn a configured safety boundary off without saying
-#: so. The current name wins when both are set.
+#: deleted from.
+#:
+#: Removed 2026-09-26 (Task 9 close-out, owner decision 3): the legacy name
+#: this carried before 2026-09-14, ``DRIVERFOAM_ALLOWED_RUNS_ROOT``
+#: (``LEGACY_ALLOWED_RUNS_ROOT_ENV``), is no longer read. It was the
+#: project's own former name, not an OpenFOAM- or A1/A2-related debt --
+#: `future/ENVIRONMENT_CONTRACT.md`'s scope -- and the owner chose to drop
+#: it outright rather than keep reading it indefinitely.
 ALLOWED_RUNS_ROOT_ENV = "OMNIDRIVER_ALLOWED_RUNS_ROOT"
-LEGACY_ALLOWED_RUNS_ROOT_ENV = "DRIVERFOAM_ALLOWED_RUNS_ROOT"
 
 
 def _allowed_runs_root(env: dict[str, str] | None = None) -> Path | None:
@@ -114,7 +145,7 @@ def _allowed_runs_root(env: dict[str, str] | None = None) -> Path | None:
     use ``mock.patch.dict`` on real ``os.environ`` instead.
     """
     source = env if env is not None else os.environ
-    value = source.get(ALLOWED_RUNS_ROOT_ENV) or source.get(LEGACY_ALLOWED_RUNS_ROOT_ENV)
+    value = source.get(ALLOWED_RUNS_ROOT_ENV)
     if not value:
         return None
     return Path(value).resolve()

@@ -54,6 +54,20 @@ class TestDataArtifactFromJson(unittest.TestCase):
                 "format": "csv_probe",
             })
 
+    def test_time_indexed_key_is_refused_by_name(self) -> None:
+        """R2 fix, finding M1: a pre-A2 artifact entry naming the old
+        'time_indexed' key is refused, never silently dropped."""
+        with self.assertRaises(ValueError) as ctx:
+            data_artifact_from_json({
+                "artifact_id": "vm",
+                "path_pattern": "out/vm.igb",
+                "format": "igb",
+                "time_indexed": False,
+            })
+        message = str(ctx.exception)
+        self.assertIn("time_indexed", message)
+        self.assertIn("instance_indexed", message)
+
 
 if __name__ == "__main__":
     unittest.main()

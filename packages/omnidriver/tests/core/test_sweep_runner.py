@@ -200,6 +200,50 @@ def test_completed_sweep_reuse_checks_input_identity_and_required_outputs(tmp_pa
     assert not reusable and "required outputs are missing" in error
 
 
+def test_completed_pre_a2_run_document_is_reported_not_reusable_and_rerun(tmp_path):
+    """R2 fix, finding I1: a sweep-run output directory a pre-A2 completion
+    left behind carries ``"time_indexed"`` on every artifact (A2a's schema
+    has ``additionalProperties: false``, and ``time_indexed`` was renamed
+    ``instance_indexed``). ``load_run_document`` used to let
+    ``jsonschema.ValidationError`` escape uncaught -- not a ``ValueError``,
+    so ``_completed_case_is_reusable``'s except tuple never caught it, and
+    the whole sweep crashed instead of re-running this one case. It must
+    instead be reported as a named refusal, exactly like every other reason
+    a case cannot be reused."""
+    output_dir = tmp_path / "out"
+    case_dir = output_dir / "x"
+    case_dir.mkdir(parents=True)
+    pre_a2_document = {
+        "version": "3", "id": "x", "name": "x", "createdAt": "", "lastModified": "",
+        "status": "planned", "intent": {}, "plugin": None, "config": {},
+        "configurationSource": "document", "resolvedEntry": None,
+        "workflowDag": None, "workflowState": None, "launch": None,
+        "expectedArtifacts": [{
+            "artifact_id": "vm", "path_pattern": "out/vm.igb", "format": "igb",
+            "variables": [], "description": "", "produced_by": "", "optional": False,
+            "time_indexed": False,
+        }],
+        "validation": {}, "results": None, "terminalStatusValues": ["completed", "failed"],
+    }
+    (case_dir / "run_document.json").write_text(json.dumps(pre_a2_document))
+    (case_dir / "workflow_state.json").write_text("{}")
+    prior_entry = CaseManifestEntry(
+        case_id="x", resolved_axis_values={}, override_hash=compute_override_hash({}),
+        run_document_path="x/run_document.json", workflow_state_path="x/workflow_state.json",
+        status="completed", outcome="fresh", started_at="t0", updated_at="t0",
+    )
+
+    reusable, error = _completed_case_is_reusable(
+        prior_entry, output_dir=output_dir, routed={}, driver_context=_CTX,
+        execution_environment={},
+    )
+
+    assert reusable is False
+    assert error is not None
+    assert "time_indexed" in error
+    assert "schema" in error
+
+
 def test_entry_case_staging_keeps_authored_case_clean(tmp_path):
     source = tmp_path / "tutorials" / "case"
     source.mkdir(parents=True)

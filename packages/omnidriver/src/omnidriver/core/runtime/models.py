@@ -63,10 +63,17 @@ class DataArtifact:
     instance_indexed: bool = False
     """True for an output written once per solver-declared instance (for
     OpenFOAM, a time directory). ``path_pattern`` then contains
-    ``{instance}``, which reconciliation substitutes with each directory the
+    ``{instance}``, which reconciliation substitutes with each name the
     environment's ``CaseRuntimeConventions.instance_directory_pattern``
     matches. Renamed from ``time_indexed`` 2026-09-26 (spec
-    2026-09-26-core-generality-design.md §2, A2)."""
+    2026-09-26-core-generality-design.md §2, A2).
+
+    Corrected 2026-09-26 (R2 fix, finding M2): said "each directory" the
+    pattern matches, and by implication only at the case root. The pattern
+    is matched against a name at every depth in the case tree, and applies
+    to files too, not only directories -- see
+    ``CaseRuntimeConventions.instance_directory_pattern``'s own docstring
+    for the same correction in full."""
 
     def __post_init__(self) -> None:
         # Catch typos like {caseId} or {run_id} at construction so they never
@@ -127,6 +134,21 @@ def expand_path_pattern(
     return _PATH_PATTERN_PLACEHOLDER.sub(_resolve, pattern)
 
 
+#: Exactly the JSON keys :class:`DataArtifact` reconstructs from -- the same
+#: closed set ``schemas/run-document.json``'s artifact object declares via
+#: ``additionalProperties: false``. Named once, generically, rather than as
+#: a hardcoded old-key comparison (R2 fix, finding M1): a renamed or removed
+#: field (any of them, not only the A2 rename this was written for) is then
+#: refused by name -- the actual key found, read back from the caller's own
+#: data -- without core's source needing to spell any one specific retired
+#: field name as a literal (scripts/check-core-shape.py's token scan is
+#: about coupling to a *shape*, not about a caller's data mentioning one).
+_ARTIFACT_JSON_KEYS: Final[frozenset[str]] = frozenset({
+    "artifact_id", "path_pattern", "format", "variables", "description",
+    "produced_by", "optional", "instance_indexed",
+})
+
+
 def data_artifact_from_json(data: dict[str, Any]) -> DataArtifact:
     """Reconstruct a :class:`DataArtifact` from its JSON dict form.
 
@@ -135,7 +157,24 @@ def data_artifact_from_json(data: dict[str, Any]) -> DataArtifact:
     dataclass defaults. ``DataArtifact.__post_init__`` still runs, so a
     malformed ``path_pattern`` (unknown placeholder) raises ``ValueError``
     here rather than reaching the executor.
+
+    An unrecognised key -- a pre-A2 artifact's now-renamed field among them
+    -- is refused by name (R2 fix, finding M1), never silently dropped:
+    ``load_run_document`` schema-validates and already refuses one (the
+    schema's ``additionalProperties: false``), but
+    ``core.quantities.comparison._artifact`` reads a run document as raw
+    JSON, with no schema validation -- that path used to accept an artifact
+    carrying an old key and silently discard it via ``data.get(...)``,
+    dropping the fact rather than refusing it.
     """
+    unrecognised = sorted(set(data) - _ARTIFACT_JSON_KEYS)
+    if unrecognised:
+        raise ValueError(
+            f"expectedArtifacts entry {data.get('artifact_id')!r} carries "
+            f"unrecognised key(s) {unrecognised!r}; a renamed or removed "
+            f"field (e.g. A2's instance_indexed rename, 2026-09-26) is "
+            f"refused, never silently dropped or translated"
+        )
     return DataArtifact(
         artifact_id=str(data["artifact_id"]),
         path_pattern=str(data["path_pattern"]),
