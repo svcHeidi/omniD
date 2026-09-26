@@ -70,15 +70,15 @@ def main() -> int:
     #    context rule. Calling one without a context and without an installed
     #    adapter must not manufacture a generic answer.
     try:
-        from omnidriver.dict_entries import get_heterogeneity_models
+        from omnidriver.dict_entries import all_documented_driver_paths
 
-        get_heterogeneity_models()
+        all_documented_driver_paths()
     except LookupError as exc:
         print(f"public edge without context : {type(exc).__name__}: {exc}")
     except Exception as exc:  # noqa: BLE001
-        failures.append(f"get_heterogeneity_models() raised {type(exc).__name__}, not LookupError: {exc}")
+        failures.append(f"all_documented_driver_paths() raised {type(exc).__name__}, not LookupError: {exc}")
     else:
-        failures.append("get_heterogeneity_models() unexpectedly answered without an adapter")
+        failures.append("all_documented_driver_paths() unexpectedly answered without an adapter")
 
     # 4. The CLI is reachable. It hard-imported omnidriver.openfoam at module
     #    scope once, which made the whole command surface unusable in a

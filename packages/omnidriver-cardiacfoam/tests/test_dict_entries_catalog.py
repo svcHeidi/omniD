@@ -5,10 +5,8 @@ import typing
 import unittest
 from pathlib import Path
 
-from omnidriver.dict_entries import (
-    get_electro_property_entry_groups,
-    all_documented_driver_paths,
-)
+from omnidriver.cardiacfoam.dict_entries import get_electro_property_entry_groups
+from omnidriver.dict_entries import all_documented_driver_paths
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.cardiacfoam.active_tension_catalog import ACTIVE_TENSION_MODEL_CATALOG
 from omnidriver.cardiacfoam.common_dict_entries import PHYSICS_PROPERTY_ENTRIES

@@ -45,7 +45,7 @@ from pathlib import Path
 
 from omnidriver.cardiacfoam.common_dict_entries import PHYSICS_PROPERTY_ENTRIES
 from omnidriver.core.contracts.dictionary import DictEntry
-from omnidriver.dict_entries import get_electro_property_entry_groups
+from omnidriver.cardiacfoam.dict_entries import get_electro_property_entry_groups
 from omnidriver.cardiacfoam.own_context import own_driver_context
 
 

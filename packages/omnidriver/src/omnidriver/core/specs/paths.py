@@ -4,27 +4,6 @@ from pathlib import Path
 from ..tutorial_records import TutorialRecordError
 
 
-def cardiacfoam_monorepo_root(start: Path | None = None) -> Path | None:
-    """Walk parent directories looking for the full cardiacFoam monorepo root.
-
-    Returns the first ancestor of ``start`` (default: this file) that has
-    both ``tutorials/`` and ``applications/`` siblings -- the monorepo
-    ``omnidriver`` was extracted from -- or ``None`` when running in a
-    standalone checkout that doesn't happen to sit inside that tree (the
-    normal case: this repo has its own remote and isn't nested in the
-    monorepo). Shared by each package's test ``conftest.py`` (via
-    ``skip_without_monorepo``) and by the root-level ``scripts/`` (e.g.
-    ``regenerate-ionic-catalog.py``, ``scan-dict-keys.py``) that read
-    monorepo-only content. No call sites exist inside core itself; this
-    function has no callers unless something outside core imports it.
-    """
-    current = (start or Path(__file__)).resolve()
-    for parent in current.parents:
-        if (parent / "tutorials").exists() and (parent / "applications").exists():
-            return parent
-    return None
-
-
 def repo_root_default() -> Path:
     """Locate the repository root using a three-tier fallback.
 

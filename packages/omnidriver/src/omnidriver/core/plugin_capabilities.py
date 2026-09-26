@@ -210,7 +210,7 @@ class CapabilityManifestCapability(Protocol):
     and serialises it for ``describe`` without interpreting it.
 
     :adapts: get_capabilities
-    :consumed-by: omnidriver/dict_entries.py, omnidriver/core/introspection.py, omnidriver/core/strict_planning.py
+    :consumed-by: omnidriver/cardiacfoam/dict_entries.py, omnidriver/core/introspection.py, omnidriver/core/strict_planning.py
     :fallback: none
     :status: required
     """

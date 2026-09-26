@@ -876,8 +876,8 @@ def build_parser() -> argparse.ArgumentParser:
             "'omnidriver.plugins' entry-point group, a trusted "
             "local-development import target (module.path:PluginClass). "
             "Defaults to the sole installed solver-tier adapter, composed "
-            "with whatever it requires (e.g. an OpenFOAM environment "
-            "adapter); explicit selection is required when none is "
+            "with whatever it requires (e.g. an environment adapter it names "
+            "in requires:); explicit selection is required when none is "
             "installed, or when two or more installed adapters are mutually "
             "independent solver-tier plugins with no requires: relationship "
             "tying them together. "
@@ -910,7 +910,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Plan and print simulation cases without running OpenFOAM.",
+        help="Plan and print simulation cases without running the solver.",
     )
     parser.add_argument(
         "--strict",
@@ -963,12 +963,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--config",
         help=(
-            "Path to JSON file with make_spec overrides. Supports either a top-level "
-            "entry map (keys: singleCell, niederer2012, manufacturedMonodomainPseudoECG, "
-            "manufacturedBidomain, manufacturedBathBidomain, "
-            "manufacturedEikonalECG, manufacturedMonodomainTotalLagrangianEM, "
-            "manufacturedPurkinjeGraph, restitutionCurves, genericCase/randomCase) "
-            "or a direct parameter object for the selected entry."
+            "Path to JSON file with make_spec overrides: either a top-level map "
+            "keyed by entry name (the names `describe` lists for the selected "
+            "plugin) or a direct parameter object for the selected entry."
         ),
     )
     parser.add_argument(

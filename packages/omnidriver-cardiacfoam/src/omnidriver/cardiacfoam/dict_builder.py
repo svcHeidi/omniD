@@ -45,10 +45,8 @@ from collections.abc import Mapping, Sequence
 from numbers import Integral, Real
 from typing import Any
 
-from omnidriver.dict_entries import (
-    DictEntry,
-    get_electro_property_entry_groups,
-)
+from omnidriver.dict_entries import DictEntry
+from omnidriver.cardiacfoam.dict_entries import get_electro_property_entry_groups
 from omnidriver.openfoam.dict_builder import (
     _PLACEHOLDER_RE,
     _openfoam_value_token,
@@ -167,7 +165,7 @@ def _infer_virtual_presence(ctx: dict[str, Any]) -> None:
                 break
 
     # Support OR logic for ionicHeterogeneity applicability
-    from omnidriver.dict_entries import get_heterogeneity_models
+    from omnidriver.cardiacfoam.dict_entries import get_heterogeneity_models
     if (
         ctx.get("myocardiumSolver") == "eikonalSolver"
         or ctx.get("ionicModel") in get_heterogeneity_models(own_driver_context())

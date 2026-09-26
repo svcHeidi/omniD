@@ -56,7 +56,8 @@ from omnidriver.openfoam.dict_keys_scanner import (
     scan_dict_reads,
     strict_dict_key_report,
 )
-from omnidriver.core.specs.paths import cardiacfoam_monorepo_root, repo_root_default
+from omnidriver.cardiacfoam.monorepo import cardiacfoam_monorepo_root
+from omnidriver.core.specs.paths import repo_root_default
 
 REPO_ROOT = cardiacfoam_monorepo_root() or repo_root_default()
 

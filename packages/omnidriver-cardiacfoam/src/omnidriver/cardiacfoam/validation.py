@@ -217,7 +217,7 @@ def _dynamic_block_templates() -> dict[str, list[Any]]:
     ``ionicHeterogeneity.regions.<region_name>``. Entries sharing a template
     are the leaves that one configured instance of that block may carry.
     """
-    from omnidriver.dict_entries import get_electro_property_entry_groups
+    from omnidriver.cardiacfoam.dict_entries import get_electro_property_entry_groups
     from omnidriver.core.specs.validation import slot_key
     from omnidriver.cardiacfoam.own_context import own_driver_context
 

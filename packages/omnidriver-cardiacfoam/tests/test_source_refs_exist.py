@@ -71,7 +71,7 @@ from __future__ import annotations
 import pytest
 from pathlib import Path
 
-from omnidriver.dict_entries import get_electro_property_entry_groups
+from omnidriver.cardiacfoam.dict_entries import get_electro_property_entry_groups
 from omnidriver.cardiacfoam.common_dict_entries import (
     CONTROL_DICT_ENTRIES,
     PHYSICS_PROPERTY_ENTRIES,

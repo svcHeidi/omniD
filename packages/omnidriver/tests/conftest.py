@@ -5,7 +5,7 @@ from pathlib import Path
 os.environ["SKIP_ENV_DIAGNOSTICS"] = "1"
 
 
-from omnidriver.core.specs.paths import cardiacfoam_monorepo_root, repo_root_default
+from omnidriver.core.specs.paths import repo_root_default
 
 
 def _repo_root_or_none() -> Path | None:
@@ -47,11 +47,20 @@ skip_without_repo = pytest.mark.skipif(
     ),
 )
 
+def _cardiacfoam_monorepo_root() -> Path | None:
+    """The cardiacFoam monorepo this repository was extracted from, if this
+    checkout sits inside one: the first ancestor holding both ``tutorials/``
+    and ``applications/``. Test-local since 2026-09-26 (spec A6): shipped
+    core names no solver, and this package's tests cannot import
+    omnidriver-cardiacfoam's copy (``omnidriver.cardiacfoam.monorepo``)."""
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "tutorials").exists() and (parent / "applications").exists():
+            return parent
+    return None
+
+
 #: The monorepo root resolved once at collection time.  ``None`` in standalone.
-#: Shared with shipped code (e.g. utility_catalog.py's UTILITIES_ROOT) via
-#: cardiacfoam_monorepo_root() rather than each conftest.py recomputing its
-#: own copy of the same walk-up search.
-monorepo_root: Path | None = cardiacfoam_monorepo_root()
+monorepo_root: Path | None = _cardiacfoam_monorepo_root()
 
 #: Apply this decorator to any test class/function that reads real tutorial
 #: case directories from the monorepo ``tutorials/`` tree.  The test is

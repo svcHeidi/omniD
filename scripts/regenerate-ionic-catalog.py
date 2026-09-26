@@ -50,7 +50,8 @@ from omnidriver.cardiacfoam.names_parser import (
     find_names_header,
     parse_names_header,
 )
-from omnidriver.core.specs.paths import cardiacfoam_monorepo_root, repo_root_default
+from omnidriver.cardiacfoam.monorepo import cardiacfoam_monorepo_root
+from omnidriver.core.specs.paths import repo_root_default
 
 REPO_ROOT = repo_root_default()
 CATALOG_PATH = (

@@ -33,7 +33,7 @@ from pathlib import Path
 os.environ["SKIP_ENV_DIAGNOSTICS"] = "1"
 
 
-from omnidriver.core.specs.paths import cardiacfoam_monorepo_root
+from omnidriver.cardiacfoam.monorepo import cardiacfoam_monorepo_root
 
 
 monorepo_root: Path | None = cardiacfoam_monorepo_root()
