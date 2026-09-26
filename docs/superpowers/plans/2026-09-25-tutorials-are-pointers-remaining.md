@@ -93,6 +93,37 @@ and the native repo's own log:
 | 5.5, TL-EM | Purkinje graph, 1D3D; electromechanics | blocked or deferred, as above | — |
 | C | final cleanup (§3), including deleting the old factory path | last | — |
 
+**Corrected 2026-09-26 (review 54b I4).** The two tables above had fallen
+behind: the 5.4b-B row says "Worktree `t54-bidomain`, not merged" and "no
+open gaps", but it is merged and its tet studies could not be swept (review
+54b I2); the roadmap shows P3 "in progress" and 5.4b "after P3 + NF", and
+5.4b-N, 5.4b-E and the record-scoped axes had no row at all. This table
+replaces them where they differ. Numbers are the command under this
+section, run at each commit and its parent: tutorial modules plus
+defaults / all package source (tutorials included) / all package tests.
+
+| step | what | state | commits | lines before -> after |
+|---|---|---|---|---|
+| P3 | `TutorialRecord.default_variant` (Q2); `WorkflowStep.default_arguments`/`argv()` (Q3/Q7) | **done**, on `main` | `f39cce4`, `caa9527` (docs `8456d29`); the branch hashes `8737e6a`/`5cea253` above were rewritten when it landed | see that plan's own rows |
+| NF | native: `DefineConstant` in the five gmsh templates (`60805b27`), pseudo-ECG `anisotropic yes` (`6eb12863`), bidomain's unapplied ODE tolerances deleted (`03f02dec`), byte-identical tet overlays deleted (`9cb1213e`, `72038987`); omniD: the Q11 catalogue relation | **done** | omniD `9de75cf`; native as listed | — |
+| 5.4b-B | `manufacturedBidomain` record, the shared `records/manufactured_solution_axes.py`; 7 native studies rewritten | **done**, on `main`. Its three tet studies were refused at expansion until native `c048ec1b`/`44037651` | omniD `c15d5c5`, `fbe3bc4`; native `5f5692c7`, `b8ad4ee6`, `b203f347`, `c048ec1b`, `44037651` | 5883 / 59018 / 65121 -> 5707 / 59212 / 65084 |
+| 5.4b-N | `niederer2011` record; `block_mesh_resolution_axis` passes each document's own extent; 2 native studies rewritten | **done**, on `main`. Its two studies named no `cases_root` and could not be swept until native `11ea8f62` (review 54b I1); they run the paper's Δt since native `1a583b68` (owner) | omniD `1811e2e`, `f3bda47`, `93486ac`; native `22fdadca`, `a18843eb`, `11ea8f62`, `1a583b68` | 5707 / 59212 / 65084 -> 5153 / 59032 / 65095 |
+| 5.4b-E | `manufacturedEikonalECG` record; 6 native studies rewritten | **done**, on `main` | omniD `3e04030`, `4934557`; native `db896dd0` | 5153 / 59032 / 65095 -> 4445 / 58726 / 64780 |
+| RA | record-scoped axes: `TutorialRecord.axes`, no stack-wide axis catalogue | **done**, on `main` | `7d79ec9` (core), `caa7806` | 4445 / 58726 / 64780 -> 4445 / 58477 / 64852 |
+| B7 | topic B Task 7, cardiacFOAM's activation-probe reader | **done**, on `main` | `4300c81`, `222a641` | 4445 / 58477 / 64852 -> 4445 / 58740 / 65333 |
+| — | a duplicate tutorial record name is refused by name | **done**, on `main` | `718d015` | 4445 / 58740 / 65333 -> 4445 / 58788 / 65357 |
+| R54b | the review 54b fixes: I1-I4 and the minors (`.superpowers/sdd/review54b-fix-report.md`) | done on branch `review54b-fixes`, not merged | omniD `a89c085` through this commit (listed in the report); native `11ea8f62`, `1a583b68` on `omnid/review54b-fixes` | 4445 / 58788 / 65357 -> 4448 / 59000 / 65868 (source +212: `variant_constraints`, the sweep refusal, C10, the scale reader, `case_outputs.py`; tests +511, of which the native study-expansion test and the real-mesh extent tests are +174) |
+| 5.4a | bath | in progress, branch `t54a-bath` | — | — |
+| 5.4b-P | pseudo-ECG, last in 5.4b | not started | — | — |
+| B8 | topic B Task 8, the cross-solver Niederer comparison | in progress, branch `qoi-b8` | — | — |
+
+The wave from `9de75cf` to `718d015` (5.4b-B, N, E, the axes, Task 7 and
+the name refusal): tutorial modules and defaults 5883 -> 4445 (-1438), all
+package source 59018 -> 58788 (-230), all package tests 65121 -> 65357
+(+236). Source outside `tutorials/` grew by 1208 lines: three records, the
+shared axes, the extent reading, the probe reader (Task 7, +263) and the
+record-scoped axes' refusals.
+
 **Baseline for the cleaning, measured 2026-09-25 at `0cf5bfb`:**
 - tutorial modules plus `tutorials/defaults/`: 5,884 lines;
 - all package source: 53,965 lines;

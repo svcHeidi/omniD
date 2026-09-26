@@ -387,26 +387,58 @@ millimetre/millisecond table:
 {
   "base": {
     "entry": "niederer2011",
+    "cases_root": "tutorials",
     "mesh": "hex"
   },
   "sweep": {
     "mode": "zip",
     "independent": {
       "dx": [0.0005, 0.0005, 0.0005, 0.0002, 0.0002, 0.0002, 0.0001, 0.0001, 0.0001],
-      "system/controlDict:deltaT": [1e-05, 5e-06, 1e-06, 1e-05, 5e-06, 1e-06, 1e-05, 5e-06, 1e-06],
+      "system/controlDict:deltaT": [5e-05, 1e-05, 5e-06, 5e-05, 1e-05, 5e-06, 5e-05, 1e-05, 5e-06],
       "system/controlDict:endTime": [0.2, 0.2, 0.2, 0.08, 0.08, 0.08, 0.055, 0.055, 0.055]
     }
   }
 }
 ```
 
-Every axis value is forwarded verbatim as a keyword argument to that
+This is the native study
+`NiedererEtAl2011verification/setup/studies/cartesianConvergence/sweep_hex_convergence.json`:
+Niederer et al. (2011)'s grid, Δx 0.5/0.2/0.1 mm × Δt 0.05/0.01/0.005 ms,
+with `endTime` per Δx chosen so every probe has activated (owner,
+2026-09-26; the Δt here were 0.01/0.005/0.001 ms until then). Run it from
+the native repository root:
+`omnidriver --plugin cardiacfoam sweep-plan --spec tutorials/NiedererEtAl2011verification/setup/studies/cartesianConvergence/sweep_hex_convergence.json --output-dir <dir>`.
+
+**A record sweep names its own cases root.** `base.cases_root` says where
+the record's native case lives: here `tutorials`, relative to the directory
+the sweep runs from. A record has no ambient cases root, and `sweep-plan`/
+`sweep-run` refuse `--cases-root`, so a record sweep without
+`base.cases_root` is refused before any case exists, as the CLI's JSON
+failure. Each `independent`/`dependent` name, and each `base` key other than
+`entry`/`cases_root`, is a `document:dotted.path` key, one of the record's
+own axes, its route selector (`mesh`), or a sweep naming key (`caseId`,
+`output_dir_name`). Anything else is refused up front,
+for the whole sweep. Each case is staged from the native case into
+`<output_dir>/cases/<case_id>/` and committed there; the native tree is never
+written. `describe --entry niederer2011 --cases-root tutorials` lists the
+record's axes and keys.
+
+**Corrected 2026-09-26 (review 54b I1/I4).** This example had no
+`cases_root`, and neither did the native study it copies, so neither could
+be swept at all ("tutorial record 'niederer2011' cannot be swept: sweep.json's
+'base' must supply 'cases_root'"). Both are fixed (native `11ea8f62`). The
+paragraph below also followed this example as if it described it; it
+describes only the remaining **factory** tutorials, and its "as above" no
+longer points at anything here.
+
+For a factory tutorial (not a record), every axis value is forwarded
+verbatim as a keyword argument to that
 tutorial's own `make_spec(**overrides)` — there is no fixed vocabulary the way
 generic mode has (`electro_selectors`/`dx`/etc.); `make_spec` validates its
 own keyword arguments and an unrecognized one is a normal `TypeError`,
 reported as that case's `materialization_error`, same as any other per-case
-failure. Values fixed across every case in the sweep (like `solvers`/
-`end_time_by_dx` above) go in `base`; per-case values come from
+failure. Values fixed across every case in the sweep (like a factory's
+`solvers`/`end_time_by_dx`) go in `base`; per-case values come from
 `independent`/`dependent` and win on conflict.
 
 **One case per resolved combination, and why.** Several of these tutorials'
@@ -419,8 +451,8 @@ constraining kwarg like `solvers` is missing),
 `sweep-plan`/`sweep-run` reports that case as `failed` with a clear
 `materialization_error` rather than silently applying only the first of
 several. In practice this means giving `dt`/`dx`-style axes their own
-dedicated sweep row (`"zip"` mode with per-case single-element lists, as
-above) instead of relying on the tutorial's own internal multi-value fan-out.
+dedicated sweep row (`"zip"` mode with per-case single-element lists)
+instead of relying on the tutorial's own internal multi-value fan-out.
 Entry-mode sweeps remain serial because each case owns its staged case tree
 and post-processing boundary.
 
