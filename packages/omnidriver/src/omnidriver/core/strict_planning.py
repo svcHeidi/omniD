@@ -7,7 +7,7 @@ import shlex
 from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
 from pathlib import PurePosixPath
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Mapping
 
 if TYPE_CHECKING:
     from .plugin_interface import DriverContext
@@ -487,9 +487,16 @@ def strict_plan(
     environment_source: str | None = None,
     allow_unresolved_configuration: bool = False,
     scratch_root: str | Path | None = None,
+    cli_study: Mapping[str, Any] | None = None,
     driver_context: "DriverContext",
 ) -> StrictPlanReport:
     """Build a non-mutating strict simulation plan report.
+
+    ``cli_study`` holds the study values the CLI itself supplies (PAR,
+    2026-09-26: ``--parallel``), a record study's ``"cli"`` source beside
+    ``overrides``' ``"base"``, so a CLI value that disagrees with the
+    study's is refused by name rather than merged. Only a tutorial record
+    takes study values; any other entry given one is refused by name.
 
     ``scratch_root`` is where a tutorial record's case is staged
     (``<scratch_root>/records/<name>``); resolved by
@@ -529,8 +536,10 @@ def strict_plan(
             environment_source=environment_source,
             allow_unresolved_configuration=allow_unresolved_configuration,
             scratch_root=scratch_root,
+            cli_study=cli_study,
             driver_context=driver_context,
         )
+    refuse_cli_study_for_non_record(entry, cli_study)
     spec = load_entry_spec(
         entry,
         entry_kind=entry_kind,
@@ -548,6 +557,18 @@ def strict_plan(
     )
 
 
+def refuse_cli_study_for_non_record(entry: str, cli_study: Mapping[str, Any] | None) -> None:
+    """A CLI study value (``--parallel``) asks something of a tutorial
+    record's run; a factory or case-folder entry has no record study to put
+    it in, so it is refused by name rather than dropped (PAR, 2026-09-26)."""
+    if cli_study:
+        flags = ", ".join(f"--{name}" for name in sorted(cli_study))
+        raise TutorialRecordError(
+            f"{flags} applies only to a tutorial record's run, and {entry!r} is not a "
+            "tutorial record"
+        )
+
+
 def _strict_plan_for_record(
     record: Any,
     *,
@@ -559,6 +580,7 @@ def _strict_plan_for_record(
     environment_source: str | None,
     allow_unresolved_configuration: bool,
     scratch_root: str | Path | None,
+    cli_study: Mapping[str, Any] | None = None,
     driver_context: "DriverContext",
 ) -> StrictPlanReport:
     """Plan (and commit) one tutorial-record case for `plan --strict --entry
@@ -604,6 +626,7 @@ def _strict_plan_for_record(
             key: value for key, value in overrides.items() if key != "cases_root"
         },
         "sweep": {},
+        "cli": dict(cli_study or {}),
     }
     # Resolved here, after the cases_root refusal and only for a record --
     # lazily, so nothing else ever asks for a scratch root it does not use.

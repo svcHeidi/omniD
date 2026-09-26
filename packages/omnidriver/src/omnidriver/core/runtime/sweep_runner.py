@@ -8,9 +8,9 @@ import subprocess
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING, Any, Mapping, NamedTuple
 
-from omnidriver.core.strict_planning import strict_plan, _strict_plan_for_spec
+from omnidriver.core.strict_planning import refuse_cli_study_for_non_record, strict_plan, _strict_plan_for_spec
 from omnidriver.core.plugin_profile import is_replica_directory_name, replica_directory_globs
 from omnidriver.core.sweep.sweep_derivation_catalog import get_derivation
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError, check_case_count_cap, expand_sweep
@@ -164,12 +164,16 @@ def _sweep_record(
 
 def _record_case_study_by_source(
     *, base: dict[str, Any], resolved_axis_values: dict[str, Any],
+    cli_study: Mapping[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
+    """``cli_study`` is the CLI's own study source (PAR, 2026-09-26:
+    ``--parallel``), kept apart from ``base`` so a disagreement with the
+    sweep file is refused by name (``_extract_reserved_names``), not merged."""
     stripped_base = {
         key: value for key, value in base.items()
         if key not in _RECORD_NON_STUDY_BASE_KEYS
     }
-    return {"base": stripped_base, "sweep": dict(resolved_axis_values)}
+    return {"base": stripped_base, "sweep": dict(resolved_axis_values), "cli": dict(cli_study or {})}
 
 
 def _validate_record_sweep_upfront(
@@ -228,7 +232,8 @@ def _validate_record_sweep_upfront(
 
 def _record_sweep_plan(
     record: Any, cases_root: Path, sweep_spec: dict[str, Any], *,
-    output_dir: Path, driver_context: "DriverContext",
+    output_dir: Path, cli_study: Mapping[str, Any] | None = None,
+    driver_context: "DriverContext",
 ) -> dict[str, Any]:
     _validate_record_sweep_upfront(record, sweep_spec, driver_context=driver_context)
     resolved_cases = expand_sweep(sweep_spec, get_derivation=get_derivation)
@@ -237,7 +242,7 @@ def _record_sweep_plan(
     for case in resolved_cases:
         staged_case_root = output_dir / "cases" / case.case_id
         study_by_source = _record_case_study_by_source(
-            base=base, resolved_axis_values=case.resolved_axis_values,
+            base=base, resolved_axis_values=case.resolved_axis_values, cli_study=cli_study,
         )
         try:
             commit_result, spec = commit_and_build_record_spec(
@@ -278,6 +283,7 @@ def _record_sweep_plan(
 def _record_sweep_run(
     record: Any, cases_root: Path, sweep_spec: dict[str, Any], *,
     output_dir: Path, case_timeout_s: float | None, task: str,
+    cli_study: Mapping[str, Any] | None = None,
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
     """The record-entry counterpart of ``sweep_run``'s factory-entry branch.
@@ -316,7 +322,7 @@ def _record_sweep_run(
         workflow_state_path = case_dir / STATE_FILENAME
         case_record_path = case_dir / CASE_RECORD_FILENAME
         study_by_source = _record_case_study_by_source(
-            base=base, resolved_axis_values=case.resolved_axis_values,
+            base=base, resolved_axis_values=case.resolved_axis_values, cli_study=cli_study,
         )
 
         status = "failed"
@@ -829,8 +835,12 @@ def sweep_plan(
     *,
     output_dir: str | Path,
     max_cases: int = 200,
+    cli_study: Mapping[str, Any] | None = None,
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
+    """``cli_study``: the CLI's own study values (``--parallel``), a record
+    sweep's ``"cli"`` source; a factory sweep given one is refused by name
+    (PAR, 2026-09-26)."""
     try:
         sweep_spec = _load_spec(spec_path)
     except (OSError, ValueError) as exc:
@@ -850,8 +860,12 @@ def sweep_plan(
         # commit_record_case unresolved).
         return _record_sweep_plan(
             record, cases_root, sweep_spec, output_dir=Path(output_dir).resolve(),
-            driver_context=driver_context,
+            cli_study=cli_study, driver_context=driver_context,
         )
+    try:
+        refuse_cli_study_for_non_record(str(_entry_name(sweep_spec)), cli_study)
+    except TutorialRecordError as exc:
+        return {"case_count": 0, "cases": [], "spec_error": str(exc)}
 
     resolved_cases = expand_sweep(sweep_spec, get_derivation=get_derivation)
     base = sweep_spec.get("base", {})
@@ -981,9 +995,12 @@ def sweep_run(
     case_timeout_s: float | None = None,
     fresh: bool = False,
     task: str = "summarize",
+    cli_study: Mapping[str, Any] | None = None,
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
-    """`task` plays no part in the sweep loop itself -- expanding, routing,
+    """``cli_study``: as :func:`sweep_plan`'s (PAR, 2026-09-26).
+
+    `task` plays no part in the sweep loop itself -- expanding, routing,
     materializing, and running cases is fully deterministic and has no use
     for it. It is only consumed at the very end, handed to
     run_postprocessing_module: the sweep is task(sweep), no reasoning
@@ -1049,8 +1066,10 @@ def sweep_run(
             )
         return _record_sweep_run(
             record, cases_root, sweep_spec, output_dir=output_dir,
-            case_timeout_s=case_timeout_s, task=task, driver_context=driver_context,
+            case_timeout_s=case_timeout_s, task=task, cli_study=cli_study,
+            driver_context=driver_context,
         )
+    refuse_cli_study_for_non_record(str(_entry_name(sweep_spec)), cli_study)
 
     fresh_error = ensure_fresh_output_dir(
         output_dir, fresh=fresh, allowed_root=_allowed_runs_root(),

@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Mapping
 
 if TYPE_CHECKING:
     from .plugin_interface import DriverContext
@@ -515,6 +515,7 @@ def _describe_tutorial_record(
     resolution: dict[str, Any],
     *,
     overrides: dict[str, Any] | None,
+    cli_study: Mapping[str, Any] | None = None,
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
     """Item 1: describe's own preview of a tutorial_record entry.
@@ -574,7 +575,7 @@ def _describe_tutorial_record(
     preview = preview_record_case(
         record,
         cases_root=cases_root,
-        study_by_source={"base": incoming_overrides},
+        study_by_source={"base": incoming_overrides, "cli": dict(cli_study or {})},
         driver_context=driver_context,
     )
     surface = record_surface(
@@ -620,8 +621,12 @@ def describe_entry(
     entry_kind: str | None = None,
     overrides: dict[str, Any] | None = None,
     config_path: str | Path | None = None,
+    cli_study: Mapping[str, Any] | None = None,
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
+    """``cli_study``: the CLI's own study values (``--parallel``), previewed
+    as a record study's ``"cli"`` source, as ``strict_plan`` plans them;
+    refused by name for an entry that is not a record (PAR, 2026-09-26)."""
     resolution = resolve_entry(
         entry,
         entry_kind=entry_kind,
@@ -630,8 +635,12 @@ def describe_entry(
     )
     if resolution["resolution"] == "tutorial_record":
         return _describe_tutorial_record(
-            entry, resolution, overrides=overrides, driver_context=driver_context,
+            entry, resolution, overrides=overrides, cli_study=cli_study,
+            driver_context=driver_context,
         )
+    from .strict_planning import refuse_cli_study_for_non_record
+
+    refuse_cli_study_for_non_record(entry, cli_study)
     from .runtime.registry import _materialize_resolved_entry
 
     spec = _materialize_resolved_entry(

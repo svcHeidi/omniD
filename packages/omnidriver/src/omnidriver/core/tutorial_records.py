@@ -55,6 +55,19 @@ class TutorialRecordError(ValueError):
 # ---------------------------------------------------------------------------
 
 
+PARALLEL_STUDY_NAME = "parallel"
+"""The one study name core reserves for how a record case runs (PAR, owner
+Q6, 2026-09-26). Absent or ``False``: serial, the native default. Any other
+value asks the composed stack's solver layer for the parallel form of the
+record's solve step, and is handed to it as is: core gives it no meaning
+(``record_execution._parallel_workflow_dag``). The CLI's ``--parallel`` is
+the same request from another source. Core reserves it, rather than each
+record or plugin declaring its own, because the request is a property of a
+run, not of a record's content: one spelling for every solver is what lets
+a scheduler job script ask for it without knowing which stack it drives.
+No record may name an axis or its variant selector this."""
+
+
 PLAIN_FILE_FORMAT = "file"
 """The format of a ``produces`` path that names none: a file that exists or
 not, which no reader reads (``record_execution.record_step_artifacts``)."""
@@ -440,6 +453,12 @@ class TutorialRecord:
                     "a study name must resolve to one axis in its record"
                 )
             seen.add(axis.name)
+        if PARALLEL_STUDY_NAME in seen or self.variant_selector == PARALLEL_STUDY_NAME:
+            raise TutorialRecordError(
+                f"tutorial record {self.name!r} names an axis or its variant "
+                f"selector {PARALLEL_STUDY_NAME!r}; {PARALLEL_STUDY_NAME!r} is reserved "
+                "for how a run executes (serial or parallel), never case content"
+            )
         object.__setattr__(self, "workflow_steps", tuple(self.workflow_steps))
         step_ids = [step.step_id for step in self.workflow_steps]
         if len(set(step_ids)) != len(step_ids):

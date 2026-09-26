@@ -224,6 +224,7 @@ _SHAPE: dict[str, str] = {
     "get_run_document_config_schema": "single",
     "build_run_document_config": "single",
     "get_artifact_value_reader": "single",
+    "get_parallel_steps": "single",
     "get_loaded_environment": "single",
     "is_nondimensional_case": "single",
     "has_case_marker": "single",

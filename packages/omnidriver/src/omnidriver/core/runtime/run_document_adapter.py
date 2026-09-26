@@ -73,6 +73,10 @@ def _run_document_from_case(
             "sourceType": spec.metadata.get("source_type"),
             "workflowFamily": spec.metadata.get("workflow_family"),
             "isRunnable": True,
+            # PAR (2026-09-26): a record case run parallel says so, with the
+            # scheduler allocation it was checked against; a serial one
+            # carries no key (record_execution.record_case_spec).
+            **({"parallel": spec.metadata["parallel"]} if "parallel" in spec.metadata else {}),
         },
         workflowDag=workflow_dag,
         workflowState=workflow_state.to_json() if workflow_state else None,

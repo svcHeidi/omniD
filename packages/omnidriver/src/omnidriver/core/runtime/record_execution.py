@@ -21,7 +21,9 @@ preview." ``commit_record_case`` performs all four steps.
 from __future__ import annotations
 
 import contextlib
+import copy
 import datetime
+import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -32,6 +34,7 @@ from ..case_write import CaseMutationRequest, CaseWritePlan, CaseWriteRecord
 from ..sweep.sweep_derivation_catalog import NAMING_OUTPUT_KEYS
 from .models import DataArtifact
 from ..tutorial_records import (
+    PARALLEL_STUDY_NAME,
     SourcedPatch,
     TutorialRecord,
     TutorialRecordError,
@@ -69,6 +72,10 @@ class RecordCommitResult:
     #: `_resolve_workflow_route`. The caller that runs the workflow (sweep
     #: dispatch) needs this alongside `command_arguments` to build the DAG.
     workflow_step_ids: tuple[str, ...]
+    #: PAR (2026-09-26): the run's ``parallel`` request, ``None`` for serial
+    #: (absent, or ``False``). The caller that builds the DAG hands it to
+    #: the stack's parallel form (``record_case_spec``).
+    parallel_request: Any = None
 
     @property
     def status(self) -> str:
@@ -139,9 +146,26 @@ def _reserved_study_names(record: TutorialRecord) -> frozenset[str]:
     own (item 4's vocabulary fix: ``MESH_SELECTOR_NAME`` was deleted; each
     record declares its own).
     """
+    reserved = NAMING_OUTPUT_KEYS | frozenset({PARALLEL_STUDY_NAME})
     if record.variant_selector is None:
-        return NAMING_OUTPUT_KEYS
-    return NAMING_OUTPUT_KEYS | frozenset({record.variant_selector})
+        return reserved
+    return reserved | frozenset({record.variant_selector})
+
+
+def _parallel_request(record: TutorialRecord, reserved_values: Mapping[str, Any]) -> Any:
+    """PAR: the study's ``parallel`` value, or ``None`` for serial (absent,
+    or ``False``). Any other value is the solver layer's to interpret. A
+    ``null`` is refused by name rather than read as "no choice", as a null
+    variant selector is (``resolve_variant_selector``)."""
+    if PARALLEL_STUDY_NAME not in reserved_values:
+        return None
+    value = reserved_values[PARALLEL_STUDY_NAME]
+    if value is None:
+        raise TutorialRecordError(
+            f"tutorial record {record.name!r}: {PARALLEL_STUDY_NAME!r} is null; "
+            "omit it, or set it false, to run serial"
+        )
+    return None if value is False else value
 
 
 def _extract_reserved_names(
@@ -233,7 +257,7 @@ def _resolve_and_split(
     driver_context: "DriverContext",
 ) -> tuple[
     tuple[SourcedPatch, ...], tuple[SourcedPatch, ...],
-    dict[str, tuple[str, ...]], tuple[str, ...], dict[str, Any] | None,
+    dict[str, tuple[str, ...]], tuple[str, ...], dict[str, Any] | None, Any,
 ]:
     # M1: neither of these two capabilities has a compatibility fallback any
     # more (`:fallback: none`, matching ConfigValueCapability/
@@ -270,6 +294,7 @@ def _resolve_and_split(
     if workflow_variant is not None:
         # Review 54b I3: before any axis runs or any patch is proposed.
         check_variant_constraints(record, workflow_variant["selected"], study_by_source)
+    parallel_request = _parallel_request(record, reserved_values)
     combined, command_arguments = resolve_case_patches(
         record,
         study_by_source=study_by_source,
@@ -284,7 +309,7 @@ def _resolve_and_split(
         ),
         values_agree=comparator,
     )
-    return to_write, unchanged, command_arguments, workflow_step_ids, workflow_variant
+    return to_write, unchanged, command_arguments, workflow_step_ids, workflow_variant, parallel_request
 
 
 def _reader_refusing_as_record_error(
@@ -387,9 +412,20 @@ def preview_record_case(
             record, cases_root=cases_root, staged_case_root=staged_case_root,
             driver_context=driver_context,
         )
-        to_write, unchanged, command_arguments, workflow_step_ids, workflow_variant = _resolve_and_split(
+        (
+            to_write, unchanged, command_arguments, workflow_step_ids, workflow_variant, parallel_request,
+        ) = _resolve_and_split(
             record, study_by_source=study_by_source,
             staged_case_root=staged_case_root, driver_context=driver_context,
+        )
+        dag = _workflow_dag_for_record(
+            record, workflow_step_ids=workflow_step_ids, command_arguments=command_arguments,
+        )
+        dag, parallel = _apply_parallel_request(
+            record, dag, request=parallel_request, driver_context=driver_context,
+            read_value=_case_value_reader(
+                record, driver_context, case_root=staged_case_root, pending=to_write,
+            ),
         )
         patches = [
             _serialize_sourced_patch(sourced, status="changed") for sourced in to_write
@@ -404,26 +440,20 @@ def preview_record_case(
             },
             "workflow_step_ids": list(workflow_step_ids),
             "workflow_variant": workflow_variant,
-            "workflow_commands": _workflow_commands(
-                record, workflow_step_ids, command_arguments,
-            ),
+            "parallel": parallel,
+            "workflow_commands": _workflow_commands(dag),
         }
 
 
-def _workflow_commands(
-    record: TutorialRecord, workflow_step_ids: Sequence[str],
-    command_arguments: Mapping[str, tuple[str, ...]],
-) -> dict[str, list[str]]:
-    """The command line each selected step runs, as ``describe`` shows it:
-    its command, the default arguments no axis replaced, and the axis's
-    contribution (``WorkflowStep.argv``; owner Q3, 2026-09-26). The
-    preview's ``command_arguments`` shows only what axes contributed, so
-    without this a default argument was invisible before a run."""
-    steps_by_id = {step.step_id: step for step in record.workflow_steps}
-    return {
-        step_id: list(steps_by_id[step_id].argv(command_arguments.get(step_id, ())))
-        for step_id in workflow_step_ids
-    }
+def _workflow_commands(dag: Mapping[str, Any]) -> dict[str, list[str]]:
+    """The command line each step of the DAG a run would build runs, as
+    ``describe`` shows it: its command, the default arguments no axis
+    replaced, and the axis's contribution (``WorkflowStep.argv``; owner Q3,
+    2026-09-26). The preview's ``command_arguments`` shows only what axes
+    contributed, so without this a default argument was invisible before a
+    run. Corrected 2026-09-26 (PAR): read from the DAG, not the record's
+    steps, so a parallel request's form is what the preview shows."""
+    return {step["id"]: [step["command"], *step.get("args", ())] for step in dag["steps"]}
 
 
 @contextlib.contextmanager
@@ -487,14 +517,16 @@ def commit_record_case(
         record, cases_root=cases_root, staged_case_root=staged_case_root,
         driver_context=driver_context,
     )
-    to_write, unchanged, command_arguments, workflow_step_ids, _variant = _resolve_and_split(
+    (
+        to_write, unchanged, command_arguments, workflow_step_ids, _variant, parallel_request,
+    ) = _resolve_and_split(
         record, study_by_source=study_by_source,
         staged_case_root=staged_case_root, driver_context=driver_context,
     )
     if not to_write:
         return RecordCommitResult(
             write_record=None, unchanged=unchanged, command_arguments=command_arguments,
-            workflow_step_ids=workflow_step_ids,
+            workflow_step_ids=workflow_step_ids, parallel_request=parallel_request,
         )
 
     # `DriverContext.identity` has no default -- it is always present, never
@@ -561,7 +593,7 @@ def commit_record_case(
     )
     return RecordCommitResult(
         write_record=record_, unchanged=unchanged, command_arguments=command_arguments,
-        workflow_step_ids=workflow_step_ids,
+        workflow_step_ids=workflow_step_ids, parallel_request=parallel_request,
     )
 
 
@@ -609,6 +641,190 @@ def _workflow_dag_for_record(
         dag_steps.append(step_entry)
         depends_on = [step_id]
     return {"steps": dag_steps}
+
+
+# ---------------------------------------------------------------------------
+# PAR (owner Q6, 2026-09-26): serial versus parallel belongs to the solver's
+# own layer. Core finds the solve step, hands it over, and rewires the DAG.
+# ---------------------------------------------------------------------------
+
+
+#: Where core looks for the processes a batch scheduler allocated to this
+#: job. It is the one execution resource core reads, and it is read only
+#: when a run asks for parallel: a scheduler's allocation is an ambient
+#: fact (CLAUDE.md, "supplied versus discovered"; ENVIRONMENT_CONTRACT §12),
+#: so discovering it is right, provided the place looked in is declared --
+#: this tuple is that declaration. Slurm's ``SLURM_NTASKS`` only, the one
+#: scheduler the owner's campaign runs on; another is one more entry.
+SCHEDULER_ALLOCATION_VARIABLES = ("SLURM_NTASKS",)
+
+
+@dataclass(frozen=True)
+class SchedulerAllocation:
+    """How many processes the ambient scheduler allocated, and where that
+    was read. Handed to the solver layer's parallel form, which decides
+    what an allocation that disagrees with its own count means (always a
+    refusal by name in the shipped layers, never an override)."""
+
+    variable: str
+    ranks: int
+
+    def to_json(self) -> dict[str, Any]:
+        return {"variable": self.variable, "ranks": self.ranks}
+
+
+def scheduler_allocation(environ: Mapping[str, str]) -> SchedulerAllocation | None:
+    """The allocation ``environ`` states, from the first declared variable
+    that is set, or ``None`` outside a scheduler. A value that is not a
+    positive integer is refused by name, never skipped."""
+    for variable in SCHEDULER_ALLOCATION_VARIABLES:
+        raw = environ.get(variable)
+        if raw is None:
+            continue
+        try:
+            ranks = int(raw.strip())
+        except ValueError:
+            ranks = 0
+        if ranks < 1:
+            raise TutorialRecordError(
+                f"the scheduler allocation {variable}={raw!r} is not a positive "
+                "integer; a parallel run cannot check its process count against it"
+            )
+        return SchedulerAllocation(variable=variable, ranks=ranks)
+    return None
+
+
+def _case_value_reader(
+    record: TutorialRecord, driver_context: "DriverContext", *, case_root: Path,
+    pending: Sequence[SourcedPatch] = (),
+):
+    """``read_value(document, key_path)`` for the parallel form: the value
+    the run's case will hold -- a ``pending`` (not yet committed) patch's
+    value, else the staged case's, through the stack's config-value reader.
+    The preview passes its uncommitted patches, so ``describe`` shows the
+    form the committed case will get; the commit path passes none, because
+    by then they are on disk."""
+    pending_values = {
+        (sourced.patch.document, tuple(sourced.patch.key_path)): sourced.patch.value
+        for sourced in pending
+    }
+    read = _reader_refusing_as_record_error(
+        record, driver_context.capabilities.config_value.reader(), case_root=case_root,
+    )
+
+    def read_value(document: str, key_path: Sequence[str]) -> Any:
+        key = (document, tuple(key_path))
+        if key in pending_values:
+            return pending_values[key]
+        return read(Path(case_root) / document, tuple(key_path))
+
+    return read_value
+
+
+def _apply_parallel_request(
+    record: TutorialRecord, dag: dict[str, Any], *, request: Any,
+    driver_context: "DriverContext", read_value: Any,
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """``dag`` unchanged and ``None`` for a serial run; otherwise the parallel
+    DAG and what provenance records of the request: the requested value and
+    the scheduler allocation the form was checked against (``None`` outside
+    a scheduler). The allocation is read here, lazily, only for a parallel
+    run."""
+    if request is None:
+        return dag, None
+    allocation = scheduler_allocation(os.environ)
+    parallel_dag = _parallel_workflow_dag(
+        record, dag, request=request, driver_context=driver_context,
+        read_value=read_value, allocation=allocation,
+    )
+    return parallel_dag, {
+        "requested": request,
+        "allocation": allocation.to_json() if allocation is not None else None,
+    }
+
+
+def _parallel_workflow_dag(
+    record: TutorialRecord, dag: Mapping[str, Any], *, request: Any,
+    driver_context: "DriverContext", read_value: Any,
+    allocation: SchedulerAllocation | None,
+) -> dict[str, Any]:
+    """Replace each step whose command the stack declares a solve command
+    (``get_solve_step_commands``, the record's solve step, declared once)
+    with the parallel form the stack's ``get_parallel_steps`` returns, and
+    make the next step follow the form's last step.
+
+    Core checks only what keeps the rest of the run honest: the form keeps
+    the solve step's id and ``produces`` on exactly one step (its artifacts
+    and the record's declared outputs stay where they were), and takes no id
+    another step already uses. What the form means -- a decomposition, a
+    launcher, a rank count -- is the solver layer's. Every refusal names the
+    record."""
+    form = driver_context.capabilities.parallel_execution.steps_for()
+    if form is None:
+        raise TutorialRecordError(
+            f"tutorial record {record.name!r}: the run asks for "
+            f"{PARALLEL_STUDY_NAME!r} = {request!r}, but the composed stack declares no "
+            "parallel form (get_parallel_steps), so it runs serial only; omit "
+            f"{PARALLEL_STUDY_NAME!r}, or set it false, to run serial"
+        )
+    solve_commands = driver_context.capabilities.runtime_evidence.solve_step_commands()
+    if not any(step["command"] in solve_commands for step in dag["steps"]):
+        raise TutorialRecordError(
+            f"tutorial record {record.name!r}: the run asks for {PARALLEL_STUDY_NAME!r}, "
+            f"but none of its selected steps {[step['id'] for step in dag['steps']]} runs a "
+            f"solve command the stack declares (get_solve_step_commands: "
+            f"{sorted(solve_commands)}), so there is no solve step to run in parallel"
+        )
+    taken = {step["id"] for step in dag["steps"]}
+    steps: list[dict[str, Any]] = []
+    follows: dict[str, str] = {}
+    for serial_step in dag["steps"]:
+        step = {**serial_step, "depends_on": [follows.get(d, d) for d in serial_step["depends_on"]]}
+        if step["command"] not in solve_commands:
+            steps.append(step)
+            continue
+        try:
+            replacement = [
+                dict(entry) for entry in form(
+                    copy.deepcopy(step), request=request, read_value=read_value,
+                    allocation=allocation,
+                )
+            ]
+        except ValueError as exc:
+            raise TutorialRecordError(
+                f"tutorial record {record.name!r}: the solver layer refused the parallel "
+                f"form of step {step['id']!r} ({type(exc).__name__}): {exc}"
+            ) from exc
+        _check_parallel_form(record, step, replacement, taken=taken)
+        taken |= {entry["id"] for entry in replacement}
+        steps.extend(replacement)
+        follows[step["id"]] = replacement[-1]["id"]
+    return {**dag, "steps": steps}
+
+
+def _check_parallel_form(
+    record: TutorialRecord, step: Mapping[str, Any], replacement: Sequence[Mapping[str, Any]],
+    *, taken: set[str],
+) -> None:
+    where = f"tutorial record {record.name!r}: the parallel form of step {step['id']!r}"
+    if not replacement:
+        raise TutorialRecordError(f"{where} returned no steps")
+    keeping = [entry for entry in replacement if entry.get("id") == step["id"]]
+    if len(keeping) != 1:
+        raise TutorialRecordError(
+            f"{where} must keep the solve step's id {step['id']!r} on exactly one step; "
+            f"it returned ids {[entry.get('id') for entry in replacement]}"
+        )
+    if list(keeping[0].get("produces", ())) != list(step["produces"]):
+        raise TutorialRecordError(
+            f"{where} must keep its produces {step['produces']} on the step that runs "
+            f"the solver; it returned {keeping[0].get('produces')}"
+        )
+    for entry in replacement:
+        if entry is not keeping[0] and entry.get("id") in taken:
+            raise TutorialRecordError(
+                f"{where} returned step id {entry.get('id')!r}, which the workflow already uses"
+            )
 
 
 def record_artifact_id(step_id: str, index: int) -> str:
@@ -668,6 +884,8 @@ def commit_and_build_record_spec(
         record, case_id=case_id, staged_case_root=staged_case_root,
         workflow_step_ids=commit_result.workflow_step_ids,
         command_arguments=commit_result.command_arguments,
+        parallel_request=commit_result.parallel_request,
+        driver_context=driver_context,
     )
     return commit_result, spec
 
@@ -679,6 +897,8 @@ def record_case_spec(
     staged_case_root: Path,
     workflow_step_ids: tuple[str, ...],
     command_arguments: Mapping[str, tuple[str, ...]],
+    parallel_request: Any = None,
+    driver_context: "DriverContext | None" = None,
 ) -> Any:
     """Build the ``TutorialSpec`` a committed record case's workflow runs
     through -- the same ``strict_planning._strict_plan_for_spec``/run-
@@ -698,6 +918,13 @@ def record_case_spec(
     correct here for the same reason: a tutorial record is core-owned data,
     not a solver's config vocabulary, so there is no plugin config schema to
     validate a record spec's (empty) ``config`` against.
+
+    PAR (2026-09-26): a ``parallel_request`` (``RecordCommitResult``'s)
+    rewrites the solve step into the stack's parallel form, reading the
+    committed case; it needs the ``driver_context``, and a serial spec does
+    not. ``metadata["parallel"]`` then records the request, and the run
+    document carries it (``resolvedEntry.parallel``), so a serial and a
+    parallel run of one case are told apart by more than their DAG digest.
     """
     from .models import CaseConfig, TutorialSpec
 
@@ -705,6 +932,20 @@ def record_case_spec(
     workflow_dag = _workflow_dag_for_record(
         record, workflow_step_ids=workflow_step_ids, command_arguments=command_arguments,
     )
+    parallel = None
+    if parallel_request is not None:
+        if driver_context is None:
+            raise TutorialRecordError(
+                f"tutorial record {record.name!r}: a parallel request needs the "
+                "driver context whose stack provides the parallel form"
+            )
+        workflow_dag, parallel = _apply_parallel_request(
+            record, workflow_dag, request=parallel_request, driver_context=driver_context,
+            read_value=_case_value_reader(record, driver_context, case_root=case_root),
+        )
+    metadata: dict[str, Any] = {}
+    if parallel is not None:
+        metadata["parallel"] = parallel
     return TutorialSpec(
         name=case_id,
         case_root=case_root,
@@ -722,5 +963,6 @@ def record_case_spec(
             "workflow_dag": workflow_dag,
             "generic_case": True,
             "expected_artifacts": record_step_artifacts(record, workflow_step_ids),
+            **metadata,
         },
     )

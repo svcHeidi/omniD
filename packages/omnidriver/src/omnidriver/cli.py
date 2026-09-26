@@ -51,7 +51,7 @@ from .core.runtime.execution_context import (
     StepExecutionContext as _ExecutionContext,
 )
 from .core.sweep.sweep_expansion import SweepValidationError
-from .core.tutorial_records import TutorialRecordError
+from .core.tutorial_records import PARALLEL_STUDY_NAME, TutorialRecordError
 
 
 if TYPE_CHECKING:
@@ -495,6 +495,7 @@ def _context_from_entry(
     stage_for_execution: bool = False,
     fresh: bool = False,
     scratch_dir: str | None = None,
+    cli_study: dict | None = None,
 ) -> tuple[_ExecutionContext | None, int]:
     replan_entry = selected_entry
     replan_entry_kind = entry_kind
@@ -508,6 +509,7 @@ def _context_from_entry(
             environment_source=environment_source,
             allow_unresolved_configuration=allow_unresolved_configuration,
             scratch_root=scratch_dir,
+            cli_study=cli_study,
             driver_context=driver_context,
         )
     except TutorialRecordError as exc:
@@ -591,6 +593,7 @@ def _context_from_entry(
                 environment_source=environment_source,
                 allow_unresolved_configuration=allow_unresolved_configuration,
                 scratch_root=scratch_dir,
+                cli_study=cli_study,
                 driver_context=driver_context,
             )
         except TutorialRecordError as exc:
@@ -622,6 +625,7 @@ def _context_from_entry(
                 environment_source=environment_source,
                 allow_unresolved_configuration=allow_unresolved_configuration,
                 scratch_root=scratch_dir,
+                cli_study=cli_study,
                 driver_context=driver_context,
             )
         except (OSError, ValueError, TutorialRecordError) as exc:
@@ -655,6 +659,7 @@ def _context_from_entry(
             environment_source=environment_source,
             allow_unresolved_configuration=allow_unresolved_configuration,
             scratch_root=scratch_dir,
+            cli_study=cli_study,
             driver_context=driver_context,
         )
         replanned_readiness = is_launchable(
@@ -876,6 +881,14 @@ def resolve_cases_root(explicit: str | Path | None = None) -> Path:
     return Path.cwd()
 
 
+def _parallel_value(text: str) -> int:
+    """``--parallel N``: N as the integer the study value would hold."""
+    try:
+        return int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"--parallel takes an integer, got {text!r}") from None
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Simulation experiment automation driver")
     parser.add_argument(
@@ -951,6 +964,26 @@ def build_parser() -> argparse.ArgumentParser:
             "for strict plan/step/run; core never reads it. What it names is "
             "the plugin's own business (a script to source, or nothing). "
             "Absent, the plugin uses whatever its tool's ambient environment is."
+        ),
+    )
+    parser.add_argument(
+        "--parallel",
+        nargs="?",
+        const=True,
+        default=None,
+        type=_parallel_value,
+        metavar="N",
+        help=(
+            "For a tutorial record (describe, plan/step/run --strict, "
+            "sweep-plan/sweep-run): run its solve step in the composed "
+            "stack's parallel form -- the same request as the study value "
+            "'parallel', from another source; one that disagrees with the "
+            "study's is refused. Absent: serial. '--parallel' leaves the "
+            "process count to the solver layer, which reads it from the "
+            "case or the scheduler's allocation (SLURM_NTASKS); '--parallel "
+            "N' also hands it N, for a layer with no other source. Refused "
+            "by name where the stack has no parallel form, or where N, the "
+            "case and the allocation disagree."
         ),
     )
     parser.add_argument(
@@ -1177,6 +1210,13 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
         parser.error("--run-document and --entry are mutually exclusive")
     if args.run_document and (args.config or args.entry_kind or args.cases_root):
         parser.error("--config/--entry-kind/--cases-root are not valid with --run-document")
+    if args.parallel is not None and (
+        args.run_document or args.action not in {"describe", "plan", "step", "run", "sweep-plan", "sweep-run"}
+    ):
+        parser.error(
+            "--parallel is only valid where a tutorial record's run is planned: "
+            "describe, plan/step/run with --entry, sweep-plan, sweep-run"
+        )
     if args.run_document and args.allow_unresolved_configuration:
         parser.error("--allow-unresolved-configuration requires --entry, not --run-document")
     if args.action in {"sweep-plan", "sweep-run"}:
@@ -1287,6 +1327,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
     selected_entry = args.entry
+    # PAR (2026-09-26): the CLI's own study source, beside --config's.
+    cli_study = {PARALLEL_STUDY_NAME: args.parallel} if args.parallel is not None else {}
 
     overrides = (
         _load_spec_overrides(
@@ -1324,6 +1366,7 @@ def main(argv: list[str] | None = None) -> int:
                 entry_kind=args.entry_kind,
                 overrides=overrides,
                 config_path=args.config,
+                cli_study=cli_study,
                 driver_context=driver_context,
             )
         except TutorialRecordError as exc:
@@ -1349,6 +1392,7 @@ def main(argv: list[str] | None = None) -> int:
                 environment_source=args.environment_source,
                 allow_unresolved_configuration=args.allow_unresolved_configuration,
                 scratch_root=args.scratch_dir,
+                cli_study=cli_study,
                 driver_context=driver_context,
             )
         except TutorialRecordError as exc:
@@ -1384,6 +1428,7 @@ def main(argv: list[str] | None = None) -> int:
             stage_for_execution=True,
             fresh=args.fresh,
             scratch_dir=args.scratch_dir,
+            cli_study=cli_study,
         )
         if context is None:
             return failure_code
@@ -1405,6 +1450,7 @@ def main(argv: list[str] | None = None) -> int:
             stage_for_execution=True,
             fresh=args.fresh,
             scratch_dir=args.scratch_dir,
+            cli_study=cli_study,
         )
         if context is None:
             return failure_code
@@ -1419,6 +1465,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.spec,
                 output_dir=output_dir,
                 max_cases=args.max_cases,
+                cli_study=cli_study,
                 driver_context=driver_context,
             )
         except (SweepValidationError, TutorialRecordError) as exc:
@@ -1443,6 +1490,7 @@ def main(argv: list[str] | None = None) -> int:
                 retry_failed=args.retry_failed,
                 case_timeout_s=args.case_timeout_s,
                 fresh=args.fresh,
+                cli_study=cli_study,
                 driver_context=driver_context,
             )
         except (SweepValidationError, TutorialRecordError) as exc:

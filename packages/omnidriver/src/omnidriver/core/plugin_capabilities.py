@@ -710,14 +710,16 @@ class RuntimeEvidenceCapability(Protocol):
 
     Telemetry collection consumes ``solve_step_commands`` and
     ``telemetry_source_globs``. Phase 2 (provenance) now consumes
-    ``extra_provenance_paths`` for real.
+    ``extra_provenance_paths`` for real. Since 2026-09-26 (PAR),
+    ``solve_step_commands`` is also how ``record_execution`` finds a
+    record's solve step, the one a parallel request rewrites.
 
     Every member degrades to empty for a plugin that declares nothing, which
     is the honest answer rather than a solver-shaped guess -- so this
     capability needs no compatibility fallback.
 
     :adapts: get_artifact_value_reader, get_extra_provenance_paths, get_log_redaction_patterns, get_solve_step_commands, get_telemetry_source_globs
-    :consumed-by: omnidriver/conformance/checks.py, omnidriver/core/quantities/comparison.py, omnidriver/core/runtime/provenance_inputs.py, omnidriver/core/runtime/workflow_runner.py
+    :consumed-by: omnidriver/conformance/checks.py, omnidriver/core/quantities/comparison.py, omnidriver/core/runtime/provenance_inputs.py, omnidriver/core/runtime/record_execution.py, omnidriver/core/runtime/workflow_runner.py
     :fallback: none
     :status: optional-neutral
     """
@@ -1090,6 +1092,29 @@ class CaseValueComparisonCapability(Protocol):
     """
 
     def comparator(self) -> Any: ...
+
+
+class ParallelExecutionCapability(Protocol):
+    """The parallel form of a record's solve step, if the stack has one.
+
+    Owner Q6, 2026-09-26: serial versus parallel belongs to the solver's own
+    layer, which must know how to run it; a record declares its solve step
+    once and carries no parallel variant. ``steps_for()`` returns the
+    stack's ``get_parallel_steps`` callable (contract on
+    ``SolverPluginOptionalHooks``), or ``None``. ``record_execution
+    ._parallel_workflow_dag`` calls it for each step whose command the stack
+    declares in ``get_solve_step_commands``, rewires the DAG around what it
+    returns, and refuses by name when a run asks for parallel and this is
+    ``None``. A serial run never consults it, so a stack without it runs
+    exactly as before.
+
+    :adapts: get_parallel_steps
+    :consumed-by: omnidriver/core/runtime/record_execution.py
+    :fallback: none
+    :status: optional-neutral
+    """
+
+    def steps_for(self) -> Any | None: ...
 
 
 class CaseWriterCapability(Protocol):
@@ -2019,6 +2044,17 @@ class _CaseValueComparisonAdapter:
         return hook() if callable(hook) else None
 
 
+@dataclass(frozen=True)
+class _ParallelExecutionAdapter:
+    plugin: "SolverPlugin"
+
+    def steps_for(self) -> Any | None:
+        """The stack's own ``get_parallel_steps``, or ``None``; no fallback
+        stands in for a missing one (the caller refuses by name)."""
+        hook = getattr(self.plugin, "get_parallel_steps", None)
+        return hook if callable(hook) else None
+
+
 def _resolved_purely(hook, request, *, driver_context):
     """Run a resolution hook and refuse one that touched the case.
 
@@ -2287,6 +2323,7 @@ class PluginCapabilities:
     tutorial_records: TutorialRecordCapability
     record_key_validation: RecordKeyValidationCapability
     case_value_comparison: CaseValueComparisonCapability
+    parallel_execution: ParallelExecutionCapability
 
 
 def adapt_plugin_capabilities(plugin: "SolverPlugin") -> PluginCapabilities:
@@ -2331,4 +2368,5 @@ def adapt_plugin_capabilities(plugin: "SolverPlugin") -> PluginCapabilities:
         tutorial_records=_TutorialRecordAdapter(plugin),
         record_key_validation=_RecordKeyValidationAdapter(plugin),
         case_value_comparison=_CaseValueComparisonAdapter(plugin),
+        parallel_execution=_ParallelExecutionAdapter(plugin),
     )

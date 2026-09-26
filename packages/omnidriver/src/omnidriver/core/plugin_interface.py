@@ -621,6 +621,32 @@ class SolverPluginOptionalHooks(Protocol):
         committing it."""
         ...
 
+    # -- ParallelExecutionCapability (PAR, 2026-09-26) ---------------------------
+    def get_parallel_steps(self, step, *, request, read_value, allocation):
+        """The parallel form of one of a record's solve steps (owner Q6).
+
+        Core calls this only when a run asks for parallel (the reserved study
+        name ``tutorial_records.PARALLEL_STUDY_NAME``, or ``--parallel``), and
+        only for a step whose command this stack declares in
+        ``get_solve_step_commands``. ``step`` is that step's serial DAG entry
+        (``id``, ``command``, ``args``, ``depends_on``, ``produces``,
+        ``consumes``); ``request`` is the requested value, never ``False``;
+        ``read_value(document, key_path)`` returns the value the run's case
+        holds for a case-relative document key, uncommitted study patches
+        included; ``allocation`` is the ambient scheduler allocation
+        (``record_execution.SchedulerAllocation``) or ``None``.
+
+        Returns the steps that replace it, in order. Exactly one keeps
+        ``step["id"]`` and its ``produces`` (the step that runs the solver);
+        the others take ids no other step uses. The first follows
+        ``step["depends_on"]``; the step after the solve will follow the last.
+        Raises ``ValueError`` to refuse, naming the fact that is missing or
+        disagrees; core reports it with the record and step. Composed
+        ``single``: the most specific provider's form answers, so a solver
+        plugin may replace its environment's. Absent -> a run asking for
+        parallel is refused by name; a serial run never calls this."""
+        ...
+
     # -- RecordSurfaceCapability (C10) ------------------------------------------
     def get_record_key_catalog(self, case_root: "Path") -> tuple[Mapping[str, Any], ...]:
         """Every key a study may name for this case: document, key, value_kind, and optionally

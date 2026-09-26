@@ -375,7 +375,7 @@ no entry in `_instrumented` fallback accounting -- `phases` on the same
 | `environment_preflight` | `EnvironmentPreflightCapability` | `get_environment_diagnostics`, `get_configured_environment`, `get_loaded_environment` | `omnidriver/core/strict_planning.py`, `omnidriver/core/runtime/sweep_runner.py`, `omnidriver/cli.py`, `omnidriver/conformance/checks.py` | `legacy_environment_diagnostics`, `legacy_configured_environment`, `legacy_load_environment` | optional-neutral |
 | `dict_diagnostics` | `DictDiagnosticsCapability` | `get_function_object_field_diagnostics`, `get_case_dict_key_diagnostics` | `omnidriver/core/strict_planning.py` | `legacy_function_object_field_diagnostics`, `legacy_case_dict_key_diagnostics` | optional-neutral |
 | `override_schema` | `OverrideSchemaCapability` | `get_dict_entry_catalog`, `get_override_schema` | `omnidriver/core/introspection.py` | `legacy_dict_entry_catalog`, `legacy_override_schema` | optional-neutral |
-| `runtime_evidence` | `RuntimeEvidenceCapability` | `get_artifact_value_reader`, `get_extra_provenance_paths`, `get_log_redaction_patterns`, `get_solve_step_commands`, `get_telemetry_source_globs` | `omnidriver/conformance/checks.py`, `omnidriver/core/quantities/comparison.py`, `omnidriver/core/runtime/provenance_inputs.py`, `omnidriver/core/runtime/workflow_runner.py` | none | optional-neutral |
+| `runtime_evidence` | `RuntimeEvidenceCapability` | `get_artifact_value_reader`, `get_extra_provenance_paths`, `get_log_redaction_patterns`, `get_solve_step_commands`, `get_telemetry_source_globs` | `omnidriver/conformance/checks.py`, `omnidriver/core/quantities/comparison.py`, `omnidriver/core/runtime/provenance_inputs.py`, `omnidriver/core/runtime/record_execution.py`, `omnidriver/core/runtime/workflow_runner.py` | none | optional-neutral |
 | `record_surface` | `RecordSurfaceCapability` | `get_agent_guidance`, `get_record_key_catalog` | `omnidriver/core/runtime/record_surface.py` | none | optional-neutral |
 | `case_provenance` | `CaseProvenanceCapability` | `get_generated_output_globs`, `get_input_roots`, `get_required_inputs` | `omnidriver/core/runtime/provenance_inputs.py` | none | optional-neutral |
 | `report_catalog` | `ReportCatalogCapability` | `get_report_catalog` | `scripts/export-report-catalog.py` | `legacy_report_catalog` | optional-neutral |
@@ -388,7 +388,8 @@ no entry in `_instrumented` fallback accounting -- `phases` on the same
 | `tutorial_records` | `TutorialRecordCapability` | `get_tutorial_records` | `omnidriver/core/runtime/registry.py`, `omnidriver/conformance/checks.py` | none | optional-neutral |
 | `record_key_validation` | `RecordKeyValidationCapability` | `get_record_key_validator` | `omnidriver/core/runtime/record_execution.py`, `omnidriver/conformance/checks.py` | none | optional-neutral |
 | `case_value_comparison` | `CaseValueComparisonCapability` | `get_case_value_comparator` | `omnidriver/core/runtime/record_execution.py`, `omnidriver/conformance/checks.py` | none | optional-neutral |
+| `parallel_execution` | `ParallelExecutionCapability` | `get_parallel_steps` | `omnidriver/core/runtime/record_execution.py` | none | optional-neutral |
 
-31 capability seams.
+32 capability seams.
 
 <!-- END GENERATED: capability-seams -->
