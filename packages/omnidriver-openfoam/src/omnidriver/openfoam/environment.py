@@ -213,6 +213,7 @@ class OpenFOAMEnvironmentPlugin:
             case_root,
             control_dict_relpath=control_dict,
             read_value=read_foam_entry,
+            instance_directory_pattern=conventions.instance_directory_pattern,
         )
         globs = conventions.replica_directory_globs
         replicas = sorted(

@@ -43,7 +43,49 @@ def test_latest_time_selection_is_an_openfoam_adapter_convention(tmp_path: Path)
         tmp_path,
         control_dict_relpath="system/controlDict",
         read_value=read_foam_entry,
+        instance_directory_pattern=openfoam_case_runtime_conventions().instance_directory_pattern,
     ) == "0.5"
+
+
+def test_latest_time_selection_uses_the_conventions_regex_not_float(tmp_path: Path) -> None:
+    """Final review M5: before this fix, ``latestTime`` picked a candidate
+    time directory by ``float(name)`` succeeding, a rule that disagreed with
+    ``instance_directory_pattern`` (the same rule staging/discovery use) on
+    names like ``inf``. A directory literally named ``inf`` parses as a
+    float but is not an instance by the conventions regex, so it must be
+    ignored here too -- the rule is stated once, not twice with different
+    answers."""
+    _write_control_dict(tmp_path, "startFrom latestTime;\nstartTime 0;\n")
+    for name in ("0", "0.5", "inf", "nan", "1_0", "+1"):
+        (tmp_path / name).mkdir()
+
+    from omnidriver.openfoam.mutators import read_foam_entry
+
+    assert selected_start_time(
+        tmp_path,
+        control_dict_relpath="system/controlDict",
+        read_value=read_foam_entry,
+        instance_directory_pattern=openfoam_case_runtime_conventions().instance_directory_pattern,
+    ) == "0.5"
+
+
+def test_a_missing_control_dict_still_answers_the_zero_default(tmp_path: Path) -> None:
+    """Final review M5: a stricter refusal here was attempted and reverted
+    the same day (see `time_selection.selected_start_time`'s docstring) --
+    it broke `omnidriver-cardiaccore`'s
+    `test_controlled_allrun_executes_without_domain_claims`, a real,
+    pre-existing case that is deliberately not OpenFOAM-shaped at all. This
+    characterization test pins the restored behaviour: a missing
+    controlDict still answers the silent default ``"0"``, unchanged from
+    before this review."""
+    from omnidriver.openfoam.mutators import read_foam_entry
+
+    assert selected_start_time(
+        tmp_path,
+        control_dict_relpath="system/controlDict",
+        read_value=read_foam_entry,
+        instance_directory_pattern=openfoam_case_runtime_conventions().instance_directory_pattern,
+    ) == "0"
 
 
 def test_external_include_changes_openfoam_provenance_identity(tmp_path: Path) -> None:
