@@ -6,7 +6,6 @@ from importlib import resources
 from pathlib import Path
 
 from omnidriver.core.case_write import RenderedFile, ResolvedMutation, _digest_bytes
-from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 from omnidriver.core.plugin_profile import load_plugin_profile
 
 from .catalog import load_catalog, template_name
@@ -28,28 +27,16 @@ class OpenCARPPlugin:
     plugin_version = "0.1.0"
     plugin_api_version = "2"
 
-    # -- required contract; the dictionary-shaped members are empty (spec K5 deferred)
+    # -- required contract (the dictionary-shaped members are optional since 2026-09-26, spec A3, so none are stubbed)
     def get_profile(self):
         with resources.as_file(resources.files(__package__).joinpath("opencarp.yaml")) as path:
             return load_plugin_profile(path)
-
-    def get_dict_entries(self):
-        return ()
-
-    def get_dictionary_catalog(self):
-        return DictionaryCatalog({})
-
-    def get_dict_groups(self):
-        return {}
 
     def get_capabilities(self):
         return {}
 
     def get_tutorial_catalog(self):
         return {"registered_tutorials": (), "spec_factories": {}}
-
-    def get_tutorial_displays(self):
-        return ()
 
     def validate_configuration(self, spec):
         return ()

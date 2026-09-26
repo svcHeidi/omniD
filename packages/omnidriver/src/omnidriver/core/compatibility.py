@@ -445,7 +445,8 @@ def legacy_phases(plugin) -> tuple[str, ...]:
     ``DictEntry`` values, so it is correct for every plugin."""
 
     declared: set[str] = set()
-    for entry in plugin.get_dict_entries():
+    hook = getattr(plugin, "get_dict_entries", None)
+    for entry in (hook() if callable(hook) else ()):
         declared.update(entry.phases)
     return tuple(sorted(declared))
 

@@ -48,8 +48,9 @@ def test_declaring_the_contract_without_implementing_it_is_rejected() -> None:
         # mark `required` -- Task 4 (2026-09-20) demoted thirteen members
         # (including the former `get_artifact_value_reader`) to
         # `optional-neutral`, so a plugin lacking one of those is no longer
-        # rejected here.
-        get_dictionary_catalog = None
+        # rejected here. `get_dictionary_catalog` became optional on
+        # 2026-09-26 (spec A3), so it no longer serves this test either.
+        validate_configuration = None
 
     with pytest.raises(TypeError, match="does not implement the plugin contract"):
         driver_context(HalfMigratedPlugin(), source="test")
@@ -59,13 +60,13 @@ def test_the_shape_check_names_what_is_missing() -> None:
     # Both members must be `required` per the seam tiers -- see the note in
     # test_declaring_the_contract_without_implementing_it_is_rejected above.
     class MissingTwo(MinimalTestPlugin):
-        get_dict_groups = None
+        get_capabilities = None
         get_tutorial_catalog = None
 
     with pytest.raises(TypeError) as excinfo:
         driver_context(MissingTwo(), source="test")
     message = str(excinfo.value)
-    assert "get_dict_groups" in message
+    assert "get_capabilities" in message
     assert "get_tutorial_catalog" in message
 
 

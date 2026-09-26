@@ -193,23 +193,6 @@ class SolverPlugin(Protocol):
     def get_profile(self):
         """Return declarative case/C++ provenance metadata for this plugin."""
         ...
-        
-    def get_dict_entries(self) -> tuple[DictEntry, ...]:
-        """
-        Return the catalog of all solver-specific dictionary entries.
-        Agents will use this to introspect capabilities deterministically.
-        """
-        ...
-
-    def get_dictionary_catalog(self):
-        """Return dictionary entries partitioned by plugin-owned document name."""
-        ...
-
-    def get_dict_groups(self) -> dict[str, tuple[DictEntry, ...]]:
-        """
-        Return the dictionary entries organized by logical group.
-        """
-        ...
 
     def get_capabilities(self) -> CapabilityManifest:
         """
@@ -221,12 +204,6 @@ class SolverPlugin(Protocol):
     def get_tutorial_catalog(self) -> dict:
         """
         Return the tutorial specs provided by this solver.
-        """
-        ...
-
-    def get_tutorial_displays(self) -> tuple[TutorialDisplay, ...]:
-        """
-        Return the UI display cards for the registered tutorials.
         """
         ...
 
@@ -748,6 +725,26 @@ class SolverPluginOptionalHooks(Protocol):
         renders nothing."""
         ...
 
+    # -- DictionaryCatalogCapability / TutorialCatalogCapability ----------------
+    # Optional-neutral since 2026-09-26 (spec 2026-09-26 A3).
+    def get_dict_entries(self) -> tuple[DictEntry, ...]:
+        """The plugin's dictionary entries. Absent -> ``()``; the identity
+        digest then hashes ``()``, exactly as an empty stub did."""
+        ...
+
+    def get_dictionary_catalog(self):
+        """Entries partitioned by plugin-owned document name. Absent -> an
+        empty ``DictionaryCatalog``."""
+        ...
+
+    def get_dict_groups(self) -> dict[str, tuple[DictEntry, ...]]:
+        """Entries by the plugin's own group names. Absent -> ``{}``."""
+        ...
+
+    def get_tutorial_displays(self) -> tuple[TutorialDisplay, ...]:
+        """Display cards for the registered tutorials. Absent -> ``()``."""
+        ...
+
 
 # The single plugin contract version this core can drive. Anything else is
 # refused before any plugin catalog code runs.
@@ -801,7 +798,7 @@ def validate_plugin(plugin: Any) -> SolverPlugin:
         if not isinstance(value, str) or not value.strip():
             raise TypeError(f"SolverPlugin.{name} must be a non-empty string")
     # Refused here -- before the callable checks, before get_profile(), and
-    # before get_dict_entries() -- so an unsupported plugin's catalog code
+    # before any catalog member -- so an unsupported plugin's catalog code
     # never executes.
     if plugin.plugin_api_version not in SUPPORTED_PLUGIN_API_VERSIONS:
         raise TypeError(
@@ -830,6 +827,17 @@ def validate_plugin(plugin: Any) -> SolverPlugin:
     return plugin
 
 
+def _declared_dict_entries(provider: Any) -> tuple[Any, ...]:
+    """A provider's dictionary entries, or ``()`` when it declares none.
+
+    ``()`` is the identity digest's input for "none" (spec 2026-09-26 A3).
+    A provider without ``get_dict_entries`` digests exactly as one whose
+    stub returned ``()`` did, so deleting such a stub changes no provider
+    digest."""
+    hook = getattr(provider, "get_dict_entries", None)
+    return tuple(hook()) if callable(hook) else ()
+
+
 def _validate_one_provider(provider: SolverPlugin) -> SolverPlugin:
     """Structural checks a single provider must pass before it joins a stack.
 
@@ -849,7 +857,7 @@ def _validate_one_provider(provider: SolverPlugin) -> SolverPlugin:
 
     from .contracts.dictionary import DictEntry
 
-    entries = tuple(checked.get_dict_entries())
+    entries = _declared_dict_entries(checked)
     invalid_entries = [
         entry for entry in entries
         if not isinstance(entry, DictEntry) or not entry.driver_path.strip()
@@ -879,7 +887,7 @@ def _provider_identity(provider: SolverPlugin, *, source: str) -> "ProviderIdent
 
     provider_digest = _resolved_capability_digest(
         profile_digest=provider.get_profile().digest,
-        dictionary_entries=tuple(provider.get_dict_entries()),
+        dictionary_entries=_declared_dict_entries(provider),
         manifest=provider.get_capabilities(),
     )
     return ProviderIdentity(

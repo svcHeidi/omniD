@@ -157,14 +157,15 @@ class TutorialCatalogCapability(Protocol):
 
     ``catalog`` returns the plugin's registry keyed by tutorial name -- the
     entry names ``omnidriver`` accepts. ``displays`` returns the presentation
-    metadata ``describe`` renders. Both are required v1 members, so there is
-    no fallback: a plugin that registers no tutorials returns empty rather
-    than omitting the member.
+    metadata ``describe`` renders. ``catalog`` is required: a plugin that
+    registers no tutorials returns empty rather than omitting it. ``displays``
+    is optional-neutral since 2026-09-26 (spec A3); absent, it answers ``()``,
+    and core has no runtime consumer of it.
 
     :adapts: get_tutorial_catalog, get_tutorial_displays
     :consumed-by: omnidriver/core/runtime/registry.py, omnidriver/cardiacfoam/dict_builder.py
     :fallback: none
-    :status: required
+    :status: get_tutorial_catalog=required, get_tutorial_displays=optional-neutral
     """
 
     def catalog(self) -> dict[str, Any]: ...
@@ -180,14 +181,17 @@ class DictionaryCatalogCapability(Protocol):
     not know those names -- ``electroProperties`` is cardiac vocabulary, and a
     solids4foam plugin would say ``solidProperties`` instead.
 
-    All three are required v1 members with no fallback. This is the seam that
+    All three are optional-neutral since 2026-09-26 (spec A3). A plugin
+    without dictionaries (openCARP, the toy) omits them, and each answers
+    empty: ``()``, ``DictionaryCatalog({})``, ``{}``. Corrected that day: they
+    were required, so every plugin had to stub them. This is the seam that
     keeps dictionary *syntax* knowledge (core's) apart from dictionary
     *meaning* (the plugin's).
 
     :adapts: get_dict_entries, get_dict_groups, get_dictionary_catalog, get_phases
     :consumed-by: omnidriver/dict_entries.py, omnidriver/cardiacfoam/sweep.py, omnidriver/openfoam/apply_overrides.py, omnidriver/openfoam/dict_builder.py, omnidriver/core/specs/validation.py, omnidriver/core/strict_planning.py
     :fallback: legacy_phases
-    :status: get_dict_entries=required, get_dict_groups=required, get_dictionary_catalog=required, get_phases=optional-neutral
+    :status: optional-neutral
     """
 
     def entries(self) -> tuple[Any, ...]: ...
@@ -1064,7 +1068,8 @@ class _TutorialCatalogAdapter:
         return self.plugin.get_tutorial_catalog()
 
     def displays(self) -> tuple[Any, ...]:
-        return self.plugin.get_tutorial_displays()
+        hook = getattr(self.plugin, "get_tutorial_displays", None)
+        return tuple(hook()) if callable(hook) else ()
 
 
 @dataclass(frozen=True)
@@ -1072,13 +1077,20 @@ class _DictionaryCatalogAdapter:
     plugin: "SolverPlugin"
 
     def entries(self) -> tuple[Any, ...]:
-        return self.plugin.get_dict_entries()
+        hook = getattr(self.plugin, "get_dict_entries", None)
+        return tuple(hook()) if callable(hook) else ()
 
     def catalog(self) -> Any:
-        return self.plugin.get_dictionary_catalog()
+        hook = getattr(self.plugin, "get_dictionary_catalog", None)
+        if callable(hook):
+            return hook()
+        from .contracts.dictionary_catalog import DictionaryCatalog
+
+        return DictionaryCatalog({})
 
     def groups(self) -> dict[str, tuple[Any, ...]]:
-        return self.plugin.get_dict_groups()
+        hook = getattr(self.plugin, "get_dict_groups", None)
+        return dict(hook()) if callable(hook) else {}
 
     def phases(self) -> tuple[str, ...]:
         hook = getattr(self.plugin, "get_phases", None)

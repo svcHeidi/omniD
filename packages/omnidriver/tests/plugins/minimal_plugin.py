@@ -12,7 +12,6 @@ from pathlib import Path
 
 from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile
-from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 
 
 class MinimalTestPlugin:
@@ -137,15 +136,6 @@ class MinimalTestPlugin:
             },
         )
 
-    def get_dict_entries(self):
-        return ()
-
-    def get_dictionary_catalog(self):
-        return DictionaryCatalog({})
-
-    def get_dict_groups(self):
-        return {}
-
     def get_capabilities(self):
         return {}
 
@@ -158,9 +148,6 @@ class MinimalTestPlugin:
             case_entrypoints=entrypoints,
             case_script_commands=entrypoints,
         )
-
-    def get_tutorial_displays(self):
-        return ()
 
     def validate_configuration(self, spec):
         return ()

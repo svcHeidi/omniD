@@ -37,7 +37,7 @@ def test_generic_openfoam_plugin_satisfies_runtime_contract() -> None:
     ctx = driver_context(plugin, source="test")
 
     assert ctx.identity.to_json()["providers"][-1]["id"] == "org.omnidriver.openfoam.environment"
-    assert plugin.get_dict_entries() == ()
+    assert ctx.capabilities.dictionaries.entries() == ()
     assert plugin.get_tutorial_catalog() == {"registered_tutorials": (), "spec_factories": {}}
 
 
@@ -46,5 +46,5 @@ def test_minimal_plugin_proves_non_cardiac_solver_contract() -> None:
     ctx = driver_context(plugin, source="test")
 
     assert ctx.identity.to_json()["providers"][-1]["id"] == "org.driverfoam.test-minimal"
-    assert plugin.get_dict_entries() == ()
+    assert ctx.capabilities.dictionaries.entries() == ()
     assert plugin.get_capabilities() == {}

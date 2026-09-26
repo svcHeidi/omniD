@@ -39,7 +39,7 @@ def test_context_exposes_focused_adapters_without_replacing_public_plugin(
 
     assert context.providers == (plugin,)
     assert context.capabilities.tutorials.catalog() == plugin.get_tutorial_catalog()
-    assert context.capabilities.dictionaries.entries() == plugin.get_dict_entries()
+    assert context.capabilities.dictionaries.entries() == ()
     # Corrected 2026-09-22 (Task 10): this used to assert
     # `manifest.manifest() == plugin.get_capabilities()` -- true only because
     # `MinimalTestPlugin.get_capabilities()` happened to return `{}` and

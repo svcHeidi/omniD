@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from omnidriver.core.plugin_profile import PluginProfile
-from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 
 
 class MinimalOpenFOAMPlugin:
@@ -44,23 +43,11 @@ class MinimalOpenFOAMPlugin:
             },
         )
 
-    def get_dict_entries(self):
-        return ()
-
-    def get_dictionary_catalog(self):
-        return DictionaryCatalog({})
-
-    def get_dict_groups(self):
-        return {}
-
     def get_capabilities(self):
         return {}
 
     def get_tutorial_catalog(self):
         return {"registered_tutorials": (), "spec_factories": {}}
-
-    def get_tutorial_displays(self):
-        return ()
 
     def validate_configuration(self, spec):
         return ()

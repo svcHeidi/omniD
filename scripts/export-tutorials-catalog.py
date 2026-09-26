@@ -57,11 +57,7 @@ def build_catalog(plugin: str | None = None) -> dict:
     # and this is the plugin *object*. Binding both to one name reads as a
     # mistake even when it is not.
     context = load_plugin_context(plugin) if plugin else default_driver_context()
-    # `.plugin` was the retired single-plugin field (Task 7's
-    # `DriverContext` now holds an ordered `.providers` stack); the most
-    # specific provider -- last in the ordered tuple -- is this selection.
-    selected = context.providers[-1]
-    display_ids = {t.id for t in selected.get_tutorial_displays()}
+    display_ids = {t.id for t in context.capabilities.tutorials.displays()}
     registry_ids = set(list_tutorials(context))
     # A tutorial's backend is EITHER a factory (`registry_ids`, above) OR a
     # tutorial record (design doc docs/superpowers/specs/2026-09-24-
@@ -92,7 +88,7 @@ def build_catalog(plugin: str | None = None) -> dict:
     # record-backed ids not already a factory, sorted -- reproducible
     # regardless of get_tutorial_displays()'s or the record catalog's own
     # dict order.
-    by_id = {t.id: t for t in selected.get_tutorial_displays()}
+    by_id = {t.id: t for t in context.capabilities.tutorials.displays()}
     ordered_ids = list(list_tutorials(context)) + sorted(record_ids - registry_ids)
     return {
         "version": "1",

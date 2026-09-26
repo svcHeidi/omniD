@@ -331,8 +331,8 @@ fallback cannot be neutral and refuses by hook name instead.
 
 | capability | protocol | adapts | consumed by | fallback | status |
 |---|---|---|---|---|---|
-| `tutorials` | `TutorialCatalogCapability` | `get_tutorial_catalog`, `get_tutorial_displays` | `omnidriver/core/runtime/registry.py`, `omnidriver/cardiacfoam/dict_builder.py` | none | required |
-| `dictionaries` | `DictionaryCatalogCapability` | `get_dict_entries`, `get_dict_groups`, `get_dictionary_catalog`, `get_phases` | `omnidriver/dict_entries.py`, `omnidriver/cardiacfoam/sweep.py`, `omnidriver/openfoam/apply_overrides.py`, `omnidriver/openfoam/dict_builder.py`, `omnidriver/core/specs/validation.py`, `omnidriver/core/strict_planning.py` | `legacy_phases` | get_dict_entries=required, get_dict_groups=required, get_dictionary_catalog=required, get_phases=optional-neutral |
+| `tutorials` | `TutorialCatalogCapability` | `get_tutorial_catalog`, `get_tutorial_displays` | `omnidriver/core/runtime/registry.py`, `omnidriver/cardiacfoam/dict_builder.py` | none | get_tutorial_catalog=required, get_tutorial_displays=optional-neutral |
+| `dictionaries` | `DictionaryCatalogCapability` | `get_dict_entries`, `get_dict_groups`, `get_dictionary_catalog`, `get_phases` | `omnidriver/dict_entries.py`, `omnidriver/cardiacfoam/sweep.py`, `omnidriver/openfoam/apply_overrides.py`, `omnidriver/openfoam/dict_builder.py`, `omnidriver/core/specs/validation.py`, `omnidriver/core/strict_planning.py` | `legacy_phases` | optional-neutral |
 | `manifest` | `CapabilityManifestCapability` | `get_capabilities` | `omnidriver/dict_entries.py`, `omnidriver/core/introspection.py`, `omnidriver/core/strict_planning.py` | none | required |
 | `configuration_validator` | `ConfigurationValidatorCapability` | `validate_configuration` | `omnidriver/core/strict_planning.py` | none | required |
 | `run_semantic_validator` | `RunSemanticValidatorCapability` | `validate_run_semantics` | `omnidriver/core/specs/validation.py` | none | required |

@@ -5,7 +5,6 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 from omnidriver.core.plugin_interface import driver_context as make_driver_context
 
 from .case_runtime_conventions import openfoam_case_runtime_conventions
@@ -111,15 +110,6 @@ class OpenFOAMEnvironmentPlugin:
     def get_profile():
         return load_openfoam_profile(Path(__file__).with_name("openfoam-environment.yaml"))
 
-    def get_dict_entries(self):
-        return ()
-
-    def get_dictionary_catalog(self):
-        return DictionaryCatalog({})
-
-    def get_dict_groups(self):
-        return {}
-
     def get_capabilities(self):
         """This provider has no domain catalogue core cannot already compose.
 
@@ -145,9 +135,6 @@ class OpenFOAMEnvironmentPlugin:
 
     def get_tutorial_catalog(self):
         return {"registered_tutorials": (), "spec_factories": {}}
-
-    def get_tutorial_displays(self):
-        return ()
 
     def validate_configuration(self, spec):
         return ()

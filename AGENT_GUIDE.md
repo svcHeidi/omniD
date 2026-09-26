@@ -953,12 +953,8 @@ plugin_id               # str — reverse-DNS id, must match plugin.yaml
 plugin_version          # str — plugin semantics version
 plugin_api_version      # str — "2", the only supported contract version
 get_profile()           # PluginProfile from load_plugin_profile("plugin.yaml")
-get_dict_entries()      # tuple[DictEntry, ...] — globally unique driver_paths
-get_dictionary_catalog() # DictionaryCatalog — entries by document name
-get_dict_groups()       # dict[str, tuple[DictEntry, ...]] — by logical group
 get_capabilities()      # CapabilityManifest via build_capability_manifest()
 get_tutorial_catalog()  # dict with spec_factories, registered_tutorials
-get_tutorial_displays() # tuple[TutorialDisplay, ...]
 validate_configuration(spec)   # tuple[StrictDiagnostic, ...]
 validate_run_semantics(context) # tuple[...]
 predict_data_artifacts(case_root, spec) # tuple[DataArtifact, ...]
@@ -982,6 +978,10 @@ get_artifact_value_reader(format)    # Any | None
 (Corrected 2026-09-19: `get_environment_commands()` and
 `is_installed_environment_command(command)` were missing from this block —
 both are required `SolverPlugin` members, bringing the true count to 29.)
+
+Corrected 2026-09-26 (spec A3): `get_dict_entries`, `get_dictionary_catalog`,
+`get_dict_groups` and `get_tutorial_displays` are optional; absent, each
+answers empty. A plugin without dictionaries (openCARP) omits them.
 
 There is no shipped scaffold to copy in this repository (corrected
 2026-09-19: previously named a nonexistent `GenericOpenFOAMPlugin` in
