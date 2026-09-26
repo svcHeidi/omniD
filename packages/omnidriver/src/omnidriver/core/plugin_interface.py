@@ -445,7 +445,6 @@ class SolverPluginOptionalHooks(Protocol):
         self,
         case_root: "Path",
         resolved_case: dict[str, Any],
-        selected_start_time: str,
     ) -> tuple["ResolvedInput", ...]:
         """Already-resolved input paths this case reads. Resolved, not globs:
         field names are dictionary-configurable and locations resolve by a
@@ -458,18 +457,19 @@ class SolverPluginOptionalHooks(Protocol):
         self,
         case_root: "Path",
         resolved_case: dict[str, Any],
-        selected_start_time: str,
     ) -> tuple[str, ...]:
         """Globs for files this case generates rather than consumes. Globs are
         fine here: generated diagnostics have fixed names. Absent -> ``()``."""
         ...
 
-    # -- CaseIntrospectionCapability ------------------------------------------
-    def get_selected_start_time(
+    def get_input_roots(
         self, case_root: "Path", resolved_case: dict[str, Any],
-    ) -> str:
-        """Which adapter-defined state directory a run resumes from.
-        Absent -> no selected state directory is added to provenance."""
+    ) -> tuple[str, ...]:
+        """Case-relative directories whose files a run reads as state, beyond
+        the case-file roots: for example the directory a run resumes from,
+        and that directory inside each parallel replica. Absent -> ``()``:
+        core walks no state directory. Each must be a non-empty case-relative
+        path inside the case (added 2026-09-26, spec A2)."""
         ...
 
     # -- EnvironmentPreflightCapability --------------------------------------

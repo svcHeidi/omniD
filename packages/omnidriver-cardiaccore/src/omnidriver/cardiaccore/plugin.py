@@ -214,7 +214,6 @@ class CardiacCorePlugin:
         self,
         case_root: Path,
         resolved_case: dict[str, Any],
-        selected_start_time: str,
     ) -> tuple[str, ...]:
         """Exclude utility outputs from source-input provenance.
 
@@ -222,7 +221,7 @@ class CardiacCorePlugin:
         remains an explicit input to ``setPurkinjeSlab`` after the preceding
         utility has generated it.
         """
-        del case_root, resolved_case, selected_start_time
+        del case_root, resolved_case
         return tuple(sorted({
             produced.path_pattern
             for manifest in UTILITY_MANIFESTS.values()

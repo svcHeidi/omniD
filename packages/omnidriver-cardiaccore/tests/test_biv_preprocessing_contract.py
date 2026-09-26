@@ -102,7 +102,7 @@ def test_utility_outputs_are_not_misclassified_as_source_inputs(tmp_path):
     context = driver_context(OpenFOAMEnvironmentPlugin(), CardiacCorePlugin(), source="test")
 
     output_globs = context.capabilities.case_provenance.generated_output_globs(
-        tmp_path, {}, "0"
+        tmp_path, {}
     )
 
     assert "0/AHA_Segment" in output_globs

@@ -14,7 +14,7 @@ omnidriver fallbacks.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Mapping, Protocol, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -489,12 +489,12 @@ class CaseIntrospectionCapability(Protocol):
     plugin with no solver semantics (the generic plugin) resolves nothing and
     exposes no fields.
 
-    ``selected_start_time`` answers which on-disk state directory a run
-    resumes from. It is an environment interpretation, not a Core path rule:
-    an adapter that has no such convention returns ``None`` and Core does not
-    invent a directory to fingerprint.
+    Corrected 2026-09-26 (spec A2): this also answered ``selected_start_time``,
+    the directory a run resumes from. That was an OpenFOAM interpretation core
+    only used to walk provenance; the plugin now declares the walk itself,
+    through ``CaseProvenanceCapability.input_roots``.
 
-    :adapts: get_samplable_fields, get_selected_start_time, resolve_case_models
+    :adapts: get_samplable_fields, resolve_case_models
     :consumed-by: omnidriver/core/runtime/provenance_inputs.py
     :fallback: legacy_resolve_case_models, legacy_samplable_fields
     :status: optional-neutral
@@ -502,9 +502,6 @@ class CaseIntrospectionCapability(Protocol):
 
     def resolve_case_models(self, case_root: Path) -> dict[str, Any]: ...
     def samplable_fields(self, resolved: dict[str, Any]) -> dict[str, tuple[str, ...]]: ...
-    def selected_start_time(
-        self, case_root: Path, resolved_case: dict[str, Any], *, driver_context: Any,
-    ) -> str | None: ...
 
 
 class CaseFileContractCapability(Protocol):
@@ -699,10 +696,17 @@ class CaseProvenanceCapability(Protocol):
     ``generated_output_globs`` may stay globs: generated diagnostic outputs
     have fixed names.
 
-    Both take the resolved case dictionaries (not just the model name) and
-    the selected start time, because gating is by dictionary *value*: e.g.
-    ``conductivitySource field`` vs ``uniform`` flips a mandatory read on
-    and off, and an absent key silently defaults to ``uniform``.
+    Each takes the resolved case dictionaries (not just the model name),
+    because gating is by dictionary *value*: e.g. ``conductivitySource field``
+    vs ``uniform`` flips a mandatory read on and off, and an absent key
+    silently defaults to ``uniform``.
+
+    ``input_roots`` names the case-relative directories, beyond the case-file
+    roots, whose files a run reads as state. For OpenFOAM, that is the
+    selected start-time directory and the same directory in every parallel
+    replica. Core walks each and classifies its files by the same precedence.
+    Added 2026-09-26 (spec A2) to replace core's own start-time and
+    ``processor*`` walk. Absent: ``()``, and core walks no state directory.
 
     Routed through the capability adapter exactly like every other plugin
     capability -- deliberately **not** a mandatory ``SolverPlugin``
@@ -713,24 +717,22 @@ class CaseProvenanceCapability(Protocol):
     means "everything unknown is a required input" -- the safe default for
     a plugin that declares nothing.
 
-    :adapts: get_generated_output_globs, get_required_inputs
+    :adapts: get_generated_output_globs, get_input_roots, get_required_inputs
     :consumed-by: omnidriver/core/runtime/provenance_inputs.py
     :fallback: none
     :status: optional-neutral
     """
 
+    def input_roots(
+        self, case_root: Path, resolved_case: dict[str, Any],
+    ) -> tuple[str, ...]: ...
+
     def required_inputs(
-        self,
-        case_root: Path,
-        resolved_case: dict[str, Any],
-        selected_start_time: str,
+        self, case_root: Path, resolved_case: dict[str, Any],
     ) -> tuple[ResolvedInput, ...]: ...
 
     def generated_output_globs(
-        self,
-        case_root: Path,
-        resolved_case: dict[str, Any],
-        selected_start_time: str,
+        self, case_root: Path, resolved_case: dict[str, Any],
     ) -> tuple[str, ...]: ...
 
 
@@ -1495,25 +1497,6 @@ class _CaseIntrospectionAdapter:
 
         return legacy_samplable_fields(self.plugin, resolved)
 
-    def selected_start_time(
-        self, case_root: Path, resolved_case: dict[str, Any], *, driver_context: Any,
-    ) -> str | None:
-        hook = getattr(self.plugin, "get_selected_start_time", None)
-        if callable(hook):
-            result = hook(case_root, resolved_case)
-            # A blank result is not "no opinion" -- ``case_root / "" ==
-            # case_root``, so it would silently walk the entire case tree
-            # instead of the intended time directory. Fail loudly, matching
-            # this codebase's rule that an unclassified/malformed input is a
-            # spurious refusal, never a silent misclassification.
-            if not isinstance(result, str) or not result:
-                raise TypeError(
-                    f"{self.plugin.plugin_id}.get_selected_start_time() must return "
-                    f"a non-empty string, got {result!r}"
-                )
-            return result
-        return None
-
 
 @dataclass(frozen=True)
 class _CaseFileContractAdapter:
@@ -1729,26 +1712,39 @@ class _RecordSurfaceAdapter:
 class _CaseProvenanceAdapter:
     plugin: "SolverPlugin"
 
+    def input_roots(
+        self, case_root: Path, resolved_case: dict[str, Any],
+    ) -> tuple[str, ...]:
+        hook = getattr(self.plugin, "get_input_roots", None)
+        if not callable(hook):
+            return ()
+        roots = tuple(hook(case_root, resolved_case))
+        for root in roots:
+            # A blank root is not "no opinion": ``case_root / ""`` is the whole
+            # case tree. An absolute or escaping root walks outside the case.
+            # Refused by name, never silently misclassified.
+            parts = PurePosixPath(root).parts if isinstance(root, str) else None
+            if not parts or PurePosixPath(root).is_absolute() or ".." in parts:
+                raise TypeError(
+                    f"{self.plugin.plugin_id}.get_input_roots() must return non-empty "
+                    f"case-relative paths inside the case, got {root!r}"
+                )
+        return roots
+
     def required_inputs(
-        self,
-        case_root: Path,
-        resolved_case: dict[str, Any],
-        selected_start_time: str,
+        self, case_root: Path, resolved_case: dict[str, Any],
     ) -> tuple[ResolvedInput, ...]:
         hook = getattr(self.plugin, "get_required_inputs", None)
         if callable(hook):
-            return tuple(hook(case_root, resolved_case, selected_start_time))
+            return tuple(hook(case_root, resolved_case))
         return ()
 
     def generated_output_globs(
-        self,
-        case_root: Path,
-        resolved_case: dict[str, Any],
-        selected_start_time: str,
+        self, case_root: Path, resolved_case: dict[str, Any],
     ) -> tuple[str, ...]:
         hook = getattr(self.plugin, "get_generated_output_globs", None)
         if callable(hook):
-            return tuple(hook(case_root, resolved_case, selected_start_time))
+            return tuple(hook(case_root, resolved_case))
         return ()
 
 

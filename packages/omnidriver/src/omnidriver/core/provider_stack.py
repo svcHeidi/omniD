@@ -3,7 +3,8 @@
 Core owns composition; a provider never embeds another provider. Before this
 module, each solver plugin embedded the environment adapter by hand -- and the
 two did it differently, so `get_config_value_reader` returned a different
-callable from each and `get_selected_start_time` was copy-pasted into both.
+callable from each and a start-time hook was copy-pasted into both (that hook
+left the contract 2026-09-26, spec A2).
 
 This module implements one piece of that: the declared-vs-implemented guard.
 ``ENVIRONMENT_CONTRACT.md`` §12 draws the line -- intent is supplied, the
@@ -202,6 +203,7 @@ _SHAPE: dict[str, str] = {
     "get_telemetry_source_globs": "sequence",
     "get_required_inputs": "sequence",
     "get_generated_output_globs": "sequence",
+    "get_input_roots": "sequence",
     "get_report_catalog": "sequence",
     "get_regeneration_scopes": "sequence",
     "get_override_scopes": "sequence",
@@ -213,7 +215,6 @@ _SHAPE: dict[str, str] = {
     "get_capabilities": "single",
     "resolve_case_mutation": "single",
     "get_supported_mutation_modes": "single",
-    "get_selected_start_time": "single",
     "get_config_value_reader": "single",
     "get_dict_key_scanner": "single",
     "get_record_key_validator": "single",

@@ -52,9 +52,12 @@ def _read_control_dict_values(
 
     Resolved BY ROLE, never by literal path: the adapter declares
     ``openfoam.control_dict`` in its profile, and
-    ``CardiacFoamPlugin.get_selected_start_time`` already resolves the same
-    file the same way. Spelling ``system/controlDict`` here would be a
-    second declaration of a fact the profile already owns.
+    ``OpenFOAMEnvironmentPlugin.get_input_roots`` resolves the same file the
+    same way (corrected 2026-09-26: this named
+    ``CardiacFoamPlugin.get_selected_start_time``, which that class never
+    had, and which left the contract in spec A2). Spelling
+    ``system/controlDict`` here would be a second declaration of a fact the
+    profile already owns.
 
     A key silently defaulted would make the RunDocument's ``config`` lie
     about what the run actually used -- ``build_control_dict`` takes

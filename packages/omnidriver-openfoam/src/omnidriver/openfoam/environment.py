@@ -185,8 +185,15 @@ class OpenFOAMEnvironmentPlugin:
     def get_case_value_comparator(self):
         return _case_value_agree
 
-    def get_selected_start_time(self, case_root, resolved_case) -> str:
+    def get_input_roots(self, case_root, resolved_case) -> tuple[str, ...]:
+        """The state a run resumes from: the selected start-time directory,
+        and the same directory in every parallel replica (I9). OpenFOAM's
+        convention, moved here 2026-09-26 from core's provenance walk (spec
+        2026-09-26-core-generality-design.md §2, A2); core no longer knows
+        "start time" or replicas."""
         del resolved_case
+        from omnidriver.core.plugin_profile import is_replica_directory_name
+
         from .mutators import read_foam_entry
         from .time_selection import selected_start_time
 
@@ -195,11 +202,17 @@ class OpenFOAMEnvironmentPlugin:
             for rule in self.get_profile().case_files
             if rule.role == "openfoam.control_dict"
         )
-        return selected_start_time(
+        start = selected_start_time(
             case_root,
             control_dict_relpath=control_dict,
             read_value=read_foam_entry,
         )
+        globs = openfoam_case_runtime_conventions().replica_directory_globs
+        replicas = sorted(
+            child.name for child in Path(case_root).iterdir()
+            if child.is_dir() and is_replica_directory_name(child.name, globs)
+        ) if Path(case_root).is_dir() else []
+        return (start, *(f"{name}/{start}" for name in replicas))
 
     def get_function_object_field_diagnostics(self, case_root, *, samplable):
         from .function_object_fields import function_object_field_diagnostics

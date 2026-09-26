@@ -13,14 +13,13 @@ still a mandatory input. The resolution precedence, first match wins:
    refusal (recoverable); the reverse is the silent stale replay this whole
    phase exists to prevent.
 
-Concretely, the top-level roots declared by the active adapter, the
-**selected** start-time directory (as answered by its
-``CaseIntrospectionCapability.selected_start_time``), and each declared
-parallel-decomposition directory's ``<selected-time>/**`` during a
-decomposed restart are walked and classified by that precedence. The exact
-case scripts named by the DAG are added directly. Adapter-declared generated
-directories and state/manifest files are excluded by construction rather than
-by a Core-owned naming rule.
+Concretely, the top-level roots declared by the active adapter, and every
+input root the plugin declares (``CaseProvenanceCapability.input_roots``; for
+OpenFOAM, the selected start time serially and in each replica) are walked.
+Corrected 2026-09-26 (spec A2): core used to compute the start time and the
+replica walk itself. The exact case scripts named by the DAG are added
+directly. Adapter-declared generated directories and state/manifest files are
+excluded by construction rather than by a Core-owned naming rule.
 
 Step executables -- including an MPI launcher's payload -- are resolved through
 ``workflow_runner._resolve_command``, the executor's own resolution, so a
@@ -45,7 +44,6 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, TYPE_CHECKING
 
 from ..plugin_capabilities import ResolvedInput, RuntimeDependency
-from ..plugin_profile import replica_directory_globs
 from .provenance import ProvenanceComponent, component_for_path
 from .provenance_dependencies import (
     component_for_runtime_dependency,
@@ -250,35 +248,26 @@ def enumerate_case_inputs(
     capabilities = driver_context.capabilities
 
     resolved_case = capabilities.case_introspection.resolve_case_models(case_root)
-    selected_start_time = capabilities.case_introspection.selected_start_time(
-        case_root, resolved_case, driver_context=driver_context,
-    )
 
     consumed_relpaths = _collect_consumed_relpaths(workflow_dag)
-    required_inputs = capabilities.case_provenance.required_inputs(
-        case_root, resolved_case, selected_start_time
-    )
-    generated_globs = capabilities.case_provenance.generated_output_globs(
-        case_root, resolved_case, selected_start_time
-    )
+    required_inputs = capabilities.case_provenance.required_inputs(case_root, resolved_case)
+    generated_globs = capabilities.case_provenance.generated_output_globs(case_root, resolved_case)
 
     components: dict[tuple[str, str], ProvenanceComponent] = {}
     add = _ComponentAdder(components)
 
     # -- every top-level directory the active plugin declares a case file
-    # under the adapter-declared case roots, the selected
-    # start-time dir, and <decomposition-prefix>*/<selected-time>/** (I9)
-    # -- classified by precedence steps 1 (consumes), 3 (generated_output_globs), 4 (fallback
-    # required). Step 2 (plugin required_inputs) is applied uniformly below
-    # instead, since a resolved input's path need not fall under any of
-    # these directories.
+    # under, plus every input root the plugin declares (for OpenFOAM: the
+    # selected start time, serially and in each replica, I9), classified
+    # by precedence steps 1 (consumes), 3 (generated_output_globs) and 4
+    # (fallback required). Step 2 (plugin required_inputs) is applied
+    # uniformly below instead, since a resolved input's path need not fall
+    # under any of these directories.
     walk_roots = [case_root / d for d in _case_root_dirnames(driver_context)]
-    if selected_start_time is not None:
-        walk_roots.append(case_root / selected_start_time)
-        for replica_glob in replica_directory_globs(driver_context):
-            for replica_dir in sorted(case_root.glob(replica_glob)):
-                if replica_dir.is_dir():
-                    walk_roots.append(replica_dir / selected_start_time)
+    walk_roots.extend(
+        case_root / root
+        for root in capabilities.case_provenance.input_roots(case_root, resolved_case)
+    )
 
     for root in walk_roots:
         for path in _walk_files(root):

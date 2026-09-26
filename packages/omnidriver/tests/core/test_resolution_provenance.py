@@ -20,6 +20,10 @@ digestion), so the provenance-only tests below keep the plan's member choice.
 The `resolutions()`-level test instead uses `"manifest"` / `get_capabilities`,
 the one digested capability whose member is `single`-shaped
 (`cxx_mapping` is `profile`-shaped, `dictionaries` is `sequence`-shaped).
+
+Corrected 2026-09-26 (spec A2): the provenance-only tests used
+`get_selected_start_time`, which left the contract; they use
+`get_config_value_reader`, also `single`-shaped.
 """
 
 from omnidriver.core import provider_stack
@@ -37,7 +41,7 @@ class _Base:
     def get_profile(self):
         return _Profile()
 
-    def get_selected_start_time(self, *args, **kwargs):
+    def get_config_value_reader(self, *args, **kwargs):
         return "0"
 
     def get_capabilities(self):
@@ -50,7 +54,7 @@ class _Declines(_Base):
     def get_profile(self):
         return _Profile(requires=("org.base",))
 
-    def get_selected_start_time(self, *args, **kwargs):
+    def get_config_value_reader(self, *args, **kwargs):
         return None
 
     def get_capabilities(self):
@@ -60,7 +64,7 @@ class _Declines(_Base):
 def test_the_provider_that_returned_none_is_not_recorded_as_the_winner():
     ordered = provider_stack.order_providers([_Base(), _Declines()])
     value, provider_id = provider_stack.resolve_with_provenance(
-        ordered, "get_selected_start_time",
+        ordered, "get_config_value_reader",
     )
     assert value == "0"
     assert provider_id == "org.base"
@@ -85,7 +89,7 @@ def test_no_implementer_answering_reports_no_provider():
         def get_profile(self):
             return _Profile()
 
-        def get_selected_start_time(self, *args, **kwargs):
+        def get_config_value_reader(self, *args, **kwargs):
             return None
 
     class _DeclinesB(_Base):
@@ -94,12 +98,12 @@ def test_no_implementer_answering_reports_no_provider():
         def get_profile(self):
             return _Profile()
 
-        def get_selected_start_time(self, *args, **kwargs):
+        def get_config_value_reader(self, *args, **kwargs):
             return None
 
     ordered = provider_stack.order_providers([_DeclinesA(), _DeclinesB()])
     value, provider_id = provider_stack.resolve_with_provenance(
-        ordered, "get_selected_start_time",
+        ordered, "get_config_value_reader",
     )
     assert value is None
     assert provider_id is None

@@ -28,7 +28,7 @@ requires:
 #    that pass gate 1 fail this one and are also withheld:
 #      - case_provenance: get_generated_output_globs is real (a specific,
 #        deliberate glob list), but get_required_inputs is
-#        `del case_root, resolved_case, selected_start_time; return ()`
+#        `del case_root, resolved_case; return ()`
 #        unconditionally -- case_provenance.py's own module docstring calls
 #        this "deferred... until input enumeration lands," i.e. an admitted
 #        stub, not a genuine answer.

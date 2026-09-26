@@ -86,18 +86,21 @@ class _FakePlugin(MinimalTestPlugin):
         self._generated_output_globs = generated_output_globs
         self._extra_provenance_paths = extra_provenance_paths
 
-    def get_required_inputs(self, case_root, resolved_case, selected_start_time):
+    def get_required_inputs(self, case_root, resolved_case):
         return self._required_inputs
 
-    def get_generated_output_globs(self, case_root, resolved_case, selected_start_time):
+    def get_generated_output_globs(self, case_root, resolved_case):
         return self._generated_output_globs
 
     def get_extra_provenance_paths(self, case_root):
         return self._extra_provenance_paths
 
-    def get_selected_start_time(self, case_root, resolved_case) -> str:
-        del case_root, resolved_case
-        return "0"
+    def get_input_roots(self, case_root, resolved_case):
+        """The toy's state directory "0", serially and in each processor*
+        replica: the shape an OpenFOAM stack declares, stated by hand."""
+        del resolved_case
+        replicas = sorted(p.name for p in Path(case_root).glob("processor*") if p.is_dir())
+        return ("0", *(f"{name}/0" for name in replicas))
 
     def get_profile(self) -> PluginProfile:
         rules = (
@@ -149,11 +152,10 @@ def test_selected_start_time_directory_is_included_others_excluded(tmp_path: Pat
 
 
 class _ForeignEnvironmentPlugin(MinimalTestPlugin):
-    """A plugin that declares runtime conventions without case-file roles."""
+    """A plugin that declares its input roots without case-file roles."""
 
-    def __init__(self, *, chosen_start_time: str, replica_glob: str = "processor*") -> None:
-        self._chosen_start_time = chosen_start_time
-        self._replica_glob = replica_glob
+    def __init__(self, *, roots: tuple[str, ...]) -> None:
+        self._roots = roots
 
     def get_profile(self) -> PluginProfile:
         return PluginProfile(
@@ -169,13 +171,8 @@ class _ForeignEnvironmentPlugin(MinimalTestPlugin):
             },
         )
 
-    def get_selected_start_time(self, case_root, resolved_case) -> str:
-        return self._chosen_start_time
-
-    def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
-        return CaseRuntimeConventions(
-            replica_directory_globs=(self._replica_glob,),
-        )
+    def get_input_roots(self, case_root, resolved_case):
+        return self._roots
 
 
 def test_plugin_implemented_start_time_hook_overrides_the_openfoam_default(
@@ -186,7 +183,7 @@ def test_plugin_implemented_start_time_hook_overrides_the_openfoam_default(
         time_dir.mkdir()
         (time_dir / "Vm").write_text(f"field-at-{time_name}")
 
-    plugin = _ForeignEnvironmentPlugin(chosen_start_time="0.5")
+    plugin = _ForeignEnvironmentPlugin(roots=("0.5",))
     assert plugin.get_profile().case_files == ()
 
     components = enumerate_case_inputs(
@@ -199,13 +196,13 @@ def test_plugin_implemented_start_time_hook_overrides_the_openfoam_default(
     assert "1/Vm" not in included
 
 
-def test_start_time_hook_must_return_a_non_empty_string(tmp_path: Path) -> None:
-    """A blank result is not "no opinion" -- ``case_root / "" == case_root``
-    would silently walk the entire case tree. The adapter must fail loudly
-    instead."""
-    plugin = _ForeignEnvironmentPlugin(chosen_start_time="")
-
-    with pytest.raises(TypeError, match="get_selected_start_time"):
+@pytest.mark.parametrize("bad", ["", ".", "/abs", "../up", 3])
+def test_an_input_root_must_be_a_case_relative_path_inside_the_case(tmp_path: Path, bad) -> None:
+    """A blank root would walk the whole case tree (``case_root / ""``); an
+    absolute or escaping one would walk outside it. The adapter refuses
+    each by name instead."""
+    plugin = _ForeignEnvironmentPlugin(roots=(bad,))
+    with pytest.raises(TypeError, match="get_input_roots"):
         enumerate_case_inputs(
             tmp_path, workflow_dag={"steps": []}, driver_context=driver_context(plugin, source="test"),
         )
@@ -225,7 +222,7 @@ def test_plugin_implemented_decomposition_prefix_hook_overrides_processor(
     (stray_processor0 / "0").mkdir(parents=True)
     (stray_processor0 / "0" / "Vm").write_text("not this plugin's convention")
 
-    plugin = _ForeignEnvironmentPlugin(chosen_start_time="0", replica_glob="rank*")
+    plugin = _ForeignEnvironmentPlugin(roots=("0", "rank0/0"))
 
     components = enumerate_case_inputs(
         tmp_path, workflow_dag={"steps": []}, driver_context=driver_context(plugin, source="test"),

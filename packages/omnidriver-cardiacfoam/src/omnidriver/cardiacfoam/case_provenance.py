@@ -70,19 +70,17 @@ _GENERATED_OUTPUT_GLOBS: tuple[str, ...] = (
 def required_inputs(
     case_root: Path,
     resolved_case: dict[str, Any],
-    selected_start_time: str,
 ) -> tuple[ResolvedInput, ...]:
     """Deferred: returns ``()`` until input enumeration lands. See the module
     docstring for why ``()`` is safe."""
-    del case_root, resolved_case, selected_start_time
+    del case_root, resolved_case
     return ()
 
 
 def generated_output_globs(
     case_root: Path,
     resolved_case: dict[str, Any],
-    selected_start_time: str,
 ) -> tuple[str, ...]:
     """``constant/C``, ``Cx``, ``Cy``, ``Cz``, ``skewness`` -- read by nothing."""
-    del case_root, resolved_case, selected_start_time
+    del case_root, resolved_case
     return _GENERATED_OUTPUT_GLOBS

@@ -28,7 +28,7 @@ def test_cardiac_declares_the_mesh_diagnostic_fields_as_generated_outputs(
     """constant/C, Cx, Cy, Cz, skewness are consumed by nothing -- confirmed
     by exhaustive grep across src/ and applications/: zero hits."""
     cardiac = _CTX.capabilities.case_provenance
-    globs = cardiac.generated_output_globs(tmp_path, {}, "0")
+    globs = cardiac.generated_output_globs(tmp_path, {})
     assert set(globs) == {
         "constant/C",
         "constant/Cx",
@@ -43,4 +43,4 @@ def test_cardiac_required_inputs_defers_to_the_safe_default(tmp_path: Path) -> N
     (input enumeration). Returning () here is safe under I1's precedence:
     an unclassified file still defaults to required_input upstream."""
     cardiac = _CTX.capabilities.case_provenance
-    assert cardiac.required_inputs(tmp_path, {}, "0") == ()
+    assert cardiac.required_inputs(tmp_path, {}) == ()

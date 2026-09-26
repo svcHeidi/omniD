@@ -19,9 +19,7 @@ def test_minimal_plugin_declares_no_case_files() -> None:
     assert contract.required_files() == ()
     assert contract.conditional_files() == ()
     assert context.capabilities.case_runtime_conventions.conventions() == CORE_RUNTIME_RECORDS
-    assert context.capabilities.case_introspection.selected_start_time(
-        Path("case"), {}, driver_context=context,
-    ) is None
+    assert context.capabilities.case_provenance.input_roots(Path("case"), {}) == ()
 
 
 def test_conditional_files_are_separated_from_required() -> None:

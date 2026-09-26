@@ -277,22 +277,22 @@ class CardiacFoamPlugin:
             f"only, not {request.mode!r}"
         )
 
-    def get_required_inputs(self, case_root, resolved_case, selected_start_time) -> tuple:
+    def get_required_inputs(self, case_root, resolved_case) -> tuple:
         """Model-dependent required inputs (CaseProvenanceCapability). See
         ``case_provenance.py`` for why this defers to the safe default."""
         from omnidriver.cardiacfoam.case_provenance import (
             required_inputs,
         )
 
-        return required_inputs(case_root, resolved_case, selected_start_time)
+        return required_inputs(case_root, resolved_case)
 
-    def get_generated_output_globs(self, case_root, resolved_case, selected_start_time) -> tuple:
+    def get_generated_output_globs(self, case_root, resolved_case) -> tuple:
         """Fixed mesh-diagnostic outputs nothing in src/ or applications/ reads."""
         from omnidriver.cardiacfoam.case_provenance import (
             generated_output_globs,
         )
 
-        return generated_output_globs(case_root, resolved_case, selected_start_time)
+        return generated_output_globs(case_root, resolved_case)
 
     def get_dict_entry_catalog(self) -> dict:
         """Dictionary entries arranged by cardiacFoam's own document names."""

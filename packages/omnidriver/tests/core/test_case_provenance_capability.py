@@ -18,14 +18,14 @@ def test_minimal_plugin_declares_no_required_inputs(tmp_path: Path) -> None:
     generic = driver_context(
         MinimalTestPlugin(), source="test:minimal-provenance",
     ).capabilities.case_provenance
-    assert generic.required_inputs(tmp_path, {}, "0") == ()
+    assert generic.required_inputs(tmp_path, {}) == ()
 
 
 def test_minimal_plugin_declares_no_generated_outputs(tmp_path: Path) -> None:
     generic = driver_context(
         MinimalTestPlugin(), source="test:minimal-provenance",
     ).capabilities.case_provenance
-    assert generic.generated_output_globs(tmp_path, {}, "0") == ()
+    assert generic.generated_output_globs(tmp_path, {}) == ()
 
 
 def test_a_v1_plugin_with_no_hooks_gets_the_empty_fallback(tmp_path: Path) -> None:
@@ -33,8 +33,8 @@ def test_a_v1_plugin_with_no_hooks_gets_the_empty_fallback(tmp_path: Path) -> No
     plugin that never implemented it -- must still load and adapt cleanly.
     CaseProvenanceCapability is not a mandatory SolverPlugin member."""
     context = driver_context(MinimalTestPlugin(), source="test")
-    assert context.capabilities.case_provenance.required_inputs(tmp_path, {}, "0") == ()
-    assert context.capabilities.case_provenance.generated_output_globs(tmp_path, {}, "0") == ()
+    assert context.capabilities.case_provenance.required_inputs(tmp_path, {}) == ()
+    assert context.capabilities.case_provenance.generated_output_globs(tmp_path, {}) == ()
 
 
 def test_extra_provenance_paths_is_annotated_as_dependencies():

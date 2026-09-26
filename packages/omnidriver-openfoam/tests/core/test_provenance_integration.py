@@ -83,3 +83,28 @@ def test_optional_openfoam_include_records_absence_then_content(tmp_path: Path) 
         "verified_absence", "absence", "optional_input",
     )
     assert _component(present, name).strength == "content"
+
+
+def _write(case_root: Path, relpath: str) -> None:
+    path = case_root / relpath
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(relpath)
+
+
+def test_the_start_time_is_walked_serially_and_in_every_replica(tmp_path: Path) -> None:
+    """What an OpenFOAM stack fingerprints from its time and replica
+    directories (I9). A characterization: it passes before A2c moves the
+    rule out of core, and must pass unchanged after."""
+    _write_control_dict(tmp_path, "startFrom startTime;\nstartTime 0;\n")
+    for relpath in ("0/Vm", "0.5/Vm", "processor0/0/Vm", "processor0/0.5/Vm", "processor1/0/Vm"):
+        _write(tmp_path, relpath)
+    included = {c.path for c in _components(tmp_path) if c.kind == "case_file"}
+    assert {"0/Vm", "processor0/0/Vm", "processor1/0/Vm"} <= included
+    assert not {"0.5/Vm", "processor0/0.5/Vm"} & included
+
+
+def test_openfoam_declares_its_start_time_and_replicas_as_input_roots(tmp_path: Path) -> None:
+    _write_control_dict(tmp_path, "startFrom latestTime;\nstartTime 0;\n")
+    for relpath in ("0/Vm", "0.5/Vm", "processor1/0.5/Vm", "processor0/0.5/Vm", "processorX.txt"):
+        _write(tmp_path, relpath)
+    assert OpenFOAMEnvironmentPlugin().get_input_roots(tmp_path, {}) == ("0.5", "processor0/0.5", "processor1/0.5")

@@ -428,6 +428,8 @@ one thing at all five.
 
 **Tier 3 closed 2026-09-02.** All six items landed; every one turned out to be either a bare optional hook (`selected_start_time`, `decomposition_dirname_prefix`) or a rename/removal (`ArtifactFormat`, `utility_catalog` vocabulary, `apply_overrides`'s fallback wiring, `--openfoam-bashrc`) — none needed the heavier "registration" or namespace-neutral-role machinery §11 considered and rejected for role vocabulary. Next: Tier 4.
 
+**2026-09-26 (topic A, A2):** the Tier 3 "bare optional hooks" `selected_start_time` and `decomposition_dirname_prefix` are gone. Core now reads only plugin-declared vocabulary: `CaseRuntimeConventions.instance_directory_pattern`/`preserved_instance_names`/`replica_directory_globs`, the `{instance}` placeholder, and `CaseProvenanceCapability.input_roots`, through which the OpenFOAM layer declares its start time and replicas.
+
 ### Tier 4 — the trust boundary, unchanged from §5b
 
 `CASE_SCRIPT_COMMANDS`, `CORE_NEUTRAL_COMMANDS`, `_is_installed_openfoam_app`.
