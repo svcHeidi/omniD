@@ -324,15 +324,25 @@ contract a plugin author implements. `PluginCapabilities` in
 plugin — it points the opposite way and is not an authoring surface.
 
 A capability marked `optional-neutral` or `optional-refusing` degrades when
-the plugin does not implement its hook: the named `compatibility.py`
-fallback runs instead. No fallback branches on plugin identity, so a given
-fallback answers the same for every plugin. An `optional-refusing` member's
-fallback cannot be neutral and refuses by hook name instead.
+the plugin does not implement its hook. Most name a `compatibility.py`
+fallback, which runs instead; no fallback branches on plugin identity, so a
+given fallback answers the same for every plugin. An `optional-refusing`
+member's fallback cannot be neutral and refuses by hook name instead.
+
+Corrected 2026-09-26 (R1 fix, finding M7): this said every optional member
+degrades through *the named* `compatibility.py` fallback, as if that were
+the only mechanism. The table's `fallback` column below names one only
+where one exists (`none` otherwise) -- the four members A3 (2026-09-26)
+made optional-neutral (`dictionaries`'s `entries`, `catalog`, `groups`;
+`tutorials`'s `get_tutorial_displays`) answer a neutral
+value inline, in the adapter itself, with no named fallback function and
+no entry in `_instrumented` fallback accounting -- `phases` on the same
+`dictionaries` capability is the contrast: it names `legacy_phases`.
 
 | capability | protocol | adapts | consumed by | fallback | status |
 |---|---|---|---|---|---|
 | `tutorials` | `TutorialCatalogCapability` | `get_tutorial_catalog`, `get_tutorial_displays` | `omnidriver/core/runtime/registry.py`, `omnidriver/cardiacfoam/dict_builder.py` | none | get_tutorial_catalog=required, get_tutorial_displays=optional-neutral |
-| `dictionaries` | `DictionaryCatalogCapability` | `get_dict_entries`, `get_dict_groups`, `get_dictionary_catalog`, `get_phases` | `omnidriver/dict_entries.py`, `omnidriver/cardiacfoam/sweep.py`, `omnidriver/openfoam/apply_overrides.py`, `omnidriver/openfoam/dict_builder.py`, `omnidriver/core/specs/validation.py`, `omnidriver/core/strict_planning.py` | `legacy_phases` | optional-neutral |
+| `dictionaries` | `DictionaryCatalogCapability` | `get_dict_entries`, `get_dict_groups`, `get_dictionary_catalog`, `get_phases` | `omnidriver/dict_entries.py`, `omnidriver/cardiacfoam/dict_entries.py`, `omnidriver/cardiacfoam/sweep.py`, `omnidriver/openfoam/apply_overrides.py`, `omnidriver/openfoam/dict_builder.py`, `omnidriver/core/specs/validation.py`, `omnidriver/core/strict_planning.py` | `legacy_phases` | optional-neutral |
 | `manifest` | `CapabilityManifestCapability` | `get_capabilities` | `omnidriver/cardiacfoam/dict_entries.py`, `omnidriver/core/introspection.py`, `omnidriver/core/strict_planning.py` | none | required |
 | `configuration_validator` | `ConfigurationValidatorCapability` | `validate_configuration` | `omnidriver/core/strict_planning.py` | none | required |
 | `run_semantic_validator` | `RunSemanticValidatorCapability` | `validate_run_semantics` | `omnidriver/core/specs/validation.py` | none | required |

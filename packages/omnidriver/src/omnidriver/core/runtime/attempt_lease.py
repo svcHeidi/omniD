@@ -26,11 +26,22 @@ elif os.name == "nt":
 
 _LOCAL_LEASES: dict[Path, tuple[str, int]] = {}
 
+def _guard_filename(lock_filename: str) -> str:
+    """The stable guard file ``_lease_record_guard`` keeps beside any lease
+    file. Named once (R1 fix, finding M3: this convention used to be
+    spelled twice -- here, to build ``ATTEMPT_LOCK_GUARD_FILENAME``, and
+    again inside ``_lease_record_guard`` itself as ``f"{path.name}.guard"``)
+    so both the attempt lock's guard name and ``_lease_record_guard``'s
+    per-call guard name (also used for the case lease, whose filename is
+    not one of the constants below) come from one function."""
+    return f"{lock_filename}.guard"
+
+
 #: The attempt lease's file in an output directory, and the guard file
 #: ``_acquire_local_lease`` keeps beside it. Named once here so core's run
 #: records (``core.runtime_records``) can name them too (spec 2026-09-26 A5).
 ATTEMPT_LOCK_FILENAME = ".omnidriver-attempt.lock"
-ATTEMPT_LOCK_GUARD_FILENAME = f"{ATTEMPT_LOCK_FILENAME}.guard"
+ATTEMPT_LOCK_GUARD_FILENAME = _guard_filename(ATTEMPT_LOCK_FILENAME)
 
 
 class AttemptLeaseError(RuntimeError):
@@ -112,7 +123,7 @@ def _lease_record_guard(path: Path) -> Iterator[None]:
         raise AttemptLeaseError(
             "attempt leases require host-local advisory locking for safe recovery"
         )
-    guard_path = path.with_name(f"{path.name}.guard")
+    guard_path = path.with_name(_guard_filename(path.name))
     descriptor = os.open(guard_path, os.O_RDWR | os.O_CREAT, 0o600)
     try:
         if os.name == "posix":

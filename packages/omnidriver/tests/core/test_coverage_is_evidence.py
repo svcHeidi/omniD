@@ -95,9 +95,13 @@ def test_an_exempt_mesh_check_is_reported_as_inapplicable(tmp_path: Path) -> Non
     """`_mesh_geometry_diagnostics` returns () for two unrelated reasons.
 
     One is SKIP_GEOMETRY_DIAGNOSTICS (renamed 2026-09-26). The other is
-    `exempt`, which is `_mesh_geometry_exempt(...)` (renamed 2026-09-26 from
-    the old name-based heuristic) -- a case with no physical
-    mesh scale, or one whose conventions core does not know. Both produce an
+    `exempt`, which is `_mesh_geometry_exempt(...)` (corrected 2026-09-26,
+    R1 fix, finding M6: this said "renamed 2026-09-26 from the old
+    name-based heuristic" -- it is not a rename. The old name-based
+    heuristic, `_is_nondimensional_entry`, was deleted outright; this is a
+    behaviour change, exempting a case by the plugin's own hook instead)
+    -- a case with no physical mesh scale, or one whose conventions core
+    does not know. Both produce an
     empty tuple, so the audit could not tell them apart from a mesh that was
     examined and found clean, and an exempt case kept earning the stage's full
     five points.

@@ -947,6 +947,17 @@ directly from the `Protocol` classes in `plugin_interface.py`.)
 
 ### Required Members (all plugins)
 
+**Corrected 2026-09-26 (R1 fix, finding M5): this block used to list about
+25 members under "Required", most of which A3 (and earlier work) had
+already made optional-neutral -- absent, each answers a documented neutral
+value, and a plugin implementing none of them still validates. The list
+below is `_REQUIRED_PLUGIN_MEMBERS`'s own 10: the 4 identity strings plus
+the 6 capability members `capability_seams.members_by_tier()["required"]`
+names -- the two places that decide enforcement, kept in sync by
+construction (`plugin_interface._required_plugin_members`). Deriving this
+block from either at doc-writing time, rather than restating a count, is
+how it will avoid rotting again.**
+
 ```python
 plugin_name             # str — human display name
 plugin_id               # str — reverse-DNS id, must match plugin.yaml
@@ -958,6 +969,19 @@ get_tutorial_catalog()  # dict with spec_factories, registered_tutorials
 validate_configuration(spec)   # tuple[StrictDiagnostic, ...]
 validate_run_semantics(context) # tuple[...]
 predict_data_artifacts(case_root, spec) # tuple[DataArtifact, ...]
+```
+
+### Optional Members (probed; answer a documented fallback when absent)
+
+Everything else `plugin_capabilities.py` declares is optional: most answer a
+neutral value (`False`, `{}`, `()`) when the plugin omits them
+(`capability_seams.members_by_tier()["optional-neutral"]`); a small set
+instead raises, naming the missing hook
+(`...["optional-refusing"]`, e.g. `render_case_files`,
+`apply_overrides`). A representative sample a solver plugin commonly
+implements:
+
+```python
 get_solver_commands()           # frozenset[str] — artifact-producing binaries
 get_auxiliary_commands()        # frozenset[str] — meshers, decomposers
 get_environment_commands()      # frozenset[str] — environment-supplied static commands
@@ -974,10 +998,6 @@ get_telemetry_source_globs(command) # tuple[str, ...]
 get_extra_provenance_paths(case_root) # tuple[RuntimeDependency, ...]
 get_artifact_value_reader(format)    # Any | None
 ```
-
-(Corrected 2026-09-19: `get_environment_commands()` and
-`is_installed_environment_command(command)` were missing from this block —
-both are required `SolverPlugin` members, bringing the true count to 29.)
 
 Corrected 2026-09-26 (spec A3): `get_dict_entries`, `get_dictionary_catalog`,
 `get_dict_groups` and `get_tutorial_displays` are optional; absent, each

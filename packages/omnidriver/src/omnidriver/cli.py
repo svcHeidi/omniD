@@ -33,6 +33,8 @@ from omnidriver.core.strict_planning import _utility_produces_by_command, strict
 from .core.runtime.run_document_exec import build_execution_inputs, load_run_document, _allowed_runs_root
 from .core.runtime.fresh import ensure_fresh_output_dir
 from .core.runtime.attempt_lease import (
+    ATTEMPT_LOCK_FILENAME,
+    ATTEMPT_LOCK_GUARD_FILENAME,
     AttemptLeaseError,
     acquire_attempt_lease,
     acquire_case_lease,
@@ -726,9 +728,14 @@ def _dispatch_context_owned(args, context: _ExecutionContext) -> int:
                 context.output_dir,
                 fresh=True,
                 allowed_root=_allowed_runs_root(),
+                # R1 fix, finding M3: these used to be spelled as literals
+                # here, a third spelling alongside attempt_lease.py's own
+                # constants -- a drift risk (a changed ATTEMPT_LOCK_FILENAME
+                # would let --fresh delete the live lease out from under
+                # itself).
                 preserve_names=frozenset({
-                    ".omnidriver-attempt.lock",
-                    ".omnidriver-attempt.lock.guard",
+                    ATTEMPT_LOCK_FILENAME,
+                    ATTEMPT_LOCK_GUARD_FILENAME,
                 }),
             )
             if fresh_error is not None:
