@@ -50,6 +50,7 @@ from .core.runtime.execution_context import (
     ReplannedExecution as _ReplannedExecution,
     StepExecutionContext as _ExecutionContext,
 )
+from .core.sweep.sweep_expansion import SweepValidationError
 from .core.tutorial_records import TutorialRecordError
 
 
@@ -1246,6 +1247,24 @@ def _sweep_output_dir(args) -> str | Path | None:
         return None
 
 
+def _sweep_refusal(args, exc: Exception) -> int:
+    """A refusal of the sweep as a whole -- the spec's own shape, a record
+    sweep's missing ``cases_root``, a study name the record does not
+    resolve, a case id that is not path-safe -- printed as the CLI's JSON
+    failure, the shape ``_sweep_output_dir``'s refusal and ``plan --strict``
+    already use. Added 2026-09-26 (review 54b M12): these escaped
+    ``sweep-plan``/``sweep-run`` as a Python traceback with nothing on
+    stdout. A per-case refusal is not this: it is one case's
+    ``materialization_error`` inside the sweep's own report."""
+    print(json.dumps({
+        "status": "failed",
+        "action": args.action,
+        "spec": args.spec,
+        "error": str(exc),
+    }, indent=2))
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -1395,12 +1414,15 @@ def main(argv: list[str] | None = None) -> int:
         output_dir = _sweep_output_dir(args)
         if output_dir is None:
             return 1
-        result = sweep_plan(
-            args.spec,
-            output_dir=output_dir,
-            max_cases=args.max_cases,
-            driver_context=driver_context,
-        )
+        try:
+            result = sweep_plan(
+                args.spec,
+                output_dir=output_dir,
+                max_cases=args.max_cases,
+                driver_context=driver_context,
+            )
+        except (SweepValidationError, TutorialRecordError) as exc:
+            return _sweep_refusal(args, exc)
         print(json.dumps(result, indent=2))
         # A spec that could not be read yields zero cases, so "no case
         # failed" would otherwise read as success.
@@ -1413,15 +1435,18 @@ def main(argv: list[str] | None = None) -> int:
         output_dir = _sweep_output_dir(args)
         if output_dir is None:
             return 1
-        result = sweep_run(
-            args.spec,
-            output_dir=output_dir,
-            max_cases=args.max_cases,
-            retry_failed=args.retry_failed,
-            case_timeout_s=args.case_timeout_s,
-            fresh=args.fresh,
-            driver_context=driver_context,
-        )
+        try:
+            result = sweep_run(
+                args.spec,
+                output_dir=output_dir,
+                max_cases=args.max_cases,
+                retry_failed=args.retry_failed,
+                case_timeout_s=args.case_timeout_s,
+                fresh=args.fresh,
+                driver_context=driver_context,
+            )
+        except (SweepValidationError, TutorialRecordError) as exc:
+            return _sweep_refusal(args, exc)
         print(json.dumps(result, indent=2))
         return 1 if result["failed_count"] > 0 else 0
 

@@ -20,6 +20,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from omnidriver.cli import main
 
 
@@ -121,9 +123,6 @@ def test_plan_strict_over_a_tutorial_record_whose_native_case_is_missing_refuses
     assert "toyTutorial" in payload["error"]
 
 
-import pytest
-
-
 @pytest.mark.parametrize("plugin", [
     "plugins.conformance_toy:RefusingRendererPlugin",
     "plugins.conformance_toy:RefusingResolverPlugin",
@@ -215,3 +214,46 @@ def test_plan_strict_against_a_read_only_tree_without_a_scratch_dir_refuses_as_j
     assert plan["status"] == "ok"
     after = sorted(p.relative_to(cases_root).as_posix() for p in cases_root.rglob("*"))
     assert after == before
+
+
+def _write_spec(tmp_path: Path, spec: dict) -> Path:
+    path = tmp_path / "sweep.json"
+    path.write_text(json.dumps(spec))
+    return path
+
+
+
+@pytest.mark.parametrize("action", ["sweep-plan", "sweep-run"])
+@pytest.mark.parametrize(("base_extra", "sweep", "fragment"), [
+    # The whole-sweep refusal a record sweep without a cases root gets.
+    ({}, {"mode": "zip", "independent": {"number_cells": [1, 2]}}, "must supply 'cases_root'"),
+    # A study name the record does not resolve, refused up front for the sweep.
+    ({"cases_root": None}, {"mode": "zip", "independent": {"no_such_axis": [1, 2]}}, "'no_such_axis'"),
+    # A sweep-expansion refusal: a case id that is not path-safe.
+    ({"cases_root": None}, {"mode": "zip", "independent": {
+        "number_cells": [1, 2], "caseId": ["a/b", "c"],
+    }}, "not path-safe"),
+])
+def test_a_record_sweep_refusal_is_the_clis_json_failure(
+    tmp_path, capsys, action, base_extra, sweep, fragment,
+):
+    """Review 54b M12: a refusal of a record sweep as a whole used to escape
+    `sweep-plan`/`sweep-run` as a Python traceback with nothing on stdout.
+    It is now the same JSON failure `plan --strict` and `describe` give."""
+    cases_root = _native_toy_case(tmp_path)
+    base = {"entry": "toyTutorial"}
+    for key, value in base_extra.items():
+        base[key] = str(cases_root) if value is None else value
+    spec = _write_spec(tmp_path, {"base": base, "sweep": sweep})
+
+    exit_code = main([
+        action, "--plugin", "plugins.e2e_record_plugin:E2ERecordPlugin",
+        "--spec", str(spec), "--output-dir", str(tmp_path / "out"),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 1, captured.out
+    payload = json.loads(captured.out)
+    assert payload["status"] == "failed"
+    assert payload["action"] == action
+    assert payload["spec"] == str(spec)
+    assert fragment in payload["error"], payload["error"]
