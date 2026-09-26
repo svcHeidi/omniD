@@ -400,7 +400,49 @@ def read_hex_cell_counts(
 
 _VERTICES_BLOCK = re.compile(r"vertices\s*\(\s*((?:\([^)]*\)\s*)+)\)\s*;")
 _ONE_VERTEX = re.compile(r"\(\s*([^()]*)\)")
-_SCALE_LINE = re.compile(r"^\s*scale\s+([0-9.eE+-]+)\s*;", re.MULTILINE)
+#: The keywords ``blockMesh`` reads its scale from, in the order it looks:
+#: OpenFOAM v2412 ``blockMesh::readPointTransforms``
+#: (``src/mesh/blockMesh/blockMesh/blockMesh.C``) calls
+#: ``dict.findCompat("scale", {{"convertToMeters", 1012}})``, and
+#: ``dictionary::csearchCompat`` (``src/OpenFOAM/db/dictionary/
+#: dictionaryCompat.C``) returns ``scale`` when present and falls back to
+#: ``convertToMeters`` only when it is not.
+_SCALE_KEYWORDS: tuple[str, ...] = ("scale", "convertToMeters")
+_SCALAR = re.compile(r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?")
+
+
+def _scale_line(keyword: str) -> re.Pattern[str]:
+    return re.compile(rf"^\s*{keyword}\s+([^;]*?)\s*;", re.MULTILINE)
+
+
+def _block_mesh_scale(text: str, path: Path) -> float:
+    """The uniform scale ``blockMesh`` applies to ``vertices``: the first of
+    :data:`_SCALE_KEYWORDS` present, else 1.0 (no scaling).
+
+    A scalar ``<= 0`` is no scaling, as in ``readScaling`` (same file:
+    ``if ((val > 0) && !equal(val, 1))``). ``readScaling`` also takes a
+    vector (per-component scaling); this text reader reads a scalar only and
+    refuses anything else by name rather than read it as 1.0.
+
+    Added 2026-09-26 (review 54b M5): this read only ``scale``, so a
+    dictionary written with ``convertToMeters`` read as scale 1.0, a 1000x
+    extent for a millimetre case (at dx 0.5 mm, a silent
+    ``(40000, 6000, 14000)``). A ``scale`` line inside a nested
+    sub-dictionary would still match first; no native dictionary has one.
+    """
+    for keyword in _SCALE_KEYWORDS:
+        match = _scale_line(keyword).search(text)
+        if match is None:
+            continue
+        value = match.group(1)
+        if not _SCALAR.fullmatch(value):
+            raise ValueError(
+                f"{path}: {keyword!r} is {value!r}; this reader takes a single number "
+                "(blockMesh also accepts a per-component vector, which it cannot read)"
+            )
+        scale = float(value)
+        return scale if scale > 0 else 1.0
+    return 1.0
 
 
 def read_hex_block_extent_m(document_path: Path) -> tuple[float, float, float] | None:
@@ -429,7 +471,9 @@ def read_hex_block_extent_m(document_path: Path) -> tuple[float, float, float] |
 
     ``scale`` defaults to ``1.0`` when the document declares no `scale`
     line at all (OpenFOAM's own default), not refused -- a `blockMeshDict`
-    authored directly in metres is a real, if unusual, case.
+    authored directly in metres is a real, if unusual, case (bidomain's
+    unit cubes are). The scale is read as ``blockMesh`` reads it, including
+    the ``convertToMeters`` synonym (:func:`_block_mesh_scale`).
 
     Reads the SAME grammar `_rewrite_hex_block_lines`/`read_hex_cell_counts`
     already parse text-level, never a full OpenFOAM dictionary parser: one
@@ -444,8 +488,7 @@ def read_hex_block_extent_m(document_path: Path) -> tuple[float, float, float] |
     match = _VERTICES_BLOCK.search(text)
     if match is None:
         return None
-    scale_match = _SCALE_LINE.search(text)
-    scale = float(scale_match.group(1)) if scale_match else 1.0
+    scale = _block_mesh_scale(text, path)
     points: list[tuple[float, float, float]] = []
     for vertex_match in _ONE_VERTEX.finditer(match.group(1)):
         tokens = vertex_match.group(1).split()

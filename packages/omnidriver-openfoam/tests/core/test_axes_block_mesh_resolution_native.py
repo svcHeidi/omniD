@@ -378,3 +378,98 @@ def test_preview_record_case_reports_a_different_resolution_as_changed():
     assert len(patches) == 1
     assert patches[0]["value"] == (20, 20, 20)
     assert patches[0]["status"] == "changed"
+
+
+# ---------------------------------------------------------------------------
+# ``extents``, read from the real native files (review 54b M5, 2026-09-26).
+# These replace ``test_axes_block_mesh_resolution.py``'s
+# ``test_resolution_receives_the_documents_own_extent_in_metres``, which
+# built 20x3x7 and 40x6x14 mm ``blockMeshDict``s from nothing (the owner's
+# "testing against real meshes" rule). The Niederer slab is 20x3x7 mm under
+# ``scale 0.001``; bidomain's ``.3D`` is the unit cube with no ``scale``.
+# ---------------------------------------------------------------------------
+
+_NIEDERER_BLOCK_MESH = "NiedererEtAl2011verification/system/blockMeshDict"
+_BIDOMAIN_BLOCK_MESH_3D = "manufacturedSolutions/bidomain/system/blockMeshDict.3D"
+
+
+def _dx_resolution(dx, current, extents):
+    from omnidriver.openfoam.mesh_provisioning import cell_counts_from_dx
+
+    del current
+    return cell_counts_from_dx(dx, extents)
+
+
+def _extent(path: Path) -> tuple[float, float, float]:
+    from omnidriver.openfoam.case_planning import read_hex_block_extent_m
+
+    extent = read_hex_block_extent_m(path)
+    assert extent is not None, path
+    return extent
+
+
+def test_the_extent_is_each_real_documents_own_in_metres(tmp_path):
+    """The reason ``extents`` exists: a ``resolution`` converting a cell
+    size (niederer2011's ``dx``) must see the document's own geometry. One
+    ``dx``, two real documents, two different counts."""
+    root = _native_tutorials_root()
+    assert _extent(root / _NIEDERER_BLOCK_MESH) == pytest.approx((0.02, 0.003, 0.007))
+    assert _extent(root / _BIDOMAIN_BLOCK_MESH_3D) == pytest.approx((1.0, 1.0, 1.0))
+
+    niederer = block_mesh_resolution_axis(
+        "dx", documents=("system/blockMeshDict",), resolution=_dx_resolution, value_kind="scalar",
+    )
+    bidomain = block_mesh_resolution_axis(
+        "dx", documents=("system/blockMeshDict.3D",), resolution=_dx_resolution, value_kind="scalar",
+    )
+    assert niederer.resolve(0.0005, root / "NiedererEtAl2011verification").patches[0].value == (40, 6, 14)
+    assert niederer.resolve(0.001, root / "NiedererEtAl2011verification").patches[0].value == (20, 3, 7)
+    assert bidomain.resolve(0.1, root / "manufacturedSolutions/bidomain").patches[0].value == (10, 10, 10)
+
+
+def _niederer_copy(tmp_path: Path, edit) -> Path:
+    """The real Niederer ``blockMeshDict`` with its scaling line edited, and
+    nothing else changed."""
+    text = (_native_tutorials_root() / _NIEDERER_BLOCK_MESH).read_text()
+    assert text.count("scale   0.001;") == 1, "the native file's scale line moved"
+    target = tmp_path / "blockMeshDict"
+    target.write_text(edit(text))
+    return target
+
+
+def test_convert_to_meters_is_read_when_scale_is_absent(tmp_path):
+    """OpenFOAM v2412 ``blockMesh::readPointTransforms``
+    (``src/mesh/blockMesh/blockMesh/blockMesh.C``) reads the scale with
+    ``dict.findCompat("scale", {{"convertToMeters", 1012}})``: the pre-2010
+    keyword is still honoured. Read as scale 1.0 before this fix, it gave a
+    1000x extent and, at dx 0.5 mm, a silent (40000, 6000, 14000)."""
+    path = _niederer_copy(tmp_path, lambda text: text.replace("scale   0.001;", "convertToMeters 0.001;"))
+    assert _extent(path) == pytest.approx((0.02, 0.003, 0.007))
+
+
+def test_scale_wins_when_both_keywords_are_present(tmp_path):
+    """``dictionary::csearchCompat`` (``src/OpenFOAM/db/dictionary/
+    dictionaryCompat.C``) returns ``scale`` when it is found, and looks at
+    ``convertToMeters`` only when it is not."""
+    path = _niederer_copy(
+        tmp_path, lambda text: text.replace("scale   0.001;", "convertToMeters 1;\nscale   0.001;"),
+    )
+    assert _extent(path) == pytest.approx((0.02, 0.003, 0.007))
+
+
+def test_a_non_positive_scale_means_no_scaling_as_in_blockmesh(tmp_path):
+    """``readScaling`` applies a scalar only when ``val > 0``; otherwise the
+    scaling stays uniform 1."""
+    path = _niederer_copy(tmp_path, lambda text: text.replace("scale   0.001;", "scale   0;"))
+    assert _extent(path) == pytest.approx((20.0, 3.0, 7.0))
+
+
+def test_a_scale_this_reader_cannot_parse_is_refused_by_name(tmp_path):
+    """``readScaling`` also takes a vector (per-component scaling). This
+    text reader reads a scalar only, so it refuses anything else by name
+    rather than reading it as 1.0."""
+    path = _niederer_copy(tmp_path, lambda text: text.replace("scale   0.001;", "scale   (0.001 0.001 0.001);"))
+    from omnidriver.openfoam.case_planning import read_hex_block_extent_m
+
+    with pytest.raises(ValueError, match=r"'scale'.*\(0\.001 0\.001 0\.001\)"):
+        read_hex_block_extent_m(path)
