@@ -542,6 +542,13 @@ def _describe_tutorial_record(
     their value kinds, the stack's key catalogue for the native case, the
     stack's agent guidance, and the case's own ``case.documentation`` files
     (``runtime.record_surface.record_surface``).
+
+    **One canonical catalogue** (2026-09-26, conformance Task 14 step 4,
+    decision 4): a record's keys are in ``record_surface.keys`` only. This
+    payload used to carry the stack's whole ``dict_entries`` beside it --
+    a second, differently shaped answer to "which keys may I name", with
+    unconcretised scope tokens. Factory and case-folder entries keep
+    ``dict_entries`` until the factory path is deleted.
     """
     from .runtime.record_execution import preview_record_case
     from .runtime.record_surface import record_surface
@@ -597,7 +604,6 @@ def _describe_tutorial_record(
             cases_root, driver_context=driver_context,
         ),
         "common_override_keys": list(COMMON_OVERRIDE_KEYS),
-        "dict_entries": _dict_entry_catalog(driver_context),
         "plugin_catalogs": _plugin_catalogs(driver_context),
         "record_preview": preview,
         "record_surface": surface,

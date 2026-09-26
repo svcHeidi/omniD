@@ -281,6 +281,20 @@ def test_c10_surface_lists_the_toy_axis_key_and_guidance(tmp_path):
     assert surface["guidance"] and surface["guidance"][0]["title"]
 
 
+def test_describe_of_a_record_carries_its_keys_only_in_the_record_surface(tmp_path):
+    """One canonical catalogue for a record (2026-09-26, conformance Task 14
+    step 4, decision 4): ``record_surface.keys``, never ``dict_entries``
+    beside it. Factory and case-folder entries keep ``dict_entries``."""
+    from omnidriver.core.introspection import describe_entry
+    from omnidriver.core.plugin_interface import load_plugin_context
+
+    target = toy_conformance_target(tmp_path)
+    payload = describe_entry(target.record, overrides={"cases_root": str(target.cases_root)},
+                             driver_context=load_plugin_context(target.plugin))
+    assert "dict_entries" not in payload
+    assert payload["record_surface"]["keys"]
+
+
 def test_c10_bites_a_stack_that_declares_no_surface(tmp_path):
     verdict = run_check("C10", toy_conformance_target(tmp_path, plugin=SILENT_SURFACE_PLUGIN))
     assert not verdict.passed
