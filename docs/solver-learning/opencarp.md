@@ -175,6 +175,15 @@ session scratchpad, never in the native tree.
   `ExperimentCase.comparison.association_status` (via
   `experiment_comparisons`) reads `run_verified` for both. The proof is that
   the pipeline reports correctly, not that the two resolutions agree.
+- **G9, against cardiacFOAM (2026-09-26, topic B Task 8):**
+  `niedererNVersion` at dx 500 µm, **dt 10 µs** and tend 200 ms, to match
+  cardiacFOAM's step. It was compared with cardiacFOAM's `niederer2011` at
+  the same dx and step by a pre-registered request. The table and setup are
+  in `cardiacfoam.md` section X.
+  - **The time step barely moves openCARP.** Its own values at dt 10 µs are
+    P1 1.253986 ms, P8 126.268283 ms and P9 55.556030 ms. P8 is within
+    0.2 ms of G4's dt 50 µs value, and P1 is 0.1 ms earlier.
+  - The `solve` step took 9.6 s. Every P1-P9 is a slab node (offset 0).
 
 ## H. omniD drives openCARP
 

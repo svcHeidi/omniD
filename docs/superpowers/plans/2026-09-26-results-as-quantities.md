@@ -57,8 +57,8 @@ reader to start here, and there was no table). Built from `git log`.
 | Task 5: openCARP reads its LAT file as quantities (F16/F17) | `422d549`, `ff6331e` | done |
 | Task 6: openCARP-vs-openCARP proof end to end; docs and CI gate | `5a0778e` | done |
 | Opus review fixes (location guards, pre-registration, unit-carrying reports; M11) | `04a1093`, `206de29`, `9923621` | done |
-| Task 7 (cardiacFOAM's probe reader) | `b11da6c` (branch `qoi-b7`) | done 2026-09-26, unmerged; unblocked once 5.4b landed `niederer2011` as a record (`1811e2e`). Departures from its contract: see Task 7's own "Implemented 2026-09-26" block |
-| Task 8 (openCARP vs cardiacFOAM end to end) | — | open; was blocked on Task 7 |
+| Task 7 (cardiacFOAM's probe reader) | `b11da6c` (branch `qoi-b7`); on `main` as `4300c81` | done 2026-09-26 (corrected 2026-09-26, Task 8: said "unmerged"; it landed on `main` as `4300c81`); unblocked once 5.4b landed `niederer2011` as a record (`1811e2e`). Departures from its contract: see Task 7's own "Implemented 2026-09-26" block |
+| Task 8 (openCARP vs cardiacFOAM end to end) | `627e337` (request pre-registered before any run), `5f0d906`, and the docs commit after them (branch `qoi-b8`) | done 2026-09-26, unmerged. Report `failed` (P1, P3, P7 within 5 ms; six pairs outside), both runs `run_verified`; evidence in `docs/solver-learning/cardiacfoam.md` section X. Departures from the brief below: see Task 8's own "Implemented 2026-09-26" block |
 
 ## Global Constraints
 
@@ -3201,6 +3201,40 @@ Where it departs from the contract above, and why:
   - every metric carries its `note`;
   - both runs are `run_verified` in their own sweep's `inspect_sweep_experiment`.
 - [ ] **Step 3: Run it, record the numbers as evidence (not a reference), and commit.**
+
+**Implemented 2026-09-26 (Task 8; report `.superpowers/sdd/B-task-8-report.md`;
+test `packages/omnidriver-cardiacfoam/tests/test_niederer_cross_solver_native.py`,
+evidence `docs/solver-learning/cardiacfoam.md` section X).** The brief above
+predates Task 7 and the topic B review fix. Dated corrections, 2026-09-26:
+- **`sampled_at`.** Step 2 said cardiacFOAM's `sampled_at` equals "its
+  probe location". Since Task 7 it is the **containing cell's centre**, so
+  the test asserts it equals the solver's own `-debug-switch probes=1` cell's
+  `C`. openCARP's `sampled_at` is asserted to be the mesh node nearest the
+  requested point.
+- **Points for cardiacFOAM.** Step 2 said the cardiacFOAM runs take "no
+  points". Since review fix I3, a self-sampling reader's `points` are the
+  agent's *expected* locations, with a required `max_sampling_offset`.
+  They are given from `system/Niedererpoints`, in metres (0.0004331 m, half
+  a cell diagonal). openCARP's points are given in its own frame, the
+  reference frame (0.001 mm). The request also pre-registers
+  `both_not_reached` (`fail`).
+- **All nine pairs.** Step 1 listed P1, P4, P8, P9 (and P5). All nine
+  P1-P9 are resolved in the reference and all nine are paired, probe k with
+  P(k+1). That was checked against `constant/electroProperties`' stimulus
+  box at (0, 0, 7) mm, which gives x = a, y = c, z = 7 mm - b. There is no
+  frame-conversion code: the pairing is a literal table in the test, and
+  the orientation is in each pair's `note`.
+- **Resolution and duration.** Step 2 said "the cardiacFOAM record at its
+  native resolution". Its native `endTime` 0.015 s reaches only P1, so both
+  solvers run at dx 0.5 mm, a 0.01 ms step (openCARP `dt 10` µs; cardiacFOAM
+  native `deltaT 1e-05`) and 200 ms. That is the native
+  `cartesianConvergence` `endTime` for dx 0.5 mm. The test takes about 7 min,
+  400 s of it the cardiacFOAM solve.
+- **Where the test lives.** It is a new module needing both environments,
+  in cardiacFOAM's tests. It carries both markers, and
+  `native_opencarp` is registered in that package's `pyproject.toml`. It
+  loads openCARP's `opencarp_native.py` helper by path, because a
+  per-package run does not put openCARP's tests on `sys.path`.
 
 ---
 

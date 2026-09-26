@@ -746,6 +746,79 @@ comparison is for. The pipeline reporting that correctly, with every value,
 unit and sampled location shown, is the proof; a passing overall `status` is
 not the goal.
 
+### Comparing two solvers on the Niederer benchmark
+
+Added 2026-09-26 (topic B Task 8). The worked example is
+`packages/omnidriver-cardiacfoam/tests/test_niederer_cross_solver_native.py`.
+It needs both native environments, and its evidence is
+`docs/solver-learning/cardiacfoam.md` section X. These are the agent's
+steps. Core does none of them for you.
+
+1. **Orient each solver from its own native files, never from a secondary
+   map.**
+   - **cardiacFOAM** (`NiedererEtAl2011verification`). Three files:
+     - `constant/electroProperties`, `monodomainSolverCoeffs.externalStimulus`:
+       the stimulus box `stimulusLocationMin`/`stimulusLocationMax` is at
+       the corner (0, 0, 7) mm;
+     - `system/blockMeshDict`: the slab spans x 20, y 3, z 7 mm;
+     - the conductivity tensor: fibres run along x.
+
+     Against `benchmarks/niederer2011.json`'s `frame` (origin at the
+     stimulus corner; axes a, b and c along the 20, 7 and 3 mm edges), that
+     gives x = a, y = c, z = 7 mm - b. So probe k of
+     `system/Niedererpoints` is P(k+1).
+   - **openCARP** (`02_EP_tissue/03E_study_resolution`). `nversion.par`'s
+     `stim[0].elec` box sits at the origin, and the record's `mesher` slab
+     is 0-20000 x 0-7000 x 0-3000 µm with fibres along x
+     (`docs/solver-learning/opencarp.md` F3). Its frame *is* the reference
+     frame.
+2. **Run both at a setting that reaches every point.**
+   - Use the same dx and time step on both: the `dx` axis is in metres for
+     cardiacFOAM and in µm for openCARP, and `nversion.par:dt` is in µs
+     (G2).
+   - Run long enough for the slowest point to activate on both. At dx
+     0.5 mm that is past about 143 ms (`cardiacfoam.md` Q7, openCARP G4),
+     and the example uses 200 ms. The native cardiacFOAM `endTime` (0.015 s)
+     reaches only P1.
+   - Each solver runs as its own `sweep-run`, with its own `--output-dir`
+     and `--scratch-dir`.
+3. **Write each side's points in its own solver's frame and unit.**
+   - openCARP's reader samples at the points you give it. Give the
+     reference's own coordinates, in mm.
+   - cardiacFOAM's reader chooses its own sampling (`takes_points` false),
+     so its `points` are your *expected* locations. Give them in metres,
+     straight from `system/Niedererpoints`, including the 0.019999 x
+     coordinate.
+   - Each side needs its own `max_sampling_offset`. For cardiacFOAM that is
+     half a cell diagonal, because it reports the containing cell's centre.
+     For openCARP it is a rounding bound, because every P1-P9 is a node at
+     dx 500 µm.
+   - No code converts a frame. The orientation is in your points and in
+     each pair's `note`.
+4. **Pair explicitly.** Each `pairs[]` entry names the openCARP quantity
+   `P<k+1>` and the cardiacFOAM quantity `"<k>"` under that reference label.
+   Its `note` says how you oriented it. Take each side's `artifact_id` from
+   its run document's `expectedArtifacts`, by format:
+   - openCARP: `opencarp_lat_per_node`, `record.solve.2`;
+   - cardiacFOAM: `cardiacfoam_activation_probes`, `record.samplePoints.0`.
+5. **Pre-register, then run `compare`.**
+   - Declare the tolerance, with its rationale, and `both_not_reached`
+     before either run is read. The example chooses `fail`, so a point the
+     duration was too short for fails the report instead of agreeing.
+   - Keep the request. Its digest is in the report.
+6. **Read the report, not the exit code.**
+   - `omnidriver compare` exits 0 whenever it writes a report.
+   - Check the report's `status`, and each pair's two `sampled_at` against
+     its `requested_at`, with their units: µm for openCARP, m for
+     cardiacFOAM.
+   - Attach the report to each sweep with
+     `experiment_comparisons(report_path, sweep_output=<that sweep>)` and
+     check `association_status` is `run_verified` for both.
+   - A `failed` status between two discretisations is a finding to report,
+     not a request to retune. In section X it is `failed`: P1, P3 and P7
+     agree within 5 ms, and the points across the 7 mm edge differ by
+     15-19 ms.
+
 ## Discovering what's valid
 
 Three layers of discovery:

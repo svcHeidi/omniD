@@ -16,6 +16,18 @@ Tasks 1–6 landed (Task 1 `26a8da6`; Task 2 `3f16fe8`; Task 3 `13ba8b6`,
 on `main` -- **corrected 2026-09-26, final review M13:** this said "is this
 commit, on branch `qoi-b6`", which went stale once Task 6 landed); Tasks 7–8
 wait on the tutorial stream's 5.4b.
+**Corrected 2026-09-26 (topic B Task 8):** "Tasks 7–8 wait on the tutorial
+stream's 5.4b" is stale.
+- **Task 7** landed on `main` as `4300c81` (5.4b had landed `niederer2011`).
+- **Task 8** is done on branch `qoi-b8` (`627e337`, `5f0d906` and a docs
+  commit), unmerged. openCARP and cardiacFOAM each ran the N-version slab at
+  dx 0.5 mm, dt 0.01 ms, for 200 ms. A pre-registered `omnidriver compare`
+  report came back `failed`: P1, P3 and P7 agree within 5 ms, and the points
+  across the 7 mm edge differ by 15–19 ms. Both runs are `run_verified`.
+  The evidence is in `docs/solver-learning/cardiacfoam.md` section X.
+- §1's solver fact "samples the **cell containing** the point" still holds.
+  But the reader reports the containing cell's *centre* as `sampled_at`, not
+  the point (plan Task 7, "Implemented 2026-09-26").
 
 ## 1. What exists
 

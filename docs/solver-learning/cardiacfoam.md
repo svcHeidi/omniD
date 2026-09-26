@@ -12,7 +12,7 @@ tree is a `git archive` of the native feature branch's committed files (plan
 §4, "a clean native tree"), never the owner's checkout. Runs happen in
 scratch copies.
 
-Sections: **R** was started by conformance Task 14 (P4); **G** by the tutorial plan's P5 (gmsh); **B** by step 5.4b-B (`manufacturedBidomain`). Merged 2026-09-26. **N** by step 5.4b-N (`niederer2011`); **Q** by topic B Task 7 (the activation-probe reader), 2026-09-26.
+Sections: **R** was started by conformance Task 14 (P4); **G** by the tutorial plan's P5 (gmsh); **B** by step 5.4b-B (`manufacturedBidomain`). Merged 2026-09-26. **N** by step 5.4b-N (`niederer2011`); **Q** by topic B Task 7 (the activation-probe reader), 2026-09-26. **X** by topic B Task 8 (openCARP against cardiacFOAM, the first cross-solver benchmark), 2026-09-26.
 
 ## R. restitutionCurves (`electrophysiologyProtocols/restitutionCurves_s1s2Protocol`)
 
@@ -203,3 +203,103 @@ hex mesh is `(40 6 14)` (dx 0.5 mm) unless stated.
 | Q6 | Q1's case: `postProcess -func 'Niedererpoints(Cx,probeLocations=((1 1 1) (0 0 0)))' -latestTime` | log: `Did not find location (1 1 1) in any cell. Skipping location.` File `postProcessing/Niedererpoints(Cx,probeLocations=((111)(000)))/0/Cx`: `# Probe 0 (1 1 1)  # Not Found`, value `-1e+300` (-VGREAT); probe 1 `0.00025` | an unfound probe is a number in the file, not a statement; the header flag is what says so, and the reader refuses such a probe by name. The output directory is the whole `-func` argument with whitespace removed (`word::validate`) |
 | Q7 | dx 1 mm (`(20 3 7)`) and dx 0.5 mm copies, `endTime 0.2`, `cardiacFoam`, `postProcess -func Niedererpoints -latestTime` | solve 73 s (dx 1 mm) and 396 s (dx 0.5 mm), run concurrently. Final rows, probes 0-8, in s: dx 1 mm `0.00119552 -1 0.0855099 -1 -1 -1 -1 -1 -1`; dx 0.5 mm `0.00119496 0.132315 0.0465183 0.142155 0.0359346 0.133633 0.0559661 0.143067 0.0707206` | picks the self-comparison's `endTime` 0.1 before any comparison was run: by then P1 and P3 (probes 0, 2) are reached at both resolutions, P5, P7, P9 at dx 0.5 mm only, the rest at neither. At dx 1 mm only the probes on the stimulus face along the fibre activate by 0.2 s (the 3-cell-thick direction does not conduct at this resolution) |
 | Q8 | `omnidriver sweep-run` of the record at dx 0.5 mm, `endTime 0.015` (`test_activation_probes_native.py`, OMNIDRIVER_NATIVE_TUTORIALS at native `a02902ee`) | the record's `samplePoints`, `writeCellCentres` and `samplePointCentres` steps write the declared files; each is byte-identical to Q1/Q3's manual output, and the debug-cell check of Q3 passes on the staged case | the record reproduces the manual evidence; the committed unit-test fixtures are that output, gated by this test |
+
+## X. Cross-solver: openCARP against cardiacFOAM on the Niederer slab (topic B Task 8)
+
+The benchmarker's step 3, run by
+`packages/omnidriver-cardiacfoam/tests/test_niederer_cross_solver_native.py`
+(markers `native` and `native_opencarp`), on 2026-09-26: one `sweep-run` per
+solver, one pre-registered `omnidriver compare` request, the report attached
+to both sweeps' experiments. **These numbers are evidence, not a reference.**
+Neither solver is the truth here, and `benchmarks/niederer2011.json` is not
+changed by them.
+
+**Setup, pre-registered in `627e337` before either run was read.**
+- Both solvers: dx 0.5 mm, time step 0.01 ms, 200 ms.
+  - openCARP: `niedererNVersion`, `dx 500` µm, `nversion.par:dt 10` µs,
+    `nversion.par:tend 200` ms, native `03E_study_resolution`.
+  - cardiacFOAM: `niederer2011` (hex, cells (40 6 14)), `dx 0.0005` m,
+    `system/controlDict:deltaT 1e-05` s (native), `endTime 0.2` s. This is
+    the native `cartesianConvergence` study's own `endTime` for dx 0.5 mm.
+    Native tree at `e5fdb3e1`.
+- Orientation, from native files only:
+  - cardiacFOAM's `constant/electroProperties` stimulus box runs from
+    (0, 0, 5.5) mm to (1.5, 1.5, 7) mm, so the stimulus corner is
+    (0, 0, 7) mm. With `system/blockMeshDict`'s 20 x 3 x 7 mm slab and
+    fibres along x (the conductivity tensor), the reference frame is
+    x = a, y = c, z = 7 mm - b. So probe k of `system/Niedererpoints` is
+    P(k+1).
+  - openCARP's `nversion.par` stimulus box starts at the origin, and its
+    slab is the reference frame in µm (`opencarp.md` F3).
+- Request:
+  - tolerance: absolute, 5 ms;
+  - `both_not_reached`: `fail`;
+  - `max_sampling_offset`: 1 µm for openCARP (given as 0.001 mm) and
+    0.0004331 m for cardiacFOAM (half a cell diagonal).
+  - Digest in this run: `sha256:2ecfc1ec03116ab008aaa59e426418d6f4957560e7f43aea2f29c09c8446da42`.
+    The request carries absolute run paths, so each run's digest differs.
+- The two native cases describe the same tissue in their own terms:
+  - both use TNNP epicardial cells;
+  - conductivity: cardiacFOAM's monodomain (0.1334, 0.0176, 0.0176) S/m is
+    the harmonic mean of openCARP's intra/extracellular `g_il 0.17`,
+    `g_el 0.62`, `g_it 0.019`, `g_et 0.24`;
+  - surface-to-volume ratio: `chi 140000` 1/m against `cellSurfVolRatio 0.14`
+    1/µm;
+  - both detect activation at a 0 mV upward crossing:
+    `lats[0].threshold 0` for openCARP, `activationThreshold` default 0.0
+    (Q2) for cardiacFOAM.
+  - Stimulus strength and the time integrators are each solver's own.
+
+**Runtimes (`workflow_state.json`).**
+
+| run | time |
+|---|---|
+| openCARP `solve` | 9.6 s |
+| cardiacFOAM `solve` | 399.8 s |
+| the whole test (both sweeps, compare, the debug-cell check) | 416 s |
+
+**Result.** The report's `status` is **`failed`**:
+- 3 pairs are `within_tolerance` (P1, P3, P7);
+- 6 are `outside_tolerance`;
+- none are `not_reached` or `sampled_off_point`.
+
+Both experiments associate the report as `run_verified`.
+
+**What each side reports.**
+- openCARP: every side has `declared_unit`/`unit` `ms`, rule `node`,
+  `sampled_at_unit` `um` and offset 0, because every point is a slab node.
+- cardiacFOAM: every side has `declared_unit` `s`, `unit` `ms`, rule
+  `cell-containing` and `sampled_at_unit` `m`. Its `sampled_at` equals the
+  solver's own containing-cell centre (the `-debug-switch probes=1` cell's
+  `C`, as in Q3).
+
+| pair | openCARP (ms) | openCARP sampled_at (µm) | offset (µm) | cardiacFOAM probe | cardiacFOAM (ms) | cardiacFOAM sampled_at (m) | expected (m) | offset (m) | difference (ms) | status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| P1 | 1.253986 | (0, 0, 0) | 0 | 0 | 1.19496 | (0.00025, 0.00025, 0.00675) | (0, 0, 0.007) | 0.000433013 | 0.059 | within_tolerance |
+| P2 | 113.347596 | (0, 7000, 0) | 0 | 1 | 132.315 | (0.00025, 0.00025, 0.00025) | (0, 0, 0) | 0.000433013 | 18.967 | outside_tolerance |
+| P3 | 49.530603 | (20000, 0, 0) | 0 | 2 | 46.5183 | (0.01975, 0.00025, 0.00675) | (0.019999, 0, 0.007) | 0.000432436 | 3.012 | within_tolerance |
+| P4 | 125.926870 | (20000, 7000, 0) | 0 | 3 | 142.155 | (0.01975, 0.00025, 0.00025) | (0.019999, 0, 0) | 0.000432436 | 16.228 | outside_tolerance |
+| P5 | 26.765282 | (0, 0, 3000) | 0 | 4 | 35.9346 | (0.00025, 0.00275, 0.00675) | (0, 0.003, 0.007) | 0.000433013 | 9.169 | outside_tolerance |
+| P6 | 114.232568 | (0, 7000, 3000) | 0 | 5 | 133.633 | (0.00025, 0.00275, 0.00025) | (0, 0.003, 0) | 0.000433013 | 19.400 | outside_tolerance |
+| P7 | 55.807756 | (20000, 0, 3000) | 0 | 6 | 55.9661 | (0.01975, 0.00275, 0.00675) | (0.019999, 0.003, 0.007) | 0.000432436 | 0.158 | within_tolerance |
+| P8 | 126.268283 | (20000, 7000, 3000) | 0 | 7 | 143.067 | (0.01975, 0.00275, 0.00025) | (0.019999, 0.003, 0) | 0.000432436 | 16.799 | outside_tolerance |
+| P9 | 55.556030 | (10000, 3500, 1500) | 0 | 8 | 70.7206 | (0.00975, 0.00125, 0.00325) | (0.01, 0.0015, 0.0035) | 0.000433013 | 15.165 | outside_tolerance |
+
+**What the numbers show, and what they do not.**
+- **Where they agree.** The points reached from P1 along the fibres, or
+  along the 3 mm edge and then the fibres, agree within 5 ms: P1, P3, P7.
+- **Where they differ.** Every point that needs conduction across the 7 mm
+  edge (P2, P4, P6, P8, P9) is 15 to 19 ms later in cardiacFOAM. P5, across
+  the 3 mm edge, is 9 ms later.
+- **The sampling offset does not explain the gap.** cardiacFOAM's cell
+  centres sit 0.25 mm inside the slab on each axis, which moves the far
+  corners *towards* the stimulus. That offset would make cardiacFOAM
+  earlier there, not later.
+- **What this does not settle.** This run cannot say which discretisation is
+  closer to converged. The paper's P8 range at dx 0.1 mm (37.8–48.7 ms) is
+  far below both values, as expected at dx 0.5 mm (`opencarp.md` G8: P8
+  halves between dx 500 and dx 250 µm).
+- **Reproducibility.** cardiacFOAM's nine values equal Q7's manual dx 0.5 mm
+  run to every written digit.
+- **The time step moves openCARP only a little.** openCARP's P8 at dt 10 µs
+  (126.27 ms) is within 0.2 ms of G4's dt 50 µs value (126.45 ms).
