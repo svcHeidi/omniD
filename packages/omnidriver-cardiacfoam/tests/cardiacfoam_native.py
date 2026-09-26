@@ -29,15 +29,10 @@ import pytest
 from omnidriver.conformance import ConformanceTarget
 from omnidriver.core.runtime.models import DataArtifact, data_artifact_from_json
 from omnidriver.core.runtime.postprocess_phase import build_sweep_context
+from omnidriver.cardiacfoam.records import niederer_2011
 
 RESTITUTION_CURVES_RELPATH = "electrophysiologyProtocols/restitutionCurves_s1s2Protocol"
 NIEDERER_2011_RELPATH = "NiedererEtAl2011verification"
-#: The literal path topic B Task 7's reader turns into a
-#: ``ProducedPath(path, "cardiacfoam_activation_probes")`` (plan §5c, item 2):
-#: written last by the ``samplePoints`` step
-#: (``postProcess -func Niedererpoints -latestTime``), confirmed by a real
-#: run (``docs/solver-learning/cardiacfoam.md``, section N).
-NIEDERER_POINTS_PATH = "postProcessing/Niedererpoints/0/activationTime"
 
 
 def native_tutorials_root() -> Path:
@@ -125,10 +120,11 @@ def restitution_curves_conformance_target(tmp_path: Path) -> ConformanceTarget:
 
 
 def manufactured_bidomain_conformance_target(tmp_path: Path) -> ConformanceTarget:
-    """``manufacturedBidomain`` at its coarsest hex resolution (a 5x5x5 box,
-    a real run in well under a second -- module docstring evidence: N=5
-    produced ``postProcessing/3D_5_cells.dat`` and ran to completion in the
-    real solver log's own ``ExecutionTime = 0.04 s``)."""
+    """``manufacturedBidomain`` on its hex route, 1D at ``numberCells`` 10
+    (``(10 1 1)``, ``cartesianConvergence``'s coarsest 1D point), a real run
+    in well under a second. Corrected 2026-09-26 (review 54b M8): this said
+    "a 5x5x5 box", which is B1/B2's manual run, not this target's
+    ``base_study``."""
     require_sourced_openfoam("blockMesh", "cardiacFoam")
     return ConformanceTarget(
         plugin="cardiacfoam",
@@ -136,10 +132,11 @@ def manufactured_bidomain_conformance_target(tmp_path: Path) -> ConformanceTarge
         cases_root=native_tutorials_root(),
         scratch_root=tmp_path / "scratch",
         base_study={"mesh": "hex", "dimension": "1D", "numberCells": 10},
-        # A cataloged enum key (`$ELECTRO_MODEL_COEFFS.verificationModel.k`,
-        # applicable to `manufacturedFDABidomainVerifier` since this
-        # module's own 2026-09-26 catalog correction), read at the native
-        # default 1.0/sqrt(2) when absent (manufacturedFDABidomainVerifier.C).
+        # A catalogued scalar key (`$ELECTRO_MODEL_COEFFS.verificationModel.k`,
+        # applicable to `manufacturedFDABidomainVerifier` since the
+        # 2026-09-26 catalogue correction), read at the native default
+        # 1.0/sqrt(2) when absent (manufacturedFDABidomainVerifier.C).
+        # Corrected 2026-09-26 (review 54b M8): this said "enum".
         patch=("constant/electroProperties:bidomainSolverCoeffs.verificationModel.k", 0.5),
         untouched=(
             "constant/electroProperties",
@@ -198,13 +195,16 @@ def niederer_run(tmp_path: Path, *, dx: float, end_time: float | None = None) ->
     """``niederer2011`` at one ``dx``, run for real -- the counterpart of
     ``omnidriver-opencarp``'s ``opencarp_native.niederer_run``, for topic B
     Task 7's own tests. Returns ``(case_root, probe)``, where ``probe`` is
-    the declared ``samplePoints`` artifact for :data:`NIEDERER_POINTS_PATH`."""
+    the declared ``samplePoints`` artifact for the record's own
+    ``POINTS_PATH``. Corrected 2026-09-26 (review 54b M6): this module kept
+    its own copy of that path, ``NIEDERER_POINTS_PATH``; it now reads the
+    record's."""
     output = niederer_sweep(tmp_path, dx_values=(dx,), end_time=end_time)
     (case,) = build_sweep_context(output).cases
     document = json.loads((output / case.run_document_path).read_text())
     artifact = next(
         data_artifact_from_json(raw) for raw in document["expectedArtifacts"]
-        if raw["path_pattern"] == NIEDERER_POINTS_PATH
+        if raw["path_pattern"] == niederer_2011.POINTS_PATH
     )
     return Path(case.case_root), artifact
 

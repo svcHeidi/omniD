@@ -69,8 +69,9 @@ from __future__ import annotations
 
 from omnidriver.core.tutorial_records import DefaultArgument, TutorialRecord, WorkflowStep
 
+from .case_outputs import ELECTRO_PROPERTIES, POLY_MESH_OUTPUTS, WITH_DEFAULT_VALUES, gmsh_to_foam_outputs
 from .manufactured_solution_axes import (
-    BLOCK_MESH_DICT_DOCUMENTS, GMSH_LC_KEY, MESH_DICT_KEY, TET_DIMENSIONS,
+    BLOCK_MESH_DICT_DOCUMENTS, MESH_DICT_KEY, TET_DIMENSIONS,
     dimension_axis, hex_number_cells_axis, tet_number_cells_axis,
 )
 
@@ -78,54 +79,27 @@ from .manufactured_solution_axes import (
 #: `bidomainSolverCoeffs` scope -- never varied by this tutorial (the native
 #: case already holds it, design's own "dropped... because the native case
 #: already holds that value").
-_ELECTRO_DOCUMENT = "constant/electroProperties"
 _BIDOMAIN_SOLVER_COEFFS = ("bidomainSolverCoeffs",)
 
 _TET_TEMPLATE = "setup/studies/tetConvergence/box.geo.template"
 _TET_MESH = "box.msh"
 
-#: Every step's own default-argument tokens, copied verbatim from
-#: ``regression/regressionTest.sh`` (mesh) and from the module docstring's
-#: real-run evidence (gmsh's own template default, ``lc=0.1``, owner Q8).
+#: The mesh step's default argument, copied verbatim from
+#: ``regression/regressionTest.sh``. The gmsh step has none: with no
+#: ``tetNumberCells``, gmsh uses the template's own ``DefineConstant`` ``lc``
+#: default (corrected 2026-09-26, review 54b M1: a ``-setnumber lc 0.1``
+#: default here restated that value, and would have kept forcing it after a
+#: template change).
 _MESH_DICT_DEFAULT = "system/blockMeshDict.3D"
-_GMSH_LC_DEFAULT = "0.1"
 
 AXES = (
     dimension_axis(
         "dimension", mesh_step_id="mesh",
-        solver_coefficients=(_ELECTRO_DOCUMENT, _BIDOMAIN_SOLVER_COEFFS),
+        solver_coefficients=(ELECTRO_PROPERTIES, _BIDOMAIN_SOLVER_COEFFS),
     ),
     hex_number_cells_axis("numberCells"),
     tet_number_cells_axis("tetNumberCells", gmsh_step_id="gmsh"),
 )
-
-#: Real ``blockMesh``-observed outputs (module docstring); identical to
-#: ``restitutionCurves``'s own, since both cases' hex ``blockMeshDict``s are
-#: single, zone-free ``hex (`` blocks.
-_HEX_MESH_OUTPUTS = (
-    "constant/polyMesh",
-    "constant/polyMesh/boundary",
-    "constant/polyMesh/faces",
-    "constant/polyMesh/neighbour",
-    "constant/polyMesh/owner",
-    "constant/polyMesh/points",
-)
-
-#: Real ``gmshToFoam``-observed outputs (module docstring): the hex set
-#: above, plus the three zone files and the cellSet the template's single
-#: ``Physical Volume("internal")`` always produces.
-_TET_MESH_OUTPUTS = _HEX_MESH_OUTPUTS + (
-    "constant/polyMesh/cellZones",
-    "constant/polyMesh/faceZones",
-    "constant/polyMesh/pointZones",
-    "constant/polyMesh/sets/internal",
-)
-
-#: ``electroModel::end`` renames and writes this dictionary at the end of
-#: every non-``singleCellSolver`` run (P4's R4) -- declared here so a restage
-#: does not carry it as an unaccounted-for output (A5's exclusion needs it
-#: named).
-WITH_DEFAULT_VALUES = f"{_ELECTRO_DOCUMENT}.withDefaultValues"
 
 RECORD = TutorialRecord(
     name="manufacturedBidomain",
@@ -136,19 +110,18 @@ RECORD = TutorialRecord(
             step_id="mesh", command=("blockMesh",),
             default_arguments=(DefaultArgument(key=MESH_DICT_KEY, values=(_MESH_DICT_DEFAULT,)),),
             consumes=BLOCK_MESH_DICT_DOCUMENTS + ("system/controlDict",),
-            produces=_HEX_MESH_OUTPUTS,
+            produces=POLY_MESH_OUTPUTS,
         ),
         WorkflowStep(
             step_id="gmsh",
             command=("gmsh", "-3", _TET_TEMPLATE, "-o", _TET_MESH, "-format", "msh2"),
-            default_arguments=(DefaultArgument(key=GMSH_LC_KEY, values=(_GMSH_LC_DEFAULT,)),),
             consumes=(_TET_TEMPLATE,),
             produces=(_TET_MESH,),
         ),
         WorkflowStep(
             step_id="gmshToFoam", command=("gmshToFoam", _TET_MESH),
             consumes=(_TET_MESH,),
-            produces=_TET_MESH_OUTPUTS,
+            produces=gmsh_to_foam_outputs("internal"),
         ),
         WorkflowStep(
             step_id="checkMesh", command=("checkMesh",),
@@ -157,7 +130,7 @@ RECORD = TutorialRecord(
             step_id="solve", command=("cardiacFoam",),
             consumes=(
                 "system/controlDict", "system/fvSchemes", "system/fvSolution",
-                "constant/physicsProperties", _ELECTRO_DOCUMENT,
+                "constant/physicsProperties", ELECTRO_PROPERTIES,
             ),
             produces=(WITH_DEFAULT_VALUES, "postProcessing/*_cells.dat"),
         ),

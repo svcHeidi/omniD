@@ -104,15 +104,16 @@ from __future__ import annotations
 from typing import Any
 
 from omnidriver.core.tutorial_records import (
-    AxisContract, AxisResult, DefaultArgument, ProducedPath, TutorialRecord, WorkflowStep,
+    AxisContract, AxisResult, ProducedPath, TutorialRecord, WorkflowStep,
 )
 from omnidriver.openfoam.axes import block_mesh_resolution_axis
 from omnidriver.openfoam.mesh_provisioning import cell_counts_from_dx
 from omnidriver.openfoam.probes import CELL_CENTRE_FIELDS, probes_function_with_fields, sibling_probe_files
 
 from ..activation_probes import ACTIVATION_PROBES_FORMAT
+from .case_outputs import ELECTRO_PROPERTIES, POLY_MESH_OUTPUTS, WITH_DEFAULT_VALUES, gmsh_to_foam_outputs
+from .manufactured_solution_axes import GMSH_LC_KEY
 
-_ELECTRO_DOCUMENT = "constant/electroProperties"
 _PHYSICS_DOCUMENT = "constant/physicsProperties"
 _BLOCK_MESH_DICT_DOCUMENT = "system/blockMeshDict"
 _TET_GEO_TEMPLATE_RELPATH = "setup/studies/tetConvergence/slab.geo.template"
@@ -120,7 +121,7 @@ _TET_MSH_RELPATH = "slab.msh"
 #: The native case's `probes` function (`system/Niedererpoints`) and the file
 #: it writes last, from `postProcess -latestTime` (section N, N2).
 _POINTS_FUNCTION = "Niedererpoints"
-_POINTS_PATH = "postProcessing/Niedererpoints/0/activationTime"
+POINTS_PATH = "postProcessing/Niedererpoints/0/activationTime"
 
 DX_AXIS_NAME = "dx"
 TET_DX_AXIS_NAME = "tetDx"
@@ -169,7 +170,15 @@ def _tet_dx_axis(name: str) -> AxisContract:
     ``gmsh`` step (owner Q2/Q8; ``docs/solver-learning/cardiacfoam.md`` G5,
     "``-setnumber lc v`` overrides ``DefineConstant[ lc = … ]``"). Produces
     no ``AxisPatch`` at all -- ``slab.geo.template`` needs no rendering any
-    more (native ``60805b27``), only this one command-line argument.
+    more (native ``60805b27``), only this one command-line argument. With
+    the axis unnamed, gmsh uses the template's own ``DefineConstant``
+    default.
+
+    Not ``manufactured_solution_axes.tet_number_cells_axis``: that axis
+    takes a cell count ``N`` on the unit cube and passes ``lc = 1/N``; this
+    slab is not a unit cube, and its study states ``lc`` itself, in metres.
+    The key is the shared ``GMSH_LC_KEY`` (review 54b M6, 2026-09-26: this
+    restated ``("-setnumber", "lc")``).
     """
 
     def resolve(value: Any, staged_case_root) -> AxisResult:
@@ -177,7 +186,7 @@ def _tet_dx_axis(name: str) -> AxisContract:
         dx = float(value)
         if dx <= 0:
             raise ValueError(f"tet-dx axis {name!r}: dx must be positive, got {value!r}")
-        return AxisResult(command_arguments={"gmsh": ("-setnumber", "lc", str(dx))})
+        return AxisResult(command_arguments={"gmsh": GMSH_LC_KEY + (str(dx),)})
 
     return AxisContract(name=name, value_kind="scalar", resolve=resolve)
 
@@ -195,23 +204,12 @@ AXES = (
     _tet_dx_axis(TET_DX_AXIS_NAME),
 )
 
-#: `blockMesh`'s own mesh output, identical across every hex-mesh cardiac
-#: tutorial (`records/restitution_curves.py`'s own `_MESH_OUTPUTS`).
-_MESH_OUTPUTS = (
-    "constant/polyMesh",
-    "constant/polyMesh/boundary",
-    "constant/polyMesh/faces",
-    "constant/polyMesh/neighbour",
-    "constant/polyMesh/owner",
-    "constant/polyMesh/points",
-)
-
-#: gmsh's own default `lc` (metres): the tet study's coarsest ladder rung
-#: (`setup/studies/tetConvergence/sweep_tet_generic.json`'s `dx_values`,
-#: `[0.5]` mm first), matching the template's own `DefineConstant` default
-#: (native `60805b27`) -- owner Q8: "the coarsest level its own tet study
-#: uses".
-_DEFAULT_LC_M = "0.0005"
+#: The gmsh step passes no default `-setnumber lc`: with no `tetDx`, gmsh
+#: uses `slab.geo.template`'s own `DefineConstant` default (0.0005 m, the
+#: tet study's coarsest rung). Corrected 2026-09-26 (review 54b M1): a
+#: `_DEFAULT_LC_M = "0.0005"` default argument restated that value, and its
+#: comment cited `sweep_tet_generic.json`'s `dx_values`, a key the 5.4b-N
+#: study rewrite had deleted.
 
 RECORD = TutorialRecord(
     name="niederer2011",
@@ -230,34 +228,36 @@ RECORD = TutorialRecord(
         WorkflowStep(
             step_id="mesh", command=("blockMesh",),
             consumes=(_BLOCK_MESH_DICT_DOCUMENT,),
-            produces=_MESH_OUTPUTS,
+            produces=POLY_MESH_OUTPUTS,
         ),
         WorkflowStep(
             step_id="gmsh",
             command=("gmsh", "-3", _TET_GEO_TEMPLATE_RELPATH, "-o", _TET_MSH_RELPATH, "-format", "msh2"),
-            default_arguments=(DefaultArgument(key=("-setnumber", "lc"), values=(_DEFAULT_LC_M,)),),
             consumes=(_TET_GEO_TEMPLATE_RELPATH,),
             produces=(_TET_MSH_RELPATH,),
         ),
         WorkflowStep(
             step_id="gmshToFoam", command=("gmshToFoam", _TET_MSH_RELPATH),
             consumes=(_TET_MSH_RELPATH,),
-            produces=_MESH_OUTPUTS,
+            # Review 54b M2: the full real-run set (this declared only the
+            # hex route's six, "matching restitutionCurves's precedent",
+            # which has no tet route).
+            produces=gmsh_to_foam_outputs("internal"),
         ),
         WorkflowStep(step_id="checkMesh", command=("checkMesh",)),
         WorkflowStep(
             step_id="solve", command=("cardiacFoam",),
             consumes=(
-                _ELECTRO_DOCUMENT, _PHYSICS_DOCUMENT, "system/controlDict",
+                ELECTRO_PROPERTIES, _PHYSICS_DOCUMENT, "system/controlDict",
                 "system/fvSchemes", "system/fvSolution",
                 "system/Niedererpoints", "system/Niedererlines",
             ),
-            produces=(f"{_ELECTRO_DOCUMENT}.withDefaultValues",),
+            produces=(WITH_DEFAULT_VALUES,),
         ),
         WorkflowStep(
             step_id="samplePoints",
             command=("postProcess", "-func", _POINTS_FUNCTION, "-latestTime"),
-            produces=(ProducedPath(_POINTS_PATH, format=ACTIVATION_PROBES_FORMAT),),
+            produces=(ProducedPath(POINTS_PATH, format=ACTIVATION_PROBES_FORMAT),),
         ),
         # Q3/Q4 (docs/solver-learning/cardiacfoam.md): where each probe
         # sampled. `writeCellCentres` writes C/Cx/Cy/Cz into the latest time
@@ -272,7 +272,7 @@ RECORD = TutorialRecord(
             step_id="samplePointCentres",
             command=("postProcess", "-func", probes_function_with_fields(_POINTS_FUNCTION, CELL_CENTRE_FIELDS),
                      "-latestTime"),
-            produces=sibling_probe_files(_POINTS_PATH, CELL_CENTRE_FIELDS),
+            produces=sibling_probe_files(POINTS_PATH, CELL_CENTRE_FIELDS),
         ),
         WorkflowStep(
             step_id="sampleLines",

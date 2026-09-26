@@ -62,6 +62,7 @@ from typing import Any, Sequence
 from omnidriver.core.tutorial_records import TutorialRecord, WorkflowStep
 from omnidriver.openfoam.axes import block_mesh_resolution_axis
 
+from .case_outputs import ELECTRO_PROPERTIES, POLY_MESH_OUTPUTS
 from .ionic_model_axis import ionic_model_axis
 from .s1_s2_protocol_axis import s1_s2_protocol_axis
 
@@ -70,7 +71,6 @@ from .s1_s2_protocol_axis import s1_s2_protocol_axis
 #: native case already holds it; design's own "dropped... because the
 #: native case already holds that value"), so both axes below are
 #: instantiated with it directly rather than deriving it from a study value.
-_ELECTRO_DOCUMENT = "constant/electroProperties"
 _SINGLE_CELL_SOLVER_COEFFS = ("singleCellSolverCoeffs",)
 
 IONIC_MODEL_AXIS_NAME = "ionicModel"
@@ -118,11 +118,11 @@ def _explicit_cell_counts(
 AXES = (
     ionic_model_axis(
         IONIC_MODEL_AXIS_NAME,
-        document=_ELECTRO_DOCUMENT, scope=_SINGLE_CELL_SOLVER_COEFFS,
+        document=ELECTRO_PROPERTIES, scope=_SINGLE_CELL_SOLVER_COEFFS,
     ),
     s1_s2_protocol_axis(
         S1_S2_PROTOCOL_AXIS_NAME,
-        electro_document=_ELECTRO_DOCUMENT, scope=_SINGLE_CELL_SOLVER_COEFFS,
+        electro_document=ELECTRO_PROPERTIES, scope=_SINGLE_CELL_SOLVER_COEFFS,
     ),
     block_mesh_resolution_axis(
         BLOCK_MESH_RESOLUTION_AXIS_NAME,
@@ -157,15 +157,8 @@ AXES = (
 #:
 #: No ``constant/electroProperties.withDefaultValues``: ``singleCellSolver``
 #: overrides ``electroModel::end`` without calling it, and no real run of
-#: this case writes one (R4).
-_MESH_OUTPUTS = (
-    "constant/polyMesh",
-    "constant/polyMesh/boundary",
-    "constant/polyMesh/faces",
-    "constant/polyMesh/neighbour",
-    "constant/polyMesh/owner",
-    "constant/polyMesh/points",
-)
+#: this case writes one (R4). The mesh step's outputs are
+#: ``case_outputs.POLY_MESH_OUTPUTS`` (R1).
 
 RECORD = TutorialRecord(
     name="restitutionCurves",
@@ -175,13 +168,13 @@ RECORD = TutorialRecord(
         WorkflowStep(
             step_id="mesh", command=("blockMesh",),
             consumes=(_BLOCK_MESH_DICT_DOCUMENT, "system/controlDict"),
-            produces=_MESH_OUTPUTS,
+            produces=POLY_MESH_OUTPUTS,
         ),
         WorkflowStep(
             step_id="solve", command=("cardiacFoam",),
             consumes=(
                 "system/controlDict", "system/fvSchemes", "system/fvSolution",
-                "constant/physicsProperties", _ELECTRO_DOCUMENT,
+                "constant/physicsProperties", ELECTRO_PROPERTIES,
             ),
             produces=("postProcessing/*.txt",),
         ),

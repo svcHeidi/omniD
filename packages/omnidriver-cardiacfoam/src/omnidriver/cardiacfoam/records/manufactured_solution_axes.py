@@ -70,7 +70,12 @@ BLOCK_MESH_DICT_DOCUMENTS: tuple[str, ...] = tuple(
 #: its native default under this key (``DefaultArgument``, owner Q3/Q7).
 MESH_DICT_KEY: tuple[str, ...] = ("-dict",)
 
-#: The gmsh step's argument the tet axis replaces, likewise.
+#: The gmsh argument a tet axis passes. The gmsh steps declare no default
+#: for it (review 54b M1, 2026-09-26): with no study value, gmsh uses the
+#: template's own ``DefineConstant`` default, and an axis that names it
+#: adds it (``WorkflowStep.argv`` appends a contribution no default claims).
+#: A record that did declare a ``DefaultArgument`` under this key would
+#: still have it replaced.
 GMSH_LC_KEY: tuple[str, ...] = ("-setnumber", "lc")
 
 #: The only dimension a tet route's gmsh template builds: every
@@ -163,7 +168,7 @@ def hex_number_cells_axis(name: str, *, expected_blocks: int = 1) -> AxisContrac
 
 def tet_number_cells_axis(name: str, *, gmsh_step_id: str = "gmsh") -> AxisContract:
     """A named ``tetNumberCells`` axis: ``N`` becomes the gmsh step's
-    ``-setnumber lc <1/N>`` (replacing the step's default argument), and no
+    ``-setnumber lc <1/N>`` (added to the step's command line), and no
     document patch -- a tet case writes nothing into the unused
     ``blockMeshDict``s (the design's reason for a separate axis).
 
@@ -172,7 +177,9 @@ def tet_number_cells_axis(name: str, *, gmsh_step_id: str = "gmsh") -> AxisContr
     the unit cube's edge (the hex route's vocabulary), and G5/G8's real-gmsh
     evidence confirms ``-setnumber lc <v>`` overrides the template's
     ``DefineConstant`` default at any value. With the axis unnamed, a case
-    gets the template's own default.
+    gets the template's own default. Corrected 2026-09-26 (review 54b M1):
+    that sentence was false while each record declared a ``-setnumber lc``
+    default copied from the template; the records no longer declare one.
 
     Refuses by name a value that is not a positive integer (``bool``
     excluded): ``1/N`` would otherwise be a ``ZeroDivisionError`` or a

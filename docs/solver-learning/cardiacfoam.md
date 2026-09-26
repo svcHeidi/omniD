@@ -12,7 +12,7 @@ tree is a `git archive` of the native feature branch's committed files (plan
 §4, "a clean native tree"), never the owner's checkout. Runs happen in
 scratch copies.
 
-Sections: **R** was started by conformance Task 14 (P4); **G** by the tutorial plan's P5 (gmsh); **B** by step 5.4b-B (`manufacturedBidomain`). Merged 2026-09-26. **N** by step 5.4b-N (`niederer2011`); **Q** by topic B Task 7 (the activation-probe reader), 2026-09-26. **X** by topic B Task 8 (openCARP against cardiacFOAM, the first cross-solver benchmark), 2026-09-26.
+Sections: **R** was started by conformance Task 14 (P4); **G** by the tutorial plan's P5 (gmsh); **B** by step 5.4b-B (`manufacturedBidomain`). Merged 2026-09-26. **N** by step 5.4b-N (`niederer2011`); **E** by step 5.4b-E (`manufacturedEikonalECG`); **Q** by topic B Task 7 (the activation-probe reader), 2026-09-26. **X** by topic B Task 8 (openCARP against cardiacFOAM, the first cross-solver benchmark), 2026-09-26. **T** by the controller's TNNP integrator timing (owner question), 2026-09-26. Rows B11-B12, E4-E6 and N5-N6 were added by the review 54b fixes, 2026-09-26. Corrected 2026-09-26 (review 54b I4): this line did not name section E.
 
 ## R. restitutionCurves (`electrophysiologyProtocols/restitutionCurves_s1s2Protocol`)
 
@@ -98,6 +98,24 @@ Native commits for B9/B10: `b8ad4ee6` (the `fvSolution` fix),
 `b203f347` (README corrections to `corrector`/`correctorN80`, reversing
 their own B5/B6-era "open gap" notes).
 
+**Corrected 2026-09-26 (review 54b I2/I4).** B6 and B10 overstated what
+they proved. Each passed one hand-built case per study straight to
+`strict_plan`, which bypasses the study's own expansion, so "all 7
+rewritten studies now `strict_plan` cleanly" was not shown: three of them
+(`tetConvergence`, `tetTemporalControl`, `linearToleranceControl`, 16
+cases) derived `caseId`/`output_dir_name` from
+`system/fvSchemes:gradSchemes.default`, whose value is now `"Gauss
+linear"`, and `sweep-plan` refused them ("caseId 'Gauss linear_10' is not
+path-safe"). Native `c048ec1b`/`44037651` restored the path-safe
+`gauss_linear`/`least_squares` names; B11 proves every study through its
+own expansion. B10 also said "all 4 `corrector` cases": `corrector` has
+**12** cases (`correctorN80` has 4), so B10 planned 4 of 16.
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| B11 | `omnidriver --plugin cardiacfoam sweep-plan --spec tutorials/manufacturedSolutions/bidomain/setup/studies/<study>/<file>.json --output-dir <scratch>` from the native repository root, for each of the 7 studies; also `test_record_studies_native.py`, which does the same for every study of every record | 52 cases, every one `status: ok` (cartesianConvergence 12, corrector 12, correctorN80 4, linearToleranceControl 4, temporalConvergence 8, tetConvergence 8, tetTemporalControl 4). Against native `e5fdb3e1` (before `c048ec1b`) the same test fails naming exactly the three tet studies | the studies' own expansion is the proof; a hand-built case is not |
+| B12 | the tet route through the record, no study values but the route: `plan --strict --entry manufacturedBidomain --config {"mesh": "tet"}`, then the advertised `run --run-document`, from native `44037651` | the gmsh command line carries no `-setnumber` (the record declares no `lc` default any more); gmsh `1184 nodes 6462 elements`, G7's count at the template's own `lc = 0.1`. rc 0, workflow `completed`; reconciliation 22 predicted, 22 matched, 0 missing; the 13 record-declared artifacts (`box.msh`, gmshToFoam's 10 `constant/polyMesh` entries, `.withDefaultValues`, `postProcessing/*_cells.dat`, here `3D_17_cells.dat`) all matched | "absent by default, added by an axis" holds: with no `tetNumberCells` the template's `DefineConstant` default applies. B3's nine-entry `gmshToFoam` output reproduced through the record |
+
 Native commits: `60805b27` (the five templates), `6eb12863` (Q11,
 `ecgDomains.ECG.verificationModel.anisotropic yes` in
 `monodomainPseudoECG/constant/electroProperties`), `03f02dec` (Q9, drops
@@ -148,6 +166,11 @@ observation (every non-zero probe still `-1` at this coarser resolution)
 is consistent with, though not a proof of, that same set never having
 activated by `t=0.015` at the reference's finer resolution either.
 
+| # | command | observed | conclusion |
+|---|---|---|---|
+| N5 | review 54b, from native `44037651`: `plan --strict --entry niederer2011 --config {"mesh": "tet"}` then the advertised `run --run-document` (no `tetDx`, so the template's own `lc = 0.0005`; native `endTime 0.015`) | gmsh command line with no `-setnumber`; `3739 nodes 20810 elements` (N4's count), `checkMesh` 16442 cells (Q4's). rc 0, workflow `completed`, 245 s; reconciliation 20 predicted, 20 matched, 0 missing; 17 record-declared artifacts matched, including gmshToFoam's `cellZones`, `faceZones`, `pointZones` and `sets/internal`. Final probe row `0.015 0.00119397 -1 -1 -1 0.008078 -1 -1 -1 -1` | N4 observed these four extra entries but the record declared only the hex six; they are declared now. The tet route is proved through the record, not only by hand |
+| N6 | N5's case: `grep dimensions 0.015/activationTime` | `dimensions      [0 0 1 0 0 0 0];` | plan §5c 5.4b-N item 5 asked for `activationTime`'s `dimensions` from a run's field file, and this section did not record it (review 54b M10). Q2 had recorded the same line from the hex route, and the reader cites it: the probe values are seconds |
+
 ## E. manufacturedEikonalECG (`manufacturedSolutions/eikonalECG`, plan 5.4b-E)
 
 Real runs against a `git archive` export of `omnid/54b-eikonalECG` at
@@ -160,6 +183,9 @@ shrunk to `10x10x10` (the coarsest any study defines) for a fast run,
 | E1 | `blockMesh -dict system/blockMeshDict.3D` then `cardiacFoam`, serial (`Allrun`'s own default: no `parallel` argument) | rc 0 both, 13 s total. `ls constant/` after: `electroProperties electroProperties.withDefaultValues physicsProperties polyMesh`. `find postProcessing`: `eikonalECG.dat`, `manufacturedEikonalActivationTime.dat`, `manufacturedEikonalECGSummary_ECG.dat`, `manufacturedEikonalECG_ECG.dat` | unlike `restitutionCurves`'s `singleCellSolver` (R4), `eikonalMyocardiumDomain`'s solve DOES write `.withDefaultValues` -- it does not override `electroModel::end()` without calling it. The four `postProcessing` names are exactly the ones the brief predicted from the C++, confirmed by a real run rather than assumed |
 | E2 | remove `0/activationTime` from a copy of E1's already-meshed case, run `cardiacFoam` | `FOAM FATAL ERROR: cannot find file .../0/activationTime`, rc 1 | `0/activationTime` is a real `consumes` entry for the `solve` step, the same way R3 established the pattern for `restitutionCurves` |
 | E3 | `gmsh -3 setup/studies/tetConvergence/box.geo.template -o box.msh -format msh2` (template already has `DefineConstant[ lc = {0.1, Name "lc"} ]`, native `60805b27`), then `gmshToFoam box.msh`, then `checkMesh`, then `cardiacFoam` | gmsh: `1184 nodes 6462 elements`, matching G7 exactly. `checkMesh`: `Mesh OK`, no extra files written. `cardiacFoam`: rc 0, `ls constant/`/`find postProcessing` identical in NAME to E1 (`.withDefaultValues` plus the same four `postProcessing/*.dat`) | the tet route produces the same declared artifact set as hex; `checkMesh` itself writes nothing beyond its own log, so its workflow step declares no `produces` |
+| E4 | review 54b, from native `44037651`: `plan --strict --entry manufacturedEikonalECG --config {"mesh": "<route>"}` then the advertised `run --run-document`, for each of `tet`, `tet-errorLocalisation`, `tet-gradientReconstruction` (the coarsest level: no `tetNumberCells`, so the template's `lc = 0.1`) | each: rc 0, workflow `completed`, ~80 s; reconciliation 20 predicted, 20 matched, 0 missing; 16 record-declared artifacts matched (`box.msh`, gmshToFoam's 10 `constant/polyMesh` entries including `cellZones`, `faceZones`, `pointZones` and `sets/internal`, and the 5 solve outputs); gmsh `1184 nodes 6462 elements` | E3's "the tet route produces the same declared artifact set as hex" was true of the solve step only: `gmshToFoam` writes the three zone files and `sets/internal` beside the hex six (as bidomain's B3 found), and `gmsh` writes `box.msh`, which `gmshToFoam` reads. Both are declared now |
+| E5 | E4's three case trees, the files newer than the plan (`find -newer plan.json`, run records and logs excluded) | `tet` and `tet-gradientReconstruction` write the same 20 files; `tet-errorLocalisation` adds exactly `1/C`, `1/Cx`, `1/Cy`, `1/Cz` | `writeCellCentres` writes only into the latest time directory, which cannot be declared and is dropped at staging (the record's comment holds); `gradientReconstructionOrder` writes no file beyond its log, so it declares no `produces`. Both extra routes are now observed in a real run, not assumed |
+| E6 | `plan --strict --entry manufacturedEikonalECG --config {"mesh": "tet", "dimension": "2D", "tetNumberCells": 10}`, before and after review 54b I3 | before: rc 0, `status: ok`, the `dimension` value silently unused. After: rc 1, `"tutorial record 'manufacturedEikonalECG''s workflow variant 'tet' admits 'dimension' only as one of ['3D'], or unset; 'base' sets it to '2D'"` | the old `make_spec` refusal (`mesh_family='tet' requires dimensions=['3D']`) is restored for every tet route |
 
 Native commit for this task: `db896dd0` (rewrites the six studies to
 `document:key` vocabulary; no template/case-content change was needed here,

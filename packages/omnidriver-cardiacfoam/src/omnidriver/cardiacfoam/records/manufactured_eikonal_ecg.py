@@ -90,13 +90,14 @@ from __future__ import annotations
 
 from omnidriver.core.tutorial_records import DefaultArgument, TutorialRecord, WorkflowStep
 
+from .case_outputs import ELECTRO_PROPERTIES, POLY_MESH_OUTPUTS, WITH_DEFAULT_VALUES, gmsh_to_foam_outputs
 from .manufactured_solution_axes import (
-    BLOCK_MESH_DICT_DOCUMENTS, GMSH_LC_KEY, MESH_DICT_KEY, TET_DIMENSIONS,
+    BLOCK_MESH_DICT_DOCUMENTS, MESH_DICT_KEY, TET_DIMENSIONS,
     dimension_axis, hex_number_cells_axis, tet_number_cells_axis,
 )
 
-_ELECTRO_DOCUMENT = "constant/electroProperties"
 _TET_TEMPLATE_RELPATH = "setup/studies/tetConvergence/box.geo.template"
+_TET_MESH = "box.msh"
 
 #: This record's own axes. The dimension axis takes no
 #: `solver_coefficients`: eikonalECG's `eikonalSolverCoeffs` has no
@@ -108,25 +109,12 @@ AXES = (
     tet_number_cells_axis("tetNumberCells", gmsh_step_id="gmsh"),
 )
 
-#: Settled by a real run (module docstring; ``docs/solver-learning
-#: /cardiacfoam.md`` section E). Shared by the ``mesh`` (blockMesh) and
-#: ``gmshToFoam`` steps: whichever mesher ran, the mesh route produces the
-#: same `constant/polyMesh` files.
-_MESH_OUTPUTS = (
-    "constant/polyMesh",
-    "constant/polyMesh/boundary",
-    "constant/polyMesh/faces",
-    "constant/polyMesh/neighbour",
-    "constant/polyMesh/owner",
-    "constant/polyMesh/points",
-)
-
 #: Settled by a real run (module docstring). Every cardiacFoam solve step
 #: writes `.withDefaultValues` here (unlike `restitutionCurves`'s
 #: `singleCellSolver`, which overrides `electroModel::end()` without calling
 #: it -- see R4): `eikonalMyocardiumDomain`'s solve does call it.
 _SOLVE_OUTPUTS = (
-    "constant/electroProperties.withDefaultValues",
+    WITH_DEFAULT_VALUES,
     "postProcessing/manufacturedEikonalActivationTime.dat",
     "postProcessing/eikonalECG.dat",
     "postProcessing/manufacturedEikonalECG_ECG.dat",
@@ -139,27 +127,33 @@ _MESH_STEP = WorkflowStep(
         DefaultArgument(key=MESH_DICT_KEY, values=("system/blockMeshDict.3D",)),
     ),
     consumes=BLOCK_MESH_DICT_DOCUMENTS + ("system/controlDict",),
-    produces=_MESH_OUTPUTS,
+    produces=POLY_MESH_OUTPUTS,
 )
 _SOLVE_STEP = WorkflowStep(
     step_id="solve", command=("cardiacFoam",),
     consumes=(
         "system/controlDict", "system/fvSchemes", "system/fvSolution",
-        _ELECTRO_DOCUMENT, "constant/physicsProperties", "0/activationTime",
+        ELECTRO_PROPERTIES, "constant/physicsProperties", "0/activationTime",
     ),
     produces=_SOLVE_OUTPUTS,
 )
+#: No default ``-setnumber lc``: with no ``tetNumberCells`` gmsh uses the
+#: template's own ``DefineConstant`` default (review 54b M1, 2026-09-26: a
+#: ``("0.1",)`` default here restated it). ``box.msh`` is declared on both
+#: sides, and ``gmshToFoam``'s full output set, from the real run through
+#: this record logged in ``docs/solver-learning/cardiacfoam.md`` (review
+#: 54b M2; this said "the same `constant/polyMesh` files" as blockMesh,
+#: which omitted the three zone files and ``sets/internal``).
 _GMSH_STEP = WorkflowStep(
     step_id="gmsh",
-    command=("gmsh", "-3", _TET_TEMPLATE_RELPATH, "-o", "box.msh", "-format", "msh2"),
-    default_arguments=(
-        DefaultArgument(key=GMSH_LC_KEY, values=("0.1",)),
-    ),
+    command=("gmsh", "-3", _TET_TEMPLATE_RELPATH, "-o", _TET_MESH, "-format", "msh2"),
     consumes=(_TET_TEMPLATE_RELPATH,),
+    produces=(_TET_MESH,),
 )
 _GMSH_TO_FOAM_STEP = WorkflowStep(
-    step_id="gmshToFoam", command=("gmshToFoam", "box.msh"),
-    produces=_MESH_OUTPUTS,
+    step_id="gmshToFoam", command=("gmshToFoam", _TET_MESH),
+    consumes=(_TET_MESH,),
+    produces=gmsh_to_foam_outputs("internal"),
 )
 _CHECK_MESH_STEP = WorkflowStep(step_id="checkMesh", command=("checkMesh",))
 _WRITE_CELL_CENTRES_STEP = WorkflowStep(

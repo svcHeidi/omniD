@@ -75,19 +75,20 @@ def test_the_tet_axis_refuses_a_cell_count_that_is_not_positive(value, tmp_path)
         axis.resolve(value, tmp_path)
 
 
-def test_every_cardiac_record_resolves_each_of_its_axis_names_to_its_own_contract():
-    """Every record the cardiac stack registers: each bare axis name a study
-    may use resolves, through core, to that record's own contract. The
-    one-name-one-contract rule itself is ``TutorialRecord``'s, at load."""
+def test_a_record_refuses_an_axis_only_another_record_declares():
+    """``ionicModel`` is restitutionCurves' axis; bidomain refuses it by name
+    rather than borrowing it. Corrected 2026-09-26 (review 54b M3): this
+    test also resolved every record's axis names against the same record's
+    axes, which could fail only on a duplicate ``TutorialRecord`` already
+    refuses; that half is replaced by ``test_record_studies_native.py``,
+    which resolves every name a real native study uses through the study's
+    own expansion."""
     from omnidriver.core.tutorial_records import sort_study_name
 
-    for record in _CTX.capabilities.tutorial_records.catalog().values():
-        for axis in record.axes:
-            assert sort_study_name(axis.name, axes=record.axes).axis is axis
+    catalog = _CTX.capabilities.tutorial_records.catalog()
+    assert "ionicModel" in catalog["restitutionCurves"].axis_names()
     with pytest.raises(TutorialRecordError, match="ionicModel"):
-        sort_study_name(
-            "ionicModel", axes=_CTX.capabilities.tutorial_records.catalog()["manufacturedBidomain"].axes,
-        )
+        sort_study_name("ionicModel", axes=catalog["manufacturedBidomain"].axes)
 
 
 #: Every tet route of every record that has a ``dimension`` axis. The old
@@ -147,3 +148,66 @@ def test_every_route_that_skips_the_mesh_step_constrains_dimension():
             assert record.variant_constraints.get(variant, {}).get("dimension") == ("3D",), (
                 record.name, variant,
             )
+
+
+def _records_with_a_gmsh_step():
+    for record in _CTX.capabilities.tutorial_records.catalog().values():
+        steps = {step.step_id: step for step in record.workflow_steps}
+        if "gmsh" in steps:
+            yield record, steps
+
+
+def test_no_gmsh_step_restates_its_templates_lc_default():
+    """Review 54b M1: each record declared a ``-setnumber lc`` default copied
+    from its template's ``DefineConstant``, so a template change would have
+    been silently overridden. With no study value gmsh now runs without
+    ``-setnumber`` and the template's own default applies; a tet axis adds
+    it."""
+    records = list(_records_with_a_gmsh_step())
+    assert {record.name for record, _ in records} >= {
+        "manufacturedBidomain", "manufacturedEikonalECG", "niederer2011",
+    }
+    for record, steps in records:
+        assert steps["gmsh"].default_arguments == (), record.name
+        assert "-setnumber" not in steps["gmsh"].argv(()), record.name
+
+
+@pytest.mark.parametrize(("record_name", "study", "lc"), [
+    ("manufacturedBidomain", {"tetNumberCells": 20}, "0.05"),
+    ("manufacturedEikonalECG", {"tetNumberCells": 20}, "0.05"),
+    ("niederer2011", {"tetDx": 0.0002}, "0.0002"),
+])
+def test_a_tet_axis_adds_lc_to_the_gmsh_command_line(record_name, study, lc, tmp_path):
+    record = _CTX.capabilities.tutorial_records.catalog()[record_name]
+    _, command_arguments = _resolve(record_name, study, tmp_path)
+    gmsh = next(step for step in record.workflow_steps if step.step_id == "gmsh")
+    argv = gmsh.argv(command_arguments["gmsh"])
+    assert argv[-3:] == ("-setnumber", "lc", lc)
+    assert argv.count("-setnumber") == 1
+
+
+def test_every_gmsh_route_hands_its_mesh_file_from_gmsh_to_gmsh_to_foam():
+    """Review 54b M2: eikonalECG's ``gmsh`` step declared no ``produces``
+    and its ``gmshToFoam`` no ``consumes``, so C6/C8 could not see the
+    ``.msh`` hand-off bidomain and niederer2011 declare. The file gmsh writes
+    (its ``-o`` argument) is what gmshToFoam reads, on both sides."""
+    for record, steps in _records_with_a_gmsh_step():
+        gmsh, to_foam = steps["gmsh"], steps["gmshToFoam"]
+        msh = gmsh.command[gmsh.command.index("-o") + 1]
+        assert msh in gmsh.produces, record.name
+        assert msh in to_foam.consumes, record.name
+        assert to_foam.command == ("gmshToFoam", msh), record.name
+
+
+def test_every_gmsh_to_foam_step_declares_the_zone_files_it_writes():
+    """Review 54b M2: a real ``gmshToFoam`` on each template (one
+    ``Physical Volume("internal")``) writes the three zone files and
+    ``sets/internal`` beside the hex route's six; bidomain declared all
+    nine, eikonalECG and niederer2011 only the six. Proved by the tet runs
+    through each record logged in docs/solver-learning/cardiacfoam.md."""
+    for record, steps in _records_with_a_gmsh_step():
+        produced = set(steps["gmshToFoam"].produces)
+        assert {
+            "constant/polyMesh/cellZones", "constant/polyMesh/faceZones",
+            "constant/polyMesh/pointZones", "constant/polyMesh/sets/internal",
+        } <= produced, record.name
