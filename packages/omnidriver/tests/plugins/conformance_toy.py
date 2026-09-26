@@ -19,6 +19,7 @@ TOY_PLUGIN = "plugins.e2e_record_plugin:E2ERecordPlugin"
 import json as _json
 
 from omnidriver.core.case_write import RenderedFile, _digest_bytes
+from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 from omnidriver.core.tutorial_records import TutorialRecord, WorkflowStep
 
 from plugins.e2e_record_plugin import E2ERecordPlugin, _FORMAT, _deep_set
@@ -334,3 +335,17 @@ class UndeclaredOutputPlugin(E2ERecordPlugin):
                 consumes=("constant/mesh.json",), produces=("solved.marker",),
             ),),
         )}
+
+
+OVER_GENERATED_CONVENTIONS_PLUGIN = "plugins.conformance_toy:OverGeneratedConventionsPlugin"
+
+
+class OverGeneratedConventionsPlugin(E2ERecordPlugin):
+    """Wrongly declares the native case's own authored input
+    (``constant/mesh.json``) as a generated file name, so staging drops it
+    even from the untouched native case's own restage. C11's equality
+    check (R1 fix, finding M1) must name it as dropped; the old
+    subset-only check could not see this at all."""
+
+    def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
+        return CaseRuntimeConventions(generated_file_names=("mesh.json",))

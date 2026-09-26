@@ -88,11 +88,30 @@ def record_generated_relpaths(record: TutorialRecord) -> frozenset[str]:
     """The case-relative paths a record's steps write, which staging must
     not carry from one run into the next stage (spec 2026-09-26 A5).
 
-    A path some step also ``consumes`` is an input updated in place, so it
-    is never excluded: excluding it would drop an authored input."""
-    produced = {PurePosixPath(p).as_posix() for step in record.workflow_steps for p in step.produces}
-    consumed = {PurePosixPath(p).as_posix() for step in record.workflow_steps for p in step.consumes}
-    return frozenset(produced - consumed)
+    Corrected 2026-09-26 (R1 fix, finding I2): this used to be "produced
+    minus consumed", treating any path some step consumes as "an input
+    updated in place", exempt from exclusion -- even when an EARLIER step
+    produced that same path. That path is an intermediate, not an authored
+    input (e.g. a mesh step's output a solve step reads): keeping it meant
+    a restage carried a previous run's mesh forward. The rule is now: a
+    produced path is excluded unless the FIRST step (in workflow order)
+    that touches it -- consumes or produces -- consumes it, meaning the
+    path was already an authored input before this record ever produced it.
+    A path a single step both consumes and produces (rewritten in place,
+    with no earlier producer) still counts as consumed first, so it is
+    still never excluded.
+    """
+    first_touch: dict[str, str] = {}
+    produced_overall: set[str] = set()
+    for step in record.workflow_steps:
+        step_consumes = {PurePosixPath(p).as_posix() for p in step.consumes}
+        step_produces = {PurePosixPath(p).as_posix() for p in step.produces}
+        produced_overall |= step_produces
+        for path in step_consumes | step_produces:
+            if path in first_touch:
+                continue
+            first_touch[path] = "consumes" if path in step_consumes else "produces"
+    return frozenset(path for path in produced_overall if first_touch[path] != "consumes")
 
 
 def _stage(

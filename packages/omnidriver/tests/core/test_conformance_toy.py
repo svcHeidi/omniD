@@ -13,8 +13,8 @@ from omnidriver.conformance import CHECKS, run_check
 from omnidriver.core.runtime.sweep_runner import _child_reconciliation
 from plugins.conformance_toy import (
     DOCUMENTED_PLUGIN, GHOST_CONSUMES_PLUGIN, INDEXED_KEY_PLUGIN, KINDLESS_KEY_PLUGIN, NATIVE_WRITING_PLUGIN,
-    NO_CONSUMES_PLUGIN, NO_PRODUCES_PLUGIN, REPLACING_PLUGIN, SILENT_PREFLIGHT_PLUGIN,
-    SILENT_SURFACE_PLUGIN, UNDECLARED_OUTPUT_PLUGIN, UNLISTED_KEY_PLUGIN,
+    NO_CONSUMES_PLUGIN, NO_PRODUCES_PLUGIN, OVER_GENERATED_CONVENTIONS_PLUGIN, REPLACING_PLUGIN,
+    SILENT_PREFLIGHT_PLUGIN, SILENT_SURFACE_PLUGIN, UNDECLARED_OUTPUT_PLUGIN, UNLISTED_KEY_PLUGIN,
     STRAY_NAME, STRAY_ROOT_VARIABLE, toy_conformance_target,
 )
 from plugins.quantity_toy import BAD_DECLARATION_PLUGIN, QUANTITY_TOY_PLUGIN, UNREADABLE_PLUGIN
@@ -339,20 +339,33 @@ def test_c11_names_an_output_the_record_does_not_declare(tmp_path):
     assert "workflow_state.json" not in verdict.detail   # core's own records are never carried
 
 
-def test_c11_passes_a_record_whose_formats_have_readers(tmp_path):
+def test_c11_names_an_authored_path_wrongly_dropped(tmp_path):
+    """R1 fix, finding M1: C11 used to assert ``restaged <= native`` only,
+    so a plugin whose conventions wrongly claim an authored native file is
+    "generated" -- and so get dropped during staging -- passed cleanly.
+    It is now checked both ways."""
+    verdict = run_check(
+        "C11", toy_conformance_target(tmp_path, plugin=OVER_GENERATED_CONVENTIONS_PLUGIN),
+    )
+    assert not verdict.passed
+    assert "mesh.json" in verdict.detail
+    assert "dropped" in verdict.detail
+
+
+def test_c12_passes_a_record_whose_formats_have_readers(tmp_path):
     target = dataclasses.replace(toy_conformance_target(tmp_path), plugin=QUANTITY_TOY_PLUGIN, record="toyQuantities")
     verdict = run_check("C12", target)
     assert verdict.passed, verdict.detail
     assert "toy_named_values" in verdict.detail
 
 
-def test_c11_says_so_when_nothing_declares_a_format(tmp_path):
+def test_c12_says_so_when_nothing_declares_a_format(tmp_path):
     verdict = run_check("C12", toy_conformance_target(tmp_path))
     assert verdict.passed and "nothing to read" in verdict.detail
 
 
 @pytest.mark.parametrize(("plugin", "named"), [(UNREADABLE_PLUGIN, "no reader"), (BAD_DECLARATION_PLUGIN, "furlong")])
-def test_c11_bites_a_declared_format_it_cannot_read(plugin, named, tmp_path):
+def test_c12_bites_a_declared_format_it_cannot_read(plugin, named, tmp_path):
     verdict = run_check("C12", toy_conformance_target(tmp_path, plugin=plugin))
     assert not verdict.passed
     assert named in verdict.detail and "toy_unreadable" in verdict.detail

@@ -17,6 +17,16 @@ from .transaction_mechanics import fsync_directory as _fsync_directory
 
 MARKER_NAME = ".omnidriver-remediation-transaction.json"
 
+#: The two directories this module writes under ``output_dir`` (for a
+#: tutorial-record run, ``output_dir`` is ``case_root`` itself). Named once
+#: here, alongside ``MARKER_NAME``, so core's run records
+#: (``core.runtime_records``) can name all three (R1 fix, finding I3: the
+#: marker and ``TRANSACTIONS_DIRECTORY`` were missing from
+#: ``CORE_RUNTIME_RECORDS``; ``CANDIDATES_DIRECTORY`` -- written by
+#: ``_archive_candidate_files`` -- was missing from that fix's own plan too).
+TRANSACTIONS_DIRECTORY = "remediation_transactions"
+CANDIDATES_DIRECTORY = "remediation_candidates"
+
 
 class RemediationTransactionError(RuntimeError):
     """A case has an interrupted or rejected configuration transaction."""
@@ -43,7 +53,7 @@ def _persist(case_root: Path, transaction: dict[str, Any]) -> None:
     _atomic_write(_marker(case_root), transaction)
     output_dir = Path(str(transaction["output_dir"]))
     record = (
-        output_dir / "remediation_transactions"
+        output_dir / TRANSACTIONS_DIRECTORY
         / f"{transaction['transaction_id']}.json"
     )
     _atomic_write(record, transaction)
@@ -625,7 +635,7 @@ def _archive_candidate_files(
     case_root: Path, transaction: dict[str, Any],
 ) -> Path | None:
     output_dir = Path(str(transaction["output_dir"]))
-    archive = output_dir / "remediation_candidates" / str(transaction["transaction_id"])
+    archive = output_dir / CANDIDATES_DIRECTORY / str(transaction["transaction_id"])
     root = Path(case_root).resolve()
     sources: set[Path] = set()
     for item in transaction.get("target_manifest", ()):

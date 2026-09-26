@@ -440,8 +440,27 @@ def check_restage_is_clean(target: ConformanceTarget) -> CheckVerdict:
 
     A native case someone has already run in, or a copy of an earlier
     stage, holds that run's state (core's run records) and its outputs.
-    Staging it again must give only paths the untouched native case has.
-    Every other path is named."""
+    Staging it again must give exactly the paths the untouched native case
+    has -- no more, no fewer. Every mismatched path is named.
+
+    Corrected 2026-09-26 (R1 fix, finding M1): two things about this used to
+    be wrong.
+
+    First, this only asserted ``restaged <= native`` (subset), which cannot
+    see a staging rule that wrongly *drops* an authored native file: a
+    restage missing content the native case has passed just as cleanly as
+    a clean one. It is now ``restaged == native`` (equality), checked in
+    both directions.
+
+    Second, the docstring and verdict claimed "nothing the run wrote was
+    carried" as if content were untouched too. That overstates what this
+    check verifies: it compares path *sets* only, not file contents. A
+    restage with ``study_by_source={"base": {}}`` (below) still inherits
+    whatever values the first run's plan patched into the case's documents
+    -- carrying that content forward is intended (a restage continues from
+    the inputs the case holds), but it is not "nothing was carried", and
+    this check does not audit it.
+    """
     ctx = _context(target)
     record = _record(ctx, target.record)
     report = _plan(target, ctx)
@@ -463,11 +482,25 @@ def check_restage_is_clean(target: ConformanceTarget) -> CheckVerdict:
         record, cases_root=ran_cases_root, staged_case_root=restaged,
         study_by_source={"base": {}}, driver_context=ctx,
     )
-    carried = sorted(_relpaths(restaged) - _relpaths(target.cases_root / record.native_case_relpath))
-    if carried:
-        shown = carried[:20] + ([f"... {len(carried) - 20} more"] if len(carried) > 20 else [])
-        return _verdict("C11", False, f"restaging a case the first run wrote carried {len(carried)} path(s) the native case does not have: {shown}")
-    return _verdict("C11", True, "restaged from a run case; nothing the run wrote was carried")
+    restaged_paths = _relpaths(restaged)
+    native_paths = _relpaths(target.cases_root / record.native_case_relpath)
+    carried = sorted(restaged_paths - native_paths)
+    dropped = sorted(native_paths - restaged_paths)
+    if carried or dropped:
+        def _shown(paths: list[str]) -> list[str]:
+            return paths[:20] + ([f"... {len(paths) - 20} more"] if len(paths) > 20 else [])
+        parts = []
+        if carried:
+            parts.append(f"carried {len(carried)} path(s) the native case does not have: {_shown(carried)}")
+        if dropped:
+            parts.append(f"dropped {len(dropped)} path(s) the native case has: {_shown(dropped)}")
+        return _verdict("C11", False, f"restaging a case the first run wrote " + "; ".join(parts))
+    return _verdict(
+        "C11", True,
+        "restaged from a run case; the restaged case has exactly the native "
+        "case's paths (content inherited from the run's plan is expected, "
+        "and not checked here)",
+    )
 
 
 def check_readable_quantities(target: ConformanceTarget) -> CheckVerdict:

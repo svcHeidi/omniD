@@ -598,8 +598,20 @@ def _stage_entry_case(
     directories, at any depth) that the caller knows are generated: a
     tutorial record's step outputs (``record_execution
     .record_generated_relpaths``, spec 2026-09-26 A5). Core's own run
-    records need no listing here, because every stack's conventions carry
-    them (``runtime_records.CORE_RUNTIME_RECORDS``).
+    records need no listing here ONLY when ``driver_context`` is supplied --
+    ``conventions`` then comes from ``driver_context.capabilities
+    .case_runtime_conventions.conventions()``, which every stack's adapter
+    merges with ``runtime_records.CORE_RUNTIME_RECORDS`` regardless of what
+    the plugin itself declares.
+
+    Corrected 2026-09-26 (R1 fix, finding M8): this used to claim that
+    unconditionally. With the default ``driver_context=None``, ``conventions``
+    below is a bare ``CaseRuntimeConventions()`` instead, which carries
+    NONE of core's own records -- every production caller supplies a real
+    ``driver_context`` (this is a keyword with a default only so tests that
+    do not need a plugin at all can omit it), but a caller that genuinely
+    has none, and stages a case a run has already written into, would carry
+    core's own state forward with nothing here excluding it.
     """
     from ..plugin_capabilities import CaseRuntimeConventions
 

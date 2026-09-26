@@ -4,9 +4,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from omnidriver.core.case_transaction import _JOURNAL_RELATIVE_PATH
 from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context
+from omnidriver.core.runtime.attempt_lease import (
+    ATTEMPT_LOCK_FILENAME, ATTEMPT_LOCK_GUARD_FILENAME,
+)
 from omnidriver.core.runtime.record_execution import record_generated_relpaths
+from omnidriver.core.runtime.remediation_transaction import (
+    CANDIDATES_DIRECTORY as REMEDIATION_CANDIDATES_DIRECTORY,
+    MARKER_NAME as REMEDIATION_MARKER_NAME,
+    TRANSACTIONS_DIRECTORY as REMEDIATION_TRANSACTIONS_DIRECTORY,
+)
 from omnidriver.core.runtime.sweep_runner import _stage_entry_case
 from omnidriver.core.runtime_records import CORE_RUNTIME_RECORDS, with_core_runtime_records
 from omnidriver.core.tutorial_records import TutorialRecord, WorkflowStep
@@ -18,11 +27,20 @@ def _tree(root: Path) -> list[str]:
 
 
 def test_core_names_every_file_it_writes_into_a_case():
+    """Corrected 2026-09-26 (R1 fix, finding I3): two names were missing --
+    the remediation-transaction marker and its directories
+    (``runtime.remediation_transaction``). The expected set is now derived
+    from each owning module's own constant, not restated as a literal, so a
+    name missing from ``CORE_RUNTIME_RECORDS`` still fails this even if it
+    is also missing here."""
     assert set(CORE_RUNTIME_RECORDS.generated_file_names) == {
         "workflow_state.json", "run_document.json", "sweep_manifest.json", "case_record.json",
-        ".omnidriver-attempt.lock", ".omnidriver-attempt.lock.guard",
+        ATTEMPT_LOCK_FILENAME, ATTEMPT_LOCK_GUARD_FILENAME, REMEDIATION_MARKER_NAME,
     }
-    assert set(CORE_RUNTIME_RECORDS.generated_directory_names) == {"workflow_logs", ".omnidriver"}
+    assert set(CORE_RUNTIME_RECORDS.generated_directory_names) == {
+        "workflow_logs", _JOURNAL_RELATIVE_PATH.parts[0],
+        REMEDIATION_TRANSACTIONS_DIRECTORY, REMEDIATION_CANDIDATES_DIRECTORY,
+    }
 
 
 def test_a_stack_that_declares_nothing_still_knows_cores_records():
@@ -48,6 +66,27 @@ def test_a_records_generated_paths_are_what_it_produces_and_does_not_consume():
         ),
     )
     assert record_generated_relpaths(record) == frozenset({"mesh.pts", "out"})
+
+
+def test_an_intermediate_a_later_step_consumes_is_still_excluded():
+    """R1 fix, finding I2: a path one step produces and a LATER step
+    consumes is an intermediate (a mesh a solve step reads), not an
+    authored input updated in place -- it must still be excluded, or a
+    restage carries the earlier run's mesh forward (the reviewer's
+    pipeline evidence: openCARP's mesh step produces slab.pts/slab.elem,
+    and an honestly-declared solve step consumes them)."""
+    record = TutorialRecord(
+        name="r", native_case_relpath="r", allowed_axes=frozenset(),
+        workflow_steps=(
+            WorkflowStep(step_id="mesh", command=("m",), produces=("slab.pts", "slab.elem")),
+            WorkflowStep(
+                step_id="solve", command=("s",),
+                consumes=("nversion.par", "slab.pts", "slab.elem"),
+                produces=("out",),
+            ),
+        ),
+    )
+    assert record_generated_relpaths(record) == frozenset({"slab.pts", "slab.elem", "out"})
 
 
 def test_staging_drops_excluded_paths_at_any_depth_and_cores_records(tmp_path):
