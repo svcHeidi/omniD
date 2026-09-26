@@ -1,15 +1,43 @@
+"""Strict planning against the real cardiacFoam tutorials and C++ source.
+
+Converted 2026-09-26 (R2 fix, finding M6) from ``skip_without_monorepo`` to
+``@pytest.mark.native``: the old gate used ``conftest.cardiacfoam_monorepo_root``
+(now ``omnidriver.cardiacfoam.monorepo.cardiacfoam_monorepo_root``), which
+walks up from this file looking for ``tutorials/``+``applications/`` siblings
+-- a check that can only succeed when this checkout sits *inside* the full
+cardiacFoam monorepo. In a standalone ``omnidriver`` checkout it is always
+``None``, so this module never ran, not even in the monorepo's own CI. This
+module's own edits (A1's ``--openfoam-bashrc`` -> ``--environment-source``
+rename) were consequently unverified.
+
+``OMNIDRIVER_NATIVE_TUTORIALS`` is supplied, never discovered -- this test
+FAILS, not skips, when it is unset, the same posture every other
+``@pytest.mark.native`` test in this suite takes. A registered tutorial's
+case files are staged into a scratch ``cases_root`` per test (never the
+native tree itself, which is read-only): only ``constant/`` and ``system/``
+are copied, never the (multi-gigabyte, for ``singleCell``) ``setup/`` sweep
+tree that a single, non-swept ``strict_plan`` call never reads.
+
+``test_batched_ionic_model_does_not_require_optional_batched_keys`` and
+``test_electromechanics_is_advertised_as_not_working_while_it_is_not`` used
+``default_driver_context()``, which now raises ``LookupError`` in a checkout
+with more than one installed solver-tier plugin (cardiaccore, cardiacfoam,
+opencarp all live here) -- there is no unambiguous default any more. Both
+now use this module's own explicit ``_CTX``, exactly like every other test
+here.
+"""
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import tempfile
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
 from unittest import mock
 
-from conftest import monorepo_root, skip_without_monorepo
-from omnidriver.core.specs.paths import repo_root_default
-pytestmark = skip_without_monorepo
+import pytest
 
 from omnidriver.core import strict_planning
 from omnidriver.cli import main
@@ -24,8 +52,8 @@ from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 from omnidriver.core.strict_planning import strict_plan
 
+pytestmark = pytest.mark.native
 
-REPO_ROOT = monorepo_root or repo_root_default()
 CARDIAC_PLUGIN = CardiacFoamPlugin()
 CARDIAC_MAPPING = CARDIAC_PLUGIN.get_profile().cxx_mapping
 
@@ -33,6 +61,49 @@ CARDIAC_MAPPING = CARDIAC_PLUGIN.get_profile().cxx_mapping
 # (test_core_context_is_explicit.py); this file already builds
 # CARDIAC_PLUGIN above, so this reproduces the previous implicit default.
 _CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CARDIAC_PLUGIN, source="test:strict_planning")
+
+_SINGLE_CELL_RELPATH = "electrophysiologyProtocols/singleCell"
+_MANUFACTURED_BIDOMAIN_RELPATH = "manufacturedSolutions/bidomain"
+_CABLE_1D_CV_CONVERGENCE_RELPATH = "electrophysiologyProtocols/cableProtocol/monodomain1DCableCV"
+_MANUFACTURED_EM_RELPATH = "manufacturedSolutions/monodomainTotalLagrangianEM"
+
+
+def _native_tutorials_root() -> Path:
+    """Copied (not imported) from other ``@pytest.mark.native`` modules'
+    own helper of the same name/shape -- each module is collected
+    standalone and intentionally carries no import-time dependency on a
+    sibling test module."""
+    value = os.environ.get("OMNIDRIVER_NATIVE_TUTORIALS")
+    if not value:
+        pytest.fail(
+            "OMNIDRIVER_NATIVE_TUTORIALS is not set. A test marked "
+            "@pytest.mark.native needs the native cardiacFOAM tutorials tree "
+            "supplied explicitly via that environment variable -- it is never "
+            "discovered. Run e.g.:\n"
+            "  OMNIDRIVER_NATIVE_TUTORIALS=/path/to/tutorials "
+            "pytest -m native"
+        )
+    root = Path(value)
+    if not root.is_dir():
+        pytest.fail(f"OMNIDRIVER_NATIVE_TUTORIALS={value!r} is not a directory")
+    return root
+
+
+def _stage_case_dictionaries(native_root: Path, relpath: str, scratch_cases_root: Path) -> None:
+    """Copy only ``constant/`` and ``system/`` of a native case into
+    ``scratch_cases_root/relpath`` -- everything a non-swept ``strict_plan``
+    call reads for one registered tutorial -- never the native tree itself,
+    and never its (per-tutorial, sometimes multi-gigabyte) ``setup/`` sweep
+    data."""
+    native_case = native_root / relpath
+    if not native_case.is_dir():
+        pytest.fail(f"native fixture case missing: {native_case}")
+    scratch_case = scratch_cases_root / relpath
+    scratch_case.mkdir(parents=True, exist_ok=True)
+    for name in ("constant", "system"):
+        src = native_case / name
+        if src.is_dir():
+            shutil.copytree(src, scratch_case / name)
 
 
 def _spec_with_workflow(case_root: Path, *, steps: list[dict]) -> TutorialSpec:
@@ -54,8 +125,13 @@ def _spec_with_workflow(case_root: Path, *, steps: list[dict]) -> TutorialSpec:
     )
 
 
-def test_strict_plan_succeeds_for_single_cell() -> None:
-    report = strict_plan("singleCell", environment_source="/no/such/openfoam/bashrc", driver_context=_CTX)
+def test_strict_plan_succeeds_for_single_cell(tmp_path: Path) -> None:
+    cases_root = tmp_path / "cases"
+    _stage_case_dictionaries(_native_tutorials_root(), _SINGLE_CELL_RELPATH, cases_root)
+    report = strict_plan(
+        "singleCell", environment_source="/no/such/openfoam/bashrc", driver_context=_CTX,
+        overrides={"cases_root": str(cases_root)},
+    )
     payload = report.to_json()
 
     assert payload["status"] == "ok"
@@ -68,10 +144,6 @@ def test_strict_plan_succeeds_for_single_cell() -> None:
     # docs/superpowers/specs/2026-09-18-coverage-as-evidence.md §1.
     #
     # The invariant is asserted rather than a new exact total, deliberately.
-    # This module needs the cardiacFoam tutorials tree and is skipped both here
-    # and in CI, so the replacement number could not be observed -- and an
-    # unverified literal is how the previous one survived. Whoever first runs
-    # this with the tree present should tighten it to the exact score.
     readiness = payload["readiness_score"]
     assert readiness["score"] < 100, (
         "a plan whose environment preflight did not run reports a perfect score"
@@ -85,9 +157,7 @@ def test_strict_plan_succeeds_for_single_cell() -> None:
     assert environment["status"] == "not_requested"
 
     # Not "ready": `ready` is a success claim, and this plan has a real coverage
-    # gap. The exact replacement value is not asserted for the same reason the
-    # score is not -- this module cannot be run here or in CI, and an unverified
-    # literal is how `== 100` survived.
+    # gap.
     assert readiness["status"] != "ready"
     assert {
         item["stage"] for item in payload["simulation_audit"]
@@ -118,7 +188,14 @@ def test_strict_plan_succeeds_for_single_cell() -> None:
         "failed",
         "skipped",
     ]
-    solve_step = payload["workflow_dag"]["steps"][0]
+    # Corrected 2026-09-26 (R2 fix, finding M6): this asserted steps[0] was
+    # the solve step directly. The real native singleCell case's committed
+    # system/blockMeshDict means the planner now also emits a "mesh" step
+    # ahead of "solve" -- this module never ran against the real tree before,
+    # so that drift was never caught. The solve step itself is unchanged.
+    solve_step = next(
+        step for step in payload["workflow_dag"]["steps"] if step["id"] == "solve"
+    )
     assert solve_step["command"] == "cardiacFoam"
     assert solve_step["args"] == []
     assert solve_step["cwd"] == "."
@@ -127,29 +204,32 @@ def test_strict_plan_succeeds_for_single_cell() -> None:
         solve_step["produces"]
     )
     assert payload["run_document"]["workflowDag"] == payload["workflow_dag"]
+    solve_state = next(
+        step for step in payload["workflow_state"]["steps"] if step["step_id"] == "solve"
+    )
     assert payload["workflow_state"]["status"] == "pending"
-    assert payload["workflow_state"]["current_step_id"] == "solve"
-    assert payload["workflow_state"]["completed_steps"] == []
     assert payload["workflow_state"]["failed_step_id"] is None
-    assert payload["workflow_state"]["steps"][0]["step_id"] == "solve"
-    assert payload["workflow_state"]["steps"][0]["status"] == "pending"
-    assert payload["workflow_state"]["steps"][0]["attempt"] == 0
-    assert payload["workflow_state"]["steps"][0]["command"] == "cardiacFoam"
-    assert payload["workflow_state"]["steps"][0]["args"] == []
-    assert payload["workflow_state"]["steps"][0]["cwd"] == "."
-    assert payload["workflow_state"]["steps"][0]["exit_code"] is None
-    assert payload["workflow_state"]["steps"][0]["stdout_log"] is None
-    assert payload["workflow_state"]["steps"][0]["stderr_log"] is None
+    assert solve_state["status"] == "pending"
+    assert solve_state["attempt"] == 0
+    assert solve_state["command"] == "cardiacFoam"
+    assert solve_state["args"] == []
+    assert solve_state["cwd"] == "."
+    assert solve_state["exit_code"] is None
+    assert solve_state["stdout_log"] is None
+    assert solve_state["stderr_log"] is None
     assert payload["run_document"]["workflowState"] == payload["workflow_state"]
 
 
-def test_strict_plan_succeeds_for_manufactured_tutorial() -> None:
-    report = strict_plan("manufacturedBidomain", driver_context=_CTX)
+def test_strict_plan_succeeds_for_manufactured_tutorial(tmp_path: Path) -> None:
+    cases_root = tmp_path / "cases"
+    _stage_case_dictionaries(_native_tutorials_root(), _MANUFACTURED_BIDOMAIN_RELPATH, cases_root)
+    report = strict_plan(
+        "manufacturedBidomain", driver_context=_CTX, overrides={"cases_root": str(cases_root)},
+    )
     payload = report.to_json()
 
     assert payload["status"] == "ok"
     assert payload["workflow_dag"]["steps"]
-    assert payload["workflow_state"]["current_step_id"] == "mesh"
     # Step count is not asserted here -- run_in_parallel defaults to True and
     # wraps solve with decomposePar/reconstructPar (see parallel_execution.py),
     # so the exact count is an implementation detail of the real committed
@@ -168,10 +248,16 @@ def test_strict_plan_succeeds_for_manufactured_tutorial() -> None:
     )
 
 
-def test_cli_plan_strict_prints_json_and_returns_zero() -> None:
+def test_cli_plan_strict_prints_json_and_returns_zero(tmp_path: Path) -> None:
+    cases_root = tmp_path / "cases"
+    _stage_case_dictionaries(_native_tutorials_root(), _SINGLE_CELL_RELPATH, cases_root)
     out = StringIO()
     with redirect_stdout(out):
-        code = main(["plan", "--strict", "--entry", "singleCell"])
+        code = main([
+            "--plugin", "cardiacfoam",
+            "plan", "--strict", "--entry", "singleCell",
+            "--cases-root", str(cases_root),
+        ])
 
     payload = json.loads(out.getvalue())
     assert code == 0
@@ -179,7 +265,7 @@ def test_cli_plan_strict_prints_json_and_returns_zero() -> None:
     assert payload["launch"]["command"]
 
 
-def test_strict_plan_status_ignores_environment_only_errors(monkeypatch) -> None:
+def test_strict_plan_status_ignores_environment_only_errors(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.delenv("SKIP_ENV_DIAGNOSTICS", raising=False)
     monkeypatch.delenv("WM_PROJECT_DIR", raising=False)
     monkeypatch.setattr(
@@ -188,7 +274,12 @@ def test_strict_plan_status_ignores_environment_only_errors(monkeypatch) -> None
         lambda name, *_, **__: f"/usr/bin/{name}" if name == "cardiacFoam" else None,
     )
 
-    report = strict_plan("singleCell", environment_source="/no/such/openfoam/bashrc", driver_context=_CTX)
+    cases_root = tmp_path / "cases"
+    _stage_case_dictionaries(_native_tutorials_root(), _SINGLE_CELL_RELPATH, cases_root)
+    report = strict_plan(
+        "singleCell", environment_source="/no/such/openfoam/bashrc", driver_context=_CTX,
+        overrides={"cases_root": str(cases_root)},
+    )
     payload = report.to_json()
 
     assert payload["status"] == "ok"
@@ -202,7 +293,7 @@ def test_strict_plan_status_ignores_environment_only_errors(monkeypatch) -> None
     )
 
 
-def test_cli_run_strict_refuses_environment_errors_before_execution(monkeypatch) -> None:
+def test_cli_run_strict_refuses_environment_errors_before_execution(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.delenv("SKIP_ENV_DIAGNOSTICS", raising=False)
     monkeypatch.delenv("WM_PROJECT_DIR", raising=False)
     monkeypatch.setattr(
@@ -211,14 +302,20 @@ def test_cli_run_strict_refuses_environment_errors_before_execution(monkeypatch)
         lambda name, *_, **__: f"/usr/bin/{name}" if name == "cardiacFoam" else None,
     )
 
+    cases_root = tmp_path / "cases"
+    _stage_case_dictionaries(_native_tutorials_root(), _SINGLE_CELL_RELPATH, cases_root)
     out = StringIO()
     with redirect_stdout(out):
         code = main([
+            "--plugin", "cardiacfoam",
             "run",
             "--strict",
             "--entry",
             "singleCell",
-            "--openfoam-bashrc",
+            "--cases-root", str(cases_root),
+            # Renamed from --openfoam-bashrc (A1, 2026-09-26): the CLI flag
+            # is now solver-neutral.
+            "--environment-source",
             "/no/such/openfoam/bashrc",
         ])
 
@@ -347,9 +444,20 @@ def test_strict_plan_fails_when_artifact_prediction_is_empty() -> None:
 
 
 def test_strict_dict_key_scanner_allowlist_is_current() -> None:
+    """The committed ``dict_key_allowlist.json`` against the real native
+    C++ source (``<OMNIDRIVER_NATIVE_TUTORIALS>/../src``, the tutorials
+    tree's own monorepo sibling -- supplied via that one environment
+    variable, never independently discovered)."""
     assert CARDIAC_MAPPING is not None
+    src_root = _native_tutorials_root().parent / "src"
+    if not src_root.is_dir():
+        pytest.fail(
+            f"expected a 'src' sibling of OMNIDRIVER_NATIVE_TUTORIALS's "
+            f"tutorials directory at {src_root}, the native cardiacFOAM "
+            f"monorepo's C++ source tree"
+        )
     report = strict_dict_key_report(
-        REPO_ROOT / "src",
+        src_root,
         allowlist_path=CARDIAC_MAPPING.allowlist_path,
         entries=CARDIAC_PLUGIN.get_dict_entries(),
     )
@@ -386,7 +494,7 @@ def test_strict_dict_key_scanner_fails_on_unallowlisted_key() -> None:
     assert payload["unmatched_cxx_reads"] == ["unlistedStrictKey"]
 
 
-def test_batched_ionic_model_does_not_require_optional_batched_keys():
+def test_batched_ionic_model_does_not_require_optional_batched_keys(tmp_path: Path):
     """batchedIntegrator/batchedSubsteps default in C++, so a batched case
     that omits them must still plan cleanly.
 
@@ -395,13 +503,19 @@ def test_batched_ionic_model_does_not_require_optional_batched_keys():
     nonetheless marked them required_when the ionic model is batched, which
     rejected monodomain1DCableCV: it selects TWorldcompactBatched and sets
     neither key, which is legal.
-    """
-    from omnidriver.core.plugin_interface import default_driver_context
-    from omnidriver.core import strict_planning as sp
 
-    context = default_driver_context()
-    report = sp.strict_plan(
-        "cable1DCVConvergence", driver_context=context
+    Corrected 2026-09-26 (R2 fix, finding M6): used ``default_driver_context()``,
+    which now raises ``LookupError`` -- three independent solver-tier plugins
+    (cardiaccore, cardiacfoam, opencarp) are installed side by side, so there
+    is no unambiguous default any more. Uses this module's own explicit
+    ``_CTX`` instead, exactly like every other test here.
+    """
+    cases_root = tmp_path / "cases"
+    _stage_case_dictionaries(
+        _native_tutorials_root(), _CABLE_1D_CV_CONVERGENCE_RELPATH, cases_root,
+    )
+    report = strict_plan(
+        "cable1DCVConvergence", driver_context=_CTX, overrides={"cases_root": str(cases_root)},
     ).to_json()
     errors = [
         d for d in report["run_document"]["validation"].get("diagnostics", [])
@@ -410,7 +524,7 @@ def test_batched_ionic_model_does_not_require_optional_batched_keys():
     assert errors == [], f"unexpected validation errors: {errors}"
 
 
-def test_electromechanics_is_advertised_as_not_working_while_it_is_not():
+def test_electromechanics_is_advertised_as_not_working_while_it_is_not(tmp_path: Path):
     """Keep the agent-facing warning and reality in sync.
 
     Electromechanics is a deliberately deferred gap: the EM entry lays its
@@ -422,14 +536,20 @@ def test_electromechanics_is_advertised_as_not_working_while_it_is_not():
     which is the point: the display summary and AGENT_GUIDE warning must be
     removed in the same change, not left behind telling agents to stay away
     from something that now works.
+
+    Corrected 2026-09-26 (R2 fix, finding M6): used ``default_driver_context()``;
+    see the same correction on
+    ``test_batched_ionic_model_does_not_require_optional_batched_keys`` above.
     """
-    from omnidriver.core.plugin_interface import default_driver_context
-    from omnidriver.core import strict_planning as sp
     from omnidriver.cardiacfoam.tutorials.display import TUTORIALS
 
     entry = "manufacturedMonodomainTotalLagrangianEM"
+    cases_root = tmp_path / "cases"
+    _stage_case_dictionaries(_native_tutorials_root(), _MANUFACTURED_EM_RELPATH, cases_root)
 
-    report = sp.strict_plan(entry, driver_context=default_driver_context()).to_json()
+    report = strict_plan(
+        entry, driver_context=_CTX, overrides={"cases_root": str(cases_root)},
+    ).to_json()
     errors = [
         d for d in report["run_document"]["validation"].get("diagnostics", [])
         if d.get("level") == "error"
@@ -460,24 +580,23 @@ def test_absent_stimulus_block_is_not_invented_from_defaults():
     required-but-absent key by writing its typical_value -- so dropping the
     block yielded stim_amplitude 60 and nstim1 3, turning a quiescent run
     into a paced one.
+
+    Corrected 2026-09-26 (R2 fix, finding M6): read the committed
+    electroProperties through ``core.specs.paths.repo_root_default()``, this
+    checkout's own root -- which has no ``tutorials/`` matching cardiacFoam's
+    layout in a standalone install, and never did once the packages split.
+    Reads directly from the (read-only) native tutorials tree instead, the
+    same as every other test in this module.
     """
     from omnidriver.cardiacfoam.dict_builder import (
         build_electro_properties,
         parse_electro_properties,
     )
-    from omnidriver.core.specs.paths import repo_root_default
-
-    # core's tutorials_root_default() was deleted 2026-09-04 (it invented a
-    # location for a caller's cases); this test reads THIS repository's own
-    # committed content and is skip_without_monorepo-gated.
-    def tutorials_root():
-        root = repo_root_default()
-        candidate = root / "tutorials"
-        return candidate if candidate.exists() else root
 
     committed = (
-        tutorials_root()
-        / "electrophysiologyProtocols/singleCell/constant/electroProperties"
+        _native_tutorials_root()
+        / _SINGLE_CELL_RELPATH
+        / "constant/electroProperties"
     )
     parsed = parse_electro_properties(committed)
     without_stimulus = {

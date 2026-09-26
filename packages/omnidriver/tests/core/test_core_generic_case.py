@@ -286,10 +286,28 @@ def test_per_case_openfoam_bashrc_key_is_silently_unused(tmp_path: Path) -> None
 
     Corrected 2026-09-26 (A1): this said a cases[] entry "only recognises
     explicit_bashrc now"; since A1 it recognises no environment key at all
-    (the environment source is the plugin's, passed at plan and run time)."""
+    (the environment source is the plugin's, passed at plan and run time).
+
+    Corrected 2026-09-26 (R2 fix, finding M5): this asserted
+    ``"explicit_bashrc" not in case.params``, a key this test never
+    supplies, so the assertion could never fail regardless of what the
+    fix did. Asserts the key actually supplied, ``"openfoam_bashrc"``,
+    instead."""
     spec = _spec(
         tmp_path,
         cases=[{"case_id": "c1", "openfoam_bashrc": "/opt/openfoam/etc/bashrc"}],
+    )
+    case = spec.build_cases()[0]
+    assert "openfoam_bashrc" not in case.params
+
+
+def test_per_case_explicit_bashrc_key_is_ignored(tmp_path: Path) -> None:
+    """R2 fix, finding M5: a cases[] entry carrying the key A1 removed,
+    ``explicit_bashrc``, is ignored -- not translated into anything -- the
+    same as any other unrecognised field a cases[] entry might carry."""
+    spec = _spec(
+        tmp_path,
+        cases=[{"case_id": "c1", "explicit_bashrc": "/opt/openfoam/etc/bashrc"}],
     )
     case = spec.build_cases()[0]
     assert "explicit_bashrc" not in case.params
