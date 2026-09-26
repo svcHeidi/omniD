@@ -192,7 +192,7 @@ def test_personalized_templates_rejects_manufactured_ecg_before_execution():
     context = {
         prefix + "ecgSolver": "eikonalECG",
         prefix + "personalizedTemplates.nBeats": 1,
-        prefix + "manufacturedEikonalECG.enabled": True,
+        prefix + "verificationModel.type": "manufacturedEikonalECGVerifier",
     }
     errors = _evaluate_personalized_templates(context)
     assert any("cannot be combined" in error.message for error in errors)

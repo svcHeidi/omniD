@@ -74,6 +74,30 @@ def require_sourced_openfoam(*commands: str) -> None:
         pytest.fail(f"not on PATH in the sourced OpenFOAM shell: {missing}")
 
 
+def manufactured_eikonal_ecg_conformance_target(tmp_path: Path) -> ConformanceTarget:
+    """``manufacturedEikonalECG`` at the coarsest resolution any of its
+    studies define (``numberCells: 10``, ``cartesianConvergence``'s own
+    coarsest point) -- a real hex/blockMesh run takes well under a minute
+    (docs/solver-learning/cardiacfoam.md, section E: 10x10x10 completed in
+    13 s)."""
+    require_sourced_openfoam("blockMesh", "cardiacFoam")
+    return ConformanceTarget(
+        plugin="cardiacfoam",
+        record="manufacturedEikonalECG",
+        cases_root=native_tutorials_root(),
+        scratch_root=tmp_path / "scratch",
+        base_study={"numberCells": 10},
+        # A catalogued boolean key the native case sets `false` by default.
+        patch=("constant/electroProperties:eikonalSolverCoeffs.verificationModel.writeErrorField", True),
+        untouched=("constant/electroProperties", ("eikonalSolverCoeffs", "eikonalAdvectionDiffusionApproach")),
+        sweep_name="numberCells",
+        sweep_values=(10, 20),
+        unknown_name="constant/electroProperties:eikonalSolverCoeffs.verificationModel.writeErrorFiel",
+        solver_command="cardiacFoam",
+        environment={},
+    )
+
+
 def restitution_curves_conformance_target(tmp_path: Path) -> ConformanceTarget:
     """``restitutionCurves`` at the coarsest mesh ``system/blockMeshDict``
     documents (40x6x14, deltaX 0.5 mm), the one step 4c ran. Everything

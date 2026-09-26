@@ -8,9 +8,6 @@
 from omnidriver.cardiacfoam.tutorials.manufactured_bath_bidomain import (
     make_spec as make_manufactured_bath_bidomain_spec,
 )
-from omnidriver.cardiacfoam.tutorials.manufactured_eikonal_ecg import (
-    make_spec as make_manufactured_eikonal_ecg_spec,
-)
 from omnidriver.cardiacfoam.tutorials.manufactured_monodomain_total_lagrangian_em import (
     make_spec as make_manufactured_monodomain_total_lagrangian_em_spec,
 )
@@ -53,8 +50,6 @@ SPEC_FACTORIES = {
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_PSEUDO_ECG.value.lower(): make_manufactured_monodomain_pseudo_ecg_spec,
     CardiacTutorialID.MANUFACTURED_BATH_BIDOMAIN.value: make_manufactured_bath_bidomain_spec,
     CardiacTutorialID.MANUFACTURED_BATH_BIDOMAIN.value.lower(): make_manufactured_bath_bidomain_spec,
-    CardiacTutorialID.MANUFACTURED_EIKONAL_ECG.value: make_manufactured_eikonal_ecg_spec,
-    CardiacTutorialID.MANUFACTURED_EIKONAL_ECG.value.lower(): make_manufactured_eikonal_ecg_spec,
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_TOTAL_LAGRANGIAN_EM.value: make_manufactured_monodomain_total_lagrangian_em_spec,
     "manufacturedelectromechanicsbc": make_manufactured_monodomain_total_lagrangian_em_spec,
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_1D3D.value: make_manufactured_monodomain_1d3d_spec,
@@ -70,7 +65,6 @@ REGISTERED_TUTORIALS = (
     CardiacTutorialID.CABLE_1D_CV_CONVERGENCE.value,
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_PSEUDO_ECG.value,
     CardiacTutorialID.MANUFACTURED_BATH_BIDOMAIN.value,
-    CardiacTutorialID.MANUFACTURED_EIKONAL_ECG.value,
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_TOTAL_LAGRANGIAN_EM.value,
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_1D3D.value,
     CardiacTutorialID.MANUFACTURED_PURKINJE_GRAPH.value,

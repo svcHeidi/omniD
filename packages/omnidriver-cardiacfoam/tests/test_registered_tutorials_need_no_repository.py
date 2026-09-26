@@ -32,7 +32,9 @@ _NEEDS_CASE_CONTENT = {
     # all, so it can neither be skipped here nor asked for a rank count
     # below; a record run's parallel/serial choice is the OpenFOAM layer's
     # job (owner Q6), not this factory-era gate's.
-    "manufacturedeikonalecg",
+    # "manufacturedeikonalecg" removed 2026-09-26: migrated onto a tutorial
+    # record (records/manufactured_eikonal_ecg.py, step 5.4b-E), for the same
+    # reason as "manufacturedbidomain" above.
     "manufacturedmonodomainpseudoecg",
 }
 
@@ -80,6 +82,12 @@ def test_every_serial_tutorial_builds_under_any_base(tmp_path: Path) -> None:
     # its single key (already all-lowercase, so its own ".lower()" alias line
     # was always the same key) is simply gone, not merely unbuildable, so the
     # buildable count drops by 1, to 12.
+    # Corrected 2026-09-26 (`manufacturedEikonalECG`'s migration onto a
+    # tutorial record, records/manufactured_eikonal_ecg.py): its 2 keys
+    # (case and case-folded) are gone from SPEC_FACTORIES too, the same way
+    # `restitutionCurves`'s were -- but it was one of `_NEEDS_CASE_CONTENT`,
+    # so those 2 keys were already excluded from `built`, not counted in it.
+    # The count stays 12.
     assert built == 12, f"expected 12 buildable catalog entries, got {built}"
 
 

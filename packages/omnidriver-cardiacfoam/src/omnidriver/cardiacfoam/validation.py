@@ -606,6 +606,14 @@ def _evaluate_personalized_templates(context: dict[str, Any]) -> list["StrictDia
     templates.  Its all-or-nothing contents and its relationship to a
     manufactured verifier are solver science, not generic dictionary rules.
     This mirrors constructor checks in ``eikonalECG.C`` before a run starts.
+
+    **Corrected 2026-09-26** (native ``c15e2fcf``, cited by
+    ``docs/superpowers/plans/2026-09-25-tutorials-are-pointers-remaining.md``
+    §5c task 5.4b-E): the native ``manufacturedEikonalECG.`` legacy alias key
+    was deleted from the C++; a case selects its verifier only through
+    ``ecgVerificationModel``/``verificationModel.type``. The clause matching
+    any ``<domain>.manufacturedEikonalECG.*`` key is removed -- no context
+    built from a real case can ever hold that key again.
     """
     errors: list["StrictDiagnostic"] = []
     domains = {
@@ -628,8 +636,7 @@ def _evaluate_personalized_templates(context: dict[str, Any]) -> list["StrictDia
             continue
 
         manufactured = (
-            any(key.startswith(prefix + "manufacturedEikonalECG.") for key in context)
-            or context.get(prefix + "ecgVerificationModel") == "manufacturedEikonalECGVerifier"
+            context.get(prefix + "ecgVerificationModel") == "manufacturedEikonalECGVerifier"
             or context.get(prefix + "verificationModel.type") == "manufacturedEikonalECGVerifier"
         )
         if manufactured:

@@ -71,6 +71,7 @@ _KNOWN_CASES: tuple[RegressionCase, ...] = (
     RegressionCase(
         "manufacturedSolutions/eikonalECG", "manufacturedEikonalECG",
         (_ELECTRO, _PHYSICS), "regression/eikonalECG.reference",
+        resolution="tutorial_record",
     ),
     RegressionCase(
         "manufacturedSolutions/bathBidomain", "manufacturedBathBidomain",
