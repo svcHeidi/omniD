@@ -197,7 +197,19 @@ class OpenFOAMEnvironmentPlugin:
         ``openfoam_case_runtime_conventions()`` (R2 fix, finding I2): a
         plugin stacked on top of OpenFOAM that redeclares
         ``replica_directory_globs`` must have its replicas walked here too,
-        not just by staging."""
+        not just by staging.
+
+        **Corrected 2026-09-26 (owner decision).** When ``selected_start_time``
+        answers ``None`` -- no ``system/controlDict`` at all, so this is not
+        (or not yet known to be) an OpenFOAM case by the owner's rule
+        ("controlDict is how we know an OpenFOAM case exists") -- this
+        contributes **no roots at all**: not a start folder, and not any
+        replica's start folder either. Previously this named the literal
+        string ``"0"`` in that case, indistinguishable from a real case that
+        deliberately starts at time zero. See ``time_selection
+        .selected_start_time``'s own docstring for the full rule and why
+        `omnidriver-cardiaccore`'s Allrun-only,
+        controlDict-less test case still needs exactly this answer."""
         del resolved_case
         from omnidriver.core.plugin_profile import is_replica_directory_name
 
@@ -215,6 +227,8 @@ class OpenFOAMEnvironmentPlugin:
             read_value=read_foam_entry,
             instance_directory_pattern=conventions.instance_directory_pattern,
         )
+        if start is None:
+            return ()
         globs = conventions.replica_directory_globs
         replicas = sorted(
             child.name for child in Path(case_root).iterdir()

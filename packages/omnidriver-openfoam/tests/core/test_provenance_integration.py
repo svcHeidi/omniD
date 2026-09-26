@@ -69,15 +69,21 @@ def test_latest_time_selection_uses_the_conventions_regex_not_float(tmp_path: Pa
     ) == "0.5"
 
 
-def test_a_missing_control_dict_still_answers_the_zero_default(tmp_path: Path) -> None:
-    """Final review M5: a stricter refusal here was attempted and reverted
-    the same day (see `time_selection.selected_start_time`'s docstring) --
-    it broke `omnidriver-cardiaccore`'s
-    `test_controlled_allrun_executes_without_domain_claims`, a real,
-    pre-existing case that is deliberately not OpenFOAM-shaped at all. This
-    characterization test pins the restored behaviour: a missing
-    controlDict still answers the silent default ``"0"``, unchanged from
-    before this review."""
+def test_a_missing_control_dict_contributes_no_roots_at_all(tmp_path: Path) -> None:
+    """**Corrected 2026-09-26 (owner decision):** this used to pin the
+    silent ``"0"`` default a stricter refusal broke and Final review M5
+    reverted the same day. The owner settled it instead: "``controlDict``
+    is how we know an OpenFOAM case exists; that is what we use. The rule
+    is mandatory and the same for every case, with no exceptions." A
+    missing ``controlDict`` is not this hook's problem to refuse OR to
+    silently answer ``"0"`` for -- it means the case may not be
+    OpenFOAM-shaped at all, so ``selected_start_time`` answers ``None`` and
+    ``get_input_roots`` contributes no roots at all, not even a start
+    folder. `omnidriver-cardiaccore`'s
+    `test_controlled_allrun_executes_without_domain_claims` (a real,
+    deliberately non-OpenFOAM Allrun-only case) keeps passing under this
+    rule too -- see the native/cardiacCore verification in this task's
+    report."""
     from omnidriver.openfoam.mutators import read_foam_entry
 
     assert selected_start_time(
@@ -85,7 +91,10 @@ def test_a_missing_control_dict_still_answers_the_zero_default(tmp_path: Path) -
         control_dict_relpath="system/controlDict",
         read_value=read_foam_entry,
         instance_directory_pattern=openfoam_case_runtime_conventions().instance_directory_pattern,
-    ) == "0"
+    ) is None
+    assert OpenFOAMEnvironmentPlugin().get_input_roots(
+        tmp_path, {}, conventions=openfoam_case_runtime_conventions(),
+    ) == ()
 
 
 def test_external_include_changes_openfoam_provenance_identity(tmp_path: Path) -> None:
