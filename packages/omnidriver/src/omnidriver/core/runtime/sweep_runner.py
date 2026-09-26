@@ -21,7 +21,7 @@ from .fresh import ensure_fresh_output_dir
 from .attempt_lease import acquire_case_staging_lease
 from .models import data_artifact_from_json, invoke_case_mutation
 from .output_collection import collect_new_output_tree, snapshot_output_tree
-from .postprocess_phase import build_sweep_context, run_postprocessing_module
+from .postprocess_phase import CASE_RECORD_FILENAME, build_sweep_context, run_postprocessing_module
 from .record_execution import (
     commit_and_build_record_spec,
     _reserved_study_names,
@@ -29,11 +29,13 @@ from .record_execution import (
 )
 from .registry import load_entry_spec
 from .run_command import omnidriver_run_command
-from .run_document_exec import _allowed_runs_root, load_run_document
+from .run_document_exec import RUN_DOCUMENT_FILENAME, _allowed_runs_root, load_run_document
 from .resume import validate_resume
+from .workflow_orchestrator import STATE_FILENAME
 from .workflow_state import workflow_state_from_json
 from .workflow_runner import _terminate_process_group
 from .sweep_manifest import (
+    SWEEP_MANIFEST_FILENAME,
     CaseManifestEntry,
     SweepManifest,
     compute_spec_hash,
@@ -297,7 +299,7 @@ def _record_sweep_run(
     resolved_cases = expand_sweep(sweep_spec, get_derivation=get_derivation)
     base = sweep_spec.get("base", {})
 
-    manifest_path = output_dir / "sweep_manifest.json"
+    manifest_path = output_dir / SWEEP_MANIFEST_FILENAME
     spec_hash = compute_spec_hash(sweep_spec)
     manifest = SweepManifest(
         schema_version="1.0", sweep_spec_hash=spec_hash,
@@ -311,9 +313,9 @@ def _record_sweep_run(
     for case in resolved_cases:
         staged_case_root = output_dir / "cases" / case.case_id
         case_dir = output_dir / case.case_id
-        run_document_path = case_dir / "run_document.json"
-        workflow_state_path = case_dir / "workflow_state.json"
-        case_record_path = case_dir / "case_record.json"
+        run_document_path = case_dir / RUN_DOCUMENT_FILENAME
+        workflow_state_path = case_dir / STATE_FILENAME
+        case_record_path = case_dir / CASE_RECORD_FILENAME
         study_by_source = _record_case_study_by_source(
             base=base, resolved_axis_values=case.resolved_axis_values,
         )
@@ -927,7 +929,7 @@ def _workflow_state_path_from_run_document(run_document: dict[str, Any]) -> Path
         output_dir = run_document["launch"]["outputDir"]
     except KeyError as exc:
         raise ValueError("strict_plan run_document is missing launch.outputDir") from exc
-    return Path(output_dir) / "workflow_state.json"
+    return Path(output_dir) / STATE_FILENAME
 
 
 def _completed_case_is_reusable(
@@ -1028,7 +1030,7 @@ def sweep_run(
         # alongside the new ones with no warning at all. The SAME spec-hash
         # check the factory branch below runs gives the more specific answer
         # when the spec truly changed.
-        manifest_path = output_dir / "sweep_manifest.json"
+        manifest_path = output_dir / SWEEP_MANIFEST_FILENAME
         if manifest_path.exists():
             existing = read_manifest(manifest_path)
             spec_hash = compute_spec_hash(sweep_spec)
@@ -1057,7 +1059,7 @@ def sweep_run(
     if fresh_error is not None:
         raise SweepValidationError(fresh_error)
     output_dir.mkdir(parents=True, exist_ok=True)
-    manifest_path = output_dir / "sweep_manifest.json"
+    manifest_path = output_dir / SWEEP_MANIFEST_FILENAME
 
     spec_hash = compute_spec_hash(sweep_spec)
     existing_status_by_case: dict[str, str] = {}
@@ -1089,9 +1091,9 @@ def sweep_run(
 
     for case in resolved_cases:
         case_dir = output_dir / case.case_id
-        run_document_path = case_dir / "run_document.json"
-        workflow_state_path = case_dir / "workflow_state.json"
-        case_record_path = case_dir / "case_record.json"
+        run_document_path = case_dir / RUN_DOCUMENT_FILENAME
+        workflow_state_path = case_dir / STATE_FILENAME
+        case_record_path = case_dir / CASE_RECORD_FILENAME
 
         prior_status = existing_status_by_case.get(case.case_id)
         prior_entry = existing_entry_by_case.get(case.case_id)

@@ -22,6 +22,7 @@ from .runtime.record_execution import commit_and_build_record_spec
 from .runtime.registry import classify_entry, load_entry_spec
 from .runtime.run_command import omnidriver_run_command
 from .runtime.run_document_adapter import _run_document_from_case
+from .runtime.run_document_exec import RUN_DOCUMENT_FILENAME
 from .runtime.run_model import RunDocument
 from .runtime.strict_audit import SKIP_GEOMETRY_DIAGNOSTICS_ENV, _build_simulation_audit
 from .runtime.workflow import (
@@ -455,7 +456,7 @@ def _run_launch_description(
     """
     if is_tutorial_record:
         run_document_path = str(
-            Path(context.output_dir).absolute() / "run_document.json"
+            Path(context.output_dir).absolute() / RUN_DOCUMENT_FILENAME
         )
         command = omnidriver_run_command(driver_context, "--run-document", run_document_path)
     else:
@@ -638,7 +639,7 @@ def _strict_plan_for_record(
         allow_unresolved_configuration=allow_unresolved_configuration,
         driver_context=driver_context,
     )
-    run_document_path = Path(report.launch["output_dir"]) / "run_document.json"
+    run_document_path = Path(report.launch["output_dir"]) / RUN_DOCUMENT_FILENAME
     run_document_path.parent.mkdir(parents=True, exist_ok=True)
     run_document_path.write_text(json.dumps(report.run_document.to_json(), indent=2))
     return report

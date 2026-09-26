@@ -29,6 +29,7 @@ from omnidriver.core.quantities import ReaderDeclarationError, check_reader
 from omnidriver.core.runtime.provenance_inputs import enumerate_case_inputs
 from omnidriver.core.runtime.record_execution import commit_record_case
 from omnidriver.core.runtime.run_command import omnidriver_run_command
+from omnidriver.core.runtime.run_document_exec import RUN_DOCUMENT_FILENAME
 from omnidriver.core.specs.paths import SCRATCH_ENV_VAR
 from omnidriver.core.strict_planning import strict_plan
 from omnidriver.core.tutorial_records import PLAIN_FILE_FORMAT, TutorialRecordError
@@ -198,7 +199,7 @@ def _child_env(target: ConformanceTarget) -> dict[str, str]:
 
 
 def _run_document_path(report) -> Path:
-    return Path(report.launch["output_dir"]) / "run_document.json"
+    return Path(report.launch["output_dir"]) / RUN_DOCUMENT_FILENAME
 
 
 def check_strict_plan(target: ConformanceTarget) -> CheckVerdict:

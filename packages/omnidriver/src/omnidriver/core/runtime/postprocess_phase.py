@@ -12,7 +12,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .sweep_manifest import read_manifest
+from .sweep_manifest import SWEEP_MANIFEST_FILENAME, read_manifest
+from .workflow_orchestrator import STATE_FILENAME
+
+#: The standalone case record's on-disk filename, named once here (final
+#: review M6, 2026-09-26) instead of restated as a literal at each write
+#: site (``cli.py``, ``sweep_runner.py``,
+#: ``runtime_records.CORE_RUNTIME_RECORDS``).
+CASE_RECORD_FILENAME = "case_record.json"
 
 
 @dataclass(frozen=True)
@@ -85,7 +92,7 @@ def build_standalone_case_record(
 ) -> CaseRecord:
     """Record a standalone run without scanning its output directory."""
     output_dir = Path(output_dir)
-    workflow_state_path = output_dir / "workflow_state.json"
+    workflow_state_path = output_dir / STATE_FILENAME
     status = "unknown"
     if workflow_state_path.is_file():
         try:
@@ -147,7 +154,7 @@ def build_sweep_context(
     own manifest; a later reader must never rewrite that evidence.
     """
     output_dir = Path(output_dir)
-    manifest = read_manifest(output_dir / "sweep_manifest.json")
+    manifest = read_manifest(output_dir / SWEEP_MANIFEST_FILENAME)
     records: list[CaseRecord] = []
     for entry in manifest.cases:
         candidate = Path(entry.workflow_state_path)

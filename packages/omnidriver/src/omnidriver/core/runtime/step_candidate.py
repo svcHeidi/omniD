@@ -35,6 +35,7 @@ from .repair_loop import (
     complete_repair_reservation,
 )
 from .resume import validate_resume
+from .workflow_orchestrator import STATE_FILENAME, WORKFLOW_LOGS_DIRNAME
 from .workflow_runner import WorkflowStepRunResult, _step_state_by_id, run_workflow_step
 from .workflow_state import workflow_digest, workflow_state_from_json
 
@@ -160,7 +161,7 @@ def execute_step_candidate_owned(
             )
         repair_binding = asdict(reservation)
 
-    state_path = output_dir / "workflow_state.json"
+    state_path = output_dir / STATE_FILENAME
     workflow_state = context.planned_state
     if state_path.exists():
         workflow_state = workflow_state_from_json(json.loads(state_path.read_text()))
@@ -285,7 +286,7 @@ def execute_step_candidate_owned(
             workflow_state,
             step_id,
             case_root=case_root,
-            log_dir=output_dir / "workflow_logs",
+            log_dir=output_dir / WORKFLOW_LOGS_DIRNAME,
             state_path=state_path,
             expected_artifacts=expected_artifacts,
             env=context.execution_env,

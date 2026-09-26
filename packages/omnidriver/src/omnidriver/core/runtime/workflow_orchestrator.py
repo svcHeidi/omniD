@@ -21,6 +21,18 @@ if TYPE_CHECKING:
     from ..plugin_interface import DriverContext
 
 
+#: The workflow-state record's filename, named once here (final review M6,
+#: 2026-09-26) instead of restated as a literal at each write/read site
+#: (``cli.py``, ``postprocess_phase.py``, ``step_candidate.py``,
+#: ``sweep_runner.py``, ``execution_context.py``, ``run_discovery.py``,
+#: ``runtime_records.CORE_RUNTIME_RECORDS`` and ``fresh._OMNIDRIVER_MARKER_NAMES``).
+STATE_FILENAME = "workflow_state.json"
+
+#: The per-run step-log directory's name, named once here for the same
+#: reason (used by ``step_candidate.py`` and ``runtime_records.py``).
+WORKFLOW_LOGS_DIRNAME = "workflow_logs"
+
+
 @dataclass(frozen=True)
 class WorkflowRunOutcome:
     state: WorkflowRunState
@@ -114,8 +126,8 @@ def _run_workflow_locked(
     """
     if max_total_attempts is not None and max_total_attempts < 0:
         raise ValueError("max_total_attempts must be non-negative")
-    resolved_state_path = state_path or (output_dir / "workflow_state.json")
-    log_dir = output_dir / "workflow_logs"
+    resolved_state_path = state_path or (output_dir / STATE_FILENAME)
+    log_dir = output_dir / WORKFLOW_LOGS_DIRNAME
     summaries: dict[str, dict[str, Any]] = {}
     total_attempts = 0
 

@@ -17,6 +17,8 @@ import json
 from pathlib import Path
 from typing import Iterator
 
+from .workflow_orchestrator import STATE_FILENAME
+
 
 def list_runs(root: Path) -> Iterator[dict]:
     """Yield every parseable `workflow_state.json` under `root`.
@@ -29,7 +31,7 @@ def list_runs(root: Path) -> Iterator[dict]:
     root = Path(root)
     if not root.is_dir():
         return
-    for state_path in root.rglob("workflow_state.json"):
+    for state_path in root.rglob(STATE_FILENAME):
         try:
             payload = json.loads(state_path.read_text())
         except (json.JSONDecodeError, OSError):

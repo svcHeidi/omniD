@@ -13,7 +13,13 @@ from .core.runtime.remediation import build_candidate_remediations
 from .core.runtime.workflow_runner import run_workflow_step, _step_state_by_id
 from .core.runtime.workflow_orchestrator import run_workflow
 from .core.runtime.workflow_state import workflow_state_from_json
-from .core.runtime.postprocess_phase import build_standalone_case_record, run_postprocess_phase, write_case_record
+from .core.runtime.postprocess_phase import (
+    CASE_RECORD_FILENAME,
+    build_standalone_case_record,
+    run_postprocess_phase,
+    write_case_record,
+)
+from .core.runtime.workflow_orchestrator import STATE_FILENAME
 from .core.runtime.registry import ENTRY_KIND_VALUES, list_tutorials
 from .core.runtime.sweep_runner import (
     _materialize_entry_case,
@@ -237,7 +243,7 @@ def _execute_step(
             "step": step_id,
             "error": f"{prefix}{exc}",
         }
-        state_path = output_dir / "workflow_state.json"
+        state_path = output_dir / STATE_FILENAME
         if state_path.exists():
             payload["workflow_state_path"] = str(state_path)
         print(json.dumps(payload, indent=2))
@@ -283,7 +289,7 @@ def _execute_run(
     Shared by the --entry (strict_plan) path and the --run-document path.
     Refuses to auto-resume a terminally-failed saved state (use action=step).
     """
-    state_path = output_dir / "workflow_state.json"
+    state_path = output_dir / STATE_FILENAME
     workflow_state = planned_state
     if state_path.exists():
         try:
@@ -366,7 +372,7 @@ def _execute_run(
     case_record = build_standalone_case_record(
         entry=entry_label, case_root=case_root, setup_root=setup_root, output_dir=output_dir,
     )
-    case_record_path = output_dir / "case_record.json"
+    case_record_path = output_dir / CASE_RECORD_FILENAME
     write_case_record(case_record_path, case_record)
     payload["case_record_path"] = str(case_record_path)
     _attach_failure_context(payload, workflow_state, workflow_state.failed_step_id, tail_lines=tail_lines)

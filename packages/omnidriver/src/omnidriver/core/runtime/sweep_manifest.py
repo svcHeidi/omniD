@@ -8,6 +8,14 @@ from pathlib import Path
 from typing import Any
 
 
+#: The sweep manifest's on-disk filename, named once here (final review M6,
+#: 2026-09-26) instead of restated as a literal at each write/read site
+#: (``sweep_runner.py``, ``postprocess_phase.py``,
+#: ``runtime_records.CORE_RUNTIME_RECORDS`` and
+#: ``fresh._OMNIDRIVER_MARKER_NAMES``).
+SWEEP_MANIFEST_FILENAME = "sweep_manifest.json"
+
+
 @dataclass
 class CaseManifestEntry:
     case_id: str

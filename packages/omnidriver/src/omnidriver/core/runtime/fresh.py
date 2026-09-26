@@ -4,9 +4,24 @@ import shutil
 import sys
 from pathlib import Path
 
-from .run_document_exec import ALLOWED_RUNS_ROOT_ENV
+from .run_document_exec import ALLOWED_RUNS_ROOT_ENV, RUN_DOCUMENT_FILENAME
+from .sweep_manifest import SWEEP_MANIFEST_FILENAME
+from .workflow_orchestrator import STATE_FILENAME
 
-_OMNIDRIVER_MARKER_NAMES = ("workflow_state.json", "sweep_manifest.json", "run_document.json")
+#: Named from each owner's own constant (final review M6, 2026-09-26)
+#: instead of restating the three literals here. This set is deliberately
+#: NOT the same as ``runtime_records.CORE_RUNTIME_RECORDS.generated_case_markers``
+#: (``STATE_FILENAME``, ``WORKFLOW_LOGS_DIRNAME``, ``RUN_DOCUMENT_FILENAME``):
+#: that one answers "is this directory a case a run touched" and is checked
+#: against a case root; this one answers "is this directory (or one level
+#: under it) something `--fresh` may safely delete", checked against an
+#: `output_dir`, which for a sweep is the sweep root -- so it needs
+#: `SWEEP_MANIFEST_FILENAME` (a sweep root never holds one otherwise) and has
+#: never needed `WORKFLOW_LOGS_DIRNAME`: every case that has one also has a
+#: `workflow_state.json` alongside it, so the extra name would detect
+#: nothing `_has_omnidriver_marker` does not already catch. Not merged into
+#: one set: they answer different questions over different roots.
+_OMNIDRIVER_MARKER_NAMES = (STATE_FILENAME, SWEEP_MANIFEST_FILENAME, RUN_DOCUMENT_FILENAME)
 
 
 def _has_omnidriver_marker(output_dir: Path) -> bool:

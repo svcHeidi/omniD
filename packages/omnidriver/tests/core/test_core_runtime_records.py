@@ -10,13 +10,17 @@ from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime.attempt_lease import (
     ATTEMPT_LOCK_FILENAME, ATTEMPT_LOCK_GUARD_FILENAME,
 )
+from omnidriver.core.runtime.postprocess_phase import CASE_RECORD_FILENAME
 from omnidriver.core.runtime.record_execution import record_generated_relpaths
 from omnidriver.core.runtime.remediation_transaction import (
     CANDIDATES_DIRECTORY as REMEDIATION_CANDIDATES_DIRECTORY,
     MARKER_NAME as REMEDIATION_MARKER_NAME,
     TRANSACTIONS_DIRECTORY as REMEDIATION_TRANSACTIONS_DIRECTORY,
 )
+from omnidriver.core.runtime.run_document_exec import RUN_DOCUMENT_FILENAME
+from omnidriver.core.runtime.sweep_manifest import SWEEP_MANIFEST_FILENAME
 from omnidriver.core.runtime.sweep_runner import _stage_entry_case
+from omnidriver.core.runtime.workflow_orchestrator import STATE_FILENAME, WORKFLOW_LOGS_DIRNAME
 from omnidriver.core.runtime_records import CORE_RUNTIME_RECORDS, with_core_runtime_records
 from omnidriver.core.tutorial_records import TutorialRecord, WorkflowStep
 from plugins.minimal_plugin import MinimalTestPlugin
@@ -32,13 +36,25 @@ def test_core_names_every_file_it_writes_into_a_case():
     (``runtime.remediation_transaction``). The expected set is now derived
     from each owning module's own constant, not restated as a literal, so a
     name missing from ``CORE_RUNTIME_RECORDS`` still fails this even if it
-    is also missing here."""
+    is also missing here.
+
+    Corrected again 2026-09-26 (final review M6): "derived from each
+    owning module's own constant" was true for two of the seven names and
+    restated as a literal for the rest (``workflow_state.json``,
+    ``run_document.json``, ``sweep_manifest.json``, ``case_record.json``,
+    ``workflow_logs``) -- both here and in ``CORE_RUNTIME_RECORDS`` itself.
+    Every name below is now imported from its owner
+    (``workflow_orchestrator.STATE_FILENAME``/``WORKFLOW_LOGS_DIRNAME``,
+    ``run_document_exec.RUN_DOCUMENT_FILENAME``,
+    ``sweep_manifest.SWEEP_MANIFEST_FILENAME``,
+    ``postprocess_phase.CASE_RECORD_FILENAME``), so a rename at the owner
+    is what this test would actually catch."""
     assert set(CORE_RUNTIME_RECORDS.generated_file_names) == {
-        "workflow_state.json", "run_document.json", "sweep_manifest.json", "case_record.json",
+        STATE_FILENAME, RUN_DOCUMENT_FILENAME, SWEEP_MANIFEST_FILENAME, CASE_RECORD_FILENAME,
         ATTEMPT_LOCK_FILENAME, ATTEMPT_LOCK_GUARD_FILENAME, REMEDIATION_MARKER_NAME,
     }
     assert set(CORE_RUNTIME_RECORDS.generated_directory_names) == {
-        "workflow_logs", _JOURNAL_RELATIVE_PATH.parts[0],
+        WORKFLOW_LOGS_DIRNAME, _JOURNAL_RELATIVE_PATH.parts[0],
         REMEDIATION_TRANSACTIONS_DIRECTORY, REMEDIATION_CANDIDATES_DIRECTORY,
     }
 
@@ -50,10 +66,10 @@ def test_a_stack_that_declares_nothing_still_knows_cores_records():
 
 def test_merging_keeps_the_plugins_names_first_and_adds_cores_once():
     merged = with_core_runtime_records(
-        CaseRuntimeConventions(generated_file_names=("run_document.json", "log.x")),
+        CaseRuntimeConventions(generated_file_names=(RUN_DOCUMENT_FILENAME, "log.x")),
     )
-    assert merged.generated_file_names[:2] == ("run_document.json", "log.x")
-    assert merged.generated_file_names.count("run_document.json") == 1
+    assert merged.generated_file_names[:2] == (RUN_DOCUMENT_FILENAME, "log.x")
+    assert merged.generated_file_names.count(RUN_DOCUMENT_FILENAME) == 1
     assert set(CORE_RUNTIME_RECORDS.generated_file_names) <= set(merged.generated_file_names)
 
 
@@ -91,7 +107,10 @@ def test_an_intermediate_a_later_step_consumes_is_still_excluded():
 
 def test_staging_drops_excluded_paths_at_any_depth_and_cores_records(tmp_path):
     source = tmp_path / "source"
-    for relpath in ("out/a.dat", "keep/b.txt", "keep/gen.txt", "workflow_state.json", "workflow_logs/s.log", "input.par"):
+    for relpath in (
+        "out/a.dat", "keep/b.txt", "keep/gen.txt", STATE_FILENAME,
+        f"{WORKFLOW_LOGS_DIRNAME}/s.log", "input.par",
+    ):
         (source / relpath).parent.mkdir(parents=True, exist_ok=True)
         (source / relpath).write_text(relpath)
     staged = tmp_path / "staged"

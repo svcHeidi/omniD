@@ -27,25 +27,38 @@ from dataclasses import replace
 from .case_transaction import _JOURNAL_RELATIVE_PATH
 from .plugin_capabilities import CaseRuntimeConventions
 from .runtime.attempt_lease import ATTEMPT_LOCK_FILENAME, ATTEMPT_LOCK_GUARD_FILENAME
+from .runtime.postprocess_phase import CASE_RECORD_FILENAME
 from .runtime.remediation_transaction import (
     CANDIDATES_DIRECTORY as _REMEDIATION_CANDIDATES_DIRECTORY,
     MARKER_NAME as _REMEDIATION_MARKER_NAME,
     TRANSACTIONS_DIRECTORY as _REMEDIATION_TRANSACTIONS_DIRECTORY,
 )
+from .runtime.run_document_exec import RUN_DOCUMENT_FILENAME
+from .runtime.sweep_manifest import SWEEP_MANIFEST_FILENAME
+from .runtime.workflow_orchestrator import STATE_FILENAME, WORKFLOW_LOGS_DIRNAME
 
 #: ``case_transaction``'s per-case journal directory, named by its owner.
 _CASE_TRANSACTION_DIRECTORY = _JOURNAL_RELATIVE_PATH.parts[0]
 
+#: Every name below is now read from its owning module's own constant
+#: (final review M6, 2026-09-26) rather than restated as a literal here --
+#: this closed the gap ``test_core_names_every_file_it_writes_into_a_case``
+#: could not see: its docstring claimed the set was "derived from each
+#: owning module's own constant" while three of the five core-record names
+#: (``workflow_state.json``, ``run_document.json``, ``sweep_manifest.json``,
+#: ``case_record.json``, ``workflow_logs``) were still spelled here directly.
+#: See ``fresh._OMNIDRIVER_MARKER_NAMES`` for why THAT marker set is a
+#: deliberately different three names, not a copy-paste drift of this one.
 CORE_RUNTIME_RECORDS = CaseRuntimeConventions(
     generated_directory_names=(
-        "workflow_logs", _CASE_TRANSACTION_DIRECTORY,
+        WORKFLOW_LOGS_DIRNAME, _CASE_TRANSACTION_DIRECTORY,
         _REMEDIATION_TRANSACTIONS_DIRECTORY, _REMEDIATION_CANDIDATES_DIRECTORY,
     ),
     generated_file_names=(
-        "workflow_state.json", "run_document.json", "sweep_manifest.json", "case_record.json",
+        STATE_FILENAME, RUN_DOCUMENT_FILENAME, SWEEP_MANIFEST_FILENAME, CASE_RECORD_FILENAME,
         ATTEMPT_LOCK_FILENAME, ATTEMPT_LOCK_GUARD_FILENAME, _REMEDIATION_MARKER_NAME,
     ),
-    generated_case_markers=("workflow_state.json", "workflow_logs", "run_document.json"),
+    generated_case_markers=(STATE_FILENAME, WORKFLOW_LOGS_DIRNAME, RUN_DOCUMENT_FILENAME),
 )
 
 

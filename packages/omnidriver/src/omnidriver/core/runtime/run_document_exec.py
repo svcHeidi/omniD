@@ -39,6 +39,14 @@ if TYPE_CHECKING:
     from ..plugin_interface import DriverContext
 
 
+#: The RunDocument's on-disk filename, named once here (final review M6,
+#: 2026-09-26) instead of restated as a literal at each write/read site
+#: (``cli.py``, ``strict_planning.py``, ``conformance/checks.py``,
+#: ``sweep_runner.py``, ``runtime_records.CORE_RUNTIME_RECORDS`` and
+#: ``fresh._OMNIDRIVER_MARKER_NAMES``).
+RUN_DOCUMENT_FILENAME = "run_document.json"
+
+
 def _is_record_run_with_steps(run_doc: RunDocument) -> bool:
     """A tutorial-record run whose document carries the record's steps.
 
