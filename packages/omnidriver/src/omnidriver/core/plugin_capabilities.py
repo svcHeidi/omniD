@@ -124,7 +124,12 @@ class CaseRuntimeConventions:
     case_entrypoints: tuple[str, ...] = ()
     case_script_commands: tuple[str, ...] = ()
     case_discovery_ignored_directory_names: tuple[str, ...] = ()
-    decomposition_directory_prefix: str | None = None
+    #: fnmatch globs naming a case-root directory that holds one replica of
+    #: the case per parallel rank (OpenFOAM: ``processor*``). Core skips them
+    #: when staging and discovering cases, and looks inside them for an
+    #: instance-indexed output. Empty: the environment declares no replicas.
+    #: Renamed 2026-09-26 from ``decomposition_directory_prefix`` (spec A2).
+    replica_directory_globs: tuple[str, ...] = ()
     #: Regex a case-root directory name matches when it is one of the
     #: solver's output instances (OpenFOAM: a time directory). ``None``: the
     #: environment declares no instances, and core treats no directory as

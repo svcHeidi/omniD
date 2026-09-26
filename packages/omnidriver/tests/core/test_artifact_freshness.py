@@ -15,7 +15,7 @@ from plugins.minimal_plugin import MinimalTestPlugin
 
 class _ParallelEnvironment(MinimalTestPlugin):
     def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
-        return CaseRuntimeConventions(decomposition_directory_prefix="processor")
+        return CaseRuntimeConventions(replica_directory_globs=("processor*",))
 
 
 def _run(root: Path, code: str, *, pattern: str = "result", optional: bool = False,

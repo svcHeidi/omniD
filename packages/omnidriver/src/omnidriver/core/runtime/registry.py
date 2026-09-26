@@ -8,7 +8,8 @@ from typing import TYPE_CHECKING, Callable
 from .models import TutorialSpec
 from .generic_case import make_generic_case_spec
 from omnidriver.core.plugin_profile import (
-    decomposition_dirname_prefix,
+    is_replica_directory_name,
+    replica_directory_globs,
     entrypoint_relpaths,
 )
 
@@ -87,7 +88,7 @@ def _iter_case_directories_recursive(
         return []
 
     discovered: list[Path] = []
-    decomposition_prefix = decomposition_dirname_prefix(driver_context)
+    replica_globs = replica_directory_globs(driver_context)
     ignored_directory_names = (
         frozenset(
             driver_context.capabilities.case_runtime_conventions.conventions()
@@ -103,10 +104,7 @@ def _iter_case_directories_recursive(
             for dirname in dirnames
             if not dirname.startswith(".")
             and dirname != "__pycache__"
-            and (
-                decomposition_prefix is None
-                or not dirname.startswith(decomposition_prefix)
-            )
+            and not is_replica_directory_name(dirname, replica_globs)
             and dirname not in ignored_directory_names
         ]
         if _is_case_directory(path, driver_context):

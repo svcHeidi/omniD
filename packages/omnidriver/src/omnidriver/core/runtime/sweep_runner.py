@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 from omnidriver.core.strict_planning import strict_plan, _strict_plan_for_spec
-from omnidriver.core.plugin_profile import decomposition_dirname_prefix
+from omnidriver.core.plugin_profile import is_replica_directory_name, replica_directory_globs
 from omnidriver.core.sweep.sweep_derivation_catalog import get_derivation
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError, check_case_count_cap, expand_sweep
 from omnidriver.core.tutorial_records import TutorialRecordError, sort_study_name
@@ -619,10 +619,7 @@ def _stage_entry_case(
         driver_context.capabilities.case_runtime_conventions.conventions()
         if driver_context is not None else CaseRuntimeConventions()
     )
-    decomposition_prefix = (
-        decomposition_dirname_prefix(driver_context)
-        if driver_context is not None else None
-    )
+    replica_globs = replica_directory_globs(driver_context)
     source_case_root = Path(source_case_root).resolve()
     staged_case_root = Path(staged_case_root).resolve()
 
@@ -651,7 +648,7 @@ def _stage_entry_case(
             if (
                 candidate.is_dir()
                 and (
-                    (decomposition_prefix is not None and name.startswith(decomposition_prefix))
+                    is_replica_directory_name(name, replica_globs)
                     or any(name.startswith(prefix) for prefix in conventions.generated_directory_prefixes)
                 )
             ):

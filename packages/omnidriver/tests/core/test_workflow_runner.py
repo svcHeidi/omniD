@@ -17,7 +17,7 @@ from plugins.minimal_plugin import MinimalTestPlugin
 
 class _ParallelOutputPlugin(MinimalTestPlugin):
     def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
-        return CaseRuntimeConventions(decomposition_directory_prefix="processor")
+        return CaseRuntimeConventions(replica_directory_globs=("processor*",))
 
 
 def _dag(command: str, args: list[str], *, produces: list[str] | None = None) -> dict:

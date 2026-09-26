@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
-from ..plugin_profile import decomposition_dirname_prefix
+from ..plugin_profile import replica_directory_globs
 from .workflow import case_script_commands
 from .attempt_lease import (
     AttemptLeaseError,
@@ -193,9 +193,8 @@ def _artifact_snapshot(
     expanded = artifact.path_pattern.format(case_id=case_root.name, instance="*")
     patterns = [str(case_root / expanded)]
     if artifact.instance_indexed:
-        prefix = decomposition_dirname_prefix(driver_context)
-        if prefix is not None:
-            patterns.append(str(case_root / f"{prefix}*" / expanded))
+        for replica_glob in replica_directory_globs(driver_context):
+            patterns.append(str(case_root / replica_glob / expanded))
     snapshot = {}
     for pattern in patterns:
         for match in glob.glob(pattern):

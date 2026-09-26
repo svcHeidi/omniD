@@ -45,7 +45,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, TYPE_CHECKING
 
 from ..plugin_capabilities import ResolvedInput, RuntimeDependency
-from ..plugin_profile import decomposition_dirname_prefix
+from ..plugin_profile import replica_directory_globs
 from .provenance import ProvenanceComponent, component_for_path
 from .provenance_dependencies import (
     component_for_runtime_dependency,
@@ -275,11 +275,10 @@ def enumerate_case_inputs(
     walk_roots = [case_root / d for d in _case_root_dirnames(driver_context)]
     if selected_start_time is not None:
         walk_roots.append(case_root / selected_start_time)
-    decomposition_prefix = decomposition_dirname_prefix(driver_context)
-    if decomposition_prefix is not None and selected_start_time is not None:
-        for processor_dir in sorted(case_root.glob(f"{decomposition_prefix}*")):
-            if processor_dir.is_dir():
-                walk_roots.append(processor_dir / selected_start_time)
+        for replica_glob in replica_directory_globs(driver_context):
+            for replica_dir in sorted(case_root.glob(replica_glob)):
+                if replica_dir.is_dir():
+                    walk_roots.append(replica_dir / selected_start_time)
 
     for root in walk_roots:
         for path in _walk_files(root):

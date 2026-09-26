@@ -55,7 +55,7 @@ class _StagingConventionPlugin(DeclaredCasePlugin):
             generated_directory_names=("postProcessing", "workflow_logs"),
             generated_file_names=("workflow_state.json",),
             generated_case_markers=("workflow_state.json", "workflow_logs"),
-            decomposition_directory_prefix="processor",
+            replica_directory_globs=("processor*",),
             instance_directory_pattern=r"^-?\d+(\.\d+)?(e[+\-]?\d+)?$",
             preserved_instance_names=("0",),
         )

@@ -40,6 +40,7 @@ def test_openfoam_hides_declared_generated_roots(tmp_path: Path, generated_direc
 
 
 def test_openfoam_hides_parallel_decomposition_output(tmp_path: Path) -> None:
+    assert openfoam_case_runtime_conventions().replica_directory_globs == ("processor*",)
     case_root = tmp_path / "processor0" / "nestedCase"
     case_root.mkdir(parents=True)
     _touch(case_root, "Allrun")

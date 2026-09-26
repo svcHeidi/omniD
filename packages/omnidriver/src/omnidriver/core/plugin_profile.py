@@ -7,6 +7,7 @@ remain Python responsibilities behind the core security boundary.
 
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import json
 from dataclasses import dataclass, field
@@ -163,14 +164,19 @@ def entrypoint_command(driver_context: Any | None) -> str:
     return paths[0]
 
 
-def decomposition_dirname_prefix(driver_context: Any | None) -> str | None:
-    """Parallel-output prefix declared by the active environment."""
+def replica_directory_globs(driver_context: Any | None) -> tuple[str, ...]:
+    """Parallel-replica directory globs declared by the active environment."""
     if driver_context is None:
-        return None
-    return (
+        return ()
+    return tuple(
         driver_context.capabilities.case_runtime_conventions.conventions()
-        .decomposition_directory_prefix
+        .replica_directory_globs
     )
+
+
+def is_replica_directory_name(name: str, globs: tuple[str, ...]) -> bool:
+    """Whether a case-root directory name is one of the declared replicas."""
+    return any(fnmatch.fnmatchcase(name, pattern) for pattern in globs)
 
 
 def load_plugin_profile(path: str | Path) -> PluginProfile:

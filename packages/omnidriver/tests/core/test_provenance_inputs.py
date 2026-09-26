@@ -125,7 +125,7 @@ class _FakePlugin(MinimalTestPlugin):
 
     def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
         return CaseRuntimeConventions(
-            decomposition_directory_prefix="processor",
+            replica_directory_globs=("processor*",),
             case_entrypoints=("run-case",),
             case_script_commands=("run-case",),
         )
@@ -151,9 +151,9 @@ def test_selected_start_time_directory_is_included_others_excluded(tmp_path: Pat
 class _ForeignEnvironmentPlugin(MinimalTestPlugin):
     """A plugin that declares runtime conventions without case-file roles."""
 
-    def __init__(self, *, chosen_start_time: str, decomposition_prefix: str = "processor") -> None:
+    def __init__(self, *, chosen_start_time: str, replica_glob: str = "processor*") -> None:
         self._chosen_start_time = chosen_start_time
-        self._decomposition_prefix = decomposition_prefix
+        self._replica_glob = replica_glob
 
     def get_profile(self) -> PluginProfile:
         return PluginProfile(
@@ -174,7 +174,7 @@ class _ForeignEnvironmentPlugin(MinimalTestPlugin):
 
     def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
         return CaseRuntimeConventions(
-            decomposition_directory_prefix=self._decomposition_prefix,
+            replica_directory_globs=(self._replica_glob,),
         )
 
 
@@ -225,7 +225,7 @@ def test_plugin_implemented_decomposition_prefix_hook_overrides_processor(
     (stray_processor0 / "0").mkdir(parents=True)
     (stray_processor0 / "0" / "Vm").write_text("not this plugin's convention")
 
-    plugin = _ForeignEnvironmentPlugin(chosen_start_time="0", decomposition_prefix="rank")
+    plugin = _ForeignEnvironmentPlugin(chosen_start_time="0", replica_glob="rank*")
 
     components = enumerate_case_inputs(
         tmp_path, workflow_dag={"steps": []}, driver_context=driver_context(plugin, source="test"),
