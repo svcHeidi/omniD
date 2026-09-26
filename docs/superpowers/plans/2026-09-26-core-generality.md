@@ -41,7 +41,7 @@ reader to start here, and there was no table). Built from `git log`.
 | Task 9: close-out (legacy allowed-root var; spec/CLAUDE.md corrections) | `125b344`, `551ed9c` | done |
 | R1 checkpoint fixes (I1/M2/M9 cardiacfoam; I2/I3/M1/M8 staging/C11; M3/M5/M6/M7 docs) | `46f1dc9`, `bf55217`, `cba98d8` | done |
 | R2 checkpoint fixes (I1/M1 pre-A2 refusal; I3/M2 conventions validation; I2/M3/M8 merged conventions; M5/M6 planning test; M4/M7 doc/gate) | `51211ad`, `ae2d1bf`, `8abb187`, `d9c9fc6`, `de913a9` | done |
-| Final whole-topic review fixes (M1, M4, M5, M6, M7, M9, M10, M13) | see `git log` on `core-gen-close` after this table was written | done |
+| Final whole-topic review fixes (M1, M4, M5, M6, M7, M9, M10, M13) | `240f96a`, `7f24218`, `c415a9b`, `6c0611f`, `35fca7c`, `dc82def` | done (M5's refusal half reverted; M2/M3/M8/M11/M12 deferred per decisions doc) |
 
 ## Global Constraints
 
