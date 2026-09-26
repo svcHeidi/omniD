@@ -389,3 +389,31 @@ class OverGeneratedConventionsPlugin(E2ERecordPlugin):
 
     def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
         return CaseRuntimeConventions(generated_file_names=("mesh.json",))
+
+
+DEFAULT_ROUTE_PLUGIN = "plugins.conformance_toy:DefaultRoutePlugin"
+#: What each route of DefaultRoutePlugin's record writes. C6 finds the
+#: default route's marker only if the default route is the one that ran.
+DEFAULT_ROUTE_MARKER = "native-route.marker"
+OTHER_ROUTE_MARKER = "other-route.marker"
+
+
+class DefaultRoutePlugin(E2ERecordPlugin):
+    """Its record has two routes and names the native one its default
+    (``default_variant``, owner Q2, 2026-09-26). A target with no study
+    values must describe, plan, run and sweep the default route."""
+
+    def get_tutorial_records(self):
+        return {"toyTutorial": TutorialRecord(
+            name="toyTutorial", native_case_relpath="toyTutorial",
+            allowed_axes=frozenset({"number_cells"}),
+            workflow_steps=(
+                WorkflowStep(step_id="solveNative", command=("touch", DEFAULT_ROUTE_MARKER),
+                             consumes=("constant/mesh.json",), produces=(DEFAULT_ROUTE_MARKER,)),
+                WorkflowStep(step_id="solveOther", command=("touch", OTHER_ROUTE_MARKER),
+                             consumes=("constant/mesh.json",), produces=(OTHER_ROUTE_MARKER,)),
+            ),
+            workflow_variants={"native": ("solveNative",), "other": ("solveOther",)},
+            variant_selector="route",
+            default_variant="native",
+        )}

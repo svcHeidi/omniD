@@ -12,7 +12,7 @@ import pytest
 from omnidriver.conformance import CHECKS, run_check
 from omnidriver.core.runtime.sweep_runner import _child_reconciliation
 from plugins.conformance_toy import (
-    DOCUMENTED_PLUGIN, GHOST_CONSUMES_PLUGIN, INDEXED_KEY_PLUGIN, KINDLESS_KEY_PLUGIN, NAMED_KEY_PLUGIN,
+    DEFAULT_ROUTE_MARKER, DEFAULT_ROUTE_PLUGIN, DOCUMENTED_PLUGIN, GHOST_CONSUMES_PLUGIN, INDEXED_KEY_PLUGIN, KINDLESS_KEY_PLUGIN, NAMED_KEY_PLUGIN,
     NATIVE_WRITING_PLUGIN, NO_CONSUMES_PLUGIN, NO_PRODUCES_PLUGIN, OPEN_DOCUMENT_PLUGIN, OTHER_OPEN_DOCUMENT_PLUGIN,
     OVER_GENERATED_CONVENTIONS_PLUGIN, REPLACING_PLUGIN, SILENT_PREFLIGHT_PLUGIN, SILENT_SURFACE_PLUGIN,
     UNDECLARED_OUTPUT_PLUGIN, UNLISTED_KEY_PLUGIN, VALIDATED_KINDLESS_PLUGIN,
@@ -25,6 +25,32 @@ from plugins.quantity_toy import BAD_DECLARATION_PLUGIN, QUANTITY_TOY_PLUGIN, UN
 def test_toy_passes(check_id, tmp_path):
     verdict = run_check(check_id, toy_conformance_target(tmp_path))
     assert verdict.passed, verdict.detail
+
+
+@pytest.mark.parametrize("check_id", sorted(CHECKS))
+def test_a_record_with_a_default_route_passes_with_no_study_values(check_id, tmp_path):
+    """Owner Q2, 2026-09-26: a record with two routes and a
+    ``default_variant`` is a full conformance target with an empty base
+    study. Before ``default_variant``, C2 and every check that plans refused
+    it: the study had to name a route."""
+    verdict = run_check(check_id, toy_conformance_target(tmp_path, plugin=DEFAULT_ROUTE_PLUGIN))
+    assert verdict.passed, verdict.detail
+    if check_id == "C6":
+        assert "1 declared artifact(s) present" in verdict.detail
+
+
+def test_the_default_route_is_the_one_that_runs(tmp_path):
+    """C6 counts declared artifacts of the selected route only; this checks
+    by name that the route which ran is the native one, not the other."""
+    from omnidriver.conformance.checks import _context, _plan
+
+    target = toy_conformance_target(tmp_path, plugin=DEFAULT_ROUTE_PLUGIN)
+    report = _plan(target, _context(target))
+    assert report.status == "ok"
+    steps = report.run_document.to_json()["workflowDag"]["steps"]
+    assert [(s["id"], s["command"], s["args"]) for s in steps] == [
+        ("solveNative", "touch", [DEFAULT_ROUTE_MARKER]),
+    ]
 
 
 def test_c8_bites_a_record_that_declares_no_inputs(tmp_path):

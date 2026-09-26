@@ -65,7 +65,7 @@ class RecordCommitResult:
     command_arguments: dict[str, tuple[str, ...]]
     #: Item 4/item 2: the ordered step ids this case's workflow actually
     #: runs -- the record's own steps, or one selected variant's, per
-    #: `_resolve_workflow_step_ids`. The caller that runs the workflow (sweep
+    #: `_resolve_workflow_route`. The caller that runs the workflow (sweep
     #: dispatch) needs this alongside `command_arguments` to build the DAG.
     workflow_step_ids: tuple[str, ...]
 
@@ -183,30 +183,45 @@ def _extract_reserved_names(
     return stripped, reserved_values
 
 
-def _resolve_workflow_step_ids(
+def _resolve_workflow_route(
     record: TutorialRecord, reserved_values: Mapping[str, Any],
-) -> tuple[str, ...]:
-    """Item 4: the record's own steps, or one selected variant's steps.
+) -> tuple[tuple[str, ...], dict[str, Any] | None]:
+    """Item 4: the record's own steps, or one selected variant's steps, and
+    which variant that is.
 
-    A record that declares ``workflow_variants`` REQUIRES the study to name
-    its own ``variant_selector`` -- no silent default among declared
-    variants. A record with no variants at all requires the study NOT to
-    name one (refused via ``resolve_variant_selector`` itself: "declares no
-    workflow_variants").
+    A record that declares ``workflow_variants`` runs the variant the study
+    names through the record's ``variant_selector``, or, when the study does
+    not name the selector at all, the record's ``default_variant`` (owner
+    Q2, 2026-09-26). A study that names the selector with a value that is not
+    a declared variant -- ``None`` included -- is refused by
+    ``resolve_variant_selector``, never read as "no choice" and defaulted.
+    A record with no variants at all refuses a study that names its
+    selector ("declares no workflow_variants").
+
+    Corrected 2026-09-26 (owner Q2): a variant record used to REQUIRE the
+    study to name the selector, so ``describe`` with no study values (design
+    §6's zero-change test, conformance C2) refused every variant record.
+
+    The second value is ``None`` for a record without variants, otherwise
+    the choice as ``describe`` reports it: the selector name, the selected
+    variant, whether it came from the ``"study"`` or the record's
+    ``"default"``, the default, and every declared variant.
     """
     selector_name = record.variant_selector
-    selector_value = reserved_values.get(selector_name) if selector_name is not None else None
-    if record.workflow_variants:
-        if selector_value is None:
-            raise TutorialRecordError(
-                f"tutorial record {record.name!r} declares workflow_variants "
-                f"{sorted(record.workflow_variants)}; the study must supply "
-                f"{selector_name!r} to select one"
-            )
-        return resolve_variant_selector(record, selector_value)
-    if selector_value is not None:
-        return resolve_variant_selector(record, selector_value)  # raises: no variants
-    return record.step_ids()
+    named = selector_name is not None and selector_name in reserved_values
+    if not record.workflow_variants:
+        if named:
+            resolve_variant_selector(record, reserved_values[selector_name])  # raises: no variants
+        return record.step_ids(), None
+    selected = reserved_values[selector_name] if named else record.default_variant
+    steps = resolve_variant_selector(record, selected)
+    return steps, {
+        "selector": selector_name,
+        "selected": selected,
+        "source": "study" if named else "default",
+        "default": record.default_variant,
+        "declared": sorted(record.workflow_variants),
+    }
 
 
 def _resolve_and_split(
@@ -217,7 +232,7 @@ def _resolve_and_split(
     driver_context: "DriverContext",
 ) -> tuple[
     tuple[SourcedPatch, ...], tuple[SourcedPatch, ...],
-    dict[str, tuple[str, ...]], tuple[str, ...],
+    dict[str, tuple[str, ...]], tuple[str, ...], dict[str, Any] | None,
 ]:
     # M1: neither of these two capabilities has a compatibility fallback any
     # more (`:fallback: none`, matching ConfigValueCapability/
@@ -250,7 +265,7 @@ def _resolve_and_split(
     study_by_source, reserved_values = _extract_reserved_names(
         study_by_source, reserved_names=_reserved_study_names(record),
     )
-    workflow_step_ids = _resolve_workflow_step_ids(record, reserved_values)
+    workflow_step_ids, workflow_variant = _resolve_workflow_route(record, reserved_values)
     # No fallback for axes either, but an absent axis catalog IS a neutral
     # state here (design §3: "Core... ships no solver axes" -- most stacks
     # provide none at all), not a refusal: `sort_study_name` already refuses
@@ -271,7 +286,7 @@ def _resolve_and_split(
         ),
         values_agree=comparator,
     )
-    return to_write, unchanged, command_arguments, workflow_step_ids
+    return to_write, unchanged, command_arguments, workflow_step_ids, workflow_variant
 
 
 def _reader_refusing_as_record_error(
@@ -374,7 +389,7 @@ def preview_record_case(
             record, cases_root=cases_root, staged_case_root=staged_case_root,
             driver_context=driver_context,
         )
-        to_write, unchanged, command_arguments, workflow_step_ids = _resolve_and_split(
+        to_write, unchanged, command_arguments, workflow_step_ids, workflow_variant = _resolve_and_split(
             record, study_by_source=study_by_source,
             staged_case_root=staged_case_root, driver_context=driver_context,
         )
@@ -390,6 +405,7 @@ def preview_record_case(
                 step: list(args) for step, args in command_arguments.items()
             },
             "workflow_step_ids": list(workflow_step_ids),
+            "workflow_variant": workflow_variant,
         }
 
 
@@ -454,7 +470,7 @@ def commit_record_case(
         record, cases_root=cases_root, staged_case_root=staged_case_root,
         driver_context=driver_context,
     )
-    to_write, unchanged, command_arguments, workflow_step_ids = _resolve_and_split(
+    to_write, unchanged, command_arguments, workflow_step_ids, _variant = _resolve_and_split(
         record, study_by_source=study_by_source,
         staged_case_root=staged_case_root, driver_context=driver_context,
     )

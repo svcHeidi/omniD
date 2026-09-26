@@ -224,6 +224,16 @@ class TutorialRecord:
     ``workflow_variants`` maps a selector value (e.g. an adapter's choice
     between two mesh-generation routes) to the ordered tuple of step ids
     that variant runs; a record with one route leaves this empty.
+
+    ``default_variant`` names the variant a study runs when it does not name
+    the record's ``variant_selector`` (owner Q2, 2026-09-26): the route the
+    native case itself runs -- "the native case is the default", applied to
+    routes. A record that declares ``workflow_variants`` must declare it,
+    and it must be one of them, compared exactly (no ``str()`` coercion, as
+    for a study's own selector value); a ``default_variant`` on a record with
+    no variants is refused too. Each refusal names the record and the
+    declared variants. Core never knows what a route means; the record says
+    which one is native.
     """
 
     name: str
@@ -240,6 +250,10 @@ class TutorialRecord:
     #: (cardiacFOAM's records declare ``"mesh"`` themselves, step 4).
     #: ``None`` when the record declares no variants to select among.
     variant_selector: str | None = None
+    #: The ``workflow_variants`` key a study that names no route runs (owner
+    #: Q2, 2026-09-26; see the class docstring). ``None`` exactly when the
+    #: record declares no variants.
+    default_variant: str | None = None
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -283,6 +297,24 @@ class TutorialRecord:
                 f"{sorted(variants)} but no variant_selector name to select "
                 "among them"
             )
+        if variants and self.default_variant is None:
+            raise TutorialRecordError(
+                f"tutorial record {self.name!r} declares workflow_variants "
+                f"{sorted(variants)} but no default_variant naming the one "
+                "its native case runs"
+            )
+        if self.default_variant is not None:
+            if not variants:
+                raise TutorialRecordError(
+                    f"tutorial record {self.name!r} declares default_variant "
+                    f"{self.default_variant!r} but no workflow_variants"
+                )
+            if not any(_strictly_equal(self.default_variant, key) for key in variants):
+                raise TutorialRecordError(
+                    f"tutorial record {self.name!r}'s default_variant "
+                    f"{self.default_variant!r} is not one of its declared "
+                    f"workflow_variants ({sorted(variants)})"
+                )
 
     def step_ids(self) -> tuple[str, ...]:
         return tuple(step.step_id for step in self.workflow_steps)

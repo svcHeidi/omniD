@@ -656,6 +656,7 @@ def test_resolve_variant_selector_picks_a_declared_variant():
             "variantB": ("meshB", "solve"),
         },
         variant_selector="variant",
+        default_variant="variantA",
     )
     assert resolve_variant_selector(record, "variantA") == ("meshA", "solve")
     assert resolve_variant_selector(record, "variantB") == ("meshB", "solve")
@@ -666,6 +667,7 @@ def test_resolve_variant_selector_refuses_an_unknown_variant_by_name():
         workflow_steps=(WorkflowStep(step_id="meshA", command=("toolA",)),),
         workflow_variants={"variantA": ("meshA",)},
         variant_selector="variant",
+        default_variant="variantA",
     )
     with pytest.raises(TutorialRecordError, match="unknownVariant"):
         resolve_variant_selector(record, "unknownVariant")
@@ -679,6 +681,7 @@ def test_resolve_variant_selector_refuses_a_null_value():
         workflow_steps=(WorkflowStep(step_id="meshA", command=("toolA",)),),
         workflow_variants={"variantA": ("meshA",)},
         variant_selector="variant",
+        default_variant="variantA",
     )
     with pytest.raises(TutorialRecordError, match="null"):
         resolve_variant_selector(record, None)
@@ -691,6 +694,7 @@ def test_resolve_variant_selector_does_not_coerce_the_value_with_str():
         workflow_steps=(WorkflowStep(step_id="meshA", command=("toolA",)),),
         workflow_variants={"1": ("meshA",), "True": ("meshA",)},
         variant_selector="variant",
+        default_variant="1",
     )
     with pytest.raises(TutorialRecordError, match="not a workflow variant"):
         resolve_variant_selector(record, 1)
@@ -713,6 +717,52 @@ def test_tutorial_record_refuses_workflow_variants_without_a_variant_selector():
             workflow_steps=(WorkflowStep(step_id="meshA", command=("toolA",)),),
             workflow_variants={"variantA": ("meshA",)},
         )
+
+
+def test_tutorial_record_refuses_workflow_variants_without_a_default_variant():
+    """Owner Q2, 2026-09-26: a record with routes names the one its native
+    case runs (``default_variant``). A record that names none would leave a
+    study that picks no route with nothing to run but a guess -- refused at
+    construction, by name."""
+    with pytest.raises(TutorialRecordError, match="default_variant") as exc:
+        _record(
+            workflow_steps=(
+                WorkflowStep(step_id="meshA", command=("toolA",)),
+                WorkflowStep(step_id="meshB", command=("toolB",)),
+            ),
+            workflow_variants={"variantA": ("meshA",), "variantB": ("meshB",)},
+            variant_selector="variant",
+        )
+    assert "variantA" in str(exc.value) and "variantB" in str(exc.value)
+
+
+def test_tutorial_record_refuses_a_default_variant_it_does_not_declare():
+    with pytest.raises(TutorialRecordError, match="'variantC'") as exc:
+        _record(
+            workflow_steps=(WorkflowStep(step_id="meshA", command=("toolA",)),),
+            workflow_variants={"variantA": ("meshA",)},
+            variant_selector="variant",
+            default_variant="variantC",
+        )
+    assert "default_variant" in str(exc.value)
+    assert "variantA" in str(exc.value)
+
+
+def test_tutorial_record_refuses_a_default_variant_it_does_not_coerce():
+    """The default is compared exactly, like a study's selector value: an
+    integer ``1`` does not name a variant called ``"1"``."""
+    with pytest.raises(TutorialRecordError, match="default_variant"):
+        _record(
+            workflow_steps=(WorkflowStep(step_id="meshA", command=("toolA",)),),
+            workflow_variants={"1": ("meshA",)},
+            variant_selector="variant",
+            default_variant=1,
+        )
+
+
+def test_tutorial_record_refuses_a_default_variant_without_workflow_variants():
+    with pytest.raises(TutorialRecordError, match="default_variant"):
+        _record(default_variant="variantA")
 
 
 # ---------------------------------------------------------------------------
@@ -1210,6 +1260,7 @@ def _record_with_variants(**overrides) -> TutorialRecord:
             "variantB": ("meshB", "solve"),
         },
         variant_selector="mesh",
+        default_variant="variantA",
     )
     fields.update(overrides)
     return TutorialRecord(**fields)
@@ -1227,6 +1278,10 @@ def test_preview_record_case_reports_the_selected_variants_steps(tmp_path):
         driver_context=context,
     )
     assert preview["workflow_step_ids"] == ["meshB", "solve"]
+    assert preview["workflow_variant"] == {
+        "selector": "mesh", "selected": "variantB", "source": "study",
+        "default": "variantA", "declared": ["variantA", "variantB"],
+    }
 
 
 def test_preview_record_case_refuses_an_unknown_mesh_variant(tmp_path):
@@ -1242,17 +1297,62 @@ def test_preview_record_case_refuses_an_unknown_mesh_variant(tmp_path):
         )
 
 
-def test_preview_record_case_refuses_a_missing_mesh_when_record_has_variants(tmp_path):
+def test_preview_record_case_runs_the_default_variant_when_the_study_names_none(tmp_path):
+    """Owner Q2, 2026-09-26. This test used to expect a refusal ("the study
+    must supply 'mesh'"): a variant record could not be previewed, planned or
+    pass C2 with no study values. Its default route is now the route the
+    native case runs, so a study that names no route runs that one, and the
+    preview says the choice came from the record, not the study."""
     _native_case(tmp_path, {})
     record = _record_with_variants()
     context = _context_with_writer()
-    with pytest.raises(TutorialRecordError, match="mesh"):
+    preview = record_execution.preview_record_case(
+        record,
+        cases_root=tmp_path / "cases",
+        study_by_source={"base": {}},
+        driver_context=context,
+    )
+    assert preview["workflow_step_ids"] == ["meshA", "solve"]
+    assert preview["workflow_variant"] == {
+        "selector": "mesh", "selected": "variantA", "source": "default",
+        "default": "variantA", "declared": ["variantA", "variantB"],
+    }
+
+
+def test_preview_record_case_refuses_a_null_selector_rather_than_defaulting(tmp_path):
+    """A study that names the selector with a null value made a choice that
+    is not a route; it is refused, never read as "no choice" and defaulted."""
+    _native_case(tmp_path, {})
+    record = _record_with_variants()
+    context = _context_with_writer()
+    with pytest.raises(TutorialRecordError, match="null"):
         record_execution.preview_record_case(
             record,
             cases_root=tmp_path / "cases",
-            study_by_source={"base": {}},
+            study_by_source={"base": {"mesh": None}},
             driver_context=context,
         )
+
+
+def test_preview_of_a_record_without_variants_reports_no_variant(tmp_path):
+    _native_case(tmp_path, {})
+    preview = record_execution.preview_record_case(
+        _record(allowed_axes=frozenset()), cases_root=tmp_path / "cases",
+        study_by_source={"base": {}}, driver_context=_context_with_writer(),
+    )
+    assert preview["workflow_variant"] is None
+
+
+def test_commit_record_case_runs_the_default_variant_when_the_study_names_none(tmp_path):
+    _native_case(tmp_path, {})
+    result = record_execution.commit_record_case(
+        _record_with_variants(),
+        cases_root=tmp_path / "cases",
+        staged_case_root=tmp_path / "staged",
+        study_by_source={"base": {}},
+        driver_context=_context_with_writer(),
+    )
+    assert result.workflow_step_ids == ("meshA", "solve")
 
 
 def test_commit_record_case_reports_the_selected_variants_steps(tmp_path):
