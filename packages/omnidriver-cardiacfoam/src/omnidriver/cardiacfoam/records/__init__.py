@@ -17,14 +17,20 @@ and axis is pure data / a pure function; only ``core.case_transaction
 
 from __future__ import annotations
 
+from omnidriver.core.tutorial_records import build_tutorial_record_catalog
+
 from .niederer_2011 import RECORD as _NIEDERER_2011_RECORD
 from .manufactured_eikonal_ecg import RECORD as _MANUFACTURED_EIKONAL_ECG_RECORD
 from .restitution_curves import RECORD as _RESTITUTION_CURVES_RECORD
 from .manufactured_bidomain import RECORD as _MANUFACTURED_BIDOMAIN_RECORD
 
-TUTORIAL_RECORDS = {
-    _RESTITUTION_CURVES_RECORD.name: _RESTITUTION_CURVES_RECORD,
-    _MANUFACTURED_BIDOMAIN_RECORD.name: _MANUFACTURED_BIDOMAIN_RECORD,
-    _NIEDERER_2011_RECORD.name: _NIEDERER_2011_RECORD,
-    _MANUFACTURED_EIKONAL_ECG_RECORD.name: _MANUFACTURED_EIKONAL_ECG_RECORD,
-}
+#: Built with build_tutorial_record_catalog, not a dict comprehension, so
+#: two records sharing a name are refused by name instead of one silently
+#: overwriting the other (the same hazard 7d79ec9 closed for two axes
+#: sharing a name inside one record).
+TUTORIAL_RECORDS = build_tutorial_record_catalog((
+    _RESTITUTION_CURVES_RECORD,
+    _MANUFACTURED_BIDOMAIN_RECORD,
+    _NIEDERER_2011_RECORD,
+    _MANUFACTURED_EIKONAL_ECG_RECORD,
+))

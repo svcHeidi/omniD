@@ -1079,3 +1079,40 @@ def patches_to_parameters(
         )
         for sourced in patches
     )
+
+
+# ---------------------------------------------------------------------------
+# Building a plugin's own record catalog (a plain {record.name: record} dict
+# comprehension silently drops a duplicate name -- the same hazard
+# record-scoped axes closed for two axes sharing a name within one record,
+# 2026-09-26; this closes it for two records sharing a name across a
+# plugin's own TUTORIAL_RECORDS).
+# ---------------------------------------------------------------------------
+
+
+def build_tutorial_record_catalog(
+    records: Sequence[TutorialRecord],
+) -> dict[str, TutorialRecord]:
+    """Build a ``name -> record`` catalog, refusing a duplicate name by name.
+
+    A plugin's own ``TUTORIAL_RECORDS`` module constant is exactly this: a
+    tuple of the records it registers, reduced to a dict keyed by
+    ``TutorialRecord.name``. Writing that reduction as a dict comprehension
+    lets a second record with the same name silently overwrite the first,
+    with no error and no trace of which record was actually reachable --
+    the same hazard ``TutorialRecord.__post_init__`` already refuses for two
+    axes sharing a name inside one record. Neutral (core owns no record
+    vocabulary; this is just "how to build the dict without losing one"), so
+    both ``cardiacfoam.records`` and ``opencarp.records`` share it.
+    """
+    catalog: dict[str, TutorialRecord] = {}
+    for record in records:
+        if record.name in catalog:
+            raise TutorialRecordError(
+                f"duplicate tutorial record name {record.name!r}: both "
+                f"{catalog[record.name].native_case_relpath!r} and "
+                f"{record.native_case_relpath!r} claim it; a record catalog "
+                "requires unique names"
+            )
+        catalog[record.name] = record
+    return catalog

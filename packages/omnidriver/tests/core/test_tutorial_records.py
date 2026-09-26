@@ -30,6 +30,7 @@ from omnidriver.core.tutorial_records import (
     TutorialRecord,
     TutorialRecordError,
     WorkflowStep,
+    build_tutorial_record_catalog,
     combine_patches,
     patches_to_parameters,
     resolve_case_patches,
@@ -1880,3 +1881,26 @@ def test_record_case_spec_builds_the_generic_workflow_dag_shape(tmp_path):
     # The case was already committed by commit_record_case; this spec's own
     # mutation is a genuine no-op.
     assert spec.plan_case(staged, spec.build_cases()[0]) is None
+
+
+# ---------------------------------------------------------------------------
+# build_tutorial_record_catalog: a plugin's TUTORIAL_RECORDS is a reduction
+# of a tuple of records to a name -> record dict, and a plain dict
+# comprehension silently drops a duplicate name. This is the same guard
+# TutorialRecord.__post_init__ already gives two axes sharing a name inside
+# one record, applied across a plugin's own record tuple.
+# ---------------------------------------------------------------------------
+
+
+def test_build_tutorial_record_catalog_keys_by_name():
+    first = _record(name="alpha", native_case_relpath="alpha")
+    second = _record(name="beta", native_case_relpath="beta")
+    catalog = build_tutorial_record_catalog((first, second))
+    assert catalog == {"alpha": first, "beta": second}
+
+
+def test_build_tutorial_record_catalog_refuses_a_duplicate_name():
+    first = _record(name="dup", native_case_relpath="caseOne")
+    second = _record(name="dup", native_case_relpath="caseTwo")
+    with pytest.raises(TutorialRecordError, match="duplicate tutorial record name 'dup'"):
+        build_tutorial_record_catalog((first, second))
