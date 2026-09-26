@@ -1,6 +1,9 @@
 """K4: a record step names the case files it reads and writes."""
 from __future__ import annotations
 
+import copy
+import dataclasses
+import json
 from pathlib import Path
 
 import pytest
@@ -8,7 +11,9 @@ import pytest
 from omnidriver.core.runtime.record_execution import (
     _workflow_dag_for_record, record_artifact_id, record_case_spec, record_step_artifacts,
 )
-from omnidriver.core.tutorial_records import TutorialRecord, TutorialRecordError, WorkflowStep
+from omnidriver.core.tutorial_records import (
+    PLAIN_FILE_FORMAT, ProducedPath, TutorialRecord, TutorialRecordError, WorkflowStep,
+)
 
 RECORD = TutorialRecord(
     name="io",
@@ -110,3 +115,63 @@ def test_a_step_without_its_own_produces_still_takes_the_manifest():
         utility_produces={"u": ("u.metrics",)}, driver_context=None,
     )
     assert dag["steps"][0]["produces"] == ["u.metrics"]
+
+
+# ---------------------------------------------------------------------------
+# Task 1 (results-as-quantities, topic B): ProducedPath -- a produces entry
+# names its own format, read only through WorkflowStep.produced_format.
+# ---------------------------------------------------------------------------
+
+
+def test_a_plain_produces_path_is_an_unread_file():
+    step = WorkflowStep(step_id="solve", command=("s",), produces=("out/v.igb",))
+    assert step.produces == ("out/v.igb",)
+    assert step.produced_format("out/v.igb") == PLAIN_FILE_FORMAT == "file"
+
+
+def test_a_produced_path_is_its_path_and_names_its_format():
+    step = WorkflowStep(step_id="solve", command=("s",),
+                        produces=("out/v.igb", ProducedPath("out/lat.dat", format="toy_lat")))
+    # every existing reader of `produces` still sees plain paths
+    assert step.produces == ("out/v.igb", "out/lat.dat")
+    assert all(isinstance(path, str) for path in step.produces)
+    assert json.dumps(list(step.produces)) == '["out/v.igb", "out/lat.dat"]'
+    assert step.produced_format("out/lat.dat") == "toy_lat"
+    # the format survives the copies core and tests make
+    assert copy.deepcopy(step).produced_format("out/lat.dat") == "toy_lat"
+    assert dataclasses.replace(step, command=("t",)).produced_format("out/lat.dat") == "toy_lat"
+
+
+def test_record_artifacts_carry_the_declared_format():
+    record = TutorialRecord(
+        name="fmt", native_case_relpath="fmt", allowed_axes=frozenset(),
+        workflow_steps=(WorkflowStep(step_id="solve", command=("s",),
+                                     produces=("out/v.igb", ProducedPath("out/lat.dat", format="toy_lat"))),),
+    )
+    assert [(a.path_pattern, a.format) for a in record_step_artifacts(record, ("solve",))] == [
+        ("out/v.igb", "file"), ("out/lat.dat", "toy_lat"),
+    ]
+
+
+@pytest.mark.parametrize("bad", ["", " toy", "file"])
+def test_a_format_must_be_named_and_not_the_plain_meaning(bad):
+    with pytest.raises(TutorialRecordError, match="format"):
+        ProducedPath("out/lat.dat", format=bad)
+
+
+@pytest.mark.parametrize("second", [ProducedPath("out/lat.dat", format="other"), "out/lat.dat"])
+def test_a_formatted_path_is_declared_once(second):
+    with pytest.raises(TutorialRecordError, match="more than once"):
+        WorkflowStep(step_id="solve", command=("s",),
+                     produces=(ProducedPath("out/lat.dat", format="toy_lat"), second))
+
+
+def test_a_format_on_consumes_is_refused():
+    with pytest.raises(TutorialRecordError, match="belongs on the step that produces"):
+        WorkflowStep(step_id="solve", command=("s",), consumes=(ProducedPath("in.dat", format="toy"),))
+
+
+def test_the_format_of_a_path_the_step_does_not_produce_is_refused_by_name():
+    step = WorkflowStep(step_id="solve", command=("s",), produces=("out/v.igb",))
+    with pytest.raises(TutorialRecordError, match="'out/lat.dat'"):
+        step.produced_format("out/lat.dat")

@@ -559,7 +559,7 @@ def record_step_artifacts(record: TutorialRecord, workflow_step_ids: Sequence[st
             artifacts.append(DataArtifact(
                 artifact_id=record_artifact_id(step.step_id, index),
                 path_pattern=path,
-                format="file",
+                format=step.produced_format(path),
                 description=f"{record.name} step {step.step_id!r} writes {path}",
                 produced_by=step.step_id,
             ))

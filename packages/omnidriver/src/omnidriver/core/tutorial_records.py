@@ -55,6 +55,52 @@ class TutorialRecordError(ValueError):
 # ---------------------------------------------------------------------------
 
 
+PLAIN_FILE_FORMAT = "file"
+"""The format of a ``produces`` path that names none: a file that exists or
+not, which no reader reads (``record_execution.record_step_artifacts``)."""
+
+
+class ProducedPath(str):
+    """A ``produces`` path that also names the format of what it holds.
+
+    It *is* its path: a ``str`` equal to the path, so every reader of
+    ``WorkflowStep.produces`` (the DAG's artifact ids, record staging,
+    provenance, a JSON dump) sees paths exactly as before. The format rides
+    on the entry and is read only through :meth:`WorkflowStep.produced_format`:
+    a string operation on the path returns a plain ``str`` without it, and
+    two entries compare equal by path alone. Core never interprets the
+    format. It names the reader a plugin returns from
+    ``get_artifact_value_reader`` (docs/superpowers/specs/2026-09-26-results-
+    as-quantities-design.md §3). Added 2026-09-26.
+    """
+
+    format: str
+
+    def __new__(cls, path: str, format: str) -> "ProducedPath":
+        if not isinstance(path, str):
+            raise TutorialRecordError(f"a produced path must be a str, not {type(path).__name__}")
+        if not isinstance(format, str) or not format or format != format.strip():
+            raise TutorialRecordError(
+                f"produced path {path!r} must name a non-empty format without surrounding spaces, got {format!r}"
+            )
+        if format == PLAIN_FILE_FORMAT:
+            raise TutorialRecordError(
+                f"produced path {path!r}: format {PLAIN_FILE_FORMAT!r} is what a plain path already means; write the path alone"
+            )
+        entry = super().__new__(cls, path)
+        entry.__dict__["format"] = format
+        return entry
+
+    def __setattr__(self, name: str, value: object) -> None:
+        raise AttributeError(f"ProducedPath is immutable; cannot set {name!r}")
+
+    def __reduce__(self):
+        return (ProducedPath, (str(self), self.format))
+
+    def __repr__(self) -> str:
+        return f"ProducedPath({str(self)!r}, format={self.format!r})"
+
+
 @dataclass(frozen=True)
 class WorkflowStep:
     """One named step in a tutorial record's workflow.
@@ -83,6 +129,9 @@ class WorkflowStep:
     refused; so are ``{`` and ``}``, because a ``produces`` path becomes an
     artifact ``path_pattern`` that core ``str.format``-s -- the
     ``{case_id}``/``{time}`` placeholders are not supported here.
+
+    A ``produces`` entry may be a :class:`ProducedPath`, which also names its
+    format. A plain path means :data:`PLAIN_FILE_FORMAT`. Added 2026-09-26.
     """
 
     step_id: str
@@ -120,6 +169,36 @@ class WorkflowStep:
                     raise TutorialRecordError(f"{label} must be case-relative: {exc}") from exc
                 if not parts:
                     raise TutorialRecordError(f"{label} must name a path inside the case, not the case root")
+
+        formatted: set[str] = set()
+        plain: set[str] = set()
+        for path in self.produces:
+            if isinstance(path, ProducedPath):
+                if path in formatted or path in plain:
+                    raise TutorialRecordError(
+                        f"workflow step {self.step_id!r} produces {str(path)!r} more than once with a format; a path has one format"
+                    )
+                formatted.add(str(path))
+            else:
+                if path in formatted:
+                    raise TutorialRecordError(
+                        f"workflow step {self.step_id!r} produces {path!r} more than once with a format; a path has one format"
+                    )
+                plain.add(path)
+        for path in self.consumes:
+            if isinstance(path, ProducedPath):
+                raise TutorialRecordError(
+                    f"workflow step {self.step_id!r} consumes {str(path)!r} with a format; a format belongs on the step that produces the file"
+                )
+
+    def produced_format(self, path: str) -> str:
+        """The declared format of one of this step's ``produces`` paths."""
+        for entry in self.produces:
+            if entry == path:
+                return entry.format if isinstance(entry, ProducedPath) else PLAIN_FILE_FORMAT
+        raise TutorialRecordError(
+            f"workflow step {self.step_id!r} does not produce {path!r}; it produces {[str(p) for p in self.produces]}"
+        )
 
 
 @dataclass(frozen=True)
