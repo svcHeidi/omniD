@@ -53,7 +53,14 @@ def test_the_per_event_layout_is_refused_by_name(tmp_path):
     # (opencarp_parameters.json: "name": "lats[Int].all", "type": "Int"), so
     # the study value must be an int -- a bool is refused by the generic
     # value-shape check ("must be an integer", contracts/dictionary.py).
-    run = niederer_run(tmp_path, dx=1000.0, tend=10.0, extra={"nversion.par:lats[0].all": 1})
+    # allow_missing_declared_artifact=True is this test's own concession, not
+    # the shared helper's default: with all = 1 the declared LAT file is
+    # expected to be absent (that is the point of this test), and
+    # reconciliation marks the case failed even though openCARP exits 0. Any
+    # other caller of niederer_run/niederer_sweep still fails loudly on a
+    # missing declared artifact.
+    run = niederer_run(tmp_path, dx=1000.0, tend=10.0, extra={"nversion.par:lats[0].all": 1},
+                       allow_missing_declared_artifact=True)
     assert not (run.case_root / run.lat_artifact.path_pattern).exists()
     per_event = dataclasses.replace(run.lat_artifact, path_pattern="out/vm_act-thresh.dat")
     with pytest.raises(ValueError, match=r"lats\[\]\.all = 1"):

@@ -53,9 +53,21 @@ LAT_PATH = "out/init_acts_vm_act-thresh.dat"
 
 
 def niederer_sweep(tmp_path: Path, *, dx_values: tuple[float, ...], tend: float,
-                   extra: Mapping[str, Any] | None = None) -> Path:
+                   extra: Mapping[str, Any] | None = None,
+                   allow_missing_declared_artifact: bool = False) -> Path:
     """Run niedererNVersion over ``dx_values`` through ``omnidriver sweep-run``
-    (dt 50 us, G4/G7). Returns the sweep's output directory."""
+    (dt 50 us, G4/G7). Returns the sweep's output directory.
+
+    By default any case that does not complete fails the caller loudly --
+    including a missing declared artifact, e.g. the LAT file absent at
+    ``all = 0`` (an actual solver or staging defect). Only
+    ``test_the_per_event_layout_is_refused_by_name`` (F17) passes
+    ``allow_missing_declared_artifact=True``: with ``lats[0].all = 1`` the
+    declared per-node LAT file is *expected* to be missing (openCARP writes
+    a different file instead, F17), and reconciliation marks that case
+    failed even though the solver itself exited 0 -- see
+    ``_only_a_declared_artifact_is_missing``. Every other caller must not
+    silently tolerate a missing artifact."""
     require_opencarp_binary()
     spec = {
         "base": {"entry": "niedererNVersion", "cases_root": str(opencarp_tutorials_root()),
@@ -75,7 +87,9 @@ def niederer_sweep(tmp_path: Path, *, dx_values: tuple[float, ...], tend: float,
     except ValueError:
         pytest.fail(f"sweep-run printed no JSON (rc={proc.returncode}): {proc.stderr[-2000:]}")
     for case in payload.get("cases", ()):
-        if case.get("status") == "completed" or _only_a_declared_artifact_is_missing(case):
+        if case.get("status") == "completed":
+            continue
+        if allow_missing_declared_artifact and _only_a_declared_artifact_is_missing(case):
             continue
         pytest.fail(f"sweep-run failed (rc={proc.returncode}): {proc.stdout[-2000:]} {proc.stderr[-2000:]}")
     if not payload.get("cases"):
@@ -107,8 +121,10 @@ class NiedererRun:
     lat_artifact: DataArtifact
 
 
-def niederer_run(tmp_path: Path, *, dx: float, tend: float, extra: Mapping[str, Any] | None = None) -> NiedererRun:
-    output = niederer_sweep(tmp_path, dx_values=(dx,), tend=tend, extra=extra)
+def niederer_run(tmp_path: Path, *, dx: float, tend: float, extra: Mapping[str, Any] | None = None,
+                 allow_missing_declared_artifact: bool = False) -> NiedererRun:
+    output = niederer_sweep(tmp_path, dx_values=(dx,), tend=tend, extra=extra,
+                            allow_missing_declared_artifact=allow_missing_declared_artifact)
     (case,) = build_sweep_context(output).cases
     document = json.loads((output / case.run_document_path).read_text())
     artifact = next(data_artifact_from_json(raw) for raw in document["expectedArtifacts"]
