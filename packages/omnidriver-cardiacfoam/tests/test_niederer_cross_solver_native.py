@@ -129,6 +129,7 @@ def _opencarp_native() -> ModuleType:
     ["tests"]``) does not put openCARP's tests on ``sys.path``."""
     spec = importlib.util.spec_from_file_location("opencarp_native_for_cross_solver", _OPENCARP_NATIVE)
     module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module     # its dataclass resolves its own module while it executes
     spec.loader.exec_module(module)
     return module
 
