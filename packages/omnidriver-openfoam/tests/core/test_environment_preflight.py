@@ -202,6 +202,11 @@ def test_missing_executable_is_error(clean_env):
     assert len(missing) == 1
     assert missing[0].level == "error"
     assert missing[0].field == "setExprFields"
+    # Added 2026-09-26 (conformance Task 14, C9): the message names the
+    # command as a quoted token, so a reader -- and conformance C9, which
+    # requires exactly that of every solver's preflight -- can tell which
+    # command is missing without parsing prose.
+    assert missing[0].message == "'setExprFields' not found on PATH."
 
 
 def test_present_executables_have_no_error(clean_env):

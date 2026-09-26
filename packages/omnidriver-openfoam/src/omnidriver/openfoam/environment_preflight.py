@@ -243,7 +243,7 @@ def _environment_diagnostics(
             diagnostics.append(diagnostic(
                 "error",
                 "missing_executable",
-                f"{executable} not found on PATH.",
+                f"{executable!r} not found on PATH.",
                 source="environment",
                 field=executable,
             ))
