@@ -1100,11 +1100,14 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.anisotropic',
             phases=frozenset({'physics'}),
-            description="Whether the manufactured pseudo-ECG reference uses its anisotropic solution branch (the sin^2(pi x)*sin^2(pi y)*sin^2(pi z) field), rather than the isotropic default. 3D-only: the solver raises a FatalError if this is set true while verificationModel.dimension resolves to anything but 3D.",
+            description="Whether the manufactured pseudo-ECG reference uses its anisotropic solution branch (the sin^2(pi x)*sin^2(pi y)*sin^2(pi z) field), rather than the isotropic default. Must be yes exactly when the tissue verifier ($ELECTRO_MODEL_COEFFS.verificationModel.type) is manufacturedAnisotropicMonodomainVerifier, and no otherwise: cardiacfoam.validation refuses a mismatch by name, in either direction (owner, 2026-09-26, plan §5g Q11). 3D-only: the solver raises a FatalError if this is set true while verificationModel.dimension resolves to anything but 3D.",
             source_refs=('src/verificationModels/ecgVerification/manufacturedPseudoECGVerifier.C',),
             value_kind='boolean', dynamic_path=True, allowed_bindings={"<name>": None},
             typical_value='false',
-            constraints=('Only read by manufacturedPseudoECGVerifier. Native FatalError if true and verificationModel.dimension is not 3D.',),
+            constraints=(
+                'Only read by manufacturedPseudoECGVerifier. Native FatalError if true and verificationModel.dimension is not 3D.',
+                'Must equal ($ELECTRO_MODEL_COEFFS.verificationModel.type == "manufacturedAnisotropicMonodomainVerifier"); refused by name otherwise.',
+            ),
             applicable_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.type": ('manufacturedPseudoECGVerifier',)},
         ),
         DictEntry(

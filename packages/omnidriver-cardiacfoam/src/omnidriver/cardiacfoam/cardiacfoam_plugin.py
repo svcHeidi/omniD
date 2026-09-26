@@ -483,6 +483,7 @@ class CardiacFoamPlugin:
         from omnidriver.cardiacfoam.validation import (
             _evaluate_block_references,
             _evaluate_dynamic_required_fields,
+            _evaluate_ecg_anisotropic_consistency,
             _evaluate_heterogeneity,
             _evaluate_personalized_templates,
             _evaluate_solver_coupling,
@@ -496,6 +497,7 @@ class CardiacFoamPlugin:
             + _evaluate_heterogeneity(context)
             + _evaluate_personalized_templates(context)
             + _evaluate_tissue_compatibility(context)
+            + _evaluate_ecg_anisotropic_consistency(context)
         )
 
     def predict_data_artifacts(self, case_root: Path, spec: TutorialSpec) -> tuple[DataArtifact, ...]:

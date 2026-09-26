@@ -683,6 +683,94 @@ def _evaluate_personalized_templates(context: dict[str, Any]) -> list["StrictDia
     return errors
 
 
+_TISSUE_ANISOTROPIC_VERIFIER = "manufacturedAnisotropicMonodomainVerifier"
+_ECG_PSEUDO_VERIFIER = "manufacturedPseudoECGVerifier"
+
+
+def _as_switch_bool(value: Any) -> bool:
+    """Interpret an OpenFOAM ``Switch``-shaped value as a Python bool.
+
+    ``value`` is either a real ``foamlib``-parsed string (``"yes"``/``"no"``/
+    ``"true"``/``"false"``, possibly quoted) or, in a unit test's literal
+    context dict, a plain Python ``bool``. Anything else (missing, ``None``)
+    reads as ``False`` -- the native default
+    (``manufacturedPseudoECGVerifier.C:420``,
+    ``cfg.lookupOrDefault<Switch>("anisotropic", false)``).
+    """
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    text = str(value).strip().strip('"').lower()
+    return text in {"yes", "true", "on", "y", "t", "1"}
+
+
+def _evaluate_ecg_anisotropic_consistency(context: dict[str, Any]) -> list["StrictDiagnostic"]:
+    """``ecgDomains.<name>.verificationModel.anisotropic`` must state the same
+    relation the tissue verifier already states, in both directions.
+
+    Native ``manufacturedPseudoECGVerifier`` reads its own ``anisotropic``
+    ``Switch`` (default ``false``,
+    ``src/verificationModels/ecgVerification/manufacturedPseudoECGVerifier.C``,
+    ``readVerificationModel``) to choose which of two reference branches --
+    the isotropic FDA cosine field or the anisotropic
+    ``sin^2(pi x)*sin^2(pi y)*sin^2(pi z)`` field -- its samples are checked
+    against. That choice has to agree with the *tissue*-side verifier
+    actually driving the solve
+    (``$ELECTRO_MODEL_COEFFS.verificationModel.type``): ``anisotropic yes``
+    is correct exactly when the tissue verifier is
+    ``manufacturedAnisotropicMonodomainVerifier``, and wrong -- a silently
+    mismatched reference -- otherwise, in either direction. This models the
+    relation between the two existing keys; it adds no new key (owner,
+    2026-09-26, plan §5g Q11: "get the physics right").
+
+    Scoped to domains whose own ``ecgDomains.<name>.verificationModel.type``
+    is ``manufacturedPseudoECGVerifier``: native only reads ``anisotropic``
+    there (``manufacturedEikonalECGVerifier``/``manufacturedFDABathBidomain
+    ECGVerifier`` do not declare the key at all -- ``grep -rl anisotropic
+    src/verificationModels/ecgVerification/`` finds only the pseudo-ECG
+    verifier's ``.C``/``.H`` pair), matching this catalog entry's own
+    ``applicable_when``.
+    """
+    errors: list["StrictDiagnostic"] = []
+    tissue_is_anisotropic = context.get("verificationModel.type") == _TISSUE_ANISOTROPIC_VERIFIER
+
+    domains = {
+        key[len(_ECG_DOMAIN_PREFIX):].split(".", 1)[0]
+        for key in context
+        if key.startswith(_ECG_DOMAIN_PREFIX)
+        and not _is_template_slot_key(key)
+    }
+    for domain in sorted(domains):
+        prefix = f"{_ECG_DOMAIN_PREFIX}{domain}."
+        if context.get(prefix + "verificationModel.type") != _ECG_PSEUDO_VERIFIER:
+            continue
+
+        field = prefix + "verificationModel.anisotropic"
+        anisotropic = _as_switch_bool(context.get(field))
+        if anisotropic == tissue_is_anisotropic:
+            continue
+
+        tissue_type = context.get("verificationModel.type")
+        if anisotropic:
+            message = (
+                f"{field} is yes, but $ELECTRO_MODEL_COEFFS.verificationModel.type "
+                f"is {tissue_type!r}, not {_TISSUE_ANISOTROPIC_VERIFIER!r}. "
+                "anisotropic must match the tissue verifier actually driving the solve."
+            )
+        else:
+            message = (
+                f"{field} is no (or unset), but "
+                f"$ELECTRO_MODEL_COEFFS.verificationModel.type is "
+                f"{_TISSUE_ANISOTROPIC_VERIFIER!r}. anisotropic must be yes "
+                f"when the tissue verifier is {_TISSUE_ANISOTROPIC_VERIFIER!r}."
+            )
+        errors.append(_diagnostic_from_phase(
+            phase="physics", field=field, message=message, level="error",
+        ))
+    return errors
+
+
 _RPVJ_COUPLER = "reactionDiffusionPvjCoupler"
 
 

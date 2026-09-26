@@ -45,3 +45,45 @@ templates declare `lc` with `DefineConstant`. There are two options:
   `generated_file_suffixes` (`.geo` is dropped at staging and git-ignored natively).
 
 The first is the minimum-code route, and the native case stays the pointer.
+
+**Owner decision (2026-09-26, plan §5g Q2/Q3/Q7/Q8), executed.** The first
+option: all five native templates were converted to
+`DefineConstant[ lc = {<default>, Name "lc"} ]`, native commit `60805b27`
+(worktree `omnid-tutorials-are-pointers`, branch `omnid/tutorials-are-pointers`).
+Defaults are each study's own coarsest tet level (§5c's mapping,
+confirmed by reading each study's `sweep_tet_*.json`): coarsest
+`number_cells` is `10` for bidomain, eikonalECG and monodomainPseudoECG's
+`box.geo.template` and for bathBidomain's `three_domain_box.geo.template`
+(`sweep_tet_electrodePair.json`'s `number_cells: [10, 20, 40]` is coarser
+than `sweep_tet_generic.json`'s `[80]`), giving `lc = 1/10 = 0.1`; coarsest
+`dx_values` for `NiedererEtAl2011verification/slab.geo.template` is `0.5`
+mm `= 0.0005` m.
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| G7 | `gmsh -3 <template> -o a.msh -format msh2` at each template's new default, in a `git stash create` export of the worktree (uncommitted templates at the time), gmsh 4.15.2 | 0 errors for all five: bidomain/eikonalECG/monodomainPseudoECG `1184 nodes 6462 elements`; bathBidomain `3304 nodes 18996 elements`; Niederer `3739 nodes 20810 elements` | every template's `DefineConstant` default parses and meshes cleanly with no flag given |
+| G8 | as G7 with `-setnumber lc <finer>` (`0.05` for the four box/bath templates, `0.0002` m for Niederer) | 0 errors for all five: bidomain/eikonalECG/monodomainPseudoECG `7408 nodes 42954 elements`; bathBidomain `21243 nodes 127148 elements`; Niederer `45154 nodes 267666 elements` | `-setnumber lc <value>` overrides the default and refines the mesh as expected, matching G5's finding on this repo's actual five templates (not a copy) |
+| G9 | `gmsh -3 <template> -o /tmp/x.msh -format msh2 2>&1 \| grep -ci error` for all five, post-conversion | `0` for every template | confirms 0 parse errors by exact count, not by eyeballing the tail of the log |
+
+Native commits: `60805b27` (the five templates), `6eb12863` (Q11,
+`ecgDomains.ECG.verificationModel.anisotropic yes` in
+`monodomainPseudoECG/constant/electroProperties`), `03f02dec` (Q9, drops
+bidomain's unapplied `ode_abs_tolerance`/`ode_rel_tolerance` from all 7
+studies plus the `temporalConvergence` README), `9cb1213e` + `72038987`
+(Q10, deletes the four byte-identical tet overlays and corrects their
+case READMEs).
+
+**Q11 regression outcome.** `regression/regressionTest.sh` (`Allrun
+parallel`, 6-way `scotch` decomposition, real `cardiacFoam`) against a
+`git stash create` export with `anisotropic yes`: **PASSED, 16/16 checks,
+0 failures.** Every value in `regression/monodomainPseudoECG.reference`
+(cell count, final time, the tissue `Vm`/`u1`/`u2` L1/L2/Linf error
+metrics, and the raw `pseudoECG.dat` E1-E5 final samples) matched to
+within its existing tolerance (differences of order `1e-10`-`1e-12`,
+floating-point noise from a fresh run, not from the flag). The reference
+does not compare `manufacturedPseudoECGSummary_ECG.dat`'s error/delta
+columns, which are the ones the `anisotropic` flag actually changes (its
+internal-accuracy-checking reference branch) -- so the committed
+reference is unaffected and was not regenerated. Old vs new: unchanged
+(same file, same values, before and after the flag flip, by design of
+what the reference actually checks).
