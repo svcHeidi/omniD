@@ -51,7 +51,7 @@ uv venv --python 3.11 /tmp/odcore && VIRTUAL_ENV=/tmp/odcore uv pip install -q \
 | core alone | `python -m pytest packages/omnidriver/tests -q` | core reaching into a sibling package |
 | **installed wheel** | see below | core reading repo-relative state at import time |
 | native tree | `OMNIDRIVER_NATIVE_TUTORIALS=<path> python -m pytest packages/ -q -m native` | drift against the real native cardiacFOAM tutorials tree; supplied only via that variable (never discovered) — a `native`-marked test FAILS, not skips, when it is unset |
-| native openCARP | `OMNIDRIVER_OPENCARP_TUTORIALS=<path> DYLD_LIBRARY_PATH=<lib> python -m pytest packages/omnidriver-opencarp/tests -m native_opencarp` | drift against the real openCARP binary and its tutorials tree; `DYLD_LIBRARY_PATH` is required on macOS or the binary fails to load `libsundials_cvode`, supplied, never discovered — a `native_opencarp`-marked test FAILS, not skips, when either is missing. Outside these tests (which set their own), planning or running a record against this tree needs `OMNIDRIVER_SCRATCH_DIR` pointing outside it: the default scratch is `<cases_root>/.omnidriver`, root-owned in an installed tree and the native tree itself in a source build (final review S-I3) |
+| native openCARP | `OMNIDRIVER_OPENCARP_TUTORIALS=<path> DYLD_LIBRARY_PATH=<lib> python -m pytest packages/omnidriver-opencarp/tests -m native_opencarp` | drift against the real openCARP binary and its tutorials tree; `DYLD_LIBRARY_PATH` is required on macOS or the binary fails to load `libsundials_cvode`, supplied, never discovered — a `native_opencarp`-marked test FAILS, not skips, when either is missing. Outside these tests (which supply their own), planning or running a record against this tree needs `--scratch-dir <dir>` (or `OMNIDRIVER_SCRATCH_DIR`) outside it. Corrected 2026-09-26: this said the default scratch was `<cases_root>/.omnidriver` (final review S-I3); there is no default any more — see the scratch-root rule below |
 | static gates | `python3 scripts/check-import-boundaries.py`, `scripts/export-capability-seams.py --check`, `scripts/check-case-writes.py`, and `scripts/check-core-shape.py` | import direction; a stale generated table; a tutorial-record/axis module writing a case directly instead of through `commit_case_write`; core gaining a new OpenFOAM layout token or growing its recorded debt |
 
 The wheel shape is the one people skip and the one that found the worst
@@ -73,6 +73,17 @@ carry `native_opencarp`: `-m native` collects cardiacFOAM's native tests
 only, and the all-packages row (named "all four" until then) excludes both
 markers.
 
+**The scratch root is supplied, never invented (2026-09-26).** Anything that
+stages — `plan --strict`/`step`/`run --strict` over a tutorial record (or a
+case-folder entry whose source lies inside this checkout), or a sweep with no
+`--output-dir` — needs `--scratch-dir <dir>` or `OMNIDRIVER_SCRATCH_DIR`; with
+neither it is refused by name as JSON (`ScratchRootNotSupplied`), and a scratch
+dir inside `--cases-root` is refused too. Core takes it as `strict_plan(...,
+scratch_root=)`; every caller goes through `core.specs.paths.resolve_scratch_root`.
+The suites supply their own (`tmp_path`), so the commands above need nothing
+extra; a manual CLI run does. It used to default to `<cases_root>/.omnidriver`,
+which wrote into native tutorials trees and failed on read-only installs.
+
 Do not quote suite totals from documentation — they rot within days. Run the
 command. The only durable claim is **0 failed**.
 
@@ -86,7 +97,7 @@ A skip here hides exactly what the guard exists to find.
 |---|---|
 | core imports nothing cardiac | `scripts/check-import-boundaries.py` (empty waiver list) |
 | core declares no solver vocabulary | `test_core_declares_no_phase_vocabulary`, `test_core_exports_no_phase_vocabulary` |
-| core never invents a filesystem root | `test_core_never_invents_a_filesystem_root` |
+| core never invents a filesystem root | `test_core_never_invents_a_filesystem_root`; for the scratch root, `test_the_scratch_resolver_invents_no_default` and `test_nothing_rebuilds_a_dot_omnidriver_scratch_default` (added 2026-09-26) |
 | core threads its `DriverContext` through the public edge | `test_core_threads_its_context_through_the_public_edge` |
 | an explicitly-contexted operation never falls back to the default | `test_fallback_census.py` |
 | no compatibility fallback reaches cardiac code | `test_no_fallback_reaches_cardiac_code_at_all` |

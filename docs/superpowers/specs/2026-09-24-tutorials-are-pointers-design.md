@@ -573,6 +573,12 @@ Where `plan --strict --entry <record>` stages, since there is no sweep
 case-folder entry's own `runs/<name>` staging (`cli._context_from_entry`),
 so a record and a same-named case folder can never collide, matching
 `registry.classify_entry`'s own "one name must not name both" invariant.
+**Corrected 2026-09-26 (final review S-I3: fixed).** "Anchored at the
+SUPPLIED `cases_root`" meant `<cases_root>/.omnidriver/records/<name>`, i.e.
+inside the native tree, and a `PermissionError` on a read-only install. The
+scratch root is now supplied separately (`--scratch-dir`, `strict_plan(...,
+scratch_root=)`, or `OMNIDRIVER_SCRATCH_DIR`) or refused by name, and one
+inside `cases_root` is refused (`core.specs.paths.resolve_scratch_root`).
 
 `step`/`run --entry <record>`: decided by the same principle, not refused
 by name. `_context_from_entry` (which both actions dispatch through)
