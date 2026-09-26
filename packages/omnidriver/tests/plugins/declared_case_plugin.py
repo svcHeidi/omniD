@@ -27,13 +27,13 @@ class DeclaredCasePlugin(MinimalTestPlugin):
         )
 
     def get_environment_diagnostics(
-        self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None,
+        self, workflow_dag, *, env=None, environment_source=None, driver_context=None,
     ) -> tuple:
-        del workflow_dag, env, explicit_bashrc, driver_context
+        del workflow_dag, env, environment_source, driver_context
         return ()
 
-    def get_loaded_environment(self, *, explicit_bashrc=None, driver_context=None) -> dict:
-        del explicit_bashrc, driver_context
+    def get_loaded_environment(self, *, environment_source=None, driver_context=None) -> dict:
+        del environment_source, driver_context
         return dict(os.environ)
 
     def get_configured_environment(self, env, driver_context) -> dict:

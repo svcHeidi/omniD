@@ -483,7 +483,7 @@ def strict_plan(
     entry_kind: str | None = None,
     overrides: dict[str, Any] | None = None,
     config_path: str | Path | None = None,
-    explicit_bashrc: str | Path | None = None,
+    environment_source: str | None = None,
     allow_unresolved_configuration: bool = False,
     scratch_root: str | Path | None = None,
     driver_context: "DriverContext",
@@ -525,7 +525,7 @@ def strict_plan(
             cases_root=cases_root,
             overrides=incoming_overrides,
             config_path=config_path,
-            explicit_bashrc=explicit_bashrc,
+            environment_source=environment_source,
             allow_unresolved_configuration=allow_unresolved_configuration,
             scratch_root=scratch_root,
             driver_context=driver_context,
@@ -540,7 +540,7 @@ def strict_plan(
         entry,
         spec,
         entry_kind=entry_kind,
-        explicit_bashrc=explicit_bashrc,
+        environment_source=environment_source,
         allow_unresolved_configuration=allow_unresolved_configuration,
         driver_context=driver_context,
         config_path=config_path,
@@ -555,7 +555,7 @@ def _strict_plan_for_record(
     cases_root: Path | None,
     overrides: dict[str, Any],
     config_path: str | Path | None,
-    explicit_bashrc: str | Path | None,
+    environment_source: str | None,
     allow_unresolved_configuration: bool,
     scratch_root: str | Path | None,
     driver_context: "DriverContext",
@@ -634,7 +634,7 @@ def _strict_plan_for_record(
         spec,
         entry_kind=entry_kind,
         config_path=config_path,
-        explicit_bashrc=explicit_bashrc,
+        environment_source=environment_source,
         allow_unresolved_configuration=allow_unresolved_configuration,
         driver_context=driver_context,
     )
@@ -650,7 +650,7 @@ def _strict_plan_for_spec(
     *,
     entry_kind: str | None = None,
     config_path: str | Path | None = None,
-    explicit_bashrc: str | Path | None = None,
+    environment_source: str | None = None,
     allow_unresolved_configuration: bool = False,
     driver_context: "DriverContext",
 ) -> StrictPlanReport:
@@ -705,7 +705,7 @@ def _strict_plan_for_spec(
     )
     env_diagnostics = driver_context.capabilities.environment_preflight.diagnostics(
         workflow_dag,
-        explicit_bashrc=str(explicit_bashrc) if explicit_bashrc is not None else None,
+        environment_source=environment_source,
         driver_context=driver_context,
     )
     # Bound once and passed on: the audit has to know *why* the mesh

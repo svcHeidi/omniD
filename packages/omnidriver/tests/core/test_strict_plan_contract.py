@@ -53,7 +53,7 @@ def test_unresolvable_solver_selector_is_reported_as_a_diagnostic(tmp_path):
         "case",
         entry_kind="case_folder",
         overrides={"cases_root": str(cases_root)},
-        explicit_bashrc="/no/such/openfoam/bashrc",
+        environment_source="/no/such/openfoam/bashrc",
         driver_context=default_driver_context(),
     ).to_json()
 
@@ -81,7 +81,7 @@ def test_the_cli_still_emits_parseable_json(tmp_path):
             sys.executable, "-m", "omnidriver", "plan", "--strict",
             "--cases-root", str(cases_root),
             "--entry", "case", "--entry-kind", "case_folder",
-            "--environment-bashrc", "/no/such/openfoam/bashrc",
+            "--environment-source", "/no/such/openfoam/bashrc",
         ],
         cwd=DRIVER_ROOT, capture_output=True, text=True,
     )

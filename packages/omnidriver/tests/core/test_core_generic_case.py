@@ -258,10 +258,14 @@ def test_cardiac_named_kwargs_are_no_longer_accepted(tmp_path: Path) -> None:
         _spec(tmp_path, electro_properties_relpath="constant/electro/electroProperties")
 
 
-def test_explicit_bashrc_kwarg_reaches_case_params(tmp_path: Path) -> None:
-    spec = _spec(tmp_path, explicit_bashrc="/opt/openfoam/etc/bashrc")
-    case = spec.build_cases()[0]
-    assert case.params["explicit_bashrc"] == "/opt/openfoam/etc/bashrc"
+def test_generic_case_takes_no_environment_parameter(tmp_path: Path) -> None:
+    """A1 (2026-09-26): the environment source is the plugin's, passed at
+    plan and run time; a generic case never stored it (it was dead data)."""
+    import pytest
+
+    assert "explicit_bashrc" not in _spec(tmp_path).build_cases()[0].params
+    with pytest.raises(TypeError, match="explicit_bashrc"):
+        _spec(tmp_path, explicit_bashrc="/opt/openfoam/etc/bashrc")
 
 
 def test_openfoam_bashrc_kwarg_is_no_longer_accepted(tmp_path: Path) -> None:
@@ -285,7 +289,7 @@ def test_per_case_openfoam_bashrc_key_is_silently_unused(tmp_path: Path) -> None
         cases=[{"case_id": "c1", "openfoam_bashrc": "/opt/openfoam/etc/bashrc"}],
     )
     case = spec.build_cases()[0]
-    assert case.params["explicit_bashrc"] is None
+    assert "explicit_bashrc" not in case.params
 
 
 def test_per_case_entries_accept_generic_override_keys(tmp_path: Path) -> None:

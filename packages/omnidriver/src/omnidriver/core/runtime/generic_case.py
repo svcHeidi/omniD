@@ -79,7 +79,6 @@ def _normalize_case_specs(
     dimension: str | None,
     parallel: bool,
     touch_case_foam: bool,
-    explicit_bashrc: str | Path | None,
     solver_command: str | Sequence[str] | None,
     pre_solve_commands: Sequence[str | Sequence[str]],
 ) -> list[CaseConfig]:
@@ -89,7 +88,6 @@ def _normalize_case_specs(
             "dimension": dimension,
             "parallel": parallel,
             "touch_case_foam": touch_case_foam,
-            "explicit_bashrc": str(explicit_bashrc) if explicit_bashrc is not None else None,
             "solver_command": solver_command,
             "pre_solve_commands": list(pre_solve_commands),
         }
@@ -98,7 +96,6 @@ def _normalize_case_specs(
     normalized: list[CaseConfig] = []
     for index, item in enumerate(cases, start=1):
         case_id = str(item.get("case_id", f"case{index:03d}"))
-        item_bashrc = item.get("explicit_bashrc")
         normalized.append(
             CaseConfig(
                 case_id=case_id,
@@ -109,11 +106,6 @@ def _normalize_case_specs(
                     "dimension": item.get("dimension", dimension),
                     "parallel": bool(item.get("parallel", parallel)),
                     "touch_case_foam": bool(item.get("touch_case_foam", touch_case_foam)),
-                    "explicit_bashrc": (
-                        str(item_bashrc)
-                        if item_bashrc is not None
-                        else (str(explicit_bashrc) if explicit_bashrc is not None else None)
-                    ),
                     "solver_command": item.get("solver_command", solver_command),
                     "pre_solve_commands": list(item.get("pre_solve_commands", pre_solve_commands)),
                 },
@@ -202,7 +194,6 @@ def make_spec(
     dimension: str | None = None,
     parallel: bool = False,
     touch_case_foam: bool = False,
-    explicit_bashrc: str | Path | None = None,
     collect_patterns: Sequence[str] = (),
     run_script_relpath: str | Path = RUN_CASE_SCRIPT_RELPATH,
     driver_context: Any | None = None,
@@ -256,7 +247,6 @@ def make_spec(
         dimension=dimension,
         parallel=parallel,
         touch_case_foam=touch_case_foam,
-        explicit_bashrc=explicit_bashrc,
         solver_command=solver_command,
         pre_solve_commands=normalized_pre_solve,
     )

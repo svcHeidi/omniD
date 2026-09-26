@@ -150,8 +150,8 @@ class NoProducesPlugin(E2ERecordPlugin):
 class SilentPreflightPlugin(E2ERecordPlugin):
     """A preflight that ignores its ``env`` and never reports anything."""
 
-    def get_environment_diagnostics(self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None) -> tuple:
-        del workflow_dag, env, explicit_bashrc, driver_context
+    def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None) -> tuple:
+        del workflow_dag, env, environment_source, driver_context
         return ()
 
 
@@ -165,12 +165,12 @@ class AuxiliaryOnlyPreflightPlugin(E2ERecordPlugin):
     that echoed PATH (under the scratch root) contains the solver's name
     (final review S-I2)."""
 
-    def get_environment_diagnostics(self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None) -> tuple:
+    def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None) -> tuple:
         import shutil
 
         from omnidriver.core.planning_types import StrictDiagnostic
 
-        del workflow_dag, explicit_bashrc, driver_context
+        del workflow_dag, environment_source, driver_context
         path = (env if env is not None else os.environ).get("PATH", "")
         if shutil.which("touch", path=path) is not None:
             return ()

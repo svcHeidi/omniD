@@ -411,14 +411,13 @@ class SolverPluginOptionalHooks(Protocol):
 
     # -- EnvironmentPreflightCapability -----------------------------------------
     def get_environment_diagnostics(
-        self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None,
+        self, workflow_dag, *, env=None, environment_source=None, driver_context=None,
     ) -> tuple[Any, ...]:
         """Preflight the runtime environment a plan's workflow_dag will run
         in. Absent -> no adapter-specific environment evidence is claimed.
-        ``explicit_bashrc`` -- not
-        ``openfoam_bashrc`` -- matches ``get_loaded_environment``'s own
-        parameter for the same concept (Tier 3,
-        future/ENVIRONMENT_CONTRACT.md §10)."""
+        ``environment_source`` is the operator's opaque ``--environment-source``
+        value; this plugin decides what it means (renamed from
+        ``explicit_bashrc`` 2026-09-26, spec A1)."""
         ...
 
     def get_configured_environment(self, env, driver_context) -> dict[str, str]:
@@ -475,11 +474,12 @@ class SolverPluginOptionalHooks(Protocol):
 
     # -- EnvironmentPreflightCapability --------------------------------------
     def get_loaded_environment(
-        self, *, explicit_bashrc: Any | None, driver_context: Any,
+        self, *, environment_source: str | None, driver_context: Any,
     ) -> dict[str, str]:
-        """Build the execution environment from scratch, e.g. by sourcing a
-        shell profile. Distinct from ``get_configured_environment``, which
-        overlays a plugin contract onto an environment that already exists.
+        """Build the execution environment from scratch, e.g. by sourcing
+        whatever ``environment_source`` names. Distinct from
+        ``get_configured_environment``, which overlays a plugin contract onto
+        an environment that already exists.
 
         Absent -> the current process environment is used unchanged."""
         ...

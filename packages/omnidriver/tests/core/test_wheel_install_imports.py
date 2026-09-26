@@ -138,9 +138,9 @@ with tempfile.TemporaryDirectory() as raw:
         "        return CaseRuntimeConventions(output_collection_relpath='output', case_entrypoints=('Allrun',), case_script_commands=('Allrun',))\\n\\n"
         "    def get_selected_start_time(self, case_root, resolved_case):\\n"
         "        return '0'\\n\\n"
-        "    def get_environment_diagnostics(self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None):\\n"
+        "    def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None):\\n"
         "        return ()\\n\\n"
-        "    def get_loaded_environment(self, *, explicit_bashrc=None, driver_context=None):\\n"
+        "    def get_loaded_environment(self, *, environment_source=None, driver_context=None):\\n"
         "        return dict(os.environ)\\n"
     )
     case_root = root / "case"

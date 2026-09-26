@@ -71,7 +71,7 @@ def test_multiple_entries_on_one_line_and_key_prefixes(tmp_path):
 def test_source_failure_is_not_masked_by_environment_export(tmp_path):
     bashrc = tmp_path / "bashrc"
     bashrc.write_text("export WM_PROJECT_DIR=/not/a/runtime\nreturn 7\n")
-    loaded = load_openfoam_environment(explicit_bashrc=bashrc, base_env={})
+    loaded = load_openfoam_environment(bashrc_path=bashrc, base_env={})
     assert loaded.error is not None
     assert "7" in loaded.error
     assert "WM_PROJECT_DIR" not in loaded.env

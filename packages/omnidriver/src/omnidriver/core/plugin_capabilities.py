@@ -568,15 +568,17 @@ class EnvironmentPreflightCapability(Protocol):
     already-sourced OpenFOAM environment plus any plugin-specific overlay)
     without re-sourcing anything, returning the resolved variable mapping.
 
-    ``diagnostics`` and ``load`` both take an explicit path to an
-    environment-sourcing script, and both now spell it ``explicit_bashrc`` --
-    ``diagnostics`` used to spell it ``openfoam_bashrc``, naming OpenFOAM
-    specifically for a parameter every environment needs (future/
-    ENVIRONMENT_CONTRACT.md §10, Tier 3). The CLI flag threading it in is
-    ``--environment-bashrc``. ``--openfoam-bashrc`` was shipped as a deprecated
-    alias and then removed outright the same day, pre-publication -- this
-    sentence used to claim the alias still worked, which ``cli.py`` and
-    ``test_openfoam_bashrc_kwarg_is_no_longer_accepted`` both disprove.
+    ``diagnostics`` and ``load`` both take ``environment_source``: one opaque
+    string, or ``None``, the operator supplies with ``--environment-source``.
+    Core passes it through and never reads it; what it names is the plugin's
+    business. The OpenFOAM layer sources it as a shell script; openCARP
+    ignores it.
+
+    Renamed 2026-09-26 (spec 2026-09-26-core-generality-design.md §2, A1)
+    from ``explicit_bashrc``/``--environment-bashrc``, a shell-profile word
+    in a parameter every environment shares. It was ``openfoam_bashrc`` /
+    ``--openfoam-bashrc`` before that (future/ENVIRONMENT_CONTRACT.md §10).
+    No old name is aliased.
 
     :adapts: get_environment_diagnostics, get_configured_environment, get_loaded_environment
     :consumed-by: omnidriver/core/strict_planning.py, omnidriver/core/runtime/sweep_runner.py, omnidriver/cli.py, omnidriver/conformance/checks.py
@@ -589,7 +591,7 @@ class EnvironmentPreflightCapability(Protocol):
         workflow_dag: dict[str, Any] | None,
         *,
         env: dict[str, str] | None = None,
-        explicit_bashrc: str | None = None,
+        environment_source: str | None = None,
         driver_context: Any | None = None,
     ) -> tuple[Any, ...]: ...
 
@@ -1566,19 +1568,19 @@ class _EnvironmentPreflightAdapter:
         workflow_dag: dict[str, Any] | None,
         *,
         env: dict[str, str] | None = None,
-        explicit_bashrc: str | None = None,
+        environment_source: str | None = None,
         driver_context: Any | None = None,
     ) -> tuple[Any, ...]:
         hook = getattr(self.plugin, "get_environment_diagnostics", None)
         if callable(hook):
             return tuple(hook(
-                workflow_dag, env=env, explicit_bashrc=explicit_bashrc,
+                workflow_dag, env=env, environment_source=environment_source,
                 driver_context=driver_context,
             ))
         from .compatibility import legacy_environment_diagnostics
 
         return tuple(legacy_environment_diagnostics(
-            workflow_dag, env=env, explicit_bashrc=explicit_bashrc,
+            workflow_dag, env=env, environment_source=environment_source,
             driver_context=driver_context,
         ))
 
@@ -1593,7 +1595,7 @@ class _EnvironmentPreflightAdapter:
         return dict(legacy_configured_environment(env, driver_context))
 
     def load(
-        self, *, explicit_bashrc: Any | None, driver_context: Any | None,
+        self, *, environment_source: str | None, driver_context: Any | None,
     ) -> dict[str, str]:
         """Source the environment, then configure it. Both halves, always.
 
@@ -1621,12 +1623,12 @@ class _EnvironmentPreflightAdapter:
         """
         hook = getattr(self.plugin, "get_loaded_environment", None)
         if callable(hook):
-            sourced = dict(hook(explicit_bashrc=explicit_bashrc, driver_context=driver_context))
+            sourced = dict(hook(environment_source=environment_source, driver_context=driver_context))
         else:
             from .compatibility import legacy_load_environment
 
             sourced = dict(legacy_load_environment(
-                explicit_bashrc=explicit_bashrc, driver_context=driver_context,
+                environment_source=environment_source, driver_context=driver_context,
             ))
         return self.configure(sourced, driver_context)
 

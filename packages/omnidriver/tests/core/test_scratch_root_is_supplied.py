@@ -283,7 +283,7 @@ def _stage_from_checkout(tmp_path: Path, capsys, *, scratch_dir):
         execution, code = cli._context_from_entry(
             selected_entry="someCase", entry_kind=None,
             overrides={"cases_root": str(cases_root)}, config_path=None,
-            explicit_bashrc=None, driver_context=context,
+            environment_source=None, driver_context=context,
             stage_for_execution=True, scratch_dir=scratch_dir,
         )
     return execution, code, stage, cases_root, capsys.readouterr().out

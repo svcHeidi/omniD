@@ -101,30 +101,29 @@ class CardiacFoamPlugin:
         configured_env, _error = configure_runtime_environment(env)
         return configured_env
 
-    def get_loaded_environment(self, *, explicit_bashrc=None, driver_context=None):
+    def get_loaded_environment(self, *, environment_source=None, driver_context=None):
         """Resolve this plugin's configured bashrc, then source it via OpenFOAM.
 
-        Formerly a private ``get_openfoam_bashrc`` hook that
-        `openfoam_environment.py` reached for by hand, via a `getattr` on the
-        context's selected provider. `provider_stack.py` classifies
-        ``get_loaded_environment`` as ``single`` (first non-``None``,
-        most-specific provider first), so this provider must resolve the
-        bashrc itself rather than rely on the generic OpenFOAM provider to
-        ask it for one.
+        ``environment_source``, when supplied, is the bashrc to source;
+        absent, this plugin's configured one (``runtime_profile
+        .configured_openfoam_bashrc``) is used. ``get_loaded_environment``
+        is ``single`` in `provider_stack.py` (first non-``None``,
+        most-specific provider first), so this provider resolves the bashrc
+        itself rather than rely on the generic OpenFOAM provider to ask it.
         """
         from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
-        if explicit_bashrc is None:
+        if environment_source is None:
             import os
 
             from omnidriver.cardiacfoam.runtime_profile import (
                 configured_openfoam_bashrc,
             )
 
-            explicit_bashrc = configured_openfoam_bashrc(os.environ)
+            environment_source = configured_openfoam_bashrc(os.environ)
 
         return OpenFOAMEnvironmentPlugin().get_loaded_environment(
-            explicit_bashrc=explicit_bashrc,
+            environment_source=environment_source,
             driver_context=driver_context,
         )
 

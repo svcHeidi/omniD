@@ -188,9 +188,9 @@ class E2ERecordPlugin(MinimalTestPlugin):
     # to a record run carrying its own steps
     # (``run_document_exec._is_record_run_with_steps``).
 
-    def get_environment_diagnostics(self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None) -> tuple:
+    def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None) -> tuple:
         """The toy's one real check: its solver command resolves on the supplied PATH."""
-        del workflow_dag, explicit_bashrc, driver_context
+        del workflow_dag, environment_source, driver_context
         import shutil
         from omnidriver.core.planning_types import StrictDiagnostic
 
@@ -202,8 +202,8 @@ class E2ERecordPlugin(MinimalTestPlugin):
             if shutil.which(command, path=path) is None
         )
 
-    def get_loaded_environment(self, *, explicit_bashrc=None, driver_context=None) -> dict:
-        del explicit_bashrc, driver_context
+    def get_loaded_environment(self, *, environment_source=None, driver_context=None) -> dict:
+        del environment_source, driver_context
         return dict(os.environ)
 
     def get_configured_environment(self, env, driver_context) -> dict:

@@ -27,11 +27,12 @@ def test_the_neutral_dictionary_view_stays_in_core():
     assert callable(all_documented_driver_paths)
 
 
-#: Solver and tutorial names the CLI help used to carry. Task 5 (A1) adds
-#: "bashrc" when --environment-bashrc is renamed.
+#: Solver and tutorial names the CLI help used to carry. Task 5 (A1) added
+#: "bashrc" 2026-09-26, when the old environment-sourcing flag (a
+#: shell-profile word) was renamed to the neutral --environment-source.
 _SOLVER_WORDS = (
     "OpenFOAM", "openfoam", "cardiac", "singleCell", "niederer", "manufactured",
-    "restitutionCurves", "genericCase", "randomCase",
+    "restitutionCurves", "genericCase", "randomCase", "bashrc",
 )
 
 

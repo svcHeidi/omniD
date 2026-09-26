@@ -152,7 +152,7 @@ def test_composed_load_threads_the_sourced_environment_through_configure(tmp_pat
     )
 
     loaded = ctx.capabilities.environment_preflight.load(
-        explicit_bashrc=str(bashrc), driver_context=ctx,
+        environment_source=str(bashrc), driver_context=ctx,
     )
 
     # Absent from what mere sourcing produces (bash only re-exports what was

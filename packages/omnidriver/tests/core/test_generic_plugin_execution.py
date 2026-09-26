@@ -161,7 +161,7 @@ def test_cli_context_from_run_document_rejects_a_mismatched_supplied_plugin(
     doc_path.write_text(json.dumps(run_doc.to_json()))
 
     args = argparse.Namespace(
-        run_document=str(doc_path), environment_bashrc=None,
+        run_document=str(doc_path), environment_source=None,
     )
     result = _context_from_run_document(args, context)
     printed = json.loads(capsys.readouterr().out)

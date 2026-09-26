@@ -79,14 +79,14 @@ def _parse_exported_environment(payload: str) -> dict[str, str]:
 
 def _candidate_bashrcs(
     *,
-    explicit_bashrc: str | Path | None = None,
+    bashrc_path: str | Path | None = None,
     base_env: Mapping[str, str] | None = None,
 ) -> tuple[Path, ...]:
     env = base_env or os.environ
     candidates: list[Path] = []
 
-    if explicit_bashrc:
-        return (Path(explicit_bashrc).expanduser(),)
+    if bashrc_path:
+        return (Path(bashrc_path).expanduser(),)
 
     openfoam_bashrc = env.get("OPENFOAM_BASHRC")
     if openfoam_bashrc:
@@ -111,11 +111,11 @@ def _candidate_bashrcs(
 
 def discover_openfoam_bashrc(
     *,
-    explicit_bashrc: str | Path | None = None,
+    bashrc_path: str | Path | None = None,
     base_env: Mapping[str, str] | None = None,
 ) -> Path | None:
     for candidate in _candidate_bashrcs(
-        explicit_bashrc=explicit_bashrc,
+        bashrc_path=bashrc_path,
         base_env=base_env,
     ):
         if candidate.is_file():
@@ -125,7 +125,7 @@ def discover_openfoam_bashrc(
 
 def load_openfoam_environment(
     *,
-    explicit_bashrc: str | Path | None = None,
+    bashrc_path: str | Path | None = None,
     base_env: Mapping[str, str] | None = None,
     driver_context: Any | None = None,
     timeout_s: float = 20.0,
@@ -138,14 +138,14 @@ def load_openfoam_environment(
     """
     env = dict(base_env or os.environ)
     bashrc = discover_openfoam_bashrc(
-        explicit_bashrc=explicit_bashrc,
+        bashrc_path=bashrc_path,
         base_env=env,
     )
     if bashrc is None:
-        if explicit_bashrc:
+        if bashrc_path:
             return OpenFOAMEnvironment(
                 env=env,
-                error=f"OpenFOAM bashrc not found: {explicit_bashrc}",
+                error=f"OpenFOAM bashrc not found: {bashrc_path}",
             )
         sourced = OpenFOAMEnvironment(env=env)
         return _configure_plugin_environment(sourced, driver_context)

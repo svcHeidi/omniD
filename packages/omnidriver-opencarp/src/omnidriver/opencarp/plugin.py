@@ -152,12 +152,12 @@ class OpenCARPPlugin:
     def get_utility_roots(self):
         return ()
 
-    def get_environment_diagnostics(self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None):
-        del explicit_bashrc, driver_context
+    def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None):
+        del environment_source, driver_context      # openCARP needs no environment source (evidence A4-A8)
         return opencarp_environment_diagnostics(workflow_dag, env if env is not None else os.environ)
 
-    def get_loaded_environment(self, *, explicit_bashrc=None, driver_context=None):
-        del explicit_bashrc, driver_context
+    def get_loaded_environment(self, *, environment_source=None, driver_context=None):
+        del environment_source, driver_context
         return dict(os.environ)
 
     def get_configured_environment(self, env, driver_context):

@@ -14,7 +14,7 @@
     }
   },
   "integration": {
-    "driver_command": ["{python}", "-m", "omnidriver", "run", "--plugin", "cardiacfoam", "--strict", "--entry", "case", "--cases-root", "{stage_root}", "--environment-bashrc", "{openfoam_bashrc}"],
+    "driver_command": ["{python}", "-m", "omnidriver", "run", "--plugin", "cardiacfoam", "--strict", "--entry", "case", "--cases-root", "{stage_root}", "--environment-source", "{openfoam_bashrc}"],
     "solver_checker_command": ["bash", "regression/regressionTest.sh", "--check-only", "--report", "regression/comparison-report.json"],
     "timeout_s": 3600
   },

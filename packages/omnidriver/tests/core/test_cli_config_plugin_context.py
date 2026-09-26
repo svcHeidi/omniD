@@ -65,7 +65,7 @@ def test_execution_materializes_registered_entry_before_final_plan(tmp_path: Pat
             entry_kind="registered_tutorial",
             overrides={"cases_root": str(tmp_path)},
             config_path=str(tmp_path / "config.json"),
-            explicit_bashrc=None,
+            environment_source=None,
             driver_context=context,
             stage_for_execution=True,
         )

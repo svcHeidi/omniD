@@ -151,14 +151,15 @@ class OpenFOAMEnvironmentPlugin:
         return mesh_geometry_diagnostics(case_root)
 
     def get_environment_diagnostics(
-        self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None,
+        self, workflow_dag, *, env=None, environment_source=None, driver_context=None,
     ):
+        """``environment_source`` is, for OpenFOAM, a bashrc to source."""
         from .environment_preflight import _environment_diagnostics
 
         return _environment_diagnostics(
             workflow_dag,
             env=env,
-            explicit_bashrc=explicit_bashrc,
+            bashrc_path=environment_source,
             driver_context=driver_context,
         )
 
@@ -167,12 +168,13 @@ class OpenFOAMEnvironmentPlugin:
 
         return configure_plugin_environment(env, driver_context).env
 
-    def get_loaded_environment(self, *, explicit_bashrc=None, driver_context=None):
+    def get_loaded_environment(self, *, environment_source=None, driver_context=None):
+        """``environment_source`` is, for OpenFOAM, a bashrc to source."""
         from .openfoam_environment import load_openfoam_environment
 
         return dict(
             load_openfoam_environment(
-                explicit_bashrc=explicit_bashrc,
+                bashrc_path=environment_source,
                 driver_context=driver_context,
             ).env
         )

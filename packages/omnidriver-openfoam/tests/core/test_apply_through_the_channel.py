@@ -558,7 +558,7 @@ def test_apply_readback_matches_the_real_foamdictionary(tmp_path):
     if bashrc is None:
         pytest.skip("no real OpenFOAM install discoverable on this machine")
 
-    openfoam_env = load_openfoam_environment(explicit_bashrc=bashrc)
+    openfoam_env = load_openfoam_environment(bashrc_path=bashrc)
     if openfoam_env.error or "PATH" not in openfoam_env.env:
         pytest.skip(f"could not source the real OpenFOAM environment: {openfoam_env.error}")
 

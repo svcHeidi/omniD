@@ -337,7 +337,7 @@ def test_load_openfoam_environment_sources_bashrc(tmp_path, monkeypatch):
     )
 
     monkeypatch.delenv("SKIP_ENV_DIAGNOSTICS", raising=False)
-    loaded = load_openfoam_environment(explicit_bashrc=bashrc, base_env={})
+    loaded = load_openfoam_environment(bashrc_path=bashrc, base_env={})
 
     assert loaded.error is None
     assert loaded.env["WM_PROJECT_DIR"] == str(tmp_path)

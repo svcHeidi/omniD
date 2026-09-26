@@ -413,7 +413,7 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
             }, indent=2))
             return None
     execution_env = driver_context.capabilities.environment_preflight.load(
-        explicit_bashrc=args.environment_bashrc,
+        environment_source=args.environment_source,
         driver_context=driver_context,
     )
     inputs, diagnostics = build_execution_inputs(
@@ -465,7 +465,7 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
         setup_root=Path(setup_root_raw) if setup_root_raw else None,
         environment_diagnostics=driver_context.capabilities.environment_preflight.diagnostics(
             inputs.workflow_dag,
-            explicit_bashrc=args.environment_bashrc,
+            environment_source=args.environment_source,
             driver_context=driver_context,
         ),
         simulation_audit=inputs.simulation_audit,
@@ -482,7 +482,7 @@ def _context_from_entry(
     entry_kind: str | None,
     overrides: dict | None,
     config_path: str | None,
-    explicit_bashrc: str | None,
+    environment_source: str | None,
     driver_context,
     allow_unresolved_configuration: bool = False,
     stage_for_execution: bool = False,
@@ -498,7 +498,7 @@ def _context_from_entry(
             entry_kind=entry_kind,
             overrides=overrides,
             config_path=config_path,
-            explicit_bashrc=explicit_bashrc,
+            environment_source=environment_source,
             allow_unresolved_configuration=allow_unresolved_configuration,
             scratch_root=scratch_dir,
             driver_context=driver_context,
@@ -581,7 +581,7 @@ def _context_from_entry(
                 entry_kind=replan_entry_kind,
                 overrides=staged_overrides,
                 config_path=config_path,
-                explicit_bashrc=explicit_bashrc,
+                environment_source=environment_source,
                 allow_unresolved_configuration=allow_unresolved_configuration,
                 scratch_root=scratch_dir,
                 driver_context=driver_context,
@@ -612,7 +612,7 @@ def _context_from_entry(
                 entry_kind=replan_entry_kind,
                 overrides=replan_overrides,
                 config_path=config_path,
-                explicit_bashrc=explicit_bashrc,
+                environment_source=environment_source,
                 allow_unresolved_configuration=allow_unresolved_configuration,
                 scratch_root=scratch_dir,
                 driver_context=driver_context,
@@ -632,7 +632,7 @@ def _context_from_entry(
             print(json.dumps(report.to_json(), indent=2))
             return None, 1
     execution_env = driver_context.capabilities.environment_preflight.load(
-        explicit_bashrc=explicit_bashrc,
+        environment_source=environment_source,
         driver_context=driver_context,
     )
 
@@ -645,7 +645,7 @@ def _context_from_entry(
             entry_kind=replan_entry_kind,
             overrides=replan_overrides,
             config_path=config_path,
-            explicit_bashrc=explicit_bashrc,
+            environment_source=environment_source,
             allow_unresolved_configuration=allow_unresolved_configuration,
             scratch_root=scratch_dir,
             driver_context=driver_context,
@@ -936,13 +936,14 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
-        "--environment-bashrc",
-        dest="environment_bashrc",
+        "--environment-source",
+        dest="environment_source",
         default=None,
         help=(
-            "Path to the active plugin's environment-sourcing script (e.g. its "
-            "bashrc) to source for strict plan/step/run. Defaults to whatever "
-            "the plugin discovers for its own tool's ambient environment."
+            "An opaque value handed to the active plugin's environment hooks "
+            "for strict plan/step/run; core never reads it. What it names is "
+            "the plugin's own business (a script to source, or nothing). "
+            "Absent, the plugin uses whatever its tool's ambient environment is."
         ),
     )
     parser.add_argument(
@@ -1153,9 +1154,9 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
         parser.error(
             "--allow-unresolved-configuration is only valid with action=plan, action=step, or action=run"
         )
-    if args.environment_bashrc and args.action not in {"plan", "step", "run"}:
+    if args.environment_source and args.action not in {"plan", "step", "run"}:
         parser.error(
-            "--environment-bashrc is only valid with action=plan, action=step, or action=run"
+            "--environment-source is only valid with action=plan, action=step, or action=run"
         )
     if args.action != "step" and args.step:
         parser.error("--step is only valid with action=step")
@@ -1320,7 +1321,7 @@ def main(argv: list[str] | None = None) -> int:
                 entry_kind=args.entry_kind,
                 overrides=overrides,
                 config_path=args.config,
-                explicit_bashrc=args.environment_bashrc,
+                environment_source=args.environment_source,
                 allow_unresolved_configuration=args.allow_unresolved_configuration,
                 scratch_root=args.scratch_dir,
                 driver_context=driver_context,
@@ -1352,7 +1353,7 @@ def main(argv: list[str] | None = None) -> int:
             entry_kind=args.entry_kind,
             overrides=overrides,
             config_path=args.config,
-            explicit_bashrc=args.environment_bashrc,
+            environment_source=args.environment_source,
             driver_context=driver_context,
             allow_unresolved_configuration=args.allow_unresolved_configuration,
             stage_for_execution=True,
@@ -1373,7 +1374,7 @@ def main(argv: list[str] | None = None) -> int:
             entry_kind=args.entry_kind,
             overrides=overrides,
             config_path=args.config,
-            explicit_bashrc=args.environment_bashrc,
+            environment_source=args.environment_source,
             driver_context=driver_context,
             allow_unresolved_configuration=args.allow_unresolved_configuration,
             stage_for_execution=True,

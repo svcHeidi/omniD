@@ -107,7 +107,7 @@ def test_the_dispatch_gate_receives_the_audit(tmp_path: Path):
             entry_kind=None,
             overrides=None,
             config_path=None,
-            explicit_bashrc=None,
+            environment_source=None,
             driver_context=driver_context,
         )
 
@@ -161,7 +161,7 @@ def test_an_available_audit_does_not_block_on_coverage_alone(tmp_path: Path):
             entry_kind=None,
             overrides=None,
             config_path=None,
-            explicit_bashrc=None,
+            environment_source=None,
             driver_context=driver_context,
         )
 

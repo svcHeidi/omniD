@@ -1514,7 +1514,6 @@ def build_and_launch(
         case_dir_name=case_dir.name,
         solver_command="cardiacFoam",
         pre_solve_commands=list(pre_solve_commands or ()),
-        explicit_bashrc=openfoam_bashrc,
     )
     execution_context = resolve_execution_context(spec)
     workflow_dag, _dag_diagnostics = normalize_workflow_dag(
@@ -1529,7 +1528,7 @@ def build_and_launch(
             + "; ".join(d.message for d in command_diagnostics)
         )
 
-    env = load_openfoam_environment(explicit_bashrc=openfoam_bashrc).env
+    env = load_openfoam_environment(bashrc_path=openfoam_bashrc).env
     outcome = run_workflow(
         workflow_dag,
         initial_workflow_state(workflow_dag),

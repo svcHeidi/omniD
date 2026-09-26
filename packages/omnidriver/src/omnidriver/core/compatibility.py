@@ -147,7 +147,7 @@ def legacy_base_mesh_geometry_diagnostics(case_root) -> tuple:
 
 @_instrumented
 def legacy_environment_diagnostics(
-    workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None,
+    workflow_dag, *, env=None, environment_source=None, driver_context=None,
 ) -> tuple:
     """Plugins predating get_environment_diagnostics().
 
@@ -155,7 +155,7 @@ def legacy_environment_diagnostics(
     explicit unsupported-capability diagnostic. Core does not infer a runtime
     or source a shell profile on its behalf."""
 
-    del workflow_dag, env, explicit_bashrc, driver_context
+    del workflow_dag, env, environment_source, driver_context
     from .planning_types import diagnostic
 
     return (diagnostic(
@@ -177,12 +177,12 @@ def legacy_configured_environment(env, driver_context) -> dict:
 
 
 @_instrumented
-def legacy_load_environment(*, explicit_bashrc, driver_context) -> dict:
+def legacy_load_environment(*, environment_source, driver_context) -> dict:
     """Plugins predating get_loaded_environment() use the current process
     environment unchanged. This keeps legacy callers usable in a core-only
     installation without assuming a shell-profile format."""
 
-    del explicit_bashrc, driver_context
+    del environment_source, driver_context
     import os
 
     return dict(os.environ)
