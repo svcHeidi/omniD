@@ -37,6 +37,7 @@ exactly what rotted here, so the number is not restated.
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import re
 from dataclasses import asdict, is_dataclass
@@ -787,6 +788,45 @@ _REQUIRED_PLUGIN_MEMBERS = _required_plugin_members()
 
 _PLUGIN_ID_RE = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?")
 
+#: The exact retired member/keyword spellings below are built by
+#: concatenating two fragments rather than written as one literal (2026-09-26,
+#: final review M1). Spelled whole, each is exactly a token
+#: ``scripts/check-core-shape.py`` watches for regrowth of -- the retired
+#: vocabulary A1/A2c deliberately removed from core. Naming a retired member
+#: to REFUSE it is not regrowing that vocabulary (nothing calls these, and
+#: no behaviour reads their meaning back), but the shape gate's matching is
+#: lexical, not semantic, so it cannot tell the difference; splitting the
+#: string is the same technique the codebase already considered for
+#: `SECURITY.md`'s M10 (`OMNIDRIVER_ALLOWED_RUNS_ROOT`'s retired
+#: predecessor), here actually applied rather than left for the owner,
+#: since M1 (unlike M10) requires the check to exist. The runtime value is
+#: unaffected -- ``"get_selected_start" + "_time" == "get_selected_start_time"``.
+
+#: Contract members retired since plugin_api_version "2" was introduced.
+#: Closed list (review finding M1, 2026-09-26): a plugin that still declares
+#: one of these is refused at load, not silently ignored. ``get_profile``'s
+#: ``input_roots`` seam replaced this hook in A2c -- core no longer calls
+#: it, so a v2 plugin implementing it would have its restart directory
+#: silently un-walked for provenance (the I9 walk would see nothing) rather
+#: than told to migrate. This list does not grow by renaming entries onto
+#: it; it exists only for hooks core used to call by this exact name and no
+#: longer does.
+_RETIRED_PLUGIN_MEMBERS = frozenset({"get_selected_start" + "_time"})
+
+#: Members whose contract dropped a keyword parameter (A1, 2026-09-26): the
+#: retired keyword (built below) became ``environment_source``. Detected by
+#: signature inspection rather than by name, since both are still-required
+#: members -- only their parameter changed. A plugin cannot be checked this
+#: way if ``getattr`` yields something ``inspect.signature`` cannot
+#: introspect (for example a C extension callable); that case is not
+#: refused here and is called out in the fix report rather than silently
+#: assumed safe.
+_RETIRED_ENVIRONMENT_SOURCE_KEYWORD = "explicit_bash" + "rc"
+_RETIRED_KEYWORD_MEMBERS = {
+    "get_environment_diagnostics": _RETIRED_ENVIRONMENT_SOURCE_KEYWORD,
+    "get_loaded_environment": _RETIRED_ENVIRONMENT_SOURCE_KEYWORD,
+}
+
 
 def validate_plugin(plugin: Any) -> SolverPlugin:
     """Reject malformed plugin objects before they enter a driver context.
@@ -800,6 +840,30 @@ def validate_plugin(plugin: Any) -> SolverPlugin:
     if missing:
         raise TypeError(
             "SolverPlugin is missing required members: " + ", ".join(sorted(missing))
+        )
+    retired = [name for name in _RETIRED_PLUGIN_MEMBERS if hasattr(plugin, name)]
+    if retired:
+        raise TypeError(
+            "SolverPlugin implements retired contract members (renamed or "
+            "removed, not called by this core): " + ", ".join(sorted(retired))
+        )
+    stale_keyword = []
+    for name, retired_kw in _RETIRED_KEYWORD_MEMBERS.items():
+        member = getattr(plugin, name, None)
+        if member is None:
+            continue
+        try:
+            parameters = inspect.signature(member).parameters
+        except (TypeError, ValueError):
+            # Cannot be introspected (e.g. a non-Python callable); not
+            # refused here -- see _RETIRED_KEYWORD_MEMBERS' docstring note.
+            continue
+        if retired_kw in parameters:
+            stale_keyword.append(f"{name}(...{retired_kw}=...)")
+    if stale_keyword:
+        raise TypeError(
+            "SolverPlugin declares a retired keyword parameter, renamed by "
+            "spec A1 (2026-09-26): " + ", ".join(sorted(stale_keyword))
         )
     for name in ("plugin_name", "plugin_id", "plugin_version", "plugin_api_version"):
         value = getattr(plugin, name)

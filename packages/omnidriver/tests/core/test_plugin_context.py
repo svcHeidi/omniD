@@ -167,6 +167,36 @@ def test_plugin_contract_rejects_an_invalid_stable_id() -> None:
         validate_plugin(_Plugin("Example Plugin", "example"))
 
 
+def test_plugin_contract_refuses_a_retired_hook_by_name() -> None:
+    """review finding M1 (2026-09-26): a v2 plugin that still implements
+    ``get_selected_start_time`` (renamed ``input_roots`` by A2c) must be
+    refused at load, not silently ignored -- core no longer calls it, so its
+    restart directory would otherwise go un-walked for provenance without a
+    word."""
+    plugin = _Plugin("example.retired-hook", "retired-hook")
+    plugin.get_selected_start_time = lambda case_root, resolved_case: "5"
+
+    with pytest.raises(TypeError, match="get_selected_start_time"):
+        validate_plugin(plugin)
+
+
+def test_plugin_contract_refuses_a_retired_keyword_parameter() -> None:
+    """review finding M1: ``get_environment_diagnostics``/
+    ``get_loaded_environment`` renamed ``explicit_bashrc`` to
+    ``environment_source`` (spec A1). A plugin whose implementation still
+    takes the old keyword is refused at load rather than crashing mid-plan
+    with a ``TypeError`` the first time core calls it by the new name."""
+    plugin = _Plugin("example.retired-keyword", "retired-keyword")
+
+    def get_environment_diagnostics(self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None):
+        return ()
+
+    plugin.get_environment_diagnostics = get_environment_diagnostics.__get__(plugin)
+
+    with pytest.raises(TypeError, match="get_environment_diagnostics"):
+        validate_plugin(plugin)
+
+
 def test_driver_context_rejects_duplicate_catalog_paths() -> None:
     plugin = _Plugin("example.duplicates", "duplicates")
     plugin.get_dict_entries = lambda: (
