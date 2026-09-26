@@ -67,7 +67,7 @@ def _number_cells_axis() -> AxisContract:
 _TOY_RECORD = TutorialRecord(
     name="toyTutorial",
     native_case_relpath="toyTutorial",
-    allowed_axes=frozenset({"number_cells"}),
+    axes=(_number_cells_axis(),),
     workflow_steps=(WorkflowStep(
         step_id="solve", command=("touch", "solved.marker"),
         consumes=("constant/mesh.json",), produces=("solved.marker",),
@@ -80,7 +80,6 @@ class E2ERecordPlugin(MinimalTestPlugin):
         super().__init__(
             solver_commands=frozenset({"touch"}),
             tutorial_records={"toyTutorial": _TOY_RECORD},
-            axis_catalog={"number_cells": _number_cells_axis()},
             record_key_validator=_known_catalog_validator,
             case_value_comparator=_typed_agree,
         )

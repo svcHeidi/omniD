@@ -212,7 +212,7 @@ def _record(**overrides) -> TutorialRecord:
     fields = dict(
         name="toyTutorial",
         native_case_relpath="toyTutorial",
-        allowed_axes=frozenset({"number_cells"}),
+        axes=(_number_cells_axis(),),
         workflow_steps=(WorkflowStep(step_id="mesh", command=("generate-mesh",)),),
     )
     fields.update(overrides)
@@ -244,6 +244,57 @@ def test_tutorial_record_refuses_a_native_case_relpath_that_escapes_the_case():
         _record(native_case_relpath="../outside")
 
 
+# ---------------------------------------------------------------------------
+# Record-scoped axes (2026-09-26): an axis belongs to the record that uses
+# it, so one name can mean different things in two records, and two axes of
+# one record can never share a name silently.
+# ---------------------------------------------------------------------------
+
+
+def _patch_axis(name: str, document: str) -> AxisContract:
+    def resolve(value, staged_case_root):
+        del staged_case_root
+        return AxisResult(patches=(AxisPatch(document, ("cells",), int(value), "integer"),))
+
+    return AxisContract(name=name, value_kind="integer", resolve=resolve)
+
+
+def test_a_record_refuses_two_axes_under_one_name():
+    with pytest.raises(TutorialRecordError, match=r"'toyTutorial' declares axis 'number_cells' twice"):
+        _record(axes=(_number_cells_axis(), _patch_axis("number_cells", "constant/other.json")))
+
+
+def test_a_record_refuses_axes_given_as_a_name_mapping():
+    """A ``name -> contract`` dict restates each contract's own name, and a
+    literal with one key twice keeps only the last value -- the silent
+    clash this guard exists to refuse."""
+    with pytest.raises(TutorialRecordError, match="sequence of AxisContract, not dict"):
+        _record(axes={"number_cells": _number_cells_axis()})
+
+
+def test_a_record_refuses_an_axis_that_is_not_an_axis_contract():
+    with pytest.raises(TutorialRecordError, match="'number_cells', which is not an AxisContract"):
+        _record(axes=("number_cells",))
+
+
+def test_one_axis_name_resolves_within_each_record_that_declares_it():
+    """Two records each declare ``number_cells`` with a different meaning;
+    each study resolves the name against its own record, never the other's
+    (the manufacturedBidomain/manufacturedEikonalECG ``dimension`` defect)."""
+    first = _record(name="first", axes=(_patch_axis("number_cells", "constant/first.json"),))
+    second = _record(name="second", axes=(_patch_axis("number_cells", "constant/second.json"),))
+
+    def validator(document, key_path, value):
+        return "integer", True
+
+    for record, document in ((first, "constant/first.json"), (second, "constant/second.json")):
+        combined, _ = resolve_case_patches(
+            record, study_by_source={"base": {"number_cells": 4}},
+            staged_case_root=Path("/nonexistent"), direct_key_validator=validator,
+        )
+        assert [sourced.patch.document for sourced in combined] == [document]
+
+
 def test_workflow_step_refuses_an_empty_command():
     """Minor: a step with no command has nothing to run -- refused at
     construction, rather than surfacing later as an IndexError when
@@ -264,42 +315,30 @@ def test_workflow_step_refuses_an_empty_step_id():
 
 def test_sort_study_name_classifies_a_document_key():
     result = sort_study_name(
-        "constant/physics.json:a.b", allowed_axes=frozenset(), axis_catalog={},
+        "constant/physics.json:a.b", axes=(),
     )
     assert isinstance(result, DocumentKeyName)
     assert result.document == "constant/physics.json"
     assert result.key_path == ("a", "b")
 
 
-def test_sort_study_name_classifies_an_allowed_provided_axis():
+def test_sort_study_name_classifies_an_axis_the_entry_declares():
     axis = _number_cells_axis()
-    result = sort_study_name(
-        "number_cells", allowed_axes=frozenset({"number_cells"}),
-        axis_catalog={"number_cells": axis},
-    )
+    result = sort_study_name("number_cells", axes=(axis,))
     assert isinstance(result, AxisMatch)
     assert result.axis is axis
 
 
 def test_sort_study_name_refuses_a_name_that_is_neither():
     with pytest.raises(TutorialRecordError, match="mesh_family"):
-        sort_study_name("mesh_family", allowed_axes=frozenset(), axis_catalog={})
+        sort_study_name("mesh_family", axes=())
 
 
-def test_sort_study_name_refuses_an_axis_the_record_does_not_allow():
-    axis = _number_cells_axis()
-    with pytest.raises(TutorialRecordError, match="does not allow"):
-        sort_study_name(
-            "number_cells", allowed_axes=frozenset(),  # not allowed here
-            axis_catalog={"number_cells": axis},
-        )
-
-
-def test_sort_study_name_refuses_an_axis_no_adapter_provides():
-    with pytest.raises(TutorialRecordError, match="no composed adapter"):
-        sort_study_name(
-            "number_cells", allowed_axes=frozenset({"number_cells"}), axis_catalog={},
-        )
+def test_sort_study_name_refuses_a_bare_name_the_entry_declares_no_axis_for():
+    """Record-scoped axes (2026-09-26): a bare name resolves against the
+    entry's own axes only, and the refusal names the ones it has."""
+    with pytest.raises(TutorialRecordError, match=r"'mesh_family'.*declared axes: \['number_cells'\]"):
+        sort_study_name("mesh_family", axes=(_number_cells_axis(),))
 
 
 def test_sort_study_name_refuses_an_unknown_document():
@@ -308,12 +347,12 @@ def test_sort_study_name_refuses_an_unknown_document():
     structural facts core can check without knowing any solver's
     vocabulary."""
     with pytest.raises(ValueError, match="escape"):
-        sort_study_name("../outside:a.b", allowed_axes=frozenset(), axis_catalog={})
+        sort_study_name("../outside:a.b", axes=())
 
 
 def test_sort_study_name_refuses_an_empty_key_path_segment():
     with pytest.raises(TutorialRecordError, match="empty segment"):
-        sort_study_name("constant/physics.json:a..b", allowed_axes=frozenset(), axis_catalog={})
+        sort_study_name("constant/physics.json:a..b", axes=())
 
 
 # ---------------------------------------------------------------------------
@@ -399,14 +438,12 @@ def test_combine_patches_refuses_int_and_bool_as_a_conflict():
 
 def test_resolve_case_patches_runs_axes_and_direct_keys_together():
     record = _record()
-    axis_catalog = {"number_cells": _number_cells_axis()}
     combined, command_args = resolve_case_patches(
         record,
         study_by_source={
             "base": {"constant/physics.json:modelName": "modelAlpha"},
             "sweep": {"number_cells": 5},
         },
-        axis_catalog=axis_catalog,
         staged_case_root=Path("/nonexistent"),  # this axis never reads the case
         direct_key_validator=_known_catalog_validator,
     )
@@ -425,7 +462,6 @@ def test_resolve_case_patches_refuses_a_direct_key_absent_from_the_catalog():
         resolve_case_patches(
             record,
             study_by_source={"base": {"constant/physics.json:unknownKey": "x"}},
-            axis_catalog={},
             staged_case_root=Path("/nonexistent"),
             direct_key_validator=_known_catalog_validator,
         )
@@ -436,7 +472,6 @@ def test_resolve_case_patches_accepts_an_unvalidated_environment_owned_key():
     combined, _ = resolve_case_patches(
         record,
         study_by_source={"base": {"system/unowned.json:endTime": 0.02}},
-        axis_catalog={},
         staged_case_root=Path("/nonexistent"),
         direct_key_validator=_known_catalog_validator,
     )
@@ -456,12 +491,11 @@ def test_resolve_case_patches_validates_axis_produced_patches_too():
         )
 
     axis = AxisContract(name="rogue", value_kind="word", resolve=rogue)
-    record = _record(allowed_axes=frozenset({"rogue"}))
+    record = _record(axes=(axis,))
     with pytest.raises(TutorialRecordError, match="notInCatalog"):
         resolve_case_patches(
             record,
             study_by_source={"base": {"rogue": "x"}},
-            axis_catalog={"rogue": axis},
             staged_case_root=Path("/nonexistent"),
             direct_key_validator=_known_catalog_validator,
         )
@@ -479,12 +513,11 @@ def test_resolve_case_patches_refuses_a_value_that_does_not_fit_the_axis_value_k
         ))
 
     axis = AxisContract(name="number_cells", value_kind="integer", resolve=resolve)
-    record = _record(allowed_axes=frozenset({"number_cells"}))
+    record = _record(axes=(axis,))
     with pytest.raises(TutorialRecordError, match="number_cells"):
         resolve_case_patches(
             record,
             study_by_source={"base": {"number_cells": "not-a-number"}},
-            axis_catalog={"number_cells": axis},
             staged_case_root=Path("/nonexistent"),
             direct_key_validator=_known_catalog_validator,
         )
@@ -504,12 +537,11 @@ def test_resolve_case_patches_refuses_an_axis_that_writes_the_staged_case(tmp_pa
         return AxisResult()
 
     axis = AxisContract(name="rogue", value_kind="word", resolve=rogue)
-    record = _record(allowed_axes=frozenset({"rogue"}))
+    record = _record(axes=(axis,))
     with pytest.raises(TutorialRecordError, match="rogue.*not pure"):
         resolve_case_patches(
             record,
             study_by_source={"base": {"rogue": "x"}},
-            axis_catalog={"rogue": axis},
             staged_case_root=staged_case_root,
             direct_key_validator=_known_catalog_validator,
         )
@@ -536,7 +568,6 @@ def test_resolve_case_patches_validates_all_direct_keys_before_any_axis_runs():
                 "sweep": {"number_cells": 3},
                 "base": {"constant/physics.json:unknownKey": "x"},
             },
-            axis_catalog={"number_cells": axis},
             staged_case_root=Path("/nonexistent"),
             direct_key_validator=_known_catalog_validator,
         )
@@ -551,12 +582,11 @@ def test_resolve_case_patches_refuses_command_arguments_for_an_undeclared_step()
         return AxisResult(command_arguments={"not_a_real_step": ("-x",)})
 
     axis = AxisContract(name="rogue_step", value_kind="integer", resolve=rogue)
-    record = _record(allowed_axes=frozenset({"rogue_step"}))
+    record = _record(axes=(axis,))
     with pytest.raises(TutorialRecordError, match="not_a_real_step"):
         resolve_case_patches(
             record,
             study_by_source={"base": {"rogue_step": 1}},
-            axis_catalog={"rogue_step": axis},
             staged_case_root=Path("/nonexistent"),
             direct_key_validator=_known_catalog_validator,
         )
@@ -571,24 +601,22 @@ def test_resolve_case_patches_refuses_conflicting_command_arguments_for_one_step
     def axis_two(value, staged_case_root):
         return AxisResult(command_arguments={"mesh": ("-N", "9")})
 
-    record = _record(allowed_axes=frozenset({"one", "two"}))
-    axis_catalog = {
-        "one": AxisContract(name="one", value_kind="integer", resolve=axis_one),
-        "two": AxisContract(name="two", value_kind="integer", resolve=axis_two),
-    }
+    record = _record(axes=(
+        AxisContract(name="one", value_kind="integer", resolve=axis_one),
+        AxisContract(name="two", value_kind="integer", resolve=axis_two),
+    ))
     with pytest.raises(TutorialRecordError, match="mesh"):
         resolve_case_patches(
             record,
             study_by_source={"base": {"one": 1, "two": 2}},
-            axis_catalog=axis_catalog,
             staged_case_root=Path("/nonexistent"),
             direct_key_validator=_known_catalog_validator,
         )
 
 
-def _record_with_a_default_argument() -> TutorialRecord:
+def _record_with_a_default_argument(axis: AxisContract) -> TutorialRecord:
     return _record(
-        allowed_axes=frozenset({"meshFile"}),
+        axes=(axis,),
         workflow_steps=(
             WorkflowStep(
                 step_id="mesh", command=("generate-mesh",),
@@ -611,9 +639,8 @@ def test_resolve_case_patches_refuses_an_axis_that_passes_a_default_key_twice():
     step and the key -- never a command carrying the argument twice."""
     with pytest.raises(TutorialRecordError) as exc:
         resolve_case_patches(
-            _record_with_a_default_argument(),
+            _record_with_a_default_argument(_mesh_file_axis("-dict", "a", "-dict", "b")),
             study_by_source={"base": {"meshFile": "x"}},
-            axis_catalog={"meshFile": _mesh_file_axis("-dict", "a", "-dict", "b")},
             staged_case_root=Path("/nonexistent"),
             direct_key_validator=_known_catalog_validator,
         )
@@ -626,9 +653,9 @@ def test_preview_shows_each_selected_steps_command_with_its_default_argument(tmp
     ``record_preview.workflow_commands`` shows the argv that will run."""
     _native_case(tmp_path, {})
     preview = record_execution.preview_record_case(
-        _record_with_a_default_argument(), cases_root=tmp_path / "cases",
+        _record_with_a_default_argument(_mesh_file_axis("-dict", "x")), cases_root=tmp_path / "cases",
         study_by_source={"base": {}},
-        driver_context=_context_with_writer(axis_catalog={"meshFile": _mesh_file_axis("-dict", "x")}),
+        driver_context=_context_with_writer(),
     )
     assert preview["workflow_commands"] == {"mesh": ["generate-mesh", "-dict", "system/meshDict.3D"]}
     assert preview["command_arguments"] == {}
@@ -637,11 +664,10 @@ def test_preview_shows_each_selected_steps_command_with_its_default_argument(tmp
 def test_preview_shows_the_axis_argument_in_place_of_the_default(tmp_path):
     _native_case(tmp_path, {})
     preview = record_execution.preview_record_case(
-        _record_with_a_default_argument(), cases_root=tmp_path / "cases",
+        _record_with_a_default_argument(_mesh_file_axis("-dict", "system/meshDict.1D")),
+        cases_root=tmp_path / "cases",
         study_by_source={"base": {"meshFile": "1D"}},
-        driver_context=_context_with_writer(
-            axis_catalog={"meshFile": _mesh_file_axis("-dict", "system/meshDict.1D")},
-        ),
+        driver_context=_context_with_writer(),
     )
     assert preview["workflow_commands"] == {"mesh": ["generate-mesh", "-dict", "system/meshDict.1D"]}
     assert preview["command_arguments"] == {"mesh": ["-dict", "system/meshDict.1D"]}
@@ -656,15 +682,13 @@ def test_resolve_case_patches_allows_identical_command_arguments_for_one_step():
     def axis_two(value, staged_case_root):
         return AxisResult(command_arguments={"mesh": ("-N", "5")})
 
-    record = _record(allowed_axes=frozenset({"one", "two"}))
-    axis_catalog = {
-        "one": AxisContract(name="one", value_kind="integer", resolve=axis_one),
-        "two": AxisContract(name="two", value_kind="integer", resolve=axis_two),
-    }
+    record = _record(axes=(
+        AxisContract(name="one", value_kind="integer", resolve=axis_one),
+        AxisContract(name="two", value_kind="integer", resolve=axis_two),
+    ))
     _, command_args = resolve_case_patches(
         record,
         study_by_source={"base": {"one": 1, "two": 2}},
-        axis_catalog=axis_catalog,
         staged_case_root=Path("/nonexistent"),
         direct_key_validator=_known_catalog_validator,
     )
@@ -682,14 +706,13 @@ def test_resolve_case_patches_refuses_before_running_any_axis():
         return AxisResult()
 
     good_axis = AxisContract(name="good_axis", value_kind="integer", resolve=_tracking_resolve)
-    record = _record(allowed_axes=frozenset({"good_axis"}))
+    record = _record(axes=(good_axis,))
     with pytest.raises(TutorialRecordError):
         resolve_case_patches(
             record,
             study_by_source={
                 "base": {"good_axis": 1, "not_a_real_axis_or_key": 2},
             },
-            axis_catalog={"good_axis": good_axis},
             staged_case_root=Path("/nonexistent"),
             direct_key_validator=_known_catalog_validator,
         )
@@ -1142,7 +1165,6 @@ def test_describe_entry_previews_a_tutorial_record_instead_of_refusing(tmp_path)
     record = _record()
     plugin = _RecordCaseWriterPlugin(
         tutorial_records={"toyTutorial": record},
-        axis_catalog={"number_cells": _number_cells_axis()},
         record_key_validator=_known_catalog_validator,
     )
     context = driver_context(plugin, source="test:describe-record")
@@ -1217,10 +1239,9 @@ def test_describe_tutorial_output_for_a_factory_tutorial_is_unchanged(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def _context_with_writer(tutorial_records=None, axis_catalog=None):
+def _context_with_writer(tutorial_records=None):
     plugin = _RecordCaseWriterPlugin(
         tutorial_records=tutorial_records or {},
-        axis_catalog=axis_catalog or {},
         record_key_validator=_known_catalog_validator,
     )
     return driver_context(plugin, source="test:pipeline")
@@ -1232,7 +1253,7 @@ def test_preview_record_case_lists_each_patch_with_status_and_validated(tmp_path
         "constant/mesh.json": {"cells": "5"},
     })
     record = _record()
-    context = _context_with_writer(axis_catalog={"number_cells": _number_cells_axis()})
+    context = _context_with_writer()
 
     preview = record_execution.preview_record_case(
         record,
@@ -1257,7 +1278,7 @@ def test_preview_record_case_ignores_sweep_naming_output_keys(tmp_path):
     unrecognized bare name, which is what happened before this fix."""
     _native_case(tmp_path, {"constant/mesh.json": {"cells": "1"}})
     record = _record()
-    context = _context_with_writer(axis_catalog={"number_cells": _number_cells_axis()})
+    context = _context_with_writer()
 
     preview = record_execution.preview_record_case(
         record,
@@ -1311,7 +1332,7 @@ def _record_with_variants(**overrides) -> TutorialRecord:
     fields = dict(
         name="toyTutorial",
         native_case_relpath="toyTutorial",
-        allowed_axes=frozenset(),
+        axes=(),
         workflow_steps=(
             WorkflowStep(step_id="meshA", command=("toolA",)),
             WorkflowStep(step_id="meshB", command=("toolB",)),
@@ -1399,7 +1420,7 @@ def test_preview_record_case_refuses_a_null_selector_rather_than_defaulting(tmp_
 def test_preview_of_a_record_without_variants_reports_no_variant(tmp_path):
     _native_case(tmp_path, {})
     preview = record_execution.preview_record_case(
-        _record(allowed_axes=frozenset()), cases_root=tmp_path / "cases",
+        _record(axes=()), cases_root=tmp_path / "cases",
         study_by_source={"base": {}}, driver_context=_context_with_writer(),
     )
     assert preview["workflow_variant"] is None
@@ -1434,7 +1455,7 @@ def test_commit_record_case_reports_the_selected_variants_steps(tmp_path):
 
 def test_commit_record_case_writes_one_case_with_validated_flags_in_the_record(tmp_path):
     _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
-    record = _record(allowed_axes=frozenset())
+    record = _record(axes=())
     context = _context_with_writer()
 
     result = record_execution.commit_record_case(
@@ -1490,7 +1511,7 @@ def test_commit_record_case_preserves_sibling_keys_in_a_multi_key_document(tmp_p
         "constant/mesh.json": {"cells": "1", "material": "myocardium"},
     })
     record = _record()
-    context = _context_with_writer(axis_catalog={"number_cells": _number_cells_axis()})
+    context = _context_with_writer()
 
     result = record_execution.commit_record_case(
         record,
@@ -1511,7 +1532,7 @@ def test_commit_record_case_writes_nothing_when_every_patch_is_unchanged(tmp_pat
     None told a caller nothing happened, but not WHY, or what the unchanged
     patches even were."""
     _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
-    record = _record(allowed_axes=frozenset())
+    record = _record(axes=())
     context = _context_with_writer()
 
     result = record_execution.commit_record_case(
@@ -1541,7 +1562,7 @@ def test_commit_record_case_refuses_when_the_native_case_is_missing(tmp_path):
 
 def test_commit_record_case_refuses_a_conflict_between_base_and_sweep(tmp_path):
     _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
-    record = _record(allowed_axes=frozenset())
+    record = _record(axes=())
     context = _context_with_writer()
     with pytest.raises(TutorialRecordError):
         record_execution.commit_record_case(
@@ -1577,7 +1598,7 @@ class _NoReaderPlugin(_RecordCaseWriterPlugin):
 
 def test_commit_record_case_refuses_when_the_stack_has_no_record_key_validator(tmp_path):
     _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
-    record = _record(allowed_axes=frozenset())
+    record = _record(axes=())
     context = driver_context(_NoValidatorPlugin(), source="test:no-validator")
     with pytest.raises(TutorialRecordError, match="no record-key validator"):
         record_execution.commit_record_case(
@@ -1591,7 +1612,7 @@ def test_commit_record_case_refuses_when_the_stack_has_no_record_key_validator(t
 
 def test_preview_record_case_refuses_when_the_stack_has_no_record_key_validator(tmp_path):
     _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
-    record = _record(allowed_axes=frozenset())
+    record = _record(axes=())
     context = driver_context(_NoValidatorPlugin(), source="test:no-validator")
     with pytest.raises(TutorialRecordError, match="no record-key validator"):
         record_execution.preview_record_case(
@@ -1607,7 +1628,7 @@ def test_commit_record_case_refuses_when_the_stack_has_no_case_value_comparator(
     patch, including a genuine no-op, as 'changed' and committed it. M4/M1
     now refuse outright instead."""
     _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
-    record = _record(allowed_axes=frozenset())
+    record = _record(axes=())
     context = driver_context(
         _NoComparatorPlugin(record_key_validator=_known_catalog_validator),
         source="test:no-comparator",
@@ -1629,7 +1650,7 @@ def test_commit_record_case_refuses_when_the_stack_has_no_config_value_reader(tm
     own no-reader default) and committed it, unable to ever report a real
     no-op."""
     _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
-    record = _record(allowed_axes=frozenset())
+    record = _record(axes=())
     context = driver_context(
         _NoReaderPlugin(record_key_validator=_known_catalog_validator),
         source="test:no-reader",
@@ -1646,7 +1667,7 @@ def test_commit_record_case_refuses_when_the_stack_has_no_config_value_reader(tm
 
 def test_preview_record_case_refuses_when_the_stack_has_no_config_value_reader(tmp_path):
     _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
-    record = _record(allowed_axes=frozenset())
+    record = _record(axes=())
     context = driver_context(
         _NoReaderPlugin(record_key_validator=_known_catalog_validator),
         source="test:no-reader",
@@ -1663,10 +1684,12 @@ def test_preview_record_case_refuses_when_the_stack_has_no_config_value_reader(t
 class _DeclaresNoneOfTheFourHooks(MinimalTestPlugin):
     """Unlike plain `MinimalTestPlugin` -- which always implements all four
     hooks, just returning empty/None defaults -- this plugin declares NONE
-    of them at all, the shape a pre-2026-09-24 plugin actually has."""
+    of them at all, the shape a pre-2026-09-24 plugin actually has.
+    Corrected 2026-09-26 (record-scoped axes): three hooks now; the fourth,
+    ``get_axis_catalog``, left the contract, and a plugin declaring it at
+    all is refused at load."""
 
     get_tutorial_records = None
-    get_axis_catalog = None
     get_record_key_validator = None
     get_case_value_comparator = None
 
@@ -1688,7 +1711,6 @@ def test_tutorial_record_capability_seams_call_no_legacy_fallback_when_absent():
     ctx = driver_context(_DeclaresNoneOfTheFourHooks(), source="test:m1-census")
     with compatibility.track_fallback_calls() as calls:
         assert ctx.capabilities.tutorial_records.catalog() is None
-        assert ctx.capabilities.axes.catalog() is None
         assert ctx.capabilities.record_key_validation.validator() is None
         assert ctx.capabilities.case_value_comparison.comparator() is None
     assert calls == []
@@ -1716,7 +1738,6 @@ def test_strict_plan_over_a_tutorial_record_refuses_without_cases_root():
     record = _record()
     context = _context_with_writer(
         tutorial_records={"toyTutorial": record},
-        axis_catalog={"number_cells": _number_cells_axis()},
     )
     with pytest.raises(TutorialRecordError, match="cases_root"):
         strict_plan("toyTutorial", driver_context=context)
@@ -1780,7 +1801,7 @@ def test_strict_plan_over_a_tutorial_record_commits_and_plans_with_a_working_run
 def test_a_sweep_over_a_record_entry_produces_one_commit_per_case(tmp_path):
     _native_case(tmp_path, {"constant/mesh.json": {"cells": "1"}})
     record = _record()
-    context = _context_with_writer(axis_catalog={"number_cells": _number_cells_axis()})
+    context = _context_with_writer()
 
     sweep_spec = {
         "base": {},
@@ -1824,7 +1845,7 @@ def test_record_case_spec_builds_the_generic_workflow_dag_shape(tmp_path):
     record = TutorialRecord(
         name="toyTutorial",
         native_case_relpath="toyTutorial",
-        allowed_axes=frozenset(),
+        axes=(),
         workflow_steps=(
             WorkflowStep(step_id="mesh", command=("toolA", "-dict")),
             WorkflowStep(step_id="solve", command=("solverBinary",)),

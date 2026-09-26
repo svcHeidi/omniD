@@ -86,7 +86,6 @@ def test_tutorial_record_entry_is_case_sourced(tmp_path: Path) -> None:
     record = TutorialRecord(
         name="toyTutorial",
         native_case_relpath="toyTutorial",
-        allowed_axes=frozenset(),
         workflow_steps=(WorkflowStep(step_id="solve", command=("run-test-case",)),),
     )
     staged = tmp_path / "case"

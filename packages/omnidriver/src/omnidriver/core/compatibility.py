@@ -526,3 +526,5 @@ def legacy_dict_regeneration_scopes(plugin) -> tuple:
 #: -- a missing record-key validator or case-value comparator must stop a
 #: record case from running at all (`record_execution._resolve_and_split`
 #: refuses by name), not quietly agree to run it unchecked.
+#: Corrected 2026-09-26 (record-scoped axes): AxisCapability itself is gone
+#: too; a record carries its own axes (``TutorialRecord.axes``).

@@ -75,7 +75,7 @@ def test_merging_keeps_the_plugins_names_first_and_adds_cores_once():
 
 def test_a_records_generated_paths_are_what_it_produces_and_does_not_consume():
     record = TutorialRecord(
-        name="r", native_case_relpath="r", allowed_axes=frozenset(),
+        name="r", native_case_relpath="r",
         workflow_steps=(
             WorkflowStep(step_id="mesh", command=("m",), produces=("mesh.pts", "out")),
             WorkflowStep(step_id="fix", command=("f",), consumes=("in_place.par",), produces=("in_place.par",)),
@@ -92,7 +92,7 @@ def test_an_intermediate_a_later_step_consumes_is_still_excluded():
     pipeline evidence: openCARP's mesh step produces slab.pts/slab.elem,
     and an honestly-declared solve step consumes them)."""
     record = TutorialRecord(
-        name="r", native_case_relpath="r", allowed_axes=frozenset(),
+        name="r", native_case_relpath="r",
         workflow_steps=(
             WorkflowStep(step_id="mesh", command=("m",), produces=("slab.pts", "slab.elem")),
             WorkflowStep(

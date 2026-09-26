@@ -147,7 +147,7 @@ def test_default_arguments_must_be_default_argument_items():
 # -- the DAG a record runs ---------------------------------------------------
 
 RECORD = TutorialRecord(
-    name="toy", native_case_relpath="toy", allowed_axes=frozenset(),
+    name="toy", native_case_relpath="toy",
     workflow_steps=(MESH, WorkflowStep(step_id="solve", command=("solver",))),
 )
 

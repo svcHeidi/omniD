@@ -987,8 +987,11 @@ class TutorialRecordCapability(Protocol):
     """The tutorial records this plugin registers -- data, not factories.
 
     A record (``core.tutorial_records.TutorialRecord``) names a native case
-    path relative to the environment's own cases root, the axis names it
-    allows, and its workflow steps. Distinct from ``TutorialCatalogCapability
+    path relative to the environment's own cases root, its own axes, and
+    its workflow steps. Corrected 2026-09-26 (record-scoped axes): a record
+    named the axes it allowed and ``AxisCapability`` (``get_axis_catalog``,
+    deleted) provided them for the whole stack, so two records could not
+    give one axis name two meanings. Distinct from ``TutorialCatalogCapability
     .catalog()``'s ``spec_factories``, which builds a ``TutorialSpec`` by
     calling plugin code: resolving a record calls no plugin code at all,
     until an axis it names actually runs (design doc
@@ -1006,32 +1009,6 @@ class TutorialRecordCapability(Protocol):
 
     :adapts: get_tutorial_records
     :consumed-by: omnidriver/core/runtime/registry.py, omnidriver/conformance/checks.py
-    :fallback: none
-    :status: optional-neutral
-    """
-
-    def catalog(self) -> dict[str, Any] | None: ...
-
-
-class AxisCapability(Protocol):
-    """The named axes this plugin provides for a tutorial-record study.
-
-    An axis (``core.tutorial_records.AxisContract``) is a name, the value
-    kind it accepts, and a pure function ``(value, staged_case_root) ->
-    AxisResult`` deriving patches and workflow-step command arguments. Core
-    defines the contract and ships none itself (design doc §3: "Core defines
-    the contract and ships no solver axes") -- a bare study name not found in
-    a record's ``allowed_axes`` *and* in this catalog is refused by
-    ``tutorial_records.sort_study_name`` before anything runs.
-
-    **No fallback (review finding M1).** ``catalog()`` returns ``None`` when
-    the plugin declares no ``get_axis_catalog`` hook -- callers (currently
-    only ``record_execution._resolve_and_split``) treat that the same as an
-    empty catalog: no fallback need branch on it, since a bare study name
-    refuses identically either way.
-
-    :adapts: get_axis_catalog
-    :consumed-by: omnidriver/core/runtime/record_execution.py
     :fallback: none
     :status: optional-neutral
     """
@@ -2022,16 +1999,6 @@ class _TutorialRecordAdapter:
 
 
 @dataclass(frozen=True)
-class _AxisAdapter:
-    plugin: "SolverPlugin"
-
-    def catalog(self) -> dict[str, Any] | None:
-        """``None`` when the plugin declares no hook (review finding M1)."""
-        hook = getattr(self.plugin, "get_axis_catalog", None)
-        return dict(hook()) if callable(hook) else None
-
-
-@dataclass(frozen=True)
 class _RecordKeyValidationAdapter:
     plugin: "SolverPlugin"
 
@@ -2318,7 +2285,6 @@ class PluginCapabilities:
     dict_key_scanner: DictKeyScannerCapability
     case_writer: CaseWriterCapability
     tutorial_records: TutorialRecordCapability
-    axes: AxisCapability
     record_key_validation: RecordKeyValidationCapability
     case_value_comparison: CaseValueComparisonCapability
 
@@ -2363,7 +2329,6 @@ def adapt_plugin_capabilities(plugin: "SolverPlugin") -> PluginCapabilities:
         dict_key_scanner=_DictKeyScannerAdapter(plugin),
         case_writer=_CaseWriterAdapter(plugin),
         tutorial_records=_TutorialRecordAdapter(plugin),
-        axes=_AxisAdapter(plugin),
         record_key_validation=_RecordKeyValidationAdapter(plugin),
         case_value_comparison=_CaseValueComparisonAdapter(plugin),
     )

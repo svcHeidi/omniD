@@ -54,10 +54,9 @@ def lists_key(entry: Mapping[str, Any], document: str, key: str) -> bool:
 
 
 def record_surface(record, *, native_case_root: Path, driver_context) -> dict[str, Any]:
-    axis_catalog = driver_context.capabilities.axes.catalog() or {}
     axes = [
-        {"name": name, "value_kind": axis_catalog[name].value_kind}
-        for name in sorted(record.allowed_axes) if name in axis_catalog
+        {"name": axis.name, "value_kind": axis.value_kind}
+        for axis in sorted(record.axes, key=lambda axis: axis.name)
     ]
     surface = driver_context.capabilities.record_surface
     documentation = []

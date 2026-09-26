@@ -576,7 +576,7 @@ class SolverPluginOptionalHooks(Protocol):
         """This plugin's tutorial records, keyed by name.
 
         A record (``core.tutorial_records.TutorialRecord``) is inert data --
-        a native case path, its allowed axes, its workflow steps -- not a
+        a native case path, its own axes, its workflow steps -- not a
         callable factory. Distinct from ``get_tutorial_catalog()``'s
         ``spec_factories``, which core calls; a record is core data core
         never calls into the plugin to build. Absent -> ``None``, not
@@ -585,19 +585,6 @@ class SolverPluginOptionalHooks(Protocol):
         case for a plugin that has not migrated any tutorial onto this shape
         yet (design doc ``docs/superpowers/specs/2026-09-24-tutorials-are-
         pointers-design.md``)."""
-        ...
-
-    # -- AxisCapability --------------------------------------------------------
-    def get_axis_catalog(self) -> dict[str, Any]:
-        """This plugin's named axes, keyed by name.
-
-        An axis (``core.tutorial_records.AxisContract``) is a name, the value
-        kind it accepts, and a pure function ``(value, staged_case_root) ->
-        AxisResult``. Core defines the contract and ships none itself. Absent
-        -> ``None``, not ``{}`` (review finding M1) -- callers treat that the
-        same as an empty catalog either way: a study naming a bare axis this
-        plugin does not provide is refused by name, same as one it never
-        declared."""
         ...
 
     # -- RecordKeyValidationCapability ------------------------------------------
@@ -820,7 +807,13 @@ _PLUGIN_ID_RE = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?")
 #: than told to migrate. This list does not grow by renaming entries onto
 #: it; it exists only for hooks core used to call by this exact name and no
 #: longer does.
-_RETIRED_PLUGIN_MEMBERS = frozenset({"get_selected_start" + "_time"})
+#:
+#: ``get_axis_catalog`` added 2026-09-26 (record-scoped axes): each
+#: ``TutorialRecord`` now carries its own ``axes``, and core no longer asks a
+#: plugin for a stack-wide catalog, so a plugin still implementing it would
+#: have its axes silently unused rather than told to move them onto its
+#: records.
+_RETIRED_PLUGIN_MEMBERS = frozenset({"get_selected_start" + "_time", "get_axis_catalog"})
 
 #: Members whose contract dropped a keyword parameter (A1, 2026-09-26): the
 #: retired keyword (built below) became ``environment_source``. Detected by

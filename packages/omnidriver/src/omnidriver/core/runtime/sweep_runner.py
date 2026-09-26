@@ -210,7 +210,6 @@ def _validate_record_sweep_upfront(
             "whether a patch is unchanged cannot be determined"
         )
 
-    axis_catalog = driver_context.capabilities.axes.catalog() or {}
     reserved = _reserved_study_names(record)
     base = sweep_spec.get("base", {})
     sweep_section = sweep_spec.get("sweep", {})
@@ -224,7 +223,7 @@ def _validate_record_sweep_upfront(
     names -= reserved
     names -= _RECORD_NON_STUDY_BASE_KEYS
     for name in names:
-        sort_study_name(name, allowed_axes=record.allowed_axes, axis_catalog=axis_catalog)
+        sort_study_name(name, axes=record.axes)
 
 
 def _record_sweep_plan(

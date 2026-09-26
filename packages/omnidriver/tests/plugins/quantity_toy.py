@@ -115,7 +115,7 @@ def write_toy_values(path: Path, rows: Mapping[str, tuple[str, tuple[float, floa
 TOY_QUANTITY_RECORD = TutorialRecord(
     name="toyQuantities",
     native_case_relpath="toyQuantities",
-    allowed_axes=frozenset({"number_cells"}),
+    axes=(_number_cells_axis(),),
     workflow_steps=(WorkflowStep(
         step_id="solve", command=("cp", "seed/values.txt", "values.txt"),
         consumes=("constant/mesh.json", "seed/values.txt"),
@@ -143,7 +143,6 @@ class QuantityToyPlugin(E2ERecordPlugin):
             self,
             solver_commands=frozenset({"cp"}),
             tutorial_records={"toyQuantities": TOY_QUANTITY_RECORD},
-            axis_catalog={"number_cells": _number_cells_axis()},
             record_key_validator=_known_catalog_validator,
             case_value_comparator=_typed_agree,
         )

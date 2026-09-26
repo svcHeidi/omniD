@@ -423,8 +423,8 @@ def check_discoverable(target: ConformanceTarget) -> CheckVerdict:
         return _verdict("C10", False, "describe has no record_surface")
     problems = []
     axis_names = {a["name"] for a in surface["axes"]}
-    if axis_names != set(record.allowed_axes):
-        problems.append(f"axes listed {sorted(axis_names)}, record allows {sorted(record.allowed_axes)}")
+    if axis_names != set(record.axis_names()):
+        problems.append(f"axes listed {sorted(axis_names)}, record declares {sorted(record.axis_names())}")
     if any(not a.get("value_kind") for a in surface["axes"]):
         problems.append("an axis is listed without its value kind")
     incomplete = [e for e in surface["keys"] if _incomplete(e)]

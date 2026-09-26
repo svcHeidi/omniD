@@ -32,15 +32,16 @@ class MinimalTestPlugin:
     _solver_commands: frozenset[str] = frozenset()
     _telemetry_globs: dict[str, tuple[str, ...]] = {}
     #: Tutorial-record test seams (2026-09-24, tutorial-record design). Empty
-    #: by default: a plugin declaring no records/axes/validator/comparator is
-    #: the ordinary case -- this plugin still implements all four hooks
-    #: (returning the empty/None defaults below), which is why the four
+    #: by default: a plugin declaring no records/validator/comparator is
+    #: the ordinary case -- this plugin still implements all three hooks
+    #: (returning the empty/None defaults below), which is why the three
     #: capabilities' OWN adapters (not a legacy fallback: those were deleted
     #: outright, review finding M1 -- ``compatibility.legacy_tutorial_records``
     #: and kin no longer exist) see a declared hook and call it -- so most
-    #: tests never need these constructor arguments at all.
+    #: tests never need these constructor arguments at all. Corrected
+    #: 2026-09-26 (record-scoped axes): four hooks until ``get_axis_catalog``
+    #: left the contract; a record now carries its own axes.
     _tutorial_records: dict = {}
-    _axis_catalog: dict = {}
     _record_key_validator = None
     _case_value_comparator = None
 
@@ -51,7 +52,6 @@ class MinimalTestPlugin:
         solver_commands: frozenset[str] | set[str] | None = None,
         telemetry_globs: dict[str, tuple[str, ...]] | None = None,
         tutorial_records: dict | None = None,
-        axis_catalog: dict | None = None,
         record_key_validator=None,
         case_value_comparator=None,
     ) -> None:
@@ -79,8 +79,6 @@ class MinimalTestPlugin:
             self._telemetry_globs = dict(telemetry_globs)
         if tutorial_records is not None:
             self._tutorial_records = dict(tutorial_records)
-        if axis_catalog is not None:
-            self._axis_catalog = dict(axis_catalog)
         if record_key_validator is not None:
             self._record_key_validator = record_key_validator
         if case_value_comparator is not None:
@@ -205,9 +203,6 @@ class MinimalTestPlugin:
 
     def get_tutorial_records(self) -> dict:
         return dict(self._tutorial_records)
-
-    def get_axis_catalog(self) -> dict:
-        return dict(self._axis_catalog)
 
     def get_record_key_validator(self):
         return self._record_key_validator

@@ -1298,7 +1298,7 @@ def _toy_record() -> TutorialRecord:
     return TutorialRecord(
         name="toyTutorial",
         native_case_relpath="toyTutorial",
-        allowed_axes=frozenset({"number_cells"}),
+        axes=(_record_number_cells_axis(),),
         workflow_steps=(WorkflowStep(step_id="solve", command=("touch", "solved.marker")),),
     )
 
@@ -1325,7 +1325,6 @@ def _record_driver_context():
     plugin = _RecordSweepWriterPlugin(
         solver_commands=frozenset({"touch"}),
         tutorial_records={"toyTutorial": _toy_record()},
-        axis_catalog={"number_cells": _record_number_cells_axis()},
         record_key_validator=_record_known_catalog_validator,
     )
     return _driver_context(plugin, source="test:record-sweep")
@@ -1357,7 +1356,6 @@ def test_sweep_run_over_a_record_entry_refuses_a_missing_capability_upfront_befo
     plugin = _RecordSweepWriterPlugin(
         solver_commands=frozenset({"touch"}),
         tutorial_records={"toyTutorial": _toy_record()},
-        axis_catalog={"number_cells": _record_number_cells_axis()},
         record_key_validator=None,  # no validator declared at all
     )
     ctx = _driver_context(plugin, source="test:record-sweep-no-validator")
@@ -1631,7 +1629,6 @@ def test_sweep_record_refuses_when_shadowed_by_a_cwd_case_path(tmp_path, monkeyp
     plugin = _RecordSweepWriterPlugin(
         solver_commands=frozenset({"touch"}),
         tutorial_records={"toyTutorial": _toy_record()},
-        axis_catalog={"number_cells": _record_number_cells_axis()},
         record_key_validator=_record_known_catalog_validator,
         entrypoint="run-test-case",
     )
@@ -1668,13 +1665,12 @@ def test_sweep_record_refuses_when_shadowed_by_a_case_folder_under_cases_root(tm
     record = TutorialRecord(
         name="toyTutorial",
         native_case_relpath="nativeCases/toyTutorial",
-        allowed_axes=frozenset({"number_cells"}),
+        axes=(_record_number_cells_axis(),),
         workflow_steps=(WorkflowStep(step_id="solve", command=("touch", "solved.marker")),),
     )
     plugin = _RecordSweepWriterPlugin(
         solver_commands=frozenset({"touch"}),
         tutorial_records={"toyTutorial": record},
-        axis_catalog={"number_cells": _record_number_cells_axis()},
         record_key_validator=_record_known_catalog_validator,
         entrypoint="run-test-case",
     )

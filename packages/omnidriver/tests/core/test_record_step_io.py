@@ -18,7 +18,6 @@ from omnidriver.core.tutorial_records import (
 RECORD = TutorialRecord(
     name="io",
     native_case_relpath="io",
-    allowed_axes=frozenset(),
     workflow_steps=(
         WorkflowStep(step_id="mesh", command=("m",), produces=("a.pts", "a.elem")),
         WorkflowStep(step_id="solve", command=("s",), consumes=("in.par",), produces=("out/v.igb",)),
@@ -144,7 +143,7 @@ def test_a_produced_path_is_its_path_and_names_its_format():
 
 def test_record_artifacts_carry_the_declared_format():
     record = TutorialRecord(
-        name="fmt", native_case_relpath="fmt", allowed_axes=frozenset(),
+        name="fmt", native_case_relpath="fmt",
         workflow_steps=(WorkflowStep(step_id="solve", command=("s",),
                                      produces=("out/v.igb", ProducedPath("out/lat.dat", format="toy_lat"))),),
     )

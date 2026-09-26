@@ -183,7 +183,6 @@ _SHAPE: dict[str, str] = {
     "get_samplable_fields": "map",
     "resolve_case_models": "map",
     "get_tutorial_records": "map",
-    "get_axis_catalog": "map",
     # -- catalog -----------------------------------------------------------
     "get_dictionary_catalog": "catalog",
     # -- sequence ----------------------------------------------------------

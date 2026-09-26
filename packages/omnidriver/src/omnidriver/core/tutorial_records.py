@@ -340,9 +340,19 @@ class TutorialRecord:
     resolving this to an absolute path is the caller's job, not this
     dataclass's.
 
-    ``allowed_axes`` is a closed set: a bare study name not in this set is
-    refused (design §5, "an axis the record does not allow"), even when the
-    composed stack happens to provide an axis by that name.
+    ``axes`` are the record's own axes, each an :class:`AxisContract` named
+    by its own ``name``. A bare study name resolves against these and
+    nothing else (design §5, "an axis the record does not allow"), so one
+    name can mean different things in two records. **Corrected 2026-09-26
+    (record-scoped axes):** this was ``allowed_axes``, a set of names looked
+    up in one stack-wide ``get_axis_catalog`` map. Two records defining
+    ``dimension`` differently then shared whichever registered last:
+    ``manufacturedBidomain``'s, which also writes
+    ``bidomainSolverCoeffs.dimension``, silently became
+    ``manufacturedEikonalECG``'s, which does not. Two axes of one record
+    sharing a name are refused by name here, at load, and so is a
+    ``name -> contract`` mapping, whose keys would restate each contract's
+    ``name`` and could silently drop a duplicate.
 
     ``workflow_steps`` are keyed by ``step_id``, for ``workflow_variants``
     and for axes that contribute command arguments to a named step.
@@ -363,8 +373,8 @@ class TutorialRecord:
 
     name: str
     native_case_relpath: str
-    allowed_axes: frozenset[str]
     workflow_steps: tuple[WorkflowStep, ...]
+    axes: tuple[AxisContract, ...] = ()
     workflow_variants: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     #: The reserved study name that selects among ``workflow_variants`` --
     #: DECLARED BY THE RECORD (item 4's vocabulary fix), never a name core
@@ -395,7 +405,24 @@ class TutorialRecord:
             f"tutorial record {self.name!r}'s native_case_relpath",
             self.native_case_relpath,
         )
-        object.__setattr__(self, "allowed_axes", frozenset(self.allowed_axes))
+        if isinstance(self.axes, (Mapping, AxisContract, str)):
+            raise TutorialRecordError(
+                f"tutorial record {self.name!r} axes must be a sequence of AxisContract, "
+                f"not {type(self.axes).__name__}; each contract already carries its own name"
+            )
+        object.__setattr__(self, "axes", tuple(self.axes))
+        seen: set[str] = set()
+        for axis in self.axes:
+            if not isinstance(axis, AxisContract):
+                raise TutorialRecordError(
+                    f"tutorial record {self.name!r} axes holds {axis!r}, which is not an AxisContract"
+                )
+            if axis.name in seen:
+                raise TutorialRecordError(
+                    f"tutorial record {self.name!r} declares axis {axis.name!r} twice; "
+                    "a study name must resolve to one axis in its record"
+                )
+            seen.add(axis.name)
         object.__setattr__(self, "workflow_steps", tuple(self.workflow_steps))
         step_ids = [step.step_id for step in self.workflow_steps]
         if len(set(step_ids)) != len(step_ids):
@@ -443,6 +470,9 @@ class TutorialRecord:
 
     def step_ids(self) -> tuple[str, ...]:
         return tuple(step.step_id for step in self.workflow_steps)
+
+    def axis_names(self) -> tuple[str, ...]:
+        return tuple(axis.name for axis in self.axes)
 
 
 # ---------------------------------------------------------------------------
@@ -525,8 +555,10 @@ class AxisContract:
 
     Core defines this contract and ships no axis of its own (design §3:
     "Core defines the contract and ships no solver axes"). An adapter
-    provides axes through ``AxisCapability``, following the same
-    provider-stack pattern every other capability uses.
+    declares each axis on the record that uses it (``TutorialRecord.axes``).
+    Corrected 2026-09-26 (record-scoped axes): an adapter used to provide
+    axes stack-wide through ``AxisCapability``/``get_axis_catalog``, both
+    deleted.
     """
 
     name: str
@@ -614,8 +646,7 @@ class AxisMatch:
 def sort_study_name(
     name: str,
     *,
-    allowed_axes: frozenset[str],
-    axis_catalog: Mapping[str, AxisContract],
+    axes: Sequence[AxisContract],
 ) -> DocumentKeyName | AxisMatch:
     """Classify one study name, refusing by name before anything runs.
 
@@ -627,11 +658,12 @@ def sort_study_name(
     real catalog recognises is adapter work, resolved later by
     ``RecordKeyValidationCapability`` (``resolve_case_patches``), not here.
 
-    A name with no colon is a bare axis name: refused unless it is BOTH
-    declared allowed by the record (``allowed_axes``) AND actually provided
-    by the composed stack (``axis_catalog``) -- an axis a record allows but
-    no adapter provides, or one an adapter provides but this record does not
-    allow, are both refusals, and each names the specific reason.
+    A name with no colon is a bare axis name, resolved against ``axes``, the
+    entry's own (``TutorialRecord.axes``), and refused when none of them has
+    that name. Corrected 2026-09-26 (record-scoped axes): this took a
+    record's allowed names and the stack-wide axis catalog, and refused an
+    allowed name no adapter provided and a provided name the record did not
+    allow; with axes on the record, neither state exists.
     """
     if ":" in name:
         document, _, dotted = name.partition(":")
@@ -647,23 +679,13 @@ def sort_study_name(
             )
         return DocumentKeyName(document=document, key_path=key_path)
 
-    if name not in allowed_axes:
-        if name in axis_catalog:
-            raise TutorialRecordError(
-                f"{name!r} is an axis this entry does not allow (allowed "
-                f"axes: {sorted(allowed_axes)})"
-            )
-        raise TutorialRecordError(
-            f"{name!r} is neither a 'document:dotted.path' key nor an axis "
-            f"this entry allows (allowed axes: {sorted(allowed_axes)})"
-        )
-    axis = axis_catalog.get(name)
-    if axis is None:
-        raise TutorialRecordError(
-            f"{name!r} is an allowed axis, but no composed adapter provides "
-            f"an axis by that name (provided axes: {sorted(axis_catalog)})"
-        )
-    return AxisMatch(axis=axis)
+    for axis in axes:
+        if axis.name == name:
+            return AxisMatch(axis=axis)
+    raise TutorialRecordError(
+        f"{name!r} is neither a 'document:dotted.path' key nor an axis "
+        f"this entry declares (declared axes: {sorted(axis.name for axis in axes)})"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -831,7 +853,6 @@ def resolve_case_patches(
     record: TutorialRecord,
     *,
     study_by_source: Mapping[str, Mapping[str, Any]],
-    axis_catalog: Mapping[str, AxisContract],
     staged_case_root: Path,
     direct_key_validator: DirectKeyValidator,
 ) -> tuple[tuple[SourcedPatch, ...], dict[str, tuple[str, ...]]]:
@@ -866,9 +887,7 @@ def resolve_case_patches(
     classified: list[tuple[str, str, DocumentKeyName | AxisMatch, Any]] = []
     for source, values in study_by_source.items():
         for name, value in values.items():
-            sorted_name = sort_study_name(
-                name, allowed_axes=record.allowed_axes, axis_catalog=axis_catalog,
-            )
+            sorted_name = sort_study_name(name, axes=record.axes)
             classified.append((source, name, sorted_name, value))
 
     direct_entries = [

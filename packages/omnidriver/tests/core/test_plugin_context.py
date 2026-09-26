@@ -180,6 +180,17 @@ def test_plugin_contract_refuses_a_retired_hook_by_name() -> None:
         validate_plugin(plugin)
 
 
+def test_plugin_contract_refuses_a_stack_wide_axis_catalog() -> None:
+    """Record-scoped axes (2026-09-26): axes live on each ``TutorialRecord``,
+    and core no longer calls ``get_axis_catalog``. A plugin still declaring
+    it would have its axes silently unused, so it is refused at load."""
+    plugin = _Plugin("example.axis-catalog", "axis-catalog")
+    plugin.get_axis_catalog = lambda: {}
+
+    with pytest.raises(TypeError, match="get_axis_catalog"):
+        validate_plugin(plugin)
+
+
 def test_plugin_contract_refuses_a_retired_keyword_parameter() -> None:
     """review finding M1: ``get_environment_diagnostics``/
     ``get_loaded_environment`` renamed ``explicit_bashrc`` to

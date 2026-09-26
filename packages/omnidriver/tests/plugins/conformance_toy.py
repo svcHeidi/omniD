@@ -22,7 +22,7 @@ from omnidriver.core.case_write import RenderedFile, _digest_bytes
 from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 from omnidriver.core.tutorial_records import TutorialRecord, WorkflowStep
 
-from plugins.e2e_record_plugin import E2ERecordPlugin, _FORMAT, _deep_set
+from plugins.e2e_record_plugin import _TOY_RECORD, E2ERecordPlugin, _FORMAT, _deep_set, _number_cells_axis
 
 REPLACING_PLUGIN = "plugins.conformance_toy:ReplacingRendererPlugin"
 NO_CONSUMES_PLUGIN = "plugins.conformance_toy:NoConsumesPlugin"
@@ -80,7 +80,7 @@ class NoConsumesPlugin(E2ERecordPlugin):
     def get_tutorial_records(self):
         return {"toyTutorial": TutorialRecord(
             name="toyTutorial", native_case_relpath="toyTutorial",
-            allowed_axes=frozenset({"number_cells"}),
+            axes=(_number_cells_axis(),),
             workflow_steps=(WorkflowStep(step_id="solve", command=("touch", "solved.marker"),
                                          produces=("solved.marker",)),),
         )}
@@ -96,7 +96,7 @@ class GhostConsumesPlugin(E2ERecordPlugin):
     def get_tutorial_records(self):
         return {"toyTutorial": TutorialRecord(
             name="toyTutorial", native_case_relpath="toyTutorial",
-            allowed_axes=frozenset({"number_cells"}),
+            axes=(_number_cells_axis(),),
             workflow_steps=(WorkflowStep(step_id="solve", command=("touch", "solved.marker"),
                                          consumes=("constant/mesh.json", "does/not/exist.json"),
                                          produces=("solved.marker",)),),
@@ -115,11 +115,10 @@ class NativeWritingPlugin(E2ERecordPlugin):
     named by ``STRAY_ROOT_VARIABLE`` -- the native cases root, in the bite
     test -- outside the record's own subtree, where C7's digest never looks."""
 
-    def __init__(self) -> None:
-        super().__init__()
+    def get_tutorial_records(self):
         from dataclasses import replace
 
-        axis = self._axis_catalog["number_cells"]
+        (axis,) = _TOY_RECORD.axes
         original = axis.resolve
 
         def resolve(value, staged_case_root):
@@ -128,7 +127,7 @@ class NativeWritingPlugin(E2ERecordPlugin):
                 (Path(root) / STRAY_NAME).write_text("written by an axis\n")
             return original(value, staged_case_root)
 
-        self._axis_catalog = {**self._axis_catalog, "number_cells": replace(axis, resolve=resolve)}
+        return {"toyTutorial": replace(_TOY_RECORD, axes=(replace(axis, resolve=resolve),))}
 
 
 NO_PRODUCES_PLUGIN = "plugins.conformance_toy:NoProducesPlugin"
@@ -141,7 +140,7 @@ class NoProducesPlugin(E2ERecordPlugin):
     def get_tutorial_records(self):
         return {"toyTutorial": TutorialRecord(
             name="toyTutorial", native_case_relpath="toyTutorial",
-            allowed_axes=frozenset({"number_cells"}),
+            axes=(_number_cells_axis(),),
             workflow_steps=(WorkflowStep(step_id="solve", command=("touch", "solved.marker"),
                                          consumes=("constant/mesh.json",)),),
         )}
@@ -293,7 +292,7 @@ class LogRedactingPlugin(E2ERecordPlugin):
     def get_tutorial_records(self):
         return {"toyTutorial": TutorialRecord(
             name="toyTutorial", native_case_relpath="toyTutorial",
-            allowed_axes=frozenset({"number_cells"}),
+            axes=(_number_cells_axis(),),
             workflow_steps=(WorkflowStep(
                 step_id="solve",
                 command=("sh", "-c", f"echo {FAKE_CREDENTIAL_URL}; touch solved.marker"),
@@ -369,7 +368,7 @@ class UndeclaredOutputPlugin(E2ERecordPlugin):
     def get_tutorial_records(self):
         return {"toyTutorial": TutorialRecord(
             name="toyTutorial", native_case_relpath="toyTutorial",
-            allowed_axes=frozenset({"number_cells"}),
+            axes=(_number_cells_axis(),),
             workflow_steps=(WorkflowStep(
                 step_id="solve", command=("sh", "-c", "touch solved.marker undeclared.out"),
                 consumes=("constant/mesh.json",), produces=("solved.marker",),
@@ -406,7 +405,7 @@ class DefaultRoutePlugin(E2ERecordPlugin):
     def get_tutorial_records(self):
         return {"toyTutorial": TutorialRecord(
             name="toyTutorial", native_case_relpath="toyTutorial",
-            allowed_axes=frozenset({"number_cells"}),
+            axes=(_number_cells_axis(),),
             workflow_steps=(
                 WorkflowStep(step_id="solveNative", command=("touch", DEFAULT_ROUTE_MARKER),
                              consumes=("constant/mesh.json",), produces=(DEFAULT_ROUTE_MARKER,)),
@@ -445,14 +444,13 @@ class DefaultArgumentPlugin(E2ERecordPlugin):
     def __init__(self) -> None:
         super().__init__()
         self._solver_commands = frozenset({"touch", "sh"})
-        self._axis_catalog = {**self._axis_catalog, "marker": _marker_axis()}
 
     def get_tutorial_records(self):
         from omnidriver.core.tutorial_records import DefaultArgument
 
         return {"toyTutorial": TutorialRecord(
             name="toyTutorial", native_case_relpath="toyTutorial",
-            allowed_axes=frozenset({"number_cells", "marker"}),
+            axes=(_number_cells_axis(), _marker_axis()),
             workflow_steps=(WorkflowStep(
                 step_id="solve", command=("sh", "-c", 'touch "$2"', "sh"),
                 default_arguments=(DefaultArgument(key=("--marker",), values=(DEFAULT_ARGUMENT_MARKER,)),),

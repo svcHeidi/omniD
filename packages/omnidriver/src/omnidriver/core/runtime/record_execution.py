@@ -266,15 +266,9 @@ def _resolve_and_split(
         study_by_source, reserved_names=_reserved_study_names(record),
     )
     workflow_step_ids, workflow_variant = _resolve_workflow_route(record, reserved_values)
-    # No fallback for axes either, but an absent axis catalog IS a neutral
-    # state here (design §3: "Core... ships no solver axes" -- most stacks
-    # provide none at all), not a refusal: `sort_study_name` already refuses
-    # any bare study name by name when no adapter provides that axis.
-    axis_catalog = driver_context.capabilities.axes.catalog() or {}
     combined, command_arguments = resolve_case_patches(
         record,
         study_by_source=study_by_source,
-        axis_catalog=axis_catalog,
         staged_case_root=staged_case_root,
         direct_key_validator=validator,
     )
