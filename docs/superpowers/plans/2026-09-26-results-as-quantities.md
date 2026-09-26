@@ -20,7 +20,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-26-results-as-quantities-design.md`.
 **Evidence:**
-- `docs/solver-learning/opencarp.md`: F3, F5, F6, D5, G4, plus F15 and F16 added by Task 5;
+- `docs/solver-learning/opencarp.md`: F3, F5, F6, D5, G4, plus F16 and F17 added by Task 5;
 - the code map `.superpowers/sdd/map-B.md`;
 - the paper research `.superpowers/sdd/niederer-benchmark-definition.md`, which is not committed (the directory is git-ignored). Task 4 transcribes from it.
 **Runs alongside:** topic A, `docs/superpowers/specs/2026-09-26-core-generality-design.md`. See "Coordination with topic A" below.
@@ -41,6 +41,8 @@
 > of pairs naming an unresolved point) stays: it is a general feature for future
 > references, tested with the toy reference only.
 
+> **Corrected 2026-09-26 (R1 review, I4), after topic A's A5 landed:** A5 wrote its own F15 into `docs/solver-learning/opencarp.md` and prepended `"out"` to the openCARP solve step's `produces`. So this plan's probe rows are **F16 and F17** (they were F15 and F16), the solve step keeps `"out"` first, and the LAT artifact id in the request example is `record.solve.2` (record artifact ids are index-based, `record.<step>.<index>`).
+
 ## Global Constraints
 
 - Python floor 3.11; CI matrixes 3.11/3.12/3.13.
@@ -56,7 +58,7 @@
   - native trees come from `OMNIDRIVER_OPENCARP_TUTORIALS` (openCARP) and `OMNIDRIVER_NATIVE_TUTORIALS` (cardiacFOAM);
   - openCARP's library path is the ambient `DYLD_LIBRARY_PATH`;
   - the reference file's path, each run's sweep output, case and plugin, the sampling points, the pairing and the tolerance all come from the agent's comparison request. Core finds none of them itself.
-  - The one thing a reader reads without being told is the solver's own record of the run it is reading: openCARP's `<simID>/parameters.par` states `meshname` (D5, F15). That is ambient truth, and the reader declares where it looks.
+  - The one thing a reader reads without being told is the solver's own record of the run it is reading: openCARP's `<simID>/parameters.par` states `meshname` (D5, F16). That is ambient truth, and the reader declares where it looks.
 - **A supplied scratch root is required.** Every `plan --strict`, `sweep-plan`/`sweep-run` without `--output-dir`, and every test that stages a record passes `--scratch-dir <dir>` (or `scratch_root=`), outside the tutorials tree. There is no default.
 - **No frame-conversion functions anywhere** (owner, 2026-09-26). Orientation and pairing are the agent's step. The report shows reference coordinates, requested points and sampled locations side by side.
 - **Units are declared by readers, never hardcoded per solver.** Sentinels (`-1` = never reached) are resolved **before** any conversion, so `-1 s` is `not_reached` and never `-1000 ms`.
@@ -176,7 +178,7 @@ packages/omnidriver-opencarp/
   tests/test_lat_reader.py                     CREATE (T5)
   tests/test_lat_reader_native.py              CREATE (T5)
   tests/test_quantity_comparison_native.py     CREATE (T6; extended in T8)
-docs/solver-learning/opencarp.md               MODIFY (T5): F15, F16
+docs/solver-learning/opencarp.md               MODIFY (T5): F16, F17
 AGENT_GUIDE.md, CLAUDE.md, .github/workflows/ci.yml, the spec   MODIFY (T6)
 packages/omnidriver-openfoam/src/omnidriver/openfoam/probes.py            CREATE (T7, blocked)
 packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/activation_probes.py  CREATE (T7, blocked)
@@ -1188,7 +1190,7 @@ packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/activation_probes.py 
   "tolerance": {"kind": "absolute", "value": 5.0, "unit": "ms", "rationale": "declared before any run was read; ..."},
   "runs": {
     "coarse": {"plugin": "opencarp", "sweep_output": "/scratch/sweeps/n", "case_id": "<id>",
-               "artifact_id": "record.solve.1",
+               "artifact_id": "record.solve.2",
                "points": {"unit": "mm", "at": {"P1": [0, 0, 0], "P8": [20, 7, 3]}},
                "max_sampling_offset": 0.001},
     "other":  {"plugin": "cardiacfoam", "sweep_output": "...", "case_id": "...", "artifact_id": "..."}
@@ -2571,7 +2573,7 @@ packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/activation_probes.py 
 - Modify: `packages/omnidriver-opencarp/src/omnidriver/opencarp/guidance.md`
 - Modify: `packages/omnidriver-opencarp/tests/opencarp_native.py` (`niederer_sweep`, `niederer_run`, `NiedererRun`)
 - Create: `packages/omnidriver-opencarp/tests/test_lat_reader.py`, `test_lat_reader_native.py`
-- Modify: `docs/solver-learning/opencarp.md` (F15, F16)
+- Modify: `docs/solver-learning/opencarp.md` (F16, F17)
 
 **How the points reach the reader.** They are in the agent's comparison request (`runs.<name>.points`), never in a record edit. Core converts them from the request's length unit to the reader's `um` and passes them as `ReadRequest.points`. The record changes only to name the LAT file's format.
 
@@ -2583,7 +2585,7 @@ packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/activation_probes.py 
   - `OpenCARPPlugin.get_artifact_value_reader(format)`;
   - in tests: `niederer_sweep(tmp_path, *, dx_values, tend, extra=None) -> Path` and `niederer_run(tmp_path, *, dx, tend, extra=None) -> NiedererRun(output_dir, case_id, case_root, lat_artifact)`.
 
-- [ ] **Step 1: Settle F15 and F16 against the real binary, and log them**
+- [ ] **Step 1: Settle F16 and F17 against the real binary, and log them**
 
   Both were observed while this plan was written (2026-09-26, openCARP v18.1, scratchpad, `nversion.par` from `03E_study_resolution`, `mesher` slab at dx 1000). Re-run them and write both rows into `docs/solver-learning/opencarp.md` §F with the output you see:
   ```bash
@@ -2605,8 +2607,8 @@ packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/activation_probes.py 
 
   Rows to add (fill the observed column from your run):
   ```
-  | F15 | Does openCARP record which mesh a solve used? | the dx-1000 slab, `openCARP +F nversion.par -meshname slab -simID out ... -tend 10 -dt 50`; `grep meshname out/parameters.par`; `par_format.read_raw(text, "meshname")` | `meshname = slab`; the whole file parses (40 assignments) | **yes: `<simID>/parameters.par` states `meshname`**, relative to the working directory (F5). The LAT reader reads the mesh from there, the solver's own record of the run, rather than from an argument |
-  | F16 | What does `lats[0].all = 1` write for nversion? | as F15 plus `-lats[0].all 1`, `-simID outall` | no `init_acts_vm_act-thresh.dat`; `vm_act-thresh.dat`, two columns (node index, time), one line per activation event | the per-node file the record declares exists only with `all = 0`. With `all = 1` the declared artifact is missing (reconciliation says so), and the reader refuses a two-column file by name |
+  | F16 | Does openCARP record which mesh a solve used? | the dx-1000 slab, `openCARP +F nversion.par -meshname slab -simID out ... -tend 10 -dt 50`; `grep meshname out/parameters.par`; `par_format.read_raw(text, "meshname")` | `meshname = slab`; the whole file parses (40 assignments) | **yes: `<simID>/parameters.par` states `meshname`**, relative to the working directory (F5). The LAT reader reads the mesh from there, the solver's own record of the run, rather than from an argument |
+  | F17 | What does `lats[0].all = 1` write for nversion? | as F16 plus `-lats[0].all 1`, `-simID outall` | no `init_acts_vm_act-thresh.dat`; `vm_act-thresh.dat`, two columns (node index, time), one line per activation event | the per-node file the record declares exists only with `all = 0`. With `all = 1` the declared artifact is missing (reconciliation says so), and the reader refuses a two-column file by name |
   ```
   If the binary disagrees with the observations above, stop and report. Do not write the reader against the plan's expectation.
 
@@ -2699,7 +2701,7 @@ packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/activation_probes.py 
   `packages/omnidriver-opencarp/tests/test_lat_reader_native.py`:
   ```python
   """The LAT reader against the real binary: values at supplied points, in ms,
-  at the mesh nodes the solve used (F6, F15, F16, G4). Every file read here
+  at the mesh nodes the solve used (F6, F16, F17, G4). Every file read here
   was written by mesher and openCARP; no mesh is invented."""
   from __future__ import annotations
 
@@ -2740,14 +2742,14 @@ packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/activation_probes.py 
 
   def test_a_point_equidistant_from_nodes_is_refused_by_name(tmp_path):
       """At dx 1000 the centre (10000, 3500, 1500) um lies midway between nodes
-      on two axes (21 x 8 x 4 points, F15's run)."""
+      on two axes (21 x 8 x 4 points, F16's run)."""
       run = niederer_run(tmp_path, dx=1000.0, tend=10.0)
       with pytest.raises(ValueError, match="'centre'.*equidistant"):
           LatPerNodeReader().read(run.case_root, run.lat_artifact, ReadRequest(names=("centre",), points=CENTRE))
 
 
   def test_the_per_event_layout_is_refused_by_name(tmp_path):
-      """F16: with lats[0].all = 1 the declared per-node file is absent, and the
+      """F17: with lats[0].all = 1 the declared per-node file is absent, and the
       file openCARP does write has two columns, which the reader refuses."""
       run = niederer_run(tmp_path, dx=1000.0, tend=10.0, extra={"nversion.par:lats[0].all": True})
       assert not (run.case_root / run.lat_artifact.path_pattern).exists()
@@ -2775,10 +2777,10 @@ packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/activation_probes.py 
   Each fact below comes from the real binary (docs/solver-learning/opencarp.md):
   - ``init_acts_<lats[].ID>-thresh.dat`` with ``lats[].all = 0``: one value per
     mesh point, in point order, ``-1`` for never activated, in ms (F6, G4). With
-    ``all = 1`` openCARP writes a two-column per-event file instead (F16),
+    ``all = 1`` openCARP writes a two-column per-event file instead (F17),
     which this reader refuses;
   - the mesh the solve used is ``meshname`` as the solver recorded it in
-    ``<simID>/parameters.par`` (D5, F15), relative to the case root, which is
+    ``<simID>/parameters.par`` (D5, F16), relative to the case root, which is
     the solve step's working directory (F5);
   - ``<meshname>.pts`` holds a point count, then ``x y z`` per point, in µm (F3).
 
@@ -2804,10 +2806,10 @@ packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/activation_probes.py 
       try:
           text = parameters.read_text()
       except OSError as exc:
-          raise ValueError(f"cannot read {parameters}, where openCARP records the mesh a solve used (F15): {exc}") from exc
+          raise ValueError(f"cannot read {parameters}, where openCARP records the mesh a solve used (F16): {exc}") from exc
       raw = read_raw(text, "meshname")
       if raw is None:
-          raise ValueError(f"{parameters} records no meshname (F15)")
+          raise ValueError(f"{parameters} records no meshname (F16)")
       return unquote(raw)
 
 
@@ -2833,7 +2835,7 @@ packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/activation_probes.py 
       rows = [line.split() for line in path.read_text().splitlines() if line.strip()]
       if any(len(row) != 1 for row in rows):
           raise ValueError(
-              f"{path} has more than one column: openCARP's per-event layout (lats[].all = 1, F16), "
+              f"{path} has more than one column: openCARP's per-event layout (lats[].all = 1, F17), "
               f"not one value per node; set nversion.par:lats[0].all to false"
           )
       if len(rows) != point_count:
@@ -2871,7 +2873,7 @@ packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/activation_probes.py 
               samples.append(RawSample(name=name, value=values[index], sampled_at=points[index]))
           return tuple(samples)
   ```
-  Exact float ties are sound because `mesher` writes integer µm coordinates (F15's run).
+  Exact float ties are sound because `mesher` writes integer µm coordinates (F16's run).
 
   `plugin.py`, in `OpenCARPPlugin` beside the other runtime-evidence hooks:
   ```python
@@ -2883,7 +2885,7 @@ packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/activation_probes.py 
 
   `records/niederer_n_version.py`:
   - import `ProducedPath` from `omnidriver.core.tutorial_records`, and `LAT_FORMAT` from `..lat_reader`;
-  - the solve step's `produces` becomes `("out/vm.igb", ProducedPath("out/init_acts_vm_act-thresh.dat", format=LAT_FORMAT))`, keeping its `# F6` comment;
+  - the solve step's `produces` becomes `("out", "out/vm.igb", ProducedPath("out/init_acts_vm_act-thresh.dat", format=LAT_FORMAT))`, keeping its `# F6` comment. **Corrected 2026-09-26 (R1 I4):** this dropped A5's `"out"` entry, which C11 needs; keep it first;
   - add to the module docstring: "The LAT file names its format so omniD reads it through `LatPerNodeReader` (results as quantities, 2026-09-26)."
 
   `guidance.md`: add a section.
@@ -2897,8 +2899,8 @@ packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/activation_probes.py 
   `ms`, and `-1` as `not_reached`. It refuses a point equidistant from two nodes: at
   dx 1000 the slab centre is one. Pick a dx whose nodes include your points (dx 500
   and 250 contain the Niederer corners and centre). The mesh is the one openCARP
-  records in `out/parameters.par` (F15). `lats[0].all` must stay `0`: with `1`
-  there is no per-node file (F16). openCARP's slab is 0–20000 × 0–7000 × 0–3000 µm
+  records in `out/parameters.par` (F16). `lats[0].all` must stay `0`: with `1`
+  there is no per-node file (F17). openCARP's slab is 0–20000 × 0–7000 × 0–3000 µm
   with the stimulus cube at the origin and fibres along x (F3). That is the frame
   of `benchmarks/niederer2011.json`, so its coordinates are written unchanged.
   ```
@@ -2918,7 +2920,7 @@ packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/activation_probes.py 
 
   ```bash
   git add packages/omnidriver-opencarp docs/solver-learning/opencarp.md
-  git commit -m "feat(opencarp): read the per-node LAT file as quantities at supplied points (F15, F16)
+  git commit -m "feat(opencarp): read the per-node LAT file as quantities at supplied points (F16, F17)
 
   Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   ```
@@ -3189,5 +3191,5 @@ Gaps: none left open. The P5 owner question and the ESM for P2/P3/P6/P7 are stat
 - The CLI's JSON-failure shape is `{"status": "failed", "action", "error"}`, matching `_sweep_output_dir`.
 - `provider_stack` composes `get_artifact_value_reader` as `single` (first non-`None`, most specific first), so per-format dispatch across a stack works unchanged.
 - The seam-documentation test requires each `:consumed-by:` module to contain `capabilities.runtime_evidence`. Both `checks.py` and `comparison.py` do.
-- A missing declared artifact does not fail a sweep case: status comes from `workflow_state`. So F16's run completes, and the comparison reports `not_evaluated`.
+- A missing declared artifact does not fail a sweep case: status comes from `workflow_state`. So F17's run completes, and the comparison reports `not_evaluated`.
 - The one assumption to check at execution time is that a real sweep's `workflow_state.json` carries `workflow_digest` and `resume_snapshot.aggregate_digest`. `experiments._association_status` already relies on them, and Task 3 Step 9 says what to do if it does not.
