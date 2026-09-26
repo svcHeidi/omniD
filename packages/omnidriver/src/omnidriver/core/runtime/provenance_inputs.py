@@ -248,6 +248,7 @@ def enumerate_case_inputs(
     capabilities = driver_context.capabilities
 
     resolved_case = capabilities.case_introspection.resolve_case_models(case_root)
+    conventions = capabilities.case_runtime_conventions.conventions()
 
     consumed_relpaths = _collect_consumed_relpaths(workflow_dag)
     required_inputs = capabilities.case_provenance.required_inputs(case_root, resolved_case)
@@ -266,7 +267,9 @@ def enumerate_case_inputs(
     walk_roots = [case_root / d for d in _case_root_dirnames(driver_context)]
     walk_roots.extend(
         case_root / root
-        for root in capabilities.case_provenance.input_roots(case_root, resolved_case)
+        for root in capabilities.case_provenance.input_roots(
+            case_root, resolved_case, conventions=conventions,
+        )
     )
 
     for root in walk_roots:

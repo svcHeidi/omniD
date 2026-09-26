@@ -95,10 +95,10 @@ class _FakePlugin(MinimalTestPlugin):
     def get_extra_provenance_paths(self, case_root):
         return self._extra_provenance_paths
 
-    def get_input_roots(self, case_root, resolved_case):
+    def get_input_roots(self, case_root, resolved_case, *, conventions):
         """The toy's state directory "0", serially and in each processor*
         replica: the shape an OpenFOAM stack declares, stated by hand."""
-        del resolved_case
+        del resolved_case, conventions
         replicas = sorted(p.name for p in Path(case_root).glob("processor*") if p.is_dir())
         return ("0", *(f"{name}/0" for name in replicas))
 
@@ -135,6 +135,15 @@ class _FakePlugin(MinimalTestPlugin):
 
 
 def test_selected_start_time_directory_is_included_others_excluded(tmp_path: Path) -> None:
+    """Corrected 2026-09-26 (R2 fix, finding M3): ``_FakePlugin.get_input_roots``
+    always returns ``"0"`` by hand, so the ``startTime``/``startFrom`` keys
+    ``_write_control_dict`` writes into ``system/controlDict`` here are never
+    read by core -- this proves core walks whatever input root the plugin
+    declares, not that core interprets OpenFOAM's start-time keywords (it
+    does not; that lives entirely in ``OpenFOAMEnvironmentPlugin.get_input_roots``,
+    covered by ``test_provenance_integration.py``'s
+    ``test_latest_time_selection_is_an_openfoam_adapter_convention`` and
+    ``test_openfoam_declares_its_start_time_and_replicas_as_input_roots``)."""
     _write_control_dict(tmp_path, start_from="startTime", start_time="0")
     for time_name in ("0", "0.5", "1"):
         time_dir = tmp_path / time_name
@@ -171,13 +180,22 @@ class _ForeignEnvironmentPlugin(MinimalTestPlugin):
             },
         )
 
-    def get_input_roots(self, case_root, resolved_case):
+    def get_input_roots(self, case_root, resolved_case, *, conventions):
+        del conventions
         return self._roots
 
 
-def test_plugin_implemented_start_time_hook_overrides_the_openfoam_default(
+def test_a_foreign_plugins_declared_input_roots_are_walked_as_given(
     tmp_path: Path,
 ) -> None:
+    """Corrected 2026-09-26 (R2 fix, finding M3): this was named
+    ``..._overrides_the_openfoam_default``, but there is no OpenFOAM default
+    in core to override -- ``_ForeignEnvironmentPlugin`` declares no
+    ``openfoam.control_dict`` role at all, and no stack here composes more
+    than one provider, so nothing is "overridden". What this proves is
+    simpler and still real: core walks exactly the input roots a plugin
+    declares, whatever they are, with no OpenFOAM-shaped fallback baked in
+    when a plugin implements the hook."""
     for time_name in ("0", "0.5", "1"):
         time_dir = tmp_path / time_name
         time_dir.mkdir()
@@ -208,13 +226,16 @@ def test_an_input_root_must_be_a_case_relative_path_inside_the_case(tmp_path: Pa
         )
 
 
-def test_plugin_implemented_decomposition_prefix_hook_overrides_processor(
+def test_a_plugins_own_replica_naming_convention_is_walked_as_declared(
     tmp_path: Path,
 ) -> None:
-    """A plugin whose parallel decomposition directories are named e.g.
-    ``rank0`` rather than ``processor0`` still gets them walked as I9
-    inputs, and a stray ``processor0`` (not this plugin's convention) is
-    left alone (future/ENVIRONMENT_CONTRACT.md §10, Tier 3)."""
+    """Corrected 2026-09-26 (R2 fix, finding M3): this was named
+    ``..._overrides_processor``, and its docstring said a ``rank0`` layout
+    "still gets them walked as I9 inputs ... (Tier 3)" -- Tier 3's bare
+    optional hooks (``get_decomposition_dirname_prefix``) are gone since A2;
+    the plugin now simply lists ``rank0/0`` by hand via ``get_input_roots``,
+    so this proves only that core walks the roots it is given, not that any
+    "processor" default is overridden."""
     rank0 = tmp_path / "rank0"
     (rank0 / "0").mkdir(parents=True)
     (rank0 / "0" / "Vm").write_text("decomposed restart field")

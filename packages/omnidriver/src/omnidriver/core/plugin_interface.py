@@ -464,12 +464,18 @@ class SolverPluginOptionalHooks(Protocol):
 
     def get_input_roots(
         self, case_root: "Path", resolved_case: dict[str, Any],
+        *, conventions: Any,
     ) -> tuple[str, ...]:
         """Case-relative directories whose files a run reads as state, beyond
         the case-file roots: for example the directory a run resumes from,
         and that directory inside each parallel replica. Absent -> ``()``:
         core walks no state directory. Each must be a non-empty case-relative
-        path inside the case (added 2026-09-26, spec A2)."""
+        ``str`` path inside the case (added 2026-09-26, spec A2).
+
+        ``conventions`` is the stack's merged ``CaseRuntimeConventions`` --
+        the same value staging and discovery read -- so a plugin computing
+        replica roots reads its own replica globs from there rather than a
+        second, independent copy (R2 fix, finding I2)."""
         ...
 
     # -- EnvironmentPreflightCapability --------------------------------------

@@ -185,12 +185,19 @@ class OpenFOAMEnvironmentPlugin:
     def get_case_value_comparator(self):
         return _case_value_agree
 
-    def get_input_roots(self, case_root, resolved_case) -> tuple[str, ...]:
+    def get_input_roots(self, case_root, resolved_case, *, conventions) -> tuple[str, ...]:
         """The state a run resumes from: the selected start-time directory,
         and the same directory in every parallel replica (I9). OpenFOAM's
         convention, moved here 2026-09-26 from core's provenance walk (spec
         2026-09-26-core-generality-design.md §2, A2); core no longer knows
-        "start time" or replicas."""
+        "start time" or replicas.
+
+        ``conventions`` is the STACK's merged declaration -- the same value
+        staging/discovery read -- not this plugin's own
+        ``openfoam_case_runtime_conventions()`` (R2 fix, finding I2): a
+        plugin stacked on top of OpenFOAM that redeclares
+        ``replica_directory_globs`` must have its replicas walked here too,
+        not just by staging."""
         del resolved_case
         from omnidriver.core.plugin_profile import is_replica_directory_name
 
@@ -207,7 +214,7 @@ class OpenFOAMEnvironmentPlugin:
             control_dict_relpath=control_dict,
             read_value=read_foam_entry,
         )
-        globs = openfoam_case_runtime_conventions().replica_directory_globs
+        globs = conventions.replica_directory_globs
         replicas = sorted(
             child.name for child in Path(case_root).iterdir()
             if child.is_dir() and is_replica_directory_name(child.name, globs)

@@ -773,6 +773,31 @@ class CaseProvenanceCapability(Protocol):
     Added 2026-09-26 (spec A2) to replace core's own start-time and
     ``processor*`` walk. Absent: ``()``, and core walks no state directory.
 
+    Composes as ``sequence`` (``provider_stack._SHAPE``), not ``single``: every
+    provider in the stack that implements the hook contributes its own roots,
+    concatenated, rather than the most specific provider's answer replacing
+    the rest. A more specific provider can only add required inputs, never
+    remove one a less specific provider declared -- conservative, since the
+    superset can only make a case's provenance MORE complete, never drop a
+    root a less specific layer actually needs walked (R2 fix, finding M3;
+    before this note, the hook's own docstring did not say which shape it
+    composed as, though ``selected_start_time``, the seam this replaced, was
+    ``single`` -- a more specific provider there really did replace the
+    default outright, a semantic change worth documenting even though no
+    current stack overrides another's roots).
+
+    ``conventions`` is the stack's merged ``CaseRuntimeConventions`` -- the
+    same value ``case_runtime_conventions.conventions()`` returns, and the
+    same source staging/discovery/snapshotting read (R2 fix, finding I2).
+    Before this, ``OpenFOAMEnvironmentPlugin.get_input_roots`` read its own
+    module-level ``openfoam_case_runtime_conventions()`` directly instead,
+    so a plugin stacked on top of OpenFOAM that declared a *different*
+    ``replica_directory_globs`` (e.g. a collated layout's ``"procs*"``) would
+    have its replicas honoured by staging and discovery but silently walked
+    past -- unfingerprinted -- by provenance: the exact silent stale-replay
+    direction this whole phase exists to prevent. No stack today overrides
+    the conventions, so this was latent, not yet observed.
+
     Routed through the capability adapter exactly like every other plugin
     capability -- deliberately **not** a mandatory ``SolverPlugin``
     member, so existing v2 third-party plugins keep loading. The adapter's
@@ -790,6 +815,7 @@ class CaseProvenanceCapability(Protocol):
 
     def input_roots(
         self, case_root: Path, resolved_case: dict[str, Any],
+        *, conventions: CaseRuntimeConventions,
     ) -> tuple[str, ...]: ...
 
     def required_inputs(
@@ -1779,16 +1805,26 @@ class _CaseProvenanceAdapter:
 
     def input_roots(
         self, case_root: Path, resolved_case: dict[str, Any],
+        *, conventions: CaseRuntimeConventions,
     ) -> tuple[str, ...]:
         hook = getattr(self.plugin, "get_input_roots", None)
         if not callable(hook):
             return ()
-        roots = tuple(hook(case_root, resolved_case))
+        roots = tuple(hook(case_root, resolved_case, conventions=conventions))
         for root in roots:
+            # str-only, first (R2 fix, finding M8): a plugin returning
+            # pathlib.Path("0"), the natural type, used to be refused with
+            # "must return non-empty case-relative paths", which reads as
+            # though a Path is not a path. The real requirement is str.
+            if not isinstance(root, str):
+                raise TypeError(
+                    f"{self.plugin.plugin_id}.get_input_roots() must return "
+                    f"`str` case-relative paths, got {type(root).__name__}"
+                )
             # A blank root is not "no opinion": ``case_root / ""`` is the whole
             # case tree. An absolute or escaping root walks outside the case.
             # Refused by name, never silently misclassified.
-            parts = PurePosixPath(root).parts if isinstance(root, str) else None
+            parts = PurePosixPath(root).parts
             if not parts or PurePosixPath(root).is_absolute() or ".." in parts:
                 raise TypeError(
                     f"{self.plugin.plugin_id}.get_input_roots() must return non-empty "

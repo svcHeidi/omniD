@@ -5,7 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from omnidriver.core.plugin_interface import driver_context
+from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 from omnidriver.core.runtime.provenance_inputs import enumerate_case_inputs
+from omnidriver.openfoam.case_runtime_conventions import openfoam_case_runtime_conventions
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.openfoam.time_selection import selected_start_time
 
@@ -107,4 +109,83 @@ def test_openfoam_declares_its_start_time_and_replicas_as_input_roots(tmp_path: 
     _write_control_dict(tmp_path, "startFrom latestTime;\nstartTime 0;\n")
     for relpath in ("0/Vm", "0.5/Vm", "processor1/0.5/Vm", "processor0/0.5/Vm", "processorX.txt"):
         _write(tmp_path, relpath)
-    assert OpenFOAMEnvironmentPlugin().get_input_roots(tmp_path, {}) == ("0.5", "processor0/0.5", "processor1/0.5")
+    assert OpenFOAMEnvironmentPlugin().get_input_roots(
+        tmp_path, {}, conventions=openfoam_case_runtime_conventions(),
+    ) == ("0.5", "processor0/0.5", "processor1/0.5")
+
+
+class _CollatedLayoutPlugin:
+    """A minimal companion provider stacked on top of
+    ``OpenFOAMEnvironmentPlugin`` that overrides only the replica
+    convention (a collated ``procs*`` layout instead of ``processor*``).
+    Implements exactly the required ``SolverPlugin`` contract -- nothing
+    solver-shaped beyond that -- so it can join a provider stack without
+    colliding with OpenFOAM's own case-file declarations or its exclusive
+    hooks (``apply_overrides``, ...)."""
+
+    plugin_name = "collated layout test plugin"
+    plugin_id = "test.collated-layout"
+    plugin_version = "1.0.0"
+    plugin_api_version = "2"
+
+    def get_profile(self):
+        from omnidriver.core.plugin_profile import PluginProfile
+
+        return PluginProfile(
+            path=Path(__file__), plugin_id=self.plugin_id, api_version=self.plugin_api_version,
+            case_files=(), cxx_mapping=None,
+            payload={
+                "schema_version": 1,
+                "plugin": {"id": self.plugin_id, "api_version": self.plugin_api_version},
+                "case_profile": {"dictionaries": []},
+            },
+        )
+
+    def get_capabilities(self):
+        return {}
+
+    def get_tutorial_catalog(self):
+        return {"registered_tutorials": (), "spec_factories": {}}
+
+    def validate_configuration(self, spec):
+        return ()
+
+    def validate_run_semantics(self, context):
+        return ()
+
+    def predict_data_artifacts(self, case_root, spec):
+        return ()
+
+    def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
+        from dataclasses import replace
+
+        return replace(
+            openfoam_case_runtime_conventions(),
+            replica_directory_globs=("procs*",),
+        )
+
+
+def test_a_stacked_providers_merged_replica_globs_are_what_provenance_walks(tmp_path: Path) -> None:
+    """R2 fix, finding I2: the OpenFOAM layer must read the STACK's merged
+    replica convention, not always its own default. A stacked provider that
+    redeclares ``replica_directory_globs`` (here, a collated ``procs*``
+    layout instead of ``processor*``) makes provenance follow it too, not
+    just staging/discovery -- both go through
+    ``case_runtime_conventions.conventions()``, and ``get_case_runtime_conventions``
+    composes ``single`` (most specific wins), so the companion's answer, not
+    OpenFOAM's, is what every core mechanic reads."""
+    _write_control_dict(tmp_path, "startFrom startTime;\nstartTime 0;\n")
+    for relpath in ("0/Vm", "procs4/0/Vm", "processor0/0/Vm"):
+        _write(tmp_path, relpath)
+
+    components = enumerate_case_inputs(
+        tmp_path,
+        workflow_dag={"steps": []},
+        driver_context=driver_context(
+            OpenFOAMEnvironmentPlugin(), _CollatedLayoutPlugin(), source="test",
+        ),
+    )
+    included = {c.path for c in components if c.kind == "case_file"}
+
+    assert "procs4/0/Vm" in included
+    assert "processor0/0/Vm" not in included
