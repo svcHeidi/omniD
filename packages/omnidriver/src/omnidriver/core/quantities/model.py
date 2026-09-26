@@ -32,8 +32,12 @@ class Quantity:
     happened) or ``not_evaluated`` (nothing was read; ``reason`` says why).
     ``sampled_at`` is where the solver says it sampled, in
     ``sampled_at_unit``, in the solver's own frame. ``sampling_rule`` is the
-    reader's declared rule, e.g. the nearest mesh point or the containing
-    cell: plugin vocabulary, carried and never interpreted.
+    reader's declared rule, e.g. the nearest sample or the enclosing region:
+    plugin vocabulary, carried and never interpreted. (Corrected 2026-09-26,
+    controller review M4: this docstring used to name "mesh point" and
+    "containing cell" -- solver vocabulary core's own words must not carry;
+    `scripts/check-core-shape.py` and the phase-vocabulary tests did not
+    catch it because it is prose, not a token either check parses.)
     ``sampled_at_unit`` and ``reason`` go beyond the spec's field list
     (2026-09-26): a coordinate triple without a unit is ambiguous, and a
     ``not_evaluated`` without a reason cannot be acted on.

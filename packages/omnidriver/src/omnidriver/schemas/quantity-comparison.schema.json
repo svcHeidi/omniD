@@ -5,11 +5,15 @@
   "description": "An agent's comparison: which runs, which artifact of each, where to sample, the reference, the pairs, and the tolerance declared before any value is read. Core adds no frame conversion, pairing or tolerance of its own.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "reference", "tolerance", "runs", "pairs"],
+  "required": ["schema_version", "reference", "tolerance", "both_not_reached", "runs", "pairs"],
   "properties": {
     "schema_version": {"const": 1},
     "reference": {"type": "string", "minLength": 1},
     "tolerance": {"$ref": "#/$defs/tolerance"},
+    "both_not_reached": {
+      "enum": ["agree", "fail"],
+      "description": "Pre-registered before any value is read, no default (I2/M1, controller review 2026-09-26): whether a pair whose sentinel (e.g. -1, 'never reached') is resolved on both sides counts as agreement ('agree', it does not fail the report) or as a failure ('fail', exactly like outside_tolerance). Recorded in the report unchanged."
+    },
     "runs": {"type": "object", "minProperties": 1, "additionalProperties": {"$ref": "#/$defs/run"}},
     "pairs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/pair"}}
   },
@@ -35,6 +39,7 @@
         "case_id": {"type": "string", "minLength": 1},
         "artifact_id": {"type": "string", "minLength": 1},
         "points": {
+          "description": "Two meanings, by the artifact's reader (I3, controller review 2026-09-26). For a reader that takes points (samples at supplied locations): where to sample, in this run's own frame and unit -- the reader receives them. For a reader that samples where it chooses: the agent's *expected* location of each named quantity, in this run's own frame and unit -- the reader never receives them; the comparison checks each sample's reported sampled_at against its expected point instead. Either meaning requires 'max_sampling_offset' (refused by name, before any read, if it is missing).",
           "type": "object", "additionalProperties": false, "required": ["unit", "at"],
           "properties": {
             "unit": {"type": "string", "minLength": 1},
@@ -43,7 +48,10 @@
             }}
           }
         },
-        "max_sampling_offset": {"type": "number", "minimum": 0}
+        "max_sampling_offset": {
+          "description": "Required whenever 'points' is given (either meaning above); pre-registered, no default.",
+          "type": "number", "minimum": 0
+        }
       }
     },
     "side": {

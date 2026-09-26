@@ -19,6 +19,21 @@ Order, so that nothing is decided after a value is seen:
 
 The report is a checker report for ``experiments.inspect_sweep_experiment``:
 ``status``, ``metrics`` (one per pair) and ``run_evidence`` (one per run).
+It is written read-only (`_write_once`); the request's ``both_not_reached``
+choice is echoed back in it, and ``status`` is never ``passed`` unless at
+least one pair is ``within_tolerance`` (I2/M1, controller review
+2026-09-26) -- ``experiments._read_comparison`` also recomputes it from the
+report's own ``metrics`` rather than trusting a stated ``status`` verbatim.
+
+**A run's ``points`` mean one of two things (I3, controller review
+2026-09-26), by whether its artifact's reader ``takes_points``:** for a
+reader that samples at supplied locations, they are where to sample, and
+the reader receives them; for a reader that samples where it chooses, they
+are the agent's *expected* location of each named quantity -- the reader
+never receives them, and the comparison checks each sample's reported
+``sampled_at`` against its expected point instead, exactly as it does for a
+points-taking reader. Either meaning requires ``max_sampling_offset``,
+pre-registered with no default (`_points`).
 """
 from __future__ import annotations
 
@@ -94,13 +109,28 @@ def compare_pair(left: Quantity, right: Quantity, *, unit: str, tolerance: Toler
     return ("within_tolerance" if difference <= bound else "outside_tolerance"), difference, bound
 
 
-def overall_status(statuses: Iterable[str]) -> str:
+def overall_status(statuses: Iterable[str], *, both_not_reached: str) -> tuple[str, str | None]:
+    """``(status, reason)``: ``reason`` is not ``None`` exactly when
+    ``status`` is ``unavailable`` (I2/M1, controller review 2026-09-26).
+
+    ``both_not_reached`` is the request's pre-registered, no-default choice:
+    with ``"agree"`` a ``both_not_reached`` pair does not fail the report;
+    with ``"fail"`` it does, exactly like any other failing status. Either
+    way, the report is never ``passed`` unless at least one pair is
+    ``within_tolerance`` -- otherwise nothing was compared numerically, and
+    the status is ``unavailable``, not a vacuous ``passed`` (the defect a
+    report full of ``both_not_reached`` pairs used to have)."""
+    if both_not_reached not in {"agree", "fail"}:
+        raise ValueError(f"both_not_reached must be 'agree' or 'fail', not {both_not_reached!r}")
     statuses = tuple(statuses)
-    if any(status in _FAILING for status in statuses):
-        return "failed"
+    failing = _FAILING | ({"both_not_reached"} if both_not_reached == "fail" else set())
+    if any(status in failing for status in statuses):
+        return "failed", None
     if "not_evaluated" in statuses:
-        return "unavailable"
-    return "passed"
+        return "unavailable", "a pair could not be evaluated; see its metric's own reason"
+    if "within_tolerance" not in statuses:
+        return "unavailable", "no pair was within_tolerance: nothing was compared numerically"
+    return "passed", None
 
 
 @dataclass(frozen=True)
@@ -147,7 +177,11 @@ def _location(base: Path, runs: Mapping[str, Any], side: Mapping[str, str]) -> t
     sides that resolve identically compare a run against itself even when
     they name two different run keys (N1, controller review 2026-09-26)."""
     run = runs[side["run"]]
-    return (str(_resolve(base, run["sweep_output"])), run["case_id"], run["artifact_id"], side["quantity"])
+    # .resolve(): an unnormalised path (e.g. "sweep/../sweep", or a symlink)
+    # must still compare equal to its normal form, or two sides naming the
+    # same place through different spellings pass N1 undetected (M2,
+    # controller review 2026-09-26).
+    return (str(_resolve(base, run["sweep_output"]).resolve()), run["case_id"], run["artifact_id"], side["quantity"])
 
 
 def _pairs(request: Mapping[str, Any], reference: PointReference, default: Tolerance, *, base: Path) -> tuple[_Pair, ...]:
@@ -181,7 +215,15 @@ def _artifact(name: str, document: Mapping[str, Any], artifact_id: str) -> DataA
     declared = [raw for raw in document.get("expectedArtifacts", ()) if isinstance(raw, dict)]
     for raw in declared:
         if raw.get("artifact_id") == artifact_id:
-            artifact = data_artifact_from_json(raw)
+            try:
+                artifact = data_artifact_from_json(raw)
+            except (KeyError, ValueError, TypeError) as exc:
+                # M10, controller review 2026-09-26: a malformed
+                # expectedArtifacts entry is a named refusal, never a
+                # traceback.
+                raise QuantityComparisonError(
+                    f"run {name!r}: artifact {artifact_id!r} in expectedArtifacts is malformed: {type(exc).__name__}: {exc}"
+                ) from exc
             if "{" in artifact.path_pattern:
                 raise QuantityComparisonError(
                     f"run {name!r}: artifact {artifact_id!r} has the pattern {artifact.path_pattern!r}; a quantity is read from one literal path"
@@ -193,22 +235,30 @@ def _artifact(name: str, document: Mapping[str, Any], artifact_id: str) -> DataA
 
 
 def _points(name: str, raw: Mapping[str, Any], reader: Any, names: tuple[str, ...]) -> tuple[Mapping[str, Point], float | None]:
+    """``points`` means one of two things, by ``reader.takes_points`` (I3,
+    controller review 2026-09-26): where to sample (the reader receives
+    them), or -- for a reader that samples where it chooses -- the agent's
+    *expected* location of each named quantity (the reader never receives
+    them; ``_quantities`` withholds them from the ``ReadRequest``, and
+    ``_side`` checks them against the reader's own ``sampled_at``). Either
+    meaning requires ``max_sampling_offset``, refused by name here, before
+    any read, when it is missing (I2/M1)."""
     supplied = raw.get("points")
-    if not reader.takes_points:
-        if supplied is not None or raw.get("max_sampling_offset") is not None:
-            raise QuantityComparisonError(
-                f"run {name!r}: this artifact's reader ({reader.sampling_rule!r}) samples where the solver chose, so it takes no points; remove 'points' and 'max_sampling_offset'"
-            )
-        return {}, None
-    if supplied is None:
+    if reader.takes_points and supplied is None:
         raise QuantityComparisonError(f"run {name!r}: this artifact's reader samples at supplied points; give 'points' for {list(names)}")
+    if supplied is None:
+        return {}, None
     if set(supplied["at"]) != set(names):
         raise QuantityComparisonError(f"run {name!r}: points are given for {sorted(supplied['at'])}, but its pairs use {sorted(names)}")
+    offset = raw.get("max_sampling_offset")
+    if offset is None:
+        raise QuantityComparisonError(
+            f"run {name!r}: 'points' is given without 'max_sampling_offset'; a location check must be pre-registered before any read"
+        )
     try:
         points = {label: tuple(convert(float(v), supplied["unit"], reader.coordinate_unit) for v in xyz)
                   for label, xyz in supplied["at"].items()}
-        offset = raw.get("max_sampling_offset")
-        max_offset = None if offset is None else convert(float(offset), supplied["unit"], reader.coordinate_unit)
+        max_offset = convert(float(offset), supplied["unit"], reader.coordinate_unit)
     except QuantityError as exc:
         raise QuantityComparisonError(f"run {name!r}: {exc}") from exc
     return points, max_offset
@@ -289,24 +339,50 @@ def _quantities(run: _Run, names: tuple[str, ...]) -> dict[str, Quantity]:
     entry = reconcile_artifacts(case_root, (run.artifact,), case_id=run.case.case_id).artifacts[0]
     if entry["status"] != "matched":
         return gap(f"artifact {run.artifact.artifact_id!r} ({source}) is missing under {case_root}")
+    # I3, controller review 2026-09-26: run.points may hold the agent's
+    # *expected* locations for a reader that samples where it chooses
+    # (takes_points is false); the reader itself never receives them --
+    # only `_side` compares them against what the reader actually reports.
+    request_points = run.points if run.reader.takes_points else {}
     try:
-        read = read_quantities(run.reader, case_root, run.artifact, ReadRequest(names=names, points=run.points))
+        read = read_quantities(run.reader, case_root, run.artifact, ReadRequest(names=names, points=request_points))
     except Exception as exc:  # any reader exception, not only ValueError, becomes a named gap; a report is always written
         return gap(f"the reader raised {type(exc).__name__}: {exc}")
-    return {q.name: q for q in read}
+    quantities = {q.name: q for q in read}
+    # I3, controller review 2026-09-26: an expected location was given for a
+    # self-sampling reader (`_points`'s second meaning) is only useful if it
+    # can be checked against a reported sampled_at; a reader that reports
+    # none is a named gap here, not a silently unchecked offset (`_side`
+    # would otherwise just show `sampling_offset: null` and pass).
+    for name, expected in run.points.items():
+        quantity = quantities.get(name)
+        if quantity is not None and quantity.sampled_at is None:
+            quantities[name] = not_evaluated(
+                (name,), source_artifact=source,
+                reason=f"an expected location {list(expected)} was given, but the reader reported no sampled_at for {name!r}",
+            )[0]
+    return quantities
 
 
 def _side(run: _Run, quantity: Quantity, unit: str) -> dict[str, Any]:
     shown = converted(quantity, unit)
     requested = run.points.get(quantity.name)
     offset = math.dist(requested, quantity.sampled_at) if requested is not None and quantity.sampled_at is not None else None
+    # M7, controller review 2026-09-26: requested_at/sampling_offset are in
+    # the reader's own coordinate_unit (the same unit `_points` converted
+    # them into) -- a bare number here was ambiguous (mm requested read
+    # back as a bare 1.0 that was really 1 um).
+    coordinate_unit = run.reader.coordinate_unit if run.reader is not None else None
     return {
         "run": run.name, "quantity": quantity.name, "status": shown.status, "value": shown.value,
         "unit": shown.unit, "declared_unit": quantity.unit, "sampling_rule": quantity.sampling_rule,
         "sampled_at": list(quantity.sampled_at) if quantity.sampled_at is not None else None,
         "sampled_at_unit": quantity.sampled_at_unit,
         "requested_at": list(requested) if requested is not None else None,
-        "sampling_offset": offset, "source_artifact": quantity.source_artifact, "reason": quantity.reason,
+        "requested_at_unit": coordinate_unit if requested is not None else None,
+        "sampling_offset": offset,
+        "sampling_offset_unit": coordinate_unit if offset is not None else None,
+        "source_artifact": quantity.source_artifact, "reason": quantity.reason,
     }
 
 
@@ -336,6 +412,7 @@ def _run_json(run: _Run) -> dict[str, Any]:
         "case_id": run.case.case_id, "execution_status": run.case.status,
         "artifact_id": run.artifact.artifact_id, "artifact_path": run.artifact.path_pattern,
         "artifact_format": run.artifact.format, "max_sampling_offset": run.max_offset,
+        "max_sampling_offset_unit": (reader.coordinate_unit if reader is not None and run.max_offset is not None else None),
         "reader": None if reader is None else {
             "value_unit": reader.value_unit, "sampling_rule": reader.sampling_rule,
             "coordinate_unit": reader.coordinate_unit, "takes_points": reader.takes_points,
@@ -345,21 +422,37 @@ def _run_json(run: _Run) -> dict[str, Any]:
 
 
 def _write_once(path: Path, report: Mapping[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    temporary.write_text(json.dumps(report, indent=2) + "\n")
+    """Write ``report`` to ``path`` exactly once, then make it read-only
+    (M6, controller review 2026-09-26: pre-registration asserted nothing
+    about the report staying as written; ``chmod 0o444`` at least stops an
+    ordinary rewrite in place -- ``experiments._read_comparison`` also no
+    longer trusts a checker ``omnidriver.quantities`` report's stated
+    ``status`` verbatim, for a filesystem that permits it anyway). Every
+    step here is a named ``QuantityComparisonError``, never a bare
+    ``OSError`` traceback (M10)."""
     try:
-        os.link(temporary, path)
-    except FileExistsError:
-        raise QuantityComparisonError(
-            f"report {path} already exists; a report is written once, and a changed request is a new report"
-        ) from None
+        path.parent.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        # E.g. no hard-link support on this filesystem. Named, not a
-        # traceback; `path` was never touched, so nothing is overwritten.
-        raise QuantityComparisonError(f"cannot write report {path}: hard-linking it failed: {exc}") from exc
+        raise QuantityComparisonError(f"cannot create the report directory {path.parent}: {exc}") from exc
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        temporary.write_text(json.dumps(report, indent=2) + "\n")
+    except OSError as exc:
+        raise QuantityComparisonError(f"cannot write report {path}: {exc}") from exc
+    try:
+        try:
+            os.link(temporary, path)
+        except FileExistsError:
+            raise QuantityComparisonError(
+                f"report {path} already exists; a report is written once, and a changed request is a new report"
+            ) from None
+        except OSError as exc:
+            # E.g. no hard-link support on this filesystem. Named, not a
+            # traceback; `path` was never touched, so nothing is overwritten.
+            raise QuantityComparisonError(f"cannot write report {path}: hard-linking it failed: {exc}") from exc
+        os.chmod(path, 0o444)
     finally:
-        temporary.unlink()
+        temporary.unlink(missing_ok=True)
 
 
 def run_quantity_comparison(request_path: str | Path, report_path: str | Path) -> dict[str, Any]:
@@ -401,9 +494,13 @@ def run_quantity_comparison(request_path: str | Path, report_path: str | Path) -
     # Nothing above read an artifact; everything below does.
     quantities = {name: _quantities(run, tuple(names_by_run[name])) for name, run in runs.items()}
     metrics = [_metric(pair, runs, quantities, reference) for pair in pairs]
+    both_not_reached = request["both_not_reached"]
+    status, status_reason = overall_status((metric["status"] for metric in metrics), both_not_reached=both_not_reached)
     report = {
         "schema_version": 1,
-        "status": overall_status(metric["status"] for metric in metrics),
+        "status": status,
+        "status_reason": status_reason,
+        "both_not_reached": both_not_reached,
         "checker": {"id": CHECKER_ID, "version": CHECKER_VERSION},
         "reference": {"id": reference.reference_id, "version": reference.version, "path": reference.path,
                       "digest": reference.digest, "quantity": reference.quantity_name, "unit": reference.quantity_unit},

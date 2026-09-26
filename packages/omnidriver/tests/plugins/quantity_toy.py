@@ -32,6 +32,7 @@ DIFFERENT_VERSION_QUANTITY_TOY_PLUGIN = "plugins.quantity_toy:DifferentVersionQu
 RAISING_READER_PLUGIN = "plugins.quantity_toy:RaisingReaderPlugin"
 UNREADABLE_PLUGIN = "plugins.quantity_toy:UnreadableFormatPlugin"
 BAD_DECLARATION_PLUGIN = "plugins.quantity_toy:BadDeclarationPlugin"
+NO_WHERE_READER_PLUGIN = "plugins.quantity_toy:NoWhereReaderPlugin"
 
 
 class ToyRowReader:
@@ -78,6 +79,21 @@ class ToyNearestRowReader:
 
 class _FurlongReader(ToyRowReader):
     value_unit = "furlong"
+
+
+class _NoWhereRowReader(ToyRowReader):
+    """Same contract as ``ToyRowReader`` (``takes_points = False``), but
+    never reports where it sampled -- proof that a self-sampling reader's
+    sample without ``sampled_at`` is a named gap when the request gives
+    *expected* points to check it against (I3, controller review
+    2026-09-26). It is not an I1 case: I1 is about a *points-taking*
+    reader; this reader never takes points at all."""
+
+    def read(self, case_root, artifact, request):
+        return tuple(
+            RawSample(name=sample.name, value=sample.value)
+            for sample in ToyRowReader.read(self, case_root, artifact, request)
+        )
 
 
 class _RaisingReader(ToyRowReader):
@@ -141,6 +157,13 @@ class RaisingReaderPlugin(QuantityToyPlugin):
     reader always raises ``OSError`` -- see ``_RaisingReader``."""
 
     _READERS = {VALUES_FORMAT: _RaisingReader()}
+
+
+class NoWhereReaderPlugin(QuantityToyPlugin):
+    """Same tutorial record and axes as ``QuantityToyPlugin``, but its values
+    reader never reports where it sampled -- see ``_NoWhereRowReader``."""
+
+    _READERS = {VALUES_FORMAT: _NoWhereRowReader()}
 
 
 class DifferentVersionQuantityToyPlugin(QuantityToyPlugin):

@@ -29,6 +29,12 @@ from .runtime.sweep_runner import sweep_run
 
 _COMPARISON_STATUSES = frozenset({"passed", "failed", "unavailable", "not_requested", "unknown"})
 
+# core.quantities.comparison.CHECKER_ID. Not imported: that module imports
+# ComparisonRequest from this one, so a module-level import here would be
+# circular. `test_the_quantities_checker_id_constant_matches_core` guards
+# against the two drifting apart (M6, controller review 2026-09-26).
+_QUANTITIES_CHECKER_ID = "omnidriver.quantities"
+
 
 @dataclass(frozen=True)
 class ComparisonReportLimits:
@@ -381,6 +387,14 @@ def _read_comparison(
         )
     stated_status = report.get("status")
     status = stated_status if isinstance(stated_status, str) and stated_status in _COMPARISON_STATUSES else "unknown"
+    reason: str | None = None
+    if request.checker_id == _QUANTITIES_CHECKER_ID:
+        # M6, controller review 2026-09-26: never trust a checker
+        # omnidriver.quantities report's stated status verbatim -- it is
+        # written read-only, but nothing stops an edit after the fact, so
+        # recompute it from the report's own metrics with the function that
+        # wrote it in the first place.
+        status, reason = _quantities_status(report, stated_status=status)
     metric_values, metric_truncated = _bounded_metrics(report.get("metrics"), limits)
     details, detail_truncated = _bounded_details(report, limits)
     return ComparisonOutcome(
@@ -395,7 +409,41 @@ def _read_comparison(
         details=details,
         details_truncated=metric_truncated or detail_truncated,
         association_status=_association_status(report, record, state),
+        reason=reason,
     )
+
+
+def _quantities_status(report: Mapping[str, Any], *, stated_status: str) -> tuple[str, str | None]:
+    """Recompute a checker ``omnidriver.quantities`` report's overall status
+    from its own ``metrics`` and ``both_not_reached``, using the same
+    function that wrote it (``core.quantities.comparison.overall_status``,
+    imported lazily here to avoid the cycle noted at ``_QUANTITIES_CHECKER_ID``).
+    A report that cannot be recomputed at all, or recomputes to something
+    other than what it states, is a named failure -- never a silent
+    pass-through of whatever ``status`` says (M6, controller review
+    2026-09-26)."""
+    from .quantities.comparison import overall_status
+
+    metrics = report.get("metrics")
+    if not isinstance(metrics, list) or not metrics or any(
+        not isinstance(metric, Mapping) or not isinstance(metric.get("status"), str) for metric in metrics
+    ):
+        return "failed", "checker omnidriver.quantities report has no recomputable metrics; its status cannot be trusted"
+    both_not_reached = report.get("both_not_reached")
+    if not isinstance(both_not_reached, str):
+        return "failed", "checker omnidriver.quantities report declares no both_not_reached; its status cannot be trusted"
+    try:
+        recomputed, recompute_reason = overall_status(
+            (metric["status"] for metric in metrics), both_not_reached=both_not_reached,
+        )
+    except ValueError as exc:
+        return "failed", f"checker omnidriver.quantities report cannot be recomputed: {exc}"
+    if recomputed != stated_status:
+        return "failed", (
+            f"checker omnidriver.quantities reported status {stated_status!r}, but recomputing from its own metrics "
+            f"gives {recomputed!r}; the report may have been edited after it was written"
+        )
+    return stated_status, recompute_reason
 
 
 def _association_status(

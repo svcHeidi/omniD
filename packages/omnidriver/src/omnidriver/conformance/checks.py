@@ -507,7 +507,13 @@ def check_readable_quantities(target: ConformanceTarget) -> CheckVerdict:
     """C12: every record output that declares a format has a reader for it,
     through the reader contract, with a declaration core can use (results
     as quantities, spec 2026-09-26 §4). A record whose outputs declare no
-    format passes and says so: not every record is compared."""
+    format passes and says so: not every record is compared.
+
+    Corrected 2026-09-26 (controller review M3): this checks the reader's
+    *declaration* only (``check_reader``) -- it never calls ``read``, so a
+    reader whose ``read`` always raises still passes C12. Spec §4 says "a
+    record that declares quantity outputs returns them through the reader
+    contract"; that stronger claim is not proved here."""
     ctx = _context(target)
     record = _record(ctx, target.record)
     formats = sorted({step.produced_format(path) for step in record.workflow_steps for path in step.produces}
@@ -524,7 +530,7 @@ def check_readable_quantities(target: ConformanceTarget) -> CheckVerdict:
             check_reader(reader, artifact_format=artifact_format)
         except ReaderDeclarationError as exc:
             problems.append(str(exc))
-    return _verdict("C12", not problems, "; ".join(problems) or f"readers for {formats}")
+    return _verdict("C12", not problems, "; ".join(problems) or f"readers declared for {formats} (declaration checked, not read; 2026-09-26)")
 
 
 CHECKS: dict[str, Callable[[ConformanceTarget], CheckVerdict]] = {

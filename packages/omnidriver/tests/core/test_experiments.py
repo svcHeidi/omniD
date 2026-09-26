@@ -310,3 +310,78 @@ def test_a_run_evidence_list_without_this_case_is_unverified(tmp_path: Path) -> 
         report_path="reports/multi.json",
     )])
     assert experiment.cases[0].comparison.association_status == "unverified"
+
+
+def test_the_quantities_checker_id_constant_matches_core(tmp_path: Path) -> None:
+    """Guards `experiments._QUANTITIES_CHECKER_ID` (a plain string literal,
+    to avoid a circular import -- see its own comment) against drifting
+    from `core.quantities.comparison.CHECKER_ID`."""
+    from omnidriver.core import experiments as experiments_module
+    from omnidriver.core.quantities import CHECKER_ID
+
+    assert experiments_module._QUANTITIES_CHECKER_ID == CHECKER_ID
+
+
+def test_a_quantities_report_edited_after_writing_is_recomputed_as_failed(tmp_path: Path) -> None:
+    """M6, controller review 2026-09-26: a checker omnidriver.quantities
+    report's stated status is never trusted verbatim -- it is recomputed
+    from the report's own metrics, and a mismatch (e.g. a hand-edited
+    'passed') is a named failure."""
+    _manifest(tmp_path, [_case(tmp_path, "a", status="completed")])
+    report = tmp_path / "reports" / "checker.json"
+    report.parent.mkdir()
+    report.write_text(json.dumps({
+        "status": "passed",  # disagrees with its own metrics below
+        "both_not_reached": "agree",
+        "metrics": [{"status": "outside_tolerance"}],
+        "run_evidence": [{"case_id": "a", "workflow_digest": "sha256:plan-a", "input_provenance_digest": "sha256:inputs-a"}],
+    }))
+    experiment = inspect_sweep_experiment(tmp_path, comparisons=[ComparisonRequest(
+        case_id="a", checker_id="omnidriver.quantities", checker_version="1",
+        reference_id="r", reference_version="1", report_path="reports/checker.json",
+    )])
+    comparison = experiment.cases[0].comparison
+    assert comparison.status == "failed"
+    assert comparison.reason is not None and "recomputing" in comparison.reason
+
+
+def test_a_consistent_quantities_report_keeps_its_status_and_surfaces_why(tmp_path: Path) -> None:
+    """The consistent case: recomputation agrees, and the report's own
+    'nothing was compared numerically' reason (I2/M1) surfaces through the
+    experiment envelope too, not only in the report file itself."""
+    _manifest(tmp_path, [_case(tmp_path, "a", status="completed")])
+    report = tmp_path / "reports" / "checker.json"
+    report.parent.mkdir()
+    report.write_text(json.dumps({
+        "status": "unavailable",
+        "both_not_reached": "agree",
+        "metrics": [{"status": "both_not_reached"}],
+        "run_evidence": [{"case_id": "a", "workflow_digest": "sha256:plan-a", "input_provenance_digest": "sha256:inputs-a"}],
+    }))
+    experiment = inspect_sweep_experiment(tmp_path, comparisons=[ComparisonRequest(
+        case_id="a", checker_id="omnidriver.quantities", checker_version="1",
+        reference_id="r", reference_version="1", report_path="reports/checker.json",
+    )])
+    comparison = experiment.cases[0].comparison
+    assert comparison.status == "unavailable"
+    assert comparison.reason is not None and "within_tolerance" in comparison.reason
+
+
+def test_a_quantities_report_with_no_recomputable_metrics_is_a_named_failure(tmp_path: Path) -> None:
+    """A checker omnidriver.quantities report missing metrics/both_not_reached
+    cannot be recomputed at all, so it is never trusted either (M6): the
+    stated status is not passed through as-is just because recomputation
+    could not run."""
+    _manifest(tmp_path, [_case(tmp_path, "a", status="completed")])
+    report = tmp_path / "reports" / "checker.json"
+    report.parent.mkdir()
+    report.write_text(json.dumps({"status": "passed", "run_evidence": [
+        {"case_id": "a", "workflow_digest": "sha256:plan-a", "input_provenance_digest": "sha256:inputs-a"},
+    ]}))
+    experiment = inspect_sweep_experiment(tmp_path, comparisons=[ComparisonRequest(
+        case_id="a", checker_id="omnidriver.quantities", checker_version="1",
+        reference_id="r", reference_version="1", report_path="reports/checker.json",
+    )])
+    comparison = experiment.cases[0].comparison
+    assert comparison.status == "failed"
+    assert comparison.reason is not None and "cannot be trusted" in comparison.reason

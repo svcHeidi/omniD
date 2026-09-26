@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from omnidriver.core.quantities import (
-    Quantity, QuantityReadError, ReadRequest, ReaderDeclarationError, UnitError,
+    Quantity, QuantityReadError, RawSample, ReadRequest, ReaderDeclarationError, UnitError,
     check_reader, convert, converted, read_quantities,
 )
 from omnidriver.core.runtime.models import DataArtifact
@@ -74,6 +74,25 @@ def test_a_point_reader_needs_a_point_for_every_name(tmp_path):
     (q,) = read_quantities(ToyNearestRowReader(), tmp_path, GRID,
                            ReadRequest(names=("far",), points={"far": (0.9, 0.0, 0.0)}))
     assert (q.value, q.unit, q.sampled_at, q.sampled_at_unit) == (2.0, "ms", (1.0, 0.0, 0.0), "mm")
+
+
+def test_a_points_taking_reader_that_reports_no_location_is_refused_by_name(tmp_path):
+    """I1, controller review 2026-09-26: a pre-registered
+    max_sampling_offset is silently unenforceable if the reader never says
+    where it sampled -- that stated guard must never pass unchecked, so
+    core refuses here instead of letting `sampling_offset` come back null."""
+    (tmp_path / "grid.txt").write_text("0 0 0 1.0\n1 0 0 2.0\n")
+
+    class NoWhereReader(ToyNearestRowReader):
+        def read(self, case_root, artifact, request):
+            return tuple(
+                RawSample(name=sample.name, value=sample.value)
+                for sample in ToyNearestRowReader.read(self, case_root, artifact, request)
+            )
+
+    with pytest.raises(QuantityReadError, match="reported no sampled_at for 'far'"):
+        read_quantities(NoWhereReader(), tmp_path, GRID,
+                        ReadRequest(names=("far",), points={"far": (0.9, 0.0, 0.0)}))
 
 
 def test_a_reader_declaration_core_cannot_use_is_refused():
