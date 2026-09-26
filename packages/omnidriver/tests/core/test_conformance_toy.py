@@ -14,12 +14,12 @@ from omnidriver.core.runtime.sweep_runner import _child_reconciliation
 from plugins.conformance_toy import (
     DOCUMENTED_PLUGIN, GHOST_CONSUMES_PLUGIN, INDEXED_KEY_PLUGIN, KINDLESS_KEY_PLUGIN, NATIVE_WRITING_PLUGIN,
     NO_CONSUMES_PLUGIN, NO_PRODUCES_PLUGIN, REPLACING_PLUGIN, SILENT_PREFLIGHT_PLUGIN,
-    SILENT_SURFACE_PLUGIN, UNLISTED_KEY_PLUGIN,
+    SILENT_SURFACE_PLUGIN, UNDECLARED_OUTPUT_PLUGIN, UNLISTED_KEY_PLUGIN,
     STRAY_NAME, STRAY_ROOT_VARIABLE, toy_conformance_target,
 )
 
 
-@pytest.mark.parametrize("check_id", ["C1", "C2", "C3", "C5", "C6", "C7", "C8", "C9", "C10"])
+@pytest.mark.parametrize("check_id", ["C1", "C2", "C3", "C5", "C6", "C7", "C8", "C9", "C10", "C11"])
 def test_toy_passes(check_id, tmp_path):
     verdict = run_check(check_id, toy_conformance_target(tmp_path))
     assert verdict.passed, verdict.detail
@@ -329,3 +329,10 @@ def test_a_record_plugin_without_the_runnable_hook_passes_I4(check_id, tmp_path)
 
     verdict = run_check(check_id, toy_conformance_target(tmp_path, plugin=NO_RUNNABLE_HOOK_PLUGIN))
     assert verdict.passed, verdict.detail
+
+
+def test_c11_names_an_output_the_record_does_not_declare(tmp_path):
+    verdict = run_check("C11", toy_conformance_target(tmp_path, plugin=UNDECLARED_OUTPUT_PLUGIN))
+    assert not verdict.passed
+    assert "undeclared.out" in verdict.detail
+    assert "workflow_state.json" not in verdict.detail   # core's own records are never carried

@@ -1,4 +1,4 @@
-"""C1-C10. Each check is self-contained: it builds its own context, stages
+"""C1-C11. Each check is self-contained: it builds its own context, stages
 its own copy, and returns a verdict naming what it saw. No check skips; a
 check that cannot run is a failure saying why.
 
@@ -429,6 +429,46 @@ def check_discoverable(target: ConformanceTarget) -> CheckVerdict:
                     f"{len(surface['axes'])} axes, {len(surface['keys'])} keys, {len(surface['guidance'])} guidance item(s)")
 
 
+def _relpaths(root: Path) -> set[str]:
+    return {path.relative_to(root).as_posix() for path in root.rglob("*")}
+
+
+def check_restage_is_clean(target: ConformanceTarget) -> CheckVerdict:
+    """C11: staging a record from a case one run has written carries nothing
+    that run wrote (spec 2026-09-26-core-generality-design.md §4, A5).
+
+    A native case someone has already run in, or a copy of an earlier
+    stage, holds that run's state (core's run records) and its outputs.
+    Staging it again must give only paths the untouched native case has.
+    Every other path is named."""
+    ctx = _context(target)
+    record = _record(ctx, target.record)
+    report = _plan(target, ctx)
+    if report.status != "ok":
+        return _verdict("C11", False, f"cannot check: plan failed: {_plan_errors(report)}")
+    try:
+        proc, payload = _execute(target, ctx, report)
+    except subprocess.TimeoutExpired:
+        return _verdict("C11", False, f"the first run timed out after {target.timeout_s}s (ConformanceTarget.timeout_s)")
+    if payload is None or payload.get("status") != "ok":
+        return _verdict("C11", False, f"cannot check: the first run did not complete (rc={proc.returncode}); stderr tail: {proc.stderr[-800:]}")
+    work = target.scratch_root / "conformance" / "C11"
+    if work.exists():
+        shutil.rmtree(work)
+    ran_cases_root = work / "ran"
+    shutil.copytree(Path(report.launch["case_root"]), ran_cases_root / record.native_case_relpath, symlinks=True)
+    restaged = work / "restaged" / record.name
+    commit_record_case(
+        record, cases_root=ran_cases_root, staged_case_root=restaged,
+        study_by_source={"base": {}}, driver_context=ctx,
+    )
+    carried = sorted(_relpaths(restaged) - _relpaths(target.cases_root / record.native_case_relpath))
+    if carried:
+        shown = carried[:20] + ([f"... {len(carried) - 20} more"] if len(carried) > 20 else [])
+        return _verdict("C11", False, f"restaging a case the first run wrote carried {len(carried)} path(s) the native case does not have: {shown}")
+    return _verdict("C11", True, "restaged from a run case; nothing the run wrote was carried")
+
+
 CHECKS: dict[str, Callable[[ConformanceTarget], CheckVerdict]] = {
     "C1": check_load,
     "C2": check_describe_noop,
@@ -440,6 +480,7 @@ CHECKS: dict[str, Callable[[ConformanceTarget], CheckVerdict]] = {
     "C8": check_provenance,
     "C9": check_environment,
     "C10": check_discoverable,
+    "C11": check_restage_is_clean,
 }
 
 

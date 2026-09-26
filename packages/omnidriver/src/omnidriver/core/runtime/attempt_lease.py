@@ -26,6 +26,12 @@ elif os.name == "nt":
 
 _LOCAL_LEASES: dict[Path, tuple[str, int]] = {}
 
+#: The attempt lease's file in an output directory, and the guard file
+#: ``_acquire_local_lease`` keeps beside it. Named once here so core's run
+#: records (``core.runtime_records``) can name them too (spec 2026-09-26 A5).
+ATTEMPT_LOCK_FILENAME = ".omnidriver-attempt.lock"
+ATTEMPT_LOCK_GUARD_FILENAME = f"{ATTEMPT_LOCK_FILENAME}.guard"
+
 
 class AttemptLeaseError(RuntimeError):
     """The output directory is already or ambiguously owned."""
@@ -39,7 +45,7 @@ class AttemptLease:
 
 def attempt_lease_is_held(output_dir: Path) -> bool:
     """Whether this thread already owns the local lease for ``output_dir``."""
-    path = Path(output_dir).resolve() / ".omnidriver-attempt.lock"
+    path = Path(output_dir).resolve() / ATTEMPT_LOCK_FILENAME
     owner = _LOCAL_LEASES.get(path)
     return owner is not None and owner[1] == threading.get_ident()
 
@@ -204,7 +210,7 @@ def acquire_attempt_lease(output_dir: Path) -> Iterator[AttemptLease]:
     """
     with _acquire_local_lease(
         output_dir,
-        filename=".omnidriver-attempt.lock",
+        filename=ATTEMPT_LOCK_FILENAME,
         resource_label="output directory",
         create_directory=True,
     ) as lease:

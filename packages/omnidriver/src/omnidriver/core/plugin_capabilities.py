@@ -541,8 +541,10 @@ class CaseRuntimeConventionsCapability(Protocol):
     derived output, and an entry-mode sweep may need to snapshot one shared
     output tree between cases. Those are Core mechanisms. The path names are
     environment conventions, so this capability supplies them as data. A
-    plugin without the optional hook receives an empty declaration: Core
-    preserves every path and does not collect a convention-specific tree.
+    plugin without the optional hook receives only core's own run records
+    (``runtime_records.CORE_RUNTIME_RECORDS``, merged into every answer since
+    2026-09-26, spec A5): Core preserves every authored path and does not
+    collect a convention-specific tree.
 
     :adapts: get_case_runtime_conventions
     :consumed-by: omnidriver/core/runtime/registry.py, omnidriver/core/runtime/sweep_runner.py
@@ -1528,6 +1530,13 @@ class _CaseRuntimeConventionsAdapter:
     plugin: "SolverPlugin"
 
     def conventions(self) -> CaseRuntimeConventions:
+        """The stack's declared generated paths, plus core's own run records
+        (``runtime_records.CORE_RUNTIME_RECORDS``), whatever the plugin
+        declares. Corrected 2026-09-26 (spec 2026-09-26 A5): a plugin
+        without the hook used to receive an empty declaration, so staging a
+        case a run had written carried core's own state into the next stage."""
+        from .runtime_records import with_core_runtime_records
+
         hook = getattr(self.plugin, "get_case_runtime_conventions", None)
         if callable(hook):
             result = hook()
@@ -1536,10 +1545,10 @@ class _CaseRuntimeConventionsAdapter:
                     f"{self.plugin.plugin_id}.get_case_runtime_conventions() must "
                     f"return CaseRuntimeConventions, got {result!r}"
                 )
-            return result
+            return with_core_runtime_records(result)
         from .compatibility import legacy_case_runtime_conventions
 
-        return legacy_case_runtime_conventions()
+        return with_core_runtime_records(legacy_case_runtime_conventions())
 
 
 @dataclass(frozen=True)

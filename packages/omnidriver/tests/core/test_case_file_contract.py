@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context
+from omnidriver.core.runtime_records import CORE_RUNTIME_RECORDS
 from plugins.minimal_plugin import MinimalTestPlugin
 
 
@@ -18,7 +18,7 @@ def test_minimal_plugin_declares_no_case_files() -> None:
     contract = context.capabilities.case_files
     assert contract.required_files() == ()
     assert contract.conditional_files() == ()
-    assert context.capabilities.case_runtime_conventions.conventions() == CaseRuntimeConventions()
+    assert context.capabilities.case_runtime_conventions.conventions() == CORE_RUNTIME_RECORDS
     assert context.capabilities.case_introspection.selected_start_time(
         Path("case"), {}, driver_context=context,
     ) is None

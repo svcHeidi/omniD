@@ -47,14 +47,14 @@ RECORD = TutorialRecord(
             step_id="mesh",
             command=("mesher", "-size[0]", "2.0", "-size[1]", "0.7", "-size[2]", "0.3",
                      "-center[0]", "1.0", "-center[1]", "0.35", "-center[2]", "0.15", "-mesh", "slab"),
-            produces=("slab.pts", "slab.elem", "slab.lon"),
+            produces=("slab.pts", "slab.elem", "slab.lon", "slab.vec", "slab.vpts"),   # F15
         ),
         WorkflowStep(
             step_id="solve",
             command=("openCARP", "+F", "nversion.par", "-meshname", "slab", "-simID", "out",
                      "-imp_region[0].im_sv_init", "singlecell.sv"),
             consumes=("nversion.par", "singlecell.sv"),
-            produces=("out/vm.igb", "out/init_acts_vm_act-thresh.dat"),   # F6
+            produces=("out", "out/vm.igb", "out/init_acts_vm_act-thresh.dat"),   # F6; the whole -simID directory: F15
         ),
     ),
 )

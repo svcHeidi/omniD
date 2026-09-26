@@ -3159,6 +3159,8 @@ The owner's gaps 1 and 3 (2026-09-25). Without this, `describe` shows cardiacFOA
 
 ### Task 15 (after tutorials-are-pointers step 5 is finished): every file declared by the layer that reads it (gap 2, K3)
 
+**Corrected 2026-09-26 (topic A, A5):** Step 3's core half landed early in `docs/superpowers/plans/2026-09-26-core-generality.md` Task 3: `core/runtime_records.py` (`CORE_RUNTIME_RECORDS`, which names every file core writes, not only the four listed below) and the merge in `_CaseRuntimeConventionsAdapter.conventions`. This task keeps only the OpenFOAM half: deleting core's names from `openfoam_case_runtime_conventions()`, and the two guards.
+
 Owner decision 2026-09-25. It waits for step 5 because it edits cardiacFOAM's `plugin.yaml`. Two guards force the change, so it is made the way every K-change is made: the guard fails first.
 
 **Files:**

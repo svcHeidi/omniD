@@ -312,3 +312,25 @@ class NoRunnableHookPlugin(E2ERecordPlugin):
     steps (wave-2 review I4); core must not ask the plugin to vouch for it."""
 
     is_case_runnable_without_workflow = None
+
+
+UNDECLARED_OUTPUT_PLUGIN = "plugins.conformance_toy:UndeclaredOutputPlugin"
+
+
+class UndeclaredOutputPlugin(E2ERecordPlugin):
+    """Its solve step writes a file it does not declare in ``produces``, so
+    staging cannot know the file is generated. C11 must name it."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._solver_commands = frozenset({"touch", "sh"})
+
+    def get_tutorial_records(self):
+        return {"toyTutorial": TutorialRecord(
+            name="toyTutorial", native_case_relpath="toyTutorial",
+            allowed_axes=frozenset({"number_cells"}),
+            workflow_steps=(WorkflowStep(
+                step_id="solve", command=("sh", "-c", "touch solved.marker undeclared.out"),
+                consumes=("constant/mesh.json",), produces=("solved.marker",),
+            ),),
+        )}

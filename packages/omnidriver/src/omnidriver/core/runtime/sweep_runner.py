@@ -583,6 +583,7 @@ def _materialize_entry_case(
 
 def _stage_entry_case(
     source_case_root: Path, staged_case_root: Path, *, driver_context=None,
+    excluded_relpaths: frozenset[str] = frozenset(),
 ) -> None:
     """Copy a registered case into scratch storage without old run output.
 
@@ -592,6 +593,13 @@ def _stage_entry_case(
     bug this staging boundary is meant to prevent, so the filter is explicit
     and conservative: keep authored inputs (including ``0/``) and omit only
     known derived artifacts.
+
+    ``excluded_relpaths`` names further case-relative paths (files, or whole
+    directories, at any depth) that the caller knows are generated: a
+    tutorial record's step outputs (``record_execution
+    .record_generated_relpaths``, spec 2026-09-26 A5). Core's own run
+    records need no listing here, because every stack's conventions carry
+    them (``runtime_records.CORE_RUNTIME_RECORDS``).
     """
     from ..plugin_capabilities import CaseRuntimeConventions
 
@@ -603,11 +611,17 @@ def _stage_entry_case(
         decomposition_dirname_prefix(driver_context)
         if driver_context is not None else None
     )
+    source_case_root = Path(source_case_root).resolve()
+    staged_case_root = Path(staged_case_root).resolve()
 
     def ignore_generated(_directory: str, names: list[str]) -> set[str]:
         ignored: set[str] = set()
+        relative_directory = Path(_directory).relative_to(source_case_root)
         for name in names:
             candidate = Path(_directory) / name
+            if (relative_directory / name).as_posix() in excluded_relpaths:
+                ignored.add(name)
+                continue
             # A previous driverFOAM case can have a descriptive directory name
             # (for example ``gauss_linear_40_*``) rather than a numeric
             # generated numeric-time name. Its workflow markers are the reliable
@@ -648,8 +662,6 @@ def _stage_entry_case(
                 ignored.add(name)
         return ignored
 
-    source_case_root = Path(source_case_root).resolve()
-    staged_case_root = Path(staged_case_root).resolve()
     if not source_case_root.is_dir():
         raise FileNotFoundError(f"Registered case root does not exist: {source_case_root}")
     with acquire_case_staging_lease(staged_case_root):

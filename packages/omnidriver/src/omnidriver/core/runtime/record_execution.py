@@ -24,7 +24,7 @@ import contextlib
 import datetime
 import shutil
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Iterator, Mapping, Sequence
 
 from ..case_transaction import commit_case_write
@@ -84,6 +84,17 @@ def _native_case_root(record: TutorialRecord, *, cases_root: Path) -> Path:
     return native_case_root
 
 
+def record_generated_relpaths(record: TutorialRecord) -> frozenset[str]:
+    """The case-relative paths a record's steps write, which staging must
+    not carry from one run into the next stage (spec 2026-09-26 A5).
+
+    A path some step also ``consumes`` is an input updated in place, so it
+    is never excluded: excluding it would drop an authored input."""
+    produced = {PurePosixPath(p).as_posix() for step in record.workflow_steps for p in step.produces}
+    consumed = {PurePosixPath(p).as_posix() for step in record.workflow_steps for p in step.consumes}
+    return frozenset(produced - consumed)
+
+
 def _stage(
     record: TutorialRecord, *, cases_root: Path, staged_case_root: Path,
     driver_context: "DriverContext",
@@ -91,7 +102,10 @@ def _stage(
     from .sweep_runner import _stage_entry_case
 
     native_case_root = _native_case_root(record, cases_root=cases_root)
-    _stage_entry_case(native_case_root, staged_case_root, driver_context=driver_context)
+    _stage_entry_case(
+        native_case_root, staged_case_root, driver_context=driver_context,
+        excluded_relpaths=record_generated_relpaths(record),
+    )
 
 
 def _reserved_study_names(record: TutorialRecord) -> frozenset[str]:
