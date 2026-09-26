@@ -27,6 +27,23 @@ def test_repository_matches_its_baseline():
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_a_string_used_as_a_comparison_value_still_counts(tmp_path: Path):
+    """A bare string statement is exempt (the field-docstring convention
+    above); a string literal actually USED -- as a comparison operand here,
+    an f-string argument elsewhere -- is real code, not prose, and must
+    still be caught."""
+    core = tmp_path / "core"
+    core.mkdir()
+    (core / "m.py").write_text(
+        "def f(name: str) -> bool:\n    return name == 'polyMesh'\n"
+    )
+    baseline = tmp_path / "baseline.txt"
+    baseline.write_text("")
+    result = _gate("--core-src", str(core), "--baseline", str(baseline))
+    assert result.returncode == 1
+    assert "polyMesh" in result.stdout
+
+
 def test_a_new_token_fails(tmp_path: Path):
     core = tmp_path / "core"
     core.mkdir()
@@ -42,6 +59,30 @@ def test_comments_and_docstrings_do_not_count(tmp_path: Path):
     core = tmp_path / "core"
     core.mkdir()
     (core / "m.py").write_text('"""Mentions polyMesh."""\n# and blockMesh\nX = 1\n')
+    baseline = tmp_path / "baseline.txt"
+    baseline.write_text("")
+    assert _gate("--core-src", str(core), "--baseline", str(baseline)).returncode == 0
+
+
+def test_a_field_trailing_docstring_does_not_count(tmp_path: Path):
+    """R2 fix, finding M7: only ``body[0]`` (a module/class/function's true
+    docstring) used to be exempt. This codebase's own house style dates a
+    correction as a bare string statement trailing a dataclass field or
+    class attribute -- not ``body[0]`` -- and the module's own docstring
+    already says "comments and docstrings are prose, not coupling", so that
+    convention must be exempt too, or every dated correction that repeats a
+    retired token becomes a false new "hit" the moment that token is added
+    to TOKENS (exactly what happened when M7 added ``time_indexed``:
+    ``DataArtifact.instance_indexed``'s and `UtilityManifest`-alike's own
+    "Renamed from time_indexed" corrections, both pre-existing, both not
+    ``body[0]``)."""
+    core = tmp_path / "core"
+    core.mkdir()
+    (core / "m.py").write_text(
+        "class C:\n"
+        "    x: int = 0\n"
+        '    """Renamed from polyMesh 2026-09-26."""\n'
+    )
     baseline = tmp_path / "baseline.txt"
     baseline.write_text("")
     assert _gate("--core-src", str(core), "--baseline", str(baseline)).returncode == 0

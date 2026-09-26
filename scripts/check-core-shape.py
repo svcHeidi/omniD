@@ -48,6 +48,14 @@ TOKENS = (
     "controlDict", "fvSchemes", "fvSolution", "polyMesh", "blockMesh", "decomposePar",
     "reconstructPar", "processor", "case.foam", "Allrun", "Allclean", "bashrc",
     "WM_PROJECT", "FOAM_", "foamlib",
+    # Added 2026-09-26 (R2 fix, finding M7): A2 removed core's own "start
+    # time"/"time-indexed" vocabulary (CaseIntrospectionCapability
+    # .selected_start_time, DataArtifact.time_indexed, the {time} path
+    # placeholder), but nothing in this list guarded against it regrowing --
+    # only the specific assertions in test_instance_directories.py
+    # ::test_the_time_vocabulary_is_gone covered {time}/time_indexed, and
+    # nothing covered "start time" itself.
+    "start_time", "startTime", "latestTime", "time_indexed", "{time}",
 )
 
 # Chars treated as equivalent-to-absent when comparing spellings: they
@@ -84,13 +92,36 @@ def _count_token(token: str, raw_text: str, normalized_text: str) -> int:
     return normalized_text.count(_normalize(token))
 
 
+def _is_string_expr_statement(stmt: ast.stmt) -> bool:
+    return (
+        isinstance(stmt, ast.Expr)
+        and isinstance(stmt.value, ast.Constant)
+        and isinstance(stmt.value.value, str)
+    )
+
+
 def _docstring_ids(tree: ast.AST) -> set[int]:
+    """String literals this module's own docstring calls prose, not
+    coupling: not only body[0] (a module/class/function's true docstring),
+    but also a bare string statement anywhere else in a body -- the
+    attribute/field "docstring" convention this codebase's own house style
+    uses for a dated correction (CLAUDE.md: "record the correction with a
+    date rather than silently overwriting it").
+
+    Corrected 2026-09-26 (R2 fix, finding M7): before this, only body[0]
+    counted, so a dated correction on a dataclass field (e.g.
+    ``DataArtifact.instance_indexed``'s "Renamed from time_indexed ...")
+    was scanned as a literal despite being exactly the prose the module
+    docstring already says is exempt -- discovered when M7 added
+    ``time_indexed`` to TOKENS and two already-committed, pre-existing dated
+    corrections became new "hits" with no code change at all.
+    """
     ids = set()
     for node in ast.walk(tree):
         if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
-            body = getattr(node, "body", [])
-            if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant) and isinstance(body[0].value.value, str):
-                ids.add(id(body[0].value))
+            for stmt in getattr(node, "body", []):
+                if _is_string_expr_statement(stmt):
+                    ids.add(id(stmt.value))
     return ids
 
 

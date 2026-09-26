@@ -415,12 +415,19 @@ and post-processing boundary.
 **Entry-mode execution is staged and disposable.** `sweep-plan` and
 `sweep-run` copy the registered tutorial into
 `<output_dir>/cases/<case_id>/` before calling `apply_case()`; the source under
-`tutorials/` is never the mutable execution root. If `--output-dir` is omitted,
-the default is `<repo>/.tmp/driverfoam/sweeps/<spec-name>`. All generated
+`tutorials/` is never the mutable execution root. All generated
 meshes, processor/time directories, logs, workflow state, manifests,
-post-processing output, and archives must stay below this repository-local
-`.tmp/driverfoam/` workspace. Keep a failed workspace when diagnosing a run;
+post-processing output, and archives must stay below the disposable
+workspace. Keep a failed workspace when diagnosing a run;
 cleanup is an explicit, disposable-output action.
+
+**Corrected 2026-09-26 (R2 fix, out-of-scope item noted by the reviewer):**
+this said that omitting `--output-dir` defaults to
+`<repo>/.tmp/driverfoam/sweeps/<spec-name>`. There is no such default any
+more (CLAUDE.md's scratch-root rule, 2026-09-26): a sweep with no
+`--output-dir` needs `--scratch-dir <dir>` (or `OMNIDRIVER_SCRATCH_DIR`), or
+it is refused by name (`ScratchRootNotSupplied`) rather than silently
+writing into the checkout.
 
 Everything else — the manifest, `--retry-failed`, `--case-timeout-s`,
 `--max-cases`, resumability — is identical to generic mode.
