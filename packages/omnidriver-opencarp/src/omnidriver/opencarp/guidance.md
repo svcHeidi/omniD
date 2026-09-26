@@ -54,3 +54,17 @@ records in `out/parameters.par` (F16). `lats[0].all` must stay `0`: with `1`
 there is no per-node file (F17). openCARP's slab is 0–20000 × 0–7000 × 0–3000 µm
 with the stimulus cube at the origin and fibres along x (F3). That is the frame
 of `benchmarks/niederer2011.json`, so its coordinates are written unchanged.
+
+## Running in parallel
+
+Ask with the study value `parallel` (or `--parallel` on the CLI); serial is the
+default. openCARP has no decomposition file, so its process count is either the
+scheduler's allocation (`SLURM_NTASKS`, used by `parallel: true`) or a count you
+supply (`parallel: 4`, `--parallel 4`); outside a scheduler `true` is refused, and
+a count that disagrees with the allocation is refused. The solve runs as `mpirun
+-np N openCARP ...`; the outputs keep their serial names, node order and location,
+and differ from a serial run only in the LAT file's last printed digit (I7). The
+`mpirun` first on PATH must be the launcher of the MPI openCARP was built
+against (an install that bundles MPICH ships it next to its PETSc). Another MPI's
+launcher runs N separate one-process copies into one output directory; preflight
+refuses it by name (`opencarp_mpi_launcher_mismatch`, I2, I5).

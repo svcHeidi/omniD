@@ -29,8 +29,14 @@ _GIT_TAG = re.compile(r"GIT tag:\s*(\S+)")
 
 
 def opencarp_environment_diagnostics(workflow_dag: Mapping[str, Any], env: Mapping[str, str]) -> tuple[StrictDiagnostic, ...]:
+    from .parallel import SOLVER, launcher_diagnostics
+
     path = env.get("PATH", "")
-    commands = sorted({step.get("command") for step in (workflow_dag or {}).get("steps", ()) if step.get("command")})
+    steps = (workflow_dag or {}).get("steps", ())
+    # PAR (2026-09-26): a parallel solve step's command is its launcher; the
+    # solver it launches is checked as if it were the command.
+    commands = sorted({step.get("command") for step in steps if step.get("command")}
+                      | {SOLVER for step in steps if SOLVER in (step.get("args") or ())})
     # The command is quoted (``!r``): conformance C9 looks for the solver as a
     # quoted token once the PATH echoed here is removed (final review S-I2),
     # so an unquoted name, or the name inside a scratch path, never counts.
@@ -50,6 +56,7 @@ def opencarp_environment_diagnostics(workflow_dag: Mapping[str, Any], env: Mappi
             ))
         else:
             diagnostics.extend(_version_diagnostics(proc.stdout))
+            diagnostics.extend(launcher_diagnostics(workflow_dag, env))
     return tuple(diagnostics)
 
 

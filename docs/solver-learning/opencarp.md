@@ -234,3 +234,40 @@ workflow metadata is runnable, and a record run's document carries its steps,
 so core should not have asked. Core now exempts such a run from that gate
 (`run_document_exec._is_record_run_with_steps`), and the hook is deleted from
 `OpenCARPPlugin`; all ten checks still pass on the real binary without it.
+
+## I. Parallel runs (PAR, owner Q6, 2026-09-26)
+
+**Question:** does `mpirun -np N openCARP ...` keep the serial outputs (the
+LAT file and `vm.igb`) in the same layout and location, and where does N come
+from? openCARP v18.1, macOS arm64, 14 cores; the `03E_study_resolution` case
+copied into the session scratchpad, meshed with F3's `mesher` line. Every log
+was read with `grep -v "://"`, so the build header's token (G3) was never
+printed or copied.
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| I1 | `otool -L /usr/local/lib/opencarp/bin/openCARP \| grep -i mpi`; `ls /usr/local/lib/opencarp/lib/petsc/bin`; then that directory's `mpirun --version`; `/opt/homebrew/bin/mpirun --version` | links `/usr/local/lib/opencarp/lib/petsc/lib/libmpi.12.dylib` (MPICH's ABI name); the bundle ships `mpirun`/`mpiexec` → `mpiexec.hydra`, "HYDRA build details: Version 4.0.1"; Homebrew's is "mpirun (Open MPI) 5.0.9", the one OpenFOAM uses (`WM_MPLIB=SYSTEMOPENMPI`) | **openCARP is built against its own bundled MPICH, not the machine's Open MPI.** Two MPIs on one machine: each solver needs its own launcher |
+| I2 | `/opt/homebrew/bin/mpirun -np 2 openCARP +F nversion.par -meshname slab -simID ompi2 -imp_region[0].im_sv_init singlecell.sv -tend 20 -dt 50` (dx 1000); again with `PETSC_OPTIONS=-log_view` | exit 0; the log holds **two** build headers, every stage twice, and `L2 : Output directory exists: ompi2`; `vm.igb` and the LAT file are **byte-identical to the serial run**; `-log_view` prints `openCARP on a  named macbook with 1 processor` **twice** | **another MPI's launcher starts N separate one-process runs of the whole problem, racing on one output directory, and nothing fails.** Its outputs equal the serial run's, so a serial-against-parallel comparison would pass without any parallel run. This has to be checked, not assumed |
+| I3 | the bundle's `mpirun -np 2 openCARP ...` (as I2) | exit 15: `MPID_nem_tcp_get_business_card ... GetSockInterfaceAddr: gethostbyname failed, macbook`. `python3 -c "socket.gethostbyname('macbook')"` fails; `macbook.local` resolves to 127.0.0.1. `MPIR_CVAR_CH3_INTERFACE_HOSTNAME=127.0.0.1` (or `macbook.local`) still fails with the same message; `HYDRA_USE_LOCALHOST=1` fails; `mpirun -hosts 127.0.0.1 -np 2 ...` and `HYDRA_IFACE=lo0 mpirun -np 2 ...` both **exit 0** | **this machine's host name does not resolve, which MPICH's TCP channel needs.** Hydra sets the interface host name for each process itself, so the MPICH variable is overridden; hydra's own `HYDRA_IFACE=lo0` is the ambient fix. A machine fact, supplied in the environment, not by omniD. (Also: `/usr/bin/env VAR=... mpirun` loses `DYLD_LIBRARY_PATH`, since macOS strips `DYLD_*` when it starts a protected binary; export it instead) |
+| I4 | `PETSC_OPTIONS=-log_view HYDRA_IFACE=lo0 <bundle>/mpirun -np 2 openCARP ... -tend 5`, vs I2's Open MPI line | bundle: `openCARP on a  named macbook with 2 processors`, once; Open MPI: `with 1 processor`, twice | PETSc's own report of the world size: the bundle's launcher gives one 2-process run |
+| I5 | the header, counted, for `<launcher> -np <n> openCARP +Default` in an empty directory (it initialises MPI, prints the header, then fails for want of `project.elem`), and for `-buildinfo` | `+Default`: bundle n=2 → **1**, n=3 → **1**; Open MPI n=2 → **2**, n=3 → **3**; serial → 1. `-buildinfo`: 2 under both launchers (it prints before MPI is initialised) | **the build header is printed once per MPI world**, so `+Default`'s header count tells one N-process run from N one-process runs, in well under a second and with no case. This is the preflight check `parallel.launcher_diagnostics` makes (`opencarp_mpi_launcher_mismatch`); `-buildinfo` cannot tell them apart |
+| I6 | dx 1000, tend 20, dt 50: serial vs `HYDRA_IFACE=lo0 <bundle>/mpirun -np 2` | exit 0; the same nine files in the `-simID` directory; `vm.igb` and `init_acts_vm_act-thresh.dat` **byte-identical** (md5); `parameters.par` differs only in the `simID` line and the echoed command | at this size the parallel run reproduces the serial one exactly |
+| I7 | dx 500, tend 150, dt 50 (G4's case): serial, then the bundle's `-np 2` and `-np 4` | all exit 0, about 2 s each (too small to speed up); the same nine files in each `-simID` directory; LAT file 4305 lines each, in the serial node order (line 1 `1.355495` = P1, line 4305 `126.454889` = P8, as G4), max \|difference\| **1e-6 ms** against serial for both, i.e. the last printed digit, with no `-1` mismatch; `vm.igb` header identical (`x:4305 ... t:151`), size identical (2601244 bytes), max \|ΔVm\| 5.3e-5 mV (np 2) and 6.3e-5 mV (np 4), about 3% of values differ | **the outputs keep their layout, node order and location in parallel**: PETSc partitions internally and rank 0 writes the canonical order into the same `-simID` directory; there are no per-rank files. The values differ only by the parallel solve's reduction order, below the LAT file's printed precision. The record's `produces` and the LAT reader need nothing new |
+| I8 | omniD, `plan --strict --plugin opencarp --entry niedererNVersion --parallel 2` (dx 1000), three environments | Homebrew's Open MPI first on PATH: `opencarp_mpi_launcher_mismatch`, "'mpirun' (/opt/homebrew/bin/mpirun) started 2 separate one-process openCARP runs"; the bundle first, no `HYDRA_IFACE`: the same code, "could not start 2 openCARP processes: ... gethostbyname failed, macbook"; the bundle first with `HYDRA_IFACE=lo0`: no error. A `sweep-run` of the first environment fails the case before openCARP runs (no `out/`) | preflight refuses both wrong environments by name, before a run |
+
+**Where N comes from.** openCARP has no decomposition dictionary: nothing in
+its case states a process count, so N is not a case fact. It is either the
+scheduler's allocation, which is ambient (`SLURM_NTASKS`, read by core only
+when a run asks for parallel), or a count the agent supplies with the request
+(`parallel: N`, `--parallel N`). `parallel: true` uses the allocation and is
+refused by name outside a scheduler; a supplied N that disagrees with an
+ambient allocation is refused by name. Neither is ever restated or
+overridden (`parallel.parallel_steps`).
+
+**The proof on the real binary** is `test_parallel_native.py`: `niedererNVersion`
+at dx 500, tend 150, serial and `parallel: 2` through `sweep-run`, P1-P9 read
+through the LAT reader at `benchmarks/niederer2011.json`'s points, equal within
+1e-5 ms (ten units of the printed last digit); the parallel solve log states
+`with 2 processors` and one header; the file set, LAT length and `vm.igb` header
+match. It needs the bundle's launcher first on PATH and, on this machine,
+`HYDRA_IFACE=lo0` (I3), and fails, naming the diagnostic, without them.

@@ -11,6 +11,7 @@ from omnidriver.core.plugin_profile import load_plugin_profile
 from .catalog import load_catalog, template_name
 from .environment import AUXILIARY_COMMANDS, REDACTION_PATTERNS, SOLVER_COMMANDS, opencarp_environment_diagnostics
 from .lat_reader import LAT_FORMAT, LatPerNodeReader
+from .parallel import parallel_steps
 from .par_format import ParFormatError, format_value, patch_par, read_raw, unquote, values_agree
 from .records import TUTORIAL_RECORDS
 from .validation import check_indices, read_documents, record_key_validator
@@ -160,6 +161,13 @@ class OpenCARPPlugin:
     def get_configured_environment(self, env, driver_context):
         del driver_context
         return dict(env)
+
+    # -- parallel (PAR, owner Q6, 2026-09-26; evidence I1-I8)
+    def get_solve_step_commands(self):
+        return SOLVER_COMMANDS      # the step a parallel request runs under mpirun
+
+    def get_parallel_steps(self, step, *, request, read_value, allocation):
+        return parallel_steps(step, request=request, read_value=read_value, allocation=allocation)
 
     def get_log_redaction_patterns(self):
         return REDACTION_PATTERNS     # consumed by core's redact_step_logs (K9); corrected 2026-09-25, was "once Task 12 lands"
