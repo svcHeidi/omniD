@@ -120,3 +120,31 @@ internal-accuracy-checking reference branch) -- so the committed
 reference is unaffected and was not regenerated. Old vs new: unchanged
 (same file, same values, before and after the flag flip, by design of
 what the reference actually checks).
+
+## N. niederer2011 (`NiedererEtAl2011verification`)
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| N1 | manual, in a `git archive` scratch copy: `blockMesh` (hex block edited to `(40 6 14)`, dx 0.5 mm), then `cardiacFoam`, in a sourced shell, native `system/controlDict` unchanged (`endTime 0.015`, `deltaT 1e-05`) | rc 0 both, cardiacFoam ~50 s. After `cardiacFoam` alone: `constant/electroProperties.withDefaultValues` exists; `postProcessing/Niedererpoints/0/activationTime` exists with **3** data rows (`0.005`, `0.01`, `0.015`, all under the one instance `0`) plus a 9-probe/1-header preamble (13 lines total); `postProcessing/Niedererlines/0/activationTime` likewise, 3 rows under `0`, 101-probe preamble (105 lines total) | `monodomainSolver` calls `electroModel::end()`, so the solve step writes `.withDefaultValues` (unlike `restitutionCurves`'s `singleCellSolver`, R4) -- declared on `solve`. The `Niederer{points,lines}` function objects (`writeControl writeTime`) write every write time into ONE instance directory, `0` (never `0.005/`, `0.01/`, `0.015/`) -- OpenFOAM's own instance numbering restarts at the case's `startTime` for a function object's own output tree, not at wall/solve time |
+| N2 | same scratch copy, then `postProcess -func Niedererpoints -latestTime`, then `-func Niedererlines -latestTime` | rc 0 both. No new directory created (still only `postProcessing/{Niedererpoints,Niedererlines}/0/`). Each file is **replaced**, not appended to: `Niedererpoints/0/activationTime` drops from 3 data rows to exactly **1** (`0.015`, the probes' own header lines unchanged, 11 lines total); `Niedererlines/0/activationTime` likewise, 1 row, 103 lines total | confirms plan §5c item 2's own archived-run evidence exactly: **the `samplePoints`/`sampleLines` steps write LAST**, each producing exactly one data row at the run's `endTime`, at the literal path `postProcessing/Niederer{points,lines}/0/activationTime` -- these are declared as the first (only) `produces` entry of each of those two steps, as plain paths (no format: no reader exists yet, topic B Task 7's own job) |
+| N3 | `column 2` (probe 0) of N2's `Niedererpoints/0/activationTime` | `0.00119496` at `dx=0.5 mm`, native reference `0.00119338` at the case's own default resolution (dx 0.2 mm, `(100 15 35)`) | expected: coarser mesh, small but real difference -- not a byte-identical check, this run only settles which step/path/row-count, not the reference numbers themselves (those are equivalence_protocol.yaml's own, transcribed verbatim from `regression/NiedererEtAl2011.reference`, §5d) |
+| N4 | manual gmsh tet route in a second scratch copy: `gmsh -3 setup/studies/tetConvergence/slab.geo.template -o slab.msh -format msh2 -setnumber lc 0.0005`, then `gmshToFoam slab.msh`, then `checkMesh` | all rc 0. gmsh: `3739 nodes 20810 elements` (matches P5's G7 at the template's own default). `gmshToFoam`: writes `constant/polyMesh/{boundary,cellZones,faces,faceZones,neighbour,owner,pointZones,points,sets/}` (a superset of the hex route's own polyMesh files) plus "Found 4120 undefined faces... adding to default patch defaultFaces". `checkMesh`: `Mesh OK` (max aspect ratio 8.46, max skewness 0.74, non-orthogonality OK) | confirms the tet route's own commands and declared `produces`/`consumes` (`gmsh` consumes the template, produces `slab.msh`; `gmshToFoam` consumes `slab.msh`, produces the same core `constant/polyMesh/*` set the hex `mesh` step declares; `checkMesh` writes nothing declared, only validates) |
+
+**Column numbering** (settled here, for topic B Task 7's own reader and
+`test_a_probe_never_reached_is_not_reached`): `regressionTest.sh`'s `awk`
+`col` indexes the data line's whitespace-split fields, 1-based, with field 1
+the time column -- so `variable "2"` is probe 0 (the first `probeLocations`
+entry), `variable "10"` is probe 8 (the ninth and last). At `dx=0.5 mm`
+(this section's own coarse proof mesh) N2 found every probe but probe 0
+still at `-1` at `t=0.015` -- slower, coarser-mesh conduction than the
+committed reference's own default resolution (`dx=0.2 mm`, `(100 15 35)`),
+which is expected and not a discrepancy this run is trying to resolve (N3).
+The committed `equivalence_protocol.yaml` rows (`variable`s `2`, `4`, `5`,
+`6`, `9`, `10`, i.e. probes 0, 2, 3, 4, 7 and 8) are transcribed verbatim
+from `regression/NiedererEtAl2011.reference` (§5d), not re-derived from
+this coarse run -- probes 2, 3, 7 and 8 (`variable`s `4`, `5`, `9`, `10`)
+are the reference's own `-1.0` entries, and this run's own
+observation (every non-zero probe still `-1` at this coarser resolution)
+is consistent with, though not a proof of, that same set never having
+activated by `t=0.015` at the reference's finer resolution either.
+

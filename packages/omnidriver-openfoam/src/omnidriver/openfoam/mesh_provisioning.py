@@ -18,10 +18,13 @@ pre-existing author file to parse or risk corrupting, so this does not need
 `mutators.py`'s dictionary mutation machinery (that's for patching
 values into an *already-written* file). `dx` (metres, isotropic cell size)
 derives the cell count via `cell_counts_from_dx`, a small pure function
-factored out so `niederer_2011.py`'s own `_replace_blockmesh_resolution`
-(which *does* patch an existing author-provided file, a genuinely different
-problem) can share the exact same divide-or-error math instead of duplicating
-it.
+factored out so a tutorial's own resolution formula for an existing
+author-provided `blockMeshDict` (a genuinely different problem: patching,
+not generating) can share the exact same divide-or-error math instead of
+duplicating it -- e.g. `records/niederer_2011.py`'s own `dx` axis
+(**corrected 2026-09-26**: this used to cite the factory tutorial
+`niederer_2011.py`'s `_replace_blockmesh_resolution`, deleted when that
+tutorial migrated onto a tutorial record).
 """
 
 from __future__ import annotations

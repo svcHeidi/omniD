@@ -2,87 +2,89 @@ schema_version: 1
 description: Frozen numerical tolerances for E1. Do not edit a tolerance after seeing
   a comparison result; add a new row with its own rationale.
 rows:
-- case_dir: NiedererEtAl2011/NiedererEtAl2011verification
-  data_file: Niedererpoints/0/activationTime
-  variable: '10'
-  time: 0.03
-  expected: 0.02396
-  tolerance: 0.0001
-  source_reference: regression/NiedererEtAl2011.reference
-  rationale: Transcribed verbatim from the committed regression reference, which predates
-    E1; adopting it involves no post hoc threshold selection.
-- case_dir: NiedererEtAl2011/NiedererEtAl2011verification
+- case_dir: NiedererEtAl2011verification
   data_file: Niedererpoints/0/activationTime
   variable: '2'
-  time: 0.03
+  time: 0.015
   expected: 0.00119338
   tolerance: 0.0001
   source_reference: regression/NiedererEtAl2011.reference
-  rationale: Transcribed verbatim from the committed regression reference, which predates
-    E1; adopting it involves no post hoc threshold selection.
-- case_dir: NiedererEtAl2011/NiedererEtAl2011verification
+  rationale: Replaces a row whose case_dir/reference no longer exist (the case
+    moved natively in 7a04349b, and the reference was renamed from
+    NiedererEtAl2012.reference to NiedererEtAl2011.reference in 924bc72ec, and
+    its values changed in 39fe76eb0, "faster Niederer TNNP case"). Transcribed
+    verbatim from the current regression/NiedererEtAl2011.reference as of
+    39fe76eb0/924bc72ec; no post hoc threshold selection (owner Q12, 2026-09-26).
+- case_dir: NiedererEtAl2011verification
   data_file: Niedererpoints/0/activationTime
   variable: '4'
-  time: 0.03
+  time: 0.015
   expected: -1.0
   tolerance: 0.0001
   source_reference: regression/NiedererEtAl2011.reference
-  rationale: Transcribed verbatim from the committed regression reference, which predates
-    E1; adopting it involves no post hoc threshold selection.
-- case_dir: NiedererEtAl2011/NiedererEtAl2011verification
-  data_file: Niedererpoints/0/activationTime
-  variable: '5'
-  time: 0.03
-  expected: -1.0
-  tolerance: 0.0001
-  source_reference: regression/NiedererEtAl2011.reference
-  rationale: Transcribed verbatim from the committed regression reference, which predates
-    E1; adopting it involves no post hoc threshold selection.
-- case_dir: NiedererEtAl2011/NiedererEtAl2011verification
+  rationale: Replaces a row whose case_dir/reference no longer exist (the case
+    moved natively in 7a04349b, and the reference was renamed from
+    NiedererEtAl2012.reference to NiedererEtAl2011.reference in 924bc72ec, and
+    its values changed in 39fe76eb0, "faster Niederer TNNP case"). Transcribed
+    verbatim from the current regression/NiedererEtAl2011.reference as of
+    39fe76eb0/924bc72ec; no post hoc threshold selection (owner Q12, 2026-09-26).
+- case_dir: NiedererEtAl2011verification
   data_file: Niedererpoints/0/activationTime
   variable: '6'
-  time: 0.03
+  time: 0.015
   expected: 0.0112286
   tolerance: 0.0001
   source_reference: regression/NiedererEtAl2011.reference
-  rationale: Transcribed verbatim from the committed regression reference, which predates
-    E1; adopting it involves no post hoc threshold selection.
-- case_dir: NiedererEtAl2011/NiedererEtAl2011verification
+  rationale: Replaces a row whose case_dir/reference no longer exist (the case
+    moved natively in 7a04349b, and the reference was renamed from
+    NiedererEtAl2012.reference to NiedererEtAl2011.reference in 924bc72ec, and
+    its values changed in 39fe76eb0, "faster Niederer TNNP case"). Transcribed
+    verbatim from the current regression/NiedererEtAl2011.reference as of
+    39fe76eb0/924bc72ec; no post hoc threshold selection (owner Q12, 2026-09-26).
+- case_dir: NiedererEtAl2011verification
   data_file: Niedererpoints/0/activationTime
-  variable: '9'
-  time: 0.03
+  variable: '10'
+  time: 0.015
   expected: -1.0
   tolerance: 0.0001
   source_reference: regression/NiedererEtAl2011.reference
-  rationale: Transcribed verbatim from the committed regression reference, which predates
-    E1; adopting it involves no post hoc threshold selection.
-- case_dir: NiedererEtAl2011/electroMechanicalNiedererEtAl2011
-  data_file: Taprobes/solid/0/Ta
-  variable: '2'
-  time: 0.02
-  expected: 125.91
-  tolerance: 2.0
-  source_reference: regression/electroMechHeterogeneity.reference
-  rationale: Transcribed verbatim from the committed regression reference, which predates
-    E1; adopting it involves no post hoc threshold selection.
-- case_dir: NiedererEtAl2011/electroMechanicalNiedererEtAl2011
-  data_file: Taprobes/solid/0/Ta
-  variable: '3'
-  time: 0.02
-  expected: 121.498
-  tolerance: 2.0
-  source_reference: regression/electroMechHeterogeneity.reference
-  rationale: Transcribed verbatim from the committed regression reference, which predates
-    E1; adopting it involves no post hoc threshold selection.
-- case_dir: NiedererEtAl2011/electroMechanicalNiedererEtAl2011
-  data_file: Taprobes/solid/0/Ta
-  variable: '4'
-  time: 0.02
-  expected: 482.663
-  tolerance: 5.0
-  source_reference: regression/electroMechHeterogeneity.reference
-  rationale: Transcribed verbatim from the committed regression reference, which predates
-    E1; adopting it involves no post hoc threshold selection.
+  rationale: Replaces a row whose case_dir/reference no longer exist (the case
+    moved natively in 7a04349b, and the reference was renamed from
+    NiedererEtAl2012.reference to NiedererEtAl2011.reference in 924bc72ec, and
+    its values changed in 39fe76eb0, "faster Niederer TNNP case" -- this variable
+    included, from 0.02396 to -1. Transcribed verbatim from the current
+    regression/NiedererEtAl2011.reference as of 39fe76eb0/924bc72ec; no post hoc
+    threshold selection (owner Q12, 2026-09-26).
+- case_dir: NiedererEtAl2011verification
+  data_file: Niedererpoints/0/activationTime
+  variable: '5'
+  time: 0.015
+  expected: -1.0
+  tolerance: 0.0001
+  source_reference: regression/NiedererEtAl2011.reference
+  rationale: Replaces a row whose case_dir/reference no longer exist (the case
+    moved natively in 7a04349b, and the reference was renamed from
+    NiedererEtAl2012.reference to NiedererEtAl2011.reference in 924bc72ec, and
+    its values changed in 39fe76eb0, "faster Niederer TNNP case"). Transcribed
+    verbatim from the current regression/NiedererEtAl2011.reference as of
+    39fe76eb0/924bc72ec; no post hoc threshold selection (owner Q12, 2026-09-26).
+- case_dir: NiedererEtAl2011verification
+  data_file: Niedererpoints/0/activationTime
+  variable: '9'
+  time: 0.015
+  expected: -1.0
+  tolerance: 0.0001
+  source_reference: regression/NiedererEtAl2011.reference
+  rationale: Replaces a row whose case_dir/reference no longer exist (the case
+    moved natively in 7a04349b, and the reference was renamed from
+    NiedererEtAl2012.reference to NiedererEtAl2011.reference in 924bc72ec, and
+    its values changed in 39fe76eb0, "faster Niederer TNNP case"). Transcribed
+    verbatim from the current regression/NiedererEtAl2011.reference as of
+    39fe76eb0/924bc72ec; no post hoc threshold selection (owner Q12, 2026-09-26).
+# The three NiedererEtAl2011/electroMechanicalNiedererEtAl2011 rows (Taprobes)
+# are deleted (owner Q12, 2026-09-26): native 7a04349b removed that case. Its
+# successor, electromechanicsProtocols/springSupportedSlab, has its own
+# reference (springSupportedSlab.reference) and is deliberately not added here.
 - case_dir: electrophysiologyProtocols/rotorInstability
   data_file: rotorpoints/0/activationTime
   variable: '2'

@@ -43,11 +43,6 @@ def _factories():
     ]
 
 
-def test_niederer2011_builds_under_any_base(tmp_path: Path) -> None:
-    spec = _factories()["niederer2011"](cases_root=tmp_path)
-    assert Path(spec.case_root).is_relative_to(tmp_path)
-
-
 def test_every_serial_tutorial_builds_under_any_base(tmp_path: Path) -> None:
     failed = []
     built = 0
@@ -79,8 +74,13 @@ def test_every_serial_tutorial_builds_under_any_base(tmp_path: Path) -> None:
     # -- three keys for one tutorial. The rename drops that alias rather than
     # reproducing it under the new name (the old name must be refused like
     # any unknown entry, not kept reachable under either spelling), so
-    # SPEC_FACTORIES now holds 13 buildable entries, not 14.
-    assert built == 13, f"expected 13 buildable catalog entries, got {built}"
+    # SPEC_FACTORIES held 13 buildable entries, not 14.
+    # Corrected 2026-09-26 (5.4b-N): niederer2011 migrated onto a tutorial
+    # record (records/niederer_2011.py) and left SPEC_FACTORIES entirely --
+    # its single key (already all-lowercase, so its own ".lower()" alias line
+    # was always the same key) is simply gone, not merely unbuildable, so the
+    # buildable count drops by 1, to 12.
+    assert built == 12, f"expected 12 buildable catalog entries, got {built}"
 
 
 @pytest.mark.parametrize("name", sorted(_NEEDS_CASE_CONTENT))

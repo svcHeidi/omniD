@@ -29,15 +29,6 @@ def test_strict_rows_resolve_and_are_idempotent():
     assert all(r["idempotent"] == "ok" for r in strict)
 
 
-def test_electromechanical_generic_row_is_addressable():
-    rows = list(build_matrix_iter(run_phase2=False))
-    em = [r for r in rows
-          if r["case"] == "NiedererEtAl2011/electroMechanicalNiedererEtAl2011"]
-    assert len(em) == 1
-    assert em[0]["driver"] == "generic"
-    assert em[0]["resolves"] == "ok"
-
-
 def test_phase2_rows_keep_reproduction_detail(monkeypatch):
     def fake_verify_reproduction(case, *, driver):
         return SimpleNamespace(status="run_failed", detail=f"{case.case_dir} via {driver}")

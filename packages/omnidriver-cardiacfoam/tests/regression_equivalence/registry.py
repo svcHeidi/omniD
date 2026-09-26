@@ -55,8 +55,9 @@ _KNOWN_CASES: tuple[RegressionCase, ...] = (
         (_ELECTRO, _PHYSICS), "regression/singleCell.reference",
     ),
     RegressionCase(
-        "NiedererEtAl2011/NiedererEtAl2011verification", "niederer2011",
+        "NiedererEtAl2011verification", "niederer2011",
         (_ELECTRO, _PHYSICS), "regression/NiedererEtAl2011.reference",
+        resolution="tutorial_record",
     ),
     RegressionCase(
         "manufacturedSolutions/bidomain", "manufacturedBidomain",
@@ -75,10 +76,10 @@ _KNOWN_CASES: tuple[RegressionCase, ...] = (
         "manufacturedSolutions/bathBidomain", "manufacturedBathBidomain",
         (_ELECTRO, _PHYSICS), "regression/bathBidomainManufactured.reference",
     ),
-    RegressionCase(
-        "NiedererEtAl2011/electroMechanicalNiedererEtAl2011", None,
-        (), "regression/electroMechHeterogeneity.reference",
-    ),
+    # NiedererEtAl2011/electroMechanicalNiedererEtAl2011 removed 2026-09-26
+    # (5.4b-N, plan §5d): native 7a04349b deleted that case. Its successor,
+    # electromechanicsProtocols/springSupportedSlab, has its own reference
+    # and is deliberately not added here (owner Q12).
     RegressionCase(
         "electrophysiologyProtocols/rotorInstability", None,
         (), "regression/rotorInstability.reference",

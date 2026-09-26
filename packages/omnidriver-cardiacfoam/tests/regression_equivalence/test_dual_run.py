@@ -252,7 +252,7 @@ def test_verify_reproduction_generic_maps_regression_skip(monkeypatch, tmp_path)
 # 2026-09-18 in the coverage-as-evidence design's "found, not part of this
 # design" list). These call it for real, against the committed protocol.
 
-_SERIES_CASE = "NiedererEtAl2011/NiedererEtAl2011verification"
+_SERIES_CASE = "NiedererEtAl2011verification"
 
 
 def _write_series_outputs(case_path, rows) -> None:

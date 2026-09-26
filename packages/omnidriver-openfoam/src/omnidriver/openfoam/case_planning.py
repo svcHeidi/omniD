@@ -123,9 +123,11 @@ def plan_delta_t(delta_t_seconds: float, *, owner: str) -> ParameterAssignment:
     """Resolve a `system/controlDict` `deltaT` edit into a typed, pure
     `ParameterAssignment` -- reads nothing, writes nothing (Phase 3 Task 3).
 
-    Beside `utils.set_delta_t`, not a replacement for it yet: that function
-    keeps writing directly until its last caller migrates onto the
-    render/commit channel.
+    Used to sit beside `utils.set_delta_t` as an as-yet-unmigrated writer's
+    counterpart. **Corrected 2026-09-26 (5.4b-N):** that function is now
+    retired -- its last caller (`niederer_2011.py`'s `mesh_family == "tet"`
+    branch) migrated onto a tutorial record, and `utils.py` now defines no
+    writer at all.
 
     ``owner`` is supplied, not discovered: this module (`omnidriver-openfoam`)
     must not know about cardiacFoam or any other adapter identity (see this

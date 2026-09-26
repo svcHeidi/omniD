@@ -18,7 +18,7 @@ _SOURCE_REVISION = "6515739bd1b1c6cf7ef21fe1d4e25830352ed4d2"
         ("single_cell_tworld.json", "tutorials/electrophysiologyProtocols/singleCell"),
         (
             "niederer_tissue.json",
-            "tutorials/NiedererEtAl2011/NiedererEtAl2011verification",
+            "tutorials/NiedererEtAl2011verification",
         ),
     ],
 )

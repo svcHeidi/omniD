@@ -15,6 +15,8 @@ and axis is pure data / a pure function; only ``core.case_transaction
 
 from __future__ import annotations
 
+from .niederer_2011 import AXES as _NIEDERER_2011_AXES
+from .niederer_2011 import RECORD as _NIEDERER_2011_RECORD
 from .restitution_curves import AXES as _RESTITUTION_CURVES_AXES
 from .restitution_curves import RECORD as _RESTITUTION_CURVES_RECORD
 from .manufactured_bidomain import AXES as _MANUFACTURED_BIDOMAIN_AXES
@@ -23,7 +25,9 @@ from .manufactured_bidomain import RECORD as _MANUFACTURED_BIDOMAIN_RECORD
 TUTORIAL_RECORDS = {
     _RESTITUTION_CURVES_RECORD.name: _RESTITUTION_CURVES_RECORD,
     _MANUFACTURED_BIDOMAIN_RECORD.name: _MANUFACTURED_BIDOMAIN_RECORD,
+    _NIEDERER_2011_RECORD.name: _NIEDERER_2011_RECORD,
 }
 
 AXIS_CATALOG = dict(_RESTITUTION_CURVES_AXES)
 AXIS_CATALOG.update(_MANUFACTURED_BIDOMAIN_AXES)
+AXIS_CATALOG.update(_NIEDERER_2011_AXES)

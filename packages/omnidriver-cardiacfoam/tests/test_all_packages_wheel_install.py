@@ -92,6 +92,14 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
     probe_root = tmp_path / "probe"
     cases_root = probe_root / "cases"
     cases_root.mkdir(parents=True)
+    # `niederer2011` migrated onto a tutorial record 2026-09-26 (5.4b-N): a
+    # record's own `describe`, unlike a factory tutorial's, resolves against
+    # a real (if empty) native case directory
+    # (`record_execution._native_case_root`, `is_dir()` only -- no file
+    # content is read without a study naming an axis), so this artifact gate
+    # supplies an empty stand-in rather than the real native tutorials tree
+    # (still "no source case... participates": nothing inside it is read).
+    (cases_root / "NiedererEtAl2011verification").mkdir()
     clean_environment = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
     probe = textwrap.dedent(
         f"""

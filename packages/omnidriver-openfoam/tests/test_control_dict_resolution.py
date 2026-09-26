@@ -1,17 +1,19 @@
-"""Phase 3 Task 3: `set_delta_t`/`set_end_time` grow a resolver each.
-
-Characterization tests pin the exact bytes today's writers produce (content
-digests, not existence -- an existence check passes for an empty file).
+"""Phase 3 Task 3: `set_delta_t`/`set_end_time` grew a resolver each.
 
 **Corrected 2026-09-23 (Phase 3 Task 6's completion):** `set_end_time` is
 retired -- Task 6 migrated its last caller onto `plan_end_time`, and
 `grep -rn "set_end_time(" packages/*/src/` (excluding this module's own
-former definition) returns zero. `set_delta_t`'s own characterization stays:
-it keeps one caller, `niederer_2011.py`'s `mesh_family == "tet"` branch
-(a source-artifact route that never migrates onto the channel), so it is not
-yet retired.
+former definition) returns zero.
 
-The rest are the failing-then-passing tests for the pure planners,
+**Corrected 2026-09-26 (5.4b-N):** `set_delta_t` is retired too -- its one
+remaining caller, `niederer_2011.py`'s `mesh_family == "tet"` branch,
+migrated onto a tutorial record (`records/niederer_2011.py`), and
+`grep -rn "set_delta_t(" packages/*/src/` (excluding its own former
+definition) now returns zero. Its characterization tests (pinning the exact
+bytes the old direct writer produced) are deleted with it, not left
+pointing at nothing.
+
+What remains are the failing-then-passing tests for the pure planners,
 `plan_delta_t`/`plan_end_time`: they must address `system/controlDict`'s real
 `deltaT`/`endTime` keys, refuse a non-finite value at construction (the same
 guard every other `ParameterAssignment` gets, per the Phase 2 decision that
@@ -27,7 +29,6 @@ import math
 import pytest
 
 from omnidriver.core.case_write import ParameterAssignment
-from omnidriver.openfoam.utils import set_delta_t
 
 try:
     # Imported this way, rather than folded into the module-level import
@@ -66,57 +67,6 @@ def _snapshot(directory) -> dict:
         for path in sorted(directory.rglob("*"))
         if path.is_file()
     }
-
-
-# ---------------------------------------------------------------------------
-# Characterization: today's writers, pinned by content digest.
-# ---------------------------------------------------------------------------
-
-
-#: `update_foam_entry` rewrites a whole-line entry as `<indent><key>    <value>;`
-#: -- four spaces, not the original column alignment (verified against the
-#: actual writer, not assumed: the template's `deltaT          1e-06;`
-#: becomes `deltaT    0.001;`, and `endTime         1;` becomes
-#: `endTime    250.0;`, `str(250.0)` carrying its `.0` through unchanged).
-_EXPECTED_AFTER_DELTA_T = _CONTROL_DICT_TEMPLATE.replace(
-    "deltaT          1e-06;", "deltaT    0.001;"
-)
-
-
-def test_set_delta_t_characterization_spelled_as_exponent(tmp_path):
-    """`set_delta_t(..., 1e-3)` today. Pinned by content digest, not a
-    substring or existence check."""
-    path = tmp_path / "controlDict"
-    path.write_text(_CONTROL_DICT_TEMPLATE)
-    set_delta_t(path, 1e-3)
-    assert _digest(path.read_text()) == _digest(_EXPECTED_AFTER_DELTA_T)
-
-
-def test_set_delta_t_characterization_spelled_as_decimal(tmp_path):
-    """`set_delta_t(..., 0.001)` -- the same float as `1e-3` -- today."""
-    path = tmp_path / "controlDict"
-    path.write_text(_CONTROL_DICT_TEMPLATE)
-    set_delta_t(path, 0.001)
-    assert _digest(path.read_text()) == _digest(_EXPECTED_AFTER_DELTA_T)
-
-
-def test_both_spellings_of_the_same_float_write_identical_bytes_today(tmp_path):
-    """`1e-3` and `0.001` are the same Python float (`1e-3 == 0.001`), and
-    `_format_value` renders it with `str()` -- so today's writer already
-    collapses both spellings to the same output. This is the characterization
-    this task's Step 2 asks for: capturing that collapse, not merely one
-    value, is what proves nothing regresses when the planners are added."""
-    path_a = tmp_path / "a" / "controlDict"
-    path_b = tmp_path / "b" / "controlDict"
-    path_a.parent.mkdir()
-    path_b.parent.mkdir()
-    path_a.write_text(_CONTROL_DICT_TEMPLATE)
-    path_b.write_text(_CONTROL_DICT_TEMPLATE)
-
-    set_delta_t(path_a, 1e-3)
-    set_delta_t(path_b, 0.001)
-
-    assert _digest(path_a.read_text()) == _digest(path_b.read_text())
 
 
 # ---------------------------------------------------------------------------

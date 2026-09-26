@@ -4,7 +4,11 @@ from enum import Enum
 class CardiacTutorialID(str, Enum):
     SINGLE_CELL = "singleCell"
     CABLE_1D_CV_CONVERGENCE = "cable1DCVConvergence"
-    NIEDERER_2011 = "niederer2011"
+    # NIEDERER_2011 ("niederer2011") removed 2026-09-26: migrated onto a
+    # tutorial record (records/niederer_2011.py, plan docs/superpowers/
+    # plans/2026-09-25-tutorials-are-pointers-remaining.md §5c "5.4b-N"),
+    # which names itself directly rather than through this factory-tutorial
+    # enum -- same reasoning as RESTITUTION_CURVES's removal below.
     MANUFACTURED_MONODOMAIN_PSEUDO_ECG = "manufacturedMonodomainPseudoECG"
     # MANUFACTURED_BIDOMAIN ("manufacturedBidomain") removed 2026-09-26:
     # migrated onto a tutorial record (records/manufactured_bidomain.py,
