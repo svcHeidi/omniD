@@ -209,5 +209,8 @@ def test_every_gmsh_to_foam_step_declares_the_zone_files_it_writes():
         produced = set(steps["gmshToFoam"].produces)
         assert {
             "constant/polyMesh/cellZones", "constant/polyMesh/faceZones",
-            "constant/polyMesh/pointZones", "constant/polyMesh/sets/internal",
+            "constant/polyMesh/pointZones",
         } <= produced, record.name
+        # One cell set per Physical Volume; its name is the template's own
+        # (`internal` for these three, others for a multi-volume template).
+        assert any(path.startswith("constant/polyMesh/sets/") for path in produced), record.name
