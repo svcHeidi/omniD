@@ -101,16 +101,102 @@ class ProducedPath(str):
         return f"ProducedPath({str(self)!r}, format={self.format!r})"
 
 
+def _token_runs(tokens: Sequence[str], key: Sequence[str]) -> list[int]:
+    """Every index where ``key`` occurs in ``tokens`` as a contiguous run,
+    compared token by token for equality (overlapping runs counted)."""
+    width = len(key)
+    key = tuple(key)
+    return [i for i in range(len(tokens) - width + 1) if tuple(tokens[i:i + width]) == key]
+
+
+def _string_tokens(label: str, value: Any, *, allow_empty_tuple: bool, allow_empty_token: bool) -> tuple[str, ...]:
+    if isinstance(value, str):
+        raise TutorialRecordError(f"{label} must be a sequence of strings, not the bare string {value!r}")
+    tokens = tuple(value)
+    if not tokens and not allow_empty_tuple:
+        raise TutorialRecordError(f"{label} must hold at least one token")
+    for token in tokens:
+        if not isinstance(token, str):
+            raise TutorialRecordError(f"{label} {list(tokens)!r} holds {token!r}, which is not a str")
+        if not token and not allow_empty_token:
+            raise TutorialRecordError(f"{label} {list(tokens)!r} holds an empty token")
+    return tokens
+
+
+@dataclass(frozen=True)
+class DefaultArgument:
+    """An argument a workflow step passes unless an axis passes its own
+    (owner Q3/Q7, 2026-09-26).
+
+    On the command line it is ``key`` followed by ``values``: ``key=("-dict",),
+    values=("system/blockMeshDict.3D",)`` passes ``-dict
+    system/blockMeshDict.3D``, and ``key=("-setnumber", "lc"), values=("0.1",)``
+    passes ``-setnumber lc 0.1``. The default is the step's own, copied from
+    the native case, and independent of any study.
+
+    **The replacement rule.** An axis replaces a default by passing the
+    default's ``key`` tokens, contiguously, anywhere in its
+    ``AxisResult.command_arguments`` for that step; the default's own tokens
+    are then dropped, and the axis's contribution is appended as always. An
+    axis that does not pass the ``key`` appends, and the default stays. So a
+    ``dimension`` axis passing ``-dict system/blockMeshDict.1D`` gives
+    ``blockMesh -dict system/blockMeshDict.1D``, never two ``-dict``s, and a
+    gmsh axis passing ``-setnumber lc 0.05`` replaces a ``-setnumber lc``
+    default but not a ``-setnumber nx`` one.
+
+    ``key`` is as many tokens as name the argument: one for ``-dict``, two
+    for ``-setnumber lc``, whose flag alone names nothing. Core compares
+    tokens for equality and nothing more; it parses no flag and knows no
+    arity.
+
+    **Loose by design** (owner, 2026-09-26, "the pre-processing stage"): the
+    record declares only the default, never the values that may replace it.
+    Whatever an axis passes after the key -- ``-dict system/blockMeshDict.2D``,
+    a dictionary an agent composed, any ``-setnumber lc`` -- replaces the
+    default as passed; nothing checks it against the record. Only malformed
+    input and real ambiguity are refused, below.
+
+    **Ambiguity is refused, by name.** At construction
+    (``WorkflowStep.__post_init__``), each default's ``key`` must occur
+    exactly once, as a contiguous run, in the step's default command line
+    (``command`` plus every default's tokens). That refuses a key the
+    command already holds, two defaults with one key, and a key inside
+    another default's tokens (``-setnumber`` beside ``-setnumber lc``). At
+    resolution (``WorkflowStep.argv``), an axis contribution holding one key
+    more than once is refused: it would pass the argument twice.
+    """
+
+    key: tuple[str, ...]
+    values: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "key", _string_tokens(
+            "a default argument's key", self.key, allow_empty_tuple=False, allow_empty_token=False,
+        ))
+        object.__setattr__(self, "values", _string_tokens(
+            f"default argument {list(self.key)!r}'s values", self.values,
+            allow_empty_tuple=True, allow_empty_token=True,
+        ))
+
+    def tokens(self) -> tuple[str, ...]:
+        return self.key + self.values
+
+
 @dataclass(frozen=True)
 class WorkflowStep:
     """One named step in a tutorial record's workflow.
 
     ``command`` is the step's base argv; an axis may contribute additional
     arguments for a step it names (``AxisResult.command_arguments``),
-    appended in axis-declaration order (see ``resolve_case_patches``). Core
-    does not know what any of these strings mean -- the solver binary's own
-    name, or a mesh-generation tool's flags, are the adapter's own
-    vocabulary.
+    appended after the base (see ``resolve_case_patches``). Core does not
+    know what any of these strings mean -- the solver binary's own name, or
+    a mesh-generation tool's flags, are the adapter's own vocabulary.
+
+    ``default_arguments`` are arguments the step passes unless an axis
+    passes its own; :class:`DefaultArgument` states the replacement rule.
+    The step runs :meth:`argv`: ``command``, then every default no axis
+    replaced (in declared order), then the axis's contribution. Added
+    2026-09-26 (owner Q3/Q7).
 
     ``produces`` and ``consumes`` are case-relative paths the step writes
     and reads (K4, docs/superpowers/specs/2026-09-25-solver-conformance-
@@ -138,9 +224,29 @@ class WorkflowStep:
     command: tuple[str, ...]
     produces: tuple[str, ...] = ()
     consumes: tuple[str, ...] = ()
+    default_arguments: tuple[DefaultArgument, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "command", tuple(self.command))
+        if isinstance(self.default_arguments, DefaultArgument):
+            raise TutorialRecordError(
+                f"workflow step {self.step_id!r} default_arguments must be a sequence of DefaultArgument, not one"
+            )
+        object.__setattr__(self, "default_arguments", tuple(self.default_arguments))
+        for default in self.default_arguments:
+            if not isinstance(default, DefaultArgument):
+                raise TutorialRecordError(
+                    f"workflow step {self.step_id!r} default_arguments holds {default!r}, which is not a DefaultArgument"
+                )
+        default_line = self.command + tuple(token for d in self.default_arguments for token in d.tokens())
+        for default in self.default_arguments:
+            count = len(_token_runs(default_line, default.key))
+            if count != 1:
+                raise TutorialRecordError(
+                    f"workflow step {self.step_id!r}: default argument key {list(default.key)!r} must occur "
+                    f"exactly once in the step's default command line {list(default_line)!r}, and occurs "
+                    f"{count} times; an axis passing it could not say which argument it replaces"
+                )
         for field_name in ("produces", "consumes"):
             value = getattr(self, field_name)
             if isinstance(value, str):
@@ -190,6 +296,25 @@ class WorkflowStep:
                 raise TutorialRecordError(
                     f"workflow step {self.step_id!r} consumes {str(path)!r} with a format; a format belongs on the step that produces the file"
                 )
+
+    def argv(self, contributed: Sequence[str] = ()) -> tuple[str, ...]:
+        """The command line this step runs, given the arguments an axis
+        contributes to it (:class:`DefaultArgument` states the rule).
+
+        Refuses, by name, a contribution holding a default's key more than
+        once."""
+        contributed = tuple(contributed)
+        kept: list[str] = []
+        for default in self.default_arguments:
+            count = len(_token_runs(contributed, default.key))
+            if count > 1:
+                raise TutorialRecordError(
+                    f"workflow step {self.step_id!r}: the contributed arguments {list(contributed)!r} pass "
+                    f"default argument key {list(default.key)!r} {count} times; pass it once to replace the default"
+                )
+            if count == 0:
+                kept.extend(default.tokens())
+        return self.command + tuple(kept) + contributed
 
     def produced_format(self, path: str) -> str:
         """The declared format of one of this step's ``produces`` paths."""
@@ -368,6 +493,10 @@ class AxisPatch:
 class AxisResult:
     """One axis's pure output: the patches it derives, and any command
     arguments it contributes to named workflow steps.
+
+    A contribution that passes one of the step's default-argument keys
+    replaces that default; anything else is appended (:class:`DefaultArgument`,
+    owner Q3, 2026-09-26).
     """
 
     patches: tuple[AxisPatch, ...] = ()
@@ -761,6 +890,7 @@ def resolve_case_patches(
         sourced_patches.append(SourcedPatch(patch=patch, source=source, validated=validated))
 
     known_step_ids = frozenset(record.step_ids())
+    steps_by_id = {step.step_id: step for step in record.workflow_steps}
     command_arguments: dict[str, tuple[str, ...]] = {}
     command_argument_source: dict[str, str] = {}
     for source, name, sorted_name, value in axis_entries:
@@ -819,6 +949,14 @@ def resolve_case_patches(
                     f"does not declare (declared steps: {sorted(known_step_ids)})"
                 )
             extra_args = tuple(extra_args)
+            # Owner Q3 (2026-09-26): the contribution must name each of the
+            # step's default-argument keys at most once
+            # (`DefaultArgument`'s rule), refused here, before any later
+            # axis runs, rather than when the DAG is built.
+            try:
+                steps_by_id[step_id].argv(extra_args)
+            except TutorialRecordError as exc:
+                raise TutorialRecordError(f"axis {name!r}: {exc}") from exc
             existing_args = command_arguments.get(step_id)
             if existing_args is None:
                 command_arguments[step_id] = extra_args

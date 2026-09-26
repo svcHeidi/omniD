@@ -417,3 +417,45 @@ class DefaultRoutePlugin(E2ERecordPlugin):
             variant_selector="route",
             default_variant="native",
         )}
+
+
+DEFAULT_ARGUMENT_PLUGIN = "plugins.conformance_toy:DefaultArgumentPlugin"
+#: The file DefaultArgumentPlugin's solve step writes through its default
+#: argument, and only through it: C6 finds it only if the default reached
+#: the real command line.
+DEFAULT_ARGUMENT_MARKER = "default-argument.marker"
+
+
+def _marker_axis():
+    from omnidriver.core.tutorial_records import AxisContract, AxisResult
+
+    def resolve(value, staged_case_root):
+        del staged_case_root
+        return AxisResult(command_arguments={"solve": ("--marker", f"{value}.marker")})
+
+    return AxisContract(name="marker", value_kind="word", resolve=resolve)
+
+
+class DefaultArgumentPlugin(E2ERecordPlugin):
+    """Its solve step's file name is a replaceable default argument
+    (``DefaultArgument``, owner Q3/Q7, 2026-09-26): ``sh -c 'touch "$2"' sh
+    --marker default-argument.marker``. Its ``marker`` axis passes
+    ``--marker <value>.marker``, which replaces the default."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._solver_commands = frozenset({"touch", "sh"})
+        self._axis_catalog = {**self._axis_catalog, "marker": _marker_axis()}
+
+    def get_tutorial_records(self):
+        from omnidriver.core.tutorial_records import DefaultArgument
+
+        return {"toyTutorial": TutorialRecord(
+            name="toyTutorial", native_case_relpath="toyTutorial",
+            allowed_axes=frozenset({"number_cells", "marker"}),
+            workflow_steps=(WorkflowStep(
+                step_id="solve", command=("sh", "-c", 'touch "$2"', "sh"),
+                default_arguments=(DefaultArgument(key=("--marker",), values=(DEFAULT_ARGUMENT_MARKER,)),),
+                consumes=("constant/mesh.json",), produces=(DEFAULT_ARGUMENT_MARKER,),
+            ),),
+        )}

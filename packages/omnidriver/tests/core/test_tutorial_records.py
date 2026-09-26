@@ -24,6 +24,7 @@ from omnidriver.core.tutorial_records import (
     AxisMatch,
     AxisPatch,
     AxisResult,
+    DefaultArgument,
     DocumentKeyName,
     SourcedPatch,
     TutorialRecord,
@@ -583,6 +584,67 @@ def test_resolve_case_patches_refuses_conflicting_command_arguments_for_one_step
             staged_case_root=Path("/nonexistent"),
             direct_key_validator=_known_catalog_validator,
         )
+
+
+def _record_with_a_default_argument() -> TutorialRecord:
+    return _record(
+        allowed_axes=frozenset({"meshFile"}),
+        workflow_steps=(
+            WorkflowStep(
+                step_id="mesh", command=("generate-mesh",),
+                default_arguments=(DefaultArgument(key=("-dict",), values=("system/meshDict.3D",)),),
+            ),
+        ),
+    )
+
+
+def _mesh_file_axis(*arguments: str) -> AxisContract:
+    def resolve(value, staged_case_root):
+        return AxisResult(command_arguments={"mesh": arguments})
+
+    return AxisContract(name="meshFile", value_kind="word", resolve=resolve)
+
+
+def test_resolve_case_patches_refuses_an_axis_that_passes_a_default_key_twice():
+    """Owner Q3: an axis replaces a default argument by passing its key once.
+    Passing it twice is refused before anything runs, naming the axis, the
+    step and the key -- never a command carrying the argument twice."""
+    with pytest.raises(TutorialRecordError) as exc:
+        resolve_case_patches(
+            _record_with_a_default_argument(),
+            study_by_source={"base": {"meshFile": "x"}},
+            axis_catalog={"meshFile": _mesh_file_axis("-dict", "a", "-dict", "b")},
+            staged_case_root=Path("/nonexistent"),
+            direct_key_validator=_known_catalog_validator,
+        )
+    message = str(exc.value)
+    assert "'meshFile'" in message and "'mesh'" in message and "['-dict']" in message
+
+
+def test_preview_shows_each_selected_steps_command_with_its_default_argument(tmp_path):
+    """Owner Q3/Q7: with no study values the step runs its default argument;
+    ``record_preview.workflow_commands`` shows the argv that will run."""
+    _native_case(tmp_path, {})
+    preview = record_execution.preview_record_case(
+        _record_with_a_default_argument(), cases_root=tmp_path / "cases",
+        study_by_source={"base": {}},
+        driver_context=_context_with_writer(axis_catalog={"meshFile": _mesh_file_axis("-dict", "x")}),
+    )
+    assert preview["workflow_commands"] == {"mesh": ["generate-mesh", "-dict", "system/meshDict.3D"]}
+    assert preview["command_arguments"] == {}
+
+
+def test_preview_shows_the_axis_argument_in_place_of_the_default(tmp_path):
+    _native_case(tmp_path, {})
+    preview = record_execution.preview_record_case(
+        _record_with_a_default_argument(), cases_root=tmp_path / "cases",
+        study_by_source={"base": {"meshFile": "1D"}},
+        driver_context=_context_with_writer(
+            axis_catalog={"meshFile": _mesh_file_axis("-dict", "system/meshDict.1D")},
+        ),
+    )
+    assert preview["workflow_commands"] == {"mesh": ["generate-mesh", "-dict", "system/meshDict.1D"]}
+    assert preview["command_arguments"] == {"mesh": ["-dict", "system/meshDict.1D"]}
 
 
 def test_resolve_case_patches_allows_identical_command_arguments_for_one_step():

@@ -406,7 +406,26 @@ def preview_record_case(
             },
             "workflow_step_ids": list(workflow_step_ids),
             "workflow_variant": workflow_variant,
+            "workflow_commands": _workflow_commands(
+                record, workflow_step_ids, command_arguments,
+            ),
         }
+
+
+def _workflow_commands(
+    record: TutorialRecord, workflow_step_ids: Sequence[str],
+    command_arguments: Mapping[str, tuple[str, ...]],
+) -> dict[str, list[str]]:
+    """The command line each selected step runs, as ``describe`` shows it:
+    its command, the default arguments no axis replaced, and the axis's
+    contribution (``WorkflowStep.argv``; owner Q3, 2026-09-26). The
+    preview's ``command_arguments`` shows only what axes contributed, so
+    without this a default argument was invisible before a run."""
+    steps_by_id = {step.step_id: step for step in record.workflow_steps}
+    return {
+        step_id: list(steps_by_id[step_id].argv(command_arguments.get(step_id, ())))
+        for step_id in workflow_step_ids
+    }
 
 
 @contextlib.contextmanager
@@ -570,14 +589,16 @@ def _workflow_dag_for_record(
 
     An axis's command arguments for a step (``AxisResult.command_arguments``,
     already merged and conflict-checked by ``resolve_case_patches``, M6) are
-    appended after the step's own declared ``command`` tail.
+    appended after the step's own declared ``command`` tail and the default
+    arguments they do not replace (``WorkflowStep.argv``; owner Q3,
+    2026-09-26).
     """
     steps_by_id = {step.step_id: step for step in record.workflow_steps}
     dag_steps: list[dict[str, Any]] = []
     depends_on: list[str] = []
     for step_id in workflow_step_ids:
         step = steps_by_id[step_id]
-        argv = list(step.command) + list(command_arguments.get(step_id, ()))
+        argv = list(step.argv(command_arguments.get(step_id, ())))
         step_entry: dict[str, Any] = {
             "id": step_id,
             "command": argv[0],

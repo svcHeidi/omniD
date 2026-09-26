@@ -12,7 +12,7 @@ import pytest
 from omnidriver.conformance import CHECKS, run_check
 from omnidriver.core.runtime.sweep_runner import _child_reconciliation
 from plugins.conformance_toy import (
-    DEFAULT_ROUTE_MARKER, DEFAULT_ROUTE_PLUGIN, DOCUMENTED_PLUGIN, GHOST_CONSUMES_PLUGIN, INDEXED_KEY_PLUGIN, KINDLESS_KEY_PLUGIN, NAMED_KEY_PLUGIN,
+    DEFAULT_ARGUMENT_MARKER, DEFAULT_ARGUMENT_PLUGIN, DEFAULT_ROUTE_MARKER, DEFAULT_ROUTE_PLUGIN, DOCUMENTED_PLUGIN, GHOST_CONSUMES_PLUGIN, INDEXED_KEY_PLUGIN, KINDLESS_KEY_PLUGIN, NAMED_KEY_PLUGIN,
     NATIVE_WRITING_PLUGIN, NO_CONSUMES_PLUGIN, NO_PRODUCES_PLUGIN, OPEN_DOCUMENT_PLUGIN, OTHER_OPEN_DOCUMENT_PLUGIN,
     OVER_GENERATED_CONVENTIONS_PLUGIN, REPLACING_PLUGIN, SILENT_PREFLIGHT_PLUGIN, SILENT_SURFACE_PLUGIN,
     UNDECLARED_OUTPUT_PLUGIN, UNLISTED_KEY_PLUGIN, VALIDATED_KINDLESS_PLUGIN,
@@ -51,6 +51,28 @@ def test_the_default_route_is_the_one_that_runs(tmp_path):
     assert [(s["id"], s["command"], s["args"]) for s in steps] == [
         ("solveNative", "touch", [DEFAULT_ROUTE_MARKER]),
     ]
+
+
+@pytest.mark.parametrize("check_id", sorted(CHECKS))
+def test_a_record_whose_step_has_a_default_argument_passes(check_id, tmp_path):
+    """Owner Q3/Q7, 2026-09-26: a step's default argument is fixed on the
+    step and needs no study value. C6 finds the one file the default
+    argument names, so the default reached the real command line."""
+    verdict = run_check(check_id, toy_conformance_target(tmp_path, plugin=DEFAULT_ARGUMENT_PLUGIN))
+    assert verdict.passed, verdict.detail
+
+
+def test_an_axis_argument_replaces_the_default_in_the_planned_command(tmp_path):
+    import dataclasses as _dc
+
+    from omnidriver.conformance.checks import _context, _plan
+
+    target = toy_conformance_target(tmp_path, plugin=DEFAULT_ARGUMENT_PLUGIN)
+    ctx = _context(target)
+    default = _plan(target, ctx).run_document.to_json()["workflowDag"]["steps"][0]
+    assert default["args"] == ["-c", 'touch "$2"', "sh", "--marker", DEFAULT_ARGUMENT_MARKER]
+    replaced = _plan(_dc.replace(target, base_study={"marker": "axis"}), ctx).run_document.to_json()
+    assert replaced["workflowDag"]["steps"][0]["args"] == ["-c", 'touch "$2"', "sh", "--marker", "axis.marker"]
 
 
 def test_c8_bites_a_record_that_declares_no_inputs(tmp_path):
