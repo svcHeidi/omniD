@@ -234,12 +234,12 @@ def _plan_codes(report: dict) -> set[str]:
 
 
 # --------------------------------------------------------------------------
-# Documented-closed claim: "launch.caseRoot ... when DRIVERFOAM_ALLOWED_RUNS_ROOT
+# Documented-closed claim: "launch.caseRoot ... when OMNIDRIVER_ALLOWED_RUNS_ROOT
 # is set, both must resolve under it" (Trust boundaries / Mitigations).
 # --------------------------------------------------------------------------
 
 def test_case_root_outside_allowed_runs_root_is_rejected_before_execution() -> None:
-    """SECURITY.md: "opt-in DRIVERFOAM_ALLOWED_RUNS_ROOT containment"."""
+    """SECURITY.md: "opt-in OMNIDRIVER_ALLOWED_RUNS_ROOT containment"."""
     with tempfile.TemporaryDirectory() as temp_dir:
         cases_root = Path(temp_dir)
         case_root = _write_case(cases_root)
@@ -249,7 +249,7 @@ def test_case_root_outside_allowed_runs_root_is_rejected_before_execution() -> N
         elsewhere = cases_root / "allowed-elsewhere"
         elsewhere.mkdir()
         with mock.patch.dict(
-            os.environ, {"DRIVERFOAM_ALLOWED_RUNS_ROOT": str(elsewhere)}
+            os.environ, {"OMNIDRIVER_ALLOWED_RUNS_ROOT": str(elsewhere)}
         ):
             code, payload = _cli(["run", "--run-document", str(doc_path)])
 
@@ -274,7 +274,7 @@ def test_output_dir_outside_allowed_runs_root_is_rejected_before_execution() -> 
         doc_path.write_text(json.dumps(document))
 
         with mock.patch.dict(
-            os.environ, {"DRIVERFOAM_ALLOWED_RUNS_ROOT": str(allowed)}
+            os.environ, {"OMNIDRIVER_ALLOWED_RUNS_ROOT": str(allowed)}
         ):
             code, payload = _cli(["run", "--run-document", str(doc_path)])
 
@@ -305,7 +305,7 @@ def test_symlinked_case_root_cannot_escape_allowed_runs_root() -> None:
         doc_path.write_text(json.dumps(document))
 
         with mock.patch.dict(
-            os.environ, {"DRIVERFOAM_ALLOWED_RUNS_ROOT": str(allowed)}
+            os.environ, {"OMNIDRIVER_ALLOWED_RUNS_ROOT": str(allowed)}
         ):
             code, payload = _cli(["run", "--run-document", str(doc_path)])
 
@@ -327,7 +327,7 @@ def test_allowed_runs_root_permits_a_contained_case() -> None:
         _plan_to_file(cases_root, doc_path)
 
         with mock.patch.dict(
-            os.environ, {"DRIVERFOAM_ALLOWED_RUNS_ROOT": str(cases_root)}
+            os.environ, {"OMNIDRIVER_ALLOWED_RUNS_ROOT": str(cases_root)}
         ):
             code, payload = _cli(["run", "--run-document", str(doc_path)])
 

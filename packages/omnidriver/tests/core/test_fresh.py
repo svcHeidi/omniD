@@ -120,26 +120,23 @@ def test_ensure_fresh_output_dir_noop_when_directory_does_not_exist(tmp_path):
     assert not target.exists()
 
 
-def test_the_retired_allowed_root_variable_is_still_honoured(monkeypatch, tmp_path):
-    """Renaming the variable must not silently switch the boundary off.
-
-    ``DRIVERFOAM_ALLOWED_RUNS_ROOT`` was renamed to
-    ``OMNIDRIVER_ALLOWED_RUNS_ROOT`` on 2026-09-14. An operator who set the old
-    name is expressing an intent to confine deletions; ignoring it would turn a
-    configured safety boundary off without any diagnostic, which is strictly
-    worse than the rename being incomplete.
-    """
+def test_the_legacy_allowed_root_variable_name_is_not_read(monkeypatch, tmp_path):
+    """Task 9 close-out (owner decision 3, 2026-09-26): the legacy name,
+    ``DRIVERFOAM_ALLOWED_RUNS_ROOT`` (renamed to
+    ``OMNIDRIVER_ALLOWED_RUNS_ROOT`` on 2026-09-14), is removed outright --
+    it is the project's own former name, not an OpenFOAM- or A1/A2-scoped
+    rename, and the owner chose to stop reading it rather than carry it
+    forward indefinitely. Only the current name is honoured now."""
     from omnidriver.core.runtime.run_document_exec import _allowed_runs_root
 
     monkeypatch.delenv("OMNIDRIVER_ALLOWED_RUNS_ROOT", raising=False)
     monkeypatch.setenv("DRIVERFOAM_ALLOWED_RUNS_ROOT", str(tmp_path))
-    assert _allowed_runs_root() == tmp_path.resolve()
+    assert _allowed_runs_root() is None
 
-    # The current name wins when both are set.
-    other = tmp_path / "current"
-    other.mkdir()
-    monkeypatch.setenv("OMNIDRIVER_ALLOWED_RUNS_ROOT", str(other))
-    assert _allowed_runs_root() == other.resolve()
+    current = tmp_path / "current"
+    current.mkdir()
+    monkeypatch.setenv("OMNIDRIVER_ALLOWED_RUNS_ROOT", str(current))
+    assert _allowed_runs_root() == current.resolve()
 
 
 def test_a_run_document_written_before_the_rename_is_still_driver_owned():

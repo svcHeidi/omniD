@@ -218,7 +218,7 @@ def test_run_document_respects_allowed_runs_root() -> None:
         other_root.mkdir()
         out = StringIO()
         with redirect_stdout(out), mock.patch.dict(
-            os.environ, {"DRIVERFOAM_ALLOWED_RUNS_ROOT": str(other_root)}
+            os.environ, {"OMNIDRIVER_ALLOWED_RUNS_ROOT": str(other_root)}
         ):
             code = main(["run", "--run-document", str(doc_path)])
         payload = json.loads(out.getvalue())
@@ -229,7 +229,7 @@ def test_run_document_respects_allowed_runs_root() -> None:
         # Allowed root that DOES contain the case -> runs to completion.
         out = StringIO()
         with redirect_stdout(out), mock.patch.dict(
-            os.environ, {"DRIVERFOAM_ALLOWED_RUNS_ROOT": str(cases_root)}
+            os.environ, {"OMNIDRIVER_ALLOWED_RUNS_ROOT": str(cases_root)}
         ):
             code = main(["run", "--run-document", str(doc_path)])
         payload = json.loads(out.getvalue())

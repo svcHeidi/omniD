@@ -269,7 +269,7 @@ class TestAllowedRunsRoot(unittest.TestCase):
                 "caseRoot": str(case),
                 "outputDir": str(case / "output"),
             })
-            with mock.patch.dict(os.environ, {"DRIVERFOAM_ALLOWED_RUNS_ROOT": str(allowed)}), \
+            with mock.patch.dict(os.environ, {"OMNIDRIVER_ALLOWED_RUNS_ROOT": str(allowed)}), \
                  mock.patch(
                      "omnidriver.core.runtime.run_document_exec.validate_run",
                      return_value=[],
@@ -290,7 +290,7 @@ class TestAllowedRunsRoot(unittest.TestCase):
                 "caseRoot": str(case),
                 "outputDir": str(outside_out),
             })
-            with mock.patch.dict(os.environ, {"DRIVERFOAM_ALLOWED_RUNS_ROOT": str(allowed)}), \
+            with mock.patch.dict(os.environ, {"OMNIDRIVER_ALLOWED_RUNS_ROOT": str(allowed)}), \
                  mock.patch(
                      "omnidriver.core.runtime.run_document_exec.validate_run",
                      return_value=[],
@@ -308,7 +308,7 @@ class TestAllowedRunsRoot(unittest.TestCase):
                 "caseRoot": str(case),
                 "outputDir": str(case / "output"),
             })
-            with mock.patch.dict(os.environ, {"DRIVERFOAM_ALLOWED_RUNS_ROOT": str(allowed)}), \
+            with mock.patch.dict(os.environ, {"OMNIDRIVER_ALLOWED_RUNS_ROOT": str(allowed)}), \
                  mock.patch(
                      "omnidriver.core.runtime.run_document_exec.validate_run",
                      return_value=[],
@@ -317,7 +317,7 @@ class TestAllowedRunsRoot(unittest.TestCase):
             self.assertIsNotNone(inputs, diagnostics)
 
     def test_unset_allowed_root_permits_separate_output_dir(self) -> None:
-        # No DRIVERFOAM_ALLOWED_RUNS_ROOT: an absolute outputDir outside the case
+        # No OMNIDRIVER_ALLOWED_RUNS_ROOT: an absolute outputDir outside the case
         # is allowed (matches resolve_spec_paths separate-results-dir layout).
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -334,7 +334,7 @@ class TestAllowedRunsRoot(unittest.TestCase):
                      "omnidriver.core.runtime.run_document_exec.validate_run",
                      return_value=[],
                  ):
-                os.environ.pop("DRIVERFOAM_ALLOWED_RUNS_ROOT", None)
+                os.environ.pop("OMNIDRIVER_ALLOWED_RUNS_ROOT", None)
                 inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
             self.assertIsNotNone(inputs, diagnostics)
             self.assertEqual(inputs.output_dir, separate_out.resolve())

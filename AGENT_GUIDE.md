@@ -119,12 +119,13 @@ omnidriver run --strict --entry singleCell --fresh
 `--fresh` refuses to delete anything that doesn't look like driverFOAM's own
 output (no `workflow_state.json`/`sweep_manifest.json`/`run_document.json`
 found), the filesystem root, your home directory, or a path outside
-`OMNIDRIVER_ALLOWED_RUNS_ROOT` when that's set (corrected 2026-09-19: this
-named the legacy `DRIVERFOAM_ALLOWED_RUNS_ROOT`; that name is still honoured
-if set, but the current name is `OMNIDRIVER_ALLOWED_RUNS_ROOT` and wins when
-both are set) — but it does not prompt for confirmation, so treat any
-`--output-dir`/case directory you point it at as fully disposable and copy
-out anything you want to keep first.
+`OMNIDRIVER_ALLOWED_RUNS_ROOT` when that's set — but it does not prompt for
+confirmation, so treat any `--output-dir`/case directory you point it at as
+fully disposable and copy out anything you want to keep first.
+
+**Corrected 2026-09-26 (Task 9 close-out, owner decision 3):** this said the
+legacy name, `DRIVERFOAM_ALLOWED_RUNS_ROOT`, was still honoured if set. It is
+removed outright; only `OMNIDRIVER_ALLOWED_RUNS_ROOT` is read now.
 
 `--max-total-attempts <N>` caps the total number of step executions across the
 whole run (a retry-storm guard on top of each step's per-step `max_attempts`).

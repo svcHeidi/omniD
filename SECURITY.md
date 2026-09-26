@@ -21,7 +21,7 @@ host.
     app. Absolute-path and arbitrary `./script` commands are rejected.
   - `launch.caseRoot` must be an existing, runnable OpenFOAM case
     (`registry._case_is_runnable`); `caseRoot`/`outputDir` are resolved to
-    canonical absolute paths; when `DRIVERFOAM_ALLOWED_RUNS_ROOT` is set, both
+    canonical absolute paths; when `OMNIDRIVER_ALLOWED_RUNS_ROOT` is set, both
     must resolve under it.
   This is the only path untrusted document content reaches execution.
 - **Case-authored (untrusted, unsandboxed by design):** the contents of
@@ -53,7 +53,7 @@ results directory — it is not forced under `caseRoot`.
   reasoning and the six call sites this touches.
 - Workflow `cwd` cannot escape `caseRoot`.
 - `caseRoot` must be a runnable OpenFOAM case; `caseRoot`/`outputDir` resolved to
-  canonical paths; opt-in `DRIVERFOAM_ALLOWED_RUNS_ROOT` containment.
+  canonical paths; opt-in `OMNIDRIVER_ALLOWED_RUNS_ROOT` containment.
 - Steps run argv-style (no shell).
 - Override / spec **values** are rejected at the `update_foam_entry` write
   path if they are directive- or entry-terminating-shaped. The command

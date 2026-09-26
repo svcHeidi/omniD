@@ -111,7 +111,7 @@ with two members missing from this table: `get_environment_commands` and
 
 | Variable | Purpose |
 |---|---|
-| `OMNIDRIVER_ALLOWED_RUNS_ROOT` | Restrict where `--fresh` may delete; recommended in production. The legacy name `DRIVERFOAM_ALLOWED_RUNS_ROOT` is still honoured if set (the current name wins when both are set). (Corrected 2026-09-19: this row previously named only the legacy variable, per `core/runtime/run_document_exec.py`'s `ALLOWED_RUNS_ROOT_ENV`/`LEGACY_ALLOWED_RUNS_ROOT_ENV`.) |
+| `OMNIDRIVER_ALLOWED_RUNS_ROOT` | Restrict where `--fresh` may delete; recommended in production. (Corrected 2026-09-19: this row previously named only the legacy variable, per `core/runtime/run_document_exec.py`'s `ALLOWED_RUNS_ROOT_ENV`. Corrected 2026-09-26, Task 9 close-out, owner decision 3: the legacy name, `DRIVERFOAM_ALLOWED_RUNS_ROOT`, is removed outright and no longer read.) |
 | `FOAM_APPBIN` | Standard OpenFOAM binary path; required for environment preflight. |
 | `FOAM_USER_APPBIN` | User-compiled binary path; also checked during preflight. |
 | `WM_PROJECT_DIR` | OpenFOAM installation root; sourced by `etc/bashrc`. |
