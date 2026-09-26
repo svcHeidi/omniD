@@ -55,7 +55,8 @@ RECORDS_SRC = (
     REPO_ROOT / "packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/records"
 )
 # The pure planners axes import (`plan_delta_t`, `plan_block_mesh_resolution`,
-# ...). Split from the writers in `openfoam/utils.py` so an axis never imports
+# ...). Split from the writers once in `openfoam/utils.py` (deleted 2026-09-26,
+# review 54b M6, when its last writer had retired) so an axis never imports
 # a module that writes; scanned too, so that split cannot quietly regress.
 # Added 2026-09-25 (consolidation), when this module was found importing
 # `_format_value` from `mutators`, the live-file writer module.
@@ -79,9 +80,11 @@ FORBIDDEN_IMPORT_MODULES: tuple[str, ...] = (
     "importlib",
     "omnidriver.openfoam.mutators",
     "omnidriver.openfoam.foam_backend",
-    # M2 (utils.py split): utils.py now contains ONLY writers (set_delta_t
-    # and kin) -- the pure planners moved to case_planning.py, which is not
-    # named here and remains importable.
+    # M2 (utils.py split): utils.py held ONLY writers (set_delta_t and kin);
+    # the pure planners moved to case_planning.py, which is not named here
+    # and remains importable. utils.py itself was deleted 2026-09-26 (review
+    # 54b M6); the name stays banned so a writer module re-created there is
+    # still unreachable from an axis or record.
     "omnidriver.openfoam.utils",
     "omnidriver.openfoam.apply_overrides",
     "omnidriver.core.case_transaction",

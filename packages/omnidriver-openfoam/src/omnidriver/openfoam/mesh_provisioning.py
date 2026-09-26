@@ -113,9 +113,11 @@ def cell_counts_from_dx(dx: float, slab_size: Sequence[float]) -> tuple[int, ...
 
     Raises `ValueError` if `dx` does not evenly divide every axis length:
     deliberately no rounding. A requested `dx` that doesn't fit the domain is
-    a caller error to surface, not something to approximate quietly (mirrors
-    the rigor `niederer_2011.py`'s own `_replace_blockmesh_resolution`
-    already established for the same problem, on a different domain).
+    a caller error to surface, not something to approximate quietly (the
+    rigor the deleted factory `niederer_2011.py`'s
+    `_replace_blockmesh_resolution` established; corrected 2026-09-26,
+    review 54b M8: this cited it as live. Its successor, the niederer2011
+    record's `dx` axis, calls this function).
     """
     if dx <= 0:
         raise ValueError(f"dx must be positive; got {dx}")

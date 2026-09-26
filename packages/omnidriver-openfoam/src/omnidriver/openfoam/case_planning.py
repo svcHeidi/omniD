@@ -4,13 +4,18 @@ M2, the ``utils.py`` split).
 Every function in this module reads nothing and writes nothing: each
 resolves a requested edit into a typed, pure target (a
 ``ParameterAssignment`` or a raw ``render_patch_case_files`` target mapping)
-for the render/commit channel to act on later. ``utils.py`` keeps this
-module's writer counterparts (``set_delta_t`` and kin) -- the two used to
-live in the same module, which made it impossible for a tutorial-record axis
-to import a pure planner without ALSO being able to reach a writer one
-import away. A future axis module (``openfoam/axes/``) may import from here;
-``scripts/check-case-writes.py`` bans importing ``omnidriver.openfoam.utils``
-entirely from that directory, but this module is never named there.
+for the render/commit channel to act on later. The planners used to share
+``utils.py`` with their writer counterparts (``set_delta_t`` and kin), which
+made it impossible for a tutorial-record axis to import a pure planner
+without ALSO being able to reach a writer one import away. An axis module
+(``openfoam/axes/``) may import from here; ``scripts/check-case-writes.py``
+scans this module and bans importing ``omnidriver.openfoam.utils``.
+
+Corrected 2026-09-26 (review 54b M6): ``utils.py`` is deleted. Its last
+writer, ``set_delta_t``, was retired with the niederer2011 migration, and
+it was kept empty "since a future direct writer may still need to land
+here"; nothing imported it. The gate still bans the name, so a writer
+module re-created there stays unreachable from an axis.
 """
 
 import re

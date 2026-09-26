@@ -339,7 +339,10 @@ def _plan_case(
     **Corrected 2026-09-23 (Phase 3 Task 7):** the tet branch's overlay
     copies were classified here as "source-artifact renders/copies, Task 7's
     domain" -- wrong, per the identical correction on
-    `manufactured_eikonal_ecg._plan_case`'s own docstring: `overlay_name`
+    `manufactured_eikonal_ecg._plan_case`'s own docstring (that module was
+    deleted 2026-09-26 when eikonalECG became a tutorial record; see
+    `git show 3e04030^:packages/omnidriver-cardiacfoam/src/omnidriver/
+    cardiacfoam/tutorials/manufactured_eikonal_ecg.py`): `overlay_name`
     resolves to `"fvSolution"` (`_NUMERICS_PROFILES`), so this replaces
     `system/fvSolution` wholesale with a small, hand-authored document --
     a whole-template-file swap's class (`plan_verbatim_content`), not a

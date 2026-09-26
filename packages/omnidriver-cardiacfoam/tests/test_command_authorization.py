@@ -35,8 +35,9 @@ def _dag(command: str) -> dict:
 def test_cardiac_plugin_authorizes_its_unmanifested_utility() -> None:
     """gradientReconstructionOrder has no utility.manifest.toml, so it cannot
     come through utility_manifests(); the plugin must authorize it directly or
-    manufactured_eikonal_ecg.py's gradient_reconstruction=True workflow stops
-    validating."""
+    the manufacturedEikonalECG record's tet-gradientReconstruction route stops
+    validating. (Corrected 2026-09-26, review 54b M8: this named the deleted
+    factory module's gradient_reconstruction=True workflow.)"""
     context = _CTX
     errors = [
         d for d in validate_workflow_commands(

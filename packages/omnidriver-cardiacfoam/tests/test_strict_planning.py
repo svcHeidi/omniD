@@ -245,6 +245,11 @@ def test_strict_plan_succeeds_for_single_cell(tmp_path: Path) -> None:
 # artifact id. `current_step_id == "mesh"` is a structural fact of the
 # record's own step ordering (its first declared step, on both variants, is
 # "mesh"/"gmsh"), not independent behaviour this module need verify again.
+# Corrected 2026-09-26 (review 54b M8): `verification_error_summary` is not
+# factory-only. The cardiac plugin's artifact predictor
+# (`artifacts_predictor._predict_verification`) adds it on the record path
+# too, from the case's verifier type: B10's real run and the review 54b tet
+# run through the record both matched it. The deletion stands on C5/C6.
 
 
 def test_cli_plan_strict_prints_json_and_returns_zero(tmp_path: Path) -> None:

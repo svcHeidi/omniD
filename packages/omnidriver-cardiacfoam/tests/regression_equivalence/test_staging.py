@@ -36,6 +36,15 @@ def test_non_addressable_case_is_not_discoverable(case):
 
 @pytest.mark.parametrize("case", MAPPED, ids=lambda c: c.entry_name)
 def test_mapped_entry_resolves_registered(case):
+    """Each mapped case resolves to its own ``case.resolution``: still
+    ``"registered"`` for a factory tutorial, ``"tutorial_record"`` for
+    niederer2011, manufacturedBidomain and manufacturedEikonalECG since
+    5.4b. The name predates records.
+
+    Corrected 2026-09-26 (review 54b M7): the 5.4b wave changed these
+    expectations, but this module is ``skip_without_monorepo``-gated and
+    skips in every shape CLAUDE.md lists, so the new expectations have never
+    executed. Converting the gate is a later item."""
     resolution = resolve_strict(case)
     assert resolution["resolution"] == case.resolution, case.entry_name
     assert resolution["is_runnable"] is True, case.entry_name

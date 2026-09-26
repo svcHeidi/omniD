@@ -776,7 +776,7 @@ def resolve_patch_mutation(request: CaseMutationRequest) -> ResolvedMutation:
 
     Mirrors `cardiaccore.workflows.overrides.resolve_patch_mutation` in
     shape -- pure, every parameter already addressed by the caller
-    (`resolve_entry_overrides`, `omnidriver.openfoam.utils.plan_delta_t`/
+    (`resolve_entry_overrides`, `omnidriver.openfoam.case_planning.plan_delta_t`/
     `plan_end_time`) before this ever runs. The one real difference:
     `target["value"]` is `_write_value_for_assignment(parameter)`, not
     `parameter.value` (the typed value) the way cardiacCore's resolver uses
@@ -862,7 +862,7 @@ def commit_case_overrides(
 
     ``extra_targets``/``extra_effects`` carry a target `resolve_patch_mutation`
     cannot build because it has no `ParameterAssignment` to build it from --
-    `omnidriver.openfoam.utils.plan_block_mesh_resolution`'s block-mesh
+    `omnidriver.openfoam.case_planning.plan_block_mesh_resolution`'s block-mesh
     rewrite (Phase 3 Task 4) and `plan_verbatim_content`'s whole-document
     content target (Phase 3 Task 7's whole-template-file swap shape: zero
     parameters, all content). Folded into the resolution returned by the
