@@ -127,8 +127,12 @@ class IonicModelEntry:
     blend) via configureIonicHeterogeneity. Batched variants inherit this flag
     through dataclasses.replace()."""
 
-    supports_apex_base_heterogeneity: bool = False
-    """Whether the model implements gradientAxes overlay heterogeneity (a
+    supports_gradient_axis_heterogeneity: bool = False
+    """Renamed 2026-09-26 from ``supports_apex_base_heterogeneity`` (owner):
+    native ``3025230b9`` renamed ``apexBaseBands`` to ``gradientAxes``, and the
+    flag now carries the C++ method's own name. No alias.
+
+    Whether the model implements gradientAxes overlay heterogeneity (a
     named-axis exponential scale, of which apex-to-base was the original and
     still most common case) via configureGradientAxisHeterogeneity. Batched
     variants inherit this flag through dataclasses.replace().
@@ -164,7 +168,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         native_tissue_labels=("myocyte",),
         approximate_tissue_labels=("epicardialCells", "mCells", "endocardialCells"),
         supports_heterogeneity=True,
-        supports_apex_base_heterogeneity=True,
+        supports_gradient_axis_heterogeneity=True,
         compatible_solvers=("monodomainSolver", "bidomainSolver", "singleCellSolver"),
         species=("generic",),
         cardiac_region=("ventricle",),
@@ -185,7 +189,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         compatible_tissues=("epicardialCells", "mCells", "endocardialCells"),
         native_tissue_labels=("epicardialCells", "mCells", "endocardialCells"),
         supports_heterogeneity=True,
-        supports_apex_base_heterogeneity=True,
+        supports_gradient_axis_heterogeneity=True,
         compatible_solvers=("monodomainSolver", "bidomainSolver", "singleCellSolver"),
         species=("generic",),
         cardiac_region=("ventricle",),
@@ -206,7 +210,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         native_tissue_labels=("myocyte",),
         approximate_tissue_labels=("epicardialCells", "mCells", "endocardialCells"),
         supports_heterogeneity=True,
-        supports_apex_base_heterogeneity=True,
+        supports_gradient_axis_heterogeneity=True,
         compatible_solvers=("monodomainSolver", "bidomainSolver", "singleCellSolver"),
         species=("human",),
         cardiac_region=("atrium",),
@@ -227,7 +231,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         native_tissue_labels=("myocyte",),
         approximate_tissue_labels=("epicardialCells", "mCells", "endocardialCells"),
         supports_heterogeneity=True,
-        supports_apex_base_heterogeneity=True,
+        supports_gradient_axis_heterogeneity=True,
         compatible_solvers=("monodomainSolver", "bidomainSolver", "singleCellSolver"),
         species=("human",),
         cardiac_region=("sinoatrial_node",),
@@ -248,7 +252,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         native_tissue_labels=("myocyte",),
         approximate_tissue_labels=("epicardialCells", "mCells", "endocardialCells"),
         supports_heterogeneity=True,
-        supports_apex_base_heterogeneity=True,
+        supports_gradient_axis_heterogeneity=True,
         compatible_solvers=("monodomainSolver", "bidomainSolver", "singleCellSolver"),
         species=("pig",),
         cardiac_region=("ventricle",),
@@ -269,7 +273,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         native_tissue_labels=("myocyte",),
         approximate_tissue_labels=("epicardialCells", "mCells", "endocardialCells"),
         supports_heterogeneity=True,
-        supports_apex_base_heterogeneity=True,
+        supports_gradient_axis_heterogeneity=True,
         compatible_solvers=("monodomainSolver", "bidomainSolver", "singleCellSolver"),
         species=("human",),
         cardiac_region=("ventricle",),
@@ -290,7 +294,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         native_tissue_labels=("myocyte",),
         approximate_tissue_labels=("epicardialCells", "mCells", "endocardialCells"),
         supports_heterogeneity=True,
-        supports_apex_base_heterogeneity=True,
+        supports_gradient_axis_heterogeneity=True,
         compatible_solvers=("monodomainSolver", "bidomainSolver", "singleCellSolver"),
         species=("human",),
         cardiac_region=("purkinje",),
@@ -310,7 +314,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         compatible_tissues=("epicardialCells", "mCells", "endocardialCells"),
         native_tissue_labels=("epicardialCells", "mCells", "endocardialCells"),
         supports_heterogeneity=True,
-        supports_apex_base_heterogeneity=True,
+        supports_gradient_axis_heterogeneity=True,
         compatible_solvers=("monodomainSolver", "bidomainSolver", "singleCellSolver"),
         species=("human",),
         cardiac_region=("ventricle",),
@@ -330,7 +334,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         compatible_tissues=("epicardialCells", "mCells", "endocardialCells"),
         native_tissue_labels=("epicardialCells", "mCells", "endocardialCells"),
         supports_heterogeneity=True,
-        supports_apex_base_heterogeneity=True,
+        supports_gradient_axis_heterogeneity=True,
         compatible_solvers=("monodomainSolver", "bidomainSolver", "singleCellSolver"),
         species=("human",),
         cardiac_region=("ventricle",),
@@ -351,7 +355,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         native_tissue_labels=("myocyte",),
         approximate_tissue_labels=("epicardialCells", "mCells", "endocardialCells"),
         supports_heterogeneity=True,
-        supports_apex_base_heterogeneity=True,
+        supports_gradient_axis_heterogeneity=True,
         compatible_solvers=("monodomainSolver", "bidomainSolver", "singleCellSolver"),
         species=("human",),
         cardiac_region=("ventricle",),
@@ -371,7 +375,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         compatible_tissues=("epicardialCells", "mCells", "endocardialCells"),
         native_tissue_labels=("epicardialCells", "mCells", "endocardialCells"),
         supports_heterogeneity=True,
-        supports_apex_base_heterogeneity=True,
+        supports_gradient_axis_heterogeneity=True,
         compatible_solvers=("monodomainSolver", "bidomainSolver", "singleCellSolver"),
         species=("human",),
         cardiac_region=("ventricle",),
@@ -393,7 +397,7 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
         native_tissue_labels=("myocyte",),
         approximate_tissue_labels=("epicardialCells", "mCells", "endocardialCells"),
         supports_heterogeneity=True,
-        supports_apex_base_heterogeneity=True,
+        supports_gradient_axis_heterogeneity=True,
         compatible_solvers=("monodomainSolver", "bidomainSolver", "singleCellSolver"),
         species=("pig",),
         cardiac_region=("atrium",),
@@ -486,7 +490,7 @@ BATCHED_MODELS = [
 # their CPU parent and must be wired for tissue heterogeneity independently.
 # Only these have actually been wired as of this catalog; the others must
 # NOT silently inherit their (possibly heterogeneity-capable) parent's
-# compatible_tissues/supports_heterogeneity/supports_apex_base_heterogeneity
+# compatible_tissues/supports_heterogeneity/supports_gradient_axis_heterogeneity
 # via replace() below.
 _BATCHED_HETEROGENEITY_CAPABLE: frozenset[str] = frozenset(
     {
@@ -515,8 +519,8 @@ for batched_name in BATCHED_MODELS:
                 parent.approximate_tissue_labels if heterogeneity_capable else ()
             ),
             supports_heterogeneity=heterogeneity_capable,
-            supports_apex_base_heterogeneity=(
-                heterogeneity_capable and parent.supports_apex_base_heterogeneity
+            supports_gradient_axis_heterogeneity=(
+                heterogeneity_capable and parent.supports_gradient_axis_heterogeneity
             ),
             description=(
                 f"GPU/CUDA variant of {parent_name}. "

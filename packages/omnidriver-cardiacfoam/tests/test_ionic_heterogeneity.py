@@ -29,7 +29,7 @@
 
 Covers the four surfaces wired in Phase 2:
   1. ionic_model_catalog: ``supports_heterogeneity`` and
-     ``supports_apex_base_heterogeneity`` flags plus tissue semantics.
+     ``supports_gradient_axis_heterogeneity`` flags plus tissue semantics.
   2. dict_entries: the five transmural ``ionicHeterogeneity.*`` DictEntries
      plus the five dynamic ``gradientAxes.<axis_name>.*`` entries (13 total
      with the three ``regions.<region_name>.*`` entries, separately gated).
@@ -101,19 +101,19 @@ def test_single_tissue_models_do_not_support_heterogeneity():
         assert IONIC_MODEL_CATALOG[name].supports_heterogeneity is False, name
 
 
-def test_supports_apex_base_heterogeneity_for_capable_scalar_models():
+def test_supports_gradient_axis_heterogeneity_for_capable_scalar_models():
     from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG
     for name in ("BuenoOrovio", "TNNP", "TWorld", "ToRORd_dynCl"):
-        assert IONIC_MODEL_CATALOG[name].supports_apex_base_heterogeneity is True, name
+        assert IONIC_MODEL_CATALOG[name].supports_gradient_axis_heterogeneity is True, name
 
 
-def test_supports_apex_base_heterogeneity_inherited_by_batched_variants():
+def test_supports_gradient_axis_heterogeneity_inherited_by_batched_variants():
     from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG
     for name in (
         "BuenoOroviocompactBatched", "TNNPcompactBatched",
         "TWorldcompactBatched", "ToRORd_dynClcompactBatched",
     ):
-        assert IONIC_MODEL_CATALOG[name].supports_apex_base_heterogeneity is True, name
+        assert IONIC_MODEL_CATALOG[name].supports_gradient_axis_heterogeneity is True, name
 
 
 def test_native_tissue_labels_mark_models_with_intrinsic_tissue_variants():
@@ -156,7 +156,7 @@ def test_planning_tissues_uses_native_tissues_only_for_other_models():
     assert planning_tissues(IONIC_MODEL_CATALOG["Courtemanche"]) == ("myocyte",)
 
 
-def test_transmural_only_models_do_not_support_apex_base_heterogeneity():
+def test_manufactured_models_do_not_support_gradient_axis_heterogeneity():
     # These models support neither transmural/named-region nor apex-base
     # heterogeneity at all — the manufactured verification models.
     from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG
@@ -164,7 +164,7 @@ def test_transmural_only_models_do_not_support_apex_base_heterogeneity():
         "monodomainFDAManufactured", "bidomainFDAManufactured",
         "bathBidomainFDAManufactured",
     ):
-        assert IONIC_MODEL_CATALOG[name].supports_apex_base_heterogeneity is False, name
+        assert IONIC_MODEL_CATALOG[name].supports_gradient_axis_heterogeneity is False, name
 
 
 # --------------------------------------------------------------------------

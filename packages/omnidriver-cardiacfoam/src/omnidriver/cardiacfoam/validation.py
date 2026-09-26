@@ -472,10 +472,10 @@ def _evaluate_heterogeneity(context: dict[str, Any]) -> list["StrictDiagnostic"]
                     ))
 
     if ga_keys:
-        if entry is not None and not getattr(entry, "supports_apex_base_heterogeneity", False):
+        if entry is not None and not getattr(entry, "supports_gradient_axis_heterogeneity", False):
             capable_models = sorted(
                 n for n, e in IONIC_MODEL_CATALOG.items()
-                if getattr(e, "supports_apex_base_heterogeneity", False)
+                if getattr(e, "supports_gradient_axis_heterogeneity", False)
                 and not n.endswith("compactBatched")
             )
             errors.append(_diagnostic_from_phase(
