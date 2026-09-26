@@ -148,3 +148,40 @@ observation (every non-zero probe still `-1` at this coarser resolution)
 is consistent with, though not a proof of, that same set never having
 activated by `t=0.015` at the reference's finer resolution either.
 
+## E. manufacturedEikonalECG (`manufacturedSolutions/eikonalECG`, plan 5.4b-E)
+
+Real runs against a `git archive` export of `omnid/54b-eikonalECG` at
+`72038987` (before this task's own study-rewrite commit), resolution
+shrunk to `10x10x10` (the coarsest any study defines) for a fast run,
+`source /Volumes/OpenFOAM-v2412/etc/bashrc`.
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| E1 | `blockMesh -dict system/blockMeshDict.3D` then `cardiacFoam`, serial (`Allrun`'s own default: no `parallel` argument) | rc 0 both, 13 s total. `ls constant/` after: `electroProperties electroProperties.withDefaultValues physicsProperties polyMesh`. `find postProcessing`: `eikonalECG.dat`, `manufacturedEikonalActivationTime.dat`, `manufacturedEikonalECGSummary_ECG.dat`, `manufacturedEikonalECG_ECG.dat` | unlike `restitutionCurves`'s `singleCellSolver` (R4), `eikonalMyocardiumDomain`'s solve DOES write `.withDefaultValues` -- it does not override `electroModel::end()` without calling it. The four `postProcessing` names are exactly the ones the brief predicted from the C++, confirmed by a real run rather than assumed |
+| E2 | remove `0/activationTime` from a copy of E1's already-meshed case, run `cardiacFoam` | `FOAM FATAL ERROR: cannot find file .../0/activationTime`, rc 1 | `0/activationTime` is a real `consumes` entry for the `solve` step, the same way R3 established the pattern for `restitutionCurves` |
+| E3 | `gmsh -3 setup/studies/tetConvergence/box.geo.template -o box.msh -format msh2` (template already has `DefineConstant[ lc = {0.1, Name "lc"} ]`, native `60805b27`), then `gmshToFoam box.msh`, then `checkMesh`, then `cardiacFoam` | gmsh: `1184 nodes 6462 elements`, matching G7 exactly. `checkMesh`: `Mesh OK`, no extra files written. `cardiacFoam`: rc 0, `ls constant/`/`find postProcessing` identical in NAME to E1 (`.withDefaultValues` plus the same four `postProcessing/*.dat`) | the tet route produces the same declared artifact set as hex; `checkMesh` itself writes nothing beyond its own log, so its workflow step declares no `produces` |
+
+Native commit for this task: `db896dd0` (rewrites the six studies to
+`document:key` vocabulary; no template/case-content change was needed here,
+since `60805b27`/`9cb1213e` had already landed the gmsh `DefineConstant`
+conversion and the tet `fvSolution` overlay deletion this task's brief
+assumed).
+
+**A record-key-validator defect this task's own studies exposed, fixed in
+omniD (not native):** `record_key_validation._infer_unvalidated_value_kind`
+used to tag every plain `str` `"word"`, including one containing
+whitespace -- but `"word"`'s own shape check refuses whitespace, so a
+whitespace-containing string reaching a real `ParameterAssignment` (e.g.
+`system/fvSchemes:gradSchemes.default` = `"Gauss linear"`, `errorLocalisation`/
+`gradientVerification`/`tetConvergence`'s own `grad_scheme` values) failed at
+commit time with "declares value_kind 'word' but its value does not fit".
+Never exercised before this task: every prior `system/`-owned string value
+committed through the write channel happened to be a single token
+(`"leastSquares"`, `"corrected"`, ...). Now returns `"string"` (K6) for a
+value that does not fit `"word"`'s own contract, `"word"` unchanged
+otherwise -- confirmed by staging all 60 cases the six rewritten studies
+expand to with no refusal, and by inspecting a representative case per
+study (`constant/electroProperties`'s `conductivity`/
+`eikonalAdvectionDiffusionApproach`, `system/fvSchemes`'s `gradSchemes.default`,
+`system/fvSolution`'s `PIMPLE.residualControl.activationTime.tolerance`) against
+the old module's own literals.
