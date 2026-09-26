@@ -280,10 +280,13 @@ def test_openfoam_bashrc_kwarg_is_no_longer_accepted(tmp_path: Path) -> None:
 
 
 def test_per_case_openfoam_bashrc_key_is_silently_unused(tmp_path: Path) -> None:
-    """A cases[] entry only recognises "explicit_bashrc" now -- an old
-    "openfoam_bashrc" key is just an unrecognised field, tolerated like any
-    other (cases[] entries were never validated against a closed field set),
-    not translated."""
+    """An old "openfoam_bashrc" key in a cases[] entry is just an
+    unrecognised field, tolerated like any other (cases[] entries were never
+    validated against a closed field set), not translated.
+
+    Corrected 2026-09-26 (A1): this said a cases[] entry "only recognises
+    explicit_bashrc now"; since A1 it recognises no environment key at all
+    (the environment source is the plugin's, passed at plan and run time)."""
     spec = _spec(
         tmp_path,
         cases=[{"case_id": "c1", "openfoam_bashrc": "/opt/openfoam/etc/bashrc"}],
