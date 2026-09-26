@@ -17,9 +17,10 @@ from plugins.conformance_toy import (
     SILENT_SURFACE_PLUGIN, UNDECLARED_OUTPUT_PLUGIN, UNLISTED_KEY_PLUGIN,
     STRAY_NAME, STRAY_ROOT_VARIABLE, toy_conformance_target,
 )
+from plugins.quantity_toy import BAD_DECLARATION_PLUGIN, QUANTITY_TOY_PLUGIN, UNREADABLE_PLUGIN
 
 
-@pytest.mark.parametrize("check_id", ["C1", "C2", "C3", "C5", "C6", "C7", "C8", "C9", "C10", "C11"])
+@pytest.mark.parametrize("check_id", ["C1", "C2", "C3", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12"])
 def test_toy_passes(check_id, tmp_path):
     verdict = run_check(check_id, toy_conformance_target(tmp_path))
     assert verdict.passed, verdict.detail
@@ -336,3 +337,22 @@ def test_c11_names_an_output_the_record_does_not_declare(tmp_path):
     assert not verdict.passed
     assert "undeclared.out" in verdict.detail
     assert "workflow_state.json" not in verdict.detail   # core's own records are never carried
+
+
+def test_c11_passes_a_record_whose_formats_have_readers(tmp_path):
+    target = dataclasses.replace(toy_conformance_target(tmp_path), plugin=QUANTITY_TOY_PLUGIN, record="toyQuantities")
+    verdict = run_check("C12", target)
+    assert verdict.passed, verdict.detail
+    assert "toy_named_values" in verdict.detail
+
+
+def test_c11_says_so_when_nothing_declares_a_format(tmp_path):
+    verdict = run_check("C12", toy_conformance_target(tmp_path))
+    assert verdict.passed and "nothing to read" in verdict.detail
+
+
+@pytest.mark.parametrize(("plugin", "named"), [(UNREADABLE_PLUGIN, "no reader"), (BAD_DECLARATION_PLUGIN, "furlong")])
+def test_c11_bites_a_declared_format_it_cannot_read(plugin, named, tmp_path):
+    verdict = run_check("C12", toy_conformance_target(tmp_path, plugin=plugin))
+    assert not verdict.passed
+    assert named in verdict.detail and "toy_unreadable" in verdict.detail

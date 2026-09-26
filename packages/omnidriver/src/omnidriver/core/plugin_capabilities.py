@@ -20,6 +20,7 @@ from typing import Any, Mapping, Protocol, TYPE_CHECKING
 if TYPE_CHECKING:
     from .plugin_interface import SolverPlugin
     from .plugin_profile import CaseFileRule
+    from .quantities.model import ArtifactValueReader
     from .runtime.models import DataArtifact, TutorialSpec
     from omnidriver.core.planning_types import StrictDiagnostic
     from omnidriver.core.report_catalog import ReportDefinition
@@ -626,17 +627,22 @@ class OverrideSchemaCapability(Protocol):
 class RuntimeEvidenceCapability(Protocol):
     """Where the plugin's runtime evidence lives.
 
+    ``artifact_value_reader(format)`` returns the reader for one artifact
+    format (``core.quantities.ArtifactValueReader``) or ``None``. A ``None``
+    makes that artifact's quantities ``not_evaluated`` with the format
+    named, never an implicit pass. Corrected 2026-09-26 (results as
+    quantities): it was declaration-only.
+
     Telemetry collection consumes ``solve_step_commands`` and
-    ``telemetry_source_globs``; observable extraction will consume
-    ``artifact_value_reader``; both remain declaration-only for now. Phase 2
-    (provenance) now consumes ``extra_provenance_paths`` for real.
+    ``telemetry_source_globs``. Phase 2 (provenance) now consumes
+    ``extra_provenance_paths`` for real.
 
     Every member degrades to empty for a plugin that declares nothing, which
     is the honest answer rather than a solver-shaped guess -- so this
     capability needs no compatibility fallback.
 
     :adapts: get_artifact_value_reader, get_extra_provenance_paths, get_log_redaction_patterns, get_solve_step_commands, get_telemetry_source_globs
-    :consumed-by: omnidriver/core/runtime/provenance_inputs.py, omnidriver/core/runtime/workflow_runner.py
+    :consumed-by: omnidriver/conformance/checks.py, omnidriver/core/runtime/provenance_inputs.py, omnidriver/core/runtime/workflow_runner.py
     :fallback: none
     :status: optional-neutral
     """
@@ -644,7 +650,7 @@ class RuntimeEvidenceCapability(Protocol):
     def solve_step_commands(self) -> frozenset[str]: ...
     def telemetry_source_globs(self, command: str) -> tuple[str, ...]: ...
     def extra_provenance_paths(self, case_root: Path) -> tuple[RuntimeDependency, ...]: ...
-    def artifact_value_reader(self, artifact_format: str) -> Any | None: ...
+    def artifact_value_reader(self, artifact_format: str) -> "ArtifactValueReader | None": ...
     def log_redaction_patterns(self) -> frozenset[str]:
         """Patterns whose every match is replaced whole by ``[REDACTED]`` in a
         kept step log (``workflow_runner.redact_step_logs``); capture groups

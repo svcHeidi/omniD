@@ -48,6 +48,7 @@ from typing import Any, Mapping, Protocol, Sequence, TYPE_CHECKING, runtime_chec
 if TYPE_CHECKING:
     from omnidriver.core.plugin_capabilities import PluginCapabilities, RuntimeDependency
     from omnidriver.core.contracts.dictionary import DictEntry
+    from omnidriver.core.quantities.model import ArtifactValueReader
     from omnidriver.core.runtime.models import TutorialSpec, CaseConfig, DataArtifact
     from omnidriver.core.planning_types import StrictDiagnostic
     from omnidriver.core.tutorials_display import TutorialDisplay
@@ -185,9 +186,10 @@ class SolverPlugin(Protocol):
         solver replay a resumed run's numbers as fresh."""
         ...
 
-    def get_artifact_value_reader(self, artifact_format: str) -> Any | None:
-        """Reader for a plugin-specific artifact format, or ``None`` if this
-        plugin cannot read that format."""
+    def get_artifact_value_reader(self, artifact_format: str) -> "ArtifactValueReader | None":
+        """The reader for one of this plugin's artifact formats, or ``None``.
+        Composed ``single`` (the most specific provider with a reader for the
+        format answers). Contract: ``core.quantities.ArtifactValueReader``."""
         ...
 
     def get_profile(self):

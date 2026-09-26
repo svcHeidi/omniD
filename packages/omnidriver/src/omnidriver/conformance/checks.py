@@ -25,12 +25,13 @@ from typing import Any, Callable, Mapping
 
 from omnidriver.core.introspection import describe_entry
 from omnidriver.core.plugin_interface import load_plugin_context
+from omnidriver.core.quantities import ReaderDeclarationError, check_reader
 from omnidriver.core.runtime.provenance_inputs import enumerate_case_inputs
 from omnidriver.core.runtime.record_execution import commit_record_case
 from omnidriver.core.runtime.run_command import omnidriver_run_command
 from omnidriver.core.specs.paths import SCRATCH_ENV_VAR
 from omnidriver.core.strict_planning import strict_plan
-from omnidriver.core.tutorial_records import TutorialRecordError
+from omnidriver.core.tutorial_records import PLAIN_FILE_FORMAT, TutorialRecordError
 
 from .target import CheckVerdict, ConformanceTarget
 
@@ -469,6 +470,30 @@ def check_restage_is_clean(target: ConformanceTarget) -> CheckVerdict:
     return _verdict("C11", True, "restaged from a run case; nothing the run wrote was carried")
 
 
+def check_readable_quantities(target: ConformanceTarget) -> CheckVerdict:
+    """C12: every record output that declares a format has a reader for it,
+    through the reader contract, with a declaration core can use (results
+    as quantities, spec 2026-09-26 §4). A record whose outputs declare no
+    format passes and says so: not every record is compared."""
+    ctx = _context(target)
+    record = _record(ctx, target.record)
+    formats = sorted({step.produced_format(path) for step in record.workflow_steps for path in step.produces}
+                     - {PLAIN_FILE_FORMAT})
+    if not formats:
+        return _verdict("C12", True, "no output declares a format, so there is nothing to read")
+    problems = []
+    for artifact_format in formats:
+        reader = ctx.capabilities.runtime_evidence.artifact_value_reader(artifact_format)
+        if reader is None:
+            problems.append(f"no reader for format {artifact_format!r}")
+            continue
+        try:
+            check_reader(reader, artifact_format=artifact_format)
+        except ReaderDeclarationError as exc:
+            problems.append(str(exc))
+    return _verdict("C12", not problems, "; ".join(problems) or f"readers for {formats}")
+
+
 CHECKS: dict[str, Callable[[ConformanceTarget], CheckVerdict]] = {
     "C1": check_load,
     "C2": check_describe_noop,
@@ -481,6 +506,7 @@ CHECKS: dict[str, Callable[[ConformanceTarget], CheckVerdict]] = {
     "C9": check_environment,
     "C10": check_discoverable,
     "C11": check_restage_is_clean,
+    "C12": check_readable_quantities,
 }
 
 
