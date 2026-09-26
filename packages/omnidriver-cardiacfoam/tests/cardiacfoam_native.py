@@ -22,7 +22,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 import pytest
 
@@ -153,13 +153,15 @@ def manufactured_bidomain_conformance_target(tmp_path: Path) -> ConformanceTarge
     )
 
 
-def niederer_sweep(tmp_path: Path, *, dx: float, end_time: float | None = None,
+def niederer_sweep(tmp_path: Path, *, dx_values: Sequence[float], end_time: float | None = None,
                     extra: Mapping[str, Any] | None = None) -> Path:
-    """Run ``niederer2011`` (hex route) at one ``dx`` (metres) through
-    ``omnidriver sweep-run``, against the supplied native tree. Returns the
-    sweep's output directory. Any case that does not complete fails the
-    caller loudly (mirrors ``omnidriver-opencarp``'s ``opencarp_native
-    .niederer_sweep``)."""
+    """Run ``niederer2011`` (hex route) at each of ``dx_values`` (metres)
+    through ``omnidriver sweep-run``, against the supplied native tree.
+    Returns the sweep's output directory. Any case that does not complete
+    fails the caller loudly (mirrors ``omnidriver-opencarp``'s
+    ``opencarp_native.niederer_sweep``). (Corrected 2026-09-26, topic B Task
+    7: took one ``dx``; the cross-resolution comparison needs two cases in
+    one sweep.)"""
     require_sourced_openfoam("blockMesh", "cardiacFoam")
     base: dict[str, Any] = {
         "entry": "niederer2011", "cases_root": str(native_tutorials_root()),
@@ -169,7 +171,7 @@ def niederer_sweep(tmp_path: Path, *, dx: float, end_time: float | None = None,
         base["system/controlDict:endTime"] = end_time
     spec = {
         "base": base,
-        "sweep": {"mode": "cross_product", "independent": {"dx": [dx]}},
+        "sweep": {"mode": "cross_product", "independent": {"dx": list(dx_values)}},
     }
     spec_path = tmp_path / "sweep.json"
     spec_path.write_text(json.dumps(spec))
@@ -178,7 +180,7 @@ def niederer_sweep(tmp_path: Path, *, dx: float, end_time: float | None = None,
         [sys.executable, "-m", "omnidriver", "sweep-run", "--plugin", "cardiacfoam",
          "--spec", str(spec_path), "--output-dir", str(output),
          "--scratch-dir", str(tmp_path / "scratch")],
-        capture_output=True, text=True, timeout=600,
+        capture_output=True, text=True, timeout=1800,
     )
     try:
         payload = json.loads(proc.stdout)
@@ -197,7 +199,7 @@ def niederer_run(tmp_path: Path, *, dx: float, end_time: float | None = None) ->
     ``omnidriver-opencarp``'s ``opencarp_native.niederer_run``, for topic B
     Task 7's own tests. Returns ``(case_root, probe)``, where ``probe`` is
     the declared ``samplePoints`` artifact for :data:`NIEDERER_POINTS_PATH`."""
-    output = niederer_sweep(tmp_path, dx=dx, end_time=end_time)
+    output = niederer_sweep(tmp_path, dx_values=(dx,), end_time=end_time)
     (case,) = build_sweep_context(output).cases
     document = json.loads((output / case.run_document_path).read_text())
     artifact = next(

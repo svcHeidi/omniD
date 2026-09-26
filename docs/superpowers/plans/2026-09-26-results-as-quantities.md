@@ -3147,6 +3147,24 @@ function is fed). A study that changes one gives a value that compares
 against the same reference with no word in the report. Worth a reader
 enhancement later -- not scoped into Task 7 or Task 8.
 
+**Implemented 2026-09-26 (Task 7; report `.superpowers/sdd/B-task-7-report.md`).**
+Where it departs from the contract above, and why:
+- `sampled_at` is the containing cell's centre, per the I3 correction. It
+  comes from two new `niederer2011` steps, `writeCellCentres` and
+  `samplePointCentres` (`postProcess -func 'Niedererpoints(Cx,Cy,Cz)'
+  -latestTime`, declared as plain `produces`), because `probes` reports the
+  cell only under `-debug-switch` (cardiacfoam.md Q3) and a mesh-derived
+  search cannot settle a probe on a cell boundary. Checked on hex and tet
+  (Q3, Q4).
+- `ProbeSeries` gained `not_found`: OpenFOAM writes -VGREAT for a probe no
+  cell contains (Q6), which the reader refuses by name. A `# Time` header
+  not naming every probe in order is also refused.
+- `test_the_probe_file_is_read_as_seconds_with_its_header_locations` became
+  `test_the_probe_file_is_read_as_seconds_at_the_containing_cells_centres`,
+  asserting each centre against the solver's own debug-reported cell; the
+  vector refusal uses a real `Niedererpoints(C)` file from the same case.
+  The C11 bullet is C1-C12 on the cardiacFOAM target (`test_conformance_native.py`).
+
 - [ ] **Step 1: Unblock check.** `git log main` shows the tutorial stream's 5.4b `niederer2011` record. Read its record module, its coarse study values from its native test, and its step ids. Use those names wherever this task writes `niederer2011`. Build `/tmp/odB-<wt>` fresh.
 - [ ] **Step 2: Settle the facts on a real run.** Run 5.4b's `niederer2011` record through `sweep-run` at its coarse settings with `--scratch-dir`, and inspect `postProcessing/Niedererpoints/0/activationTime`. Log each fact in the cardiacFOAM evidence (or 5.4b's own log), as command, observed and conclusion:
   - the header lines;

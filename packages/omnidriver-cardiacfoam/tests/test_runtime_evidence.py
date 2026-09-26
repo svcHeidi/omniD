@@ -10,7 +10,10 @@ along with two cases (``test_a_command_with_no_declared_globs_returns_empty``
 and ``test_an_unknown_artifact_format_has_no_reader``) that are trivially
 true under any plugin -- ``artifact_value_reader`` has no real
 implementation yet, so moving them would not have been a meaningful split
-either. A later pass (Phase 2, Milestone 4 test-ownership split) needed
+either. (Corrected 2026-09-26, topic B Task 7: cardiacFOAM's
+``artifact_value_reader`` now has one implementation, for its
+``cardiacfoam_activation_probes`` format; the core cases above still
+concern an unknown format, so the split stands.) A later pass (Phase 2, Milestone 4 test-ownership split) needed
 core-only to be genuinely green and found those two still calling
 ``default_driver_context()`` (which unconditionally imports cardiacfoam)
 instead of ``openfoam_environment_context()`` like their neighbors in the same

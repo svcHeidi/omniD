@@ -138,6 +138,21 @@ gate, nothing in between".
     and once from elsewhere (F5). A staged clone moves the case, so this
     decides the working directory of every step.
 
+**Refined 2026-09-26, while writing cardiacFOAM's activation-probe reader
+(`cardiacfoam.md`, Q1-Q8):**
+
+23. **Ask the solver where it sampled; never echo where you asked.** An
+    output header that repeats the configured location is the agent's input,
+    not evidence. Look for the solver's own report (for OpenFOAM `probes`,
+    only a `-debug-switch` log line), then find the least machinery that
+    turns it into a file: here, the same sampling function run on the
+    cell-centre field, checked against the debug report cell by cell. A
+    point on a cell boundary is a tie only the solver's own search resolves,
+    so re-deriving the cell from the mesh would not be exact.
+24. **Check a claim on every mesh family the record offers.** The method
+    above was checked on the hex route and again on the tet route (Q4)
+    before the reader claimed it for both.
+
 ## What this method produced for openCARP
 
 See [`opencarp.md`](opencarp.md): the evidence log, the noun mapping, and the

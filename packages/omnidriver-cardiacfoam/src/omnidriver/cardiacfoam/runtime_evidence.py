@@ -302,9 +302,17 @@ def extra_provenance_paths(
 def artifact_value_reader(artifact_format: str):
     """Reader for a solver-specific artifact format, or ``None``.
 
-    Empty today. Readers for cardiac formats such as ECG traces and Purkinje
-    time series register here when observable extraction lands. Returning
-    ``None`` must make that consumer
-    report ``not_evaluated`` with a reason -- never an implicit pass."""
-    del artifact_format
+    Returning ``None`` must make that consumer report ``not_evaluated`` with
+    a reason -- never an implicit pass.
+
+    **Corrected 2026-09-26 (topic B Task 7):** this said "Empty today". It
+    now returns :class:`~omnidriver.cardiacfoam.activation_probes.
+    ActivationProbeReader` for ``ACTIVATION_PROBES_FORMAT``, the format
+    ``niederer2011``'s ``samplePoints`` output declares. Readers for other
+    cardiac formats (ECG traces, Purkinje time series) still register here
+    when they land."""
+    from omnidriver.cardiacfoam.activation_probes import ACTIVATION_PROBES_FORMAT, ActivationProbeReader
+
+    if artifact_format == ACTIVATION_PROBES_FORMAT:
+        return ActivationProbeReader()
     return None

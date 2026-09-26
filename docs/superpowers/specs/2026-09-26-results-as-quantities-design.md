@@ -155,6 +155,19 @@ A study that changes `startTime` moves the output; the comparison then
 reports it as a named `not_evaluated` (the artifact is missing), never as a
 silent mismatch against the wrong path.
 
+**Implemented 2026-09-26 (Task 7, forced by evidence):** the I3 block
+above is how it landed, with one mechanism the spec did not name. OpenFOAM
+v2412's `probes` names the containing cell only in a `-debug-switch` log
+line, and a nearest-centre search from the mesh cannot settle a probe on a
+cell boundary (P9's probe sits on a vertex of eight cells at dx 0.5 mm). So
+`niederer2011` gained two steps, `writeCellCentres` and
+`samplePointCentres` (`postProcess -func 'Niedererpoints(Cx,Cy,Cz)'`), which
+probe the cell-centre components through the same cell search; the reader
+reports those as `sampled_at`, checked against the debug report on hex and
+tet meshes (`docs/solver-learning/cardiacfoam.md`, Q3/Q4). The parser
+(`openfoam/probes.py`) also keeps OpenFOAM's `# Not Found` flag, since a
+missing probe's column holds -VGREAT, a number (Q6).
+
 ## 4. Proof
 
 - A native test, openCARP only: `niedererNVersion` at a coarse `dx` gives
