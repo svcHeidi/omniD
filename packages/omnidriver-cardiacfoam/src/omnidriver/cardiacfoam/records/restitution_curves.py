@@ -87,15 +87,22 @@ BLOCK_MESH_RESOLUTION_AXIS_NAME = "blockMeshResolution"
 _BLOCK_MESH_DICT_DOCUMENT = "system/blockMeshDict"
 
 
-def _explicit_cell_counts(cell_counts: Sequence[Any]) -> tuple[int, int, int]:
+def _explicit_cell_counts(
+    cell_counts: Sequence[Any], current: tuple[int, int, int],
+) -> tuple[int, int, int]:
     """No scaling formula: this axis's study value already IS the three hex
     cell counts (one of ``system/blockMeshDict``'s own three documented
-    resolutions, e.g. ``[40, 6, 14]``), taken as given.
+    resolutions, e.g. ``[40, 6, 14]``), taken as given -- ``current`` (the
+    document's own resolution before this axis runs, P2's 2026-09-26
+    addition to the axis's own ``resolution`` signature) is unused: this
+    tutorial has exactly one ``blockMeshDict`` and no per-direction "stays
+    1" rule to apply, so nothing here needs to read it.
     ``block_mesh_resolution_axis``'s own ``_validate_cell_counts`` checks the
     shape (exactly three positive integers) once ``resolution`` returns --
     this callable only turns the study's list/tuple into the plain tuple
     that check expects, inventing no formula of its own.
     """
+    del current
     return tuple(cell_counts)
 
 
@@ -113,7 +120,7 @@ AXES = {
     ),
     BLOCK_MESH_RESOLUTION_AXIS_NAME: block_mesh_resolution_axis(
         BLOCK_MESH_RESOLUTION_AXIS_NAME,
-        document=_BLOCK_MESH_DICT_DOCUMENT,
+        documents=(_BLOCK_MESH_DICT_DOCUMENT,),
         resolution=_explicit_cell_counts,
         # The study value is already the three cell counts (e.g.
         # [40, 6, 14]), not a bare count a formula expands -- "integer" (this

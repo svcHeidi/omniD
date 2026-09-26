@@ -1,14 +1,25 @@
 """``block_mesh_resolution_axis`` -- the OpenFOAM package's one generic axis
 (design doc ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-
-design.md`` §3, corrected 2026-09-25).
+design.md`` §3, corrected 2026-09-25; extended 2026-09-26, P2,
+``docs/superpowers/plans/2026-09-25-tutorials-are-pointers-remaining.md``
+§5e, to several documents and several ``hex (`` blocks).
 
 TDD: every test in this module failed before ``axes/block_mesh_resolution.py``
 existed (``ModuleNotFoundError: No module named
 'omnidriver.openfoam.axes.block_mesh_resolution'``), then failed again on the
 first working draft that read the whole document instead of only checking
 its existence -- see ``test_resolve_succeeds_against_a_document_with_more_
-than_one_hex_block`` below, which pins the reason a document's hex-block
-count is never checked here.
+than_one_hex_block`` below.
+
+**Corrected 2026-09-26 (P2).** ``document`` (one path) became ``documents``
+(one or more); ``expected_blocks`` became a required, per-axis-instance
+argument instead of each downstream reader/writer independently defaulting
+it to 1; ``resolution`` now takes the study value AND the document's own
+current cell counts. Every test below that built an axis with the old
+``document=``/one-argument-``resolution`` signature is rewritten for the
+new one; several new tests exercise what changed (``expected_blocks``
+threading through the patch's key path, several documents, and a
+document's current counts reaching ``resolution``).
 """
 
 from __future__ import annotations
@@ -38,6 +49,14 @@ _TWO_HEX_BLOCK_DICT = (
     ");\n"
 )
 
+_TWO_HEX_BLOCK_DICT_DISAGREEING = (
+    "FoamFile\n{\n    object blockMeshDict;\n}\n"
+    "blocks\n(\n"
+    "    hex (0 1 2 3 4 5 6 7) (10 1 1) simpleGrading (1 1 1)\n"
+    "    hex (1 2 3 4 5 6 7 8) (10 1 2) simpleGrading (1 1 1)\n"
+    ");\n"
+)
+
 
 def _staged_case(tmp_path: Path, document: str, content: str) -> Path:
     case_root = tmp_path / "case"
@@ -47,14 +66,20 @@ def _staged_case(tmp_path: Path, document: str, content: str) -> Path:
     return case_root
 
 
+def _isotropic(n, current):
+    del current
+    return (n, n, n)
+
+
 # ---------------------------------------------------------------------------
-# The builder itself
+# The builder itself: build-time refusals (documents/expected_blocks/
+# resolution), each by name, before any study ever resolves.
 # ---------------------------------------------------------------------------
 
 
 def test_builder_returns_an_axis_contract_declaring_an_integer_study_value():
     axis = block_mesh_resolution_axis(
-        "my_axis", document="system/blockMeshDict", resolution=lambda n: (n, n, n),
+        "my_axis", documents=("system/blockMeshDict",), resolution=_isotropic,
     )
     assert isinstance(axis, AxisContract)
     assert axis.name == "my_axis"
@@ -62,15 +87,43 @@ def test_builder_returns_an_axis_contract_declaring_an_integer_study_value():
     assert callable(axis.resolve)
 
 
+def test_builder_refuses_a_bare_string_for_documents():
+    with pytest.raises(TypeError, match="not a bare string"):
+        block_mesh_resolution_axis(
+            "my_axis", documents="system/blockMeshDict", resolution=_isotropic,
+        )
+
+
+def test_builder_refuses_an_empty_documents_sequence():
+    with pytest.raises(ValueError, match="at least one document"):
+        block_mesh_resolution_axis("my_axis", documents=(), resolution=_isotropic)
+
+
+@pytest.mark.parametrize("bad_expected_blocks", [0, -1, True, "3", 1.5])
+def test_builder_refuses_a_non_positive_integer_expected_blocks(bad_expected_blocks):
+    with pytest.raises(ValueError, match="expected_blocks must be a positive integer"):
+        block_mesh_resolution_axis(
+            "my_axis", documents=("system/blockMeshDict",), resolution=_isotropic,
+            expected_blocks=bad_expected_blocks,
+        )
+
+
+def test_builder_refuses_a_non_callable_resolution():
+    with pytest.raises(TypeError, match="resolution must be callable"):
+        block_mesh_resolution_axis(
+            "my_axis", documents=("system/blockMeshDict",), resolution="not callable",
+        )
+
+
 # ---------------------------------------------------------------------------
-# Happy path
+# Happy path: one document.
 # ---------------------------------------------------------------------------
 
 
 def test_resolve_produces_the_planners_hex_cell_counts_patch(tmp_path):
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _ONE_HEX_BLOCK_DICT)
     axis = block_mesh_resolution_axis(
-        "number_cells", document="system/blockMeshDict", resolution=lambda n: (n, n, n),
+        "number_cells", documents=("system/blockMeshDict",), resolution=_isotropic,
     )
 
     result = axis.resolve(20, case_root)
@@ -80,6 +133,9 @@ def test_resolve_produces_the_planners_hex_cell_counts_patch(tmp_path):
     assert len(result.patches) == 1
     patch = result.patches[0]
     assert patch.document == "system/blockMeshDict"
+    # expected_blocks=1 (the default) still produces the bare key path --
+    # byte-for-byte the same spelling a direct `document:hex_cell_counts`
+    # study key already sorts to (P2's own backward-compatibility decision).
     assert patch.key_path == ("hex_cell_counts",)
     # Typed data (2026-09-25 correction), not `plan_block_mesh_resolution`'s
     # own pre-joined text -- see the module docstring's dated correction for
@@ -94,11 +150,11 @@ def test_resolve_produces_the_planners_hex_cell_counts_patch(tmp_path):
 
 def test_resolve_supports_a_non_isotropic_resolution_formula(tmp_path):
     """`resolution` is the record's own pure formula -- this axis does not
-    assume it is always `lambda n: (n, n, n)`."""
+    assume it is always isotropic."""
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _ONE_HEX_BLOCK_DICT)
     axis = block_mesh_resolution_axis(
-        "cable_cells", document="system/blockMeshDict",
-        resolution=lambda n: (n, 1, 1),
+        "cable_cells", documents=("system/blockMeshDict",),
+        resolution=lambda n, current: (n, 1, 1),
     )
 
     result = axis.resolve(50, case_root)
@@ -106,16 +162,79 @@ def test_resolve_supports_a_non_isotropic_resolution_formula(tmp_path):
     assert result.patches[0].value == (50, 1, 1)
 
 
+def test_resolution_receives_the_documents_own_current_cell_counts(tmp_path):
+    """P2's own point: `resolution` sees the document's current counts, not
+    only the study value -- the reusable "a direction at 1 stays 1" shape
+    (owner decision (d)) is impossible without this."""
+    case_root = _staged_case(tmp_path, "system/blockMeshDict", _ONE_HEX_BLOCK_DICT)
+    seen = []
+
+    def resolution(value, current):
+        seen.append(current)
+        return tuple(value if c != 1 else 1 for c in current)
+
+    axis = block_mesh_resolution_axis(
+        "number_cells", documents=("system/blockMeshDict",), resolution=resolution,
+    )
+
+    result = axis.resolve(20, case_root)
+
+    # `_ONE_HEX_BLOCK_DICT`'s current resolution is (10, 1, 1): the first
+    # direction is genuinely refined (10, not 1), the other two are not.
+    assert seen == [(10, 1, 1)]
+    assert result.patches[0].value == (20, 1, 1)
+
+
+def test_several_documents_each_get_their_own_current_counts_and_own_patch(tmp_path):
+    """The reason `documents` is plural at all: bathBidomain's three
+    `blockMeshDict.<dim>` files each have their OWN current resolution, and
+    one study value (`N`) must patch every one of them, each keeping its own
+    un-refined directions at 1."""
+    case_root = tmp_path / "case"
+    (case_root / "system").mkdir(parents=True)
+    (case_root / "system" / "blockMeshDict.1D").write_text(
+        "blocks\n(\n    hex (0 1 2 3 4 5 6 7) (80 1 1) simpleGrading (1 1 1)\n);\n"
+    )
+    (case_root / "system" / "blockMeshDict.2D").write_text(
+        "blocks\n(\n    hex (0 1 2 3 4 5 6 7) (80 80 1) simpleGrading (1 1 1)\n);\n"
+    )
+    (case_root / "system" / "blockMeshDict.3D").write_text(
+        "blocks\n(\n    hex (0 1 2 3 4 5 6 7) (80 80 80) simpleGrading (1 1 1)\n);\n"
+    )
+
+    def stays_at_one(n, current):
+        return tuple(n if c != 1 else 1 for c in current)
+
+    axis = block_mesh_resolution_axis(
+        "number_cells",
+        documents=(
+            "system/blockMeshDict.1D",
+            "system/blockMeshDict.2D",
+            "system/blockMeshDict.3D",
+        ),
+        resolution=stays_at_one,
+    )
+
+    result = axis.resolve(20, case_root)
+
+    by_document = {patch.document: patch.value for patch in result.patches}
+    assert by_document == {
+        "system/blockMeshDict.1D": (20, 1, 1),
+        "system/blockMeshDict.2D": (20, 20, 1),
+        "system/blockMeshDict.3D": (20, 20, 20),
+    }
+
+
 # ---------------------------------------------------------------------------
-# Refusals
+# Resolve-time refusals.
 # ---------------------------------------------------------------------------
 
 
 def test_resolve_refuses_a_non_integer_cell_count(tmp_path):
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _ONE_HEX_BLOCK_DICT)
     axis = block_mesh_resolution_axis(
-        "number_cells", document="system/blockMeshDict",
-        resolution=lambda n: (n, n, "20"),
+        "number_cells", documents=("system/blockMeshDict",),
+        resolution=lambda n, current: (n, n, "20"),
     )
 
     with pytest.raises(ValueError, match="must return a tuple of 3 integers"):
@@ -127,8 +246,8 @@ def test_resolve_refuses_a_boolean_masquerading_as_an_integer_count(tmp_path):
     refused, not silently accepted as 1/0."""
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _ONE_HEX_BLOCK_DICT)
     axis = block_mesh_resolution_axis(
-        "number_cells", document="system/blockMeshDict",
-        resolution=lambda n: (n, n, True),
+        "number_cells", documents=("system/blockMeshDict",),
+        resolution=lambda n, current: (n, n, True),
     )
 
     with pytest.raises(ValueError, match="must return a tuple of 3 integers"):
@@ -138,8 +257,8 @@ def test_resolve_refuses_a_boolean_masquerading_as_an_integer_count(tmp_path):
 def test_resolve_refuses_a_non_positive_cell_count(tmp_path):
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _ONE_HEX_BLOCK_DICT)
     axis = block_mesh_resolution_axis(
-        "number_cells", document="system/blockMeshDict",
-        resolution=lambda n: (0, n, n),
+        "number_cells", documents=("system/blockMeshDict",),
+        resolution=lambda n, current: (0, n, n),
     )
 
     with pytest.raises(ValueError, match="non-positive cell count"):
@@ -149,8 +268,8 @@ def test_resolve_refuses_a_non_positive_cell_count(tmp_path):
 def test_resolve_refuses_a_negative_cell_count(tmp_path):
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _ONE_HEX_BLOCK_DICT)
     axis = block_mesh_resolution_axis(
-        "number_cells", document="system/blockMeshDict",
-        resolution=lambda n: (-5, n, n),
+        "number_cells", documents=("system/blockMeshDict",),
+        resolution=lambda n, current: (-5, n, n),
     )
 
     with pytest.raises(ValueError, match="non-positive cell count"):
@@ -161,48 +280,49 @@ def test_resolve_refuses_a_document_that_does_not_exist_in_the_staged_case(tmp_p
     case_root = tmp_path / "case"
     case_root.mkdir()
     axis = block_mesh_resolution_axis(
-        "number_cells", document="system/blockMeshDict", resolution=lambda n: (n, n, n),
+        "number_cells", documents=("system/blockMeshDict",), resolution=_isotropic,
     )
 
     with pytest.raises(ValueError, match="does not exist in the staged case"):
         axis.resolve(20, case_root)
 
 
-def test_resolve_reads_nothing_but_existence_before_refusing_a_bad_count(tmp_path):
-    """The count is validated BEFORE any file access -- a bad `resolution`
-    output is refused even when the document does not exist at all, so the
-    refusal message names the count, not a spurious "missing document"."""
-    case_root = tmp_path / "case"
-    case_root.mkdir()  # the document itself is never created
+def test_resolve_refuses_when_one_of_several_documents_is_missing(tmp_path):
+    case_root = _staged_case(tmp_path, "system/blockMeshDict.1D", _ONE_HEX_BLOCK_DICT)
     axis = block_mesh_resolution_axis(
-        "number_cells", document="system/blockMeshDict",
-        resolution=lambda n: (n, n, "bad"),
+        "number_cells",
+        documents=("system/blockMeshDict.1D", "system/blockMeshDict.2D"),
+        resolution=_isotropic,
     )
 
-    with pytest.raises(ValueError, match="must return a tuple of 3 integers"):
+    with pytest.raises(ValueError, match="system/blockMeshDict.2D"):
         axis.resolve(20, case_root)
 
 
 # ---------------------------------------------------------------------------
-# The deferred "exactly one hex block" refusal: reused, not duplicated.
-#
-# `plan_block_mesh_resolution` itself never checks a document's real hex-
-# block count (case_planning.py's own docstring: "That check is the
-# renderer's job") -- only `_rewrite_hex_block_lines`, called by
-# `case_rendering.render_patch_case_files`, does. This axis therefore never
-# refuses a multi-block document at resolve() time either: it must not, since
-# a real multi-block file (bathBidomain's own `blockMeshDict.3D`, proven by
-# this package's native tests) is a legitimate document to compute a patch
-# value for. The refusal still exists -- it fires wherever this patch is
-# actually rendered, reusing the exact mechanism `test_block_mesh_resolution_
-# channel.py` already characterizes against a real fixture.
+# expected_blocks: now checked at resolve() time (P2's own behaviour change
+# -- see below), and threaded through the produced patch's key path.
 # ---------------------------------------------------------------------------
 
 
-def test_resolve_succeeds_against_a_document_with_more_than_one_hex_block(tmp_path):
+def test_expected_blocks_greater_than_one_is_threaded_through_the_key_path(tmp_path):
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _TWO_HEX_BLOCK_DICT)
     axis = block_mesh_resolution_axis(
-        "number_cells", document="system/blockMeshDict", resolution=lambda n: (n, n, n),
+        "number_cells", documents=("system/blockMeshDict",), resolution=_isotropic,
+        expected_blocks=2,
+    )
+
+    result = axis.resolve(20, case_root)
+
+    assert result.patches[0].key_path == ("hex_cell_counts", "2")
+    assert result.patches[0].value == (20, 20, 20)
+
+
+def test_resolve_succeeds_against_a_document_with_the_correctly_declared_block_count(tmp_path):
+    case_root = _staged_case(tmp_path, "system/blockMeshDict", _TWO_HEX_BLOCK_DICT)
+    axis = block_mesh_resolution_axis(
+        "number_cells", documents=("system/blockMeshDict",), resolution=_isotropic,
+        expected_blocks=2,
     )
 
     result = axis.resolve(20, case_root)
@@ -210,17 +330,76 @@ def test_resolve_succeeds_against_a_document_with_more_than_one_hex_block(tmp_pa
     assert result.patches[0].value == (20, 20, 20)
 
 
-def test_the_axis_produced_value_still_refuses_the_wrong_block_count_when_rendered(tmp_path):
-    """The patch's value (space-joined the same way the real writer would)
-    threads straight back into `plan_block_mesh_resolution`'s own default
-    `expected_blocks=1` -- rendering it against the real two-block document
-    above refuses via the SAME reused mechanism, proving the check was
-    deferred, not dropped."""
+def test_resolve_refuses_a_document_whose_real_block_count_disagrees_with_expected_blocks(
+    tmp_path,
+):
+    """**Corrected 2026-09-26 (P2).** Before this axis had to read a
+    document's current cell counts (to hand them to `resolution`), a
+    mismatched `expected_blocks` was NOT caught here at all -- `resolve()`
+    only ever checked document existence, and the real block-count check
+    was deferred all the way to whichever writer eventually rendered the
+    patch (see `test_the_axis_produced_value_still_refuses_the_wrong_
+    block_count_when_rendered`'s OLD docstring, and this module's own
+    dated correction). Now that `resolution` needs the document's own
+    current counts as an input, this axis already reads the document via
+    `read_hex_cell_counts` -- which performs the SAME `expected_blocks`
+    check `plan_block_mesh_resolution`'s renderer always has -- so a
+    record that declares the wrong `expected_blocks` for a real document is
+    refused immediately, at `resolve()` time, not only when a future writer
+    commits the patch.
+    """
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _TWO_HEX_BLOCK_DICT)
     axis = block_mesh_resolution_axis(
-        "number_cells", document="system/blockMeshDict", resolution=lambda n: (n, n, n),
+        "number_cells", documents=("system/blockMeshDict",), resolution=_isotropic,
+        expected_blocks=1,
     )
-    patch = axis.resolve(20, case_root).patches[0]
+
+    with pytest.raises(KeyError, match="expected 1 hex"):
+        axis.resolve(20, case_root)
+
+
+def test_resolve_refuses_a_document_whose_blocks_disagree_with_each_other(tmp_path):
+    case_root = _staged_case(
+        tmp_path, "system/blockMeshDict", _TWO_HEX_BLOCK_DICT_DISAGREEING,
+    )
+    axis = block_mesh_resolution_axis(
+        "number_cells", documents=("system/blockMeshDict",), resolution=_isotropic,
+        expected_blocks=2,
+    )
+
+    with pytest.raises(KeyError, match="do not share one cell count"):
+        axis.resolve(20, case_root)
+
+
+# ---------------------------------------------------------------------------
+# The pinning test, corrected 2026-09-26 (P2). The OLD version proved a
+# mismatched real block count was refused only when a patch was actually
+# RENDERED, never at `axis.resolve()` time (the axis, by design, never read
+# the document at all -- only checked its existence). That is no longer
+# true: `resolve()` now must read each document's current cell counts to
+# hand them to `resolution`, and that read already performs the exact same
+# `expected_blocks` check -- so a record declaring the wrong count is now
+# refused immediately, at `resolve()` time
+# (`test_resolve_refuses_a_document_whose_real_block_count_disagrees_with_
+# expected_blocks`, above), not deferred to whichever writer eventually
+# commits the patch.
+#
+# This test instead proves the RENDERER's own `expected_blocks` check
+# (`plan_block_mesh_resolution`/`_rewrite_hex_block_lines`, reused by
+# `render_patch_case_files`) still fires independently of the axis
+# entirely: a caller can build a `plan_block_mesh_resolution` target
+# directly (as `cardiacfoam.overrides._target_for_parameter` does, from
+# whatever `expected_blocks` a `ParameterAssignment`'s key path carries) and
+# the renderer still refuses a real document whose block count disagrees --
+# the check the axis's own module docstring used to describe as "deferred
+# to the renderer" is still there, just no longer the ONLY place it fires.
+# ---------------------------------------------------------------------------
+
+
+def test_the_renderer_still_refuses_the_wrong_expected_blocks_independently_of_the_axis(
+    tmp_path,
+):
+    case_root = _staged_case(tmp_path, "system/blockMeshDict", _TWO_HEX_BLOCK_DICT)
 
     delta_t = plan_delta_t(1e-4, owner="test")
     request = CaseMutationRequest(
@@ -228,7 +407,6 @@ def test_the_axis_produced_value_still_refuses_the_wrong_block_count_when_render
         workflow="test", source_artifacts=(), parameters=(delta_t,), requested_by="test",
     )
     (case_root / "system" / "controlDict").write_text("FoamFile\n{\n}\ndeltaT 1e-05;\n")
-    cell_counts_str = " ".join(str(count) for count in patch.value)
     resolved = ResolvedMutation(
         request=request,
         targets=(
@@ -238,7 +416,11 @@ def test_the_axis_produced_value_still_refuses_the_wrong_block_count_when_render
                 "value": delta_t.value,
                 "format": "openfoam_dictionary",
             },
-            plan_block_mesh_resolution(patch.document, cell_counts_str),
+            # A real document with two hex ( blocks, but a target declaring
+            # expected_blocks=1 -- exactly the mismatch this whole task
+            # fixes the WRITER/READER side of (P2); the RENDERER's own
+            # check is unrelated to that fix and still catches it here.
+            plan_block_mesh_resolution("system/blockMeshDict", "20 20 20", expected_blocks=1),
         ),
         preconditions=(), expected_effects=(), semantic_owner_id="org.omnidriver.test",
     )

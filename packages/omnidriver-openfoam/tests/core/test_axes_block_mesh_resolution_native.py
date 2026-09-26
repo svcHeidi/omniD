@@ -12,14 +12,26 @@ Two tests, matching the task's own two native checks:
    ``manufacturedSolutions/bathBidomain/system/blockMeshDict.3D`` with
    ``N=20`` produces a ``(20 20 20)`` patch. This file has THREE ``hex (``
    blocks (all currently ``80 80 80``), not one -- read directly below, not
-   assumed -- which is exactly why the axis itself never checks a
-   document's hex-block count (see ``axes/block_mesh_resolution.py``'s
-   module docstring): a strict eager check here would refuse this real,
-   legitimate document before ever computing a patch value for it.
+   assumed.
 2. The same axis, wired into a real ``TutorialRecord`` and run through
    ``record_execution.preview_record_case`` with the study value that
    reproduces the file's OWN current resolution (``80``), reports that
    patch ``"unchanged"`` -- design §4 step 7.
+
+**Extended 2026-09-26 (P2,
+``docs/superpowers/plans/2026-09-25-tutorials-are-pointers-remaining.md``
+§5e): several documents, over bath's three files and bidomain's.** Bath's
+``system/blockMeshDict.1D``/``.2D``/``.3D`` each have THREE agreeing
+``hex (`` blocks (``expected_blocks=3``), and each file refines a different
+subset of directions -- ``.1D`` is ``(80 1 1)``, ``.2D`` is ``(80 80 1)``,
+``.3D`` is ``(80 80 80)`` (read directly below, not assumed) -- exactly the
+real shape owner decision (d) describes ("a direction whose current count
+is 1 stays 1... reading which directions are refined FROM EACH FILE
+ITSELF"). Bidomain's own ``system/blockMeshDict.1D``/``.2D``/``.3D`` each
+have exactly ONE ``hex (`` block (``expected_blocks=1``), with three
+different current resolutions again (``(1280 1 1)``/``(640 640 1)``/
+``(20 20 20)``) -- the other real shape this axis must support: several
+single-block documents under one axis instance.
 """
 
 from __future__ import annotations
@@ -69,6 +81,16 @@ def _read_current_hex_cell_counts(text: str) -> str:
     return match.group(1)
 
 
+def _isotropic(n, current):
+    del current
+    return (n, n, n)
+
+
+def _stays_at_one(n, current):
+    """Owner decision (d): "a direction whose current count is 1 stays 1"."""
+    return tuple(n if c != 1 else 1 for c in current)
+
+
 def test_block_mesh_resolution_axis_against_the_real_bath_bidomain_block_mesh_dict(tmp_path):
     root = _native_tutorials_root()
     real_document = root / _BATH_BIDOMAIN_RELPATH / _BLOCK_MESH_DOCUMENT
@@ -78,9 +100,7 @@ def test_block_mesh_resolution_axis_against_the_real_bath_bidomain_block_mesh_di
     # Read the real file's current resolution directly, rather than assuming
     # it (task instruction: "Read the real file to learn its current
     # counts; do not assume them"). Confirms this fixture really does have
-    # more than one `hex (` block, all at the same current resolution --
-    # the exact reason the axis itself never checks the block count (see
-    # ``axes/block_mesh_resolution.py``'s module docstring).
+    # more than one `hex (` block, all at the same current resolution.
     hex_lines = [line for line in real_text.splitlines() if "hex (" in line]
     assert len(hex_lines) == 3
     assert all(_read_current_hex_cell_counts(line) == "80 80 80" for line in hex_lines)
@@ -91,7 +111,8 @@ def test_block_mesh_resolution_axis_against_the_real_bath_bidomain_block_mesh_di
     staged_document.write_text(real_text)  # the native tree is never written
 
     axis = block_mesh_resolution_axis(
-        "number_cells", document=_BLOCK_MESH_DOCUMENT, resolution=lambda n: (n, n, n),
+        "number_cells", documents=(_BLOCK_MESH_DOCUMENT,), resolution=_isotropic,
+        expected_blocks=3,
     )
     result = axis.resolve(20, staged_case_root)
 
@@ -101,6 +122,117 @@ def test_block_mesh_resolution_axis_against_the_real_bath_bidomain_block_mesh_di
     # Typed data (2026-09-25 correction, `axes/block_mesh_resolution.py`'s
     # own module docstring), not pre-joined text.
     assert patch.value == (20, 20, 20)
+    # expected_blocks=3 travels through the patch's own key path (P2).
+    assert patch.key_path == ("hex_cell_counts", "3")
+
+
+# ---------------------------------------------------------------------------
+# P2 (2026-09-26): several documents at once, over bath's three real
+# `blockMeshDict.<dim>` files -- decision (d)'s own reusable resolution,
+# "a direction whose current count is 1 stays 1", against real content.
+# ---------------------------------------------------------------------------
+
+
+def test_block_mesh_resolution_axis_over_all_three_real_bath_bidomain_documents(tmp_path):
+    root = _native_tutorials_root()
+    bath_root = root / _BATH_BIDOMAIN_RELPATH
+    documents = (
+        "system/blockMeshDict.1D",
+        "system/blockMeshDict.2D",
+        "system/blockMeshDict.3D",
+    )
+
+    staged_case_root = tmp_path / "case"
+    real_current: dict[str, str] = {}
+    for document in documents:
+        real_document = bath_root / document
+        assert real_document.is_file(), f"fixture path missing: {real_document}"
+        real_text = real_document.read_text()
+        hex_lines = [line for line in real_text.splitlines() if "hex (" in line]
+        assert len(hex_lines) == 3, f"{document}: expected 3 hex ( blocks"
+        counts = {_read_current_hex_cell_counts(line) for line in hex_lines}
+        assert len(counts) == 1, f"{document}: its blocks disagree: {counts}"
+        real_current[document] = next(iter(counts))
+
+        staged_document = staged_case_root / document
+        staged_document.parent.mkdir(parents=True, exist_ok=True)
+        staged_document.write_text(real_text)  # the native tree is never written
+
+    # Read directly from the real files, not assumed: each dimension refines
+    # a different subset of directions.
+    assert real_current == {
+        "system/blockMeshDict.1D": "80 1 1",
+        "system/blockMeshDict.2D": "80 80 1",
+        "system/blockMeshDict.3D": "80 80 80",
+    }
+
+    axis = block_mesh_resolution_axis(
+        "number_cells", documents=documents, resolution=_stays_at_one,
+        expected_blocks=3,
+    )
+    result = axis.resolve(20, staged_case_root)
+
+    by_document = {patch.document: patch.value for patch in result.patches}
+    assert by_document == {
+        "system/blockMeshDict.1D": (20, 1, 1),
+        "system/blockMeshDict.2D": (20, 20, 1),
+        "system/blockMeshDict.3D": (20, 20, 20),
+    }
+    assert all(patch.key_path == ("hex_cell_counts", "3") for patch in result.patches)
+
+
+# ---------------------------------------------------------------------------
+# P2 (2026-09-26): bidomain's own three real `blockMeshDict.<dim>`
+# documents -- the other real shape, one block per document
+# (`expected_blocks=1`), still handled under one axis instance.
+# ---------------------------------------------------------------------------
+
+
+_BIDOMAIN_RELPATH = "manufacturedSolutions/bidomain"
+
+
+def test_block_mesh_resolution_axis_over_all_three_real_bidomain_documents(tmp_path):
+    root = _native_tutorials_root()
+    bidomain_root = root / _BIDOMAIN_RELPATH
+    documents = (
+        "system/blockMeshDict.1D",
+        "system/blockMeshDict.2D",
+        "system/blockMeshDict.3D",
+    )
+
+    staged_case_root = tmp_path / "case"
+    real_current: dict[str, str] = {}
+    for document in documents:
+        real_document = bidomain_root / document
+        assert real_document.is_file(), f"fixture path missing: {real_document}"
+        real_text = real_document.read_text()
+        hex_lines = [line for line in real_text.splitlines() if "hex (" in line]
+        assert len(hex_lines) == 1, f"{document}: expected 1 hex ( block"
+        real_current[document] = _read_current_hex_cell_counts(hex_lines[0])
+
+        staged_document = staged_case_root / document
+        staged_document.parent.mkdir(parents=True, exist_ok=True)
+        staged_document.write_text(real_text)
+
+    assert real_current == {
+        "system/blockMeshDict.1D": "1280 1 1",
+        "system/blockMeshDict.2D": "640 640 1",
+        "system/blockMeshDict.3D": "20 20 20",
+    }
+
+    axis = block_mesh_resolution_axis(
+        "number_cells", documents=documents, resolution=_stays_at_one,
+    )
+    result = axis.resolve(50, staged_case_root)
+
+    by_document = {patch.document: patch.value for patch in result.patches}
+    assert by_document == {
+        "system/blockMeshDict.1D": (50, 1, 1),
+        "system/blockMeshDict.2D": (50, 50, 1),
+        "system/blockMeshDict.3D": (50, 50, 50),
+    }
+    # expected_blocks=1 (the default) -- the bare key path, unchanged.
+    assert all(patch.key_path == ("hex_cell_counts",) for patch in result.patches)
 
 
 # ---------------------------------------------------------------------------
@@ -119,7 +251,12 @@ def test_block_mesh_resolution_axis_against_the_real_bath_bidomain_block_mesh_di
 
 
 def _hex_cell_counts_validator(document, key_path, value):
-    if key_path == ("hex_cell_counts",):
+    # P2 (2026-09-26): matched by PREFIX, not exact equality -- a patch
+    # declaring `expected_blocks` > 1 now carries a second key-path segment
+    # (`case_planning.hex_cell_counts_key_path`), and this test-only catalog
+    # must recognise that shape too, the same way the real environment's
+    # `_read_config_value_by_key_path` does.
+    if key_path[:1] == ("hex_cell_counts",):
         # design §5's environment-owned-key exception: no full OpenFOAM key
         # catalog exists yet, so this is written (or, here, merely compared)
         # unvalidated rather than refused.
@@ -141,7 +278,7 @@ def _hex_cell_counts_agree(value_kind, requested, current) -> bool:
 
 
 def _read_current_value(document_path: Path, key_path):
-    if key_path != ("hex_cell_counts",):
+    if key_path[:1] != ("hex_cell_counts",):
         return None
     if not document_path.exists():
         return None
@@ -181,7 +318,8 @@ def test_preview_record_case_reports_the_matching_resolution_as_unchanged():
     assert real_document.is_file(), f"fixture path missing: {real_document}"
 
     axis = block_mesh_resolution_axis(
-        "number_cells", document=_BLOCK_MESH_DOCUMENT, resolution=lambda n: (n, n, n),
+        "number_cells", documents=(_BLOCK_MESH_DOCUMENT,), resolution=_isotropic,
+        expected_blocks=3,
     )
     record = TutorialRecord(
         name="bathBidomainNativeTest",
@@ -219,7 +357,8 @@ def test_preview_record_case_reports_a_different_resolution_as_changed():
     assert real_document.is_file(), f"fixture path missing: {real_document}"
 
     axis = block_mesh_resolution_axis(
-        "number_cells", document=_BLOCK_MESH_DOCUMENT, resolution=lambda n: (n, n, n),
+        "number_cells", documents=(_BLOCK_MESH_DOCUMENT,), resolution=_isotropic,
+        expected_blocks=3,
     )
     record = TutorialRecord(
         name="bathBidomainNativeTest",

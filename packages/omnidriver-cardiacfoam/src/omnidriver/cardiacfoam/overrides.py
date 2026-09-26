@@ -14,6 +14,7 @@ from omnidriver.core.contracts.dictionary import validate_value_shape
 from omnidriver.openfoam import case_rendering
 from omnidriver.openfoam.case_planning import (
     HEX_CELL_COUNTS_KEY_PATH,
+    hex_cell_counts_expected_blocks,
     plan_block_mesh_resolution,
 )
 from omnidriver.openfoam.dict_builder import match_dynamic_entry
@@ -736,10 +737,27 @@ def _target_for_parameter(parameter: ParameterAssignment) -> dict[str, Any]:
     target's own shape, which also carries no `"value"`, for the same reason.
     Every other operation keeps writing `_write_value_for_assignment`'s
     result, unchanged from before this field existed.
+
+    **The block count travels with the patch (added 2026-09-26, P2).**
+    Before this, `expected_blocks` was never read from `parameter` at all --
+    this always called `plan_block_mesh_resolution(document, cell_counts_str)`
+    with THAT planner's own `expected_blocks=1` default, regardless of how
+    many blocks the record actually declared. Correct for every
+    single-block document (every migrated tutorial so far), but silently
+    wrong for a multi-block one (bathBidomain's three-block
+    `blockMeshDict.<dim>` files): a real rewrite would have raised
+    "Expected to update 1 hex blocks, but found 3" no matter what the axis
+    resolved. `hex_cell_counts_expected_blocks` parses the count
+    `case_planning.hex_cell_counts_key_path` encoded into `parameter.key_path`
+    when the axis built it, so this writer honours whatever the record
+    actually stated instead of guessing 1.
     """
-    if parameter.key_path == HEX_CELL_COUNTS_KEY_PATH:
+    if parameter.key_path[:1] == HEX_CELL_COUNTS_KEY_PATH:
+        expected_blocks = hex_cell_counts_expected_blocks(parameter.key_path)
         cell_counts_str = " ".join(str(count) for count in parameter.value)
-        return dict(plan_block_mesh_resolution(parameter.document, cell_counts_str))
+        return dict(plan_block_mesh_resolution(
+            parameter.document, cell_counts_str, expected_blocks=expected_blocks,
+        ))
     target: dict[str, Any] = {
         "qualified_id": parameter.qualified_id,
         "document": parameter.document,

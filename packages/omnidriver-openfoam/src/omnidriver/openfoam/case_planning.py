@@ -31,7 +31,84 @@ from .literals import _format_value
 #: :func:`.environment._read_config_value_by_key_path` (the reader that
 #: answers "what is it now") share ONE spelling of the convention rather than
 #: three independently-typed copies of the literal ``("hex_cell_counts",)``.
+#:
+#: **This is the BARE, one-block spelling** -- a direct
+#: ``document:hex_cell_counts`` study key (no axis at all;
+#: ``test_record_key_validation_native.py``'s own real-cardiac-stack check
+#: uses exactly this) sorts to this literal tuple, and it always means
+#: ``expected_blocks=1``, the same default :func:`read_hex_cell_counts`/
+#: :func:`plan_block_mesh_resolution` already had. See
+#: :func:`hex_cell_counts_key_path` for the multi-block spelling
+#: (P2, 2026-09-26): a document declaring more than one block gets a second
+#: segment naming the count, so the actual count a record declares travels
+#: with the patch instead of every reader/writer independently assuming 1.
 HEX_CELL_COUNTS_KEY_PATH: tuple[str, ...] = ("hex_cell_counts",)
+
+
+def hex_cell_counts_key_path(*, expected_blocks: int) -> tuple[str, ...]:
+    """The key path a hex-cell-counts patch is addressed at, carrying
+    ``expected_blocks`` through the patch itself (P2, 2026-09-26,
+    ``docs/superpowers/plans/2026-09-25-tutorials-are-pointers-remaining.md``
+    §5e) rather than letting the writer (``cardiacfoam.overrides
+    ._target_for_parameter``) and the reader
+    (``environment._read_config_value_by_key_path``) each independently
+    default it to 1, which silently mis-rewrote/mis-read a real multi-block
+    document (bathBidomain's three-block ``blockMeshDict.<dim>`` files) --
+    the axis's own patch never said how many blocks the record actually
+    declared, so both sides fell back to the planners' own ``expected_blocks
+    =1`` default regardless.
+
+    ``expected_blocks=1`` produces the bare :data:`HEX_CELL_COUNTS_KEY_PATH`
+    unchanged -- the exact spelling a direct ``document:hex_cell_counts``
+    study key already sorts to, so an existing single-block record (the
+    ``restitutionCurves`` pilot, and any record wired through the axis with
+    one block per document) is unaffected byte for byte. A record whose
+    ``expected_blocks`` is more than one gets a second segment naming it,
+    parsed back out by :func:`hex_cell_counts_expected_blocks`, the one
+    place that grammar is written -- shared by the reader and the writer so
+    neither can drift from the other, the same "change one, mirror the
+    other" warning :func:`read_hex_cell_counts` already gives for
+    ``_rewrite_hex_block_lines``'s grammar.
+    """
+    if expected_blocks == 1:
+        return HEX_CELL_COUNTS_KEY_PATH
+    return (*HEX_CELL_COUNTS_KEY_PATH, str(expected_blocks))
+
+
+def hex_cell_counts_expected_blocks(key_path: Sequence[str]) -> int:
+    """The ``expected_blocks`` a hex-cell-counts key path carries -- the
+    inverse of :func:`hex_cell_counts_key_path`, and the ONE place that
+    parse happens: both
+    :func:`.environment._read_config_value_by_key_path` and
+    :func:`omnidriver.cardiacfoam.overrides._target_for_parameter` call this
+    rather than each re-deriving "what does this key path mean" on its own.
+
+    Refuses BY NAME (``ValueError``, naming the key path) when the second
+    segment is not a positive integer -- a hand-authored direct study key
+    naming a malformed count (e.g. ``document:hex_cell_counts.0`` or
+    ``...hex_cell_counts.abc``) is a caller mistake, not a silent 1.
+
+    Only ever called after a caller has already matched this key path's
+    leading segment against :data:`HEX_CELL_COUNTS_KEY_PATH` -- a key path
+    that is not a hex-cell-counts one at all is not this function's
+    concern, and is never passed here.
+    """
+    segments = tuple(key_path)
+    if segments == HEX_CELL_COUNTS_KEY_PATH:
+        return 1
+    if len(segments) == 2 and segments[0] == HEX_CELL_COUNTS_KEY_PATH[0]:
+        try:
+            expected_blocks = int(segments[1])
+        except ValueError:
+            expected_blocks = None
+        if expected_blocks is not None and expected_blocks > 0:
+            return expected_blocks
+    raise ValueError(
+        f"{segments!r} is not a hex-cell-counts key path built by "
+        "hex_cell_counts_key_path -- expected either "
+        f"{HEX_CELL_COUNTS_KEY_PATH!r} (one block) or that plus one "
+        "positive-integer segment naming expected_blocks"
+    )
 
 #: `system/controlDict` is a fixed, case-relative location -- the same for
 #: every OpenFOAM case, never derived from a caller-supplied path. Unlike
@@ -277,6 +354,19 @@ def read_hex_cell_counts(
     "the" current resolution this reader could report, and reporting one
     block's count while silently ignoring the others would be worse than
     refusing.
+
+    **Also refuses BY NAME when ``expected_blocks`` real blocks disagree**
+    (P2, 2026-09-26): this reader answers ONE triple, "the current
+    resolution", so when a document genuinely has more than one ``hex ((`` a
+    single value is only a truthful answer if every block actually shares
+    it -- true of every real multi-block file this reader has been proven
+    against (bathBidomain's three ``blockMeshDict.<dim>`` documents, each
+    with three blocks all at one resolution), but not guaranteed by this
+    reader's own grammar, which never checked before this. Compared as
+    whitespace-normalised tokens (``"80  80 80"``/``"80 80 80"`` agree), not
+    as raw substrings -- the exact same "typed, not text" posture
+    ``apply_overrides.effective_values_agree`` already applies to the
+    caller comparing THIS reader's own answer against a requested value.
     """
     path = Path(document_path)
     if not path.is_file():
@@ -295,6 +385,12 @@ def read_hex_cell_counts(
         raise KeyError(
             f"expected {expected_blocks} hex ( block(s) in {path}, found "
             f"{len(counts)}"
+        )
+    distinct = {tuple(one_count.split()) for one_count in counts}
+    if len(distinct) > 1:
+        raise KeyError(
+            f"{path}'s {len(counts)} hex ( blocks do not share one cell "
+            f"count: {sorted(set(counts))!r}"
         )
     return counts[0]
 

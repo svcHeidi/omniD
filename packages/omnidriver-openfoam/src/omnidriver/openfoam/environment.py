@@ -36,7 +36,11 @@ def _read_config_value_by_key_path(file_path: Path, key_path):
     Python happily iterates character-by-character) is refused by name
     instead of silently misinterpreted.
     """
-    from .case_planning import HEX_CELL_COUNTS_KEY_PATH, read_hex_cell_counts
+    from .case_planning import (
+        HEX_CELL_COUNTS_KEY_PATH,
+        hex_cell_counts_expected_blocks,
+        read_hex_cell_counts,
+    )
     from .mutators import read_foam_entry
 
     if isinstance(key_path, str):
@@ -48,13 +52,19 @@ def _read_config_value_by_key_path(file_path: Path, key_path):
     segments = tuple(key_path)
     if not segments:
         raise ValueError("a config value read needs a non-empty key path")
-    if segments == HEX_CELL_COUNTS_KEY_PATH:
+    if segments[:1] == HEX_CELL_COUNTS_KEY_PATH:
         # The one synthetic key path this reader answers specially (step 4a,
         # 2026-09-25): `plan_block_mesh_resolution`'s own target shape has no
         # single literal dictionary key (module docstring), so
         # `read_hex_cell_counts` parses the `hex (` grammar directly rather
         # than going through `read_foam_entry`'s scope/key split below.
-        return read_hex_cell_counts(file_path)
+        #
+        # **P2, 2026-09-26**: the block count travels with the key path
+        # (`case_planning.hex_cell_counts_key_path`'s own grammar) instead of
+        # this reader defaulting to 1 regardless of what the record actually
+        # declared -- see `hex_cell_counts_expected_blocks`'s own docstring.
+        expected_blocks = hex_cell_counts_expected_blocks(segments)
+        return read_hex_cell_counts(file_path, expected_blocks=expected_blocks)
     *scope, key = segments
     return read_foam_entry(file_path, key, scope=list(scope) if scope else None)
 
