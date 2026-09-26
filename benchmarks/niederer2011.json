@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "id": "niederer2011",
+  "version": "1",
+  "title": "Niederer et al. 2011 N-version benchmark: activation time at P1-P9",
+  "sources": [
+    {
+      "id": "niederer2011",
+      "citation": "Niederer SA, Kerfoot E, Benson AP, et al. Verification of cardiac tissue electrophysiology simulators using an N-version benchmark. Phil. Trans. R. Soc. A 369(1954):4331-4351 (2011)",
+      "doi": "10.1098/rsta.2011.0139",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3263775/",
+      "retrieved": "2026-09-26",
+      "accessed": true,
+      "note": "open-access full text (PMC3263775, mirrored by Europe PMC) and Figure 1 (rsta20110139-g1.jpg)"
+    },
+    {
+      "id": "niederer2011-esm",
+      "citation": "Electronic supplementary material of the same article: the per-code activation times at P1-P9",
+      "url": "https://royalsocietypublishing.org/doi/10.1098/rsta.2011.0139",
+      "accessed": false,
+      "note": "behind a bot check on 2026-09-26; not retrieved. Would hold Niederer's own per-point coordinate table; P2, P3, P6 and P7's coordinates come instead from the owner's paper appendix (source niederer2011-owner-appendix), whose P2/P3 naming order this file has not cross-checked against this ESM"
+    },
+    {
+      "id": "niederer2011-owner-appendix",
+      "citation": "Project owner's manuscript appendix, 'Niederer Benchmark Protocol' (ElectrophysiologySolver, paperI_methods_publication/appendices/niederer_protocol.qmd), table 'Probe | Position (mm)' (@tbl-niederer-probe-activation) and the 'Activation-time extraction and sampling' section — an unpublished project document, not the primary source",
+      "retrieved": "2026-09-26",
+      "accessed": true,
+      "note": "Read-only, outside this repository: /Users/simaocastro/Documents/Latex_papers/ElectrophysiologySolver/sections/paperI_methods_publication/appendices/niederer_protocol.qmd. States P1-P9 in the appendix's own cardiacFOAM frame (slab 20x3x7 mm; axes x=20mm edge, y=3mm edge, z=7mm edge; stimulus box at high z). Converted here to this file's frame (origin at P1, the stimulus corner; axis 1 = 20 mm edge, axis 2 = 7 mm edge, axis 3 = 3 mm edge) via (x, y_cf, z_cf) -> (x, 7 - z_cf, y_cf). The converted P1, P8, P9 and the four vertical pairings (P1-P5, P2-P6, P3-P7, P4-P8, each differing only in axis 3) match every constraint niederer2011 itself states. The P2/P3 (and hence P6/P7) naming order is this appendix's own convention; it has not been independently checked against niederer2011's ESM (source niederer2011-esm, not retrieved). Controller resolution recorded 2026-09-26 in .superpowers/sdd/niederer-benchmark-definition.md, section 'Resolution of P2-P7'"
+    }
+  ],
+  "quantity": {
+    "name": "activation time",
+    "definition": "the time at which the membrane potential first passes through 0 mV",
+    "unit": "ms",
+    "source": {"source_id": "niederer2011", "where": "section 3f (metric); milliseconds throughout, section 3d and Figures 2-4"}
+  },
+  "frame": {
+    "length_unit": "mm",
+    "definition": "A convention adopted by this file; the paper prints no coordinates. Origin at P1, the stimulus corner. Axis 1 runs along the 20 mm edge (the fibre direction), axis 2 along the 7 mm edge, axis 3 along the 3 mm edge, each pointing into the slab. The slab's dimensions (20 x 7 x 3 mm), its fibre axis and the stimulus corner are the paper's.",
+    "stated_by_source": false,
+    "source": {"source_id": "niederer2011", "where": "section 3b and Table 3 (dimensions, fibres along the 20 mm axis); section 3c (stimulus at one corner); Figure 1b (P1 at that corner)"}
+  },
+  "points": [
+    {"label": "P1", "definition": "the corner where the stimulus is delivered; the P1-P8 line starts here", "coordinates": [0, 0, 0],
+     "source": {"source_id": "niederer2011", "where": "Figure 1b; section 3c; section 5b (the initial corner)"}},
+    {"label": "P2", "definition": "the corner adjacent to P1, displaced along the 7 mm edge (P1's bottom, 3 mm-axis, face); the P2-P6 vertical line pairs with it", "coordinates": [0, 7, 0],
+     "source": {"source_id": "niederer2011-owner-appendix", "where": "table 'Probe | Position (mm)', probe P2, frame-converted; naming order (7 mm edge vs 20 mm edge) is this appendix's convention, not independently checked against niederer2011's ESM"}},
+    {"label": "P3", "definition": "the corner adjacent to P1, displaced along the 20 mm (fibre) edge (P1's bottom, 3 mm-axis, face); the P3-P7 vertical line pairs with it", "coordinates": [20, 0, 0],
+     "source": {"source_id": "niederer2011-owner-appendix", "where": "table 'Probe | Position (mm)', probe P3, frame-converted; naming order (20 mm edge vs 7 mm edge) is this appendix's convention, not independently checked against niederer2011's ESM"}},
+    {"label": "P4", "definition": "the corner of P1's 3 mm-axis face diagonally opposite P1; P8 lies directly above it along the 3 mm edge", "coordinates": [20, 7, 0],
+     "source": {"source_id": "niederer2011", "where": "Figure 1b (construction line P4-P8)"}},
+    {"label": "P5", "definition": "the corner above P1 along the 3 mm edge; the P1-P5 vertical line pairs with it", "coordinates": [0, 0, 3],
+     "source": {"source_id": "niederer2011-owner-appendix", "where": "table 'Probe | Position (mm)', probe P5, frame-converted; the P1-P5 vertical pairing this yields matches Figure 1b's construction line"}},
+    {"label": "P6", "definition": "the corner above P2 along the 3 mm edge; the P2-P6 vertical line pairs with it", "coordinates": [0, 7, 3],
+     "source": {"source_id": "niederer2011-owner-appendix", "where": "table 'Probe | Position (mm)', probe P6, frame-converted; follows P2, whose naming order is the appendix's convention"}},
+    {"label": "P7", "definition": "the corner above P3 along the 3 mm edge; the P3-P7 vertical line pairs with it", "coordinates": [20, 0, 3],
+     "source": {"source_id": "niederer2011-owner-appendix", "where": "table 'Probe | Position (mm)', probe P7, frame-converted; follows P3, whose naming order is the appendix's convention"}},
+    {"label": "P8", "definition": "the corner diagonally opposite P1 through the slab; the P1-P8 line ends here, and it activates last", "coordinates": [20, 7, 3],
+     "source": {"source_id": "niederer2011", "where": "Figure 1 caption; section 5; section 5b (the far corner); section 6"}},
+    {"label": "P9", "definition": "the centre of the slab", "coordinates": [10, 3.5, 1.5],
+     "source": {"source_id": "niederer2011", "where": "section 5b (the centre of the cuboid)"}}
+  ],
+  "published_values": [
+    {"label": "P8", "kind": "range of last activation across the participating codes", "unit": "ms", "range": [37.8, 48.7],
+     "conditions": "the highest spatial and temporal resolutions (dx 0.1 mm, dt 0.005 ms)",
+     "source": {"source_id": "niederer2011", "where": "section 6 (Discussion); resolutions from section 3d"}}
+  ]
+}
