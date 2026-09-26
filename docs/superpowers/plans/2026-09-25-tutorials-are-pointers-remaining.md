@@ -993,6 +993,28 @@ only by the task named.
 - **Q13, `withDefaultValues`.** Declare `constant/electroProperties.withDefaultValues` on each record's solve step, as one shared constant in `records/`, so C6 checks it and A5 excludes it? Or once in cardiacFOAM's case-runtime conventions? *Recommend: the shared `produces` constant. It is checked, and it does not touch Task 15's files.*
 - **Q14, the six exploratory temporal sweeps.** They were deleted from the working tree at 14:04 today; a copy survives under the git-ignored `tutorialsTest-regression/`. Was that intended? *Recommend: yes. Nothing to commit; pseudo-ECG does not need them.*
 
+### 5g answered (owner, 2026-09-26)
+
+These answers govern. Where one differs from a recommendation above, the answer wins.
+
+- **Q1, native base: merge.** The controller makes a native worktree of `omnid/tutorials-are-pointers` and merges `feature/spring-supported-slab-tutorial` into it, including `c15e2fcf` (the dead-key removal) and `044559d2` (the `niederer2011` rename). All native migration work happens in that worktree. Nothing is pushed. The owner's checkout is not touched.
+- **Q2, Q3, Q7, Q8 are one decision: blockMesh is always the default, and gmsh is an optional extra mesher.**
+  - Every record's default route is the blockMesh route (`default_variant`).
+  - The default mesh arguments are the ones the case's own `regression/regressionTest.sh` uses: `-dict system/blockMeshDict.3D` for bidomain, pseudo-ECG and eikonalECG, and `.1D` for bath. They are fixed on the step and independent of any study. A study replaces them.
+  - The native `Allrun` of bidomain and pseudo-ECG does not mesh at all; it goes straight to `cardiacFoam`, and neither case ships a mesh. This is a native gap. **Recommended native fix, to be confirmed:** add the regression test's `blockMesh` line to those two `Allrun`s, so the native default is self-contained, as eikonalECG's already is.
+  - The tet route (gmsh) is declared in the record as the alternative a study picks.
+  - **The gmsh templates change natively to `DefineConstant[ lc = {<coarsest>, Name "lc"} ]`**, and the record runs `gmsh -3 <template> -setnumber lc <v>` (evidence: `docs/solver-learning/cardiacfoam.md` G1–G6). gmsh stays outside OpenFOAM's layer; nothing OpenFOAM-side needs to know about it. The template comments that name deleted scripts are corrected.
+- **Q4, removal: first try replacing the whole sub-dictionary.** A study sets `bathPotentialDomain.surfaceCurrentPatches` and `.groundPatches` as whole dictionaries (`{ xMax 0.01; }`, `{ xMin 0; }`). Verify on the real file that the case writer **replaces** a sub-dictionary rather than merging into it. Add a removal kind to `AxisPatch` only if it merges, and say so.
+- **Q5, the reference point: no new contract.** `phiERefPoint` is a case fact the user or agent chooses by reasoning. The native case already fixes `(-0.9 0.05 0.05)`. The Python's half-cell shift existed only because a point on a cell face is claimed by two partitions in a parallel run. Guidance gets one line: choose a point in a cell interior at every resolution the study uses. `reads_also` is not built.
+- **Q6, serial and parallel belong to the OpenFOAM layer, which must know about them.** A record declares its solve step once. Running it serial (the native `Allrun` default) or parallel (`decomposePar` → `mpirun -np N` → `reconstructPar`, with N read from `decomposeParDict`, never restated) is the OpenFOAM layer's job, through its existing `parallel_execution`. Records don't carry parallel variants. Serial is the default.
+- **Q9: delete** the `ode_abs_tolerance`/`ode_rel_tolerance` references from bidomain's studies and its temporalConvergence README (natively).
+- **Q10: keep all 14 bath studies; delete the byte-identical tet overlay files natively.**
+- **Q11: get the physics right.** `ecgDomains.<name>.verificationModel.anisotropic yes` exactly when the tissue verifier is `manufacturedAnisotropicMonodomainVerifier`. The native pseudo-ECG case uses that verifier with `anisotropic no`, which is wrong, so it changes natively to `yes`. The catalog must make the relation clear: the `anisotropic` entry's description states it, and validation refuses a mismatch by name. This models the relation between two existing keys, adding no new key. Re-run the pseudo-ECG `regressionTest.sh`. If its reference numbers move, regenerate the native regression reference and report old against new.
+- **Q12, Q13:** recommendations as above. Q13 is corrected by P4's R4: `withDefaultValues` is declared only by records whose own run writes it.
+- **P4 extras, deferred:**
+  - filtering catalogue coefficient keys by `myocardiumSolver`;
+  - a guard in the native-tree helper that refuses a dirty git checkout. Recommended soon.
+
 ## 5. Generality log
 
 Added 2026-09-26: each core addition §5e P3 makes (§5g Q2–Q5) adds a row here
