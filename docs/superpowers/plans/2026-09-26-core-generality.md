@@ -509,12 +509,18 @@ scripts/  check-wheel-artifact.py, export-dict-catalog.py, scan-dict-keys.py, re
 
 That case is region-split. Its `constant/electroMechanicalProperties` says `sequentialElectroMechanicalCoeffs { electroRegion electro; }`, and `constant/electro/electroProperties` declares `verificationModel { type manufacturedFDAMonodomainVerifier; }`.
 
-So the hook is taught to read the electro region that the case itself declares. The electromechanical case keeps the exemption it has today; this task does not make that case plan. The EM warning in `AGENT_GUIDE.md` still stands, and the owner confirms this choice at R1.
+So the hook is taught to read the electro region that the case itself declares. The electromechanical case keeps the exemption it has today; this task does not make that case plan. The EM warning in `AGENT_GUIDE.md` still stands.
+
+**Amended 2026-09-26 (owner, before execution).** The region is not read by a one-off lookup inside the hook. It comes from a small **physics layout table**, `cardiacfoam/physics_layout.json`: one row per `constant/physicsProperties` `type`, saying which region roles that type has and which entry of which document names each role's region. The table never copies the region names (all three native EM cases use `electro`/`solid`, but the case owns that fact). FSI later is one more row. This task uses the table only in the hook; making electromechanics plan is a later topic, settled by a real EM run. A native drift test checks every native case's physics type is in the table and every region it resolves exists.
 
 **Files:**
 - Create:
+  - `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/physics_layout.json`
+  - `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/physics_layout.py`
+  - `packages/omnidriver-cardiacfoam/tests/test_physics_layout_native.py`
   - `packages/omnidriver-cardiacfoam/tests/test_nondimensional_hook_covers_the_name_rule_native.py`
   - `packages/omnidriver/tests/core/test_mesh_geometry_exemption.py`
+- Modify: `packages/omnidriver-cardiacfoam/pyproject.toml` (package-data gains `physics_layout.json`)
 - Modify:
   - `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/planning_policy.py`
   - `packages/omnidriver/src/omnidriver/core/strict_planning.py` (`_is_nondimensional_entry` deleted; `_mesh_geometry_exempt` added; `_mesh_geometry_diagnostics`; the call site in `_strict_plan_for_spec`)
@@ -525,7 +531,8 @@ So the hook is taught to read the electro region that the case itself declares. 
 - Produces:
   - `strict_planning._mesh_geometry_exempt(spec, driver_context) -> bool`;
   - `strict_audit.SKIP_GEOMETRY_DIAGNOSTICS_ENV = "SKIP_GEOMETRY_DIAGNOSTICS"`;
-  - `planning_policy._electro_properties_path(case_root: Path) -> Path | None`.
+  - `physics_layout.region_document(case_root: Path, role: str, name: str) -> Path | None` (`constant/<region>/<name>` for a region-split type, `constant/<name>` for a single-region one, `None` when the type has no such role);
+  - `physics_layout.physics_type(case_root: Path) -> str` and `PhysicsLayoutError` (an unknown type is refused by name).
 
 - [ ] **Step 1: Write the native proof test first**
 
@@ -609,7 +616,92 @@ So the hook is taught to read the electro region that the case itself declares. 
   
   If it names a different or longer list, stop. The Evidence paragraph above no longer describes the tree; report the list to the owner before changing the hook.
 
-- [ ] **Step 3: Teach the hook the region the case declares**
+- [ ] **Step 3: Teach the hook the region the case declares, through the physics layout table**
+
+  `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/physics_layout.json`:
+  ```json
+  {
+    "_comment": "One row per constant/physicsProperties `type`. `regions` maps a role to the entry that names its region inside `names_in` (`{model}` is that document's own `model_key` value). A type with no `regions` is single-region: its documents sit directly under constant/ and system/. The table never copies region names; the case owns them. Added 2026-09-26 (spec 2026-09-26 A7, owner amendment).",
+    "electroModel": {},
+    "electroMechanicalModel": {
+      "names_in": "constant/electroMechanicalProperties",
+      "model_key": "electroMechanicalModel",
+      "regions": {"electro": "electroRegion", "solid": "solidRegion"}
+    }
+  }
+  ```
+
+  `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/physics_layout.py`:
+  ```python
+  """Where a cardiacFoam case keeps each region's documents, as the case says.
+
+  ``constant/physicsProperties`` names the physics ``type``. ``physics_layout.json``
+  says, per type, which region roles exist and which entry names each role's
+  region. A single-region type keeps its documents under ``constant/``; a
+  region-split one under ``constant/<region>/``. Added 2026-09-26 (spec
+  2026-09-26-core-generality-design.md A7, owner amendment): the table replaces
+  a one-off lookup, so electromechanics and later FSI are one row each.
+  """
+
+  from __future__ import annotations
+
+  import json
+  from functools import cache
+  from importlib.resources import files
+  from pathlib import Path
+
+  from foamlib import FoamFile
+
+
+  class PhysicsLayoutError(ValueError):
+      """The case names a physics type the layout table does not know."""
+
+
+  @cache
+  def _table() -> dict:
+      raw = json.loads(files(__package__).joinpath("physics_layout.json").read_text())
+      return {key: value for key, value in raw.items() if not key.startswith("_")}
+
+
+  def physics_type(case_root: Path) -> str:
+      return str(FoamFile(Path(case_root) / "constant" / "physicsProperties")["type"])
+
+
+  def _layout(case_root: Path) -> dict:
+      kind = physics_type(case_root)
+      try:
+          return _table()[kind]
+      except KeyError:
+          raise PhysicsLayoutError(
+              f"physics type {kind!r} is not in physics_layout.json; add its row "
+              f"(known: {sorted(_table())})"
+          ) from None
+
+
+  def region_of(case_root: Path, role: str) -> str | None:
+      """The region the case names for ``role``; ``None`` for a single-region type."""
+      layout = _layout(case_root)
+      if not layout.get("regions"):
+          return None
+      entry = layout["regions"].get(role)
+      if entry is None:
+          raise PhysicsLayoutError(
+              f"physics type {physics_type(case_root)!r} has no region role {role!r}"
+          )
+      document = FoamFile(Path(case_root) / layout["names_in"])
+      model = str(document[layout["model_key"]])
+      return str(document[f"{model}Coeffs"][entry])
+
+
+  def region_document(case_root: Path, role: str, name: str) -> Path | None:
+      """``constant/<region>/<name>`` or ``constant/<name>``; ``None`` if absent."""
+      region = region_of(case_root, role)
+      base = Path(case_root) / "constant"
+      path = base / region / name if region else base / name
+      return path if path.exists() else None
+  ```
+
+  Add `"physics_layout.json",` to `[tool.setuptools.package-data]` `"omnidriver.cardiacfoam"` in `packages/omnidriver-cardiacfoam/pyproject.toml`, after `"dict_key_allowlist.json",`.
 
   Replace the whole of `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/planning_policy.py`:
   ```python
@@ -619,45 +711,20 @@ So the hook is taught to read the electro region that the case itself declares. 
 
   from pathlib import Path
 
-  from foamlib import FoamFile
-
   from omnidriver.cardiacfoam.detection import (
       detect_myocardium_solver_name,
       detect_verification_model_type,
   )
-
-
-  def _electro_properties_path(case_root: Path) -> Path | None:
-      """The case's ``electroProperties``, where the case itself says it is.
-
-      A single-region case keeps it at ``constant/electroProperties``. A
-      region-split electromechanical case keeps it in the electro region its
-      ``constant/electroMechanicalProperties`` names under
-      ``<electroMechanicalModel>Coeffs.electroRegion``. For example,
-      ``manufacturedSolutions/monodomainTotalLagrangianEM`` has
-      ``electroRegion electro;``, so its file is
-      ``constant/electro/electroProperties``.
-
-      Added 2026-09-26 (spec 2026-09-26 A7). The name rule core used to
-      apply exempted that case, and this hook, reading only ``constant/``,
-      did not. Reading the region keeps its exemption without the rule.
-      """
-      direct = case_root / "constant" / "electroProperties"
-      if direct.exists():
-          return direct
-      coupling = case_root / "constant" / "electroMechanicalProperties"
-      if not coupling.exists():
-          return None
-      document = FoamFile(coupling)
-      model = str(document["electroMechanicalModel"])
-      region = str(document[f"{model}Coeffs"]["electroRegion"])
-      regional = case_root / "constant" / region / "electroProperties"
-      return regional if regional.exists() else None
+  from omnidriver.cardiacfoam.physics_layout import region_document
 
 
   def is_nondimensional_case(spec) -> bool:
+      """Corrected 2026-09-26 (spec 2026-09-26 A7): this read only
+      ``constant/electroProperties``, so a region-split case such as
+      ``monodomainTotalLagrangianEM`` was missed, and core's name rule hid it.
+      The electro region now comes from ``physics_layout``."""
       try:
-          electro_path = _electro_properties_path(Path(spec.case_root))
+          electro_path = region_document(Path(spec.case_root), "electro", "electroProperties")
           if electro_path is None:
               return False
           return (
@@ -667,6 +734,48 @@ So the hook is taught to read the electro region that the case itself declares. 
       except Exception:
           return False
   ```
+
+  `packages/omnidriver-cardiacfoam/tests/test_physics_layout_native.py` (the drift gate against the real tree):
+  ```python
+  """physics_layout.json covers every native case, and every region it
+  resolves exists (spec 2026-09-26 A7, owner amendment). Supplied only
+  through OMNIDRIVER_NATIVE_TUTORIALS, never discovered."""
+  from __future__ import annotations
+
+  import os
+  from pathlib import Path
+
+  import pytest
+
+  from omnidriver.cardiacfoam.physics_layout import _table, physics_type, region_of
+
+  pytestmark = pytest.mark.native
+
+
+  def _cases() -> list[Path]:
+      value = os.environ.get("OMNIDRIVER_NATIVE_TUTORIALS")
+      if not value:
+          pytest.fail("OMNIDRIVER_NATIVE_TUTORIALS is not set; a native test needs it supplied")
+      return sorted(
+          p.parent.parent for p in Path(value).rglob("constant/physicsProperties")
+          if "results" not in p.relative_to(value).parts
+      )
+
+
+  def test_every_native_physics_type_has_a_row_and_its_regions_exist():
+      cases = _cases()
+      assert cases, "no native case found, so this proves nothing"
+      split = 0
+      for case in cases:
+          layout = _table()[physics_type(case)]
+          for role in layout.get("regions", {}):
+              region = region_of(case, role)
+              assert (case / "constant" / region).is_dir(), (case, role, region)
+              split += 1
+      assert split, "no region-split case found, so the region path is unproved"
+  ```
+
+  Run: `OMNIDRIVER_NATIVE_TUTORIALS=/Users/simaocastro/noFrontendCardiacFoam_minor_errors/tutorials /tmp/odA-core-gen-p1/bin/python -m pytest $W/packages/omnidriver-cardiacfoam/tests/test_physics_layout_native.py -v -m native`. Expected: PASS. (Reinstall the worktree venv's cardiacfoam package first if package-data changed: `VIRTUAL_ENV=/tmp/odA-core-gen-p1 uv pip install -q -e $W/packages/omnidriver-cardiacfoam`.) If a native type is missing from the table, stop and report it; do not add a row without evidence from that case.
 
 - [ ] **Step 4: Run the proof to verify it passes**
 
@@ -821,7 +930,7 @@ So the hook is taught to read the electro region that the case itself declares. 
   
   Generality-log row:
   ```
-  | 2026-09-26 | core generality (A) | A7: `strict_planning._is_nondimensional_entry` (exempted a case by "manufactured"/"verification" in its name) deleted; `_mesh_geometry_exempt` asks only the plugin hook and `generic_case`; `SKIP_MESH_DIAGNOSTICS` renamed `SKIP_GEOMETRY_DIAGNOSTICS` (`strict_audit.SKIP_GEOMETRY_DIAGNOSTICS_ENV`); cardiacfoam's hook reads a region-split case's electroProperties from the region its `electroMechanicalProperties` names | an exemption by name is solver vocabulary in core; the native proof found the hook missed `manufacturedMonodomainTotalLagrangianEM` | neutral: proved first by `test_every_case_the_name_rule_exempted_is_exempted_by_the_hook` (native) |
+  | 2026-09-26 | core generality (A) | A7: `strict_planning._is_nondimensional_entry` (exempted a case by "manufactured"/"verification" in its name) deleted; `_mesh_geometry_exempt` asks only the plugin hook and `generic_case`; `SKIP_MESH_DIAGNOSTICS` renamed `SKIP_GEOMETRY_DIAGNOSTICS` (`strict_audit.SKIP_GEOMETRY_DIAGNOSTICS_ENV`); cardiacfoam's hook finds electroProperties through the new physics layout table (`physics_layout.json`, one row per physics type; region names read from the case) | an exemption by name is solver vocabulary in core; the native proof found the hook missed `manufacturedMonodomainTotalLagrangianEM` | neutral: proved first by `test_every_case_the_name_rule_exempted_is_exempted_by_the_hook` (native) |
   ```
   ```bash
   git -C $W add -A packages docs/superpowers/plans/2026-09-25-tutorials-are-pointers-remaining.md
