@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 
+from ..tutorial_records import TutorialRecordError
+
 
 def cardiacfoam_monorepo_root(start: Path | None = None) -> Path | None:
     """Walk parent directories looking for the full cardiacFoam monorepo root.
@@ -93,24 +95,76 @@ def repo_root_or_none() -> Path | None:
         return None
 
 
-def scratch_root(base: Path) -> Path:
-    """Disposable working data, kept beside the workspace rather than inside
-    the installation.
+#: The one environment tier of :func:`resolve_scratch_root`.
+SCRATCH_ENV_VAR = "OMNIDRIVER_SCRATCH_DIR"
 
-    ``OMNIDRIVER_SCRATCH_DIR`` overrides. Deliberately NOT the OS temp
-    directory: sweep outputs default under here, and somewhere the OS reaps
-    would be worse than the repository-local ``.tmp/driverfoam`` this replaces
-    -- which was both solver-branded and unwritable on a read-only install.
+
+class ScratchRootNotSupplied(TutorialRecordError):
+    """An operation that stages needs a scratch root and none was supplied.
+
+    A ``TutorialRecordError`` so the CLI's existing refusal handlers print it
+    as structured JSON, never a traceback."""
+
+
+class ScratchRootInsideCasesRoot(TutorialRecordError):
+    """A supplied scratch root lies inside the cases root being planned, so
+    staging there would write the native tree."""
+
+
+def resolve_scratch_root(
+    supplied: str | Path | None, *, cases_root: str | Path | None = None,
+) -> Path:
+    """Where disposable working data goes: supplied, never invented.
+
+    ``supplied`` (``--scratch-dir``, or the ``scratch_root`` keyword of a core
+    entry point) > ``OMNIDRIVER_SCRATCH_DIR`` > :class:`ScratchRootNotSupplied`.
+    Call it only once an operation actually stages (CLAUDE.md, "evaluate
+    defaults lazily"): describing, or a sweep given ``--output-dir``, must
+    never refuse for want of a scratch root it does not use.
+
+    When ``cases_root`` is given, a scratch root at or inside it is refused
+    (:class:`ScratchRootInsideCasesRoot`, naming both) -- the rule
+    ``ConformanceTarget`` already enforced.
+
+    Replaced ``scratch_root(base)`` on 2026-09-26 (owner decision). That
+    defaulted to ``<base>/.omnidriver`` and its callers passed ``cases_root``,
+    so planning a tutorial record wrote ``.omnidriver/`` into the native tree
+    and failed with ``PermissionError`` on a read-only install (openCARP's
+    ``/usr/local/lib/opencarp/share/tutorials``). A scratch location has no
+    ambient truth, so defaulting one invents it
+    (future/ENVIRONMENT_CONTRACT.md §12). Renamed rather than re-signed so a
+    stale ``scratch_root(cases_root)`` call fails to import instead of
+    silently treating the cases root as a supplied scratch root.
     """
-    override = os.environ.get("OMNIDRIVER_SCRATCH_DIR")
-    if override:
-        return Path(override).expanduser()
-    return Path(base) / ".omnidriver"
+    if supplied is not None and str(supplied) != "":
+        root = Path(supplied).expanduser()
+    elif os.environ.get(SCRATCH_ENV_VAR):
+        root = Path(os.environ[SCRATCH_ENV_VAR]).expanduser()
+    else:
+        raise ScratchRootNotSupplied(
+            "no scratch root was supplied, and this operation stages a case: pass "
+            f"--scratch-dir <dir> (or set {SCRATCH_ENV_VAR}) naming a writable "
+            "directory outside the cases root. There is no default; a native "
+            "tutorials tree is never written (future/ENVIRONMENT_CONTRACT.md §12)"
+        )
+    if cases_root is not None:
+        cases = Path(cases_root).expanduser()
+        if root.resolve().is_relative_to(cases.resolve()):
+            raise ScratchRootInsideCasesRoot(
+                f"scratch root {root} is inside cases root {cases}: staging there "
+                "would write the native tree; supply a --scratch-dir outside it"
+            )
+    return root
 
 
-def default_sweep_output_dir(spec_path: str | Path, *, base: Path) -> Path:
-    """Return the standard output location for a sweep specification."""
-    return scratch_root(base) / "sweeps" / Path(spec_path).stem
+def default_sweep_output_dir(
+    spec_path: str | Path, *, scratch_root: str | Path | None,
+) -> Path:
+    """Return the standard output location for a sweep specification:
+    ``<scratch root>/sweeps/<spec stem>``, the scratch root resolved by
+    :func:`resolve_scratch_root` (so it refuses when none is supplied). Call
+    it only when no ``--output-dir`` was given."""
+    return resolve_scratch_root(scratch_root) / "sweeps" / Path(spec_path).stem
 
 
 def default_setup_dir_name(case_dir_name: str) -> str:

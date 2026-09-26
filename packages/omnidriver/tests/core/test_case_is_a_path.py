@@ -115,20 +115,28 @@ def test_core_exposes_no_ambient_root_default() -> None:
     assert not hasattr(paths, "tutorials_root_default")
 
 
-def test_scratch_is_workspace_local_not_repository_local(tmp_path: Path) -> None:
+def test_scratch_is_supplied_not_repository_or_workspace_local(tmp_path: Path, monkeypatch) -> None:
     """`.tmp/driverfoam` wrote inside the repository, which fails on a
-    read-only install and is solver-branded. It is workspace-local now --
-    deliberately NOT the OS temp directory, because sweep outputs default here
-    and having the OS reap them would be worse than the old behaviour."""
-    from omnidriver.core.specs.paths import default_sweep_output_dir, scratch_root
+    read-only install and is solver-branded. It then became workspace-local,
+    ``<cases_root>/.omnidriver`` -- which wrote into native tutorials trees.
+    Corrected 2026-09-26 (owner decision): it is supplied or refused, never
+    defaulted -- still deliberately NOT the OS temp directory, because sweep
+    outputs default under it and having the OS reap them would be worse."""
+    from omnidriver.core.specs.paths import (
+        ScratchRootNotSupplied, default_sweep_output_dir, resolve_scratch_root,
+    )
 
-    assert scratch_root(tmp_path) == tmp_path / ".omnidriver"
-    out = default_sweep_output_dir("study.json", base=tmp_path)
-    assert out == tmp_path / ".omnidriver" / "sweeps" / "study"
+    monkeypatch.delenv("OMNIDRIVER_SCRATCH_DIR", raising=False)
+    with pytest.raises(ScratchRootNotSupplied):
+        resolve_scratch_root(None)
+    with pytest.raises(ScratchRootNotSupplied):
+        default_sweep_output_dir("study.json", scratch_root=None)
+    out = default_sweep_output_dir("study.json", scratch_root=tmp_path / "scratch")
+    assert out == tmp_path / "scratch" / "sweeps" / "study"
 
 
 def test_scratch_honours_the_environment_variable(tmp_path: Path, monkeypatch) -> None:
-    from omnidriver.core.specs.paths import scratch_root
+    from omnidriver.core.specs.paths import resolve_scratch_root
 
     monkeypatch.setenv("OMNIDRIVER_SCRATCH_DIR", str(tmp_path / "elsewhere"))
-    assert scratch_root(tmp_path) == tmp_path / "elsewhere"
+    assert resolve_scratch_root(None) == tmp_path / "elsewhere"

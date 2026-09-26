@@ -2,14 +2,17 @@
 its own copy, and returns a verdict naming what it saw. No check skips; a
 check that cannot run is a failure saying why.
 
-Checks are not thread-parallel within one process; run targets in separate
-processes. In-process planning reads core's scratch root from the process
-environment (``_scratch_environment``), so every check that plans in
-process holds one module-level lock for as long as it overrides it (fix
-round 1 I2, 2026-09-25)."""
+Corrected 2026-09-26: this said checks are not thread-parallel within one
+process, because in-process planning read core's scratch root from the
+process environment (``_scratch_environment``, serialised behind one
+module-level lock; fix round 1 I2, 2026-09-25). Core's scratch root is now
+supplied explicitly (``specs.paths.resolve_scratch_root``): every in-process
+call passes ``target.scratch_root`` as an argument, a child process gets
+``--scratch-dir`` or the variable in its own env dict, and nothing here
+mutates ``os.environ`` -- so the override, its lock and that restriction are
+gone."""
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import json
 import os
@@ -17,15 +20,15 @@ import re
 import shutil
 import subprocess
 import sys
-import threading
 from pathlib import Path, PurePosixPath
-from typing import Any, Callable, Iterator, Mapping
+from typing import Any, Callable, Mapping
 
 from omnidriver.core.introspection import describe_entry
 from omnidriver.core.plugin_interface import load_plugin_context
 from omnidriver.core.runtime.provenance_inputs import enumerate_case_inputs
 from omnidriver.core.runtime.record_execution import commit_record_case
 from omnidriver.core.runtime.run_command import omnidriver_run_command
+from omnidriver.core.specs.paths import SCRATCH_ENV_VAR
 from omnidriver.core.strict_planning import strict_plan
 from omnidriver.core.tutorial_records import TutorialRecordError
 
@@ -35,9 +38,6 @@ _PLAN_DIAGNOSTIC_GROUPS = (
     "validation_diagnostics", "workflow_diagnostics", "catalog_coverage_errors",
     "artifact_diagnostics", "mesh_geometry_diagnostics", "configuration_diagnostics",
 )
-
-_SCRATCH_VARIABLE = "OMNIDRIVER_SCRATCH_DIR"
-
 
 def _verdict(check_id: str, passed: bool, detail: str) -> CheckVerdict:
     return CheckVerdict(check_id=check_id, passed=passed, detail=detail)
@@ -52,34 +52,6 @@ def _record(ctx, name: str):
     if name not in records:
         raise LookupError(f"{name!r} is not a tutorial record of this stack; it has {sorted(records)}")
     return records[name]
-
-
-#: Held for the whole of every ``_scratch_environment``: the override is
-#: process-global, so two threads interleaving it would plan one target
-#: with no override (writing ``<cases_root>/.omnidriver``) and leave the
-#: variable pointing at the other's scratch. Reentrant so nesting works.
-_SCRATCH_LOCK = threading.RLock()
-
-
-@contextlib.contextmanager
-def _scratch_environment(target: ConformanceTarget) -> Iterator[None]:
-    """Point core's scratch space at the target's scratch_root for an
-    in-process call. Without it, planning a record writes
-    ``<cases_root>/.omnidriver`` -- inside the caller's native tree.
-
-    Checks are not thread-parallel within one process; run targets in
-    separate processes. ``_SCRATCH_LOCK`` serialises concurrent callers
-    rather than letting them corrupt each other's environment."""
-    with _SCRATCH_LOCK:
-        previous = os.environ.get(_SCRATCH_VARIABLE)
-        os.environ[_SCRATCH_VARIABLE] = str(target.scratch_root)
-        try:
-            yield
-        finally:
-            if previous is None:
-                os.environ.pop(_SCRATCH_VARIABLE, None)
-            else:
-                os.environ[_SCRATCH_VARIABLE] = previous
 
 
 def check_load(target: ConformanceTarget) -> CheckVerdict:
@@ -103,10 +75,9 @@ def check_load(target: ConformanceTarget) -> CheckVerdict:
 def check_describe_noop(target: ConformanceTarget) -> CheckVerdict:
     """C2: with no study values, describe proposes no change to the native case."""
     ctx = _context(target)
-    with _scratch_environment(target):
-        payload = describe_entry(
-            target.record, overrides={"cases_root": str(target.cases_root)}, driver_context=ctx,
-        )
+    payload = describe_entry(
+        target.record, overrides={"cases_root": str(target.cases_root)}, driver_context=ctx,
+    )
     preview = payload.get("record_preview")
     if preview is None:
         return _verdict("C2", False, f"{target.record!r} did not resolve as a tutorial record (resolution={payload.get('resolution')!r})")
@@ -140,8 +111,7 @@ def check_refuses_unknown(target: ConformanceTarget) -> CheckVerdict:
     ctx = _context(target)
     overrides = {"cases_root": str(target.cases_root), target.unknown_name: 1}
     try:
-        with _scratch_environment(target):
-            describe_entry(target.record, overrides=overrides, driver_context=ctx)
+        describe_entry(target.record, overrides=overrides, driver_context=ctx)
     except (TutorialRecordError, KeyError, ValueError) as exc:
         named = _names(str(exc), target.unknown_name)
         return _verdict("C3", named, f"refused: {exc}" if named else f"refused without naming {target.unknown_name!r}: {exc}")
@@ -183,11 +153,10 @@ def check_patch_preserves(target: ConformanceTarget) -> CheckVerdict:
     value_kind, _validated = validator(patch_doc, patch_key, patch_value)
     if comparator(value_kind, patch_value, reader(staged / patch_doc, patch_key)):
         return _verdict("C4", False, f"target misconfigured: the native case already holds {patch_name} = {patch_value!r}")
-    with _scratch_environment(target):
-        commit_record_case(
-            record, cases_root=target.cases_root, staged_case_root=staged,
-            study_by_source={"base": {patch_name: patch_value}}, driver_context=ctx,
-        )
+    commit_record_case(
+        record, cases_root=target.cases_root, staged_case_root=staged,
+        study_by_source={"base": {patch_name: patch_value}}, driver_context=ctx,
+    )
     after_patched = reader(staged / patch_doc, patch_key)
     after_untouched = reader(staged / untouched_doc, untouched_key)
     problems = []
@@ -199,12 +168,12 @@ def check_patch_preserves(target: ConformanceTarget) -> CheckVerdict:
 
 
 def _plan(target: ConformanceTarget, ctx):
-    with _scratch_environment(target):
-        return strict_plan(
-            target.record,
-            overrides={"cases_root": str(target.cases_root), **dict(target.base_study)},
-            driver_context=ctx,
-        )
+    return strict_plan(
+        target.record,
+        overrides={"cases_root": str(target.cases_root), **dict(target.base_study)},
+        scratch_root=target.scratch_root,
+        driver_context=ctx,
+    )
 
 
 def _plan_errors(report) -> list[str]:
@@ -218,9 +187,12 @@ def _plan_errors(report) -> list[str]:
 
 
 def _child_env(target: ConformanceTarget) -> dict[str, str]:
+    """The environment a child process (or an env-taking call) receives: the
+    caller's, the target's overlay, and the target's scratch root -- set in
+    this copy only, never in ``os.environ``."""
     env = dict(os.environ)
     env.update(target.environment)
-    env[_SCRATCH_VARIABLE] = str(target.scratch_root)
+    env[SCRATCH_ENV_VAR] = str(target.scratch_root)
     return env
 
 
@@ -323,6 +295,7 @@ def check_sweep(target: ConformanceTarget) -> CheckVerdict:
         proc = subprocess.run(
             [sys.executable, "-m", "omnidriver", "sweep-run", "--plugin", target.plugin,
              "--spec", str(spec_path), "--output-dir", str(work / "out"),
+             "--scratch-dir", str(target.scratch_root),
              "--case-timeout-s", str(target.timeout_s)],
             capture_output=True, text=True, env=_child_env(target), timeout=target.timeout_s,
         )
@@ -430,8 +403,7 @@ def check_discoverable(target: ConformanceTarget) -> CheckVerdict:
     and keys the record takes, and what to read first."""
     ctx = _context(target)
     record = _record(ctx, target.record)
-    with _scratch_environment(target):
-        payload = describe_entry(target.record, overrides={"cases_root": str(target.cases_root)}, driver_context=ctx)
+    payload = describe_entry(target.record, overrides={"cases_root": str(target.cases_root)}, driver_context=ctx)
     surface = payload.get("record_surface")
     if surface is None:
         return _verdict("C10", False, "describe has no record_surface")

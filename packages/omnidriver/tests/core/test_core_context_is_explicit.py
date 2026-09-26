@@ -224,6 +224,51 @@ def test_core_never_invents_a_filesystem_root() -> None:
     )
 
 
+#: The one scratch resolver (owner decision 2026-09-26). It lives in paths.py,
+#: which `test_core_never_invents_a_filesystem_root` exempts, so it is
+#: guarded here instead: it must refuse, not default, and nothing in the
+#: package may rebuild the `<base>/.omnidriver` default it replaced.
+_SCRATCH_RESOLVER = "resolve_scratch_root"
+_PACKAGE_ROOT = _CORE_ROOT.parent
+#: `case_transaction` journals inside the case it transacts (a staged copy,
+#: never the native tree): a per-case directory, not a scratch root.
+_DOT_OMNIDRIVER_EXEMPT = {_CORE_ROOT / "case_transaction.py"}
+
+
+def test_the_scratch_resolver_invents_no_default(tmp_path, monkeypatch) -> None:
+    import inspect
+
+    from omnidriver.core.specs import paths
+
+    resolver = getattr(paths, _SCRATCH_RESOLVER)
+    assert "base" not in inspect.signature(resolver).parameters, (
+        "a `base` parameter is how the <base>/.omnidriver default worked"
+    )
+    assert not hasattr(paths, "scratch_root"), (
+        "scratch_root(base) defaulted under its base; every caller goes "
+        f"through {_SCRATCH_RESOLVER} now"
+    )
+    monkeypatch.delenv(paths.SCRATCH_ENV_VAR, raising=False)
+    with pytest.raises(paths.ScratchRootNotSupplied):
+        resolver(None, cases_root=tmp_path)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_nothing_rebuilds_a_dot_omnidriver_scratch_default() -> None:
+    """A bare ``".omnidriver"`` path segment anywhere in the package is the
+    old default coming back under another name. (``.omnidriver-attempt.lock``
+    and the like are distinct literals and are not matched.)"""
+    offenders = {
+        str(path.relative_to(_PACKAGE_ROOT)): [
+            node.lineno for node in ast.walk(ast.parse(path.read_text(), filename=str(path)))
+            if isinstance(node, ast.Constant) and node.value == ".omnidriver"
+        ]
+        for path in sorted(_PACKAGE_ROOT.rglob("*.py"))
+        if "__pycache__" not in path.parts and path not in _DOT_OMNIDRIVER_EXEMPT
+    }
+    assert {f: ls for f, ls in offenders.items() if ls} == {}
+
+
 @pytest.fixture
 def two_provider_context():
     """A composed :class:`DriverContext` over two real, installed providers.

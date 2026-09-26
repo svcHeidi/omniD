@@ -109,6 +109,7 @@ def test_restitution_curves_plan_strict_and_its_advertised_run_document_reach_co
             "plan", "--strict", "--entry", "restitutionCurves",
             "--config", str(config_path),
             "--cases-root", str(cases_root),
+            "--scratch-dir", str(tmp_path / "scratch"),
         ])
     plan_payload = json.loads(out.getvalue())
     assert code == 0, plan_payload

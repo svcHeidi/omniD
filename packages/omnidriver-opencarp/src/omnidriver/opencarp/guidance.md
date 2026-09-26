@@ -2,11 +2,14 @@
 
 Study keys are `<file>.par:<parameter>`, e.g. `nversion.par:gregion[0].g_il`.
 
-Before `plan`/`run` against openCARP's tutorials tree, set
-`OMNIDRIVER_SCRATCH_DIR` to a writable directory outside it. A record stages
-its case under `<cases_root>/.omnidriver` by default, which in an installed
-tree is root-owned (the plan is refused) and in a source build would write
-into the native tree (final review S-I3).
+`plan`/`run` stage the record's case under a scratch root you supply:
+`--scratch-dir <dir>` (or `OMNIDRIVER_SCRATCH_DIR`), a writable directory
+outside the tutorials tree. There is no default -- without one the plan is
+refused by name, and one inside the tutorials tree is refused too; the native
+tree is only ever read. `describe` needs none. (Corrected 2026-09-26: this
+said to set the variable because the default was `<cases_root>/.omnidriver`,
+root-owned in an installed tree and the native tree itself in a source build;
+final review S-I3, now fixed.)
 `describe` lists every parameter you may set, with its type, default and
 bounds: only keys of a `.par` the record passes with `+F`, and none the record's
 command line sets.

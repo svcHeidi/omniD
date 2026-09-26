@@ -27,7 +27,7 @@ from omnidriver.core.specs.common import default_setup_dir_name
 from omnidriver.core.specs.paths import (
     default_sweep_output_dir,
     repo_root_or_none,
-    scratch_root,
+    resolve_scratch_root,
 )
 from omnidriver.core.strict_planning import _utility_produces_by_command, strict_plan
 from .core.runtime.run_document_exec import build_execution_inputs, load_run_document, _allowed_runs_root
@@ -497,6 +497,7 @@ def _context_from_entry(
     allow_unresolved_configuration: bool = False,
     stage_for_execution: bool = False,
     fresh: bool = False,
+    scratch_dir: str | None = None,
 ) -> tuple[_ExecutionContext | None, int]:
     replan_entry = selected_entry
     replan_entry_kind = entry_kind
@@ -509,6 +510,7 @@ def _context_from_entry(
             config_path=config_path,
             explicit_bashrc=explicit_bashrc,
             allow_unresolved_configuration=allow_unresolved_configuration,
+            scratch_root=scratch_dir,
             driver_context=driver_context,
         )
     except TutorialRecordError as exc:
@@ -549,8 +551,19 @@ def _context_from_entry(
             char if char.isalnum() or char in {"-", "_", "."} else "_"
             for char in selected_entry
         ).strip("._") or "entry"
-        _base = Path((overrides or {}).get("cases_root") or Path.cwd())
-        staged_case_root = scratch_root(_base) / "runs" / safe_entry
+        # Supplied or refused (2026-09-26): this defaulted to
+        # <cases_root>/.omnidriver/runs, i.e. into the tree being planned.
+        try:
+            staged_case_root = resolve_scratch_root(
+                scratch_dir, cases_root=(overrides or {}).get("cases_root"),
+            ) / "runs" / safe_entry
+        except TutorialRecordError as exc:
+            print(json.dumps({
+                "status": "failed",
+                "entry": selected_entry,
+                "error": str(exc),
+            }, indent=2))
+            return None, 1
         if fresh or not staged_case_root.exists():
             _stage_entry_case(source_case_root, staged_case_root, driver_context=driver_context)
         staged_overrides = dict(overrides or {})
@@ -580,6 +593,7 @@ def _context_from_entry(
                 config_path=config_path,
                 explicit_bashrc=explicit_bashrc,
                 allow_unresolved_configuration=allow_unresolved_configuration,
+                scratch_root=scratch_dir,
                 driver_context=driver_context,
             )
         except TutorialRecordError as exc:
@@ -610,6 +624,7 @@ def _context_from_entry(
                 config_path=config_path,
                 explicit_bashrc=explicit_bashrc,
                 allow_unresolved_configuration=allow_unresolved_configuration,
+                scratch_root=scratch_dir,
                 driver_context=driver_context,
             )
         except (OSError, ValueError, TutorialRecordError) as exc:
@@ -642,6 +657,7 @@ def _context_from_entry(
             config_path=config_path,
             explicit_bashrc=explicit_bashrc,
             allow_unresolved_configuration=allow_unresolved_configuration,
+            scratch_root=scratch_dir,
             driver_context=driver_context,
         )
         replanned_readiness = is_launchable(
@@ -983,9 +999,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-dir",
         help=(
             "Output directory for action=sweep-plan/sweep-run. Defaults to "
-            "<repo>/.omnidriver/sweeps/<spec-name> (or "
-            "$OMNIDRIVER_SCRATCH_DIR/sweeps/<spec-name>); generated cases "
-            "and logs never belong under tutorials/."
+            "<scratch>/sweeps/<spec-name>, <scratch> being --scratch-dir or "
+            "$OMNIDRIVER_SCRATCH_DIR (refused when neither is supplied); "
+            "generated cases and logs never belong under tutorials/."
+        ),
+    )
+    parser.add_argument(
+        "--scratch-dir",
+        help=(
+            "Writable directory for disposable working data: a tutorial "
+            "record's staged case (records/<name>), a run's staged case "
+            "(runs/<name>), a sweep's default output (sweeps/<spec-name>). "
+            "Overrides $OMNIDRIVER_SCRATCH_DIR. There is no default: an "
+            "operation that stages refuses when neither is supplied, and a "
+            "scratch dir inside --cases-root is refused. Read only when an "
+            "operation stages, so describe (which previews in a discarded "
+            "temporary directory) never needs it."
         ),
     )
     parser.add_argument(
@@ -1154,10 +1183,33 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
             )
     elif args.case_root or args.transaction_id:
         parser.error("--case-root/--transaction-id are only valid with action=recover")
+    if args.action == "recover" and args.scratch_dir:
+        parser.error("--scratch-dir is not valid with action=recover")
     if not args.run_document and not args.entry and args.action not in {
         "recover", "sweep-plan", "sweep-run"
     }:
         parser.error("--entry is required (or use --run-document with action=run/step)")
+
+
+def _sweep_output_dir(args) -> str | Path | None:
+    """``--output-dir``, else ``<scratch>/sweeps/<spec-name>``; ``None``
+    after printing the JSON refusal when neither that nor a scratch root is
+    supplied. The scratch default is computed only when ``--output-dir`` is
+    absent (lazily). Corrected 2026-09-26: it was
+    ``<cases root>/.omnidriver/sweeps/<spec-name>``, the cases root being
+    OMNIDRIVER_CASES_ROOT or the working directory."""
+    if args.output_dir:
+        return args.output_dir
+    try:
+        return default_sweep_output_dir(args.spec, scratch_root=args.scratch_dir)
+    except TutorialRecordError as exc:
+        print(json.dumps({
+            "status": "failed",
+            "action": args.action,
+            "spec": args.spec,
+            "error": str(exc),
+        }, indent=2))
+        return None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1240,6 +1292,7 @@ def main(argv: list[str] | None = None) -> int:
                 config_path=args.config,
                 explicit_bashrc=args.environment_bashrc,
                 allow_unresolved_configuration=args.allow_unresolved_configuration,
+                scratch_root=args.scratch_dir,
                 driver_context=driver_context,
             )
         except TutorialRecordError as exc:
@@ -1274,6 +1327,7 @@ def main(argv: list[str] | None = None) -> int:
             allow_unresolved_configuration=args.allow_unresolved_configuration,
             stage_for_execution=True,
             fresh=args.fresh,
+            scratch_dir=args.scratch_dir,
         )
         if context is None:
             return failure_code
@@ -1294,15 +1348,16 @@ def main(argv: list[str] | None = None) -> int:
             allow_unresolved_configuration=args.allow_unresolved_configuration,
             stage_for_execution=True,
             fresh=args.fresh,
+            scratch_dir=args.scratch_dir,
         )
         if context is None:
             return failure_code
         return _dispatch_context(args, context)
 
     if args.action == "sweep-plan":
-        output_dir = args.output_dir or default_sweep_output_dir(
-            args.spec, base=resolve_cases_root(args.cases_root),
-        )
+        output_dir = _sweep_output_dir(args)
+        if output_dir is None:
+            return 1
         result = sweep_plan(
             args.spec,
             output_dir=output_dir,
@@ -1318,9 +1373,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if any_failed else 0
 
     if args.action == "sweep-run":
-        output_dir = args.output_dir or default_sweep_output_dir(
-            args.spec, base=resolve_cases_root(args.cases_root),
-        )
+        output_dir = _sweep_output_dir(args)
+        if output_dir is None:
+            return 1
         result = sweep_run(
             args.spec,
             output_dir=output_dir,

@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
+from omnidriver.core.specs.paths import resolve_scratch_root
+
 
 @dataclass(frozen=True)
 class ConformanceTarget:
@@ -21,9 +23,11 @@ class ConformanceTarget:
     written. ``base_study`` pins values that keep a real run short (for
     openCARP, mesh resolution and time step; evidence G7).
 
-    Checks are not thread-parallel within one process; run targets in
-    separate processes (in-process planning takes core's scratch root from
-    the process environment, so the suite serialises it behind one lock).
+    Corrected 2026-09-26: this said checks are not thread-parallel within one
+    process, because in-process planning took core's scratch root from the
+    process environment. Every check now passes ``scratch_root`` explicitly
+    (``strict_plan(scratch_root=...)``, ``--scratch-dir``, a child's own env
+    dict), and none writes ``os.environ``.
     """
 
     plugin: str
@@ -48,13 +52,9 @@ class ConformanceTarget:
     def __post_init__(self) -> None:
         # M8 (fix round 1, 2026-09-25): every stage, plan and rmtree a check
         # makes lands under scratch_root, so one inside cases_root would do
-        # all of it inside the native tree.
-        scratch, cases = Path(self.scratch_root), Path(self.cases_root)
-        if scratch.resolve().is_relative_to(cases.resolve()):
-            raise ValueError(
-                f"scratch_root {scratch} is inside cases_root {cases}: every stage, "
-                "plan and sweep would write the native tree"
-            )
+        # all of it inside the native tree. Since 2026-09-26 this is core's
+        # own rule (`resolve_scratch_root`), not a second copy of it.
+        resolve_scratch_root(self.scratch_root, cases_root=self.cases_root)
 
 
 @dataclass(frozen=True)

@@ -1594,6 +1594,7 @@ def test_strict_plan_over_a_tutorial_record_commits_and_plans_with_a_working_run
             "cases_root": str(tmp_path / "cases"),
             "constant/mesh.json:cells": 7,
         },
+        scratch_root=tmp_path / "scratch",
         driver_context=context,
     )
 

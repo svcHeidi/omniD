@@ -50,36 +50,42 @@ class TestCliSweepActions(unittest.TestCase):
         payload = json.loads(captured[0])
         assert payload["case_count"] == 2
 
-    def test_sweep_plan_defaults_to_workspace_scratch_output_dir(self):
+    def test_sweep_plan_defaults_to_the_supplied_scratch_output_dir(self):
         with mock.patch(
             "omnidriver.cli.sweep_plan",
             return_value={"case_count": 0, "cases": []},
         ) as mock_fn, mock.patch("builtins.print"), _patch_default_driver_context():
-            assert main(["sweep-plan", "--spec", "paperI_methods.json"]) == 0
+            assert main([
+                "sweep-plan", "--spec", "paperI_methods.json", "--scratch-dir", "/tmp/od-scratch",
+            ]) == 0
 
         # Was `.tmp/driverfoam/sweeps/...` INSIDE the repository, which is
-        # unwritable on a read-only install and solver-branded. Scratch is
-        # workspace-local now, under the resolved cases root -- deliberately
-        # not the OS temp directory, since sweep outputs default here and
-        # having the OS reap them would be worse.
+        # unwritable on a read-only install and solver-branded, then
+        # `<cases root>/.omnidriver/sweeps/...`. Corrected 2026-09-26: the
+        # scratch root is supplied (--scratch-dir / OMNIDRIVER_SCRATCH_DIR) or
+        # refused -- still deliberately not the OS temp directory by default,
+        # since sweep outputs default under it.
         assert str(mock_fn.call_args.kwargs["output_dir"]) == str(
-            Path.cwd() / ".omnidriver" / "sweeps" / "paperI_methods"
+            Path("/tmp/od-scratch") / "sweeps" / "paperI_methods"
         )
 
-    def test_sweep_run_defaults_to_workspace_scratch_output_dir(self):
+    def test_sweep_run_defaults_to_the_supplied_scratch_output_dir(self):
         with mock.patch(
             "omnidriver.cli.sweep_run",
             return_value={"case_count": 0, "completed_count": 0, "failed_count": 0},
         ) as mock_fn, mock.patch("builtins.print"), _patch_default_driver_context():
-            assert main(["sweep-run", "--spec", "paperI_methods.json"]) == 0
+            assert main([
+                "sweep-run", "--spec", "paperI_methods.json", "--scratch-dir", "/tmp/od-scratch",
+            ]) == 0
 
         # Was `.tmp/driverfoam/sweeps/...` INSIDE the repository, which is
-        # unwritable on a read-only install and solver-branded. Scratch is
-        # workspace-local now, under the resolved cases root -- deliberately
-        # not the OS temp directory, since sweep outputs default here and
-        # having the OS reap them would be worse.
+        # unwritable on a read-only install and solver-branded, then
+        # `<cases root>/.omnidriver/sweeps/...`. Corrected 2026-09-26: the
+        # scratch root is supplied (--scratch-dir / OMNIDRIVER_SCRATCH_DIR) or
+        # refused -- still deliberately not the OS temp directory by default,
+        # since sweep outputs default under it.
         assert str(mock_fn.call_args.kwargs["output_dir"]) == str(
-            Path.cwd() / ".omnidriver" / "sweeps" / "paperI_methods"
+            Path("/tmp/od-scratch") / "sweeps" / "paperI_methods"
         )
 
     def test_sweep_run_passes_max_cases_and_retry_flag(self):

@@ -39,7 +39,7 @@ from omnidriver.core.planning_types import (
     diagnostic as _diagnostic,
 )
 from .contracts.catalogue_paths import catalogued_paths as _catalogued_paths
-from .specs.paths import scratch_root
+from .specs.paths import resolve_scratch_root
 from .tutorial_records import TutorialRecordError
 
 
@@ -478,9 +478,16 @@ def strict_plan(
     config_path: str | Path | None = None,
     explicit_bashrc: str | Path | None = None,
     allow_unresolved_configuration: bool = False,
+    scratch_root: str | Path | None = None,
     driver_context: "DriverContext",
 ) -> StrictPlanReport:
     """Build a non-mutating strict simulation plan report.
+
+    ``scratch_root`` is where a tutorial record's case is staged
+    (``<scratch_root>/records/<name>``); resolved by
+    ``specs.paths.resolve_scratch_root`` only when the entry is a record, so
+    it is supplied (this keyword, else ``OMNIDRIVER_SCRATCH_DIR``) or refused
+    by name -- never defaulted under ``cases_root`` (2026-09-26).
 
     Resolves ``entry`` to a spec via ``load_entry_spec`` (which refuses a
     tutorial_record by name -- B2), then delegates every diagnostic/
@@ -513,6 +520,7 @@ def strict_plan(
             config_path=config_path,
             explicit_bashrc=explicit_bashrc,
             allow_unresolved_configuration=allow_unresolved_configuration,
+            scratch_root=scratch_root,
             driver_context=driver_context,
         )
     spec = load_entry_spec(
@@ -542,6 +550,7 @@ def _strict_plan_for_record(
     config_path: str | Path | None,
     explicit_bashrc: str | Path | None,
     allow_unresolved_configuration: bool,
+    scratch_root: str | Path | None,
     driver_context: "DriverContext",
 ) -> StrictPlanReport:
     """Plan (and commit) one tutorial-record case for `plan --strict --entry
@@ -557,13 +566,16 @@ def _strict_plan_for_record(
     also calls -- design's own "no duplicate" instruction.
 
     Where this stages: "supplied, not invented" (CLAUDE.md) -- there is no
-    sweep output_dir here to stage under, so this uses the repository's own
-    scratch rule, `core.specs.paths.scratch_root`, anchored at the SUPPLIED
-    cases_root, under a `records/<name>` subdirectory (parallel to
-    `cli._context_from_entry`'s own `runs/<name>` staging for a case-folder
-    entry -- a different subdirectory name because a record and a same-named
-    case folder must never collide, `registry.classify_entry`'s own
-    invariant).
+    sweep output_dir here to stage under, so this stages under the SUPPLIED
+    scratch root (``scratch_root``, else ``OMNIDRIVER_SCRATCH_DIR``, else
+    refused by name; `core.specs.paths.resolve_scratch_root`), under a
+    `records/<name>` subdirectory (parallel to `cli._context_from_entry`'s
+    own `runs/<name>` staging for a case-folder entry -- a different
+    subdirectory name because a record and a same-named case folder must
+    never collide, `registry.classify_entry`'s own invariant). Corrected
+    2026-09-26: this said the scratch rule was "anchored at the SUPPLIED
+    cases_root" -- which is exactly how it wrote `<cases_root>/.omnidriver`
+    into the native tree. A scratch root inside cases_root is now refused.
 
     The plan this returns commits the record's case as a side effect (the
     same thing `sweep_runner._record_sweep_plan`, i.e. `sweep-plan` over a
@@ -585,7 +597,12 @@ def _strict_plan_for_record(
         },
         "sweep": {},
     }
-    staged_case_root = scratch_root(cases_root) / "records" / record.name
+    # Resolved here, after the cases_root refusal and only for a record --
+    # lazily, so nothing else ever asks for a scratch root it does not use.
+    staged_case_root = (
+        resolve_scratch_root(scratch_root, cases_root=cases_root)
+        / "records" / record.name
+    )
     try:
         _commit_result, spec = commit_and_build_record_spec(
             record,
@@ -596,17 +613,14 @@ def _strict_plan_for_record(
             driver_context=driver_context,
         )
     except PermissionError as exc:
-        # Final review S-I3 (2026-09-25): the default scratch is
-        # <cases_root>/.omnidriver, so against a read-only native tree (as
-        # openCARP's installer leaves its tutorials) staging died with a bare
-        # traceback. Where the default should point is the owner's pending
-        # decision; this only makes the failure a refusal that says what to
-        # supply.
+        # Final review S-I3 (2026-09-25) made a read-only scratch a refusal
+        # rather than a traceback. Corrected 2026-09-26: the scratch root is
+        # now always supplied, so this only fires on a supplied root that
+        # cannot be written; it no longer describes a default.
         raise TutorialRecordError(
             f"tutorial record {entry!r} cannot be staged under {staged_case_root}: {exc}. "
-            "Planning a record against a read-only or native tutorials tree needs "
-            "OMNIDRIVER_SCRATCH_DIR set to a writable directory outside it (the default "
-            "is <cases_root>/.omnidriver)"
+            "Supply a writable scratch root outside the cases root with "
+            "--scratch-dir (or OMNIDRIVER_SCRATCH_DIR)"
         ) from exc
     report = _strict_plan_for_spec(
         entry,

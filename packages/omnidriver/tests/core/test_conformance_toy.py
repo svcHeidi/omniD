@@ -73,41 +73,39 @@ def test_c8_bites_a_consumed_file_that_does_not_exist(tmp_path):
     assert "constant/mesh.json" not in verdict.detail
 
 
-def test_scratch_environment_is_serialised_across_threads(tmp_path, monkeypatch):
-    """I2: the scratch override is process-global. A second thread must wait
-    for the first to leave, and the variable is restored afterwards."""
+def test_checks_take_the_scratch_root_as_an_argument_so_threads_do_not_interleave(tmp_path, monkeypatch):
+    """Replaces the I2 lock test (2026-09-26). Checks used to point core at
+    the target's scratch root by overriding ``OMNIDRIVER_SCRATCH_DIR`` in
+    ``os.environ`` behind a lock. Core takes the scratch root as an argument
+    now, so two targets planned in parallel threads each stage under their
+    own scratch root, and the process environment is never written."""
     import os
     import threading
 
-    from omnidriver.conformance.checks import _SCRATCH_VARIABLE, _scratch_environment
+    from omnidriver.core.specs.paths import SCRATCH_ENV_VAR
 
-    monkeypatch.delenv(_SCRATCH_VARIABLE, raising=False)
-    first = toy_conformance_target(tmp_path / "a")
-    second = toy_conformance_target(tmp_path / "b")
-    first_inside, release_first = threading.Event(), threading.Event()
-    seen: list[str | None] = []
+    monkeypatch.delenv(SCRATCH_ENV_VAR, raising=False)
+    targets = [toy_conformance_target(tmp_path / name) for name in ("a", "b")]
+    barrier = threading.Barrier(len(targets))
+    verdicts: dict[str, object] = {}
+    seen_in_environment: list[str | None] = []
 
-    def hold_first():
-        with _scratch_environment(first):
-            first_inside.set()
-            release_first.wait(5)
+    def plan(target):
+        barrier.wait(5)
+        verdicts[str(target.scratch_root)] = run_check("C5", target)
+        seen_in_environment.append(os.environ.get(SCRATCH_ENV_VAR))
 
-    def enter_second():
-        with _scratch_environment(second):
-            seen.append(os.environ.get(_SCRATCH_VARIABLE))
-
-    holder = threading.Thread(target=hold_first)
-    holder.start()
-    assert first_inside.wait(5)
-    waiter = threading.Thread(target=enter_second)
-    waiter.start()
-    waiter.join(0.3)
-    assert waiter.is_alive(), "a second thread entered while the first held the scratch override"
-    release_first.set()
-    holder.join(5)
-    waiter.join(5)
-    assert seen == [str(second.scratch_root)]
-    assert _SCRATCH_VARIABLE not in os.environ
+    threads = [threading.Thread(target=plan, args=(t,)) for t in targets]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(30)
+    for target in targets:
+        verdict = verdicts[str(target.scratch_root)]
+        assert verdict.passed, verdict.detail
+        assert (target.scratch_root / "records" / target.record).is_dir()
+    assert seen_in_environment == [None, None]
+    assert SCRATCH_ENV_VAR not in os.environ
 
 
 def test_a_write_into_the_native_cases_root_fails_the_check(tmp_path):

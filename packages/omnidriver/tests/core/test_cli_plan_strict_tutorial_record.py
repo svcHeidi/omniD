@@ -40,6 +40,7 @@ def test_plan_strict_over_a_tutorial_record_advertises_a_working_run_document_co
         "--plugin", "plugins.e2e_record_plugin:E2ERecordPlugin",
         "--entry", "toyTutorial",
         "--cases-root", str(cases_root),
+        "--scratch-dir", str(tmp_path / "scratch"),
     ])
     assert exit_code == 0, capsys.readouterr().out
     payload = json.loads(capsys.readouterr().out)
@@ -89,6 +90,7 @@ def test_run_strict_entry_over_a_tutorial_record_also_works_end_to_end(tmp_path,
         "--plugin", "plugins.e2e_record_plugin:E2ERecordPlugin",
         "--entry", "toyTutorial",
         "--cases-root", str(cases_root),
+        "--scratch-dir", str(tmp_path / "scratch"),
     ])
     assert exit_code == 0, capsys.readouterr().out
     payload = json.loads(capsys.readouterr().out)
@@ -111,6 +113,7 @@ def test_plan_strict_over_a_tutorial_record_whose_native_case_is_missing_refuses
         "--plugin", "plugins.e2e_record_plugin:E2ERecordPlugin",
         "--entry", "toyTutorial",
         "--cases-root", str(empty_cases_root),
+        "--scratch-dir", str(tmp_path / "scratch"),
     ])
     assert exit_code == 1
     payload = json.loads(capsys.readouterr().out)
@@ -138,6 +141,7 @@ def test_a_renderer_or_resolver_refusal_comes_back_as_structured_json_I2(tmp_pat
     exit_code = main([
         "plan", "--strict", "--plugin", plugin, "--entry", "toyTutorial",
         "--cases-root", str(cases_root), "--config", str(config),
+        "--scratch-dir", str(tmp_path / "scratch"),
     ])
     assert exit_code == 1
     payload = json.loads(capsys.readouterr().out)
@@ -163,6 +167,7 @@ def test_a_config_reader_refusal_comes_back_as_structured_json_naming_document_a
     exit_code = main([
         *action, "--plugin", REFUSING_READER_PLUGIN, "--entry", "toyTutorial",
         "--cases-root", str(cases_root), "--config", str(config),
+        "--scratch-dir", str(tmp_path / "scratch"),
     ])
     assert exit_code == 1
     payload = json.loads(capsys.readouterr().out)
@@ -174,30 +179,39 @@ def test_a_config_reader_refusal_comes_back_as_structured_json_naming_document_a
 def test_plan_strict_against_a_read_only_tree_without_a_scratch_dir_refuses_as_json_S_I3(
     tmp_path, capsys, monkeypatch,
 ):
-    """Final review S-I3: a record's scratch defaults to
+    """Final review S-I3: a record's scratch defaulted to
     ``<cases_root>/.omnidriver``. Against a read-only tutorials tree (openCARP's
     installer leaves its tree root-owned) with ``OMNIDRIVER_SCRATCH_DIR``
     unset, ``plan --strict`` died with a ``PermissionError`` traceback and
-    empty stdout. The default itself is the owner's pending decision; the
-    refusal is now JSON naming the variable to set."""
+    empty stdout. Corrected 2026-09-26 (owner decision, fixed): there is no
+    default any more. With nothing supplied the plan is refused as JSON naming
+    ``--scratch-dir`` before anything is written; with one supplied, the
+    read-only tree plans cleanly and is left untouched."""
     import os
     import stat
 
     cases_root = _native_toy_case(tmp_path)
     monkeypatch.delenv("OMNIDRIVER_SCRATCH_DIR", raising=False)
+    before = sorted(p.relative_to(cases_root).as_posix() for p in cases_root.rglob("*"))
+    argv = [
+        "plan", "--strict", "--plugin", "plugins.e2e_record_plugin:E2ERecordPlugin",
+        "--entry", "toyTutorial", "--cases-root", str(cases_root),
+    ]
     cases_root.chmod(stat.S_IRUSR | stat.S_IXUSR)
     try:
         if os.access(cases_root, os.W_OK):
             pytest.fail("cannot make a read-only cases root here (running as root?); this test needs one")
-        exit_code = main([
-            "plan", "--strict", "--plugin", "plugins.e2e_record_plugin:E2ERecordPlugin",
-            "--entry", "toyTutorial", "--cases-root", str(cases_root),
-        ])
+        refused = main(argv)
+        refusal = json.loads(capsys.readouterr().out)
+        planned = main([*argv, "--scratch-dir", str(tmp_path / "scratch")])
+        plan = json.loads(capsys.readouterr().out)
     finally:
         cases_root.chmod(stat.S_IRWXU)
-    assert exit_code == 1
-    payload = json.loads(capsys.readouterr().out)
-    assert payload["status"] == "failed"
-    assert "OMNIDRIVER_SCRATCH_DIR" in payload["error"]
-    assert str(cases_root / ".omnidriver") in payload["error"]
-    assert not (cases_root / ".omnidriver").exists()
+    assert refused == 1
+    assert refusal["status"] == "failed"
+    assert "--scratch-dir" in refusal["error"]
+    assert "OMNIDRIVER_SCRATCH_DIR" in refusal["error"]
+    assert planned == 0, plan
+    assert plan["status"] == "ok"
+    after = sorted(p.relative_to(cases_root).as_posix() for p in cases_root.rglob("*"))
+    assert after == before
