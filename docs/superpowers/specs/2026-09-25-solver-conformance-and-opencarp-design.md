@@ -438,7 +438,7 @@ files this plan's execution produced.
 | 12 | K9, step logs are redacted by plugin-declared patterns before they are kept | `7e0d11f`, native proof `e9c448c` |
 | — | Tasks 10a/11/12 fix round (wave-2 review): command-owned keys refused by name (F14), a case-writer refusal reaches `plan --strict` as JSON, redaction replaces the whole match, a record run carrying its steps is runnable without asking the adapter | `5bf06c0`, `29530d2`, `483408b`, `b7cdaf3`, `458824f`, `ad11256`, `c2a9448` |
 | 13 | this document's Status table; CI; CLAUDE.md (this task) | — |
-| 14 | cardiacFoam `restitutionCurves` conformance target | waiting for `tutorials-are-pointers` step 5 |
+| 14 | cardiacFoam `restitutionCurves` conformance target. Corrected 2026-09-26: it did not wait for step 5 (tutorials-are-pointers §5f, P4); C1–C12 pass against the real cardiacFoam binary, on branch `tut-p4` (not yet on `main`) | `8acbce2` (OpenFOAM preflight quotes the missing command, for C9), `36c99c1` (steps 1–3), `0e736f8` (key grammar), `a6e79e2` (one catalogue in `describe`), `a982d6c` (C10 hooks) |
 | 15 | per-layer file ownership (forces K3) | waiting for `tutorials-are-pointers` step 5 |
 
 ### Dated corrections (2026-09-25)

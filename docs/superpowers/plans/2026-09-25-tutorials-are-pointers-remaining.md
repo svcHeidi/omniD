@@ -68,6 +68,7 @@ and the native repo's own log:
 | 5.4b | manufacturedBidomain, manufacturedMonodomainPseudoECG, manufacturedEikonalECG, **niederer2011**, as tasks in §5c. **Corrected 2026-09-26:** pseudo-ECG is **not** blocked on the owner. `setup/studies/tetConvergence/box.geo.template` is committed natively (`21f7bc82e`, 2026-08-18, last touched `a72870bee`, 2026-09-21), as are bidomain's and eikonalECG's `box.geo.template` and bath's `three_domain_box.geo.template`. The six `sweep_temporal_*.json` were untracked exploratory files that no committed file referenced. They were deleted from the owner's working tree at 14:04 today, and only a copy under the git-ignored `tutorialsTest-regression/` survives. The committed temporal study is `sweep_temporal_convergence.json` with its README | not started | — |
 | 5.1–5.3, 5.5, TL-EM | unchanged from the table above | — | — |
 | C | final cleanup (§3); also where conformance Task 14's "delete the old factory path" lands | not started | — |
+| P4 | conformance Task 14, all four steps: `restitutionCurves` passes C1–C12 against the real binary (added 2026-09-26). Branch `tut-p4`, not merged | done on the branch | `8acbce2`, `36c99c1`, `0e736f8`, `a6e79e2`, `a982d6c` |
 
 **Baseline for the cleaning, measured 2026-09-25 at `0cf5bfb`:**
 - tutorial modules plus `tutorials/defaults/`: 5,884 lines;
@@ -183,7 +184,10 @@ above disagree, this list wins.
      The restitutionCurves pilot declares none, which is why conformance
      Task 14 starts by adding them (§5f).
    - **Every cardiacFoam solve step produces
-     `constant/electroProperties.withDefaultValues`.** Native
+     `constant/electroProperties.withDefaultValues`** (corrected 2026-09-26,
+     P4: every step whose solver runs `electroModel::end`. `singleCellSolver`
+     overrides it, and `restitutionCurves` writes no such file; R4 in
+     `docs/solver-learning/cardiacfoam.md`). Native
      `electroModel::end` (`src/electroModels/core/electroModel.C`) renames the
      dictionary and writes it. No convention excludes it: the OpenFOAM
      layer's suffix rule covers `.foam`, `.msh` and `.geo`. So a restage of a
@@ -942,6 +946,13 @@ tutorials-are-pointers step 5 is finished".
   - Its step 1 must add `constant/electroProperties.withDefaultValues` to
     the solve step's `produces` (§2 item 1). Otherwise its C11 fails with
     "carried".
+    **Corrected 2026-09-26 (P4, by real runs):** not for `restitutionCurves`.
+    Its solver, `singleCellSolver`, overrides `electroModel::end()` without
+    calling it, and no run of the case writes the file
+    (`docs/solver-learning/cardiacfoam.md` R4). Declaring it would fail C6;
+    C11 passes without it. So no shared constant was added yet: the first
+    record whose solve step writes the file (every 5.4 record, by source)
+    adds it, as §5g Q13 recommends.
   - It creates `packages/omnidriver-cardiacfoam/tests/cardiacfoam_native.py`,
     a uniquely named module (CLAUDE.md's conftest trap). It holds
     `native_tutorials_root()`, which three pilot tests each copy today, and
