@@ -118,6 +118,33 @@ inferred.
    (`cardiacfoam/activation_probes.py`) belongs in `omnidriver-cardiacfoam`,
    which knows the physics. Neither exists yet.
 
+**Corrected 2026-09-26 (controller review of the whole unblocked topic,
+finding I3; recorded, not implemented -- Task 7 is still blocked):** this
+paragraph's "Unit `s`, rule `cell-containing`" would, as specified, report
+the requested probe location (the `# Probe k (x y z)` header, i.e. the
+agent's own `system/Niedererpoints` entry) as `Quantity.sampled_at`. The
+owner's appendix (`niederer_protocol.qmd`, "Activation-time extraction and
+sampling") says OpenFOAM's `probes` function samples the **containing
+cell**, without interpolation -- so the header location is *not* where the
+value came from, and a cross-solver report would show a cardiacFOAM
+`sampled_at` that is really just the agent's own input echoed back, next to
+openCARP's genuinely-measured node. Task 7 must instead:
+- report the **containing cell's centre**, read from the case's own mesh or
+  cell-centre field (e.g. OpenFOAM's `C`), as `sampled_at` -- never the
+  header's probe location;
+- accept the agent's expected probe locations (in cardiacFOAM's own frame)
+  as `points`, with a required `max_sampling_offset`, using core's generic
+  expected-location check for a self-sampling reader (`comparison._points`,
+  fixed for this finding: a reader with `takes_points = False` may still be
+  given `points`, meaning "expected location", checked against its reported
+  `sampled_at` -- see `core/quantities/comparison.py`'s module docstring).
+
+**Open item, also recorded here:** `comparison._artifact` refuses any
+`path_pattern` containing `{`. If the cardiacFOAM probe artifact ends up
+declared with topic A's `{instance}` placeholder (instance directories),
+Task 7 needs a core change first to read a quantity from an indexed
+artifact at all -- not decided here.
+
 ## 4. Proof
 
 - A native test, openCARP only: `niedererNVersion` at a coarse `dx` gives

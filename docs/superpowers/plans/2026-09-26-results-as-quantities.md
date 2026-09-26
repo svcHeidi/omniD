@@ -3099,6 +3099,37 @@ packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/activation_probes.py 
   - `read` returns one `RawSample` per requested probe, named by its index as a string (`"0"`…`"8"`), with `value` from the **last** data row and `sampled_at` = the probe's header location (the requested probe location as the solver echoes it; the containing cell's centre is not in the file, and the rule says so).
   - Each of these facts (seconds, `-1`, cell-containing, last row) is from map B. Step 2 re-checks them on a real run before any code is written.
 
+**Corrected 2026-09-26 (controller review of the whole unblocked topic,
+finding I3; recorded here, not implemented -- this task is still blocked):**
+the `sampled_at` bullet above is wrong as written. OpenFOAM's `probes`
+function (no `interpolationScheme`) samples the **containing cell**, not
+the header's configured location, so reporting the header location as
+`sampled_at` would restate the agent's own `system/Niedererpoints` entry,
+not say where the value actually came from -- exactly the class of defect
+the owner's rule ("the coordinates the solver says it sampled") exists to
+catch. When Step 4 implements this:
+- `sampled_at` must be the **containing cell's centre**, read from the
+  case's own mesh or cell-centre field (e.g. `C`), never the probe header;
+- the agent's request gives the expected probe locations, in cardiacFOAM's
+  own frame, as `points`, with a required `max_sampling_offset`. Core's
+  `comparison._points`/`_quantities` (fixed by the same controller review,
+  finding I3) support this for any `takes_points = False` reader: `points`
+  means "expected location", checked against the reported `sampled_at`, and
+  never handed to the reader itself.
+- **Open item:** `comparison._artifact` refuses any `path_pattern`
+  containing `{`. If 5.4b's `niederer2012` record ends up declaring the
+  probe artifact with topic A's `{instance}` placeholder, this task needs a
+  core change first. Check this at Step 1's unblock check.
+
+**Deferred (M9, controller review 2026-09-26; not this task's job to fix):**
+neither this reader nor `LatPerNodeReader` reports the parameters that
+define what "activation" means for its solver (openCARP:
+`nversion.par:lats[0].threshold`/`mode`; cardiacFOAM: whatever
+`electroProperties`/ionic setting defines the 0 mV crossing this probe
+function is fed). A study that changes one gives a value that compares
+against the same reference with no word in the report. Worth a reader
+enhancement later -- not scoped into Task 7 or Task 8.
+
 - [ ] **Step 1: Unblock check.** `git log main` shows the tutorial stream's 5.4b `niederer2012` record. Read its record module, its coarse study values from its native test, and its step ids. Use those names wherever this task writes `niederer2012`. Build `/tmp/odB-<wt>` fresh.
 - [ ] **Step 2: Settle the facts on a real run.** Run 5.4b's `niederer2012` record through `sweep-run` at its coarse settings with `--scratch-dir`, and inspect `postProcessing/Niedererpoints/0/activationTime`. Log each fact in the cardiacFOAM evidence (or 5.4b's own log), as command, observed and conclusion:
   - the header lines;

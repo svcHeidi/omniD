@@ -575,21 +575,68 @@ that schema before anything is read.
 
 **Orientation, pairing and tolerance are the agent's step, and they are
 stated in the request.** Core does no frame conversion and infers no
-pairing: a request's `points` are written in the reference's own frame and
-unit, converted only to the reader's declared unit; a request's `pairs`
-say explicitly which `(run, quantity)` on the left compares against which
-on the right, under which reference label. A tolerance (`kind`: `absolute`
-or `relative`, a `value`, and a `rationale`) is declared once, before either
-run is read — changing it after seeing a result is not supported by the
-tool: a written report cannot be edited, only superseded (next paragraph).
+pairing. **Corrected 2026-09-26 (controller review M5): a request's
+`points` are written in the *reader's* (the solver's) own frame and unit —
+not the reference's.** The two frames only coincide for openCARP, whose
+reader "orients nothing: openCARP's frame is whatever the mesh says"
+(`opencarp/lat_reader.py`); an agent following the old, wrong sentence for
+a points-taking reader in another frame would sample the wrong location
+with zero reported offset. Orienting a reference's coordinates into a
+reader's frame (e.g. cardiacFOAM's probe-versus-slab rotation) is the
+agent's own step, done before writing the request. A request's `pairs` say
+explicitly which `(run, quantity)` on the left compares against which on
+the right, under which reference label. A tolerance (`kind`: `absolute` or
+`relative`, a `value`, and a `rationale`) is declared once, before either
+run is read.
 
-**The report is written once.** `run_quantity_comparison(request_path,
+**`points` means one of two things, by the artifact's reader
+(`takes_points`).** For a reader that samples at supplied locations
+(openCARP's), `points` says where to sample, and the reader receives them.
+For a reader that samples where it chooses, `points` instead states the
+agent's *expected* location of each named quantity — the reader never
+receives them; the comparison checks each sample's own reported
+`sampled_at` against that expected point, exactly as for a points-taking
+reader, so a mispaired probe still shows up as `sampled_off_point`. Either
+meaning requires `max_sampling_offset`: it is **pre-registered, with no
+default** — a request that gives `points` without it is refused by name,
+before anything is read.
+
+**`both_not_reached` is also pre-registered, with no default.** Every
+request states `"both_not_reached": "agree"` or `"fail"`: with `agree`, a
+pair whose sentinel (e.g. `-1`) is resolved on both sides does not fail the
+report; with `fail`, it does, exactly like `outside_tolerance`. Either way,
+the report's `status` is never `passed` unless at least one pair is
+`within_tolerance` — a report full of `both_not_reached` pairs is
+`unavailable`, with `status_reason` saying why, never a vacuous `passed`.
+
+**What pre-registration actually enforces, and what stays the agent's own
+discipline.** Corrected 2026-09-26 (controller review M5): the earlier text
+here overclaimed that "changing a tolerance after seeing a result is not
+supported by the tool." It is: nothing stops rerunning `compare` with a
+loosened tolerance at a new report path, and a written report's request
+digest ties it to the request bytes that produced it, not to a time before
+any value was read. What core actually enforces is narrower: the report is
+written once (below), the request's digest is recorded in it, and
+(`omnidriver.quantities` reports specifically) `experiments.inspect_sweep_experiment`
+recomputes the overall status from the report's own `metrics` rather than
+trusting a stated `status`. Writing the request *before* looking at
+results, and not writing a second one once the first result is
+unwelcome, is the agent's own discipline — the tool does not, and cannot,
+verify it.
+
+**The report is written once, and read-only.** `run_quantity_comparison(request_path,
 report_path)` (`omnidriver compare --comparison-request ... --report ...`)
 refuses to run at all if `report_path` already exists, and refuses to
 overwrite it if two processes race to write it (it hard-links a temporary
-file into place). A changed request is a new report, at a new path; the
-request's own digest is recorded in the report so the two stay traceable to
-each other.
+file into place, then `chmod`s it `0o444`). A changed request is a new
+report, at a new path; the request's own digest is recorded in the report
+so the two stay traceable to each other. **`omnidriver compare` exits 0
+once a report is written, whatever its `status`** — `failed` and
+`unavailable` are still a successful run of the tool; check the report's
+own `status` field, not the process exit code, for the comparison's
+result. Exit 1 means the comparison itself was refused (a malformed
+request, a report path that already exists, …), reported as JSON on
+stdout with an `error` field, and no report file is written at all.
 
 Each pair in the report's `metrics` carries a `status`:
 
@@ -597,23 +644,36 @@ Each pair in the report's `metrics` carries a `status`:
   against the pair's bound;
 - `both_not_reached` — the sentinel (e.g. `-1`) on both sides, resolved
   before any unit conversion, never converted itself (`-1 s` is never
-  `-1000 ms`);
+  `-1000 ms`); counts as agreement or as a failure per the request's
+  `both_not_reached` choice above;
 - `reached_on_one_side` — the sentinel on exactly one side;
-- `sampled_off_point` — a side's reader sampled further from the requested
-  point than the run's stated `max_sampling_offset`;
+- `sampled_off_point` — a side's reader sampled further from its requested
+  or expected point than the run's stated `max_sampling_offset`;
 - `not_evaluated` — a side could not be read at all (a `reason` says why:
   the case did not complete, the stack declares no reader for the
-  artifact's format, the artifact is missing, or the reader itself raised).
+  artifact's format, the artifact is missing, the reader itself raised, or
+  an expected location was given but the reader reported none to check it
+  against).
 
 Each side of a pair also reports its `value`, `unit` (post-conversion) and
 `declared_unit` (the reader's own), its `sampling_rule` (e.g. `node`,
 `cell-containing`) and its `sampled_at`/`sampled_at_unit` next to the
-`requested_at` point that was asked for — so a wrong pairing or a
-misoriented frame is visible in the report itself, not hidden behind an
-aggregate number. The report's own `status` (`passed`/`failed`/
-`unavailable`) is `failed` if any pair is outside tolerance, reached on one
-side only, or sampled off point; `unavailable` if any pair could not be
-evaluated; `passed` otherwise.
+`requested_at`/`requested_at_unit` point that was asked for and the
+`sampling_offset`/`sampling_offset_unit` between them — so a wrong pairing
+or a misoriented frame is visible in the report itself, not hidden behind
+an aggregate number, and every one of those location numbers carries its
+own unit (`max_sampling_offset_unit` likewise, on each `runs` entry). The
+report's own `status` (`passed`/`failed`/`unavailable`) is `failed` if any
+pair is outside tolerance, reached on one side only, sampled off point, or
+(with `both_not_reached: "fail"`) both not reached; `unavailable` if any
+pair could not be evaluated, or if no pair reached `within_tolerance` at
+all; `passed` otherwise.
+
+**Relative paths in the request resolve against the request file's own
+directory**, not the current working directory: `"reference": "../reference.json"`
+in `requests/request.json` reads `reference.json` next to `requests/`, and
+likewise for each run's `sweep_output`. This is undocumented behaviour an
+agent relied on implicitly until this correction (M5).
 
 **Attaching the report to an experiment.** `quantities.experiment_comparisons(report_path,
 sweep_output=...)` builds the `ComparisonRequest` tuple for every case in one
@@ -640,6 +700,7 @@ OMNIDRIVER_OPENCARP_TUTORIALS=/usr/local/lib/opencarp/share/tutorials DYLD_LIBRA
   "schema_version": 1, "reference": "benchmarks/niederer2011.json",
   "tolerance": {"kind": "absolute", "value": 5.0, "unit": "ms",
                 "rationale": "declared before either run was read; exploratory, not a benchmark acceptance claim"},
+  "both_not_reached": "agree",
   "runs": {
     "dx500": {"plugin": "opencarp", "sweep_output": "sweep", "case_id": "case_0001",
               "artifact_id": "record.solve.2", "points": {"unit": "mm", "at": {"P1": [0, 0, 0], "...": "..."}},
