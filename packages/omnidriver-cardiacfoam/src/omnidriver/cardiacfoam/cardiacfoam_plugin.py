@@ -373,14 +373,15 @@ class CardiacFoamPlugin:
         return record_key_catalog(case_root)
 
     def get_agent_guidance(self) -> tuple:
-        """What this stack's validator and catalogues enforce, stated for an
+        """What this stack's validator and catalogues enforce, and the owner's
+        pre-processing rule (added 2026-09-26, review 54b M11), stated for an
         agent before it writes a study (``guidance.md``; conformance C10).
         The case's own README reaches the agent separately, through the
         ``case.documentation`` role this plugin's profile declares."""
         from importlib import resources
 
         text = resources.files(__package__).joinpath("guidance.md").read_text()
-        return ({"title": "cardiacFOAM: how omniD checks a study's keys", "text": text},)
+        return ({"title": "cardiacFOAM: how omniD checks a study's keys, and where the mesh comes from", "text": text},)
 
     def get_tutorial_records(self) -> dict:
         """This plugin's ``TutorialRecordCapability`` answer (design doc

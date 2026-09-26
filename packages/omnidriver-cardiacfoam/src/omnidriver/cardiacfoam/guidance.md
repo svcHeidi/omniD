@@ -2,9 +2,10 @@
 
 Study keys are `<document>:<dotted.key>`, e.g.
 `constant/electroProperties:singleCellSolverCoeffs.tissue`. `describe` lists
-every key a record's case accepts, in `record_surface.keys`. Each rule below
-is one the record-key validator (`record_key_validation.record_key_validator`)
-or the catalogue already enforces; none is new.
+every key a record's case accepts, in `record_surface.keys`. Each rule in
+this first part is one the record-key validator
+(`record_key_validation.record_key_validator`) or the catalogue already
+enforces; none is new. The last section is about the mesh.
 
 - **Two documents are catalogued**: `constant/electroProperties` and
   `constant/physicsProperties`. A key in either must be in the catalogue,
@@ -33,3 +34,49 @@ or the catalogue already enforces; none is new.
   keeps its electro documents under `constant/<region>/` (`physics_layout.json`),
   which the validator does not address; `describe` refuses such a record by
   name.
+
+## Where a case's mesh comes from: the pre-processing stage
+
+The owner's rule (2026-09-26), for how records are built and used. Unlike
+the rules above, a validator does not check it; the refusals it names are
+the record's own.
+
+- **What the solver starts from.** Before the solve, a case needs a
+  starting state: a mesh, and possibly fields or graphs. The steps that
+  produce it are the record's pre-processing stage. Its source is either
+  **generated**, from a recipe the case owns and every run rebuilds, or
+  **supplied**, a finished artifact brought in and not rebuilt. Anything
+  from outside the native tree is supplied by you and never discovered.
+  Every cardiacFOAM record today generates its mesh. Supplied inputs for a
+  record are a later item.
+- **blockMesh is the default route.** A record runs its native case's own
+  route unless the study picks another: `blockMesh` with
+  `system/blockMeshDict`, or the dictionary the case's own scripts name. For
+  bidomain and eikonalECG that is `-dict system/blockMeshDict.3D`, from their
+  `regression/regressionTest.sh`. A record mirrors the native commands and
+  never calls `./Allrun`. `describe`'s `record_preview.workflow_variant`
+  says which route runs and whether the study or the record chose it.
+  `record_preview.workflow_commands` shows each step's command line.
+- **gmsh is the alternative generator**, where a case ships a
+  `.geo.template`: `gmsh -3 <template> -setnumber lc <v>`, then
+  `gmshToFoam`. A study selects it through the record's route selector,
+  `"mesh"` (`"mesh": "tet"`). With no resolution value, gmsh uses the
+  template's own `DefineConstant` default. `tetNumberCells` (lc = 1/N on
+  the unit cube) or niederer2011's `tetDx` (lc in metres) adds
+  `-setnumber lc`.
+- **A study value replaces the default argument it names.** `dimension`
+  passes `-dict system/blockMeshDict.<dim>`, which replaces the default
+  `-dict system/blockMeshDict.3D` rather than adding a second `-dict`.
+- **A route admits only what it can build.** Every tet template is a 3D
+  geometry, so a tet route accepts `dimension` only as `3D`, or unset. Any
+  other value is refused by name before anything is written. A route the
+  record does not declare is refused by name too.
+- **Keep it loose.** A record declares its default route and the routes its
+  native studies use; it does not list every possible one. To do something
+  else, read the native case: its `Allrun`, `regression/regressionTest.sh`,
+  README and `setup/studies/`. Then choose one of the record's routes and
+  shape it with study values and step arguments, for example a `-dict`
+  naming a dictionary you composed, or any `-setnumber lc`. What ran, what
+  it read and wrote, and the fingerprints are recorded. The choice is yours.
+- **Serial only.** Running the solve in parallel belongs to the OpenFOAM
+  layer (a later item), not to a record's routes.
