@@ -642,7 +642,16 @@ class SolverPluginOptionalHooks(Protocol):
         ``[Int]`` is generic index notation, not a solver's syntax: a key
         whose path segment carries a concrete index (``stim[0].start``) is
         matched against its template (``stim[Int].start``). Absent -> no
-        keys, which the conformance check C10 reports as a failure."""
+        keys, which the conformance check C10 reports as a failure.
+
+        Added 2026-09-26 (conformance Task 14 step 4): a whole segment
+        ``<name>`` -- any identifier in angle brackets, e.g.
+        ``regions.<region_name>.baseline`` -- stands for any single dot-free
+        segment (``regions.lv.baseline``). A document whose keys are
+        written as asked but have no catalogue is listed once as
+        ``{"document": d, "key": "<any>", "validated": False}``, with no
+        ``value_kind``; it lists every key of ``d``. The grammar, and its
+        matcher, live in ``runtime.record_surface``."""
         ...
 
     def get_agent_guidance(self) -> tuple[Mapping[str, str], ...]:

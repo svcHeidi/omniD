@@ -1,4 +1,4 @@
-"""C1-C11. Each check is self-contained: it builds its own context, stages
+"""C1-C12. Each check is self-contained: it builds its own context, stages
 its own copy, and returns a verdict naming what it saw. No check skips; a
 check that cannot run is a failure saying why.
 
@@ -27,6 +27,7 @@ from omnidriver.core.introspection import describe_entry
 from omnidriver.core.plugin_interface import load_plugin_context
 from omnidriver.core.quantities import ReaderDeclarationError, check_reader
 from omnidriver.core.runtime.provenance_inputs import enumerate_case_inputs
+from omnidriver.core.runtime.record_surface import lists_key
 from omnidriver.core.runtime.record_execution import commit_record_case
 from omnidriver.core.runtime.run_command import omnidriver_run_command
 from omnidriver.core.runtime.run_document_exec import RUN_DOCUMENT_FILENAME
@@ -392,17 +393,28 @@ def check_environment(target: ConformanceTarget) -> CheckVerdict:
     return _verdict("C9", not problems, "; ".join(problems) or "clean; names the missing solver")
 
 
-#: Generic index notation (``[Int]``, ``get_record_key_catalog``): any
-#: concrete index in a key path segment matches its template.
-_ANY_INDEX = re.compile(r"\[\d+\]")
-
-#: What ``get_record_key_catalog`` requires of every entry.
+#: What ``get_record_key_catalog`` requires of every entry. ``value_kind``
+#: may be absent only from an entry that says ``validated: False``
+#: (``record_surface``'s grammar: an open document).
 _REQUIRED_KEY_FIELDS = ("document", "key", "value_kind")
+
+
+def _incomplete(entry: Mapping[str, Any]) -> bool:
+    required = _REQUIRED_KEY_FIELDS if entry.get("validated") is not False else ("document", "key")
+    return any(not entry.get(field) for field in required)
 
 
 def check_discoverable(target: ConformanceTarget) -> CheckVerdict:
     """C10: describe tells an agent, the same way for every solver, which axes
-    and keys the record takes, and what to read first."""
+    and keys the record takes, and what to read first.
+
+    The target's patch key is looked up through ``record_surface``'s key
+    grammar (``[Int]``, ``<name>`` segments, open documents). Corrected
+    2026-09-26 (conformance Task 14 step 4): this matched a key literally,
+    or with each concrete index rewritten to ``[Int]``, so a catalogue could
+    list neither a named segment (cardiacFOAM's
+    ``regions.<region_name>.baseline``) nor a document whose keys have no
+    catalogue."""
     ctx = _context(target)
     record = _record(ctx, target.record)
     payload = describe_entry(target.record, overrides={"cases_root": str(target.cases_root)}, driver_context=ctx)
@@ -415,15 +427,14 @@ def check_discoverable(target: ConformanceTarget) -> CheckVerdict:
         problems.append(f"axes listed {sorted(axis_names)}, record allows {sorted(record.allowed_axes)}")
     if any(not a.get("value_kind") for a in surface["axes"]):
         problems.append("an axis is listed without its value kind")
-    incomplete = [e for e in surface["keys"] if any(not e.get(f) for f in _REQUIRED_KEY_FIELDS)]
+    incomplete = [e for e in surface["keys"] if _incomplete(e)]
     if not surface["keys"]:
         problems.append("no key catalogue")
     elif incomplete:
         problems.append(f"{len(incomplete)} catalogue entr(ies) lack one of {list(_REQUIRED_KEY_FIELDS)}, e.g. {incomplete[0]}")
     document, key_path = _split_study_key(target.patch[0])
     key = ".".join(key_path)
-    listed = {(e.get("document"), e.get("key")) for e in surface["keys"]}
-    if (document, key) not in listed and (document, _ANY_INDEX.sub("[Int]", key)) not in listed:
+    if not any(lists_key(e, document, key) for e in surface["keys"]):
         problems.append(f"the target's own patch key {document}:{key} is not in the catalogue")
     if not surface["guidance"]:
         problems.append("no agent guidance")

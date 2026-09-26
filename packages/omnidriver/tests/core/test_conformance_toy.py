@@ -12,9 +12,10 @@ import pytest
 from omnidriver.conformance import CHECKS, run_check
 from omnidriver.core.runtime.sweep_runner import _child_reconciliation
 from plugins.conformance_toy import (
-    DOCUMENTED_PLUGIN, GHOST_CONSUMES_PLUGIN, INDEXED_KEY_PLUGIN, KINDLESS_KEY_PLUGIN, NATIVE_WRITING_PLUGIN,
-    NO_CONSUMES_PLUGIN, NO_PRODUCES_PLUGIN, OVER_GENERATED_CONVENTIONS_PLUGIN, REPLACING_PLUGIN,
-    SILENT_PREFLIGHT_PLUGIN, SILENT_SURFACE_PLUGIN, UNDECLARED_OUTPUT_PLUGIN, UNLISTED_KEY_PLUGIN,
+    DOCUMENTED_PLUGIN, GHOST_CONSUMES_PLUGIN, INDEXED_KEY_PLUGIN, KINDLESS_KEY_PLUGIN, NAMED_KEY_PLUGIN,
+    NATIVE_WRITING_PLUGIN, NO_CONSUMES_PLUGIN, NO_PRODUCES_PLUGIN, OPEN_DOCUMENT_PLUGIN, OTHER_OPEN_DOCUMENT_PLUGIN,
+    OVER_GENERATED_CONVENTIONS_PLUGIN, REPLACING_PLUGIN, SILENT_PREFLIGHT_PLUGIN, SILENT_SURFACE_PLUGIN,
+    UNDECLARED_OUTPUT_PLUGIN, UNLISTED_KEY_PLUGIN, VALIDATED_KINDLESS_PLUGIN,
     STRAY_NAME, STRAY_ROOT_VARIABLE, toy_conformance_target,
 )
 from plugins.quantity_toy import BAD_DECLARATION_PLUGIN, QUANTITY_TOY_PLUGIN, UNREADABLE_PLUGIN
@@ -299,6 +300,56 @@ def test_c10_matches_a_concrete_index_against_its_int_template(tmp_path):
     )
     verdict = run_check("C10", target)
     assert verdict.passed, verdict.detail
+
+
+@pytest.mark.parametrize(("key", "listed"), [
+    ("regions.lv.count", True),
+    ("regions.lv[0].count", True),     # one dot-free segment, whatever it holds
+    ("regions.lv.inner.count", False),  # two segments are not one
+    ("regions..count", False),          # an empty segment is not a segment
+    ("regions.count", False),
+])
+def test_c10_matches_a_named_segment_against_its_template(key, listed, tmp_path):
+    """``<region_name>`` in a catalogue key stands for any single dot-free
+    segment (2026-09-26, conformance Task 14 step 4, decision 2)."""
+    target = dataclasses.replace(
+        toy_conformance_target(tmp_path, plugin=NAMED_KEY_PLUGIN), patch=(f"constant/mesh.json:{key}", 7),
+    )
+    verdict = run_check("C10", target)
+    assert verdict.passed is listed, verdict.detail
+    if not listed:
+        assert f"constant/mesh.json:{key} is not in the catalogue" in verdict.detail
+
+
+def test_c10_an_int_template_does_not_match_a_named_index(tmp_path):
+    target = dataclasses.replace(
+        toy_conformance_target(tmp_path, plugin=INDEXED_KEY_PLUGIN), patch=("constant/mesh.json:cells[x].count", 7),
+    )
+    verdict = run_check("C10", target)
+    assert not verdict.passed
+    assert "constant/mesh.json:cells[x].count is not in the catalogue" in verdict.detail
+
+
+def test_c10_matches_any_key_of_an_open_document_through_its_document(tmp_path):
+    """A document-level entry (``key: "<any>"``, ``validated: False``) needs
+    no value kind, and lists every key of its document (decision 3)."""
+    target = dataclasses.replace(
+        toy_conformance_target(tmp_path, plugin=OPEN_DOCUMENT_PLUGIN), patch=("constant/mesh.json:a.b[2].c", 7),
+    )
+    verdict = run_check("C10", target)
+    assert verdict.passed, verdict.detail
+
+
+def test_c10_an_open_document_lists_only_its_own_document(tmp_path):
+    verdict = run_check("C10", toy_conformance_target(tmp_path, plugin=OTHER_OPEN_DOCUMENT_PLUGIN))
+    assert not verdict.passed
+    assert "constant/mesh.json:cells is not in the catalogue" in verdict.detail
+
+
+def test_c10_bites_a_kindless_entry_that_does_not_say_it_is_unvalidated(tmp_path):
+    verdict = run_check("C10", toy_conformance_target(tmp_path, plugin=VALIDATED_KINDLESS_PLUGIN))
+    assert not verdict.passed
+    assert "'key': '<any>'" in verdict.detail
 
 
 def test_c10_surface_carries_the_cases_own_documentation(tmp_path):

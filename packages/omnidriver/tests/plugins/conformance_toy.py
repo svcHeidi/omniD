@@ -208,6 +208,46 @@ class IndexedKeyPlugin(E2ERecordPlugin):
         return ({"document": "constant/mesh.json", "key": "cells[Int].count", "value_kind": "integer"},)
 
 
+NAMED_KEY_PLUGIN = "plugins.conformance_toy:NamedKeyPlugin"
+OPEN_DOCUMENT_PLUGIN = "plugins.conformance_toy:OpenDocumentPlugin"
+OTHER_OPEN_DOCUMENT_PLUGIN = "plugins.conformance_toy:OtherOpenDocumentPlugin"
+VALIDATED_KINDLESS_PLUGIN = "plugins.conformance_toy:ValidatedKindlessPlugin"
+
+
+class NamedKeyPlugin(E2ERecordPlugin):
+    """Lists a key with a named segment, ``<region_name>``, in template form
+    only (2026-09-26, conformance Task 14 step 4)."""
+
+    def get_record_key_catalog(self, case_root):
+        del case_root
+        return ({"document": "constant/mesh.json", "key": "regions.<region_name>.count", "value_kind": "integer"},)
+
+
+class OpenDocumentPlugin(E2ERecordPlugin):
+    """Lists ``constant/mesh.json`` as an open document: its keys are
+    written as asked, with no catalogue behind them (``validated: False``)."""
+
+    def get_record_key_catalog(self, case_root):
+        del case_root
+        return ({"document": "constant/mesh.json", "key": "<any>", "validated": False},)
+
+
+class OtherOpenDocumentPlugin(E2ERecordPlugin):
+    """An open document, but not the one the target's patch names."""
+
+    def get_record_key_catalog(self, case_root):
+        del case_root
+        return ({"document": "constant/other.json", "key": "<any>", "validated": False},)
+
+
+class ValidatedKindlessPlugin(E2ERecordPlugin):
+    """An open-document entry that does not say it is unvalidated."""
+
+    def get_record_key_catalog(self, case_root):
+        del case_root
+        return ({"document": "constant/mesh.json", "key": "<any>"},)
+
+
 class DocumentedCasePlugin(E2ERecordPlugin):
     """Gives the native case's README.md the core role ``case.documentation``."""
 
