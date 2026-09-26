@@ -364,6 +364,24 @@ class CardiacFoamPlugin:
 
         return record_key_validator
 
+    def get_record_key_catalog(self, case_root) -> tuple:
+        """Every key a study may name for the case at ``case_root``: the
+        same rules ``get_record_key_validator`` refuses by
+        (``record_key_validation.record_key_catalog``; conformance C10)."""
+        from omnidriver.cardiacfoam.record_key_validation import record_key_catalog
+
+        return record_key_catalog(case_root)
+
+    def get_agent_guidance(self) -> tuple:
+        """What this stack's validator and catalogues enforce, stated for an
+        agent before it writes a study (``guidance.md``; conformance C10).
+        The case's own README reaches the agent separately, through the
+        ``case.documentation`` role this plugin's profile declares."""
+        from importlib import resources
+
+        text = resources.files(__package__).joinpath("guidance.md").read_text()
+        return ({"title": "cardiacFOAM: how omniD checks a study's keys", "text": text},)
+
     def get_tutorial_records(self) -> dict:
         """This plugin's ``TutorialRecordCapability`` answer (design doc
         ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md``

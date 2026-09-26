@@ -78,6 +78,14 @@ Three outcomes, exactly the owner's three rules for this task:
    final ``s``) would fall through as "an OpenFOAM-owned key, unvalidated but
    accepted" instead of being the catalog miss it actually is.
 
+**The catalogue** (``record_key_catalog``, added 2026-09-26, conformance
+Task 14 step 4) is the same three rules, listed for one case so an agent can
+read them (``SolverPlugin.get_record_key_catalog``; the grammar is core's
+``runtime.record_surface``): rule 1's two catalogues, with the case's own
+``<solver>Coeffs`` in place of ``$ELECTRO_MODEL_COEFFS``; rule 2's
+``system/`` documents, each listed once as open (``validated: False``); and,
+by omission, rule 3. It reads the case; the validator below does not.
+
 No case root, no filesystem read. The ``<solver>Coeffs`` first-segment
 substitution above is a SYNTACTIC and CATALOG-VOCABULARY check only (it
 never reads which ``myocardiumSolver`` value is actually active in the
@@ -93,9 +101,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from omnidriver.core.contracts.dictionary import validate_value_shape
+from pathlib import Path
 
-from .overrides import _ELECTRO_ENTRIES_BY_PATH, _catalog_entry_for, _validate_dynamic_binding
+from omnidriver.core.contracts.dictionary import DictEntry, validate_value_shape
+from omnidriver.core.runtime.record_surface import ANY_KEY
+
+from .detection import detect_myocardium_solver_name
+from .overrides import (
+    _ELECTRO_ENTRIES_BY_PATH, _PHYSICS_ENTRIES_BY_PATH, _catalog_entry_for, _validate_dynamic_binding,
+)
+from .physics_layout import PhysicsLayoutError, region_of
 
 #: The two documents this package actually catalogues (rule 1). Mirrors
 #: ``dict_builder._ELECTRO_DOCUMENT``/``_PHYSICS_DOCUMENT`` (not imported --
@@ -233,3 +248,53 @@ def record_key_validator(
         "OpenFOAM-owned 'system/' document; refusing rather than silently "
         "treating an unrecognised document as an unvalidated OpenFOAM key"
     )
+
+
+def _listed(document: str, key: str, entry: DictEntry) -> dict[str, Any]:
+    return {
+        "document": document, "key": key, "value_kind": entry.value_kind,
+        "description": entry.description, "menu": list(entry.enum_values),
+    }
+
+
+def record_key_catalog(case_root: Path) -> tuple[dict[str, Any], ...]:
+    """Every key ``record_key_validator`` accepts for the case at
+    ``case_root``, in ``runtime.record_surface``'s grammar (module
+    docstring, "The catalogue").
+
+    The electroProperties location is ``physics_layout.json``'s: a
+    region-split case keeps it under ``constant/<region>/``, which the
+    validator does not address, so that case is refused by name rather than
+    catalogued with keys the validator would refuse. The case's
+    ``myocardiumSolver`` must be one the catalogue's own vocabulary allows
+    (``_myocardium_solver_coeffs_names``), for the same reason.
+    """
+    case_root = Path(case_root)
+    region = region_of(case_root, "electro")
+    if region is not None:
+        raise PhysicsLayoutError(
+            f"case {case_root} keeps its electro documents under constant/{region}/ "
+            f"(physics_layout.json), but record keys are validated in {_ELECTRO_DOCUMENT!r} "
+            "only; a region-split record needs record_key_validator to address its region first"
+        )
+    entries: list[dict[str, Any]] = []
+    electro = case_root / _ELECTRO_DOCUMENT
+    if electro.is_file():
+        coeffs = f"{detect_myocardium_solver_name(electro)}Coeffs"
+        if coeffs not in _myocardium_solver_coeffs_names():
+            raise KeyError(
+                f"{electro} names myocardiumSolver {coeffs[:-len('Coeffs')]!r}, which the "
+                "electroProperties catalog's myocardiumSolver enum does not list"
+            )
+        entries += [
+            _listed(_ELECTRO_DOCUMENT, entry.driver_path.replace(_COEFFS_TOKEN, coeffs, 1), entry)
+            for entry in _ELECTRO_ENTRIES_BY_PATH.values()
+        ]
+    if (case_root / _PHYSICS_DOCUMENT).is_file():
+        entries += [_listed(_PHYSICS_DOCUMENT, path, entry) for path, entry in _PHYSICS_ENTRIES_BY_PATH.items()]
+    system = case_root / "system"
+    entries += [
+        {"document": path.relative_to(case_root).as_posix(), "key": ANY_KEY, "validated": False}
+        for path in sorted(system.rglob("*")) if path.is_file()
+    ]
+    return tuple(entries)
