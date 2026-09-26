@@ -158,3 +158,24 @@ def niederer_conformance_target(tmp_path: Path) -> ConformanceTarget:
         solver_command="openCARP",
         environment={},
     )
+
+
+def require_opencarp_mpi_launcher() -> None:
+    """The ``mpirun`` first on PATH starts one MPI world of openCARP processes
+    (PAR; docs/solver-learning/opencarp.md I2-I5), checked up front so a wrong
+    environment fails naming the fix, not as a failed sweep case whose
+    preflight message stayed in its child process."""
+    from omnidriver.opencarp.parallel import launcher_diagnostics
+
+    require_opencarp_binary()
+    dag = {"steps": [{"id": "solve", "command": "mpirun", "args": ["-np", "2", "openCARP"]}]}
+    problems = [d.message for d in launcher_diagnostics(dag, os.environ)]
+    if shutil.which("mpirun") is None:
+        problems.append("no mpirun on PATH")
+    if problems:
+        pytest.fail(
+            "the parallel openCARP tests need the launcher of the MPI openCARP was built against "
+            "first on PATH (for a bundled-MPICH install, <openCARP prefix>/lib/petsc/bin) and, "
+            "where the host name does not resolve, HYDRA_IFACE=lo0: " + "; ".join(problems)
+        )
+

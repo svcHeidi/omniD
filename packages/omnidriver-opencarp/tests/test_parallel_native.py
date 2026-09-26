@@ -11,8 +11,9 @@ The environment is supplied, never discovered: the caller's PATH must reach
 the launcher of the MPI openCARP was built against first (for the owner's
 install, openCARP's bundled MPICH, ``/usr/local/lib/opencarp/lib/petsc/bin``),
 and on a machine whose host name does not resolve, ``HYDRA_IFACE=lo0`` (I3).
-Otherwise preflight refuses the plan (``opencarp_mpi_launcher_mismatch``) and
-this test FAILS, naming it. ``PETSC_OPTIONS=-log_view`` is set for both runs,
+Otherwise this test FAILS up front, naming the launcher check's own finding
+(``opencarp_mpi_launcher_mismatch``, the diagnostic preflight refuses the plan
+with). ``PETSC_OPTIONS=-log_view`` is set for both runs,
 so each solve log states the size of the MPI world PETSc ran in (I4).
 
 Tolerance, 1e-5 ms absolute: ten units of the last digit the LAT file prints
@@ -29,7 +30,7 @@ import pytest
 
 from omnidriver.core.quantities import ReadRequest, load_point_reference, read_quantities
 from omnidriver.opencarp.lat_reader import LatPerNodeReader
-from opencarp_native import niederer_run
+from opencarp_native import niederer_run, require_opencarp_mpi_launcher
 
 pytestmark = pytest.mark.native_opencarp
 
@@ -48,6 +49,7 @@ def _points() -> dict[str, tuple[float, float, float]]:
 
 @pytest.fixture(scope="module")
 def runs(tmp_path_factory):
+    require_opencarp_mpi_launcher()
     with pytest.MonkeyPatch.context() as patch:
         patch.setenv("PETSC_OPTIONS", "-log_view")
         serial = niederer_run(tmp_path_factory.mktemp("serial"), dx=500.0, tend=150.0)
