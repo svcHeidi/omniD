@@ -40,6 +40,20 @@ def _environment_identity(environment: Mapping[str, str]) -> dict[str, str]:
 
 def checkpoint_snapshot(case_root: Path, workflow_dag: dict, driver_context: DriverContext,
                         env: Mapping[str, str] | None) -> dict:
+    """Build the identity a resumed run's evidence is compared against.
+
+    ``plugin_identity`` here is the FULL ``driver_context.identity.to_json()``
+    (every ``ProviderIdentity``, including its ``source``) plus an
+    ``environment_digest`` over the execution environment -- not the
+    ``provider_identity.STACK_IDENTITY_COMPARISON_KEYS`` subset that
+    ``stack_identity_mismatch`` uses for plan/run/compare stack binding
+    (added 2026-09-26, final review M4). That is intentional: resuming a
+    checkpoint replays a specific prior attempt, so an import path or
+    environment change resume would otherwise miss is exactly what must
+    force a fresh run, even though the same change is not a "different
+    stack" for binding purposes. See ``runtime.provenance.compare`` for
+    where the full-identity comparison is applied.
+    """
     environment = dict(os.environ if env is None else env)
     # Store only the digest, not potentially secret environment values.
     stable_environment = _environment_identity(environment)

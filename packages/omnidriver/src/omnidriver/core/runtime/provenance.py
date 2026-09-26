@@ -311,6 +311,20 @@ def compare(
     mtime; metadata identity includes it. Order follows ``after.components`` for
     added/modified, then ``before.components`` for removed, then the two
     synthetic scalar diffs -- source order throughout, never sorted.
+
+    **Why the ``plugin`` diff is stricter than ``stack_identity_mismatch``
+    (added 2026-09-26, final review M4):** ``before.plugin_identity`` and
+    ``after.plugin_identity`` are compared as full dicts here, not just the
+    ``provider_identity.STACK_IDENTITY_COMPARISON_KEYS`` subset --
+    ``resume.checkpoint_snapshot`` builds them from the full
+    ``driver_context.identity.to_json()`` (``providers`` and its embedded
+    ``source`` included) plus an ``environment_digest``. That is deliberate,
+    not an oversight: a *replay* must reproduce the exact bytes a checkpoint
+    depends on, so a changed import ``source`` or a changed environment is
+    exactly the kind of difference resume exists to catch, even though
+    ``stack_identity_mismatch`` correctly treats it as a non-mismatch for
+    plan/run/compare stack *binding*, where only capability-relevant identity
+    matters. The two rules disagree on purpose.
     """
     diffs: list[ProvenanceDiff] = []
 

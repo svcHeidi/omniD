@@ -123,14 +123,19 @@ def stack_identity_mismatch(planned: Mapping[str, Any], selected: Mapping[str, A
     """The ``STACK_IDENTITY_COMPARISON_KEYS`` on which two ``StackIdentity.to_json()``
     payloads disagree, empty when they agree on every one.
 
-    One source of truth for "was this run planned with the stack now
-    selected": ``run_document_exec.build_execution_inputs``, ``cli.py``'s
+    **Corrected 2026-09-26 (final review M4):** this used to say it was the
+    single source of truth for "was this run planned with the stack now
+    selected", full stop. That overreached: it is the rule for *plan/run/
+    compare* stack binding only --
+    ``run_document_exec.build_execution_inputs``, ``cli.py``'s
     ``_context_from_run_document``, and
     ``quantities.comparison._resolve_run`` all call this rather than each
     keeping its own copy of the key list and the reasoning above (found
     2026-09-26: a copy that instead compared full provider records,
     ``source`` included, refused two same-content stacks loaded from
     different import paths, which the reasoning above says is not a real
-    mismatch).
+    mismatch). *Resume* is a separate, deliberately stricter rule -- see
+    ``runtime.provenance.compare`` and ``runtime.resume.checkpoint_snapshot``
+    for why the two disagree on purpose rather than by drift.
     """
     return [key for key in STACK_IDENTITY_COMPARISON_KEYS if planned.get(key) != selected.get(key)]
