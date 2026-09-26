@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Mapping
 
 from .provenance import ProvenanceSnapshot, compare, snapshot_from_components
 from .provenance_inputs import enumerate_case_inputs
-from .reconciler import declared_time_directory_names, reconcile_artifacts
+from .reconciler import declared_instance_names, reconcile_artifacts
 from .workflow_state import WorkflowRunState, workflow_digest
 from .models import DataArtifact
 
@@ -102,7 +102,7 @@ def validate_resume(state: WorkflowRunState, workflow_dag: dict, *, case_root: P
         report = reconcile_artifacts(
             case_root,
             expected_artifacts,
-            time_directory_names=declared_time_directory_names(
+            instance_names=declared_instance_names(
                 case_root, driver_context=driver_context,
             ),
         )

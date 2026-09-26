@@ -16,7 +16,7 @@ class TestDataArtifactFromJson(unittest.TestCase):
             description="membrane potential probe",
             produced_by="cardiacFoam",
             optional=True,
-            time_indexed=False,
+            instance_indexed=False,
         )
         from dataclasses import asdict
         payload = asdict(original)
@@ -34,7 +34,7 @@ class TestDataArtifactFromJson(unittest.TestCase):
         self.assertEqual(rebuilt.description, "")
         self.assertEqual(rebuilt.produced_by, "")
         self.assertFalse(rebuilt.optional)
-        self.assertFalse(rebuilt.time_indexed)
+        self.assertFalse(rebuilt.instance_indexed)
 
     def test_variables_is_coerced_to_tuple_of_str(self) -> None:
         rebuilt = data_artifact_from_json({

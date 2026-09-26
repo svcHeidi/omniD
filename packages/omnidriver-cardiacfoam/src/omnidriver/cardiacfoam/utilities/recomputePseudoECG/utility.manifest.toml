@@ -54,4 +54,4 @@ path_pattern = "postProcessing/pseudoECG.dat"
 format = "csv_probe"
 description = "Pseudo-ECG time series: one row per time step, columns are time V1 V2 V3 V4 V5 V6."
 produced_by = "recomputePseudoECG"
-time_indexed = false
+instance_indexed = false

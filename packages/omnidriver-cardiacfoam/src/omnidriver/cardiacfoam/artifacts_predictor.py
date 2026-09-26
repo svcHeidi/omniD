@@ -50,7 +50,7 @@ def _exported_active_tension_variables(case_root: Path) -> tuple[str, ...]:
         return ("Ta",)
     return entry.recommended_exports
 
-def _time_indexed_field_artifact(*, solver: str, field_name: str, ionic_model: str | None, description: str, optional: bool = False) -> DataArtifact:
+def _instance_indexed_field_artifact(*, solver: str, field_name: str, ionic_model: str | None, description: str, optional: bool = False) -> DataArtifact:
     artifact_id = f"{solver}_{field_name.lower()}_series"
     produced_by = {
         "monodomain": "monodomainSolver",
@@ -60,12 +60,12 @@ def _time_indexed_field_artifact(*, solver: str, field_name: str, ionic_model: s
     }[solver]
     return DataArtifact(
         artifact_id=artifact_id,
-        path_pattern=f"{{time}}/{field_name}",
+        path_pattern=f"{{instance}}/{field_name}",
         format="openfoam_time_dirs",
         variables=(field_name,),
         description=description,
         produced_by=produced_by,
-        time_indexed=True,
+        instance_indexed=True,
         optional=optional,
     )
 
@@ -80,7 +80,7 @@ def _predict_single_cell(case_root: Path, spec: TutorialSpec, ionic_model: str |
             variables=_exported_ionic_variables(case_root, ionic_model) + _exported_active_tension_variables(case_root),
             description=f"Per-case time series produced by singleCellSolver (ionicModel={ionic_model})",
             produced_by="singleCellSolver",
-            time_indexed=False,
+            instance_indexed=False,
         ),
     )
 
@@ -88,7 +88,7 @@ def _predict_monodomain(case_root: Path, spec: TutorialSpec, ionic_model: str | 
     if ionic_model is None:
         return ()
     artifacts: list[DataArtifact] = []
-    artifacts.append(_time_indexed_field_artifact(
+    artifacts.append(_instance_indexed_field_artifact(
         solver="monodomain",
         field_name="Vm",
         ionic_model=ionic_model,
@@ -97,7 +97,7 @@ def _predict_monodomain(case_root: Path, spec: TutorialSpec, ionic_model: str | 
     for var in _exported_ionic_variables(case_root, ionic_model):
         if var == "Vm":
             continue
-        artifacts.append(_time_indexed_field_artifact(
+        artifacts.append(_instance_indexed_field_artifact(
             solver="monodomain",
             field_name=var,
             ionic_model=ionic_model,
@@ -114,7 +114,7 @@ def _predict_bidomain(case_root: Path, spec: TutorialSpec, ionic_model: str | No
         ("phiE", "Extracellular potential phiE (bidomainSolver)"),
         ("phiI", "Intracellular potential phiI (bidomainSolver)"),
     ):
-        artifacts.append(_time_indexed_field_artifact(
+        artifacts.append(_instance_indexed_field_artifact(
             solver="bidomain",
             field_name=field_name,
             ionic_model=ionic_model,
@@ -123,7 +123,7 @@ def _predict_bidomain(case_root: Path, spec: TutorialSpec, ionic_model: str | No
     for var in _exported_ionic_variables(case_root, ionic_model):
         if var == "Vm":
             continue
-        artifacts.append(_time_indexed_field_artifact(
+        artifacts.append(_instance_indexed_field_artifact(
             solver="bidomain",
             field_name=var,
             ionic_model=ionic_model,
@@ -133,7 +133,7 @@ def _predict_bidomain(case_root: Path, spec: TutorialSpec, ionic_model: str | No
 
 def _predict_eikonal(case_root: Path, spec: TutorialSpec, ionic_model: str | None) -> tuple[DataArtifact, ...]:
     return (
-        _time_indexed_field_artifact(
+        _instance_indexed_field_artifact(
             solver="eikonal",
             field_name="activationTime",
             ionic_model=None,
@@ -156,7 +156,7 @@ def _predict_ecg(case_root: Path) -> tuple[DataArtifact, ...]:
             format="csv_probe",
             description="Pseudo-ECG time series at the declared electrodes",
             produced_by="pseudoECG",
-            time_indexed=False,
+            instance_indexed=False,
         ))
     if "torsoECG" in text:
         artifacts.append(DataArtifact(
@@ -165,7 +165,7 @@ def _predict_ecg(case_root: Path) -> tuple[DataArtifact, ...]:
             format="csv_probe",
             description="Torso-ECG time series at the declared electrodes",
             produced_by="torsoECG",
-            time_indexed=False,
+            instance_indexed=False,
         ))
     return tuple(artifacts)
 
@@ -182,7 +182,7 @@ def _predict_purkinje(case_root: Path) -> tuple[DataArtifact, ...]:
             format="csv_probe",
             description="Purkinje network time-series — node Vm, activation times, PVJ coupling currents (one row per writeInterval)",
             produced_by="conductionSystemDomain",
-            time_indexed=False,
+            instance_indexed=False,
         ),
         DataArtifact(
             artifact_id="purkinje_network_vtk_series",
@@ -190,7 +190,7 @@ def _predict_purkinje(case_root: Path) -> tuple[DataArtifact, ...]:
             format="vtk_sequence",
             description="Per-timestep Purkinje network VTK — one file per write step named purkinjeNetwork_<6-digit-timeIndex>.vtk",
             produced_by="conductionSystemDomain",
-            time_indexed=False,
+            instance_indexed=False,
         ),
     )
 
@@ -218,7 +218,7 @@ def _predict_verification(case_root: Path) -> tuple[DataArtifact, ...]:
             format="csv_probe",
             description=f"Manufactured-solution L1/L2/Linf error norms emitted by {verifier_type}",
             produced_by=verifier_type,
-            time_indexed=False,
+            instance_indexed=False,
         ),
     )
 
@@ -235,12 +235,12 @@ def _predict_active_tension(case_root: Path, solver: str) -> tuple[DataArtifact,
     return tuple(
         DataArtifact(
             artifact_id=f"active_tension_{var}_series",
-            path_pattern=f"{{time}}/{var}",
+            path_pattern=f"{{instance}}/{var}",
             format="openfoam_time_dirs",
             variables=(var,),
             description=f"Active tension {var} (activeTensionModel={at_model})",
             produced_by="sequentialElectroMechanical",
-            time_indexed=True,
+            instance_indexed=True,
         )
         for var in variables
     )

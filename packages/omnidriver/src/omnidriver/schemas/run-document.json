@@ -414,7 +414,7 @@
         "description": {"type": "string"},
         "produced_by": {"type": "string"},
         "optional": {"type": "boolean"},
-        "time_indexed": {"type": "boolean"}
+        "instance_indexed": {"type": "boolean"}
       },
       "additionalProperties": false
     }

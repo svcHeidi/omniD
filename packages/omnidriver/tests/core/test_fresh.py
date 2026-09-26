@@ -158,7 +158,7 @@ def test_a_run_document_written_before_the_rename_is_still_driver_owned():
     from omnidriver.core.runtime.workflow import workflow_output_artifacts
 
     solver = DataArtifact(
-        artifact_id="solver.field", path_pattern="{time}/Vm",
+        artifact_id="solver.field", path_pattern="{instance}/Vm",
         format="openfoam_time_dirs", produced_by="someSolver",
     )
     legacy = DataArtifact(

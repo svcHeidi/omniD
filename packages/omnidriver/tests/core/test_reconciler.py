@@ -106,13 +106,13 @@ class TestTimeIndexedReconciliation(unittest.TestCase):
 
             artifact = _make_artifact(
                 artifact_id="vm_series",
-                path_pattern="{time}/Vm",
+                path_pattern="{instance}/Vm",
                 format="openfoam_time_dirs",
-                time_indexed=True,
+                instance_indexed=True,
             )
             report = reconcile_artifacts(
                 case_root, (artifact,),
-                time_directory_names=("0", "0.001", "0.002"),
+                instance_names=("0", "0.001", "0.002"),
             )
             entry = report.artifacts[0]
             self.assertEqual(entry["status"], "matched")
@@ -130,9 +130,9 @@ class TestTimeIndexedReconciliation(unittest.TestCase):
             case_root = Path(temp)
             artifact = _make_artifact(
                 artifact_id="vm_series",
-                path_pattern="{time}/Vm",
+                path_pattern="{instance}/Vm",
                 format="openfoam_time_dirs",
-                time_indexed=True,
+                instance_indexed=True,
             )
             report = reconcile_artifacts(case_root, (artifact,))
             self.assertEqual(report.artifacts[0]["status"], "missing")
@@ -145,9 +145,9 @@ class TestTimeIndexedReconciliation(unittest.TestCase):
             (case_root / "1" / "result.dat").write_bytes(b"output")
             artifact = _make_artifact(
                 artifact_id="series",
-                path_pattern="{time}/result.dat",
+                path_pattern="{instance}/result.dat",
                 format="environment_series",
-                time_indexed=True,
+                instance_indexed=True,
             )
 
             report = reconcile_artifacts(case_root, (artifact,))
@@ -175,7 +175,7 @@ class TestReportSummary(unittest.TestCase):
 class TestRealPredictorOutputShapes(unittest.TestCase):
     """Regression tests for the 2026-05-21 audit findings:
 
-    - PDE solver predictors emit `path_pattern="{time}"` — the OpenFOAM
+    - PDE solver predictors emit `path_pattern="{instance}"` — the OpenFOAM
       time directory itself, not a file inside it. The reconciler must
       accept directories as matches.
     - The single-cell predictor emits `path_pattern="postProcessing/{case_id}.txt"`.
@@ -184,7 +184,7 @@ class TestRealPredictorOutputShapes(unittest.TestCase):
     """
 
     def test_time_directory_alone_is_a_match(self) -> None:
-        """`path_pattern="{time}"` (the monodomain predictor's actual
+        """`path_pattern="{instance}"` (the monodomain predictor's actual
         output) must match the time directory itself, reported as kind='dir'."""
         from omnidriver.core.runtime.reconciler import reconcile_artifacts
         with tempfile.TemporaryDirectory() as temp:
@@ -197,13 +197,13 @@ class TestRealPredictorOutputShapes(unittest.TestCase):
 
             artifact = _make_artifact(
                 artifact_id="myocardium_time_series",
-                path_pattern="{time}",
+                path_pattern="{instance}",
                 format="openfoam_time_dirs",
-                time_indexed=True,
+                instance_indexed=True,
             )
             report = reconcile_artifacts(
                 case_root, (artifact,),
-                time_directory_names=("0", "0.001", "0.002"),
+                instance_names=("0", "0.001", "0.002"),
             )
             entry = report.artifacts[0]
             self.assertEqual(entry["status"], "matched")

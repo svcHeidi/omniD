@@ -241,7 +241,7 @@ def test_tet_unclaimed_artifacts_are_credited_to_the_solve_step(tmp_path):
     spec = _make_spec(tmp_path, mesh_family="tet")
     artifact = DataArtifact(
         artifact_id="vm_field",
-        path_pattern="{time}/Vm",
+        path_pattern="{instance}/Vm",
         format="openfoam_field",
     )
     dag, diagnostics = normalize_workflow_dag(

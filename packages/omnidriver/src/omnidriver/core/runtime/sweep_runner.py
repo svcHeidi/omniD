@@ -452,29 +452,29 @@ def _relative_or_absolute(path: Path, base: Path) -> str:
         return str(path)
 
 
-def _is_declared_generated_time_directory(name: str, conventions) -> bool:
-    """Apply the environment's declared time-directory rule without naming it."""
-    pattern = conventions.time_directory_name_pattern
+def _is_declared_generated_instance(name: str, conventions) -> bool:
+    """Apply the environment's declared instance-directory rule without naming it."""
+    pattern = conventions.instance_directory_pattern
     return (
         pattern is not None
-        and name not in conventions.preserved_time_directory_names
+        and name not in conventions.preserved_instance_names
         and re.match(pattern, name) is not None
     )
 
 
-def _clean_stale_time_directories(case_root: Path, *, conventions) -> None:
-    """Remove prior generated time directories when the environment declares them.
+def _clean_stale_instances(case_root: Path, *, conventions) -> None:
+    """Remove prior generated instance directories when the environment declares them.
 
     Entry-based sweeps reuse one shared case_root across cases (see
     _materialize_entry_case's docstring). A case with no authored initial
-    directory can otherwise consume a prior run's generated time directory.
-    Clearing declared generated directories before materialization prevents
-    that stale-state reuse.
+    instance can otherwise consume a prior run's generated one. Clearing
+    declared generated instances before materialization prevents that
+    stale-state reuse. Renamed 2026-09-26 from _clean_stale_time_directories (spec A2).
     """
-    if conventions.time_directory_name_pattern is None or not case_root.is_dir():
+    if conventions.instance_directory_pattern is None or not case_root.is_dir():
         return
     for child in case_root.iterdir():
-        if child.is_dir() and _is_declared_generated_time_directory(child.name, conventions):
+        if child.is_dir() and _is_declared_generated_instance(child.name, conventions):
             shutil.rmtree(child)
 
 
@@ -576,7 +576,7 @@ def _materialize_entry_case(
         driver_context.capabilities.case_runtime_conventions.conventions()
         if driver_context is not None else CaseRuntimeConventions()
     )
-    _clean_stale_time_directories(spec.case_root, conventions=conventions)
+    _clean_stale_instances(spec.case_root, conventions=conventions)
     invoke_case_mutation(spec, spec.case_root, cases[0])
     return MaterializedEntry(effective_entry, effective_routed)
 
@@ -670,7 +670,7 @@ def _stage_entry_case(
                 ignored.add(name)
                 continue
             path = Path(name)
-            if _is_declared_generated_time_directory(path.name, conventions):
+            if _is_declared_generated_instance(path.name, conventions):
                 ignored.add(name)
         return ignored
 

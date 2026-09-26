@@ -91,7 +91,7 @@ def _manifest_to_record(manifest, utility_roots: tuple[Path, ...]) -> dict:
                 "produced_by": pr.produced_by,
                 "variables": list(pr.variables),
                 "optional": pr.optional,
-                "time_indexed": pr.time_indexed,
+                "instance_indexed": pr.instance_indexed,
             }
             for pr in manifest.produces
         ],

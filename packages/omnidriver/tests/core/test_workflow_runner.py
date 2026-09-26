@@ -119,7 +119,7 @@ def test_run_workflow_step_allows_missing_optional_artifacts() -> None:
             expected_artifacts=(
                 DataArtifact(
                     artifact_id="optional_vm",
-                    path_pattern="{time}/Vm",
+                    path_pattern="{instance}/Vm",
                     format="openfoam_time_dirs",
                     optional=True,
                 ),
@@ -134,7 +134,7 @@ def test_run_workflow_step_allows_missing_optional_artifacts() -> None:
 
 def test_run_workflow_step_accepts_decomposed_time_artifact() -> None:
     # A parallel, not-yet-reconstructed run writes processor0/<time>/<field>.
-    # The required time_indexed artifact must be considered produced.
+    # The required instance_indexed artifact must be considered produced.
     with tempfile.TemporaryDirectory() as temp_dir:
         root = Path(temp_dir)
         script = (
@@ -152,9 +152,9 @@ def test_run_workflow_step_accepts_decomposed_time_artifact() -> None:
             expected_artifacts=(
                 DataArtifact(
                     artifact_id="vm_field",
-                    path_pattern="{time}/Vm",
+                    path_pattern="{instance}/Vm",
                     format="openfoam_time_dirs",
-                    time_indexed=True,
+                    instance_indexed=True,
                 ),
             ),
             driver_context=driver_context(_ParallelOutputPlugin(), source="test:parallel-output"),
@@ -185,9 +185,9 @@ def test_run_workflow_step_accepts_reconstructed_time_artifact() -> None:
             expected_artifacts=(
                 DataArtifact(
                     artifact_id="vm_field",
-                    path_pattern="{time}/Vm",
+                    path_pattern="{instance}/Vm",
                     format="openfoam_time_dirs",
-                    time_indexed=True,
+                    instance_indexed=True,
                 ),
             ),
         )
@@ -208,9 +208,9 @@ def test_run_workflow_step_missing_time_artifact_still_fails() -> None:
             expected_artifacts=(
                 DataArtifact(
                     artifact_id="vm_field",
-                    path_pattern="{time}/Vm",
+                    path_pattern="{instance}/Vm",
                     format="openfoam_time_dirs",
-                    time_indexed=True,
+                    instance_indexed=True,
                 ),
             ),
         )

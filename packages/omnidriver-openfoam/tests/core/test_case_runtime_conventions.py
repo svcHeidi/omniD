@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from omnidriver.core.runtime.reconciler import declared_instance_names
 from omnidriver.core.runtime.registry import list_entries
 from omnidriver.openfoam.case_runtime_conventions import openfoam_case_runtime_conventions
 from omnidriver.openfoam.environment import openfoam_environment_context
@@ -43,3 +44,12 @@ def test_openfoam_hides_parallel_decomposition_output(tmp_path: Path) -> None:
     case_root.mkdir(parents=True)
     _touch(case_root, "Allrun")
     assert list_entries(tmp_path, driver_context=openfoam_environment_context()) == []
+
+
+def test_openfoam_time_directories_are_its_instances(tmp_path: Path) -> None:
+    """OpenFOAM declares its numeric time directories as instances, and
+    "0" as preserved (spec 2026-09-26 A2): byte-for-byte the old rule."""
+    for name in ("0", "0.001", "1e-05", "constant", "processor0", "postProcessing"):
+        (tmp_path / name).mkdir()
+    assert declared_instance_names(tmp_path, driver_context=openfoam_environment_context()) == ("0", "0.001", "1e-05")
+    assert openfoam_case_runtime_conventions().preserved_instance_names == ("0",)

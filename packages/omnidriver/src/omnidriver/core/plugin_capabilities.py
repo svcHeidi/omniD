@@ -108,9 +108,9 @@ class CaseRuntimeConventions:
     """Environment-declared paths that are generated during a case run.
 
     Core supplies copying, snapshotting, collision detection, and recovery.
-    It does not supply names such as ``postProcessing`` or rules for numeric
-    time directories. A missing declaration is deliberately neutral: no
-    authored path is silently removed from a staged case.
+    It does not supply names such as ``postProcessing`` or rules for which
+    directories are output instances. A missing declaration is deliberately
+    neutral: no authored path is silently removed from a staged case.
     """
 
     output_collection_relpath: str | None = None
@@ -125,8 +125,14 @@ class CaseRuntimeConventions:
     case_script_commands: tuple[str, ...] = ()
     case_discovery_ignored_directory_names: tuple[str, ...] = ()
     decomposition_directory_prefix: str | None = None
-    time_directory_name_pattern: str | None = None
-    preserved_time_directory_names: tuple[str, ...] = ()
+    #: Regex a case-root directory name matches when it is one of the
+    #: solver's output instances (OpenFOAM: a time directory). ``None``: the
+    #: environment declares no instances, and core treats no directory as
+    #: one. Renamed 2026-09-26 from ``time_directory_name_pattern`` (spec A2).
+    instance_directory_pattern: str | None = None
+    #: Instance names that are authored input and never cleaned (OpenFOAM:
+    #: ``"0"``). Renamed 2026-09-26 from ``preserved_time_directory_names``.
+    preserved_instance_names: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

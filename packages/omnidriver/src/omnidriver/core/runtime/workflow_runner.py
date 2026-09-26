@@ -186,13 +186,13 @@ def _artifact_snapshot(
     """Record matched outputs and directory contents for step attribution.
 
     Stat changes establish filesystem activity only, not scientific validity.
-    Time-indexed contracts accept both serial and decomposed locations.
+    Instance-indexed contracts accept both serial and decomposed locations.
     """
     import glob
 
-    expanded = artifact.path_pattern.format(case_id=case_root.name, time="*")
+    expanded = artifact.path_pattern.format(case_id=case_root.name, instance="*")
     patterns = [str(case_root / expanded)]
-    if artifact.time_indexed:
+    if artifact.instance_indexed:
         prefix = decomposition_dirname_prefix(driver_context)
         if prefix is not None:
             patterns.append(str(case_root / f"{prefix}*" / expanded))

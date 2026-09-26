@@ -19,7 +19,7 @@ class _ParallelEnvironment(MinimalTestPlugin):
 
 
 def _run(root: Path, code: str, *, pattern: str = "result", optional: bool = False,
-         time_indexed: bool = False, driver_context=None) -> dict:
+         instance_indexed: bool = False, driver_context=None) -> dict:
     dag = {
         "schema_version": "1",
         "steps": [{"id": "run", "command": sys.executable, "args": ["-c", code],
@@ -32,7 +32,7 @@ def _run(root: Path, code: str, *, pattern: str = "result", optional: bool = Fal
         dag, state, "run", case_root=root, log_dir=root / "logs",
         expected_artifacts=(DataArtifact(artifact_id="output", path_pattern=pattern,
                                         format="text", optional=optional,
-                                        time_indexed=time_indexed),),
+                                        instance_indexed=instance_indexed),),
         driver_context=driver_context,
     ).state.to_json()
 
@@ -82,7 +82,7 @@ def test_unchanged_time_output_is_stale_in_both_locations(tmp_path: Path, locati
         if location.startswith("processor") else None
     )
     result = _run(
-        tmp_path, "pass", pattern="{time}/field", time_indexed=True,
+        tmp_path, "pass", pattern="{instance}/field", instance_indexed=True,
         driver_context=context,
     )
     assert result["status"] == "failed"

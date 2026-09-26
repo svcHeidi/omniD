@@ -253,12 +253,12 @@ def _reconciliation_payload(case_root: Path, expected_artifacts, *, driver_conte
     size and sha256. It makes no judgement about the values inside them --
     interpretation is the caller's job.
     """
-    from .core.runtime.reconciler import declared_time_directory_names, reconcile_artifacts
+    from .core.runtime.reconciler import declared_instance_names, reconcile_artifacts
 
     return reconcile_artifacts(
         case_root,
         expected_artifacts or (),
-        time_directory_names=declared_time_directory_names(
+        instance_names=declared_instance_names(
             case_root, driver_context=driver_context,
         ),
     ).to_json()

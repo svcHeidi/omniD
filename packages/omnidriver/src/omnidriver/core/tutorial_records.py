@@ -128,7 +128,7 @@ class WorkflowStep:
     one-character paths; ``""`` and ``"."`` (the case root itself) are
     refused; so are ``{`` and ``}``, because a ``produces`` path becomes an
     artifact ``path_pattern`` that core ``str.format``-s -- the
-    ``{case_id}``/``{time}`` placeholders are not supported here.
+    ``{case_id}``/``{instance}`` placeholders are not supported here.
 
     A ``produces`` entry may be a :class:`ProducedPath`, which also names its
     format. A plain path means :data:`PLAIN_FILE_FORMAT`. Added 2026-09-26.

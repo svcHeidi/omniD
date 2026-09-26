@@ -24,11 +24,11 @@ class TestDataArtifact(unittest.TestCase):
     def test_constructs_with_required_fields_only(self) -> None:
         artifact = DataArtifact(
             artifact_id="vm_probe",
-            path_pattern="postProcessing/probes/{time}/Vm",
+            path_pattern="postProcessing/probes/{instance}/Vm",
             format="csv_probe",
         )
         self.assertEqual(artifact.artifact_id, "vm_probe")
-        self.assertEqual(artifact.path_pattern, "postProcessing/probes/{time}/Vm")
+        self.assertEqual(artifact.path_pattern, "postProcessing/probes/{instance}/Vm")
         self.assertEqual(artifact.format, "csv_probe")
 
     def test_defaults_are_safe_for_predictor_merging(self) -> None:
@@ -43,7 +43,7 @@ class TestDataArtifact(unittest.TestCase):
         self.assertEqual(artifact.description, "")
         self.assertEqual(artifact.produced_by, "")
         self.assertIs(artifact.optional, False)
-        self.assertIs(artifact.time_indexed, False)
+        self.assertIs(artifact.instance_indexed, False)
 
     def test_is_frozen(self) -> None:
         """Artifacts are value objects embedded in agent manifests; mutation
@@ -71,7 +71,7 @@ class TestDataArtifact(unittest.TestCase):
     def test_construction_with_known_placeholders_succeeds(self) -> None:
         DataArtifact(
             artifact_id="ok",
-            path_pattern="results/{case_id}/{time}/Vm",
+            path_pattern="results/{case_id}/{instance}/Vm",
             format="openfoam_time_dirs",
         )
 
@@ -122,7 +122,7 @@ class TestArtifactFormatIsOpen(unittest.TestCase):
 
 
 class TestExpandPathPattern(unittest.TestCase):
-    """Path-pattern placeholders ({case_id}, {time}) are the only documented
+    """Path-pattern placeholders ({case_id}, {instance}) are the only documented
     substitution language. The helper enforces the closed set so a predictor
     or utility-manifest author cannot silently invent a third placeholder."""
 
@@ -136,13 +136,13 @@ class TestExpandPathPattern(unittest.TestCase):
 
     def test_substitutes_time(self) -> None:
         out = expand_path_pattern(
-            "postProcessing/probes/{time}/Vm", case_id="c1", time="0.01"
+            "postProcessing/probes/{instance}/Vm", case_id="c1", instance="0.01"
         )
         self.assertEqual(out, "postProcessing/probes/0.01/Vm")
 
     def test_substitutes_both_placeholders(self) -> None:
         out = expand_path_pattern(
-            "out/{case_id}/{time}/field", case_id="c2", time="0.5"
+            "out/{case_id}/{instance}/field", case_id="c2", instance="0.5"
         )
         self.assertEqual(out, "out/c2/0.5/field")
 
@@ -158,9 +158,9 @@ class TestExpandPathPattern(unittest.TestCase):
     def test_missing_time_for_pattern_that_needs_it_raises(self) -> None:
         with self.assertRaises(ValueError) as ctx:
             expand_path_pattern(
-                "postProcessing/{time}/Vm", case_id="c1", time=None
+                "postProcessing/{instance}/Vm", case_id="c1", instance=None
             )
-        self.assertIn("time", str(ctx.exception))
+        self.assertIn("instance", str(ctx.exception))
 
     def test_unknown_placeholder_raises(self) -> None:
         with self.assertRaises(ValueError) as ctx:
@@ -169,11 +169,11 @@ class TestExpandPathPattern(unittest.TestCase):
         self.assertIn("unknown placeholder", str(ctx.exception).lower())
 
     def test_unused_kwargs_are_tolerated(self) -> None:
-        """Passing time= when the pattern has no {time} is not an error.
+        """Passing instance= when the pattern has no {instance} is not an error.
         Callers compose artifacts uniformly; they should not have to inspect
         each pattern before calling."""
         out = expand_path_pattern(
-            "postProcessing/static.csv", case_id="c1", time="0.01"
+            "postProcessing/static.csv", case_id="c1", instance="0.01"
         )
         self.assertEqual(out, "postProcessing/static.csv")
 

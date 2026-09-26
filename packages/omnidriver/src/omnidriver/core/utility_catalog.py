@@ -45,7 +45,7 @@ The following fields are optional:
         entry:
         artifact_id   (str)   – stable identifier.
         path_pattern  (str)   – case-relative path; may contain {case_id} or
-                                 {time} placeholders (validated at load time
+                                 {instance} placeholders (validated at load time
                                  via models._validate_path_pattern — Gap B).
         format        (str)   – non-empty, plugin-chosen (see
                                  core.runtime.models.ArtifactFormat — open by
@@ -54,7 +54,7 @@ The following fields are optional:
         produced_by   (str, optional)  – utility/solver name.
         variables     (list[str], optional)
         optional      (bool, default False)
-        time_indexed  (bool, default False)
+        instance_indexed  (bool, default False)
 
 Public API
 ----------
@@ -135,7 +135,7 @@ _KNOWN_PRODUCES_FIELDS: Final[frozenset[str]] = frozenset(
         "produced_by",
         "variables",
         "optional",
-        "time_indexed",
+        "instance_indexed",
     }
 )
 
@@ -187,7 +187,7 @@ class ProducesEntry:
     """Stable identifier within the manifest."""
 
     path_pattern: str
-    """Case-relative path; may contain {case_id} / {time} placeholders."""
+    """Case-relative path; may contain {case_id} / {instance} placeholders."""
 
     format: str
     """Plugin-chosen, non-empty. See ``core.runtime.models.ArtifactFormat``
@@ -205,8 +205,9 @@ class ProducesEntry:
     optional: bool = False
     """True when the artifact appears only under specific configurations."""
 
-    time_indexed: bool = False
-    """True for time-directory style outputs."""
+    instance_indexed: bool = False
+    """True for an output written once per declared instance (renamed from
+    time_indexed 2026-09-26, spec A2)."""
 
 
 @dataclass(frozen=True)
@@ -324,7 +325,7 @@ def _parse_produces_entry(raw: object, manifest_path: Path) -> ProducesEntry:
         produced_by=raw.get("produced_by", ""),
         variables=tuple(raw_variables),
         optional=bool(raw.get("optional", False)),
-        time_indexed=bool(raw.get("time_indexed", False)),
+        instance_indexed=bool(raw.get("instance_indexed", False)),
     )
 
 

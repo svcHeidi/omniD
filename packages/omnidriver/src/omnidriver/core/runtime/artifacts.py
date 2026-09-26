@@ -63,7 +63,7 @@ def _produces_entry_to_artifact(
         description=entry.description,
         produced_by=entry.produced_by or utility_name,
         optional=entry.optional,
-        time_indexed=entry.time_indexed,
+        instance_indexed=entry.instance_indexed,
     )
 
 

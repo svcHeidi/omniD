@@ -39,6 +39,6 @@ def openfoam_case_runtime_conventions() -> CaseRuntimeConventions:
         case_script_commands=("Allrun", "Allclean", "Allrun.pre", "Allrun.post"),
         case_discovery_ignored_directory_names=("postProcessing", "logs"),
         decomposition_directory_prefix="processor",
-        time_directory_name_pattern=r"^-?\d+(\.\d+)?(e[+\-]?\d+)?$",
-        preserved_time_directory_names=("0",),
+        instance_directory_pattern=r"^-?\d+(\.\d+)?(e[+\-]?\d+)?$",
+        preserved_instance_names=("0",),
     )

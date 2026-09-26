@@ -260,7 +260,7 @@ class TestPredictorMonodomain(unittest.TestCase):
             self.assertIn("monodomain_vm_series", ids)
             self.assertIn("monodomain_calcium_cai_series", ids)
             for a in artifacts:
-                self.assertTrue(a.time_indexed, f"{a.artifact_id} not time-indexed")
+                self.assertTrue(a.instance_indexed, f"{a.artifact_id} not time-indexed")
                 self.assertEqual(a.produced_by, "monodomainSolver")
                 self.assertEqual(a.format, "openfoam_time_dirs")
 
@@ -275,7 +275,7 @@ class TestPredictorMonodomain(unittest.TestCase):
             artifacts = predict_data_artifacts(case_root, spec)
             for a in artifacts:
                 self.assertTrue(
-                    a.path_pattern.startswith("{time}/"),
+                    a.path_pattern.startswith("{instance}/"),
                     f"{a.artifact_id}: {a.path_pattern}",
                 )
 
@@ -297,7 +297,7 @@ class TestPredictorBidomain(unittest.TestCase):
             self.assertIn("bidomain_calcium_cai_series", ids)
             for a in artifacts:
                 self.assertEqual(a.produced_by, "bidomainSolver")
-                self.assertTrue(a.path_pattern.startswith("{time}/"))
+                self.assertTrue(a.path_pattern.startswith("{instance}/"))
 
 
 class TestPredictorEikonal(unittest.TestCase):
@@ -315,7 +315,7 @@ class TestPredictorEikonal(unittest.TestCase):
             self.assertEqual(ids, {"eikonal_activationtime_series"})
             for a in artifacts:
                 self.assertEqual(a.produced_by, "eikonalSolver")
-                self.assertTrue(a.path_pattern.startswith("{time}/"))
+                self.assertTrue(a.path_pattern.startswith("{instance}/"))
 
 
 class TestPredictorExportListFiltering(unittest.TestCase):
@@ -496,7 +496,7 @@ class TestPredictorPathPatternContract(unittest.TestCase):
                     expanded = expand_path_pattern(
                         artifact.path_pattern,
                         case_id="probeCase",
-                        time="0.001",
+                        instance="0.001",
                     )
                     self.assertIsInstance(expanded, str)
                     self.assertNotIn(
@@ -905,7 +905,7 @@ class TestPredictorActiveTension(unittest.TestCase):
             artifacts = predict_data_artifacts(tmp, spec)
             ta = next(a for a in artifacts if a.artifact_id == "active_tension_Ta_series")
             self.assertEqual(ta.format, "openfoam_time_dirs")
-            self.assertTrue(ta.time_indexed)
+            self.assertTrue(ta.instance_indexed)
 
 
 if __name__ == "__main__":

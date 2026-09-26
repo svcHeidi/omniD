@@ -30,9 +30,9 @@ class DataArtifact:
     the same shape.
 
     ``path_pattern`` is case-relative. The only recognised placeholders are
-    ``{case_id}`` (substituted with the sweep case identifier) and ``{time}``
-    (substituted with an OpenFOAM time directory name). Anything else is a
-    literal path component.
+    ``{case_id}`` (the sweep case identifier) and ``{instance}`` (one of the
+    environment's declared instance directories; for OpenFOAM, a time
+    directory). Anything else is a literal path component.
     """
 
     artifact_id: str
@@ -40,7 +40,7 @@ class DataArtifact:
     artifacts by ``artifact_id`` (static wins on collision)."""
 
     path_pattern: str
-    """Case-relative path; may contain ``{case_id}`` / ``{time}`` placeholders."""
+    """Case-relative path; may contain ``{case_id}`` / ``{instance}`` placeholders."""
 
     format: ArtifactFormat
     """One of the documented :data:`ArtifactFormat` values."""
@@ -60,9 +60,13 @@ class DataArtifact:
     optional: bool = False
     """True when the artifact appears only under specific configurations."""
 
-    time_indexed: bool = False
-    """True for time-indexed outputs that produce one file per write interval.
-    ``path_pattern`` will typically contain ``{time}``."""
+    instance_indexed: bool = False
+    """True for an output written once per solver-declared instance (for
+    OpenFOAM, a time directory). ``path_pattern`` then contains
+    ``{instance}``, which reconciliation substitutes with each directory the
+    environment's ``CaseRuntimeConventions.instance_directory_pattern``
+    matches. Renamed from ``time_indexed`` 2026-09-26 (spec
+    2026-09-26-core-generality-design.md §2, A2)."""
 
     def __post_init__(self) -> None:
         # Catch typos like {caseId} or {run_id} at construction so they never
@@ -73,7 +77,7 @@ class DataArtifact:
 
 
 _PATH_PATTERN_PLACEHOLDER: Final[re.Pattern[str]] = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}")
-_KNOWN_PATH_PLACEHOLDERS: Final[frozenset[str]] = frozenset({"case_id", "time"})
+_KNOWN_PATH_PLACEHOLDERS: Final[frozenset[str]] = frozenset({"case_id", "instance"})
 
 
 def _validate_path_pattern(pattern: str) -> None:
@@ -94,21 +98,21 @@ def expand_path_pattern(
     pattern: str,
     *,
     case_id: str | None = None,
-    time: str | None = None,
+    instance: str | None = None,
 ) -> str:
-    """Substitute ``{case_id}`` and ``{time}`` placeholders in a path pattern.
+    """Substitute ``{case_id}`` and ``{instance}`` placeholders in a path pattern.
 
     The set of recognised placeholders is closed (see
     :data:`_KNOWN_PATH_PLACEHOLDERS`). Encountering an unknown ``{foo}`` token
     raises ``ValueError`` so authors cannot silently introduce a third
     placeholder convention.
 
-    Passing an unused keyword (e.g., ``time=`` when the pattern has no
-    ``{time}``) is tolerated — callers compose artifacts uniformly and should
-    not have to inspect every pattern before invoking the helper.
+    Passing an unused keyword (e.g., ``instance=`` when the pattern has no
+    ``{instance}``) is tolerated — callers compose artifacts uniformly and
+    should not have to inspect every pattern before invoking the helper.
     """
     _validate_path_pattern(pattern)
-    values = {"case_id": case_id, "time": time}
+    values = {"case_id": case_id, "instance": instance}
 
     def _resolve(match: re.Match[str]) -> str:
         name = match.group(1)
@@ -140,7 +144,7 @@ def data_artifact_from_json(data: dict[str, Any]) -> DataArtifact:
         description=str(data.get("description", "")),
         produced_by=str(data.get("produced_by", "")),
         optional=bool(data.get("optional", False)),
-        time_indexed=bool(data.get("time_indexed", False)),
+        instance_indexed=bool(data.get("instance_indexed", False)),
     )
 
 

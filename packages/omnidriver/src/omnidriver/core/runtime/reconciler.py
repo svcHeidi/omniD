@@ -10,21 +10,22 @@ Design notes (rewritten after the 2026-05-21 audit):
 
 * **Matching uses `pathlib.Path.glob`**, not literal `exists()`. The
   predictor's `path_pattern` may contain placeholders (`{case_id}`,
-  `{time}`) AND shell-glob wildcards once substituted. Globbing handles
+  `{instance}`) AND shell-glob wildcards once substituted. Globbing handles
   both literal paths (degenerate glob) and wildcards uniformly.
 * **Directories are valid match targets.** The monodomain/bidomain/eikonal
-  predictors emit `path_pattern="{time}"` — an environment-declared time directory
-  itself, not a file inside it. Earlier code rejected directories via
-  `is_file()`; the new code accepts both kinds and tags each match with
-  `kind: "file" | "dir"`.
+  predictors emit `path_pattern="{instance}"` — an environment-declared
+  instance directory itself, not a file inside it. Earlier code rejected
+  directories via `is_file()`; the new code accepts both kinds and tags each
+  match with `kind: "file" | "dir"`.
 * **`{case_id}` substitution is explicit.** Callers pass `case_id=` when
   they want a literal substitution. When omitted, `{case_id}` is replaced
   with the glob wildcard `*` so the reconciler still finds matches across
   all per-case outputs in a sweep. Earlier code silently stripped
   `{case_id}` to empty string, producing malformed paths with an empty file
   prefix that never matched anything.
-* **Time-indexed iteration** receives time directory names from the active
-  environment contract. Core does not infer which case directories are times.
+* **Instance-indexed iteration** receives instance directory names from the
+  active environment contract. Core does not infer which case directories
+  are instances.
 * **"Extra files"** (on-disk content not advertised by any prediction)
   remain out of scope. The case tree is large and the value of
   enumerating every unmodelled file is low.
@@ -70,14 +71,14 @@ class ReconciliationReport:
         }
 
 
-def declared_time_directory_names(case_root: Path, *, driver_context) -> tuple[str, ...]:
-    """Return time directories only when the environment declares their form."""
+def declared_instance_names(case_root: Path, *, driver_context) -> tuple[str, ...]:
+    """The case's instance directories, only when the environment declares their form."""
     if driver_context is None:
         return ()
     conventions = driver_context.capabilities.case_runtime_conventions.conventions()
-    if conventions.time_directory_name_pattern is None:
+    if conventions.instance_directory_pattern is None:
         return ()
-    pattern = re.compile(conventions.time_directory_name_pattern)
+    pattern = re.compile(conventions.instance_directory_pattern)
     return tuple(sorted(
         child.name for child in case_root.iterdir()
         if child.is_dir() and pattern.match(child.name)
@@ -152,21 +153,21 @@ def _reconcile_artifact(
     artifact: DataArtifact,
     *,
     case_id: str | None,
-    time_directory_names: tuple[str, ...],
+    instance_names: tuple[str, ...],
 ) -> dict:
     """Classify one artifact, returning the per-entry report dict."""
     matched_files: list[dict] = []
 
-    if artifact.time_indexed:
-        for time_name in time_directory_names:
-            resolved = artifact.path_pattern.replace("{time}", time_name)
+    if artifact.instance_indexed:
+        for instance_name in instance_names:
+            resolved = artifact.path_pattern.replace("{instance}", instance_name)
             resolved = _substitute_case_id(resolved, case_id)
             matched_files.extend(_glob_under(case_root, resolved))
     else:
         resolved = _substitute_case_id(artifact.path_pattern, case_id)
-        # Defensive: a non-time-indexed pattern shouldn't contain {time},
-        # but if it does, accept any time dir name via wildcard.
-        resolved = resolved.replace("{time}", "*")
+        # Defensive: a pattern that is not instance-indexed shouldn't contain
+        # {instance}, but if it does, accept any instance name via wildcard.
+        resolved = resolved.replace("{instance}", "*")
         matched_files.extend(_glob_under(case_root, resolved))
 
     status = "matched" if matched_files else "missing"
@@ -184,7 +185,7 @@ def reconcile_artifacts(
     predicted: Iterable[DataArtifact],
     *,
     case_id: str | None = None,
-    time_directory_names: Iterable[str] = (),
+    instance_names: Iterable[str] = (),
 ) -> ReconciliationReport:
     """Compare `predicted` artifacts against the on-disk state of
     `case_root`.
@@ -196,21 +197,21 @@ def reconcile_artifacts(
         case_id: when supplied, substituted into `{case_id}` placeholders
             literally. When omitted, `{case_id}` becomes the glob wildcard
             ``*`` so per-case outputs in a sweep still match.
-        time_directory_names: environment-declared names available for a
-            ``{time}`` artifact. The neutral default is empty.
+        instance_names: environment-declared names available for an
+            ``{instance}`` artifact. The neutral default is empty.
 
     Returns:
         A `ReconciliationReport` enumerating every predicted artifact and
         whether (and how) it was realised.
     """
     predicted_tuple = tuple(predicted)
-    declared_times = tuple(sorted(set(time_directory_names)))
+    declared_instances = tuple(sorted(set(instance_names)))
     entries: list[dict] = []
     matched_count = 0
     for artifact in predicted_tuple:
         entry = _reconcile_artifact(
             case_root, artifact, case_id=case_id,
-            time_directory_names=declared_times,
+            instance_names=declared_instances,
         )
         if entry["status"] == "matched":
             matched_count += 1

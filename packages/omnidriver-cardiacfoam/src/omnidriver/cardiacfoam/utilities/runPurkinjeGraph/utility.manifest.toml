@@ -32,8 +32,8 @@ argument_kind = "word"
 
 [[produces]]
 artifact_id = "purkinje_time_dirs"
-path_pattern = "{time}/"
+path_pattern = "{instance}/"
 format = "openfoam_time_dirs"
 description = "OpenFOAM time directories containing Purkinje graph field outputs at each write interval."
 produced_by = "runPurkinjeGraph"
-time_indexed = true
+instance_indexed = true
