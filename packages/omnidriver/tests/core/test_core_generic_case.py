@@ -292,25 +292,48 @@ def test_per_case_openfoam_bashrc_key_is_silently_unused(tmp_path: Path) -> None
     ``"explicit_bashrc" not in case.params``, a key this test never
     supplies, so the assertion could never fail regardless of what the
     fix did. Asserts the key actually supplied, ``"openfoam_bashrc"``,
-    instead."""
-    spec = _spec(
+    instead.
+
+    Corrected 2026-09-26 (final review M9): that fix was still, by the
+    R2 fix report's own admission, unfalsifiable -- ``_normalize_case_specs``
+    builds ``params`` from a fixed key set that never copies an arbitrary
+    ``cases[]`` key regardless of its name, so ``"openfoam_bashrc" not in
+    case.params`` cannot fail no matter what this test supplies. Asserts
+    instead that the built case is identical to one built from a ``cases[]``
+    entry that never carried the key at all -- a comparison that WOULD
+    fail if a future change started copying unrecognised keys through."""
+    with_key = _spec(
         tmp_path,
         cases=[{"case_id": "c1", "openfoam_bashrc": "/opt/openfoam/etc/bashrc"}],
-    )
-    case = spec.build_cases()[0]
-    assert "openfoam_bashrc" not in case.params
+    ).build_cases()[0]
+    without_key = _spec(
+        tmp_path,
+        cases=[{"case_id": "c1"}],
+    ).build_cases()[0]
+    assert "openfoam_bashrc" not in with_key.params
+    assert with_key == without_key
 
 
 def test_per_case_explicit_bashrc_key_is_ignored(tmp_path: Path) -> None:
     """R2 fix, finding M5: a cases[] entry carrying the key A1 removed,
     ``explicit_bashrc``, is ignored -- not translated into anything -- the
-    same as any other unrecognised field a cases[] entry might carry."""
-    spec = _spec(
+    same as any other unrecognised field a cases[] entry might carry.
+
+    Corrected 2026-09-26 (final review M9): the original assertion here had
+    the same unfalsifiable shape as
+    ``test_per_case_openfoam_bashrc_key_is_silently_unused`` -- see that
+    test's docstring. Asserts equality against a case built without the key
+    instead."""
+    with_key = _spec(
         tmp_path,
         cases=[{"case_id": "c1", "explicit_bashrc": "/opt/openfoam/etc/bashrc"}],
-    )
-    case = spec.build_cases()[0]
-    assert "explicit_bashrc" not in case.params
+    ).build_cases()[0]
+    without_key = _spec(
+        tmp_path,
+        cases=[{"case_id": "c1"}],
+    ).build_cases()[0]
+    assert "explicit_bashrc" not in with_key.params
+    assert with_key == without_key
 
 
 def test_per_case_entries_accept_generic_override_keys(tmp_path: Path) -> None:

@@ -156,6 +156,16 @@ def test_strict_plan_succeeds_for_single_cell(tmp_path: Path) -> None:
     assert environment["points"] == 0
     assert environment["status"] == "not_requested"
 
+    # Restored 2026-09-26 (final review M7): these were dropped during the
+    # M6 conversion to a native test rather than corrected. Both still hold
+    # against the real tree -- a fresh strict plan has run nothing yet, so
+    # `current_step_id` is the workflow's first step. R2-fix-report.md
+    # claimed this assertion was merely "corrected"; it was deleted and is
+    # restored here with `"mesh"` (not the pre-conversion `"solve"`), per
+    # `probe_m6.py`'s output against the real native tree.
+    assert payload["workflow_state"]["completed_steps"] == []
+    assert payload["workflow_state"]["current_step_id"] == "mesh"
+
     # Not "ready": `ready` is a success claim, and this plan has a real coverage
     # gap.
     assert readiness["status"] != "ready"
@@ -246,6 +256,11 @@ def test_strict_plan_succeeds_for_manufactured_tutorial(tmp_path: Path) -> None:
         artifact["artifact_id"] == "verification_error_summary"
         for artifact in payload["expected_artifacts"]
     )
+    # Restored 2026-09-26 (final review M7): dropped during the M6
+    # conversion. R2-fix-report.md claimed this tutorial "passes unchanged";
+    # that was not checked -- `probe_m6.py` against the real native tree
+    # confirms `current_step_id == "mesh"` still holds.
+    assert payload["workflow_state"]["current_step_id"] == "mesh"
 
 
 def test_cli_plan_strict_prints_json_and_returns_zero(tmp_path: Path) -> None:
