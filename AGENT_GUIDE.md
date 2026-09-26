@@ -1184,6 +1184,14 @@ domain-specific semantics is `OpenFOAMEnvironmentPlugin`
 paired with `openfoam-environment.yaml` in the same directory) — read it
 alongside this contract and the plugin-builder skill referenced above.
 
+**Updated 2026-09-26 (final review M13):** `OpenFOAMEnvironmentPlugin` proves
+"no domain-specific semantics"; it does not prove "no OpenFOAM". For the
+complete example of a plugin outside OpenFOAM entirely, read
+`packages/omnidriver-opencarp/src/omnidriver/opencarp/plugin.py`
+(`OpenCARPPlugin`) — it implements the full contract with none of the four
+optional dictionary members and passes conformance C1–C10 against the real
+openCARP v18.1 binary.
+
 ### Key Optional Hooks (`SolverPluginOptionalHooks`, probed with `getattr`)
 
 Two have no neutral fallback — sweeps fail if they are absent:
@@ -1252,6 +1260,9 @@ omnidriver --plugin mysolver plan --strict --entry <tutorial_or_case_path>
   in-repo example of a plugin with no domain-specific semantics (corrected
   2026-09-19: previously named a nonexistent `omnidriver/core/generic_plugin.py`
   and `omnidriver/core/generic-plugin.yaml`)
+- `omnidriver/opencarp/plugin.py` (`OpenCARPPlugin`) — added 2026-09-26 (final
+  review M13): the complete non-OpenFOAM plugin example, passing C1–C10
+  against the real binary
 - `omnidriver/cardiacfoam/cardiacfoam_plugin.py` — full v2 reference
   (corrected 2026-09-19: previously given as `omnidriver/plugins/cardiacfoam_plugin.py`
   — `omnidriver.plugins` is the entry-point group name, not a package; the

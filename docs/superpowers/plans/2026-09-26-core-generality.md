@@ -23,6 +23,26 @@
 **Code map:** `.superpowers/sdd/map-A.md`. It was made at `3c6b615`; this plan re-verified every symbol against `main` at `fd21fe7`.
 **Previous plan (format and binding rules):** `docs/superpowers/plans/2026-09-25-solver-conformance-and-opencarp.md`.
 
+## Status
+
+Added 2026-09-26 (final whole-topic review, finding M13: CLAUDE.md tells a
+reader to start here, and there was no table). Built from `git log`.
+
+| item | commit(s) | status |
+|---|---|---|
+| Task 1: A6, cardiac names out of core | `03b0727` | done |
+| Task 2: A7, the name heuristic | `17f2906` | done |
+| Task 3: A5, core's own run records; C11 | `95797a9` | done |
+| Task 4: A3, dictionary members optional-neutral | `7bc7777` | done |
+| Task 5: A1, `environment_source` opaque to core | `1983749`, `5f2c51e` | done |
+| Task 6: A2a, instance directories, `{instance}` | `64eb550` | done |
+| Task 7: A2b, replica directories | `ca5a394` | done |
+| Task 8: A2c, `input_roots`; core drops "start time" | `9cf5485` | done |
+| Task 9: close-out (legacy allowed-root var; spec/CLAUDE.md corrections) | `125b344`, `551ed9c` | done |
+| R1 checkpoint fixes (I1/M2/M9 cardiacfoam; I2/I3/M1/M8 staging/C11; M3/M5/M6/M7 docs) | `46f1dc9`, `bf55217`, `cba98d8` | done |
+| R2 checkpoint fixes (I1/M1 pre-A2 refusal; I3/M2 conventions validation; I2/M3/M8 merged conventions; M5/M6 planning test; M4/M7 doc/gate) | `51211ad`, `ae2d1bf`, `8abb187`, `d9c9fc6`, `de913a9` | done |
+| Final whole-topic review fixes (M1, M4, M5, M6, M7, M9, M10, M13) | see `git log` on `core-gen-close` after this table was written | done |
+
 ## Global Constraints
 
 - Python floor 3.11; CI matrixes 3.11/3.12/3.13.

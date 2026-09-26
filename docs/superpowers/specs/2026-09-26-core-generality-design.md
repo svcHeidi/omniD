@@ -75,8 +75,11 @@ Each change keeps every existing guard green and adds these:
   fix finding M1: the check used to accept `restaged <= native`, a subset,
   which could not see a staging rule that wrongly *drops* an authored native
   file). Meeting it needed `CORE_RUNTIME_RECORDS` to list every file core
-  writes (seven files and two directories, not four) and openCARP's record
-  to declare its full outputs (F15).
+  writes (seven files and four directories -- corrected 2026-09-26, final
+  review M13: this said "two directories, not four"; the directories are
+  `workflow_logs`, the case-transaction journal directory,
+  `remediation_transactions` and `remediation_candidates`) and openCARP's
+  record to declare its full outputs (F15).
 - A3's stable digest: every provider digest and the cardiac stacks'
   identities are unchanged; `opencarp` and standalone `openfoam-environment`
   record `dictionaries` as `<unclaimed>` once, because their stub had been
@@ -89,8 +92,21 @@ Each change keeps every existing guard green and adds these:
 - A2 landed as three commits (A2a instances, A2b replicas, A2c input roots);
   the run-document schema key `time_indexed` became `instance_indexed`.
 - The R1 and R2 checkpoint-review fixes, one line each:
-  - R1-I1: the A7 hook missed `manufacturedMonodomainTotalLagrangianEM`;
-    now covered by the `physics_layout.json` table above.
+  - R1-I1 (corrected 2026-09-26, final review M13: this bullet described
+    A7's own original motivation, the EM tutorial gap, which is a
+    different finding, not recorded here before now): `planning_policy
+    .is_nondimensional_case`'s `except Exception` swallowed
+    `PhysicsLayoutError`, so a case with no `constant/physicsProperties`
+    (e.g. `ionicHeterogeneity`) silently lost the exemption the pre-A7
+    direct read gave it, becoming a bare `FileNotFoundError` the hook
+    caught and answered `False` (not exempt) for. `PhysicsLayoutError` now
+    subclasses `TutorialRecordError` so it reaches `plan --strict`'s
+    existing refusal handling instead of a traceback, and a case with no
+    `physicsProperties` is now an explicit single-region `_IMPLICIT_LAYOUT`
+    (role `electro` only), documented against cardiacFoam's
+    `physicsModel::New` and `ionicHeterogeneity`'s own probe application.
+    (`manufacturedMonodomainTotalLagrangianEM`'s region-split gap is A7's
+    own fix, above, not R1-I1.)
   - R1-I2: `record_generated_relpaths` keeps an intermediate a later step
     `consumes` excluded from a record's generated set (first-touch-in-step
     -order rule), rather than re-including it as an authored input.

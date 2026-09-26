@@ -12,8 +12,10 @@ paper, researched separately into
 
 **Status, 2026-09-26:** plan `docs/superpowers/plans/2026-09-26-results-as-quantities.md`;
 Tasks 1–6 landed (Task 1 `26a8da6`; Task 2 `3f16fe8`; Task 3 `13ba8b6`,
-`5259160`; Task 4 `767f70a`; Task 5 `422d549`, `ff6331e`; Task 6 is this
-commit, on branch `qoi-b6`); Tasks 7–8 wait on the tutorial stream's 5.4b.
+`5259160`; Task 4 `767f70a`; Task 5 `422d549`, `ff6331e`; Task 6 `5a0778e`,
+on `main` -- **corrected 2026-09-26, final review M13:** this said "is this
+commit, on branch `qoi-b6`", which went stale once Task 6 landed); Tasks 7–8
+wait on the tutorial stream's 5.4b.
 
 ## 1. What exists
 
@@ -139,11 +141,19 @@ openCARP's genuinely-measured node. Task 7 must instead:
   given `points`, meaning "expected location", checked against its reported
   `sampled_at` -- see `core/quantities/comparison.py`'s module docstring).
 
-**Open item, also recorded here:** `comparison._artifact` refuses any
-`path_pattern` containing `{`. If the cardiacFOAM probe artifact ends up
-declared with topic A's `{instance}` placeholder (instance directories),
-Task 7 needs a core change first to read a quantity from an indexed
-artifact at all -- not decided here.
+**Open item, closed 2026-09-26 (final whole-topic review, Q6):** `comparison
+._artifact` refuses any `path_pattern` containing `{`. This cannot arise for
+a record's artifact, though: every `WorkflowStep.produces`/`consumes` path is
+itself refused if it contains `{`/`}` (`tutorial_records.py`, "placeholders
+are not supported"), so a record's artifacts always arrive through
+`record_step_artifacts` as a literal `path_pattern`, never topic A's
+`{instance}` placeholder. Task 7 therefore needs no core change for this:
+cardiacFOAM's `NiedererEtAl2011verification` case has `startTime 0` and a
+`probes` function object named `Niedererpoints` sampling `activationTime`, so
+Task 7 declares the literal `postProcessing/Niedererpoints/0/activationTime`.
+A study that changes `startTime` moves the output; the comparison then
+reports it as a named `not_evaluated` (the artifact is missing), never as a
+silent mismatch against the wrong path.
 
 ## 4. Proof
 

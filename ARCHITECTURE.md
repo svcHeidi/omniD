@@ -15,17 +15,33 @@ omnidriver/ (GitHub Root)
 ├── packages/
 │   ├── omnidriver/                  (import omnidriver.core)
 │   │   └── src/omnidriver/core/     <-- Universal DAG, provenance, schemas
+│   │       ├── quantities/          <-- Solver-neutral results-as-quantities: Quantity,
+│   │       │                            units, sentinels, the reader contract, comparison
+│   │       │                            (2026-09-26, topic B)
+│   │       └── runtime_records.py   <-- Core's own run-record filenames, declared once
+│   │                                    (workflow_state.json, run_document.json, ...;
+│   │                                    2026-09-26, spec A5)
 │   │
 │   ├── omnidriver-openfoam/         (import omnidriver.openfoam)
 │   │   └── src/omnidriver/openfoam/ <-- Translates core requests into OpenFOAM
 │   │
 │   ├── omnidriver-cardiacfoam/          (import omnidriver.cardiacfoam)
 │   │   └── src/omnidriver/cardiacfoam/  <-- Cardiac physics and logic
+│   │       └── physics_layout.py/.json  <-- Which region(s) a case's physics type
+│   │                                        declares, one row per type (2026-09-26, A7)
 │   │
 │   └── omnidriver-cardiaccore/          (import omnidriver.cardiaccore)
 │       └── src/omnidriver/cardiaccore/  <-- Cardiac preprocessing adapter; sibling to
 │                                             cardiacfoam, not a dependent of it (Rule 4)
+│
+├── benchmarks/                      <-- Published, solver-neutral reference definitions
+│                                        (e.g. niederer2011.json); scripts/check-benchmark-
+│                                        references.py gates them (2026-09-26, topic B Task 4)
 ```
+
+**Corrected 2026-09-26 (final review M13):** the tree above did not mention
+`core/quantities/`, `core/runtime_records.py`, `benchmarks/` or
+`cardiacfoam/physics_layout.*`, all landed the same day by topics A and B.
 
 ### Architectural Rules
 1. **Core Independence:** `omnidriver.core` MUST NOT import anything from `openfoam` or `cardiac`. It must contain **zero** physics rules and **zero** OpenFOAM vocabulary.

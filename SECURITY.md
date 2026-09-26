@@ -54,6 +54,23 @@ results directory — it is not forced under `caseRoot`.
 - Workflow `cwd` cannot escape `caseRoot`.
 - `caseRoot` must be a runnable OpenFOAM case; `caseRoot`/`outputDir` resolved to
   canonical paths; opt-in `OMNIDRIVER_ALLOWED_RUNS_ROOT` containment.
+  **Corrected 2026-09-26 (final review M10):** this variable was renamed from
+  `DRIVERFOAM_ALLOWED_RUNS_ROOT` with no dated note at the time, against this
+  file's own house style (CLAUDE.md). The old name is gone, not read under
+  either name, and there is no fallback: `core/runtime/run_document_exec.py`'s
+  `_allowed_runs_root` reads `OMNIDRIVER_ALLOWED_RUNS_ROOT` only. This was an
+  owner decision (no external caller of the old name is known), but its
+  trade-off is real and worth stating plainly: an operator who still sets
+  only `DRIVERFOAM_ALLOWED_RUNS_ROOT` gets no containment and no warning --
+  the boundary is silently off, not silently on. A named refusal for the old
+  variable was considered and rejected: `scripts/check-core-shape.py`'s gate
+  on core naming OpenFOAM/driver-specific vocabulary matches an unbounded
+  `FOAM_` substring, so spelling the retired name literally in core to refuse
+  it would itself grow the shape debt the gate exists to shrink. If a refusal
+  is wanted later, it belongs at the OpenFOAM-free CLI edge, or the string
+  would need to be built from two joined fragments to dodge the substring
+  match -- ugly enough that the owner should choose deliberately rather than
+  have an implementer default to it.
 - Steps run argv-style (no shell).
 - Override / spec **values** are rejected at the `update_foam_entry` write
   path if they are directive- or entry-terminating-shaped. The command

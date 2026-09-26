@@ -43,6 +43,23 @@
 
 > **Corrected 2026-09-26 (R1 review, I4), after topic A's A5 landed:** A5 wrote its own F15 into `docs/solver-learning/opencarp.md` and prepended `"out"` to the openCARP solve step's `produces`. So this plan's probe rows are **F16 and F17** (they were F15 and F16), the solve step keeps `"out"` first, and the LAT artifact id in the request example is `record.solve.2` (record artifact ids are index-based, `record.<step>.<index>`).
 
+## Status
+
+Added 2026-09-26 (final whole-topic review, finding M13: CLAUDE.md tells a
+reader to start here, and there was no table). Built from `git log`.
+
+| item | commit(s) | status |
+|---|---|---|
+| Task 1: record outputs name their format (`ProducedPath`) | `26a8da6` | done |
+| Task 2: quantities, units, reader contract; C12 | `3f16fe8` | done |
+| Task 3: comparison (reference/request/report), `omnidriver compare` | `13ba8b6`, `5259160` | done |
+| Task 4: reference `benchmarks/niederer2011.json` | `767f70a` | done |
+| Task 5: openCARP reads its LAT file as quantities (F16/F17) | `422d549`, `ff6331e` | done |
+| Task 6: openCARP-vs-openCARP proof end to end; docs and CI gate | `5a0778e` | done |
+| Opus review fixes (location guards, pre-registration, unit-carrying reports; M11) | `04a1093`, `206de29`, `9923621` | done |
+| Task 7 (cardiacFOAM's probe reader) | — | **blocked** on the tutorial stream's step 5.4b (`niederer2012` as a record) |
+| Task 8 (openCARP vs cardiacFOAM end to end) | — | **blocked** on Task 7 |
+
 ## Global Constraints
 
 - Python floor 3.11; CI matrixes 3.11/3.12/3.13.
