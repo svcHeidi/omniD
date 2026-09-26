@@ -99,18 +99,27 @@ def niederer_sweep(tmp_path: Path, *, dx_values: tuple[float, ...], tend: float,
 
 def _only_a_declared_artifact_is_missing(case: Mapping[str, Any]) -> bool:
     """Whether ``case`` failed for exactly the reason F17 exercises: the solver
-    exited fine, but a declared (non-optional) artifact is absent, so
+    exited fine, but the LAT artifact (``LAT_PATH``) specifically is absent, so
     reconciliation -- not a crash, a timeout or a refused patch -- marked the
     case failed. Anything else (``materialization_error``, ``plan_error``,
     ``timeout_error``) is a genuine failure and stays fatal, per the
     no-fallbacks rule: this only widens what counts as an *expected* shape,
-    it never silences an unexplained one."""
+    it never silences an unexplained one.
+
+    Corrected 2026-09-26 (controller review M11): this used to accept ANY
+    missing declared artifact (``missing_count > 0``), so a missing
+    ``out/vm.igb`` -- an actual defect -- would have been tolerated right
+    alongside F17's expected absence. It now checks which artifact is
+    missing, by ``predicted_path``, and refuses to tolerate anything else."""
     if case.get("status") != "failed":
         return False
     if case.get("materialization_error") or case.get("plan_error") or case.get("timeout_error"):
         return False
     reconciliation = case.get("artifact_reconciliation")
-    return bool(reconciliation) and reconciliation.get("missing_count", 0) > 0
+    if not reconciliation or reconciliation.get("missing_count", 0) <= 0:
+        return False
+    missing = [a for a in reconciliation.get("artifacts", ()) if a.get("status") == "missing"]
+    return bool(missing) and all(a.get("predicted_path") == LAT_PATH for a in missing)
 
 
 @dataclass(frozen=True)

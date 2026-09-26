@@ -50,6 +50,14 @@ def test_an_agent_compares_dx_500_with_dx_250_at_the_paper_points(tmp_path):
         "schema_version": 1, "reference": str(REFERENCE),
         "tolerance": {"kind": "absolute", "value": TOLERANCE_MS, "unit": "ms",
                       "rationale": "declared before either run was read; exploratory, not a benchmark acceptance claim"},
+        # I2/M1, controller review 2026-09-26: pre-registered, no default.
+        # At tend 150 ms every P1-P9 corner activates on both resolutions
+        # (test_the_slab_corners_and_centre_at_dx_500_match_g4), so no pair
+        # is expected to be both_not_reached either way; 'agree' is chosen
+        # only because it must be chosen, not because it changes anything
+        # here -- the outside_tolerance pairs below are what fails this
+        # report, exactly as before this field existed.
+        "both_not_reached": "agree",
         "runs": {"dx500": run(500.0), "dx250": run(250.0)},
         "pairs": [{"reference_label": label, "left": {"run": "dx500", "quantity": label},
                    "right": {"run": "dx250", "quantity": label}} for label in labels],
@@ -59,7 +67,12 @@ def test_an_agent_compares_dx_500_with_dx_250_at_the_paper_points(tmp_path):
                            "--report", str(report_path)], capture_output=True, text=True, timeout=600)
     assert proc.returncode == 0, proc.stdout[-2000:] + proc.stderr[-2000:]
     report = json.loads(report_path.read_text())
-    assert report["status"] in {"passed", "failed"}          # every pair was evaluated
+    assert report["both_not_reached"] == "agree"
+    # I2/M1: every side below is asserted "evaluated" -- no pair is ever
+    # both_not_reached at tend 150 ms, so 'agree' vs 'fail' changes nothing
+    # here. dx 500 vs dx 250 disagrees outside P1 (AGENT_GUIDE.md), so this
+    # stays "failed" for the same reason it always has.
+    assert report["status"] == "failed"
     by_label = {m["reference_label"]: m for m in report["metrics"]}
     assert set(by_label) == set(labels)
     for metric in by_label.values():
