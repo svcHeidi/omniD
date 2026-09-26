@@ -156,6 +156,25 @@ session scratchpad, never in the native tree.
 - **G5:** `run.py`'s example flow passes `-dt`, `-tend` and `-mass_lumping` on
   the command line. They are ordinary `.par` parameters, so omniD writes them
   into the staged `nversion.par`, keeping one source of values: the case.
+- **G8, the benchmarker's step-2 proof (2026-09-26, spec `2026-09-26-results-as-quantities-design.md`
+  Task 6):** `test_an_agent_compares_dx_500_with_dx_250_at_the_paper_points`
+  runs `niedererNVersion` at dx 500 and dx 250 (dt 50 µs, tend 150 ms) through
+  `sweep-run`, reads all nine of `benchmarks/niederer2011.json`'s resolved
+  points (P1-P9) through the LAT reader (artifact `record.solve.2`, format
+  `opencarp_lat_per_node`), and compares them with a pre-registered
+  `omnidriver compare` request (absolute tolerance 5 ms). Evidence for the
+  benchmarker, not a reference value, like G4: P1 (nearest the stimulus)
+  agrees closely (dx 500 1.355495 ms vs dx 250 1.355191 ms,
+  `within_tolerance`); P8 (the far corner) is dx 500 **126.454889 ms**
+  (matching G4) vs dx 250 61.989965 ms; P9 (the centre) is dx 500 55.776783 ms
+  vs dx 250 27.536149 ms. Every point but P1 comes back `outside_tolerance` —
+  the coarse mesh's diagonal conduction disagrees substantially with the
+  finer one, which is what a spatial-refinement comparison is expected to
+  show, not a defect in the pipeline. The report's overall `status` is
+  `failed`, exactly as it should be reported; each case's
+  `ExperimentCase.comparison.association_status` (via
+  `experiment_comparisons`) reads `run_verified` for both. The proof is that
+  the pipeline reports correctly, not that the two resolutions agree.
 
 ## H. omniD drives openCARP
 

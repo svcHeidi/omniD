@@ -10,6 +10,11 @@ benchmark on openCARP and cardiacFOAM and compare activation times at P1–P9.
 paper, researched separately into
 `.superpowers/sdd/niederer-benchmark-definition.md`.
 
+**Status, 2026-09-26:** plan `docs/superpowers/plans/2026-09-26-results-as-quantities.md`;
+Tasks 1–6 landed (Task 1 `26a8da6`; Task 2 `3f16fe8`; Task 3 `13ba8b6`,
+`5259160`; Task 4 `767f70a`; Task 5 `422d549`, `ff6331e`; Task 6 is this
+commit, on branch `qoi-b6`); Tasks 7–8 wait on the tutorial stream's 5.4b.
+
 ## 1. What exists
 
 - **In core:** no code reads a value from a result file or compares numbers.
@@ -41,6 +46,29 @@ paper, researched separately into
 | sampling | handled with care and **reported, never hidden**. Every value carries its sampling rule (cell-containing, node) and the coordinates the solver says it sampled, so a wrong pairing or rotation is visible in the report |
 | stale references | cardiacFOAM's stale Niederer tolerance rows and reference paths (`equivalence_protocol.yaml`, `regression_equivalence/registry.py`) are fixed with the tutorial stream's `niederer2012` migration (its step 5.4b), not here |
 
+**Corrected 2026-09-26 (Task 6, forced by evidence):** the "reference" row
+above says the reference holds "the paper's coordinates ... and the
+tolerances" for P1–P9. Neither is quite true of the committed
+`benchmarks/niederer2011.json` (Task 4):
+1. **The paper prints no coordinates at all** (research §1, §3). The
+   reference declares a frame convention instead (`stated_by_source: false`:
+   origin at P1, axes along the 20/7/3 mm edges) and gives coordinates only
+   for the points the paper itself settles (P1, P4, P8, P9). P2, P3, P5, P6
+   and P7 are not paper coordinates either — they come from the project
+   owner's own (unpublished) manuscript appendix, frame-converted into this
+   file's convention; the P2/P3 (and hence P6/P7) naming order is that
+   appendix's convention, not independently checked against niederer2011's
+   own ESM (not retrieved). See the reference's own `sources` and Controller
+   resolution recorded in `.superpowers/sdd/niederer-benchmark-definition.md`,
+   section "Resolution of P2-P7".
+2. **The paper states no tolerance.** Tolerances live only in the agent's
+   comparison request, pre-registered with a rationale, never in the
+   reference — the reference schema has no `tolerances` field. The paper's
+   one published number (P8, a 37.8–48.7 ms range across codes at the finest
+   resolution, §6) is recorded as a `published_values` entry, not a
+   tolerance: one source for a tolerance, nothing inferred into a
+   paper-derived file.
+
 ## 3. What gets built
 
 **Core (solver-neutral):**
@@ -69,6 +97,26 @@ the core contract and the openCARP half are proved alone.
 
 **The reference file:** built from the paper's own definition. Nothing is
 inferred.
+
+**Corrected 2026-09-26 (Task 6, forced by evidence):**
+3. **The reader signature above undersold what shipped.** `(case_root,
+   artifact) -> tuple[Quantity, ...]` became a reader *object*
+   (`ArtifactValueReader`) declaring `value_unit`, `sentinels`,
+   `sampling_rule`, `coordinate_unit` and `takes_points`, whose
+   `read(case_root, artifact, request)` takes a third argument — the
+   request's points — so core, not the reader, resolves sentinels and
+   converts units in the right order (sentinels first). `Quantity` also
+   gained `sampled_at_unit` (openCARP's coordinates are µm, cardiacFOAM's are
+   m; a bare coordinate triple would be ambiguous) and `reason` (a
+   `not_evaluated` without one is useless; `cardiacfoam/runtime_evidence.py`
+   already required a reason elsewhere).
+4. **"A reader for probe files" undersold the split cardiacFOAM's reader
+   will need** (still blocked on the tutorial stream's 5.4b): the parser for
+   OpenFOAM's probes output format belongs in `omnidriver-openfoam`
+   (`openfoam/probes.py`), which knows the layout; the reader that declares
+   the unit, the sentinel and what the field means
+   (`cardiacfoam/activation_probes.py`) belongs in `omnidriver-cardiacfoam`,
+   which knows the physics. Neither exists yet.
 
 ## 4. Proof
 

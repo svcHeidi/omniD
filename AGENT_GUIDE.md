@@ -562,6 +562,110 @@ for artifact in reconciliation["artifacts"]:
 Missing-but-optional artifacts are not errors. They only appear under specific
 configurations, for example probes that were not enabled.
 
+## Comparing results as quantities
+
+Once two runs' declared artifacts hold quantities a plugin's reader
+understands (`RuntimeEvidenceCapability.artifact_value_reader`), an agent
+compares them with `omnidriver compare` rather than parsing solver output
+itself. Core reads no result file on its own: everything — which runs, which
+artifact of each, where to sample, which reference, which pairs and the
+tolerance — comes from the agent's comparison request
+(`omnidriver/schemas/quantity-comparison.schema.json`), validated against
+that schema before anything is read.
+
+**Orientation, pairing and tolerance are the agent's step, and they are
+stated in the request.** Core does no frame conversion and infers no
+pairing: a request's `points` are written in the reference's own frame and
+unit, converted only to the reader's declared unit; a request's `pairs`
+say explicitly which `(run, quantity)` on the left compares against which
+on the right, under which reference label. A tolerance (`kind`: `absolute`
+or `relative`, a `value`, and a `rationale`) is declared once, before either
+run is read — changing it after seeing a result is not supported by the
+tool: a written report cannot be edited, only superseded (next paragraph).
+
+**The report is written once.** `run_quantity_comparison(request_path,
+report_path)` (`omnidriver compare --comparison-request ... --report ...`)
+refuses to run at all if `report_path` already exists, and refuses to
+overwrite it if two processes race to write it (it hard-links a temporary
+file into place). A changed request is a new report, at a new path; the
+request's own digest is recorded in the report so the two stay traceable to
+each other.
+
+Each pair in the report's `metrics` carries a `status`:
+
+- `within_tolerance` / `outside_tolerance` — both sides evaluated, compared
+  against the pair's bound;
+- `both_not_reached` — the sentinel (e.g. `-1`) on both sides, resolved
+  before any unit conversion, never converted itself (`-1 s` is never
+  `-1000 ms`);
+- `reached_on_one_side` — the sentinel on exactly one side;
+- `sampled_off_point` — a side's reader sampled further from the requested
+  point than the run's stated `max_sampling_offset`;
+- `not_evaluated` — a side could not be read at all (a `reason` says why:
+  the case did not complete, the stack declares no reader for the
+  artifact's format, the artifact is missing, or the reader itself raised).
+
+Each side of a pair also reports its `value`, `unit` (post-conversion) and
+`declared_unit` (the reader's own), its `sampling_rule` (e.g. `node`,
+`cell-containing`) and its `sampled_at`/`sampled_at_unit` next to the
+`requested_at` point that was asked for — so a wrong pairing or a
+misoriented frame is visible in the report itself, not hidden behind an
+aggregate number. The report's own `status` (`passed`/`failed`/
+`unavailable`) is `failed` if any pair is outside tolerance, reached on one
+side only, or sampled off point; `unavailable` if any pair could not be
+evaluated; `passed` otherwise.
+
+**Attaching the report to an experiment.** `quantities.experiment_comparisons(report_path,
+sweep_output=...)` builds the `ComparisonRequest` tuple for every case in one
+sweep that the report actually names, for `experiments.inspect_sweep_experiment(...,
+comparisons=...)` to associate. Core verifies the association itself
+(`ExperimentCase.comparison.association_status`) from the run's own recorded
+digests — it never trusts the report's say-so about which case it covers.
+
+**Example: openCARP vs openCARP, two resolutions, at the paper's points**
+(`packages/omnidriver-opencarp/tests/test_quantity_comparison_native.py`,
+proof for `benchmarks/niederer2011.json`). An agent runs the sweep, reads
+each case's own artifact id off its run document, writes points from the
+reference (already in the reader's frame — F3, `docs/solver-learning/opencarp.md`),
+and states the pairing and tolerance itself:
+
+```bash
+OMNIDRIVER_OPENCARP_TUTORIALS=/usr/local/lib/opencarp/share/tutorials DYLD_LIBRARY_PATH=/opt/homebrew/lib \
+  python -m omnidriver sweep-run --plugin opencarp --spec sweep.json \
+  --output-dir sweep --scratch-dir scratch
+```
+
+```json
+{
+  "schema_version": 1, "reference": "benchmarks/niederer2011.json",
+  "tolerance": {"kind": "absolute", "value": 5.0, "unit": "ms",
+                "rationale": "declared before either run was read; exploratory, not a benchmark acceptance claim"},
+  "runs": {
+    "dx500": {"plugin": "opencarp", "sweep_output": "sweep", "case_id": "case_0001",
+              "artifact_id": "record.solve.2", "points": {"unit": "mm", "at": {"P1": [0, 0, 0], "...": "..."}},
+              "max_sampling_offset": 0.001},
+    "dx250": {"plugin": "opencarp", "sweep_output": "sweep", "case_id": "case_0002",
+              "artifact_id": "record.solve.2", "points": {"unit": "mm", "at": {"P1": [0, 0, 0], "...": "..."}},
+              "max_sampling_offset": 0.001}
+  },
+  "pairs": [{"reference_label": "P1", "left": {"run": "dx500", "quantity": "P1"},
+             "right": {"run": "dx250", "quantity": "P1"}}]
+}
+```
+
+```bash
+python -m omnidriver compare --comparison-request request.json --report report.json
+```
+
+At dx 500 vs dx 250 (dt 50 µs, tend 150 ms), the report's own numbers are the
+proof, not agreement between resolutions: P1 (nearest the stimulus) is
+`within_tolerance` (both around 1.355 ms), while most other points are
+`outside_tolerance` by tens of ms — the coarser mesh's diagonal conduction
+disagrees with the finer one, which is exactly what a spatial-refinement
+comparison is for. The pipeline reporting that correctly, with every value,
+unit and sampled location shown, is the proof; a passing overall `status` is
+not the goal.
+
 ## Discovering what's valid
 
 Three layers of discovery:
