@@ -10,11 +10,13 @@ from pathlib import Path
 
 import pytest
 
+from omnidriver.core import plugin_discovery
 from omnidriver.core.experiments import inspect_sweep_experiment
 from omnidriver.core.quantities import QuantityComparisonError, experiment_comparisons, run_quantity_comparison
 from omnidriver.core.runtime.postprocess_phase import build_sweep_context
 from plugins.quantity_toy import (
-    GRID_FORMAT, QUANTITY_TOY_PLUGIN, write_quantity_toy_case, write_toy_reference, write_toy_sweep,
+    DIFFERENT_VERSION_QUANTITY_TOY_PLUGIN, GRID_FORMAT, QUANTITY_TOY_PLUGIN, RAISING_READER_PLUGIN,
+    write_quantity_toy_case, write_toy_reference, write_toy_sweep,
 )
 
 TESTS_ROOT = Path(__file__).resolve().parents[1]
@@ -129,6 +131,41 @@ def test_a_tolerance_in_the_wrong_dimension_is_refused(tmp_path):
                                 tmp_path / "report.json")
 
 
+def test_an_absolute_tolerance_without_a_unit_is_refused_by_the_schema(tmp_path):
+    sweep, runs = _two_runs(tmp_path)
+    tolerance = {"kind": "absolute", "value": 1.0, "rationale": "no unit given"}
+    with pytest.raises(QuantityComparisonError, match="not a comparison request"):
+        run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "two")], tolerance=tolerance),
+                                tmp_path / "report.json")
+    assert not (tmp_path / "report.json").exists()
+
+
+def test_a_relative_tolerance_with_a_unit_is_refused_by_the_schema(tmp_path):
+    sweep, runs = _two_runs(tmp_path)
+    tolerance = {"kind": "relative", "value": 0.05, "unit": "ms", "rationale": "relative tolerances carry no unit"}
+    with pytest.raises(QuantityComparisonError, match="not a comparison request"):
+        run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "two")], tolerance=tolerance),
+                                tmp_path / "report.json")
+    assert not (tmp_path / "report.json").exists()
+
+
+def test_a_pair_may_override_the_default_tolerance(tmp_path):
+    sweep, runs = _two_runs(tmp_path, second="a 0.0025 0 0 0.007\nb -1 0.02 0.003 0\n")
+    loose = {"kind": "absolute", "value": 2.0, "unit": "ms", "rationale": "this pair alone tolerates more"}
+    pair = _pair("A", "one", "two", tolerance=loose)
+    report = run_quantity_comparison(_request(tmp_path, runs, [pair]), tmp_path / "report.json")
+    assert report["metrics"][0]["status"] == "within_tolerance" and report["metrics"][0]["bound"] == 2.0
+
+
+def test_a_pair_tolerance_in_the_wrong_dimension_is_refused(tmp_path):
+    sweep, runs = _two_runs(tmp_path)
+    bad = {"kind": "absolute", "value": 1.0, "unit": "mm", "rationale": "wrong on purpose, per-pair"}
+    pair = _pair("A", "one", "two", tolerance=bad)
+    with pytest.raises(QuantityComparisonError, match="pair 0.*'mm'"):
+        run_quantity_comparison(_request(tmp_path, runs, [pair]), tmp_path / "report.json")
+    assert not (tmp_path / "report.json").exists()
+
+
 def test_a_reader_unit_that_cannot_become_the_reference_unit_is_refused(tmp_path):
     sweep, runs = _two_runs(tmp_path)
     reference = write_toy_reference(tmp_path / "reference.json", quantity_unit="mm")
@@ -139,11 +176,41 @@ def test_a_reader_unit_that_cannot_become_the_reference_unit_is_refused(tmp_path
 
 
 def test_a_run_planned_with_another_stack_is_refused(tmp_path):
-    sweep = write_toy_sweep(tmp_path / "sweep", {"one": SAME, "two": SAME},
-                            plugin="plugins.e2e_record_plugin:E2ERecordPlugin")
-    runs = {"one": _run(sweep, "one"), "two": _run(sweep, "two")}
+    """A stack that really differs (here, a declared plugin_version a real
+    version bump would change) is refused. Rewritten per controller review
+    B1 (2026-09-26): two distinct classes sharing MinimalTestPlugin's
+    hardcoded plugin_id are NOT a different stack by the shared
+    `stack_identity_mismatch` check (only `source`, deliberately excluded,
+    told them apart) -- see `test_the_same_plugin_loaded_by_import_path_and_by_name_is_accepted`."""
+    sweep = write_toy_sweep(tmp_path / "sweep", {"one": SAME, "two": SAME}, plugin=QUANTITY_TOY_PLUGIN)
+    runs = {"one": _run(sweep, "one", plugin=DIFFERENT_VERSION_QUANTITY_TOY_PLUGIN), "two": _run(sweep, "two")}
     with pytest.raises(QuantityComparisonError, match="was planned with"):
         run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "two")]), tmp_path / "report.json")
+
+
+class _FakeQuantityToyEntryPoint:
+    """A discovered (no-colon) form of QUANTITY_TOY_PLUGIN, so a run can be
+    re-loaded by name instead of by its trusted import path."""
+
+    name = "quantity-toy"
+    value = "plugins.quantity_toy:QuantityToyPlugin"
+    dist = type("D", (), {"name": "toy-dist", "version": "1"})()
+
+    def load(self):
+        from plugins.quantity_toy import QuantityToyPlugin
+
+        return QuantityToyPlugin
+
+
+def test_the_same_plugin_loaded_by_import_path_and_by_name_is_accepted(tmp_path, monkeypatch):
+    """B1: the stack comparison is insensitive to `source` on purpose --
+    reloading the identical provider through a different install/import
+    path is not a "different stack" refusal."""
+    monkeypatch.setattr(plugin_discovery, "_entry_points", lambda: (_FakeQuantityToyEntryPoint(),))
+    sweep = write_toy_sweep(tmp_path / "sweep", {"one": SAME, "two": SAME}, plugin=QUANTITY_TOY_PLUGIN)
+    runs = {"one": _run(sweep, "one", plugin="quantity-toy"), "two": _run(sweep, "two")}
+    report = run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "two")]), tmp_path / "report.json")
+    assert report["status"] == "passed"
 
 
 def test_points_are_converted_to_the_reader_unit_and_an_off_point_sample_fails(tmp_path):
@@ -157,6 +224,142 @@ def test_points_are_converted_to_the_reader_unit_and_an_off_point_sample_fails(t
     assert metric["left"]["sampled_at"] == [1.0, 0.0, 0.0] and metric["left"]["sampled_at_unit"] == "mm"
     assert metric["right"]["sampling_offset"] == pytest.approx(0.1)
     assert metric["status"] == "sampled_off_point" and report["status"] == "failed"
+
+
+def test_a_points_taking_reader_without_points_is_refused(tmp_path):
+    grid = "0 0 0 1.0\n1 0 0 2.0\n"
+    sweep = write_toy_sweep(tmp_path / "sweep", {"one": grid, "two": grid}, artifact_format=GRID_FORMAT)
+    runs = {"one": _run(sweep, "one"), "two": _run(sweep, "two")}
+    with pytest.raises(QuantityComparisonError, match="samples at supplied points"):
+        run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "two")]), tmp_path / "report.json")
+    assert not (tmp_path / "report.json").exists()
+
+
+def test_a_points_taking_reader_with_a_mismatched_label_set_is_refused(tmp_path):
+    grid = "0 0 0 1.0\n1 0 0 2.0\n"
+    sweep = write_toy_sweep(tmp_path / "sweep", {"one": grid, "two": grid}, artifact_format=GRID_FORMAT)
+    points = {"unit": "m", "at": {"not-a": [0, 0, 0]}}
+    runs = {"one": _run(sweep, "one", points=points), "two": _run(sweep, "two", points=points)}
+    with pytest.raises(QuantityComparisonError, match="points are given for"):
+        run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "two")]), tmp_path / "report.json")
+    assert not (tmp_path / "report.json").exists()
+
+
+def test_points_for_a_stack_with_no_reader_are_refused_before_any_read(tmp_path):
+    sweep = write_toy_sweep(tmp_path / "sweep", {"one": SAME, "two": SAME}, artifact_format="toy_unreadable_format")
+    points = {"unit": "m", "at": {"a": [0, 0, 0]}}
+    runs = {"one": _run(sweep, "one", points=points), "two": _run(sweep, "two")}
+    with pytest.raises(QuantityComparisonError, match="no reader"):
+        run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "two")]), tmp_path / "report.json")
+    assert not (tmp_path / "report.json").exists()
+
+
+def test_max_sampling_offset_for_a_stack_with_no_reader_is_also_refused(tmp_path):
+    sweep = write_toy_sweep(tmp_path / "sweep", {"one": SAME, "two": SAME}, artifact_format="toy_unreadable_format")
+    runs = {"one": _run(sweep, "one", max_sampling_offset=0.001), "two": _run(sweep, "two")}
+    with pytest.raises(QuantityComparisonError, match="no reader"):
+        run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "two")]), tmp_path / "report.json")
+    assert not (tmp_path / "report.json").exists()
+
+
+def test_a_pair_naming_two_different_runs_that_resolve_to_the_same_place_is_refused(tmp_path):
+    """N1 (controller review 2026-09-26): the refusal is about what a pair's
+    two sides actually resolve to, not whether they spell the same run
+    name."""
+    sweep, runs = _two_runs(tmp_path)
+    runs["one_alias"] = dict(runs["one"])
+    with pytest.raises(QuantityComparisonError, match="itself"):
+        run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "one_alias")]), tmp_path / "report.json")
+    assert not (tmp_path / "report.json").exists()
+
+
+def test_two_run_names_for_the_same_case_are_not_double_counted_as_evidence(tmp_path):
+    """B2 (controller review 2026-09-26): two run names that resolve to one
+    case must not produce two identical run_evidence entries, or
+    `experiments._association_status`'s "exactly one match" rule would see
+    two and call it unverified."""
+    sweep, runs = _two_runs(tmp_path)
+    runs["one_again"] = dict(runs["one"])
+    report_path = tmp_path / "report.json"
+    report = run_quantity_comparison(
+        _request(tmp_path, runs, [_pair("A", "one", "two"), _pair("B", "one_again", "two")]), report_path,
+    )
+    assert report["status"] == "passed"
+    assert len(report["run_evidence"]) == 2  # "one"/"one_again" -> one case; "two" is a distinct case
+    experiment = inspect_sweep_experiment(sweep, comparisons=experiment_comparisons(report_path, sweep_output=sweep))
+    assert {case.comparison.association_status for case in experiment.cases} == {"run_verified"}
+
+
+def test_a_case_that_did_not_complete_is_not_evaluated_with_its_status(tmp_path):
+    sweep, runs = _two_runs(tmp_path, status="failed")
+    report = run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "two")]), tmp_path / "report.json")
+    assert report["status"] == "unavailable"
+    left = report["metrics"][0]["left"]
+    assert left["status"] == "not_evaluated" and "'failed'" in left["reason"]
+
+
+def test_relative_reference_and_sweep_output_resolve_against_the_requests_directory(tmp_path):
+    write_toy_sweep(tmp_path / "sweep", {"one": SAME, "two": SAME})
+    write_toy_reference(tmp_path / "reference.json")
+    request_dir = tmp_path / "requests"
+    request_dir.mkdir()
+    request = request_dir / "request.json"
+    relative_runs = {
+        "one": {"plugin": QUANTITY_TOY_PLUGIN, "sweep_output": "../sweep", "case_id": "one",
+                "artifact_id": "record.solve.0"},
+        "two": {"plugin": QUANTITY_TOY_PLUGIN, "sweep_output": "../sweep", "case_id": "two",
+                "artifact_id": "record.solve.0"},
+    }
+    request.write_text(json.dumps({"schema_version": 1, "reference": "../reference.json", "tolerance": TOL,
+                                   "runs": relative_runs, "pairs": [_pair("A", "one", "two")]}))
+    report = run_quantity_comparison(request, request_dir / "report.json")
+    assert report["status"] == "passed"
+
+
+def test_a_reader_exception_other_than_valueerror_becomes_a_named_gap(tmp_path):
+    """N3 (controller review 2026-09-26): a report is always written, even
+    when a reader raises something core never anticipated."""
+    sweep = write_toy_sweep(tmp_path / "sweep", {"one": SAME, "two": SAME}, plugin=RAISING_READER_PLUGIN)
+    runs = {"one": _run(sweep, "one", plugin=RAISING_READER_PLUGIN),
+            "two": _run(sweep, "two", plugin=RAISING_READER_PLUGIN)}
+    report = run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "two")]), tmp_path / "report.json")
+    assert report["status"] == "unavailable"
+    left = report["metrics"][0]["left"]
+    assert left["status"] == "not_evaluated"
+    assert "OSError" in left["reason"] and "disk fell over" in left["reason"]
+
+
+def test_a_hard_link_failure_is_a_named_refusal_not_a_traceback(tmp_path, monkeypatch):
+    """N3 (controller review 2026-09-26): a filesystem without hard-link
+    support refuses by name and never overwrites -- it is not a traceback."""
+    from omnidriver.core.quantities import comparison as comparison_module
+
+    def _no_hardlinks(*_args, **_kwargs):
+        raise OSError("no hard link support on this filesystem")
+
+    monkeypatch.setattr(comparison_module.os, "link", _no_hardlinks)
+    sweep, runs = _two_runs(tmp_path)
+    report_path = tmp_path / "report.json"
+    with pytest.raises(QuantityComparisonError, match="hard-linking"):
+        run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "two")]), report_path)
+    assert not report_path.exists()
+
+
+def test_a_refused_request_never_calls_the_reader(tmp_path, monkeypatch):
+    """A spy reader proves refusal happens before any read (N5, controller
+    review 2026-09-26): a bad-tolerance request is refused before any run
+    is even resolved, so patching the reader to explode changes nothing."""
+    from plugins.quantity_toy import ToyRowReader
+
+    def _spy(self, case_root, artifact, request):
+        raise AssertionError("reader.read must not be called for a refused request")
+
+    monkeypatch.setattr(ToyRowReader, "read", _spy)
+    sweep, runs = _two_runs(tmp_path)
+    tolerance = {"kind": "absolute", "value": 1.0, "unit": "mm", "rationale": "wrong on purpose"}
+    with pytest.raises(QuantityComparisonError, match="'mm'"):
+        run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "two")], tolerance=tolerance),
+                                tmp_path / "report.json")
 
 
 def test_the_report_attaches_to_each_run_in_the_experiment_envelope(tmp_path):

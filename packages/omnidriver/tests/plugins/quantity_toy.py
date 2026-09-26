@@ -28,6 +28,8 @@ _CITE = {"source_id": "toy", "where": "this file"}
 VALUES_FORMAT = "toy_named_values"
 GRID_FORMAT = "toy_grid_values"
 QUANTITY_TOY_PLUGIN = "plugins.quantity_toy:QuantityToyPlugin"
+DIFFERENT_VERSION_QUANTITY_TOY_PLUGIN = "plugins.quantity_toy:DifferentVersionQuantityToyPlugin"
+RAISING_READER_PLUGIN = "plugins.quantity_toy:RaisingReaderPlugin"
 UNREADABLE_PLUGIN = "plugins.quantity_toy:UnreadableFormatPlugin"
 BAD_DECLARATION_PLUGIN = "plugins.quantity_toy:BadDeclarationPlugin"
 
@@ -78,6 +80,16 @@ class _FurlongReader(ToyRowReader):
     value_unit = "furlong"
 
 
+class _RaisingReader(ToyRowReader):
+    """Declares the same contract as ``ToyRowReader``, but ``.read`` always
+    raises a non-``ValueError`` exception: proof that ANY reader exception
+    becomes a named ``not_evaluated`` gap, not a crash (N3, controller
+    review 2026-09-26)."""
+
+    def read(self, case_root, artifact, request):
+        raise OSError("disk fell over")
+
+
 def write_toy_values(path: Path, rows: Mapping[str, tuple[str, tuple[float, float, float]]]) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("".join(f"{name} {value} {x} {y} {z}\n" for name, (value, (x, y, z)) in rows.items()))
@@ -122,6 +134,26 @@ class QuantityToyPlugin(E2ERecordPlugin):
 
     def get_artifact_value_reader(self, artifact_format: str):
         return self._READERS.get(artifact_format)
+
+
+class RaisingReaderPlugin(QuantityToyPlugin):
+    """Same tutorial record and axes as ``QuantityToyPlugin``, but its values
+    reader always raises ``OSError`` -- see ``_RaisingReader``."""
+
+    _READERS = {VALUES_FORMAT: _RaisingReader()}
+
+
+class DifferentVersionQuantityToyPlugin(QuantityToyPlugin):
+    """Same class family, a genuinely different declared version -- unlike
+    two distinct classes sharing ``MinimalTestPlugin``'s hardcoded
+    ``plugin_id``, this changes ``capability_digest`` (its payload embeds
+    each provider's version; see ``provider_identity.build_stack_identity``),
+    so the shared ``stack_identity_mismatch`` check catches it (B1,
+    controller review 2026-09-26)."""
+
+    @property
+    def plugin_version(self) -> str:
+        return "9.9.9"
 
 
 class UnreadableFormatPlugin(E2ERecordPlugin):

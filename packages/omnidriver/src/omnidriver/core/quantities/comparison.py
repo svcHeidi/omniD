@@ -33,6 +33,7 @@ from typing import Any, Iterable, Mapping
 
 from ..experiments import ComparisonRequest
 from ..plugin_interface import load_plugin_context
+from ..provider_identity import stack_identity_mismatch
 from ..runtime.models import DataArtifact, data_artifact_from_json
 from ..runtime.postprocess_phase import CaseRecord, build_sweep_context
 from ..runtime.reconciler import reconcile_artifacts
@@ -140,8 +141,18 @@ def _json_object(path: Path) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _pairs(request: Mapping[str, Any], reference: PointReference, default: Tolerance) -> tuple[_Pair, ...]:
+def _location(base: Path, runs: Mapping[str, Any], side: Mapping[str, str]) -> tuple[str, str, str, str]:
+    """What ``side`` actually names, independent of which run name it spells:
+    the resolved sweep output, the case, the artifact and the quantity. Two
+    sides that resolve identically compare a run against itself even when
+    they name two different run keys (N1, controller review 2026-09-26)."""
+    run = runs[side["run"]]
+    return (str(_resolve(base, run["sweep_output"])), run["case_id"], run["artifact_id"], side["quantity"])
+
+
+def _pairs(request: Mapping[str, Any], reference: PointReference, default: Tolerance, *, base: Path) -> tuple[_Pair, ...]:
     pairs = []
+    runs = request["runs"]
     for index, raw in enumerate(request["pairs"]):
         label = raw["reference_label"]
         point = reference.points.get(label)
@@ -152,10 +163,13 @@ def _pairs(request: Mapping[str, Any], reference: PointReference, default: Toler
                 f"pair {index} names {label!r}, which reference {reference.reference_id!r} leaves unresolved: {point.unresolved}"
             )
         for side in ("left", "right"):
-            if raw[side]["run"] not in request["runs"]:
-                raise QuantityComparisonError(f"pair {index} {side} names run {raw[side]['run']!r}; the request has {sorted(request['runs'])}")
-        if raw["left"] == raw["right"]:
-            raise QuantityComparisonError(f"pair {index} compares {raw['left']} with itself")
+            if raw[side]["run"] not in runs:
+                raise QuantityComparisonError(f"pair {index} {side} names run {raw[side]['run']!r}; the request has {sorted(runs)}")
+        if _location(base, runs, raw["left"]) == _location(base, runs, raw["right"]):
+            raise QuantityComparisonError(
+                f"pair {index} compares {raw['left']} with itself: both resolve to the same "
+                "(sweep_output, case_id, artifact_id, quantity), whatever the run names"
+            )
         tolerance = default if "tolerance" not in raw else Tolerance.from_json(
             raw["tolerance"], where=f"pair {index}", reference_unit=reference.quantity_unit)
         pairs.append(_Pair(label, raw["left"]["run"], raw["left"]["quantity"], raw["right"]["run"],
@@ -228,25 +242,28 @@ def _resolve_run(name: str, raw: Mapping[str, Any], *, base: Path, reference_uni
         ctx = load_plugin_context(raw["plugin"])
     except Exception as exc:  # a plugin that does not load is refused by name
         raise QuantityComparisonError(f"run {name!r}: plugin {raw['plugin']!r} does not load: {type(exc).__name__}: {exc}") from exc
-    # Compared as full provider records (id, version, api_version, source,
-    # provider_digest), not id alone: two test plugins in this suite share
-    # a plugin_id inherited from MinimalTestPlugin, so id-only equality
-    # would not catch a case planned by a different class under the same
-    # id. ``source`` (the import path) is what actually distinguishes them.
-    provider_records = tuple(dict(p) for p in ctx.identity.to_json()["providers"])
-    stack = tuple(p["id"] for p in provider_records)
-    recorded_raw = (document.get("plugin") or {}).get("providers", ())
-    recorded = tuple(dict(p) for p in recorded_raw if isinstance(p, dict))
-    if recorded != provider_records:
+    stack = tuple(p["id"] for p in ctx.identity.to_json()["providers"])
+    # One source of truth for this comparison: see
+    # `provider_identity.stack_identity_mismatch`'s docstring for what is
+    # compared and why (also called from `cli.py` and `run_document_exec.py`).
+    mismatched = stack_identity_mismatch(document.get("plugin") or {}, ctx.identity.to_json())
+    if mismatched:
         raise QuantityComparisonError(
-            f"run {name!r}: plugin {raw['plugin']!r} loads the stack {list(stack)}, but case {case.case_id!r} was "
-            f"planned with {[p.get('id') for p in recorded] or 'no recorded stack'}"
+            f"run {name!r}: plugin {raw['plugin']!r} loads a stack whose {', '.join(mismatched)} differ from what "
+            f"case {case.case_id!r} was planned with"
         )
     artifact = _artifact(name, document, raw["artifact_id"])
     reader = ctx.capabilities.runtime_evidence.artifact_value_reader(artifact.format)
     points: Mapping[str, Point] = {}
     max_offset = None
-    if reader is not None:
+    if reader is None:
+        if raw.get("points") is not None or raw.get("max_sampling_offset") is not None:
+            raise QuantityComparisonError(
+                f"run {name!r}: the stack has no reader for format {artifact.format!r} (artifact {raw['artifact_id']!r}); "
+                "'points'/'max_sampling_offset' cannot be checked against a reader that does not exist, so they are "
+                "refused rather than silently ignored"
+            )
+    else:
         try:
             check_reader(reader, artifact_format=artifact.format)
             check_convertible(reader.value_unit, reference_unit)
@@ -274,8 +291,8 @@ def _quantities(run: _Run, names: tuple[str, ...]) -> dict[str, Quantity]:
         return gap(f"artifact {run.artifact.artifact_id!r} ({source}) is missing under {case_root}")
     try:
         read = read_quantities(run.reader, case_root, run.artifact, ReadRequest(names=names, points=run.points))
-    except ValueError as exc:  # a reader refuses by ValueError, naming why
-        return gap(f"the reader refused: {exc}")
+    except Exception as exc:  # any reader exception, not only ValueError, becomes a named gap; a report is always written
+        return gap(f"the reader raised {type(exc).__name__}: {exc}")
     return {q.name: q for q in read}
 
 
@@ -337,6 +354,10 @@ def _write_once(path: Path, report: Mapping[str, Any]) -> None:
         raise QuantityComparisonError(
             f"report {path} already exists; a report is written once, and a changed request is a new report"
         ) from None
+    except OSError as exc:
+        # E.g. no hard-link support on this filesystem. Named, not a
+        # traceback; `path` was never touched, so nothing is overwritten.
+        raise QuantityComparisonError(f"cannot write report {path}: hard-linking it failed: {exc}") from exc
     finally:
         temporary.unlink()
 
@@ -363,7 +384,7 @@ def run_quantity_comparison(request_path: str | Path, report_path: str | Path) -
     except QuantityError as exc:
         raise QuantityComparisonError(str(exc)) from exc
     default = Tolerance.from_json(request["tolerance"], where="the request", reference_unit=reference.quantity_unit)
-    pairs = _pairs(request, reference, default)
+    pairs = _pairs(request, reference, default, base=base)
     names_by_run: dict[str, list[str]] = {}
     for pair in pairs:
         for run_name, quantity in ((pair.left_run, pair.left_quantity), (pair.right_run, pair.right_quantity)):
@@ -387,12 +408,31 @@ def run_quantity_comparison(request_path: str | Path, report_path: str | Path) -
         "reference": {"id": reference.reference_id, "version": reference.version, "path": reference.path,
                       "digest": reference.digest, "quantity": reference.quantity_name, "unit": reference.quantity_unit},
         "request": {"path": str(request_path), "digest": "sha256:" + hashlib.sha256(raw_bytes).hexdigest()},
-        "run_evidence": [run.evidence for run in runs.values() if run.evidence is not None],
+        "run_evidence": _deduplicated_run_evidence(runs.values()),
         "runs": {name: _run_json(run) for name, run in runs.items()},
         "metrics": metrics,
     }
     _write_once(report_path, report)
     return report
+
+
+def _deduplicated_run_evidence(runs: Iterable[_Run]) -> list[dict[str, str]]:
+    """One entry per distinct case, even when two run *names* in the request
+    resolve to the same case (B2, controller review 2026-09-26): duplicate
+    identical entries would make ``experiments._association_status``'s
+    "exactly one match" check see more than one and report ``unverified``
+    for a genuinely verified case."""
+    seen: set[tuple[str, str, str]] = set()
+    evidence: list[dict[str, str]] = []
+    for run in runs:
+        if run.evidence is None:
+            continue
+        key = (run.evidence["case_id"], run.evidence["workflow_digest"], run.evidence["input_provenance_digest"])
+        if key in seen:
+            continue
+        seen.add(key)
+        evidence.append(run.evidence)
+    return evidence
 
 
 def experiment_comparisons(report_path: str | Path, *, sweep_output: str | Path) -> tuple[ComparisonRequest, ...]:

@@ -32,6 +32,7 @@ from .workflow_state import (
     workflow_state_from_json,
 )
 from omnidriver.core.planning_types import SimulationAuditItem, StrictDiagnostic, diagnostic
+from omnidriver.core.provider_identity import stack_identity_mismatch
 from omnidriver.core.specs.validation import validate_run
 
 if TYPE_CHECKING:
@@ -167,27 +168,11 @@ def build_execution_inputs(
     if run_doc.plugin is not None:
         planned = run_doc.plugin
         selected = driver_context.identity.to_json()
-        # `StackIdentity.to_json()` has no singular `id`/`version`/
-        # `api_version` to compare the way the retired single-plugin
-        # `PluginIdentity` did -- a stack has several. `capability_digest`
-        # is the field spec Sec4.4 designs to change whenever the stack (which
-        # providers, their versions, their order) or the composition result
-        # changes, so comparing it alone is both necessary and sufficient to
-        # detect a real mismatch; it is also, like the retired comparison,
-        # already insensitive to `source` (build_stack_identity's hashed
-        # payload never includes it), so reloading the same provider from a
-        # different install path does not spuriously flag a mismatch.
-        # `composition_rule_version` and `resolutions` are folded into that
-        # same digest and add nothing detection-wise; they are compared too
-        # only so the diagnostic can name which aspect of the stack moved,
-        # matching the specificity the old id/version/api_version list gave.
-        # `providers` is deliberately NOT compared here -- each entry embeds
-        # `source`, and comparing the list wholesale would reintroduce
-        # exactly the source-sensitivity the old comparison excluded.
-        mismatched = [
-            key for key in ("composition_rule_version", "capability_digest", "resolutions")
-            if planned.get(key) != selected.get(key)
-        ]
+        # One source of truth for this comparison: see
+        # `provider_identity.stack_identity_mismatch`'s docstring for what is
+        # compared and why (also called from `cli.py` and
+        # `quantities.comparison`).
+        mismatched = stack_identity_mismatch(planned, selected)
         if mismatched:
             diagnostics.append(diagnostic(
                 "error",

@@ -23,6 +23,7 @@ from .core.runtime.sweep_runner import (
 )
 from omnidriver.core.introspection import describe_entry
 from omnidriver.core.planning_types import diagnostic
+from omnidriver.core.provider_identity import stack_identity_mismatch
 from omnidriver.core.specs.common import default_setup_dir_name
 from omnidriver.core.specs.paths import (
     default_sweep_output_dir,
@@ -394,24 +395,11 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
     if run_doc.plugin is not None:
         planned = run_doc.plugin
         selected = driver_context.identity.to_json()
-        # `StackIdentity.to_json()` (see `plugin_interface.py`) has no
-        # singular `id`/`version`/`api_version` to compare the way the
-        # retired single-plugin `PluginIdentity` did -- a stack has several,
-        # one per provider, under `providers`. `capability_digest` alone is
-        # necessary and sufficient to detect a real mismatch (it changes
-        # whenever the stack -- which providers, their versions, their order
-        # -- or the composition result changes); `composition_rule_version`
-        # and `resolutions` add no detection power but let the diagnostic
-        # name which aspect of the stack moved. `providers` is deliberately
-        # NOT compared: each entry embeds `source`, and comparing it wholesale
-        # would reintroduce the source-sensitivity the old id/version/
-        # api_version comparison never had. Same key list and reasoning as
-        # the twin gate in `run_document_exec.py`'s `build_execution_inputs`
-        # -- read that copy of this comment if this one drifts.
-        mismatched = [
-            key for key in ("composition_rule_version", "capability_digest", "resolutions")
-            if planned.get(key) != selected.get(key)
-        ]
+        # One source of truth for this comparison: see
+        # `provider_identity.stack_identity_mismatch`'s docstring for what is
+        # compared and why (also called from `run_document_exec.py` and
+        # `quantities.comparison`).
+        mismatched = stack_identity_mismatch(planned, selected)
         if mismatched:
             print(json.dumps({
                 "status": "failed",
@@ -1147,6 +1135,10 @@ _FLAG_ERRORS_BY_ACTION = {
     "run": (
         ("dry_run", "--dry-run is not valid with action=run"),
         ("continue_on_error", "--continue-on-error is not valid with action=run"),
+    ),
+    "compare": (
+        ("dry_run", "--dry-run is not valid with action=compare"),
+        ("continue_on_error", "--continue-on-error is not valid with action=compare"),
     ),
 }
 

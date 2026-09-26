@@ -10,6 +10,19 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from typing import Any, Mapping
+
+#: The keys ``stack_identity_mismatch`` compares. ``capability_digest`` alone
+#: is necessary and sufficient to detect a real mismatch: it changes whenever
+#: the stack (which providers, their versions, their order) or the
+#: composition result changes. ``composition_rule_version``/``resolutions``
+#: add no detection power on top of it, but let a diagnostic name which
+#: aspect of the stack moved -- the specificity the retired single-plugin
+#: id/version/api_version comparison gave. ``providers`` is deliberately
+#: EXCLUDED: each entry embeds ``source`` (an install/import path), and
+#: comparing it wholesale would flag reloading the same provider from a
+#: different source as a mismatch, which it is not.
+STACK_IDENTITY_COMPARISON_KEYS = ("composition_rule_version", "capability_digest", "resolutions")
 
 #: Bumped whenever a composition rule in `provider_stack` changes meaning.
 #: Without it, the same providers at the same versions would digest
@@ -104,3 +117,20 @@ def build_stack_identity(
             capability: winner for capability, (winner, _) in resolutions.items()
         },
     )
+
+
+def stack_identity_mismatch(planned: Mapping[str, Any], selected: Mapping[str, Any]) -> list[str]:
+    """The ``STACK_IDENTITY_COMPARISON_KEYS`` on which two ``StackIdentity.to_json()``
+    payloads disagree, empty when they agree on every one.
+
+    One source of truth for "was this run planned with the stack now
+    selected": ``run_document_exec.build_execution_inputs``, ``cli.py``'s
+    ``_context_from_run_document``, and
+    ``quantities.comparison._resolve_run`` all call this rather than each
+    keeping its own copy of the key list and the reasoning above (found
+    2026-09-26: a copy that instead compared full provider records,
+    ``source`` included, refused two same-content stacks loaded from
+    different import paths, which the reasoning above says is not a real
+    mismatch).
+    """
+    return [key for key in STACK_IDENTITY_COMPARISON_KEYS if planned.get(key) != selected.get(key)]
