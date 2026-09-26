@@ -350,6 +350,46 @@ def test_c10_bites_a_stack_that_declares_no_surface(tmp_path):
     assert "no agent guidance" in verdict.detail
 
 
+def _break_the_surface(monkeypatch, breaker):
+    """Wrap core's ``record_surface`` so the ``describe`` C10 reads lists a
+    deliberately wrong axis set. Review 54b M3: C10 compared
+    ``record_surface.axes`` with ``record.axis_names()``, both built from
+    ``record.axes``, so no plugin could ever make it fail; these tests break
+    the surface itself and require C10 to notice."""
+    from omnidriver.core.runtime import record_surface as module
+
+    real = module.record_surface
+
+    def broken(*args, **kwargs):
+        surface = real(*args, **kwargs)
+        surface["axes"] = breaker(surface["axes"])
+        return surface
+
+    monkeypatch.setattr(module, "record_surface", broken)
+
+
+def test_c10_bites_a_surface_that_drops_an_axis(tmp_path, monkeypatch):
+    _break_the_surface(monkeypatch, lambda axes: [])
+    verdict = run_check("C10", toy_conformance_target(tmp_path))
+    assert not verdict.passed, verdict.detail
+    assert "axes listed [], record declares ['number_cells']" in verdict.detail
+    assert "the target's own study name(s) ['number_cells'] are not listed" in verdict.detail
+
+
+def test_c10_bites_a_surface_that_lists_an_axis_under_the_wrong_kind(tmp_path, monkeypatch):
+    _break_the_surface(monkeypatch, lambda axes: [{**a, "value_kind": "word"} for a in axes])
+    verdict = run_check("C10", toy_conformance_target(tmp_path))
+    assert not verdict.passed, verdict.detail
+    assert "'number_cells' is listed as 'word', but its contract takes 'integer'" in verdict.detail
+
+
+def test_c10_bites_a_surface_that_lists_an_axis_the_record_does_not_declare(tmp_path, monkeypatch):
+    _break_the_surface(monkeypatch, lambda axes: axes + [{"name": "ghost", "value_kind": "integer"}])
+    verdict = run_check("C10", toy_conformance_target(tmp_path))
+    assert not verdict.passed, verdict.detail
+    assert "axes listed ['ghost', 'number_cells'], record declares ['number_cells']" in verdict.detail
+
+
 def test_c10_bites_a_catalogue_without_the_targets_own_key(tmp_path):
     verdict = run_check("C10", toy_conformance_target(tmp_path, plugin=UNLISTED_KEY_PLUGIN))
     assert not verdict.passed

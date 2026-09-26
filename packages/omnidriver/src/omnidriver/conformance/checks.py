@@ -33,6 +33,7 @@ from omnidriver.core.runtime.run_command import omnidriver_run_command
 from omnidriver.core.runtime.run_document_exec import RUN_DOCUMENT_FILENAME
 from omnidriver.core.specs.paths import SCRATCH_ENV_VAR
 from omnidriver.core.strict_planning import strict_plan
+from omnidriver.core.sweep.sweep_derivation_catalog import NAMING_OUTPUT_KEYS
 from omnidriver.core.tutorial_records import PLAIN_FILE_FORMAT, TutorialRecordError
 
 from .target import CheckVerdict, ConformanceTarget
@@ -414,7 +415,17 @@ def check_discoverable(target: ConformanceTarget) -> CheckVerdict:
     or with each concrete index rewritten to ``[Int]``, so a catalogue could
     list neither a named segment (cardiacFOAM's
     ``regions.<region_name>.baseline``) nor a document whose keys have no
-    catalogue."""
+    catalogue.
+
+    Corrected 2026-09-26 (review 54b M3): the axis half compared
+    ``record_surface.axes`` with ``record.axis_names()`` only. Both come
+    from ``record.axes``, so it said little about what an agent is told, and
+    a surface listing an axis under the wrong value kind passed. It now also
+    requires each listed axis's kind to be its contract's, and every bare
+    study name the target itself uses (``base_study`` and ``sweep_name``,
+    less the record's selector and the sweep naming keys) to be listed: an
+    agent reading ``describe`` must find the axes a real study of this
+    record needs."""
     ctx = _context(target)
     record = _record(ctx, target.record)
     payload = describe_entry(target.record, overrides={"cases_root": str(target.cases_root)}, driver_context=ctx)
@@ -422,11 +433,20 @@ def check_discoverable(target: ConformanceTarget) -> CheckVerdict:
     if surface is None:
         return _verdict("C10", False, "describe has no record_surface")
     problems = []
-    axis_names = {a["name"] for a in surface["axes"]}
-    if axis_names != set(record.axis_names()):
-        problems.append(f"axes listed {sorted(axis_names)}, record declares {sorted(record.axis_names())}")
-    if any(not a.get("value_kind") for a in surface["axes"]):
+    listed = {a["name"]: a.get("value_kind") for a in surface["axes"]}
+    declared = {axis.name: axis.value_kind for axis in record.axes}
+    if set(listed) != set(declared):
+        problems.append(f"axes listed {sorted(listed)}, record declares {sorted(declared)}")
+    if any(not kind for kind in listed.values()):
         problems.append("an axis is listed without its value kind")
+    for name in sorted(set(listed) & set(declared)):
+        if listed[name] and listed[name] != declared[name]:
+            problems.append(f"axis {name!r} is listed as {listed[name]!r}, but its contract takes {declared[name]!r}")
+    own_names = {name for name in (*target.base_study, target.sweep_name) if ":" not in name}
+    own_names -= NAMING_OUTPUT_KEYS | {record.variant_selector}
+    unlisted = sorted(own_names - set(listed))
+    if unlisted:
+        problems.append(f"the target's own study name(s) {unlisted} are not listed among the axes")
     incomplete = [e for e in surface["keys"] if _incomplete(e)]
     if not surface["keys"]:
         problems.append("no key catalogue")
