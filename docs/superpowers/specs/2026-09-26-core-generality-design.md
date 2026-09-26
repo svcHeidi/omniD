@@ -1,7 +1,9 @@
 # Core generality: replace core's OpenFOAM-shaped concepts with general ones
 
-**Date:** 2026-09-26 · **Status:** the scope split was approved by the owner in
-conversation (2026-09-26). The written form is written from those decisions.
+**Date:** 2026-09-26 · **Status:** implemented 2026-09-26 (plan
+`docs/superpowers/plans/2026-09-26-core-generality.md`). The scope split was
+approved by the owner in conversation (2026-09-26); the written form is
+written from those decisions.
 **Follows:** `2026-09-25-solver-conformance-and-opencarp-design.md`. openCARP
 now passes C1–C10, so a second solver exists to prove each change against.
 **Evidence:** a read-only map of every OpenFOAM-shaped concept in core
@@ -60,6 +62,53 @@ Each change keeps every existing guard green and adds these:
   plugin-declared vocabulary:** an OpenFOAM stack's time and `processor*`
   behaviour is unchanged (existing tests), and a stack that declares none of
   them behaves as openCARP does.
+
+**Corrected 2026-09-26 (implementation, topic A):**
+- "only the A4 debt remains" was not reachable as written: `run_document_exec.py`'s
+  `FOAM_` hit was the legacy `DRIVERFOAM_ALLOWED_RUNS_ROOT` variable (the
+  project's former name), no OpenFOAM coupling, and outside A1/A2/A4. It has
+  since been removed outright (Task 9 close-out, owner decision, 2026-09-26),
+  so only the A4 debt now remains, as originally targeted.
+- The A5 check is C11, not a C7 extension (plan Task 3). It is strict: a
+  restaged case holds only native paths -- concretely, **C11 checks path-set
+  equality** (`restaged == native`, both directions, corrected further by R1
+  fix finding M1: the check used to accept `restaged <= native`, a subset,
+  which could not see a staging rule that wrongly *drops* an authored native
+  file). Meeting it needed `CORE_RUNTIME_RECORDS` to list every file core
+  writes (seven files and two directories, not four) and openCARP's record
+  to declare its full outputs (F15).
+- A3's stable digest: every provider digest and the cardiac stacks'
+  identities are unchanged; `opencarp` and standalone `openfoam-environment`
+  record `dictionaries` as `<unclaimed>` once, because their stub had been
+  its false winner.
+- A7: the hook did not cover `manufacturedMonodomainTotalLagrangianEM`; it
+  now reads the electro region that case declares **through
+  `physics_layout.json`** (one row per physics type; a case without
+  `physicsProperties` is single-region, per cardiacFoam's
+  `physicsModel::New` `MUST_READ`).
+- A2 landed as three commits (A2a instances, A2b replicas, A2c input roots);
+  the run-document schema key `time_indexed` became `instance_indexed`.
+- The R1 and R2 checkpoint-review fixes, one line each:
+  - R1-I1: the A7 hook missed `manufacturedMonodomainTotalLagrangianEM`;
+    now covered by the `physics_layout.json` table above.
+  - R1-I2: `record_generated_relpaths` keeps an intermediate a later step
+    `consumes` excluded from a record's generated set (first-touch-in-step
+    -order rule), rather than re-including it as an authored input.
+  - R1-I3: `CORE_RUNTIME_RECORDS` gains the remediation-transaction marker
+    and its two directories -- three files core writes that its own "every
+    file" claim had missed.
+  - R2-I1: `load_run_document` re-raises a schema `jsonschema.ValidationError`
+    as `ValueError`, so a pre-A2 completed sweep case is reported
+    not-reusable by name instead of crashing the sweep.
+  - R2-I2: `CaseProvenanceCapability.input_roots` takes the stack's merged
+    `CaseRuntimeConventions` as a required `conventions` keyword, so a
+    stacked provider's replica globs are what provenance walks, not always
+    OpenFOAM's own default.
+  - R2-I3: `CaseRuntimeConventions.__post_init__` refuses a malformed
+    `replica_directory_globs`/`preserved_instance_names`/
+    `instance_directory_pattern` by name at construction, closing the
+    bare-`str` migration mistake the old `decomposition_directory_prefix`
+    field invited.
 
 ## 5. Order and parallelism
 
