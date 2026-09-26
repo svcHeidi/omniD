@@ -14,7 +14,10 @@ rows:
     NiedererEtAl2012.reference to NiedererEtAl2011.reference in 924bc72ec, and
     its values changed in 39fe76eb0, "faster Niederer TNNP case"). Transcribed
     verbatim from the current regression/NiedererEtAl2011.reference as of
-    39fe76eb0/924bc72ec; no post hoc threshold selection (owner Q12, 2026-09-26).
+    39fe76eb0/924bc72ec; no post hoc threshold selection (owner Q12, 2026-09-26). Corrected 2026-09-26 (owner) -- re-transcribed
+    from the reference regenerated in native 0489be3c, when the case moved to
+    ionicModel TNNPcompactBatched with batchedIntegrator rushLarsen; only
+    variable 6 moved (0.0112286 to 0.0112285), tolerances unchanged.
 - case_dir: NiedererEtAl2011verification
   data_file: Niedererpoints/0/activationTime
   variable: '4'
@@ -27,12 +30,15 @@ rows:
     NiedererEtAl2012.reference to NiedererEtAl2011.reference in 924bc72ec, and
     its values changed in 39fe76eb0, "faster Niederer TNNP case"). Transcribed
     verbatim from the current regression/NiedererEtAl2011.reference as of
-    39fe76eb0/924bc72ec; no post hoc threshold selection (owner Q12, 2026-09-26).
+    39fe76eb0/924bc72ec; no post hoc threshold selection (owner Q12, 2026-09-26). Corrected 2026-09-26 (owner) -- re-transcribed
+    from the reference regenerated in native 0489be3c, when the case moved to
+    ionicModel TNNPcompactBatched with batchedIntegrator rushLarsen; only
+    variable 6 moved (0.0112286 to 0.0112285), tolerances unchanged.
 - case_dir: NiedererEtAl2011verification
   data_file: Niedererpoints/0/activationTime
   variable: '6'
   time: 0.015
-  expected: 0.0112286
+  expected: 0.0112285
   tolerance: 0.0001
   source_reference: regression/NiedererEtAl2011.reference
   rationale: Replaces a row whose case_dir/reference no longer exist (the case
@@ -40,7 +46,10 @@ rows:
     NiedererEtAl2012.reference to NiedererEtAl2011.reference in 924bc72ec, and
     its values changed in 39fe76eb0, "faster Niederer TNNP case"). Transcribed
     verbatim from the current regression/NiedererEtAl2011.reference as of
-    39fe76eb0/924bc72ec; no post hoc threshold selection (owner Q12, 2026-09-26).
+    39fe76eb0/924bc72ec; no post hoc threshold selection (owner Q12, 2026-09-26). Corrected 2026-09-26 (owner) -- re-transcribed
+    from the reference regenerated in native 0489be3c, when the case moved to
+    ionicModel TNNPcompactBatched with batchedIntegrator rushLarsen; only
+    variable 6 moved (0.0112286 to 0.0112285), tolerances unchanged.
 - case_dir: NiedererEtAl2011verification
   data_file: Niedererpoints/0/activationTime
   variable: '10'
@@ -54,7 +63,10 @@ rows:
     its values changed in 39fe76eb0, "faster Niederer TNNP case" -- this variable
     included, from 0.02396 to -1. Transcribed verbatim from the current
     regression/NiedererEtAl2011.reference as of 39fe76eb0/924bc72ec; no post hoc
-    threshold selection (owner Q12, 2026-09-26).
+    threshold selection (owner Q12, 2026-09-26). Corrected 2026-09-26 (owner) -- re-transcribed
+    from the reference regenerated in native 0489be3c, when the case moved to
+    ionicModel TNNPcompactBatched with batchedIntegrator rushLarsen; only
+    variable 6 moved (0.0112286 to 0.0112285), tolerances unchanged.
 - case_dir: NiedererEtAl2011verification
   data_file: Niedererpoints/0/activationTime
   variable: '5'
@@ -67,7 +79,10 @@ rows:
     NiedererEtAl2012.reference to NiedererEtAl2011.reference in 924bc72ec, and
     its values changed in 39fe76eb0, "faster Niederer TNNP case"). Transcribed
     verbatim from the current regression/NiedererEtAl2011.reference as of
-    39fe76eb0/924bc72ec; no post hoc threshold selection (owner Q12, 2026-09-26).
+    39fe76eb0/924bc72ec; no post hoc threshold selection (owner Q12, 2026-09-26). Corrected 2026-09-26 (owner) -- re-transcribed
+    from the reference regenerated in native 0489be3c, when the case moved to
+    ionicModel TNNPcompactBatched with batchedIntegrator rushLarsen; only
+    variable 6 moved (0.0112286 to 0.0112285), tolerances unchanged.
 - case_dir: NiedererEtAl2011verification
   data_file: Niedererpoints/0/activationTime
   variable: '9'
@@ -80,7 +95,10 @@ rows:
     NiedererEtAl2012.reference to NiedererEtAl2011.reference in 924bc72ec, and
     its values changed in 39fe76eb0, "faster Niederer TNNP case"). Transcribed
     verbatim from the current regression/NiedererEtAl2011.reference as of
-    39fe76eb0/924bc72ec; no post hoc threshold selection (owner Q12, 2026-09-26).
+    39fe76eb0/924bc72ec; no post hoc threshold selection (owner Q12, 2026-09-26). Corrected 2026-09-26 (owner) -- re-transcribed
+    from the reference regenerated in native 0489be3c, when the case moved to
+    ionicModel TNNPcompactBatched with batchedIntegrator rushLarsen; only
+    variable 6 moved (0.0112286 to 0.0112285), tolerances unchanged.
 # The three NiedererEtAl2011/electroMechanicalNiedererEtAl2011 rows (Taprobes)
 # are deleted (owner Q12, 2026-09-26): native 7a04349b removed that case. Its
 # successor, electromechanicsProtocols/springSupportedSlab, has its own

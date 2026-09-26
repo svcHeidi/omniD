@@ -18,7 +18,7 @@ one: an axis, a direct study key, or dropped"):
 | old write | now |
 |---|---|
 | ``monodomainSolverCoeffs.tissue`` | direct study key (a study names it, e.g. ``constant/electroProperties:monodomainSolverCoeffs.tissue``) |
-| ``monodomainSolverCoeffs.ionicModel`` | direct study key -- this record allows no ``ionicModel`` axis: the case fixes ``TNNP``, and a study wanting another names the key directly |
+| ``monodomainSolverCoeffs.ionicModel`` | direct study key -- this record allows no ``ionicModel`` axis: the case fixes ``TNNPcompactBatched`` with ``batchedIntegrator rushLarsen`` (native ``0489be3c``, owner 2026-09-26; it was ``TNNP`` with ``solver RKF45``), and a study wanting another names the key directly |
 | ``monodomainSolverCoeffs.solutionAlgorithm`` | direct study key |
 | ``system/blockMeshDict`` hex block rewrite | ``dx`` axis (hex route) |
 | tet ``slab.geo`` ``__LC__`` substitution | ``tetDx`` axis (tet route; native ``60805b27`` already turned the template's own substitution into a real ``DefineConstant``, so this axis need not render a file at all -- it only passes ``-setnumber lc <v>`` to the ``gmsh`` step) |
