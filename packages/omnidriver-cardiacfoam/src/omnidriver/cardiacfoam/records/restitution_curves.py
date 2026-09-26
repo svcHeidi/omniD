@@ -133,12 +133,51 @@ AXES = {
     ),
 }
 
+#: What each step reads and writes, as observed in real runs (conformance
+#: Task 14 step 1; ``docs/solver-learning/cardiacfoam.md`` R1-R4). A step
+#: ``consumes`` only the authored files it fails without; the solve step's
+#: mesh comes from the mesh step's ``produces``, so it is not re-declared as
+#: a consumed input. ``constant/sweepCurrents`` is read by neither step
+#: (R3: the ``sweepCurrents`` utility's input), nor is ``system/blockMeshDict``
+#: by ``cardiacFoam``.
+#:
+#: The trace's name is ``<ionicModel>_<tissue>_<protocol>.txt``
+#: (``singleCellSolver``'s constructor; R1 observed
+#: ``BuenoOrovio_epicardialCells_S1_2000_S2_250.txt``, step 4c
+#: ``TWorld_epicardialCells_S1_1000_S2_1500.txt``), so it depends on three
+#: study values and is declared as a glob. ``postProcessing`` is dropped at
+#: staging by the OpenFOAM layer's conventions, which A5's literal-path
+#: exclusion needs for a globbed output (plan §2 item 1).
+#:
+#: No ``constant/electroProperties.withDefaultValues``: ``singleCellSolver``
+#: overrides ``electroModel::end`` without calling it, and no real run of
+#: this case writes one (R4).
+_MESH_OUTPUTS = (
+    "constant/polyMesh",
+    "constant/polyMesh/boundary",
+    "constant/polyMesh/faces",
+    "constant/polyMesh/neighbour",
+    "constant/polyMesh/owner",
+    "constant/polyMesh/points",
+)
+
 RECORD = TutorialRecord(
     name="restitutionCurves",
     native_case_relpath="electrophysiologyProtocols/restitutionCurves_s1s2Protocol",
     allowed_axes=frozenset(AXES),
     workflow_steps=(
-        WorkflowStep(step_id="mesh", command=("blockMesh",)),
-        WorkflowStep(step_id="solve", command=("cardiacFoam",)),
+        WorkflowStep(
+            step_id="mesh", command=("blockMesh",),
+            consumes=(_BLOCK_MESH_DICT_DOCUMENT, "system/controlDict"),
+            produces=_MESH_OUTPUTS,
+        ),
+        WorkflowStep(
+            step_id="solve", command=("cardiacFoam",),
+            consumes=(
+                "system/controlDict", "system/fvSchemes", "system/fvSolution",
+                "constant/physicsProperties", _ELECTRO_DOCUMENT,
+            ),
+            produces=("postProcessing/*.txt",),
+        ),
     ),
 )

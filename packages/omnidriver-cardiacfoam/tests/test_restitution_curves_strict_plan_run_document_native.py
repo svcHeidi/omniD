@@ -26,7 +26,6 @@ step 4c) in addition to ``native``.
 from __future__ import annotations
 
 import json
-import os
 import shutil
 from contextlib import redirect_stdout
 from io import StringIO
@@ -34,30 +33,11 @@ from pathlib import Path
 
 import pytest
 
+from cardiacfoam_native import native_tutorials_root
+
 pytestmark = [pytest.mark.native, pytest.mark.slow]
 
 _RESTITUTION_CURVES_RELPATH = "electrophysiologyProtocols/restitutionCurves_s1s2Protocol"
-
-
-def _native_tutorials_root() -> Path:
-    """Copied from test_restitution_curves_real_solver_run_native.py's own
-    helper of the same name (not imported: that module is collected
-    standalone and this test intentionally has no import-time dependency on
-    it)."""
-    value = os.environ.get("OMNIDRIVER_NATIVE_TUTORIALS")
-    if not value:
-        pytest.fail(
-            "OMNIDRIVER_NATIVE_TUTORIALS is not set. A test marked "
-            "@pytest.mark.native needs the native cardiacFOAM tutorials tree "
-            "supplied explicitly via that environment variable -- it is never "
-            "discovered. Run e.g.:\n"
-            "  OMNIDRIVER_NATIVE_TUTORIALS=/path/to/tutorials "
-            "pytest -m native"
-        )
-    root = Path(value)
-    if not root.is_dir():
-        pytest.fail(f"OMNIDRIVER_NATIVE_TUTORIALS={value!r} is not a directory")
-    return root
 
 
 def _stage_scratch_copy(native_root: Path, scratch_root: Path) -> Path:
@@ -79,7 +59,7 @@ def _stage_scratch_copy(native_root: Path, scratch_root: Path) -> Path:
 def test_restitution_curves_plan_strict_and_its_advertised_run_document_reach_completed(
     tmp_path: Path,
 ) -> None:
-    native_root = _native_tutorials_root()
+    native_root = native_tutorials_root()
     cases_root = _stage_scratch_copy(native_root, tmp_path / "native-scratch")
 
     # The same single, real protocol point step 4c's sweep-based test uses

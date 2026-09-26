@@ -1,14 +1,27 @@
-# Learning cardiacFOAM's toolchain: the evidence log
+# Learning cardiacFOAM: the evidence log
 
-**Method:** [`method.md`](method.md). **Design it feeds:**
-`docs/superpowers/plans/2026-09-25-tutorials-are-pointers-remaining.md` §5e P5
-(the tet-mesh route of the 5.4 records).
-**Machine:** macOS arm64, the owner's workstation. **Started:** 2026-09-26.
+**Method:** [`method.md`](method.md). **Plan it feeds:**
+`docs/superpowers/plans/2026-09-25-tutorials-are-pointers-remaining.md` §1
+("a claim about what the solver or a tool does is settled by a real run").
+**Machine:** macOS arm64, the owner's workstation; OpenFOAM v2412
+(`/Volumes/OpenFOAM-v2412`), cardiacFoam built into the user platform
+directory. **Started:** 2026-09-26, by conformance Task 14.
 
-Every entry records the command and what it printed (abridged). Native files
-are read from a `git archive` export of the native repo's
-`feature/spring-supported-slab-tutorial` (the committed files only, no in-place
-run output), never from the working checkout.
+Every entry records the command and what it printed (abridged). The native
+tree is a `git archive` of the native feature branch's committed files (plan
+§4, "a clean native tree"), never the owner's checkout. Runs happen in
+scratch copies.
+
+Sections: **R** was started by conformance Task 14 (P4); **G** by the tutorial plan's P5 (gmsh). Merged 2026-09-26.
+
+## R. restitutionCurves (`electrophysiologyProtocols/restitutionCurves_s1s2Protocol`)
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| R1 | `strict_plan("restitutionCurves", {"blockMeshResolution": [40, 6, 14]})`, then `omnidriver run --run-document` (the path conformance C5/C6 take), in a sourced shell | rc 0, 12.9 s. Added to the staged case: `constant/polyMesh/{boundary,faces,neighbour,owner,points}`, `postProcessing/BuenoOrovio_epicardialCells_S1_2000_S2_250.txt`, and core's own `workflow_state.json`, `case_record.json`, `workflow_logs/*`, `.omnidriver-attempt.lock.guard`. Nothing else, and nothing removed | `blockMesh` produces `constant/polyMesh`; `cardiacFoam` produces one trace in `postProcessing/`. The solve log ends `Results written to: ".../postProcessing/BuenoOrovio_epicardialCells_S1_2000_S2_250.txt"` |
+| R2 | `singleCellSolver`'s constructor (`src/electroModels/myocardiumModels/singleCellSolver/singleCellSolver.C`) and `stimulusIO::protocolSuffix` (`src/genericWriter/stimulusIO.C`) | the name is `<ionicModel type>_<tissue>_<protocolSuffix>[_<constant-override suffix>].txt`, where the suffix is `noStim`, `S1_<s1>` or `S1_<s1>_S2_<s2>` | the trace name depends on study values (step 4c's run wrote `TWorld_epicardialCells_S1_1000_S2_1500.txt`), so a record declares it as `postProcessing/*.txt` |
+| R3 | in a copy of the native case (plus R1's mesh for `cardiacFoam`), remove one file, run `blockMesh -case <copy>` or `cardiacFoam -case <copy>` | `blockMesh`: fatal without `system/blockMeshDict` or `system/controlDict`; rc 0 without any other file. `cardiacFoam`: `cannot find file` without `system/controlDict`, `system/fvSchemes`, `system/fvSolution`, `constant/electroProperties` or `constant/physicsProperties`; rc 0 without `constant/sweepCurrents` or `system/blockMeshDict` | these are the two steps' authored `consumes`. `constant/sweepCurrents` is read by neither; `grep` finds it only in `applications/utilities/sweepCurrents` and `src/genericWriter/ionicModelIO.C` |
+| R4 | `ls constant/` after R1 and after every rc-0 run of R3 | `electroProperties physicsProperties polyMesh sweepCurrents`: no `electroProperties.withDefaultValues` | `singleCellSolver::end()` overrides `electroModel::end()` (which renames and writes `.withDefaultValues`) and does not call it. **A single-cell record does not produce `.withDefaultValues`**; plan §2 item 1's "every cardiacFoam solve step produces it" does not hold here. `singleCellSolver` is the only myocardium solver under `src/electroModels/myocardiumModels/` that overrides `end()` (`grep '::end'`), so by source the rule holds for the others; the owner's checkout shows the file after in-place runs of eikonalECG, pseudo-ECG and Niederer (plan §4's table). Each of those records settles it by its own run |
 
 ## G. gmsh and the `.geo.template` tet route (P5)
 

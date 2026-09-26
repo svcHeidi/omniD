@@ -2,8 +2,8 @@
 design.md against the REAL native cardiacFOAM tutorials tree (CLAUDE.md's
 "testing against real meshes": real case or native-source drift gate,
 nothing invented). ``OMNIDRIVER_NATIVE_TUTORIALS`` is supplied, never
-discovered -- every test here FAILS, not skips, when it is unset (pattern
-copied from ``test_record_key_validation_native.py``).
+discovered -- every test here FAILS, not skips, when it is unset
+(``cardiacfoam_native.native_tutorials_root``).
 
 Covers the two native-evidence claims design step 4b's own instructions
 make:
@@ -28,11 +28,12 @@ now drives through the study rather than a direct case edit.
 
 from __future__ import annotations
 
-import os
 import re
 from pathlib import Path
 
 import pytest
+
+from cardiacfoam_native import native_tutorials_root
 
 from omnidriver.cardiacfoam.records.restitution_curves import AXES, RECORD
 from omnidriver.core.plugin_discovery import load_discovered_plugin
@@ -43,23 +44,6 @@ pytestmark = pytest.mark.native
 
 _RESTITUTION_CURVES_RELPATH = "electrophysiologyProtocols/restitutionCurves_s1s2Protocol"
 _SINGLE_CELL_RELPATH = "electrophysiologyProtocols/singleCell"
-
-
-def _native_tutorials_root() -> Path:
-    value = os.environ.get("OMNIDRIVER_NATIVE_TUTORIALS")
-    if not value:
-        pytest.fail(
-            "OMNIDRIVER_NATIVE_TUTORIALS is not set. A test marked "
-            "@pytest.mark.native needs the native cardiacFOAM tutorials tree "
-            "supplied explicitly via that environment variable -- it is never "
-            "discovered. Run e.g.:\n"
-            "  OMNIDRIVER_NATIVE_TUTORIALS=/path/to/tutorials "
-            "pytest -m native"
-        )
-    root = Path(value)
-    if not root.is_dir():
-        pytest.fail(f"OMNIDRIVER_NATIVE_TUTORIALS={value!r} is not a directory")
-    return root
 
 
 def _cardiac_stack():
@@ -86,7 +70,7 @@ def _read_ionic_model(case_root: Path) -> str:
 
 
 def test_restitution_curves_preview_with_no_study_values_shows_zero_changes():
-    tutorials_root = _native_tutorials_root()
+    tutorials_root = native_tutorials_root()
     case_root = tutorials_root / _RESTITUTION_CURVES_RELPATH
     assert case_root.is_dir(), f"fixture case missing: {case_root}"
     context = _cardiac_stack()
@@ -112,7 +96,7 @@ def test_restitution_curves_preview_with_no_study_values_shows_zero_changes():
 
 
 def test_restitution_curves_block_mesh_resolution_axis_reports_the_active_resolution_unchanged():
-    tutorials_root = _native_tutorials_root()
+    tutorials_root = native_tutorials_root()
     case_root = tutorials_root / _RESTITUTION_CURVES_RELPATH
     assert case_root.is_dir(), f"fixture case missing: {case_root}"
     context = _cardiac_stack()
@@ -143,7 +127,7 @@ def test_restitution_curves_block_mesh_resolution_axis_reports_the_active_resolu
 
 
 def test_the_single_cell_native_case_confirms_tworld_sixty():
-    tutorials_root = _native_tutorials_root()
+    tutorials_root = native_tutorials_root()
     case_root = tutorials_root / _SINGLE_CELL_RELPATH
     assert case_root.is_dir(), f"fixture case missing: {case_root}"
     assert _read_ionic_model(case_root) == "TWorld"
@@ -160,7 +144,7 @@ def test_the_single_cell_native_case_confirms_tworld_sixty():
 
 
 def test_the_restitution_curves_native_case_confirms_buenoorovio_zero_point_four():
-    tutorials_root = _native_tutorials_root()
+    tutorials_root = native_tutorials_root()
     case_root = tutorials_root / _RESTITUTION_CURVES_RELPATH
     assert case_root.is_dir(), f"fixture case missing: {case_root}"
     assert _read_ionic_model(case_root) == "BuenoOrovio"
@@ -185,7 +169,7 @@ def test_the_restitution_curves_native_case_confirms_buenoorovio_zero_point_four
 
 
 def test_commit_record_case_writes_a_real_case_via_the_real_renderer(tmp_path):
-    tutorials_root = _native_tutorials_root()
+    tutorials_root = native_tutorials_root()
     case_root = tutorials_root / _RESTITUTION_CURVES_RELPATH
     assert case_root.is_dir(), f"fixture case missing: {case_root}"
     context = _cardiac_stack()
