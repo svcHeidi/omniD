@@ -81,13 +81,14 @@ def _read_current_hex_cell_counts(text: str) -> str:
     return match.group(1)
 
 
-def _isotropic(n, current):
-    del current
+def _isotropic(n, current, extents=None):
+    del current, extents
     return (n, n, n)
 
 
-def _stays_at_one(n, current):
+def _stays_at_one(n, current, extents=None):
     """Owner decision (d): "a direction whose current count is 1 stays 1"."""
+    del extents
     return tuple(n if c != 1 else 1 for c in current)
 
 

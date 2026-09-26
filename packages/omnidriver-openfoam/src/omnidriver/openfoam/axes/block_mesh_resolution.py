@@ -64,6 +64,18 @@ future writer eventually renders the patch. See the pinning test's own
 2026-09-26 correction (``test_axes_block_mesh_resolution.py``) for exactly
 what changed and why.
 
+**Corrected 2026-09-26, later the same day (controller review of `2125168`,
+the ``niederer2011`` tutorial record).** ``resolution`` now ALSO receives
+each document's own physical extent in metres (``extents``, third
+positional argument) -- read from the same document this axis already
+opens for its current cell counts, via the new
+:func:`.case_planning.read_hex_block_extent_m`. Additive: every existing
+``resolution`` callable (``restitutionCurves``'s, and every test fixture in
+this package) gained a third, ignorable parameter, and every one that does
+not need it simply does not read it -- no existing behaviour changed. See
+:func:`block_mesh_resolution_axis`'s own docstring, below, for the full
+reasoning.
+
 **Why the produced patch is not a ``document:key`` edit.**
 :func:`omnidriver.openfoam.case_planning.plan_block_mesh_resolution`'s own
 docstring already gives the full reasoning: rewriting every ``hex (`` block
@@ -136,7 +148,9 @@ from typing import Any, Callable, Sequence
 
 from omnidriver.core.tutorial_records import AxisContract, AxisPatch, AxisResult
 
-from ..case_planning import hex_cell_counts_key_path, read_hex_cell_counts
+from ..case_planning import (
+    hex_cell_counts_key_path, read_hex_block_extent_m, read_hex_cell_counts,
+)
 
 
 def _validate_documents(documents: Any) -> tuple[str, ...]:
@@ -184,6 +198,20 @@ def _validate_expected_blocks(expected_blocks: Any, *, axis_name: str) -> int:
             f"be a positive integer, got {expected_blocks!r}"
         )
     return expected_blocks
+
+
+def _current_extents_m(
+    *, staged_case_root: Path, document: str,
+) -> tuple[float, float, float] | None:
+    """This document's own physical extent in metres, or ``None`` when it
+    cannot be read (added 2026-09-26, controller review of `2125168`: see
+    :func:`block_mesh_resolution_axis`'s own dated correction). Reuses
+    :func:`.case_planning.read_hex_block_extent_m` rather than
+    re-implementing it -- this axis already reads the same document for its
+    current cell counts (:func:`_current_cell_counts`), and this is simply
+    a second, independent fact read from the same file."""
+    document_path = Path(staged_case_root) / document
+    return read_hex_block_extent_m(document_path)
 
 
 def _validate_cell_counts(
@@ -245,7 +273,10 @@ def block_mesh_resolution_axis(
     name: str,
     *,
     documents: Sequence[str],
-    resolution: Callable[[Any, tuple[int, int, int]], tuple[int, int, int]],
+    resolution: Callable[
+        [Any, tuple[int, int, int], tuple[float, float, float] | None],
+        tuple[int, int, int],
+    ],
     expected_blocks: int = 1,
     value_kind: str = "integer",
 ) -> AxisContract:
@@ -260,17 +291,34 @@ def block_mesh_resolution_axis(
     counts -- this axis never assumes every document resolves to the same
     triple.
 
-    ``resolution`` is a pure callable from the study value AND this
-    document's own current cell counts to the three new cell counts --
-    ``Callable[[value, current_counts], counts]``. A tutorial record's own
-    formula, e.g. ``lambda n, current: (n, n, n)`` for an isotropic
-    resolution that ignores the document's current state entirely, or a
-    formula that keeps a direction at its current count when that count is
-    1 (owner decision (d): "a direction whose current count is 1 stays 1"),
-    e.g. ``lambda n, current: tuple(n if c != 1 else 1 for c in current)`` --
-    this package knows neither the formula nor which documents any
-    particular tutorial uses, only how to read a document's current state
-    and turn "some cell counts" into a patch once it has them.
+    ``resolution`` is a pure callable from the study value, this document's
+    own current cell counts, and this document's own current physical
+    extent to the three new cell counts --
+    ``Callable[[value, current_counts, extents], counts]``. A tutorial
+    record's own formula, e.g. ``lambda n, current, extents: (n, n, n)``
+    for an isotropic resolution that ignores the document's current state
+    entirely, or a formula that keeps a direction at its current count when
+    that count is 1 (owner decision (d): "a direction whose current count
+    is 1 stays 1"), e.g. ``lambda n, current, extents: tuple(n if c != 1
+    else 1 for c in current)`` -- this package knows neither the formula
+    nor which documents any particular tutorial uses, only how to read a
+    document's current state and turn "some cell counts" into a patch once
+    it has them.
+
+    **``extents`` added 2026-09-26 (controller review of `2125168`).** The
+    document's own physical bounding-box extent in METRES -- its
+    ``vertices`` block's own per-axis span, times ``scale``
+    (:func:`.case_planning.read_hex_block_extent_m`), or ``None`` when the
+    document has no parseable ``vertices``/``scale`` (a synthetic test
+    fixture that only ever exercises cell counts, never extents). Lets a
+    record's ``resolution`` convert a physical cell size (e.g. Niederer's
+    ``dx``, in metres) into cell counts via
+    ``mesh_provisioning.cell_counts_from_dx`` without restating the case's
+    own geometry as a second, independently editable Python constant --
+    "one source of truth" (CLAUDE.md), for a fact ``system/blockMeshDict``
+    already states. A ``resolution`` that only ever needs cell counts (the
+    isotropic/"stays at 1" formulas above) simply ignores this third
+    argument, same as they already ignore ``current`` when unneeded.
 
     ``expected_blocks`` (added 2026-09-26, P2) is how many ``hex (`` blocks
     EVERY named document declares -- stated by the record (e.g. bath's
@@ -323,7 +371,10 @@ def block_mesh_resolution_axis(
                 staged_case_root=staged_case_root,
                 expected_blocks=resolved_expected_blocks,
             )
-            cell_counts = resolution(value, current_counts)
+            extents = _current_extents_m(
+                staged_case_root=staged_case_root, document=document,
+            )
+            cell_counts = resolution(value, current_counts, extents)
             cell_counts = _validate_cell_counts(
                 axis_name=name, document=document, study_value=value,
                 cell_counts=cell_counts,

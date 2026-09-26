@@ -66,8 +66,8 @@ def _staged_case(tmp_path: Path, document: str, content: str) -> Path:
     return case_root
 
 
-def _isotropic(n, current):
-    del current
+def _isotropic(n, current, extents=None):
+    del current, extents
     return (n, n, n)
 
 
@@ -154,7 +154,7 @@ def test_resolve_supports_a_non_isotropic_resolution_formula(tmp_path):
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _ONE_HEX_BLOCK_DICT)
     axis = block_mesh_resolution_axis(
         "cable_cells", documents=("system/blockMeshDict",),
-        resolution=lambda n, current: (n, 1, 1),
+        resolution=lambda n, current, extents=None: (n, 1, 1),
     )
 
     result = axis.resolve(50, case_root)
@@ -169,7 +169,8 @@ def test_resolution_receives_the_documents_own_current_cell_counts(tmp_path):
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _ONE_HEX_BLOCK_DICT)
     seen = []
 
-    def resolution(value, current):
+    def resolution(value, current, extents=None):
+        del extents
         seen.append(current)
         return tuple(value if c != 1 else 1 for c in current)
 
@@ -202,7 +203,8 @@ def test_several_documents_each_get_their_own_current_counts_and_own_patch(tmp_p
         "blocks\n(\n    hex (0 1 2 3 4 5 6 7) (80 80 80) simpleGrading (1 1 1)\n);\n"
     )
 
-    def stays_at_one(n, current):
+    def stays_at_one(n, current, extents=None):
+        del extents
         return tuple(n if c != 1 else 1 for c in current)
 
     axis = block_mesh_resolution_axis(
@@ -226,6 +228,92 @@ def test_several_documents_each_get_their_own_current_counts_and_own_patch(tmp_p
 
 
 # ---------------------------------------------------------------------------
+# ``extents`` (added 2026-09-26, controller review of `2125168`): a
+# `resolution` callable that converts a physical cell size (rather than
+# taking cell counts as given, as `_isotropic`/`stays_at_one` do above) must
+# see the document's OWN geometry -- never a value restated independently of
+# the file. Proven here by two documents with different `vertices`/`scale`,
+# the same `dx`, and two different resulting cell counts.
+# ---------------------------------------------------------------------------
+
+
+def _block_mesh_dict_text(*, vertices_mm: tuple[float, float, float], scale: float = 0.001) -> str:
+    x, y, z = vertices_mm
+    corners = (
+        (0, 0, 0), (x, 0, 0), (x, y, 0), (0, y, 0),
+        (0, 0, z), (x, 0, z), (x, y, z), (0, y, z),
+    )
+    vertices_block = "".join(f"    ({cx} {cy} {cz})\n" for cx, cy, cz in corners)
+    return (
+        "FoamFile\n{\n    object blockMeshDict;\n}\n"
+        f"scale {scale};\n"
+        "vertices\n(\n" + vertices_block + ");\n"
+        "blocks\n(\n"
+        "    hex (0 1 2 3 4 5 6 7) (1 1 1) simpleGrading (1 1 1)\n"
+        ");\n"
+    )
+
+
+def test_resolution_receives_the_documents_own_extent_in_metres(tmp_path):
+    """The reason `extents` exists at all: a `resolution` formula converting
+    a physical cell size (e.g. Niederer's own `dx` axis,
+    `records/niederer_2011.py`) needs the case's own geometry, read from the
+    document, not restated as a Python constant beside it -- CLAUDE.md's
+    "one source of truth", applied to `system/blockMeshDict`'s own
+    `vertices`/`scale`."""
+    from omnidriver.openfoam.mesh_provisioning import cell_counts_from_dx
+
+    def resolution(dx, current, extents):
+        del current
+        return cell_counts_from_dx(dx, extents)
+
+    small_case = _staged_case(
+        tmp_path / "small", "system/blockMeshDict",
+        _block_mesh_dict_text(vertices_mm=(20.0, 3.0, 7.0)),
+    )
+    large_case = _staged_case(
+        tmp_path / "large", "system/blockMeshDict",
+        _block_mesh_dict_text(vertices_mm=(40.0, 6.0, 14.0)),
+    )
+    axis = block_mesh_resolution_axis(
+        "dx", documents=("system/blockMeshDict",), resolution=resolution,
+        value_kind="scalar",
+    )
+
+    small_result = axis.resolve(0.001, small_case)
+    large_result = axis.resolve(0.001, large_case)
+
+    # Same `dx` (1 mm), two different documents -- because the axis read
+    # each one's own extent (20x3x7 mm vs. 40x6x14 mm), the resulting cell
+    # counts differ, and each is exactly what `cell_counts_from_dx` gives
+    # for THAT document's own geometry.
+    assert small_result.patches[0].value == (20, 3, 7)
+    assert large_result.patches[0].value == (40, 6, 14)
+    assert small_result.patches[0].value != large_result.patches[0].value
+
+
+def test_extents_is_none_for_a_document_with_no_vertices_block(tmp_path):
+    """A synthetic fixture that only ever exercises cell counts (this
+    module's other tests) has no `vertices` block at all -- `extents` is
+    `None`, not a refusal, so a `resolution` that never reads it (every
+    other test in this module) is unaffected."""
+    case_root = _staged_case(tmp_path, "system/blockMeshDict", _ONE_HEX_BLOCK_DICT)
+    seen = []
+
+    def resolution(value, current, extents):
+        del current
+        seen.append(extents)
+        return (value, value, value)
+
+    axis = block_mesh_resolution_axis(
+        "number_cells", documents=("system/blockMeshDict",), resolution=resolution,
+    )
+    axis.resolve(20, case_root)
+
+    assert seen == [None]
+
+
+# ---------------------------------------------------------------------------
 # Resolve-time refusals.
 # ---------------------------------------------------------------------------
 
@@ -234,7 +322,7 @@ def test_resolve_refuses_a_non_integer_cell_count(tmp_path):
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _ONE_HEX_BLOCK_DICT)
     axis = block_mesh_resolution_axis(
         "number_cells", documents=("system/blockMeshDict",),
-        resolution=lambda n, current: (n, n, "20"),
+        resolution=lambda n, current, extents=None: (n, n, "20"),
     )
 
     with pytest.raises(ValueError, match="must return a tuple of 3 integers"):
@@ -247,7 +335,7 @@ def test_resolve_refuses_a_boolean_masquerading_as_an_integer_count(tmp_path):
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _ONE_HEX_BLOCK_DICT)
     axis = block_mesh_resolution_axis(
         "number_cells", documents=("system/blockMeshDict",),
-        resolution=lambda n, current: (n, n, True),
+        resolution=lambda n, current, extents=None: (n, n, True),
     )
 
     with pytest.raises(ValueError, match="must return a tuple of 3 integers"):
@@ -258,7 +346,7 @@ def test_resolve_refuses_a_non_positive_cell_count(tmp_path):
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _ONE_HEX_BLOCK_DICT)
     axis = block_mesh_resolution_axis(
         "number_cells", documents=("system/blockMeshDict",),
-        resolution=lambda n, current: (0, n, n),
+        resolution=lambda n, current, extents=None: (0, n, n),
     )
 
     with pytest.raises(ValueError, match="non-positive cell count"):
@@ -269,7 +357,7 @@ def test_resolve_refuses_a_negative_cell_count(tmp_path):
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _ONE_HEX_BLOCK_DICT)
     axis = block_mesh_resolution_axis(
         "number_cells", documents=("system/blockMeshDict",),
-        resolution=lambda n, current: (-5, n, n),
+        resolution=lambda n, current, extents=None: (-5, n, n),
     )
 
     with pytest.raises(ValueError, match="non-positive cell count"):

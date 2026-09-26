@@ -30,19 +30,15 @@ one: an axis, a direct study key, or dropped"):
 size (20 x 3 x 7 mm) as a public, overridable ``make_spec`` default
 parameter -- a second, independently-editable copy of a fact
 ``system/blockMeshDict`` already states in its own ``vertices``/``scale``.
-``_SLAB_EXTENT_M`` below is not that: it is a private module constant (no
-caller can override it independently of the case), cited to the exact
-native file it must equal, and drift-tested against that file
-(``test_niederer_2011_slab_extent_matches_native``,
-``packages/omnidriver-cardiacfoam/tests/test_niederer_2011_record.py``) --
-because ``block_mesh_resolution_axis``'s ``resolution`` callable
-(``AXES``' own ``resolution=``) receives only the study value and the
-document's OWN current cell counts (P2, 2026-09-26), never the staged case
-root, so it cannot itself open ``system/blockMeshDict`` and read its
-vertices at resolve time. Reading them live is exactly what a native drift
-test is for; a Python constant asserted equal to the real file, every time
-the native suite runs, is not a second source of truth so much as the one
-place this fact is checked.
+This record does not restate it either, as a Python constant or otherwise:
+the ``dx`` axis's own ``resolution`` callable reads the document's real
+extent every time it runs, via ``block_mesh_resolution_axis``'s own
+``extents`` argument (**corrected 2026-09-26, controller review of
+`2125168`**: an earlier version of this record cited a private
+``_SLAB_EXTENT_M`` constant here, because the axis builder did not yet
+expose the staged document's extent to ``resolution`` at all -- fixed at
+the source, in ``axes/block_mesh_resolution.py`` itself, rather than
+worked around here with a constant needing its own drift test).
 
 **Workflow steps, taken from the native ``Allrun``**::
 
@@ -112,29 +108,39 @@ MESH_SELECTOR_NAME = "mesh"
 HEX_VARIANT = "hex"
 TET_VARIANT = "tet"
 
-#: The Niederer slab's physical extent in METRES: (0.020, 0.003, 0.007),
-#: i.e. 20 x 3 x 7 mm -- read from this case's own
-#: ``system/blockMeshDict``: ``vertices`` span ``(0 0 0)`` to
-#: ``(20 3 7)`` at ``scale 0.001``. A private constant, not a caller-facing
-#: default (no ``make_spec``-style override exists any more); guarded
-#: against drift by ``test_niederer_2011_slab_extent_matches_native``
-#: (native), which parses the real file and fails if these three numbers
-#: ever stop matching it.
-_SLAB_EXTENT_M: tuple[float, float, float] = (0.020, 0.003, 0.007)
-
-
-def _hex_cell_counts_from_dx(dx_m: Any, current: tuple[int, int, int]) -> tuple[int, int, int]:
+def _hex_cell_counts_from_dx(
+    dx_m: Any, current: tuple[int, int, int],
+    extents: tuple[float, float, float] | None,
+) -> tuple[int, int, int]:
     """``dx`` (metres, isotropic cell size) -> the slab's three hex cell
-    counts, via the same ``cell_counts_from_dx`` the cable tutorials share.
+    counts, via the same ``cell_counts_from_dx`` the cable tutorials share,
+    over ``extents`` -- the document's own physical extent, read live from
+    ``system/blockMeshDict``'s ``vertices``/``scale`` by the axis builder
+    itself (``block_mesh_resolution_axis``'s ``extents`` argument, added
+    2026-09-26: see ``axes/block_mesh_resolution.py``'s own dated
+    correction). Never a Python constant restating that geometry: a
+    different slab (a different ``vertices``/``scale``) gives different
+    counts for the same ``dx``, because this reads the file every time.
+
     ``current`` (this document's own resolution before this axis runs) is
     unused: unlike bath's ``groundElectrode`` axis, no direction here ever
     "stays 1" -- every one of the slab's three axes is always refined.
+
+    ``extents`` is never ``None`` for the real case (``system/
+    blockMeshDict`` always has a ``vertices`` block), so a ``None`` here
+    means the staged document could not be read at all -- refused by name,
+    not silently defaulted.
     """
     del current
     dx = float(dx_m)
     if dx <= 0:
         raise ValueError(f"dx-axis {DX_AXIS_NAME!r}: dx must be positive, got {dx_m!r}")
-    return cell_counts_from_dx(dx, _SLAB_EXTENT_M)
+    if extents is None:
+        raise ValueError(
+            f"dx-axis {DX_AXIS_NAME!r}: {_BLOCK_MESH_DICT_DOCUMENT!r} has no "
+            "parseable vertices/scale to read a physical extent from"
+        )
+    return cell_counts_from_dx(dx, extents)
 
 
 def _tet_dx_axis(name: str) -> AxisContract:

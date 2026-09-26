@@ -13,6 +13,7 @@ import away. A future axis module (``openfoam/axes/``) may import from here;
 entirely from that directory, but this module is never named there.
 """
 
+import re
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Mapping
@@ -395,6 +396,69 @@ def read_hex_cell_counts(
             f"count: {sorted(set(counts))!r}"
         )
     return counts[0]
+
+
+_VERTICES_BLOCK = re.compile(r"vertices\s*\(\s*((?:\([^)]*\)\s*)+)\)\s*;")
+_ONE_VERTEX = re.compile(r"\(\s*([^()]*)\)")
+_SCALE_LINE = re.compile(r"^\s*scale\s+([0-9.eE+-]+)\s*;", re.MULTILINE)
+
+
+def read_hex_block_extent_m(document_path: Path) -> tuple[float, float, float] | None:
+    """A ``blockMeshDict``'s own physical bounding-box extent, in METRES:
+    the ``vertices`` block's own per-axis ``max - min``, times ``scale``
+    (added 2026-09-26, controller review of `2125168`).
+
+    **Why this exists.** `block_mesh_resolution_axis`'s own `resolution`
+    callable now also receives this (see that module's own dated
+    correction), so a record's resolution formula (e.g.
+    `records/niederer_2011.py`'s `dx` axis) can convert a physical cell
+    size into cell counts via `mesh_provisioning.cell_counts_from_dx`
+    without restating the case's own geometry as a second, independently
+    editable Python constant -- "one source of truth" (CLAUDE.md), applied
+    to a fact `system/blockMeshDict` already states in its own `vertices`/
+    `scale`.
+
+    ``None`` when the document does not exist, or has no ``vertices ( ... );``
+    block to parse -- "cannot determine", not "zero extent", the same
+    posture :func:`read_hex_cell_counts` already takes for a missing file.
+    Every real `blockMeshDict` (this package's own fixtures and every real
+    cardiac tutorial's) has one; only a synthetic test fixture that only
+    ever exercises cell COUNTS (not extents) reasonably omits it, and such a
+    fixture's own `resolution` callable simply never looks at the `extents`
+    argument this enables.
+
+    ``scale`` defaults to ``1.0`` when the document declares no `scale`
+    line at all (OpenFOAM's own default), not refused -- a `blockMeshDict`
+    authored directly in metres is a real, if unusual, case.
+
+    Reads the SAME grammar `_rewrite_hex_block_lines`/`read_hex_cell_counts`
+    already parse text-level, never a full OpenFOAM dictionary parser: one
+    ``vertices ( (x y z) (x y z) ... );`` block, whitespace-tolerant, no
+    nested comments or `#include` expansion (none of this package's own
+    `blockMeshDict` grammar handles those either).
+    """
+    path = Path(document_path)
+    if not path.is_file():
+        return None
+    text = path.read_text()
+    match = _VERTICES_BLOCK.search(text)
+    if match is None:
+        return None
+    scale_match = _SCALE_LINE.search(text)
+    scale = float(scale_match.group(1)) if scale_match else 1.0
+    points: list[tuple[float, float, float]] = []
+    for vertex_match in _ONE_VERTEX.finditer(match.group(1)):
+        tokens = vertex_match.group(1).split()
+        if len(tokens) != 3:
+            continue
+        points.append(tuple(float(token) for token in tokens))  # type: ignore[arg-type]
+    if not points:
+        return None
+    extents = []
+    for axis in range(3):
+        values = [point[axis] for point in points]
+        extents.append((max(values) - min(values)) * scale)
+    return tuple(extents)  # type: ignore[return-value]
 
 
 def plan_dict_block(

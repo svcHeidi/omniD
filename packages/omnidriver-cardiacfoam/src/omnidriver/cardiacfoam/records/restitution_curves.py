@@ -89,6 +89,7 @@ _BLOCK_MESH_DICT_DOCUMENT = "system/blockMeshDict"
 
 def _explicit_cell_counts(
     cell_counts: Sequence[Any], current: tuple[int, int, int],
+    extents: tuple[float, float, float] | None = None,
 ) -> tuple[int, int, int]:
     """No scaling formula: this axis's study value already IS the three hex
     cell counts (one of ``system/blockMeshDict``'s own three documented
@@ -96,13 +97,18 @@ def _explicit_cell_counts(
     document's own resolution before this axis runs, P2's 2026-09-26
     addition to the axis's own ``resolution`` signature) is unused: this
     tutorial has exactly one ``blockMeshDict`` and no per-direction "stays
-    1" rule to apply, so nothing here needs to read it.
+    1" rule to apply, so nothing here needs to read it. ``extents`` (the
+    document's own physical extent, added 2026-09-26 -- see
+    ``axes/block_mesh_resolution.py``'s own dated correction) is unused for
+    the same reason: this axis's study value is already the target cell
+    counts, not a physical cell size a formula would need the extent to
+    convert.
     ``block_mesh_resolution_axis``'s own ``_validate_cell_counts`` checks the
     shape (exactly three positive integers) once ``resolution`` returns --
     this callable only turns the study's list/tuple into the plain tuple
     that check expects, inventing no formula of its own.
     """
-    del current
+    del current, extents
     return tuple(cell_counts)
 
 
