@@ -78,7 +78,7 @@ def test_an_agent_compares_dx_500_with_dx_250_at_the_paper_points(tmp_path):
     for metric in by_label.values():
         for side in (metric["left"], metric["right"]):
             assert (side["status"], side["unit"], side["declared_unit"], side["sampling_rule"], side["sampled_at_unit"]) == (
-                "evaluated", "ms", "ms", "node", "um")
+                "evaluated", "ms", "ms", "linear", "um")
             assert side["sampling_offset"] == 0.0 and side["source_artifact"] == "out/init_acts_vm_act-thresh.dat"
         difference = abs(metric["left"]["value"] - metric["right"]["value"])
         assert metric["difference"] == pytest.approx(difference)

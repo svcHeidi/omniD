@@ -234,10 +234,10 @@ def test_an_agent_compares_opencarp_with_cardiacfoam_at_p1_to_p9(tmp_path):
         assert (oc["run"], oc["quantity"], cf["run"], cf["quantity"]) == ("opencarp", label, "cardiacfoam", probe)
         # The premise: 200 ms activates every point on both solvers.
         assert (oc["status"], cf["status"]) == ("evaluated", "evaluated"), (label, oc, cf)
-        # openCARP: declared and reported in ms, at the mesh node nearest the
-        # reference point, in its own µm.
+        # openCARP: declared and reported in ms, linearly interpolated at
+        # the requested point (a mesh node here, dx 0.5 mm), in its own µm.
         assert (oc["declared_unit"], oc["unit"], oc["sampling_rule"], oc["sampled_at_unit"], oc["requested_at_unit"]) == (
-            "ms", "ms", "node", "um", "um")
+            "ms", "ms", "linear", "um", "um")
         assert oc["requested_at"] == [1000.0 * v for v in reference_at]
         assert tuple(oc["sampled_at"]) in oc_nodes
         assert math.dist(oc["sampled_at"], oc["requested_at"]) == min(math.dist(n, oc["requested_at"]) for n in oc_nodes)
