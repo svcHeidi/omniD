@@ -248,7 +248,8 @@ It also gains three axes:
 | `dt` | `solve:-dt` |
 | `massLumping` | `solve:-mass_lumping` |
 
-Each axis also carries its unit (§3.1): `ms` for `tend`, `us` for `dt`.
+Each axis also carries its native unit (§3.1): `ms` for `tend`, `us` for `dt`.
+The study states SI (`s`); the axis converts (owner, 2026-09-28).
 `guidance.md` states the defaults and the F14 consequence.
 
 **Tests:**
@@ -343,7 +344,7 @@ function can meet.
 | **TOML record loader** (`core/record_description.py`, about 140 code over steps 1, 2 and 4) | Records are data written as Python: 588 code lines against 831 prose in cardiacFOAM's `records/`. The owner wants them authored and maintained as TOML | Both solvers have records. A loader per solver would be two copies of one parser. It builds only existing objects |
 | **structured default-argument replacement** (`AxisResult.replacements`, §1) | openCARP's `dt` and `tend` cannot both be set: `resolve_case_patches` refuses them (review, reproduced) | The refusal is in core's merge, which runs before any solver code. A solver function cannot make core accept two contributions |
 | **record source digest** in provider identity (§4.1) | A record changed without a version bump leaves the stack digest unchanged, because only `cxx_mapping`, `dictionaries` and `manifest` are hashed (`provider_stack._DIGESTED_CAPABILITIES`). Resume and compare cannot tell | Identity is computed by core (`_provider_identity`). A solver's alternative is bumping its version by hand, which is the failure mode |
-| **`unit` on `AxisContract`**, reported only, never converted (about 6 code) | `dx` is metres in `niederer2011` and µm in `niedererNVersion`, and `describe` cannot say so. The campaign needed per-solver lookup tables (`campaign.sh` `dx_value`) | The agent-facing axis list (`describe`, C10) is built by core. Without a field, the unit lives only in Python docstrings. No conversion is added |
+| **SI at omniD's surface; `native_unit` on `AxisContract`, converted at the axis** (owner, 2026-09-28; about 20 code, reusing `core/quantities/units.py`) | `dx` is metres in `niederer2011` and µm in `niedererNVersion`, `dt` seconds in one and µs in the other, and `describe` cannot say so. The campaign needed per-solver lookup tables (`campaign.sh` `dx_value`, `dt_where`), and its requests state points in mm for one solver and m for the other | A per-solver conversion would copy the unit table core already has for quantities. Studies, requests and reports state SI; only a record's axis knows the solver's unit. Keys stay per solver (they differ anyway), so this normalises values, not names |
 | **optional `get_effective_settings` hook** (§4.2) | openCARP's config reader returns `None` for absent keys and ignores argv, although an argv `-<key>` after `+F` wins (F14). A parameter report from it can describe a different run | The **implementation** is solver-specific, as the owner asks. The hook exists only so `describe`/`plan --strict` and the run document show it. Without a hook, each benchmark would import solver internals |
 | **ranks-within-allocation flag** (§4.4, about 20 code) | The campaign's strong-scaling runs inside one 64-task allocation work around the equality check by overriding `SLURM_NTASKS=$n` (campaign README), which misstates the allocation in provenance | The policy is per run and identical for both solvers. Each solver form would otherwise parse the same flag. The forms keep their own checks |
 | **`WorkflowStep.cwd`** (§5; lands with TL-EM) | TL-EM's case-local build (`src/Allwmake`) | `_workflow_dag_for_record` builds the DAG node in core and drops any field `WorkflowStep` does not have |
@@ -367,7 +368,7 @@ job, or no current use needs it.
 | launch templates (`pre`/`wrap`/`post`), the core rank rule, the launcher-check and environment-probe grammars, `srun` as core data | The two parallel forms (71 and 95 code lines) and openCARP's launcher check are small, correct and solver-specific. Only one grammar difference mattered, and it is fixed locally (§3.1) |
 | `[case.generated]`, `[tool.*] produces`, `[output.*]` reader tables, the `json_document` codec | Each replaces a few lines of working Python or restates a constant |
 | **the `omnidriver-electrophysiology` package, its units, relations and rules**, including V5 moving | One benchmark consumes it. Its bindings are case-scoped (the review), so they live in that benchmark's comparison configuration (§4.3). V5 stays in `validation.py` |
-| solver-wide quantity maps, quantity-named study keys, conversion of axis units | The Niederer file names, region indices and stimulus indices are case facts, not solver facts. Studies stay per solver, because the keys differ anyway |
+| solver-wide quantity maps, quantity-named study keys | The Niederer file names, region indices and stimulus indices are case facts, not solver facts. Studies stay per solver, because the keys differ anyway |
 | the "problem identity" report | It proves less than it claimed (review §3). It is replaced by a benchmark-local mapped-parameter check with declared known differences (§4.3) |
 | a general sampling, interpolation, pairing or output-selector framework | Each solver owns its sampling (`f2cd0fd`, `8c919cb`). Requests pair explicitly. An ambiguous output is fixed locally by its path |
 | substitution axes (`{value}`, `arguments`, `patch`) | Every current axis is an existing Python factory, and a substitution grammar would have changed `dx`'s argv spelling (step 1) |
@@ -556,4 +557,4 @@ diagnostic in its place.
 | D2 | Step 3: the record reproduces `run.py`'s defaults | Yes, as its own reviewed change |
 | D3 | Does "reproduces `run.py`" include carputils' solver options (step 3b)? | Yes if that is the promise, with the options files supplied. Otherwise name the record's policy "binary defaults" in `guidance.md` |
 | D11 | Freeze the current campaign on its commit before step 1, and revise it separately | Yes |
-| D17 | The reported axis `unit`: keep it (no conversion) or drop it? | Keep: 6 lines, and it removes the m/µm ambiguity from `describe` |
+| D17 | Axis units | **Decided (owner, 2026-09-28): SI is the normalisation.** Studies, requests and reports state SI; each axis declares its solver's native unit and converts with core's existing table. Limits: only dimensioned values (unitless keys such as `mass_lumping` pass through); sentinels are never converted; the written text must be the exact decimal (`1e-4 m` writes `100`, and an inexact conversion is refused); the table grows beyond time and length only when a real axis needs it (mV, S/m, µA/cm²); frames stay explicit in each request; the current campaign is frozen (D11), so SI requests are new requests |
