@@ -46,21 +46,19 @@ from __future__ import annotations
 import importlib.util
 import json
 import math
-import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
 
 import pytest
-from foamlib import FoamFieldFile, FoamFile
+from foamlib import FoamFile
 
 from omnidriver.cardiacfoam.activation_probes import ACTIVATION_PROBES_FORMAT
 from omnidriver.core.experiments import inspect_sweep_experiment
 from omnidriver.core.quantities import experiment_comparisons, load_point_reference
 from omnidriver.core.runtime.postprocess_phase import build_sweep_context
-from cardiacfoam_native import NIEDERER_2011_RELPATH, native_tutorials_root, niederer_sweep, require_sourced_openfoam
+from cardiacfoam_native import NIEDERER_2011_RELPATH, native_tutorials_root, niederer_sweep
 
 #: Needs both native environments: the cardiacFOAM tree with OpenFOAM
 #: sourced, and openCARP's tutorials tree with its binary. Each marker fails,
@@ -80,18 +78,18 @@ OPENCARP_TEND_MS = 200.0           # nversion.par:tend, ms: the same 200 ms
 TOLERANCE_MS = 5.0
 TOLERANCE_RATIONALE = (
     "declared before either run was read; exploratory, not a benchmark acceptance claim. Two discretisations at "
-    "dx 0.5 mm (openCARP P1 finite elements, read at mesh nodes; cardiacFOAM finite volumes, read at the "
-    "containing cell's centre, up to 0.433 mm from the point) are expected to differ. 5 ms is the bound Tasks 6 "
-    "and 7 used, and about half the 10.9 ms spread of P8 across the paper's codes at its finest resolution "
-    "(37.8-48.7 ms, section 6)"
+    "dx 0.5 mm (openCARP P1 finite elements, linearly interpolated at the requested point; cardiacFOAM finite "
+    "volumes, reported at the probe's own point under interpolationScheme cellPoint) are expected to differ. "
+    "5 ms is the bound Tasks 6 and 7 used, and about half the 10.9 ms spread of P8 across the paper's codes at "
+    "its finest resolution (37.8-48.7 ms, section 6)"
 )
 #: A point either solver leaves unactivated by 200 ms means the duration was
 #: too short for that point; it must fail the report, not agree.
 BOTH_NOT_REACHED = "fail"
-#: cardiacFOAM samples the containing cell's centre: at most half a cell
-#: diagonal from any point inside the cell, rounded up at 0.1 µm because the
-#: slab's corner probes sit exactly on that bound (as Task 7 pre-registered).
-CARDIACFOAM_MAX_OFFSET_M = math.ceil(math.sqrt(3) / 2 * CARDIACFOAM_DX_M * 1e7) / 1e7
+#: Updated 2026-09-27 (native `interpolationScheme cellPoint`, e9439c4f):
+#: cardiacFOAM now reports each probe's own configured location exactly
+#: (offset 0), not the containing cell's centre.
+CARDIACFOAM_MAX_OFFSET_M = 0.0
 #: openCARP samples the nearest mesh node. At dx 500 µm every P1-P9 is a
 #: node of the slab (F3's 41 x 15 x 7 grid), so any offset beyond rounding is
 #: an orientation error. In the reference's unit, mm: 1 µm.
@@ -111,9 +109,6 @@ PROBES = {
     "7": ((0.019999, 0.003, 0.0), "P8", (20, 7, 3)),
     "8": ((0.01, 0.0015, 0.0035), "P9", (10, 3.5, 1.5)),
 }
-_FOUND = re.compile(r"probes : found point \(([^()]*)\) in cell (\d+)")
-
-
 def _note(probe: str) -> str:
     at, label, reference_at = PROBES[probe]
     return (f"{label} {list(reference_at)} mm in the reference frame. openCARP: the reference frame itself, in um "
@@ -138,29 +133,6 @@ def _artifact_id(output: Path, case, artifact_format: str) -> str:
     document = json.loads((output / case.run_document_path).read_text())
     (artifact,) = [a for a in document["expectedArtifacts"] if a["format"] == artifact_format]
     return artifact["artifact_id"]
-
-
-def _latest_time(case: Path) -> Path:
-    times = [p for p in case.iterdir() if p.is_dir() and re.fullmatch(r"[0-9.eE+-]+", p.name) and p.name != "0"]
-    return max(times, key=lambda p: float(p.name))
-
-
-def _containing_cell_centres(case_root: Path, scratch: Path) -> list[tuple[float, ...]]:
-    """Each probe's containing-cell centre, as the solver itself reports it:
-    OpenFOAM's ``probes`` names the cell it found for each point only under
-    ``-debug-switch probes=1`` (``cardiacfoam.md`` Q3), run on a copy of the
-    case so the compared run is untouched, and the centre is that cell's
-    entry in the ``C`` the run's ``writeCellCentres`` step wrote."""
-    require_sourced_openfoam("postProcess")
-    copy = scratch / "case"
-    shutil.copytree(case_root, copy)
-    proc = subprocess.run(["postProcess", "-func", "Niedererpoints", "-debug-switch", "probes=1", "-latestTime"],
-                          cwd=copy, capture_output=True, text=True, timeout=300)
-    assert proc.returncode == 0, proc.stdout[-2000:] + proc.stderr[-2000:]
-    cells = [int(cell) for _, cell in _FOUND.findall(proc.stdout + proc.stderr)]
-    assert len(cells) == len(PROBES), (proc.stdout + proc.stderr)[-2000:]
-    centres = FoamFieldFile(_latest_time(case_root) / "C").internal_field
-    return [tuple(float(v) for v in centres[cell]) for cell in cells]
 
 
 def _slab_nodes(case_root: Path) -> list[tuple[float, float, float]]:
@@ -223,7 +195,6 @@ def test_an_agent_compares_opencarp_with_cardiacfoam_at_p1_to_p9(tmp_path):
     assert report["status"] in {"passed", "failed"}
     assert report["both_not_reached"] == BOTH_NOT_REACHED
 
-    cf_centres = _containing_cell_centres(cf_output / cf_case.case_root, tmp_path / "cardiacfoam")
     oc_nodes = _slab_nodes(oc_output / oc_case.case_root)
     by_label = {m["reference_label"]: m for m in report["metrics"]}
     assert set(by_label) == {label for _, label, _ in PROBES.values()}
@@ -241,12 +212,13 @@ def test_an_agent_compares_opencarp_with_cardiacfoam_at_p1_to_p9(tmp_path):
         assert oc["requested_at"] == [1000.0 * v for v in reference_at]
         assert tuple(oc["sampled_at"]) in oc_nodes
         assert math.dist(oc["sampled_at"], oc["requested_at"]) == min(math.dist(n, oc["requested_at"]) for n in oc_nodes)
-        # cardiacFOAM: declared in s, reported in ms, at the containing
-        # cell's centre as the solver reports it, in its own metres.
+        # cardiacFOAM: declared in s, reported in ms, at the probe's own
+        # configured point exactly (interpolationScheme cellPoint, offset 0),
+        # in its own metres.
         assert (cf["declared_unit"], cf["unit"], cf["sampling_rule"], cf["sampled_at_unit"], cf["requested_at_unit"]) == (
-            "s", "ms", "cell-containing", "m", "m")
+            "s", "ms", "point", "m", "m")
         assert cf["requested_at"] == list(at)
-        assert tuple(cf["sampled_at"]) == cf_centres[k]
+        assert cf["sampled_at"] == cf["requested_at"]
         assert metric["status"] in {"within_tolerance", "outside_tolerance", "sampled_off_point"}
     for side, max_offset in (("opencarp", OPENCARP_MAX_OFFSET_MM * 1000.0), ("cardiacfoam", CARDIACFOAM_MAX_OFFSET_M)):
         assert report["runs"][side]["max_sampling_offset"] == pytest.approx(max_offset)

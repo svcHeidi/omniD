@@ -8,13 +8,14 @@ core: cardiacFOAM probe ``k`` is the reference's ``P<k+1>`` (the owner's
 appendix, via the reference's own ``niederer2011-owner-appendix`` source),
 and each probe's expected location is its configured one, read from the
 native ``system/Niedererpoints`` in cardiacFOAM's own frame, metres -- no
-frame conversion. The reader reports the containing cell's centre, so the
-pre-registered ``max_sampling_offset`` is half a cell diagonal.
+frame conversion. **Updated 2026-09-27 (native `interpolationScheme
+cellPoint`, e9439c4f):** the reader now reports each probe's own configured
+location exactly (offset 0, ``sampling_rule == "point"``), not the
+containing cell's centre -- the pre-registered ``max_sampling_offset`` is 0.
 """
 from __future__ import annotations
 
 import json
-import math
 import subprocess
 import sys
 from pathlib import Path
@@ -42,13 +43,6 @@ BOTH_REACHED = {"P1", "P3"}
 ONE_SIDE = {"P5", "P7", "P9"}
 
 
-def _half_cell_diagonal(dx: float) -> float:
-    """sqrt(3)/2 * dx, rounded up at 0.1 um: a probe at a cell's corner (the
-    slab's corner probes) sits exactly at this bound, and rounding must not
-    turn that into a refusal."""
-    return math.ceil(math.sqrt(3) / 2 * dx * 1e7) / 1e7
-
-
 def _artifact_id(output: Path, case) -> str:
     document = json.loads((output / case.run_document_path).read_text())
     (artifact,) = [a for a in document["expectedArtifacts"] if a["format"] == ACTIVATION_PROBES_FORMAT]
@@ -66,7 +60,7 @@ def test_an_agent_compares_dx_1_mm_with_dx_0_5_mm_at_the_probes(tmp_path):
         case = cases[dx]
         return {"plugin": "cardiacfoam", "sweep_output": str(output), "case_id": case.case_id,
                 "artifact_id": _artifact_id(output, case), "points": {"unit": "m", "at": expected},
-                "max_sampling_offset": _half_cell_diagonal(dx)}
+                "max_sampling_offset": 0.0}
 
     request = tmp_path / "request.json"
     request.write_text(json.dumps({
@@ -93,9 +87,9 @@ def test_an_agent_compares_dx_1_mm_with_dx_0_5_mm_at_the_probes(tmp_path):
         for side, dx in (("left", 0.001), ("right", 0.0005)):
             shown = metric[side]
             assert (shown["unit"], shown["declared_unit"], shown["sampling_rule"], shown["sampled_at_unit"],
-                    shown["requested_at_unit"]) == ("ms", "s", "cell-containing", "m", "m")
-            assert 0 < shown["sampling_offset"] <= _half_cell_diagonal(dx)
-            assert shown["sampled_at"] != shown["requested_at"]
+                    shown["requested_at_unit"]) == ("ms", "s", "point", "m", "m")
+            assert shown["sampling_offset"] == 0
+            assert shown["sampled_at"] == shown["requested_at"]
             reached = label in BOTH_REACHED or (label in ONE_SIDE and side == "right")
             assert shown["status"] == ("evaluated" if reached else "not_reached"), (label, side, shown)
         if label in BOTH_REACHED:
