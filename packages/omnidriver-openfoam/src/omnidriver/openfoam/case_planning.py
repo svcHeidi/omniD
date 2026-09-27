@@ -485,6 +485,58 @@ def read_hex_block_extent_m(document_path: Path) -> tuple[float, float, float] |
     return tuple(extents)  # type: ignore[return-value]
 
 
+_LINE_COMMENT = re.compile(r"//[^\n]*")
+_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
+
+
+def _named_block_body(text: str, name: str) -> str | None:
+    """The ``{ ... }`` body of ``name { ... }`` in ``text`` (brace-depth
+    aware, so a nested sub-dictionary's own braces do not end the scan
+    early), or ``None`` if ``name`` has no such block. The first match
+    only -- callers name a scope path one level at a time."""
+    match = re.search(rf"(?<![\w.]){re.escape(name)}\s*\{{", text)
+    if match is None:
+        return None
+    depth = 1
+    index = match.end()
+    while index < len(text) and depth > 0:
+        if text[index] == "{":
+            depth += 1
+        elif text[index] == "}":
+            depth -= 1
+        index += 1
+    return text[match.end():index - 1]
+
+
+def read_nested_entry(document_path: Path, key: str, *, scope: Sequence[str]) -> str | None:
+    """``key``'s raw value text (trailing ``;`` and inline comments
+    stripped) from inside a nested dictionary ``scope`` (e.g.
+    ``("monodomainSolverCoeffs", "externalStimulus")``) -- ``None`` when
+    the document, any scope block, or the key itself is absent.
+
+    A minimal, read-only nested-block locator in the same house style as
+    :func:`read_hex_cell_counts`/:func:`read_hex_block_extent_m` (text-level,
+    not a full OpenFOAM dictionary parser) -- deliberately NOT
+    ``mutators.read_foam_entry``, which this package's axes/records may
+    never import (``scripts/check-case-writes.py`` bans the whole module,
+    since it also holds every writer). Strips ``//`` and ``/* */`` comments
+    before searching; does not evaluate ``#calc``/``#codeStream`` (returns
+    their literal source text, like every other reader here).
+    """
+    path = Path(document_path)
+    if not path.is_file():
+        return None
+    text = _BLOCK_COMMENT.sub("", _LINE_COMMENT.sub("", path.read_text()))
+    for name in scope:
+        text = _named_block_body(text, name)
+        if text is None:
+            return None
+    match = re.search(rf"(?<![\w.]){re.escape(key)}\s+(.*?);", text, re.DOTALL)
+    if match is None:
+        return None
+    return match.group(1).strip()
+
+
 def plan_verbatim_content(
     document: str, content: str, *, executable: bool = False,
 ) -> Mapping[str, Any]:

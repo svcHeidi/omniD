@@ -1,41 +1,16 @@
-"""``cable1DCVConvergence``, a tutorial record (tutorials-are-pointers plan
-§5e, step 5.3). Native case: the same
-``electrophysiologyProtocols/cableProtocol/monodomain1DCableCV`` step 5.2's
-``cable1DRestitution`` points at (§5e: "5.3 needs 5.2 -- same native case
-``cableProtocol``").
+"""``cable1DCVConvergence``: a tutorial record for the same case
+``cable1DRestitution`` points at,
+``electrophysiologyProtocols/cableProtocol/monodomain1DCableCV``.
 
-Replaces ``cardiacfoam.tutorials.cable_1d_cv_convergence``/``tutorials
-.defaults.cable_1d_cv_convergence`` (deleted alongside this record).
-
-**Every write the old ``_plan_case`` made, accounted for:**
-
-| old write | now |
-|---|---|
-| ``system/blockMeshDict`` hex block rewrite | ``dx`` axis, shared with ``cable1DRestitution`` (:mod:`.cable_axes`) |
-| ``system/controlDict:deltaT``/``endTime`` | direct study keys, in seconds |
-| ``monodomainSolverCoeffs.conductivity``/``tissue``/``ionicModel``/``solutionAlgorithm`` | direct study keys (no catalog-derived axis: this tutorial's stimulus is not the ionic-model catalog's single-cell amplitude) |
-| ``monodomainSolverCoeffs.externalStimulus.*`` | direct study keys, one per catalogued leaf (``stimulusStartTimeList``/``stimulusLocationMinList``/``MaxList``/``stimulusDurationList``/``stimulusIntensityList`` -- the catalog declares no composite ``externalStimulus`` key to set as one mapping) (owner decision: "its study states its own ``externalStimulus`` explicitly") -- unlike ``cable1DRestitution``, this tutorial derives no S1-S2 schedule: a convergence sweep launches one wave and measures its speed |
-| ``conductivity_id``, ``case_dir_name``/``setup_dir_name``/``output_dir_name``, ``postprocess_strict_artifacts`` | dropped: sweep-engine/staging bookkeeping the new engine already provides |
-| ``electro_property_overrides``/``physics_property_overrides`` | dropped: always ``None`` in the real committed study |
-| ``parallel`` (old default ``True``) | dropped: owner Q6, serial is the record's default |
-
-No post-processing step: the old ``make_spec``'s own ``workflow_dag`` had
-none either (``expected_artifacts: []``) -- CV extraction
-(``setup/extract_cv.py``) is a manual script the native ``run_convergence.sh``
-drives directly, never wired through ``Allrun``/``Allrun.post``, so it is
-not one of this record's steps either (the same "the record mirrors
-``Allrun``" rule that excludes ``restitutionCurves``'s conditional
-``plotVoltage``).
-
-**Workflow steps, from the native ``Allrun``**::
-
-    runApplication blockMesh
-    runApplication cardiacFoam
-
-(the ``parallel`` branch is owner Q6, the OpenFOAM layer's job).
-
-Produces/consumes observed in a real run:
-``docs/solver-learning/cardiacfoam.md``, section "cable".
+The native ``Allrun``'s commands, ``blockMesh`` then ``cardiacFoam`` --
+no postprocess step (CV extraction is a manual script, never wired through
+``Allrun``/``Allrun.post``). Shares the ``dx`` axis with
+``cable1DRestitution`` (:mod:`.cable_axes`); everything else is a direct
+study key, including ``externalStimulus``'s catalogued leaves (owner
+decision: "its study states its own ``externalStimulus`` explicitly" --
+this tutorial derives no S1-S2 schedule). What each step reads/writes and
+the catalog facts behind these choices:
+``docs/solver-learning/cardiacfoam.md``, section CABLE.
 """
 
 from __future__ import annotations

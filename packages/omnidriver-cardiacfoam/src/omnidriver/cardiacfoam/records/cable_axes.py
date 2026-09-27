@@ -1,17 +1,7 @@
-"""The axis ``cable1DRestitution`` and ``cable1DCVConvergence`` share (both
-point at ``electrophysiologyProtocols/cableProtocol/monodomain1DCableCV``,
-tutorials-are-pointers plan §5e "5.2/5.3 ... same native case
-``cableProtocol``").
-
-The case's own ``system/blockMeshDict`` is a single ``hex (`` block
-``(100 1 1)`` over a 20 mm x 0.1 mm x 0.1 mm cable (scale ``0.001``): only
-the along-cable direction is ever refined, the cross-section stays a single
-cell at every resolution a committed study uses. Real runs (logged in
-``docs/solver-learning/cardiacfoam.md`` under "cable"): a ``dx`` of 0.1 mm
-against this cable gives ``(200 1 1)``, matching the old module's own
-``cell_counts_from_dx(dx_mm, (cable_length_mm,))`` call, minus the Python
-constant -- this reads the cable's length from the document itself
-(``block_mesh_resolution_axis``'s ``extents``), never restating it.
+"""The ``dx`` axis ``cable1DRestitution`` and ``cable1DCVConvergence`` share
+(both point at ``electrophysiologyProtocols/cableProtocol/
+monodomain1DCableCV``). Real-run evidence and the resolved cell counts:
+``docs/solver-learning/cardiacfoam.md``, section CABLE.
 """
 
 from __future__ import annotations
