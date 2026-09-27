@@ -39,7 +39,6 @@ It skips when ``listCellModelsVariables`` is not on ``PATH``, which is the
 normal state on a machine without OpenFOAM sourced. To run it::
 
     source /Volumes/OpenFOAM-v2412/etc/bashrc
-    cd applications/scripts/driverFoam
     uv run pytest openfoam_driver/tests/plugins/cardiacfoam/\\
 test_ionic_catalog_live_verification.py -q -s
 

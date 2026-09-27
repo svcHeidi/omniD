@@ -5,7 +5,7 @@ the **agent's own run path** and require the agent-produced outputs to match the
 committed ``.reference`` within the case's own tolerances. The committed
 reference is the ground truth — the hand-authored path is not re-run.
 
-- Agent run (strict): ``driverFoam run --strict --entry <name> --cases-root
+- Agent run (strict): ``omnidriver run --strict --entry <name> --cases-root
   <staged>`` — the agent resolves the registered spec, plans it (non-mutating),
   and executes the case's workflow (solver + post). No dictionary overrides are
   applied; dict mutation lives only in the sweep path.

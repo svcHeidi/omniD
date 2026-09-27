@@ -19,7 +19,7 @@ def test_materialize_case_honours_dx_for_spatial_solver(tmp_path):
         "omnidriver.cardiacfoam.cardiacfoam_plugin",
         reason=(
             "materialize_case()'s only real (non-refusing) implementation is "
-            "gated to org.cardiacfoam (compatibility.legacy_materialize_sweep_case); "
+            "gated to org.cardiacfoam (compatibility.absent_materialize_sweep_case); "
             "omnidriver-cardiacfoam is not installed"
         ),
     )

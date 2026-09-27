@@ -28,7 +28,7 @@
 """Baseline templates for system dictionaries (fvSolution, fvSchemes, controlDict).
 
 These templates provide a clean starting point for generating cases from scratch.
-Overrides can be applied to them using standard driverFoam mechanisms.
+Overrides can be applied to them using standard omnidriver mechanisms.
 
 Every template here is cardiacFoam's: the controlDict names `cardiacFoam` as
 its application, and the schemes/solution sets are keyed on the fields each

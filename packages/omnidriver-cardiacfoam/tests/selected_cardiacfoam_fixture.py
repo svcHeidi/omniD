@@ -22,8 +22,8 @@ from typing import Mapping
 SOURCE_ROOT_ENV = "OMNIDRIVER_CARDIACFOAM_SOURCE_ROOT"
 SOURCE_REVISION_ENV = "OMNIDRIVER_CARDIACFOAM_SOURCE_REVISION"
 OPENFOAM_BASHRC_ENV = "OPENFOAM_BASHRC"
-BACKEND_ENV = "DRIVERFOAM_CARDIACFOAM_BACKEND"
-BUILD_MANIFEST_ENV = "DRIVERFOAM_CARDIACFOAM_BUILD_MANIFEST"
+BACKEND_ENV = "OMNIDRIVER_CARDIACFOAM_BACKEND"
+BUILD_MANIFEST_ENV = "OMNIDRIVER_CARDIACFOAM_BUILD_MANIFEST"
 OUTPUT_ROOT_ENV = "OMNIDRIVER_NATIVE_OUTPUT_ROOT"
 CASE_MANIFEST_ENV = "OMNIDRIVER_CARDIACFOAM_CASE_MANIFEST"
 REGRESSION_SCOPE_ENV = "OMNIDRIVER_CARDIACFOAM_REGRESSION_SCOPE"
@@ -188,7 +188,7 @@ def selected_runtime_from_environment(
         raise FixtureInputError(f"{REGRESSION_SCOPE_ENV} must not be empty")
     configured_input = dict(runtime_environment)
     configured_input.update(
-        {key: value for key, value in env.items() if key.startswith("DRIVERFOAM_")}
+        {key: value for key, value in env.items() if key.startswith("OMNIDRIVER_")}
     )
     solver = shutil.which("cardiacFoam", path=configured_input.get("PATH"))
     if solver is None:

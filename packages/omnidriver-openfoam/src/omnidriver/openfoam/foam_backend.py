@@ -29,7 +29,7 @@ def _normalize_scope(scope: ScopeArg) -> tuple[str, ...]:
 
 
 def coerce_value(value: Any) -> Any:
-    """Convert a driverFOAM override value into a type foamlib will store.
+    """Convert an omnidriver override value into a type foamlib will store.
 
     Override values arrive from ``sweep.json`` and the CLI as strings, but
     foamlib is type-strict on write: it refuses a ``str`` that would be read

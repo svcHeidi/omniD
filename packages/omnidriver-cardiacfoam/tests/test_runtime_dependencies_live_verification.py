@@ -33,7 +33,6 @@ plan's verified-live findings say a sourced OpenFOAM install behaves?
 To run it::
 
     source /Volumes/OpenFOAM-v2412/etc/bashrc
-    cd applications/scripts/driverFoam
     uv run pytest openfoam_driver/tests/plugins/cardiacfoam/\\
 test_runtime_dependencies_live_verification.py -v
 

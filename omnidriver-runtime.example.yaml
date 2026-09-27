@@ -1,11 +1,11 @@
 # Copy this file to a user-local path and set:
-#   export DRIVERFOAM_RUNTIME_CONFIG=/absolute/path/driverfoam-runtime.yaml
+#   export OMNIDRIVER_RUNTIME_CONFIG=/absolute/path/omnidriver-runtime.yaml
 #
 # This file is machine configuration, not case/sweep configuration. It is
-# selected once for all driverFOAM runs on this host.
-# The same backend/root must be exported before running ./Allwmake:
-#   export DRIVERFOAM_CARDIACFOAM_BACKEND=full
-#   export DRIVERFOAM_CARDIACFOAM_SOLIDS4FOAM_ROOT=/absolute/path/to/solids4foam
+# selected once for all omnidriver runs on this host.
+#
+# Native ./Allwmake reads none of these variables -- it is a separate build
+# step, unaffected by this runtime selection.
 openfoam:
   bashrc: /Volumes/OpenFOAM-v2412/etc/bashrc
 

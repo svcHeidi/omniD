@@ -16,4 +16,4 @@ class NeutralEnvironmentPlugin(MinimalTestPlugin):
 
     @property
     def plugin_id(self) -> str:
-        return "org.driverfoam.test-neutral-environment"
+        return "org.omnidriver.test-neutral-environment"

@@ -29,7 +29,7 @@
 
 """Drift guard: catalogue ``source_refs`` must resolve to real files on disk.
 
-Every ``DictEntry`` in the driverFOAM catalogue carries a ``source_refs``
+Every ``DictEntry`` in the omnidriver catalogue carries a ``source_refs``
 tuple of relative paths that document *where in the C++ source tree* the
 dictionary key is actually read. This test verifies that every path in every
 ``source_refs`` tuple points to a file that actually exists in the monorepo.
@@ -38,7 +38,7 @@ Why this matters
 ----------------
 When a C++ file is renamed, refactored, or deleted, the catalogue entry that
 references it silently becomes stale. The old path stays in ``source_refs``
-pointing at nothing, and driverFOAM may open it to extract validation rules —
+pointing at nothing, and omnidriver may open it to extract validation rules —
 crashing at runtime instead of at CI time.
 
 This is precisely what happened with the ``eikonalSolver`` refactor: the old

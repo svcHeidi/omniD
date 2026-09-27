@@ -17,7 +17,7 @@ Adapters may provide their own context factories for convenience, and
 Environment and solver adapters implement this contract directly. See
 ``AGENT_GUIDE.md``, section "Plugin Guide -- Adding a New Solver".
 2026-09-14: this previously pointed at
-``.agents/skills/driverfoam-plugin-builder/SKILL.md``, a path that lived
+``.agents/skills/omnidriver-plugin-builder/SKILL.md``, a path that lived
 in the pre-migration cardiacFOAM tree and exists in no repository now.
 2026-09-20: the ``SolverPlugin`` bullet previously said "27 required
 members." That count went stale the moment :func:`_required_plugin_members`
@@ -1148,6 +1148,6 @@ def default_driver_context() -> DriverContext:
     context creation raises rather than inventing a solver context.
     """
 
-    from .compatibility import legacy_default_driver_context
+    from .compatibility import absent_default_driver_context
 
-    return legacy_default_driver_context()
+    return absent_default_driver_context()

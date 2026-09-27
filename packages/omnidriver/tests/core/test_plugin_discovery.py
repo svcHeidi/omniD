@@ -28,7 +28,7 @@ def test_a_colon_still_means_a_trusted_local_import() -> None:
     # StackIdentity has no singular id/source -- one per provider, on
     # StackIdentity.providers (a tuple of ProviderIdentity). A single-plugin
     # driver_context composes to a one-entry stack.
-    assert context.identity.providers[0].id == "org.driverfoam.test-minimal"
+    assert context.identity.providers[0].id == "org.omnidriver.test-minimal"
     assert context.identity.providers[0].source.startswith("trusted-import:")
 
 

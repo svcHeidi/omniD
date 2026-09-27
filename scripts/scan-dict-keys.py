@@ -26,7 +26,7 @@
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-"""Dict-keys drift report for the cardiacFoam driverFoam Python catalogue.
+"""Dict-keys drift report for the cardiacFoam omnidriver Python catalogue.
 
 Compares dictionary keys actually read by the C++ source tree against
 ``driver_path`` entries declared in ``dict_entries.py``.
@@ -268,7 +268,7 @@ def main() -> int:
         help=(
             "Fail on drift not covered by the reviewed allowlist, and fail "
             "when allowlist entries become unused. Note that "
-            "'driverFoam plan --strict' already runs this same check and "
+            "'omnidriver plan --strict' already runs this same check and "
             "reports it as plugin_dict_key_* diagnostics."
         ),
     )

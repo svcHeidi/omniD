@@ -27,10 +27,10 @@ from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
 
 def _gated_fallback_names() -> frozenset[str]:
-    """Every legacy_* whose source branches on the cardiac plugin id."""
+    """Every absent_* whose source branches on the cardiac plugin id."""
     names = set()
     for name in dir(compatibility):
-        if not name.startswith("legacy_"):
+        if not name.startswith("absent_"):
             continue
         func = getattr(compatibility, name)
         if not callable(func):

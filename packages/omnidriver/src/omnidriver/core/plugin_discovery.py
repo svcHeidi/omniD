@@ -38,7 +38,7 @@ def _scan_entry_points() -> tuple[Any, ...]:
     ``importlib.metadata.entry_points()`` re-reads every installed
     distribution's metadata on each call -- about 6 ms here. That was
     invisible while discovery only ran when ``--plugin`` was passed, but
-    ``compatibility.legacy_default_driver_context`` now resolves the implicit
+    ``compatibility.absent_default_driver_context`` now resolves the implicit
     default through this group, and the public edge calls it once per sweep
     case. Uncached, that took the test suite from 35 s to 13 min.
 
@@ -462,7 +462,7 @@ def default_discovered_context():
     """Build a fresh context for the implicitly-selected default stack.
 
     See :func:`_default_selection` for the selection rule and
-    ``compatibility.legacy_default_driver_context`` for why the public edge
+    ``compatibility.absent_default_driver_context`` for why the public edge
     needs one at all. Whichever providers :func:`_default_selection` selects
     (one solver-tier root plus its `requires:` closure, per its 2026-09-21
     Task 9 correction -- not necessarily every unambiguous adapter installed)

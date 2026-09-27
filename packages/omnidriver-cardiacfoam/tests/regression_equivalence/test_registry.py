@@ -1,4 +1,4 @@
-"""Registry guardrails for driverFOAM-owned regression-equivalence cases."""
+"""Registry guardrails for omnidriver-owned regression-equivalence cases."""
 from __future__ import annotations
 
 import re

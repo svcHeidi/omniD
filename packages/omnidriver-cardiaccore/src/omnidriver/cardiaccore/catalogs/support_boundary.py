@@ -78,5 +78,5 @@ SUPPORT_BOUNDARY = {
         "cardiaccore-pig-transmural-purkinje",
     ),
     "pending": ("Automatic workflow integration of seed proposal, coverage, and coordinate-ring operations", "CObiveco VTU-to-legacy-VTK conversion with vector-field compatibility", "Workflow step for the refine1Dgraph/1DgraphToFoam graph hand-off, with -maxEdgeLength scaled from the mesh length unit"),
-    "retired": "Standalone driverFOAM and agent pipeline/catalog interfaces are not adapter authorities.",
+    "retired": "Standalone omnidriver and agent pipeline/catalog interfaces are not adapter authorities.",
 }

@@ -94,7 +94,7 @@ def test_plain_case_uses_the_selected_declared_context(tmp_path: Path) -> None:
     # report.plugin is a StackIdentity.to_json() -- one ProviderIdentity per
     # provider, not a single flat id/version. A single-provider driver_context
     # composes to a one-entry stack, so the sole provider is at index 0.
-    assert report.plugin["providers"][0]["id"] == "org.driverfoam.test-minimal"
+    assert report.plugin["providers"][0]["id"] == "org.omnidriver.test-minimal"
     assert report.run_document is not None
     assert report.run_document.plugin == report.plugin
 

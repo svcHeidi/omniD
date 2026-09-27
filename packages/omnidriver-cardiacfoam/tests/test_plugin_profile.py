@@ -71,16 +71,16 @@ def test_cardiac_runtime_exports_one_validated_solids4foam_root(tmp_path: Path) 
     solver = _write_complete_full_manifest(manifest, tmp_path, root)
 
     env, error = configure_runtime_environment({
-        "DRIVERFOAM_CARDIACFOAM_BACKEND": "full",
-        "DRIVERFOAM_CARDIACFOAM_SOLIDS4FOAM_ROOT": str(root),
-        "DRIVERFOAM_CARDIACFOAM_BUILD_MANIFEST": str(manifest),
+        "OMNIDRIVER_CARDIACFOAM_BACKEND": "full",
+        "OMNIDRIVER_CARDIACFOAM_SOLIDS4FOAM_ROOT": str(root),
+        "OMNIDRIVER_CARDIACFOAM_BUILD_MANIFEST": str(manifest),
         "WM_PROJECT_DIR": str(tmp_path),
         "PATH": str(solver.parent),
     })
 
     assert error is None
     assert env["SOLIDS4FOAM_INST_DIR"] == str(root.resolve())
-    assert env["DRIVERFOAM_CARDIACFOAM_SOLIDS4FOAM_ROOT"] == str(root.resolve())
+    assert env["OMNIDRIVER_CARDIACFOAM_SOLIDS4FOAM_ROOT"] == str(root.resolve())
 
 
 def test_infer_backend_from_linked_libraries() -> None:
@@ -115,13 +115,13 @@ def test_full_runtime_does_not_require_solids4foam_source_provenance(
     )
 
     env, error = configure_runtime_environment({
-        "DRIVERFOAM_CARDIACFOAM_BUILD_MANIFEST": str(manifest),
+        "OMNIDRIVER_CARDIACFOAM_BUILD_MANIFEST": str(manifest),
         "WM_PROJECT_DIR": str(tmp_path),
         "PATH": str(solver.parent),
     })
 
     assert error is None
-    assert env["DRIVERFOAM_CARDIACFOAM_BACKEND"] == "full"
+    assert env["OMNIDRIVER_CARDIACFOAM_BACKEND"] == "full"
     assert "SOLIDS4FOAM_INST_DIR" not in env
 
 
@@ -182,8 +182,8 @@ def test_build_manifest_self_generates_from_compiled_artifacts(
     assert not manifest.exists()
 
     env, error = configure_runtime_environment({
-        "DRIVERFOAM_CARDIACFOAM_BACKEND": "lightweight",
-        "DRIVERFOAM_CARDIACFOAM_BUILD_MANIFEST": str(manifest),
+        "OMNIDRIVER_CARDIACFOAM_BACKEND": "lightweight",
+        "OMNIDRIVER_CARDIACFOAM_BUILD_MANIFEST": str(manifest),
         "WM_PROJECT_DIR": str(tmp_path),
         "PATH": str(solver.parent),
         "FOAM_USER_APPBIN": str(appbin),
@@ -223,8 +223,8 @@ def test_build_manifest_self_heals_when_stale(tmp_path: Path, monkeypatch: pytes
     monkeypatch.setattr(runtime_profile, "_linked_library_names", lambda binary: ("libphysicsModel.dylib",))
 
     env, error = configure_runtime_environment({
-        "DRIVERFOAM_CARDIACFOAM_BACKEND": "lightweight",
-        "DRIVERFOAM_CARDIACFOAM_BUILD_MANIFEST": str(manifest),
+        "OMNIDRIVER_CARDIACFOAM_BACKEND": "lightweight",
+        "OMNIDRIVER_CARDIACFOAM_BUILD_MANIFEST": str(manifest),
         "WM_PROJECT_DIR": str(tmp_path),
         "PATH": str(solver.parent),
         "FOAM_USER_APPBIN": str(appbin),
@@ -248,7 +248,7 @@ def test_cardiac_runtime_file_selects_backend_and_bashrc(tmp_path: Path) -> None
         path.write_text("// header\n")
     manifest = tmp_path / "cardiacFoam.build.json"
     solver = _write_complete_full_manifest(manifest, tmp_path, root)
-    config = tmp_path / "driverfoam-runtime.yaml"
+    config = tmp_path / "omnidriver-runtime.yaml"
     config.write_text(
         "openfoam:\n  bashrc: /tmp/openfoam/etc/bashrc\n"
         "plugins:\n  org.cardiacfoam:\n"
@@ -257,14 +257,14 @@ def test_cardiac_runtime_file_selects_backend_and_bashrc(tmp_path: Path) -> None
     )
 
     env, error = configure_runtime_environment({
-        "DRIVERFOAM_RUNTIME_CONFIG": str(config),
+        "OMNIDRIVER_RUNTIME_CONFIG": str(config),
         "WM_PROJECT_DIR": str(tmp_path),
         "PATH": str(solver.parent),
     })
 
     assert error is None
-    assert env["DRIVERFOAM_CARDIACFOAM_BACKEND"] == "full"
+    assert env["OMNIDRIVER_CARDIACFOAM_BACKEND"] == "full"
     assert env["SOLIDS4FOAM_INST_DIR"] == str(root.resolve())
     assert runtime_profile.configured_openfoam_bashrc({
-        "DRIVERFOAM_RUNTIME_CONFIG": str(config),
+        "OMNIDRIVER_RUNTIME_CONFIG": str(config),
     }) == "/tmp/openfoam/etc/bashrc"

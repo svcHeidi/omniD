@@ -94,7 +94,7 @@ runtime:
     bashrc_env: OPENFOAM_BASHRC
   backend:
     required: true
-    selection_env: DRIVERFOAM_CARDIACFOAM_BACKEND
+    selection_env: OMNIDRIVER_CARDIACFOAM_BACKEND
     common_libraries:
       - libelectroModels
       - libionicModels

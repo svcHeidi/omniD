@@ -72,7 +72,7 @@ _SRC_ROOT = pathlib.Path(omnidriver.cardiacfoam.__file__).resolve().parent
 
 # The name that resolves an adapter from the ambient registry, and the core
 # helper that does the same thing when handed None.
-_FORBIDDEN = frozenset({"default_driver_context", "legacy_default_driver_context"})
+_FORBIDDEN = frozenset({"default_driver_context", "absent_default_driver_context"})
 
 # No exemptions. This package has no public edge of its own: callers who want a
 # different adapter select it before reaching here, and callers who reach here

@@ -1,6 +1,6 @@
 """cardiacCore gains --apply by composition, not by writing an implementation.
 
-Six one-line delegations were never written, so `legacy_apply_overrides`
+Six one-line delegations were never written, so `absent_apply_overrides`
 raised and strict applying was refused for this adapter entirely -- while the
 package maintained parallel override machinery reachable only through
 `TutorialSpec.apply_case`.

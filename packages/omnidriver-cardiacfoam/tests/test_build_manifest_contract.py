@@ -33,8 +33,8 @@ def complete_manifest(tmp_path: Path):
     }
     manifest = tmp_path / "build.json"
     env = {
-        "DRIVERFOAM_CARDIACFOAM_BACKEND": "lightweight",
-        "DRIVERFOAM_CARDIACFOAM_BUILD_MANIFEST": str(manifest),
+        "OMNIDRIVER_CARDIACFOAM_BACKEND": "lightweight",
+        "OMNIDRIVER_CARDIACFOAM_BUILD_MANIFEST": str(manifest),
         "WM_PROJECT_DIR": str(tmp_path),
         "PATH": str(tmp_path),
     }
@@ -50,7 +50,7 @@ def _configure(fixture):
 def test_valid_complete_manifest(complete_manifest):
     env, error = _configure(complete_manifest)
     assert error is None
-    assert env["DRIVERFOAM_CARDIACFOAM_BUILD_MANIFEST"] == str(complete_manifest[1])
+    assert env["OMNIDRIVER_CARDIACFOAM_BUILD_MANIFEST"] == str(complete_manifest[1])
 
 
 @pytest.mark.parametrize("omitted", [False, True])
@@ -155,7 +155,7 @@ def test_wrong_solids4foam_root(complete_manifest, tmp_path):
         library.write_bytes(name.encode())
         payload["artifacts"].append({"name": name, "path": str(library),
                                      "sha256": hashlib.sha256(library.read_bytes()).hexdigest()})
-    env["DRIVERFOAM_CARDIACFOAM_BACKEND"] = "full"
-    env["DRIVERFOAM_CARDIACFOAM_SOLIDS4FOAM_ROOT"] = str(solids)
+    env["OMNIDRIVER_CARDIACFOAM_BACKEND"] = "full"
+    env["OMNIDRIVER_CARDIACFOAM_SOLIDS4FOAM_ROOT"] = str(solids)
     _, error = _configure(complete_manifest)
     assert "solids4foam root is missing or does not match" in error

@@ -638,7 +638,7 @@ def _stage_entry_case(
             if (relative_directory / name).as_posix() in excluded_relpaths:
                 ignored.add(name)
                 continue
-            # A previous driverFOAM case can have a descriptive directory name
+            # A previous omnidriver case can have a descriptive directory name
             # (for example ``gauss_linear_40_*``) rather than a numeric
             # generated numeric-time name. Its workflow markers are the reliable
             # boundary between authored tutorial content and generated case

@@ -1,13 +1,13 @@
 cff-version: 1.2.0
-message: "If you use driverFOAM in your research, please cite the following publication:"
+message: "If you use omnidriver in your research, please cite the following publication:"
 authors:
   - family-names: "Contributors"
     given-names: "cardiacFoam"
-title: "driverFOAM: Typed Planning, Validation, and Reproducible Workflow Orchestration for OpenFOAM Simulations"
+title: "omnidriver: Typed Planning, Validation, and Reproducible Workflow Orchestration for OpenFOAM Simulations"
 version: "0.1.0"
 date-released: "2026-08-25"
 license: "GPL-3.0-or-later"
-repository: "https://github.com/TODO/driverFOAM"
+repository: "https://github.com/svcHeidi/omniD"
 keywords:
   - OpenFOAM
   - orchestration
@@ -18,7 +18,7 @@ preferred-citation:
   authors:
     - family-names: "Contributors"
       given-names: "cardiacFoam"
-  title: "driverFOAM: Typed Planning, Validation, and Reproducible Workflow Orchestration for OpenFOAM Simulations"
+  title: "omnidriver: Typed Planning, Validation, and Reproducible Workflow Orchestration for OpenFOAM Simulations"
   journal: "TODO"
   year: 2026
   doi: "10.0000/todo"

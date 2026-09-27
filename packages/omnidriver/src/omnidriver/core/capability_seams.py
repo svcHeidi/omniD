@@ -237,7 +237,7 @@ def render(seams: list[Seam]) -> str:
         "`tutorials`'s `get_tutorial_displays`) answer a neutral",
         "value inline, in the adapter itself, with no named fallback function and",
         "no entry in `_instrumented` fallback accounting -- `phases` on the same",
-        "`dictionaries` capability is the contrast: it names `legacy_phases`.",
+        "`dictionaries` capability is the contrast: it names `absent_phases`.",
         "",
         "| capability | protocol | adapts | consumed by | fallback | status |",
         "|---|---|---|---|---|---|",

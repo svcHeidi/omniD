@@ -4,13 +4,13 @@ This is the opposite direction to ``openfoam/dict_keys_scanner.py``. That one
 asks *what keys does the C++ accept?* -- information that lives only in C++
 source, because a defaulted read nobody sets appears in no dictionary at all.
 This one asks *what keys did the author actually write?* -- information that
-lives only in the case file, because driverFOAM's builder only ever writes
+lives only in the case file, because omnidriver's builder only ever writes
 keys it already knows and the solver only ever asks "is key X present?".
 
 Nothing else closes this gap. OpenFOAM ignores unrecognised keys by design, so
 a misspelled optional key is silently dropped: misspelling
 ``activeTensionModel`` in singleCell yields exit 0, a clean solver log, and an
-output set quietly missing the active-tension trace. driverFOAM's artifact
+output set quietly missing the active-tension trace. omnidriver's artifact
 reconciliation cannot catch it either -- it reads the same misspelled file, so
 it never expects the missing artifact and the two agree on the wrong thing.
 

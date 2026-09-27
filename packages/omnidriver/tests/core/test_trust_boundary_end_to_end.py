@@ -196,7 +196,7 @@ def _hand_authored_document(
         "configurationSource": "document",
         "launch": launch if launch is not None else {
             "caseRoot": str(case_root),
-            "outputDir": str(case_root / "driverfoam-output"),
+            "outputDir": str(case_root / "omnidriver-output"),
         },
         "workflowDag": {
             "schema_version": "1",
@@ -724,7 +724,7 @@ def test_non_mapping_config_phase_blocks_execution_at_ingestion() -> None:
     `specs/validation.py::_non_mapping_phase_errors`, a non-dict phase
     (`{"anatomy": "not-an-object"}`) reached `_flatten_context` and raised an
     uncaught `AttributeError` through the real
-    `driverFoam run --run-document` path -- a traceback instead of the
+    `omnidriver run --run-document` path -- a traceback instead of the
     diagnostic SECURITY.md promises. This is the regression gate for that
     fix: the CLI must exit non-zero with a parseable JSON payload.
     """
@@ -843,7 +843,7 @@ def test_override_values_containing_a_coded_entry_are_rejected() -> None:
     now rejects any override value containing `#`, `;`, or a newline before
     it is ever written to a case dictionary file. See SECURITY.md.
 
-    Real entry point: `driverFoam step --run-document <doc> --step <id> --apply
+    Real entry point: `omnidriver step --run-document <doc> --step <id> --apply
     <overrides.json>`, which routes through specs.apply_overrides.
     """
     with tempfile.TemporaryDirectory() as temp_dir:

@@ -88,7 +88,7 @@ def _adapter_package_roots() -> dict[str, Path]:
 # asserts the rule outright.
 #
 # The last two entries were core/compatibility.py's
-# legacy_default_driver_context and legacy_generic_case_mutation, both of the
+# absent_default_driver_context and legacy_generic_case_mutation, both of the
 # same shape: the historical public API lets a caller omit a plugin/context
 # entirely, and core answered by importing cardiacFoam. Both were described
 # here as "permanent compatibility edge (not debt)". They were not permanent.

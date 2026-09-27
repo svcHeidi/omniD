@@ -37,7 +37,7 @@
 
 The assertion strategy: derive the build-manifest path from `FOAM_USER_LIBBIN`
 (see `configure_runtime_environment`'s fallback for `_MANIFEST_ENV`) instead
-of setting `DRIVERFOAM_CARDIACFOAM_BUILD_MANIFEST` directly, so the resolved
+of setting `OMNIDRIVER_CARDIACFOAM_BUILD_MANIFEST` directly, so the resolved
 manifest path is *output* of `configure_runtime_environment`, absent from the
 merely-sourced environment `get_loaded_environment` alone would return. If
 `.load()` stopped at sourcing (the bug), that key would never appear.
@@ -102,7 +102,7 @@ def _write_valid_lightweight_install(tmp_path: Path) -> Path:
 def _configured_env(tmp_path: Path) -> dict[str, str]:
     """The env `configure_runtime_environment` sees, matching the fixture."""
     return {
-        "DRIVERFOAM_CARDIACFOAM_BACKEND": "lightweight",
+        "OMNIDRIVER_CARDIACFOAM_BACKEND": "lightweight",
         "WM_PROJECT_DIR": str(tmp_path),
         "FOAM_USER_LIBBIN": str(tmp_path),
         "PATH": str(tmp_path),
@@ -112,13 +112,13 @@ def _configured_env(tmp_path: Path) -> dict[str, str]:
 def test_configure_runtime_environment_derives_the_manifest_path_from_foam_user_libbin(tmp_path):
     """Sanity check on the fixture itself, isolated from composition/sourcing:
     `configure_runtime_environment` alone must succeed and must add
-    `DRIVERFOAM_CARDIACFOAM_BUILD_MANIFEST`, not merely leave it unset."""
+    `OMNIDRIVER_CARDIACFOAM_BUILD_MANIFEST`, not merely leave it unset."""
     manifest_path = _write_valid_lightweight_install(tmp_path)
 
     configured, error = configure_runtime_environment(_configured_env(tmp_path))
 
     assert error is None
-    assert configured["DRIVERFOAM_CARDIACFOAM_BUILD_MANIFEST"] == str(manifest_path)
+    assert configured["OMNIDRIVER_CARDIACFOAM_BUILD_MANIFEST"] == str(manifest_path)
 
 
 def test_composed_load_threads_the_sourced_environment_through_configure(tmp_path, monkeypatch):
@@ -143,8 +143,8 @@ def test_composed_load_threads_the_sourced_environment_through_configure(tmp_pat
             monkeypatch.setenv("PATH", f"{value}{os.pathsep}{system_path}")
         else:
             monkeypatch.setenv(key, value)
-    monkeypatch.delenv("DRIVERFOAM_RUNTIME_CONFIG", raising=False)
-    monkeypatch.delenv("DRIVERFOAM_CARDIACFOAM_BUILD_MANIFEST", raising=False)
+    monkeypatch.delenv("OMNIDRIVER_RUNTIME_CONFIG", raising=False)
+    monkeypatch.delenv("OMNIDRIVER_CARDIACFOAM_BUILD_MANIFEST", raising=False)
 
     ctx = _driver_context(
         OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(),
@@ -159,5 +159,5 @@ def test_composed_load_threads_the_sourced_environment_through_configure(tmp_pat
     # already in the process environment); present only because `.load()`
     # also ran the chain-composed `get_configured_environment`, which is
     # `CardiacFoamPlugin`'s real `configure_runtime_environment` call.
-    assert loaded.get("DRIVERFOAM_CARDIACFOAM_BUILD_MANIFEST") == str(manifest_path)
-    assert loaded.get("DRIVERFOAM_CARDIACFOAM_BACKEND") == "lightweight"
+    assert loaded.get("OMNIDRIVER_CARDIACFOAM_BUILD_MANIFEST") == str(manifest_path)
+    assert loaded.get("OMNIDRIVER_CARDIACFOAM_BACKEND") == "lightweight"

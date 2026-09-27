@@ -72,4 +72,4 @@ def test_the_shape_check_names_what_is_missing() -> None:
 
 def test_neutral_plugin_builds_an_explicit_context() -> None:
     context = driver_context(MinimalTestPlugin(), source="test:plugin-api")
-    assert context.identity.providers[0].id == "org.driverfoam.test-minimal"
+    assert context.identity.providers[0].id == "org.omnidriver.test-minimal"

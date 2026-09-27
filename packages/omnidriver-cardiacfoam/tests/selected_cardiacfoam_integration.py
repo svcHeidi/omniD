@@ -70,7 +70,7 @@ def load_integration_commands(runtime: SelectedRuntime) -> IntegrationCommands:
 def run_selected_integration(
     runtime: SelectedRuntime, commands: IntegrationCommands
 ) -> IntegrationEvidence:
-    """Stage inputs, invoke driverFOAM, then invoke the solver's own checker.
+    """Stage inputs, invoke omnidriver, then invoke the solver's own checker.
 
     This is a test harness boundary, not a second process runner: retries,
     transaction policy, and solver timeout semantics remain in the driver

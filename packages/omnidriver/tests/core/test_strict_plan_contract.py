@@ -1,6 +1,6 @@
 """``plan --strict`` must always answer in its own contract.
 
-Every failure mode driverFOAM knows about is reported as a JSON document with
+Every failure mode omnidriver knows about is reported as a JSON document with
 ``status: "failed"`` and structured diagnostics -- that document IS the
 interface an agent consumes. A failure that escapes as an unhandled exception
 gives the caller a traceback on stderr and nothing on stdout, so

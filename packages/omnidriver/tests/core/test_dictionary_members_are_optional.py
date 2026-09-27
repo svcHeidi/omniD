@@ -67,4 +67,4 @@ def test_no_dictionary_entries_digests_exactly_as_an_empty_stub_did():
 
 def test_a_stack_with_no_dictionary_implementer_records_the_capability_unclaimed():
     assert driver_context(MinimalTestPlugin(), source="test").identity.resolutions["dictionaries"] == provider_stack.UNCLAIMED
-    assert driver_context(_EmptyStubs(), source="test").identity.resolutions["dictionaries"] == "org.driverfoam.test-minimal"
+    assert driver_context(_EmptyStubs(), source="test").identity.resolutions["dictionaries"] == "org.omnidriver.test-minimal"

@@ -54,8 +54,8 @@ if TYPE_CHECKING:
 class CardiacFoamPlugin:
     """
     Plugin implementation for cardiacFoam.
-    Provides domain-specific dictionaries, tutorials, and capabilities 
-    to the generic driverFOAM engine.
+    Provides domain-specific dictionaries, tutorials, and capabilities
+    to the generic omnidriver engine.
     """
     
     @property
@@ -307,7 +307,7 @@ class CardiacFoamPlugin:
     def get_config_resolution_description(self) -> str:
         """Which files resolve into a valid RunDocument config, in one sentence.
 
-        Moved here from core's legacy_describe_config_resolution fallback, which
+        Moved here from core's absent_describe_config_resolution fallback, which
         hardcoded this string behind a plugin_id check. Core owning a sentence
         about electroProperties was the last reachable cardiac gate.
         """

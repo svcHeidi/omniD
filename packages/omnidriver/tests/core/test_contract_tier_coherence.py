@@ -32,7 +32,7 @@ def test_no_required_member_has_a_fallback():
     required = capability_seams.members_by_tier()["required"]
     offenders = sorted(
         name for name in required
-        if hasattr(compatibility, f"legacy_{name.removeprefix('get_')}")
+        if hasattr(compatibility, f"absent_{name.removeprefix('get_')}")
     )
     assert offenders == [], (
         "these members are required, so their fallbacks are unreachable: "

@@ -19,8 +19,8 @@ The implementation must provide an explicit test selection/opt-in mechanism. Nat
 | `OMNIDRIVER_CARDIACFOAM_SOURCE_ROOT` | Solver checkout containing `src/`, `tutorials/`, and its Git metadata | Absolute existing path; `git rev-parse HEAD` matches `OMNIDRIVER_CARDIACFOAM_SOURCE_REVISION`. |
 | `OMNIDRIVER_CARDIACFOAM_SOURCE_REVISION` | Accepted solver commit | Full 40-character commit ID. The fixture requires a clean `src/` diff against this commit. Tutorial/characterization drift is permitted, but its complete status and diff digest are recorded. |
 | `OPENFOAM_BASHRC` | OpenFOAM environment entrypoint | Existing absolute `etc/bashrc`; the child process reports `WM_PROJECT_DIR`, `WM_PROJECT_VERSION`, and `WM_OPTIONS`. |
-| `DRIVERFOAM_CARDIACFOAM_BACKEND` | Declared compiled capability | Validated against the cardiac runtime profile and the selected solver/build evidence. |
-| `DRIVERFOAM_CARDIACFOAM_BUILD_MANIFEST` | Solver-library evidence | Existing manifest accepted by `CardiacFoamPlugin.configure_execution_environment`. |
+| `OMNIDRIVER_CARDIACFOAM_BACKEND` | Declared compiled capability | Validated against the cardiac runtime profile and the selected solver/build evidence. |
+| `OMNIDRIVER_CARDIACFOAM_BUILD_MANIFEST` | Solver-library evidence | Existing manifest accepted by `CardiacFoamPlugin.configure_execution_environment`. |
 | `OMNIDRIVER_NATIVE_OUTPUT_ROOT` | Disposable output parent | Existing explicit directory outside both source and OmniDriver checkouts; each test creates a unique child. |
 
 ## Input selection policy

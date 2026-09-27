@@ -2,7 +2,7 @@
 
 Why this exists
 ---------------
-Older cardiacFoam tutorial folders may not provide ``Allrun``. driverFOAM
+Older cardiacFoam tutorial folders may not provide ``Allrun``. omnidriver
 historically discovered them from ``electroProperties*`` and considered them
 runnable when the matching physics and standard OpenFOAM system dictionaries
 were present.

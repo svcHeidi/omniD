@@ -1,9 +1,11 @@
-"""Named Plan-1 compatibility boundaries.
+"""Named fallback answers for optional plugin members.
 
-These adapters intentionally preserve observable behavior.  They produce no
-warnings and make no policy changes.  Keeping them named and documented stops
-legacy decisions from being rediscovered deep inside solver-neutral code and
-gives Plan 2 explicit seams at which behaviour may later change.
+Each ``absent_*`` function below is the answer core gives when the active
+plugin stack does not implement one particular optional hook. These adapters
+intentionally preserve observable behavior. They produce no warnings and
+make no policy changes. Keeping them named and documented stops these
+decisions from being rediscovered deep inside solver-neutral code, and gives
+an explicit seam at which each one's behaviour may later change.
 """
 
 from __future__ import annotations
@@ -23,7 +25,7 @@ _fallback_call_log: contextvars.ContextVar[list[str] | None] = contextvars.Conte
 
 @contextmanager
 def track_fallback_calls():
-    """Yield a list that fills with the name of every legacy_* fallback
+    """Yield a list that fills with the name of every ``absent_*`` fallback
     invoked inside the ``with`` block, in call order. Empty means none fired
     -- the P2.4 assertion an explicit non-cardiac v2 context should satisfy."""
     token = _fallback_call_log.set([])
@@ -44,7 +46,7 @@ def _instrumented(func):
 
 
 @_instrumented
-def legacy_default_driver_context() -> "DriverContext":
+def absent_default_driver_context() -> "DriverContext":
     """Resolve the plugin to use when a public caller supplies no context.
 
     Why: public CLI and Python callers have always been able to omit the
@@ -79,11 +81,11 @@ def resolve_public_driver_context(
 ) -> "DriverContext":
     """Resolve the unchanged optional-context public API convention once."""
 
-    return driver_context if driver_context is not None else legacy_default_driver_context()
+    return driver_context if driver_context is not None else absent_default_driver_context()
 
 
 @_instrumented
-def legacy_case_marker(plugin, case_root) -> bool:
+def absent_case_marker(plugin, case_root) -> bool:
     """Plugins predating has_case_marker(). A plugin that does not implement
     the hook gets ``False`` and must declare its own filesystem marker."""
 
@@ -92,9 +94,9 @@ def legacy_case_marker(plugin, case_root) -> bool:
 
 
 @_instrumented
-def legacy_case_runnable_without_workflow(plugin, case_root) -> bool:
+def absent_case_runnable_without_workflow(plugin, case_root) -> bool:
     """Plugins predating is_case_runnable_without_workflow(). A plugin that
-    does not implement the hook gets ``False``. Adapter-declared entrypoints
+    does not implement it gets ``False``. Adapter-declared entrypoints
     are checked separately by the registry."""
 
     del plugin, case_root
@@ -102,10 +104,10 @@ def legacy_case_runnable_without_workflow(plugin, case_root) -> bool:
 
 
 @_instrumented
-def legacy_run_document_config(plugin, spec):
+def absent_run_document_config(plugin, spec):
     """Plugins predating build_run_document_config(). A plugin that does not
-    implement the hook gets an empty config and no diagnostics -- it
-    constrains nothing, exactly as :func:`legacy_run_document_config_schema`
+    implement it gets an empty config and no diagnostics -- it
+    constrains nothing, exactly as :func:`absent_run_document_config_schema`
     hands it a fully open schema."""
 
     del plugin, spec
@@ -113,19 +115,19 @@ def legacy_run_document_config(plugin, spec):
 
 
 @_instrumented
-def legacy_run_document_config_schema(plugin) -> dict:
-    """v1 plugins predate get_run_document_config_schema(). A plugin that does
-    not implement the hook gets a fully open schema (no constraint) and must
-    declare its own by migrating to v2."""
+def absent_run_document_config_schema(plugin) -> dict:
+    """get_run_document_config_schema() is optional. A plugin that does
+    not implement it gets a fully open schema (no constraint) and must
+    declare its own by implementing get_run_document_config_schema()."""
 
     del plugin
     return {"type": "object", "additionalProperties": True}
 
 
 @_instrumented
-def legacy_nondimensional_case(plugin, spec) -> bool:
+def absent_nondimensional_case(plugin, spec) -> bool:
     """Plugins predating is_nondimensional_case(). A plugin that does not
-    implement the hook gets ``False``: its meshes are dimensional until it
+    implement it gets ``False``: its meshes are dimensional until it
     says otherwise, which is the conservative answer -- it keeps mesh-scale
     diagnostics ON rather than silently exempting a case from them."""
 
@@ -134,7 +136,7 @@ def legacy_nondimensional_case(plugin, spec) -> bool:
 
 
 @_instrumented
-def legacy_base_mesh_geometry_diagnostics(case_root) -> tuple:
+def absent_base_mesh_geometry_diagnostics(case_root) -> tuple:
     """Plugins predating get_base_mesh_geometry_diagnostics().
 
     A plugin that predates the mesh-diagnostics hook contributes no base
@@ -146,7 +148,7 @@ def legacy_base_mesh_geometry_diagnostics(case_root) -> tuple:
 
 
 @_instrumented
-def legacy_environment_diagnostics(
+def absent_environment_diagnostics(
     workflow_dag, *, env=None, environment_source=None, driver_context=None,
 ) -> tuple:
     """Plugins predating get_environment_diagnostics().
@@ -167,7 +169,7 @@ def legacy_environment_diagnostics(
 
 
 @_instrumented
-def legacy_configured_environment(env, driver_context) -> dict:
+def absent_configured_environment(env, driver_context) -> dict:
     """Plugins predating get_configured_environment(). sweep_runner.py has
     no adapter-specific environment contract to apply, so the mapping is
     preserved unchanged."""
@@ -177,9 +179,9 @@ def legacy_configured_environment(env, driver_context) -> dict:
 
 
 @_instrumented
-def legacy_load_environment(*, environment_source, driver_context) -> dict:
-    """Plugins predating get_loaded_environment() use the current process
-    environment unchanged. This keeps legacy callers usable in a core-only
+def absent_load_environment(*, environment_source, driver_context) -> dict:
+    """A plugin without get_loaded_environment() uses the current process
+    environment unchanged. This keeps such callers usable in a core-only
     installation without assuming a shell-profile format."""
 
     del environment_source, driver_context
@@ -189,7 +191,7 @@ def legacy_load_environment(*, environment_source, driver_context) -> dict:
 
 
 @_instrumented
-def legacy_apply_overrides(
+def absent_apply_overrides(
     overrides, *, case_root, driver_context, execution_env=None,
 ) -> tuple[dict, ...]:
     """Plugins predating apply_overrides() cannot apply format-specific
@@ -218,7 +220,7 @@ def legacy_apply_overrides(
 
 
 @_instrumented
-def legacy_override_target_paths(overrides, *, case_root, driver_context) -> tuple:
+def absent_override_target_paths(overrides, *, case_root, driver_context) -> tuple:
     """An adapter without a mutator cannot declare mutation targets."""
 
     del overrides, case_root, driver_context
@@ -228,7 +230,7 @@ def legacy_override_target_paths(overrides, *, case_root, driver_context) -> tup
 
 
 @_instrumented
-def legacy_inspect_effective_configuration(
+def absent_inspect_effective_configuration(
     *, case_root, driver_context, execution_env=None,
 ) -> tuple[dict, ...]:
     """A plugin without an inspection hook contributes no fabricated evidence."""
@@ -237,7 +239,7 @@ def legacy_inspect_effective_configuration(
 
 
 @_instrumented
-def legacy_function_object_field_diagnostics(case_root, *, samplable) -> tuple:
+def absent_function_object_field_diagnostics(case_root, *, samplable) -> tuple:
     """Plugins predating the function-object hook emit no format-specific
     diagnostics."""
 
@@ -246,7 +248,7 @@ def legacy_function_object_field_diagnostics(case_root, *, samplable) -> tuple:
 
 
 @_instrumented
-def legacy_case_dict_key_diagnostics(case_root, *, catalogued_paths, dict_relpaths) -> tuple:
+def absent_case_dict_key_diagnostics(case_root, *, catalogued_paths, dict_relpaths) -> tuple:
     """Plugins predating the dictionary-key hook emit no format-specific
     diagnostics."""
 
@@ -255,7 +257,7 @@ def legacy_case_dict_key_diagnostics(case_root, *, catalogued_paths, dict_relpat
 
 
 @_instrumented
-def legacy_dict_key_scanner():
+def absent_dict_key_scanner():
     """Plugins predating a C++ dictionary-key scanner hook emit an empty
     report. Format-specific source scanning belongs to the adapter.
 
@@ -289,7 +291,7 @@ def legacy_dict_key_scanner():
 
 
 @_instrumented
-def legacy_route_sweep_case(plugin, *, base, resolved_axis_values, driver_context):
+def absent_route_sweep_case(plugin, *, base, resolved_axis_values, driver_context):
     """Plugins predating route_sweep_case_values().
 
     Unlike every other fallback here, a neutral empty return is not available:
@@ -314,9 +316,9 @@ def legacy_route_sweep_case(plugin, *, base, resolved_axis_values, driver_contex
 
 
 @_instrumented
-def legacy_materialize_sweep_case(plugin, *, case_dir, routed) -> None:
+def absent_materialize_sweep_case(plugin, *, case_dir, routed) -> None:
     """Plugins predating materialize_sweep_case(). Refuses for the same
-    reason as :func:`legacy_route_sweep_case`.
+    reason as :func:`absent_route_sweep_case`.
 
     This refusal is intentional. A missing materializer cannot be replaced by
     another adapter's writer. The historical defect that motivated this seam
@@ -335,19 +337,19 @@ def legacy_materialize_sweep_case(plugin, *, case_dir, routed) -> None:
 
 
 @_instrumented
-def legacy_solver_commands(plugin) -> frozenset[str]:
-    """v1 plugins predate get_solver_commands(). A plugin that does not
-    implement the hook gets none authorized and must declare its commands by
-    migrating to v2."""
+def absent_solver_commands(plugin) -> frozenset[str]:
+    """get_solver_commands() is optional. A plugin that does not
+    implement it gets none authorized and must declare its commands by
+    implementing get_solver_commands()."""
 
     del plugin
     return frozenset()
 
 
 @_instrumented
-def legacy_auxiliary_commands(plugin) -> frozenset[str]:
-    """v1 plugins predate get_auxiliary_commands(). Same rule as
-    :func:`legacy_solver_commands`: a plugin that does not implement the hook
+def absent_auxiliary_commands(plugin) -> frozenset[str]:
+    """get_auxiliary_commands() is optional. Same rule as
+    :func:`absent_solver_commands`: a plugin that does not implement it
     gets no non-solver commands authorized."""
 
     del plugin
@@ -355,7 +357,7 @@ def legacy_auxiliary_commands(plugin) -> frozenset[str]:
 
 
 @_instrumented
-def legacy_environment_commands(plugin) -> frozenset[str]:
+def absent_environment_commands(plugin) -> frozenset[str]:
     """Plugins without an environment declaration authorize no such commands."""
 
     del plugin
@@ -363,7 +365,7 @@ def legacy_environment_commands(plugin) -> frozenset[str]:
 
 
 @_instrumented
-def legacy_is_installed_environment_command(plugin, command: str) -> bool:
+def absent_is_installed_environment_command(plugin, command: str) -> bool:
     """A missing environment declaration cannot authorize dynamic commands."""
 
     del plugin, command
@@ -371,37 +373,37 @@ def legacy_is_installed_environment_command(plugin, command: str) -> bool:
 
 
 @_instrumented
-def legacy_utility_manifests(plugin) -> dict:
-    """v1 plugins predate get_utility_manifests(). A plugin that does not
-    implement the hook gets no utility catalog."""
+def absent_utility_manifests(plugin) -> dict:
+    """get_utility_manifests() is optional. A plugin that does not
+    implement it gets no utility catalog."""
 
     del plugin
     return {}
 
 
 @_instrumented
-def legacy_utility_roots(plugin) -> tuple:
-    """v1 plugins predate get_utility_roots(). A plugin that does not
-    implement the hook gets no utility roots."""
+def absent_utility_roots(plugin) -> tuple:
+    """get_utility_roots() is optional. A plugin that does not
+    implement it gets no utility roots."""
 
     del plugin
     return ()
 
 
 @_instrumented
-def legacy_resolve_case_models(plugin, case_root) -> dict:
-    """v1 plugins predate resolve_case_models(). A plugin that does not
-    implement the hook gets nothing and must declare its own resolution by
-    migrating to v2."""
+def absent_resolve_case_models(plugin, case_root) -> dict:
+    """resolve_case_models() is optional. A plugin that does not
+    implement it gets nothing and must declare its own resolution by
+    implementing resolve_case_models()."""
 
     del plugin, case_root
     return {}
 
 
 @_instrumented
-def legacy_samplable_fields(plugin, resolved) -> dict:
-    """v1 plugins predate get_samplable_fields(). Same rule as
-    :func:`legacy_resolve_case_models`: a plugin that does not implement the
+def absent_samplable_fields(plugin, resolved) -> dict:
+    """get_samplable_fields() is optional. Same rule as
+    :func:`absent_resolve_case_models`: a plugin that does not implement the
     hook names no fields."""
 
     del plugin, resolved
@@ -409,19 +411,19 @@ def legacy_samplable_fields(plugin, resolved) -> dict:
 
 
 @_instrumented
-def legacy_override_schema(plugin, tutorial_name: str, make_spec_info: dict) -> dict:
-    """v1 plugins predate get_override_schema(). A plugin that does not
-    implement the hook gets an empty schema and must declare its own by
-    migrating to v2."""
+def absent_override_schema(plugin, tutorial_name: str, make_spec_info: dict) -> dict:
+    """get_override_schema() is optional. A plugin that does not
+    implement it gets an empty schema and must declare its own by
+    implementing get_override_schema()."""
 
     del plugin, tutorial_name, make_spec_info
     return {}
 
 
 @_instrumented
-def legacy_dict_entry_catalog(plugin) -> dict:
-    """v1 plugins predate get_dict_entry_catalog(). Same rule as
-    :func:`legacy_override_schema`: a plugin that does not implement the hook
+def absent_dict_entry_catalog(plugin) -> dict:
+    """get_dict_entry_catalog() is optional. Same rule as
+    :func:`absent_override_schema`: a plugin that does not implement it
     gets no dictionary catalog."""
 
     del plugin
@@ -429,7 +431,7 @@ def legacy_dict_entry_catalog(plugin) -> dict:
 
 
 @_instrumented
-def legacy_phases(plugin) -> tuple[str, ...]:
+def absent_phases(plugin) -> tuple[str, ...]:
     """The dictionary phases for a plugin that does not implement
     ``get_phases()``: those its own ``DictEntry`` values declare, sorted for
     determinism.
@@ -452,16 +454,16 @@ def legacy_phases(plugin) -> tuple[str, ...]:
 
 
 @_instrumented
-def legacy_describe_config_resolution(plugin) -> str:
-    """v1 plugins predate describe_config_resolution(). A plugin that does not
-    implement the hook gets a plugin-neutral sentence."""
+def absent_describe_config_resolution(plugin) -> str:
+    """describe_config_resolution() is optional. A plugin that does not
+    implement it gets a plugin-neutral sentence."""
 
     del plugin
     return "The plugin's configuration files resolve into a valid RunDocument config."
 
 
 @_instrumented
-def legacy_case_runtime_conventions():
+def absent_case_runtime_conventions():
     """Neutral fallback for plugins that declare no generated case paths.
 
     A foreign environment must not lose an authored ``data`` or
@@ -475,29 +477,31 @@ def legacy_case_runtime_conventions():
 
 
 @_instrumented
-def legacy_report_catalog(plugin) -> tuple:
-    """v1 plugins predate get_report_catalog(). Same rule as
-    :func:`legacy_override_schema`: a plugin that does not implement the hook
-    gets no reports and must declare its own by migrating to v2."""
+def absent_report_catalog(plugin) -> tuple:
+    """get_report_catalog() is optional. Same rule as
+    :func:`absent_override_schema`: a plugin that does not implement it
+    gets no reports and must declare its own by implementing
+    get_report_catalog()."""
 
     del plugin
     return ()
 
 
 @_instrumented
-def legacy_named_catalogs(plugin) -> dict:
-    """v1 plugins predate get_named_catalogs(). Same rule as
-    :func:`legacy_override_schema`: a plugin that does not implement the hook
-    gets no named catalogs and must declare its own by migrating to v2."""
+def absent_named_catalogs(plugin) -> dict:
+    """get_named_catalogs() is optional. Same rule as
+    :func:`absent_override_schema`: a plugin that does not implement it
+    gets no named catalogs and must declare its own by implementing
+    get_named_catalogs()."""
 
     del plugin
     return {}
 
 
 @_instrumented
-def legacy_override_scopes(plugin) -> tuple:
-    """v1/v2 plugins predate get_override_scopes(). A plugin that does not
-    implement the hook gets no override scopes and must declare its own by
+def absent_override_scopes(plugin) -> tuple:
+    """get_override_scopes() is optional. A plugin that does not
+    implement it gets no override scopes and must declare its own by
     implementing get_override_scopes()."""
 
     del plugin
@@ -505,9 +509,9 @@ def legacy_override_scopes(plugin) -> tuple:
 
 
 @_instrumented
-def legacy_dict_regeneration_scopes(plugin) -> tuple:
-    """v1/v2 plugins predate get_regeneration_scopes(). A plugin that does not
-    implement the hook gets no regeneration scopes and must declare its own
+def absent_dict_regeneration_scopes(plugin) -> tuple:
+    """get_regeneration_scopes() is optional. A plugin that does not
+    implement it gets no regeneration scopes and must declare its own
     by implementing get_regeneration_scopes()."""
 
     del plugin

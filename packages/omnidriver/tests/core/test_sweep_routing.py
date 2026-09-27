@@ -24,7 +24,7 @@ def test_routing_uses_the_selected_plugin_catalog():
     # catalog -- i.e. that routing consults the SELECTED plugin rather than a
     # hardcoded cardiac vocabulary.
     #
-    # Gating legacy_route_sweep_case makes that point more strongly: the
+    # Gating absent_route_sweep_case makes that point more strongly: the
     # generic plugin does not implement route_sweep_case_values() at all, so
     # routing refuses outright instead of running cardiac validation over a
     # non-cardiac plugin's axes. The refusal names the missing hook, so the

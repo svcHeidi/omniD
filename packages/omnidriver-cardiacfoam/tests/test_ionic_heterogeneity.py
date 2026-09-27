@@ -25,7 +25,7 @@
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-"""Phase 2 — driverFOAM tissue-heterogeneity wiring.
+"""Phase 2 — omnidriver tissue-heterogeneity wiring.
 
 Covers the four surfaces wired in Phase 2:
   1. ionic_model_catalog: ``supports_heterogeneity`` and

@@ -14,10 +14,10 @@ import yaml
 
 
 _PLUGIN_ID = "org.cardiacfoam"
-_RUNTIME_CONFIG_ENV = "DRIVERFOAM_RUNTIME_CONFIG"
-_BACKEND_ENV = "DRIVERFOAM_CARDIACFOAM_BACKEND"
-_SOLIDS_ROOT_ENV = "DRIVERFOAM_CARDIACFOAM_SOLIDS4FOAM_ROOT"
-_MANIFEST_ENV = "DRIVERFOAM_CARDIACFOAM_BUILD_MANIFEST"
+_RUNTIME_CONFIG_ENV = "OMNIDRIVER_RUNTIME_CONFIG"
+_BACKEND_ENV = "OMNIDRIVER_CARDIACFOAM_BACKEND"
+_SOLIDS_ROOT_ENV = "OMNIDRIVER_CARDIACFOAM_SOLIDS4FOAM_ROOT"
+_MANIFEST_ENV = "OMNIDRIVER_CARDIACFOAM_BUILD_MANIFEST"
 _LIBRARY_EXTENSIONS = ("dylib", "so")
 
 
@@ -48,19 +48,19 @@ def _user_selection(env: Mapping[str, str]) -> dict[str, Any]:
         return {}
     config_path = Path(os.path.expandvars(config_name)).expanduser().resolve()
     if not config_path.is_file():
-        raise ValueError(f"Configured driverFOAM runtime file does not exist: {config_path}")
+        raise ValueError(f"Configured omnidriver runtime file does not exist: {config_path}")
     try:
         payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
-        raise ValueError(f"Invalid driverFOAM runtime YAML {config_path}: {exc}") from exc
+        raise ValueError(f"Invalid omnidriver runtime YAML {config_path}: {exc}") from exc
     if not isinstance(payload, dict):
-        raise ValueError(f"DriverFOAM runtime file must contain a mapping: {config_path}")
+        raise ValueError(f"omnidriver runtime file must contain a mapping: {config_path}")
     plugins = payload.get("plugins", {})
     if not isinstance(plugins, dict):
-        raise ValueError("DriverFOAM runtime 'plugins' must be a mapping")
+        raise ValueError("omnidriver runtime 'plugins' must be a mapping")
     selection = plugins.get(_PLUGIN_ID, {})
     if not isinstance(selection, dict):
-        raise ValueError(f"DriverFOAM runtime selection for {_PLUGIN_ID} must be a mapping")
+        raise ValueError(f"omnidriver runtime selection for {_PLUGIN_ID} must be a mapping")
     return selection
 
 

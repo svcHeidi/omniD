@@ -90,7 +90,7 @@ def _plugin_members() -> set[str]:
 
 
 def _compatibility_functions() -> set[str]:
-    return {name for name in dir(compatibility) if name.startswith("legacy_")}
+    return {name for name in dir(compatibility) if name.startswith("absent_")}
 
 
 @pytest.mark.parametrize("field", CAPABILITY_FIELDS)
@@ -169,7 +169,7 @@ def test_no_fallback_reaches_cardiac_code_at_all() -> None:
     This began as "no fallback may reach cardiac code *without checking
     plugin_id*" -- six did not, so a non-cardiac plugin silently inherited
     cardiac semantics -- and carried an allowlist of two that were permitted
-    to, legacy_default_driver_context and legacy_generic_case_mutation.
+    to, absent_default_driver_context and legacy_generic_case_mutation.
 
     Both are gone: the default context now resolves through the
     omnidriver.plugins entry-point group, and the cardiac case mutation moved
@@ -187,7 +187,7 @@ def test_no_fallback_reaches_cardiac_code_at_all() -> None:
             continue
         # Look at import statements, not at the function's text. Matching raw
         # source cannot tell an import from a docstring that names the package
-        # -- and legacy_default_driver_context's docstring has to name it, to
+        # -- and absent_default_driver_context's docstring has to name it, to
         # explain which cardiac import used to be there and why it no longer
         # is. A guard that forces documentation to avoid a word in order to
         # pass is measuring the wrong thing.

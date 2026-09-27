@@ -30,7 +30,7 @@
 When this fails, the catalogue has drifted from the C++ source of truth. Fix
 by running:
 
-    python applications/scripts/driverFoam/scripts/regenerate-ionic-catalog.py
+    python scripts/regenerate-ionic-catalog.py
 
 Models in `EXCLUDED_FROM_HEADER_SYNC` (the FDA manufactured family) are
 intentionally documented with user-facing semantic labels rather than raw
@@ -54,10 +54,7 @@ from omnidriver.cardiacfoam.names_parser import (
 REPO_ROOT = monorepo_root or repo_root_default()
 IONIC_MODELS_DIR = REPO_ROOT / "src" / "ionicModels"
 
-_REGEN_HINT = (
-    "run: python applications/scripts/driverFoam/scripts/"
-    "regenerate-ionic-catalog.py"
-)
+_REGEN_HINT = "run: python scripts/regenerate-ionic-catalog.py"
 
 
 def test_gaur_metadata_matches_selected_source_identity() -> None:

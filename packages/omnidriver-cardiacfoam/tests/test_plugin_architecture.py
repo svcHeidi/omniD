@@ -45,6 +45,6 @@ def test_minimal_plugin_proves_non_cardiac_solver_contract() -> None:
     plugin = validate_plugin(MinimalOpenFOAMPlugin())
     ctx = driver_context(plugin, source="test")
 
-    assert ctx.identity.to_json()["providers"][-1]["id"] == "org.driverfoam.test-minimal"
+    assert ctx.identity.to_json()["providers"][-1]["id"] == "org.omnidriver.test-minimal"
     assert ctx.capabilities.dictionaries.entries() == ()
     assert plugin.get_capabilities() == {}

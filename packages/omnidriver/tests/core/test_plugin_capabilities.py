@@ -86,7 +86,7 @@ def test_context_exposes_focused_adapters_without_replacing_public_plugin(
     # phase names are exactly what RunDocument v3 removed from core, where
     # `config` is an open object with no fixed phases (schemas/run-document.json),
     # so handing them to a plugin that never declared them contradicted the
-    # schema. Matches legacy_run_document_config_schema, which already handed
+    # schema. Matches absent_run_document_config_schema, which already handed
     # non-cardiac plugins a fully open schema.
     assert config == {}
     assert diagnostics == ()
@@ -118,7 +118,7 @@ def test_non_cardiac_plugin_does_not_inherit_cardiac_case_evidence(
     This test previously asserted the opposite, under the name
     ``test_legacy_plugin_case_evidence_preserves_pre_capability_behavior``: a
     non-cardiac plugin DID claim a case carrying ``electroProperties*``,
-    because legacy_case_marker/legacy_case_runnable_without_workflow called
+    because absent_case_marker/absent_case_runnable_without_workflow called
     the cardiac implementation without checking plugin_id -- unlike the
     thirteen sibling fallbacks, which all gate on ``org.cardiacfoam``.
 
@@ -208,12 +208,12 @@ def test_config_value_reader_calls_through_to_the_plugin_hook() -> None:
 
 
 def test_dict_key_scanner_uses_the_fallback_for_a_plugin_that_declares_nothing() -> None:
-    """DictKeyScannerCapability's fallback is legacy_dict_key_scanner: absence
+    """DictKeyScannerCapability's fallback is absent_dict_key_scanner: absence
     means an empty drift report, not an AttributeError.
 
     Added 2026-09-22 (Task 11), alongside the Protocol itself --
     `get_dict_key_scanner` had no capability at all before this; strict
-    planning imported and called `compatibility.legacy_dict_key_scanner`
+    planning imported and called `compatibility.absent_dict_key_scanner`
     directly at module scope, so nothing exercised the adapter's own
     fallback routing.
     """

@@ -3,7 +3,7 @@
 Phase 2 Task 6 made ``omnidriver.openfoam``'s ``validate_overrides`` and
 ``apply_overrides`` require an explicit ``DriverContext``, so that package stops
 silently resolving the cardiac default. That broke the fallback underneath them:
-``compatibility.legacy_apply_overrides`` called both with no context and had
+``compatibility.absent_apply_overrides`` called both with no context and had
 none to give, because ``_OverrideScopeAdapter`` holds only ``self.plugin``.
 
 The result was a ``TypeError`` on the agent-facing ``step --strict --apply``
@@ -48,7 +48,7 @@ def test_apply_requires_a_context_rather_than_resolving_one() -> None:
 
 
 def test_the_fallback_reaches_openfoam_with_the_context_it_was_given() -> None:
-    """A plugin with no apply_overrides hook takes legacy_apply_overrides.
+    """A plugin with no apply_overrides hook takes absent_apply_overrides.
 
     Skipped without omnidriver-openfoam, which owns the mutators the fallback
     delegates to -- the point is the handoff, not the mutation.

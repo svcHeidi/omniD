@@ -267,7 +267,7 @@ class DictionaryCatalogCapability(Protocol):
 
     :adapts: get_dict_entries, get_dict_groups, get_dictionary_catalog, get_phases
     :consumed-by: omnidriver/dict_entries.py, omnidriver/cardiacfoam/dict_entries.py, omnidriver/cardiacfoam/sweep.py, omnidriver/openfoam/apply_overrides.py, omnidriver/openfoam/dict_builder.py, omnidriver/core/specs/validation.py, omnidriver/core/strict_planning.py
-    :fallback: legacy_phases
+    :fallback: absent_phases
     :status: optional-neutral
     """
 
@@ -370,7 +370,7 @@ class RunDocumentConfigurationCapability(Protocol):
 
     :adapts: build_run_document_config, get_run_document_config_schema
     :consumed-by: omnidriver/core/runtime/run_document_adapter.py, omnidriver/core/runtime/run_document_exec.py
-    :fallback: legacy_run_document_config, legacy_run_document_config_schema
+    :fallback: absent_run_document_config, absent_run_document_config_schema
     :status: optional-neutral
     """
 
@@ -415,7 +415,7 @@ class DictDiagnosticsCapability(Protocol):
 
     :adapts: get_function_object_field_diagnostics, get_case_dict_key_diagnostics
     :consumed-by: omnidriver/core/strict_planning.py
-    :fallback: legacy_function_object_field_diagnostics, legacy_case_dict_key_diagnostics
+    :fallback: absent_function_object_field_diagnostics, absent_case_dict_key_diagnostics
     :status: optional-neutral
     """
 
@@ -449,7 +449,7 @@ class MeshDiagnosticPolicyCapability(Protocol):
 
     :adapts: get_mesh_geometry_diagnostics, get_base_mesh_geometry_diagnostics, is_nondimensional_case
     :consumed-by: omnidriver/core/strict_planning.py
-    :fallback: legacy_nondimensional_case, legacy_base_mesh_geometry_diagnostics
+    :fallback: absent_nondimensional_case, absent_base_mesh_geometry_diagnostics
     :status: optional-neutral
     """
 
@@ -481,7 +481,7 @@ class CaseCompatibilityCapability(Protocol):
 
     :adapts: has_case_marker, is_case_runnable_without_workflow
     :consumed-by: omnidriver/core/runtime/registry.py
-    :fallback: legacy_case_marker, legacy_case_runnable_without_workflow
+    :fallback: absent_case_marker, absent_case_runnable_without_workflow
     :status: optional-neutral
     """
 
@@ -511,7 +511,7 @@ class SweepMaterializerCapability(Protocol):
 
     :adapts: materialize_sweep_case, route_sweep_case_values
     :consumed-by: omnidriver/sweep_materialize.py, omnidriver/sweep_routing.py
-    :fallback: legacy_materialize_sweep_case, legacy_route_sweep_case
+    :fallback: absent_materialize_sweep_case, absent_route_sweep_case
     :status: optional-refusing
     """
 
@@ -533,7 +533,7 @@ class CommandAuthorizationCapability(Protocol):
 
     :adapts: get_auxiliary_commands, get_environment_commands, get_solver_commands, get_utility_manifests, get_utility_roots, is_installed_environment_command
     :consumed-by: omnidriver/core/runtime/artifacts.py, omnidriver/core/runtime/workflow.py, omnidriver/core/strict_planning.py
-    :fallback: legacy_auxiliary_commands, legacy_environment_commands, legacy_is_installed_environment_command, legacy_solver_commands, legacy_utility_manifests, legacy_utility_roots
+    :fallback: absent_auxiliary_commands, absent_environment_commands, absent_is_installed_environment_command, absent_solver_commands, absent_utility_manifests, absent_utility_roots
     :status: optional-neutral
     """
 
@@ -561,7 +561,7 @@ class CaseIntrospectionCapability(Protocol):
 
     :adapts: get_samplable_fields, resolve_case_models
     :consumed-by: omnidriver/core/runtime/provenance_inputs.py
-    :fallback: legacy_resolve_case_models, legacy_samplable_fields
+    :fallback: absent_resolve_case_models, absent_samplable_fields
     :status: optional-neutral
     """
 
@@ -599,7 +599,7 @@ class CaseFileContractCapability(Protocol):
 
     :adapts: get_profile, get_config_resolution_description
     :consumed-by: omnidriver/core/runtime/strict_audit.py, omnidriver/core/tutorial_contracts.py, omnidriver/core/runtime/provenance_inputs.py
-    :fallback: legacy_describe_config_resolution
+    :fallback: absent_describe_config_resolution
     :status: get_profile=required, get_config_resolution_description=optional-neutral
     """
 
@@ -622,7 +622,7 @@ class CaseRuntimeConventionsCapability(Protocol):
 
     :adapts: get_case_runtime_conventions
     :consumed-by: omnidriver/core/runtime/registry.py, omnidriver/core/runtime/sweep_runner.py
-    :fallback: legacy_case_runtime_conventions
+    :fallback: absent_case_runtime_conventions
     :status: optional-neutral
     """
 
@@ -655,7 +655,7 @@ class EnvironmentPreflightCapability(Protocol):
 
     :adapts: get_environment_diagnostics, get_configured_environment, get_loaded_environment
     :consumed-by: omnidriver/core/strict_planning.py, omnidriver/core/runtime/sweep_runner.py, omnidriver/cli.py, omnidriver/conformance/checks.py
-    :fallback: legacy_environment_diagnostics, legacy_configured_environment, legacy_load_environment
+    :fallback: absent_environment_diagnostics, absent_configured_environment, absent_load_environment
     :status: optional-neutral
     """
 
@@ -689,7 +689,7 @@ class OverrideSchemaCapability(Protocol):
 
     :adapts: get_dict_entry_catalog, get_override_schema
     :consumed-by: omnidriver/core/introspection.py
-    :fallback: legacy_dict_entry_catalog, legacy_override_schema
+    :fallback: absent_dict_entry_catalog, absent_override_schema
     :status: optional-neutral
     """
 
@@ -838,11 +838,11 @@ class ReportCatalogCapability(Protocol):
     (which reports exist, e.g. "Vm field" or "activation map") is
     adapter-specific data. Not a mandatory ``SolverPlugin`` member, so
     existing v2 third-party plugins keep loading; the fallback
-    (``legacy_report_catalog``) is empty until an adapter declares reports.
+    (``absent_report_catalog``) is empty until an adapter declares reports.
 
     :adapts: get_report_catalog
     :consumed-by: scripts/export-report-catalog.py
-    :fallback: legacy_report_catalog
+    :fallback: absent_report_catalog
     :status: optional-neutral
     """
 
@@ -858,12 +858,12 @@ class NamedCatalogsCapability(Protocol):
     key set, it only namespaces the whole mapping under
     ``describe_entry``'s ``plugin_catalogs`` key and serializes it. Not a
     mandatory ``SolverPlugin`` member, so existing v2 third-party plugins
-    keep loading; the fallback (``legacy_named_catalogs``) is empty until an
+    keep loading; the fallback (``absent_named_catalogs``) is empty until an
     adapter declares its own catalogs.
 
     :adapts: get_named_catalogs
     :consumed-by: omnidriver/core/introspection.py
-    :fallback: legacy_named_catalogs
+    :fallback: absent_named_catalogs
     :status: optional-neutral
     """
 
@@ -877,12 +877,12 @@ class OverrideScopeCapability(Protocol):
     Generalizes adapter-defined scope tokens without assuming a particular
     token count or path. Not a mandatory ``SolverPlugin`` member, so existing
     v2 third-party plugins keep loading; the fallback
-    (``legacy_override_scopes``) returns no scopes until an adapter declares
+    (``absent_override_scopes``) returns no scopes until an adapter declares
     them.
 
     :adapts: get_override_scopes, get_override_target_paths, apply_overrides, inspect_effective_configuration
     :consumed-by: omnidriver/openfoam/apply_overrides.py, omnidriver/core/runtime/provenance_inputs.py, omnidriver/core/runtime/step_candidate.py, omnidriver/core/strict_planning.py
-    :fallback: legacy_override_scopes, legacy_override_target_paths, legacy_apply_overrides, legacy_inspect_effective_configuration
+    :fallback: absent_override_scopes, absent_override_target_paths, absent_apply_overrides, absent_inspect_effective_configuration
     :status: get_override_scopes=optional-neutral, get_override_target_paths=optional-refusing, apply_overrides=optional-refusing, inspect_effective_configuration=optional-neutral
     """
 
@@ -914,7 +914,7 @@ class DictRegenerationCapability(Protocol):
     restructures the file -- renames a sub-block, changes which sibling
     keys are legal -- so a single key/value/scope patch cannot express it.
     Not a mandatory ``SolverPlugin`` member, so existing v2 third-party
-    plugins keep loading; the fallback (``legacy_dict_regeneration_scopes``)
+    plugins keep loading; the fallback (``absent_dict_regeneration_scopes``)
     declares no regeneration scopes for any plugin, matching
     :class:`OverrideScopeCapability`. **Corrected 2026-09-20:** this used to
     say the fallback "declares the cardiac plugin's one scope and an empty
@@ -926,7 +926,7 @@ class DictRegenerationCapability(Protocol):
 
     :adapts: get_regeneration_scopes
     :consumed-by: omnidriver/openfoam/apply_overrides.py
-    :fallback: legacy_dict_regeneration_scopes
+    :fallback: absent_dict_regeneration_scopes
     :status: optional-neutral
     """
 
@@ -962,7 +962,7 @@ class DictKeyScannerCapability(Protocol):
 
     ``_catalog_diagnostics`` (``strict_planning.py``) compares a solver
     plugin's catalogue against what its C++ actually reads, and until this
-    capability existed it called ``compatibility.legacy_dict_key_scanner``
+    capability existed it called ``compatibility.absent_dict_key_scanner``
     directly, at module scope, unconditionally -- a "fallback" no adapter
     could ever override, since nothing probed for a real one first. The scan
     itself is C++/dictionary-format knowledge, not solver knowledge (the
@@ -970,13 +970,13 @@ class DictKeyScannerCapability(Protocol):
     knows nothing about ionic models or myocardium selectors), so it belongs
     to the OpenFOAM environment adapter, not to a specific solver plugin. Not
     a mandatory ``SolverPlugin`` member, so existing v2 third-party plugins
-    keep loading; the fallback (``legacy_dict_key_scanner``) reports an empty
+    keep loading; the fallback (``absent_dict_key_scanner``) reports an empty
     drift -- no unmatched reads, no stale paths -- until an adapter declares a
     real scanner.
 
     :adapts: get_dict_key_scanner
     :consumed-by: omnidriver/core/strict_planning.py
-    :fallback: legacy_dict_key_scanner
+    :fallback: absent_dict_key_scanner
     :status: optional-neutral
     """
 
@@ -1212,9 +1212,9 @@ class _DictionaryCatalogAdapter:
         hook = getattr(self.plugin, "get_phases", None)
         if callable(hook):
             return tuple(hook())
-        from .compatibility import legacy_phases
+        from .compatibility import absent_phases
 
-        return legacy_phases(self.plugin)
+        return absent_phases(self.plugin)
 
 
 @dataclass(frozen=True)
@@ -1327,17 +1327,17 @@ class _RunDocumentConfigurationAdapter:
         if callable(hook):
             return hook(request.spec)
         # Older plugins receive the neutral compatibility configuration.
-        from .compatibility import legacy_run_document_config
+        from .compatibility import absent_run_document_config
 
-        return legacy_run_document_config(self.plugin, request.spec)
+        return absent_run_document_config(self.plugin, request.spec)
 
     def schema(self) -> dict[str, Any]:
         hook = getattr(self.plugin, "get_run_document_config_schema", None)
         if callable(hook):
             return hook()
-        from .compatibility import legacy_run_document_config_schema
+        from .compatibility import absent_run_document_config_schema
 
-        return legacy_run_document_config_schema(self.plugin)
+        return absent_run_document_config_schema(self.plugin)
 
 
 @dataclass(frozen=True)
@@ -1358,9 +1358,9 @@ class _DictDiagnosticsAdapter:
         hook = getattr(self.plugin, "get_function_object_field_diagnostics", None)
         if callable(hook):
             return tuple(hook(case_root, samplable=samplable))
-        from .compatibility import legacy_function_object_field_diagnostics
+        from .compatibility import absent_function_object_field_diagnostics
 
-        return tuple(legacy_function_object_field_diagnostics(case_root, samplable=samplable))
+        return tuple(absent_function_object_field_diagnostics(case_root, samplable=samplable))
 
     def case_dict_keys(
         self,
@@ -1374,9 +1374,9 @@ class _DictDiagnosticsAdapter:
             return tuple(hook(
                 case_root, catalogued_paths=catalogued_paths, dict_relpaths=dict_relpaths,
             ))
-        from .compatibility import legacy_case_dict_key_diagnostics
+        from .compatibility import absent_case_dict_key_diagnostics
 
-        return tuple(legacy_case_dict_key_diagnostics(
+        return tuple(absent_case_dict_key_diagnostics(
             case_root, catalogued_paths=catalogued_paths, dict_relpaths=dict_relpaths,
         ))
 
@@ -1389,9 +1389,9 @@ class _MeshDiagnosticPolicyAdapter:
         hook = getattr(self.plugin, "is_nondimensional_case", None)
         if callable(hook):
             return bool(hook(spec))
-        from .compatibility import legacy_nondimensional_case
+        from .compatibility import absent_nondimensional_case
 
-        return legacy_nondimensional_case(self.plugin, spec)
+        return absent_nondimensional_case(self.plugin, spec)
 
     def extra_geometry_diagnostics(self, case_root: Path) -> tuple[Any, ...]:
         """Plugin-owned plan-time geometry checks core cannot express.
@@ -1416,9 +1416,9 @@ class _MeshDiagnosticPolicyAdapter:
         hook = getattr(self.plugin, "get_base_mesh_geometry_diagnostics", None)
         if callable(hook):
             return tuple(hook(case_root))
-        from .compatibility import legacy_base_mesh_geometry_diagnostics
+        from .compatibility import absent_base_mesh_geometry_diagnostics
 
-        return tuple(legacy_base_mesh_geometry_diagnostics(case_root))
+        return tuple(absent_base_mesh_geometry_diagnostics(case_root))
 
 
 @dataclass(frozen=True)
@@ -1429,17 +1429,17 @@ class _CaseCompatibilityAdapter:
         hook = getattr(self.plugin, "has_case_marker", None)
         if callable(hook):
             return bool(hook(request.case_root))
-        from .compatibility import legacy_case_marker
+        from .compatibility import absent_case_marker
 
-        return legacy_case_marker(self.plugin, request.case_root)
+        return absent_case_marker(self.plugin, request.case_root)
 
     def is_runnable_without_workflow(self, request: CaseCompatibilityRequest) -> bool:
         hook = getattr(self.plugin, "is_case_runnable_without_workflow", None)
         if callable(hook):
             return bool(hook(request.case_root))
-        from .compatibility import legacy_case_runnable_without_workflow
+        from .compatibility import absent_case_runnable_without_workflow
 
-        return legacy_case_runnable_without_workflow(self.plugin, request.case_root)
+        return absent_case_runnable_without_workflow(self.plugin, request.case_root)
 
     def is_case(self, request: CaseCompatibilityRequest) -> bool:
         """Marker, entrypoint, or a leftover generated-case marker -- any one
@@ -1452,9 +1452,9 @@ class _CaseCompatibilityAdapter:
         if callable(hook):
             conventions = hook()
         else:
-            from .compatibility import legacy_case_runtime_conventions
+            from .compatibility import absent_case_runtime_conventions
 
-            conventions = legacy_case_runtime_conventions()
+            conventions = absent_case_runtime_conventions()
         case_root = request.case_root
         if any((case_root / relpath).is_file() for relpath in conventions.case_entrypoints):
             return True
@@ -1478,9 +1478,9 @@ class _SweepMaterializerAdapter:
         # Compatibility bridge for existing third-party-style plugins. A
         # missing adapter route remains a refusal rather than another
         # adapter's materializer.
-        from .compatibility import legacy_route_sweep_case
+        from .compatibility import absent_route_sweep_case
 
-        return legacy_route_sweep_case(
+        return absent_route_sweep_case(
             self.plugin,
             base=request.base,
             resolved_axis_values=request.resolved_axis_values,
@@ -1510,9 +1510,9 @@ class _SweepMaterializerAdapter:
         if callable(hook):
             hook(case_dir=request.case_dir, routed=request.routed)
             return
-        from .compatibility import legacy_materialize_sweep_case
+        from .compatibility import absent_materialize_sweep_case
 
-        legacy_materialize_sweep_case(
+        absent_materialize_sweep_case(
             self.plugin, case_dir=request.case_dir, routed=request.routed
         )
 
@@ -1525,49 +1525,49 @@ class _CommandAuthorizationAdapter:
         hook = getattr(self.plugin, "get_solver_commands", None)
         if callable(hook):
             return frozenset(hook())
-        from .compatibility import legacy_solver_commands
+        from .compatibility import absent_solver_commands
 
-        return legacy_solver_commands(self.plugin)
+        return absent_solver_commands(self.plugin)
 
     def auxiliary_commands(self) -> frozenset[str]:
         hook = getattr(self.plugin, "get_auxiliary_commands", None)
         if callable(hook):
             return frozenset(hook())
-        from .compatibility import legacy_auxiliary_commands
+        from .compatibility import absent_auxiliary_commands
 
-        return legacy_auxiliary_commands(self.plugin)
+        return absent_auxiliary_commands(self.plugin)
 
     def environment_commands(self) -> frozenset[str]:
         hook = getattr(self.plugin, "get_environment_commands", None)
         if callable(hook):
             return frozenset(hook())
-        from .compatibility import legacy_environment_commands
+        from .compatibility import absent_environment_commands
 
-        return legacy_environment_commands(self.plugin)
+        return absent_environment_commands(self.plugin)
 
     def is_installed_environment_command(self, command: str) -> bool:
         hook = getattr(self.plugin, "is_installed_environment_command", None)
         if callable(hook):
             return bool(hook(command))
-        from .compatibility import legacy_is_installed_environment_command
+        from .compatibility import absent_is_installed_environment_command
 
-        return legacy_is_installed_environment_command(self.plugin, command)
+        return absent_is_installed_environment_command(self.plugin, command)
 
     def utility_manifests(self) -> dict[str, Any]:
         hook = getattr(self.plugin, "get_utility_manifests", None)
         if callable(hook):
             return dict(hook())
-        from .compatibility import legacy_utility_manifests
+        from .compatibility import absent_utility_manifests
 
-        return legacy_utility_manifests(self.plugin)
+        return absent_utility_manifests(self.plugin)
 
     def utility_roots(self) -> tuple[Path, ...]:
         hook = getattr(self.plugin, "get_utility_roots", None)
         if callable(hook):
             return tuple(hook())
-        from .compatibility import legacy_utility_roots
+        from .compatibility import absent_utility_roots
 
-        return legacy_utility_roots(self.plugin)
+        return absent_utility_roots(self.plugin)
 
 
 @dataclass(frozen=True)
@@ -1578,17 +1578,17 @@ class _CaseIntrospectionAdapter:
         hook = getattr(self.plugin, "resolve_case_models", None)
         if callable(hook):
             return dict(hook(case_root))
-        from .compatibility import legacy_resolve_case_models
+        from .compatibility import absent_resolve_case_models
 
-        return legacy_resolve_case_models(self.plugin, case_root)
+        return absent_resolve_case_models(self.plugin, case_root)
 
     def samplable_fields(self, resolved: dict[str, Any]) -> dict[str, tuple[str, ...]]:
         hook = getattr(self.plugin, "get_samplable_fields", None)
         if callable(hook):
             return {k: tuple(v) for k, v in hook(resolved).items()}
-        from .compatibility import legacy_samplable_fields
+        from .compatibility import absent_samplable_fields
 
-        return legacy_samplable_fields(self.plugin, resolved)
+        return absent_samplable_fields(self.plugin, resolved)
 
 
 @dataclass(frozen=True)
@@ -1616,9 +1616,9 @@ class _CaseFileContractAdapter:
         hook = getattr(self.plugin, "get_config_resolution_description", None)
         if callable(hook):
             return str(hook())
-        from .compatibility import legacy_describe_config_resolution
+        from .compatibility import absent_describe_config_resolution
 
-        return legacy_describe_config_resolution(self.plugin)
+        return absent_describe_config_resolution(self.plugin)
 
 @dataclass(frozen=True)
 class _CaseRuntimeConventionsAdapter:
@@ -1641,9 +1641,9 @@ class _CaseRuntimeConventionsAdapter:
                     f"return CaseRuntimeConventions, got {result!r}"
                 )
             return with_core_runtime_records(result)
-        from .compatibility import legacy_case_runtime_conventions
+        from .compatibility import absent_case_runtime_conventions
 
-        return with_core_runtime_records(legacy_case_runtime_conventions())
+        return with_core_runtime_records(absent_case_runtime_conventions())
 
 
 @dataclass(frozen=True)
@@ -1664,9 +1664,9 @@ class _EnvironmentPreflightAdapter:
                 workflow_dag, env=env, environment_source=environment_source,
                 driver_context=driver_context,
             ))
-        from .compatibility import legacy_environment_diagnostics
+        from .compatibility import absent_environment_diagnostics
 
-        return tuple(legacy_environment_diagnostics(
+        return tuple(absent_environment_diagnostics(
             workflow_dag, env=env, environment_source=environment_source,
             driver_context=driver_context,
         ))
@@ -1677,9 +1677,9 @@ class _EnvironmentPreflightAdapter:
         hook = getattr(self.plugin, "get_configured_environment", None)
         if callable(hook):
             return dict(hook(env, driver_context))
-        from .compatibility import legacy_configured_environment
+        from .compatibility import absent_configured_environment
 
-        return dict(legacy_configured_environment(env, driver_context))
+        return dict(absent_configured_environment(env, driver_context))
 
     def load(
         self, *, environment_source: str | None, driver_context: Any | None,
@@ -1712,9 +1712,9 @@ class _EnvironmentPreflightAdapter:
         if callable(hook):
             sourced = dict(hook(environment_source=environment_source, driver_context=driver_context))
         else:
-            from .compatibility import legacy_load_environment
+            from .compatibility import absent_load_environment
 
-            sourced = dict(legacy_load_environment(
+            sourced = dict(absent_load_environment(
                 environment_source=environment_source, driver_context=driver_context,
             ))
         return self.configure(sourced, driver_context)
@@ -1747,9 +1747,9 @@ class _OverrideSchemaAdapter:
         if callable(hook):
             answer = dict(hook(tutorial_name, make_spec_info))
         else:
-            from .compatibility import legacy_override_schema
+            from .compatibility import absent_override_schema
 
-            answer = legacy_override_schema(self.plugin, tutorial_name, make_spec_info)
+            answer = absent_override_schema(self.plugin, tutorial_name, make_spec_info)
         if answer:
             return answer
         return _RunDocumentConfigurationAdapter(self.plugin).schema()
@@ -1758,9 +1758,9 @@ class _OverrideSchemaAdapter:
         hook = getattr(self.plugin, "get_dict_entry_catalog", None)
         if callable(hook):
             return dict(hook())
-        from .compatibility import legacy_dict_entry_catalog
+        from .compatibility import absent_dict_entry_catalog
 
-        return legacy_dict_entry_catalog(self.plugin)
+        return absent_dict_entry_catalog(self.plugin)
 
 
 @dataclass(frozen=True)
@@ -1859,9 +1859,9 @@ class _ReportCatalogAdapter:
         hook = getattr(self.plugin, "get_report_catalog", None)
         if callable(hook):
             return tuple(hook())
-        from .compatibility import legacy_report_catalog
+        from .compatibility import absent_report_catalog
 
-        return legacy_report_catalog(self.plugin)
+        return absent_report_catalog(self.plugin)
 
 
 @dataclass(frozen=True)
@@ -1872,9 +1872,9 @@ class _NamedCatalogsAdapter:
         hook = getattr(self.plugin, "get_named_catalogs", None)
         if callable(hook):
             return dict(hook())
-        from .compatibility import legacy_named_catalogs
+        from .compatibility import absent_named_catalogs
 
-        return legacy_named_catalogs(self.plugin)
+        return absent_named_catalogs(self.plugin)
 
 
 @dataclass(frozen=True)
@@ -1885,9 +1885,9 @@ class _OverrideScopeAdapter:
         hook = getattr(self.plugin, "get_override_scopes", None)
         if callable(hook):
             return tuple(hook())
-        from .compatibility import legacy_override_scopes
+        from .compatibility import absent_override_scopes
 
-        return legacy_override_scopes(self.plugin)
+        return absent_override_scopes(self.plugin)
 
     def apply(
         self, overrides: Any, *, case_root: Any, driver_context: Any,
@@ -1903,7 +1903,7 @@ class _OverrideScopeAdapter:
         solver-specific mutator when the hook is absent.
 
         Corrected 2026-09-22 (audit finding F1): ``execution_env`` was accepted
-        and forwarded only to ``legacy_apply_overrides``. Every real adapter
+        and forwarded only to ``absent_apply_overrides``. Every real adapter
         implements the hook, so on the path that runs it was silently dropped,
         and the OpenFOAM implementation answers an absent environment with an
         empty evidence tuple. A required readback was satisfied by evidence
@@ -1920,9 +1920,9 @@ class _OverrideScopeAdapter:
                 )
             )
         else:
-            from .compatibility import legacy_apply_overrides
+            from .compatibility import absent_apply_overrides
 
-            records = legacy_apply_overrides(
+            records = absent_apply_overrides(
                 overrides, case_root=case_root, driver_context=driver_context,
                 execution_env=execution_env,
             )
@@ -1953,9 +1953,9 @@ class _OverrideScopeAdapter:
                 "but does not declare get_override_target_paths(); crash-safe "
                 "--apply is unavailable"
             )
-        from .compatibility import legacy_override_target_paths
+        from .compatibility import absent_override_target_paths
 
-        return legacy_override_target_paths(
+        return absent_override_target_paths(
             overrides, case_root=case_root, driver_context=driver_context,
         )
 
@@ -1966,9 +1966,9 @@ class _OverrideScopeAdapter:
         hook = getattr(self.plugin, "inspect_effective_configuration", None)
         if callable(hook):
             return tuple(hook(case_root=case_root, execution_env=execution_env))
-        from .compatibility import legacy_inspect_effective_configuration
+        from .compatibility import absent_inspect_effective_configuration
 
-        return legacy_inspect_effective_configuration(
+        return absent_inspect_effective_configuration(
             case_root=case_root,
             driver_context=driver_context,
             execution_env=execution_env,
@@ -1983,9 +1983,9 @@ class _DictRegenerationAdapter:
         hook = getattr(self.plugin, "get_regeneration_scopes", None)
         if callable(hook):
             return tuple(hook())
-        from .compatibility import legacy_dict_regeneration_scopes
+        from .compatibility import absent_dict_regeneration_scopes
 
-        return legacy_dict_regeneration_scopes(self.plugin)
+        return absent_dict_regeneration_scopes(self.plugin)
 
 
 @dataclass(frozen=True)
@@ -2005,9 +2005,9 @@ class _DictKeyScannerAdapter:
         hook = getattr(self.plugin, "get_dict_key_scanner", None)
         scanner = hook() if callable(hook) else None
         if scanner is None:
-            from .compatibility import legacy_dict_key_scanner
+            from .compatibility import absent_dict_key_scanner
 
-            scanner = legacy_dict_key_scanner()
+            scanner = absent_dict_key_scanner()
         return scanner(source_root, allowlist_path=allowlist_path, entries=entries)
 
 

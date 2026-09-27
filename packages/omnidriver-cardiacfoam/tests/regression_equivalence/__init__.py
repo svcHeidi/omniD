@@ -1,4 +1,4 @@
-"""Standalone regression-equivalence harness for the driverFOAM agent.
+"""Standalone regression-equivalence harness for the omnidriver agent.
 
 Proves the agent reproduces every canonical regression in
 ``tutorials/Alltest-regression`` by running both the hand-authored path and the

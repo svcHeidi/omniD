@@ -92,20 +92,20 @@ def test_neutral_environment_does_not_assume_a_parallel_output_prefix(
 
 
 def test_legacy_resolve_case_models_neutral_shape_has_no_cardiac_keys() -> None:
-    from omnidriver.core.compatibility import legacy_resolve_case_models
+    from omnidriver.core.compatibility import absent_resolve_case_models
 
     class NotCardiac:
         plugin_id = "org.example.notcardiac"
 
-    result = legacy_resolve_case_models(NotCardiac(), case_root=None)
+    result = absent_resolve_case_models(NotCardiac(), case_root=None)
     assert result == {}
 
 
 def test_legacy_samplable_fields_neutral_shape_has_no_cardiac_keys() -> None:
-    from omnidriver.core.compatibility import legacy_samplable_fields
+    from omnidriver.core.compatibility import absent_samplable_fields
 
     class NotCardiac:
         plugin_id = "org.example.notcardiac"
 
-    result = legacy_samplable_fields(NotCardiac(), resolved={})
+    result = absent_samplable_fields(NotCardiac(), resolved={})
     assert result == {}

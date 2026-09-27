@@ -16,7 +16,7 @@ class MinimalOpenFOAMPlugin:
 
     @property
     def plugin_id(self) -> str:
-        return "org.driverfoam.test-minimal"
+        return "org.omnidriver.test-minimal"
 
     @property
     def plugin_version(self) -> str:

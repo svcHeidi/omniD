@@ -7,8 +7,8 @@ from omnidriver.core import compatibility
 
 def test_recorder_captures_a_fallback_call() -> None:
     with compatibility.track_fallback_calls() as calls:
-        compatibility.legacy_resolve_case_models(object(), case_root=None)
-    assert calls == ["legacy_resolve_case_models"]
+        compatibility.absent_resolve_case_models(object(), case_root=None)
+    assert calls == ["absent_resolve_case_models"]
 
 
 def test_recorder_is_empty_when_no_fallback_is_invoked() -> None:

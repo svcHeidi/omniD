@@ -1,9 +1,9 @@
 """Curated registry of the canonical regression-equivalence cases.
 
-This registry is owned by driverFOAM, not auto-derived from every upstream
+This registry is owned by omnidriver, not auto-derived from every upstream
 cardiacFoam tutorial that happens to ship a ``regression/*.reference`` file.
 Upstream can add new tutorials without breaking this suite; we intentionally
-expand the registry only when we want driverFOAM to take ownership of a new
+expand the registry only when we want omnidriver to take ownership of a new
 equivalence case.
 """
 from __future__ import annotations
