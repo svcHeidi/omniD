@@ -138,15 +138,16 @@ def test_tutorial_record_entry_is_case_sourced(tmp_path: Path) -> None:
 
 
 def test_factory_tutorial_entry_is_document_sourced() -> None:
-    """``manufacturedMonodomain1D3D`` is a registered factory tutorial (§3:
-    "a tutorial is a data record" is the record shape; a factory tutorial's
-    config lives in the document). This test has no real native case on
-    disk (no ``cases_root`` points at the monorepo), so planning itself
-    fails on missing case files -- but that failure is exactly the proof
-    this test wants: ``validate_run`` (``run_validation`` diagnostics,
-    naming real cardiac catalog fields like ``myocardiumSolver``) ran at
-    all, which only happens when ``configurationSource`` is "document". A
-    case-sourced entry (the two tests above) never produces these codes.
+    """``manufacturedMonodomainTotalLagrangianEM`` is a registered factory
+    tutorial (§3: "a tutorial is a data record" is the record shape; a
+    factory tutorial's config lives in the document). This test has no real
+    native case on disk (no ``cases_root`` points at the monorepo), so
+    planning itself fails on missing case files -- but that failure is
+    exactly the proof this test wants: ``validate_run`` (``run_validation``
+    diagnostics, naming real cardiac catalog fields like
+    ``myocardiumSolver``) ran at all, which only happens when
+    ``configurationSource`` is "document". A case-sourced entry (the two
+    tests above) never produces these codes.
 
     Corrected 2026-09-27: this used ``singleCell``, which migrated onto a
     tutorial record (records/single_cell.py, tutorials-are-pointers plan,
@@ -154,9 +155,12 @@ def test_factory_tutorial_entry_is_document_sourced() -> None:
     by name instead of failing on missing case files, so it no longer fits
     this test's premise. This then used ``cable1DRestitution``, which also
     migrated onto a tutorial record the same day (records/
-    cable_1d_restitution.py, plan §5e, step 5.2), for the same reason.
-    ``manufacturedMonodomain1D3D`` is another still-factory tutorial for the
-    same generic contract."""
+    cable_1d_restitution.py, plan §5e, step 5.2), then
+    ``manufacturedMonodomain1D3D``, which migrated onto a tutorial record
+    the same day too (records/manufactured_monodomain_1d3d.py, replacing it
+    and ``manufacturedPurkinjeGraph`` together).
+    ``manufacturedMonodomainTotalLagrangianEM`` is now the only still-factory
+    tutorial for this generic contract."""
     cardiacfoam = pytest.importorskip("omnidriver.cardiacfoam.cardiacfoam_plugin")
     from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
@@ -164,7 +168,7 @@ def test_factory_tutorial_entry_is_document_sourced() -> None:
         OpenFOAMEnvironmentPlugin(), cardiacfoam.CardiacFoamPlugin(),
         source="test:factory-tutorial",
     )
-    report = strict_plan("manufacturedMonodomain1D3D", driver_context=context)
+    report = strict_plan("manufacturedMonodomainTotalLagrangianEM", driver_context=context)
 
     assert report.run_document is not None
     run_doc = report.run_document

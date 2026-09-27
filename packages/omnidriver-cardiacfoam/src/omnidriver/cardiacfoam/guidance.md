@@ -85,3 +85,13 @@ the record's own.
   it read and wrote, and the fingerprints are recorded. The choice is yours.
 - **Serial only.** Running the solve in parallel belongs to the OpenFOAM
   layer (a later item), not to a record's routes.
+- **A route selector need not choose a mesh.**
+  `manufacturedMonodomain1D3D`'s selector, `"solver"`, instead picks which
+  solve command runs after the same `blockMesh` step: `"coupled"` (the
+  default, `cardiacFoam`, the coupled 1D-3D myocardium/Purkinje solve) or
+  `"graphOnly"` (`"solver": "graphOnly"`, `runPurkinjeGraph`, the graph
+  alone with no myocardium coupling -- the case's own README "Graph-Only
+  Diagnostic"). `graphFile` (a direct `constant/electroProperties` key,
+  `purkinjeGraphModelCoeffs.graphFile`) picks which committed
+  `constant/purkinjeGraph*` file either route reads, by name, checked
+  against the staged case.

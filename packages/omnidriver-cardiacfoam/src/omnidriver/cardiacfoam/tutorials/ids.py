@@ -39,9 +39,16 @@ class CardiacTutorialID(str, Enum):
     # §5c, task 5.4b-E), which names itself directly rather than through
     # this factory-tutorial enum -- see RESTITUTION_CURVES's identical
     # removal note below.
+    # MANUFACTURED_MONODOMAIN_1D3D ("manufacturedMonodomain1D3D") and
+    # MANUFACTURED_PURKINJE_GRAPH ("manufacturedPurkinjeGraph") removed
+    # 2026-09-27: both tutorials pointed at the same native case
+    # (manufacturedSolutions/monodomain1D3D) and migrated onto ONE tutorial
+    # record (records/manufactured_monodomain_1d3d.py) -- the old graph-only
+    # diagnostic is that record's `graphOnly` variant, not a second
+    # tutorial. Neither name is reachable through this enum any more; see
+    # RESTITUTION_CURVES's identical removal note below. There is no alias
+    # for "manufacturedPurkinjeGraph": it is refused like any unknown entry.
     MANUFACTURED_MONODOMAIN_TOTAL_LAGRANGIAN_EM = "manufacturedMonodomainTotalLagrangianEM"
-    MANUFACTURED_MONODOMAIN_1D3D = "manufacturedMonodomain1D3D"
-    MANUFACTURED_PURKINJE_GRAPH = "manufacturedPurkinjeGraph"
     # RESTITUTION_CURVES ("restitutionCurves") removed 2026-09-25: migrated
     # onto a tutorial record (docs/superpowers/specs/2026-09-24-tutorials-
     # are-pointers-design.md, step 4b), which names itself directly

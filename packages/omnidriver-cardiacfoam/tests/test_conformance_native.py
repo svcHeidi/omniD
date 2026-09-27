@@ -18,6 +18,7 @@ from cardiacfoam_native import (
     cable_1d_restitution_conformance_target,
     manufactured_bath_bidomain_conformance_target,
     manufactured_bidomain_conformance_target,
+    manufactured_monodomain_1d3d_conformance_target,
     manufactured_monodomain_pseudo_ecg_conformance_target,
     niederer2011_conformance_target,
     manufactured_eikonal_ecg_conformance_target,
@@ -37,6 +38,7 @@ _TARGETS = {
     "manufacturedMonodomainPseudoECG": manufactured_monodomain_pseudo_ecg_conformance_target,
     "cable1DRestitution": cable_1d_restitution_conformance_target,
     "cable1DCVConvergence": cable_1d_cv_convergence_conformance_target,
+    "manufacturedMonodomain1D3D": manufactured_monodomain_1d3d_conformance_target,
 }
 
 

@@ -108,7 +108,17 @@ def test_every_serial_tutorial_builds_under_any_base(tmp_path: Path) -> None:
     # was in `_NEEDS_CASE_CONTENT`, and each held 2 keys (the name and its
     # case-folded alias) in SPEC_FACTORIES, so the buildable count drops by
     # 4, to 6.
-    assert built == 6, f"expected 6 buildable catalog entries, got {built}"
+    # Corrected 2026-09-27 (`manufacturedMonodomain1D3D`/
+    # `manufacturedPurkinjeGraph` onto ONE tutorial record, records/
+    # manufactured_monodomain_1d3d.py): neither was in `_NEEDS_CASE_CONTENT`,
+    # and each held 2 keys in SPEC_FACTORIES (the name plus, for
+    # `manufacturedMonodomain1D3D`, its case-folded alias -- `.value.lower()`
+    # was a real second key here, unlike niederer2011's already-lowercase
+    # name), so the buildable count drops by 4, to 2 (only
+    # `manufacturedMonodomainTotalLagrangianEM` and its
+    # "manufacturedelectromechanicsbc" alias remain in SPEC_FACTORIES at
+    # all).
+    assert built == 2, f"expected 2 buildable catalog entries, got {built}"
 
 
 @pytest.mark.parametrize("name", sorted(_NEEDS_CASE_CONTENT))

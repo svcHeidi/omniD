@@ -152,10 +152,13 @@ def test_describe_entry_includes_capability_manifest():
     # name with no cases_root is refused by name), unlike a still-factory
     # tutorial, which this generic capability-manifest smoke test needs
     # nothing else from. "cable1DRestitution" (also migrated 2026-09-27,
-    # records/cable_1d_restitution.py) is no longer a fit either;
-    # "manufacturedMonodomain1D3D" is another registered factory tutorial
-    # for the same solver family.
-    payload = describe_entry("manufacturedMonodomain1D3D", driver_context=_CTX)
+    # records/cable_1d_restitution.py) is no longer a fit either.
+    # "manufacturedMonodomain1D3D" migrated the same day (records/
+    # manufactured_monodomain_1d3d.py, replacing it and
+    # "manufacturedPurkinjeGraph" together) -- "manufacturedMonodomain
+    # TotalLagrangianEM" is now the only still-factory tutorial for this
+    # generic smoke test.
+    payload = describe_entry("manufacturedMonodomainTotalLagrangianEM", driver_context=_CTX)
     manifest = payload["capability_manifest"]
     assert "cardiacFoam" in manifest["allowed_commands"]["plugin"]
     assert "electro" in manifest["samplable_fields"]
@@ -166,6 +169,6 @@ def test_strict_plan_carries_capability_manifest(monkeypatch):
     from omnidriver.core.strict_planning import strict_plan
 
     report = strict_plan(
-        "manufacturedMonodomain1D3D", driver_context=_CTX,
+        "manufacturedMonodomainTotalLagrangianEM", driver_context=_CTX,
     ).to_json()
     assert "cardiacFoam" in report["capability_manifest"]["allowed_commands"]["plugin"]

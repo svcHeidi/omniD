@@ -380,6 +380,41 @@ def niederer_run(tmp_path: Path, *, dx: float, end_time: float | None = None) ->
     return Path(case.case_root), artifact
 
 
+def manufactured_monodomain_1d3d_conformance_target(tmp_path: Path) -> ConformanceTarget:
+    """``manufacturedMonodomain1D3D`` on its default ``coupled`` route, at
+    the coarsest of ``coupledConvergence``'s own resolutions
+    (``numberCells`` 10, ``graphFile`` ``purkinjeGraph.nodes011``, ``dt``
+    0.008971136 s) -- a real run takes well under a second
+    (``docs/solver-learning/cardiacfoam.md``, section MD1D3D). Not the
+    native default N=20 (~13 s): conformance runs several plans per check,
+    and this record's own coarsest committed study point is already a
+    fast, real, non-invented resolution."""
+    require_sourced_openfoam("blockMesh", "cardiacFoam")
+    return ConformanceTarget(
+        plugin="cardiacfoam",
+        record="manufacturedMonodomain1D3D",
+        cases_root=native_tutorials_root(),
+        scratch_root=tmp_path / "scratch",
+        base_study={
+            "numberCells": 10,
+            "graphFile": "purkinjeGraph.nodes011",
+            "system/controlDict:deltaT": 0.008971136,
+        },
+        # A catalogued scalar the coupling reads (native default 1.0).
+        patch=(
+            "constant/electroProperties:monodomainSolverCoeffs"
+            ".domainCouplings.couplingA.rPvj",
+            2.0,
+        ),
+        untouched=("constant/electroProperties", ("monodomainSolverCoeffs", "ionicModel")),
+        sweep_name="graphFile",
+        sweep_values=("purkinjeGraph.nodes011", "purkinjeGraph.nodes021"),
+        unknown_name="constant/electroProperties:monodomainSolverCoeffs.domainCouplings.couplingA.rPv",
+        solver_command="cardiacFoam",
+        environment={},
+    )
+
+
 def niederer2011_conformance_target(tmp_path: Path) -> ConformanceTarget:
     """``niederer2011`` (hex route) at the coarsest resolution its own
     ``cartesianConvergence`` study defines (dx 0.5 mm -> cells (40 6 14)),

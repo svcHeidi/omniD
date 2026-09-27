@@ -17,7 +17,10 @@ _MODULES = [
     # (records/cable_1d_cv_convergence.py, records/cable_1d_restitution.py,
     # tutorials-are-pointers plan §5e, steps 5.3/5.2), for the same reason
     # as restitution_curves above.
-    "omnidriver.cardiacfoam.tutorials.defaults.manufactured_purkinje_graph",
+    # manufactured_purkinje_graph's defaults module was deleted 2026-09-27:
+    # it and manufactured_monodomain_1d3d migrated onto one tutorial record
+    # (records/manufactured_monodomain_1d3d.py), for the same reason as
+    # restitution_curves above.
     "omnidriver.cardiacfoam.tutorials.defaults.manufactured_monodomain_total_lagrangian_em",
 ]
 _DEAD_NAMES = (

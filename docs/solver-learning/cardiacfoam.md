@@ -12,7 +12,7 @@ tree is a `git archive` of the native feature branch's committed files (plan
 §4, "a clean native tree"), never the owner's checkout. Runs happen in
 scratch copies.
 
-Sections: **R** was started by conformance Task 14 (P4); **G** by the tutorial plan's P5 (gmsh); **B** by step 5.4b-B (`manufacturedBidomain`). Merged 2026-09-26. **N** by step 5.4b-N (`niederer2011`); **E** by step 5.4b-E (`manufacturedEikonalECG`); **Q** by topic B Task 7 (the activation-probe reader), 2026-09-26. **X** by topic B Task 8 (openCARP against cardiacFOAM, the first cross-solver benchmark), 2026-09-26. **T** by the controller's TNNP integrator timing (owner question), 2026-09-26. **Y** by the Niederer campaign's 0.5 mm proof, 2026-09-27. Rows B11-B12, E4-E6 and N5-N6 were added by the review 54b fixes, 2026-09-26. Corrected 2026-09-26 (review 54b I4): this line did not name section E. **P** by PAR (niederer2011 in parallel), 2026-09-26. **BB** by step 5.4a (`manufacturedBathBidomain`), 2026-09-27. **S** by the controller's Niederer parameter and single-cell check (owner question: do both solvers solve the same problem?), 2026-09-27. **CABLE** by steps 5.2/5.3 (`cable1DRestitution`/`cable1DCVConvergence`), 2026-09-27.
+Sections: **R** was started by conformance Task 14 (P4); **G** by the tutorial plan's P5 (gmsh); **B** by step 5.4b-B (`manufacturedBidomain`). Merged 2026-09-26. **N** by step 5.4b-N (`niederer2011`); **E** by step 5.4b-E (`manufacturedEikonalECG`); **Q** by topic B Task 7 (the activation-probe reader), 2026-09-26. **X** by topic B Task 8 (openCARP against cardiacFOAM, the first cross-solver benchmark), 2026-09-26. **T** by the controller's TNNP integrator timing (owner question), 2026-09-26. **Y** by the Niederer campaign's 0.5 mm proof, 2026-09-27. Rows B11-B12, E4-E6 and N5-N6 were added by the review 54b fixes, 2026-09-26. Corrected 2026-09-26 (review 54b I4): this line did not name section E. **P** by PAR (niederer2011 in parallel), 2026-09-26. **BB** by step 5.4a (`manufacturedBathBidomain`), 2026-09-27. **S** by the controller's Niederer parameter and single-cell check (owner question: do both solvers solve the same problem?), 2026-09-27. **CABLE** by steps 5.2/5.3 (`cable1DRestitution`/`cable1DCVConvergence`), 2026-09-27. **MD1D3D** by the `manufacturedMonodomain1D3D` migration (replacing `manufactured_monodomain_1d3d` and `manufactured_purkinje_graph` together), 2026-09-27.
 
 ## CABLE. cable1DRestitution / cable1DCVConvergence (`electrophysiologyProtocols/cableProtocol/monodomain1DCableCV`, plan 5.2/5.3)
 
@@ -604,3 +604,116 @@ own zip/variant-selector vocabulary and Q6 (serial only) replace them.
 Block-mesh resolution (hex) and gmsh `__LC__`/`render_tet_geo` (tet) become
 the `numberCells`/`tetNumberCells` axes respectively -- the template takes
 `lc` via CLI now, so there is nothing left to render.
+
+## MD1D3D. manufacturedMonodomain1D3D (`manufacturedSolutions/monodomain1D3D`)
+
+Replaces two old factory tutorials that both pointed at this one native
+case: `manufactured_monodomain_1d3d` (the coupled solve) and
+`manufactured_purkinje_graph` (the graph-only diagnostic, now this record's
+`graphOnly` variant).
+
+**MD1: the `Allrun` sed is dead.** `system/blockMeshDict.3D` has held a
+literal `hex (0 1 2 3 4 5 6 7) (20 20 20) simpleGrading (1 1 1)` since
+native `f3748186` ("one explicit blockMeshDict convention, .3D = 20^3");
+`sed "s/NCELLS/${N_CELLS}/g" system/blockMeshDict.3D > .../.active` finds no
+`NCELLS` token and copies the file unchanged, so `N_CELLS` (default 80 in
+`Allrun`) has silently done nothing since that commit. Verified: two
+archived copies of the case, one running the unmodified `Allrun`
+(sed/`.active`/`rm`) and one running `blockMesh -dict
+system/blockMeshDict.3D` directly, both at the native default, produce
+byte-identical `constant/polyMesh`, `constant/electroProperties
+.withDefaultValues`, every time directory, `postProcessing/`,
+`verification/` and identical manufactured-solution error summaries
+(`diff -rq`, zero differences). This case ships no
+`regression/regressionTest.sh` (confirmed: no `regression/` directory under
+this case, unlike bidomain/eikonalECG/pseudoECG), so the Allrun fix is
+verified this way rather than against a regression reference.
+
+**MD2: `graphFile` is a plain, unquoted native word**, read directly as an
+`IOdictionary` object name (`conductionSystemDomain::readGraphFile`,
+`conductionSystemDomain.C:152-170`): `graphFile purkinjeGraph;` opens
+`constant/purkinjeGraph`. No copy, no rename -- naming
+`purkinjeGraph.nodes041` directly opens that file. Already catalogued
+(`dict_entries_catalog.py`, `purkinjeGraphModelCoeffs.graphFile`,
+`source_refs` citing this same file).
+
+**MD3: `cardiacFoam` (coupled) at N=5 is too coarse for the default PVJ
+coupling.** A real run at `(5 5 5)` (dx = 0.2) fails:
+```
+--> FOAM FATAL ERROR: (openfoam-2412)
+pvjRadius is smaller than the local myocardium cell size for PVJ terminal 0.
+  terminalLocation        = (0 0.166667 0.333333)
+  pvjRadius               = 0.11
+  nearestCellDistance     = 0.124722
+  nearestCellVolume       = 0.008
+  equivalentCellLength    = 0.2
+```
+`(10 10 10)` (dx = 0.1) succeeds in well under a second. Matches the old
+Python module's own coarsest `number_cells` value (10) and the native
+`coupledConvergence` studies' own coarsest point -- neither the old code
+nor the native studies ever tried N=5. `pvjRadius` (0.11, native default)
+is unaffected by `rPvj` (the coupling-strength override the `decoupled`
+study sets to `1e6`), so this floor applies to all three `coupledConvergence`
+studies alike, not only `sweep_active`.
+
+**MD4: what a real coupled run writes**, `blockMesh -dict
+system/blockMeshDict.3D` then `cardiacFoam`, N=10, `graphFile` left at the
+native default (`purkinjeGraph`, 41 nodes):
+- `constant/polyMesh`'s standard five files (one zone-free `hex (` block --
+  `POLY_MESH_OUTPUTS`, matching every other record's own mesh step);
+- `constant/electroProperties.withDefaultValues` (`electroModel::end`, P4's
+  R4 -- every non-`singleCellSolver` solve writes it);
+- `postProcessing/3D_10_cells.dat`: the myocardium verifier's manufactured-
+  solution error summary, named `<dim>_<N>_cells.dat` (the same convention
+  bidomain/eikonalECG/niederer2011 use);
+- `postProcessing/graph_1D_41_nodes.dat`: the GRAPH verifier's own error
+  summary, named `graph_<dim>_<n>_nodes.dat` where `<n>` is the number of
+  nodes in whichever graph `graphFile` selected (41 for the plain default;
+  varies per `constant/purkinjeGraph.nodes*` file) -- a new naming
+  convention this record is the first to observe;
+- `postProcessing/purkinjeNetwork.dat`: one row per written instance, one
+  `Vm`/PVJ-current column pair per graph node;
+- `postProcessing/purkinjeNetworkVTK/purkinjeNetwork_NNNNNN.vtk` (one per
+  written instance, sequentially numbered, not named by time value) plus
+  `purkinjeNetworkVTK/purkinjeNetwork.vtk.series`;
+- `verification/coupled1D3DMonodomain_diagnostics.csv`: the coupling
+  verifier's own diagnostics (`domainCouplings.couplingA`'s
+  `coupled1D3DMonodomainVerifier`), written to a TOP-LEVEL `verification/`
+  directory -- not under `postProcessing/`, and not a directory any
+  existing staging convention drops, so it must be declared as a `produces`
+  path or a restage would carry it forward as if authored (C11). Present
+  regardless of `couplingMode`/`rPvj`: all three `coupledConvergence`
+  studies use the same `couplingA` entry, so its verifier always runs.
+
+**MD5: `runPurkinjeGraph` (graphOnly) writes strictly less.** Same
+`blockMesh` step, then `runPurkinjeGraph` in place of `cardiacFoam` (a real,
+separately-built utility,
+`applications/utilities/runPurkinjeGraph/runPurkinjeGraph.C`) at the same
+N=10, default graph: writes only the `graph_1D_41_nodes.dat`/
+`purkinjeNetwork.dat`/`purkinjeNetworkVTK/*` triad from MD4 above -- no
+`electroProperties.withDefaultValues` (it calls
+`conductionSystemDomain::end()` directly, never `electroModel::end`,
+matching `restitutionCurves`'s own `singleCellSolver` precedent), no
+`*_cells.dat` (no myocardium verifier: nothing constructs one), no
+`verification/` (the coupling verifier is never constructed either -- there
+is no myocardium domain to couple). `grep` over both `runPurkinjeGraph.C`
+and `conductionSystemDomain.C` finds no reference to `physicsProperties`,
+`fvSchemes` or `fvSolution` at all, and the log confirms it: no "Selecting
+physicsModel electroModel" line (`cardiacFoam`'s own first line), only
+"Selecting ODE solver RKF45".
+
+Native commit for this task: removes `Allrun`'s dead
+`sed`/`.active`/`rm`; rewrites the three `coupledConvergence` studies onto
+`graphFile`/`numberCells`/direct-key vocabulary (same graphs, cell counts
+and time steps as the old Python defaults); adds
+`setup/studies/graphConvergence/sweep_graph_only.json`, the old
+`manufactured_purkinje_graph` tutorial's entire reason to exist, as a real
+committed study of the `graphOnly` route, sweeping all six committed
+`constant/purkinjeGraph.nodes*` files. `setup/select_purkinje_graph.sh`
+(a human convenience script that copies a numbered graph onto the plain
+`constant/purkinjeGraph`) is untouched -- the axis makes it unnecessary for
+an automated run, but it still works for a human running `./Allrun` by
+hand. `setup/post_processing_coupled_1D3D.py`/
+`post_processing_purkinje_graph.py` (the old sweep's own aggregation
+scripts, keyed on an old-shape output-directory-per-case layout) are not
+touched or exercised by this migration; see the report's concerns.

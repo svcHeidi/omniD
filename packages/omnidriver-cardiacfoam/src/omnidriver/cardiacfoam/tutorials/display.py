@@ -126,32 +126,28 @@ TUTORIALS: tuple[TutorialDisplay, ...] = (
         },
     ),
     TutorialDisplay(
+        # A literal string, not `CardiacTutorialID.MANUFACTURED_MONODOMAIN_
+        # 1D3D` (removed 2026-09-27 alongside the factory it keyed): this
+        # tutorial is now a tutorial record
+        # (records/manufactured_monodomain_1d3d.py), which names itself
+        # directly, the same way restitutionCurves's own display entry does
+        # above. It replaces this entry AND the old, now-deleted
+        # "manufacturedPurkinjeGraph" display entry: the graph-only
+        # diagnostic that factory tutorial ran is this record's `graphOnly`
+        # variant, not a second tutorial -- "manufacturedPurkinjeGraph" is
+        # refused like any unknown entry, with no alias.
         id="manufacturedMonodomain1D3D",
         title="Manufactured Purkinje-myocardium coupling (MMS)",
         summary=(
             "Coupled 1D Purkinje graph / 3D monodomain manufactured-solution "
             "convergence, across decoupled, unidirectional, and bidirectional "
-            "PVJ transfer regimes."
+            "PVJ transfer regimes -- or the 1D graph alone, on its own "
+            "mesh-refinement convergence."
         ),
         thumbnail="/tutorials/manufactured-monodomain-1d3d.png",
-        tags=("manufactured-solution", "verification", "purkinje", "coupling"),
+        tags=("manufactured-solution", "verification", "purkinje", "coupling", "1D-3D"),
         preset={
             "anatomy.mesh": "unit-domain",
-            "physics.ionic_model": "monodomainFDAManufactured",
-        },
-    ),
-    TutorialDisplay(
-        id="manufacturedPurkinjeGraph",
-        title="Manufactured solution (Purkinje graph)",
-        summary=(
-            "Manufactured monodomain solution on a 1D Purkinje graph coupled "
-            "to a 3D domain. Traces mesh refinement convergence on the "
-            "Hines-ordered network."
-        ),
-        thumbnail="/tutorials/manufactured-purkinje-graph.png",
-        tags=("manufactured-solution", "verification", "purkinje", "1D-3D"),
-        preset={
-            "anatomy.mesh": "purkinje-graph",
             "physics.ionic_model": "monodomainFDAManufactured",
         },
     ),
