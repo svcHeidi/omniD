@@ -551,3 +551,32 @@ Native commit for this task: rewrites the four committed studies to
 names (§5g Q2/Q3/Q8, tutorials-are-pointers 5.4b-P). Q11's `anisotropic yes`
 and the `DefineConstant` gmsh template were already on `omnid/tutorials-are-
 pointers` before this task started (confirmed, not redone).
+
+**Every other old-factory write, accounted for** (moved here 2026-09-27 from
+the record's own docstring, owner audit: evidence belongs in this log, not
+in code). `monodomainSolverCoeffs.verificationModel.type` becomes a direct
+study key: the native default is `manufacturedAnisotropicMonodomainVerifier`;
+the old Python module-level default, `manufacturedFDAMonodomainVerifier`
+(FDA), is deleted, so a study that wants FDA now states it explicitly
+(`temporalConvergence` does, for parity with its own prior behaviour, since
+its JSON never overrode this key and the old code's module-level default
+applied). `ecgDomains.ECG.ecgSolver`/`verificationModel.enabled` are dropped
+entirely: never varied by any of the four committed studies, and the native
+case already holds `pseudoECG`/`yes`. `verificationModel.referenceQuadrature
+Order`/`checkQuadratureOrders` are dropped the same way: never varied,
+native already holds `96`/`(6 12 24 48)`. `ecgDomains.ECG.electrodePositions
+.<E1-E5>` become direct study keys, in the two studies that vary `dimension`
+(`cartesianConvergence`, `temporalConvergence`) -- `R1`-`R156` stays dropped
+everywhere, reasoning above. `grad_scheme` becomes a direct
+`system/fvSchemes:gradSchemes.default` key (the literal OpenFOAM token, not
+the old kwarg's enum). `end_time` becomes a direct
+`system/controlDict:endTime` key. `numerics_profile` is dropped: its one
+profile's overlay is the no-op already established above (the tet
+`fvSchemes` overlay). `phi_tolerance` is dropped: it never appears in any of
+the four committed studies (it is a bidomain-only key; `monodomainSolver
+Coeffs` has no equivalent). `ecg_enabled`/`piecewise_sweep`/`mesh_family`/
+`dimensions`/`solver_types`/`run_in_parallel` are dropped: the sweep JSON's
+own zip/variant-selector vocabulary and Q6 (serial only) replace them.
+Block-mesh resolution (hex) and gmsh `__LC__`/`render_tet_geo` (tet) become
+the `numberCells`/`tetNumberCells` axes respectively -- the template takes
+`lc` via CLI now, so there is nothing left to render.
