@@ -7,6 +7,9 @@
 #   OPENCARP_MPI_BIN                the bin directory of the MPI openCARP was built against, put first on
 #                                   PATH for openCARP only (a bundled-MPICH install: <prefix>/lib/petsc/bin)
 #   CAMPAIGN_DYLD_LIBRARY_PATH      macOS only: appended to DYLD_LIBRARY_PATH inside each solver's shell
+#   REPORTS_DIR                     compare only: where reports are written (default: runs/reports).
+#                                   Reports are written once, so a re-read with a changed reader goes
+#                                   to a fresh directory rather than overwriting what is already there.
 # Usage:
 #   campaign.sh check                              requests unchanged, native case unchanged
 #   campaign.sh level <solver> <dx-mm> [N]         one dx of the grid (its three time steps), on N ranks
@@ -116,9 +119,10 @@ case "${1:-}" in
   compare)
     shift
     if [ $# -eq 0 ]; then set -- $(cd "$HERE/requests" && ls *.json | sed 's/\.json$//'); fi
-    mkdir -p "$RUNS/reports"
+    reports="${REPORTS_DIR:-$RUNS/reports}"
+    mkdir -p "$reports"
     for stem in "$@"; do
-      request="$HERE/requests/$stem.json" report="$RUNS/reports/$stem.json"
+      request="$HERE/requests/$stem.json" report="$reports/$stem.json"
       [ -f "$request" ] || die "no request $stem"
       if [ -e "$report" ]; then echo "$stem: report exists (written once)"; continue; fi
       # A request whose cases have not all completed would write an `unavailable` report,
