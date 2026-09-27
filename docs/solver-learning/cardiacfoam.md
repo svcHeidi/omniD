@@ -498,3 +498,17 @@ a lumped mass matrix.
 Owner decisions, 2026-09-28: TNNP 2004 is intended for this benchmark, and the
 −84 mV domain default stays for now. A single-cell initialization will come
 later as its own native implementation.
+
+## SC. singleCell (`electrophysiologyProtocols/singleCell`, plan 5.1)
+
+Every run used a `git archive HEAD tutorials/electrophysiologyProtocols
+/singleCell` copy of native `omnid/single-cell` (based on `853ff09e`),
+OpenFOAM v2412 sourced. Each step's outputs were listed by hashing every
+file before and after the step.
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| SC1 | the native route, serially, on the case as committed: `blockMesh`, `cardiacFoam` (native default `endTime 2`, `deltaT 1e-6` -- 2,000,000 steps) | both rc 0. blockMesh: the standard `constant/polyMesh/{boundary,faces,neighbour,owner,points}` (and the directory itself). cardiacFoam (~24-26 s wall clock): `postProcessing/TWorld_endocardialCells_S1_1000.txt` and `..._S1_1000_Ta.txt` (the native case's own `activeTensionModel LandNiedererTWorld` also writes a second trace). No `constant/electroProperties.withDefaultValues`, no `0/` directory | each step's `produces`/`consumes`; `singleCellSolver::end` overrides `electroModel::end` without calling it, the same as `restitutionCurves` (R4) |
+| SC2 | the record's `ionicModel` axis, swept `{"ionicModel": ["TNNP", "BuenoOrovio"]}` at a shortened `endTime 0.05`, native `tissue`/`activeTensionModel` otherwise untouched | `TNNP` completes (rc 0). `BuenoOrovio` aborts: `FOAM FATAL ERROR: Active tension model requires signal 'Cai' but provider does not supply it` (`activeTensionModel::validateProvider`), a 1-byte trace file | a native-case quirk, not a record defect: the case's own `activeTensionModel LandNiedererTWorld` is a fixed global default the `ionicModel` axis (unchanged from `restitutionCurves`, whose own case sets no `activeTensionModel` at all) was never asked to touch, and BuenoOrovio's ionic model does not export a `Cai` signal that model needs. `TWorld` (the native default) and `TNNP` both supply it and were used for C7 instead. A study that wants to sweep an ionic model incompatible with the native `activeTensionModel` must also clear or replace it directly (a direct `singleCellSolverCoeffs.activeTensionModel` key removal is untested here) |
+| SC3 | the two committed native studies (`setup/sweep_ionic_model_tissue.json`, `setup/studies/tworldVsGaur/sweep_tworld_vs_gaur.json`), read against the ionic model catalog | all 24 distinct `ionic_model` values in the full sweep carry a catalogued `single_cell_stimulus_amplitude` (the `ionicModel` axis's own requirement); the old Python-vocabulary base keys `stim_start_ms`/`n_s1`/`end_time_buffer_s`/`write_after_time_s` in `sweep_tworld_vs_gaur.json`'s `base` matched no keyword of the deleted factory's own `make_spec` either -- already dead before this rewrite | both studies rewrite cleanly onto `ionicModel` plus direct `document:key` literals (`tissue`, `stim_period_S1`, `outputVariables.ionic.export`); the four dead base keys are dropped, not carried forward |
+| SC4 | `setup/driver_config.json` (`{"ionic_models": ["Stewart"]}`) | named no key any current path reads (the same fate `restitutionCurves`'s own `driver_config.json` already met) | deleted natively, not migrated |

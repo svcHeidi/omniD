@@ -110,7 +110,14 @@ def single_cell_conformance_target(tmp_path: Path) -> ConformanceTarget:
         patch=("constant/electroProperties:singleCellSolverCoeffs.tissue", "epicardialCells"),
         untouched=("constant/electroProperties", ("singleCellSolverCoeffs", "ionicModel")),
         sweep_name="ionicModel",
-        sweep_values=("TNNP", "BuenoOrovio"),
+        # Not BuenoOrovio (section SC2, docs/solver-learning/cardiacfoam.md):
+        # the native case's own activeTensionModel LandNiedererTWorld
+        # requires a Cai signal BuenoOrovio's ionic model does not supply,
+        # fatal at solve time -- a native-case quirk this axis (unchanged
+        # from restitutionCurves, whose own case sets no activeTensionModel)
+        # has no reason to guard against. TNNP and TWorld (the native
+        # default) both supply it.
+        sweep_values=("TNNP", "TWorld"),
         unknown_name="constant/electroProperties:singleCellSolverCoeffs.tissu",
         solver_command="cardiacFoam",
         environment={},

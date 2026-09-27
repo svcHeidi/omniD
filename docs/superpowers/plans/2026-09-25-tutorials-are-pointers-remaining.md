@@ -116,6 +116,7 @@ defaults / all package source (tutorials included) / all package tests.
 | 5.4a | bath | in progress, branch `t54a-bath` | — | — |
 | 5.4b-P | pseudo-ECG, last in 5.4b | not started | — | — |
 | B8 | topic B Task 8, the cross-solver Niederer comparison | in progress, branch `qoi-b8` | — | — |
+| 5.1 | `singleCell` record (§2's recipe); one reused axis, `ionicModel`; no mesh axis (a single cell has no mesh study) and no `s1s2Protocol` axis (neither committed study varies S2 pacing). Both native studies rewritten; `driver_config.json` deleted (dead, like `restitutionCurves`'s own). Passes C1-C12 (`test_conformance_native.py`) | **done**, on branch `t55-single-cell`, not merged. Measured from `main` at `70378bd`, so this row does not chain from the one above (parallel worktree, not yet merged) | omniD `a20e38a`; native `853ff09e` on `omnid/single-cell` | 3633 / 58865 / 66340 -> 3250 / 58590 / 65964 |
 
 The wave from `9de75cf` to `718d015` (5.4b-B, N, E, the axes, Task 7 and
 the name refusal): tutorial modules and defaults 5883 -> 4445 (-1438), all
