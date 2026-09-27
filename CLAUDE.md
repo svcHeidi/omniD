@@ -122,6 +122,10 @@ A skip here hides exactly what the guard exists to find.
 | core names no OpenFOAM layout beyond its recorded, shrinking debt | `scripts/check-core-shape.py` (baseline `scripts/core-shape-baseline.txt`; new tokens never added) |
 | every conformance target passes C1-C12 (toy, openCARP, cardiacFOAM; C11 added 2026-09-26: restaging a run case carries nothing the run wrote and drops nothing authored; C12 added 2026-09-26: every declared output format has a reader whose declaration is valid). Corrected 2026-09-26 (conformance Task 14): this said "cardiacFOAM from Task 14, which fails C10 today"; cardiacFOAM's `restitutionCurves` now passes all twelve, and every migrated record joins its parametrization | `omnidriver.conformance`, parametrized per package (toy in core; openCARP `native_opencarp`; cardiacFOAM `native`, `test_conformance_native.py`, run from a shell with OpenFOAM sourced and `OMNIDRIVER_NATIVE_TUTORIALS` at a clean native tree). Reworded 2026-09-25 (final review S-M5): it read "any solver plugin", a universal claim cardiacFOAM did not yet meet |
 
+## One reality (owner, 2026-09-28)
+
+cardiacFOAM and cardiacCore are both OpenFOAM-based, so they do every shared job the same way. That covers records, catalogs and how they are built, validation, case reading and writing, and key scanning. The shared mechanism lives in `omnidriver-openfoam`, never as two variants. openCARP is a different solver and may work differently, but only inside its own package. Nothing is kept for compatibility: no legacy paths, no old format versions, no retired names.
+
 ## Two rules that were learned the hard way
 
 **Supplied versus discovered.** Discover only what genuinely exists ambiently,
