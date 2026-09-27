@@ -922,6 +922,32 @@ steps. Core does none of them for you.
      agree within 5 ms, and the points across the 7 mm edge differ by
      15-19 ms.
 
+### The Niederer campaign: the whole grid, for a cluster
+
+Added 2026-09-27. `benchmarks/niederer2011/campaign/` runs the steps above
+over the paper's full grid, Δx 0.5/0.2/0.1 mm × Δt 0.05/0.01/0.005 ms. Its
+`README.md` is the runbook, and covers:
+- each solver's environment;
+- one `sweep-run` per solver and Δx, serial or on N ranks, with a Slurm
+  example;
+- 21 pre-registered requests, one cross-solver per level and one temporal
+  per solver, Δx and pair of successive Δt, with their digests;
+- `campaign.sh compare`, and a performance protocol.
+
+What it adds to the steps above:
+- **Relative request paths.** Every path in a request is relative, and
+  `runs/` is a link to scratch. So a request's digest is the same on
+  every machine, and nothing is filled in per run.
+- **openCARP runs `nversion.par:mass_lumping 0`.** That is the full mass
+  matrix, which openCARP's own `run.py` uses. The binary's default is
+  lumped, and the `niedererNVersion` record passes nothing, so the runs
+  above (Task 8) were lumped. At Δx 0.5 mm, P8 is 58 ms with the full
+  mass matrix against 126 ms lumped (`docs/solver-learning/opencarp.md`
+  G10).
+- **Per-level studies.** cardiacFOAM uses its native study, not a copy.
+  `level_study.py` keeps one Δx's rows and adds the rank count, and
+  changes nothing the study states.
+
 ## Discovering what's valid
 
 Three layers of discovery:

@@ -59,6 +59,7 @@ reader to start here, and there was no table). Built from `git log`.
 | Opus review fixes (location guards, pre-registration, unit-carrying reports; M11) | `04a1093`, `206de29`, `9923621` | done |
 | Task 7 (cardiacFOAM's probe reader) | `b11da6c` (branch `qoi-b7`); on `main` as `4300c81` | done 2026-09-26 (corrected 2026-09-26, Task 8: said "unmerged"; it landed on `main` as `4300c81`); unblocked once 5.4b landed `niederer2011` as a record (`1811e2e`). Departures from its contract: see Task 7's own "Implemented 2026-09-26" block |
 | Task 8 (openCARP vs cardiacFOAM end to end) | `627e337` (request pre-registered before any run), `5f0d906`, and the docs commit after them (branch `qoi-b8`) | done 2026-09-26, unmerged. Report `failed` (P1, P3, P7 within 5 ms; six pairs outside), both runs `run_verified`; evidence in `docs/solver-learning/cardiacfoam.md` section X. Departures from the brief below: see Task 8's own "Implemented 2026-09-26" block |
+| Niederer campaign: the full grid, prepared for a cluster (`benchmarks/niederer2011/campaign/`) | `82746b8` (21 requests pre-registered before any campaign value was read), and the runbook/evidence commit after it (branch `campaign`) | prepared 2026-09-27, unmerged; the cluster runs are the owner's. The 0.5 mm proof ran here through the campaign's own commands, serial and on 2 ranks: evidence in `docs/solver-learning/cardiacfoam.md` section Y and `opencarp.md` G10. Corrected 2026-09-27: the Task 8 row above says "unmerged"; it is on `main` as `4860ea9`, `df1ba8c`, `4611318` |
 
 ## Global Constraints
 

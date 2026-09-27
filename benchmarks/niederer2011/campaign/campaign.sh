@@ -59,9 +59,11 @@ sweep_run() {  # solver spec output N
   local solver=$1 spec=$2 output=$3 n=$4
   if [ "$solver" = cardiacfoam ]; then
     need OMNIDRIVER_NATIVE_TUTORIALS; need OPENFOAM_BASHRC
-    ( set +eu; source "$OPENFOAM_BASHRC"; set -eu
+    # `set --` first: OpenFOAM's bashrc reads its positional arguments as
+    # settings and files to source, and would otherwise see this function's.
+    ( set -- ; set +eu; source "$OPENFOAM_BASHRC"; set -eu
       [ -n "${CAMPAIGN_DYLD_LIBRARY_PATH:-}" ] && export DYLD_LIBRARY_PATH="${DYLD_LIBRARY_PATH:+$DYLD_LIBRARY_PATH:}$CAMPAIGN_DYLD_LIBRARY_PATH"
-      host_facts "cardiacfoam-$(basename "$output")" "$spec" "N=$n"
+      host_facts "cardiacfoam-$(echo "${output#"$RUNS"/}" | tr / _)" "$spec" "N=$n"
       cd "$(dirname "$OMNIDRIVER_NATIVE_TUTORIALS")"
       # OpenFOAM's N is the case's numberOfSubdomains (set in the spec); --parallel takes no count.
       "$PYTHON" -m omnidriver sweep-run --plugin cardiacfoam --spec "$spec" --output-dir "$output" \
@@ -70,7 +72,7 @@ sweep_run() {  # solver spec output N
     need OMNIDRIVER_OPENCARP_TUTORIALS; need OPENCARP_MPI_BIN
     ( export PATH="$OPENCARP_MPI_BIN:$PATH"
       [ -n "${CAMPAIGN_DYLD_LIBRARY_PATH:-}" ] && export DYLD_LIBRARY_PATH="${DYLD_LIBRARY_PATH:+$DYLD_LIBRARY_PATH:}$CAMPAIGN_DYLD_LIBRARY_PATH"
-      host_facts "opencarp-$(basename "$output")" "$spec" "N=$n"
+      host_facts "opencarp-$(echo "${output#"$RUNS"/}" | tr / _)" "$spec" "N=$n"
       cd "$(dirname "$OMNIDRIVER_OPENCARP_TUTORIALS")"
       "$PYTHON" -m omnidriver sweep-run --plugin opencarp --spec "$spec" --output-dir "$output" \
         --scratch-dir "$RUNS/scratch" $([ "$n" -gt 1 ] && echo --parallel "$n") )

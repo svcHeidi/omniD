@@ -184,6 +184,31 @@ session scratchpad, never in the native tree.
     P1 1.253986 ms, P8 126.268283 ms and P9 55.556030 ms. P8 is within
     0.2 ms of G4's dt 50 µs value, and P1 is 0.1 ms earlier.
   - The `solve` step took 9.6 s. Every P1-P9 is a slab node (offset 0).
+- **G10, the mass matrix (2026-09-27, the Niederer campaign,
+  `benchmarks/niederer2011/campaign/`).**
+  - **What the binary does by default.** `openCARP +Help mass_lumping`
+    reports `default:(Short)(1)`, "Lump mass matrix"; 0 means "Use full
+    mass matrix".
+  - **What the native driver does.** `03E_study_resolution/run.py` has
+    `--massLumping` with default 0, and always passes `-mass_lumping`. Its
+    tutorial text says lumping gave the biggest inaccuracies among the
+    paper's finite-element codes.
+  - **What the record does.** `niedererNVersion` passes nothing, and
+    `nversion.par` has no `mass_lumping` line. So every omniD run before
+    the campaign was lumped: G4, G8, G9, Task 8 and PAR's I7.
+  - **The campaign states it.** Its study sets `nversion.par:mass_lumping
+    0`, and the staged `out/parameters.par` echoes `mass_lumping = 0`.
+  - **The effect** at dx 500 µm, dt 10 µs, tend 200 ms: P8 is
+    **58.144 ms** with the full mass matrix (campaign, case_0002),
+    against **126.268 ms** lumped (G9). P9 is 24.901 ms against
+    55.556 ms. The full-mass P8 at dx 500 is already closer to the
+    paper's finest-level range (37.8-48.7 ms) than the lumped P8 at dx
+    250 (61.99 ms, G8).
+  - **The cost.** The dt 10 µs solve took 16.3 s with the full mass matrix,
+    against 9.6 s lumped (G9).
+  - **Conclusion.** A study that wants run.py's benchmark configuration
+    names `nversion.par:mass_lumping 0`; the record does not supply it.
+    Whether the record should is a record question, not settled here.
 
 ## H. omniD drives openCARP
 

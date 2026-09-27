@@ -25,6 +25,12 @@ stream's 5.4b" is stale.
   report came back `failed`: P1, P3 and P7 agree within 5 ms, and the points
   across the 7 mm edge differ by 15–19 ms. Both runs are `run_verified`.
   The evidence is in `docs/solver-learning/cardiacfoam.md` section X.
+- **Added 2026-09-27 (the Niederer campaign):** `benchmarks/niederer2011/campaign/`
+  prepares the full grid (Δx 0.5/0.2/0.1 mm × Δt 0.05/0.01/0.005 ms) for a
+  cluster, with 21 pre-registered requests (`82746b8`), on branch `campaign`.
+  Task 8 is on `main` (`4860ea9`, `df1ba8c`, `4611318`), not only on `qoi-b8`.
+  The campaign's openCARP runs use the full mass matrix; Task 8's were lumped
+  (`docs/solver-learning/opencarp.md` G10).
 - §1's solver fact "samples the **cell containing** the point" still holds.
   But the reader reports the containing cell's *centre* as `sampled_at`, not
   the point (plan Task 7, "Implemented 2026-09-26").

@@ -12,7 +12,7 @@ tree is a `git archive` of the native feature branch's committed files (plan
 §4, "a clean native tree"), never the owner's checkout. Runs happen in
 scratch copies.
 
-Sections: **R** was started by conformance Task 14 (P4); **G** by the tutorial plan's P5 (gmsh); **B** by step 5.4b-B (`manufacturedBidomain`). Merged 2026-09-26. **N** by step 5.4b-N (`niederer2011`); **E** by step 5.4b-E (`manufacturedEikonalECG`); **Q** by topic B Task 7 (the activation-probe reader), 2026-09-26. **X** by topic B Task 8 (openCARP against cardiacFOAM, the first cross-solver benchmark), 2026-09-26. **T** by the controller's TNNP integrator timing (owner question), 2026-09-26. Rows B11-B12, E4-E6 and N5-N6 were added by the review 54b fixes, 2026-09-26. Corrected 2026-09-26 (review 54b I4): this line did not name section E.
+Sections: **R** was started by conformance Task 14 (P4); **G** by the tutorial plan's P5 (gmsh); **B** by step 5.4b-B (`manufacturedBidomain`). Merged 2026-09-26. **N** by step 5.4b-N (`niederer2011`); **E** by step 5.4b-E (`manufacturedEikonalECG`); **Q** by topic B Task 7 (the activation-probe reader), 2026-09-26. **X** by topic B Task 8 (openCARP against cardiacFOAM, the first cross-solver benchmark), 2026-09-26. **T** by the controller's TNNP integrator timing (owner question), 2026-09-26. **Y** by the Niederer campaign's 0.5 mm proof, 2026-09-27. Rows B11-B12, E4-E6 and N5-N6 were added by the review 54b fixes, 2026-09-26. Corrected 2026-09-26 (review 54b I4): this line did not name section E.
 
 ## R. restitutionCurves (`electrophysiologyProtocols/restitutionCurves_s1s2Protocol`)
 
@@ -358,3 +358,81 @@ Runs staged in the session scratchpad and pytest's `tmp_path`.
 | P2 | `sweep-run` of the record, dx 0.5 mm, `endTime 0.015`, `parallel: true`, `numberOfSubdomains: 2` | completed, every declared artifact matched, 46 s wall. `solve` log: `Exec : cardiacFoam -parallel`, `nProcs : 2`; the decompose log: `Processor 0`, `Processor 1`, 84 processor faces. The case holds `processor0/`, `processor1/` (each with `0.005 0.01 0.015 constant`), the reconstructed `0.005 0.01 0.015` at the root, and `constant/electroProperties.withDefaultValues` **at the root** (not in `processor*/constant`); `samplePoints`' row `0.015 0.00119496 -1 ...`, N3's serial value | a real two-rank run. `.withDefaultValues` stays where the serial record declares it, so the solve step's `produces` needs no parallel variant; the `postProcess -latestTime` steps read the reconstructed case |
 | P3 | `test_parallel_native.py`: two sweeps started together, dx 0.5 mm, `endTime 0.15` (so all nine probes activate, Q7), one serial, one `parallel: true` with `numberOfSubdomains: 2` | both completed, 348 s for the pair. Serial solve `ExecutionTime = 340.48 s`, parallel `181.95 s`. Final `Niedererpoints` rows **identical as written** (`writePrecision 6`): `0.00119496 0.132315 0.0465183 0.142155 0.0359346 0.133633 0.0559661 0.143067 0.0707206`; `Niedererlines/0/activationTime` byte-identical (`cmp`); the reconstructed `0.15/Vm` and `0.15/activationTime` equal the serial ones in all 3360 cells | serial and parallel agree to the precision the case writes. The test's tolerance, 1e-9 s, was fixed before the first comparison and is below that precision, so it requires the written values to be equal. A 1.9x speed-up on two ranks at this size |
 
+
+## Y. The Niederer campaign's 0.5 mm proof (2026-09-27)
+
+`benchmarks/niederer2011/campaign/`, run with `campaign.sh proof` exactly
+as its README says: serial `level` runs of both solvers at dx 0.5 mm, then
+`perf` runs at dx 0.5 mm and dt 0.05 ms on 1 and 2 ranks, then the seven
+0.5 mm requests pre-registered in `82746b8`. Native tree
+`omnid-tutorials-are-pointers` at `0489be3c`, clean before and after.
+OpenFOAM v2412; openCARP v18.1 with its bundled MPICH first on PATH and
+`HYDRA_IFACE=lo0`. Whole proof 473 s wall, while another agent's native
+suite was running. **These numbers are evidence, not a reference.**
+
+**Configuration.**
+- cardiacFOAM: the native case and its native `cartesianConvergence`
+  rows at dx 0.0005 m, unchanged: `TNNPcompactBatched` with `rushLarsen`,
+  `implicit`, `endTime 0.2`.
+- openCARP: `niedererNVersion` with `nversion.par:mass_lumping 0`, the full
+  mass matrix of openCARP's own `run.py` (`opencarp.md` G10), dx 500 µm,
+  tend 200 ms.
+
+| # | request | status | largest difference |
+|---|---|---|---|
+| Y1 | `cross_dx0.5_dt0.05` | `failed`: P1 within 5 ms, eight pairs outside | P6 86.70 ms |
+| Y2 | `cross_dx0.5_dt0.01` | `failed`: the same pattern | P6 85.94 ms |
+| Y3 | `cross_dx0.5_dt0.005` | `failed`: the same pattern | P6 85.83 ms |
+| Y4 | `temporal_cardiacfoam_dx0.5_dt0.05_vs_dt0.01` | `passed` (1 ms) | P8 0.869 ms |
+| Y5 | `temporal_cardiacfoam_dx0.5_dt0.01_vs_dt0.005` | `passed` | P8 0.129 ms |
+| Y6 | `temporal_opencarp_dx0.5_dt0.05_vs_dt0.01` | `passed` | P4 0.693 ms |
+| Y7 | `temporal_opencarp_dx0.5_dt0.01_vs_dt0.005` | `passed` | P4 0.094 ms |
+
+Every report is associated `run_verified` with both of its cases.
+
+**Activation times at dt 0.005 ms (ms; Y3):**
+
+| point | openCARP | cardiacFOAM | difference |
+|---|---|---|---|
+| P1 | 1.241 | 1.192 | 0.049 |
+| P2 | 47.354 | 132.193 | 84.839 |
+| P3 | 32.884 | 46.543 | 13.659 |
+| P4 | 57.960 | 142.004 | 84.044 |
+| P5 | 11.506 | 35.900 | 24.394 |
+| P6 | 47.678 | 133.508 | 85.830 |
+| P7 | 33.801 | 55.912 | 22.111 |
+| P8 | 58.051 | 142.914 | 84.863 |
+| P9 | 24.848 | 70.637 | 45.789 |
+
+**What they show.**
+- **The time step barely matters at dx 0.5 mm, for both solvers**, as the
+  owner expected. The largest move between successive steps is under
+  0.9 ms, and under 0.13 ms from 0.01 to 0.005 ms. cardiacFOAM's
+  0.05-to-0.01 ms move, 0.87 ms at P8, is the closest to the 1 ms bar.
+- **The solvers disagree by far more than Task 8 showed.** Task 8 saw
+  15-19 ms at the far points (section X), but its openCARP was lumped
+  (`opencarp.md` G10). With the full mass matrix, openCARP's P8 at dx
+  0.5 mm is 58 ms, against cardiacFOAM's 143 ms.
+- **cardiacFOAM's values are unchanged from Task 8** at dt 0.01 ms
+  (P8 143.043 against X's 143.067, with the batched integrator in place of
+  RKF45). The difference comes from openCARP's mass matrix, not from
+  cardiacFOAM.
+- **Neither is converged at dx 0.5 mm.** The paper's P8 is 37.8-48.7 ms at
+  dx 0.1 mm. The finer levels are the cluster's job.
+
+**Serial against parallel (dx 0.5 mm, dt 0.05 ms, 4,000 steps; wall
+seconds from `workflow_state.json`):**
+
+| solver | ranks | solve | decompose + reconstruct | values against serial |
+|---|---|---|---|---|
+| cardiacFOAM | 1 | 22.4 | — | — |
+| cardiacFOAM | 2 | 13.3 | 2.8 | final `Niedererpoints` row identical as written |
+| openCARP | 1 | 3.5 | — | — |
+| openCARP | 2 | 3.1 | — | LAT file differs by at most 1e-6 ms (the last printed digit, as PAR's I7) |
+
+cardiacFOAM's solve is 1.7x faster on 2 ranks (1.4x counting the
+decomposition). openCARP's is too small to scale here. The parallel run
+documents carry `resolvedEntry.parallel` (`{"requested": true}` for
+cardiacFOAM, `{"requested": 2}` for openCARP, `allocation` null outside a
+scheduler), and the solve steps read `mpirun -np 2 ...`. The cardiacFOAM
+log reads `nProcs : 2`.
