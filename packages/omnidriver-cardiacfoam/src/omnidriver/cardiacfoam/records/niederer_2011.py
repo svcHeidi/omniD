@@ -80,17 +80,20 @@ Niedererlines/0/activationTime``.
 
 **Corrected 2026-09-26 (topic B Task 7):** ``samplePoints``' path now
 declares ``ACTIVATION_PROBES_FORMAT``, whose reader
-(``activation_probes.ActivationProbeReader``) exists, so C12 holds. Two
-steps were added after it, both from real runs (docs/solver-learning/
-cardiacfoam.md, section Q): ``writeCellCentres`` (``postProcess -func
-writeCellCentres -latestTime``) and ``samplePointCentres`` (``postProcess
--func 'Niedererpoints(Cx,Cy,Cz)' -latestTime``), which probe the cell-centre
-components at the same locations through the same cell search, so the
-reader reports where each value was sampled -- the containing cell's centre
--- rather than echoing the configured probe location. Neither is in the
-native ``Allrun``: both only post-process, reading the mesh and writing
-``C``/``Cx``/``Cy``/``Cz`` and their probe files. ``sampleLines`` stays
-a plain path: nothing reads it as a quantity yet.
+(``activation_probes.ActivationProbeReader``) exists, so C12 holds.
+``sampleLines`` stays a plain path: nothing reads it as a quantity yet.
+
+**Corrected 2026-09-27 (Q9, owner decision: sample the exact point).** The
+above used to add ``writeCellCentres`` and ``samplePointCentres`` steps
+after ``samplePoints``, probing the containing cell's centre through the
+same cell search, because the native ``system/Niedererpoints`` set no
+``interpolationScheme`` (OpenFOAM's ``cell`` default). Both steps are
+removed: the reader now requires ``interpolationScheme cellPoint``, read
+from the case's own dict, and reports the probe's own configured location,
+so no second probe of cell centres is needed. The native dict itself is a
+separate, owner-authorised change, not yet committed (the probe-cellpoint
+report says why); until it lands, this record's ``samplePoints`` output
+reads as ``cell`` and the reader refuses it by name.
 
 **``constant/electroProperties.withDefaultValues``** (owner Q13, corrected
 by P4's R4): declared on the ``solve`` step, because a real run of this
@@ -108,7 +111,6 @@ from omnidriver.core.tutorial_records import (
 )
 from omnidriver.openfoam.axes import block_mesh_resolution_axis
 from omnidriver.openfoam.mesh_provisioning import cell_counts_from_dx
-from omnidriver.openfoam.probes import CELL_CENTRE_FIELDS, probes_function_with_fields, sibling_probe_files
 
 from ..activation_probes import ACTIVATION_PROBES_FORMAT
 from .case_outputs import ELECTRO_PROPERTIES, POLY_MESH_OUTPUTS, WITH_DEFAULT_VALUES, gmsh_to_foam_outputs
@@ -218,11 +220,8 @@ RECORD = TutorialRecord(
     variant_selector=MESH_SELECTOR_NAME,
     default_variant=HEX_VARIANT,
     workflow_variants={
-        HEX_VARIANT: ("mesh", "solve", "samplePoints", "writeCellCentres", "samplePointCentres", "sampleLines"),
-        TET_VARIANT: (
-            "gmsh", "gmshToFoam", "checkMesh", "solve", "samplePoints", "writeCellCentres",
-            "samplePointCentres", "sampleLines",
-        ),
+        HEX_VARIANT: ("mesh", "solve", "samplePoints", "sampleLines"),
+        TET_VARIANT: ("gmsh", "gmshToFoam", "checkMesh", "solve", "samplePoints", "sampleLines"),
     },
     workflow_steps=(
         WorkflowStep(
@@ -258,21 +257,6 @@ RECORD = TutorialRecord(
             step_id="samplePoints",
             command=("postProcess", "-func", _POINTS_FUNCTION, "-latestTime"),
             produces=(ProducedPath(POINTS_PATH, format=ACTIVATION_PROBES_FORMAT),),
-        ),
-        # Q3/Q4 (docs/solver-learning/cardiacfoam.md): where each probe
-        # sampled. `writeCellCentres` writes C/Cx/Cy/Cz into the latest time
-        # directory (a study-dependent path, so declared by no `produces`);
-        # the same probes function on its components then writes each
-        # containing cell's centre, which ActivationProbeReader reports.
-        WorkflowStep(
-            step_id="writeCellCentres",
-            command=("postProcess", "-func", "writeCellCentres", "-latestTime"),
-        ),
-        WorkflowStep(
-            step_id="samplePointCentres",
-            command=("postProcess", "-func", probes_function_with_fields(_POINTS_FUNCTION, CELL_CENTRE_FIELDS),
-                     "-latestTime"),
-            produces=sibling_probe_files(POINTS_PATH, CELL_CENTRE_FIELDS),
         ),
         WorkflowStep(
             step_id="sampleLines",

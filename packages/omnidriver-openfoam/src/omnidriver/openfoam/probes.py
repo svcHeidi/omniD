@@ -14,28 +14,18 @@ section Q):
   tensor value is written in parentheses (Q5), and refused here: this parser
   reads scalars only.
 
-Where OpenFOAM sampled (the containing cell, with no ``interpolationScheme``)
-is not in the file. What says so is a second probe of the cell-centre
-components ``writeCellCentres`` writes (:data:`CELL_CENTRE_FIELDS`), run
-through the same function, so through the same cell search: Q3/Q4 found its
-values equal to the ``C`` entry of the very cell ``probes`` reports under
-``-debug-switch probes=1``. :func:`probes_function_with_fields` and
-:func:`sibling_probe_files` spell that second probe's ``-func`` argument and
-output files.
+Where OpenFOAM sampled is not in this file: it is the function's own
+``interpolationScheme`` (:func:`interpolation_scheme`), which the case's
+``system/<function>`` dict declares (default ``cell``, per source; Q9,
+2026-09-27).
 """
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from pathlib import PurePosixPath
-from typing import Sequence
+from pathlib import Path, PurePosixPath
 
 Point = tuple[float, float, float]
-
-#: ``writeCellCentres``'s component fields (``writeCellCentres::write``:
-#: ``mesh_.C().name() + vector::componentNames[i]``), scalar, so the parser
-#: below reads them.
-CELL_CENTRE_FIELDS: tuple[str, str, str] = ("Cx", "Cy", "Cz")
 
 _PROBE = re.compile(r"^# Probe (\d+) \(([^()]*)\)(.*)$")
 _NOT_FOUND = "# Not Found"
@@ -113,21 +103,15 @@ def parse_probe_series(text: str, *, source: str) -> ProbeSeries:
     return ProbeSeries(tuple(locations), tuple(times), tuple(rows), frozenset(not_found))
 
 
-def probes_function_with_fields(function: str, fields: Sequence[str]) -> str:
-    """The ``postProcess -func`` argument that re-runs ``function`` on
-    ``fields``. OpenFOAM names the function object -- and so its output
-    directory -- after this whole argument (``functionObjectList::
-    readFunctionObject``: ``word::validate(funcNameArgs)``, which keeps the
-    parentheses and commas and drops whitespace, so none is written)."""
-    return f"{function}({','.join(fields)})"
-
-
-def sibling_probe_files(probe_path: str, fields: Sequence[str]) -> tuple[str, ...]:
-    """For ``postProcessing/<function>/<instance>/<field>``, the files
-    :func:`probes_function_with_fields` writes for ``fields``, under the same
-    instance."""
+def interpolation_scheme(case_root: Path, probe_path: str) -> str:
+    """The ``interpolationScheme`` of the ``probes`` function that writes
+    ``probe_path`` (``postProcessing/<function>/<instance>/<field>``), read
+    from the case's own ``system/<function>`` -- one source of truth, never
+    restated. OpenFOAM's own default, ``cell``, applies when the key is
+    absent (``probes.C``, ``samplePointScheme_("cell")``; Q9)."""
     parts = PurePosixPath(probe_path).parts
     if len(parts) != 4 or parts[0] != "postProcessing":
         raise ValueError(f"{probe_path!r} is not a probes file, postProcessing/<function>/<instance>/<field>")
-    function = probes_function_with_fields(parts[1], fields)
-    return tuple(f"postProcessing/{function}/{parts[2]}/{field}" for field in fields)
+    from foamlib import FoamFile
+
+    return str(FoamFile(Path(case_root) / "system" / parts[1]).get("interpolationScheme", "cell"))

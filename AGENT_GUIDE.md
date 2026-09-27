@@ -779,7 +779,9 @@ Each pair in the report's `metrics` carries a `status`:
 
 Each side of a pair also reports its `value`, `unit` (post-conversion) and
 `declared_unit` (the reader's own), its `sampling_rule` (e.g. `node`,
-`cell-containing`) and its `sampled_at`/`sampled_at_unit` next to the
+`point` -- corrected 2026-09-27, Q9: this said `cell-containing`, cardiacFOAM's
+rule before its reader required `interpolationScheme cellPoint`) and its
+`sampled_at`/`sampled_at_unit` next to the
 `requested_at`/`requested_at_unit` point that was asked for and the
 `sampling_offset`/`sampling_offset_unit` between them — so a wrong pairing
 or a misoriented frame is visible in the report itself, not hidden behind
@@ -892,10 +894,13 @@ steps. Core does none of them for you.
      so its `points` are your *expected* locations. Give them in metres,
      straight from `system/Niedererpoints`, including the 0.019999 x
      coordinate.
-   - Each side needs its own `max_sampling_offset`. For cardiacFOAM that is
-     half a cell diagonal, because it reports the containing cell's centre.
-     For openCARP it is a rounding bound, because every P1-P9 is a node at
-     dx 500 µm.
+   - Each side needs its own `max_sampling_offset`. For openCARP it is a
+     rounding bound, because every P1-P9 is a node at dx 500 µm. For
+     cardiacFOAM it is 0: its reader now requires `interpolationScheme
+     cellPoint` on the case's `system/Niedererpoints` and reports each
+     probe's own location (corrected 2026-09-27, Q9; the worked example
+     below, Task 8, still shows `cell`-scheme numbers -- half a cell
+     diagonal -- because it ran before this change).
    - No code converts a frame. The orientation is in your points and in
      each pair's `note`.
 4. **Pair explicitly.** Each `pairs[]` entry names the openCARP quantity

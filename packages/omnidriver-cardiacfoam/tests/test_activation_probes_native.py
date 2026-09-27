@@ -1,20 +1,19 @@
 """The activation-probe reader against a real ``niederer2011`` run (hex, dx
 0.5 mm, the native ``endTime`` 0.015 s): nine quantities in seconds, sampled
-at the centres of the cells OpenFOAM chose. Every file read here was written
-by ``omnidriver sweep-run`` driving the real solver, or by OpenFOAM's own
-``postProcess`` on a copy of that run (docs/solver-learning/cardiacfoam.md,
-section Q). The native ``system/Niedererpoints`` is the drift gate for the
-configured locations; the solver's own ``-debug-switch probes=1`` report is
-the gate for which cell each probe fell in."""
+at the probes' own configured locations (Q9, 2026-09-27: the native
+``system/Niedererpoints`` sets ``interpolationScheme cellPoint``, offset 0).
+Every file read here was written by ``omnidriver sweep-run`` driving the real
+solver, or by OpenFOAM's own ``postProcess`` on a copy of that run
+(docs/solver-learning/cardiacfoam.md, section Q). The native
+``system/Niedererpoints`` is the drift gate for the configured locations."""
 from __future__ import annotations
 
-import re
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
-from foamlib import FoamFile, FoamFieldFile
+from foamlib import FoamFile
 
 from omnidriver.cardiacfoam.activation_probes import ActivationProbeReader
 from omnidriver.core.quantities import ReadRequest, converted, read_quantities
@@ -27,7 +26,6 @@ NAMES = tuple(str(k) for k in range(9))
 _TESTS = Path(__file__).resolve().parent
 READER_FIXTURE = _TESTS / "fixtures" / "niederer2011_probes"
 PARSER_FIXTURES = _TESTS.parents[1] / "omnidriver-openfoam" / "tests" / "core" / "fixtures" / "probes"
-_FOUND = re.compile(r"probes : found point \(([^()]*)\) in cell (\d+)")
 
 
 @pytest.fixture(scope="module")
@@ -52,33 +50,21 @@ def _post_process(case: Path, *args: str) -> str:
     return proc.stdout + proc.stderr
 
 
-def _latest_time(case: Path) -> Path:
-    times = [p for p in case.iterdir() if p.is_dir() and re.fullmatch(r"[0-9.eE+-]+", p.name) and p.name != "0"]
-    return max(times, key=lambda p: float(p.name))
-
-
 def _native_probe_locations() -> list[tuple[float, float, float]]:
     raw = FoamFile(native_tutorials_root() / NIEDERER_2011_RELPATH / "system" / "Niedererpoints")["probeLocations"]
     return [tuple(float(v) for v in xyz) for xyz in raw]
 
 
-def test_the_probe_file_is_read_as_seconds_at_the_containing_cells_centres(run, copy):
+def test_the_probe_file_is_read_as_seconds_at_the_probe_location(run):
     case_root, artifact = run
     quantities = {q.name: q for q in read_quantities(ActivationProbeReader(), case_root, artifact, ReadRequest(names=NAMES))}
     assert list(quantities) == list(NAMES)
     header = [at for _, at in parse_probe_series((case_root / artifact.path_pattern).read_text(), source="run").locations]
     assert header == _native_probe_locations()     # the drift gate against the native source
-    # Which cell each probe fell in, as the solver itself reports it, and
-    # that cell's centre from the `C` the run's writeCellCentres step wrote.
-    log = _post_process(copy, "-func", "Niedererpoints", "-debug-switch", "probes=1")
-    cells = [int(cell) for _, cell in _FOUND.findall(log)]
-    assert len(cells) == 9, log[-2000:]
-    centres = FoamFieldFile(_latest_time(case_root) / "C").internal_field
     for k, name in enumerate(NAMES):
         q = quantities[name]
-        assert (q.unit, q.sampling_rule, q.sampled_at_unit) == ("s", "cell-containing", "m")
-        assert q.sampled_at == tuple(float(v) for v in centres[cells[k]])
-        assert q.sampled_at != header[k]    # at dx 0.5 mm no probe sits at a cell centre
+        assert (q.unit, q.sampling_rule, q.sampled_at_unit) == ("s", "point", "m")
+        assert q.sampled_at == header[k]    # cellPoint: offset 0
     assert quantities["0"].status == "evaluated"
     assert quantities["0"].value == pytest.approx(0.00119496, abs=5e-9)   # N3, dx 0.5 mm
 
@@ -95,8 +81,8 @@ def test_a_probe_never_reached_is_not_reached(run):
 
 
 def test_the_probe_parser_refuses_a_vector_field(copy):
-    """The run's writeCellCentres step wrote the vector `C`; the same probes
-    function on it writes parenthesised values, which the parser refuses."""
+    """Probing the mesh's own vector `C` (cell centres) writes parenthesised
+    values, which the scalar parser refuses."""
     _post_process(copy, "-func", "Niedererpoints(C)")
     text = (copy / "postProcessing" / "Niedererpoints(C)" / "0" / "C").read_text()
     assert text == (PARSER_FIXTURES / "C").read_text()
@@ -112,11 +98,9 @@ def test_a_probe_outside_the_mesh_is_marked_not_found(copy):
 
 
 def test_the_committed_fixtures_are_what_the_solver_writes(run):
-    """The unit tests' fixtures (``test_activation_probes.py``,
-    ``omnidriver-openfoam``'s ``test_probes.py``) are this run's own files."""
+    """The unit tests' fixture (``test_activation_probes.py``) is this run's
+    own files: the probe output and the case's ``system/Niedererpoints``."""
     case_root, _ = run
     for fixture in sorted(p for p in READER_FIXTURE.rglob("*") if p.is_file()):
         relpath = fixture.relative_to(READER_FIXTURE)
         assert (case_root / relpath).read_text() == fixture.read_text(), relpath
-    written = case_root / "postProcessing" / "Niedererpoints(Cx,Cy,Cz)" / "0" / "Cx"
-    assert written.read_text() == (PARSER_FIXTURES / "Cx").read_text()

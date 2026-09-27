@@ -1,13 +1,14 @@
 """OpenFOAM's ``probes`` output layout, read from files OpenFOAM v2412 wrote.
 
 Every fixture under ``fixtures/probes/`` is a verbatim copy of a real run's
-output (docs/solver-learning/cardiacfoam.md, section Q), and
-``packages/omnidriver-cardiacfoam/tests/test_activation_probes_native.py``
-re-runs the solver and fails if any of them drifts from what it writes:
+output (docs/solver-learning/cardiacfoam.md, section Q):
 
 - ``Cx``: ``postProcess -func 'Niedererpoints(Cx,Cy,Cz)' -latestTime`` on
   the cell-centre components ``postProcess -func writeCellCentres`` wrote
-  (Q3), the ``NiedererEtAl2011verification`` hex mesh at dx 0.5 mm;
+  (Q3), the ``NiedererEtAl2011verification`` hex mesh at dx 0.5 mm -- kept as
+  a real scalar probe file to parse, though nothing produces it any more
+  (Q9, 2026-09-27: the reader now requires ``interpolationScheme cellPoint``
+  and reports the probe's own location, not a cell centre);
 - ``C``: the same function on the vector ``C`` (Q5);
 - ``Cx_not_found``: the same function with ``probeLocations`` replaced by
   ``((1 1 1) (0 0 0))``, the first of which lies outside the mesh (Q6).
@@ -21,13 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from omnidriver.openfoam.probes import (
-    CELL_CENTRE_FIELDS,
-    ProbeSeries,
-    parse_probe_series,
-    probes_function_with_fields,
-    sibling_probe_files,
-)
+from omnidriver.openfoam.probes import ProbeSeries, interpolation_scheme, parse_probe_series
 
 FIXTURES = Path(__file__).parent / "fixtures" / "probes"
 
@@ -96,19 +91,16 @@ def test_a_time_header_naming_other_probes_is_refused():
         parse_probe_series("\n".join(lines) + "\n", source="Cx_not_found")
 
 
-def test_a_function_with_fields_names_its_own_output_directory():
-    """Q3: ``postProcess -func 'Niedererpoints(Cx,Cy,Cz)'`` writes under
-    ``postProcessing/Niedererpoints(Cx,Cy,Cz)/`` (OpenFOAM names the
-    function after the whole ``-func`` argument)."""
-    assert CELL_CENTRE_FIELDS == ("Cx", "Cy", "Cz")
-    assert probes_function_with_fields("Niedererpoints", CELL_CENTRE_FIELDS) == "Niedererpoints(Cx,Cy,Cz)"
-    assert sibling_probe_files("postProcessing/Niedererpoints/0/activationTime", CELL_CENTRE_FIELDS) == (
-        "postProcessing/Niedererpoints(Cx,Cy,Cz)/0/Cx",
-        "postProcessing/Niedererpoints(Cx,Cy,Cz)/0/Cy",
-        "postProcessing/Niedererpoints(Cx,Cy,Cz)/0/Cz",
-    )
+def test_interpolation_scheme_reads_the_cases_own_dict(tmp_path):
+    """Q9 (OpenFOAM v2412 ``probes.C``): ``interpolationScheme`` defaults to
+    ``cell`` when the function's own ``system/<function>`` dict has none."""
+    (tmp_path / "system").mkdir()
+    (tmp_path / "system" / "Niedererpoints").write_text("interpolationScheme cellPoint;\n")
+    assert interpolation_scheme(tmp_path, "postProcessing/Niedererpoints/0/activationTime") == "cellPoint"
+    (tmp_path / "system" / "NoScheme").write_text("fields (activationTime);\n")
+    assert interpolation_scheme(tmp_path, "postProcessing/NoScheme/0/activationTime") == "cell"
 
 
-def test_a_path_outside_the_probes_layout_is_refused():
+def test_a_path_outside_the_probes_layout_is_refused(tmp_path):
     with pytest.raises(ValueError, match="postProcessing/<function>/<instance>/<field>"):
-        sibling_probe_files("0.015/activationTime", CELL_CENTRE_FIELDS)
+        interpolation_scheme(tmp_path, "0.015/activationTime")
