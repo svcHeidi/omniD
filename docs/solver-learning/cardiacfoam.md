@@ -512,3 +512,40 @@ file before and after the step.
 | SC2 | the record's `ionicModel` axis, swept `{"ionicModel": ["TNNP", "BuenoOrovio"]}` at a shortened `endTime 0.05`, native `tissue`/`activeTensionModel` otherwise untouched | `TNNP` completes (rc 0). `BuenoOrovio` aborts: `FOAM FATAL ERROR: Active tension model requires signal 'Cai' but provider does not supply it` (`activeTensionModel::validateProvider`), a 1-byte trace file | a native-case quirk, not a record defect: the case's own `activeTensionModel LandNiedererTWorld` is a fixed global default the `ionicModel` axis (unchanged from `restitutionCurves`, whose own case sets no `activeTensionModel` at all) was never asked to touch, and BuenoOrovio's ionic model does not export a `Cai` signal that model needs. `TWorld` (the native default) and `TNNP` both supply it and were used for C7 instead. A study that wants to sweep an ionic model incompatible with the native `activeTensionModel` must also clear or replace it directly (a direct `singleCellSolverCoeffs.activeTensionModel` key removal is untested here) |
 | SC3 | the two committed native studies (`setup/sweep_ionic_model_tissue.json`, `setup/studies/tworldVsGaur/sweep_tworld_vs_gaur.json`), read against the ionic model catalog | all 24 distinct `ionic_model` values in the full sweep carry a catalogued `single_cell_stimulus_amplitude` (the `ionicModel` axis's own requirement); the old Python-vocabulary base keys `stim_start_ms`/`n_s1`/`end_time_buffer_s`/`write_after_time_s` in `sweep_tworld_vs_gaur.json`'s `base` matched no keyword of the deleted factory's own `make_spec` either -- already dead before this rewrite | both studies rewrite cleanly onto `ionicModel` plus direct `document:key` literals (`tissue`, `stim_period_S1`, `outputVariables.ionic.export`); the four dead base keys are dropped, not carried forward |
 | SC4 | `setup/driver_config.json` (`{"ionic_models": ["Stewart"]}`) | named no key any current path reads (the same fate `restitutionCurves`'s own `driver_config.json` already met) | deleted natively, not migrated |
+
+## PE. manufacturedMonodomainPseudoECG (`manufacturedSolutions/monodomainPseudoECG`, plan 5.4b-P)
+
+Every run used a `git archive HEAD tutorials/manufacturedSolutions/monodomainPseudoECG`
+copy of native `omnid/pseudo-ecg` (based on `47c6d20f`), OpenFOAM v2412 sourced,
+gmsh `/opt/homebrew/bin/gmsh`.
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| PE1 | the native hex route on a copy resized to `(5 5 5)` and `endTime` cut to 4 steps: `blockMesh -dict system/blockMeshDict.3D`, then `cardiacFoam` | both rc 0, ~4 s total. `find -newer Allrun`: `constant/electroProperties.withDefaultValues`, `constant/polyMesh/{boundary,faces,neighbour,owner,points}`, `postProcessing/3D_5_cells.dat`, `postProcessing/pseudoECG.dat`, `postProcessing/manufacturedPseudoECG_ECG.dat`, `postProcessing/manufacturedPseudoECGSummary_ECG.dat`. No `0/` at all | this solve step does call `electroModel::end()` (`.withDefaultValues` is written, R4 does not apply here). The five outputs match the brief's prediction from the C++, confirmed rather than assumed. No `0/` dependency, the same shape bidomain's own record already established |
+| PE2 | the tet route on a fresh copy, same `endTime` cut: `gmsh -3 setup/studies/tetConvergence/box.geo.template -o box.msh -format msh2 -setnumber lc 0.3` (706 elements), `gmshToFoam box.msh`, `checkMesh`, `cardiacFoam` -- **with no `fvSchemes` overlay swap**, `system/fvSchemes` used as-is | gmsh: `box.msh` only. gmshToFoam: `constant/polyMesh/{boundary,cellZones,faceZones,faces,neighbour,owner,pointZones,points}` and `sets/internal`. checkMesh: nothing. cardiacFoam: rc 0, same five names as PE1 (`postProcessing/3D_7_cells.dat` at this mesh's own resolution), and a manufactured-solution error table at the expected order of magnitude for the coarser mesh | `setup/studies/tetConvergence/fvSchemes` is not needed: every entry it sets (`ddtSchemes.default none`/`ddt(Vm) backward`, `gradSchemes.default leastSquares`, `divSchemes.default none`, `laplacianSchemes.default Gauss linear corrected`, `interpolationSchemes.default linear`, `snGradSchemes.default corrected`) already equals `system/fvSchemes`'s own value (confirmed by inspecting both files: the only differences are the header/comments, not a scheme). The tet route reads `system/fvSchemes` directly, like bidomain's and eikonalECG's tet routes (neither has an overlay file at all) |
+| PE3 | `plan --strict --config '{"dimension":"1D","numberCells":5}'` against a real staged copy | staged `constant/electroProperties` shows both `monodomainSolverCoeffs.dimension "1D"` and `monodomainSolverCoeffs.ecgDomains.ECG.verificationModel.dimension "1D"` -- `ecgDomains.ECG.verificationModel.anisotropic` stays `yes` (the native default, untouched by this study) | the `dimension` axis's two-key patch (`ecg_verification_scope`) works end to end. **A real gap, not fixed here**: this combination (`dimension=1D`, `anisotropic=yes`) is exactly the one the catalogue's own `anisotropic` entry says is a native `FatalError` ("3D-only") -- but `cardiacfoam.validation._evaluate_ecg_anisotropic_consistency` only checks `anisotropic` against `verificationModel.type`, never against `dimension`. Nothing in omniD refuses this by name; every rewritten study that varies `dimension` away from `"3D"` also states `verificationModel.type`/`anisotropic` explicitly to avoid it (the record's own docstring table), but a study that forgets to would only find out from the real solver. Flagged as a concern, not built: the owner did not ask for a third key relation here, and inventing one was not asked either |
+| PE4 | `describe` with no study values, and `plan --strict` of each rewritten study's cases (a preview per case, not a full solve) | `describe`: zero `record_preview.patches`, default variant `hex`, default command `blockMesh -dict system/blockMeshDict.3D` (C2). Every study's cases resolve with no refusal | proof (a) of the record's own recipe; the studies' `document:key`/axis vocabulary matches what the catalogue and the record's axes actually declare |
+| PE5 | `cmp` of `setup/studies/tetConvergence/fvSolution` (checked for existence) | absent -- already deleted from the native tree before this task (README's own "Corrected 2026-09-26 (plan §5g Q10)" note) | Q10's fvSolution deletion for this tutorial predates 5.4b-P; nothing further to do there |
+
+**The old defaults' 1D/2D/3D electrode tables, and why R1-R156 is dropped
+everywhere.** `ECG_ELECTRODES_BY_DIMENSION["3D"]` (161 points: `E1`-`E5` plus
+the `R1`-`R156` random scatter) was confirmed byte-identical to the native
+file's own `electrodePositions` block before the module was deleted (a
+direct diff, not a recollection). The old `_plan_case` wrote the whole
+per-dimension table unconditionally through `resolve_electro_property_ensure`
+(an upsert): for a 3D case this rewrote `R1`-`R156` to values they already
+had (a no-op), and for a 1D/2D case it never touched `R1`-`R156` at all
+(ensure only writes the keys it is given, so any `R`-point already on disk
+from the native file's initial state is left alone, not removed). Byte-for-
+byte, writing `R1`-`R156` or not therefore produces identical case content
+either way, at every dimension -- so no rewritten study restates it, only
+`E1`-`E5` (which the old code genuinely varied per dimension) become direct
+study keys, in the two studies that vary `dimension` (`cartesianConvergence`,
+`temporalConvergence`).
+
+Native commit for this task: rewrites the four committed studies to
+`document:key`/axis vocabulary and corrects the native README's stale
+`__LC__`/`run_mono_tet.sh`/`summarize_tet.py` references and output-file
+names (§5g Q2/Q3/Q8, tutorials-are-pointers 5.4b-P). Q11's `anisotropic yes`
+and the `DefineConstant` gmsh template were already on `omnid/tutorials-are-
+pointers` before this task started (confirmed, not redone).
