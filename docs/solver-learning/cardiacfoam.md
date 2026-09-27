@@ -495,5 +495,6 @@ a lumped mass matrix.
 | S4 | 15 mm cables, Δt 0.01 ms, dx 10, 50, 500 µm | along fibres 0.5972, 0.5935, 0.4105 m/s; across 0.2169, 0.2068, blocked | at 10 µm, 1.7 % (along) and 2.2 % (across) slower than openCARP full mass (J3): the model's effect, about +1 ms at a converged P8. At 500 µm, along −29 % and across blocked, like openCARP lumped (J3) |
 | S5 | dx 0.5 mm slab, native and with `0/Vm` −0.08523 V | P8 143.043 and 143.651 ms | the initial state moves P8 by 0.6 ms |
 
-Open, for the owner: whether TNNP 2004 is intended for this benchmark, and
-whether the −84 mV domain default is.
+Owner decisions, 2026-09-28: TNNP 2004 is intended for this benchmark, and the
+−84 mV domain default stays for now. A single-cell initialization will come
+later as its own native implementation.
