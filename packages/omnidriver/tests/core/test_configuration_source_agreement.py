@@ -138,8 +138,8 @@ def test_tutorial_record_entry_is_case_sourced(tmp_path: Path) -> None:
 
 
 def test_factory_tutorial_entry_is_document_sourced() -> None:
-    """``cable1DRestitution`` is a registered factory tutorial (§3: "a
-    tutorial is a data record" is the record shape; a factory tutorial's
+    """``manufacturedMonodomain1D3D`` is a registered factory tutorial (§3:
+    "a tutorial is a data record" is the record shape; a factory tutorial's
     config lives in the document). This test has no real native case on
     disk (no ``cases_root`` points at the monorepo), so planning itself
     fails on missing case files -- but that failure is exactly the proof
@@ -152,8 +152,11 @@ def test_factory_tutorial_entry_is_document_sourced() -> None:
     tutorial record (records/single_cell.py, tutorials-are-pointers plan,
     step 5.1) -- a record has no ambient cases root at all and is refused
     by name instead of failing on missing case files, so it no longer fits
-    this test's premise. ``cable1DRestitution`` is another still-factory
-    tutorial for the same generic contract."""
+    this test's premise. This then used ``cable1DRestitution``, which also
+    migrated onto a tutorial record the same day (records/
+    cable_1d_restitution.py, plan §5e, step 5.2), for the same reason.
+    ``manufacturedMonodomain1D3D`` is another still-factory tutorial for the
+    same generic contract."""
     cardiacfoam = pytest.importorskip("omnidriver.cardiacfoam.cardiacfoam_plugin")
     from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
@@ -161,7 +164,7 @@ def test_factory_tutorial_entry_is_document_sourced() -> None:
         OpenFOAMEnvironmentPlugin(), cardiacfoam.CardiacFoamPlugin(),
         source="test:factory-tutorial",
     )
-    report = strict_plan("cable1DRestitution", driver_context=context)
+    report = strict_plan("manufacturedMonodomain1D3D", driver_context=context)
 
     assert report.run_document is not None
     run_doc = report.run_document

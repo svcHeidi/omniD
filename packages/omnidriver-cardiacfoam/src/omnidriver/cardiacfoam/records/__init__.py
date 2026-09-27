@@ -26,6 +26,8 @@ from .manufactured_bidomain import RECORD as _MANUFACTURED_BIDOMAIN_RECORD
 from .manufactured_bath_bidomain import RECORD as _MANUFACTURED_BATH_BIDOMAIN_RECORD
 from .single_cell import RECORD as _SINGLE_CELL_RECORD
 from .manufactured_monodomain_pseudo_ecg import RECORD as _MANUFACTURED_MONODOMAIN_PSEUDO_ECG_RECORD
+from .cable_1d_restitution import RECORD as _CABLE_1D_RESTITUTION_RECORD
+from .cable_1d_cv_convergence import RECORD as _CABLE_1D_CV_CONVERGENCE_RECORD
 
 #: Built with build_tutorial_record_catalog, not a dict comprehension, so
 #: two records sharing a name are refused by name instead of one silently
@@ -39,4 +41,6 @@ TUTORIAL_RECORDS = build_tutorial_record_catalog((
     _MANUFACTURED_BATH_BIDOMAIN_RECORD,
     _SINGLE_CELL_RECORD,
     _MANUFACTURED_MONODOMAIN_PSEUDO_ECG_RECORD,
+    _CABLE_1D_RESTITUTION_RECORD,
+    _CABLE_1D_CV_CONVERGENCE_RECORD,
 ))

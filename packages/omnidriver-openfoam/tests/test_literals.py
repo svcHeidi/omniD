@@ -48,10 +48,13 @@ REAL_DIMENSIONED_LITERALS = (
     "[0 0 -0.5 0 0 0 0] 60",
     # dict_entries_catalog.py DictEntry.typical_value (conductivityExtracellular)
     "[-1 -3 3 0 0 2 0] (0.2668 0 0 0.03521 0 0.03521)",
-    # tutorials/defaults/cable_1d_cv_convergence.py CONDUCTIVITY_VALUES
+    # cable1DCVConvergence's native default conductivity (records/
+    # cable_1d_cv_convergence.py; its old defaults module carried this
+    # literal until 2026-09-27's migration onto a tutorial record)
     "[-1 -3 3 0 0 2 0] (0.1334 0 0 0.1334 0 0.1334)",
-    # tutorials/defaults/cable_1d_restitution.py CONDUCTIVITY_VALUES, and
-    # tests/test_cable_restitution_di90.py's conductivity_values override
+    # cable1DRestitution's native default conductivity (records/
+    # cable_1d_restitution.py; its old defaults module carried this literal
+    # until 2026-09-27's migration onto a tutorial record)
     "[-1 -3 3 0 0 2 0] (2.3 0 0 2.3 0 2.3)",
     # tests/test_dict_entries_catalog.py::
     # test_apply_electro_property_overrides_updates_dimensioned_and_dynamic_entries

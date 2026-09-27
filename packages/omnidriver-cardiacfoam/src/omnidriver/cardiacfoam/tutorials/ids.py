@@ -7,7 +7,11 @@ class CardiacTutorialID(str, Enum):
     # 5.1), which names itself directly rather than through this
     # factory-tutorial enum -- see RESTITUTION_CURVES's identical removal
     # note below.
-    CABLE_1D_CV_CONVERGENCE = "cable1DCVConvergence"
+    # CABLE_1D_CV_CONVERGENCE ("cable1DCVConvergence") removed 2026-09-27:
+    # migrated onto a tutorial record (records/cable_1d_cv_convergence.py,
+    # tutorials-are-pointers plan §5e, step 5.3), which names itself
+    # directly rather than through this factory-tutorial enum -- see
+    # RESTITUTION_CURVES's identical removal note below.
     # NIEDERER_2011 ("niederer2011") removed 2026-09-26: migrated onto a
     # tutorial record (records/niederer_2011.py, plan docs/superpowers/
     # plans/2026-09-25-tutorials-are-pointers-remaining.md §5c "5.4b-N"),
@@ -45,4 +49,8 @@ class CardiacTutorialID(str, Enum):
     # tutorial enum -- a record is data, not a factory, and this ID existed
     # only to key SPEC_FACTORIES/REGISTERED_TUTORIALS for the now-deleted
     # factory.
-    CABLE_1D_RESTITUTION = "cable1DRestitution"
+    # CABLE_1D_RESTITUTION ("cable1DRestitution") removed 2026-09-27:
+    # migrated onto a tutorial record (records/cable_1d_restitution.py,
+    # tutorials-are-pointers plan §5e, step 5.2), which names itself
+    # directly rather than through this factory-tutorial enum -- see
+    # RESTITUTION_CURVES's identical removal note above.

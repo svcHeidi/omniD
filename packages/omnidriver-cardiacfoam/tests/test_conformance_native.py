@@ -14,6 +14,8 @@ import pytest
 
 from omnidriver.conformance import CHECKS, run_check
 from cardiacfoam_native import (
+    cable_1d_cv_convergence_conformance_target,
+    cable_1d_restitution_conformance_target,
     manufactured_bath_bidomain_conformance_target,
     manufactured_bidomain_conformance_target,
     manufactured_monodomain_pseudo_ecg_conformance_target,
@@ -33,6 +35,8 @@ _TARGETS = {
     "manufacturedBathBidomain": manufactured_bath_bidomain_conformance_target,
     "singleCell": single_cell_conformance_target,
     "manufacturedMonodomainPseudoECG": manufactured_monodomain_pseudo_ecg_conformance_target,
+    "cable1DRestitution": cable_1d_restitution_conformance_target,
+    "cable1DCVConvergence": cable_1d_cv_convergence_conformance_target,
 }
 
 

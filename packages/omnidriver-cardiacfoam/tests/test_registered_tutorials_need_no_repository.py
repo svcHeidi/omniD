@@ -102,7 +102,13 @@ def test_every_serial_tutorial_builds_under_any_base(tmp_path: Path) -> None:
     # Corrected 2026-09-27 (5.4b-P, `manufacturedMonodomainPseudoECG` onto a
     # tutorial record): likewise one of `_NEEDS_CASE_CONTENT`, so this one
     # has no further effect on the count -- it stays 10.
-    assert built == 10, f"expected 10 buildable catalog entries, got {built}"
+    # Corrected 2026-09-27 (5.2/5.3, `cable1DRestitution`/
+    # `cable1DCVConvergence` onto tutorial records, records/
+    # cable_1d_restitution.py, records/cable_1d_cv_convergence.py): neither
+    # was in `_NEEDS_CASE_CONTENT`, and each held 2 keys (the name and its
+    # case-folded alias) in SPEC_FACTORIES, so the buildable count drops by
+    # 4, to 6.
+    assert built == 6, f"expected 6 buildable catalog entries, got {built}"
 
 
 @pytest.mark.parametrize("name", sorted(_NEEDS_CASE_CONTENT))

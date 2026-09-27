@@ -245,6 +245,82 @@ def manufactured_monodomain_pseudo_ecg_conformance_target(tmp_path: Path) -> Con
     )
 
 
+_CABLE_CONDUCTIVITY = {
+    "value": [2.3, 0.0, 0.0, 2.3, 0.0, 2.3],
+    "dimensions": [-1, -3, 3, 0, 0, 2, 0],
+}
+
+
+def cable_1d_restitution_conformance_target(tmp_path: Path) -> ConformanceTarget:
+    """``cable1DRestitution`` at a coarse mesh (``dx`` 1 mm -> 20 cells) and
+    the ``requested_di90_ms`` branch of its own ``s1s2SpatialProtocol`` axis
+    at its smallest legal values, so ``endTime`` resolves to 1.5 ms (150
+    steps at the native ``deltaT`` 1e-5 s -- well under a second). Also
+    pins ``system/controlDict:writeInterval`` short of that ``endTime``:
+    ``predict_data_artifacts`` unconditionally requires one elapsed
+    ``monodomainSolver`` field write (``docs/solver-learning/cardiacfoam.md``
+    section CABLE, CABLE3/CABLE4), which the native default (4.25 s) never
+    reaches at this ``endTime``."""
+    require_sourced_openfoam("blockMesh", "cardiacFoam")
+    return ConformanceTarget(
+        plugin="cardiacfoam",
+        record="cable1DRestitution",
+        cases_root=native_tutorials_root(),
+        scratch_root=tmp_path / "scratch",
+        base_study={
+            "dx": 0.001,
+            "system/controlDict:writeInterval": 0.0005,
+            "constant/electroProperties:monodomainSolverCoeffs.conductivity": _CABLE_CONDUCTIVITY,
+            "s1s2SpatialProtocol": {
+                "n_s1": 1, "n_s2": 1, "end_time_buffer_s": 0.0005,
+                "requested_di90_ms": 0.0, "reference_repolarization90_s": 0.001,
+            },
+        },
+        # A catalogued enum key (`$ELECTRO_MODEL_COEFFS.tissue`), the same
+        # one every other migrated record's own target patches.
+        patch=("constant/electroProperties:monodomainSolverCoeffs.tissue", "endocardialCells"),
+        untouched=("constant/electroProperties", ("monodomainSolverCoeffs", "ionicModel")),
+        sweep_name="dx",
+        sweep_values=(0.001, 0.0005),
+        unknown_name="constant/electroProperties:monodomainSolverCoeffs.conductivit",
+        solver_command="cardiacFoam",
+        environment={},
+    )
+
+
+def cable_1d_cv_convergence_conformance_target(tmp_path: Path) -> ConformanceTarget:
+    """``cable1DCVConvergence``, mesh + solve only (no postprocess step:
+    the old factory's own ``workflow_dag`` had none either). Its own study
+    states ``externalStimulus`` explicitly (owner decision); ``endTime``
+    and ``writeInterval`` are pinned short for the same reason as
+    ``cable1DRestitution``'s own target."""
+    require_sourced_openfoam("blockMesh", "cardiacFoam")
+    return ConformanceTarget(
+        plugin="cardiacfoam",
+        record="cable1DCVConvergence",
+        cases_root=native_tutorials_root(),
+        scratch_root=tmp_path / "scratch",
+        base_study={
+            "dx": 0.001,
+            "system/controlDict:endTime": 0.0015,
+            "system/controlDict:writeInterval": 0.0005,
+            "constant/electroProperties:monodomainSolverCoeffs.conductivity": _CABLE_CONDUCTIVITY,
+            "constant/electroProperties:monodomainSolverCoeffs.externalStimulus.stimulusStartTimeList": [0.0],
+            "constant/electroProperties:monodomainSolverCoeffs.externalStimulus.stimulusLocationMinList": [[0.0, 0.0, 0.0]],
+            "constant/electroProperties:monodomainSolverCoeffs.externalStimulus.stimulusLocationMaxList": [[2e-3, 2e-4, 2e-4]],
+            "constant/electroProperties:monodomainSolverCoeffs.externalStimulus.stimulusDurationList": [4e-3],
+            "constant/electroProperties:monodomainSolverCoeffs.externalStimulus.stimulusIntensityList": [50000.0],
+        },
+        patch=("constant/electroProperties:monodomainSolverCoeffs.tissue", "endocardialCells"),
+        untouched=("constant/electroProperties", ("monodomainSolverCoeffs", "ionicModel")),
+        sweep_name="dx",
+        sweep_values=(0.001, 0.0005),
+        unknown_name="constant/electroProperties:monodomainSolverCoeffs.conductivit",
+        solver_command="cardiacFoam",
+        environment={},
+    )
+
+
 def niederer_sweep(tmp_path: Path, *, dx_values: Sequence[float], end_time: float | None = None,
                     extra: Mapping[str, Any] | None = None) -> Path:
     """Run ``niederer2011`` (hex route) at each of ``dx_values`` (metres)

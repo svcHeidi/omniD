@@ -86,9 +86,10 @@ def test_strict_plan_reports_a_structured_diagnostic_for_schema_violation(monkey
     )
     # "singleCell" migrated onto a tutorial record 2026-09-27 (records/
     # single_cell.py), which has no ambient cases root -- "cable1DRestitution"
-    # is another still-factory tutorial for this generic schema-violation
-    # smoke test.
-    report = strict_plan("cable1DRestitution", driver_context=context)
+    # migrated the same day too (records/cable_1d_restitution.py, plan §5e,
+    # step 5.2). "manufacturedMonodomain1D3D" is another still-factory
+    # tutorial for this generic schema-violation smoke test.
+    report = strict_plan("manufacturedMonodomain1D3D", driver_context=context)
     codes = {d.code for d in report.validation_diagnostics}
     assert "plugin_config_schema_violation" in codes
     messages = [d.message for d in report.validation_diagnostics if d.code == "plugin_config_schema_violation"]

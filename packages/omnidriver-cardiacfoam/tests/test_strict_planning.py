@@ -422,8 +422,21 @@ def test_batched_ionic_model_does_not_require_optional_batched_keys(tmp_path: Pa
     Both are read only via lookupOrDefault -- batchedIonicModel.H:197,200 and
     batchedActiveTensionModel.C:46,48 (defaults 1 and "euler"). The catalog
     nonetheless marked them required_when the ionic model is batched, which
-    rejected monodomain1DCableCV: it selects TWorldcompactBatched and sets
+    rejected monodomain1DCableCV: it selected TWorldcompactBatched and set
     neither key, which is legal.
+
+    Corrected 2026-09-27 (tutorials-are-pointers plan §5e, step 5.3):
+    ``cable1DCVConvergence`` migrated onto a tutorial record
+    (records/cable_1d_cv_convergence.py); a record has no ambient
+    ``cases_root`` (it is supplied, and a scratch root is mandatory), so
+    this now calls ``strict_plan`` the way every other record-entry test
+    does, against the real native tree directly (the record stages its own
+    scratch copy; no ``_stage_case_dictionaries`` pre-copy is needed).
+    Native ``ada4acb3`` (2026-09-xx) also reset this case's own default
+    ``ionicModel`` from ``TWorldcompactBatched`` to ``Stewart`` -- an
+    ordinary drive-by cleanup, not this test's concern -- so the batched
+    model this test guards is now named explicitly via a direct study key
+    rather than relied on as the case's own ambient default.
 
     Corrected 2026-09-26 (R2 fix, finding M6): used ``default_driver_context()``,
     which now raises ``LookupError`` -- three independent solver-tier plugins
@@ -431,12 +444,13 @@ def test_batched_ionic_model_does_not_require_optional_batched_keys(tmp_path: Pa
     is no unambiguous default any more. Uses this module's own explicit
     ``_CTX`` instead, exactly like every other test here.
     """
-    cases_root = tmp_path / "cases"
-    _stage_case_dictionaries(
-        _native_tutorials_root(), _CABLE_1D_CV_CONVERGENCE_RELPATH, cases_root,
-    )
     report = strict_plan(
-        "cable1DCVConvergence", driver_context=_CTX, overrides={"cases_root": str(cases_root)},
+        "cable1DCVConvergence", driver_context=_CTX,
+        overrides={
+            "cases_root": str(_native_tutorials_root()),
+            "constant/electroProperties:monodomainSolverCoeffs.ionicModel": "TWorldcompactBatched",
+        },
+        scratch_root=str(tmp_path / "scratch"),
     ).to_json()
     errors = [
         d for d in report["run_document"]["validation"].get("diagnostics", [])

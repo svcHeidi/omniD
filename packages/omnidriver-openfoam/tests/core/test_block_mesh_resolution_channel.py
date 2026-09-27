@@ -183,8 +183,9 @@ def test_rewrite_hex_block_lines_against_a_1d_single_block_fixture():
     `test_common_blockmesh_resize.py`'s own `test_replaces_single_hex_block_for_1d`
     used to cover for the now-retired direct writer -- same cell-counts
     string shape (`"50 1 1"`, a 1D cable), same one-block fixture shape
-    every 1D tutorial's real `blockMeshDict` has (see e.g.
-    `test_cable_1d_restitution_write_channel.py`'s own fixture)."""
+    every 1D tutorial's real `blockMeshDict` has (e.g. the
+    `cable1DRestitution`/`cable1DCVConvergence` records' shared native case,
+    `electrophysiologyProtocols/cableProtocol/monodomain1DCableCV`)."""
     text = _rewrite_hex_block_lines(
         "FoamFile\n{\n    object blockMeshDict;\n}\n"
         "blocks\n(\n"
