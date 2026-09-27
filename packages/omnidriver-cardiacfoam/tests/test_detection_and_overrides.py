@@ -44,9 +44,7 @@ from omnidriver.cardiacfoam.detection import (
 from omnidriver.cardiacfoam.overrides import (
     apply_electro_property_overrides,
     apply_physics_property_overrides,
-    ensure_electro_property_dict,
     normalize_entry_overrides,
-    remove_electro_property_dict,
 )
 from cardiacfoam_assertions import assert_foam_entry
 
@@ -178,75 +176,6 @@ class TestCardiacPropertyOverrides(unittest.TestCase):
                 "750",
                 scope=("singleCellSolverCoeffs", "singleCellStimulus"),
             )
-
-    def test_remove_electro_property_dict_supports_electro_scope_token(self) -> None:
-        text = "\n".join(
-            [
-                "myocardiumSolver bidomainSolver;",
-                "",
-                "bidomainSolverCoeffs",
-                "{",
-                "    ecgDomains",
-                "    {",
-                "        ECG",
-                "        {",
-                "            ecgSolver torsoECG;",
-                "        }",
-                "    }",
-                "    bathPotentialDomain",
-                "    {",
-                "        bathCellZones (bath);",
-                "    }",
-                "}",
-                "",
-            ]
-        )
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "electroProperties"
-            path.write_text(text)
-
-            remove_electro_property_dict(
-                path,
-                "ecgDomains",
-                scope="$ELECTRO_MODEL_COEFFS",
-            )
-
-            updated = path.read_text()
-            self.assertNotIn("ecgDomains", updated)
-            self.assertIn("bathPotentialDomain", updated)
-
-    def test_ensure_electro_property_dict_supports_electro_scope_token(self) -> None:
-        text = "\n".join(
-            [
-                "myocardiumSolver bidomainSolver;",
-                "",
-                "bidomainSolverCoeffs",
-                "{",
-                "    bathPotentialDomain",
-                "    {",
-                "        bathCellZones (bath);",
-                "    }",
-                "}",
-                "",
-            ]
-        )
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "electroProperties"
-            path.write_text(text)
-
-            inserted = ensure_electro_property_dict(
-                path,
-                "ecgDomains",
-                "    ecgDomains\n    {\n        ECG {}\n    }\n",
-                scope="$ELECTRO_MODEL_COEFFS",
-            )
-
-            updated = path.read_text()
-            self.assertTrue(inserted)
-            self.assertIn("ecgDomains", updated)
-            self.assertIn("bathPotentialDomain", updated)
 
     def test_apply_physics_property_overrides_updates_root_dictionary(self) -> None:
         text = "\n".join(

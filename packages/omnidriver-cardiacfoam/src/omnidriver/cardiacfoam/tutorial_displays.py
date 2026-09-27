@@ -1,12 +1,19 @@
-from omnidriver.cardiacfoam.tutorials.ids import CardiacTutorialID
+"""Display metadata for cardiacFoam's tutorial records.
+
+Relocated here 2026-09-27 (tutorials-are-pointers step C) from
+``tutorials/display.py`` once the factory-tutorial package around it was
+deleted. Every entry below describes a tutorial record, which names itself
+directly (no factory-tutorial enum survives to key these by) -- see
+``.superpowers/sdd/legacy-map.md`` §2/§4. The one entry that did key off the
+old factory enum, ``manufacturedMonodomainTotalLagrangianEM``, was deleted
+alongside its factory module (owner decision: electromechanics has no
+tutorial at all until it is rebuilt as a record).
+"""
+
 from omnidriver.core.tutorials_display import TutorialDisplay
 
 TUTORIALS: tuple[TutorialDisplay, ...] = (
     TutorialDisplay(
-        # A literal string, not `CardiacTutorialID.SINGLE_CELL` (removed
-        # 2026-09-27 alongside the factory it keyed): this tutorial is now a
-        # tutorial record (records/single_cell.py), which names itself
-        # directly, the same way restitutionCurves's own display entry does.
         id="singleCell",
         title="Single-cell action potential",
         summary=(
@@ -35,12 +42,6 @@ TUTORIALS: tuple[TutorialDisplay, ...] = (
         },
     ),
     TutorialDisplay(
-        # A literal string, not `CardiacTutorialID.MANUFACTURED_MONODOMAIN_
-        # PSEUDO_ECG` (removed 2026-09-27 alongside the factory it keyed):
-        # this tutorial is now a tutorial record
-        # (records/manufactured_monodomain_pseudo_ecg.py), which names
-        # itself directly, the same way restitutionCurves's own display
-        # entry does above.
         id="manufacturedMonodomainPseudoECG",
         title="Manufactured solution (monodomain)",
         summary=(
@@ -55,11 +56,6 @@ TUTORIALS: tuple[TutorialDisplay, ...] = (
         },
     ),
     TutorialDisplay(
-        # A literal string, not `CardiacTutorialID.MANUFACTURED_BIDOMAIN`
-        # (removed 2026-09-26 alongside the factory it keyed): this tutorial
-        # is now a tutorial record (records/manufactured_bidomain.py), which
-        # names itself directly, the same way restitutionCurves's own
-        # display entry does above.
         id="manufacturedBidomain",
         title="Manufactured solution (bidomain)",
         summary=(
@@ -102,40 +98,6 @@ TUTORIALS: tuple[TutorialDisplay, ...] = (
         },
     ),
     TutorialDisplay(
-        id=CardiacTutorialID.MANUFACTURED_MONODOMAIN_TOTAL_LAGRANGIAN_EM.value,
-        title="Manufactured electromechanics (MMS) -- NOT CURRENTLY WORKING",
-        summary=(
-            "NOT CURRENTLY WORKING: electromechanics is unsupported at the "
-            "moment and this entry fails strict planning. Do not pick it, and "
-            "do not try to repair it as a side quest -- it is a known, "
-            "deliberately deferred gap, not a bug you have just found. "
-            "It lays its dicts out per region (constant/electro/"
-            "electroProperties, constant/solid/solidProperties) while the "
-            "planner looks for constant/electroProperties, so it reports "
-            "missing_electro_properties, 'myocardiumSolver is required' and "
-            "empty_artifact_prediction. "
-            "Intended behaviour once supported: electromechanics verification "
-            "on a fully coupled manufactured field, with Vm, D, lambda and Ta "
-            "as rigorous MMS targets."
-        ),
-        thumbnail="/tutorials/manufactured-electromechanics-bc.png",
-        tags=("manufactured-solution", "verification", "electromechanics"),
-        preset={
-            "anatomy.mesh": "unit-domain",
-            "physics.ionic_model": "monodomainFDAManufactured",
-        },
-    ),
-    TutorialDisplay(
-        # A literal string, not `CardiacTutorialID.MANUFACTURED_MONODOMAIN_
-        # 1D3D` (removed 2026-09-27 alongside the factory it keyed): this
-        # tutorial is now a tutorial record
-        # (records/manufactured_monodomain_1d3d.py), which names itself
-        # directly, the same way restitutionCurves's own display entry does
-        # above. It replaces this entry AND the old, now-deleted
-        # "manufacturedPurkinjeGraph" display entry: the graph-only
-        # diagnostic that factory tutorial ran is this record's `graphOnly`
-        # variant, not a second tutorial -- "manufacturedPurkinjeGraph" is
-        # refused like any unknown entry, with no alias.
         id="manufacturedMonodomain1D3D",
         title="Manufactured Purkinje-myocardium coupling (MMS)",
         summary=(

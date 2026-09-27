@@ -300,7 +300,7 @@ class TestMakeSpecDirectRun(unittest.TestCase):
 
     def test_spec_accepts_solver_command(self) -> None:
         import tempfile
-        from omnidriver.cardiacfoam.tutorials.generic_case import make_spec
+        from omnidriver.cardiacfoam.generic_case import make_spec
         with tempfile.TemporaryDirectory() as d:
             case_dir = Path(d) / "mycase"
             case_dir.mkdir()
@@ -313,7 +313,7 @@ class TestMakeSpecDirectRun(unittest.TestCase):
 
     def test_spec_accepts_pre_solve_commands(self) -> None:
         import tempfile
-        from omnidriver.cardiacfoam.tutorials.generic_case import make_spec
+        from omnidriver.cardiacfoam.generic_case import make_spec
         with tempfile.TemporaryDirectory() as d:
             case_dir = Path(d) / "mycase"
             case_dir.mkdir()
@@ -327,7 +327,7 @@ class TestMakeSpecDirectRun(unittest.TestCase):
 
     def test_metadata_records_solver_command(self) -> None:
         import tempfile
-        from omnidriver.cardiacfoam.tutorials.generic_case import make_spec
+        from omnidriver.cardiacfoam.generic_case import make_spec
         with tempfile.TemporaryDirectory() as d:
             case_dir = Path(d) / "mycase"
             case_dir.mkdir()

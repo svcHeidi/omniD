@@ -393,18 +393,21 @@ class CardiacFoamPlugin:
         return TUTORIAL_RECORDS
 
     def get_tutorial_catalog(self) -> dict:
-        from omnidriver.cardiacfoam.tutorials.registry import SPEC_FACTORIES, REGISTERED_TUTORIALS
-        from omnidriver.cardiacfoam.tutorials.generic_case import (
-            make_generic_case_spec,
-        )
+        # No factory tutorial survives (tutorials-are-pointers step C,
+        # 2026-09-27): every one migrated onto a tutorial record, and
+        # electromechanics (the last holdout) was deleted outright rather
+        # than migrated -- see ``.superpowers/sdd/legacy-map.md``. Same
+        # empty shape openCARP's plugin already returns for these two keys.
+        from omnidriver.cardiacfoam.generic_case import make_generic_case_spec
+
         return {
-            "spec_factories": SPEC_FACTORIES,
-            "registered_tutorials": REGISTERED_TUTORIALS,
-            "make_generic_case_spec": make_generic_case_spec
+            "spec_factories": {},
+            "registered_tutorials": (),
+            "make_generic_case_spec": make_generic_case_spec,
         }
 
     def get_tutorial_displays(self) -> tuple[TutorialDisplay, ...]:
-        from omnidriver.cardiacfoam.tutorials.display import TUTORIALS
+        from omnidriver.cardiacfoam.tutorial_displays import TUTORIALS
         return TUTORIALS
 
     def validate_configuration(self, spec: TutorialSpec) -> tuple[StrictDiagnostic, ...]:

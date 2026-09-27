@@ -59,7 +59,7 @@ def own_driver_context():
     context is cheap and callers are entitled to mutate what they are given.
 
     The imports are function-local because ``cardiacfoam_plugin`` reaches back
-    into ``tutorials.generic_case``, which is one of this helper's callers.
+    into ``generic_case``, which is one of this helper's callers.
 
     Composes the OpenFOAM environment adapter alongside this plugin (Task 9):
     ``plugin.yaml`` now declares ``requires: [org.omnidriver.openfoam.environment]``,

@@ -30,7 +30,7 @@
 
 from pathlib import Path
 
-from omnidriver.cardiacfoam.tutorials.generic_case import make_spec
+from omnidriver.cardiacfoam.generic_case import make_spec
 
 
 def _make_spec(tmp_path, **overrides):

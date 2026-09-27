@@ -45,7 +45,7 @@ from pathlib import Path
 
 
 def _spec(tmp_path: Path, **kwargs):
-    from omnidriver.cardiacfoam.tutorials.generic_case import make_spec
+    from omnidriver.cardiacfoam.generic_case import make_spec
 
     return make_spec(cases_root=tmp_path, case_dir_name="aCase", **kwargs)
 

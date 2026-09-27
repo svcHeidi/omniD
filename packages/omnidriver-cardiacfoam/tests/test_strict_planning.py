@@ -64,7 +64,6 @@ _CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CARDIAC_PLUGIN, source="test
 
 _SINGLE_CELL_RELPATH = "electrophysiologyProtocols/singleCell"
 _CABLE_1D_CV_CONVERGENCE_RELPATH = "electrophysiologyProtocols/cableProtocol/monodomain1DCableCV"
-_MANUFACTURED_EM_RELPATH = "manufacturedSolutions/monodomainTotalLagrangianEM"
 
 
 def _native_tutorials_root() -> Path:
@@ -457,50 +456,6 @@ def test_batched_ionic_model_does_not_require_optional_batched_keys(tmp_path: Pa
         if d.get("level") == "error"
     ]
     assert errors == [], f"unexpected validation errors: {errors}"
-
-
-def test_electromechanics_is_advertised_as_not_working_while_it_is_not(tmp_path: Path):
-    """Keep the agent-facing warning and reality in sync.
-
-    Electromechanics is a deliberately deferred gap: the EM entry lays its
-    dicts out per region (constant/electro/electroProperties) while the
-    planner looks for constant/electroProperties, so it fails strict
-    planning. Agents were finding that failure and trying to "fix" it.
-
-    This asserts both halves. If EM is ever made to work, this test fails --
-    which is the point: the display summary and AGENT_GUIDE warning must be
-    removed in the same change, not left behind telling agents to stay away
-    from something that now works.
-
-    Corrected 2026-09-26 (R2 fix, finding M6): used ``default_driver_context()``;
-    see the same correction on
-    ``test_batched_ionic_model_does_not_require_optional_batched_keys`` above.
-    """
-    from omnidriver.cardiacfoam.tutorials.display import TUTORIALS
-
-    entry = "manufacturedMonodomainTotalLagrangianEM"
-    cases_root = tmp_path / "cases"
-    _stage_case_dictionaries(_native_tutorials_root(), _MANUFACTURED_EM_RELPATH, cases_root)
-
-    report = strict_plan(
-        entry, driver_context=_CTX, overrides={"cases_root": str(cases_root)},
-    ).to_json()
-    errors = [
-        d for d in report["run_document"]["validation"].get("diagnostics", [])
-        if d.get("level") == "error"
-    ]
-    assert errors, (
-        f"{entry} now plans cleanly. Electromechanics apparently works: drop "
-        "the NOT CURRENTLY WORKING warning from tutorials/display.py and the "
-        "electromechanics note from AGENT_GUIDE.md, then delete this test."
-    )
-
-    display = next(d for d in TUTORIALS if d.id == entry)
-    haystack = f"{display.title} {display.summary}".lower()
-    assert "not currently working" in haystack, (
-        f"{entry} fails strict planning but its display does not say so; an "
-        "agent will pick it and then try to repair the planner."
-    )
 
 
 def test_absent_stimulus_block_is_not_invented_from_defaults():

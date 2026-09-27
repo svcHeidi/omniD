@@ -433,7 +433,7 @@ def test_core_declares_no_default_dict_files(tmp_path: Path) -> None:
     via compatibility.legacy_generic_case_dict_file_relpaths. Core defaulting
     to two filenames from one solver's vocabulary was the point of that seam
     and is exactly what got removed; the pair now lives in
-    cardiacfoam/tutorials/generic_case.py, whose own test asserts it. The
+    cardiacfoam/generic_case.py, whose own test asserts it. The
     distinction from test_declaring_no_dict_files_leaves_the_case_generic
     above is that this one passes no argument at all.
     """

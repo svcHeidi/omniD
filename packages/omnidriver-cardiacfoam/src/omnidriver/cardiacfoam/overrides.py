@@ -1,12 +1,9 @@
-import datetime
-import tempfile
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 from omnidriver.core.case_write import (
     CaseMutationRequest,
-    CaseWritePlan,
     ParameterAssignment,
     ResolvedMutation,
 )
@@ -35,14 +32,11 @@ from omnidriver.openfoam.literals import (
 )
 from omnidriver.openfoam.mutators import (
     check_dictionary_word_is_safe,
-    ensure_foam_dict,
-    remove_foam_dict,
     update_foam_entry,
 )
 from .detection import detect_electro_coeffs_scope
 from .dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
 from .common_dict_entries import PHYSICS_PROPERTY_ENTRIES
-from .own_context import own_driver_context
 
 #: This module's identity on every `ParameterAssignment` it produces. Mirrors
 #: `dict_builder.PLUGIN_ID` / `runtime_profile._PLUGIN_ID` (both
@@ -449,122 +443,6 @@ def resolve_entry_overrides(
     return tuple(assignments)
 
 
-def _resolve_single_catalog_assignment(
-    entry_name: str,
-    scope: str | Sequence[str] | None,
-    value: Any,
-    *,
-    document: str,
-    electro_properties_path: Path | None,
-    operation: str,
-    source: str = "case",
-) -> ParameterAssignment:
-    """One catalog-addressed key, resolved into a typed `ParameterAssignment`
-    carrying an explicit `operation` (Phase 3 Task 6's completion,
-    2026-09-23) -- the single-key counterpart of `resolve_entry_overrides`
-    for a caller that already knows exactly which key it means and wants an
-    upsert or a removal, neither of which `resolve_entry_overrides` itself
-    can express: it only ever builds `operation="set"` assignments, and
-    always requires a value.
-
-    Same catalog strictness as `resolve_entry_overrides` -- an override
-    addressing a key the catalog does not declare is refused, not silently
-    written -- and the same dynamic-path/binding-validation machinery
-    (`_catalog_entry_for`, `_validate_dynamic_binding`), reused rather than
-    duplicated.
-
-    Corrected 2026-09-26 (tutorials-are-pointers 5.4a): its one removal
-    caller, `resolve_electro_property_removal`, is deleted with
-    `manufactured_bath_bidomain` (the bath record's studies replace
-    `groundPatches`/`surfaceCurrentPatches` whole, owner Q4), so every
-    `operation` here now carries a value.
-
-    `source` (added 2026-09-24, Phase 3 Task 9's `describe` review, audit
-    finding F4 again): defaults to `"case"`, matching `resolve_entry_overrides`
-    -- correct for `resolve_electro_property_ensure`, where the value genuinely is
-    whatever the immediate caller passed. It is NOT always correct for a
-    caller (`single_cell._plan_case`, see `resolve_electro_property_set`)
-    that computed the value from its own default table rather than from
-    anything the caller of `_plan_case` supplied -- that is `"template"`,
-    the same distinction `dict_builder.py`'s synthesis resolver already
-    draws (`source="case" if delta_t is not None else "template"`). Passed
-    through unchanged, not re-derived here: this function has no way to
-    know which case applies for its own caller.
-    """
-    is_electro = electro_properties_path is not None
-    resolved_scope: tuple[str, ...] = ()
-    if scope is not None:
-        raw_scope = (scope,) if isinstance(scope, str) else tuple(scope)
-        resolved_scope = tuple(
-            part
-            for token in raw_scope
-            for part in _resolve_scope_tokens(
-                str(token), electro_properties_path=electro_properties_path,
-            )
-        )
-    key_path = (*resolved_scope, entry_name)
-    match = _catalog_entry_for(entry_name, resolved_scope, is_electro=is_electro)
-    if match is None:
-        raise ValueError(
-            f"override {'.'.join(key_path)!r} is not declared by the "
-            f"{'electroProperties' if is_electro else 'physicsProperties'} "
-            f"catalog; no native utility is known to read an undeclared "
-            f"key, so writing it would be a silent no-op the catalog "
-            f"exists to catch"
-        )
-    entry, binding = match
-    for placeholder, bound_value in binding.items():
-        _validate_dynamic_binding(entry, placeholder, bound_value)
-    typed_value, evidence_refs = _typed_value_for_entry(entry, value)
-    return ParameterAssignment(
-        qualified_id=".".join(key_path),
-        owner=PLUGIN_ID,
-        document=document,
-        key_path=key_path,
-        binding={},
-        value=typed_value,
-        value_kind=entry.value_kind,
-        source=source,
-        evidence_refs=evidence_refs,
-        operation=operation,
-    )
-
-
-def resolve_electro_property_set(
-    electro_properties_path: Path,
-    entry_name: str,
-    value: Any,
-    *,
-    document: str,
-    scope: str | Sequence[str] | None = None,
-    source: str = "case",
-) -> ParameterAssignment:
-    """Pure, channel-routed single-key counterpart of `resolve_entry_overrides`
-    for a caller that already knows exactly which key it means and needs to
-    declare a `source` other than the constant `"case"`
-    `resolve_entry_overrides` always assigns.
-
-    Added 2026-09-24 (Phase 3 Task 9's `describe` review): running the real
-    `describe` seam against a real fixture surfaced audit finding F4 again --
-    `single_cell._plan_case` folded `stim_amplitude`, looked up from this
-    tutorial's own default `stimulus_map` (keyed by the caller's
-    `ionic_model` choice, but not itself supplied by the immediate caller),
-    into the same `case_overrides` dict as `tissue`/`ionicModel` (values the
-    caller genuinely did choose), and `resolve_entry_overrides` marks every
-    entry it resolves `source="case"` unconditionally. An agent reading
-    `describe`'s `proposed_changes` would see `stim_amplitude` as something
-    the caller asked for, when it is a tutorial default the caller's
-    `ionic_model` choice happened to select -- `source="template"`, the
-    same distinction `dict_builder.py`'s synthesis resolver already draws.
-    See `single_cell._plan_case`'s own call site for how `source` is
-    determined there."""
-    return _resolve_single_catalog_assignment(
-        entry_name, scope, value, document=document,
-        electro_properties_path=electro_properties_path, operation="set",
-        source=source,
-    )
-
-
 def apply_entry_overrides(
     file_path: Path,
     overrides: Mapping[str, Any] | Sequence[Mapping[str, Any]] | None,
@@ -737,8 +615,8 @@ def resolve_patch_mutation(request: CaseMutationRequest) -> ResolvedMutation:
 
     Mirrors `cardiaccore.workflows.overrides.resolve_patch_mutation` in
     shape -- pure, every parameter already addressed by the caller
-    (`resolve_entry_overrides`, `omnidriver.openfoam.case_planning.plan_delta_t`/
-    `plan_end_time`) before this ever runs. The one real difference:
+    (`resolve_entry_overrides`) before this ever runs. The one real
+    difference:
     `target["value"]` is `_write_value_for_assignment(parameter)`, not
     `parameter.value` (the typed value) the way cardiacCore's resolver uses
     directly. cardiacCore's own parameters carry no `evidence_refs` and need
@@ -775,133 +653,6 @@ def resolve_patch_mutation(request: CaseMutationRequest) -> ResolvedMutation:
     )
 
 
-def merge_assignments(*groups: Sequence[ParameterAssignment]) -> tuple[ParameterAssignment, ...]:
-    """Merge several `ParameterAssignment` sequences that may address the
-    same slot, later group wins (Phase 3 Task 6).
-
-    `CaseMutationRequest` refuses two parameters occupying one slot outright
-    ("which one survives would depend on ordering") -- correct for a single
-    request, but several migrated tutorials (`single_cell` included) apply
-    more than one override set to the same document in sequence, the second
-    legitimately overwriting the first at a shared key exactly the way two
-    successive `apply_entry_overrides` calls already do. This collapses
-    such a sequence to its final per-slot value before a request is built,
-    preserving that "later call wins" behaviour instead of it becoming a
-    refusal.
-    """
-    by_slot: dict[str, ParameterAssignment] = {}
-    for group in groups:
-        for parameter in group:
-            by_slot[parameter.slot()] = parameter
-    return tuple(by_slot.values())
-
-
-def commit_case_overrides(
-    case_root: Path,
-    *,
-    parameters: Sequence[ParameterAssignment] = (),
-    extra_targets: Sequence[Mapping[str, Any]] = (),
-    extra_effects: Sequence[str] = (),
-    source_artifacts: Sequence[str] = (),
-    workflow: str,
-    requested_by: str,
-    driver_context: Any | None = None,
-    execution_env: Mapping[str, str] | None = None,
-) -> "Any | None":
-    """Commit one tutorial case's whole mutation through the case-write
-    channel, in a single transaction (Phase 3 Task 6 -- the shared shape
-    every migrated tutorial's `plan_case` builds on, the same role
-    `cardiaccore.workflows.overrides.apply_input_overrides_planned` plays
-    for that package).
-
-    ``parameters`` are both described AND written through
-    `resolve_patch_mutation` -- reached the same way
-    `dict_builder.build_and_launch` already reaches its own synthesis
-    resolver, `driver_context.capabilities.case_writer.resolve`/``.render``,
-    now that `cardiacfoam_plugin.CardiacFoamPlugin` declares
-    `clone_and_patch` support too (Phase 3 Task 6).
-
-    ``extra_targets``/``extra_effects`` carry a target `resolve_patch_mutation`
-    cannot build because it has no `ParameterAssignment` to build it from --
-    `omnidriver.openfoam.case_planning.plan_block_mesh_resolution`'s block-mesh
-    rewrite (Phase 3 Task 4) and `plan_verbatim_content`'s whole-document
-    content target (Phase 3 Task 7's whole-template-file swap shape: zero
-    parameters, all content). Folded into the resolution returned by the
-    generic dispatch above by constructing a new `ResolvedMutation` that
-    carries both -- `render_case_files` only ever iterates `resolved.targets`
-    and never assumes every one came from a `ParameterAssignment`.
-
-    ``source_artifacts`` (Phase 3 Task 7) declares what a zero-parameter
-    request actually did, threaded straight into the `CaseMutationRequest` --
-    see that type's 2026-09-23 correction for why a `clone_and_patch` request
-    with no parameters now needs one of these instead. Empty by default,
-    matching every pre-Task-7 caller's behaviour exactly (they all pass
-    parameters).
-
-    Returns ``None`` when there is nothing to write -- the same no-op
-    contract `apply_input_overrides_planned` gives: a mutation with no
-    parameters and no extra targets patches nothing. **Corrected 2026-09-23
-    (Phase 3 Task 7):** a `clone_and_patch` `CaseMutationRequest` no longer
-    refuses an empty `parameters` tuple outright by itself -- it now also
-    accepts one accompanied by a non-empty `source_artifacts` -- but the
-    early no-op check below is unaffected: `source_artifacts` with no
-    `extra_targets` at all would build a `CaseWritePlan` with zero rendered
-    files, which `CaseWritePlan.__post_init__` itself refuses ("a plan must
-    render at least one file"); this function reports that as the same
-    legitimate no-op instead of an avoidable crash.
-    """
-    if not parameters and not extra_targets:
-        return None
-
-    from omnidriver.core.case_transaction import commit_case_write
-
-    case_root = Path(case_root)
-    if not case_root.is_absolute():
-        case_root = case_root.resolve()
-    if driver_context is None:
-        driver_context = own_driver_context()
-
-    request = CaseMutationRequest(
-        mode="clone_and_patch", case_root=case_root, adapter_id=PLUGIN_ID,
-        workflow=workflow, source_artifacts=tuple(source_artifacts),
-        parameters=tuple(parameters), requested_by=requested_by,
-    )
-    resolved = driver_context.capabilities.case_writer.resolve(
-        request, driver_context=driver_context,
-    )
-    if extra_targets:
-        resolved = ResolvedMutation(
-            request=resolved.request,
-            targets=resolved.targets + tuple(extra_targets),
-            preconditions=resolved.preconditions,
-            expected_effects=resolved.expected_effects + tuple(extra_effects),
-            semantic_owner_id=resolved.semantic_owner_id,
-        )
-
-    with tempfile.TemporaryDirectory(prefix="omnidriver-cardiacfoam-render-") as scratch:
-        snapshot_root = Path(scratch)
-        rendered = driver_context.capabilities.case_writer.render(
-            resolved, snapshot_root=snapshot_root, driver_context=driver_context,
-            execution_env=execution_env,
-        )
-        preconditions = resolved.preconditions + case_rendering.patch_preconditions(
-            resolved, case_root=case_root, execution_env=execution_env,
-        )
-        identity = getattr(driver_context, "identity", None)
-        stack_identity = (
-            identity.capability_digest if identity is not None else "0" * 64
-        )
-        plan = CaseWritePlan(
-            request=request, files=rendered, preconditions=preconditions,
-            semantic_owner_id=resolved.semantic_owner_id,
-            stack_identity=stack_identity,
-            created_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            expected_effects=resolved.expected_effects,
-        )
-
-    return commit_case_write(plan, driver_context=driver_context, execution_env=execution_env)
-
-
 def apply_electro_property_overrides(
     electro_properties_path: Path,
     overrides: Mapping[str, Any] | Sequence[Mapping[str, Any]] | None,
@@ -918,60 +669,6 @@ def apply_physics_property_overrides(
     overrides: Mapping[str, Any] | Sequence[Mapping[str, Any]] | None,
 ) -> None:
     apply_entry_overrides(physics_properties_path, overrides)
-
-
-def remove_electro_property_dict(
-    electro_properties_path: Path,
-    dict_name: str,
-    *,
-    scope: str | Sequence[str] | None = None,
-    missing_ok: bool = False,
-) -> None:
-    resolved_scope = None
-    if scope is not None:
-        raw_scope = (scope,) if isinstance(scope, str) else tuple(scope)
-        resolved_scope = tuple(
-            part
-            for token in raw_scope
-            for part in _resolve_scope_tokens(
-                str(token),
-                electro_properties_path=electro_properties_path,
-            )
-        )
-
-    remove_foam_dict(
-        electro_properties_path,
-        dict_name,
-        scope=resolved_scope,
-        missing_ok=missing_ok,
-    )
-
-
-def ensure_electro_property_dict(
-    electro_properties_path: Path,
-    dict_name: str,
-    block_text: str,
-    *,
-    scope: str | Sequence[str] | None = None,
-) -> bool:
-    resolved_scope = None
-    if scope is not None:
-        raw_scope = (scope,) if isinstance(scope, str) else tuple(scope)
-        resolved_scope = tuple(
-            part
-            for token in raw_scope
-            for part in _resolve_scope_tokens(
-                str(token),
-                electro_properties_path=electro_properties_path,
-            )
-        )
-
-    return ensure_foam_dict(
-        electro_properties_path,
-        dict_name,
-        block_text,
-        scope=resolved_scope,
-    )
 
 
 def _resolve_electro_model_coeffs_entry(

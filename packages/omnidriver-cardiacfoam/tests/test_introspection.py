@@ -125,7 +125,7 @@ def test_cardiac_plugin_describes_an_explicit_case_folder(tmp_path: Path) -> Non
 
     assert payload["resolution"] == "case_folder"
     assert payload["make_spec"]["callable"] == (
-        "omnidriver.cardiacfoam.tutorials.generic_case.make_generic_case_spec"
+        "omnidriver.cardiacfoam.generic_case.make_generic_case_spec"
     )
     assert payload["tutorial_contract"]["core_required_files"] == [
         "constant/electroProperties", "constant/physicsProperties",
