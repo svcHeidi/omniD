@@ -210,9 +210,10 @@ _TEXT_PARSERS: dict[str, Any] = {
 #: ("yes"/"no") -- unlike a dimensioned mapping, a vector3 tuple, or a list
 #: tuple, which it renders wrong (`str(...)` on the container itself). Adding
 #: `boolean` here would change what an already-typed `True`/`False` (e.g.
-#: `manufactured_monodomain_pseudo_ecg.py`'s `verificationModel.enabled`,
-#: `verificationModel.anisotropic`) renders as, breaking every currently-passing
-#: test that asserts "yes"/"no" -- found by running the suite, not assumed.
+#: `ecgDomains.<name>.verificationModel.enabled`/`.anisotropic`, direct study
+#: keys since `manufactured_monodomain_pseudo_ecg.py`'s deletion,
+#: 2026-09-27) renders as, breaking every currently-passing test that
+#: asserts "yes"/"no" -- found by running the suite, not assumed.
 _CONTAINER_FORMATTERS: dict[str, Any] = {
     "dimensioned_scalar": format_dimensioned_literal,
     "dimensioned_tensor": format_dimensioned_literal,
@@ -526,26 +527,6 @@ def _resolve_single_catalog_assignment(
         source=source,
         evidence_refs=evidence_refs,
         operation=operation,
-    )
-
-
-def resolve_electro_property_ensure(
-    electro_properties_path: Path,
-    entry_name: str,
-    value: Any,
-    *,
-    document: str,
-    scope: str | Sequence[str] | None = None,
-) -> ParameterAssignment:
-    """A catalog-addressed upsert (Phase 3 Task 6's completion, 2026-09-23):
-    an `operation="ensure"` `ParameterAssignment`, for a key whose presence
-    in the case legitimately varies (pseudo-ECG's electrode entries).
-    Corrected 2026-09-26 (5.4a): this was the channel counterpart of
-    `ensure_electro_property_entry`, a direct writer for the bath patch
-    entries that had no caller left and is deleted with the bath module."""
-    return _resolve_single_catalog_assignment(
-        entry_name, scope, value, document=document,
-        electro_properties_path=electro_properties_path, operation="ensure",
     )
 
 

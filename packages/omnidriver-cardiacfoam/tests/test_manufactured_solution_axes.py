@@ -55,7 +55,24 @@ def test_eikonal_ecg_dimension_only_picks_the_mesh_dict(tmp_path):
     assert command_arguments == {"mesh": ("-dict", "system/blockMeshDict.2D")}
 
 
-@pytest.mark.parametrize("record_name", ["manufacturedBidomain", "manufacturedEikonalECG"])
+def test_pseudo_ecg_dimension_writes_both_the_tissue_and_ecg_verifier_dimension(tmp_path):
+    """pseudo-ECG's ``dimension`` axis models the relation the plan names:
+    one study value drives both the tissue solver's own ``dimension`` and
+    the pseudo-ECG verifier's echoed ``verificationModel.dimension``, so a
+    study can never state one without the other."""
+    patches, command_arguments = _resolve("manufacturedMonodomainPseudoECG", {"dimension": "1D"}, tmp_path)
+    assert patches == {
+        "constant/electroProperties::monodomainSolverCoeffs.dimension": '"1D"',
+        "constant/electroProperties::monodomainSolverCoeffs.ecgDomains.ECG"
+        ".verificationModel.dimension": '"1D"',
+    }
+    assert command_arguments == {"mesh": ("-dict", "system/blockMeshDict.1D")}
+
+
+@pytest.mark.parametrize(
+    "record_name",
+    ["manufacturedBidomain", "manufacturedEikonalECG", "manufacturedMonodomainPseudoECG"],
+)
 def test_tet_number_cells_passes_lc_as_one_over_n(record_name, tmp_path):
     patches, command_arguments = _resolve(record_name, {"tetNumberCells": 20}, tmp_path)
     assert patches == {}
@@ -100,6 +117,7 @@ _TET_ROUTES = [
     ("manufacturedEikonalECG", "tet"),
     ("manufacturedEikonalECG", "tet-errorLocalisation"),
     ("manufacturedEikonalECG", "tet-gradientReconstruction"),
+    ("manufacturedMonodomainPseudoECG", "tet"),
 ]
 
 
@@ -124,7 +142,10 @@ def test_a_tet_route_admits_3d_or_no_dimension(record_name, variant):
     check_variant_constraints(record, variant, {"base": {}})
 
 
-@pytest.mark.parametrize("record_name", ["manufacturedBidomain", "manufacturedEikonalECG"])
+@pytest.mark.parametrize(
+    "record_name",
+    ["manufacturedBidomain", "manufacturedEikonalECG", "manufacturedMonodomainPseudoECG"],
+)
 @pytest.mark.parametrize("dimension", ["1D", "2D", "3D"])
 def test_the_hex_route_admits_every_dimension(record_name, dimension):
     from omnidriver.core.tutorial_records import check_variant_constraints
@@ -175,6 +196,7 @@ def test_no_gmsh_step_restates_its_templates_lc_default():
 @pytest.mark.parametrize(("record_name", "study", "lc"), [
     ("manufacturedBidomain", {"tetNumberCells": 20}, "0.05"),
     ("manufacturedEikonalECG", {"tetNumberCells": 20}, "0.05"),
+    ("manufacturedMonodomainPseudoECG", {"tetNumberCells": 20}, "0.05"),
     ("niederer2011", {"tetDx": 0.0002}, "0.0002"),
 ])
 def test_a_tet_axis_adds_lc_to_the_gmsh_command_line(record_name, study, lc, tmp_path):

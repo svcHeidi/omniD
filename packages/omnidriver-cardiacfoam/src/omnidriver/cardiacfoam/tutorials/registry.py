@@ -21,7 +21,15 @@ from omnidriver.cardiacfoam.tutorials.manufactured_purkinje_graph import (
 from omnidriver.cardiacfoam.tutorials.cable_1d_cv_convergence import (
     make_spec as make_cable_1d_cv_convergence_spec,
 )
-from omnidriver.cardiacfoam.tutorials.manufactured_monodomain_pseudo_ecg import make_spec as make_manufactured_monodomain_pseudo_ecg_spec
+# manufactured_monodomain_pseudo_ecg's factory make_spec was deleted
+# 2026-09-27: the tutorial migrated onto a tutorial record
+# (records/manufactured_monodomain_pseudo_ecg.py, tutorials-are-pointers
+# plan §5c, step 5.4b-P) -- it is no longer one of
+# SPEC_FACTORIES/REGISTERED_TUTORIALS below, by design: `classify_entry`
+# refuses a name registered as both a tutorial record and a factory
+# tutorial. `_build_cases`/`_case_output_filename` and the two constants
+# `manufactured_monodomain_total_lagrangian_em` still needed moved into
+# that tutorial's own module/defaults (the only remaining factory caller).
 # niederer_2011's factory make_spec was deleted 2026-09-26: the tutorial
 # migrated onto a tutorial record (records/niederer_2011.py, plan
 # docs/superpowers/plans/2026-09-25-tutorials-are-pointers-remaining.md
@@ -50,8 +58,6 @@ from omnidriver.cardiacfoam.tutorials.ids import CardiacTutorialID
 SPEC_FACTORIES = {
     CardiacTutorialID.CABLE_1D_CV_CONVERGENCE.value: make_cable_1d_cv_convergence_spec,
     CardiacTutorialID.CABLE_1D_CV_CONVERGENCE.value.lower(): make_cable_1d_cv_convergence_spec,
-    CardiacTutorialID.MANUFACTURED_MONODOMAIN_PSEUDO_ECG.value: make_manufactured_monodomain_pseudo_ecg_spec,
-    CardiacTutorialID.MANUFACTURED_MONODOMAIN_PSEUDO_ECG.value.lower(): make_manufactured_monodomain_pseudo_ecg_spec,
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_TOTAL_LAGRANGIAN_EM.value: make_manufactured_monodomain_total_lagrangian_em_spec,
     "manufacturedelectromechanicsbc": make_manufactured_monodomain_total_lagrangian_em_spec,
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_1D3D.value: make_manufactured_monodomain_1d3d_spec,
@@ -64,7 +70,6 @@ SPEC_FACTORIES = {
 
 REGISTERED_TUTORIALS = (
     CardiacTutorialID.CABLE_1D_CV_CONVERGENCE.value,
-    CardiacTutorialID.MANUFACTURED_MONODOMAIN_PSEUDO_ECG.value,
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_TOTAL_LAGRANGIAN_EM.value,
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_1D3D.value,
     CardiacTutorialID.MANUFACTURED_PURKINJE_GRAPH.value,

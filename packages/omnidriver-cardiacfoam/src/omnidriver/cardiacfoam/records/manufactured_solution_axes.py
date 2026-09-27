@@ -93,6 +93,7 @@ TET_DIMENSIONS: tuple[str, ...] = ("3D",)
 def dimension_axis(
     name: str, *, mesh_step_id: str = "mesh",
     solver_coefficients: tuple[str, tuple[str, ...]] | None = None,
+    ecg_verification_scope: tuple[str, ...] | None = None,
 ) -> AxisContract:
     """A named axis mapping a dimension (one of :data:`DIMENSIONS`) to the
     mesh step's ``-dict system/blockMeshDict.<dim>`` (replacing the step's
@@ -102,10 +103,23 @@ def dimension_axis(
     ``$ELECTRO_MODEL_COEFFS.dimension`` is already catalogued (enum
     ``1D``/``2D``/``3D``), so this axis derives no catalog fact of its own.
 
+    ``ecg_verification_scope`` (pseudo-ECG, plan §5c: "sets
+    ``monodomainSolverCoeffs.dimension`` and ``ecgDomains.ECG.dimension``
+    together, which models the relation") adds a second patch in the same
+    ``solver_coefficients`` document, at ``scope + ecg_verification_scope +
+    ("dimension",)`` -- the native
+    ``ecgDomains.ECG.verificationModel.dimension`` echoes the tissue
+    dimension the pseudo-ECG verifier is built for, and a study that only
+    stated one of the two could silently desync them. One study value drives
+    both, the same way a single ``dimension`` already drives the mesh
+    argument and the tissue coefficient. Requires ``solver_coefficients``.
+
     Refuses by name a value that is not one of :data:`DIMENSIONS`: a
     nonsense dimension would otherwise surface only as blockMesh failing to
     find a file named after it.
     """
+    if ecg_verification_scope is not None and solver_coefficients is None:
+        raise ValueError("ecg_verification_scope requires solver_coefficients")
 
     def resolve(value: Any, staged_case_root: Path) -> AxisResult:
         del staged_case_root  # this axis reads nothing from the staged case
@@ -119,6 +133,12 @@ def dimension_axis(
                 document=document, key_path=scope + ("dimension",),
                 value=f'"{value}"', value_kind="word",
             ),)
+            if ecg_verification_scope is not None:
+                patches += (AxisPatch(
+                    document=document,
+                    key_path=scope + ecg_verification_scope + ("dimension",),
+                    value=f'"{value}"', value_kind="word",
+                ),)
         return AxisResult(
             patches=patches,
             command_arguments={mesh_step_id: MESH_DICT_KEY + (block_mesh_dict_document(value),)},

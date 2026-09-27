@@ -51,10 +51,43 @@ from omnidriver.openfoam.case_planning import (
     plan_block_mesh_resolution,
     plan_delta_t,
 )
-from .manufactured_monodomain_pseudo_ecg import (
-    _build_cases,
-    _case_output_filename,
-)
+from itertools import product
+
+
+def _build_cases(
+    dt_values: Sequence[float],
+    number_cells: Sequence[int],
+    dimensions: Sequence[str],
+    solver_types: Sequence[str],
+    piecewise_sweep: bool,
+) -> list[CaseConfig]:
+    """Moved from the now-deleted ``manufactured_monodomain_pseudo_ecg``
+    tutorial module (tutorials-are-pointers plan §5c, step 5.4b-P: "move
+    only what TL-EM imports into TL-EM's own module"). This tutorial is
+    this function's only remaining caller -- it stays on the factory path
+    until electromechanics itself migrates (plan §3)."""
+    if piecewise_sweep:
+        dt_cells_pairs = list(zip(dt_values, number_cells))
+    else:
+        dt_cells_pairs = list(product(dt_values, number_cells))
+
+    cases: list[CaseConfig] = []
+    for dimension, solver in product(dimensions, solver_types):
+        for dt_value, cells in dt_cells_pairs:
+            token = f"{dt_value:.12g}".replace(".", "p").replace("-", "m")
+            case_id = f"{dimension}_{cells}_cells_{solver}_DT{token}"
+            cases.append(
+                CaseConfig(
+                    case_id=case_id,
+                    params={
+                        "dimension": dimension,
+                        "solver": solver,
+                        "cells": int(cells),
+                        "dt": float(dt_value),
+                    },
+                )
+            )
+    return cases
 
 
 def _case_output_filename(case: CaseConfig) -> str:

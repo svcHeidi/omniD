@@ -7,7 +7,11 @@ _MODULES = [
     # tutorial migrated onto a tutorial record (docs/superpowers/specs/
     # 2026-09-24-tutorials-are-pointers-design.md), which has no defaults
     # module to carry these dead constants at all.
-    "omnidriver.cardiacfoam.tutorials.defaults.manufactured_monodomain_pseudo_ecg",
+    # manufactured_monodomain_pseudo_ecg's defaults module was deleted
+    # 2026-09-27: the tutorial migrated onto a tutorial record
+    # (records/manufactured_monodomain_pseudo_ecg.py, tutorials-are-pointers
+    # plan §5c, step 5.4b-P), for the same reason as restitution_curves
+    # above.
     "omnidriver.cardiacfoam.tutorials.defaults.cable_1d_cv_convergence",
     "omnidriver.cardiacfoam.tutorials.defaults.cable_1d_restitution",
     "omnidriver.cardiacfoam.tutorials.defaults.manufactured_purkinje_graph",

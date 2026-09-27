@@ -2,10 +2,15 @@
 N <solve> -parallel`` -> ``reconstructPar``, with N the case's own
 ``system/decomposeParDict:numberOfSubdomains``.
 
-Two callers share one builder (:func:`_parallel_form`): the factory path's
-:func:`solve_steps`, until step C deletes it, and a tutorial record's solve
-step through core's optional ``get_parallel_steps`` hook
+One caller shares :func:`_parallel_form`: a tutorial record's solve step
+through core's optional ``get_parallel_steps`` hook
 (:func:`parallel_steps_for_record`; PAR, owner Q6, 2026-09-26).
+
+Corrected 2026-09-27 (5.4b-P): the factory path's own ``solve_steps`` was
+deleted here, ahead of step C, once its last caller (the
+``manufactured_monodomain_pseudo_ecg`` tutorial module) migrated onto a
+tutorial record -- no factory tutorial calls it any more (§1's "look one
+level further").
 """
 from __future__ import annotations
 
@@ -70,50 +75,6 @@ def _parallel_form(
         },
         {"id": reconstruct_id, "command": "reconstructPar", "depends_on": [solve["id"]]},
     ]
-
-
-def solve_steps(
-    *,
-    solve_id: str,
-    solve_command: str,
-    depends_on: list[str],
-    run_in_parallel: bool,
-    case_root: Path | None,
-    decompose_par_dict_relpath: Path = _DECOMPOSE_PAR_DICT_RELPATH,
-) -> tuple[list[dict], str]:
-    """Build the workflow_dag step(s) for a factory tutorial's solve, serial
-    or parallel. The rank count is read from the case's own
-    ``decomposeParDict``, which requires ``case_root``.
-
-    Returns ``(steps, final_step_id)`` — callers whose next workflow_dag
-    step depends on the solve (e.g. bath's ``interfaceMetrics``, which needs
-    the reconstructed mesh) must depend on ``final_step_id``, not on
-    ``solve_id`` directly, since that differs between the two modes.
-
-    Corrected 2026-09-26 (PAR): the ``num_subdomains`` fallback, for
-    planning a parallel factory case with no dictionary on disk, is
-    deleted. No caller passed it; only its own two tests did. A record's
-    parallel form reads the dictionary only (:func:`parallel_steps_for_record`).
-    """
-    if not run_in_parallel:
-        return (
-            [{"id": solve_id, "command": solve_command, "depends_on": depends_on}],
-            solve_id,
-        )
-    # `decomposePar` reads the same dictionary, so it is the one place both
-    # commands agree: a rank count taken from anywhere else could make
-    # decomposePar create six processor directories while the solve ran
-    # `mpirun -np 2` against them.
-    if case_root is None or not (case_root / decompose_par_dict_relpath).is_file():
-        raise ValueError(
-            f"a parallel solve step needs a case with {decompose_par_dict_relpath} on disk"
-        )
-    n = read_number_of_subdomains(case_root, decompose_par_dict_relpath)
-    steps = _parallel_form(
-        {"id": solve_id, "command": solve_command, "depends_on": depends_on},
-        n=n, decompose_id="decomposePar", reconstruct_id="reconstructPar",
-    )
-    return steps, "reconstructPar"
 
 
 def parallel_steps_for_record(

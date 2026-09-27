@@ -1,5 +1,9 @@
 """Tests the shared decomposePar/mpirun/reconstructPar workflow_dag step
-builder used by every manufactured-solution tutorial's _workflow_dag_for.
+builder. Corrected 2026-09-27 (5.4b-P): this used to say "used by every
+manufactured-solution tutorial's _workflow_dag_for" -- that factory-path
+caller (`solve_steps`) is deleted now that no factory tutorial calls it;
+`TestRecordParallelForm` below covers the one remaining caller, a tutorial
+record's solve step through `parallel_steps_for_record`.
 """
 
 from __future__ import annotations
@@ -12,7 +16,6 @@ from omnidriver.core.runtime.record_execution import SchedulerAllocation
 from omnidriver.openfoam.parallel_execution import (
     parallel_steps_for_record,
     read_number_of_subdomains,
-    solve_steps,
 )
 
 _DECOMPOSE_PAR_DICT = """FoamFile
@@ -34,45 +37,6 @@ class TestReadNumberOfSubdomains(unittest.TestCase):
             (case_root / "system").mkdir()
             (case_root / "system" / "decomposeParDict").write_text(_DECOMPOSE_PAR_DICT)
             self.assertEqual(read_number_of_subdomains(case_root), 6)
-
-
-class TestSolveSteps(unittest.TestCase):
-    def test_serial_is_a_single_solve_step(self) -> None:
-        steps, last_id = solve_steps(
-            solve_id="solve", solve_command="cardiacFoam",
-            depends_on=["setConductivity"], run_in_parallel=False, case_root=None,
-        )
-        self.assertEqual(steps, [
-            {"id": "solve", "command": "cardiacFoam", "depends_on": ["setConductivity"]},
-        ])
-        self.assertEqual(last_id, "solve")
-
-    def test_parallel_wraps_decompose_mpirun_reconstruct(self) -> None:
-        with TemporaryDirectory() as tmp:
-            case_root = Path(tmp)
-            (case_root / "system").mkdir()
-            (case_root / "system" / "decomposeParDict").write_text(_DECOMPOSE_PAR_DICT)
-
-            steps, last_id = solve_steps(
-                solve_id="solve", solve_command="cardiacFoam",
-                depends_on=["setConductivity"], run_in_parallel=True, case_root=case_root,
-            )
-            self.assertEqual([s["id"] for s in steps], ["decomposePar", "solve", "reconstructPar"])
-            self.assertEqual(steps[0]["command"], "decomposePar")
-            self.assertEqual(steps[0]["depends_on"], ["setConductivity"])
-            self.assertEqual(steps[1]["command"], "mpirun")
-            self.assertEqual(steps[1]["args"], ["-np", "6", "cardiacFoam", "-parallel"])
-            self.assertEqual(steps[1]["depends_on"], ["decomposePar"])
-            self.assertEqual(steps[2]["command"], "reconstructPar")
-            self.assertEqual(steps[2]["depends_on"], ["solve"])
-            self.assertEqual(last_id, "reconstructPar")
-
-    def test_parallel_requires_case_root(self) -> None:
-        with self.assertRaises(ValueError):
-            solve_steps(
-                solve_id="solve", solve_command="cardiacFoam",
-                depends_on=[], run_in_parallel=True, case_root=None,
-            )
 
 
 class TestRecordParallelForm(unittest.TestCase):

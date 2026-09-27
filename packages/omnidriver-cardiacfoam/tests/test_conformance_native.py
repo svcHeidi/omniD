@@ -16,6 +16,7 @@ from omnidriver.conformance import CHECKS, run_check
 from cardiacfoam_native import (
     manufactured_bath_bidomain_conformance_target,
     manufactured_bidomain_conformance_target,
+    manufactured_monodomain_pseudo_ecg_conformance_target,
     niederer2011_conformance_target,
     manufactured_eikonal_ecg_conformance_target,
     restitution_curves_conformance_target,
@@ -31,6 +32,7 @@ _TARGETS = {
     "manufacturedEikonalECG": manufactured_eikonal_ecg_conformance_target,
     "manufacturedBathBidomain": manufactured_bath_bidomain_conformance_target,
     "singleCell": single_cell_conformance_target,
+    "manufacturedMonodomainPseudoECG": manufactured_monodomain_pseudo_ecg_conformance_target,
 }
 
 

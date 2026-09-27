@@ -204,6 +204,47 @@ def manufactured_bath_bidomain_conformance_target(tmp_path: Path) -> Conformance
     )
 
 
+def manufactured_monodomain_pseudo_ecg_conformance_target(tmp_path: Path) -> ConformanceTarget:
+    """``manufacturedMonodomainPseudoECG`` on its default hex route, 3D at
+    ``numberCells`` 5 (a real ``blockMesh``/``cardiacFoam`` run at ``(5 5
+    5)`` took about 4 s, ``docs/solver-learning/cardiacfoam.md`` section PE).
+
+    ``dimension`` stays at the native default ``"3D"``, not a coarser 1D/2D
+    choice like the other manufactured-solution targets: the native default
+    tissue verifier is ``manufacturedAnisotropicMonodomainVerifier``
+    (``anisotropic yes``), and that verifier's own catalogued constraint is
+    3D-only (a native ``FatalError`` at any other dimension) -- switching
+    ``dimension`` alone, with no matching change to
+    ``verificationModel.type``/``anisotropic``, would otherwise plan a
+    combination the real solver refuses. Every rewritten study that varies
+    ``dimension`` away from 3D also sets both of those (the record's own
+    docstring accounting), so a target base_study either does the same or,
+    more simply, keeps ``dimension`` at the native default -- taken here."""
+    require_sourced_openfoam("blockMesh", "cardiacFoam")
+    return ConformanceTarget(
+        plugin="cardiacfoam",
+        record="manufacturedMonodomainPseudoECG",
+        cases_root=native_tutorials_root(),
+        scratch_root=tmp_path / "scratch",
+        base_study={"mesh": "hex", "dimension": "3D", "numberCells": 5},
+        # A catalogued integer key the native case sets to 96 by default.
+        patch=(
+            "constant/electroProperties:monodomainSolverCoeffs.ecgDomains.ECG"
+            ".verificationModel.referenceQuadratureOrder",
+            48,
+        ),
+        untouched=("constant/electroProperties", ("monodomainSolverCoeffs", "ionicModel")),
+        sweep_name="numberCells",
+        sweep_values=(5, 10),
+        unknown_name=(
+            "constant/electroProperties:monodomainSolverCoeffs.ecgDomains.ECG"
+            ".verificationModel.referenceQuadratureOrde"
+        ),
+        solver_command="cardiacFoam",
+        environment={},
+    )
+
+
 def niederer_sweep(tmp_path: Path, *, dx_values: Sequence[float], end_time: float | None = None,
                     extra: Mapping[str, Any] | None = None) -> Path:
     """Run ``niederer2011`` (hex route) at each of ``dx_values`` (metres)

@@ -68,6 +68,7 @@ _KNOWN_CASES: tuple[RegressionCase, ...] = (
     RegressionCase(
         "manufacturedSolutions/monodomainPseudoECG", "manufacturedMonodomainPseudoECG",
         (_ELECTRO, _PHYSICS), "regression/monodomainPseudoECG.reference",
+        resolution="tutorial_record",
     ),
     RegressionCase(
         "manufacturedSolutions/eikonalECG", "manufacturedEikonalECG",

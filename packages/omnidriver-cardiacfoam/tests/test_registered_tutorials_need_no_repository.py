@@ -37,7 +37,10 @@ _NEEDS_CASE_CONTENT = {
     # "manufacturedeikonalecg" removed 2026-09-26: migrated onto a tutorial
     # record (records/manufactured_eikonal_ecg.py, step 5.4b-E), for the same
     # reason as "manufacturedbidomain" above.
-    "manufacturedmonodomainpseudoecg",
+    # "manufacturedmonodomainpseudoecg" removed 2026-09-27: migrated onto a
+    # tutorial record (records/manufactured_monodomain_pseudo_ecg.py,
+    # tutorials-are-pointers plan §5c, step 5.4b-P), for the same reason as
+    # "manufacturedbidomain" above.
 }
 
 
@@ -96,6 +99,9 @@ def test_every_serial_tutorial_builds_under_any_base(tmp_path: Path) -> None:
     # records/single_cell.py): its 2 keys (`singleCell` and its
     # case-folded alias) are gone from SPEC_FACTORIES too -- it was not one
     # of `_NEEDS_CASE_CONTENT`, so the buildable count drops by 2, to 10.
+    # Corrected 2026-09-27 (5.4b-P, `manufacturedMonodomainPseudoECG` onto a
+    # tutorial record): likewise one of `_NEEDS_CASE_CONTENT`, so this one
+    # has no further effect on the count -- it stays 10.
     assert built == 10, f"expected 10 buildable catalog entries, got {built}"
 
 

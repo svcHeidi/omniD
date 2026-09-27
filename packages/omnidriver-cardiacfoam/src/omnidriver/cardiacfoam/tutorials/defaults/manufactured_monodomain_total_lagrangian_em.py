@@ -32,15 +32,19 @@ from ..ids import CardiacTutorialID
 
 from pathlib import Path
 
-from .manufactured_monodomain_pseudo_ecg import (
-    BLOCK_MESH_RESOLUTION_BY_DIMENSION,
-    DT_VALUES,
-    DIMENSIONS,
-    NUMBER_CELLS,
-    OUTPUT_DIR_NAME,
-    PIECEWISE_SWEEP,
-)
 from .shared import CONTROL_DICT_RELPATH, OUTPUT_RELPATH, RUN_CASE_SCRIPT_RELPATH
+
+#: Moved from the now-deleted ``defaults.manufactured_monodomain_pseudo_ecg``
+#: (tutorials-are-pointers plan §5c, step 5.4b-P): the two values this
+#: module actually consumed from that import (``DT_VALUES``/``DIMENSIONS``/
+#: ``NUMBER_CELLS``/``OUTPUT_DIR_NAME`` were imported and then immediately
+#: overwritten below, so nothing of theirs ever reached this module).
+BLOCK_MESH_RESOLUTION_BY_DIMENSION = {
+    "1D": "{cells} 1 1",
+    "2D": "{cells} {cells} 1",
+    "3D": "{cells} {cells} {cells}",
+}
+PIECEWISE_SWEEP = True
 
 DIMENSIONS = ["3D"]
 NUMBER_CELLS = [10, 20, 40, 80]

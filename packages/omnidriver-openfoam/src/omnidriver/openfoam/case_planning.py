@@ -485,55 +485,6 @@ def read_hex_block_extent_m(document_path: Path) -> tuple[float, float, float] |
     return tuple(extents)  # type: ignore[return-value]
 
 
-def plan_dict_block(
-    document: str,
-    dict_name: str,
-    *,
-    operation: str,
-    scope: Sequence[str] | None = None,
-) -> Mapping[str, Any]:
-    """Resolve a whole-sub-dictionary removal into a
-    ``render_patch_case_files`` target (Phase 3 Task 6's completion,
-    2026-09-23) -- the counterpart of :func:`plan_block_mesh_resolution` for
-    :func:`mutators.remove_foam_dict` instead of the ``hex (`` rewrite.
-
-    **Why this is not a `ParameterAssignment`**, same reasoning as
-    `plan_block_mesh_resolution`'s own docstring: there is no single
-    ``key_path`` a typed value sits at. `ParameterAssignment.key_path`
-    addresses one leaf entry with a declared `value_kind`; a whole
-    sub-dictionary has neither.
-
-    Pure: reads nothing, writes nothing. ``render_patch_case_files`` is
-    where ``remove_foam_dict`` actually runs, against the snapshot copy, the
-    same "resolver never touches the case" split every other target in this
-    module keeps.
-
-    ``scope`` is passed through as given (already-resolved segments, e.g.
-    an active ``<solver>Coeffs`` block name) -- unlike
-    `cardiacfoam.overrides._resolve_scope_tokens`, this module owns no
-    ``$ELECTRO_MODEL_COEFFS``-style token vocabulary; a caller resolves its
-    own tokens before calling this, the same division
-    `plan_block_mesh_resolution` already has (no cardiac vocabulary here).
-
-    Corrected 2026-09-26 (tutorials-are-pointers 5.4a): ``operation`` also
-    took ``"ensure"`` with a ``block_text``, for the bath tutorial module's
-    ``ecgDomains`` insert, its one caller. That module is deleted, so the
-    insert and its ``block_text`` are too; ``"remove"`` is the one operation.
-    """
-    if operation != "remove":
-        raise ValueError(
-            f"dict block target {dict_name!r} in {document!r} declares "
-            f"operation {operation!r}; the known operation is 'remove'"
-        )
-    return {
-        "document": document,
-        "format": _patch_format(),
-        "dict_operation": operation,
-        "dict_name": dict_name,
-        "scope": list(scope) if scope else None,
-    }
-
-
 def plan_verbatim_content(
     document: str, content: str, *, executable: bool = False,
 ) -> Mapping[str, Any]:
@@ -583,9 +534,11 @@ def plan_verbatim_content(
     before/after bytes) for no reason but its own authoring granularity.
 
     `document`/`content` become a raw ``{"document", "format", "content"}``
-    target -- no `source` field, matching `plan_block_mesh_resolution`'s and
-    `plan_dict_block`'s own reasoning: a target that assigns no key/value has
-    nothing for `VALUE_SOURCES` to classify.
+    target -- no `source` field, matching `plan_block_mesh_resolution`'s own
+    reasoning: a target that assigns no key/value has nothing for
+    `VALUE_SOURCES` to classify. (`plan_dict_block`, which reasoned the same
+    way for a whole-sub-dictionary removal, was deleted 2026-09-27 with its
+    one caller, the `manufactured_monodomain_pseudo_ecg` tutorial module.)
 
     **`content` must be `str`, not `bytes` -- checked by running it, not
     assumed.** `ResolvedMutation.__post_init__` deep-freezes every target

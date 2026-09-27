@@ -35,7 +35,13 @@ TUTORIALS: tuple[TutorialDisplay, ...] = (
         },
     ),
     TutorialDisplay(
-        id=CardiacTutorialID.MANUFACTURED_MONODOMAIN_PSEUDO_ECG.value,
+        # A literal string, not `CardiacTutorialID.MANUFACTURED_MONODOMAIN_
+        # PSEUDO_ECG` (removed 2026-09-27 alongside the factory it keyed):
+        # this tutorial is now a tutorial record
+        # (records/manufactured_monodomain_pseudo_ecg.py), which names
+        # itself directly, the same way restitutionCurves's own display
+        # entry does above.
+        id="manufacturedMonodomainPseudoECG",
         title="Manufactured solution (monodomain)",
         summary=(
             "Method of manufactured solutions on the monodomain "

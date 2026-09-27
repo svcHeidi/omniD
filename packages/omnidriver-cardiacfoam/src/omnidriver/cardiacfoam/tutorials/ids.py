@@ -13,7 +13,12 @@ class CardiacTutorialID(str, Enum):
     # plans/2026-09-25-tutorials-are-pointers-remaining.md §5c "5.4b-N"),
     # which names itself directly rather than through this factory-tutorial
     # enum -- same reasoning as RESTITUTION_CURVES's removal below.
-    MANUFACTURED_MONODOMAIN_PSEUDO_ECG = "manufacturedMonodomainPseudoECG"
+    # MANUFACTURED_MONODOMAIN_PSEUDO_ECG ("manufacturedMonodomainPseudoECG")
+    # removed 2026-09-27: migrated onto a tutorial record
+    # (records/manufactured_monodomain_pseudo_ecg.py, tutorials-are-pointers
+    # plan §5c, task 5.4b-P), which names itself directly rather than
+    # through this factory-tutorial enum -- see RESTITUTION_CURVES's
+    # identical removal note below.
     # MANUFACTURED_BIDOMAIN ("manufacturedBidomain") removed 2026-09-26:
     # migrated onto a tutorial record (records/manufactured_bidomain.py,
     # tutorials-are-pointers plan, step 5.4b-B), which names itself directly
