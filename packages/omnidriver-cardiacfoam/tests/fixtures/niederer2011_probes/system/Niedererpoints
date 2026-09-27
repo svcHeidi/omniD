@@ -3,6 +3,7 @@ libs            ("libsampling.so");
 enabled         true;
 
 writeControl    writeTime;
+
 interpolationScheme cellPoint;
 
 fields

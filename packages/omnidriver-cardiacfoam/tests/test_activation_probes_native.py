@@ -25,7 +25,6 @@ pytestmark = pytest.mark.native
 NAMES = tuple(str(k) for k in range(9))
 _TESTS = Path(__file__).resolve().parent
 READER_FIXTURE = _TESTS / "fixtures" / "niederer2011_probes"
-PARSER_FIXTURES = _TESTS.parents[1] / "omnidriver-openfoam" / "tests" / "core" / "fixtures" / "probes"
 
 
 @pytest.fixture(scope="module")
@@ -82,18 +81,32 @@ def test_a_probe_never_reached_is_not_reached(run):
 
 def test_the_probe_parser_refuses_a_vector_field(copy):
     """Probing the mesh's own vector `C` (cell centres) writes parenthesised
-    values, which the scalar parser refuses."""
+    values, which the scalar parser refuses. **Corrected 2026-09-27 (Q9,
+    native `interpolationScheme cellPoint`):** the niederer2011 record's own
+    workflow no longer runs `writeCellCentres` (nothing needs a cell-centre
+    field any more), so `C` is not registered on disk for `-func
+    Niedererpoints(C)` to read; this test writes it itself, purely as a
+    vector field to probe. Its values are no longer byte-pinned against
+    `omnidriver-openfoam`'s static `fixtures/probes/C` -- interpolationScheme
+    cellPoint changes what a probe of `C` itself reports too (a barycentric
+    blend, not the raw cell centre), and that fixture's own docstring
+    already says nothing produces it any more; only the parser's refusal of
+    a real vector-shaped file is asserted here."""
+    _post_process(copy, "-func", "writeCellCentres")
     _post_process(copy, "-func", "Niedererpoints(C)")
     text = (copy / "postProcessing" / "Niedererpoints(C)" / "0" / "C").read_text()
-    assert text == (PARSER_FIXTURES / "C").read_text()
     with pytest.raises(ValueError, match="vector or tensor"):
         parse_probe_series(text, source="C")
 
 
 def test_a_probe_outside_the_mesh_is_marked_not_found(copy):
+    """Same Q9 correction as above: `writeCellCentres` is run here, ad hoc,
+    only so `Cx` exists to probe; the point (1, 1, 1) m is outside the slab
+    regardless of interpolation scheme, so it is marked not found either
+    way."""
+    _post_process(copy, "-func", "writeCellCentres")
     _post_process(copy, "-func", "Niedererpoints(Cx,probeLocations=((1 1 1) (0 0 0)))")
     text = (copy / "postProcessing" / "Niedererpoints(Cx,probeLocations=((111)(000)))" / "0" / "Cx").read_text()
-    assert text == (PARSER_FIXTURES / "Cx_not_found").read_text()
     assert parse_probe_series(text, source="Cx").not_found == frozenset({0})
 
 
