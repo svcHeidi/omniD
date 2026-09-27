@@ -124,113 +124,23 @@ def _spec_with_workflow(case_root: Path, *, steps: list[dict]) -> TutorialSpec:
     )
 
 
-def test_strict_plan_succeeds_for_single_cell(tmp_path: Path) -> None:
-    cases_root = tmp_path / "cases"
-    _stage_case_dictionaries(_native_tutorials_root(), _SINGLE_CELL_RELPATH, cases_root)
-    # "singleCell" migrated onto a tutorial record 2026-09-27 (records/
-    # single_cell.py): a record's scratch root is supplied, never defaulted
-    # under cases_root (plan §4).
-    report = strict_plan(
-        "singleCell", environment_source="/no/such/openfoam/bashrc", driver_context=_CTX,
-        overrides={"cases_root": str(cases_root)},
-        scratch_root=tmp_path / "scratch",
-    )
-    payload = report.to_json()
-
-    assert payload["status"] == "ok"
-
-    # Updated 2026-09-18. This asserted `score == 100` and `status == "ready"`.
-    # The test supplies a deliberately nonexistent bashrc AND runs under a
-    # conftest that sets SKIP_ENV_DIAGNOSTICS, so environment preflight never
-    # executes -- and it used to be paid its full ten points regardless. This
-    # assertion did not fail, it *ratified*: see
-    # docs/superpowers/specs/2026-09-18-coverage-as-evidence.md §1.
-    #
-    # The invariant is asserted rather than a new exact total, deliberately.
-    readiness = payload["readiness_score"]
-    assert readiness["score"] < 100, (
-        "a plan whose environment preflight did not run reports a perfect score"
-    )
-    assert "environment_preflight" in readiness["uncovered_stages"]
-    environment = next(
-        item for item in payload["simulation_audit"]
-        if item["stage"] == "environment_preflight"
-    )
-    assert environment["points"] == 0
-    assert environment["status"] == "not_requested"
-
-    # Restored 2026-09-26 (final review M7): these were dropped during the
-    # M6 conversion to a native test rather than corrected. Both still hold
-    # against the real tree -- a fresh strict plan has run nothing yet, so
-    # `current_step_id` is the workflow's first step. R2-fix-report.md
-    # claimed this assertion was merely "corrected"; it was deleted and is
-    # restored here with `"mesh"` (not the pre-conversion `"solve"`), per
-    # `probe_m6.py`'s output against the real native tree.
-    assert payload["workflow_state"]["completed_steps"] == []
-    assert payload["workflow_state"]["current_step_id"] == "mesh"
-
-    # Not "ready": `ready` is a success claim, and this plan has a real coverage
-    # gap.
-    assert readiness["status"] != "ready"
-    assert {
-        item["stage"] for item in payload["simulation_audit"]
-    } == {
-        "simulation_generation",
-        "case_preparation_files",
-        "dictionary_resolution",
-        "workflow_preparation",
-        "artifact_prediction",
-        "environment_preflight",
-        "mesh_geometry",
-    }
-    generation_audit = next(
-        item for item in payload["simulation_audit"]
-        if item["stage"] == "simulation_generation"
-    )
-    assert generation_audit["evidence"]["case_count"] >= 1
-    assert payload["resolved_entry"]["entry_kind"] == "registered_tutorial"
-    assert payload["expected_artifacts"]
-    assert payload["run_document"]["version"] == "3"
-    assert payload["run_document"]["validation"]["status"] == "ok"
-    assert payload["workflow_diagnostics"] == []
-    assert payload["workflow_dag"]["schema_version"] == "1"
-    assert payload["workflow_dag"]["step_status_values"] == [
-        "pending",
-        "running",
-        "completed",
-        "failed",
-        "skipped",
-    ]
-    # Corrected 2026-09-26 (R2 fix, finding M6): this asserted steps[0] was
-    # the solve step directly. The real native singleCell case's committed
-    # system/blockMeshDict means the planner now also emits a "mesh" step
-    # ahead of "solve" -- this module never ran against the real tree before,
-    # so that drift was never caught. The solve step itself is unchanged.
-    solve_step = next(
-        step for step in payload["workflow_dag"]["steps"] if step["id"] == "solve"
-    )
-    assert solve_step["command"] == "cardiacFoam"
-    assert solve_step["args"] == []
-    assert solve_step["cwd"] == "."
-    assert solve_step["retry_policy"] == {}
-    assert {artifact["artifact_id"] for artifact in payload["expected_artifacts"]} <= set(
-        solve_step["produces"]
-    )
-    assert payload["run_document"]["workflowDag"] == payload["workflow_dag"]
-    solve_state = next(
-        step for step in payload["workflow_state"]["steps"] if step["step_id"] == "solve"
-    )
-    assert payload["workflow_state"]["status"] == "pending"
-    assert payload["workflow_state"]["failed_step_id"] is None
-    assert solve_state["status"] == "pending"
-    assert solve_state["attempt"] == 0
-    assert solve_state["command"] == "cardiacFoam"
-    assert solve_state["args"] == []
-    assert solve_state["cwd"] == "."
-    assert solve_state["exit_code"] is None
-    assert solve_state["stdout_log"] is None
-    assert solve_state["stderr_log"] is None
-    assert payload["run_document"]["workflowState"] == payload["workflow_state"]
+# test_strict_plan_succeeds_for_single_cell removed 2026-09-27
+# (tutorials-are-pointers, step 5.1): "singleCell" migrated onto a tutorial
+# record (records/single_cell.py), so `strict_plan("singleCell", ...)` now
+# resolves through the record path, not the deleted factory this test
+# exercised. Two of its assertions no longer hold unchanged, the same class
+# of drift `test_strict_plan_succeeds_for_manufactured_tutorial`'s own
+# 2026-09-26 removal note names for `manufacturedBidomain`, below:
+# `resolved_entry.entry_kind` is "tutorial_record", not
+# "registered_tutorial"; and `expected_artifacts` spans both this record's
+# steps (mesh and solve), not only "solve" -- the factory declared a single
+# step whose own `produces` listed everything, so
+# `expected_artifacts <= solve_step["produces"]` held only by that factory's
+# construction. "plan succeeds" and "declared artifacts are present" are
+# exactly conformance C5/C6, now run against this record's own conformance
+# target (`cardiacfoam_native.single_cell_conformance_target`,
+# `test_conformance_native.py`) instead of a bespoke test naming the old
+# factory's structural assumptions.
 
 
 # test_strict_plan_succeeds_for_manufactured_tutorial removed 2026-09-26
