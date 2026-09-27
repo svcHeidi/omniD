@@ -2,7 +2,11 @@ from enum import Enum
 
 
 class CardiacTutorialID(str, Enum):
-    SINGLE_CELL = "singleCell"
+    # SINGLE_CELL ("singleCell") removed 2026-09-27: migrated onto a tutorial
+    # record (records/single_cell.py, tutorials-are-pointers plan, step
+    # 5.1), which names itself directly rather than through this
+    # factory-tutorial enum -- see RESTITUTION_CURVES's identical removal
+    # note below.
     CABLE_1D_CV_CONVERGENCE = "cable1DCVConvergence"
     # NIEDERER_2011 ("niederer2011") removed 2026-09-26: migrated onto a
     # tutorial record (records/niederer_2011.py, plan docs/superpowers/

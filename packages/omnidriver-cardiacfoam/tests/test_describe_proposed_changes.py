@@ -9,17 +9,23 @@ staged clone of its case (never the real `case_root`), and reading the
 qualified ids/values/sources/operations off the committed
 `CaseWriteRecord` -- see `core.introspection._resolve_proposed_changes`.
 
-Three things are proven here, against real cardiacfoam adapter code (this
+Two things are proven here, against real cardiacfoam adapter code (this
 package is where `plan_case` and the real catalog live -- the core-level
 fake-plugin tests in
 `packages/omnidriver/tests/core/test_describe_write_surface.py` cannot
 exercise any of this):
 
-1. `single_cell`'s real `plan_case`, driven by raw factory kwargs exactly as
-   the CLI would supply them, produces non-empty, correctly-valued
-   `proposed_changes` -- and the real, on-disk fixture case is provably
-   untouched (a directory snapshot, not an assumption).
-2. A whole-dict removal target (`manufactured_monodomain_pseudo_ecg`'s
+Proof 1 (a factory tutorial's real `plan_case`, driven by raw factory
+kwargs exactly as the CLI would supply them, produces non-empty,
+correctly-valued `proposed_changes` against a provably-untouched on-disk
+fixture case) used to live here, exercising `single_cell`'s own `plan_case`
+-- deleted 2026-09-27 alongside that factory (tutorials-are-pointers plan,
+step 5.1): `single_cell` migrated onto a tutorial record, whose `describe`
+path this module's `_write_surface` helper does not drive at all (a
+record's own preview goes through `record_execution`, not raw factory
+kwargs), so there is no longer a `plan_case`-driven proof to make here.
+
+1. A whole-dict removal target (`manufactured_monodomain_pseudo_ecg`'s
    conditional `ecgDomains` removal) is not a `ParameterAssignment` at all
    (Task 6/7's own finding: "not a `ParameterAssignment`, a whole
    sub-dictionary has no single `key_path`") and so cannot carry a
@@ -47,7 +53,6 @@ from write_channel_test_support import write_physics_properties
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.cardiacfoam.tutorials import (
     manufactured_monodomain_pseudo_ecg as pseudo_ecg,
-    single_cell,
 )
 from omnidriver.core.introspection import _resolve_proposed_changes, _write_surface
 from omnidriver.core.plugin_interface import driver_context as _driver_context
@@ -68,132 +73,6 @@ def _tree_digest(root: Path) -> dict[str, str]:
         for path in sorted(root.rglob("*"))
         if path.is_file()
     }
-
-
-class TestSingleCellProposedChangesEndToEnd(unittest.TestCase):
-    """Proof 1: `describe --plugin cardiacfoam --entry singleCell --config
-    <real overrides>` (exercised here at the `_write_surface` level, the
-    same function `describe_entry`/the CLI calls) returns non-empty
-    `proposed_changes` naming the qualified ids that will change and their
-    values -- and the real case fixture is untouched."""
-
-    def setUp(self) -> None:
-        self.tmp = Path(tempfile.mkdtemp(prefix="omnidriver-describe-proposed-"))
-        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
-        self.case_root = self.tmp / "electrophysiologyProtocols" / "singleCell"
-        (self.case_root / "constant").mkdir(parents=True)
-        (self.case_root / "constant" / "electroProperties").write_text(
-            "\n".join([
-                "myocardiumSolver singleCellSolver;",
-                "",
-                "singleCellSolverCoeffs",
-                "{",
-                "    ionicModel BuenoOrovio;",
-                "    tissue myocyte;",
-                "    singleCellStimulus",
-                "    {",
-                "        stim_amplitude 0.4;",
-                "        stim_period_S1 1000;",
-                "    }",
-                "}",
-                "",
-            ])
-        )
-        write_physics_properties(self.case_root)
-
-    def _spec(self, overrides: dict) -> TutorialSpec:
-        return single_cell.make_spec(cases_root=self.tmp, **overrides)
-
-    def test_proposed_changes_are_non_empty_and_correctly_valued(self) -> None:
-        overrides = dict(
-            ionic_model="BuenoOrovio",
-            tissue="epicardialCells",
-            electro_property_overrides={
-                "singleCellSolverCoeffs.singleCellStimulus.stim_period_S1": 900,
-            },
-            physics_property_overrides={"type": "electroMechanicalModel"},
-        )
-        spec = self._spec(overrides)
-        before = _tree_digest(self.case_root)
-
-        described = _write_surface(driver_context=_CTX, spec=spec, overrides=overrides)
-
-        self.assertEqual(described["proposed_changes_source"], "plan_case_preview")
-        self.assertEqual(described["proposed_changes_reason"], "")
-        by_id = {item["qualified_id"]: item for item in described["proposed_changes"]}
-        self.assertIn(
-            "singleCellSolverCoeffs.singleCellStimulus.stim_period_S1", by_id,
-        )
-        changed = by_id["singleCellSolverCoeffs.singleCellStimulus.stim_period_S1"]
-        self.assertEqual(changed["value"], 900)
-        self.assertEqual(changed["source"], "case")
-        self.assertEqual(changed["operation"], "set")
-        self.assertEqual(changed["document"], "constant/electroProperties")
-        self.assertIn("singleCellSolverCoeffs.tissue", by_id)
-        self.assertEqual(by_id["singleCellSolverCoeffs.tissue"]["value"], "epicardialCells")
-        self.assertIn("type", {i["qualified_id"] for i in described["proposed_changes"]})
-
-        # The real fixture case_root -- never passed to plan_case, only a
-        # disposable staged clone was -- is provably untouched, not merely
-        # unclaimed to have changed.
-        after = _tree_digest(self.case_root)
-        self.assertEqual(before, after)
-        # No stray staging/journal artifacts were left beside it either.
-        self.assertEqual(
-            sorted(p.name for p in self.tmp.iterdir()),
-            ["electrophysiologyProtocols"],
-        )
-
-    def test_a_sweep_that_has_not_collapsed_to_one_case_reports_unknown_not_empty(self) -> None:
-        """No override collapses `ionic_models`/`ionic_model_tissue_map` to a
-        single case here -- `build_cases()` enumerates the whole catalog.
-        `single_cell` *does* have a `plan_case` -- a resolver exists, it
-        just could not run for this request -- so the result must be
-        `None` (unknown), stating why, never a silently empty list that
-        would read as "nothing will change" (corrected 2026-09-24, found by
-        running `describe` through the real CLI)."""
-        spec = self._spec({})
-        self.assertIsNotNone(spec.plan_case)
-        self.assertGreater(len(spec.build_cases()), 1)
-        described = _write_surface(driver_context=_CTX, spec=spec, overrides={})
-        self.assertEqual(described["proposed_changes_source"], "unknown")
-        self.assertIsNone(described["proposed_changes"])
-        self.assertIn("resolved to", described["proposed_changes_reason"])
-        self.assertIn("cases", described["proposed_changes_reason"])
-
-    def test_a_staged_preview_that_raises_reports_unknown_not_an_empty_list(self) -> None:
-        """Defect found by the coordinator running `describe` through the
-        real CLI against a real case (2026-09-24), not by this module's own
-        tests: with `case_root` existing but missing
-        `constant/electroProperties` (an ordinary situation -- `describe` is
-        used before a case is materialized, not only after), the staged
-        preview raises `patch target 'constant/electroProperties' does not
-        exist`. Before this fix, `_write_surface` swallowed that into the
-        naive fallback, which computed `[]` for a raw factory-kwargs
-        `overrides` dict -- indistinguishable from "nothing will change".
-        `proposed_changes` must be `None` (JSON `null`) instead, and
-        `describe` must not raise -- it stays a best-effort command whose
-        other fields are still useful when a case does not exist yet."""
-        cases_root = Path(tempfile.mkdtemp(prefix="omnidriver-describe-missing-case-"))
-        self.addCleanup(shutil.rmtree, cases_root, ignore_errors=True)
-        empty_case_root = cases_root / "electrophysiologyProtocols" / "singleCell"
-        empty_case_root.mkdir(parents=True)
-        overrides = dict(
-            ionic_model="BuenoOrovio", tissue="epicardialCells",
-            cases_root=cases_root,
-        )
-        spec = single_cell.make_spec(**overrides)
-        self.assertIsNotNone(spec.plan_case)
-
-        described = _write_surface(driver_context=_CTX, spec=spec, overrides=overrides)
-
-        self.assertIsNone(described["proposed_changes"])
-        self.assertEqual(described["proposed_changes_source"], "unknown")
-        self.assertIn("does not exist", described["proposed_changes_reason"])
-        # describe itself must not raise, and the real case_root (still
-        # missing the file, on purpose) is untouched -- no file was created
-        # by the failed preview attempt.
-        self.assertEqual(list(empty_case_root.iterdir()), [])
 
 
 class TestWholeDictRemovalSurfacesAsAnExpectedEffectNotAQualifiedChange(unittest.TestCase):

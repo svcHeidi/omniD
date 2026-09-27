@@ -84,7 +84,11 @@ def test_strict_plan_reports_a_structured_diagnostic_for_schema_violation(monkey
     monkeypatch.setattr(
         context.providers[-1], "build_run_document_config", _broken_build, raising=False,
     )
-    report = strict_plan("singleCell", driver_context=context)
+    # "singleCell" migrated onto a tutorial record 2026-09-27 (records/
+    # single_cell.py), which has no ambient cases root -- "cable1DRestitution"
+    # is another still-factory tutorial for this generic schema-violation
+    # smoke test.
+    report = strict_plan("cable1DRestitution", driver_context=context)
     codes = {d.code for d in report.validation_diagnostics}
     assert "plugin_config_schema_violation" in codes
     messages = [d.message for d in report.validation_diagnostics if d.code == "plugin_config_schema_violation"]

@@ -12,7 +12,6 @@ _MODULES = [
     "omnidriver.cardiacfoam.tutorials.defaults.cable_1d_restitution",
     "omnidriver.cardiacfoam.tutorials.defaults.manufactured_purkinje_graph",
     "omnidriver.cardiacfoam.tutorials.defaults.manufactured_monodomain_total_lagrangian_em",
-    "omnidriver.cardiacfoam.tutorials.defaults.single_cell",
 ]
 _DEAD_NAMES = (
     "POSTPROCESS_SCRIPT_RELPATH",

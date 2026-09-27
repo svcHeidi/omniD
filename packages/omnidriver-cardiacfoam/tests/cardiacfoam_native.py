@@ -93,6 +93,30 @@ def manufactured_eikonal_ecg_conformance_target(tmp_path: Path) -> ConformanceTa
     )
 
 
+def single_cell_conformance_target(tmp_path: Path) -> ConformanceTarget:
+    """``singleCell`` at a shortened ``endTime`` (the native default is
+    2 s at ``deltaT`` 1e-6 s -- 2,000,000 steps, ~25 s wall clock for a real
+    run, section SC1; 0.05 s keeps each of this target's several real runs
+    to well under a second)."""
+    require_sourced_openfoam("blockMesh", "cardiacFoam")
+    return ConformanceTarget(
+        plugin="cardiacfoam",
+        record="singleCell",
+        cases_root=native_tutorials_root(),
+        scratch_root=tmp_path / "scratch",
+        base_study={"system/controlDict:endTime": 0.05},
+        # A catalogued enum key (`$ELECTRO_MODEL_COEFFS.tissue`), the same
+        # one restitutionCurves's own target patches.
+        patch=("constant/electroProperties:singleCellSolverCoeffs.tissue", "epicardialCells"),
+        untouched=("constant/electroProperties", ("singleCellSolverCoeffs", "ionicModel")),
+        sweep_name="ionicModel",
+        sweep_values=("TNNP", "BuenoOrovio"),
+        unknown_name="constant/electroProperties:singleCellSolverCoeffs.tissu",
+        solver_command="cardiacFoam",
+        environment={},
+    )
+
+
 def restitution_curves_conformance_target(tmp_path: Path) -> ConformanceTarget:
     """``restitutionCurves`` at the coarsest mesh ``system/blockMeshDict``
     documents (40x6x14, deltaX 0.5 mm), the one step 4c ran. Everything

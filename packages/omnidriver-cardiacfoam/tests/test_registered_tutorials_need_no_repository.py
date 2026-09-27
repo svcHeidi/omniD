@@ -92,7 +92,11 @@ def test_every_serial_tutorial_builds_under_any_base(tmp_path: Path) -> None:
     # The count stays 12.
     # Corrected 2026-09-26 (5.4a, `manufacturedBathBidomain` onto a tutorial
     # record): likewise one of `_NEEDS_CASE_CONTENT`, so the count stays 12.
-    assert built == 12, f"expected 12 buildable catalog entries, got {built}"
+    # Corrected 2026-09-27 (5.1, `singleCell` onto a tutorial record,
+    # records/single_cell.py): its 2 keys (`singleCell` and its
+    # case-folded alias) are gone from SPEC_FACTORIES too -- it was not one
+    # of `_NEEDS_CASE_CONTENT`, so the buildable count drops by 2, to 10.
+    assert built == 10, f"expected 10 buildable catalog entries, got {built}"
 
 
 @pytest.mark.parametrize("name", sorted(_NEEDS_CASE_CONTENT))

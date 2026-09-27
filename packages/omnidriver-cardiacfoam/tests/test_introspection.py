@@ -21,12 +21,30 @@ from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 _CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:introspection")
 
 
+#: Valid FoamFile content, not placeholder text: "singleCell" migrated onto
+#: a tutorial record 2026-09-27 (records/single_cell.py), whose `describe`
+#: path (unlike the old factory's) actually reads the case's own
+#: `constant/electroProperties`/`physicsProperties` to build its record key
+#: catalog (`cardiacfoam_plugin.get_record_key_catalog` ->
+#: `physics_layout.physics_type`, which parses `physicsProperties` for real).
+_ELECTRO_PROPERTIES_TEXT = (
+    "myocardiumSolver singleCellSolver;\n"
+    "singleCellSolverCoeffs\n{\n"
+    "    ionicModel TNNP;\n"
+    "    tissue myocyte;\n"
+    "    singleCellStimulus\n    {\n"
+    "        stim_amplitude 60;\n"
+    "        stim_period_S1 1000;\n"
+    "    }\n"
+    "}\n"
+)
+_PHYSICS_PROPERTIES_TEXT = "type electroModel;\n"
+
+
 def _single_cell_case_root(cases_root: Path) -> Path:
     """Minimal declared-input fixture; no checkout discovery or solver run."""
     case_root = cases_root / "electrophysiologyProtocols" / "singleCell"
     for relative in (
-        "constant/electroProperties",
-        "constant/physicsProperties",
         "system/controlDict",
         "system/fvSchemes",
         "system/fvSolution",
@@ -38,6 +56,9 @@ def _single_cell_case_root(cases_root: Path) -> Path:
         path = case_root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("#!/bin/sh\n" if relative == "Allrun" else "// fixture\n")
+    (case_root / "constant" / "electroProperties").parent.mkdir(parents=True, exist_ok=True)
+    (case_root / "constant" / "electroProperties").write_text(_ELECTRO_PROPERTIES_TEXT)
+    (case_root / "constant" / "physicsProperties").write_text(_PHYSICS_PROPERTIES_TEXT)
     (case_root / "Allrun").chmod(0o755)
     return case_root
 
@@ -51,20 +72,23 @@ def _describe_single_cell(cases_root: Path) -> dict:
     )
 
 
-def test_describe_single_cell_reports_cardiac_adapter_schema(tmp_path: Path) -> None:
+def test_describe_single_cell_reports_record_surface(tmp_path: Path) -> None:
+    """"singleCell" migrated onto a tutorial record 2026-09-27 (records/
+    single_cell.py): `describe`'s payload for a record carries
+    `record_surface`/`record_preview`, not the factory-only `make_spec`/
+    `dict_entries`/`spec`/`tutorial_contract`/`strict_launch` keys this test
+    used to check (see `core.introspection._describe_tutorial_record`)."""
     payload = _describe_single_cell(tmp_path)
 
-    assert payload["resolution"] == "registered"
+    assert payload["resolution"] == "tutorial_record"
     assert payload["resolved_name"] == "singleCell"
-    assert "ionic_models" in payload["make_spec"]["parameters"]
-    assert "$ELECTRO_MODEL_COEFFS.singleCellStimulus.stim_period_S1" in {
-        item["driver_path"]
-        for item in payload["dict_entries"]["electroProperties"]["single_cell_stimulus"]
-    }
-    assert payload["spec"]["case_root"] == str(_single_cell_case_root(tmp_path))
-    assert "Allrun" in payload["tutorial_contract"]["conditional_files"]
-    assert "ionicModel" in payload["tutorial_contract"]["case_parameters"]
-    assert "--strict" in payload["strict_launch"]["command"]
+    axis_names = {axis["name"] for axis in payload["record_surface"]["axes"]}
+    assert axis_names == {"ionicModel"}
+    assert any(
+        key["document"] == "constant/electroProperties"
+        for key in payload["record_surface"]["keys"]
+    )
+    assert "patches" in payload["record_preview"]
 
 
 def test_describe_single_cell_exposes_cardiac_catalogs(tmp_path: Path) -> None:
@@ -109,14 +133,37 @@ def test_cardiac_plugin_describes_an_explicit_case_folder(tmp_path: Path) -> Non
 
 
 def test_cardiac_profile_contract_file_order_is_declared(tmp_path: Path) -> None:
-    case_root = _single_cell_case_root(tmp_path)
+    """This is the case PROFILE's own declared file order (the environment
+    adapter's + cardiacFoam's `case_files` rules) -- a fact about the
+    profile, not about any particular tutorial. It used to reuse
+    `_single_cell_case_root`/entry "singleCell", which resolved as a
+    `case_folder` only because the old factory tutorial did not shadow it;
+    now that "singleCell" is a tutorial record (records/single_cell.py,
+    2026-09-27), that same entry name resolves as `tutorial_record`
+    instead, which carries no `tutorial_contract` key at all (`core
+    .introspection._describe_tutorial_record`). A directory name that
+    matches no registered record or factory keeps this a `case_folder`
+    resolution, undisturbed by that migration."""
+    case_root = tmp_path / "electrophysiologyProtocols" / "genericProfileCase"
+    for relative in (
+        "constant/electroProperties", "constant/physicsProperties",
+        "system/controlDict", "system/fvSchemes", "system/fvSolution",
+        "system/decomposeParDict", "system/blockMeshDict",
+        "Allrun", "README.md",
+    ):
+        path = case_root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("#!/bin/sh\n" if relative == "Allrun" else "// fixture\n")
+    (case_root / "constant" / "electroProperties").write_text(_ELECTRO_PROPERTIES_TEXT)
+    (case_root / "constant" / "physicsProperties").write_text(_PHYSICS_PROPERTIES_TEXT)
+    (case_root / "Allrun").chmod(0o755)
     for relative in ("Allclean", "runRegressionTest.sh"):
         path = case_root / relative
         path.write_text("#!/bin/sh\n")
         path.chmod(0o755)
 
     payload = describe_tutorial(
-        "singleCell",
+        "genericProfileCase",
         overrides={"cases_root": tmp_path},
         driver_context=_CTX,
     )
@@ -153,7 +200,9 @@ def test_cli_describe_prints_cardiac_payload_for_explicit_case_root(tmp_path: Pa
     assert exit_code == 0
     payload = json.loads(stream.getvalue())
     assert payload["resolved_name"] == "singleCell"
-    assert "strict_launch" in payload
+    # "singleCell" migrated onto a tutorial record 2026-09-27 -- a record's
+    # payload carries `record_preview`, not the factory-only `strict_launch`.
+    assert "record_preview" in payload
 
 
 def test_cli_describe_requires_entry_name() -> None:

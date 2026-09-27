@@ -19,6 +19,7 @@ from cardiacfoam_native import (
     niederer2011_conformance_target,
     manufactured_eikonal_ecg_conformance_target,
     restitution_curves_conformance_target,
+    single_cell_conformance_target,
 )
 
 pytestmark = pytest.mark.native
@@ -29,6 +30,7 @@ _TARGETS = {
     "niederer2011": niederer2011_conformance_target,
     "manufacturedEikonalECG": manufactured_eikonal_ecg_conformance_target,
     "manufacturedBathBidomain": manufactured_bath_bidomain_conformance_target,
+    "singleCell": single_cell_conformance_target,
 }
 
 

@@ -132,14 +132,6 @@ def test_override_only_models_advertise_approximate_tissue_labels_explicitly():
         assert IONIC_MODEL_CATALOG[name].approximate_tissue_labels == expected, name
 
 
-def test_default_single_cell_tissue_map_uses_native_tissues_only():
-    from omnidriver.cardiacfoam.tutorials.defaults.single_cell import IONIC_MODEL_TISSUE_MAP
-    assert IONIC_MODEL_TISSUE_MAP["BuenoOrovio"] == (
-        "epicardialCells", "mCells", "endocardialCells",
-    )
-    assert IONIC_MODEL_TISSUE_MAP["Gaur"] == ("myocyte",)
-
-
 def test_planning_tissues_uses_native_tissues_only_for_other_models():
     """`restitutionCurves`'s own defaults module (which used to duplicate
     `single_cell`'s `IONIC_MODEL_TISSUE_MAP` construction verbatim) was
@@ -148,7 +140,19 @@ def test_planning_tissues_uses_native_tissues_only_for_other_models():
     its `restitutionCurvesIonicModelAxis` now derives `tissue` from the same
     `planning_tissues()` helper directly. This proves that helper's own
     behaviour for two more models (`TNNP`/`Courtemanche`) the test above
-    does not cover, independent of any tutorial-specific module."""
+    does not cover, independent of any tutorial-specific module.
+
+    `single_cell`'s own defaults module (which this file used to test
+    directly, as `test_default_single_cell_tissue_map_uses_native_tissues_
+    only`) was deleted the same way 2026-09-27 (records/single_cell.py,
+    tutorials-are-pointers plan, step 5.1): the ionic-model axis its record
+    reuses (`ionic_model_axis`) does not derive `tissue` at all, by design
+    (a study states it directly) -- there is no successor construction left
+    to test, and `BuenoOrovio`/`Gaur`'s own native-vs-approximate tissue
+    labels are already pinned above by
+    `test_native_tissue_labels_mark_models_with_intrinsic_tissue_variants`/
+    `test_override_only_models_advertise_approximate_tissue_labels_
+    explicitly`."""
     from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG, planning_tissues
     assert planning_tissues(IONIC_MODEL_CATALOG["TNNP"]) == (
         "epicardialCells", "mCells", "endocardialCells",

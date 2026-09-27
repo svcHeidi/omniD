@@ -35,7 +35,12 @@ from omnidriver.cardiacfoam.tutorials.manufactured_monodomain_pseudo_ecg import 
 # by design: `classify_entry` refuses a name that is registered as both a
 # tutorial record and a factory tutorial, so removing it here happens in
 # the same commit as registering the record.
-from omnidriver.cardiacfoam.tutorials.single_cell import make_spec as make_single_cell_spec
+# single_cell's factory make_spec was deleted 2026-09-27: the tutorial
+# migrated onto a tutorial record (records/single_cell.py, tutorials-are-
+# pointers plan, step 5.1) -- it is no longer one of
+# SPEC_FACTORIES/REGISTERED_TUTORIALS below, by design: `classify_entry`
+# refuses a name registered as both a tutorial record and a factory
+# tutorial.
 from omnidriver.cardiacfoam.tutorials.cable_1d_restitution import (
     make_spec as make_cable_1d_restitution_spec,
 )
@@ -43,8 +48,6 @@ from omnidriver.cardiacfoam.tutorials.cable_1d_restitution import (
 from omnidriver.cardiacfoam.tutorials.ids import CardiacTutorialID
 
 SPEC_FACTORIES = {
-    CardiacTutorialID.SINGLE_CELL.value: make_single_cell_spec,
-    CardiacTutorialID.SINGLE_CELL.value.lower(): make_single_cell_spec,
     CardiacTutorialID.CABLE_1D_CV_CONVERGENCE.value: make_cable_1d_cv_convergence_spec,
     CardiacTutorialID.CABLE_1D_CV_CONVERGENCE.value.lower(): make_cable_1d_cv_convergence_spec,
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_PSEUDO_ECG.value: make_manufactured_monodomain_pseudo_ecg_spec,
@@ -60,7 +63,6 @@ SPEC_FACTORIES = {
 }
 
 REGISTERED_TUTORIALS = (
-    CardiacTutorialID.SINGLE_CELL.value,
     CardiacTutorialID.CABLE_1D_CV_CONVERGENCE.value,
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_PSEUDO_ECG.value,
     CardiacTutorialID.MANUFACTURED_MONODOMAIN_TOTAL_LAGRANGIAN_EM.value,

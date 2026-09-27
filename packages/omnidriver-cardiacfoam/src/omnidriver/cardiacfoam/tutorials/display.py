@@ -3,6 +3,10 @@ from omnidriver.core.tutorials_display import TutorialDisplay
 
 TUTORIALS: tuple[TutorialDisplay, ...] = (
     TutorialDisplay(
+        # A literal string, not `CardiacTutorialID.SINGLE_CELL` (removed
+        # 2026-09-27 alongside the factory it keyed): this tutorial is now a
+        # tutorial record (records/single_cell.py), which names itself
+        # directly, the same way restitutionCurves's own display entry does.
         id="singleCell",
         title="Single-cell action potential",
         summary=(

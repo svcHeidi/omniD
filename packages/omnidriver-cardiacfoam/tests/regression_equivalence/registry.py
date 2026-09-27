@@ -53,6 +53,7 @@ _KNOWN_CASES: tuple[RegressionCase, ...] = (
     RegressionCase(
         "electrophysiologyProtocols/singleCell", "singleCell",
         (_ELECTRO, _PHYSICS), "regression/singleCell.reference",
+        resolution="tutorial_record",
     ),
     RegressionCase(
         "NiedererEtAl2011verification", "niederer2011",

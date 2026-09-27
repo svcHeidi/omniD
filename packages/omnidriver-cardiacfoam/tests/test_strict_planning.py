@@ -127,9 +127,13 @@ def _spec_with_workflow(case_root: Path, *, steps: list[dict]) -> TutorialSpec:
 def test_strict_plan_succeeds_for_single_cell(tmp_path: Path) -> None:
     cases_root = tmp_path / "cases"
     _stage_case_dictionaries(_native_tutorials_root(), _SINGLE_CELL_RELPATH, cases_root)
+    # "singleCell" migrated onto a tutorial record 2026-09-27 (records/
+    # single_cell.py): a record's scratch root is supplied, never defaulted
+    # under cases_root (plan §4).
     report = strict_plan(
         "singleCell", environment_source="/no/such/openfoam/bashrc", driver_context=_CTX,
         overrides={"cases_root": str(cases_root)},
+        scratch_root=tmp_path / "scratch",
     )
     payload = report.to_json()
 
@@ -261,6 +265,7 @@ def test_cli_plan_strict_prints_json_and_returns_zero(tmp_path: Path) -> None:
             "--plugin", "cardiacfoam",
             "plan", "--strict", "--entry", "singleCell",
             "--cases-root", str(cases_root),
+            "--scratch-dir", str(tmp_path / "scratch"),
         ])
 
     payload = json.loads(out.getvalue())
@@ -283,6 +288,7 @@ def test_strict_plan_status_ignores_environment_only_errors(tmp_path: Path, monk
     report = strict_plan(
         "singleCell", environment_source="/no/such/openfoam/bashrc", driver_context=_CTX,
         overrides={"cases_root": str(cases_root)},
+        scratch_root=tmp_path / "scratch",
     )
     payload = report.to_json()
 
@@ -317,6 +323,7 @@ def test_cli_run_strict_refuses_environment_errors_before_execution(tmp_path: Pa
             "--entry",
             "singleCell",
             "--cases-root", str(cases_root),
+            "--scratch-dir", str(tmp_path / "scratch"),
             # Renamed from --openfoam-bashrc (A1, 2026-09-26): the CLI flag
             # is now solver-neutral.
             "--environment-source",

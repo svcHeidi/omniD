@@ -138,15 +138,22 @@ def test_tutorial_record_entry_is_case_sourced(tmp_path: Path) -> None:
 
 
 def test_factory_tutorial_entry_is_document_sourced() -> None:
-    """``singleCell`` is a registered factory tutorial (§3: "a tutorial is a
-    data record" is the record shape; a factory tutorial's config lives in
-    the document). This test has no real native case on disk (no
-    ``cases_root`` points at the monorepo), so planning itself fails on
-    missing case files -- but that failure is exactly the proof this test
-    wants: ``validate_run`` (``run_validation`` diagnostics, naming real
-    cardiac catalog fields like ``myocardiumSolver``) ran at all, which only
-    happens when ``configurationSource`` is "document". A case-sourced entry
-    (the two tests above) never produces these codes."""
+    """``cable1DRestitution`` is a registered factory tutorial (§3: "a
+    tutorial is a data record" is the record shape; a factory tutorial's
+    config lives in the document). This test has no real native case on
+    disk (no ``cases_root`` points at the monorepo), so planning itself
+    fails on missing case files -- but that failure is exactly the proof
+    this test wants: ``validate_run`` (``run_validation`` diagnostics,
+    naming real cardiac catalog fields like ``myocardiumSolver``) ran at
+    all, which only happens when ``configurationSource`` is "document". A
+    case-sourced entry (the two tests above) never produces these codes.
+
+    Corrected 2026-09-27: this used ``singleCell``, which migrated onto a
+    tutorial record (records/single_cell.py, tutorials-are-pointers plan,
+    step 5.1) -- a record has no ambient cases root at all and is refused
+    by name instead of failing on missing case files, so it no longer fits
+    this test's premise. ``cable1DRestitution`` is another still-factory
+    tutorial for the same generic contract."""
     cardiacfoam = pytest.importorskip("omnidriver.cardiacfoam.cardiacfoam_plugin")
     from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
@@ -154,7 +161,7 @@ def test_factory_tutorial_entry_is_document_sourced() -> None:
         OpenFOAMEnvironmentPlugin(), cardiacfoam.CardiacFoamPlugin(),
         source="test:factory-tutorial",
     )
-    report = strict_plan("singleCell", driver_context=context)
+    report = strict_plan("cable1DRestitution", driver_context=context)
 
     assert report.run_document is not None
     run_doc = report.run_document

@@ -147,7 +147,13 @@ def test_unknown_model_is_not_an_error():
 def test_describe_entry_includes_capability_manifest():
     from omnidriver.core.introspection import describe_entry
 
-    payload = describe_entry("singleCell", driver_context=_CTX)
+    # "singleCell" migrated onto a tutorial record 2026-09-27 (records/
+    # single_cell.py) -- a record has no ambient cases root (a bare entry
+    # name with no cases_root is refused by name), unlike a still-factory
+    # tutorial, which this generic capability-manifest smoke test needs
+    # nothing else from. "cable1DRestitution" is another registered
+    # factory tutorial for the same solver family.
+    payload = describe_entry("cable1DRestitution", driver_context=_CTX)
     manifest = payload["capability_manifest"]
     assert "cardiacFoam" in manifest["allowed_commands"]["plugin"]
     assert "electro" in manifest["samplable_fields"]
@@ -158,6 +164,6 @@ def test_strict_plan_carries_capability_manifest(monkeypatch):
     from omnidriver.core.strict_planning import strict_plan
 
     report = strict_plan(
-        "singleCell", driver_context=_CTX,
+        "cable1DRestitution", driver_context=_CTX,
     ).to_json()
     assert "cardiacFoam" in report["capability_manifest"]["allowed_commands"]["plugin"]
