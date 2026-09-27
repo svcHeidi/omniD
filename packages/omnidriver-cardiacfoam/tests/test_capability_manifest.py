@@ -144,70 +144,7 @@ def test_unknown_model_is_not_an_error():
     assert "Vm" in manifest["samplable_fields"]["electro"]
 
 
-def _install_fake_factory_tutorial(monkeypatch) -> str:
-    """Register one synthetic factory tutorial on ``CardiacFoamPlugin`` for
-    the life of one test.
-
-    **Added 2026-09-27 (tutorials-are-pointers step C).** cardiacFoam has no
-    factory tutorial left at all: every one migrated onto a tutorial record,
-    and the last holdout, ``manufacturedMonodomainTotalLagrangianEM``, was
-    deleted outright rather than migrated (owner decision -- it never
-    worked, and electromechanics will be rebuilt as a record later; see
-    ``.superpowers/sdd/legacy-map.md`` §4). The two tests below are about a
-    generic contract ("a factory tutorial's config is document-sourced and
-    reaches the capability manifest"), not about any one tutorial's
-    correctness, so a minimal in-test fixture proves it without depending on
-    production tutorial data that no longer exists.
-    """
-    from omnidriver.cardiacfoam.generic_case import make_generic_case_spec
-    from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
-    from omnidriver.core.specs.paths import resolve_spec_paths
-
-    name = "testOnlyFactoryTutorial"
-
-    def _make_spec(**kwargs):
-        case_root, setup_root, output_dir = resolve_spec_paths(
-            cases_root=kwargs.get("cases_root"),
-            case_dir_name=name,
-            default_output_dir_name="output",
-        )
-        return TutorialSpec(
-            name=name, case_root=case_root, setup_root=setup_root,
-            output_dir=output_dir,
-            build_cases=lambda: [CaseConfig(case_id="case0", params={})],
-            plan_case=lambda case_root, case: None,
-            metadata={
-                "workflow_dag": {
-                    "steps": [{"id": "solve", "command": "cardiacFoam", "depends_on": []}],
-                },
-            },
-        )
-
-    monkeypatch.setattr(
-        CardiacFoamPlugin, "get_tutorial_catalog",
-        lambda self: {
-            "spec_factories": {name: _make_spec},
-            "registered_tutorials": (name,),
-            "make_generic_case_spec": make_generic_case_spec,
-        },
-    )
-    return name
-
-
-def test_describe_entry_includes_capability_manifest(monkeypatch):
-    from omnidriver.core.introspection import describe_entry
-
-    name = _install_fake_factory_tutorial(monkeypatch)
-    payload = describe_entry(name, driver_context=_CTX)
-    manifest = payload["capability_manifest"]
-    assert "cardiacFoam" in manifest["allowed_commands"]["plugin"]
-    assert "electro" in manifest["samplable_fields"]
-
-
-def test_strict_plan_carries_capability_manifest(monkeypatch):
-    monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
-    from omnidriver.core.strict_planning import strict_plan
-
-    name = _install_fake_factory_tutorial(monkeypatch)
-    report = strict_plan(name, driver_context=_CTX).to_json()
-    assert "cardiacFoam" in report["capability_manifest"]["allowed_commands"]["plugin"]
+# test_describe_entry_includes_capability_manifest and
+# test_strict_plan_carries_capability_manifest moved to
+# test_capability_manifest_native.py: the contract holds for a tutorial
+# record too, and a record needs the real native case files to resolve.

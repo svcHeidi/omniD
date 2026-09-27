@@ -27,11 +27,14 @@
 
 """Plugin-declared RunDocument.config schema validation (P2.2).
 
-Covers both directions of the contract: the *emission* path (a plugin-built
-config, checked in ``run_document_adapter``) and the *ingestion* path (an
-agent-authored document read off disk, checked in ``run_document_exec``).
-The two must stay symmetric -- a config the planner would refuse to emit is
-a config the executor must refuse to ingest.
+Covers the *ingestion* path: an agent-authored document read off disk,
+checked in ``run_document_exec`` against the plugin's own declared schema.
+The symmetric *emission* path (``run_document_adapter``, a plugin-built
+config checked the same way against a document-sourced spec) is exercised
+by a real case-folder entry, not by a registered factory tutorial --
+cardiacFoam has none left (tutorials-are-pointers step C) -- see the note
+below the schema-declaration test for where that leaves this file's
+coverage of it.
 """
 from __future__ import annotations
 
@@ -43,7 +46,6 @@ from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.core.planning_types import StrictDiagnostic
 from omnidriver.cardiacfoam.run_document_config import _read_physics_type
-from omnidriver.core.strict_planning import strict_plan
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
 
@@ -68,76 +70,18 @@ def test_cardiac_plugin_declares_a_config_schema() -> None:
     assert schema["required"] == ["anatomy", "physics", "stimulus", "solver"]
 
 
-def _install_fake_factory_tutorial(monkeypatch) -> str:
-    """Register one synthetic factory tutorial on ``CardiacFoamPlugin`` for
-    the life of one test.
-
-    **Added 2026-09-27 (tutorials-are-pointers step C).** cardiacFoam has no
-    factory tutorial left at all: every one migrated onto a tutorial record,
-    and the last holdout, ``manufacturedMonodomainTotalLagrangianEM``, was
-    deleted outright rather than migrated (owner decision -- it never
-    worked, and electromechanics will be rebuilt as a record later; see
-    ``.superpowers/sdd/legacy-map.md`` §4). This test is about a generic
-    contract (a schema violation the plugin's own config builder produces
-    must surface as a structured diagnostic), not about any one tutorial's
-    correctness, so a minimal in-test fixture proves it without depending on
-    production tutorial data that no longer exists.
-    """
-    from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
-    from omnidriver.cardiacfoam.generic_case import make_generic_case_spec
-    from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
-    from omnidriver.core.specs.paths import resolve_spec_paths
-
-    name = "testOnlyFactoryTutorial"
-
-    def _make_spec(**kwargs):
-        case_root, setup_root, output_dir = resolve_spec_paths(
-            cases_root=kwargs.get("cases_root"),
-            case_dir_name=name,
-            default_output_dir_name="output",
-        )
-        return TutorialSpec(
-            name=name, case_root=case_root, setup_root=setup_root,
-            output_dir=output_dir,
-            build_cases=lambda: [CaseConfig(case_id="case0", params={})],
-            plan_case=lambda case_root, case: None,
-            metadata={
-                "workflow_dag": {
-                    "steps": [{"id": "solve", "command": "cardiacFoam", "depends_on": []}],
-                },
-            },
-        )
-
-    monkeypatch.setattr(
-        CardiacFoamPlugin, "get_tutorial_catalog",
-        lambda self: {
-            "spec_factories": {name: _make_spec},
-            "registered_tutorials": (name,),
-            "make_generic_case_spec": make_generic_case_spec,
-        },
-    )
-    return name
-
-
-def test_strict_plan_reports_a_structured_diagnostic_for_schema_violation(monkeypatch) -> None:
-    """A plugin that builds a config violating its own declared schema must
-    surface a StrictDiagnostic an agent can read and act on -- not a raw
-    jsonschema traceback and not a silent pass."""
-    context = _context()
-
-    def _broken_build(spec):
-        # Deliberately omit the required "solver" phase key.
-        return {"anatomy": {}, "physics": {}, "stimulus": {}}, ()
-
-    monkeypatch.setattr(
-        context.providers[-1], "build_run_document_config", _broken_build, raising=False,
-    )
-    name = _install_fake_factory_tutorial(monkeypatch)
-    report = strict_plan(name, driver_context=context)
-    codes = {d.code for d in report.validation_diagnostics}
-    assert "plugin_config_schema_violation" in codes
-    messages = [d.message for d in report.validation_diagnostics if d.code == "plugin_config_schema_violation"]
-    assert any("solver" in message for message in messages)
+# The planning-side counterpart of this contract (build_run_document_config
+# violating its own declared schema, checked during strict_plan) used a
+# synthetic factory tutorial to reach a document-sourced spec. cardiacFoam
+# has no factory tutorial to be one any more (tutorials-are-pointers step
+# C) -- build_run_document_config's real parser (run_document_config.py)
+# is not dead, though: it still runs for a real case-folder entry whose
+# dict files are already materialized (spec.metadata["generic_case"] is
+# then False), the shape a generic sweep's per-case audit exercises
+# (test_sweep_runner.py). Testing a *violation* that way would mean staging
+# a real, broken case -- more than this schema-symmetry contract needs when
+# the tests below already cover it end-to-end via ingestion, which needs no
+# spec/entry at all.
 
 
 def _document_json(config: dict) -> dict:
