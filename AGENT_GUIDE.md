@@ -1027,21 +1027,24 @@ cardiacFoam-specific:**
   take no `region` entry. But see the electromechanics note below before
   driving such a case at all.
 
-> ### Electromechanics is not currently working
+> ### Electromechanics has no tutorial
 >
-> **Do not select an electromechanical entry, and do not try to fix one.**
-> `manufacturedMonodomainTotalLagrangianEM` is registered but fails
-> `plan --strict` with `missing_electro_properties`, `myocardiumSolver is
-> required` and `empty_artifact_prediction`. The cause is known: these cases
-> lay their dicts out per region (`constant/electro/electroProperties`,
-> `constant/solid/solidProperties`) while the planner looks for
-> `constant/electroProperties`.
+> **Do not invent one, and do not try to resurrect the old one.**
+> `manufacturedMonodomainTotalLagrangianEM`, the one factory tutorial that
+> used to exist for this, was deleted 2026-09-27 (tutorials-are-pointers
+> step C) rather than migrated: it never worked (these cases lay their dicts
+> out per region -- `constant/electro/electroProperties`,
+> `constant/solid/solidProperties` -- while the planner looks for
+> `constant/electroProperties`), and the owner chose to delete the factory
+> Python outright and rebuild electromechanics as a tutorial record later.
+> The native case is untouched, and the electromechanics/active-tension
+> catalog content described above still stands -- only the tutorial entry
+> is gone.
 >
-> This is a deliberately deferred gap, not a defect to discover. If you are
-> here because a plan failed on that entry, the correct response is to report
-> that electromechanics is unsupported and stop -- not to repair the planner,
-> move the dicts, or work around it. Every other registered entry plans clean;
-> if one of *those* fails, that is a real regression worth investigating.
+> This is a deliberately deferred gap, not a defect to discover. The entry
+> name is refused like any other unknown entry; if you are here because you
+> want electromechanics to work, the correct response is to report that it
+> has no tutorial yet and stop -- not to add one as a side quest.
 
 Outputs land where OpenFOAM puts them:
 `postProcessing/<functionObjectName>/<time>/<field>`.
@@ -1239,55 +1242,26 @@ active plugin's own, so it changes with `--plugin`.
 
 ## Adding a New cardiacFoam Tutorial
 
-This is for adding one more registered tutorial (a manufactured-solution
-case, a benchmark, a new sweep-able configuration) that uses the cardiacFoam
-solver family already wired up — not for adding support for a different
-solver binary. For that, see "Plugin Guide — Adding a New Solver" below.
+**Corrected 2026-09-27 (tutorials-are-pointers step C).** cardiacFoam has no
+factory-tutorial path any more -- every tutorial that used to register a
+`make_spec` factory here migrated onto a **tutorial record**
+(`docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md`), a
+thin declarative pointer at a native case plus its studies, not Python that
+builds cases. Electromechanics, the one tutorial that had not migrated, was
+deleted outright rather than converted (owner decision: it did not work, and
+will be rebuilt as a record later); see `.superpowers/sdd/legacy-map.md`.
+There is nothing left to register a factory into, and a deleted tutorial
+name is refused like any other unknown entry.
 
-**The registry is the single source of truth:**
-`omnidriver/cardiacfoam/tutorials/registry.py` (corrected 2026-09-19: was
-given as `omnidriver/plugins/cardiacfoam/tutorials/registry.py` —
-`omnidriver.plugins` is the entry-point group name, not a package; the real
-package is `omnidriver-cardiacfoam`, importable as `omnidriver.cardiacfoam`)
-holds `SPEC_FACTORIES` (id, and its lowercase alias, → factory function) and
-`REGISTERED_TUTORIALS` (the canonical id tuple). Both are exported through
-`CardiacFoamPlugin.get_tutorial_catalog()`.
-
-1. **Add an id** to the `CardiacTutorialID` enum in
-   `omnidriver/cardiacfoam/tutorials/ids.py`, e.g.
-   `MY_NEW_CASE = "myNewCase"`.
-2. **Write `tutorials/my_new_case.py`** with a `make_spec(...) -> TutorialSpec`
-   factory. `TutorialSpec` (`core/runtime/models.py`) needs `name`,
-   `case_root`/`setup_root`/`output_dir` (build via the shared
-   `resolve_spec_paths(...)` helper), `build_cases` (returns
-   `list[CaseConfig]`), `apply_case` (mutates the case's dict files per
-   `CaseConfig`, typically via `apply_electro_property_overrides`/
-   `apply_physics_property_overrides` from `omnidriver/cardiacfoam/overrides.py`
-   (corrected 2026-09-19: was given as `plugins/cardiacfoam/overrides.py`)),
-   and a `metadata` dict with at least a `workflow_dag` (a `solve` step at
-   minimum). There is no per-tutorial output-collection callback to wire up
-   — output discovery globs the case's actual on-disk files instead.
-   `single_cell.py` is the smallest complete worked example of this shape.
-3. **Do not accept any of the four dead postprocess-selector parameter
-   names** — `cv_extract_script_relpath`, `postprocess_script_relpath`,
-   `postprocess_function_name`, `table_summary_relpath`. The runtime cannot
-   discover through them (see `test_tutorial_postprocessing_contract.py`,
-   which fails the whole suite if any factory's signature advertises one).
-4. **Register it** in `registry.py`: import your `make_spec`, add
-   `CardiacTutorialID.MY_NEW_CASE.value` (and its `.lower()` form) to
-   `SPEC_FACTORIES`, add the id to `REGISTERED_TUTORIALS`.
-5. **Add a display entry** in `tutorials/display.py` (a `TutorialDisplay(...)`)
-   — an exporter cross-checks this one-to-one against `REGISTERED_TUTORIALS`,
-   so a tutorial without a display card (or a display card without a
-   factory) fails.
-6. **Extend the characterization fixture** —
-   `omnidriver/tests/core/test_cardiac_tutorial_characterization.py`
-   iterates every id in `REGISTERED_TUTORIALS` against
-   `tests/fixtures/cardiac_tutorial_characterization.json`. Regenerate it
-   once your factory exists (there's no dedicated CLI for this — write
-   `{"tutorials": _current_characterization()}` back to the fixture path,
-   `json.dumps(..., indent=2, sort_keys=True)`, matching the existing
-   formatting).
+To add a new tutorial, add a `TutorialRecord` under
+`omnidriver/cardiacfoam/records/` and wire it into
+`records/__init__.py`'s `TUTORIAL_RECORDS`, plus a `TutorialDisplay` entry in
+`omnidriver/cardiacfoam/tutorial_displays.py`. `records/single_cell.py` is
+the smallest complete worked example; `records/manufactured_bidomain.py`
+shows a record with several studies and a shared axis. See the design doc
+above for the record/axis/workflow-step shape, and
+`docs/solver-learning/cardiacfoam.md` for what each tutorial's native case
+actually reads and writes.
 
 Once registered, drive it exclusively through `omnidriver`
 (plan/run/sweep) per `CLAUDE.md` — never a bespoke shell script. (Corrected
