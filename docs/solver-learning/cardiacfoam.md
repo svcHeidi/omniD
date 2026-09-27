@@ -12,7 +12,7 @@ tree is a `git archive` of the native feature branch's committed files (plan
 §4, "a clean native tree"), never the owner's checkout. Runs happen in
 scratch copies.
 
-Sections: **R** was started by conformance Task 14 (P4); **G** by the tutorial plan's P5 (gmsh); **B** by step 5.4b-B (`manufacturedBidomain`). Merged 2026-09-26. **N** by step 5.4b-N (`niederer2011`); **E** by step 5.4b-E (`manufacturedEikonalECG`); **Q** by topic B Task 7 (the activation-probe reader), 2026-09-26. **X** by topic B Task 8 (openCARP against cardiacFOAM, the first cross-solver benchmark), 2026-09-26. **T** by the controller's TNNP integrator timing (owner question), 2026-09-26. **Y** by the Niederer campaign's 0.5 mm proof, 2026-09-27. Rows B11-B12, E4-E6 and N5-N6 were added by the review 54b fixes, 2026-09-26. Corrected 2026-09-26 (review 54b I4): this line did not name section E. **P** by PAR (niederer2011 in parallel), 2026-09-26.
+Sections: **R** was started by conformance Task 14 (P4); **G** by the tutorial plan's P5 (gmsh); **B** by step 5.4b-B (`manufacturedBidomain`). Merged 2026-09-26. **N** by step 5.4b-N (`niederer2011`); **E** by step 5.4b-E (`manufacturedEikonalECG`); **Q** by topic B Task 7 (the activation-probe reader), 2026-09-26. **X** by topic B Task 8 (openCARP against cardiacFOAM, the first cross-solver benchmark), 2026-09-26. **T** by the controller's TNNP integrator timing (owner question), 2026-09-26. **Y** by the Niederer campaign's 0.5 mm proof, 2026-09-27. Rows B11-B12, E4-E6 and N5-N6 were added by the review 54b fixes, 2026-09-26. Corrected 2026-09-26 (review 54b I4): this line did not name section E. **P** by PAR (niederer2011 in parallel), 2026-09-26. **BB** by step 5.4a (`manufacturedBathBidomain`), 2026-09-27. **S** by the controller's Niederer parameter and single-cell check (owner question: do both solvers solve the same problem?), 2026-09-27.
 
 ## R. restitutionCurves (`electrophysiologyProtocols/restitutionCurves_s1s2Protocol`)
 
@@ -454,3 +454,46 @@ file before and after the step.
 | BB6 | `strict_plan` of the old factory on any bath case | refused: `'adjustableRunTime' is not one of ['runTime', 'timeStep', 'clockTime', 'cpuTime']` (field `writeControl`) | the catalogue listed four of OpenFOAM's seven `Foam::Time::writeControlNames` (v2412 `src/OpenFOAM/db/Time/Time.C`: `none`, `timeStep`, `runTime`, `adjustable`, `adjustableRunTime`, `clockTime`, `cpuTime`). Corrected in `common_dict_entries`; BB1's real run accepts the value |
 | BB7 | parity: `sweep-plan` of all 14 old studies through the old factory (on a copy with the pre-`60805b27` template and the byte-identical overlay restored), and of the 14 rewritten studies through the record; every case compared document by document (parsed with foamlib, `yes`/`true` and numbers normalised) | 70 cases, identical case ids. `electroProperties`, `controlDict`, `fvSchemes`, `fvSolution` and the selected `blockMeshDict.<dim>` agree in every case; gmsh's `lc` equals the old rendered `lc` in all 26 tet cases. Differences: `phiERefPoint` in 16 cases (the electrodePair 2D, 3D and tet cases, old half-cell shift vs the native point), and the two unselected `blockMeshDict.<dim>` files, which `numberCells` also writes | no case value is lost. `phiERefPoint` does not enter the error norms: the verifier compares zero-mean potentials under `electrodePair` (`manufacturedFDABathBidomainVerifier.C`) |
 | BB8 | one real tet run through the record (`test_manufactured_bath_bidomain_tet_native.py`): `{"mesh": "tet", "dimension": "3D", "system/controlDict:endTime": 0.02, "tetNumberCells": 10}` | completes; every declared artifact is found; `3D_*_cells.dat` and `bathBidomainInterfaceMetrics.csv` written | the tet route is proved through the record, not only declared |
+
+## S. Is it the same problem? Niederer parameters and the single cell (2026-09-27)
+
+Owner question: before the full grid is read, do openCARP and cardiacFOAM
+solve the same Niederer 2011 problem, and is the 0.5 mm gap at P8 (58.14 ms
+against 143.04 ms, section Y) the model or the mesh? cardiacFOAM read from
+native `omnid/tutorials-are-pointers` (`git show` / `git archive`); openCARP
+from `/usr/local/lib/opencarp/share/tutorials`. Its probes are in
+[`opencarp.md`](opencarp.md) J. Runs: the controller's scratch
+`niederer-singlecell/` (`oc/`, `cf/`, `cable/`, `slab/`).
+
+**Verdict.** Every tissue parameter matches the paper, within 0.01 %. The cell
+model does not: cardiacFOAM runs TNNP **2004**, openCARP the **2006** model the
+paper specifies. That costs about 1 ms at a converged P8. The 85 ms gap at
+0.5 mm is the discretisation: coarse finite volumes behave like openCARP with
+a lumped mass matrix.
+
+| quantity | paper | openCARP (where) | cardiacFOAM (where) | status |
+|---|---|---|---|---|
+| ionic model | ten Tusscher–Panfilov 2006, epi | `imp_region[0].im tenTusscherPanfilov` (`nversion.par`); `limpet/models/tenTusscherPanfilov.model` has the 2006 structure and constants | `ionicModel TNNPcompactBatched`, which is TNNP 2004 (`src/ionicModels/TNNPBatched/TNNP_2004Batch.H`, `TNNP/TNNP_2004.H`): 17 states, g_Kr 0.096, g_Ks 0.245, g_CaL 1.75e-4 | **mismatch**. Neither solver offers the other's version |
+| cell type | epi | `im_param "flags=EPI"` | `tissue epicardialCells` → flag 1 (`ionicSelector::tissueFlag`) | match, within each model |
+| initial state | — | `-imp_region[0].im_sv_init singlecell.sv` (Vm −85.23 mV) | Vm −84.0 mV everywhere: the `myocardiumDomain` constructor's default (`-0.084` V), since the case has no `0/Vm`; it overrides the model's −86.2 mV for every ionic model | **mismatch** (S5) |
+| cell integration | — | Rush–Larsen gates, forward Euler concentrations, lookup tables | `rushLarsen` on 10 gates, forward Euler on the rest, one ODE solve per step | same family |
+| PDE time scheme | — | `parab_solve 1`, Crank–Nicolson | `backward` (BDF2), `implicit`, `godunov` | differ; both Δt-converged (Y) |
+| Cm | 1 µF/cm² | fixed `Cm = 1.0` (`electrics.cc`) | `cm 0.01` F/m² | match |
+| χ | 140 mm⁻¹ | `cellSurfVolRatio 0.14` µm⁻¹, `volFrac 1` | `chi 140000` m⁻¹ | match |
+| σ (monodomain) | harmonic mean of σi (0.17, 0.019) and σe (0.62, 0.24) S/m | `g_il/g_it/g_el/g_et`; `bidm_eqv_mono` 1 takes the harmonic mean per direction (`electric_integrators.cc`) | `conductivity` given as (0.1334177215, 0.01760617761, 0.01760617761) S/m | match (1e-10) |
+| fibres, frame | long axis, 20×7×3 mm | along x; x, y, z = 20, 7, 3 mm | along x; x, y, z = 20, 3, 7 mm (exact, since σt = σn) | match |
+| stimulus strength | 50,000 µA/cm³ | `35.71` µA/cm² × 1400 cm⁻¹ = 49,994 µA/cm³ | `stimulusIntensity 50000` A/m³ | match (0.01 %) |
+| stimulus duration | 2 ms | 2 ms | `updateExternalStimulusCurrent` includes the end time: one extra step (2.01 ms at Δt 0.01 ms) | minor |
+| stimulus volume | 1.5 mm cube | the 64 nodes in the closed box, reaching 1.75 mm | the 27 cells whose centres are inside, exactly (1.5 mm)³ | minor; moves P1 only (1.25 vs 1.19 ms, X) |
+| activation | 0 mV, upward | `lats threshold 0` | `activationThreshold 0` | match |
+
+| # | probe | observed | conclusion |
+|---|---|---|---|
+| S1 | read `TNNP_2004Batch.H`, `TNNP_2004.H` | 17 states, 2004 constants (`TNNPinitConsts`) | `TNNPcompactBatched` is TNNP 2004, not the benchmark's 2006 model |
+| S2 | the Niederer case for 3 steps with `debug (Vm)` | log `Vm=-84`; `0.0001/Vm` −0.0840222 V | the tissue starts at −84 mV, the domain default |
+| S3 | native `singleCell` copy: `TNNPcompactBatched`, `rushLarsen`, `epicardialCells`, `stim_start 10; stim_duration 2; stim_amplitude 35.7142857; nstim1 1`, `endTime 0.51`, `deltaT 5e-06`; `blockMesh; cardiacFoam` | Vrest −85.58 mV (drifting from −86.2), peak 53.1 mV, max dV/dt 351 mV/ms, 0 mV at 1.244 ms after onset, APD90 274.5 ms | against openCARP 2006 (J1): the upstroke agrees within 0.02 ms (shared I_Na and I_K1); repolarisation differs (max trace gap 32 mV at 287.6 ms, APD90 15 ms shorter) |
+| S4 | 15 mm cables, Δt 0.01 ms, dx 10, 50, 500 µm | along fibres 0.5972, 0.5935, 0.4105 m/s; across 0.2169, 0.2068, blocked | at 10 µm, 1.7 % (along) and 2.2 % (across) slower than openCARP full mass (J3): the model's effect, about +1 ms at a converged P8. At 500 µm, along −29 % and across blocked, like openCARP lumped (J3) |
+| S5 | dx 0.5 mm slab, native and with `0/Vm` −0.08523 V | P8 143.043 and 143.651 ms | the initial state moves P8 by 0.6 ms |
+
+Open, for the owner: whether TNNP 2004 is intended for this benchmark, and
+whether the −84 mV domain default is.

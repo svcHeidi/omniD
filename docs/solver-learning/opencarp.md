@@ -296,3 +296,22 @@ through the LAT reader at `benchmarks/niederer2011.json`'s points, equal within
 `with 2 processors` and one header; the file set, LAT length and `vm.igb` header
 match. It needs the bundle's launcher first on PATH and, on this machine,
 `HYDRA_IFACE=lo0` (I3), and fails, naming the diagnostic, without them.
+
+## J. The Niederer cell and the mass matrix (2026-09-27)
+
+The openCARP half of [`cardiacfoam.md`](cardiacfoam.md) S, which holds the
+parameter table and the verdict. `bench` and `openCARP` need
+`DYLD_LIBRARY_PATH=/opt/homebrew/lib`.
+
+| # | probe | observed | conclusion |
+|---|---|---|---|
+| J1 | `bench -I tenTusscherPanfilov -p "flags=EPI" -R niederer.sv --stim-curr 35.7142857 -T 2 --stim-start 10 --numstim 1 --duration 510 --dt 0.005 --dt-out 0.005 --fout=sv` (`niederer.sv` = the tutorial's `singlecell.sv`); again without `-R` | with `.sv`: Vrest −85.25 mV, peak 55.0 mV, max dV/dt 360 mV/ms, 0 mV at 1.223 ms, APD90 289.8 ms. Without: −86.04, 57.3, 390, 1.228, 300.3 | the Niederer cell. `--fout=` needs the `=`: `-O name` is ignored and output goes to `BENCH_REG.txt` |
+| J2 | read `openCARP.prm`, `electric_integrators.cc`, `electrics.cc` | `bidm_eqv_mono` defaults to 1 (harmonic mean per direction); Cm fixed at 1.0 µF/cm²; a transmembrane stimulus is applied unscaled in µA/cm² | σ, Cm and stimulus match the paper |
+| J3 | 15 mm cables, Δt 0.01 ms, full / lumped mass, dx 10, 50, 500 µm | along fibres 0.6073/0.6070, 0.6095/0.6018, 0.5772/0.4057 m/s; across 0.2217/0.2208, 0.2277/0.2097, 0.1139/blocked | at 0.5 mm, lumping costs about 30 % along the fibres and blocks conduction across them; the full mass matrix keeps 95 % and 51 % |
+| J4 | dx 0.5 mm slab: full mass with `.sv`, full without, lumped | P8 58.14, 57.22, 126.27 ms | the initial state moves P8 by 0.9 ms; the mass matrix by 68 ms |
+
+`run.py` (`03E_study_resolution`) passes `+F nversion.par`,
+`-imp_region[0].im_sv_init singlecell.sv`, `-tend`, `-dt` (default 20 µs) and
+`-mass_lumping` (default 0), and no linear-solver options. The
+`niedererNVersion` record passes none of these; the campaign study supplies
+`mass_lumping 0`.
