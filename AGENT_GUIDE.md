@@ -779,8 +779,7 @@ Each pair in the report's `metrics` carries a `status`:
 
 Each side of a pair also reports its `value`, `unit` (post-conversion) and
 `declared_unit` (the reader's own), its `sampling_rule` (e.g. `node`,
-`point` -- corrected 2026-09-27, Q9: this said `cell-containing`, cardiacFOAM's
-rule before its reader required `interpolationScheme cellPoint`) and its
+`point`) and its
 `sampled_at`/`sampled_at_unit` next to the
 `requested_at`/`requested_at_unit` point that was asked for and the
 `sampling_offset`/`sampling_offset_unit` between them — so a wrong pairing
@@ -898,9 +897,8 @@ steps. Core does none of them for you.
      rounding bound, because every P1-P9 is a node at dx 500 µm. For
      cardiacFOAM it is 0: its reader now requires `interpolationScheme
      cellPoint` on the case's `system/Niedererpoints` and reports each
-     probe's own location (corrected 2026-09-27, Q9; the worked example
-     below, Task 8, still shows `cell`-scheme numbers -- half a cell
-     diagonal -- because it ran before this change).
+     probe's own location. The worked example below (Task 8) ran before
+     that, with `cell` sampling.
    - No code converts a frame. The orientation is in your points and in
      each pair's `note`.
 4. **Pair explicitly.** Each `pairs[]` entry names the openCARP quantity

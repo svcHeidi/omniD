@@ -83,17 +83,8 @@ declares ``ACTIVATION_PROBES_FORMAT``, whose reader
 (``activation_probes.ActivationProbeReader``) exists, so C12 holds.
 ``sampleLines`` stays a plain path: nothing reads it as a quantity yet.
 
-**Corrected 2026-09-27 (Q9, owner decision: sample the exact point).** The
-above used to add ``writeCellCentres`` and ``samplePointCentres`` steps
-after ``samplePoints``, probing the containing cell's centre through the
-same cell search, because the native ``system/Niedererpoints`` set no
-``interpolationScheme`` (OpenFOAM's ``cell`` default). Both steps are
-removed: the reader now requires ``interpolationScheme cellPoint``, read
-from the case's own dict, and reports the probe's own configured location,
-so no second probe of cell centres is needed. The native dict itself is a
-separate, owner-authorised change, not yet committed (the probe-cellpoint
-report says why); until it lands, this record's ``samplePoints`` output
-reads as ``cell`` and the reader refuses it by name.
+The native ``system/Niedererpoints`` sets ``interpolationScheme cellPoint``
+(native ``e9439c4f``), so each probe samples its own configured point.
 
 **``constant/electroProperties.withDefaultValues``** (owner Q13, corrected
 by P4's R4): declared on the ``solve`` step, because a real run of this

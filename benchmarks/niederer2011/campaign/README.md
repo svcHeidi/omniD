@@ -125,19 +125,12 @@ In every request:
     `interpolationScheme` (OpenFOAM's `cell` default), so the reader
     reported the containing cell's centre.
 
-**Corrected 2026-09-27 (Q9, owner decision: sample the exact point).** The
-results below (the proof, section Y of `cardiacfoam.md`) all ran before
-this: native tree at `0489be3c`, `cell`-scheme sampling throughout, so
-cardiacFOAM's `max_sampling_offset` above (half a cell diagonal) applied.
-The reader now requires `interpolationScheme cellPoint` and reports each
-probe's own location, offset 0 -- but the native case has not been changed
-to set it (the owner's authorised change was blocked at commit time: branch
-`omnid/tutorials-are-pointers` was already checked out in another worktree,
-see the probe-cellpoint report). Until the native case sets `cellPoint`,
-`omnidriver compare` refuses cardiacFOAM's side of a request by name rather
-than silently reporting a cell centre. Do not edit these requests or their
-tolerances for this: the owner will add `interpolationScheme cellPoint` to
-`system/Niedererpoints` and rerun.
+**Sampling changed 2026-09-28 (owner decision).** From native `e9439c4f`,
+`system/Niedererpoints` sets `interpolationScheme cellPoint`, and the reader
+reports each probe at its own location (offset 0, inside the offsets above).
+Every cardiacFOAM result below, and the 2026-09-27 local run of the whole
+grid, used OpenFOAM's `cell` default: the containing cell's value. The
+requests and tolerances are unchanged; the owner reruns the campaign.
 
 Digests (`requests/SHA256SUMS`; verify with `shasum -a 256 -c SHA256SUMS`
 in `requests/`):
