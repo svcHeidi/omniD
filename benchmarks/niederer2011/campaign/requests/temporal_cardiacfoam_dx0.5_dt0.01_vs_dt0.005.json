@@ -1,0 +1,237 @@
+{
+  "schema_version": 1,
+  "reference": "../../../niederer2011.json",
+  "tolerance": {
+    "kind": "absolute",
+    "value": 1.0,
+    "unit": "ms",
+    "rationale": "Pre-registered 2026-09-27, before any campaign run: the owner's belief that the time step barely matters, made testable. Two successive time steps of one solver at one dx 'agree' when no point moves by more than 1 ms: a fifth of the cross-solver bar, so a time-step effect inside it cannot by itself decide a cross-solver verdict, and 20 times the coarsest step (0.05 ms), so the step's own quantisation of the 0 mV crossing cannot fail it. Seen before: openCARP P8 moved 0.19 ms between dt 50 and 10 us at dx 0.5 mm with lumped mass (opencarp.md G4, G9); cardiacFOAM's time-step effect has not been measured"
+  },
+  "both_not_reached": "fail",
+  "runs": {
+    "dt0.01": {
+      "plugin": "cardiacfoam",
+      "sweep_output": "../runs/cardiacfoam/cartesianConvergence/dx0.5",
+      "case_id": "case_0002",
+      "artifact_id": "record.samplePoints.0",
+      "points": {
+        "unit": "m",
+        "at": {
+          "0": [
+            0.0,
+            0.0,
+            0.007
+          ],
+          "1": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "2": [
+            0.019999,
+            0.0,
+            0.007
+          ],
+          "3": [
+            0.019999,
+            0.0,
+            0.0
+          ],
+          "4": [
+            0.0,
+            0.003,
+            0.007
+          ],
+          "5": [
+            0.0,
+            0.003,
+            0.0
+          ],
+          "6": [
+            0.019999,
+            0.003,
+            0.007
+          ],
+          "7": [
+            0.019999,
+            0.003,
+            0.0
+          ],
+          "8": [
+            0.01,
+            0.0015,
+            0.0035
+          ]
+        }
+      },
+      "max_sampling_offset": 0.0004331
+    },
+    "dt0.005": {
+      "plugin": "cardiacfoam",
+      "sweep_output": "../runs/cardiacfoam/cartesianConvergence/dx0.5",
+      "case_id": "case_0003",
+      "artifact_id": "record.samplePoints.0",
+      "points": {
+        "unit": "m",
+        "at": {
+          "0": [
+            0.0,
+            0.0,
+            0.007
+          ],
+          "1": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "2": [
+            0.019999,
+            0.0,
+            0.007
+          ],
+          "3": [
+            0.019999,
+            0.0,
+            0.0
+          ],
+          "4": [
+            0.0,
+            0.003,
+            0.007
+          ],
+          "5": [
+            0.0,
+            0.003,
+            0.0
+          ],
+          "6": [
+            0.019999,
+            0.003,
+            0.007
+          ],
+          "7": [
+            0.019999,
+            0.003,
+            0.0
+          ],
+          "8": [
+            0.01,
+            0.0015,
+            0.0035
+          ]
+        }
+      },
+      "max_sampling_offset": 0.0004331
+    }
+  },
+  "pairs": [
+    {
+      "reference_label": "P1",
+      "left": {
+        "run": "dt0.01",
+        "quantity": "0"
+      },
+      "right": {
+        "run": "dt0.005",
+        "quantity": "0"
+      },
+      "note": "P1 [0, 0, 0] mm in the reference frame; one solver, one frame, dx 0.5 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 1e-05 s, endTime 0.2 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 5e-06 s, endTime 0.2 s)"
+    },
+    {
+      "reference_label": "P2",
+      "left": {
+        "run": "dt0.01",
+        "quantity": "1"
+      },
+      "right": {
+        "run": "dt0.005",
+        "quantity": "1"
+      },
+      "note": "P2 [0, 7, 0] mm in the reference frame; one solver, one frame, dx 0.5 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 1e-05 s, endTime 0.2 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 5e-06 s, endTime 0.2 s)"
+    },
+    {
+      "reference_label": "P3",
+      "left": {
+        "run": "dt0.01",
+        "quantity": "2"
+      },
+      "right": {
+        "run": "dt0.005",
+        "quantity": "2"
+      },
+      "note": "P3 [20, 0, 0] mm in the reference frame; one solver, one frame, dx 0.5 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 1e-05 s, endTime 0.2 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 5e-06 s, endTime 0.2 s)"
+    },
+    {
+      "reference_label": "P4",
+      "left": {
+        "run": "dt0.01",
+        "quantity": "3"
+      },
+      "right": {
+        "run": "dt0.005",
+        "quantity": "3"
+      },
+      "note": "P4 [20, 7, 0] mm in the reference frame; one solver, one frame, dx 0.5 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 1e-05 s, endTime 0.2 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 5e-06 s, endTime 0.2 s)"
+    },
+    {
+      "reference_label": "P5",
+      "left": {
+        "run": "dt0.01",
+        "quantity": "4"
+      },
+      "right": {
+        "run": "dt0.005",
+        "quantity": "4"
+      },
+      "note": "P5 [0, 0, 3] mm in the reference frame; one solver, one frame, dx 0.5 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 1e-05 s, endTime 0.2 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 5e-06 s, endTime 0.2 s)"
+    },
+    {
+      "reference_label": "P6",
+      "left": {
+        "run": "dt0.01",
+        "quantity": "5"
+      },
+      "right": {
+        "run": "dt0.005",
+        "quantity": "5"
+      },
+      "note": "P6 [0, 7, 3] mm in the reference frame; one solver, one frame, dx 0.5 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 1e-05 s, endTime 0.2 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 5e-06 s, endTime 0.2 s)"
+    },
+    {
+      "reference_label": "P7",
+      "left": {
+        "run": "dt0.01",
+        "quantity": "6"
+      },
+      "right": {
+        "run": "dt0.005",
+        "quantity": "6"
+      },
+      "note": "P7 [20, 0, 3] mm in the reference frame; one solver, one frame, dx 0.5 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 1e-05 s, endTime 0.2 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 5e-06 s, endTime 0.2 s)"
+    },
+    {
+      "reference_label": "P8",
+      "left": {
+        "run": "dt0.01",
+        "quantity": "7"
+      },
+      "right": {
+        "run": "dt0.005",
+        "quantity": "7"
+      },
+      "note": "P8 [20, 7, 3] mm in the reference frame; one solver, one frame, dx 0.5 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 1e-05 s, endTime 0.2 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 5e-06 s, endTime 0.2 s)"
+    },
+    {
+      "reference_label": "P9",
+      "left": {
+        "run": "dt0.01",
+        "quantity": "8"
+      },
+      "right": {
+        "run": "dt0.005",
+        "quantity": "8"
+      },
+      "note": "P9 [10, 3.5, 1.5] mm in the reference frame; one solver, one frame, dx 0.5 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 1e-05 s, endTime 0.2 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 5e-06 s, endTime 0.2 s)"
+    }
+  ]
+}

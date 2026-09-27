@@ -1,0 +1,237 @@
+{
+  "schema_version": 1,
+  "reference": "../../../niederer2011.json",
+  "tolerance": {
+    "kind": "absolute",
+    "value": 1.0,
+    "unit": "ms",
+    "rationale": "Pre-registered 2026-09-27, before any campaign run: the owner's belief that the time step barely matters, made testable. Two successive time steps of one solver at one dx 'agree' when no point moves by more than 1 ms: a fifth of the cross-solver bar, so a time-step effect inside it cannot by itself decide a cross-solver verdict, and 20 times the coarsest step (0.05 ms), so the step's own quantisation of the 0 mV crossing cannot fail it. Seen before: openCARP P8 moved 0.19 ms between dt 50 and 10 us at dx 0.5 mm with lumped mass (opencarp.md G4, G9); cardiacFOAM's time-step effect has not been measured"
+  },
+  "both_not_reached": "fail",
+  "runs": {
+    "dt0.01": {
+      "plugin": "opencarp",
+      "sweep_output": "../runs/opencarp/cartesianConvergence/dx0.1",
+      "case_id": "case_0002",
+      "artifact_id": "record.solve.2",
+      "points": {
+        "unit": "mm",
+        "at": {
+          "P1": [
+            0,
+            0,
+            0
+          ],
+          "P2": [
+            0,
+            7,
+            0
+          ],
+          "P3": [
+            20,
+            0,
+            0
+          ],
+          "P4": [
+            20,
+            7,
+            0
+          ],
+          "P5": [
+            0,
+            0,
+            3
+          ],
+          "P6": [
+            0,
+            7,
+            3
+          ],
+          "P7": [
+            20,
+            0,
+            3
+          ],
+          "P8": [
+            20,
+            7,
+            3
+          ],
+          "P9": [
+            10,
+            3.5,
+            1.5
+          ]
+        }
+      },
+      "max_sampling_offset": 0.001
+    },
+    "dt0.005": {
+      "plugin": "opencarp",
+      "sweep_output": "../runs/opencarp/cartesianConvergence/dx0.1",
+      "case_id": "case_0003",
+      "artifact_id": "record.solve.2",
+      "points": {
+        "unit": "mm",
+        "at": {
+          "P1": [
+            0,
+            0,
+            0
+          ],
+          "P2": [
+            0,
+            7,
+            0
+          ],
+          "P3": [
+            20,
+            0,
+            0
+          ],
+          "P4": [
+            20,
+            7,
+            0
+          ],
+          "P5": [
+            0,
+            0,
+            3
+          ],
+          "P6": [
+            0,
+            7,
+            3
+          ],
+          "P7": [
+            20,
+            0,
+            3
+          ],
+          "P8": [
+            20,
+            7,
+            3
+          ],
+          "P9": [
+            10,
+            3.5,
+            1.5
+          ]
+        }
+      },
+      "max_sampling_offset": 0.001
+    }
+  },
+  "pairs": [
+    {
+      "reference_label": "P1",
+      "left": {
+        "run": "dt0.01",
+        "quantity": "P1"
+      },
+      "right": {
+        "run": "dt0.005",
+        "quantity": "P1"
+      },
+      "note": "P1 [0, 0, 0] mm in the reference frame; one solver, one frame, dx 0.1 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.1 (dx 100 um, nversion.par:dt 10 us, tend 55 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.1 (dx 100 um, nversion.par:dt 5 us, tend 55 ms)"
+    },
+    {
+      "reference_label": "P2",
+      "left": {
+        "run": "dt0.01",
+        "quantity": "P2"
+      },
+      "right": {
+        "run": "dt0.005",
+        "quantity": "P2"
+      },
+      "note": "P2 [0, 7, 0] mm in the reference frame; one solver, one frame, dx 0.1 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.1 (dx 100 um, nversion.par:dt 10 us, tend 55 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.1 (dx 100 um, nversion.par:dt 5 us, tend 55 ms)"
+    },
+    {
+      "reference_label": "P3",
+      "left": {
+        "run": "dt0.01",
+        "quantity": "P3"
+      },
+      "right": {
+        "run": "dt0.005",
+        "quantity": "P3"
+      },
+      "note": "P3 [20, 0, 0] mm in the reference frame; one solver, one frame, dx 0.1 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.1 (dx 100 um, nversion.par:dt 10 us, tend 55 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.1 (dx 100 um, nversion.par:dt 5 us, tend 55 ms)"
+    },
+    {
+      "reference_label": "P4",
+      "left": {
+        "run": "dt0.01",
+        "quantity": "P4"
+      },
+      "right": {
+        "run": "dt0.005",
+        "quantity": "P4"
+      },
+      "note": "P4 [20, 7, 0] mm in the reference frame; one solver, one frame, dx 0.1 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.1 (dx 100 um, nversion.par:dt 10 us, tend 55 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.1 (dx 100 um, nversion.par:dt 5 us, tend 55 ms)"
+    },
+    {
+      "reference_label": "P5",
+      "left": {
+        "run": "dt0.01",
+        "quantity": "P5"
+      },
+      "right": {
+        "run": "dt0.005",
+        "quantity": "P5"
+      },
+      "note": "P5 [0, 0, 3] mm in the reference frame; one solver, one frame, dx 0.1 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.1 (dx 100 um, nversion.par:dt 10 us, tend 55 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.1 (dx 100 um, nversion.par:dt 5 us, tend 55 ms)"
+    },
+    {
+      "reference_label": "P6",
+      "left": {
+        "run": "dt0.01",
+        "quantity": "P6"
+      },
+      "right": {
+        "run": "dt0.005",
+        "quantity": "P6"
+      },
+      "note": "P6 [0, 7, 3] mm in the reference frame; one solver, one frame, dx 0.1 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.1 (dx 100 um, nversion.par:dt 10 us, tend 55 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.1 (dx 100 um, nversion.par:dt 5 us, tend 55 ms)"
+    },
+    {
+      "reference_label": "P7",
+      "left": {
+        "run": "dt0.01",
+        "quantity": "P7"
+      },
+      "right": {
+        "run": "dt0.005",
+        "quantity": "P7"
+      },
+      "note": "P7 [20, 0, 3] mm in the reference frame; one solver, one frame, dx 0.1 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.1 (dx 100 um, nversion.par:dt 10 us, tend 55 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.1 (dx 100 um, nversion.par:dt 5 us, tend 55 ms)"
+    },
+    {
+      "reference_label": "P8",
+      "left": {
+        "run": "dt0.01",
+        "quantity": "P8"
+      },
+      "right": {
+        "run": "dt0.005",
+        "quantity": "P8"
+      },
+      "note": "P8 [20, 7, 3] mm in the reference frame; one solver, one frame, dx 0.1 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.1 (dx 100 um, nversion.par:dt 10 us, tend 55 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.1 (dx 100 um, nversion.par:dt 5 us, tend 55 ms)"
+    },
+    {
+      "reference_label": "P9",
+      "left": {
+        "run": "dt0.01",
+        "quantity": "P9"
+      },
+      "right": {
+        "run": "dt0.005",
+        "quantity": "P9"
+      },
+      "note": "P9 [10, 3.5, 1.5] mm in the reference frame; one solver, one frame, dx 0.1 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.1 (dx 100 um, nversion.par:dt 10 us, tend 55 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.1 (dx 100 um, nversion.par:dt 5 us, tend 55 ms)"
+    }
+  ]
+}

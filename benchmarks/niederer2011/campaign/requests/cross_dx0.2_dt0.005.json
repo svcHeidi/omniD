@@ -1,0 +1,237 @@
+{
+  "schema_version": 1,
+  "reference": "../../../niederer2011.json",
+  "tolerance": {
+    "kind": "absolute",
+    "value": 5.0,
+    "unit": "ms",
+    "rationale": "Pre-registered 2026-09-27 for the whole campaign, before any campaign run. The same bar at every level, so the nine reports say at which (dx, dt) openCARP and cardiacFOAM agree to it; a coarse level outside it is a finding, not a reason to loosen it. 5 ms is about half the 10.9 ms spread of P8 across the paper's codes at its finest level (37.8-48.7 ms, section 6), so passing means agreeing more closely than two of the paper's codes may. Two discretisations are compared: openCARP P1 finite elements with a full mass matrix, read at the nearest node; cardiacFOAM finite volumes, read at the containing cell's centre. Topic B Task 8 (cardiacfoam.md section X) saw dx 0.5 mm, dt 0.01 ms with openCARP's lumped mass; this bar is the 5 ms Task 8 fixed before its own runs, not chosen from its numbers"
+  },
+  "both_not_reached": "fail",
+  "runs": {
+    "opencarp": {
+      "plugin": "opencarp",
+      "sweep_output": "../runs/opencarp/cartesianConvergence/dx0.2",
+      "case_id": "case_0003",
+      "artifact_id": "record.solve.2",
+      "points": {
+        "unit": "mm",
+        "at": {
+          "P1": [
+            0,
+            0,
+            0
+          ],
+          "P2": [
+            0,
+            7,
+            0
+          ],
+          "P3": [
+            20,
+            0,
+            0
+          ],
+          "P4": [
+            20,
+            7,
+            0
+          ],
+          "P5": [
+            0,
+            0,
+            3
+          ],
+          "P6": [
+            0,
+            7,
+            3
+          ],
+          "P7": [
+            20,
+            0,
+            3
+          ],
+          "P8": [
+            20,
+            7,
+            3
+          ],
+          "P9": [
+            10,
+            3.5,
+            1.5
+          ]
+        }
+      },
+      "max_sampling_offset": 0.1415
+    },
+    "cardiacfoam": {
+      "plugin": "cardiacfoam",
+      "sweep_output": "../runs/cardiacfoam/cartesianConvergence/dx0.2",
+      "case_id": "case_0003",
+      "artifact_id": "record.samplePoints.0",
+      "points": {
+        "unit": "m",
+        "at": {
+          "0": [
+            0.0,
+            0.0,
+            0.007
+          ],
+          "1": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "2": [
+            0.019999,
+            0.0,
+            0.007
+          ],
+          "3": [
+            0.019999,
+            0.0,
+            0.0
+          ],
+          "4": [
+            0.0,
+            0.003,
+            0.007
+          ],
+          "5": [
+            0.0,
+            0.003,
+            0.0
+          ],
+          "6": [
+            0.019999,
+            0.003,
+            0.007
+          ],
+          "7": [
+            0.019999,
+            0.003,
+            0.0
+          ],
+          "8": [
+            0.01,
+            0.0015,
+            0.0035
+          ]
+        }
+      },
+      "max_sampling_offset": 0.0001733
+    }
+  },
+  "pairs": [
+    {
+      "reference_label": "P1",
+      "left": {
+        "run": "opencarp",
+        "quantity": "P1"
+      },
+      "right": {
+        "run": "cardiacfoam",
+        "quantity": "0"
+      },
+      "note": "P1 [0, 0, 0] mm in the reference frame; level dx 0.2 mm, dt 0.005 ms: opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 5 us, tend 80 ms) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 5e-06 s, endTime 0.08 s). openCARP: the reference frame itself (nversion.par stim[0].elec at the origin; opencarp.md F3 slab), points in the reference's mm. cardiacFOAM: probe 0 at [0.0, 0.0, 0.007] m of system/Niedererpoints, in its own frame, where x = a, y = c, z = 7 mm - b (constant/electroProperties puts the stimulus box at the corner (0, 0, 7) mm)"
+    },
+    {
+      "reference_label": "P2",
+      "left": {
+        "run": "opencarp",
+        "quantity": "P2"
+      },
+      "right": {
+        "run": "cardiacfoam",
+        "quantity": "1"
+      },
+      "note": "P2 [0, 7, 0] mm in the reference frame; level dx 0.2 mm, dt 0.005 ms: opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 5 us, tend 80 ms) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 5e-06 s, endTime 0.08 s). openCARP: the reference frame itself (nversion.par stim[0].elec at the origin; opencarp.md F3 slab), points in the reference's mm. cardiacFOAM: probe 1 at [0.0, 0.0, 0.0] m of system/Niedererpoints, in its own frame, where x = a, y = c, z = 7 mm - b (constant/electroProperties puts the stimulus box at the corner (0, 0, 7) mm)"
+    },
+    {
+      "reference_label": "P3",
+      "left": {
+        "run": "opencarp",
+        "quantity": "P3"
+      },
+      "right": {
+        "run": "cardiacfoam",
+        "quantity": "2"
+      },
+      "note": "P3 [20, 0, 0] mm in the reference frame; level dx 0.2 mm, dt 0.005 ms: opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 5 us, tend 80 ms) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 5e-06 s, endTime 0.08 s). openCARP: the reference frame itself (nversion.par stim[0].elec at the origin; opencarp.md F3 slab), points in the reference's mm. cardiacFOAM: probe 2 at [0.019999, 0.0, 0.007] m of system/Niedererpoints, in its own frame, where x = a, y = c, z = 7 mm - b (constant/electroProperties puts the stimulus box at the corner (0, 0, 7) mm)"
+    },
+    {
+      "reference_label": "P4",
+      "left": {
+        "run": "opencarp",
+        "quantity": "P4"
+      },
+      "right": {
+        "run": "cardiacfoam",
+        "quantity": "3"
+      },
+      "note": "P4 [20, 7, 0] mm in the reference frame; level dx 0.2 mm, dt 0.005 ms: opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 5 us, tend 80 ms) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 5e-06 s, endTime 0.08 s). openCARP: the reference frame itself (nversion.par stim[0].elec at the origin; opencarp.md F3 slab), points in the reference's mm. cardiacFOAM: probe 3 at [0.019999, 0.0, 0.0] m of system/Niedererpoints, in its own frame, where x = a, y = c, z = 7 mm - b (constant/electroProperties puts the stimulus box at the corner (0, 0, 7) mm)"
+    },
+    {
+      "reference_label": "P5",
+      "left": {
+        "run": "opencarp",
+        "quantity": "P5"
+      },
+      "right": {
+        "run": "cardiacfoam",
+        "quantity": "4"
+      },
+      "note": "P5 [0, 0, 3] mm in the reference frame; level dx 0.2 mm, dt 0.005 ms: opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 5 us, tend 80 ms) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 5e-06 s, endTime 0.08 s). openCARP: the reference frame itself (nversion.par stim[0].elec at the origin; opencarp.md F3 slab), points in the reference's mm. cardiacFOAM: probe 4 at [0.0, 0.003, 0.007] m of system/Niedererpoints, in its own frame, where x = a, y = c, z = 7 mm - b (constant/electroProperties puts the stimulus box at the corner (0, 0, 7) mm)"
+    },
+    {
+      "reference_label": "P6",
+      "left": {
+        "run": "opencarp",
+        "quantity": "P6"
+      },
+      "right": {
+        "run": "cardiacfoam",
+        "quantity": "5"
+      },
+      "note": "P6 [0, 7, 3] mm in the reference frame; level dx 0.2 mm, dt 0.005 ms: opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 5 us, tend 80 ms) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 5e-06 s, endTime 0.08 s). openCARP: the reference frame itself (nversion.par stim[0].elec at the origin; opencarp.md F3 slab), points in the reference's mm. cardiacFOAM: probe 5 at [0.0, 0.003, 0.0] m of system/Niedererpoints, in its own frame, where x = a, y = c, z = 7 mm - b (constant/electroProperties puts the stimulus box at the corner (0, 0, 7) mm)"
+    },
+    {
+      "reference_label": "P7",
+      "left": {
+        "run": "opencarp",
+        "quantity": "P7"
+      },
+      "right": {
+        "run": "cardiacfoam",
+        "quantity": "6"
+      },
+      "note": "P7 [20, 0, 3] mm in the reference frame; level dx 0.2 mm, dt 0.005 ms: opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 5 us, tend 80 ms) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 5e-06 s, endTime 0.08 s). openCARP: the reference frame itself (nversion.par stim[0].elec at the origin; opencarp.md F3 slab), points in the reference's mm. cardiacFOAM: probe 6 at [0.019999, 0.003, 0.007] m of system/Niedererpoints, in its own frame, where x = a, y = c, z = 7 mm - b (constant/electroProperties puts the stimulus box at the corner (0, 0, 7) mm)"
+    },
+    {
+      "reference_label": "P8",
+      "left": {
+        "run": "opencarp",
+        "quantity": "P8"
+      },
+      "right": {
+        "run": "cardiacfoam",
+        "quantity": "7"
+      },
+      "note": "P8 [20, 7, 3] mm in the reference frame; level dx 0.2 mm, dt 0.005 ms: opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 5 us, tend 80 ms) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 5e-06 s, endTime 0.08 s). openCARP: the reference frame itself (nversion.par stim[0].elec at the origin; opencarp.md F3 slab), points in the reference's mm. cardiacFOAM: probe 7 at [0.019999, 0.003, 0.0] m of system/Niedererpoints, in its own frame, where x = a, y = c, z = 7 mm - b (constant/electroProperties puts the stimulus box at the corner (0, 0, 7) mm)"
+    },
+    {
+      "reference_label": "P9",
+      "left": {
+        "run": "opencarp",
+        "quantity": "P9"
+      },
+      "right": {
+        "run": "cardiacfoam",
+        "quantity": "8"
+      },
+      "note": "P9 [10, 3.5, 1.5] mm in the reference frame; level dx 0.2 mm, dt 0.005 ms: opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 5 us, tend 80 ms) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 5e-06 s, endTime 0.08 s). openCARP: the reference frame itself (nversion.par stim[0].elec at the origin; opencarp.md F3 slab), points in the reference's mm. cardiacFOAM: probe 8 at [0.01, 0.0015, 0.0035] m of system/Niedererpoints, in its own frame, where x = a, y = c, z = 7 mm - b (constant/electroProperties puts the stimulus box at the corner (0, 0, 7) mm)"
+    }
+  ]
+}

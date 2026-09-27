@@ -1,0 +1,15 @@
+{
+  "base": {
+    "entry": "niedererNVersion",
+    "cases_root": "tutorials",
+    "nversion.par:mass_lumping": 0
+  },
+  "sweep": {
+    "mode": "zip",
+    "independent": {
+      "dx": [500.0, 500.0, 500.0, 200.0, 200.0, 200.0, 100.0, 100.0, 100.0],
+      "nversion.par:dt": [50.0, 10.0, 5.0, 50.0, 10.0, 5.0, 50.0, 10.0, 5.0],
+      "nversion.par:tend": [200.0, 200.0, 200.0, 80.0, 80.0, 80.0, 55.0, 55.0, 55.0]
+    }
+  }
+}
