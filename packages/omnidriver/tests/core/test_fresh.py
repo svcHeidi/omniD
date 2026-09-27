@@ -139,32 +139,3 @@ def test_the_legacy_allowed_root_variable_name_is_not_read(monkeypatch, tmp_path
     assert _allowed_runs_root() == current.resolve()
 
 
-def test_a_run_document_written_before_the_rename_is_still_driver_owned():
-    """`produced_by` was "driverFOAM" before 2026-09-14.
-
-    Artifacts the executor writes are excluded from step responsibility. A
-    document holding the retired value must keep that exclusion, or its
-    workflow_state/workflow_logs would be charged to the solver step and fail
-    it for bookkeeping it never wrote.
-    """
-    from omnidriver.core.runtime.artifacts import (
-        DRIVER_PRODUCED_BY,
-        LEGACY_DRIVER_PRODUCED_BY,
-    )
-    from omnidriver.core.runtime.models import DataArtifact
-    from omnidriver.core.runtime.workflow import workflow_output_artifacts
-
-    solver = DataArtifact(
-        artifact_id="solver.field", path_pattern="{instance}/Vm",
-        format="openfoam_time_dirs", produced_by="someSolver",
-    )
-    legacy = DataArtifact(
-        artifact_id="core.workflow_state", path_pattern="postProcessing/workflow_state.json",
-        format="json_summary", produced_by=LEGACY_DRIVER_PRODUCED_BY,
-    )
-    current = DataArtifact(
-        artifact_id="core.workflow_logs", path_pattern="postProcessing/workflow_logs",
-        format="log", produced_by=DRIVER_PRODUCED_BY,
-    )
-    kept = workflow_output_artifacts((solver, legacy, current))
-    assert [a.artifact_id for a in kept] == ["solver.field"]

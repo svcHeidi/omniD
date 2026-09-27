@@ -19,7 +19,6 @@ from typing import Any, Callable, Mapping
 
 
 CONTROL_DIR = ".omnidriver-repair-control"
-LEGACY_JOURNAL_DIR = "repair_loops"
 RESERVATION_DIR = "repair_reservations"
 
 
@@ -183,9 +182,6 @@ def _run_repair_loop_locked(
     loop_id: str,
 ) -> RepairLoopOutcome:
     path = _control_dir(Path(output_dir)) / f"{loop_id}.json"
-    legacy_path = Path(output_dir) / LEGACY_JOURNAL_DIR / f"{loop_id}.json"
-    if not path.exists() and legacy_path.exists():
-        _atomic_write(path, _load_journal(legacy_path))
     started = monotonic()
     observation = initial_observation
     executions = 0

@@ -14,30 +14,11 @@ level further").
 """
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, Callable, Mapping
 
-from omnidriver.openfoam.mutators import read_foam_entry
-
 DECOMPOSE_PAR_DICT = "system/decomposeParDict"
-_DECOMPOSE_PAR_DICT_RELPATH = Path(DECOMPOSE_PAR_DICT)
 _SUBDOMAINS_KEY_PATH = ("numberOfSubdomains",)
 _SUBDOMAINS = f"{DECOMPOSE_PAR_DICT}:{_SUBDOMAINS_KEY_PATH[0]}"
-
-
-def read_number_of_subdomains(
-    case_root: Path,
-    decompose_par_dict_relpath: Path = _DECOMPOSE_PAR_DICT_RELPATH,
-) -> int:
-    """Read ``numberOfSubdomains`` from the case's own decomposeParDict."""
-    dict_path = case_root / decompose_par_dict_relpath
-    value = read_foam_entry(dict_path, "numberOfSubdomains")
-    if value is None:
-        raise ValueError(
-            f"numberOfSubdomains not found in {dict_path} "
-            "(required to build a parallel solve step)"
-        )
-    return int(value)
 
 
 def _parallel_form(

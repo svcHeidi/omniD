@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path, PurePath
 from typing import Any, Iterable
 
-from .artifacts import DRIVER_PRODUCED_BY_VALUES
+from .artifacts import DRIVER_PRODUCED_BY
 from .models import DataArtifact
 from omnidriver.core.plugin_profile import entrypoint_relpaths
 
@@ -479,7 +479,7 @@ def workflow_output_artifacts(
     """
     return tuple(
         artifact for artifact in artifacts
-        if artifact.produced_by not in DRIVER_PRODUCED_BY_VALUES
+        if artifact.produced_by != DRIVER_PRODUCED_BY
     )
 
 

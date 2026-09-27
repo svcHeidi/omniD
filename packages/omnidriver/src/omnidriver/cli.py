@@ -930,7 +930,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--run-document",
         help=(
-            "Path to an agent-authored RunDocument v2 JSON file. With "
+            "Path to an agent-authored RunDocument v3 JSON file. With "
             "action=run/step, executes the document's workflowDag/config "
             "instead of regenerating the plan from --entry. Mutually "
             "exclusive with --entry."

@@ -9,7 +9,6 @@ from omnidriver.core.experiments import (
     ComparisonRequest,
     ComparisonReportLimits,
     inspect_sweep_experiment,
-    load_comparison_requests,
 )
 from omnidriver.core.runtime.sweep_manifest import (
     CaseManifestEntry,
@@ -240,34 +239,6 @@ def test_oversized_comparison_report_is_not_read(tmp_path: Path) -> None:
     assert comparison.status == "unavailable"
     assert comparison.association_status == "unverified"
     assert "envelope limit" in comparison.reason
-
-
-def test_comparison_manifest_requires_explicit_checker_and_reference_identity(tmp_path: Path) -> None:
-    manifest = tmp_path / "comparisons.json"
-    manifest.write_text(json.dumps({
-        "schema_version": 1,
-        "comparisons": [{
-            "case_id": "a",
-            "checker_id": "solver.checker",
-            "checker_version": "1.0",
-            "reference_id": "reference-a",
-            "reference_version": "2026-09",
-            "report_path": "reports/a.json",
-        }],
-    }))
-
-    assert load_comparison_requests(manifest) == (ComparisonRequest(
-        case_id="a",
-        checker_id="solver.checker",
-        checker_version="1.0",
-        reference_id="reference-a",
-        reference_version="2026-09",
-        report_path="reports/a.json",
-    ),)
-
-    manifest.write_text(json.dumps({"schema_version": 1, "comparisons": [{"case_id": "a"}]}))
-    with pytest.raises(ValueError, match="identity fields"):
-        load_comparison_requests(manifest)
 
 
 def test_comparison_for_unknown_case_is_rejected(tmp_path: Path) -> None:

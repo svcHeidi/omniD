@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 import threading
 import uuid
 
@@ -402,26 +401,3 @@ def test_journal_control_path_is_outside_fresh_cleaned_output(tmp_path):
     assert outcome.journal_path.is_relative_to(output_dir.parent)
 
 
-def test_legacy_output_journal_is_migrated_without_resetting_loop(tmp_path):
-    output_dir = tmp_path / "output"
-    loop_id = str(uuid.uuid4())
-    initial = RepairObservation({"code": "failed"})
-    first = run_repair_loop(
-        initial, output_dir=output_dir, budgets=RepairBudgets(1),
-        propose=lambda observation: None,
-        execute_candidate=lambda proposal, reservation: pytest.fail("must not execute"),
-        loop_id=loop_id,
-    )
-    legacy = output_dir / "repair_loops" / f"{loop_id}.json"
-    legacy.parent.mkdir(parents=True)
-    shutil.move(first.journal_path, legacy)
-
-    second = run_repair_loop(
-        initial, output_dir=output_dir, budgets=RepairBudgets(1),
-        propose=lambda observation: pytest.fail("completed loop must not restart"),
-        execute_candidate=lambda proposal, reservation: pytest.fail("must not execute"),
-        loop_id=loop_id,
-    )
-
-    assert second.reason == "proposer_stopped"
-    assert second.journal_path.exists()

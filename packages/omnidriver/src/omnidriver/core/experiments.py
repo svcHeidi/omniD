@@ -24,7 +24,6 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from .runtime.postprocess_phase import CaseRecord, SweepContext, build_sweep_context
-from .runtime.sweep_runner import sweep_run
 
 
 _COMPARISON_STATUSES = frozenset({"passed", "failed", "unavailable", "not_requested", "unknown"})
@@ -190,16 +189,6 @@ class Experiment:
         }
 
 
-def run_sweep_experiment(*args: Any, **kwargs: Any) -> dict[str, Any]:
-    """Run an experiment through the existing ``sweep_run`` implementation.
-
-    This is a public name for the established execution path, not a second
-    runner.  Its arguments and execution behavior are exactly ``sweep_run``.
-    """
-
-    return sweep_run(*args, **kwargs)
-
-
 def inspect_sweep_experiment(
     output_dir: str | Path,
     *,
@@ -231,38 +220,6 @@ def inspect_sweep_experiment(
         updated_at=context.finished_at,
         cases=cases,
     )
-
-
-def load_comparison_requests(path: str | Path) -> tuple[ComparisonRequest, ...]:
-    """Load explicit comparison declarations from a small JSON manifest.
-
-    The manifest has ``{"schema_version": 1, "comparisons": [...]}``.
-    Every declaration records checker and reference identities so a passing
-    exit code cannot be separated from the criterion that produced it.
-    """
-
-    path = Path(path)
-    try:
-        payload = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ValueError(f"invalid comparison manifest {path}: {exc}") from exc
-    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
-        raise ValueError("comparison manifest requires schema_version 1")
-    raw_requests = payload.get("comparisons")
-    if not isinstance(raw_requests, list):
-        raise ValueError("comparison manifest requires a comparisons list")
-    requests: list[ComparisonRequest] = []
-    for index, raw in enumerate(raw_requests):
-        if not isinstance(raw, dict):
-            raise ValueError(f"comparison {index} must be an object")
-        fields = (
-            "case_id", "checker_id", "checker_version", "reference_id",
-            "reference_version", "report_path",
-        )
-        if any(not isinstance(raw.get(field), str) or not raw[field] for field in fields):
-            raise ValueError(f"comparison {index} requires non-empty string identity fields")
-        requests.append(ComparisonRequest(**{field: raw[field] for field in fields}))
-    return tuple(requests)
 
 
 def _comparison_requests_by_case(

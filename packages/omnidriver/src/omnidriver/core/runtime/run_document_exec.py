@@ -1,7 +1,6 @@
 """Load and adapt a RunDocument v3 for strict workflow execution.
 
-``load_run_document(path)`` reads and schema-validates a document (migrating
-v1 explicitly); raises ``ValueError`` or ``json.JSONDecodeError`` on malformed
+``load_run_document(path)`` reads and schema-validates a v3 document; raises ``ValueError`` or ``json.JSONDecodeError`` on malformed
 input. ``build_execution_inputs(doc)`` turns a document into the same
 ``(workflow_dag, workflow_state, case_root, output_dir, expected_artifacts)``
 tuple ``strict_plan`` produces, so the CLI run/step path is identical for both
@@ -91,14 +90,13 @@ class RunDocumentExecutionInputs:
 def load_run_document(path: str | Path) -> RunDocument:
     """Read, schema-validate, and return a RunDocument from ``path``.
 
-    A version-1 document is migrated to v3 via the explicit migration path;
-    a version-3 document is validated against ``schemas/run-document.json``.
-    Version-2 documents are rejected -- callers must migrate them explicitly
-    via ``RunDocument.migrate_v2`` before loading. Raises ``ValueError`` /
-    ``json.JSONDecodeError`` on malformed input.
+    The document is validated against ``schemas/run-document.json``, whose
+    ``version`` is the constant ``"3"``: any other version is refused, never
+    migrated. Raises ``ValueError`` / ``json.JSONDecodeError`` on malformed
+    input.
 
     Corrected 2026-09-26 (R2 fix, finding I1): that ``ValueError`` claim was
-    false until this fix -- ``RunDocument.from_json``/``migrate_v1`` validate
+    false until this fix -- ``RunDocument.from_json`` validates
     via ``jsonschema.validate``, whose ``ValidationError`` is not a
     ``ValueError`` (MRO: ``ValidationError -> _Error -> Exception``), so a
     schema-invalid document -- for example one from before A2, every
@@ -120,8 +118,6 @@ def load_run_document(path: str | Path) -> RunDocument:
     if not isinstance(data, dict):
         raise ValueError("Run document must be a JSON object")
     try:
-        if data.get("version") == "1":
-            return RunDocument.migrate_v1(data)
         return RunDocument.from_json(data)
     except jsonschema.exceptions.ValidationError as exc:
         raise ValueError(

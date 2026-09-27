@@ -240,7 +240,7 @@ class TutorialCatalogCapability(Protocol):
     and core has no runtime consumer of it.
 
     :adapts: get_tutorial_catalog, get_tutorial_displays
-    :consumed-by: omnidriver/core/runtime/registry.py, omnidriver/cardiacfoam/dict_builder.py
+    :consumed-by: omnidriver/core/runtime/registry.py
     :fallback: none
     :status: get_tutorial_catalog=required, get_tutorial_displays=optional-neutral
     """

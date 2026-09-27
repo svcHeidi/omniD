@@ -6,14 +6,12 @@ _NON_ROUTABLE_KEYS: frozenset[str] = frozenset({"caseId"})
 
 
 def route_case_values(
-    *, base: dict[str, Any], resolved_axis_values: dict[str, Any], driver_context=None,
+    *, base: dict[str, Any], resolved_axis_values: dict[str, Any], driver_context,
 ) -> dict[str, Any]:
-    """Route through the selected plugin while preserving the public API."""
+    """Route through the selected plugin."""
 
-    from .core.compatibility import resolve_public_driver_context
     from .core.plugin_capabilities import SweepRoutingRequest
 
-    driver_context = resolve_public_driver_context(driver_context)
     return driver_context.capabilities.sweep_materializer.route(
         SweepRoutingRequest(
             base=base,

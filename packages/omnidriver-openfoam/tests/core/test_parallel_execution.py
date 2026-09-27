@@ -9,35 +9,11 @@ record's solve step through `parallel_steps_for_record`.
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
-from tempfile import TemporaryDirectory
 
 from omnidriver.core.runtime.record_execution import SchedulerAllocation
 from omnidriver.openfoam.parallel_execution import (
     parallel_steps_for_record,
-    read_number_of_subdomains,
 )
-
-_DECOMPOSE_PAR_DICT = """FoamFile
-{
-    version     2.0;
-    format      ascii;
-    class       dictionary;
-    object      decomposeParDict;
-}
-numberOfSubdomains  6;
-method          scotch;
-"""
-
-
-class TestReadNumberOfSubdomains(unittest.TestCase):
-    def test_reads_committed_value(self) -> None:
-        with TemporaryDirectory() as tmp:
-            case_root = Path(tmp)
-            (case_root / "system").mkdir()
-            (case_root / "system" / "decomposeParDict").write_text(_DECOMPOSE_PAR_DICT)
-            self.assertEqual(read_number_of_subdomains(case_root), 6)
-
 
 class TestRecordParallelForm(unittest.TestCase):
     """PAR (owner Q6, 2026-09-26): the OpenFOAM layer's answer to core's

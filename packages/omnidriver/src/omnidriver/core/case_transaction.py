@@ -60,7 +60,6 @@ from .case_write import (
     RenderedFile,
     _digest_bytes,
 )
-from .planning_types import SimulationAuditItem
 from .runtime.attempt_lease import AttemptLeaseError, acquire_case_lease, case_lease_is_held
 from .runtime.transaction_mechanics import (
     atomic_write_bytes as _atomic_write_bytes,
@@ -717,38 +716,3 @@ def recover_case_transaction(case_root: Path) -> CaseWriteRecord | None:
         )
     finally:
         lease_context.__exit__(None, None, None)
-
-
-def unrecovered_transaction_audit(case_root: Path) -> SimulationAuditItem | None:
-    """A ``case_inputs`` coverage item when this case has an unrecovered transaction.
-
-    Reuses the existing coverage gate
-    (:class:`~omnidriver.core.planning_types.SimulationAuditItem` plus
-    :func:`~omnidriver.core.runtime.launch_readiness.is_launchable`) rather
-    than inventing a second one, per this plan's instruction for Task 6. A
-    case whose last transaction was interrupted has inputs nobody can vouch
-    for until :func:`recover_case_transaction` runs; a caller that folds this
-    item into its ``simulation_audit`` tuple makes ``is_launchable`` refuse to
-    launch against that case.
-
-    **Not wired into any dispatch call site by this batch.** Populating a
-    real entry's ``simulation_audit`` with a ``case_inputs`` stage is Tasks
-    8/9's vertical-slice work -- this function only proves the seam behaves,
-    from this module's own tests. Calling it is what would make ``unavailable``
-    reach a real run; nothing in Tasks 5-7 calls it from a dispatch path.
-    """
-    pending = pending_transaction(case_root)
-    if not pending:
-        return None
-    return SimulationAuditItem(
-        stage="case_inputs",
-        status="unavailable",
-        points=0,
-        max_points=0,
-        summary=(
-            f"case {case_root} has an unrecovered write transaction "
-            f"{pending.get('transaction_id', 'unknown')!r}; its inputs are "
-            f"not known until recover_case_transaction() runs"
-        ),
-        evidence={"transaction_id": pending.get("transaction_id")},
-    )

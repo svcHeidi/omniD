@@ -73,34 +73,20 @@ class TestLoadRunDocument(unittest.TestCase):
             self.assertEqual(doc.name, "doc-one")
             self.assertEqual(doc.version, "3")
 
-    def test_migrates_a_v1_document(self) -> None:
-        v1 = {
-            "version": "1",
-            "id": "old",
-            "name": "legacy",
-            "status": "draft",
-            "config": _empty_config(),
-        }
-        with tempfile.TemporaryDirectory() as temp:
-            path = Path(temp) / "run.json"
-            path.write_text(json.dumps(v1))
-            doc = load_run_document(path)
-            self.assertEqual(doc.version, "3")
-            self.assertEqual(doc.name, "legacy")
-
-    def test_v2_document_is_rejected(self) -> None:
-        v2 = {
-            "version": "2",
-            "id": "old",
-            "name": "archived",
-            "status": "draft",
-            "config": _empty_config(),
-        }
-        with tempfile.TemporaryDirectory() as temp:
-            path = Path(temp) / "run.json"
-            path.write_text(json.dumps(v2))
-            with self.assertRaises(ValueError):
-                load_run_document(path)
+    def test_a_v1_or_v2_document_is_refused_not_migrated(self) -> None:
+        for version in ("1", "2"):
+            old = {
+                "version": version,
+                "id": "old",
+                "name": "archived",
+                "status": "draft",
+                "config": _empty_config(),
+            }
+            with tempfile.TemporaryDirectory() as temp:
+                path = Path(temp) / "run.json"
+                path.write_text(json.dumps(old))
+                with self.assertRaises(ValueError):
+                    load_run_document(path)
 
     def test_non_object_json_raises(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

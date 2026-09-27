@@ -66,21 +66,7 @@ def main() -> int:
     else:
         failures.append("default_driver_context() unexpectedly resolved without an adapter")
 
-    # 3. Public edges that need adapter capabilities carry the same explicit
-    #    context rule. Calling one without a context and without an installed
-    #    adapter must not manufacture a generic answer.
-    try:
-        from omnidriver.dict_entries import all_documented_driver_paths
-
-        all_documented_driver_paths()
-    except LookupError as exc:
-        print(f"public edge without context : {type(exc).__name__}: {exc}")
-    except Exception as exc:  # noqa: BLE001
-        failures.append(f"all_documented_driver_paths() raised {type(exc).__name__}, not LookupError: {exc}")
-    else:
-        failures.append("all_documented_driver_paths() unexpectedly answered without an adapter")
-
-    # 4. The CLI is reachable. It hard-imported omnidriver.openfoam at module
+    # 3. The CLI is reachable. It hard-imported omnidriver.openfoam at module
     #    scope once, which made the whole command surface unusable in a
     #    core-only install.
     result = subprocess.run(
@@ -90,7 +76,7 @@ def main() -> int:
     if result.returncode != 0:
         failures.append(f"CLI --help exited {result.returncode}: {result.stderr[:300]}")
 
-    # 5. The sweep-spec schema (Phase 2 Task 11) ships inside the installed
+    # 4. The sweep-spec schema (Phase 2 Task 11) ships inside the installed
     #    package -- a repository-only schemas/ file would pass every other
     #    check here and still be absent from every wheel, which is exactly
     #    the defect class this script exists to catch.

@@ -19,8 +19,6 @@ from pathlib import Path
 import pytest
 
 from omnidriver.core import case_transaction, case_write
-from omnidriver.core.planning_types import SimulationAuditItem
-from omnidriver.core.runtime.launch_readiness import is_launchable
 
 
 def _parameter():
@@ -181,27 +179,3 @@ def test_a_persisted_plan_round_trips(tmp_path):
     payload = json.loads(case_write.canonical_json(plan.to_json()))
     restored = case_write.CaseWritePlan.from_json(payload)
     assert restored.plan_digest == plan.plan_digest
-
-
-def test_an_unrecovered_transaction_is_reported_as_unavailable_coverage(tmp_path):
-    """Task 6's dispatch-facing seam: an unrecovered journal reuses G0 Task
-    8's existing coverage gate (`SimulationAuditItem`/`is_launchable`)
-    rather than a second bespoke check. Not wired to any dispatch call site
-    by this batch -- see `unrecovered_transaction_audit`'s own docstring."""
-    (tmp_path / ".omnidriver").mkdir(parents=True, exist_ok=True)
-    case_transaction._write_journal(tmp_path, {
-        "transaction_id": "t-stuck", "state": "applying",
-        "plan_digest": "0" * 64, "before_images": [],
-    })
-    item = case_transaction.unrecovered_transaction_audit(tmp_path)
-    assert isinstance(item, SimulationAuditItem)
-    assert item.stage == "case_inputs"
-    assert item.status == "unavailable"
-
-    readiness = is_launchable(plan_status="ok", simulation_audit=(item,))
-    assert not readiness.launchable
-    assert not readiness.coverage_ok
-
-
-def test_no_unrecovered_transaction_is_no_coverage_gap(tmp_path):
-    assert case_transaction.unrecovered_transaction_audit(tmp_path) is None

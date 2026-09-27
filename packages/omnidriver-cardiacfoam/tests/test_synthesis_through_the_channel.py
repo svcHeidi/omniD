@@ -231,11 +231,12 @@ def test_build_case_keeps_the_signature_build_and_launch_needs(tmp_path):
     # here, in the same order; only the new one is added, before
     # `driver_context` (which stays last, matching every other call site's
     # `build_case`/`build_and_launch` keyword-argument ordering).
+    # Corrected 2026-09-27 (compat audit): `pre_solve_commands` and
+    # `openfoam_bashrc` removed with the launch half they fed.
     assert list(signature.parameters) == [
         "electro_selectors", "physics_selectors", "case_dir", "electro_overrides",
-        "physics_overrides", "overwrite", "dry_run", "pre_solve_commands",
-        "openfoam_bashrc", "delta_t", "end_time", "dx", "include_allrun",
-        "driver_context",
+        "physics_overrides", "overwrite", "dry_run", "delta_t", "end_time",
+        "dx", "include_allrun", "driver_context",
     ]
 
 

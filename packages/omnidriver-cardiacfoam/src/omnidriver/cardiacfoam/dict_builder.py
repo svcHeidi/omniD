@@ -41,7 +41,7 @@ is validator-clean.
 """
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from numbers import Integral, Real
 from typing import Any
 
@@ -1360,16 +1360,15 @@ def build_and_launch(
     physics_overrides: "dict[str, str] | None" = None,
     overwrite: bool = False,
     dry_run: bool = False,
-    pre_solve_commands: "Sequence[str | Sequence[str]] | None" = None,
-    openfoam_bashrc: "str | Path | None" = None,
     delta_t: "float | str | None" = None,
     end_time: "float | str | None" = None,
     dx: "float | None" = None,
     include_allrun: bool = False,
     driver_context: "Any | None" = None,
 ) -> dict:
-    """Build both dicts, write them to ``case_dir/constant/``, and (if
-    not dry_run) launch the engine on the resulting case.
+    """Build both dicts and write them, through one committed case-write
+    plan, to ``case_dir``. Nothing is launched: run the written case with
+    ``omnidriver run --strict`` (``--entry-kind case_folder``).
 
     Args:
         electro_selectors: selectors for build_electro_properties.
@@ -1379,14 +1378,8 @@ def build_and_launch(
             builder semantics.
         overwrite: when False (default), an existing
             ``case_dir/constant/electroProperties`` raises FileExistsError.
-        dry_run: when True, writes the dicts and returns without
-            running the engine.
-        pre_solve_commands: optional commands to run in ``case_dir`` before
-            ``cardiacFoam``. Each item is a string (shell-split) or a list of
-            strings. Example: ``["vtkUnstructuredToFoam",
-            "setTorsoOrganConductivityField"]``.
-        openfoam_bashrc: when set, each command is run after sourcing this
-            OpenFOAM bashrc.
+        dry_run: when True, a meshless solver's bundled 1-cell polyMesh is
+            left out of the plan (a dry run writes no mesh).
         dx: mesh resolution (metres, isotropic cell size) for the generic
             default ``blockMeshDict`` provisioned for spatial solvers with no
             author-supplied mesh. Only meaningful for
@@ -1406,9 +1399,8 @@ def build_and_launch(
             pre-existing default of no ``Allrun`` at all.
 
     Returns:
-        A dict carrying ``case_dir`` (str) and either
-        ``status="dry_run_complete"`` or the engine result list under
-        ``results``.
+        A dict carrying ``case_dir`` (str), ``status`` (``"dry_run_complete"``
+        or ``"written"``) and ``needs_block_mesh``.
 
     Raises:
         FileExistsError: case_dir/constant/electroProperties exists and
@@ -1453,14 +1445,6 @@ def build_and_launch(
 
     myocardium_solver = electro_selectors.get("myocardiumSolver", "monodomainSolver")
 
-    # `own_driver_context()`, not the caller's `driver_context` -- matching
-    # `build_electro_properties`/`build_physics_properties`'s own existing
-    # behaviour, which already validates against `own_driver_context()`
-    # regardless of what this function's caller passed. The `driver_context`
-    # PARAMETER is reserved for the launch phase below, exactly as before
-    # this migration; threading it into the write phase too would be a
-    # behaviour change (a caller-supplied context previously had zero
-    # influence on what got written).
     write_context = driver_context if driver_context is not None else own_driver_context()
     plan = build_case(
         electro_selectors, physics_selectors=physics_selectors, case_dir=case_dir,
@@ -1492,52 +1476,8 @@ def build_and_launch(
     # since it only ever takes the MESHLESS_SOLVERS branch, which this
     # task did not touch.
 
-    if dry_run:
-        return {
-            "case_dir": str(case_dir),
-            "status": "dry_run_complete",
-            "needs_block_mesh": needs_block_mesh,
-        }
-
-    from omnidriver.core.compatibility import resolve_public_driver_context
-
-    driver_context = resolve_public_driver_context(driver_context)
-    make_spec = driver_context.capabilities.tutorials.catalog()["make_generic_case_spec"]
-    from omnidriver.core.runtime.execution_context import resolve_execution_context
-    from omnidriver.openfoam.openfoam_environment import load_openfoam_environment
-    from omnidriver.core.runtime.workflow import normalize_workflow_dag, validate_workflow_commands
-    from omnidriver.core.runtime.workflow_orchestrator import run_workflow
-    from omnidriver.core.runtime.workflow_state import initial_workflow_state
-
-    spec = make_spec(
-        cases_root=case_dir.parent,
-        case_dir_name=case_dir.name,
-        solver_command="cardiacFoam",
-        pre_solve_commands=list(pre_solve_commands or ()),
-    )
-    execution_context = resolve_execution_context(spec)
-    workflow_dag, _dag_diagnostics = normalize_workflow_dag(
-        spec.metadata.get("workflow_dag"), driver_context=driver_context,
-    )
-    command_diagnostics = validate_workflow_commands(
-        workflow_dag, driver_context=driver_context,
-    )
-    if command_diagnostics:
-        raise ValueError(
-            "build_and_launch's workflow_dag failed command validation: "
-            + "; ".join(d.message for d in command_diagnostics)
-        )
-
-    env = load_openfoam_environment(bashrc_path=openfoam_bashrc).env
-    outcome = run_workflow(
-        workflow_dag,
-        initial_workflow_state(workflow_dag),
-        case_root=execution_context.case_root,
-        output_dir=execution_context.output_dir,
-        env=env,
-    )
     return {
         "case_dir": str(case_dir),
-        "status": "complete" if outcome.state.status == "completed" else "failed",
-        "workflow_state": outcome.state.to_json(),
+        "status": "dry_run_complete" if dry_run else "written",
+        "needs_block_mesh": needs_block_mesh,
     }

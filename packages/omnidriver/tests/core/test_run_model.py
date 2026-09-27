@@ -1,15 +1,13 @@
 """Tests for the Run document JSON Schema and ``RunDocument`` dataclass.
 
-The JSON Schema in ``schemas/run-document.json`` is the single source of truth
-for its shape, and ``RunDocument`` is the Python model used by validation
+The packaged JSON Schema ``omnidriver/schemas/run-document.json`` is the single
+source of truth for its shape, and ``RunDocument`` is the Python model used by validation
 helpers and catalog exporters.
 """
 
 from __future__ import annotations
 
 import json
-import subprocess
-import sys
 from importlib import resources
 from pathlib import Path
 
@@ -18,16 +16,13 @@ import pytest
 
 from omnidriver.core.runtime.run_model import RunDocument
 from omnidriver.core.runtime.workflow_state import workflow_state_from_json
-from conftest import NO_REPO_ROOT, repo_root, skip_without_repo
-
-pytestmark = skip_without_repo
-
-SCHEMA_PATH = (repo_root or NO_REPO_ROOT) / "schemas" / "run-document.json"
 
 
 @pytest.fixture
 def schema():
-    return json.loads(SCHEMA_PATH.read_text())
+    return json.loads(
+        resources.files("omnidriver.schemas").joinpath("run-document.json").read_text()
+    )
 
 
 def _valid_run_dict():
@@ -57,36 +52,6 @@ def _valid_run_dict():
 
 def test_schema_validates_minimal_valid_run(schema):
     jsonschema.validate(_valid_run_dict(), schema)  # does not raise
-
-
-def test_packaged_schema_resource_matches_fixture_schema(schema):
-    packaged = json.loads(
-        resources.files("omnidriver.schemas")
-        .joinpath("run-document.json")
-        .read_text()
-    )
-    assert packaged == schema
-    doc = RunDocument.from_json(_valid_run_dict())
-    assert doc.to_json()["version"] == "3"
-
-
-def test_packaged_schema_is_reproducible_from_the_generator() -> None:
-    packaged_path = (
-        (repo_root or NO_REPO_ROOT)
-        / "packages/omnidriver/src/omnidriver/schemas/run-document.json"
-    )
-    before = packaged_path.read_bytes()
-    result = subprocess.run(
-        [sys.executable, "schemas/generate_run_document_schema.py"],
-        cwd=repo_root or NO_REPO_ROOT,
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr
-    assert packaged_path.read_bytes() == before, (
-        "generator changed the packaged schema copy; run "
-        "schemas/generate_run_document_schema.py and include its output"
-    )
 
 
 def test_schema_rejects_unknown_status(schema):
@@ -273,36 +238,12 @@ def test_schema_rejects_unknown_workflow_state_status(schema):
         jsonschema.validate(doc, schema)
 
 
-def test_run_document_rejects_implicit_v1_from_json():
+@pytest.mark.parametrize("version", ["1", "2"])
+def test_run_document_refuses_any_version_but_3(version):
     old = _valid_run_dict()
-    old["version"] = "1"
-    with pytest.raises(ValueError, match="migrate_v1"):
+    old["version"] = version
+    with pytest.raises(jsonschema.ValidationError):
         RunDocument.from_json(old)
-
-
-def test_run_document_rejects_implicit_v2_from_json():
-    old = _valid_run_dict()
-    old["version"] = "2"
-    with pytest.raises(ValueError, match="migrate_v2"):
-        RunDocument.from_json(old)
-
-
-def test_run_document_migrates_v1_explicitly():
-    old = _valid_run_dict()
-    old["version"] = "1"
-    old.pop("resolvedEntry")
-    old.pop("workflowDag")
-    old.pop("workflowState")
-    old.pop("launch")
-    old.pop("expectedArtifacts")
-    old.pop("terminalStatusValues")
-
-    doc = RunDocument.migrate_v1(old)
-    payload = doc.to_json()
-    assert payload["version"] == "3"
-    assert payload["config"] == old["config"]
-    assert payload["resolvedEntry"] is None
-    assert payload["workflowState"] is None
 
 
 def test_core_declares_no_phase_vocabulary() -> None:

@@ -27,12 +27,8 @@ does not add solver-specific handlers or branch on solver names.
 from __future__ import annotations
 
 #: ``produced_by`` for files the executor writes around a step, rather than the
-#: solver command. ``LEGACY_DRIVER_PRODUCED_BY`` is the value this carried
-#: before 2026-09-14; run documents written then still hold it, so readers must
-#: accept both or they would credit driver bookkeeping to the solver step.
+#: solver command.
 DRIVER_PRODUCED_BY = "omnidriver"
-LEGACY_DRIVER_PRODUCED_BY = "driverFOAM"
-DRIVER_PRODUCED_BY_VALUES = (DRIVER_PRODUCED_BY, LEGACY_DRIVER_PRODUCED_BY)
 
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Iterable

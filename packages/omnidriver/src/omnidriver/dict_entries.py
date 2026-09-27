@@ -16,12 +16,7 @@ if TYPE_CHECKING:
 __all__ = ["DictEntry", "all_documented_driver_paths", "build_group"]
 
 
-def all_documented_driver_paths(
-    driver_context: "DriverContext | None" = None,
-) -> tuple[str, ...]:
-    from omnidriver.core.compatibility import resolve_public_driver_context
-
-    driver_context = resolve_public_driver_context(driver_context)
+def all_documented_driver_paths(driver_context: "DriverContext") -> tuple[str, ...]:
     paths = [
         entry.driver_path
         for entry in driver_context.capabilities.dictionaries.entries()
