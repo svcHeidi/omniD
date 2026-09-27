@@ -19,7 +19,7 @@ repository root.
 |---|---|
 | `packages/omnidriver/src/omnidriver/core/plugin_interface.py` | **Start here.** Defines `SolverPlugin` (the single 29-member contract — corrected 2026-09-19, was stated as 27), `SolverPluginOptionalHooks` (27 probe-based hooks — corrected 2026-09-19, was stated as 14), `DriverContext`, and `validate_plugin()`. |
 | `packages/omnidriver/src/omnidriver/core/plugin_capabilities.py` | 24 capability Protocol classes (corrected 2026-09-19, was stated as 17 — this count is *generated*, not hand-counted: `ARCHITECTURE.md`'s capability-seam table is produced and CI-verified by `scripts/export-capability-seams.py --check`, so treat that table as the authority over any number restated here) + adapter dataclasses + `adapt_plugin_capabilities()`. Every plugin capability seam is documented here. |
-| `packages/omnidriver/src/omnidriver/core/compatibility.py` | Backward-compatibility shims for optional-hook capabilities: cardiac-shaped fallbacks for the built-in cardiac plugin, neutral fallbacks for every other plugin. |
+| `packages/omnidriver/src/omnidriver/core/compatibility.py` | The `absent_*` answers core gives for optional-hook capabilities a plugin does not implement -- neutral fallbacks, not plugin-specific ones. |
 | `packages/omnidriver/src/omnidriver/core/plugin_discovery.py` | Entry-point discovery via `importlib.metadata`. Explains `omnidriver.plugins` group name, ambiguity handling, and `_entry_points()` test seam. |
 | `packages/omnidriver/src/omnidriver/core/strict_planning.py` | The strict planner: `strict_plan()` / `omnidriver plan --strict`. Non-mutating; produces machine-readable JSON with readiness score, diagnostics, and launch command. |
 | `packages/omnidriver/src/omnidriver/core/runtime_records.py` | Added 2026-09-26 (spec A5, final review M13). `CORE_RUNTIME_RECORDS` — every filename/directory core itself writes into a case (`workflow_state.json`, `run_document.json`, `sweep_manifest.json`, `case_record.json`, `workflow_logs/`, ...), merged into every stack's `CaseRuntimeConventions` so staging never carries a prior run's state forward (conformance C11). |
@@ -33,7 +33,7 @@ repository root.
 
 ## For Plugin Authors
 
-> **New to writing a plugin?** Follow `.agents/skills/driverfoam-plugin-builder/SKILL.md` (**not present in this repository** — it lives in the cardiacFoam monorepo)
+> **New to writing a plugin?** Follow `.agents/skills/omnidriver-plugin-builder/SKILL.md` (**not present in this repository** — it lives in the cardiacFoam monorepo)
 > step by step — it contains the complete workflow, a contract cheat-sheet, and a worked example.
 
 | File | Role | Why you must read it |
@@ -108,8 +108,8 @@ with two members missing from this table: `get_environment_commands` and
 | File | Role |
 |---|---|
 | `AGENT_GUIDE.md` | Full agent CLI reference: `omnidriver` commands, RunDocument, sweeps, post-processing, PLUGIN_GUIDE section. |
-| `.agents/skills/driverfoam-assistant/SKILL.md` (**not present in this repository** — it lives in the cardiacFoam monorepo) | Agent workflow skill: case scaffolding, sweep generation, strict diagnostics loop, post-processing. |
-| `.agents/skills/driverfoam-plugin-builder/SKILL.md` (**not present in this repository** — it lives in the cardiacFoam monorepo) | **Plugin builder skill:** complete step-by-step guide for integrating a new solver. |
+| `.agents/skills/omnidriver-assistant/SKILL.md` (**not present in this repository** — it lives in the cardiacFoam monorepo) | Agent workflow skill: case scaffolding, sweep generation, strict diagnostics loop, post-processing. |
+| `.agents/skills/omnidriver-plugin-builder/SKILL.md` (**not present in this repository** — it lives in the cardiacFoam monorepo) | **Plugin builder skill:** complete step-by-step guide for integrating a new solver. |
 
 ### Environment Variables
 
@@ -141,9 +141,8 @@ Each `DictEntry.driver_path` must be globally unique across your entire catalog.
 
 | File | Role |
 |---|---|
-| `packages/omnidriver/src/omnidriver/postprocessing/__init__.py` | Public surface: `PostprocessingProtocol`, `PlotSpec`, `TraceSpec`, `build_line_traces`, `load_csv_folder`, `apply_plotly_layout`, `write_plotly_html`, `DEFAULT_PALETTE`. |
-| `packages/omnidriver/src/omnidriver/core/runtime/postprocess_phase.py` | `build_sweep_context()` (brain) and `run_postprocessing_module()`. The brain is the single source of truth; the module never re-reads manifests. |
-| Tutorial `run_postprocessing` scripts | Expose `run_postprocessing(*, output_dir, setup_root=None, **kwargs) -> list[dict]`. Discovery is driven by the function's docstring. |
+| `packages/omnidriver/src/omnidriver/postprocessing/__init__.py` | Plotting and table utilities (`PostprocessingProtocol`, `PlotSpec`, `TraceSpec`, `build_line_traces`, `load_csv_folder`, `apply_plotly_layout`, `write_plotly_html`, `DEFAULT_PALETTE`, `TableWriter`) that the native cardiacFOAM post-processing scripts import directly (`omnidriver.postprocessing`); core's own plan/run/sweep-run path never imports it. |
+| `packages/omnidriver/src/omnidriver/core/runtime/postprocess_phase.py` | `build_sweep_context()` (brain, the single source of truth for a sweep result's context) and `run_postprocessing_module()`, which always refuses (`not_configured`) rather than guessing an undeclared generic analysis task. |
 
 See `AGENT_GUIDE.md §5 Post-Processing Phase` for the full protocol.
 

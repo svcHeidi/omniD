@@ -1,15 +1,15 @@
 # Historical cardiacFoam operational notes
 
 > **Not a current agent contract.** This file contains useful historical
-> cardiacFoam operational detail, including retired driverFOAM-era names and
+> cardiacFoam operational detail, including retired pre-omnidriver names and
 > host assumptions. Do not use it as a routing or implementation authority.
 > Start at [`AGENTS.md`](AGENTS.md), then verify any command here against the
 > current CLI, package, and selected adapter before use.
 
 > **Historical correction, 2026-09-04.** This guide was amended after its
-> original `openfoam_driver.*` imports and `driverFoam` CLI examples proved
-> nonexistent. It may still provide useful context, but current instructions,
-> current CLI help, and the selected adapter are authoritative.
+> original `openfoam_driver.*` imports and its old, pre-rename CLI examples
+> proved nonexistent. It may still provide useful context, but current
+> instructions, current CLI help, and the selected adapter are authoritative.
 
 ## What the agent can do
 
@@ -20,11 +20,11 @@
 | Execute an agent-authored RunDocument | `omnidriver run/step --run-document <file>`; `build_execution_inputs(...)` | `omnidriver.core.runtime.run_document_exec` |
 | Execute one strict workflow step | `run_workflow_step(...)` | `omnidriver.core.runtime.workflow_runner` |
 | Read/write strict workflow state | `workflow_state_from_json(...)`, `WorkflowRunState.to_json()` | `omnidriver.core.runtime.workflow_state` |
-| Validate RunDocument v3 or migrate v1/v2 explicitly | `RunDocument.from_json(...)`, `RunDocument.migrate_v1(...)`, `RunDocument.migrate_v2(...)` | `omnidriver.core.runtime.run_model` |
+| Validate RunDocument v3 (any other version is refused) | `RunDocument.from_json(...)` | `omnidriver.core.runtime.run_model` |
 | Validate a configuration before launching | `validate_run(run, *, entries=None)` | `omnidriver.core.specs.validation` |
 | Synthesize a fresh `electroProperties` / `physicsProperties` | `build_electro_properties(...)`, `build_physics_properties(...)` | `omnidriver.cardiacfoam.dict_builder` |
 | Parse an existing `electroProperties` back to selectors + overrides | `parse_electro_properties(path)` | `omnidriver.cardiacfoam.dict_builder` |
-| Build + launch a one-shot run (runs through the strict executor) | `build_and_launch(...)` | `omnidriver.cardiacfoam.dict_builder` |
+| Write a from-scratch case's dicts as one committed plan (the sweep's case writer; nothing is launched) | `build_and_launch(...)` | `omnidriver.cardiacfoam.dict_builder` |
 | Locate predicted outputs | `strict_plan(...)`'s `expected_artifacts` field (also in `omnidriver plan --strict` JSON) | `omnidriver.core.strict_planning` |
 | Verify outputs vs predictions | `artifact_reconciliation` in `run --strict`/`step --strict` JSON output | `omnidriver.core.runtime.reconciler` |
 | List past runs | `list_runs(root)` | `omnidriver.core.runtime.run_discovery` |
@@ -34,16 +34,16 @@
 
 The solver-injection refactor does not change this public loop. A single
 per-operation driver context now supplies focused solver capabilities
-internally, while omitted contexts, RunDocument v3, legacy fallbacks, commands,
-diagnostics, and artifacts retain their established behavior.
+internally, while omitted contexts, RunDocument v3, optional-hook fallbacks,
+commands, diagnostics, and artifacts retain their established behavior.
 
 Use strict planning before launching. It is the only path that tells an agent
 whether the run is machine-readable, validated, catalog-covered, artifact
 predictable, and workflow-addressable before execution starts.
 
 For the cardiacFoam plugin, configure
-`driverfoam-runtime.example.yaml` once per
-host and expose it through `DRIVERFOAM_RUNTIME_CONFIG`. The plugin declares
+`omnidriver-runtime.example.yaml` once per
+host and expose it through `OMNIDRIVER_RUNTIME_CONFIG`. The plugin declares
 the `lightweight` and `full` physics backends in its `plugin.yaml`; the local
 file selects one backend, its OpenFOAM bashrc, the full-mode solids4foam root,
 and the generated `cardiacFoam.build.json` manifest. The manifest is not a
@@ -51,7 +51,7 @@ build step you run yourself: `runtime_profile.py` generates or refreshes it
 automatically, on the fly, whenever it is missing or older than the compiled
 `cardiacFoam` solver — by inspecting the solver's actual linked libraries
 (`otool -L`/`ldd`) to infer which backend was compiled, never by trusting an
-asserted flag. driverFOAM rejects an unset, invalid, unbuilt, or
+asserted flag. omnidriver rejects an unset, invalid, unbuilt, or
 compiled-metadata-mismatched selection instead of letting a shell resolver
 silently select another checkout. This runtime file is separate from
 case/sweep overrides and applies to all cardiacFoam entries.
@@ -116,7 +116,7 @@ exactly as it would on a first run:
 omnidriver run --strict --entry singleCell --fresh
 ```
 
-`--fresh` refuses to delete anything that doesn't look like driverFOAM's own
+`--fresh` refuses to delete anything that doesn't look like omnidriver's own
 output (no `workflow_state.json`/`sweep_manifest.json`/`run_document.json`
 found), the filesystem root, your home directory, or a path outside
 `OMNIDRIVER_ALLOWED_RUNS_ROOT` when that's set — but it does not prompt for
@@ -124,8 +124,8 @@ confirmation, so treat any `--output-dir`/case directory you point it at as
 fully disposable and copy out anything you want to keep first.
 
 **Corrected 2026-09-26 (Task 9 close-out, owner decision 3):** this said the
-legacy name, `DRIVERFOAM_ALLOWED_RUNS_ROOT`, was still honoured if set. It is
-removed outright; only `OMNIDRIVER_ALLOWED_RUNS_ROOT` is read now.
+old, pre-rename env var name was still honoured if set. It is removed
+outright; only `OMNIDRIVER_ALLOWED_RUNS_ROOT` is read now.
 
 `--max-total-attempts <N>` caps the total number of step executions across the
 whole run (a retry-storm guard on top of each step's per-step `max_attempts`).
@@ -214,41 +214,8 @@ design. The trust model is local/single-tenant: it assumes `PATH` and the
 
 See [`SECURITY.md`](SECURITY.md) for the full trust model, output-location
 contract, and the explicit list of what is and is not mitigated. For the
-plugin-boundary compatibility fallbacks (optional-hook defaults, legacy
-shims), see `omnidriver/core/compatibility.py`.
-
-## Compatibility one-shot loop
-
-The legacy `build_and_launch(...)` path remains supported for existing scripts,
-but it is not the preferred autonomous path because it mutates and launches in
-one call instead of first emitting a strict contract.
-
-```python
-from omnidriver.cardiacfoam.dict_builder import build_and_launch
-
-result = build_and_launch(
-    electro_selectors={
-        "myocardiumSolver": "singleCellSolver",
-        "ionicModel": "AlievPanfilov",
-        "tissue": "myocyte",
-    },
-    physics_selectors={"type": "electroModel"},
-    case_dir="/tmp/my_run/case",
-)
-print(result)  # {"case_dir": ..., "status": "complete", "workflow_state": {...}}
-```
-
-That single call:
-
-1. Calls `build_electro_properties(...)` and `build_physics_properties(...)`.
-2. Runs the validator on both — raises `ValueError` if your selectors break a structured constraint.
-3. Writes `case/constant/electroProperties` and `case/constant/physicsProperties`.
-4. Constructs a `generic_case` spec pointing at the case directory, whose
-   `workflow_dag` mirrors `pre_solve_commands`/`solver_command` exactly.
-5. Runs that workflow_dag to completion through the same strict executor
-   `run --strict` uses (`run_workflow`), validating every command against
-   the allowlist first.
-6. Returns the final `workflow_state` (per-step status, logs, exit codes).
+plugin-boundary compatibility fallbacks (optional-hook defaults), see
+`omnidriver/core/compatibility.py`.
 
 ## Sweeping a parameter grid
 
@@ -299,15 +266,17 @@ This is not a registered-tutorial lookup; each case is its own on-disk
 ### Mesh provisioning for from-scratch cases
 
 A freshly materialized `case_folder` has no author-supplied mesh, so
-`build_and_launch` provisions one based on `myocardiumSolver`:
+`build_and_launch` provisions one based on `myocardiumSolver`. Every solver
+meshes the same way (2026-09-28, owner decision): a `system/blockMeshDict` is
+written and the generated `Allrun` runs `blockMesh` before `cardiacFoam`.
 
-- `singleCellSolver` (no real geometry): a bundled static 1-cell polyMesh is
-  copied into `constant/polyMesh/` directly — no `blockMesh` step needed.
+- `singleCellSolver` (no real geometry): the `blockMeshDict` is fixed at one
+  hex cell, matching the native `singleCell` tutorial's own one-cell block —
+  there is no resolution to choose.
 - `monodomainSolver`/`bidomainSolver`/`eikonalSolver` (need real geometry): a
   generic default `system/blockMeshDict` is written (a small cubic slab,
-  "walls" patch — **not** tuned to any specific tutorial's science), and the
-  generated `Allrun` runs `blockMesh` before `cardiacFoam`. Sweep this mesh's
-  resolution with the `dx` axis (**metres**, isotropic cell size — this is a
+  "walls" patch — **not** tuned to any specific tutorial's science). Sweep
+  this mesh's resolution with the `dx` axis (**metres**, isotropic cell size — this is a
   from-scratch `case_folder` mechanism, unrelated to the tutorial-record
   `dx` axis `records/niederer_2011.py` declares for the Niederer benchmark,
   which happens to share the same name but resolves against that case's own
@@ -341,8 +310,8 @@ Both actions enforce a safety cap of 200 expanded cases by default (override
 with `--max-cases`), checked before any case is expanded or materialized:
 
 ```bash
-omnidriver sweep-plan --spec sweep.json --output-dir .tmp/driverfoam/sweeps/my_sweep/
-omnidriver sweep-run --spec sweep.json --output-dir .tmp/driverfoam/sweeps/my_sweep/
+omnidriver sweep-plan --spec sweep.json --output-dir .tmp/omnidriver/sweeps/my_sweep/
+omnidriver sweep-run --spec sweep.json --output-dir .tmp/omnidriver/sweeps/my_sweep/
 ```
 
 `sweep-plan` materializes and strict-plans every case without launching
@@ -443,7 +412,7 @@ failure. Values fixed across every case in the sweep (like a factory's
 
 **One case per resolved combination, and why.** Several of these tutorials'
 own `apply_case()` methods patch `system/controlDict`/`system/blockMeshDict*`
-directly instead of writing an isolated per-case directory. driverFOAM stages
+directly instead of writing an isolated per-case directory. omnidriver stages
 a fresh copy under the disposable workspace before applying those mutations,
 but each resolved axis combination must still collapse to exactly one case —
 if it doesn't (e.g. a config that still fans out internally because a
@@ -467,7 +436,7 @@ cleanup is an explicit, disposable-output action.
 
 **Corrected 2026-09-26 (R2 fix, out-of-scope item noted by the reviewer):**
 this said that omitting `--output-dir` defaults to
-`<repo>/.tmp/driverfoam/sweeps/<spec-name>`. There is no such default any
+`<repo>/.tmp/omnidriver/sweeps/<spec-name>`. There is no such default any
 more (CLAUDE.md's scratch-root rule, 2026-09-26): a sweep with no
 `--output-dir` needs `--scratch-dir <dir>` (or `OMNIDRIVER_SCRATCH_DIR`), or
 it is refused by name (`ScratchRootNotSupplied`) rather than silently
@@ -573,7 +542,7 @@ updated after every step, so the read above is safe at any instant.
 The execution engine hands off to the postprocessing phase once a workflow or sweep reaches a terminal state. This is split into two independent pieces:
 
 1. **The brain (`build_sweep_context`)**: Reads the sweep's own record (`sweep_manifest.json`), verifies it against what is actually on disk (resolving entry-mode vs generic-mode output directory differences), and returns a single grounded `SweepContext`.
-2. **The postprocessing module (`run_postprocessing_module`)**: A separate function that receives the `SweepContext` and a task. **It never re-reads the manifest or re-derives file locations.** It lists each case's postprocessing script catalog via `list_postprocess_scripts()`.
+2. **The postprocessing module (`run_postprocessing_module`)**: A separate function that receives the `SweepContext` and a task. It always refuses (`not_configured`) rather than guessing an undeclared generic analysis task -- there is no automatic per-case script discovery any more.
 
 If an agent needs deeper reasoning than the flat summary, it must use the brain's query functions:
 
@@ -582,15 +551,15 @@ If an agent needs deeper reasoning than the flat summary, it must use the brain'
 
 These query functions raise clearly on an unknown case ID and safely restrict reads to files the brain has already verified.
 
-### Authoring postprocessing scripts
+### Post-processing utilities
 
-Every postprocessing script in a tutorial's `setup/` directory must expose a `run_postprocessing` function matching the `PostprocessingProtocol` signature:
-
-```python
-def run_postprocessing(*, output_dir: str, setup_root: str | None = None, **kwargs: object) -> list[dict]: ...
-```
-
-The script's docstring is statically extracted as its `description`, allowing reasoning agents to decide if the script applies to a task. Reusable plotting and styling utilities are exposed under `omnidriver.postprocessing`.
+`omnidriver.postprocessing` is the plotting and table utilities the native
+cardiacFOAM post-processing scripts import directly (`PlotSpec`, `TraceSpec`,
+`build_line_traces`, `load_csv_folder`, `apply_plotly_layout`,
+`write_plotly_html`, `TableWriter`, `DEFAULT_PALETTE`) -- core's own
+plan/run/sweep-run path never imports it, and nothing discovers or invokes a
+script automatically; a caller runs its own post-processing script by hand
+and may use these utilities from it.
 
 ## Verifying outputs
 
@@ -994,7 +963,7 @@ If the dict builder rejects your input with `ValueError`, the message lists ever
 
 ## Function objects (probes, sampling, sets, …)
 
-Function objects are **OpenFOAM's, not driverFOAM's.** Anything you put in a
+Function objects are **OpenFOAM's, not omnidriver's.** Anything you put in a
 case's `controlDict` `functions { … }` block is defined by the OpenFOAM
 documentation, not by this driver — so there is no driver catalog, builder, or
 helper for them, and there shouldn't be. Author them the normal OpenFOAM way:
@@ -1127,7 +1096,7 @@ Only non-default values appear in `overrides`. Entries matching the catalog's
 catalog are silently ignored by the parser, but strict planning and the strict
 dict-key scanner are the contract gates for new generated plans.
 
-### Run a smoke test before a full sweep
+### Write a case, then run it separately
 
 ```python
 build_and_launch(
@@ -1138,26 +1107,17 @@ build_and_launch(
     },
     physics_selectors={"type": "electroModel"},
     case_dir="/path/to/case",
-    end_time=0.001,   # 1 ms — just enough to verify the case launches
+    end_time=0.001,   # 1 ms — a quick check before widening for production
     delta_t=0.0001,
 )
 ```
 
-If the call returns without raising, the case structure, boundary conditions, and property files are consistent enough to run. Then widen `end_time` for production. Requires an existing `system/controlDict` in the case directory — `build_and_launch` patches it in-place.
-
-### Run with pre-solve commands
-
-```python
-build_and_launch(
-    electro_selectors={...},
-    physics_selectors={"type": "electroModel"},
-    case_dir="/tmp/my_run/case",
-    pre_solve_commands=["blockMesh", "setTorsoOrganConductivityField"],
-    openfoam_bashrc="/opt/openfoam/etc/bashrc",
-)
-```
-
-Each entry in `pre_solve_commands` runs in `case_dir` before `cardiacFoam`. Strings are shell-split; lists are passed directly. When `openfoam_bashrc` is set every command is sourced into the OpenFOAM environment.
+`build_and_launch` only writes the case's dicts (plus `system/blockMeshDict`,
+and `Allrun` when `include_allrun=True`) through one committed case-write
+plan; it never launches anything itself. If the call returns without
+raising, the case structure, boundary conditions, and property files are
+consistent enough to run. Run the written case with
+`omnidriver run --strict --entry-kind case_folder --entry <case_dir>`.
 
 ### Parsing Complex OpenFOAM Dictionaries
 
@@ -1175,7 +1135,7 @@ which defeats brace counting. foamlib parses in process and never evaluates
 Reads never reach tier 2: `read_foam_entry` and `read_foam_dict_block` return
 verbatim source text, and foamlib returns typed values.
 
-driverFOAM no longer shells out to the `foamDictionary` binary. Behaviour no
+omnidriver no longer shells out to the `foamDictionary` binary. Behaviour no
 longer depends on whether OpenFOAM is sourced. If you are writing tools that
 query these dictionaries, use the `mutators.py` API -- not `grep` or `sed`.
 
@@ -1223,11 +1183,11 @@ If your agent depends on any of these, expect failure and consider a workaround 
 - `omnidriver/core/utility_catalog.py` — utility manifest schema and `load_utility_manifests()`; roots come from the active plugin, not an ambient catalog
 - `omnidriver/cardiacfoam/solver_coupling.py` — cross-domain coupler rules
 - `omnidriver/core/strict_planning.py` — strict preflight report and RunDocument v3 assembly
-- `omnidriver/core/runtime/run_model.py` — RunDocument v3 model and explicit v1/v2 migration
+- `omnidriver/core/runtime/run_model.py` — RunDocument v3 model (any other version is refused)
 - `omnidriver/core/runtime/workflow.py` — workflow DAG normalization and validation
 - `omnidriver/core/runtime/workflow_state.py` — persisted step state model
 - `omnidriver/core/runtime/workflow_runner.py` — low-level strict step executor
-- `schemas/run-document.json` — canonical RunDocument v3 JSON Schema
+- `omnidriver/schemas/run-document.json` (packaged resource) — canonical RunDocument v3 JSON Schema
 
 ## Plugin selection (Phase 1)
 
@@ -1265,18 +1225,18 @@ actually reads and writes.
 
 Once registered, drive it exclusively through `omnidriver`
 (plan/run/sweep) per `CLAUDE.md` — never a bespoke shell script. (Corrected
-2026-09-19: the binary is `omnidriver`, not `driverFoam`.)
+2026-09-19: the binary is `omnidriver`; earlier text named the pre-rename CLI.)
 
 ---
 
 ## Plugin Guide — Adding a New Solver to omnidriver
 
 This section is for **plugin authors** — developers or AI agents who need to
-add support for a new OpenFOAM solver to driverFOAM. End-users running existing
+add support for a new OpenFOAM solver to omnidriver. End-users running existing
 solvers do not need to read this section.
 
 > **Quickest path:** Follow the dedicated skill at
-> `.agents/skills/driverfoam-plugin-builder/SKILL.md` (**not present in this
+> `.agents/skills/omnidriver-plugin-builder/SKILL.md` (**not present in this
 > repository** — it lives in the cardiacFoam monorepo, per `KEY_FILES.md`),
 > which contains a complete step-by-step workflow, a worked
 > `ShallowWaterPlugin` example, and a troubleshooting table. (Corrected
@@ -1285,7 +1245,7 @@ solvers do not need to read this section.
 
 ### What a plugin is
 
-A driverFOAM plugin is a Python class that implements the `SolverPlugin`
+An omnidriver plugin is a Python class that implements the `SolverPlugin`
 contract defined in `omnidriver/core/plugin_interface.py`. It creates a
 clean boundary between the generic execution engine and all solver-specific
 knowledge.

@@ -8,7 +8,7 @@ directly) no longer exists.
 
 ## 1. What's coupled
 
-`core/strict_planning.py` (the strict planner — `driverFoam plan --strict`,
+`core/strict_planning.py` (the strict planner — `omnidriver plan --strict`,
 per `KEY_FILES.md`: "the strict planner... produces machine-readable JSON
 with readiness score, diagnostics, and launch command") has two **top-level,
 unconditional** imports:
@@ -168,8 +168,8 @@ three originally documented in §1 — `provenance_inputs.py` and
   replaces `strict_planning.py`'s and `cli.py`'s direct
   `environment_preflight._environment_diagnostics` calls, and
   `sweep_runner.py`'s direct `openfoam_environment.configure_plugin_environment`
-  call. Fallback: `legacy_environment_diagnostics` /
-  `legacy_configured_environment` in `compatibility.py`, same "preserve
+  call. Fallback: `absent_environment_diagnostics` /
+  `absent_configured_environment` in `compatibility.py`, same "preserve
   historical behavior, unconditionally OpenFOAM until a plugin opts in"
   pattern as every other legacy fallback in that file.
 - **`MeshDiagnosticPolicyCapability.base_geometry_diagnostics`** (new method

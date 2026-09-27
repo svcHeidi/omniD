@@ -12,12 +12,12 @@ code can actually satisfy.
 | §5a entrypoint wiring | **done** — `registry._entrypoint_relpaths()` (Phase 1 Task 3) |
 | §5b trust boundary | open, deliberately deferred — Phase 3 |
 | §6 `GenericEnvironmentPlugin` | open, blocked on §5b |
-| §7 the cardiac `Phase` enum | **done** — `get_phases()` + `legacy_phases()` landed (Phase 2 Task 3) |
+| §7 the cardiac `Phase` enum | **done** — `get_phases()` + `absent_phases()` landed (Phase 2 Task 3) |
 | §8 the complete binding inventory | **new** — three independent audits, 2026-09-01 |
 | §11 role-vocabulary escape tier | **done** — `plugin_profile.ESCAPE_ROLE_PREFIX` (Phase 3 Task 3b), 2026-09-01 |
 | §10 Tier 3, `openfoam.control_dict` lookup | **done** — `CaseIntrospectionCapability.selected_start_time()` (Phase 3), 2026-09-01. Superseded 2026-09-26 (spec A2, see the dated §10 note below): the hook is gone; the OpenFOAM layer declares its start time through `CaseProvenanceCapability.input_roots` instead |
 | §10 Tier 3, `processor*` decomposition seam | **done** — `CaseFileContractCapability.decomposition_dirname_prefix()` (Phase 3), 2026-09-01. Superseded 2026-09-26 (spec A2, see the dated §10 note below): the hook is gone; replaced by `CaseRuntimeConventions.replica_directory_globs` |
-| §10 Tier 3, `apply_overrides` raw-traceback crash | **done** — `legacy_apply_overrides` refuses cleanly (Phase 3), 2026-09-01 |
+| §10 Tier 3, `apply_overrides` raw-traceback crash | **done** — `absent_apply_overrides` refuses cleanly (Phase 3), 2026-09-01 |
 | §10 Tier 3, `ArtifactFormat` + `utility_catalog` vocabulary | **done** — both opened to plugin-chosen strings (Phase 3), 2026-09-02 |
 | §10 Tier 3 | **closed** — all six items done, 2026-09-02. Tier 4 next |
 | §10 Tier 4, `CASE_SCRIPT_COMMANDS` entrypoint slice | **done** — `future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md`, threat-modeled and implemented, 2026-09-02. `Allclean`/`Allrun.pre`/`Allrun.post`, `CORE_NEUTRAL_COMMANDS`, `_is_installed_openfoam_app` remain open |
@@ -85,7 +85,7 @@ correction came from executing rather than reading.
 | time-control document | `system/controlDict` | role lookup, `provenance_inputs.py:111` |
 | plugin vs environment file split | — | role prefix, `tutorial_contracts.py:123,127` |
 | entrypoint script | `Allrun` | `registry._entrypoint_relpaths()`, Phase 1 |
-| dictionary editing phases | *(cardiac)* | `get_phases()` / `legacy_phases()`, Phase 2 |
+| dictionary editing phases | *(cardiac)* | `get_phases()` / `absent_phases()`, Phase 2 |
 
 ### Hardcoded — no declaration path. These are the defects.
 
@@ -111,7 +111,7 @@ correction came from executing rather than reading.
 
 | bug | site |
 |---|---|
-| `RUN_CASE_SCRIPT_RELPATH` names `applications/scripts/driverFoam/...`, a path that **does not exist** in this repo. Anyone relying on the default gets `FileNotFoundError` | `generic_case.py:25` |
+| ~~`RUN_CASE_SCRIPT_RELPATH` names `applications/scripts/driverFoam/...`, a path that **does not exist** in this repo. Anyone relying on the default gets `FileNotFoundError`~~ **fixed** (`96a9854`): resolved relative to the installed package instead | `generic_case.py:53` |
 | `run_case.sh` hardcodes `/Volumes/OpenFOAM-v2412/etc/bashrc` — a machine-specific absolute path in shipped source | `scripts/run_case.sh:26` |
 | dead `Phase` import | `contracts/dictionary.py:12`, `dict_entries.py:31` |
 | `cardiacfoam_monorepo_root()` — zero call sites in core; its docstring cites `utility_catalog.UTILITIES_ROOT`, which no longer exists | `specs/paths.py`. **Moved 2026-09-26 (spec A6, final review M13):** now `omnidriver.cardiacfoam.monorepo` -- core's own conftest keeps a test-local walk, but the function itself is no longer in `specs/paths.py` |
@@ -213,7 +213,7 @@ walks it unconditionally.
 
 It is, however, the **worked example** of the transform this document asks for
 everywhere else: the legacy `driverFoam` tree already replaced it with a
-`get_phases()` optional hook, a `legacy_phases()` fallback deriving phases from
+`get_phases()` optional hook, a `absent_phases()` fallback deriving phases from
 the plugin's own `DictEntry` values, and a `phase_order` parameter threaded
 through `primary_phase()`. Port that first and it becomes the template for
 §5b's later work.
@@ -248,9 +248,9 @@ core-only venv with an import hook logging every reach.
 |---|---|---|
 | hook exists, the neutral test double implements it | 6 | config value reader, environment diagnostics, loaded environment, configured environment, function-object fields, case dict keys |
 | hook exists, **nothing implements it** | 2 | `apply_overrides`, `get_base_mesh_geometry_diagnostics` |
-| **no hook at all** | 1 | `legacy_dict_key_scanner` |
+| **no hook at all** | 1 | `absent_dict_key_scanner` |
 
-**Correction to an earlier claim.** `legacy_dict_key_scanner` having no hook
+**Correction to an earlier claim.** `absent_dict_key_scanner` having no hook
 does *not* make it unavoidable: `strict_planning._catalog_diagnostics` returns
 early when the plugin declares no `cxx_mapping`, and all three plugins default
 to `None`. Verified both ways — never imported for the three, imported
@@ -422,7 +422,7 @@ one thing at all five.
 |---|---|
 | ~~`provenance_inputs.py`'s `openfoam.control_dict` lookup~~ **done 2026-09-01** | moved from Tier 2: needed a namespace-neutral role or a capability hook, not wiring. Landed as `CaseIntrospectionCapability.selected_start_time()` — a new optional hook, `get_selected_start_time(case_root, resolved_case)`, alongside `resolve_case_models`/`get_samplable_fields`. `openfoam.control_dict`'s only consumer in the whole codebase was this one question ("what start time does this run resume from?"), so rather than generalise the role, core now lets the plugin answer the question outright. The fallback (`legacy_selected_start_time`) is today's OpenFOAM-shaped logic verbatim — `KNOWN_ROLES` is untouched, zero behaviour change for a plugin that implements nothing new. As a side effect this also resolves the adjacent `startFrom`/`startTime`/`latestTime`/`firstTime` keyword-vocabulary defect from §3/§8: that logic now lives entirely in the fallback, not in core proper. Proven by `test_plugin_implemented_start_time_hook_overrides_the_openfoam_default` in `packages/omnidriver/tests/core/test_provenance_inputs.py` — a plugin declaring **no** `openfoam.control_dict` role at all still gets its own start time honoured end to end |
 | ~~a seam for `processor*`~~ **done 2026-09-01** | four sites — `provenance_inputs.py` (I9 decomposed-restart walk), `workflow_runner.py` (accepting a not-yet-reconstructed parallel location as evidence a time-indexed artifact was produced), `registry.py` (pruning it during tutorial discovery), `sweep_runner.py` (excluding it when staging a fresh sweep case, where *not* recognising a foreign plugin's differently-named decomposition dir would have re-copied stale output — exactly the bug that staging boundary exists to prevent). Unlike `control_dict`, this didn't need a capability hook computing a value from case state — `processor*` names a wildcard family, not a single static path a `CaseFileRule` role can hold, so it is a bare no-argument optional hook (`get_decomposition_dirname_prefix()`) on `CaseFileContractCapability`, the same shape as `get_phases()`. Default `"processor"`; `plugin_profile.decomposition_dirname_prefix(driver_context)` wraps it and returns the default directly when `driver_context` is `None`, mirroring `entrypoint_relpaths()`. `run_workflow_step()`/`_stage_entry_case()` gained a `driver_context` parameter they didn't carry before (threaded from `cli.py`/`_materialize_entry_case()`, both of which already had it in scope) |
-| ~~`apply_overrides` raw-traceback crash~~ **done 2026-09-01** | `legacy_apply_overrides` (`compatibility.py`) did an unconditional `from omnidriver.openfoam.apply_overrides import ...`; in a core-only install (or any plugin without that package and without its own `apply_overrides()` hook) this raised `ModuleNotFoundError` uncaught — `cli.py`'s `except (OSError, ValueError)` around the call does not catch it. Reproduced directly by blocking the import via `sys.modules[name] = None` before the fix, confirmed clean after. The fix is deliberately narrow and does **not** add a neutral default: applying an override means writing bytes into a dict file whose syntax only `omnidriver-openfoam`'s mutators understand, so there is no safe universal answer the way there is for e.g. environment diagnostics — same shape as `route_sweep_case_values`/`materialize_sweep_case` already refusing by name rather than pretending to be neutral. The import is now wrapped in `try/except ImportError`, re-raised as a plain `ValueError` (not `OverrideError`, which lives in the package that may not be importable) naming the plugin via `driver_context.identity.id` — not `driver_context.plugin.plugin_id`, which `test_plugin_dependency_boundary.py` forbids outside `plugin_capabilities.py`/`plugin_interface.py`. `apply_overrides.py` itself needed no change — it already lives in `omnidriver-openfoam`, not core; only core's fallback *wiring* was the defect. Proven by `test_the_fallback_refuses_cleanly_when_openfoam_is_not_installed` in `packages/omnidriver/tests/core/test_override_apply_threads_a_context.py` |
+| ~~`apply_overrides` raw-traceback crash~~ **done 2026-09-01** | `absent_apply_overrides` (`compatibility.py`) did an unconditional `from omnidriver.openfoam.apply_overrides import ...`; in a core-only install (or any plugin without that package and without its own `apply_overrides()` hook) this raised `ModuleNotFoundError` uncaught — `cli.py`'s `except (OSError, ValueError)` around the call does not catch it. Reproduced directly by blocking the import via `sys.modules[name] = None` before the fix, confirmed clean after. The fix is deliberately narrow and does **not** add a neutral default: applying an override means writing bytes into a dict file whose syntax only `omnidriver-openfoam`'s mutators understand, so there is no safe universal answer the way there is for e.g. environment diagnostics — same shape as `route_sweep_case_values`/`materialize_sweep_case` already refusing by name rather than pretending to be neutral. The import is now wrapped in `try/except ImportError`, re-raised as a plain `ValueError` (not `OverrideError`, which lives in the package that may not be importable) naming the plugin via `driver_context.identity.id` — not `driver_context.plugin.plugin_id`, which `test_plugin_dependency_boundary.py` forbids outside `plugin_capabilities.py`/`plugin_interface.py`. `apply_overrides.py` itself needed no change — it already lives in `omnidriver-openfoam`, not core; only core's fallback *wiring* was the defect. Proven by `test_the_fallback_refuses_cleanly_when_openfoam_is_not_installed` in `packages/omnidriver/tests/core/test_override_apply_threads_a_context.py` |
 | ~~`ArtifactFormat` + `utility_catalog` vocabulary~~ **done 2026-09-02** | see §3 rows above. Two files, no capability/hook needed — this one really was mechanical once the real-usage grep confirmed which values were core's and which were the plugins' |
 | ~~`--openfoam-bashrc` rename + `EnvironmentPreflightCapability` naming split~~ **done 2026-09-02** | see §3 row above. Sized as "~6 files, mechanical" going in; tracing every real site found 11 across all three packages once `runtime/generic_case.py`'s `CaseConfig.params` JSON key was accounted for — genuinely mechanical once scoped correctly, but the scoping itself was the work |
 

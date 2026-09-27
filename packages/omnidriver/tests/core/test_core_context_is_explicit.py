@@ -96,12 +96,12 @@ def test_openfoam_never_resolves_an_implicit_driver_context() -> None:
     )
 
 
-# The public-edge functions that accept a DriverContext and resolve the
-# implicit default when handed none. A core module may call these -- they are
-# the public API -- but it must thread its own context through, or it launders
-# the cardiac default past the two guards above: the call itself lives in
-# omnidriver/*.py, which _CORE_ROOT does not scan, and nothing in core names
-# resolve_public_driver_context.
+# The public-edge functions that take a required DriverContext keyword. A
+# core module may call these -- they are the public API -- but it must
+# thread its own context through explicitly (calling one with no context
+# raises TypeError, not a silent cardiac default, since D15 made the
+# parameter required): the call itself lives in omnidriver/*.py, which
+# _CORE_ROOT does not scan.
 #
 # sweep_runner.py:273 and :449 did exactly that until Part B of
 # docs/superpowers/specs/2026-09-02-neutral-default-context-design.md, calling

@@ -1,6 +1,6 @@
-# driverFOAM security model
+# omnidriver security model
 
-driverFOAM lets a semi-trusted agent author a `RunDocument` (config + workflow
+omnidriver lets a semi-trusted agent author a `RunDocument` (config + workflow
 DAG + launch paths) that the strict executor runs as subprocesses. This is the
 threat model the code is written against. It assumes a local, single-tenant
 host.

@@ -246,7 +246,7 @@ package (the ten checks plus `test_committed_catalog_matches_the_binary` and
 **C6/C7 needed one addition the brief flagged as conditional:** without
 `is_case_runnable_without_workflow`, `run_document_exec` refused every staged
 case with `case_root_not_a_runnable_case` before it reached the solver
-(`legacy_case_runnable_without_workflow`'s default is `False`, and this
+(`absent_case_runnable_without_workflow`'s default is `False`, and this
 plugin declares no `case_compatibility` capability member otherwise). Added
 `is_case_runnable_without_workflow(self, case_root)` returning whether
 `nversion.par` is present in the staged case -- the same shape as the
