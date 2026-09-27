@@ -982,7 +982,6 @@ def resolve_synthesis_mutation(request: CaseMutationRequest) -> ResolvedMutation
     control_values: dict[str, Any] = {}
     dx: float | None = None
     overwrite = False
-    include_meshless_polymesh = False
     include_allrun = False
 
     for parameter in request.parameters:
@@ -1002,14 +1001,11 @@ def resolve_synthesis_mutation(request: CaseMutationRequest) -> ResolvedMutation
         elif parameter.document == _BLOCK_MESH_DOCUMENT:
             dx = parameter.value
         elif parameter.document == _SYNTHESIS_META_DOCUMENT:
-            # Not a case document at all -- `overwrite`/`include_meshless_
-            # polymesh` govern how targets below are built, and have no file
-            # of their own to land in. See `_SYNTHESIS_META_DOCUMENT`'s
-            # docstring.
+            # Not a case document at all -- `overwrite`/`include_allrun`
+            # govern how targets below are built, and have no file of their
+            # own to land in. See `_SYNTHESIS_META_DOCUMENT`'s docstring.
             if key == "overwrite":
                 overwrite = bool(parameter.value)
-            elif key == "include_meshless_polymesh":
-                include_meshless_polymesh = bool(parameter.value)
             elif key == "include_allrun":
                 include_allrun = bool(parameter.value)
             else:
@@ -1066,21 +1062,34 @@ def resolve_synthesis_mutation(request: CaseMutationRequest) -> ResolvedMutation
             "document": _CONTROL_DOCUMENT, "format": _SYNTHESIS_FORMAT,
             "expanded_key_path": ["endTime"], "value": control_values["endTime_patch"],
         })
-    needs_block_mesh = myocardium_solver in _block_mesh_solvers()
-    if needs_block_mesh:
+    # Every solver meshes the same way now (2026-09-28, owner decision):
+    # `blockMesh` runs before every solver, not just the spatially-resolved
+    # ones -- electroModel.C needs a real fvMesh regardless of solver.
+    # `SINGLE_CELL_SOLVERS` has no geometry to derive a resolution from, so
+    # it gets a fixed one-cell dict instead of the `dx`-derived default; `dx`
+    # is meaningless for it and rejected outright, same as before.
+    if myocardium_solver in _single_cell_solvers():
+        if dx is not None:
+            raise ValueError(
+                f"dx has no effect for myocardiumSolver={myocardium_solver!r} "
+                "(no spatial mesh -- it has no geometry for dx to resolve)."
+            )
+        from omnidriver.openfoam.mesh_provisioning import single_cell_block_mesh_dict_text
+
+        block_mesh_dict_text = single_cell_block_mesh_dict_text()
+    else:
         from omnidriver.openfoam.mesh_provisioning import default_block_mesh_dict_text
 
-        targets.append({
-            "document": _BLOCK_MESH_DOCUMENT,
-            "content": default_block_mesh_dict_text(dx_m=dx),
-            "format": _SYNTHESIS_FORMAT,
-            # Never clobbered, regardless of `overwrite` -- a hand-authored
-            # custom blockMeshDict/polyMesh must survive a repeat synthesis.
-            # Mirrors mesh_provisioning.provision_mesh's own existence guard,
-            # which still runs after this commits (idempotent: it is this
-            # same file, already there either way).
-            "skip_if_present": True,
-        })
+        block_mesh_dict_text = default_block_mesh_dict_text(dx_m=dx)
+
+    targets.append({
+        "document": _BLOCK_MESH_DOCUMENT,
+        "content": block_mesh_dict_text,
+        "format": _SYNTHESIS_FORMAT,
+        # Never clobbered, regardless of `overwrite` -- a hand-authored
+        # custom blockMeshDict/polyMesh must survive a repeat synthesis.
+        "skip_if_present": True,
+    })
 
     if include_allrun:
         # Phase 3 Task 10 (bypass 5): sweep.py::materialize_case used to
@@ -1088,40 +1097,15 @@ def resolve_synthesis_mutation(request: CaseMutationRequest) -> ResolvedMutation
         # `build_and_launch` had already returned -- a second, unaudited
         # write outside the channel, and a second transaction for one case
         # materialization (a failure between the two left inputs with no
-        # runnable Allrun). Folded into this same plan instead: same body
-        # (`needs_block_mesh` -- computed once, above -- decides whether
-        # `blockMesh` runs before `cardiacFoam`), same one `commit_case_write`
-        # call as every other document here. Never `skip_if_present`: the
-        # pre-migration code always re-wrote Allrun's content unconditionally
-        # on every call, reused case_root or not.
+        # runnable Allrun). Folded into this same plan instead: same one
+        # `commit_case_write` call as every other document here. Never
+        # `skip_if_present`: the pre-migration code always re-wrote Allrun's
+        # content unconditionally on every call, reused case_root or not.
+        # `blockMesh` always runs first -- every solver meshes now.
         from omnidriver.openfoam.case_planning import plan_verbatim_content
 
-        allrun_body = "#!/bin/sh\n" + (
-            "blockMesh\ncardiacFoam\n" if needs_block_mesh else "cardiacFoam\n"
-        )
+        allrun_body = "#!/bin/sh\nblockMesh\ncardiacFoam\n"
         targets.append(plan_verbatim_content("Allrun", allrun_body, executable=True))
-
-    if myocardium_solver in _meshless_solvers() and include_meshless_polymesh:
-        # Task 12 (batch P2-H): the bundled single-cell polyMesh fixture,
-        # folded in as five ordinary skip_if_present synthesis targets
-        # instead of mesh_provisioning.provision_mesh's direct
-        # shutil.copyfile. `build_case` has already refused a *partial*
-        # five-file state before this function ever runs (see its own
-        # docstring) -- reaching here means the real case is either
-        # entirely absent (all five render) or already complete (all five
-        # skip), never a mix. Reading the fixture's bytes here (not
-        # case-dependent state -- the same bundled bytes every time) is the
-        # one narrow exception to this function's "pure, touches no
-        # filesystem" docstring; it never reads `case_root`.
-        from omnidriver.cardiacfoam.mesh_provisioning import meshless_polymesh_fixture
-
-        for name, content in sorted(meshless_polymesh_fixture().items()):
-            targets.append({
-                "document": f"constant/polyMesh/{name}",
-                "content": content,
-                "format": _SYNTHESIS_FORMAT,
-                "skip_if_present": True,
-            })
 
     expected_effects = tuple(
         f"author {target['document']}" for target in targets if "content" in target
@@ -1132,8 +1116,8 @@ def resolve_synthesis_mutation(request: CaseMutationRequest) -> ResolvedMutation
     )
 
 
-def _block_mesh_solvers() -> frozenset[str]:
-    """`mesh_provisioning.BLOCK_MESH_SOLVERS`, named for this call site.
+def _single_cell_solvers() -> frozenset[str]:
+    """`mesh_provisioning.SINGLE_CELL_SOLVERS`, named for this call site.
 
     A plain re-export would be a second name for one constant that drifts;
     this stays a function so the import -- and the single set it reads --
@@ -1141,19 +1125,9 @@ def _block_mesh_solvers() -> frozenset[str]:
     this file (`from omnidriver.cardiacfoam.mesh_provisioning import ...`
     would create a real import-time dependency this module has not needed
     until now)."""
-    from omnidriver.cardiacfoam.mesh_provisioning import BLOCK_MESH_SOLVERS
+    from omnidriver.cardiacfoam.mesh_provisioning import SINGLE_CELL_SOLVERS
 
-    return BLOCK_MESH_SOLVERS
-
-
-def _meshless_solvers() -> frozenset[str]:
-    """`mesh_provisioning.MESHLESS_SOLVERS`, named for this call site --
-    added 2026-09-23 (R3 finding 7) alongside `_block_mesh_solvers`, for the
-    same reason: a function, not a re-exported constant, so the import
-    happens at call time rather than creating a new import-time dependency."""
-    from omnidriver.cardiacfoam.mesh_provisioning import MESHLESS_SOLVERS
-
-    return MESHLESS_SOLVERS
+    return SINGLE_CELL_SOLVERS
 
 
 def build_case(
@@ -1177,8 +1151,7 @@ def build_case(
     `build_and_launch` commits this plan (through `commit_case_write`) and
     then launches; calling this alone costs only the read `render_case_files`
     needs to decide whether an already-present `blockMeshDict` should join
-    the plan at all (never clobbered -- see `mesh_provisioning.provision_mesh`'s
-    docstring).
+    the plan at all (never clobbered).
 
     Does not implement the `overwrite=False` case-already-built guard --
     `build_and_launch` checks that before calling this, and keeps raising the
@@ -1187,24 +1160,21 @@ def build_case(
     `test_dict_builder.py::test_existing_case_dir_is_not_overwritten_without_consent`
     asserts that specific type, and this migration does not change it).
 
-    `dry_run` (Task 12, batch P2-H): added so a meshless solver's bundled
-    polyMesh fixture -- now folded into this function's own plan instead of
-    `build_and_launch` calling `mesh_provisioning.provision_mesh` separately
-    -- is excluded from the plan under `dry_run=True`, matching R3 finding
-    8's "a dry run must not write a mesh". The `dx` rejection for a meshless
-    solver, and the partial-mesh precheck below, both still run
-    unconditionally: validation is not part of the filesystem effect a dry
-    run skips (same reasoning `provision_mesh`'s own docstring already
-    states for its `dx_m` rejection).
+    Every `myocardiumSolver` meshes the same way (2026-09-28, owner
+    decision): a `system/blockMeshDict` joins the plan unconditionally,
+    never gated on `dry_run` -- a single-cell solver has no geometry to
+    derive a resolution from, so it gets a fixed one-cell dict instead of
+    the `dx`-derived default, and `dx` is rejected outright for it rather
+    than silently having no effect.
 
     `include_allrun` (Phase 3 Task 10, bypass 5): when True, a hand-runnable
     ``Allrun`` joins this same plan -- see `resolve_synthesis_mutation`'s own
     handling of the `$CARDIACFOAM.synthesis.include_allrun` meta parameter
-    this sets below. Unlike `include_meshless_polymesh`, this is not
-    `dry_run`-gated: `sweep.py::materialize_case` is the one production
-    caller and always wants the script written whether or not the case is
-    also being launched immediately, and `Allrun` is a case input, not part
-    of the filesystem effect a dry run exists to skip."""
+    this sets below. This is not `dry_run`-gated either:
+    `sweep.py::materialize_case` is the one production caller and always
+    wants the script written whether or not the case is also being launched
+    immediately, and `Allrun` is a case input, not part of the filesystem
+    effect a dry run exists to skip."""
     from pathlib import Path as _Path
     import datetime as _datetime
     import tempfile as _tempfile
@@ -1227,33 +1197,11 @@ def build_case(
     dt = delta_t if delta_t is not None else 1e-4
     et = end_time if end_time is not None else 1.0
 
-    include_meshless_polymesh = False
-    if myocardium_solver in _meshless_solvers():
-        if dx is not None:
-            raise ValueError(
-                f"dx has no effect for myocardiumSolver={myocardium_solver!r} "
-                "(no spatial mesh -- it has no geometry for dx to resolve)."
-            )
-        # Validation, not the filesystem effect -- runs unconditionally,
-        # matching the `dx` rejection just above and `provision_mesh`'s own
-        # documented reasoning for its `dx_m` rejection ("dry_run is not
-        # part of the filesystem effect it skips"). A dry run must still
-        # report a partial-mesh refusal the real run would give, rather than
-        # reporting success for a combination that would fail for real.
-        from omnidriver.cardiacfoam.mesh_provisioning import meshless_polymesh_fixture
-
-        poly_mesh_dir = case_dir / "constant" / "polyMesh"
-        fixture_names = sorted(meshless_polymesh_fixture())
-        present = [name for name in fixture_names if (poly_mesh_dir / name).exists()]
-        if present and len(present) != len(fixture_names):
-            missing = [name for name in fixture_names if name not in present]
-            raise ValueError(
-                f"{poly_mesh_dir} has a partially authored mesh (present: "
-                f"{present}, missing: {missing}); refusing to complete or "
-                f"overwrite it -- author all five files by hand, or "
-                f"remove the partial set before calling this again"
-            )
-        include_meshless_polymesh = not dry_run
+    if myocardium_solver in _single_cell_solvers() and dx is not None:
+        raise ValueError(
+            f"dx has no effect for myocardiumSolver={myocardium_solver!r} "
+            "(no spatial mesh -- it has no geometry for dx to resolve)."
+        )
 
     parameters = (
         *_selector_parameters(_ELECTRO_DOCUMENT, _ELECTRO_SELECTOR_PREFIX, electro_selectors),
@@ -1285,13 +1233,6 @@ def build_case(
             value=bool(overwrite), value_kind="boolean", source="case",
         ),
         ParameterAssignment(
-            qualified_id="$CARDIACFOAM.synthesis.include_meshless_polymesh",
-            owner=PLUGIN_ID, document=_SYNTHESIS_META_DOCUMENT,
-            key_path=("include_meshless_polymesh",), binding={},
-            value=bool(include_meshless_polymesh), value_kind="boolean",
-            source="case",
-        ),
-        ParameterAssignment(
             qualified_id="$CARDIACFOAM.synthesis.include_allrun",
             owner=PLUGIN_ID, document=_SYNTHESIS_META_DOCUMENT,
             key_path=("include_allrun",), binding={},
@@ -1311,7 +1252,9 @@ def build_case(
             document=_CONTROL_DOCUMENT, key_path=("endTime_patch",), binding={},
             value=float(end_time), value_kind="scalar", source="case",
         ))
-    if myocardium_solver in _block_mesh_solvers() and dx is not None:
+    # dx is already refused above for a single-cell solver, so reaching
+    # here with one means a spatially-resolved solver.
+    if dx is not None:
         parameters = (*parameters, ParameterAssignment(
             qualified_id="$CARDIACFOAM.mesh.dx", owner=PLUGIN_ID,
             document=_BLOCK_MESH_DOCUMENT, key_path=("dx",), binding={},
@@ -1378,18 +1321,19 @@ def build_and_launch(
             builder semantics.
         overwrite: when False (default), an existing
             ``case_dir/constant/electroProperties`` raises FileExistsError.
-        dry_run: when True, a meshless solver's bundled 1-cell polyMesh is
-            left out of the plan (a dry run writes no mesh).
+        dry_run: when True, only the dictionaries are committed; nothing is
+            launched. Every solver's ``blockMeshDict`` still joins the plan
+            either way -- it is a case input, not a launch effect.
         dx: mesh resolution (metres, isotropic cell size) for the generic
             default ``blockMeshDict`` provisioned for spatial solvers with no
             author-supplied mesh. Only meaningful for
             ``monodomainSolver``/``bidomainSolver``/``eikonalSolver``; raises
-            ``ValueError`` for ``singleCellSolver`` (no spatial geometry)
-            rather than silently having no effect, and if it does not evenly
-            divide the default slab's fixed size (no silent rounding).
-            Meaningless for real anatomical meshes imported via
-            ``vtkUnstructuredToFoam`` -- this only controls the generic
-            default slab.
+            ``ValueError`` for ``singleCellSolver`` (no spatial geometry,
+            meshed at a fixed one-cell resolution instead) rather than
+            silently having no effect, and if it does not evenly divide the
+            default slab's fixed size (no silent rounding). Meaningless for
+            real anatomical meshes imported via ``vtkUnstructuredToFoam`` --
+            this only controls the generic default slab.
         include_allrun: when True (Phase 3 Task 10, bypass 5), a
             hand-runnable ``Allrun`` joins the same committed plan as the
             dictionaries above -- see ``build_case``'s own docstring for
@@ -1454,30 +1398,11 @@ def build_and_launch(
     )
     commit_case_write(plan, driver_context=write_context, execution_env=None)
 
-    # `needs_block_mesh` is pure set membership -- `_block_mesh_solvers()`
-    # already computes exactly it -- so it no longer costs a call to a
-    # function that can write bytes (R3 finding 7, 2026-09-23).
-    needs_block_mesh = myocardium_solver in _block_mesh_solvers()
-
-    # Migrated 2026-09-23 (Task 12, batch P2-H): `MESHLESS_SOLVERS`' bundled
-    # 1-cell polyMesh fixture used to be copied here via a direct
-    # `provision_mesh(...)` call, bypassing `commit_case_write` entirely.
-    # `build_case` above now folds those same five files into its own plan
-    # (as `skip_if_present` synthesis targets, excluded under `dry_run` --
-    # see its docstring), so this branch has nothing left to do:
-    # `commit_case_write` just wrote them, journaled, the same way it wrote
-    # every other case document. `provision_mesh` is still the right tool
-    # for `ionic_catalog_verification.py`'s direct use, which does not go
-    # through `build_and_launch`. **Corrected 2026-09-24 (Phase 3 Task 10):**
-    # "provision_mesh itself is unchanged" no longer holds -- its
-    # BLOCK_MESH_SOLVERS branch (dead: `ionic_catalog_verification.py`
-    # always calls it with `myocardium_solver="singleCellSolver"`) was
-    # deleted. `ionic_catalog_verification.py`'s own call is unaffected,
-    # since it only ever takes the MESHLESS_SOLVERS branch, which this
-    # task did not touch.
-
+    # Every solver meshes now (2026-09-28, owner decision): `build_case`
+    # always put a `blockMeshDict` in the plan, and `commit_case_write` just
+    # wrote it, journaled, the same way it wrote every other case document.
     return {
         "case_dir": str(case_dir),
         "status": "dry_run_complete" if dry_run else "written",
-        "needs_block_mesh": needs_block_mesh,
+        "needs_block_mesh": True,
     }

@@ -570,18 +570,15 @@ class TestBuildAndLaunchMeshProvisioning(unittest.TestCase):
     (see project_driverfoam_sweep_bugs_found memory item #3).
     """
 
-    def test_single_cell_solver_gets_a_static_polymesh(self) -> None:
-        """Corrected 2026-09-23 (R3 finding 8): this used to assert that
-        `dry_run=True` left a real polyMesh on disk, which encoded the very
-        defect that finding reported -- `build_and_launch` called
-        `provision_mesh` unconditionally, so a *dry run* silently wrote a
-        mesh, breaking the promise that `dry_run=True` writes only the dicts
-        and returns without further effect. `provision_mesh` itself is still
-        exercised writing the real polyMesh, directly, in
-        `test_solver_mesh_provisioning.py::
-        test_provision_mesh_copies_the_bundled_single_cell_polymesh` -- that
-        coverage did not depend on going through `build_and_launch`'s
-        `dry_run` path at all."""
+    def test_single_cell_solver_gets_a_block_mesh_dict(self) -> None:
+        """Corrected 2026-09-28 (owner decision): `singleCellSolver` used to
+        get a bundled static 1-cell `constant/polyMesh` copied directly
+        (only when not `dry_run`), so a from-scratch single-cell sweep case
+        -- which always calls `dry_run=True` -- got no mesh at all. It now
+        meshes exactly like every other solver: a `system/blockMeshDict`
+        (fixed at one cell, since it has no geometry to derive a resolution
+        from) joins the plan unconditionally, and `blockMesh` runs from
+        `Allrun` before the solver -- never from Python."""
         import tempfile
         from pathlib import Path
         from omnidriver.cardiacfoam.dict_builder import build_and_launch
@@ -598,17 +595,17 @@ class TestBuildAndLaunchMeshProvisioning(unittest.TestCase):
                 case_dir=case_dir,
                 dry_run=True,
             )
-            poly_mesh = case_dir / "constant" / "polyMesh"
-            for name in ("points", "faces", "owner", "neighbour", "boundary"):
-                self.assertFalse((poly_mesh / name).exists(), f"dry_run wrote {name}")
-            self.assertFalse(result.get("needs_block_mesh", False))
+            block_mesh_dict = case_dir / "system" / "blockMeshDict"
+            self.assertTrue(block_mesh_dict.exists())
+            self.assertIn("hex (0 1 2 3 4 5 6 7) (1 1 1)", block_mesh_dict.read_text())
+            self.assertFalse((case_dir / "constant" / "polyMesh").exists())
+            self.assertTrue(result.get("needs_block_mesh", False))
 
     def test_single_cell_solver_dx_validation_still_fires_under_dry_run(self) -> None:
-        """R3 finding 8's `dry_run` fix must not also skip validation --
-        `provision_mesh`'s `dx_m` rejection for a meshless solver runs
-        unconditionally, only the filesystem effect is skipped under
-        `dry_run`. Companion to `test_dx_kwarg_rejected_for_meshless_solver`
-        below, stated at this class's level."""
+        """`dx` is rejected for a single-cell solver (no geometry for it to
+        resolve) unconditionally, whether or not `dry_run` is set. Companion
+        to `test_dx_kwarg_rejected_for_single_cell_solver` below, stated at this
+        class's level."""
         import tempfile
         from pathlib import Path
         from omnidriver.cardiacfoam.dict_builder import build_and_launch
@@ -675,7 +672,7 @@ class TestBuildAndLaunchMeshProvisioning(unittest.TestCase):
             self.assertEqual(written, default_block_mesh_dict_text(dx_m=0.0004))
             self.assertNotEqual(written, default_block_mesh_dict_text())
 
-    def test_dx_kwarg_rejected_for_meshless_solver(self) -> None:
+    def test_dx_kwarg_rejected_for_single_cell_solver(self) -> None:
         import tempfile
         from pathlib import Path
         from omnidriver.cardiacfoam.dict_builder import build_and_launch

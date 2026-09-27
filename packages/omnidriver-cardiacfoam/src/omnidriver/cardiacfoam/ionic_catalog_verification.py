@@ -65,9 +65,8 @@ The live check needs OpenFOAM sourced and the utility built::
 
     source /path/to/OpenFOAM/etc/bashrc
     (cd applications/utilities/listCellModelsVariables && wmake)
-    cd applications/scripts/driverFoam
-    uv run pytest openfoam_driver/tests/plugins/cardiacfoam/ \\
-        test_ionic_catalog_live_verification.py -v
+    uv run pytest \\
+        packages/omnidriver-cardiacfoam/tests/test_ionic_catalog_live_verification.py -v
 
 Without the utility on ``PATH`` every model reports ``skipped`` and
 ``all_match`` is ``False``. **A skip is never a pass.**
@@ -276,11 +275,17 @@ def _synthesize_case(case_dir: Path, model: str, entry: Any) -> None:
 
     (case_dir / "system" / "controlDict").write_text(build_control_dict())
 
-    from omnidriver.cardiacfoam.mesh_provisioning import provision_mesh
+    # electroModel.C requires a real fvMesh regardless of solver, so the
+    # utility needs one meshed the same way as every other case_folder case:
+    # a blockMeshDict (2026-09-28, owner decision -- this used to copy a
+    # bundled static 1-cell polyMesh fixture instead). Writing it here costs
+    # no OpenFOAM binary -- `test_case_synthesis_works_without_the_solver`
+    # exercises exactly this function without one; running `blockMesh`
+    # itself is `_verify_one`'s job, which already requires the environment
+    # this function does not.
+    from omnidriver.openfoam.mesh_provisioning import single_cell_block_mesh_dict_text
 
-    # Keyword-only. singleCellSolver copies the bundled 1-cell polyMesh
-    # directly, so no blockMesh run is needed before the utility.
-    provision_mesh(case_dir=case_dir, myocardium_solver="singleCellSolver")
+    (case_dir / "system" / "blockMeshDict").write_text(single_cell_block_mesh_dict_text())
 
 
 def _verify_one(model: str, entry: Any, binary: Path, case_root: Path) -> ModelVerificationResult:
@@ -292,6 +297,16 @@ def _verify_one(model: str, entry: Any, binary: Path, case_root: Path) -> ModelV
     except Exception as exc:  # noqa: BLE001 - reported, not swallowed
         return ModelVerificationResult(
             model=model, status="error", reason=f"could not synthesize a case: {exc}"
+        )
+
+    try:
+        subprocess.run(
+            ["blockMesh", "-case", str(case_dir)],
+            capture_output=True, text=True, timeout=120, check=True,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return ModelVerificationResult(
+            model=model, status="error", reason=f"blockMesh failed to run: {exc}"
         )
 
     try:

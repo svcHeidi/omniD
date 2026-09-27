@@ -322,13 +322,13 @@ def render_synthesis_case_files(
       decided.
 
     A ``"content"`` target marked ``"skip_if_present": True`` does not
-    replace an already-present file (``mesh_provisioning.provision_mesh``
-    never overwrites a hand-authored ``blockMeshDict``, and a resolution
-    that always proposes one must not force it back through the channel
-    where the real case already has one) -- but any edit targets for that
-    same document still apply, atop the existing file, exactly as they would
-    atop freshly authored content. A document with only edit targets and no
-    already-existing file is refused: there is nothing to fold them onto.
+    replace an already-present file (a resolution that always proposes a
+    generic ``blockMeshDict`` must not force it back through the channel
+    where the real case already has a hand-authored one) -- but any edit
+    targets for that same document still apply, atop the existing file,
+    exactly as they would atop freshly authored content. A document with
+    only edit targets and no already-existing file is refused: there is
+    nothing to fold them onto.
     """
     del driver_context, execution_env
     case_root = Path(resolved.request.case_root)

@@ -42,10 +42,10 @@ from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.sweep_materialize import materialize_case
 
-# Every case below is a cardiacFoam case, so it says so. materialize_case only
-# falls back to the ambient default when no context is supplied, and that
-# default has no single answer once a second adapter is installed alongside
-# this one (future/ENVIRONMENT_CONTRACT.md §12).
+# Every case below is a cardiacFoam case, so it says so. materialize_case
+# takes driver_context as a required keyword -- there is no ambient default
+# once a second adapter is installed alongside this one
+# (future/ENVIRONMENT_CONTRACT.md §12).
 _CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:sweep_materialize")
 
 
@@ -96,7 +96,7 @@ def test_materialize_case_allrun_mode_on_a_fresh_case_is_0o755(tmp_path):
     )
     allrun = case_dir / "Allrun"
     assert allrun.stat().st_mode & 0o777 == 0o755
-    assert allrun.read_text() == "#!/bin/sh\ncardiacFoam\n"
+    assert allrun.read_text() == "#!/bin/sh\nblockMesh\ncardiacFoam\n"
 
 
 def test_materialize_case_allrun_mode_when_allrun_already_existed(tmp_path):
@@ -121,7 +121,7 @@ def test_materialize_case_allrun_mode_when_allrun_already_existed(tmp_path):
         driver_context=_CTX,
     )
     assert allrun.stat().st_mode & 0o777 == 0o711  # 0o700 | 0o111
-    assert allrun.read_text() == "#!/bin/sh\ncardiacFoam\n"
+    assert allrun.read_text() == "#!/bin/sh\nblockMesh\ncardiacFoam\n"
 
 
 def test_materialize_case_two_cases_do_not_collide(tmp_path):
@@ -146,11 +146,12 @@ def test_materialize_case_two_cases_do_not_collide(tmp_path):
 
 
 def test_materialize_case_runs_block_mesh_first_for_spatial_solver(tmp_path):
-    # monodomainSolver needs a real fvMesh; provision_mesh writes a default
-    # blockMeshDict for it (see mesh_provisioning.py), so the generated
-    # Allrun must run blockMesh before cardiacFoam -- otherwise cardiacFoam
-    # crashes with "Cannot find file points in polyMesh" (the exact failure
-    # this fix addresses, see project_driverfoam_sweep_bugs_found memory).
+    # monodomainSolver needs a real fvMesh; build_case writes a default
+    # blockMeshDict for it (see dict_builder.py/mesh_provisioning.py), so the
+    # generated Allrun must run blockMesh before cardiacFoam -- otherwise
+    # cardiacFoam crashes with "Cannot find file points in polyMesh" (the
+    # exact failure this fix addresses, see project_driverfoam_sweep_bugs_found
+    # memory).
     case_dir = tmp_path / "TNNP_monodomain"
     materialize_case(
         case_dir=case_dir,
@@ -163,6 +164,33 @@ def test_materialize_case_runs_block_mesh_first_for_spatial_solver(tmp_path):
         driver_context=_CTX,
     )
     assert (case_dir / "system" / "blockMeshDict").exists()
+    allrun_text = (case_dir / "Allrun").read_text()
+    assert allrun_text.index("blockMesh") < allrun_text.index("cardiacFoam")
+
+
+def test_materialize_case_runs_block_mesh_first_for_single_cell_solver(tmp_path):
+    """Corrected 2026-09-28 (owner decision): `singleCellSolver` used to get
+    a bundled static 1-cell polyMesh, only when `not dry_run` -- and
+    `materialize_case` always passes `dry_run=True`, so a from-scratch
+    single-cell sweep case got no mesh at all (K4). It now meshes exactly
+    like every other solver: a fixed one-cell `blockMeshDict` joins the plan
+    unconditionally, and the generated `Allrun` runs `blockMesh` before
+    `cardiacFoam`."""
+    case_dir = tmp_path / "TNNP_singleCell"
+    materialize_case(
+        case_dir=case_dir,
+        routed={
+            "electro_selectors": {"myocardiumSolver": "singleCellSolver", "tissue": "epicardialCells", "ionicModel": "TNNP"},
+            "physics_selectors": {"type": "electroModel"},
+            "electro_overrides": {}, "physics_overrides": {},
+            "delta_t": None, "end_time": None,
+        },
+        driver_context=_CTX,
+    )
+    block_mesh_dict = case_dir / "system" / "blockMeshDict"
+    assert block_mesh_dict.exists()
+    assert "hex (0 1 2 3 4 5 6 7) (1 1 1)" in block_mesh_dict.read_text()
+    assert not (case_dir / "constant" / "polyMesh").exists()
     allrun_text = (case_dir / "Allrun").read_text()
     assert allrun_text.index("blockMesh") < allrun_text.index("cardiacFoam")
 

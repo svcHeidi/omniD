@@ -267,9 +267,12 @@ def test_case_synthesis_works_without_the_solver(tmp_path):
 
     assert (case / "constant" / "electroProperties").is_file()
     assert (case / "constant" / "physicsProperties").is_file()
-    # singleCellSolver gets the bundled 1-cell mesh copied in directly, so no
-    # blockMesh step is needed before the utility runs.
-    assert (case / "constant" / "polyMesh").is_dir()
+    # A fixed one-cell blockMeshDict, matching every other solver's mesh
+    # path -- running blockMesh itself is _verify_one's job (it already
+    # needs OpenFOAM for the solver binary), not this OpenFOAM-free half.
+    block_mesh_dict = case / "system" / "blockMeshDict"
+    assert block_mesh_dict.is_file()
+    assert "hex (0 1 2 3 4 5 6 7) (1 1 1)" in block_mesh_dict.read_text()
 
     electro = (case / "constant" / "electroProperties").read_text()
     assert "TNNP" in electro

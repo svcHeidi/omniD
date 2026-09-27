@@ -287,26 +287,27 @@ def test_blockmeshdict_never_clobbers_a_hand_authored_one(tmp_path):
 
 
 # --------------------------------------------------------------------------
-# Meshless-solver polyMesh migration (Task 12, batch P2-H)
+# Single-cell solver meshing (2026-09-28, owner decision)
 # --------------------------------------------------------------------------
 
 
-def test_meshless_solver_polymesh_is_written_through_the_channel(tmp_path):
-    """Characterization: the bundled single-cell polyMesh, now folded into
-    `build_case`'s own plan instead of a direct `provision_mesh` call, must
-    produce byte-identical content to
-    `mesh_provisioning.meshless_polymesh_fixture()` -- and must actually go
-    through `commit_case_write` (a completed-transaction record under
-    `.omnidriver/`), not merely happen to look the same.
+def test_single_cell_solver_block_mesh_dict_is_written_through_the_channel(tmp_path):
+    """Characterization: `singleCellSolver` used to get a bundled static
+    1-cell `constant/polyMesh` copied directly, skipped whenever `dry_run`
+    (so a from-scratch single-cell sweep case, which always passes
+    `dry_run=True`, got no mesh at all). It now meshes like every other
+    solver: `system/blockMeshDict` joins the same one plan, unconditionally,
+    and goes through `commit_case_write` (a completed-transaction record
+    under `.omnidriver/`) like every other document.
 
     Calls `build_case`/`commit_case_write` directly rather than
     `build_and_launch(dry_run=False, ...)`: no existing test in this package
     exercises `build_and_launch`'s real (non-dry-run) path at all, because it
     also launches the solver, which this environment cannot do. This is the
     same split `build_and_launch` itself uses internally."""
-    from omnidriver.cardiacfoam.mesh_provisioning import meshless_polymesh_fixture
     from omnidriver.cardiacfoam.own_context import own_driver_context
     from omnidriver.core.case_transaction import commit_case_write
+    from omnidriver.openfoam.mesh_provisioning import single_cell_block_mesh_dict_text
 
     context = own_driver_context()
     plan = build_case(
@@ -317,27 +318,23 @@ def test_meshless_solver_polymesh_is_written_through_the_channel(tmp_path):
         physics_selectors={"type": "electroModel"}, case_dir=tmp_path,
         dry_run=False, driver_context=context,
     )
-    poly_mesh_targets = {f.path for f in plan.files if f.path.startswith("constant/polyMesh/")}
-    assert poly_mesh_targets == {f"constant/polyMesh/{name}" for name in meshless_polymesh_fixture()}
+    block_mesh_targets = {f.path: f.content for f in plan.files if f.path == "system/blockMeshDict"}
+    assert block_mesh_targets == {"system/blockMeshDict": single_cell_block_mesh_dict_text().encode()}
+    assert not any(f.path.startswith("constant/polyMesh/") for f in plan.files)
 
     record = commit_case_write(plan, driver_context=context, execution_env=None)
     assert record.status == "committed"
-
-    poly_mesh = tmp_path / "constant" / "polyMesh"
-    fixture = meshless_polymesh_fixture()
-    for name, content in fixture.items():
-        assert (poly_mesh / name).read_text() == content
+    assert (tmp_path / "system" / "blockMeshDict").read_text() == single_cell_block_mesh_dict_text()
+    assert not (tmp_path / "constant" / "polyMesh").exists()
 
     completed_dir = tmp_path / ".omnidriver" / "case-transactions"
     assert completed_dir.is_dir() and list(completed_dir.glob("*.json"))
 
 
-def test_meshless_solver_polymesh_still_writes_nothing_under_dry_run_true_is_unchanged(tmp_path):
-    """Not a new test of the dry_run behaviour itself (see
-    test_dict_builder.py::TestBuildAndLaunchMeshProvisioning) -- a guard that
-    this migration did not quietly turn dry_run into a real write, called
-    directly through build_case (the function this migration actually
-    changed) rather than only through build_and_launch."""
+def test_single_cell_solver_block_mesh_dict_is_not_dry_run_gated(tmp_path):
+    """Unlike the deleted bundled-polyMesh copy, `blockMeshDict` is a case
+    input, not a launch effect -- it joins the plan the same way whether or
+    not `dry_run` is set, matching every other solver."""
     from omnidriver.cardiacfoam.own_context import own_driver_context
 
     plan = build_case(
@@ -345,20 +342,4 @@ def test_meshless_solver_polymesh_still_writes_nothing_under_dry_run_true_is_unc
         physics_selectors={"type": "electroModel"}, case_dir=tmp_path,
         dry_run=True, driver_context=own_driver_context(),
     )
-    assert not any(f.path.startswith("constant/polyMesh/") for f in plan.files)
-
-
-def test_meshless_solver_polymesh_refuses_a_partial_mesh_before_planning(tmp_path):
-    (tmp_path / "constant" / "polyMesh").mkdir(parents=True)
-    (tmp_path / "constant" / "polyMesh" / "points").write_text("hand-authored\n")
-    with pytest.raises(ValueError, match="partially authored"):
-        build_and_launch(
-            electro_selectors={
-                "myocardiumSolver": "singleCellSolver", "ionicModel": "AlievPanfilov",
-                "tissue": "myocyte",
-            },
-            physics_selectors={"type": "electroModel"}, case_dir=tmp_path, dry_run=True,
-        )
-    # Refused before any write -- not even electroProperties/physicsProperties
-    # from the same plan landed.
-    assert not (tmp_path / "constant" / "electroProperties").exists()
+    assert any(f.path == "system/blockMeshDict" for f in plan.files)

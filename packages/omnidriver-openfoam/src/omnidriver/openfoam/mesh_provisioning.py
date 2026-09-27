@@ -7,10 +7,10 @@ patch) that `blockMesh` turns into a mesh at run time. It is not a
 scientifically tuned geometry for any specific tutorial -- callers that need
 particular dimensions should still author their own blockMeshDict.
 
-Which solver actually wants this default (versus a static polyMesh, or a real
-anatomical mesh) is a solver-vocabulary decision and belongs to the active
-plugin; cardiacFoam's lives in
-`plugins/cardiacfoam/mesh_provisioning.py::provision_mesh`.
+Which solver actually wants this default, versus `single_cell_block_mesh_dict_text`'s
+fixed one-cell resolution or a real anatomical mesh, is a solver-vocabulary
+decision and belongs to the active plugin; cardiacFoam's lives in
+`plugins/cardiacfoam/dict_builder.py::resolve_synthesis_mutation`/`build_case`.
 
 The default `blockMeshDict` is generated fresh from our own template each
 time (like the plugin's own `system_templates.py`) -- there is no
@@ -151,3 +151,18 @@ def default_block_mesh_dict_text(*, dx_m: float | None = None) -> str:
         counts = cell_counts_from_dx(dx_m, _DEFAULT_SLAB_SIZE_M)
         cells = counts[0]
     return _DEFAULT_BLOCK_MESH_DICT.replace("__CELLS__", str(cells))
+
+
+def single_cell_block_mesh_dict_text() -> str:
+    """`system/blockMeshDict` for a solver with no real spatial geometry
+    (cardiacFoam's `singleCellSolver`): the same generic slab as
+    `default_block_mesh_dict_text`, resolved so `dx` exactly spans the whole
+    domain -- one hex cell in total, matching the native `singleCell`
+    tutorial's own one-cell block (`hex (0 1 2 3 4 5 6 7) (1 1 1)
+    simpleGrading (1 1 1)`).
+
+    A single-cell solver still needs a real mesh on disk (electroModel.C
+    requires a real `fvMesh` regardless of solver), so it goes through the
+    same `blockMeshDict`-then-`blockMesh` path as every other solver, just
+    at this one fixed resolution -- there is no dx to choose."""
+    return default_block_mesh_dict_text(dx_m=_DEFAULT_SLAB_SIZE_M[0])
