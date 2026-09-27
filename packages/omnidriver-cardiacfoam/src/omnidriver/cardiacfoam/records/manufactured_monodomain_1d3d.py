@@ -1,77 +1,14 @@
 """``manufacturedMonodomain1D3D``: a tutorial record for
 ``manufacturedSolutions/monodomain1D3D``, replacing two old factory
 tutorials that both pointed at this one native case:
-``manufactured_monodomain_1d3d`` (the coupled 1D-3D solve) and
-``manufactured_purkinje_graph`` (the graph-only diagnostic). One native
-case, one record; the old graph-only diagnostic is now this record's
-``graphOnly`` variant, not a second tutorial (owner decision).
-
-**Graph selection is a dictionary key, not a file copy.**
-``conductionSystemDomain::readGraphFile`` (native
-``src/electroModels/electroDomains/conductionSystemDomain/
-conductionSystemDomain.C``) opens ``constant/<graphFile value>`` directly as
-an ``IOdictionary`` -- the catalogued
-``$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs
-.graphFile`` key already documents this ("the value may name any graph
-dictionary ... in constant/"). The old modules' ``purkinjeGraph.<id>`` ->
-``purkinjeGraph`` ``shutil.copy2`` is gone: :func:`_graph_file_axis` instead
-patches ``graphFile`` to name whichever committed graph the study picks,
-checking only that the file exists in the staged case (never a hardcoded
-name list -- one source of truth). The plain ``constant/purkinjeGraph``
-stays the native default (native ``graphFile purkinjeGraph;``), reachable by
-simply not naming this axis.
-
-**The pre-processing stage.** The native ``Allrun`` already meshes (unlike
-bidomain/pseudo-ECG): ``blockMesh -dict system/blockMeshDict.3D`` then
-``cardiacFoam`` -- copied here verbatim as the ``mesh``/``solve`` steps.
-``system/blockMeshDict.3D`` is already a valid, literal dictionary (native
-commit ``f374818``, "one explicit blockMeshDict convention, .3D = 20^3");
-the ``Allrun``'s own ``sed 's/NCELLS/.../''`` was already dead (the file has
-held no ``NCELLS`` token since that commit, so ``N_CELLS`` silently did
-nothing) and is deleted natively alongside this migration, not carried into
-the record. ``numberCells`` reuses
-``openfoam.axes.block_mesh_resolution_axis`` directly (owner: "don't write
-a new one"), isotropic since the one ``hex (`` block is a cube.
-
-**The ``graphOnly`` variant** is the README's own "Graph-Only Diagnostic"
-(``blockMesh``; ``runPurkinjeGraph``), the old ``manufactured_purkinje_graph``
-tutorial's entire reason to exist. ``runPurkinjeGraph`` (a real installed
-utility, ``applications/utilities/runPurkinjeGraph``) advances the graph
-alone, with no myocardium coupling: a real run shows it reads no
-``physicsProperties``/``fvSchemes``/``fvSolution`` (neither file is even
-opened -- ``grep`` over both its source and ``conductionSystemDomain.C``
-finds no such reference) and writes no
-``constant/electroProperties.withDefaultValues`` (it calls
-``conductionSystemDomain::end`` directly, never ``electroModel::end``,
-matching ``restitutionCurves``'s own ``singleCellSolver`` precedent). The
-default route is still ``coupled`` (owner Q2: "blockMesh is always the
-default"; the native ``Allrun`` runs the coupled solve, not the diagnostic).
-
-**Every step's produces/consumes below is observed, not assumed**, logged in
-full under "manufacturedMonodomain1D3D" in
-``docs/solver-learning/cardiacfoam.md``:
-
-- ``blockMesh -dict system/blockMeshDict.3D`` on the one zone-free ``hex (``
-  block writes exactly :data:`.case_outputs.POLY_MESH_OUTPUTS`'s five files;
-- a real ``cardiacFoam`` (coupled) run writes
-  ``constant/electroProperties.withDefaultValues``,
-  ``postProcessing/<dim>_<N>_cells.dat`` (the myocardium verifier, the same
-  naming ``manufactured_solution_axes``'s own docstring cites for bidomain/
-  eikonalECG/niederer2011), ``postProcessing/graph_1D_<n>_nodes.dat`` (the
-  graph verifier, named by the SELECTED graph's own node count -- 41 for the
-  plain default), ``postProcessing/purkinjeNetwork.dat`` (per-node Vm/PVJ
-  current time series) and ``postProcessing/purkinjeNetworkVTK/*`` (one
-  ``.vtk`` per written instance plus its ``.vtk.series`` index), and
-  ``verification/coupled1D3DMonodomain_diagnostics.csv`` -- a directory
-  ``postProcessing`` does not drop by convention, so it must be declared or
-  a restage would carry it forward as if authored (C11);
-- a real ``runPurkinjeGraph`` (graphOnly) run writes the same
-  ``postProcessing/graph_1D_*_nodes.dat``/``purkinjeNetwork.dat``/
-  ``purkinjeNetworkVTK/*`` triad, and nothing else -- no
-  ``withDefaultValues``, no ``verification/`` (that CSV is
-  ``domainCouplings.couplingA``'s own verifier, never constructed when no
-  myocardium domain exists), no ``*_cells.dat`` (no myocardium verifier
-  either).
+``manufactured_monodomain_1d3d`` (the coupled solve, this record's
+``coupled`` variant) and ``manufactured_purkinje_graph`` (the graph-only
+diagnostic, this record's ``graphOnly`` variant). ``graphFile`` is a plain
+native dictionary key, not a file copy; ``numberCells`` reuses
+``openfoam.axes.block_mesh_resolution_axis`` directly, isotropic since the
+one ``hex (`` block is a cube. What each step reads and writes, and why
+``coupled`` is the default variant, was observed in a real run:
+``docs/solver-learning/cardiacfoam.md`` MD1D3D.
 """
 
 from __future__ import annotations

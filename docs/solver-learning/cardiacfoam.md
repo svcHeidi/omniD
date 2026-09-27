@@ -610,7 +610,10 @@ the `numberCells`/`tetNumberCells` axes respectively -- the template takes
 Replaces two old factory tutorials that both pointed at this one native
 case: `manufactured_monodomain_1d3d` (the coupled solve) and
 `manufactured_purkinje_graph` (the graph-only diagnostic, now this record's
-`graphOnly` variant).
+`graphOnly` variant). The record's `default_variant` is `coupled`, not
+`graphOnly` (owner Q2: "blockMesh is always the default") -- the native
+`Allrun` itself runs the coupled solve, not the diagnostic, so this matches
+what the case actually ships as its own default.
 
 **MD1: the `Allrun` sed is dead.** `system/blockMeshDict.3D` has held a
 literal `hex (0 1 2 3 4 5 6 7) (20 20 20) simpleGrading (1 1 1)` since
