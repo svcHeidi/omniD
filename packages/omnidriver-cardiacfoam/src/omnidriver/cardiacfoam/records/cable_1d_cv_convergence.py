@@ -14,7 +14,7 @@ Replaces ``cardiacfoam.tutorials.cable_1d_cv_convergence``/``tutorials
 | ``system/blockMeshDict`` hex block rewrite | ``dx`` axis, shared with ``cable1DRestitution`` (:mod:`.cable_axes`) |
 | ``system/controlDict:deltaT``/``endTime`` | direct study keys, in seconds |
 | ``monodomainSolverCoeffs.conductivity``/``tissue``/``ionicModel``/``solutionAlgorithm`` | direct study keys (no catalog-derived axis: this tutorial's stimulus is not the ionic-model catalog's single-cell amplitude) |
-| ``monodomainSolverCoeffs.externalStimulus`` | direct study key, stated as one mapping value (owner decision: "its study states its own ``externalStimulus`` explicitly") -- unlike ``cable1DRestitution``, this tutorial derives no S1-S2 schedule: a convergence sweep launches one wave and measures its speed |
+| ``monodomainSolverCoeffs.externalStimulus.*`` | direct study keys, one per catalogued leaf (``stimulusStartTimeList``/``stimulusLocationMinList``/``MaxList``/``stimulusDurationList``/``stimulusIntensityList`` -- the catalog declares no composite ``externalStimulus`` key to set as one mapping) (owner decision: "its study states its own ``externalStimulus`` explicitly") -- unlike ``cable1DRestitution``, this tutorial derives no S1-S2 schedule: a convergence sweep launches one wave and measures its speed |
 | ``conductivity_id``, ``case_dir_name``/``setup_dir_name``/``output_dir_name``, ``postprocess_strict_artifacts`` | dropped: sweep-engine/staging bookkeeping the new engine already provides |
 | ``electro_property_overrides``/``physics_property_overrides`` | dropped: always ``None`` in the real committed study |
 | ``parallel`` (old default ``True``) | dropped: owner Q6, serial is the record's default |
