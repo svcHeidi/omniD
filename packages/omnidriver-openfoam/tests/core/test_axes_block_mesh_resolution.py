@@ -28,11 +28,25 @@ from pathlib import Path
 
 import pytest
 
-from omnidriver.core.case_write import CaseMutationRequest, ResolvedMutation
+from omnidriver.core.case_write import CaseMutationRequest, ParameterAssignment, ResolvedMutation
 from omnidriver.core.tutorial_records import AxisContract, AxisResult
 from omnidriver.openfoam import case_rendering
 from omnidriver.openfoam.axes import block_mesh_resolution_axis
-from omnidriver.openfoam.case_planning import plan_block_mesh_resolution, plan_delta_t
+from omnidriver.openfoam.case_planning import plan_block_mesh_resolution
+
+
+def _delta_t_assignment(value: float) -> ParameterAssignment:
+    """A `system/controlDict` `deltaT` edit -- what `plan_delta_t` used to
+    build before it was deleted 2026-09-27 (tutorials-are-pointers step C,
+    its only production caller). This file needs a real, ordinary key/value
+    `ParameterAssignment` to combine with the hex-rewrite target; which
+    document/key it addresses is incidental to what these tests check."""
+    return ParameterAssignment(
+        qualified_id="deltaT", owner="test", document="system/controlDict",
+        key_path=("deltaT",), binding={}, value=value, value_kind="scalar",
+        source="case",
+    )
+
 
 _ONE_HEX_BLOCK_DICT = (
     "FoamFile\n{\n    object blockMeshDict;\n}\n"
@@ -435,7 +449,7 @@ def test_the_renderer_still_refuses_the_wrong_expected_blocks_independently_of_t
 ):
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _TWO_HEX_BLOCK_DICT)
 
-    delta_t = plan_delta_t(1e-4, owner="test")
+    delta_t = _delta_t_assignment(1e-4)
     request = CaseMutationRequest(
         mode="clone_and_patch", case_root=case_root, adapter_id="org.omnidriver.test",
         workflow="test", source_artifacts=(), parameters=(delta_t,), requested_by="test",

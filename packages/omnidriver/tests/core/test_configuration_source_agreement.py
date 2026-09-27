@@ -138,37 +138,36 @@ def test_tutorial_record_entry_is_case_sourced(tmp_path: Path) -> None:
 
 
 def test_factory_tutorial_entry_is_document_sourced() -> None:
-    """``manufacturedMonodomainTotalLagrangianEM`` is a registered factory
-    tutorial (§3: "a tutorial is a data record" is the record shape; a
-    factory tutorial's config lives in the document). This test has no real
-    native case on disk (no ``cases_root`` points at the monorepo), so
-    planning itself fails on missing case files -- but that failure is
-    exactly the proof this test wants: ``validate_run`` (``run_validation``
-    diagnostics, naming real cardiac catalog fields like
-    ``myocardiumSolver``) ran at all, which only happens when
-    ``configurationSource`` is "document". A case-sourced entry (the two
-    tests above) never produces these codes.
+    """``cardiaccore-human-purkinje-slab`` is a registered factory tutorial
+    (§3: "a tutorial is a data record" is the record shape; a factory
+    tutorial's config lives in the document). This test has no real native
+    case on disk (no ``cases_root`` points at the monorepo), so planning
+    itself fails on missing case files -- but that failure is exactly the
+    proof this test wants: ``validate_run`` (``run_validation`` diagnostics,
+    naming real cardiac catalog fields like ``$CARDIAC_CONDUCTIVITY.df``) ran
+    at all, which only happens when ``configurationSource`` is "document". A
+    case-sourced entry (the two tests above) never produces these codes.
 
-    Corrected 2026-09-27: this used ``singleCell``, which migrated onto a
-    tutorial record (records/single_cell.py, tutorials-are-pointers plan,
-    step 5.1) -- a record has no ambient cases root at all and is refused
-    by name instead of failing on missing case files, so it no longer fits
-    this test's premise. This then used ``cable1DRestitution``, which also
-    migrated onto a tutorial record the same day (records/
-    cable_1d_restitution.py, plan §5e, step 5.2), then
-    ``manufacturedMonodomain1D3D``, which migrated onto a tutorial record
-    the same day too (records/manufactured_monodomain_1d3d.py, replacing it
-    and ``manufacturedPurkinjeGraph`` together).
-    ``manufacturedMonodomainTotalLagrangianEM`` is now the only still-factory
-    tutorial for this generic contract."""
-    cardiacfoam = pytest.importorskip("omnidriver.cardiacfoam.cardiacfoam_plugin")
+    Corrected 2026-09-27 (tutorials-are-pointers step C): this used
+    ``manufacturedMonodomainTotalLagrangianEM``, cardiacFoam's own last
+    factory tutorial (every earlier fixture -- ``singleCell``,
+    ``cable1DRestitution``, ``manufacturedMonodomain1D3D`` -- had already
+    migrated onto a tutorial record the same way; see each's own history in
+    prior revisions of this docstring). That one was deleted outright
+    (owner decision: electromechanics did not work and will be rebuilt as a
+    record later), leaving cardiacFoam with no factory tutorial at all.
+    cardiacCore's own factory tutorials (``cardiaccore/workflows/
+    preprocessing.py``) are unrelated to cardiacFoam's migration and still
+    exercise this generic, solver-agnostic contract with a real plugin, not
+    a mock -- see ``.superpowers/sdd/legacy-map.md`` §4."""
+    cardiaccore = pytest.importorskip("omnidriver.cardiaccore.plugin")
     from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
     context = driver_context(
-        OpenFOAMEnvironmentPlugin(), cardiacfoam.CardiacFoamPlugin(),
+        OpenFOAMEnvironmentPlugin(), cardiaccore.CardiacCorePlugin(),
         source="test:factory-tutorial",
     )
-    report = strict_plan("manufacturedMonodomainTotalLagrangianEM", driver_context=context)
+    report = strict_plan("cardiaccore-human-purkinje-slab", driver_context=context)
 
     assert report.run_document is not None
     run_doc = report.run_document
@@ -177,7 +176,7 @@ def test_factory_tutorial_entry_is_document_sourced() -> None:
     codes = {d.code for d in report.validation_diagnostics}
     assert "run_validation" in codes, report.validation_diagnostics
     assert any(
-        d.code == "run_validation" and "myocardiumSolver" in d.message
+        d.code == "run_validation" and "$CARDIAC_CONDUCTIVITY.df" in d.message
         for d in report.validation_diagnostics
     ), report.validation_diagnostics
     assert "case_configuration_source_carries_config" not in codes

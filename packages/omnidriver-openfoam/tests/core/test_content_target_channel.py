@@ -23,11 +23,24 @@ from pathlib import Path
 
 import pytest
 
-from omnidriver.core.case_write import CaseMutationRequest, ResolvedMutation
+from omnidriver.core.case_write import CaseMutationRequest, ParameterAssignment, ResolvedMutation
 from omnidriver.openfoam import case_rendering
-from omnidriver.openfoam.case_planning import plan_delta_t, plan_verbatim_content
+from omnidriver.openfoam.case_planning import plan_verbatim_content
 
 _TEMPLATE_TEXT = "FoamFile\n{\n}\ntype electroModel;\n"
+
+
+def _delta_t_assignment(value: float) -> ParameterAssignment:
+    """A `system/controlDict` `deltaT` edit -- what `plan_delta_t` used to
+    build before it was deleted 2026-09-27 (tutorials-are-pointers step C,
+    its only production caller). This file needs a real, ordinary key/value
+    `ParameterAssignment` to combine with a `"content"` target; which
+    document/key it addresses is incidental to what these tests check."""
+    return ParameterAssignment(
+        qualified_id="deltaT", owner="test", document="system/controlDict",
+        key_path=("deltaT",), binding={}, value=value, value_kind="scalar",
+        source="case",
+    )
 
 
 def _request(case_root: Path) -> CaseMutationRequest:
@@ -126,7 +139,7 @@ def test_a_non_content_patch_against_a_missing_document_is_still_refused(tmp_pat
     confirmed here rather than assumed."""
     case_root = tmp_path / "case"
     (case_root / "constant").mkdir(parents=True)
-    delta_t = plan_delta_t(1e-4, owner="test")
+    delta_t = _delta_t_assignment(1e-4)
     request = CaseMutationRequest(
         mode="clone_and_patch", case_root=case_root, adapter_id="org.omnidriver.test",
         workflow="test", source_artifacts=(), parameters=(delta_t,), requested_by="test",
@@ -157,7 +170,7 @@ def test_a_content_target_plus_a_value_edit_on_the_same_document_lands_on_top(tm
     (case_root / "system").mkdir(parents=True)
     control_dict_text = "FoamFile\n{\n}\ndeltaT 1e-06;\nendTime 1;\n"
 
-    delta_t = plan_delta_t(2.5e-4, owner="test")
+    delta_t = _delta_t_assignment(2.5e-4)
     resolved = ResolvedMutation(
         request=_request(case_root),
         targets=(

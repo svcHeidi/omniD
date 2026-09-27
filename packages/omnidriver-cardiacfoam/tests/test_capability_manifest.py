@@ -144,21 +144,61 @@ def test_unknown_model_is_not_an_error():
     assert "Vm" in manifest["samplable_fields"]["electro"]
 
 
-def test_describe_entry_includes_capability_manifest():
+def _install_fake_factory_tutorial(monkeypatch) -> str:
+    """Register one synthetic factory tutorial on ``CardiacFoamPlugin`` for
+    the life of one test.
+
+    **Added 2026-09-27 (tutorials-are-pointers step C).** cardiacFoam has no
+    factory tutorial left at all: every one migrated onto a tutorial record,
+    and the last holdout, ``manufacturedMonodomainTotalLagrangianEM``, was
+    deleted outright rather than migrated (owner decision -- it never
+    worked, and electromechanics will be rebuilt as a record later; see
+    ``.superpowers/sdd/legacy-map.md`` §4). The two tests below are about a
+    generic contract ("a factory tutorial's config is document-sourced and
+    reaches the capability manifest"), not about any one tutorial's
+    correctness, so a minimal in-test fixture proves it without depending on
+    production tutorial data that no longer exists.
+    """
+    from omnidriver.cardiacfoam.generic_case import make_generic_case_spec
+    from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
+    from omnidriver.core.specs.paths import resolve_spec_paths
+
+    name = "testOnlyFactoryTutorial"
+
+    def _make_spec(**kwargs):
+        case_root, setup_root, output_dir = resolve_spec_paths(
+            cases_root=kwargs.get("cases_root"),
+            case_dir_name=name,
+            default_output_dir_name="output",
+        )
+        return TutorialSpec(
+            name=name, case_root=case_root, setup_root=setup_root,
+            output_dir=output_dir,
+            build_cases=lambda: [CaseConfig(case_id="case0", params={})],
+            plan_case=lambda case_root, case: None,
+            metadata={
+                "workflow_dag": {
+                    "steps": [{"id": "solve", "command": "cardiacFoam", "depends_on": []}],
+                },
+            },
+        )
+
+    monkeypatch.setattr(
+        CardiacFoamPlugin, "get_tutorial_catalog",
+        lambda self: {
+            "spec_factories": {name: _make_spec},
+            "registered_tutorials": (name,),
+            "make_generic_case_spec": make_generic_case_spec,
+        },
+    )
+    return name
+
+
+def test_describe_entry_includes_capability_manifest(monkeypatch):
     from omnidriver.core.introspection import describe_entry
 
-    # "singleCell" migrated onto a tutorial record 2026-09-27 (records/
-    # single_cell.py) -- a record has no ambient cases root (a bare entry
-    # name with no cases_root is refused by name), unlike a still-factory
-    # tutorial, which this generic capability-manifest smoke test needs
-    # nothing else from. "cable1DRestitution" (also migrated 2026-09-27,
-    # records/cable_1d_restitution.py) is no longer a fit either.
-    # "manufacturedMonodomain1D3D" migrated the same day (records/
-    # manufactured_monodomain_1d3d.py, replacing it and
-    # "manufacturedPurkinjeGraph" together) -- "manufacturedMonodomain
-    # TotalLagrangianEM" is now the only still-factory tutorial for this
-    # generic smoke test.
-    payload = describe_entry("manufacturedMonodomainTotalLagrangianEM", driver_context=_CTX)
+    name = _install_fake_factory_tutorial(monkeypatch)
+    payload = describe_entry(name, driver_context=_CTX)
     manifest = payload["capability_manifest"]
     assert "cardiacFoam" in manifest["allowed_commands"]["plugin"]
     assert "electro" in manifest["samplable_fields"]
@@ -168,7 +208,6 @@ def test_strict_plan_carries_capability_manifest(monkeypatch):
     monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
     from omnidriver.core.strict_planning import strict_plan
 
-    report = strict_plan(
-        "manufacturedMonodomainTotalLagrangianEM", driver_context=_CTX,
-    ).to_json()
+    name = _install_fake_factory_tutorial(monkeypatch)
+    report = strict_plan(name, driver_context=_CTX).to_json()
     assert "cardiacFoam" in report["capability_manifest"]["allowed_commands"]["plugin"]

@@ -2,28 +2,32 @@
 M2, the ``utils.py`` split).
 
 Every function in this module reads nothing and writes nothing: each
-resolves a requested edit into a typed, pure target (a
-``ParameterAssignment`` or a raw ``render_patch_case_files`` target mapping)
-for the render/commit channel to act on later. The planners used to share
-``utils.py`` with their writer counterparts (``set_delta_t`` and kin), which
-made it impossible for a tutorial-record axis to import a pure planner
-without ALSO being able to reach a writer one import away. An axis module
-(``openfoam/axes/``) may import from here; ``scripts/check-case-writes.py``
-scans this module and bans importing ``omnidriver.openfoam.utils``.
+resolves a requested edit into a raw ``render_patch_case_files`` target
+mapping for the render/commit channel to act on later. The planners used to
+share ``utils.py`` with their writer counterparts (``set_delta_t`` and kin),
+which made it impossible for a tutorial-record axis to import a pure
+planner without ALSO being able to reach a writer one import away. An axis
+module (``openfoam/axes/``) may import from here;
+``scripts/check-case-writes.py`` scans this module and bans importing
+``omnidriver.openfoam.utils``.
 
 Corrected 2026-09-26 (review 54b M6): ``utils.py`` is deleted. Its last
 writer, ``set_delta_t``, was retired with the niederer2011 migration, and
 it was kept empty "since a future direct writer may still need to land
 here"; nothing imported it. The gate still bans the name, so a writer
 module re-created there stays unreachable from an axis.
+
+Corrected 2026-09-27 (tutorials-are-pointers step C): ``plan_delta_t``/
+``plan_end_time``, the two planners here that produced a real
+``ParameterAssignment`` rather than a raw target mapping, are deleted --
+their only production caller was cardiacFoam's factory-tutorial path
+(``manufactured_monodomain_total_lagrangian_em.py``), deleted the same day.
 """
 
 import re
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Mapping
-
-from omnidriver.core.case_write import ParameterAssignment
 
 from .literals import _format_value
 
@@ -115,88 +119,6 @@ def hex_cell_counts_expected_blocks(key_path: Sequence[str]) -> int:
         f"{HEX_CELL_COUNTS_KEY_PATH!r} (one block) or that plus one "
         "positive-integer segment naming expected_blocks"
     )
-
-#: `system/controlDict` is a fixed, case-relative location -- the same for
-#: every OpenFOAM case, never derived from a caller-supplied path. Unlike
-#: `cardiacfoam.overrides.resolve_entry_overrides` (which takes `document`
-#: from its caller because it has only a bare `file_path` and no case root
-#: to make one relative to), `plan_delta_t`/`plan_end_time` need no path
-#: argument at all: they are pure and address this document by name alone.
-_CONTROL_DICT_DOCUMENT = "system/controlDict"
-
-
-def plan_delta_t(delta_t_seconds: float, *, owner: str) -> ParameterAssignment:
-    """Resolve a `system/controlDict` `deltaT` edit into a typed, pure
-    `ParameterAssignment` -- reads nothing, writes nothing (Phase 3 Task 3).
-
-    Used to sit beside `utils.set_delta_t` as an as-yet-unmigrated writer's
-    counterpart. **Corrected 2026-09-26 (5.4b-N):** that function is now
-    retired -- its last caller (`niederer_2011.py`'s `mesh_family == "tet"`
-    branch) migrated onto a tutorial record, and `utils.py` now defines no
-    writer at all.
-
-    ``owner`` is supplied, not discovered: this module (`omnidriver-openfoam`)
-    must not know about cardiacFoam or any other adapter identity (see this
-    repository's package table -- `omnidriver-openfoam` "must not know about
-    cardiology"), so unlike `dict_builder.py`'s own controlDict-touching
-    code, which hardcodes its own `PLUGIN_ID`, this function cannot supply a
-    default of its own; the caller's adapter id is the caller's to know.
-
-    ``source`` is unconditionally ``"case"``: unlike `dict_builder.py`'s
-    synthesis resolver (which chooses `"case"` vs `"template"` depending on
-    whether ITS OWN caller passed `None` and it fell back to a built-in
-    default), this function takes no default path of its own -- it has no
-    optional parameter and no fallback, so every value it sees is one a
-    caller explicitly decided to assign. Matches the same reasoning
-    `cardiacfoam.overrides.resolve_entry_overrides` gives for the same
-    conclusion.
-
-    No `evidence_refs`: verified against all eleven real tutorial call
-    sites (`grep -rn "set_delta_t\\|set_end_time"
-    packages/omnidriver-cardiacfoam/src/.../tutorials/`) that every one
-    passes an already-native Python `float`, never an already-rendered
-    OpenFOAM literal string -- unlike the `dimensioned_scalar`/`vector3`
-    entries Task 2's Gap 1 found, a bare `controlDict` scalar has no
-    OpenFOAM-specific literal syntax to parse (no dimension brackets), so
-    `omnidriver.openfoam.literals` does not apply here and there is no
-    original rendered spelling to preserve as evidence.
-
-    **The value is passed through untouched, not coerced with `float()`.**
-    A non-`Real` (a string included -- there is no parser for it to go
-    through, per the paragraph above) is refused by `ParameterAssignment`'s
-    own construction-time `validate_value_shape` check, the same guard every
-    other `scalar` declaration gets. Coercing here instead would silently
-    swallow a caller's mistake (or a genuine rendered literal this function
-    has no business accepting) rather than refusing it -- the same
-    strict-resolver posture the fallback deletion established for the
-    override channel.
-    """
-    return ParameterAssignment(
-        qualified_id="deltaT",
-        owner=owner,
-        document=_CONTROL_DICT_DOCUMENT,
-        key_path=("deltaT",),
-        binding={},
-        value=delta_t_seconds,
-        value_kind="scalar",
-        source="case",
-    )
-
-
-def plan_end_time(t_s: float, *, owner: str) -> ParameterAssignment:
-    """`plan_delta_t`'s counterpart for `endTime` -- see its docstring for
-    the `owner`/`source`/evidence reasoning, which applies identically."""
-    return ParameterAssignment(
-        qualified_id="endTime",
-        owner=owner,
-        document=_CONTROL_DICT_DOCUMENT,
-        key_path=("endTime",),
-        binding={},
-        value=t_s,
-        value_kind="scalar",
-        source="case",
-    )
-
 
 def _rewrite_hex_block_lines(
     text: str, cell_counts_str: str, expected_blocks: int, *, label: str,

@@ -68,13 +68,61 @@ def test_cardiac_plugin_declares_a_config_schema() -> None:
     assert schema["required"] == ["anatomy", "physics", "stimulus", "solver"]
 
 
+def _install_fake_factory_tutorial(monkeypatch) -> str:
+    """Register one synthetic factory tutorial on ``CardiacFoamPlugin`` for
+    the life of one test.
+
+    **Added 2026-09-27 (tutorials-are-pointers step C).** cardiacFoam has no
+    factory tutorial left at all: every one migrated onto a tutorial record,
+    and the last holdout, ``manufacturedMonodomainTotalLagrangianEM``, was
+    deleted outright rather than migrated (owner decision -- it never
+    worked, and electromechanics will be rebuilt as a record later; see
+    ``.superpowers/sdd/legacy-map.md`` §4). This test is about a generic
+    contract (a schema violation the plugin's own config builder produces
+    must surface as a structured diagnostic), not about any one tutorial's
+    correctness, so a minimal in-test fixture proves it without depending on
+    production tutorial data that no longer exists.
+    """
+    from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+    from omnidriver.cardiacfoam.generic_case import make_generic_case_spec
+    from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
+    from omnidriver.core.specs.paths import resolve_spec_paths
+
+    name = "testOnlyFactoryTutorial"
+
+    def _make_spec(**kwargs):
+        case_root, setup_root, output_dir = resolve_spec_paths(
+            cases_root=kwargs.get("cases_root"),
+            case_dir_name=name,
+            default_output_dir_name="output",
+        )
+        return TutorialSpec(
+            name=name, case_root=case_root, setup_root=setup_root,
+            output_dir=output_dir,
+            build_cases=lambda: [CaseConfig(case_id="case0", params={})],
+            plan_case=lambda case_root, case: None,
+            metadata={
+                "workflow_dag": {
+                    "steps": [{"id": "solve", "command": "cardiacFoam", "depends_on": []}],
+                },
+            },
+        )
+
+    monkeypatch.setattr(
+        CardiacFoamPlugin, "get_tutorial_catalog",
+        lambda self: {
+            "spec_factories": {name: _make_spec},
+            "registered_tutorials": (name,),
+            "make_generic_case_spec": make_generic_case_spec,
+        },
+    )
+    return name
+
+
 def test_strict_plan_reports_a_structured_diagnostic_for_schema_violation(monkeypatch) -> None:
     """A plugin that builds a config violating its own declared schema must
     surface a StrictDiagnostic an agent can read and act on -- not a raw
     jsonschema traceback and not a silent pass."""
-    from omnidriver.core.plugin_capabilities import RunDocumentConfigurationRequest
-    from omnidriver.cardiacfoam import cardiacfoam_plugin
-
     context = _context()
 
     def _broken_build(spec):
@@ -84,15 +132,8 @@ def test_strict_plan_reports_a_structured_diagnostic_for_schema_violation(monkey
     monkeypatch.setattr(
         context.providers[-1], "build_run_document_config", _broken_build, raising=False,
     )
-    # "singleCell" migrated onto a tutorial record 2026-09-27 (records/
-    # single_cell.py), which has no ambient cases root -- "cable1DRestitution"
-    # migrated the same day too (records/cable_1d_restitution.py, plan §5e,
-    # step 5.2), and so did "manufacturedMonodomain1D3D" (records/
-    # manufactured_monodomain_1d3d.py, replacing it and
-    # "manufacturedPurkinjeGraph" together).
-    # "manufacturedMonodomainTotalLagrangianEM" is now the only still-factory
-    # tutorial for this generic schema-violation smoke test.
-    report = strict_plan("manufacturedMonodomainTotalLagrangianEM", driver_context=context)
+    name = _install_fake_factory_tutorial(monkeypatch)
+    report = strict_plan(name, driver_context=context)
     codes = {d.code for d in report.validation_diagnostics}
     assert "plugin_config_schema_violation" in codes
     messages = [d.message for d in report.validation_diagnostics if d.code == "plugin_config_schema_violation"]

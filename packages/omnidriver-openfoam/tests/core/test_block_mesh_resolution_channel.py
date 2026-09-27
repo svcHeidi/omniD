@@ -41,8 +41,21 @@ from omnidriver.openfoam import case_rendering
 from omnidriver.openfoam.case_planning import (
     _rewrite_hex_block_lines,
     plan_block_mesh_resolution,
-    plan_delta_t,
 )
+
+
+def _delta_t_assignment(value: float) -> ParameterAssignment:
+    """A `system/controlDict` `deltaT` edit -- what `plan_delta_t` used to
+    build before it was deleted 2026-09-27 (tutorials-are-pointers step C,
+    its only production caller). This file needs a real, ordinary key/value
+    `ParameterAssignment` to combine with the hex-rewrite target; which
+    document/key it addresses is incidental to what these tests check."""
+    return ParameterAssignment(
+        qualified_id="deltaT", owner="test", document="system/controlDict",
+        key_path=("deltaT",), binding={}, value=value, value_kind="scalar",
+        source="case",
+    )
+
 
 # Transcribed byte-for-byte from the authoritative native tree (see module
 # docstring). Three `hex (` blocks, each `(80 80 80)`, matching this
@@ -247,7 +260,7 @@ def _resolved_for(case_root: Path) -> ResolvedMutation:
     pairs it with a real edit rather than trying to construct a
     zero-parameter request.
     """
-    delta_t = plan_delta_t(1e-4, owner="test")
+    delta_t = _delta_t_assignment(1e-4)
     request = CaseMutationRequest(
         mode="clone_and_patch", case_root=case_root, adapter_id="org.omnidriver.test",
         workflow="test", source_artifacts=(), parameters=(delta_t,), requested_by="test",
@@ -316,7 +329,7 @@ def test_the_renderer_is_byte_identical_to_rewrite_hex_block_lines(tmp_path):
 
 def test_the_renderer_still_refuses_the_wrong_expected_blocks(tmp_path):
     case_root = _real_case(tmp_path)
-    delta_t = plan_delta_t(1e-4, owner="test")
+    delta_t = _delta_t_assignment(1e-4)
     request = CaseMutationRequest(
         mode="clone_and_patch", case_root=case_root, adapter_id="org.omnidriver.test",
         workflow="test", source_artifacts=(), parameters=(delta_t,), requested_by="test",
@@ -355,7 +368,7 @@ def test_the_renderer_refuses_a_missing_block_mesh_dict(tmp_path):
     """
     case_root = _real_case(tmp_path)
     (case_root / "system" / "blockMeshDict").unlink()
-    delta_t = plan_delta_t(1e-4, owner="test")
+    delta_t = _delta_t_assignment(1e-4)
     request = CaseMutationRequest(
         mode="clone_and_patch", case_root=case_root, adapter_id="org.omnidriver.test",
         workflow="test", source_artifacts=(), parameters=(delta_t,), requested_by="test",
@@ -382,7 +395,7 @@ def test_the_renderer_refuses_a_missing_block_mesh_dict(tmp_path):
 
 def test_two_hex_targets_on_one_document_are_refused_as_ambiguous(tmp_path):
     case_root = _real_case(tmp_path)
-    delta_t = plan_delta_t(1e-4, owner="test")
+    delta_t = _delta_t_assignment(1e-4)
     request = CaseMutationRequest(
         mode="clone_and_patch", case_root=case_root, adapter_id="org.omnidriver.test",
         workflow="test", source_artifacts=(), parameters=(delta_t,), requested_by="test",
