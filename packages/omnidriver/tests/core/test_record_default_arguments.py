@@ -1,14 +1,4 @@
-"""A workflow step's replaceable default arguments (owner Q3/Q7, 2026-09-26).
-
-The rule under test (``tutorial_records.DefaultArgument``): a default is its
-``key`` tokens followed by its ``values``; an axis replaces it by passing
-the same ``key`` tokens, contiguously, anywhere in its contribution, and
-otherwise appends. Core compares tokens for equality only; it parses no
-flag. The two shapes the rule must serve are a one-token key with one value
-(blockMesh ``-dict <file>``) and a two-token key (gmsh ``-setnumber lc <v>``).
-The step names and commands below are the toy's own strings; core gives
-none of them a meaning.
-"""
+"""A workflow step's replaceable default arguments (owner Q3/Q7, 2026-09-26)."""
 from __future__ import annotations
 
 import pytest
@@ -43,9 +33,7 @@ def test_an_axis_passing_the_key_replaces_the_default_and_does_not_duplicate_it(
 
 
 def test_any_value_after_the_key_replaces_the_default_the_record_never_names_it():
-    """Owner, 2026-09-26 ("the pre-processing stage"): the record declares the
-    default only. A value it never anticipated -- a dictionary an agent wrote,
-    an arbitrary ``lc`` -- replaces the default just the same."""
+    """Owner, 2026-09-26 ("the pre-processing stage"): the record declares the default only."""
     assert MESH.argv(("-dict", "system/agentComposedDict")) == ("mesher", "-dict", "system/agentComposedDict")
     assert GMSH.argv(("-setnumber", "lc", "0.0123")) == (
         "gmsh", "-3", "box.geo.template", "-o", "box.msh",
@@ -115,8 +103,7 @@ def test_two_defaults_with_one_key_are_refused():
 
 
 def test_a_key_inside_another_defaults_tokens_is_refused():
-    """``-setnumber`` alone and ``-setnumber lc``: an axis passing
-    ``-setnumber lc v`` would name both, so which it replaces is ambiguous."""
+    """``-setnumber`` alone and ``-setnumber lc``: an axis passing ``-setnumber lc v`` would name both, so which it replaces is ambiguous."""
     with pytest.raises(TutorialRecordError, match=r"\['-setnumber'\]"):
         WorkflowStep(
             step_id="gmsh", command=("gmsh",),

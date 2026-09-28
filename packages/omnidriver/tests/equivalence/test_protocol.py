@@ -52,11 +52,7 @@ topology    pvjNodes   count       8                 0
 
 
 class TestMetricTranscription(unittest.TestCase):
-    """The MMS references carry the solver-emitted norm tolerances.
-
-    They are already committed, so they need no pilot -- only a parser for the
-    `kind key metric expected tolerance` layout the columnar parser rejects.
-    """
+    """The MMS references carry the solver-emitted norm tolerances."""
 
     def test_transcribes_every_metric_row(self) -> None:
         from equivalence.protocol import (

@@ -1,9 +1,4 @@
-"""Capability accessors must be cheap enough to call at context construction.
-
-Guards the accessors that cache an expensive parse instead of re-reading it
-on every call: cardiacCore's guidance manifest, cardiacFoam's runtime backend
-contract.
-"""
+"""Capability accessors must be cheap enough to call at context construction."""
 
 import pytest
 

@@ -1,9 +1,4 @@
-"""Test plugin implementing both sweep hooks, importable by a child process.
-
-It lives here, not inside a test module, because ``sweep_run`` executes each
-case in a ``python -m omnidriver run`` subprocess that must rebuild the same
-plugin from its ``--plugin module:Class`` selector.
-"""
+"""Test plugin implementing both sweep hooks, importable by a child process."""
 
 from __future__ import annotations
 
@@ -11,11 +6,7 @@ from plugins.declared_case_plugin import DeclaredCasePlugin
 
 
 class SweepablePlugin(DeclaredCasePlugin):
-    """A non-cardiac plugin implementing both sweep hooks.
-
-    The base supplies only the declared entrypoint, output root, and no-op
-    preflight that a sweep reaches before its own routing hooks run.
-    """
+    """A non-cardiac plugin implementing both sweep hooks."""
 
     def route_sweep_case_values(self, *, base, resolved_axis_values, driver_context):
         return {**base, **resolved_axis_values}

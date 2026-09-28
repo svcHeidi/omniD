@@ -1,25 +1,4 @@
-"""M5, end to end and UNMOCKED: a record-entry sweep's spawned
-``omnidriver run --run-document`` child must run on the SAME plugin stack
-the parent CLI invocation was given via ``--plugin`` -- never falling back to
-its own ``default_driver_context()``, which the parent's explicit selection
-must never be silently replaced by (CLAUDE.md's "an explicitly-contexted
-operation never falls back to the default").
-
-This spawns a REAL ``python -m omnidriver sweep-run`` process, which itself
-spawns REAL child ``python -m omnidriver run --run-document`` processes (no
-``subprocess.run`` mock anywhere in this file) -- the other tests in
-``test_sweep_runner.py`` mock the child process because they assert on
-in-process details (which run-document path the sweep itself built); this
-test instead proves the real, unmocked round trip end to end using the
-existing zero-argument-constructible ``plugins.e2e_record_plugin
-:E2ERecordPlugin`` fixture, over a 2-case record study.
-
-**Un-skipped 2026-09-25 (consolidation).** It was skipped while the
-``--plugin`` forwarding lived in a separate session. That work
-(``DriverContext.plugin_selector``, recorded where a ``--plugin`` value
-becomes a context) is now integrated, and every child command is built by
-``core.runtime.run_command.omnidriver_run_command``, record sweeps included.
-"""
+"""M5, end to end and UNMOCKED: a record-entry sweep's spawned ``omnidriver run --run-document`` child must run on the SAME plugin stack the parent CLI invocation was given via ``--plugin`` -- never falling back to its own ``default_driver_context()``, which the parent's explicit selection must never be silently replaced by (CLAUDE.md's "an explicitly-contexted operation never falls back to the default")."""
 
 from __future__ import annotations
 

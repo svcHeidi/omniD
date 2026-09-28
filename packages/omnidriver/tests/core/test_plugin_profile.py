@@ -98,8 +98,7 @@ def test_a_core_role_loads(tmp_path) -> None:
 
 
 def test_an_escape_role_for_a_foreign_environment_loads(tmp_path) -> None:
-    """The acceptance test for the hard block: a role naming an environment
-    core has never heard of (FEniCS) must load, not raise."""
+    """The acceptance test for the hard block: a role naming an environment core has never heard of (FEniCS) must load, not raise."""
     profile = tmp_path / "plugin.yaml"
     profile.write_text(
         "schema_version: 1\n"
@@ -178,11 +177,7 @@ def test_a_malformed_or_shadowing_escape_role_still_raises(
 
 
 def test_a_non_openfoam_role_survives_driver_context_end_to_end() -> None:
-    """Beyond the loader: a hand-built PluginProfile (as a real plugin's
-    get_profile() would return, whether or not it was sourced from YAML)
-    carrying an escape-tier role must be accepted by driver_context(...),
-    and the rule must come back out of capabilities.case_files intact --
-    proving the seam works all the way through, not just at parse time."""
+    """Beyond the loader: a hand-built PluginProfile (as a real plugin's get_profile() would return, whether or not it was sourced from YAML) carrying an escape-tier role must be accepted by driver_context(...), and the rule must come back out of capabilities.case_files intact -- proving the seam works all the way through, not just at parse time."""
     from omnidriver.core.plugin_interface import driver_context
     from plugins.minimal_plugin import MinimalTestPlugin
 

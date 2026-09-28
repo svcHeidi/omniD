@@ -1,7 +1,4 @@
-"""``compare`` takes exactly its own two flags: a comparison request names
-its own plugin and sweep per run, so none of plan/run/sweep's flags apply,
-and it is a one-shot report call, so --dry-run/--continue-on-error make no
-sense either (N4, controller review 2026-09-26)."""
+"""``compare`` takes exactly its own two flags: a request names its own plugin and sweep per run, and it is a one-shot report call."""
 from __future__ import annotations
 
 import pytest

@@ -1,15 +1,4 @@
-"""Existing-case discovery/runnability, for markers core itself defines.
-
-Phase 2 Task M2: three of the five parametrized rows in this file, plus
-their fixture, asserted cardiacFoam's own has_case_marker/
-is_runnable_without_workflow (electroProperties as case marker) and moved to
-packages/omnidriver-cardiacfoam/tests/test_case_compatibility_matrix.py. The
-two rows kept here -- an empty folder, and a plugin-declared ``run-case`` --
-exercise only core's own entrypoint-based discovery/runnability
-(_has_entrypoint/_is_case_directory in registry.py), which is meaningful
-under a minimal explicit context. OpenFOAM's generated-root and
-parallel-decomposition conventions live in its adapter suite.
-"""
+"""Existing-case discovery/runnability, for markers core itself defines."""
 
 from __future__ import annotations
 

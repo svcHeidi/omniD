@@ -1,16 +1,4 @@
-"""Step 4c (docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md):
-planning and execution must agree on where a RunDocument's configuration
-lives, via the ONE shared decision both call
-(``core.runtime.configuration_source.resolve_configuration_source``).
-
-Before this field existed, planning (``run_document_adapter``) inferred
-"generic case" from ``spec.metadata`` and execution (``run_document_exec``)
-could not see that marker at all, so it validated an intentionally-empty
-generic-case/tutorial-record config against the plugin schema unconditionally
-and refused every such run (recorded at the end of step 4b). These tests
-cover all three entry kinds the design names, plus the smuggling refusal an
-ingested document must not evade.
-"""
+"""Step 4c (docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md): planning and execution must agree on where a RunDocument's configuration lives, via the ONE shared decision both call (``core.runtime.configuration_source.resolve_configuration_source``)."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -228,9 +216,7 @@ def test_case_source_cannot_smuggle_unvalidated_config_past_execution(
 
 
 def test_resolve_configuration_source_is_the_single_decision_point() -> None:
-    """A direct unit check of the shared function itself, independent of
-    either caller -- the contract both `run_document_adapter` and
-    `run_document_exec` must keep matching."""
+    """A direct unit check of the shared function itself, independent of either caller -- the contract both `run_document_adapter` and `run_document_exec` must keep matching."""
     document = resolve_configuration_source("document", {"a": "1"})
     assert document.validate_document_config is True
     assert document.diagnostics == ()

@@ -1,14 +1,4 @@
-"""The composed override path must carry the execution environment.
-
-`_OverrideScopeAdapter.apply` accepted `execution_env` and forwarded it only to
-the legacy fallback. Every real adapter implements `apply_overrides`, so on the
-path that actually runs, the environment was dropped -- and the OpenFOAM
-implementation returns an empty evidence tuple when it is absent. A required
-post-write readback was therefore satisfied by having no evidence at all.
-
-Phase 2 makes that readback blocking, which is why this is a prerequisite: an
-empty tuple must not be able to pass a check it never performed.
-"""
+"""The composed override path must carry the execution environment."""
 
 from pathlib import Path
 

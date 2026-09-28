@@ -1,10 +1,4 @@
-"""Toy readers and a toy record for the quantities contract.
-
-Core-owned claims only (units, sentinels, the reader contract, the
-comparison): no geometry and no solver behaviour is asserted from these
-files. Solver claims are tested against real binaries in each plugin's
-package.
-"""
+"""Toy readers and a toy record for the quantities contract."""
 from __future__ import annotations
 
 import dataclasses
@@ -36,8 +30,7 @@ NO_WHERE_READER_PLUGIN = "plugins.quantity_toy:NoWhereReaderPlugin"
 
 
 class ToyRowReader:
-    """``<name> <value> <x> <y> <z>`` rows: seconds, ``-1`` never reached, metres.
-    Samples where the file says it sampled, so it takes no points."""
+    """``<name> <value> <x> <y> <z>`` rows: seconds, ``-1`` never reached, metres."""
 
     value_unit = "s"
     sentinels = frozenset({-1.0})
@@ -82,12 +75,7 @@ class _FurlongReader(ToyRowReader):
 
 
 class _NoWhereRowReader(ToyRowReader):
-    """Same contract as ``ToyRowReader`` (``takes_points = False``), but
-    never reports where it sampled -- proof that a self-sampling reader's
-    sample without ``sampled_at`` is a named gap when the request gives
-    *expected* points to check it against (I3, controller review
-    2026-09-26). It is not an I1 case: I1 is about a *points-taking*
-    reader; this reader never takes points at all."""
+    """Same contract as `ToyRowReader`, but its samples never report `sampled_at`."""
 
     def read(self, case_root, artifact, request):
         return tuple(
@@ -97,10 +85,7 @@ class _NoWhereRowReader(ToyRowReader):
 
 
 class _RaisingReader(ToyRowReader):
-    """Declares the same contract as ``ToyRowReader``, but ``.read`` always
-    raises a non-``ValueError`` exception: proof that ANY reader exception
-    becomes a named ``not_evaluated`` gap, not a crash (N3, controller
-    review 2026-09-26)."""
+    """Same contract as `ToyRowReader`, but `.read` always raises a non-`ValueError` exception."""
 
     def read(self, case_root, artifact, request):
         raise OSError("disk fell over")
@@ -152,26 +137,19 @@ class QuantityToyPlugin(E2ERecordPlugin):
 
 
 class RaisingReaderPlugin(QuantityToyPlugin):
-    """Same tutorial record and axes as ``QuantityToyPlugin``, but its values
-    reader always raises ``OSError`` -- see ``_RaisingReader``."""
+    """Same tutorial record and axes as ``QuantityToyPlugin``, but its values reader always raises ``OSError`` -- see ``_RaisingReader``."""
 
     _READERS = {VALUES_FORMAT: _RaisingReader()}
 
 
 class NoWhereReaderPlugin(QuantityToyPlugin):
-    """Same tutorial record and axes as ``QuantityToyPlugin``, but its values
-    reader never reports where it sampled -- see ``_NoWhereRowReader``."""
+    """Same tutorial record and axes as ``QuantityToyPlugin``, but its values reader never reports where it sampled -- see ``_NoWhereRowReader``."""
 
     _READERS = {VALUES_FORMAT: _NoWhereRowReader()}
 
 
 class DifferentVersionQuantityToyPlugin(QuantityToyPlugin):
-    """Same class family, a genuinely different declared version -- unlike
-    two distinct classes sharing ``MinimalTestPlugin``'s hardcoded
-    ``plugin_id``, this changes ``capability_digest`` (its payload embeds
-    each provider's version; see ``provider_identity.build_stack_identity``),
-    so the shared ``stack_identity_mismatch`` check catches it (B1,
-    controller review 2026-09-26)."""
+    """Same class family with a genuinely different declared version, so it changes `capability_digest`."""
 
     @property
     def plugin_version(self) -> str:
@@ -214,9 +192,7 @@ def write_toy_reference(path: Path, *, quantity_unit: str = "ms") -> Path:
 
 def write_toy_sweep(output_dir: Path, cases: Mapping[str, str | None], *, plugin: str = QUANTITY_TOY_PLUGIN,
                     status: str = "completed", artifact_format: str = VALUES_FORMAT) -> Path:
-    """A sweep output in the shape sweep_run leaves: manifest, run documents
-    carrying the planning stack's identity, workflow states with digests,
-    and each case's ``values.txt`` (``None``: the run wrote none)."""
+    """A sweep output in the shape sweep_run leaves: manifest, run documents carrying the planning stack's identity, workflow states with digests, and each case's ``values.txt`` (``None``: the run wrote none)."""
     from omnidriver.core.plugin_interface import load_plugin_context
 
     identity = load_plugin_context(plugin).identity.to_json()

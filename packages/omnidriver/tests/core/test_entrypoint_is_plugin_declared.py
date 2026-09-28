@@ -1,11 +1,4 @@
-"""A case's entrypoint script comes from the plugin's declared role.
-
-Core is entitled to the entrypoint concept; the spelling belongs to the
-plugin. See future/ENVIRONMENT_CONTRACT.md.
-
-Scope: discovery and runnability only. Which bare command names may resolve to a
-case-local executable is a trust decision and stays in CASE_SCRIPT_COMMANDS.
-"""
+"""A case's entrypoint script comes from the plugin's declared role."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -42,8 +35,7 @@ def test_a_plugin_declaring_another_entrypoint_finds_it(tmp_path) -> None:
 
 
 def test_that_plugin_does_not_claim_an_undeclared_case_script(tmp_path) -> None:
-    """The point of declaring: a plugin whose entrypoint is run.sh must not
-    claim a folder just because it happens to contain another script."""
+    """The point of declaring: a plugin whose entrypoint is run.sh must not claim a folder just because it happens to contain another script."""
     case = tmp_path / "aCase"
     case.mkdir()
     (case / "different-run-case").write_text("#!/bin/sh\n")

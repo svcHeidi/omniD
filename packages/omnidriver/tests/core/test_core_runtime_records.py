@@ -68,12 +68,7 @@ def test_a_records_generated_paths_are_what_it_produces_and_does_not_consume():
 
 
 def test_an_intermediate_a_later_step_consumes_is_still_excluded():
-    """R1 fix, finding I2: a path one step produces and a LATER step
-    consumes is an intermediate (a mesh a solve step reads), not an
-    authored input updated in place -- it must still be excluded, or a
-    restage carries the earlier run's mesh forward (the reviewer's
-    pipeline evidence: openCARP's mesh step produces slab.pts/slab.elem,
-    and an honestly-declared solve step consumes them)."""
+    """A path one step produces and a later step consumes (e.g. a mesh a solve step reads) is an intermediate, not an authored input; a restage must still exclude it."""
     record = TutorialRecord(
         name="r", native_case_relpath="r",
         workflow_steps=(

@@ -1,13 +1,4 @@
-"""The versioned sweep-spec JSON Schema (Phase 2 Task 11,
-docs/superpowers/plans/2026-09-20-phase2-one-write-channel.md).
-
-Derived from what `core.sweep.sweep_expansion` actually accepts, not from
-`AGENT_GUIDE.md` -- but there are no in-tree `sweep.json` files (sweep
-specs are always supplied by the caller at a path), so the two worked
-examples in `AGENT_GUIDE.md` ("Sweeping a parameter grid" and "Sweeping an
-existing registered tutorial") stand in for "every in-tree sweep spec"
-here, as literal dict fixtures.
-"""
+"""The versioned sweep-spec JSON Schema."""
 from __future__ import annotations
 
 import json

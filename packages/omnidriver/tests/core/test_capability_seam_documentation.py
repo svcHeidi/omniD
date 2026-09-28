@@ -1,14 +1,4 @@
-"""The capability seam contract must stay documented, accurate, and rendered.
-
-A plain "has a docstring" check is satisfied by ``\"\"\"TODO.\"\"\"``, so these
-tests assert the four structured fields resolve to things that actually exist:
-``:adapts:`` must name a real plugin member, ``:fallback:`` a real
-``compatibility.py`` function, ``:consumed-by:`` a module that really touches
-the capability. A stale or invented reference fails, not just an empty one.
-
-The same field blocks are the source of the ARCHITECTURE.md seam table, so the
-last test keeps the rendered table from drifting away from the code.
-"""
+"""The capability seam contract must stay documented, accurate, and rendered."""
 
 from __future__ import annotations
 
@@ -162,33 +152,17 @@ def test_status_is_a_known_value(field: str) -> None:
 
 
 def test_no_fallback_reaches_cardiac_code_at_all() -> None:
-    """No capability fallback may reach cardiac code, gated or otherwise.
-
-    This began as "no fallback may reach cardiac code *without checking
-    plugin_id*" -- six did not, so a non-cardiac plugin silently inherited
-    cardiac semantics -- and carried an allowlist of two that were permitted
-    to, absent_default_driver_context and legacy_generic_case_mutation.
-
-    Both are gone: the default context now resolves through the
-    omnidriver.plugins entry-point group, and the cardiac case mutation moved
-    to the plugin that owns it. So the allowlist is gone too, rather than left
-    naming functions that no longer exist -- an allowance that matches nothing
-    makes a test pass for the wrong reason, which is the exact failure mode
-    scripts/check-import-boundaries.py refuses to permit in its own waiver
-    list.
-    """
+    """No capability fallback may reach cardiac code, gated or otherwise."""
     source = Path(compatibility.__file__).read_text()
     tree = ast.parse(source)
     offenders = []
     for node in tree.body:
         if not isinstance(node, ast.FunctionDef):
             continue
-        # Look at import statements, not at the function's text. Matching raw
-        # source cannot tell an import from a docstring that names the package
-        # -- and absent_default_driver_context's docstring has to name it, to
-        # explain which cardiac import used to be there and why it no longer
-        # is. A guard that forces documentation to avoid a word in order to
-        # pass is measuring the wrong thing.
+        # Look at import statements, not at the function's text: matching raw
+        # source cannot tell an import from a docstring that merely names the
+        # package, and a guard that forces documentation to avoid a word is
+        # measuring the wrong thing.
         for child in ast.walk(node):
             if isinstance(child, ast.ImportFrom) and (child.module or "").startswith(
                 "omnidriver.cardiacfoam"
@@ -219,13 +193,7 @@ def test_architecture_seam_table_is_up_to_date() -> None:
 
 
 def test_every_probed_hook_is_declared_somewhere() -> None:
-    """A hook an adapter probes must be findable in the public contract.
-
-    Fourteen were not, so a plugin author reading plugin_interface.py could not
-    discover the extension points existed -- while not implementing one routed
-    them into a compatibility fallback. SolverPluginOptionalHooks closed that;
-    this keeps the next hook from reopening it.
-    """
+    """A hook an adapter probes must be findable in the public contract."""
     source = Path(plugin_capabilities.__file__).read_text()
     probed = set(re.findall(r'getattr\(\s*self\.plugin,\s*"([a-z_]+)"', source))
     undeclared = sorted(probed - _plugin_members())
@@ -236,18 +204,7 @@ def test_every_probed_hook_is_declared_somewhere() -> None:
 
 
 def test_every_seam_declares_a_known_tier():
-    """:status: is the single declaration of a member's enforcement tier.
-
-    Free text here is how the contract came to say `mandatory` in one place
-    and probe with getattr in another.
-
-    A capability whose members genuinely differ (``case_files``,
-    ``override_scopes``) declares one ``member=tier`` entry per member on the
-    same ``:status:`` line rather than reinventing ``mixed`` free text --
-    :func:`capability_seams.status_tiers` splits that back into the tiers
-    alone, so this check covers both the single-tier and the per-member shape
-    without needing to tell them apart itself.
-    """
+    """:status: is the single declaration of a member's enforcement tier."""
     from omnidriver.core import capability_seams
 
     seams = capability_seams.collect_seams()
@@ -266,13 +223,7 @@ def test_every_seam_declares_a_known_tier():
 
 
 def test_get_rendered_formats_is_optional_refusing_not_neutral():
-    """R2 finding 11: get_rendered_formats said optional-neutral, alongside
-    :fallback: none and the case_writer docstring's own claim that "the
-    fallback cannot be neutral". Absent -> its OWN fallback is neutral
-    (frozenset()), but that empty set reaches renderer_for, which refuses BY
-    NAME the moment any format is looked up against it -- so the member is
-    optional-refusing in practice, the same as the other three case_writer
-    members."""
+    """`get_rendered_formats` declares `:fallback: none`, so its tier must be optional-refusing, not optional-neutral."""
     from omnidriver.core import capability_seams
 
     tiers = capability_seams.members_by_tier()
@@ -294,12 +245,7 @@ def test_validate_tiers_rejects_an_unknown_status():
 
 
 def test_config_value_is_a_real_capability():
-    """`plugin_interface` documents ConfigValueCapability; it must exist.
-
-    Before 2026-09-20 the heading named a Protocol no module defined, so two
-    adapters implemented the hook and returned different callables while core
-    read neither.
-    """
+    """`plugin_interface` documents ConfigValueCapability; it must exist."""
     from omnidriver.core import plugin_capabilities
 
     assert hasattr(plugin_capabilities, "ConfigValueCapability")

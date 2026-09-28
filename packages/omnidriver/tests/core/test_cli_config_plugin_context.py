@@ -15,10 +15,7 @@ from omnidriver.core.runtime.sweep_runner import MaterializedEntry
 
 
 def test_direct_config_uses_the_selected_plugin_context(tmp_path: Path) -> None:
-    """Step S6 deleted the factory registry ``_load_spec_overrides`` used to
-    check known tutorial keys against (``driver_context.capabilities.tutorials``);
-    it now only refuses the two fixed generic-alias names, needing no
-    ``driver_context`` at all."""
+    """`_load_spec_overrides` refuses only the two fixed generic-alias names, needing no `driver_context` at all."""
     config_path = tmp_path / "config.json"
     config_path.write_text(json.dumps({"number_cells": [10]}))
 
@@ -85,9 +82,8 @@ def test_config_supplied_cases_root_is_refused_by_name(
 ) -> None:
     # `cases_root` is a real make_spec keyword, so it reads as a valid config
     # key -- but resolve_cases_root has no config-file tier (explicit ->
-    # OMNIDRIVER_CASES_ROOT -> cwd, ENVIRONMENT_CONTRACT.md §12). It used to be
-    # accepted and then silently overwritten by that chain; it must be refused
-    # instead, naming the two supported ways to supply it.
+    # OMNIDRIVER_CASES_ROOT -> cwd, ENVIRONMENT_CONTRACT.md §12), so it must be
+    # refused by name instead of silently overwritten.
     section = {"cases_root": str(tmp_path / "elsewhere"), "number_cells": [10]}
     config_path = tmp_path / "config.json"
     config_path.write_text(json.dumps({"someEntry": section} if wrapped else section))

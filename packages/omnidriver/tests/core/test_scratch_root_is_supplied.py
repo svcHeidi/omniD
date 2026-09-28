@@ -1,16 +1,4 @@
-"""The scratch root is supplied, never invented (owner decision 2026-09-26).
-
-``core.specs.paths.scratch_root(base)`` used to default to
-``<base>/.omnidriver``, and its callers passed ``cases_root``: planning a
-tutorial record against a native tutorials tree wrote ``.omnidriver/`` INTO
-that tree, and died on a read-only install (openCARP's root-owned
-``/usr/local/lib/opencarp/share/tutorials``). A scratch location has no
-ambient truth (future/ENVIRONMENT_CONTRACT.md §12), so a default invents one.
-
-Resolution, evaluated only when an operation actually stages: an explicitly
-supplied path (``--scratch-dir`` / the ``scratch_root`` keyword) >
-``OMNIDRIVER_SCRATCH_DIR`` > refused by name (``ScratchRootNotSupplied``).
-"""
+"""The scratch root is supplied, never invented (owner decision 2026-09-26)."""
 
 from __future__ import annotations
 
@@ -186,8 +174,7 @@ def test_the_cli_refuses_a_scratch_dir_inside_the_cases_root_as_json(tmp_path, c
 
 
 def test_describe_needs_no_scratch_and_writes_nothing(tmp_path, capsys):
-    """Lazy: describe previews in a discarded temporary directory, so it
-    never asks for a scratch root and never refuses for want of one."""
+    """Lazy: describe previews in a discarded temporary directory, so it never asks for a scratch root and never refuses for want of one."""
     cases_root = _native_toy_case(tmp_path)
     before = _tree(cases_root)
     exit_code = main([
@@ -252,9 +239,7 @@ def test_a_sweep_output_dir_wins_and_needs_no_scratch(tmp_path):
 
 
 def _stage_from_checkout(tmp_path: Path, capsys, *, scratch_dir):
-    """Drive ``cli._context_from_entry``'s run staging (only a case whose
-    source lies inside the checkout is staged) with the checkout pinned to a
-    tmp tree; ``_stage_entry_case`` is recorded, not run."""
+    """Drive ``cli._context_from_entry``'s run staging (only a case whose source lies inside the checkout is staged) with the checkout pinned to a tmp tree; ``_stage_entry_case`` is recorded, not run."""
     from types import SimpleNamespace
     from unittest import mock
 

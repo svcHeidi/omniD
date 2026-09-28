@@ -1,26 +1,4 @@
-"""``override_scopes.apply()`` must reach the OpenFOAM mutators with a context.
-
-Phase 2 Task 6 made ``omnidriver.openfoam``'s ``validate_overrides`` and
-``apply_overrides`` require an explicit ``DriverContext``, so that package stops
-silently resolving the cardiac default. That broke the fallback underneath them:
-``compatibility.absent_apply_overrides`` called both with no context and had
-none to give, because ``_OverrideScopeAdapter`` holds only ``self.plugin``.
-
-The result was a ``TypeError`` on the agent-facing ``step --strict --apply``
-path, for **every** shipped plugin -- no plugin implements the optional
-``apply_overrides`` hook, so all of them take the fallback.
-
-Nothing caught it. Every test covering that path
-(``test_cli_step.py``, ``test_cli_run_document.py``,
-``test_trust_boundary_end_to_end.py``) is ``skip_without_monorepo``, and this
-standalone clone has no ``tutorials/`` tree, so all three skip. A break can hide
-behind a skip exactly as well as behind a green assertion.
-
-This test needs no monorepo, no OpenFOAM install and no case on disk: it only
-has to prove the context reaches the boundary. ``validate_overrides`` rejects
-the malformed override before touching a filesystem, which is enough -- if the
-context were still missing we would get ``TypeError`` instead.
-"""
+"""``override_scopes.apply()`` must reach the OpenFOAM mutators with a context."""
 from __future__ import annotations
 
 import sys
@@ -40,8 +18,7 @@ def _context():
 
 
 def test_apply_requires_a_context_rather_than_resolving_one() -> None:
-    """The signature is the guard: omitting it must fail loudly, not silently
-    fall back to whichever plugin happens to be installed."""
+    """The signature is the guard: omitting it must fail loudly, not silently fall back to whichever plugin happens to be installed."""
     context = _context()
     with pytest.raises(TypeError, match="driver_context"):
         context.capabilities.override_scopes.apply([], case_root="/tmp")
@@ -74,14 +51,7 @@ def test_the_fallback_reaches_openfoam_with_the_context_it_was_given() -> None:
 
 
 def test_the_fallback_refuses_cleanly_when_openfoam_is_not_installed(monkeypatch) -> None:
-    """No omnidriver-openfoam, no plugin-implemented apply_overrides() hook:
-    the fallback must raise a clean ValueError naming the gap, not a raw
-    ModuleNotFoundError -- there is no neutral default for "patch a dict file
-    whose syntax core does not know" (future/ENVIRONMENT_CONTRACT.md §10,
-    Tier 3). ``sys.modules[name] = None`` is the standard way to make Python's
-    import system raise ImportError for one module without touching any
-    other test's already-imported state.
-    """
+    """No omnidriver-openfoam, no plugin-implemented apply_overrides() hook: the fallback must raise a clean ValueError naming the gap, not a raw ModuleNotFoundError -- there is no neutral default for "patch a dict file whose syntax core does not know" (future/ENVIRONMENT_CONTRACT.md §10, Tier 3)."""
     monkeypatch.setitem(sys.modules, "omnidriver.openfoam.apply_overrides", None)
 
     context = _context()

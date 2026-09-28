@@ -148,11 +148,7 @@ def test_completed_checkpoint_requires_its_required_output_on_resume(tmp_path, c
 
 
 def test_run_document_embedded_completed_state_refuses_changed_inputs(tmp_path) -> None:
-    """A RunDocument state is resumable evidence, not a success override.
-
-    This uses the core-owned test plugin and a shell-only declared entrypoint so it
-    proves the public CLI contract without any cardiacFOAM dependency.
-    """
+    """A RunDocument state is resumable evidence, not a success override."""
     case_root = tmp_path / "case"
     (case_root / "system").mkdir(parents=True)
     settings = case_root / "system" / "settings"

@@ -1,10 +1,4 @@
-"""Tests for the RunDocument execution adapter.
-
-Happy-path execution (a valid config that passes validate_run + a DAG that
-actually runs) is proven end-to-end in test_cli_run_document.py. These unit
-tests cover loading, v1 migration, and the diagnostic behaviours that make a
-document non-executable — none of which need a catalog-valid config.
-"""
+"""Tests for the RunDocument execution adapter."""
 from __future__ import annotations
 
 import json
@@ -191,9 +185,7 @@ class TestCaseRootValidation(unittest.TestCase):
             self.assertIn("case_root_not_a_runnable_case", codes)
 
     def test_a_record_run_carrying_its_steps_is_runnable_without_asking_the_adapter_I4(self) -> None:
-        """Wave-2 review I4: a tutorial-record run's document carries the
-        record's steps, so the case is runnable without the adapter's
-        ``is_case_runnable_without_workflow`` -- which is never consulted."""
+        """A tutorial-record run's document carries the record's steps, so the adapter's `is_case_runnable_without_workflow` is never consulted."""
         with tempfile.TemporaryDirectory() as temp:
             empty = Path(temp) / "empty"
             empty.mkdir()
@@ -207,8 +199,7 @@ class TestCaseRootValidation(unittest.TestCase):
             self.assertNotIn("case_root_not_a_runnable_case", {d.code for d in diagnostics})
 
     def test_any_other_run_still_asks_the_adapter_I4(self) -> None:
-        """The record exemption does not loosen the gate for anything else,
-        nor for a record document that carries no steps."""
+        """The record exemption does not loosen the gate for anything else, nor for a record document that carries no steps."""
         with tempfile.TemporaryDirectory() as temp:
             empty = Path(temp) / "empty"
             empty.mkdir()
@@ -322,15 +313,10 @@ class TestAllowedRunsRoot(unittest.TestCase):
 
 
 class TestConfigurationSource(unittest.TestCase):
-    """Step 4c: planning and execution agree on where a RunDocument's
-    configuration lives, via the one shared decision
-    (``core.runtime.configuration_source.resolve_configuration_source``)."""
+    """Step 4c: planning and execution agree on where a RunDocument's configuration lives, via the one shared decision (``core.runtime.configuration_source.resolve_configuration_source``)."""
 
     def test_case_source_skips_document_config_validation(self) -> None:
-        """A "case"-sourced document's config is validated by neither
-        `validate_run` nor the plugin's declared JSON Schema -- the case
-        files it points at already carry (and were already validated
-        against) the real configuration."""
+        """A "case"-sourced document's config is validated by neither `validate_run` nor the plugin's declared JSON Schema -- the case files it points at already carry (and were already validated against) the real configuration."""
         with tempfile.TemporaryDirectory() as temp:
             case = _make_runnable_case(Path(temp))
             doc = _minimal_doc(
@@ -349,10 +335,7 @@ class TestConfigurationSource(unittest.TestCase):
         self.assertIsNotNone(inputs, diagnostics)
 
     def test_case_source_with_non_empty_config_is_refused(self) -> None:
-        """A "case"-sourced document must not also carry document config --
-        two claimed sources for one fact is a contradiction, refused by
-        name, not merged or silently ignored (and not smuggled past the
-        plugin schema check by claiming "case")."""
+        """A "case"-sourced document must not also carry document config -- two claimed sources for one fact is a contradiction, refused by name, not merged or silently ignored (and not smuggled past the plugin schema check by claiming "case")."""
         doc = _minimal_doc(
             configurationSource="case",
             config={"solver": {"endTime": "1"}},
@@ -363,10 +346,7 @@ class TestConfigurationSource(unittest.TestCase):
         self.assertIn("case_configuration_source_carries_config", codes)
 
     def test_case_source_with_empty_shell_config_is_not_refused(self) -> None:
-        """A phase-shell config of entirely empty sub-dicts (what a plugin's
-        own config builder emits for a generic case, e.g. cardiacFoam's
-        `build_config`) is structurally empty, not "non-empty" -- truthy at
-        the top level is not the same as carrying a value."""
+        """A phase-shell config of entirely empty sub-dicts (what a plugin's own config builder emits for a generic case, e.g. cardiacFoam's `build_config`) is structurally empty, not "non-empty" -- truthy at the top level is not the same as carrying a value."""
         with tempfile.TemporaryDirectory() as temp:
             case = _make_runnable_case(Path(temp))
             doc = _minimal_doc(

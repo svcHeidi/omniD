@@ -1,10 +1,4 @@
-"""The environment and machine connections (2026-09-28, roadmap item 5).
-
-- A manifest declares its environment; ``omnidriver env`` renders the one
-  safe order (source, then exports, then PATH) from supplied values only,
-  and refuses an unset required variable by name.
-- Every step attempt records where it ran (``steps[].host``).
-"""
+"""The environment and machine connections (2026-09-28, roadmap item 5)."""
 from __future__ import annotations
 
 import json

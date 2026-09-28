@@ -1,14 +1,4 @@
-"""An explicitly-contexted operation must never fall back to the cardiac default.
-
-The static guard in test_core_context_is_explicit.py proves core contains no
-implicit resolution syntactically. This proves the runtime consequence: an
-operation driven by a named plugin fires absent_default_driver_context zero
-times.
-
-Note: `caps.dictionaries.phases()` from the plan's Task 5 Step 4 template is
-omitted here. That method does not exist yet -- it ships with Task 3
-(`get_phases()`), which has not landed on this branch.
-"""
+"""An explicitly-contexted operation must never fall back to the cardiac default."""
 from __future__ import annotations
 
 import json
@@ -56,14 +46,7 @@ def test_capability_reads_under_an_explicit_minimal_context_use_no_default() -> 
 
 
 def test_a_generic_sweep_plan_under_an_explicit_context_uses_no_default(tmp_path):
-    """sweep_plan must materialize through the plugin it was handed.
-
-    The capability reads above never enter the sweep path, which is how
-    sweep_runner.py:273/:449 dropped their context unnoticed: they called
-    the public-edge ``materialize_case`` without threading ``driver_context``,
-    so every generic sweep case was written by cardiacFoam's materializer no
-    matter which plugin drove the sweep.
-    """
+    """sweep_plan must materialize through the plugin it was handed."""
     ctx = driver_context(SweepablePlugin(), source="test:census-sweep")
     spec_path = tmp_path / "sweep.json"
     spec_path.write_text(json.dumps({

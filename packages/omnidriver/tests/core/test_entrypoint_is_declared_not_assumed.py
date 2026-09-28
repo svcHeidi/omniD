@@ -1,18 +1,4 @@
-"""Every site that needs the case entrypoint must ask the plugin for it.
-
-Phase 1 gave `registry.py` a declared entrypoint and used it
-for case detection. Three other sites kept the literal `"Allrun"`, so a plugin
-naming its entrypoint anything else got:
-
-* `workflow.py`'s `producer_commands` missing its own run step, which credits
-  unclaimed artifacts to no step at all, and
-* `generic_case.py`'s one-step DAG invoking a script the case does not contain.
-
-Both were invisible because every shipped plugin does call it `Allrun` --
-two constants agreeing by coincidence, which is the same shape as the
-`output_dir_name` defect. So these tests assert the CONTRAST: a plugin
-declaring a different entrypoint must move every one of those answers.
-"""
+"""Every site that needs the case entrypoint must ask the plugin for it."""
 from __future__ import annotations
 
 import pytest
@@ -65,13 +51,7 @@ def test_the_generic_dag_invokes_the_declared_entrypoint() -> None:
 
 
 def test_the_declared_entrypoint_can_produce_artifacts() -> None:
-    """`producer_commands` must contain the plugin's entrypoint, not "Allrun".
-
-    Asserted through the public builder rather than the private set: an
-    unclaimed artifact is credited to the last producer step, so if the
-    entrypoint is not recognised as a producer there is no step to credit and
-    the artifact stays unclaimed.
-    """
+    """`producer_commands` must contain the plugin's entrypoint, not "Allrun"."""
     from omnidriver.core.runtime.models import DataArtifact
     from omnidriver.core.runtime.workflow import normalize_workflow_dag
 
@@ -115,12 +95,7 @@ def test_the_declared_entrypoint_can_produce_artifacts() -> None:
     ],
 )
 def test_environment_ownership_is_not_an_openfoam_prefix_test(role, environment_owned) -> None:
-    """A foreign environment's files are the environment's, not core's.
-
-    `role.startswith("openfoam.")` gave the right answer for every shipped
-    role and the wrong one for every escape role, which is exactly the case
-    the escape tier was added to allow.
-    """
+    """A foreign environment's files are the environment's, not core's."""
     assert is_environment_role(role) is environment_owned
 
 

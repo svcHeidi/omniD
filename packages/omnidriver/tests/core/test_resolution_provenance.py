@@ -78,9 +78,7 @@ def test_no_implementer_answering_reports_no_provider():
 
 
 def test_resolutions_records_the_answering_provider_for_a_digested_single_member():
-    """`manifest` is the one digested capability whose member is `single`-shaped,
-    so it is the one where `resolutions()` actually calls the hook and can
-    report who truly answered, rather than who merely declared it."""
+    """`manifest` is the one digested capability whose member is `single`-shaped, so it is the one where `resolutions()` actually calls the hook and can report who truly answered, rather than who merely declared it."""
     ordered = provider_stack.order_providers([_Base(), _Declines()])
     recorded = provider_stack.resolutions(ordered)
     winner, _digest = recorded["manifest"]
@@ -88,8 +86,7 @@ def test_resolutions_records_the_answering_provider_for_a_digested_single_member
 
 
 def test_a_capability_no_provider_implements_is_recorded_as_unclaimed():
-    """Recording the most specific provider as the winner of a capability
-    nobody implements asserts an ownership that does not exist."""
+    """Recording the most specific provider as the winner of a capability nobody implements asserts an ownership that does not exist."""
     ordered = provider_stack.order_providers([_Base()])
     recorded = provider_stack.resolutions(ordered)
     for capability, (winner, _digest) in recorded.items():

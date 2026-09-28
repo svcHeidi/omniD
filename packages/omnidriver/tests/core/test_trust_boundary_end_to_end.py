@@ -1,17 +1,4 @@
-"""P2.9: end-to-end regression gate for the trust-boundary claims in
-SECURITY.md.
-
-One test per documented claim, exercised through the real entry points named in
-that document -- the CLI ``run``/``step`` path and ``build_execution_inputs``
-ingestion, not re-implemented logic. Claims SECURITY.md lists under
-"Explicitly NOT mitigated" are covered too, as assertions that the *documented
-current behaviour* is still accurate; the one open gap the document calls out
-as a value-channel hole gets an explicit ``xfail(strict=True)`` asserting the
-mitigated behaviour, so closing it forces this file (and SECURITY.md) to be
-updated rather than leaving a stale claim behind.
-
-Every test names the SECURITY.md line it gates in its docstring.
-"""
+"""P2.9: end-to-end regression gate for the trust-boundary claims in SECURITY.md."""
 from __future__ import annotations
 
 import json
@@ -62,11 +49,7 @@ ALLRUN_OK = (
 
 
 def _write_case(root: Path, *, allrun: str = ALLRUN_OK, steps: list[dict] | None = None) -> Path:
-    """Create a minimal runnable OpenFOAM case with an Allrun-owned workflow.
-
-    Mirrors tests/core/test_cli_run_document.py::_write_case so these tests
-    drive the same real planning path without needing a cardiacFoam binary.
-    """
+    """Create a minimal runnable OpenFOAM case with an Allrun-owned workflow."""
     case_root = root / CASE_NAME
     (case_root / "constant").mkdir(parents=True)
     (case_root / "system").mkdir()
@@ -132,15 +115,7 @@ def _tampered_document(
     launch: dict | None = None,
     config: dict | None = None,
 ) -> Path:
-    """A real planned RunDocument with one field replaced by agent content.
-
-    This is the adversarial shape SECURITY.md is written against: an agent
-    hands back a document that is well-formed and passes every *other* gate,
-    with exactly one hostile field. Starting from a genuinely planned document
-    (rather than a hand-written stub) keeps the resulting diagnostics
-    attributable to the tampered field alone, instead of drowning in unrelated
-    config-validation errors.
-    """
+    """A real planned RunDocument with one field replaced by agent content."""
     document = _plan_to_file(cases_root, doc_path)
     if steps is not None:
         document["workflowDag"]["steps"] = steps
@@ -167,19 +142,7 @@ def _hand_authored_document(
     launch: dict | None = None,
     config: dict | None = None,
 ) -> Path:
-    """A RunDocument built by hand, never derived from `plan --strict`.
-
-    Complements `_tampered_document` (a real planned document with one field
-    swapped): this constructs the whole document from scratch -- the shape
-    an agent could hand back without ever invoking the planner. Mirrors the
-    inline hand-authored documents in
-    tests/core/test_cli_run_document.py::test_run_document_rejects_unknown_command.
-
-    `config` defaults to a real, validation-passing config harvested by
-    planning a throwaway case of the same tutorial family in an isolated
-    directory, so tests targeting the workflow/launch boundary aren't also
-    incidentally blocked by unrelated physics-config validation errors.
-    """
+    """A RunDocument built by hand, never derived from `plan --strict`."""
     if config is None:
         with tempfile.TemporaryDirectory() as seed_dir:
             seed_root = Path(seed_dir)
@@ -283,8 +246,7 @@ def test_output_dir_outside_allowed_runs_root_is_rejected_before_execution() -> 
 
 
 def test_symlinked_case_root_cannot_escape_allowed_runs_root() -> None:
-    """SECURITY.md: paths are "resolved to canonical absolute paths", so
-    containment "runs on resolved paths, so a symlink ... cannot escape"."""
+    """SECURITY.md: paths are "resolved to canonical absolute paths", so containment "runs on resolved paths, so a symlink ..."""
     with tempfile.TemporaryDirectory() as temp_dir:
         root = Path(temp_dir)
         allowed = root / "allowed"
@@ -314,11 +276,7 @@ def test_symlinked_case_root_cannot_escape_allowed_runs_root() -> None:
 
 
 def test_allowed_runs_root_permits_a_contained_case() -> None:
-    """Containment is a boundary, not a blanket refusal: an in-root case runs.
-
-    Without this, every rejection test above would also pass against a driver
-    that refused everything.
-    """
+    """Containment is a boundary, not a blanket refusal: an in-root case runs."""
     with tempfile.TemporaryDirectory() as temp_dir:
         cases_root = Path(temp_dir)
         case_root = _write_case(cases_root)
@@ -371,8 +329,7 @@ def test_case_root_must_be_an_existing_runnable_openfoam_case() -> None:
 # --------------------------------------------------------------------------
 
 def test_command_authorization_rejects_an_unauthorized_bare_command() -> None:
-    """SECURITY.md: only "a known OpenFOAM/driver command, an Allrun-family
-    case script, a registered utility, or an installed OpenFOAM app"."""
+    """SECURITY.md: only "a known OpenFOAM/driver command, an Allrun-family case script, a registered utility, or an installed OpenFOAM app"."""
     with tempfile.TemporaryDirectory() as temp_dir:
         cases_root = Path(temp_dir)
         case_root = _write_case(cases_root)
@@ -412,8 +369,7 @@ def test_command_authorization_rejects_an_absolute_path_command() -> None:
 
 
 def test_command_authorization_rejects_an_arbitrary_relative_script() -> None:
-    """SECURITY.md: "arbitrary ./script commands are rejected" -- only
-    ./Allrun-family case scripts may be given in path form."""
+    """SECURITY.md: "arbitrary ./script commands are rejected" -- only ./Allrun-family case scripts may be given in path form."""
     with tempfile.TemporaryDirectory() as temp_dir:
         cases_root = Path(temp_dir)
         case_root = _write_case(cases_root)
@@ -443,10 +399,7 @@ def test_command_authorization_rejects_an_arbitrary_relative_script() -> None:
 
 
 def test_command_allowlist_has_one_owner_shared_by_both_producers() -> None:
-    """SECURITY.md: "Single command allowlist owner
-    (validate_workflow_commands), enforced once at ingestion" -- so the strict
-    planner and the run-document adapter cannot drift apart.
-    """
+    """SECURITY.md: "Single command allowlist owner (validate_workflow_commands), enforced once at ingestion" -- so the strict planner and the run-document adapter cannot drift apart."""
     with tempfile.TemporaryDirectory() as temp_dir:
         # Producer 1: strict planning from a driver-owned Python workflow.
         planner_root = Path(temp_dir) / "planner"
@@ -526,16 +479,7 @@ def test_case_directory_cannot_shadow_a_trusted_path_binary() -> None:
 
 
 def test_a_plugins_declared_entrypoint_resolves_case_locally_but_blockmesh_still_never_does() -> None:
-    """SECURITY.md: "No command shadowing", extended to the Tier 4 entrypoint
-    seam (future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md) -- a plugin
-    naming its entrypoint anything other than "Allrun" gets the same
-    case-local resolution Allrun already has, but CORE_NEUTRAL_COMMANDS names
-    like blockMesh must never resolve case-locally, regardless of which
-    plugin is active. Unit-level only (no CLI/RunDocument round-trip, unlike
-    the sibling test above) -- full coverage of this exact seam without any
-    monorepo dependency lives in
-    test_case_script_commands_entrypoint_seam.py.
-    """
+    """SECURITY.md: "No command shadowing", extended to the Tier 4 entrypoint seam (future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md) -- a plugin naming its entrypoint anything other than "Allrun" gets the same case-local resolution Allrun already has, but CORE_NEUTRAL_COMMANDS names like blockMesh must never resolve case-locally, regardless of which plugin is active."""
     from plugins.minimal_plugin import MinimalTestPlugin
 
     from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
@@ -593,12 +537,7 @@ def test_a_plugins_declared_entrypoint_resolves_case_locally_but_blockmesh_still
 # --------------------------------------------------------------------------
 
 def test_workflow_cwd_cannot_escape_case_root() -> None:
-    """SECURITY.md: "Workflow `cwd` cannot escape `caseRoot`".
-
-    Two layers: ingestion refuses a lexically-escaping `cwd`, and the runner
-    re-checks the *resolved* path so a symlink inside the case cannot escape
-    either.
-    """
+    """SECURITY.md: "Workflow `cwd` cannot escape `caseRoot`"."""
     with tempfile.TemporaryDirectory() as temp_dir:
         cases_root = Path(temp_dir)
         case_root = _write_case(cases_root)
@@ -661,25 +600,7 @@ def test_steps_run_argv_style_so_arguments_are_not_shell_interpreted() -> None:
 # --------------------------------------------------------------------------
 
 def test_invalid_config_blocks_execution_at_ingestion() -> None:
-    """SECURITY.md: the RunDocument's `config` is validated at ingestion
-    ("`config` via `validate_run`") before anything is executed.
-
-    The malformed value here is an out-of-enum string (a domain-semantic
-    violation `validate_run` is meant to catch), not a wrong Python type for
-    a phase slice. The wrong-type case is gated separately by
-    `test_non_mapping_config_phase_blocks_execution_at_ingestion` below;
-    keeping the two apart preserves this test's original claim (domain
-    semantics) as its own regression gate.
-
-    The out-of-enum diagnostic comes from a catalog entry the *active
-    plugin* declares (Core and the generic OpenFOAM environment plugin
-    carry no `myocardiumSolver` vocabulary at all -- see the package table
-    in CLAUDE.md). This claim can only be exercised against a plugin that
-    declares it, and only one adapter can be the unambiguous default at a
-    time (omnidriver.core.plugin_discovery._default_selection), so this
-    test skips rather than fabricating an always-false negative when no
-    such plugin is the resolved default.
-    """
+    """SECURITY.md: the RunDocument's `config` is validated at ingestion ("`config` via `validate_run`") before anything is executed."""
     from omnidriver.core.plugin_interface import default_driver_context
 
     active_context = default_driver_context()
@@ -715,18 +636,7 @@ def test_invalid_config_blocks_execution_at_ingestion() -> None:
 
 
 def test_non_mapping_config_phase_blocks_execution_at_ingestion() -> None:
-    """A wrong-*type* config phase must produce a diagnostic, not a crash.
-
-    P2.2 opened the core schema's `config` to `additionalProperties: true`
-    with no per-phase type constraint, so a phase value can legally be any
-    JSON type by the time it reaches `validate_run`. Before the guard in
-    `specs/validation.py::_non_mapping_phase_errors`, a non-dict phase
-    (`{"anatomy": "not-an-object"}`) reached `_flatten_context` and raised an
-    uncaught `AttributeError` through the real
-    `omnidriver run --run-document` path -- a traceback instead of the
-    diagnostic SECURITY.md promises. This is the regression gate for that
-    fix: the CLI must exit non-zero with a parseable JSON payload.
-    """
+    """A wrong-*type* config phase must produce a diagnostic, not a crash."""
     with tempfile.TemporaryDirectory() as temp_dir:
         cases_root = Path(temp_dir)
         case_root = _write_case(cases_root)
@@ -762,10 +672,7 @@ def test_non_mapping_config_phase_blocks_execution_at_ingestion() -> None:
 # --------------------------------------------------------------------------
 
 def test_case_script_caveat_is_still_documented_and_still_true() -> None:
-    """SECURITY.md documents case scripts as "untrusted, unsandboxed by
-    design" -- "running a case runs its code". Regression-check that this is
-    still an accurate statement about current behavior, not a stale claim.
-    """
+    """SECURITY.md documents case scripts as "untrusted, unsandboxed by design" -- "running a case runs its code"."""
     text = SECURITY_MD.read_text()
     assert "unsandboxed by design" in text
     assert "Arbitrary code inside an invoked `Allrun`" in text
@@ -796,13 +703,7 @@ def test_case_script_caveat_is_still_documented_and_still_true() -> None:
 
 
 def test_run_workflow_step_is_still_a_trusted_unvalidating_primitive() -> None:
-    """SECURITY.md: "run_workflow_step is a trusted low-level primitive: a
-    Python caller that invokes it directly with an unvalidated case_root /
-    ... / command bypasses path and command validation."
-
-    Asserts the documented caveat is still true. If validation is ever added to
-    the runner, this fails and SECURITY.md must be corrected.
-    """
+    """SECURITY.md: "run_workflow_step is a trusted low-level primitive: a Python caller that invokes it directly with an unvalidated case_root / ..."""
     text = SECURITY_MD.read_text()
     assert "run_workflow_step` is a trusted low-level primitive" in text
 
@@ -835,16 +736,7 @@ def test_run_workflow_step_is_still_a_trusted_unvalidating_primitive() -> None:
 
 
 def test_override_values_containing_a_coded_entry_are_rejected() -> None:
-    """Asserts the *mitigated* behaviour: `step --apply` refuses an override
-    whose value smuggles executable OpenFOAM code into a case dictionary.
-
-    `literals._format_value` (tier 1, the path almost every override takes)
-    now rejects any override value containing `#`, `;`, or a newline before
-    it is ever written to a case dictionary file. See SECURITY.md.
-
-    Real entry point: `omnidriver step --run-document <doc> --step <id> --apply
-    <overrides.json>`, which routes through specs.apply_overrides.
-    """
+    """Asserts the *mitigated* behaviour: `step --apply` refuses an override whose value smuggles executable OpenFOAM code into a case dictionary."""
     with tempfile.TemporaryDirectory() as temp_dir:
         cases_root = Path(temp_dir)
         case_root = _write_case(cases_root)

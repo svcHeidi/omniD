@@ -1,11 +1,4 @@
-"""Contract tests for the DataArtifact vocabulary (plan v2 phase 2).
-
-DataArtifact is the shared output-description language between the engine
-and the utility
-catalog (static declarations in utility.manifest.toml). The fields, defaults,
-and ArtifactFormat enum below are part of the agent-facing contract — every
-change here is observed by downstream consumers.
-"""
+"""Contract tests for the DataArtifact vocabulary (plan v2 phase 2)."""
 from __future__ import annotations
 
 import dataclasses
@@ -32,8 +25,7 @@ class TestDataArtifact(unittest.TestCase):
         self.assertEqual(artifact.format, "csv_probe")
 
     def test_defaults_are_safe_for_predictor_merging(self) -> None:
-        """Defaults must let predict_data_artifacts merge static + derived
-        artifacts without None-vs-tuple ambiguity (plan section 2.1)."""
+        """Defaults must let predict_data_artifacts merge static + derived artifacts without None-vs-tuple ambiguity (plan section 2.1)."""
         artifact = DataArtifact(
             artifact_id="x",
             path_pattern="foo",
@@ -46,8 +38,7 @@ class TestDataArtifact(unittest.TestCase):
         self.assertIs(artifact.instance_indexed, False)
 
     def test_is_frozen(self) -> None:
-        """Artifacts are value objects embedded in agent manifests; mutation
-        would silently desync the manifest from later reads."""
+        """Artifacts are value objects embedded in agent manifests; mutation would silently desync the manifest from later reads."""
         artifact = DataArtifact(
             artifact_id="x",
             path_pattern="foo",
@@ -57,9 +48,7 @@ class TestDataArtifact(unittest.TestCase):
             artifact.artifact_id = "y"  # type: ignore[misc]
 
     def test_construction_rejects_unknown_placeholder(self) -> None:
-        """A typo (e.g. {caseId}) in path_pattern must fail at construction,
-        not silently propagate where it can
-        only be detected when an agent tries to expand it later."""
+        """A typo (e.g. {caseId}) in path_pattern must fail at construction, not silently propagate where it can only be detected when an agent tries to expand it later."""
         with self.assertRaises(ValueError) as ctx:
             DataArtifact(
                 artifact_id="typo",
@@ -93,11 +82,7 @@ class TestDataArtifact(unittest.TestCase):
 
 
 class TestArtifactFormatIsOpen(unittest.TestCase):
-    """ArtifactFormat is deliberately NOT a closed Literal (Tier 3,
-    future/ENVIRONMENT_CONTRACT.md §10): most format strings in practice are
-    a solver plugin's own vocabulary for its own outputs, which core has no
-    business validating. What IS closed is the much smaller set of formats
-    core writes for its own artifacts -- lock that instead."""
+    """ArtifactFormat is deliberately NOT a closed Literal (Tier 3, future/ENVIRONMENT_CONTRACT.md §10): most format strings in practice are a solver plugin's own vocabulary for its own outputs, which core has no business validating."""
 
     def test_artifact_format_is_a_plain_string_type(self) -> None:
         self.assertIs(ArtifactFormat, str)
@@ -112,9 +97,7 @@ class TestArtifactFormatIsOpen(unittest.TestCase):
         )
 
     def test_a_plugin_owned_format_string_is_accepted_without_validation(self) -> None:
-        """DataArtifact does not validate .format at all -- a plugin is free
-        to use vocabulary core has never heard of (e.g. a FEniCS plugin's
-        "xdmf_sequence")."""
+        """DataArtifact does not validate .format at all -- a plugin is free to use vocabulary core has never heard of (e.g. a FEniCS plugin's "xdmf_sequence")."""
         artifact = DataArtifact(
             artifact_id="a", path_pattern="p", format="xdmf_sequence",
         )
@@ -122,9 +105,7 @@ class TestArtifactFormatIsOpen(unittest.TestCase):
 
 
 class TestExpandPathPattern(unittest.TestCase):
-    """Path-pattern placeholders ({case_id}, {instance}) are the only documented
-    substitution language. The helper enforces the closed set so a predictor
-    or utility-manifest author cannot silently invent a third placeholder."""
+    """Path-pattern placeholders ({case_id}, {instance}) are the only documented substitution language."""
 
     def test_no_placeholders_returns_pattern_unchanged(self) -> None:
         out = expand_path_pattern("postProcessing/probes.dat", case_id="c1")
@@ -169,9 +150,7 @@ class TestExpandPathPattern(unittest.TestCase):
         self.assertIn("unknown placeholder", str(ctx.exception).lower())
 
     def test_unused_kwargs_are_tolerated(self) -> None:
-        """Passing instance= when the pattern has no {instance} is not an error.
-        Callers compose artifacts uniformly; they should not have to inspect
-        each pattern before calling."""
+        """Passing instance= when the pattern has no {instance} is not an error."""
         out = expand_path_pattern(
             "postProcessing/static.csv", case_id="c1", instance="0.01"
         )

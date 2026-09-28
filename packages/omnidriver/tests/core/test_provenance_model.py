@@ -31,8 +31,7 @@ def _snapshot(tmp_path: Path, text: str) -> ProvenanceSnapshot:
 
 
 def test_a_file_defaults_to_required_input(tmp_path: Path) -> None:
-    """Unknown means required -- a spurious refusal is recoverable, a silent
-    stale replay is the incident this phase exists to prevent."""
+    """Unknown means required -- a spurious refusal is recoverable, a silent stale replay is the incident this phase exists to prevent."""
     target = tmp_path / "controlDict"
     target.write_text("deltaT 0.001;\n")
     component = _component(target, tmp_path)
@@ -44,8 +43,7 @@ def test_a_file_defaults_to_required_input(tmp_path: Path) -> None:
 def test_a_generated_file_the_solver_reads_is_still_a_required_input(
     tmp_path: Path,
 ) -> None:
-    """constant/polyMesh is written by blockMesh and read by the solver;
-    origin must not decide severity."""
+    """constant/polyMesh is written by blockMesh and read by the solver; origin must not decide severity."""
     target = tmp_path / "owner"
     target.write_text("mesh")
     component = _component(target, tmp_path, role="required_input", origin="generated")
@@ -83,8 +81,7 @@ def test_added_and_removed_components_are_distinguished(tmp_path: Path) -> None:
 
 
 def test_a_changed_workflow_produces_an_actionable_diff(tmp_path: Path) -> None:
-    """Without a synthetic entry the aggregate changes while compare()
-    returns nothing an agent can act on."""
+    """Without a synthetic entry the aggregate changes while compare() returns nothing an agent can act on."""
     target = tmp_path / "f"; target.write_text("x")
     component = _component(target, tmp_path)
     a = snapshot_from_components(
@@ -131,8 +128,7 @@ def test_a_file_over_the_threshold_is_streamed_and_content_hashed(tmp_path: Path
 
 
 def test_a_content_hash_ignores_a_timestamp_only_touch(tmp_path: Path) -> None:
-    """A checkout or rsync changes mtime without changing content. A
-    content-based snapshot must not report that as tampering."""
+    """A checkout or rsync changes mtime without changing content."""
     import os
 
     target = tmp_path / "controlDict"
@@ -204,13 +200,7 @@ def test_a_snapshot_round_trips_through_json(tmp_path: Path) -> None:
 
 
 def test_a_nondeterministic_payload_type_is_refused_not_stringified():
-    """The digest is only meaningful if it reproduces byte-for-byte.
-
-    A permissive ``default=str`` would silently accept an object whose repr
-    embeds a memory address, reintroducing the non-determinism that sorting and
-    key-canonicalisation exist to remove -- and it would surface as a spurious
-    stale_inputs refusal rather than as an error. Fail at the source instead.
-    """
+    """The digest is only meaningful if it reproduces byte-for-byte."""
     import pytest
 
     class Opaque:
@@ -225,8 +215,7 @@ def test_a_nondeterministic_payload_type_is_refused_not_stringified():
 
 
 def test_the_three_component_outcomes_share_one_construction_site(tmp_path, monkeypatch):
-    """All three branches must carry every field, so a later addition cannot
-    reach two of three."""
+    """All three branches must carry every field, so a later addition cannot reach two of three."""
     monkeypatch.setattr(
         "omnidriver.core.runtime.provenance.CONTENT_HASH_MAX_BYTES", 4
     )

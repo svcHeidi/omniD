@@ -1,12 +1,4 @@
-"""A reviewed plan contains everything that will happen, and nothing that has.
-
-Closes proposal defect W1. The previous draft's plan omitted values from its
-JSON, held mutable payloads inside frozen records, and carried execution-time
-before-images as plan fields.
-
-A plan is reviewable only if what an agent reads is what will be written, and
-stable only if the bytes it hashes cannot change afterwards.
-"""
+"""A reviewed plan contains everything that will happen, and nothing that has."""
 
 import dataclasses
 import json
@@ -82,8 +74,7 @@ def test_a_plan_round_trips_through_json_unchanged():
 
 
 def test_a_frozen_plan_has_no_mutable_interior():
-    """W1: `frozen=True` stops rebinding a field, not mutating what it points
-    at. A reviewed plan whose reviewed contents can change is not reviewed."""
+    """W1: `frozen=True` stops rebinding a field, not mutating what it points at."""
     plan = _plan()
     with pytest.raises(Exception):
         plan.files = ()
@@ -93,11 +84,7 @@ def test_a_frozen_plan_has_no_mutable_interior():
 
 
 def test_a_dict_valued_parameter_is_frozen_too():
-    """"dictionary" was in the plan's own Task 2 snippet, but Task 4 closed
-    the value_kind vocabulary without it -- no current DictEntry declaration
-    has that shape, and the plan's decision section forbids re-adding an
-    untyped escape. `dimensioned_scalar` is a real kind whose value is also a
-    mapping, so it still exercises the same freeze behaviour."""
+    """The closed value_kind vocabulary has no untyped "dictionary" escape; no current DictEntry declaration has that shape."""
     assignment = case_write.ParameterAssignment(
         qualified_id="$ELECTRO.coeffs", owner="org.a",
         document="constant/electroProperties", key_path=("coeffs",),
@@ -109,8 +96,7 @@ def test_a_dict_valued_parameter_is_frozen_too():
 
 
 def test_a_plan_carries_no_before_image():
-    """W1: a before-image is execution state. The journal owns it; a plan that
-    gains one during execution is not the plan that was reviewed."""
+    """W1: a before-image is execution state."""
     fields = {field.name for field in case_write.CaseWritePlan.__dataclass_fields__.values()}
     assert "before" not in fields
     rendered_fields = {
@@ -123,8 +109,7 @@ def test_a_plan_carries_no_before_image():
 
 
 def test_the_digest_is_stable_across_processes():
-    """The digest is what a stale-plan check compares. Dict iteration order,
-    float repr and key order must not enter it."""
+    """The digest is what a stale-plan check compares."""
     import subprocess
     import sys
     import textwrap
@@ -200,8 +185,7 @@ def test_an_unknown_precondition_kind_is_refused():
 
 
 def test_an_absence_precondition_carries_no_digest():
-    """"This file must not exist" and "this file must have digest X" are
-    different claims. A precondition asserting both is incoherent."""
+    """"This file must not exist" and "this file must have digest X" are different claims."""
     with pytest.raises(ValueError, match="absent"):
         case_write.Precondition(
             kind="absence", target="constant/x", digest="a" * 64, must_be_absent=True,
@@ -209,8 +193,7 @@ def test_an_absence_precondition_carries_no_digest():
 
 
 def test_a_record_is_separate_from_its_plan():
-    """The committed result is not a field of the plan. Recording it there is
-    how a reviewed artifact comes to differ from what was reviewed."""
+    """The committed result is not a field of the plan."""
     plan = _plan()
     record = case_write.CaseWriteRecord(
         transaction_id="t1", plan_id=plan.plan_id, plan_digest=plan.plan_digest,
@@ -223,17 +206,12 @@ def test_a_record_is_separate_from_its_plan():
     }
 
 
-# --- R2 finding 3: declared-tuple fields accepted a list, and appending to it
-# after construction bypassed the checks that had already run and mutated
-# "frozen" state -- W1 verbatim, fixed for exactly one field before this. ---
+# A list passed for a declared `tuple[...]` field must be coerced, not stored
+# by reference -- otherwise appending to the caller's list after construction
+# would bypass the duplicate-path check and mutate "frozen" state.
 
 
 def test_a_list_passed_as_files_cannot_be_mutated_after_construction():
-    """Passing a list where the field is declared `tuple[...]` used to be
-    accepted, and the SAME list object was stored -- so appending a
-    colliding path after construction bypassed the duplicate-path check that
-    had already run and silently changed `plan_digest`. `files` must be a
-    real tuple, which has no `.append`."""
     original = [_file()]
     plan = _plan(files=original)
     assert isinstance(plan.files, tuple)
@@ -261,10 +239,7 @@ def test_a_list_passed_as_parameters_is_coerced_and_the_duplicate_check_survives
 
 
 def test_a_list_passed_as_key_path_cannot_retroactively_change_the_slot():
-    """`slot()` reads `key_path`. A list `key_path` let a caller append to it
-    after `CaseMutationRequest`'s duplicate-slot check already ran against the
-    pre-append value, so the check passed against one slot while the
-    assignment silently occupied another."""
+    """`slot()` reads `key_path`."""
     key_path = ["ionicModel"]
     assignment = case_write.ParameterAssignment(
         qualified_id="$E.ionicModel", owner="org.a",
@@ -290,9 +265,7 @@ def test_a_committed_entry_is_frozen_not_a_live_dict():
 
 
 def test_a_plans_expected_effects_round_trips_through_json():
-    """Phase 3 Task 9: `expected_effects` threaded onto `CaseWritePlan` --
-    Task 1 found it computed by every producer and read by nothing;
-    `to_json`/`from_json` must carry it, the same as every other field."""
+    """`to_json`/`from_json` must carry `expected_effects`, the same as every other field."""
     plan = _plan()
     with_effects = dataclasses.replace(
         plan, expected_effects=("set 'x' in y", "remove 'z' in y"),
@@ -311,10 +284,7 @@ def test_a_plan_payload_written_before_expected_effects_existed_defaults_to_empt
 
 
 def test_expected_effects_order_does_not_change_the_digest():
-    """The same "order is not semantically meaningful" reasoning R2 finding
-    12 already applies to `files`/`request.parameters` -- `expected_effects`
-    is positionally aligned with construction-time target order, not a
-    keyed structure."""
+    """`expected_effects` is positionally aligned with construction-time target order, not a keyed structure -- like `files`/`request.parameters`."""
     plan = _plan()
     forward = dataclasses.replace(plan, expected_effects=("a", "b"))
     reversed_effects = dataclasses.replace(plan, expected_effects=("b", "a"))
@@ -322,10 +292,7 @@ def test_expected_effects_order_does_not_change_the_digest():
 
 
 def test_a_case_write_record_carries_its_committed_parameters_and_expected_effects():
-    """Phase 3 Task 9: `expected_effects`'s first real consumer --
-    `commit_case_write` copies it, and the plan's own validated
-    `ParameterAssignment`s, onto the returned record. `describe`'s
-    `_resolve_proposed_changes` reads exactly this."""
+    """`commit_case_write` copies `expected_effects`, and the plan's own validated `ParameterAssignment`s, onto the returned record."""
     plan = _plan()
     record = case_write.CaseWriteRecord(
         transaction_id="t1", plan_id=plan.plan_id, plan_digest=plan.plan_digest,
@@ -354,9 +321,7 @@ def test_a_resolved_mutation_target_is_frozen_not_a_live_dict():
 
 
 def test_a_mapping_payload_must_use_string_keys():
-    """JSON has no other key type. An int key silently becomes a string on a
-    real JSON round trip without changing the digest, which is how a
-    reviewed plan could drift after review unnoticed."""
+    """JSON has no other key type."""
     with pytest.raises(TypeError, match="string"):
         case_write.CaseWriteRecord(
             transaction_id="t1", plan_id="p", plan_digest="d" * 16,
@@ -373,8 +338,7 @@ def test_a_mapping_payload_rejects_a_non_finite_float():
 
 
 def test_a_mapping_payload_rejects_an_arbitrary_object():
-    """`_freeze` used to return an unrecognised type unchanged, while
-    promising "a plan payload must be JSON-shaped and immutable"."""
+    """`_freeze` must refuse an unrecognised type, not return it unchanged and silently break the "JSON-shaped and immutable" promise."""
 
     class _Opaque:
         pass
@@ -386,7 +350,7 @@ def test_a_mapping_payload_rejects_an_arbitrary_object():
         )
 
 
-# --- R2 finding 12: "cheap correctness items". ---
+# --- Cheap correctness items. ---
 
 
 def test_a_bad_schema_version_is_refused_at_construction_not_only_from_json():
@@ -400,9 +364,7 @@ def test_a_plan_with_zero_files_is_refused():
 
 
 def test_from_json_catches_a_tampered_content_digest():
-    """`from_json` recomputed content_digest from the decoded bytes and never
-    compared it against the stored one -- a tampered digest was silently
-    discarded rather than caught, the opposite of "an integrity check"."""
+    """`from_json` recomputed content_digest from the decoded bytes and never compared it against the stored one -- a tampered digest was silently discarded rather than caught, the opposite of "an integrity check"."""
     payload = _file().to_json()
     payload["content_digest"] = "0" * 64
     with pytest.raises(ValueError, match="does not match"):
@@ -410,11 +372,7 @@ def test_from_json_catches_a_tampered_content_digest():
 
 
 def test_plan_digest_is_insensitive_to_file_and_parameter_order():
-    """`files` and `request.parameters` cannot hold two entries at the same
-    path/slot, so their as-authored order carries no meaning -- but the
-    digest used to hash them as-given, so Task 6's replay/staleness
-    comparison would see a spurious mismatch on a reordered-but-equivalent
-    plan."""
+    """`files` and `request.parameters` cannot hold two entries at the same path/slot, so their as-authored order carries no meaning; the digest must not hash them as-given."""
     first_file = _file(path="constant/electroProperties")
     second_file = _file(path="constant/electroConductivity", content=b"df 0.1;\n")
     first_param = case_write.ParameterAssignment(

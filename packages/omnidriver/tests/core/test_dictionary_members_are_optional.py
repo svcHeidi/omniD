@@ -17,10 +17,7 @@ _NOW_OPTIONAL = ("get_dict_entries", "get_dict_groups", "get_dictionary_catalog"
 
 
 def test_the_three_are_optional_neutral():
-    """Step S6 deleted `get_tutorial_catalog` outright (the capability it
-    was `:status: required` for, `TutorialCatalogCapability`, no longer
-    exists), so this no longer also asserts a required tutorial catalog --
-    there is nothing left in that tier to name."""
+    """Step S6 deleted `get_tutorial_catalog` outright (the capability it was `:status: required` for, `TutorialCatalogCapability`, no longer exists), so this no longer also asserts a required tutorial catalog -- there is nothing left in that tier to name."""
     tiers = members_by_tier()
     assert set(_NOW_OPTIONAL) <= tiers["optional-neutral"]
 

@@ -35,9 +35,7 @@ def test_generic_config_schema_mentions_no_cardiac_tokens() -> None:
 
 
 def test_generic_dict_entry_catalog_names_no_cardiac_document() -> None:
-    """The previous version of this test asserted only on ``.values()``, so a
-    cardiac leak in the *keys* (``physicsProperties``/``electroProperties``)
-    was invisible to it. Scan the whole structure."""
+    """The previous version of this test asserted only on ``.values()``, so a cardiac leak in the *keys* (``physicsProperties``/``electroProperties``) was invisible to it."""
     catalog = driver_context(MinimalTestPlugin(), source="test:override-schema").capabilities.override_schema.dict_entry_catalog()
     blob = json.dumps(catalog)
     leaked = [token for token in _CARDIAC_TOKENS if token in blob]

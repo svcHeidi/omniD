@@ -1,14 +1,4 @@
-"""Every core module must import from a real wheel, not just an editable install.
-
-core/specs/paths.py::repo_root_default() walks up looking for a development
-checkout and raises when it finds none. capability_seams.py called it at module
-scope, so `import omnidriver.core.capability_seams` raised RuntimeError from
-site-packages -- invisible to every editable install and to all of CI, while
-release.yml built and published exactly that wheel.
-
-Slow (builds a wheel into a throwaway venv). Marked so it can be deselected
-locally with -m 'not slow'; CI runs it.
-"""
+"""Every core module must import from a real wheel, not just an editable install."""
 from __future__ import annotations
 
 import shutil
@@ -205,17 +195,7 @@ def _fail_environment(what: str, detail: str) -> None:
 
 
 def _create_environment(env_dir: Path) -> Path:
-    """Create the throwaway venv this test builds and installs the wheel into.
-
-    ``symlinks=True`` is load-bearing, not tidiness. 2026-09-23: ``venv.create``
-    defaults to ``symlinks=False``, which *copies* the interpreter. A copied
-    uv-managed CPython cannot resolve ``@rpath/libpython3.11.dylib``, so dyld
-    aborts and ``ensurepip`` dies with SIGABRT about 0.65 s in -- before any
-    repository code is imported. Because this test is ``@pytest.mark.slow`` it
-    is deselected by every ``-m "not slow"`` run, so that abort was invisible
-    and the test had never once executed on such an interpreter. Symlinking
-    leaves the interpreter where its loader paths still resolve.
-    """
+    """Create the throwaway venv this test builds and installs the wheel into."""
     try:
         venv.create(env_dir, with_pip=True, symlinks=True)
     except subprocess.CalledProcessError as error:

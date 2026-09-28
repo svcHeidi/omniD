@@ -205,11 +205,7 @@ def test_success_binds_reservation_proposal_and_transaction(tmp_path):
 
 
 def test_neutral_utility_workflow_repairs_and_dispatches_a_declared_case_script(tmp_path):
-    """One solver-neutral vertical slice: observe -> reserve -> repair -> run.
-
-    The declared case script is deliberately utility-only: it verifies the repaired case
-    input and writes a report, without invoking a solver or cardiacFOAM.
-    """
+    """One solver-neutral vertical slice: observe -> reserve -> repair -> run."""
     context, target, events, state, observation, proposal, reservation = _fixture(tmp_path)
     script = context.case_root / "run-case"
     script.write_text(

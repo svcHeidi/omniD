@@ -54,14 +54,7 @@ def test_a_stack_that_declares_no_replicas_discovers_cases_inside_them(tmp_path)
 
 
 def test_a_bare_string_replica_globs_is_refused_by_name():
-    """R2 fix, finding I3: the field this replaced,
-    ``decomposition_directory_prefix``, was a bare ``str`` -- a plugin
-    author migrating to ``replica_directory_globs`` naturally writes
-    ``replica_directory_globs="processor*"``. ``tuple(...)`` on a bare
-    string explodes it into one-character strings ('p', 'r', 'o', ..., '*'),
-    so ``is_replica_directory_name`` then matches every name and
-    ``_stage_entry_case`` silently drops every directory. Refused at
-    construction instead."""
+    """A plugin author naturally writes `replica_directory_globs="processor*"`, a bare string rather than a one-tuple."""
     import pytest
 
     with pytest.raises(TypeError, match="replica_directory_globs.*tuple of glob strings.*str"):

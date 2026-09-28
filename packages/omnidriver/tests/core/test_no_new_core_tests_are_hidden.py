@@ -1,9 +1,4 @@
-"""A module-level ``importorskip`` in core's tree hides a whole file from collection, not merely skips it.
-
-The list below is shrink-only, like ``check-import-boundaries.py``'s
-``KNOWN_VIOLATIONS``: a new hidden file fails this test, and a listed file
-that stops matching fails it too.
-"""
+"""A module-level ``importorskip`` in core's tree hides a whole file from collection, not merely skips it."""
 from __future__ import annotations
 
 import ast
@@ -17,12 +12,7 @@ KNOWN_HIDDEN_FILES: dict[str, int] = {}
 
 
 def _module_level_importorskip(path: pathlib.Path) -> bool:
-    """True when the file calls ``pytest.importorskip`` at module scope.
-
-    Module scope is the whole point: the same call inside a test function skips
-    one test and still collects the rest, which is correct and not what this
-    guards.
-    """
+    """True when the file calls ``pytest.importorskip`` at module scope."""
     tree = ast.parse(path.read_text(), filename=str(path))
     for node in tree.body:
         # Descending into a def/class would flag a function-level
@@ -63,11 +53,7 @@ def test_no_new_core_test_file_is_hidden_wholesale() -> None:
 
 
 def test_the_hidden_list_has_not_gone_stale() -> None:
-    """A listed file that no longer hides is progress; delete its entry.
-
-    Without this the list would silently outlive the problem, which is how the
-    import gate's own waiver list nearly rotted.
-    """
+    """A listed file that no longer hides is progress; delete its entry."""
     stale = sorted(set(KNOWN_HIDDEN_FILES) - _hidden_files())
     assert stale == [], (
         "these files no longer skip wholesale -- remove them from "

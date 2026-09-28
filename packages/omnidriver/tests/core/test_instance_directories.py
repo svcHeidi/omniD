@@ -1,7 +1,4 @@
-"""Instance directories are plugin-declared vocabulary
-(spec 2026-09-26-core-generality-design.md §2, A2). A stack that declares
-none (openCARP) has none; a stack that declares a pattern gets exactly
-what that pattern matches."""
+"""Instance directories are plugin-declared vocabulary (spec 2026-09-26-core-generality-design.md §2, A2). A stack that declares none (openCARP) has none; a stack that declares a pattern gets exactly what that pattern matches."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -70,10 +67,7 @@ def test_the_time_vocabulary_is_gone():
 
 
 def test_a_bare_string_preserved_instance_names_is_refused_by_name():
-    """R2 fix, finding I3: a bare ``str`` here would give substring
-    membership (``name not in "0"``) instead of exact-name membership --
-    the same migration mistake as ``replica_directory_globs``, refused the
-    same way."""
+    """A bare `str` here would give substring membership (`name not in "0"`) instead of exact-name membership."""
     with pytest.raises(TypeError, match="preserved_instance_names.*tuple of name strings.*str"):
         CaseRuntimeConventions(preserved_instance_names="0")
 
@@ -84,9 +78,7 @@ def test_a_non_string_item_in_preserved_instance_names_is_refused_by_name():
 
 
 def test_an_invalid_instance_directory_pattern_is_refused_at_construction():
-    """R2 fix, finding I3: an invalid regex used to fail with a raw
-    ``re.error`` mid-staging, wherever the pattern was first compiled --
-    refused at construction instead."""
+    """An invalid regex must be refused at construction, not fail with a raw `re.error` mid-staging."""
     with pytest.raises(ValueError, match="instance_directory_pattern"):
         CaseRuntimeConventions(instance_directory_pattern="[unclosed")
 

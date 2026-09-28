@@ -106,19 +106,7 @@ def test_context_exposes_focused_adapters_without_replacing_public_plugin(
 def test_non_cardiac_plugin_does_not_inherit_cardiac_case_evidence(
     tmp_path: Path,
 ) -> None:
-    """Same rule as :func:`test_report_catalog_is_empty_for_non_cardiac_plugin`,
-    applied to case compatibility.
-
-    This test previously asserted the opposite, under the name
-    ``test_legacy_plugin_case_evidence_preserves_pre_capability_behavior``: a
-    non-cardiac plugin DID claim a case carrying ``electroProperties*``,
-    because absent_case_marker/absent_case_runnable_without_workflow called
-    the cardiac implementation without checking plugin_id -- unlike the
-    thirteen sibling fallbacks, which all gate on ``org.cardiacfoam``.
-
-    Preserving that behaviour was never the intent; it was the Plan-1
-    fallback's unexamined default, and it meant a third-party plugin was
-    silently judged by cardiac filesystem evidence."""
+    """Same rule as :func:`test_report_catalog_is_empty_for_non_cardiac_plugin`, applied to case compatibility."""
     plugin = MinimalTestPlugin()
     context = driver_context(plugin, source="test")
     case_root = tmp_path / "case"
@@ -141,9 +129,7 @@ def test_non_cardiac_plugin_does_not_inherit_cardiac_case_evidence(
 
 
 def test_report_catalog_is_empty_for_non_cardiac_plugin() -> None:
-    """P2.7: report_catalog.py's former REPORTS tuple was cardiac-specific
-    data consumed unconditionally. A non-cardiac v1 plugin must get an empty
-    report catalog, not the built-in "Vm field"/"activation map" reports."""
+    """P2.7: report_catalog.py's former REPORTS tuple was cardiac-specific data consumed unconditionally."""
     plugin = MinimalTestPlugin()
     context = driver_context(plugin, source="test")
 
@@ -214,8 +200,7 @@ def test_dict_key_scanner_uses_the_fallback_for_a_plugin_that_declares_nothing()
 
 
 def test_dict_key_scanner_calls_through_to_the_plugin_hook() -> None:
-    """When a plugin implements the hook, the adapter calls the scanner it
-    returns instead of falling back to the empty report."""
+    """When a plugin implements the hook, the adapter calls the scanner it returns instead of falling back to the empty report."""
 
     calls = []
 

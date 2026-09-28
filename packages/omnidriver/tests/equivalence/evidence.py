@@ -1,9 +1,4 @@
-"""L1 evidence: what each condition started from, and where it ran.
-
-E1 applies no dictionary overrides, so all three conditions must start from a
-byte-identical staged tree. These helpers make that checkable, and record the
-environment identity that could otherwise explain a numerical difference.
-"""
+"""L1 evidence: what each condition started from, and where it ran."""
 from __future__ import annotations
 
 import hashlib
@@ -49,11 +44,7 @@ def _sha256_of(path: Path) -> str:
 
 
 def hash_input_tree(case_root: Path) -> dict[str, str]:
-    """Map every non-volatile file under `case_root` to its sha256.
-
-    Keys are POSIX-style paths relative to `case_root`, so the result is
-    comparable across machines and staging directories.
-    """
+    """Map every non-volatile file under `case_root` to its sha256."""
     hashes: dict[str, str] = {}
     for path in sorted(case_root.rglob("*")):
         if not path.is_file():
@@ -77,11 +68,7 @@ def tree_digest(file_hashes: Mapping[str, str]) -> str:
 
 
 def environment_manifest(env: Mapping[str, str] | None = None) -> dict[str, str | None]:
-    """Record the environment identity a numerical difference could hide in.
-
-    Absent variables are recorded as None rather than omitted, so two manifests
-    always have the same key set and compare directly.
-    """
+    """Record the environment identity a numerical difference could hide in."""
     source = os.environ if env is None else env
     manifest: dict[str, str | None] = {
         name: source.get(name) for name in _TRACKED_ENV

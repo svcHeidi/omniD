@@ -1,10 +1,4 @@
-"""A minimal, no-domain plugin used by Core contract tests.
-
-The defaults are deliberately empty.  A test that needs a case file,
-entrypoint, command, output location, or provenance convention declares it
-where that behaviour is exercised instead of inheriting a solver-shaped test
-environment.
-"""
+"""A minimal, no-domain plugin used by Core contract tests."""
 
 from __future__ import annotations
 
@@ -31,16 +25,11 @@ class MinimalTestPlugin:
     #: resolve them.
     _solver_commands: frozenset[str] = frozenset()
     _telemetry_globs: dict[str, tuple[str, ...]] = {}
-    #: Tutorial-record test seams (2026-09-24, tutorial-record design). Empty
-    #: by default: a plugin declaring no records/validator/comparator is
-    #: the ordinary case -- this plugin still implements all three hooks
-    #: (returning the empty/None defaults below), which is why the three
-    #: capabilities' OWN adapters (not a legacy fallback: those were deleted
-    #: outright, review finding M1 -- ``compatibility.legacy_tutorial_records``
-    #: and kin no longer exist) see a declared hook and call it -- so most
-    #: tests never need these constructor arguments at all. Corrected
-    #: 2026-09-26 (record-scoped axes): four hooks until ``get_axis_catalog``
-    #: left the contract; a record now carries its own axes.
+    #: Tutorial-record test seams. Empty by default: a plugin declaring no
+    #: records/validator/comparator is the ordinary case -- this plugin
+    #: still implements all three hooks (returning the empty/None defaults
+    #: below), so their own adapters see a declared hook and call it, and
+    #: most tests never need these constructor arguments at all.
     _tutorial_records: dict = {}
     _record_key_validator = None
     _case_value_comparator = None
@@ -55,23 +44,7 @@ class MinimalTestPlugin:
         record_key_validator=None,
         case_value_comparator=None,
     ) -> None:
-        """Declare just enough for a test to be non-vacuous.
-
-        `entrypoint` declares the environment's executable case entrypoint.
-
-        `solver_commands` and `telemetry_globs` exist because a plugin that
-        declares NOTHING makes several core assertions trivially true. Asking
-        an empty plugin for an undeclared command's globs and getting ``()``
-        proves nothing -- it returns ``()`` for every input. The meaningful
-        claim is the CONTRAST: a plugin that declares globs for one command
-        still returns ``()`` for another. Same for command authorization,
-        where core's suite otherwise never exercises
-        ``validate_workflow_commands``'s ``plugin_commands`` branch with a
-        non-empty set at all.
-
-        All default to empty, so every existing no-argument construction in
-        the suite is unchanged.
-        """
+        """Declare just enough for a test to be non-vacuous."""
         self._entrypoint = entrypoint
         if solver_commands is not None:
             self._solver_commands = frozenset(solver_commands)

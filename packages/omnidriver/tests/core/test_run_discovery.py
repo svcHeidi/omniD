@@ -1,9 +1,4 @@
-"""Tests for run discovery.
-
-`list_runs(root)` walks a directory and returns one parsed state dict
-per `workflow_state.json` found. Used by agents to inspect past runs
-without manual filesystem traversal.
-"""
+"""Tests for run discovery."""
 from __future__ import annotations
 
 import json
@@ -43,8 +38,7 @@ class TestListRunsBehaviour(unittest.TestCase):
             self.assertEqual(run_ids, ["r1", "r2"])
 
     def test_returns_state_path_alongside_payload(self) -> None:
-        """Each yielded entry carries the absolute path to the state file
-        file so agents can locate sibling sidecars."""
+        """Each yielded entry carries the absolute path to the state file file so agents can locate sibling sidecars."""
         from omnidriver.core.runtime.run_discovery import list_runs
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -56,8 +50,7 @@ class TestListRunsBehaviour(unittest.TestCase):
             self.assertEqual(runs[0]["_state_path"], str(manifest))
 
     def test_malformed_state_file_is_skipped_silently(self) -> None:
-        """Malformed JSON should not crash the iterator; agents should
-        still see the well-formed manifests."""
+        """Malformed JSON should not crash the iterator; agents should still see the well-formed manifests."""
         from omnidriver.core.runtime.run_discovery import list_runs
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

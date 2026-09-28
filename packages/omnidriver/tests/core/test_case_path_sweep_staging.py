@@ -1,15 +1,4 @@
-"""A case-path sweep entry is mutated in its staged copy, never at its source.
-
-``_materialize_entry_case`` stages the entry's case under ``staging_root`` and
-re-resolves the entry against that copy. For a registered tutorial the second
-resolution is steered by ``cases_root``/``case_dir_name``. A case *path* names
-its case by the path itself, so those overrides cannot steer it: before
-2026-09-24 ``resolve_entry`` overwrote the staged ``case_dir_name`` with the
-source's own name, the "test doubles" branch returned the unstaged overrides,
-and the source case was mutated in place. Commit 7d672f1 turned that into a
-``ValueError``; this module covers the fix, which re-resolves the staged
-directory's own path.
-"""
+"""A case-path sweep entry is mutated in its staged copy, never at its source."""
 from __future__ import annotations
 
 import json
@@ -24,12 +13,7 @@ from plugins.minimal_plugin import MinimalTestPlugin
 
 
 class _WritesIntoItsCaseRoot:
-    """A mutation that leaves a visible mark in whichever case it is given.
-
-    A generic case with no adapter callback writes nothing, so asserting
-    "the source is untouched" against it would pass whatever directory the
-    mutation ran in. This one writes, so where it wrote is observable.
-    """
+    """A mutation that leaves a visible mark in whichever case it is given."""
 
     def __init__(self) -> None:
         self.case_roots: list[Path] = []
@@ -81,8 +65,7 @@ def test_a_case_path_entry_is_mutated_in_its_staged_copy(tmp_path: Path) -> None
 
 
 def test_sweep_plan_plans_a_case_path_entry_at_its_staged_copy(tmp_path: Path) -> None:
-    """Mutating the staged copy is half of it: sweep_plan then plans with the
-    entry, and a plan of the source path would run the solver there."""
+    """Mutating the staged copy is half of it: sweep_plan then plans with the entry, and a plan of the source path would run the solver there."""
     ctx = driver_context(MinimalTestPlugin(entrypoint="run-case"), source="test:case-path-sweep")
     source = _source_case(tmp_path)
     before = _snapshot(source)

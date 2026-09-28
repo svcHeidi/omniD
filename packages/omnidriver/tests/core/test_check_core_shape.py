@@ -9,8 +9,7 @@ import pytest
 
 
 def _script() -> Path:
-    """The gate script, found by marker from this test file. Tests always
-    run from a checkout (they are not in the wheel), so a miss is a failure."""
+    """The gate script, found by marker from this test file."""
     for parent in Path(__file__).resolve().parents:
         candidate = parent / "scripts" / "check-core-shape.py"
         if candidate.is_file():
@@ -28,10 +27,7 @@ def test_repository_matches_its_baseline():
 
 
 def test_a_string_used_as_a_comparison_value_still_counts(tmp_path: Path):
-    """A bare string statement is exempt (the field-docstring convention
-    above); a string literal actually USED -- as a comparison operand here,
-    an f-string argument elsewhere -- is real code, not prose, and must
-    still be caught."""
+    """A bare string statement is exempt (the field-docstring convention above); a string literal actually USED -- as a comparison operand here, an f-string argument elsewhere -- is real code, not prose, and must still be caught."""
     core = tmp_path / "core"
     core.mkdir()
     (core / "m.py").write_text(
@@ -65,17 +61,7 @@ def test_comments_and_docstrings_do_not_count(tmp_path: Path):
 
 
 def test_a_field_trailing_docstring_does_not_count(tmp_path: Path):
-    """R2 fix, finding M7: only ``body[0]`` (a module/class/function's true
-    docstring) used to be exempt. This codebase's own house style dates a
-    correction as a bare string statement trailing a dataclass field or
-    class attribute -- not ``body[0]`` -- and the module's own docstring
-    already says "comments and docstrings are prose, not coupling", so that
-    convention must be exempt too, or every dated correction that repeats a
-    retired token becomes a false new "hit" the moment that token is added
-    to TOKENS (exactly what happened when M7 added ``time_indexed``:
-    ``DataArtifact.instance_indexed``'s and `UtilityManifest`-alike's own
-    "Renamed from time_indexed" corrections, both pre-existing, both not
-    ``body[0]``)."""
+    """Only `body[0]` -- a module/class/function's true docstring -- is exempt."""
     core = tmp_path / "core"
     core.mkdir()
     (core / "m.py").write_text(
@@ -100,9 +86,7 @@ def test_a_shrunk_count_must_be_recorded(tmp_path: Path):
 
 
 def test_a_grown_count_fails(tmp_path: Path):
-    """Track C review c2 (final review: must-fix): "debt can only shrink" is a
-    CLAUDE.md invariant, and nothing failed if the GREW comparison broke. A
-    recorded pair whose count went up fails, naming both counts."""
+    """"Debt can only shrink" is a CLAUDE.md invariant; a broken GREW comparison must fail the gate."""
     core = tmp_path / "core"
     core.mkdir()
     (core / "m.py").write_text('X = "controlDict controlDict"\n')
@@ -113,12 +97,11 @@ def test_a_grown_count_fails(tmp_path: Path):
     assert "GREW   m.py: controlDict 1 -> 2" in result.stdout
 
 
-# --- C-I1: snake_case / other spellings of the same layout token must count too. ---
+# --- snake_case / other spellings of the same layout token must count too. ---
 
 
 def test_snake_case_identifier_spelling_of_a_token_counts(tmp_path: Path):
-    """`touch_case_foam` is the same coupling as `case.foam`, spelled as a
-    Python identifier (review C-I1's generic_case.py example)."""
+    """`touch_case_foam` is the same coupling as `case.foam`, spelled as a Python identifier."""
     core = tmp_path / "core"
     core.mkdir()
     (core / "m.py").write_text("def f(touch_case_foam: bool) -> None:\n    return None\n")
@@ -142,8 +125,7 @@ def test_snake_case_spelling_of_a_camel_case_token_counts(tmp_path: Path):
 
 
 def test_foam_underscore_stays_an_unbounded_substring_match(tmp_path: Path):
-    """FOAM_ deliberately has no left boundary: it must still catch OPENFOAM_-style
-    constants (review: a boundary would stop catching those)."""
+    """FOAM_ deliberately has no left boundary: it must still catch OPENFOAM_-style constants (review: a boundary would stop catching those)."""
     core = tmp_path / "core"
     core.mkdir()
     (core / "m.py").write_text('X = "OPENFOAM_RUN_ROOT"\n')
@@ -155,8 +137,7 @@ def test_foam_underscore_stays_an_unbounded_substring_match(tmp_path: Path):
 
 
 def test_processor_gets_a_left_boundary(tmp_path: Path):
-    """`postprocessor`/`preprocessor` must NOT count as `processor`, but
-    `processor_dir` (a real core spelling) must."""
+    """`postprocessor`/`preprocessor` must NOT count as `processor`, but `processor_dir` (a real core spelling) must."""
     core = tmp_path / "core"
     core.mkdir()
     (core / "m.py").write_text(

@@ -1,32 +1,4 @@
-"""Generic value shapes, closed; physical meaning, elsewhere.
-
-``value_kind`` defaulted to the string "literal" and was validated only by an
-adapter's own ``_check_value``, which accepted any non-empty string for a
-vector and ``nan`` for a scalar (audit finding S1). Closing the vocabulary in
-core gives every adapter one shape check; it does not give core an opinion
-about conductivity.
-
-``dynamic_path`` was a bare boolean: a path had placeholders or it did not,
-and nothing said which values a placeholder may take. That is why ``banana``
-passed as a ventricle at the *resolution* layer (fixed separately in
-``omnidriver-cardiaccore``'s ``overrides.py``, audit finding S1). This module
-closes the *declaration* side: a catalog entry may name a placeholder's
-allowed values, and a partially-declared binding -- naming some placeholders
-but silently skipping a sibling -- is refused.
-
-Full closure (every placeholder on every ``dynamic_path`` entry must declare
-its domain) is deliberately not enforced here. The catalog surveyed for this
-task has 78 ``dynamic_path=True`` declarations and ten distinct placeholder
-names; all but the motivating ``<ventKey>`` example are open-ended,
-case-author-chosen instance identifiers (``<name>``, ``<electrode>``,
-``<region_name>``, ``<constant_name>``, ``<state_name>``, ``<patch>``,
-``<scope>``, ``<solver>``, ``<word>``, ``<value>``) with no closed domain to
-declare. Forcing one would mean fabricating an enum for something genuinely
-open. Leaving ``allowed_bindings`` empty is not "unchecked" in the sense this
-task closes -- there is nothing to check for an open identifier -- so it is
-accepted; a *partial* declaration on one entry is refused, which is the
-specific shape of bug S1 exhibited.
-"""
+"""Generic value shapes, closed; physical meaning, elsewhere."""
 
 import pytest
 
@@ -90,11 +62,8 @@ def test_a_well_shaped_value_passes(kind, value):
     ("word_list", ("alpha", ""), "empty"),
     ("scalar_list", ("1", "2"), "number"),
     ("integer_list", (1.5,), "integer"),
-    # R2 finding 10: `bytes` is a `collections.abc.Sequence`, so the typed
-    # branches that only excluded `str` let `b"abc"` through as three
-    # "numbers" (97, 98, 99). The typed-list branch already excluded
-    # `(str, bytes)`; vector3 and the dimensioned branches excluded only
-    # `str`.
+    # `bytes` is a `collections.abc.Sequence`, so a branch that excludes only
+    # `str` (not `(str, bytes)`) would let `b"abc"` through as three "numbers".
     ("vector3", b"abc", "three"),
     ("dimensioned_scalar", {"value": 1.0, "dimensions": b"1234567"}, "seven"),
     ("dimensioned_tensor", {"value": b"123456789", "dimensions": (0,) * 7}, "sequence"),
@@ -117,9 +86,7 @@ def test_a_dynamic_path_declares_its_allowed_bindings():
 
 
 def test_a_partially_declared_binding_is_refused():
-    """Naming some of an entry's placeholders and silently skipping a sibling
-    is exactly the shape of audit finding S1: the undeclared placeholder went
-    unchecked while its sibling looked covered."""
+    """Naming some of an entry's placeholders and silently skipping a sibling would leave the undeclared one unchecked while its sibling looks covered."""
     with pytest.raises(ValueError, match="<layer>"):
         dictionary.DictEntry(
             driver_path="$A.<ventKey>.<layer>.x", description="",
@@ -185,9 +152,7 @@ def test_a_binding_key_absent_from_the_path_is_refused():
         )
 
 
-# --- R2 finding 12: three one-line DictEntry guards, latent on the 258
-# production declarations R2 scanned (zero instances today) but cheap to
-# close regardless. ---
+# --- Three one-line DictEntry guards, latent but cheap to close. ---
 
 
 def test_a_placeholder_without_dynamic_path_is_refused():
@@ -215,8 +180,7 @@ def test_an_empty_binding_domain_is_refused():
 
 
 def test_core_asserts_nothing_about_units():
-    """``unit`` is the adapter's, supplied where domain evidence justifies it.
-    Core carries it and checks nothing against it."""
+    """``unit`` is the adapter's, supplied where domain evidence justifies it."""
     entry = dictionary.DictEntry(
         driver_path="$A.x", description="", value_kind="scalar", unit="furlong",
     )
@@ -225,28 +189,20 @@ def test_core_asserts_nothing_about_units():
 
 
 def test_no_kind_means_unchecked():
-    """Every member of the closed vocabulary has a real shape check; there is
-    no member whose validator always returns no reasons regardless of input."""
+    """Every member of the closed vocabulary has a real shape check; there is no member whose validator always returns no reasons regardless of input."""
     for kind in dictionary.VALUE_KINDS:
         reasons = dictionary.validate_value_shape(kind, object())
         assert reasons, f"{kind} accepted an arbitrary object with no reasons"
 
 
 def test_value_kind_is_mandatory():
-    """R2 finding 8: value_kind defaulted first to "literal" (which said
-    nothing), then to "word" once that vocabulary closed -- and "word" says
-    something specific and can be WRONG. Three production entries
-    ($ELECTRO_MODEL_COEFFS.ecgDomains.<name>.sampling.{start,end,deltaT})
-    omitted the field and silently declared "word" while actually being
-    scalars. A `grep` for `value_kind=` cannot find an entry that omits it;
-    a mandatory field cannot be missed the same way."""
+    """A default of "word" would say something specific and could be wrong; "literal" said nothing, but a default is worse than mandatory."""
     with pytest.raises(TypeError, match="value_kind"):
         dictionary.DictEntry(driver_path="$A.x", description="")
 
 
 def test_string_value_kind_K6():
-    """K6 (spec 2026-09-25 §5): openCARP's String/RFile/WFile parameters may
-    be empty or contain spaces; `word` refuses both."""
+    """openCARP's String/RFile/WFile parameters may be empty or contain spaces; `word` refuses both."""
     assert "string" in dictionary.VALUE_KINDS
     assert dictionary.validate_value_shape("string", "") == ()
     assert dictionary.validate_value_shape("string", "two words") == ()

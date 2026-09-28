@@ -77,10 +77,7 @@ def test_a_point_reader_needs_a_point_for_every_name(tmp_path):
 
 
 def test_a_points_taking_reader_that_reports_no_location_is_refused_by_name(tmp_path):
-    """I1, controller review 2026-09-26: a pre-registered
-    max_sampling_offset is silently unenforceable if the reader never says
-    where it sampled -- that stated guard must never pass unchecked, so
-    core refuses here instead of letting `sampling_offset` come back null."""
+    """A pre-registered max_sampling_offset is unenforceable if the reader never says where it sampled, so core refuses here rather than letting `sampling_offset` come back null."""
     (tmp_path / "grid.txt").write_text("0 0 0 1.0\n1 0 0 2.0\n")
 
     class NoWhereReader(ToyNearestRowReader):

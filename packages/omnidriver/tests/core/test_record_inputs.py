@@ -1,12 +1,4 @@
-"""Step S: supplied inputs for a tutorial record
-(docs/superpowers/specs/2026-09-28-supplied-inputs-design.md).
-
-``RecordInput``/``resolve_record_inputs`` are pure-data/pure-function tests
-(§2.1, §2.2); the rest exercise the real staging pipeline
-(``record_execution.commit_record_case``/``preview_record_case``) end to
-end against a toy JSON case-writer plugin, the same shape
-``test_tutorial_records.py`` already establishes -- no solver vocabulary.
-"""
+"""Step S: supplied inputs for a tutorial record (docs/superpowers/specs/2026-09-28-supplied-inputs-design.md)."""
 
 from __future__ import annotations
 
@@ -117,8 +109,7 @@ def test_a_record_refuses_a_destination_produced_before_it_is_consumed():
 
 
 def test_a_record_allows_a_step_that_both_produces_and_consumes_a_destination_in_place():
-    """A step rewriting its own input in place (setPurkinjeSlab's
-    Conductivity pattern) still counts as consumed-first."""
+    """A step rewriting its own input in place (setPurkinjeSlab's Conductivity pattern) still counts as consumed-first."""
     inp = RecordInput(name="anatomy", files=(("a", "0/a"),))
     record = TutorialRecord(
         name="r", native_case_relpath="r", inputs=(inp,),
@@ -138,8 +129,7 @@ def test_a_record_refuses_two_inputs_with_overlapping_destinations():
 
 
 def test_a_directory_destination_is_consumed_when_a_step_consumes_a_path_under_it():
-    """The idealized-heart mesh shape (§3): one input pair names a whole
-    directory; steps consume individual files under it."""
+    """The idealized-heart mesh shape (§3): one input pair names a whole directory; steps consume individual files under it."""
     mesh = RecordInput(name="mesh", files=(("m", "constant/polyMesh"),))
     record = TutorialRecord(
         name="r", native_case_relpath="r", inputs=(mesh,),
@@ -245,9 +235,7 @@ def _validator(document: str, key_path: tuple, value) -> tuple[str, bool]:
 
 
 class _InputWriterPlugin(MinimalTestPlugin):
-    """A toy case_writer, so a record with inputs can be staged and
-    committed end to end -- the "One case, step by step" pipeline, minus
-    any solver vocabulary."""
+    """A toy case_writer, so a record with inputs can be staged and committed end to end -- the "One case, step by step" pipeline, minus any solver vocabulary."""
 
     def get_supported_mutation_modes(self):
         return frozenset({"clone_and_patch"})
@@ -318,10 +306,7 @@ def test_commit_record_case_stages_a_supplied_input_into_its_destination(tmp_pat
 
 
 def test_staging_never_takes_an_input_destination_from_the_case_folder(tmp_path):
-    """Design §2.3: "a destination never comes from the case folder,
-    including a run case being restaged." A stale copy of the destination
-    sitting in the native case (as a prior run would leave one) must not
-    survive staging -- the supplied bundle's own bytes must win."""
+    """Design §2.3: "a destination never comes from the case folder, including a run case being restaged." A stale copy of the destination sitting in the native case (as a prior run would leave one) must not survive staging -- the supplied bundle's own bytes must win."""
     native = tmp_path / "cases" / "humanSlabToy"
     (native / "system").mkdir(parents=True)
     (native / "system" / "controlDict.json").write_text("{}")

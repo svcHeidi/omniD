@@ -56,11 +56,7 @@ def test_production_consumers_do_not_bypass_capability_bundle() -> None:
 
 
 def test_core_executable_literals_do_not_encode_adapter_conventions() -> None:
-    """Executable Core code must consume conventions through capabilities.
-
-    Historical adapter vocabulary may remain in explanatory docstrings, but a
-    runtime branch or default must not silently resurrect it as policy.
-    """
+    """Executable Core code must consume conventions through capabilities."""
     forbidden = (
         "Allrun",
         "Allclean",
@@ -144,13 +140,7 @@ ADAPTER_PACKAGES = (
 
 
 def test_no_adapter_reaches_into_the_context_providers():
-    """Adapters go through `.capabilities` too.
-
-    Core has been clean since Phase 2 Task 7, but this guard never covered the
-    adapters -- so `openfoam_environment` grew a private, unversioned plugin
-    ABI (`get_openfoam_bashrc`, `configure_execution_environment`) that no
-    Protocol declared and nothing validated.
-    """
+    """Adapters go through `.capabilities` too."""
     offenders = []
     for package in ADAPTER_PACKAGES:
         for path in Path(package).rglob("*.py"):

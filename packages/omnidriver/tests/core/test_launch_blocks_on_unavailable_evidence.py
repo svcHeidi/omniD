@@ -1,22 +1,4 @@
-"""A required check that cannot run prevents the claim that depends on it.
-
-See docs/superpowers/specs/2026-09-18-coverage-as-evidence.md §5.
-
-`is_launchable` decides from `plan_status` and environment *diagnostics* only.
-A stage that never ran emits no diagnostics, so `environment_ok = not ()` is
-True and the gate opens. That is the launch-side half of the same defect the
-scoring had: absence of evidence read as evidence of absence of problems.
-
-The distinction the gate must make:
-
-  unavailable    the check was owed and could not run -- blocks
-  not_requested  an operator declined it -- does not block, but is recorded
-  not_applicable there was nothing to check -- does not block
-
-These test `is_launchable` directly with constructed audit items rather than
-through a plugin, because the rule is core's and must hold for any adapter,
-including ones that do not exist yet.
-"""
+"""A required check that cannot run prevents the claim that depends on it."""
 from __future__ import annotations
 
 from omnidriver.core.planning_types import SimulationAuditItem
@@ -69,11 +51,7 @@ def test_an_inapplicable_check_does_not_block_launch() -> None:
 
 
 def test_a_plan_with_no_audit_still_launches() -> None:
-    """Callers that predate coverage must keep working unchanged.
-
-    `is_launchable` is called from several CLI paths; a missing audit means
-    "no coverage information supplied", which must not be read as a gap.
-    """
+    """Callers that predate coverage must keep working unchanged."""
     readiness = is_launchable(plan_status="ok", environment_diagnostics=())
 
     assert readiness.launchable is True

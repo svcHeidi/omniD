@@ -1,9 +1,4 @@
-"""A mutation request names its mode, its owner, and its sources.
-
-Two creation modes, deliberately not collapsed: ``clone_and_patch`` edits an
-existing case (source: that case); ``synthesize`` builds one from a catalog
-and needs explicit source artifacts (a mesh, a template tree).
-"""
+"""A mutation request names its mode, its owner, and its sources."""
 
 from pathlib import Path
 
@@ -65,11 +60,7 @@ def test_a_patch_needs_no_source_artifact():
 
 
 def test_a_parameter_keeps_its_document_scope():
-    """Two documents declaring one leaf name are two parameters.
-
-    The unqualified form is what let an absent scar dictionary overwrite a
-    present conductivity dictionary's field name (audit finding S3).
-    """
+    """Two documents declaring one leaf name are two parameters."""
     conductivity = _assignment(qualified_id="$CARDIAC_CONDUCTIVITY.fiberField",
                                document="system/setCardiacConductivityDict")
     scar = _assignment(qualified_id="$CARDIAC_SCAR.fiberField",
@@ -88,8 +79,7 @@ def test_two_assignments_to_one_slot_are_refused():
 
 
 def test_an_unknown_value_source_is_refused():
-    """A value's origin is evidence. "I do not know where this came from" is
-    not one of the five sources."""
+    """A value's origin is evidence."""
     with pytest.raises(ValueError, match="plausible"):
         _assignment(source="plausible")
 
@@ -110,9 +100,7 @@ def test_a_document_path_escaping_the_case_is_refused():
 
 
 def test_a_dynamic_binding_must_be_declared_not_inferred():
-    """`<ventKey>` accepted `banana` because the segment was substituted
-    without being checked (audit finding S1). A binding carries its allowed
-    values with it."""
+    """`<ventKey>` must not accept `banana`: the segment must be checked, not merely substituted."""
     with pytest.raises(ValueError, match="banana"):
         _assignment(
             qualified_id="$PURKINJE_TREE.<ventKey>.seed",
@@ -136,11 +124,9 @@ def test_a_declared_binding_is_accepted_and_expanded():
     assert assignment.expanded_key_path() == ("lv", "seed")
 
 
-# --- R2 finding 4, closed per the plan's 2026-09-23 decision section: "a
-# parameter value is typed data, never rendered text". `validate_value_shape`
-# was never called from `ParameterAssignment`, so the closed value_kind
-# vocabulary was closed for DictEntry and wide open here -- the exact hole
-# audit finding S1 was supposed to have closed. ---
+# --- A parameter value is typed data, never rendered text: the closed
+# value_kind vocabulary must be enforced here too, via
+# `validate_value_shape`, not only for DictEntry. ---
 
 
 def test_nan_is_refused_for_a_scalar():
@@ -187,8 +173,7 @@ def test_a_clone_and_patch_request_with_no_parameters_but_a_source_artifact_is_a
 
 
 def test_an_empty_source_artifact_is_refused():
-    """`source_artifacts=("",)` satisfied the non-empty-tuple guard while
-    naming nothing."""
+    """`source_artifacts=("",)` satisfied the non-empty-tuple guard while naming nothing."""
     with pytest.raises(ValueError, match="non-empty"):
         case_write.CaseMutationRequest(
             mode="synthesize", case_root=Path("/tmp/case"),
@@ -226,12 +211,7 @@ def test_a_relative_case_root_is_refused_at_construction():
 
 
 def test_a_relative_case_root_committed_from_two_directories_would_diverge_but_is_refused_first(tmp_path, monkeypatch):
-    """The exact reproduction R3 gave: build a plan whose `case_root` is a
-    relative `Path("somecase")` from directory A, then attempt to commit it
-    from directory B where a `somecase/` also exists. Without the
-    construction-time guard this silently wrote into whichever directory the
-    *committing* process happened to be in; with it, the plan cannot be built
-    at all."""
+    """The exact reproduction R3 gave: build a plan whose `case_root` is a relative `Path("somecase")` from directory A, then attempt to commit it from directory B where a `somecase/` also exists."""
     dir_a = tmp_path / "a"
     dir_b = tmp_path / "b"
     (dir_a / "somecase").mkdir(parents=True)
@@ -275,9 +255,7 @@ def test_an_unknown_operation_is_refused_by_name():
 
 
 def test_remove_forbids_a_value():
-    """`remove` asserts the key is absent -- a different claim from "has this
-    value", the same reasoning `Precondition` already applies to
-    `must_be_absent`/`digest`."""
+    """`remove` asserts the key is absent -- a different claim from "has this value", the same reasoning `Precondition` already applies to `must_be_absent`/`digest`."""
     with pytest.raises(ValueError, match="value"):
         _assignment(operation="remove", value=0.1)
 
@@ -299,8 +277,7 @@ def test_ensure_requires_a_value():
 
 
 def test_remove_still_checks_value_kind_is_known():
-    """`remove` skips "does the value fit", since there is no value -- it
-    does not skip "is value_kind itself a real kind"."""
+    """`remove` skips "does the value fit", since there is no value -- it does not skip "is value_kind itself a real kind"."""
     with pytest.raises(ValueError, match="banana"):
         _assignment(operation="remove", value=None, value_kind="banana")
 
@@ -315,9 +292,7 @@ def test_remove_round_trips_through_json():
 
 
 def test_a_plan_written_before_operation_existed_reads_back_as_set():
-    """`from_json` on a payload with no `operation` key -- what every plan
-    written before this field existed looks like -- must read back as `set`,
-    not raise and not invent a different default silently."""
+    """`from_json` on a payload with no `operation` key -- what every plan written before this field existed looks like -- must read back as `set`, not raise and not invent a different default silently."""
     payload = _assignment().to_json()
     del payload["operation"]
     restored = case_write.ParameterAssignment.from_json(payload)
@@ -325,10 +300,7 @@ def test_a_plan_written_before_operation_existed_reads_back_as_set():
 
 
 def test_operation_changes_the_assignment_digest():
-    """Two assignments differing only in `operation` must serialize
-    differently -- otherwise a plan could not distinguish "set this key" from
-    "remove this key" once digested, which is the entire point of adding the
-    field (2026-09-23 decision)."""
+    """Two assignments differing only in `operation` must serialize differently -- otherwise a plan could not distinguish "set this key" from "remove this key" once digested, which is the entire point of adding the field (2026-09-23 decision)."""
     set_assignment = _assignment(operation="set")
     ensure_assignment = _assignment(operation="ensure")
     assert (
@@ -338,10 +310,7 @@ def test_operation_changes_the_assignment_digest():
 
 
 def test_a_clone_and_patch_request_accepts_a_remove_operation():
-    """The request-level construction path -- not just the bare dataclass --
-    accepts a `remove` assignment. Same slot-uniqueness rule as any other
-    assignment: `CaseMutationRequest` does not know or care what operation
-    occupies a slot, only that no two assignments claim the same one."""
+    """The request-level construction path -- not just the bare dataclass -- accepts a `remove` assignment."""
     request = case_write.CaseMutationRequest(
         mode="clone_and_patch", case_root=Path("/tmp/case").resolve(),
         adapter_id="org.a", workflow="w", source_artifacts=(),

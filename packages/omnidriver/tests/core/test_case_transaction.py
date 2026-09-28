@@ -1,17 +1,4 @@
-"""Commit is core's, and it is recoverable.
-
-Per-file atomic replacement plus a journal. That gives: recovery from an
-interruption, rollback of a partially applied plan, and a framework reader
-never seeing a half-written file. It does NOT give simultaneous atomic
-visibility of several files to an arbitrary outside process -- proposal defect
-W2 described it as an atomic case write, and it is not one. The tests below
-assert what is true.
-
-The chmod-based failure-injection tests do not behave as written when run as
-root (root ignores a directory's write permission bit), so they are guarded
-with ``skipif(os.geteuid() == 0, ...)``: a test that silently passes because
-it could not fail is worse than a skip that says why.
-"""
+"""Commit is core's, and it is recoverable."""
 import os
 from pathlib import Path
 
@@ -26,10 +13,7 @@ _root_makes_chmod_tests_meaningless = pytest.mark.skipif(
 
 
 def _parameter():
-    """A request needs at least one parameter for `clone_and_patch` (R2 finding
-    7, added after this plan's Task 5 snippet was written) -- the transaction
-    executor itself does not read this; it exists only to satisfy
-    `CaseMutationRequest.__post_init__`."""
+    """The transaction executor itself does not read this parameter; it exists only to satisfy `CaseMutationRequest.__post_init__`."""
     return case_write.ParameterAssignment(
         qualified_id="$TEST.value", owner="org.a", document="constant/a",
         key_path=("value",), binding={}, value=1.0, value_kind="scalar",
@@ -162,8 +146,7 @@ def test_a_failed_precondition_refuses_before_any_write(tmp_path):
 
 
 def test_an_absence_precondition_that_no_longer_holds_refuses(tmp_path):
-    """A file appearing at a higher-priority include location changes which
-    file the run reads (audit finding F2). Its absence was a precondition."""
+    """A file appearing at a higher-priority include location changes which file the run reads."""
     (tmp_path / "site").mkdir()
     (tmp_path / "site" / "shadow").write_bytes(b"appeared\n")
     plan = _plan(
@@ -177,8 +160,7 @@ def test_an_absence_precondition_that_no_longer_holds_refuses(tmp_path):
 
 
 def test_a_path_escaping_the_case_is_refused_at_commit_too(tmp_path):
-    """`RenderedFile` refuses it at construction. Commit checks again against
-    the resolved real path, because a symlink can move a legal path outside."""
+    """`RenderedFile` refuses it at construction."""
     outside = tmp_path.parent / "outside"
     outside.mkdir(exist_ok=True)
     (tmp_path / "constant").mkdir()
@@ -200,13 +182,7 @@ def test_a_second_attempt_under_a_held_lease_is_refused(tmp_path):
 
 
 def test_case_lease_held_reuses_the_callers_own_lease(tmp_path):
-    """Phase 3 Task 5: `--apply` calls this from inside `cli.py`'s own
-    already-held case lease (`_dispatch_context`). Without
-    `case_lease_held=True`, this reproduces
-    `test_a_second_attempt_under_a_held_lease_is_refused` above -- the same
-    thread's own lease looks exactly like a conflicting second attempt.
-    `case_lease_held=True` must let the commit through, using the caller's
-    lease rather than acquiring (and refusing on) its own."""
+    """`--apply` calls this from inside `cli.py`'s own already-held case lease (`_dispatch_context`)."""
     from omnidriver.core.runtime.attempt_lease import acquire_case_lease
 
     plan = _plan(tmp_path, [_rendered("constant/a", b"one\n")])
@@ -223,10 +199,7 @@ def test_case_lease_held_reuses_the_callers_own_lease(tmp_path):
 
 
 def test_case_lease_held_refuses_an_unverified_claim(tmp_path):
-    """`case_lease_held=True` is checked, not merely trusted (R3 finding 6's
-    same "report the real cause" spirit): a caller that claims to already
-    hold the lease without actually holding it must be refused loudly rather
-    than proceed with no serialization at all."""
+    """`case_lease_held=True` is checked, not merely trusted: a caller that does not actually hold the lease is refused loudly, not left to proceed with no serialization at all."""
     plan = _plan(tmp_path, [_rendered("constant/a", b"one\n")])
     with pytest.raises(case_transaction.CaseTransactionError, match="case_lease_held"):
         case_transaction.commit_case_write(
@@ -251,12 +224,7 @@ def test_the_journal_is_removed_after_a_clean_commit(tmp_path):
 
 @_root_makes_chmod_tests_meaningless
 def test_an_unreadable_existing_file_is_wrapped_not_leaked(tmp_path):
-    """Commit a `RenderedFile(mode=0o000)`, then a second transaction
-    overwriting that same path. `_before_image`'s `target.read_bytes()` needs
-    read access to snapshot the before-image; it used to raise a bare
-    `PermissionError` that escaped past the lease's release and every
-    caller's assumption that a commit failure surfaces as
-    `CaseTransactionError`."""
+    """Commit a `RenderedFile(mode=0o000)`, then a second transaction overwriting that same path."""
     first = _plan(tmp_path, [_rendered("constant/a", b"one\n", mode=0o000)])
     case_transaction.commit_case_write(first, driver_context=object(), execution_env=None)
     assert (tmp_path / "constant" / "a").stat().st_mode & 0o777 == 0o000
@@ -297,8 +265,8 @@ def test_an_unreadable_precondition_target_is_wrapped_not_leaked(tmp_path):
 
 
 # --------------------------------------------------------------------------
-# R3 finding 3 (2026-09-23): an `environment` precondition, checked against
-# the execution environment rather than the filesystem.
+# An `environment` precondition, checked against the execution environment
+# rather than the filesystem.
 # --------------------------------------------------------------------------
 
 
@@ -329,9 +297,7 @@ def test_an_environment_precondition_refuses_when_the_value_changed(tmp_path, mo
 
 
 def test_an_absent_environment_precondition_refuses_when_the_variable_appears(tmp_path, monkeypatch):
-    """"Absence is a dependency" (audit finding F2's principle, extended to
-    environment preconditions here): a variable recorded as unset at
-    planning time must refuse the commit if it has since been set."""
+    """"Absence is a dependency" applies to environment preconditions too: a variable recorded as unset must refuse the commit if it has since been set."""
     monkeypatch.setenv("OMNIDRIVER_TEST_ENV_KEY", "surprise")
     plan = _plan(
         tmp_path, [_rendered("constant/a", b"new\n")],
@@ -358,15 +324,14 @@ def test_an_absent_environment_precondition_passes_when_it_stays_absent(tmp_path
 
 
 # --------------------------------------------------------------------------
-# R3 finding 4 (2026-09-23): precondition checks followed symlinks
-# (`is_file()`/`read_bytes()` dereference), while `_resolve_target` already
-# refused a symlink at a write target. Mirrored here.
+# A precondition check must refuse a symlinked read target the same way
+# `_resolve_target` refuses one at a write target, not dereference it via
+# `is_file()`/`read_bytes()`.
 # --------------------------------------------------------------------------
 
 
 def test_a_symlinked_precondition_target_is_refused(tmp_path):
-    """A case-relative read dependency swapped for a symlink to content
-    outside the case must not pass its precondition."""
+    """A case-relative read dependency swapped for a symlink to content outside the case must not pass its precondition."""
     outside = tmp_path.parent / "outside_dep"
     outside.mkdir(exist_ok=True)
     swapped = outside / "swapped.txt"
@@ -402,9 +367,8 @@ def test_a_symlinked_absence_target_still_counts_as_present(tmp_path):
 
 
 # --------------------------------------------------------------------------
-# R3 finding 6 (2026-09-23): a misleading lease error. When the case root
-# does not resolve, the refusal used to say "write lease is already held"
-# regardless of the real cause.
+# When the case root does not resolve, the refusal must name that real
+# cause, not a generic "write lease is already held".
 # --------------------------------------------------------------------------
 
 

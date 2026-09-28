@@ -1,18 +1,4 @@
-"""PAR (owner Q6, 2026-09-26): a record runs parallel through its solver layer.
-
-A record declares its solve step once. A run asks for parallel with the one
-reserved study name ``parallel`` (a study value, or ``--parallel`` on the
-CLI); serial is the default. Core finds the step to rewrite through the
-stack's existing ``get_solve_step_commands`` and hands it to the stack's
-optional ``get_parallel_steps`` hook, which returns the step's parallel
-form. Core never learns what that form means: it rewires the DAG, keeps
-the solve step's id and outputs, reads the scheduler's allocation from the
-declared place, and refuses by name where a fact is missing or disagrees.
-
-The toy stack (``plugins.parallel_toy``) needs no MPI: its parallel form
-is a split step, the solve with one extra argument, and a join step, with
-its count read from the toy's own case (``constant/mesh.json:cells``).
-"""
+"""PAR (owner Q6, 2026-09-26): a record runs parallel through its solver layer."""
 from __future__ import annotations
 
 import json
@@ -229,8 +215,7 @@ def test_parallel_null_is_refused_by_name_never_read_as_serial(tmp_path):
 
 
 def test_the_count_is_read_from_the_committed_case(tmp_path, monkeypatch):
-    """The study changes the toy's count and the form follows it: N comes
-    from the case the run will see, never restated."""
+    """The study changes the toy's count and the form follows it: N comes from the case the run will see, never restated."""
     monkeypatch.delenv("SLURM_NTASKS", raising=False)
     cases_root = _native_toy_case(tmp_path, cells="2")
     context = _toy_context()
@@ -377,9 +362,7 @@ def test_the_flag_is_refused_for_an_entry_that_is_not_a_record(tmp_path, capsys)
 
 
 def test_a_sweep_compares_serial_against_parallel_and_both_run(tmp_path, monkeypatch):
-    """The study value is sweepable, so one sweep holds a serial case and a
-    parallel one; both run for real, through the child process, and each
-    case's run document says which it was."""
+    """The study value is sweepable, so one sweep holds a serial case and a parallel one; both run for real, through the child process, and each case's run document says which it was."""
     monkeypatch.delenv("SLURM_NTASKS", raising=False)
     cases_root = _native_toy_case(tmp_path)
     spec = {

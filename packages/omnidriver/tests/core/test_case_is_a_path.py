@@ -1,10 +1,4 @@
-"""A case is identified by its path, not by a name under a root.
-
-registry._is_case_directory() already answers "is this a runnable case?" from
-a directory's own contents, through the plugin's declared marker or entrypoint
-contract -- and it takes a path. Before this, resolve_entry() rejected that
-same path and only resolved once the caller split it into a root and a name.
-"""
+"""A case is identified by its path, not by a name under a root."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -52,11 +46,7 @@ def test_a_relative_path_resolves_against_the_working_directory(
 
 
 def test_a_conflicting_case_dir_name_is_refused_not_dropped(tmp_path: Path) -> None:
-    """The path already names the case, so a supplied `case_dir_name` that
-    differs is a contradiction. It used to be overwritten by the path's own
-    name without a word -- a `--config` value vanished, and a case-path sweep
-    entry's staged name was discarded so the source case was mutated in
-    place. Same defect shape as the config-supplied `cases_root` refusal."""
+    """The path already names the case, so a supplied `case_dir_name` that differs is a contradiction."""
     ctx = driver_context(MinimalTestPlugin(entrypoint="run-case"), source="test:case-path")
     case = _case(tmp_path)
 
@@ -72,8 +62,7 @@ def test_a_conflicting_case_dir_name_is_refused_not_dropped(tmp_path: Path) -> N
 
 
 def test_a_case_dir_name_that_restates_the_path_is_accepted(tmp_path: Path) -> None:
-    """The contrast: refusing every supplied value would also pass the test
-    above. Only a contradiction is refused."""
+    """The contrast: refusing every supplied value would also pass the test above."""
     ctx = driver_context(MinimalTestPlugin(entrypoint="run-case"), source="test:case-path")
     case = _case(tmp_path)
 
@@ -88,8 +77,7 @@ def test_a_case_dir_name_that_restates_the_path_is_accepted(tmp_path: Path) -> N
 
 
 def test_a_directory_that_is_not_a_case_is_still_refused(tmp_path: Path) -> None:
-    """The contrast is the point: if any path resolved, the assertions above
-    would pass for a directory with nothing in it."""
+    """The contrast is the point: if any path resolved, the assertions above would pass for a directory with nothing in it."""
     ctx = driver_context(MinimalTestPlugin(entrypoint="run-case"), source="test:case-path")
     empty = tmp_path / "notacase"
     empty.mkdir()

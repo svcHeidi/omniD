@@ -49,12 +49,7 @@ def test_plain_case_plans_with_declared_neutral_environment(tmp_path: Path) -> N
 
 
 def test_the_advertised_run_command_rebuilds_the_planning_context(tmp_path: Path) -> None:
-    """strict_plan hands back a `run --strict --entry` command for another
-    process to execute. It must carry the `--plugin` selector the planning
-    context was built from, or that process resolves the entry-point default
-    -- a different stack, or a refusal when two adapters are installed. A
-    context built by no selector advertises no flag rather than a guessed one.
-    """
+    """strict_plan hands back a `run --strict --entry` command for another process to execute."""
     case_root = tmp_path / "plainCase"
     case_root.mkdir()
     (case_root / "run-test-case").write_text("#!/bin/sh\nexit 0\n")
@@ -102,16 +97,7 @@ def test_plain_case_uses_the_selected_declared_context(tmp_path: Path) -> None:
 def test_a_relative_cases_root_plans_a_document_its_reader_places_identically(
     tmp_path: Path, monkeypatch,
 ) -> None:
-    """The run document is read by another process under its own rule.
-
-    `build_execution_inputs` reads a relative `launch.outputDir` as relative
-    to `caseRoot`, and a relative `caseRoot` as relative to the reader's
-    working directory. Planning used to write both already joined and still
-    relative (`caseRoot='cases/plainCase'`,
-    `outputDir='cases/plainCase/outputs'`), so the reader nested the output
-    dir twice -- and a sweep parent looking where the document said found no
-    workflow state for a case that had completed.
-    """
+    """The run document is read by another process under its own rule."""
     from omnidriver.core.runtime.run_document_exec import build_execution_inputs
 
     case_root = tmp_path / "cases" / "plainCase"
@@ -174,9 +160,7 @@ def test_unresolved_configuration_blocks_normal_plan_but_is_explicitly_explorabl
 
 
 def test_make_spec_accepts_generic_path_addressed_overrides_not_cardiac_kwargs() -> None:
-    """make_spec's public signature must not require electro/physics-named
-    keyword arguments -- a non-cardiac caller should be able to pass generic,
-    path-addressed dictionary overrides and file relpaths."""
+    """make_spec's public signature must not require electro/physics-named keyword arguments -- a non-cardiac caller should be able to pass generic, path-addressed dictionary overrides and file relpaths."""
     import inspect
     from omnidriver.core.runtime.generic_case import make_spec
 
@@ -217,14 +201,7 @@ def _spec(tmp_path: Path, **kwargs):
 
 
 def test_generic_dict_file_overrides_reach_the_mutation_callback(tmp_path: Path) -> None:
-    """A plugin names its own dictionary files; core just carries the mapping
-    through to the callback without knowing what the names mean.
-
-    Step S6: there is no more deprecated/channel-compliant split to choose
-    between -- every spec's ``case_mutation`` is called the same way,
-    whether the underlying callback is the no-op sentinel or a real,
-    adapter-supplied one.
-    """
+    """A plugin names its own dictionary files; core just carries the mapping through to the callback without knowing what the names mean."""
     spy = _MutationSpy()
     spec = _spec(
         tmp_path,
@@ -243,12 +220,7 @@ def test_generic_dict_file_overrides_reach_the_mutation_callback(tmp_path: Path)
 
 
 def test_cardiac_named_kwargs_are_no_longer_accepted(tmp_path: Path) -> None:
-    """The cardiac-named make_spec() kwargs (electro_properties_relpath and
-    friends) were a deprecated-alias mechanism with zero real production
-    callers -- every cardiacfoam tutorial that uses these names calls its
-    own per-tutorial make_spec(), never core's generic-case factory.
-    Pre-publication is the moment to drop it rather than carry it forward
-    (future/ENVIRONMENT_CONTRACT.md §10, Tier 3)."""
+    """The cardiac-named make_spec() kwargs (electro_properties_relpath and friends) were a deprecated-alias mechanism with zero real production callers -- every cardiacfoam tutorial that uses these names calls its own per-tutorial make_spec(), never core's generic-case factory."""
     import pytest
 
     with pytest.raises(TypeError, match="electro_properties_relpath"):
@@ -256,10 +228,7 @@ def test_cardiac_named_kwargs_are_no_longer_accepted(tmp_path: Path) -> None:
 
 
 def test_generic_case_takes_no_environment_parameter(tmp_path: Path) -> None:
-    """A1 (2026-09-26): the environment source is the plugin's, passed at
-    plan and run time; a generic case never stored it (it was dead data).
-    Step S6 deleted the ``CaseConfig.params`` bag this used to also check
-    was never populated with it -- there is no such bag left at all now."""
+    """The environment source is the plugin's, passed at plan and run time; a generic case does not store it."""
     import pytest
 
     with pytest.raises(TypeError, match="explicit_bashrc"):
@@ -267,10 +236,7 @@ def test_generic_case_takes_no_environment_parameter(tmp_path: Path) -> None:
 
 
 def test_openfoam_bashrc_kwarg_is_no_longer_accepted(tmp_path: Path) -> None:
-    """The openfoam_bashrc deprecated alias was removed outright -- this
-    codebase has no external callers to protect yet, so pre-publication is
-    the moment to drop it rather than carry it forward
-    (future/ENVIRONMENT_CONTRACT.md §10, Tier 3)."""
+    """No deprecated alias is carried forward; see `future/ENVIRONMENT_CONTRACT.md` §10."""
     import pytest
 
     with pytest.raises(TypeError, match="openfoam_bashrc"):
@@ -288,11 +254,7 @@ def test_genuinely_unknown_keyword_still_raises_type_error(tmp_path: Path) -> No
 def test_generic_detection_keys_off_the_primary_declared_dict_file(
     tmp_path: Path,
 ) -> None:
-    """A folder is generic while the first declared dictionary file is absent,
-    and stops being generic once it appears. Later entries in the mapping do
-    not decide this -- a case carrying only a secondary dictionary stays
-    generic, which is what a plain OpenFOAM folder with an unrelated
-    ``constant/`` file relies on."""
+    """A folder is generic while the first declared dictionary file is absent, and stops being generic once it appears."""
     case_root = tmp_path / "aCase"
     (case_root / "constant").mkdir(parents=True)
     relpaths = {"primary": "constant/primaryDict", "secondary": "constant/secondaryDict"}
@@ -309,18 +271,7 @@ def test_generic_detection_keys_off_the_primary_declared_dict_file(
 def test_default_mapping_stays_generic_when_only_the_secondary_dict_exists(
     tmp_path: Path,
 ) -> None:
-    """The real scenario the primary-file heuristic exists for: two shipped
-    tutorials (``electroMechanicalNiedererEtAl2011``,
-    ``monodomainTotalLagrangianEM``) keep ``electroProperties`` nested under
-    ``constant/electro/electroProperties`` while still carrying a top-level
-    ``constant/physicsProperties``. Under the DEFAULT dict-file mapping (primary
-    ``electro`` -> ``constant/electroProperties``, secondary ``physics`` ->
-    ``constant/physicsProperties``, from ``core.compatibility``), the presence
-    of ``physicsProperties`` alone must not flip the case out of generic --
-    only the primary file's presence may do that. This is not exercised by
-    ``test_generic_detection_keys_off_the_primary_declared_dict_file`` above,
-    which uses synthetic ``primary``/``secondary`` names rather than
-    ``make_spec``'s real default mapping."""
+    """The real scenario the primary-file heuristic exists for: two shipped tutorials (``electroMechanicalNiedererEtAl2011``, ``monodomainTotalLagrangianEM``) keep ``electroProperties`` nested under ``constant/electro/electroProperties`` while still carrying a top-level ``constant/physicsProperties``."""
     case_root = tmp_path / "aCase"
     (case_root / "constant").mkdir(parents=True)
     (case_root / "constant" / "physicsProperties").write_text("")
@@ -335,18 +286,7 @@ def test_declaring_no_dict_files_leaves_the_case_generic(tmp_path: Path) -> None
 
 
 def test_core_declares_no_default_dict_files(tmp_path: Path) -> None:
-    """Omitting dict_file_relpaths entirely is not the same as core supplying
-    a default -- it means there are none.
-
-    This used to assert the opposite: that omitting the argument produced
-    cardiacFoam's constant/electroProperties and constant/physicsProperties
-    via compatibility.legacy_generic_case_dict_file_relpaths. Core defaulting
-    to two filenames from one solver's vocabulary was the point of that seam
-    and is exactly what got removed; the pair now lives in
-    cardiacfoam/generic_case.py, whose own test asserts it. The
-    distinction from test_declaring_no_dict_files_leaves_the_case_generic
-    above is that this one passes no argument at all.
-    """
+    """Omitting dict_file_relpaths entirely is not the same as core supplying a default -- it means there are none."""
     spec = _spec(tmp_path)
 
     assert spec.metadata["dict_file_relpaths"] == {}
@@ -371,16 +311,7 @@ def test_metadata_reports_dict_file_overrides_as_one_generic_flag(
 
 
 def test_make_generic_case_spec_applies_no_solver_mutation(tmp_path: Path) -> None:
-    """The dedicated generic entry point must never reach into a plugin's
-    mutator, even though bare make_spec still defaults to the legacy seam.
-
-    Task 8, 2026-09-24: with no adapter-supplied mutation callback, this spec
-    genuinely writes nothing. Step S6 deleted the ``apply_case``/``plan_case``
-    split this used to also check (a real, adapter-supplied callback used to
-    be reachable only through the deprecated, non-reporting ``apply_case``
-    fallback; there is only ``case_mutation`` now, called the same way
-    either way -- see ``test_generic_dict_file_overrides_reach_the_mutation_callback``
-    for the real-callback counterpart)."""
+    """The dedicated generic entry point must never reach into a plugin's mutator, even though bare make_spec still defaults to the legacy seam."""
     from omnidriver.core import compatibility
     from omnidriver.core.runtime.generic_case import make_generic_case_spec
 

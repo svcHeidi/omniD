@@ -6,12 +6,7 @@ from omnidriver.dict_entries import DictEntry
 
 
 class TestDictEntryStructuredConstraints(unittest.TestCase):
-    """DictEntry exposes five structured-constraint fields so that
-    constraints can be expressed in a form the validator can evaluate.
-
-    The fields are additive (P8 additive-only policy): every existing
-    DictEntry must construct unchanged with empty defaults.
-    """
+    """DictEntry exposes five structured-constraint fields so that constraints can be expressed in a form the validator can evaluate."""
 
     def _build_entry(self, **overrides) -> "DictEntry":
         defaults = {
@@ -52,8 +47,7 @@ class TestDictEntryStructuredConstraints(unittest.TestCase):
         )
 
     def test_applicable_when_accepts_value_list_predicate(self) -> None:
-        """Some constraints target multiple legal values
-        (e.g. 'manufactured ionic models X, Y, Z')."""
+        """Some constraints target multiple legal values (e.g. 'manufactured ionic models X, Y, Z')."""
         entry = self._build_entry(
             applicable_when={
                 "ionicModel": (
@@ -93,8 +87,7 @@ class TestDictEntryStructuredConstraints(unittest.TestCase):
 
 
     def test_entry_remains_frozen(self) -> None:
-        """The additive fields must not loosen the existing
-        immutability guarantee on DictEntry."""
+        """The additive fields must not loosen the existing immutability guarantee on DictEntry."""
         import dataclasses
         entry = self._build_entry()
         with self.assertRaises(dataclasses.FrozenInstanceError):
@@ -131,23 +124,14 @@ def test_dict_entry_phases_default_is_empty_frozenset():
 
 
 def test_core_exports_no_phase_vocabulary():
-    """``omnidriver.dict_entries`` used to re-export a ``Phase`` literal
-    spelling cardiacFoam's four editing phases. A plugin declares its own
-    through ``get_phases()``; core naming them was the last solver noun in the
-    package."""
+    """``omnidriver.dict_entries`` used to re-export a ``Phase`` literal spelling cardiacFoam's four editing phases."""
     import omnidriver.dict_entries as dict_entries
 
     assert not hasattr(dict_entries, "Phase")
 
 
 class TestCoRequiredWithEvaluation(unittest.TestCase):
-    """``co_required_with`` is the inverse of ``mutually_exclusive_with``:
-    a declared group must be set as a whole or not at all.
-
-    This guards behaviour, not a fixture: the validator has to stay silent
-    when nothing in the group is set, stay silent when every member is set,
-    and report once per missing sibling in between.
-    """
+    """``co_required_with`` is the inverse of ``mutually_exclusive_with``: a declared group must be set as a whole or not at all."""
 
     def _group(self) -> list["DictEntry"]:
         names = ("alpha", "beta", "gamma")
@@ -192,12 +176,7 @@ class TestCoRequiredWithEvaluation(unittest.TestCase):
 
 
 def test_entries_and_catalog_agree(driver_context_for_installed_plugins):
-    """One capability must not give two answers.
-
-    `get_dict_entries()` and `get_dictionary_catalog().entries` are both
-    `DictionaryCatalogCapability`. A consumer should not have to know which
-    accessor sees the whole catalogue.
-    """
+    """One capability must not give two answers."""
     for context in driver_context_for_installed_plugins:
         dictionaries = context.capabilities.dictionaries
         flat = {entry.driver_path for entry in dictionaries.entries()}

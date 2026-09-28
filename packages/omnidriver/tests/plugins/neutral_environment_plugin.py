@@ -1,10 +1,4 @@
-"""Empty environment fixture for tests that require no adapter convention.
-
-This module intentionally provides no OpenFOAM paths, roles, entrypoints,
-outputs, parsers, or command declarations.  A Core test that needs any of
-those must declare a test-specific capability at the point it is consumed.
-OpenFOAM parsing and conventions belong in the OpenFOAM package's tests.
-"""
+"""Empty environment fixture for tests that require no adapter convention."""
 
 from __future__ import annotations
 

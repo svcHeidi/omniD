@@ -1,12 +1,4 @@
-"""A plugin's dictionary phases are its own, not cardiacFoam's four.
-
-core's Phase literal spells anatomy/physics/stimulus/solver. While
-primary_phase() walked that literal, every entry of a plugin using different
-phase words returned None -- and validation's required-field and enum checks
-both read None as "skip". A plugin got a clean bill of health because core
-could not see its entries at all. That is the only silently-wrong defect in
-the compatibility set.
-"""
+"""A plugin's dictionary phases are its own, not cardiacFoam's four."""
 from __future__ import annotations
 
 from omnidriver.core.plugin_interface import driver_context
@@ -31,8 +23,7 @@ def test_an_entry_claiming_no_declared_phase_returns_none() -> None:
 
 
 def test_the_generic_plugin_declares_the_phases_its_entries_use() -> None:
-    """It has no entries, so it declares no phases -- and must not inherit
-    cardiacFoam's four."""
+    """It has no entries, so it declares no phases -- and must not inherit cardiacFoam's four."""
     phases = driver_context(
         MinimalTestPlugin(), source="test:neutral-phases",
     ).capabilities.dictionaries.phases()

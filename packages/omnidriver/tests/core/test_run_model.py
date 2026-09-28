@@ -1,9 +1,4 @@
-"""Tests for the Run document JSON Schema and ``RunDocument`` dataclass.
-
-The packaged JSON Schema ``omnidriver/schemas/run-document.json`` is the single
-source of truth for its shape, and ``RunDocument`` is the Python model used by validation
-helpers and catalog exporters.
-"""
+"""Tests for the Run document JSON Schema and ``RunDocument`` dataclass."""
 
 from __future__ import annotations
 
@@ -247,16 +242,7 @@ def test_run_document_refuses_any_version_but_3(version):
 
 
 def test_core_declares_no_phase_vocabulary() -> None:
-    """Neither module may spell a solver's editing phases.
-
-    This used to assert that ``contracts.dictionary.Phase`` and
-    ``run_model.Phase`` were the same object rather than two textually
-    identical declarations -- a guard against the vocabulary being duplicated.
-    It is now absent from both: a plugin declares its phases through
-    ``get_phases()`` and ``primary_phase()`` takes that order as a parameter,
-    so core names none of them. Guarding zero is the stronger version of
-    guarding one.
-    """
+    """Neither module may spell a solver's editing phases."""
     from omnidriver.core.contracts import dictionary
     from omnidriver.core.runtime import run_model
 
@@ -265,9 +251,7 @@ def test_core_declares_no_phase_vocabulary() -> None:
 
 
 def test_run_document_config_accepts_arbitrary_non_cardiac_keys() -> None:
-    """A non-cardiac plugin's config shape (no anatomy/physics/stimulus/solver
-    keys at all) must pass core schema validation -- the core schema no longer
-    enforces a fixed phase vocabulary."""
+    """A non-cardiac plugin's config shape (no anatomy/physics/stimulus/solver keys at all) must pass core schema validation -- the core schema no longer enforces a fixed phase vocabulary."""
     from omnidriver.core.runtime.run_model import RunDocument
 
     doc = RunDocument(
@@ -282,8 +266,7 @@ def test_run_document_config_accepts_arbitrary_non_cardiac_keys() -> None:
 
 
 def test_schema_rejects_missing_configuration_source(schema):
-    """Step 4c: a document that omits `configurationSource` is refused by
-    name, not silently treated as any particular source."""
+    """Step 4c: a document that omits `configurationSource` is refused by name, not silently treated as any particular source."""
     bad = _valid_run_dict()
     del bad["configurationSource"]
     with pytest.raises(jsonschema.ValidationError):
@@ -291,8 +274,7 @@ def test_schema_rejects_missing_configuration_source(schema):
 
 
 def test_schema_rejects_unknown_configuration_source(schema):
-    """An agent-authored value outside the closed enum is refused, not
-    coerced or ignored -- there is no third source and no default."""
+    """An agent-authored value outside the closed enum is refused, not coerced or ignored -- there is no third source and no default."""
     bad = _valid_run_dict()
     bad["configurationSource"] = "somewhere-else"
     with pytest.raises(jsonschema.ValidationError):

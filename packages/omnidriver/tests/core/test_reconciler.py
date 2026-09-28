@@ -1,10 +1,4 @@
-"""Tests for the post-run artifact reconciler.
-
-The reconciler walks a list of predicted `DataArtifact` objects and
-compares them against the on-disk state of `case_root`. Output is a
-report that classifies each artifact as matched / missing, and lists
-the actual files that matched (for matched artifacts).
-"""
+"""Tests for the post-run artifact reconciler."""
 from __future__ import annotations
 
 import tempfile
@@ -35,8 +29,7 @@ class TestReconcilerModule(unittest.TestCase):
 
 
 class TestNonTimeIndexedReconciliation(unittest.TestCase):
-    """A non-time-indexed artifact has a single expected path; reconciler
-    checks the file exists and reports its size."""
+    """A non-time-indexed artifact has a single expected path; reconciler checks the file exists and reports its size."""
 
     def test_present_file_is_matched(self) -> None:
         from omnidriver.core.runtime.reconciler import reconcile_artifacts
@@ -91,8 +84,7 @@ class TestNonTimeIndexedReconciliation(unittest.TestCase):
 
 
 class TestTimeIndexedReconciliation(unittest.TestCase):
-    """Time-indexed artifacts (e.g. OpenFOAM time directories) match
-    against multiple on-disk files — one per time dir that exists."""
+    """Time-indexed artifacts (e.g. OpenFOAM time directories) match against multiple on-disk files — one per time dir that exists."""
 
     def test_glob_collects_every_time_directory(self) -> None:
         from omnidriver.core.runtime.reconciler import reconcile_artifacts
@@ -173,19 +165,10 @@ class TestReportSummary(unittest.TestCase):
 
 
 class TestRealPredictorOutputShapes(unittest.TestCase):
-    """Regression tests for the 2026-05-21 audit findings:
-
-    - PDE solver predictors emit `path_pattern="{instance}"` — the OpenFOAM
-      time directory itself, not a file inside it. The reconciler must
-      accept directories as matches.
-    - The single-cell predictor emits `path_pattern="postProcessing/{case_id}.txt"`.
-      With no case_id supplied, `{case_id}` becomes a glob wildcard so the
-      reconciler still finds per-case outputs across a sweep.
-    """
+    """Regression tests against real predictor output shapes."""
 
     def test_time_directory_alone_is_a_match(self) -> None:
-        """`path_pattern="{instance}"` (the monodomain predictor's actual
-        output) must match the time directory itself, reported as kind='dir'."""
+        """`path_pattern="{instance}"` (the monodomain predictor's actual output) must match the time directory itself, reported as kind='dir'."""
         from omnidriver.core.runtime.reconciler import reconcile_artifacts
         with tempfile.TemporaryDirectory() as temp:
             case_root = Path(temp)
@@ -214,9 +197,7 @@ class TestRealPredictorOutputShapes(unittest.TestCase):
                 self.assertGreaterEqual(match["entries"], 1)
 
     def test_case_id_glob_matches_every_per_case_file(self) -> None:
-        """The single-cell predictor's `postProcessing/{case_id}.txt`
-        with no case_id supplied must glob across every existing per-case
-        file in postProcessing/."""
+        """The single-cell predictor's `postProcessing/{case_id}.txt` with no case_id supplied must glob across every existing per-case file in postProcessing/."""
         from omnidriver.core.runtime.reconciler import reconcile_artifacts
         with tempfile.TemporaryDirectory() as temp:
             case_root = Path(temp)
@@ -237,8 +218,7 @@ class TestRealPredictorOutputShapes(unittest.TestCase):
                 self.assertEqual(match["kind"], "file")
 
     def test_case_id_literal_substitution_when_supplied(self) -> None:
-        """When `case_id="TNNP_M"` is supplied, only the matching per-case
-        file is matched — not the others."""
+        """When `case_id="TNNP_M"` is supplied, only the matching per-case file is matched — not the others."""
         from omnidriver.core.runtime.reconciler import reconcile_artifacts
         with tempfile.TemporaryDirectory() as temp:
             case_root = Path(temp)
@@ -290,8 +270,7 @@ class TestRealPredictorOutputShapes(unittest.TestCase):
 
 
 class TestReconcilerCaseId(unittest.TestCase):
-    """The reconciler accepts an optional case_id label so per-case
-    reports can be attributed in multi-case sweeps."""
+    """The reconciler accepts an optional case_id label so per-case reports can be attributed in multi-case sweeps."""
 
     def test_case_id_is_recorded_on_report(self) -> None:
         from omnidriver.core.runtime.reconciler import reconcile_artifacts

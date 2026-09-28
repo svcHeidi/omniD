@@ -66,8 +66,7 @@ def _context(plugin) -> _FakeDriverContext:
 
 
 def test_the_described_surface_comes_from_the_validation_contracts():
-    """Not a parallel description. The same catalog entries that validate a
-    value are the ones described, so the two cannot drift."""
+    """Not a parallel description."""
     context = _context(_PluginNoWriter())
     described = _write_surface(driver_context=context, spec=_spec(), overrides=None)
     from_catalog = {entry.driver_path for entry in _ENTRIES}
@@ -76,8 +75,7 @@ def test_the_described_surface_comes_from_the_validation_contracts():
 
 
 def test_an_unsupported_mode_is_described_as_unsupported_not_omitted():
-    """Omission reads as "no opinion". An agent needs to know the difference
-    between a mode that is unsupported and one nobody mentioned."""
+    """Omission reads as "no opinion"."""
     context = _context(_PluginNoWriter())
     described = _write_surface(driver_context=context, spec=_spec(), overrides=None)
     assert set(described["modes"]) == MUTATION_MODES
@@ -139,11 +137,7 @@ def test_consumed_is_empty_for_a_spec_with_no_workflow_dag():
 
 
 def test_a_spec_with_no_case_mutation_falls_back_with_a_stated_reason():
-    """Phase 3 Task 9: `_resolve_proposed_changes` requires `spec.case_mutation`
-    to reuse the real resolver; this fake spec (like every fake spec in this
-    core-only test module) supplies none. The naive key-match fallback must
-    still run -- and say why it, not the richer path, produced the result --
-    rather than going silently empty."""
+    """`_resolve_proposed_changes` requires `spec.case_mutation` to reuse the real resolver; this fake spec supplies none."""
     context = _context(_PluginNoWriter())
     described = _write_surface(
         driver_context=context, spec=_spec(), overrides={"$FAKE.deltaT": 1e-4},
@@ -178,9 +172,7 @@ def test_a_staged_case_mutation_that_raises_reports_a_reason_not_a_crash():
 
 
 def test_a_case_mutation_no_op_is_an_empty_list_not_a_reason():
-    """`case_mutation` returning `None` is the documented no-op contract
-    (`commit_case_overrides`'s own docstring) -- a legitimate, different
-    answer from "could not be determined"."""
+    """`case_mutation` returning `None` is the documented no-op contract (`commit_case_overrides`'s own docstring) -- a legitimate, different answer from "could not be determined"."""
     spec = _spec_with_case_mutation(lambda case_root: None)
     context = _context(_PluginNoWriter())
     proposed, effects, reason = _resolve_proposed_changes(driver_context=context, spec=spec)
@@ -217,22 +209,7 @@ def test_a_real_case_write_record_is_read_into_proposed_changes():
 
 
 def test_a_nested_parameter_value_reaches_describe_as_plain_json(tmp_path, monkeypatch):
-    """Found 2026-09-24: `describe --entry cable1DCVConvergence` exited 1 with
-    ``Object of type mappingproxy is not JSON serializable`` at the CLI's
-    ``json.dumps(describe_entry(...))``. `CaseWriteRecord.__post_init__`
-    deep-freezes ``parameters`` (`_freeze`), so a nested value -- a dimensioned
-    tensor, ``{"dimensions": ..., "value": ...}`` -- is a `MappingProxyType`
-    of tuples on the record; `_resolve_proposed_changes` read
-    ``record.parameters`` directly instead of ``record.to_json()``, the form
-    that undoes the freeze. A scalar value (the test above) cannot see this.
-
-    Runs the real public edge -- `describe_entry` then `json.dumps`, exactly
-    the CLI's call -- under a `MinimalTestPlugin` whose ``get_generic_case_factory``
-    supplies the spec (step S6 deleted the factory-tutorial catalog this test
-    used to register through; a real case folder plus this plugin's own
-    ``get_generic_case_factory`` override is the equivalent surviving path,
-    so nothing here is cardiac).
-    """
+    """Found 2026-09-24: `describe --entry cable1DCVConvergence` exited 1 with ``Object of type mappingproxy is not JSON serializable`` at the CLI's ``json.dumps(describe_entry(...))``."""
     from pathlib import Path
     import json
 

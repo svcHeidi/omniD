@@ -11,10 +11,6 @@ def test_patterns_replace_the_secret_and_nothing_else(tmp_path):
 
 
 def test_the_whole_match_is_replaced_and_no_capture_group_is_kept_I3(tmp_path):
-    """Wave-2 review I3: the runner used to keep capture group 1 and replace
-    the rest, so the conventional capture-the-secret pattern kept the secret
-    and dropped its label (``hunter2[REDACTED]``). Every match is replaced
-    whole; a group in a pattern means nothing to the runner."""
     log = tmp_path / "s.stdout.log"
     log.write_text("login password=hunter2 ok\nrepo https://user:SECRET@host/x.git\n")
     redact_step_logs((log,), (r"password=(\S+)", r"(https?://)[^/\s@]+(?=@)"))

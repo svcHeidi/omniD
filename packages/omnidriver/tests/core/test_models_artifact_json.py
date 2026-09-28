@@ -55,8 +55,7 @@ class TestDataArtifactFromJson(unittest.TestCase):
             })
 
     def test_time_indexed_key_is_refused_by_name(self) -> None:
-        """R2 fix, finding M1: a pre-A2 artifact entry naming the old
-        'time_indexed' key is refused, never silently dropped."""
+        """An artifact entry naming the old 'time_indexed' key is refused, never silently dropped."""
         with self.assertRaises(ValueError) as ctx:
             data_artifact_from_json({
                 "artifact_id": "vm",

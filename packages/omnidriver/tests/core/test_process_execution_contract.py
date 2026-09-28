@@ -1,9 +1,4 @@
-"""Solver-free process execution contracts for the workflow runner.
-
-These tests intentionally use only the Python interpreter.  They exercise the
-generic runner's ownership and recovery boundaries; no OpenFOAM runtime is
-needed.
-"""
+"""Solver-free process execution contracts for the workflow runner."""
 
 from __future__ import annotations
 

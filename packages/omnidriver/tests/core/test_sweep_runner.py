@@ -59,14 +59,7 @@ _POSTPROCESSING_CTX = _driver_context(_PostProcessingOutputPlugin(), source="tes
 
 
 def _load_entry_spec_like_a_factory(fake_spec):
-    """A ``load_entry_spec`` double that honours staging, as a real factory does.
-
-    A registered factory builds case_root from the cases_root/case_dir_name it
-    is given, so a staged re-resolution returns the staged copy. A double
-    that returned one fixed root used to be tolerated by silently mutating
-    the source instead; that is now refused (2026-09-24). Every returned spec
-    shares ``fake_spec``'s hooks, so call assertions on it still see all calls.
-    """
+    """A ``load_entry_spec`` double that honours staging, as a real factory does."""
 
     def load(entry, *, overrides=None, driver_context=None):
         del entry, driver_context
@@ -115,13 +108,7 @@ def _write_entry_spec(path, entry="sampleTutorial", values=(0.5, 0.2)):
 
 
 def _write_placeholder_spec(path: Path, values=("x",)):
-    """A cross_product spec with no plugin-specific axis vocabulary.
-
-    Used by the resume/fresh/retry/timeout tests below, which mock
-    ``route_case_values`` directly and assert only on sweep-runner
-    bookkeeping (skip/retry/outcome/manifest), never on what routing
-    itself produced -- so the axis name and values are placeholders, not
-    a stand-in for any real solver parameter."""
+    """A cross_product spec with no plugin-specific axis vocabulary."""
     spec = {
         "base": {},
         "sweep": {
@@ -187,15 +174,7 @@ def test_completed_sweep_reuse_checks_input_identity_and_required_outputs(tmp_pa
 
 
 def test_completed_pre_a2_run_document_is_reported_not_reusable_and_rerun(tmp_path):
-    """R2 fix, finding I1: a sweep-run output directory a pre-A2 completion
-    left behind carries ``"time_indexed"`` on every artifact (A2a's schema
-    has ``additionalProperties: false``, and ``time_indexed`` was renamed
-    ``instance_indexed``). ``load_run_document`` used to let
-    ``jsonschema.ValidationError`` escape uncaught -- not a ``ValueError``,
-    so ``_completed_case_is_reusable``'s except tuple never caught it, and
-    the whole sweep crashed instead of re-running this one case. It must
-    instead be reported as a named refusal, exactly like every other reason
-    a case cannot be reused."""
+    """An older run document carries `"time_indexed"` on every artifact, which the current schema's `additionalProperties: false` rejects as unknown."""
     output_dir = tmp_path / "out"
     case_dir = output_dir / "x"
     case_dir.mkdir(parents=True)
@@ -625,11 +604,7 @@ def test_case_run_command_forwards_the_selector_the_sweep_was_given():
 
 
 def test_case_run_command_adds_no_selector_a_context_never_had():
-    """A hand-built context has no selector; inventing one would be a guess.
-
-    The child then resolves the default, and the run document's plugin
-    identity check refuses it loudly if that default is a different stack.
-    """
+    """A hand-built context has no selector; inventing one would be a guess."""
     from omnidriver.core.runtime.run_command import omnidriver_run_command
 
     command = omnidriver_run_command(_CTX, "--run-document", "doc.json")
@@ -637,13 +612,7 @@ def test_case_run_command_adds_no_selector_a_context_never_had():
 
 
 def test_sweep_run_child_process_rebuilds_the_parent_context(tmp_path, monkeypatch):
-    """Not mocked: each case really runs in a `python -m omnidriver` child.
-
-    Before the child was handed the parent's --plugin selector it resolved
-    the entry-point default instead, which refuses with no adapter installed
-    (core alone) and with two solver-tier adapters installed (all four
-    packages) -- so every case failed in both shapes.
-    """
+    """Not mocked: each case really runs in a `python -m omnidriver` child."""
     import plugins.sweepable_plugin
     from omnidriver.core.plugin_interface import load_plugin_context
 
@@ -667,15 +636,7 @@ def test_sweep_run_child_process_rebuilds_the_parent_context(tmp_path, monkeypat
 
 
 def test_sweep_run_with_a_relative_output_dir_finds_its_completed_case(tmp_path, monkeypatch):
-    """Not mocked: `--output-dir out` must mean what `--output-dir /abs/out` does.
-
-    Planning wrote the run document's launch paths relative and already
-    joined (`caseRoot='out/case_0001'`, `outputDir='out/case_0001/outputs'`).
-    The child reads a relative outputDir under caseRoot, so it wrote its state
-    to out/case_0001/out/case_0001/outputs; the parent read outputDir against
-    its own working directory, found nothing, and recorded a completed case
-    as "pending" with failed_count 1.
-    """
+    """Not mocked: `--output-dir out` must mean what `--output-dir /abs/out` does."""
     import plugins.sweepable_plugin
     from omnidriver.core.plugin_interface import load_plugin_context
 
@@ -1145,11 +1106,7 @@ def _record_known_catalog_validator(document: str, key_path: tuple, value):
 
 
 def _record_read_current_value(document_path: Path, key_path: tuple):
-    """Mirror the real reader's contract: a KEY-PATH TUPLE in, the current
-    value (or None) out -- matching test_tutorial_records.py's own toy
-    reader. Needed so this file's own "committed"/"unchanged" assertions
-    (M1) prove a real change from a real no-op, rather than relying on
-    split_unchanged's "no reader -> report everything changed" default."""
+    """Mirror the real reader's contract: a KEY-PATH TUPLE in, the current value (or None) out -- matching test_tutorial_records.py's own toy reader."""
     if not document_path.exists():
         return None
     node = json.loads(document_path.read_text())
@@ -1189,9 +1146,7 @@ def _record_number_cells_axis() -> AxisContract:
 
 
 class _RecordSweepWriterPlugin(MinimalTestPlugin):
-    """A toy JSON case_writer, matching test_tutorial_records.py's
-    ``_RecordCaseWriterPlugin`` -- duplicated locally rather than imported to
-    keep this file's existing zero-cardiac-dependency test isolation."""
+    """A toy JSON case_writer, matching test_tutorial_records.py's ``_RecordCaseWriterPlugin`` -- duplicated locally rather than imported to keep this file's existing zero-cardiac-dependency test isolation."""
 
     def get_supported_mutation_modes(self):
         return frozenset({"clone_and_patch"})
@@ -1282,11 +1237,7 @@ def _record_driver_context():
 
 
 def test_sweep_plan_over_a_record_entry_refuses_a_bad_axis_name_upfront_before_staging_any_case(tmp_path):
-    """Minor: study-name/capability refusals happen ONCE, up front, for the
-    whole sweep -- before this fix, a bad axis name reached
-    resolve_case_patches independently for every case, each staging its own
-    case directory before failing. Confirmed here: NO case directory exists
-    after the refusal, for a 2-case sweep."""
+    """Minor: study-name/capability refusals happen ONCE, up front, for the whole sweep -- before this fix, a bad axis name reached resolve_case_patches independently for every case, each staging its own case directory before failing."""
     cases_root = _native_toy_case(tmp_path)
     spec = _record_sweep_spec(cases_root=cases_root)
     spec["sweep"]["independent"]["not_a_real_axis"] = [1, 2]
@@ -1336,9 +1287,7 @@ def test_sweep_plan_over_a_record_entry_previews_every_case_without_running(tmp_
 
 
 def test_sweep_plan_over_a_record_entry_persists_unchanged_patches_per_case(tmp_path):
-    """M5-of-2a: a patch that already matched the case (native cells="1",
-    swept number_cells=1) is real per-case information -- persisted in the
-    sweep summary, not discarded the moment commit_record_case returns."""
+    """M5-of-2a: a patch that already matched the case (native cells="1", swept number_cells=1) is real per-case information -- persisted in the sweep summary, not discarded the moment commit_record_case returns."""
     cases_root = _native_toy_case(tmp_path)
     spec_path = tmp_path / "sweep.json"
     spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root, values=(1, 3))))
@@ -1394,22 +1343,7 @@ def test_sweep_plan_over_a_record_entry_refuses_without_cases_root(tmp_path):
 
 
 def test_sweep_run_over_a_record_entry_commits_and_runs_two_cases(tmp_path):
-    """Item 2's own end-to-end shape: a 2-case record study gets exactly one
-    commit_and_build_record_spec (stage + commit + spec, P1's shared
-    function) per case, and the record's workflow steps run through
-    the same run-document/workflow-runner machinery a factory entry uses.
-
-    The spawned ``omnidriver run --run-document`` subprocess is faked here
-    the same way this suite's OWN factory-entry equivalent
-    (``test_sweep_run_entry_mode_executes_run_document_sequentially``) and
-    cardiacfoam's ``test_sweep_run_writes_run_documents_and_continues_past_
-    failure`` both already do: a fresh ``python -m omnidriver run
-    --run-document`` process resolves its plugin via ``--plugin``/entry-point
-    default resolution, never the in-process ``driver_context`` a test
-    builds, so asserting the CHILD PROCESS'S OWN observable behavior (which
-    run-document path it was given, that it's the one this sweep just built)
-    is what a fake can prove; a real spawn is exercised separately (manual
-    CLI proof, see this task's report)."""
+    """Item 2's own end-to-end shape: a 2-case record study gets exactly one commit_and_build_record_spec (stage + commit + spec, P1's shared function) per case, and the record's workflow steps run through the same run-document/workflow-runner machinery a factory entry uses."""
     cases_root = _native_toy_case(tmp_path)
     spec_path = tmp_path / "sweep.json"
     spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root)))
@@ -1472,10 +1406,7 @@ def test_sweep_run_refuses_retry_failed_for_a_record_entry(tmp_path):
 
 
 def test_sweep_run_over_a_record_entry_refuses_to_resume_an_existing_manifest(tmp_path):
-    """B2: a record-entry sweep does not support resume -- re-running
-    sweep_run against an output directory that already holds a manifest
-    (and no --fresh) must refuse by name rather than silently restage and
-    rerun every case from scratch."""
+    """B2: a record-entry sweep does not support resume -- re-running sweep_run against an output directory that already holds a manifest (and no --fresh) must refuse by name rather than silently restage and rerun every case from scratch."""
     cases_root = _native_toy_case(tmp_path)
     spec_path = tmp_path / "sweep.json"
     spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root)))
@@ -1504,9 +1435,7 @@ def test_sweep_run_over_a_record_entry_refuses_to_resume_an_existing_manifest(tm
 
 
 def test_sweep_run_over_a_record_entry_refuses_a_changed_spec_against_the_same_output_dir(tmp_path):
-    """B2's spec-hash half: the same 'sweep.json changed' refusal the
-    factory branch already gives, reused here rather than silently accepting
-    the new spec and leaving stale case directories from the old one."""
+    """B2's spec-hash half: the same 'sweep.json changed' refusal the factory branch already gives, reused here rather than silently accepting the new spec and leaving stale case directories from the old one."""
     cases_root = _native_toy_case(tmp_path)
     spec_path = tmp_path / "sweep.json"
     spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root, values=(2, 3))))
@@ -1536,9 +1465,7 @@ def test_sweep_run_over_a_record_entry_refuses_a_changed_spec_against_the_same_o
 
 
 def test_sweep_plan_over_a_record_entry_resolves_a_relative_output_dir(tmp_path, monkeypatch):
-    """M4: a relative --output-dir used to reach commit_record_case
-    unresolved (`case_root must be absolute`) -- resolved before staging,
-    matching the factory branch's own CLI-resolved --output-dir."""
+    """M4: a relative --output-dir used to reach commit_record_case unresolved (`case_root must be absolute`) -- resolved before staging, matching the factory branch's own CLI-resolved --output-dir."""
     cases_root = _native_toy_case(tmp_path)
     spec_path = tmp_path / "sweep.json"
     spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root)))
@@ -1553,11 +1480,7 @@ def test_sweep_plan_over_a_record_entry_resolves_a_relative_output_dir(tmp_path,
 
 
 def test_sweep_record_is_never_dispatched_for_a_factory_entry(tmp_path):
-    """A study naming an ordinary factory tutorial that is NOT in the
-    stack's tutorial_records catalog is completely unaffected -- even when
-    the same stack registers OTHER, unrelated records -- _sweep_record
-    returns (None, None), so sweep_plan/sweep_run fall straight through to
-    the unchanged factory-entry branch."""
+    """A study naming an ordinary factory tutorial that is NOT in the stack's tutorial_records catalog is completely unaffected -- even when the same stack registers OTHER, unrelated records -- _sweep_record returns (None, None), so sweep_plan/sweep_run fall straight through to the unchanged factory-entry branch."""
     from omnidriver.core.runtime.sweep_runner import _sweep_record
 
     ctx = _record_driver_context()  # registers "toyTutorial" as a record
@@ -1571,11 +1494,7 @@ def test_sweep_record_is_never_dispatched_for_a_factory_entry(tmp_path):
 
 
 def test_sweep_record_refuses_when_shadowed_by_a_cwd_case_path(tmp_path, monkeypatch):
-    """B1/M6: `_sweep_record` used to carry only a duplicated copy of the
-    record-vs-factory ambiguity check, missing the record-vs-cwd-case-path
-    one `resolve_entry`/`describe` already refuse -- a sweep over a record
-    name shadowed by a real case directory under cwd used to silently run
-    the record. Both now share one classifier (`registry.classify_entry`)."""
+    """B1/M6: `_sweep_record` used to carry only a duplicated copy of the record-vs-factory ambiguity check, missing the record-vs-cwd-case-path one `resolve_entry`/`describe` already refuse -- a sweep over a record name shadowed by a real case directory under cwd used to silently run the record."""
     cases_root = _native_toy_case(tmp_path)
     plugin = _RecordSweepWriterPlugin(
         solver_commands=frozenset({"touch"}),
@@ -1597,15 +1516,7 @@ def test_sweep_record_refuses_when_shadowed_by_a_cwd_case_path(tmp_path, monkeyp
 
 
 def test_sweep_record_refuses_when_shadowed_by_a_case_folder_under_cases_root(tmp_path):
-    """B1/M6: the same ambiguity as above, but against a DIFFERENT, same-
-    NAMED case folder under the sweep's own `cases_root` (not cwd, and not
-    the record's own native case, which sits elsewhere here on purpose --
-    see test_sweep_record_does_not_confuse_a_records_own_native_case right
-    below for why that one specific case must NOT be flagged). This one was
-    never refused ANYWHERE before this fix, not even through
-    `resolve_entry`/`describe` directly (`_match_entry`'s own
-    tutorial_record exclusion meant a record resolution was returned first,
-    the case-folder match never consulted)."""
+    """B1/M6: the same ambiguity as above, but against a DIFFERENT, same- NAMED case folder under the sweep's own `cases_root` (not cwd, and not the record's own native case, which sits elsewhere here on purpose -- see test_sweep_record_does_not_confuse_a_records_own_native_case right below for why that one specific case must NOT be flagged)."""
     cases_root = tmp_path / "cases"
     (cases_root / "nativeCases" / "toyTutorial" / "constant").mkdir(parents=True)
     (cases_root / "nativeCases" / "toyTutorial" / "constant" / "mesh.json").write_text(
@@ -1634,13 +1545,7 @@ def test_sweep_record_refuses_when_shadowed_by_a_case_folder_under_cases_root(tm
 
 
 def test_sweep_record_does_not_confuse_a_records_own_native_case(tmp_path):
-    """The refinement the test above depends on: a record's OWN native case
-    is routinely ALSO independently recognizable as a plain case_folder (a
-    real adapter's entrypoint/marker declaration knows its own format, which
-    the native case obviously satisfies -- e.g. E2ERecordPlugin's
-    has_case_marker checking for its own constant/mesh.json) -- that is the
-    SAME directory discovered twice by two different catalogs, not a naming
-    collision, and must not block the sweep."""
+    """The refinement the test above depends on: a record's OWN native case is routinely ALSO independently recognizable as a plain case_folder (a real adapter's entrypoint/marker declaration knows its own format, which the native case obviously satisfies -- e.g. E2ERecordPlugin's has_case_marker checking for its own constant/mesh.json) -- that is the SAME directory discovered twice by two different catalogs, not a naming collision, and must not block the sweep."""
     cases_root = _native_toy_case(tmp_path)
     ctx = _record_driver_context()
     spec_path = tmp_path / "sweep.json"

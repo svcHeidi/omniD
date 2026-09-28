@@ -1,10 +1,4 @@
-"""CLI integration tests for the --run-document execution path.
-
-Proves the planning→execution loop: `plan --strict --entry` produces a
-RunDocument; `run --run-document <file>` executes that document. Uses a local
-Allrun script, so no cardiacFoam binary is required (SKIP_ENV_DIAGNOSTICS is
-set suite-wide by tests/conftest.py).
-"""
+"""CLI integration tests for the --run-document execution path."""
 from __future__ import annotations
 
 import json
@@ -291,19 +285,7 @@ def test_step_via_run_document_apply_mutates_reruns_and_audits() -> None:
 
 @pytest.fixture
 def invalid_run_document_report() -> dict:
-    """Run the ``--run-document`` path against a document with a
-    known-bad ``config`` phase slice and return the parsed JSON payload.
-
-    The document is invalid three ways at once -- a non-mapping ``anatomy``
-    config slice, a missing ``workflowDag``, and an empty ``launch`` -- so
-    the payload mixes diagnostics from three different emission sites
-    (``specs/validation.py`` via ``validate_run``, ``normalize_workflow_dag``,
-    and ``build_execution_inputs`` itself). Before Phase 0 Task 10 those
-    three sites spoke different diagnostic shapes; the non-mapping-config
-    one is the specific case that used to carry a non-empty ``source``
-    (the offending phase) that ``run_document_exec._diag`` then discarded
-    instead of serializing.
-    """
+    """Run the ``--run-document`` path against a document with a known-bad ``config`` phase slice and return the parsed JSON payload."""
     with tempfile.TemporaryDirectory() as temp_dir:
         doc_path = Path(temp_dir) / "run.json"
         doc_path.write_text(json.dumps({

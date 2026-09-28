@@ -62,13 +62,7 @@ def test_a_discovered_id_wins_only_when_there_is_no_colon(monkeypatch) -> None:
 
 
 def test_a_loaded_context_records_the_selector_that_rebuilds_it(monkeypatch) -> None:
-    """A child process can only rebuild a context from the selector string.
-
-    ``sweep_run`` executes each case as ``python -m omnidriver run``; before
-    the context recorded this, the child got no ``--plugin`` at all and fell
-    back to the entry-point default, which refuses outright whenever two
-    solver-tier adapters are installed.
-    """
+    """A child process can only rebuild a context from the selector string."""
     monkeypatch.setattr(
         plugin_discovery, "_entry_points", lambda: (_FakeEntryPoint(),)
     )
@@ -114,8 +108,7 @@ class _RivalEntryPoint(_FakeEntryPoint):
 def test_a_name_claimed_by_two_distributions_is_reported_not_resolved(
     monkeypatch,
 ) -> None:
-    """Insertion order must not silently decide which plugin wins -- that
-    would depend on installation order and be invisible in the plan."""
+    """Insertion order must not silently decide which plugin wins -- that would depend on installation order and be invisible in the plan."""
     monkeypatch.setattr(
         plugin_discovery,
         "_entry_points",
@@ -162,12 +155,7 @@ class _NamedTestPlugin(MinimalTestPlugin):
 
 
 def _fake_entry_point(name: str, plugin_class: type):
-    """An entry point whose ``load()`` returns ``plugin_class`` unchanged.
-
-    ``plugin_class`` must be constructible with no arguments -- every caller
-    in `plugin_discovery.py` instantiates a loaded class as ``cls()``, the
-    same as a real ``[project.entry-points...]`` target.
-    """
+    """An entry point whose ``load()`` returns ``plugin_class`` unchanged."""
     dist = type("D", (), {"name": f"{name}-dist", "version": "1.0"})()
     return type(
         "_FakeEntryPoint", (), {"name": name, "dist": dist, "load": lambda self: plugin_class},
@@ -186,9 +174,7 @@ def _solver_entry_point(name: str):
 
 
 def test_one_solver_tier_root_still_composes_with_no_plugin_flag(monkeypatch) -> None:
-    """The common case Task 7 stopped refusing must keep working: exactly one
-    solver-tier adapter, plus the environment provider it requires, composes
-    with no --plugin needed."""
+    """Exactly one solver-tier adapter, plus the environment provider it requires, composes with no --plugin needed."""
     monkeypatch.setattr(
         plugin_discovery,
         "_entry_points",
@@ -203,10 +189,7 @@ def test_one_solver_tier_root_still_composes_with_no_plugin_flag(monkeypatch) ->
 
 
 def test_two_independent_solver_tier_plugins_are_refused_by_name(monkeypatch) -> None:
-    """Two adapters with no requires: relationship between them -- each only
-    requiring the shared environment provider, neither requiring the other --
-    must not be silently composed together; that is exactly the ambiguity
-    that produced a wrong single-shape resolution (Task 9)."""
+    """Two adapters with no requires: relationship between them, each only requiring the shared environment provider, must not be silently composed together."""
     monkeypatch.setattr(
         plugin_discovery,
         "_entry_points",
@@ -240,8 +223,7 @@ def _broken_entry_point(name: str = "aaa-broken"):
 
 
 def test_a_working_named_plugin_loads_beside_a_broken_sibling(monkeypatch) -> None:
-    """The broken entry sorts first, so an order-dependent scan would hit it
-    before the provider the named plugin's ``requires:`` actually needs."""
+    """The broken entry sorts first, so an order-dependent scan would hit it before the provider the named plugin's ``requires:`` actually needs."""
     monkeypatch.setattr(
         plugin_discovery,
         "_entry_points",
@@ -265,9 +247,7 @@ def test_loading_the_broken_plugin_refuses_by_name(monkeypatch) -> None:
 
 
 def test_an_unmet_requirement_names_broken_entries_as_possible_providers(monkeypatch) -> None:
-    """Nothing loadable answers the required id; the broken entry might have,
-    so the refusal names it rather than letting ``order_providers`` report a
-    plain 'missing' that hides the likely cause."""
+    """Nothing loadable answers the required id; the broken entry might have, so the refusal names it rather than letting ``order_providers`` report a plain 'missing' that hides the likely cause."""
     monkeypatch.setattr(
         plugin_discovery,
         "_entry_points",
@@ -280,8 +260,7 @@ def test_an_unmet_requirement_names_broken_entries_as_possible_providers(monkeyp
 
 
 def test_default_selection_refuses_a_broken_entry_by_name(monkeypatch) -> None:
-    """Refused, not skipped: the broken entry may be the root the user meant,
-    so silently composing the others would change which stack runs."""
+    """Refused, not skipped: the broken entry may be the root the user meant, so silently composing the others would change which stack runs."""
     monkeypatch.setattr(
         plugin_discovery,
         "_entry_points",

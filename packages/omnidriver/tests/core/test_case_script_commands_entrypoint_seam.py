@@ -1,19 +1,4 @@
-"""A plugin's declared openfoam.entrypoint now resolves case-locally, not
-just the fixed Allrun-family names (Tier 4, entrypoint slice --
-future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md). Covers the
-core-side sites: workflow.py's allowlist and case_script_commands(),
-workflow_runner.py's command resolution and DYLD dot-source wrapper,
-provenance_inputs.py's fingerprinting mirror, and
-capability_manifest.py's advertisement. The sixth site
-(omnidriver-openfoam's environment_preflight._required_executables) is
-covered in that package's own test tree instead -- core's suite must
-never assume omnidriver-openfoam is installed (see
-plugins/neutral_environment_plugin.py's own docstring for why). These
-tests need no monorepo tutorials tree -- unlike
-test_trust_boundary_end_to_end.py, which exercises the same invariant
-for the fixed names through the full CLI but is entirely
-skip_without_monorepo-gated in a standalone checkout.
-"""
+"""A plugin's declared openfoam.entrypoint now resolves case-locally, not just the fixed Allrun-family names (Tier 4, entrypoint slice -- future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md)."""
 
 from __future__ import annotations
 
@@ -34,9 +19,7 @@ from plugins.minimal_plugin import MinimalTestPlugin
 
 
 class _ForeignEntrypointPlugin(MinimalTestPlugin):
-    """Declares its entrypoint as "run.sh" -- proves the seam
-    is a genuine escape from the fixed name, not just a coincidence of
-    every shipped plugin happening to use "Allrun" today."""
+    """Declares its entrypoint as "run.sh" -- proves the seam is a genuine escape from the fixed name, not just a coincidence of every shipped plugin happening to use "Allrun" today."""
 
     def get_profile(self) -> PluginProfile:
         return PluginProfile(
@@ -80,8 +63,7 @@ def test_a_foreign_plugins_declared_entrypoint_is_included(tmp_path: Path) -> No
 
 
 def test_declared_entrypoint_resolves_case_locally(tmp_path: Path) -> None:
-    """SECURITY.md: 'No command shadowing' -- extended to a plugin's own
-    entrypoint name, not just the fixed Allrun-family names."""
+    """SECURITY.md: 'No command shadowing' -- extended to a plugin's own entrypoint name, not just the fixed Allrun-family names."""
     _write_executable(tmp_path / "run.sh")
     ctx = driver_context(_ForeignEntrypointPlugin(), source="test")
 
@@ -95,9 +77,7 @@ def test_declared_entrypoint_resolves_case_locally(tmp_path: Path) -> None:
 def test_core_neutral_commands_never_resolve_case_locally_even_with_a_foreign_context(
     tmp_path: Path,
 ) -> None:
-    """The core invariant this whole seam must not weaken: a case directory
-    still cannot shadow a trusted PATH binary, regardless of which plugin
-    is active."""
+    """The core invariant this whole seam must not weaken: a case directory still cannot shadow a trusted PATH binary, regardless of which plugin is active."""
     _write_executable(tmp_path / "blockMesh", "#!/bin/sh\necho SHADOW\n")
     ctx = driver_context(_ForeignEntrypointPlugin(), source="test")
 
@@ -117,10 +97,7 @@ def test_allowlist_accepts_the_declared_entrypoint_only_for_its_own_plugin() -> 
 
 
 def test_dyld_dot_source_wrapper_applies_to_a_declared_entrypoint_too() -> None:
-    """The macOS-SIP DYLD-preservation wrapper (workflow_runner._argv_for_execution)
-    must recognise the declared entrypoint, not just the fixed names -- a
-    partial fix here would silently lose a foreign plugin's DYLD_* env on
-    macOS even after command resolution and the allowlist are both fixed."""
+    """The macOS-SIP DYLD-preservation wrapper (workflow_runner._argv_for_execution) must recognise the declared entrypoint, not just the fixed names -- a partial fix here would silently lose a foreign plugin's DYLD_* env on macOS even after command resolution and the allowlist are both fixed."""
     ctx = driver_context(_ForeignEntrypointPlugin(), source="test")
     env = {"DYLD_LIBRARY_PATH": "/some/lib"}
 
@@ -132,9 +109,7 @@ def test_dyld_dot_source_wrapper_applies_to_a_declared_entrypoint_too() -> None:
 
 
 def test_provenance_fingerprinting_agrees_with_the_executor(tmp_path: Path) -> None:
-    """provenance_inputs._is_case_local_script mirrors _resolve_command's own
-    precondition -- if this drifts, provenance fingerprinting misclassifies
-    the entrypoint script for a foreign plugin."""
+    """provenance_inputs._is_case_local_script mirrors _resolve_command's own precondition -- if this drifts, provenance fingerprinting misclassifies the entrypoint script for a foreign plugin."""
     _write_executable(tmp_path / "run.sh")
     ctx = driver_context(_ForeignEntrypointPlugin(), source="test")
 

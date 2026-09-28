@@ -1,14 +1,4 @@
-"""Composition order must not depend on string hashing.
-
-`order_providers` fed `set(requires)` to `TopologicalSorter`, which registers a
-node first seen as a predecessor in set-iteration order. With two or more
-dependencies that order is `PYTHONHASHSEED`-dependent, so the same installation
-composed differently between processes -- and `build_stack_identity` hashes this
-order, so a reviewed plan's stack digest was not reproducible either.
-
-An in-process test cannot see this: one process has one hash seed. The only
-honest test spawns interpreters with different seeds.
-"""
+"""Composition order must not depend on string hashing."""
 
 import subprocess
 import sys
@@ -83,12 +73,7 @@ class _Provider:
 
 
 def test_a_duplicate_plugin_id_is_refused():
-    """`by_id = {p.plugin_id: p for p in providers}` silently kept the last one.
-
-    Two distributions claiming one identity is a packaging error: which object
-    answers a capability then depends on discovery order, and the stack digest
-    records an identity that does not identify one implementation.
-    """
+    """`by_id = {p.plugin_id: p for p in providers}` silently kept the last one."""
     with pytest.raises(ValueError, match="org.dup"):
         provider_stack.order_providers([
             _Provider("org.dup"), _Provider("org.other"), _Provider("org.dup"),

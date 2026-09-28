@@ -209,11 +209,7 @@ def _failed_exit0_runner(
     expected_artifacts=(),
     env=None,
 ):
-    """Stub for run_workflow_step: marks the step failed with exit_code == 0.
-
-    Simulates the missing_artifacts case (command 'succeeded' but produced
-    nothing). Writes real stdout/stderr log files and persists state.
-    """
+    """Stub for run_workflow_step: marks the step failed with exit_code == 0."""
     from omnidriver.core.runtime.workflow_runner import (
         WorkflowStepRunResult,
         _step_state_by_id,

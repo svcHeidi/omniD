@@ -25,11 +25,7 @@ def test_minimal_plugin_declares_no_case_files() -> None:
 
 
 def test_conditional_files_are_separated_from_required() -> None:
-    """Exercises `_CaseFileContractAdapter`'s always/conditional split -- core
-    mechanics, not solver vocabulary. ``MinimalTestPlugin(entrypoint=...)``
-    makes the test-only ``run-test-case`` entrypoint explicit; the mechanic
-    under test is that conditional files are excluded from ``required_files``.
-    """
+    """Exercises `_CaseFileContractAdapter`'s always/conditional split -- core mechanics, not solver vocabulary."""
     contract = driver_context(
         MinimalTestPlugin(entrypoint="run-test-case"), source="test"
     ).capabilities.case_files
@@ -38,12 +34,7 @@ def test_conditional_files_are_separated_from_required() -> None:
 
 
 def test_apply_returns_the_plugins_records() -> None:
-    """The adapter must not swallow what the plugin reports it changed.
-
-    Phase 0 Task 8 defect 1: ``_OverrideScopeAdapter.apply`` used to call the
-    plugin hook and then unconditionally ``return ()``, discarding whatever
-    records the hook reported.
-    """
+    """The adapter must not swallow what the plugin reports it changed."""
     from omnidriver.core import plugin_capabilities
 
     sentinel = ({"path": "constant/x", "key": "a", "old": "1", "new": "2"},)
@@ -64,34 +55,7 @@ def test_apply_returns_the_plugins_records() -> None:
 
 
 def test_openfoam_environment_hooks_thread_the_callers_context(tmp_path: Path) -> None:
-    """The OpenFOAM environment plugin's ``apply_overrides``/
-    ``get_override_target_paths`` hooks must resolve scopes and catalog
-    entries from the *caller's* ``DriverContext``, not one they build from
-    themselves.
-
-    Phase 0 Task 8 defect 2: both hooks used to call
-    ``make_driver_context(self, source="adapter:openfoam-environment")``,
-    discarding whatever context the caller supplied. That self-built context
-    always wraps the bare ``OpenFOAMEnvironmentPlugin``, whose catalog and
-    override scopes are empty -- so a caller with richer vocabulary (the
-    shape a cardiacFoam-contexted ``--apply`` would take, mirroring how
-    ``get_loaded_environment``/``get_configured_environment`` already forward
-    the context they are given a few lines below in openfoam/environment.py)
-    would silently lose it.
-
-    This is a behavioural test rather than the plan's ``inspect.getsource``
-    source-text assertion: a source-grep only proves the string
-    ``make_driver_context(`` is absent, not that the caller's context is
-    actually the one consulted. The plugin below stands in for a
-    cardiacFoam-ish caller -- it declares an override scope and a catalog
-    entry the bare OpenFOAM environment plugin does not know about -- without
-    importing ``omnidriver.cardiacfoam`` (openfoam must not know about
-    cardiology; only the test simulates a caller that does). Before the fix
-    this raises ``OverrideError: ... unknown scope token`` (or, before
-    Step 4's signature change, ``TypeError`` for an unexpected
-    ``driver_context`` keyword) because the substituted context's catalog and
-    scopes are always empty; after the fix the caller's scope resolves.
-    """
+    """The OpenFOAM environment plugin's ``apply_overrides``/ ``get_override_target_paths`` hooks must resolve scopes and catalog entries from the *caller's* ``DriverContext``, not one they build from themselves."""
     pytest.importorskip(
         "omnidriver.openfoam.environment", reason="omnidriver-openfoam is not installed",
     )
@@ -101,8 +65,7 @@ def test_openfoam_environment_hooks_thread_the_callers_context(tmp_path: Path) -
     from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
     class _CardiacIshPlugin(OpenFOAMEnvironmentPlugin):
-        """A caller-side plugin with vocabulary the bare environment plugin
-        lacks -- standing in for a cardiacFoam-contexted caller."""
+        """A caller-side plugin with vocabulary the bare environment plugin lacks -- standing in for a cardiacFoam-contexted caller."""
 
         def get_dictionary_catalog(self):
             return DictionaryCatalog({

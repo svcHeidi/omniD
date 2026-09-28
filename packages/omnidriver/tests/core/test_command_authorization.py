@@ -64,13 +64,7 @@ def test_generic_plugin_authorizes_neither_kind_of_command() -> None:
 
 
 def test_mpi_wrapped_payload_is_authorized() -> None:
-    """An mpirun wrapper must not launder an unauthorized binary.
-
-    ``mpirun`` is in CORE_NEUTRAL_COMMANDS, so before 2026-09-20 the wrapped
-    program was never checked against solver_commands(). It was
-    provenance-visible (fingerprinted by _unwrap_mpi_program for the run's
-    dependency record) but allowlist-invisible.
-    """
+    """An mpirun wrapper must not launder an unauthorized binary."""
     from omnidriver.core.runtime import workflow
 
     context = driver_context(MinimalTestPlugin(), source="test:commands")

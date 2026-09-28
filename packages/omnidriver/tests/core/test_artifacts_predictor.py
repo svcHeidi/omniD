@@ -1,16 +1,4 @@
-"""Predictor contract tests (plan v2 phase 3a).
-
-predict_data_artifacts is the single agent-facing answer to "what raw data
-will/did this run produce?". It must:
-
-* derive artifacts by composing existing catalogs (ionic_model_catalog,
-  active_tension_catalog, dict_entries) — no solver-aware branching that
-  re-implements catalog logic;
-* merge a tutorial-supplied static override hook
-  (``spec.metadata['expected_artifacts']``);
-* never raise on unknown solvers or missing files — agents call it in
-  exploratory contexts before a run has produced anything.
-"""
+"""Predictor contract tests (plan v2 phase 3a)."""
 from __future__ import annotations
 
 import tempfile
@@ -54,13 +42,7 @@ def _write_single_cell_electro_properties(
     ionic_model: str = "AlievPanfilov",
     tissue: str = "myocyte",
 ) -> None:
-    """Synthesize the minimum-viable single-cell electroProperties.
-
-    Mirrors the structure of
-    tutorials/electrophysiologyProtocols/singleCell/constant/electroProperties
-    closely enough for the line-based parsers used by the rest of the
-    driver to find the relevant keys.
-    """
+    """Synthesize the minimum-viable single-cell electroProperties."""
     constant = case_root / "constant"
     constant.mkdir(parents=True, exist_ok=True)
     (constant / "electroProperties").write_text(
@@ -76,10 +58,7 @@ def _write_single_cell_electro_properties(
 
 class TestPredictorSingleCell(unittest.TestCase):
     def test_emits_artifact_with_variables_from_catalog(self) -> None:
-        """AlievPanfilov advertises states ('u', 'recovery_r') in the ionic
-        model catalog — the predictor must source variables from there
-        rather than redefining them locally. After the 2026-05-21 refactor
-        the path_pattern globs the C++-side protocol suffix."""
+        """AlievPanfilov advertises states ('u', 'recovery_r') in the ionic model catalog — the predictor must source variables from there rather than redefining them locally."""
         with tempfile.TemporaryDirectory() as temp:
             case_root = Path(temp) / "case"
             case_root.mkdir()
@@ -100,10 +79,7 @@ class TestPredictorSingleCell(unittest.TestCase):
             self.assertIn("recovery_r", trace.variables)
 
     def test_variables_change_with_ionic_model(self) -> None:
-        """Convergence guard: the predictor must return different variables
-        for different ionic models. Post-§3d-1 the variables come from
-        recommended_exports (or the export list when declared); the exact
-        names differ across models, proving catalog consultation."""
+        """Convergence guard: the predictor must return different variables for different ionic models."""
         with tempfile.TemporaryDirectory() as temp_a, tempfile.TemporaryDirectory() as temp_b:
             case_a = Path(temp_a) / "case"
             case_b = Path(temp_b) / "case"
@@ -129,8 +105,7 @@ class TestPredictorSingleCell(unittest.TestCase):
 
 
     def test_unknown_ionic_model_returns_only_vm_and_empty_trace(self) -> None:
-        """The predictor must not raise on a model name absent from the
-        catalog — agents may mutate dicts to an as-yet-undefined model."""
+        """The predictor must not raise on a model name absent from the catalog — agents may mutate dicts to an as-yet-undefined model."""
         with tempfile.TemporaryDirectory() as temp:
             case_root = Path(temp) / "case"
             case_root.mkdir()
@@ -165,10 +140,7 @@ class TestPredictorMergesStaticOverride(unittest.TestCase):
             self.assertIn("exact_error_norm", ids)
 
     def test_static_wins_on_artifact_id_collision(self) -> None:
-        """spec.metadata['expected_artifacts'] is the authoring escape hatch.
-        When a static entry shares an artifact_id with a derived one, the
-        static description must win — the human knew something the predictor
-        could not derive."""
+        """spec.metadata['expected_artifacts'] is the authoring escape hatch."""
         with tempfile.TemporaryDirectory() as temp:
             case_root = Path(temp) / "case"
             case_root.mkdir()
@@ -200,14 +172,7 @@ def _write_pde_electro_properties(
     ionic_model: str = "TNNP",
     export_list: tuple[str, ...] | None = None,
 ) -> None:
-    """Synthesize a monodomain/bidomain electroProperties shell.
-
-    Mirrors tutorials/manufacturedSolutions/{monodomain,bidomain}/constant/electroProperties
-    closely enough for the line-based parsers; everything not relevant to the
-    predictor is omitted. When ``export_list`` is supplied, an
-    ``outputVariables.ionic.export ( ... )`` block is injected to exercise
-    the §3d-1 filtering path.
-    """
+    """Synthesize a monodomain/bidomain electroProperties shell."""
     (case_root / "constant").mkdir(parents=True, exist_ok=True)
     body = (
         f"myocardiumSolver  {solver};\n"
@@ -231,8 +196,7 @@ def _write_pde_electro_properties(
 
 
 def _write_eikonal_electro_properties(case_root: Path) -> None:
-    """Eikonal cases do not declare an ionicModel (constraint enforced by
-    dict_entries.py); the predictor must not require one."""
+    """Eikonal cases do not declare an ionicModel (constraint enforced by dict_entries.py); the predictor must not require one."""
     (case_root / "constant").mkdir(parents=True, exist_ok=True)
     (case_root / "constant" / "electroProperties").write_text(
         "myocardiumSolver eikonalSolver;\n"
@@ -300,8 +264,7 @@ class TestPredictorBidomain(unittest.TestCase):
 
 class TestPredictorEikonal(unittest.TestCase):
     def test_emits_activationTime_field(self) -> None:
-        """Eikonal cases do not declare ionicModel — the predictor must
-        produce exactly activationTime per-variable artifacts."""
+        """Eikonal cases do not declare ionicModel — the predictor must produce exactly activationTime per-variable artifacts."""
         with tempfile.TemporaryDirectory() as temp:
             case_root = Path(temp) / "case"
             case_root.mkdir()
@@ -317,10 +280,7 @@ class TestPredictorEikonal(unittest.TestCase):
 
 
 class TestPredictorExportListFiltering(unittest.TestCase):
-    """Predictor must report what will actually be on disk, not
-    the catalog superset. When ``outputVariables.ionic.export`` is declared,
-    the exported subset wins. When absent, the catalog's
-    ``recommended_exports`` is the fallback."""
+    """Predictor must report what will actually be on disk, not the catalog superset."""
 
     def test_export_list_overrides_catalog_states_for_monodomain(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -385,9 +345,7 @@ class TestPredictorExportListFiltering(unittest.TestCase):
             self.assertEqual(trace.variables, ("Vm", "s"))
 
     def test_missing_export_list_falls_back_to_recommended_exports(self) -> None:
-        """AlievPanfilov.recommended_exports = ('u', 'recovery_r') in
-        ionic_model_catalog.py. With no export declaration, the predictor
-        must use the catalog fallback instead of states + algebraic."""
+        """AlievPanfilov.recommended_exports = ('u', 'recovery_r') in ionic_model_catalog.py."""
         with tempfile.TemporaryDirectory() as temp:
             case_root = Path(temp) / "case"
             case_root.mkdir()
@@ -400,11 +358,7 @@ class TestPredictorExportListFiltering(unittest.TestCase):
             self.assertEqual(trace.variables, ("u", "recovery_r"))
 
     def test_explicitly_empty_export_list_predicts_zero_ionic_exports(self) -> None:
-        """``outputVariables.ionic.export ( );`` is a real, deliberate
-        declaration -- the solver will write no ionic fields at all. This is
-        NOT the same as omitting the export block (the fallback-to-catalog
-        case above): predicting the catalog's recommended exports here
-        would report artifacts that the run can never produce."""
+        """``outputVariables.ionic.export ( );`` is a real, deliberate declaration -- the solver will write no ionic fields at all."""
         with tempfile.TemporaryDirectory() as temp:
             case_root = Path(temp) / "case"
             case_root.mkdir()
@@ -427,9 +381,7 @@ class TestPredictorExportListFiltering(unittest.TestCase):
 
 
 class TestPredictorManufacturedFdaRoundTrip(unittest.TestCase):
-    """A verification tutorial declares analytic-error artifacts statically
-    while the predictor still derives the field series.
-    Demonstrates that solver-derived + spec-declared artifacts coexist."""
+    """A verification tutorial declares analytic-error artifacts statically while the predictor still derives the field series."""
 
     def test_both_derived_and_static_present(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -460,9 +412,7 @@ class TestPredictorManufacturedFdaRoundTrip(unittest.TestCase):
 
 
 class TestPredictorPathPatternContract(unittest.TestCase):
-    """Every solver handler must emit patterns that round-trip through
-    expand_path_pattern. This locks the predictor against drift from the
-    closed placeholder enum in models.py."""
+    """Every solver handler must emit patterns that round-trip through expand_path_pattern."""
 
     def _all_solver_fixtures(self) -> list[tuple[str, callable]]:
         return [
@@ -506,9 +456,7 @@ class TestPredictorPathPatternContract(unittest.TestCase):
 
 class TestPredictorGracefulFallback(unittest.TestCase):
     def test_missing_electro_properties_returns_only_static(self) -> None:
-        """Before a run mutates the case, electroProperties may not yet
-        exist (or live under setup/). The predictor must degrade to the
-        static hook rather than raising."""
+        """Before a run mutates the case, electroProperties may not yet exist (or live under setup/)."""
         with tempfile.TemporaryDirectory() as temp:
             case_root = Path(temp) / "case"
             case_root.mkdir()
@@ -524,8 +472,7 @@ class TestPredictorGracefulFallback(unittest.TestCase):
             self.assertEqual(artifacts[0].artifact_id, "placeholder")
 
     def test_unknown_solver_returns_only_static(self) -> None:
-        """Unhandled solvers (e.g., a future addition) must not error.
-        Phases will fill in coverage incrementally."""
+        """Unhandled solvers (e.g., a future addition) must not error."""
         with tempfile.TemporaryDirectory() as temp:
             case_root = Path(temp) / "case"
             case_root.mkdir()
@@ -541,9 +488,7 @@ class TestPredictorGracefulFallback(unittest.TestCase):
 
 
 class TestPredictorECG(unittest.TestCase):
-    """When ecgDomains is declared in electroProperties, the predictor
-    must add an ECG time-series artifact pointing at the writer's output
-    file (`postProcessing/{pseudoECG,torsoECG}.dat`)."""
+    """When ecgDomains is declared in electroProperties, the predictor must add an ECG time-series artifact pointing at the writer's output file (`postProcessing/{pseudoECG,torsoECG}.dat`)."""
 
     def test_pseudo_ecg_is_predicted_when_block_present(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -605,8 +550,7 @@ class TestPredictorECG(unittest.TestCase):
 
 
 class TestPredictorPurkinje(unittest.TestCase):
-    """When conductionNetworkDomains is declared, the predictor must
-    add the Purkinje time-series and VTK series artifacts."""
+    """When conductionNetworkDomains is declared, the predictor must add the Purkinje time-series and VTK series artifacts."""
 
     def test_purkinje_artifacts_emitted_when_block_present(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -656,8 +600,7 @@ class TestPredictorPurkinje(unittest.TestCase):
 
 
 class TestPredictorVerification(unittest.TestCase):
-    """When verificationModel.type is declared, predict the verifier's
-    error-summary .dat output."""
+    """When verificationModel.type is declared, predict the verifier's error-summary .dat output."""
 
     def test_manufactured_monodomain_pseudo_ecg_verifier_is_predicted(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -701,15 +644,10 @@ class TestPredictorVerification(unittest.TestCase):
 
 
 class TestPredictorComposesUtilityProduces(unittest.TestCase):
-    """When a spec's workflow_dag declares utility steps,
-    the predictor merges every matching utility's `produces` entries into
-    its output.
-    """
+    """When a spec's workflow_dag declares utility steps, the predictor merges every matching utility's `produces` entries into its output."""
 
     def test_workflow_dag_utility_step_contributes_produces(self) -> None:
-        """A monodomain spec whose workflow_dag includes
-        `setTorsoOrganConductivityField` (a real migrated utility) must
-        carry that utility's produces entries in the predicted set."""
+        """A monodomain spec whose workflow_dag includes `setTorsoOrganConductivityField` (a real migrated utility) must carry that utility's produces entries in the predicted set."""
         with tempfile.TemporaryDirectory() as temp:
             case_root = Path(temp) / "case"
             case_root.mkdir()
@@ -758,9 +696,7 @@ class TestPredictorComposesUtilityProduces(unittest.TestCase):
             )
 
     def test_unknown_utility_in_dag_is_silently_skipped(self) -> None:
-        """If workflow_dag mentions a command that isn't in UTILITY_CATALOG
-        (e.g. `blockMesh`, which is an OpenFOAM built-in, not a cardiacFoam
-        utility), the predictor proceeds without error."""
+        """If workflow_dag mentions a command that isn't in UTILITY_CATALOG (e.g. `blockMesh`, which is an OpenFOAM built-in, not a cardiacFoam utility), the predictor proceeds without error."""
         with tempfile.TemporaryDirectory() as temp:
             case_root = Path(temp) / "case"
             case_root.mkdir()
@@ -793,8 +729,7 @@ class TestPredictorComposesUtilityProduces(unittest.TestCase):
             self.assertEqual(produced_by_blockmesh, [])
 
     def test_no_workflow_dag_means_no_utility_artifacts(self) -> None:
-        """Specs without workflow_dag (legacy / minimal) still work; the
-        utility composition is a no-op."""
+        """Specs without workflow_dag (legacy / minimal) still work; the utility composition is a no-op."""
         with tempfile.TemporaryDirectory() as temp:
             case_root = Path(temp) / "case"
             case_root.mkdir()
@@ -813,10 +748,7 @@ class TestPredictorComposesUtilityProduces(unittest.TestCase):
 
 
 class TestPredictorActiveTension(unittest.TestCase):
-    """_predict_active_tension fires for singleCellSolver+AT cases and is
-    suppressed when no activeTensionModel entry is present. singleCellSolver
-    is the only solver that currently constructs an activeTensionModel from
-    electroProperties (see singleCellSolver.C)."""
+    """_predict_active_tension fires for singleCellSolver+AT cases and is suppressed when no activeTensionModel entry is present."""
 
     def _write_single_cell_with_at(self, tmp: Path, *, at_model: str, exports: str) -> None:
         ep = tmp / "constant" / "electroProperties"

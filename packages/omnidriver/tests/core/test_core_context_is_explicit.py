@@ -1,21 +1,4 @@
-"""core/ and openfoam/ must receive an explicit DriverContext, never resolve
-one implicitly.
-
-`resolve_public_driver_context(None)` returns the cardiac context. A core
-module that calls it silently becomes cardiacFoam for any plugin that failed
-to thread a context through -- and it does so without raising, which is why
-this guard is static rather than behavioural.
-
-The cardiac default is legitimate at the public edge (omnidriver/*.py and
-cli.py), where "no plugin supplied" genuinely means "the built-in one". It is
-not legitimate inside core/ -- nor inside omnidriver-openfoam, whose three
-former offenders (apply_overrides.py's `_catalog_entries`/`apply_overrides`,
-dict_builder.py's `is_known_override_driver_path`) made a core+openfoam
-install without cardiacfoam silently import `omnidriver.cardiacfoam` (Phase 2
-Task 6). That is a wrong-direction dependency the import-boundary gate cannot
-see, because openfoam imports *core* and core does the cardiac import --
-this guard is the only thing standing between openfoam and that regression.
-"""
+"""core/ and openfoam/ must receive an explicit DriverContext, never resolve one implicitly."""
 from __future__ import annotations
 
 import ast
@@ -253,9 +236,7 @@ def test_the_scratch_resolver_invents_no_default(tmp_path, monkeypatch) -> None:
 
 
 def test_nothing_rebuilds_a_dot_omnidriver_scratch_default() -> None:
-    """A bare ``".omnidriver"`` path segment anywhere in the package is the
-    old default coming back under another name. (``.omnidriver-attempt.lock``
-    and the like are distinct literals and are not matched.)"""
+    """A bare ``".omnidriver"`` path segment anywhere in the package is the old default coming back under another name."""
     offenders = {
         str(path.relative_to(_PACKAGE_ROOT)): [
             node.lineno for node in ast.walk(ast.parse(path.read_text(), filename=str(path)))
@@ -269,19 +250,7 @@ def test_nothing_rebuilds_a_dot_omnidriver_scratch_default() -> None:
 
 @pytest.fixture
 def two_provider_context():
-    """A composed :class:`DriverContext` over two real, installed providers.
-
-    Skips rather than fabricating a stand-in when fewer than two adapters are
-    installed -- this fixture exists to prove composition over genuine
-    providers, not over test doubles that happen to satisfy the Protocol.
-
-    Deliberately does not wrap ``driver_context_for_installed_plugins``: that
-    fixture returns already-built single-plugin ``DriverContext`` objects, and
-    `driver_context(*providers, ...)` needs the plugin *instances* themselves.
-    Mirrors ``plugin_discovery.load_discovered_plugin``'s
-    ``entry_point.load()()`` pattern instead of writing new discovery, since
-    ``discover_plugins()`` returns ``EntryPoint`` objects, not classes.
-    """
+    """A composed :class:`DriverContext` over two real, installed providers."""
     from omnidriver.core import plugin_discovery
     from omnidriver.core.plugin_interface import driver_context
 
@@ -322,30 +291,11 @@ def test_identity_names_every_provider(two_provider_context):
 
 
 def test_each_provider_records_its_own_source_not_a_shared_one():
-    """Spec 4.4: a provenance record must say which adapter came from where.
-
-    `default_discovered_context()` used to join every selected provider's
-    source into one string and pass it as the single shared `source=`, so
-    every `ProviderIdentity.source` in the stack recorded the SAME joined
-    string instead of each provider's own origin -- silently defeating the
-    one reason `StackIdentity` records an identity per provider at all.
-    Uses two synthetic, no-case-file providers (not real installed adapters)
-    so this is provable independently of Finding 2's real cross-adapter
-    case-file conflict, which stops `two_provider_context` above from
-    actually composing.
-
-    Deliberately passes providers and sources in an order that does NOT
-    match `order_providers`' output (which sorts by plugin_id when nothing
-    `requires:` anything else): "zzz" is passed first but sorts last, so a
-    fix that merely paired sources positionally against the REORDERED stack,
-    rather than tracking each provider's own id, would misattribute them.
-    """
+    """Spec 4.4: a provenance record must say which adapter came from where."""
     from omnidriver.core.plugin_interface import driver_context
 
     class _NamedProvider(MinimalTestPlugin):
-        """A MinimalTestPlugin whose plugin_id is chosen per instance, so two
-        can compose together as distinct providers without a real adapter's
-        case files ever entering the picture."""
+        """A MinimalTestPlugin whose plugin_id is chosen per instance, so two can compose together as distinct providers without a real adapter's case files ever entering the picture."""
 
         def __init__(self, plugin_id: str) -> None:
             super().__init__()
@@ -370,8 +320,7 @@ def test_each_provider_records_its_own_source_not_a_shared_one():
 
 
 def test_a_single_source_string_still_broadcasts_to_every_provider():
-    """The common single-provider call shape, and a multi-provider stack that
-    genuinely shares one origin, must keep working with one plain string."""
+    """The common single-provider call shape, and a multi-provider stack that genuinely shares one origin, must keep working with one plain string."""
     from omnidriver.core.plugin_interface import driver_context
 
     class _NamedProvider(MinimalTestPlugin):

@@ -1,11 +1,4 @@
-"""The truth layer's two core seams (2026-09-28, roadmap item 4).
-
-- ``plan --strict``'s C++ scan reads a supplied source root, never a guessed
-  one: unsupplied is one info diagnostic, supplied-but-missing is an error,
-  supplied is a scan whose every drift list becomes an error.
-- ``omnidriver catalog`` lists a record's key catalogue, filtered by
-  document and key, and attaches the C++'s registered values when scanned.
-"""
+"""The truth layer's two core seams (2026-09-28, roadmap item 4)."""
 from __future__ import annotations
 
 import json

@@ -1,22 +1,4 @@
-"""The write channel's conformance suite.
-
-The 2026-09-22 roadmap enumerates what must be covered before any route
-migrates onto this channel (Tasks 8-14). ``CHANNEL_CONFORMANCE_CASES`` names
-every one of those eighteen cases; ``test_every_conformance_case_has_a_test``
-is the suite's own completeness check, so a missing case is a visible name
-rather than an absence nobody notices.
-
-Several cases are already exercised, in more depth, by
-``test_case_transaction.py`` (Task 5) and ``test_case_transaction_recovery.py``
-(Task 6) and by ``test_case_writer_capability.py`` (Task 3). Rather than
-literally importing those test functions -- this repository's test tree has
-no ``__init__.py`` and runs under ``--import-mode=importlib``, so sibling test
-modules are not reliably importable from one another -- the cases below call
-the same production entry points those files already prove, at the depth this
-suite needs to have its own name for each case. A gap in one of those other
-files would still be a gap here too; this suite is the inventory, not a
-substitute for reading them.
-"""
+"""The write channel's conformance suite."""
 from __future__ import annotations
 
 import os
@@ -127,10 +109,7 @@ class _Profile:
 
 
 def test_complete_plan_serialization_and_identity(tmp_path):
-    """W1: the serialized plan must contain every value that will be
-    written, and its digest must be stable and order-insensitive (files and
-    parameters are sorted canonically before hashing, per `plan_digest`'s
-    `_digest_payload`)."""
+    """W1: the serialized plan must contain every value that will be written, and its digest must be stable and order-insensitive (files and parameters are sorted canonically before hashing, per `plan_digest`'s `_digest_payload`)."""
     two_params = (
         _parameter(qualified_id="$TEST.a", document="constant/a", key_path=("a",)),
         _parameter(qualified_id="$TEST.b", document="constant/b", key_path=("b",)),
@@ -173,11 +152,7 @@ def test_complete_plan_serialization_and_identity(tmp_path):
 
 
 def test_no_hidden_mutable_payloads(tmp_path):
-    """W1: `frozen=True` stops rebinding a field, not mutating what it points
-    at. The closed `VALUE_KINDS` vocabulary has no generic "dictionary" kind
-    (a plan-snippet claim that does not match `contracts/dictionary.py` --
-    reported, not followed); `dimensioned_scalar` is the mapping-shaped kind
-    it actually declares, and a mapping-valued parameter must be frozen too."""
+    """W1: `frozen=True` stops rebinding a field, not mutating what it points at."""
     assignment = _parameter(
         value={"value": 50000.0, "dimensions": (0, -3, 0, 0, 0, 1, 0)},
         value_kind="dimensioned_scalar",
@@ -233,8 +208,7 @@ class _FormatBRenderer:
 
 
 def test_format_specific_patching(tmp_path):
-    """A plan spanning two formats, each rendered by its own declarer,
-    committed in one transaction."""
+    """A plan spanning two formats, each rendered by its own declarer, committed in one transaction."""
     capabilities = provider_stack.compose(
         provider_stack.order_providers([_FormatARenderer(), _FormatBRenderer()])
     )
@@ -295,9 +269,7 @@ class _FoldedRenderer(_TwoFileRenderer):
 
 
 def test_repeated_edits_to_one_file(tmp_path):
-    """`CaseWritePlan` refuses two `RenderedFile`s at one path, so a renderer
-    handling two parameters landing in one document must fold them into one
-    rendering."""
+    """`CaseWritePlan` refuses two `RenderedFile`s at one path, so a renderer handling two parameters landing in one document must fold them into one rendering."""
     two_files = plugin_capabilities.adapt_plugin_capabilities(_TwoFileRenderer())
     rendered = two_files.case_writer.render(
         object(), snapshot_root=tmp_path, driver_context=object(),
@@ -321,9 +293,7 @@ def test_repeated_edits_to_one_file(tmp_path):
 
 
 def test_missing_files(tmp_path):
-    """A precondition expects an existing file with a digest; it was deleted
-    since planning. Refused by name, distinct from `stale_input`'s changed
-    (but still present) content."""
+    """A precondition expects an existing file with a digest; it was deleted since planning."""
     (tmp_path / "constant").mkdir()
     (tmp_path / "constant" / "a").write_bytes(b"original\n")
     digest = case_write._digest_bytes(b"original\n")
@@ -375,10 +345,7 @@ def test_file_modes(tmp_path):
 
 @_root_makes_chmod_tests_meaningless
 def test_file_modes_an_unreadable_existing_file_is_a_transaction_error_not_a_leak(tmp_path):
-    """R3 blocker 1 (2026-09-23): closest existing case to file modes,
-    since it is one of those modes -- 0o000 -- that made the pre-existing
-    file unreadable. `_before_image`'s `target.read_bytes()` used to raise a
-    bare `PermissionError` that escaped `commit_case_write` unwrapped."""
+    """R3 blocker 1 (2026-09-23): closest existing case to file modes, since it is one of those modes -- 0o000 -- that made the pre-existing file unreadable."""
     first = _plan(tmp_path, [_rendered("constant/a", b"one\n", mode=0o000)])
     case_transaction.commit_case_write(first, driver_context=object(), execution_env=None)
     before = case_write._digest_bytes(b"one\n")
@@ -490,8 +457,7 @@ def test_rollback_failure(tmp_path, monkeypatch):
 
 
 def test_stale_input(tmp_path):
-    """The precondition target still exists, but its content changed since
-    the plan was made -- distinct from `missing_files`, where it vanished."""
+    """The precondition target still exists, but its content changed since the plan was made -- distinct from `missing_files`, where it vanished."""
     (tmp_path / "constant").mkdir()
     (tmp_path / "constant" / "a").write_bytes(b"changed since planning\n")
     plan = _plan(
@@ -518,9 +484,7 @@ class _StackProfile:
 
 
 class _StackProvider:
-    """Implements `case_writer` (not digested) and `get_profile` (digested
-    via `cxx_mapping`), so `resolutions()` gives one capability a real winner
-    with a placeholder digest -- the shape audit finding C4 describes."""
+    """Implements `case_writer` (not digested) and `get_profile` (digested via `cxx_mapping`), so `resolutions()` gives one capability a real winner with a placeholder digest."""
 
     def __init__(self, plugin_id: str):
         self.plugin_id = plugin_id
@@ -553,14 +517,7 @@ def _stack_identity_for(providers) -> provider_identity.StackIdentity:
 
 
 def test_stale_build(tmp_path):
-    """A plan bound to one stack is refused against another.
-
-    Known limit (audit finding C4, recorded not discovered): most
-    capabilities contribute a placeholder digest, so an edited implementation
-    in an editable install is invisible here. Binding a plan to the
-    implementations actually used needs real content digests, which is G4
-    work. Do not document this as catching an edited renderer.
-    """
+    """A plan bound to one stack is refused against another."""
     current = _stack_identity_for(_installed_providers())
     other = _stack_identity_for((*_installed_providers(), _StackProvider("org.extra")))
     assert current.capability_digest != other.capability_digest
@@ -593,8 +550,7 @@ def test_stale_build(tmp_path):
 
 
 def test_the_stack_digest_does_not_yet_bind_renderer_content(tmp_path):
-    """Fails when C4 is fixed. That failure is the signal to delete the
-    limit note on `test_stale_build` above -- not to relax this assertion."""
+    """Fails when C4 is fixed."""
     recorded = provider_stack.resolutions(
         provider_stack.order_providers(_installed_providers())
     )
@@ -620,8 +576,7 @@ def test_the_stack_digest_does_not_yet_bind_renderer_content(tmp_path):
 
 
 def test_changed_indirect_dependency(tmp_path):
-    """An `include` precondition's digest changed even though every case
-    file the plan itself writes is untouched."""
+    """An `include` precondition's digest changed even though every case file the plan itself writes is untouched."""
     (tmp_path / "constant").mkdir()
     (tmp_path / "site").mkdir()
     (tmp_path / "site" / "included").write_bytes(b"original include\n")
@@ -639,15 +594,7 @@ def test_changed_indirect_dependency(tmp_path):
 
 
 def test_changed_indirect_dependency_an_environment_value_too(tmp_path, monkeypatch):
-    """R3 finding 3 (2026-09-23): an indirect dependency is not only an
-    included file -- `openfoam.case_rendering.patch_preconditions` used to
-    call `_inspect_source_closure`, bind its `environment_keys` to `_keys`,
-    and discard them, though `"environment"` is a first-class
-    `PRECONDITION_KINDS` member. A changed `WM_PROJECT_DIR` between planning
-    and commit was invisible. Covered here at the `case_transaction` level
-    (the environment-precondition *check*); the openfoam-level *emission* of
-    these preconditions is covered in
-    `omnidriver-cardiaccore/tests/test_patch_through_the_channel.py`."""
+    """An indirect dependency is not only an included file: `"environment"` is a first-class `PRECONDITION_KINDS` member too."""
     monkeypatch.setenv("OMNIDRIVER_CONFORMANCE_ENV_KEY", "planned-value")
     plan = _plan(
         tmp_path, [_rendered("constant/a", b"new\n")],
@@ -686,8 +633,7 @@ def test_replay_after_an_uncertain_result(tmp_path):
 
 
 def test_competing_attempts(tmp_path):
-    """Two commits against one case; the second blocks on the lease rather
-    than interleaving with the first."""
+    """Two commits against one case; the second blocks on the lease rather than interleaving with the first."""
     plan = _plan(tmp_path, [_rendered("constant/a", b"one\n")])
     outcome: dict = {}
 
@@ -728,14 +674,7 @@ def test_path_escape_and_symlinks(tmp_path):
 
 
 def test_path_escape_a_relative_case_root_is_refused_at_construction(tmp_path):
-    """R3 blocker 2 (2026-09-23): the other way a plan could escape to the
-    wrong place -- not a symlinked write target, but a `case_root` that never
-    named an absolute location at all, so it resolved against whatever
-    directory the committing process happened to be in. Reproduced against
-    the real public constructor: no defensive check existed in
-    `commit_case_write` itself, so this had to be refused at
-    `CaseMutationRequest.__post_init__`, before a plan naming an unauditable
-    root could exist."""
+    """R3 blocker 2 (2026-09-23): the other way a plan could escape to the wrong place -- not a symlinked write target, but a `case_root` that never named an absolute location at all, so it resolved against whatever directory the committing process happened to be in."""
     with pytest.raises(ValueError, match="absolute"):
         case_write.CaseMutationRequest(
             mode="clone_and_patch", case_root=Path("somecase"),
@@ -745,10 +684,7 @@ def test_path_escape_a_relative_case_root_is_refused_at_construction(tmp_path):
 
 
 def test_path_escape_and_symlinks_a_precondition_target_too(tmp_path):
-    """R3 finding 4 (2026-09-23): the symlink refusal `test_path_escape_and_
-    symlinks` proves for a *write* target has a mirror-image hole on the
-    *read* side -- a precondition's `is_file()`/`read_bytes()` dereferenced a
-    symlink instead of refusing it."""
+    """The symlink refusal proved for a *write* target has a mirror-image hole on the *read* side: a precondition must refuse a symlink, not dereference it."""
     outside = tmp_path.parent / "outside_precondition_dep"
     outside.mkdir(exist_ok=True)
     swapped = outside / "swapped.txt"
@@ -796,8 +732,7 @@ class _SecondRenderer(_Renderer):
 
 
 def test_duplicate_ownership():
-    """Two providers declaring one format; composition refuses. Reuses
-    `test_case_writer_capability.py`'s scenario rather than a new one."""
+    """Two providers declaring one format; composition refuses."""
     with pytest.raises(ValueError, match="openfoam_dictionary"):
         provider_stack.compose(
             provider_stack.order_providers([_Renderer(), _SecondRenderer()])
@@ -810,12 +745,7 @@ def test_duplicate_ownership():
 
 
 def test_post_write_evidence_unavailable(tmp_path):
-    """An unverifiable write is committed and does not dispatch.
-
-    Not the same as refusing the write: offline editing is supported, and a
-    case whose values could not be read back is a case nobody has verified.
-    The write happens; the run does not.
-    """
+    """An unverifiable write is committed and does not dispatch."""
     plan = _plan(tmp_path, [_rendered("constant/a", b"one\n")])
     record = case_transaction.commit_case_write(
         plan, driver_context=object(), execution_env=None,

@@ -1,10 +1,4 @@
-"""format/argument_kind in utility.manifest.toml are no longer validated
-against a closed, OpenFOAM-shaped set (Tier 3,
-future/ENVIRONMENT_CONTRACT.md #10) -- only structural validity
-(non-empty string) is checked. A plugin's own vocabulary
-(e.g. a FEniCS utility's "xdmf_sequence") must load without core
-objecting, while a malformed entry must still fail loudly.
-"""
+"""format/argument_kind in utility.manifest.toml are no longer validated against a closed, OpenFOAM-shaped set (Tier 3, future/ENVIRONMENT_CONTRACT.md #10) -- only structural validity (non-empty string) is checked. A plugin's own vocabulary (e.g. a FEniCS utility's "xdmf_sequence") must load without core objecting, while a malformed entry must still fail loudly."""
 
 from __future__ import annotations
 

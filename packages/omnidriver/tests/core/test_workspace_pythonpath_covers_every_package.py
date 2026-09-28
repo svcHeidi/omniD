@@ -1,27 +1,4 @@
-"""A whole-repo run must be able to import every package's test helpers.
-
-Each package's own ``pyproject.toml`` sets ``pythonpath = ["tests"]``, so
-``pytest packages/<pkg>/tests`` -- what every CI job runs -- can import a
-helper module sitting at that package's tests root. A whole-repo run
-(``pytest packages/``) resolves its config from the *workspace*
-``pyproject.toml`` instead, and only the roots listed there are importable.
-``addopts = --import-mode=importlib`` means there is no basedir fallback to
-paper over the difference.
-
-So a package missing from the workspace list is invisible until someone runs
-the whole repo at once, and then it fails as a bare ``ModuleNotFoundError``
-during collection -- which aborts the run before any other test reports.
-
-That happened on 2026-09-18: core/adapter-boundaries relocated the
-OpenFOAM-dependent core tests into ``packages/omnidriver-openfoam/tests/core/``
-next to a new ``openfoam_assertions`` helper. Every per-package job stayed
-green and the branch looked clean; the combined run could not collect two of
-the relocated modules.
-
-This guard is deliberately about the *workspace* file only. It says nothing
-about which helpers exist -- just that if a package has tests, a combined run
-can reach that package's tests root the same way a per-package run can.
-"""
+"""A whole-repo run must be able to import every package's test helpers."""
 from __future__ import annotations
 
 import pathlib

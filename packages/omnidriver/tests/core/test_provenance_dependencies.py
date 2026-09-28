@@ -1,9 +1,7 @@
-"""Turning a declared RuntimeDependency into a fingerprinted
-ProvenanceComponent, reusing Task 1's provenance model rather than a
-parallel one. This is the acceptance test for the incident Phase 2
-exists to prevent: an Allrun-driven step's command never names the
-cardiacFoam binary, so only this composition -- resolve, then
-fingerprint by content -- makes a rebuilt solver visible.
+"""Turning a declared RuntimeDependency into a fingerprinted ProvenanceComponent.
+
+An Allrun-driven step's command never names the cardiacFoam binary, so only
+resolving then fingerprinting by content makes a rebuilt solver visible.
 """
 
 from __future__ import annotations
@@ -29,9 +27,7 @@ def test_a_required_dependency_with_no_path_is_unavailable() -> None:
 def test_an_optional_dependency_with_no_path_is_still_reported_unavailable(
     tmp_path: Path,
 ) -> None:
-    """I3b: a missing library in lightweight mode is a normal state, not an
-    error -- but it must still be visible, never silently dropped, so it
-    still shows up as unavailable rather than being omitted."""
+    """I3b: a missing library in lightweight mode is a normal state, not an error -- but it must still be visible, never silently dropped, so it still shows up as unavailable rather than being omitted."""
     dependency = RuntimeDependency(name="electroMechanicalModels", path=None, required=False)
     component = component_for_runtime_dependency(dependency)
     assert component.method == "unavailable"
@@ -56,10 +52,7 @@ def test_a_present_dependency_is_fingerprinted_by_content(tmp_path: Path) -> Non
 def test_replacing_the_fake_solver_binarys_contents_changes_the_fingerprint(
     tmp_path: Path,
 ) -> None:
-    """The acceptance criterion: rewriting a fake cardiacFoam binary's
-    *contents* (not touching it) changes the declared dependency fingerprint
-    for an Allrun-driven case. This is what makes a rebuilt solver visible
-    to a resume that would otherwise only fingerprint the Allrun script."""
+    """The acceptance criterion: rewriting a fake cardiacFoam binary's *contents* (not touching it) changes the declared dependency fingerprint for an Allrun-driven case."""
     binary = tmp_path / "bin" / "cardiacFoam"
     binary.parent.mkdir()
     binary.write_bytes(b"#!/bin/sh\necho build-one\n")
@@ -91,10 +84,7 @@ def test_a_timestamp_only_touch_leaves_the_fingerprint_unchanged(tmp_path: Path)
 
 
 def test_a_missing_required_dependency_makes_a_snapshot_built_from_it_partial() -> None:
-    """The other half of the acceptance criterion: a missing required
-    library yields unavailable, and folding that into a snapshot the normal
-    way (Task 1's snapshot_from_components, unmodified) makes the whole
-    snapshot partial -- never a silent pass."""
+    """A missing required library yields unavailable, and folding that into a snapshot makes the whole snapshot partial, never a silent pass."""
     missing = component_for_runtime_dependency(
         RuntimeDependency(name="libelectroModels", path=None, required=True)
     )

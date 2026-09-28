@@ -121,12 +121,6 @@ def test_ensure_fresh_output_dir_noop_when_directory_does_not_exist(tmp_path):
 
 
 def test_the_legacy_allowed_root_variable_name_is_not_read(monkeypatch, tmp_path):
-    """Task 9 close-out (owner decision 3, 2026-09-26): the legacy name,
-    ``DRIVERFOAM_ALLOWED_RUNS_ROOT`` (renamed to
-    ``OMNIDRIVER_ALLOWED_RUNS_ROOT`` on 2026-09-14), is removed outright --
-    it is the project's own former name, not an OpenFOAM- or A1/A2-scoped
-    rename, and the owner chose to stop reading it rather than carry it
-    forward indefinitely. Only the current name is honoured now."""
     from omnidriver.core.runtime.run_document_exec import _allowed_runs_root
 
     monkeypatch.delenv("OMNIDRIVER_ALLOWED_RUNS_ROOT", raising=False)

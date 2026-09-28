@@ -1,19 +1,4 @@
-"""End-to-end CLI coverage for P1 (docs/superpowers/specs/2026-09-24-
-tutorials-are-pointers-design.md, "Owner decisions" dated 2026-09-25):
-`plan --strict --entry <record>` must work end to end, and the run
-document it produces must advertise a `run --run-document <path>` command
-that ITSELF works -- never the `run --strict --entry <record>` this used to
-(uncatchably) refuse with, per `registry._materialize_resolved_entry`'s own
-explicit refusal ("tutorial records are not yet runnable through
-load_entry_spec").
-
-Uses the zero-argument-constructible `plugins.e2e_record_plugin
-:E2ERecordPlugin` fixture -- the same "core test plugin" already exercised
-end to end for `sweep-run` by `test_sweep_run_plugin_propagation.py` -- via
-`omnidriver.cli.main` in-process. `pythonpath = ["tests"]`
-(packages/omnidriver/pyproject.toml) makes `plugins.*` importable here the
-same way it does for every other CLI test in this directory.
-"""
+"""End-to-end CLI coverage for P1 (docs/superpowers/specs/2026-09-24- tutorials-are-pointers-design.md, "Owner decisions" dated 2026-09-25): `plan --strict --entry <record>` must work end to end, and the run document it produces must advertise a `run --run-document <path>` command that ITSELF works -- never the `run --strict --entry <record>` this used to (uncatchably) refuse with, per `registry._materialize_resolved_entry`'s own explicit refusal ("tutorial records are not yet runnable through load_entry_spec")."""
 
 from __future__ import annotations
 
@@ -79,12 +64,7 @@ def test_plan_strict_over_a_tutorial_record_advertises_a_working_run_document_co
 
 
 def test_run_strict_entry_over_a_tutorial_record_also_works_end_to_end(tmp_path, capsys):
-    """P1's own explicit choice, decided and reported: `step`/`run --entry
-    <record>` work through the SAME shared function `plan --strict` uses
-    (`strict_planning.strict_plan`'s new tutorial_record branch), rather
-    than refusing by name -- `_context_from_entry` calls `strict_plan`
-    exactly the way it always has, and gained record support for free once
-    `strict_plan` itself stopped refusing that resolution kind."""
+    """P1's own explicit choice, decided and reported: `step`/`run --entry <record>` work through the SAME shared function `plan --strict` uses (`strict_planning.strict_plan`'s new tutorial_record branch), rather than refusing by name -- `_context_from_entry` calls `strict_plan` exactly the way it always has, and gained record support for free once `strict_plan` itself stopped refusing that resolution kind."""
     cases_root = _native_toy_case(tmp_path)
 
     exit_code = main([
@@ -103,10 +83,7 @@ def test_run_strict_entry_over_a_tutorial_record_also_works_end_to_end(tmp_path,
 def test_plan_strict_over_a_tutorial_record_whose_native_case_is_missing_refuses_with_structured_json(
     tmp_path, capsys,
 ):
-    """P1's `cli.main` fix: a `TutorialRecordError` becomes the same
-    structured JSON failure payload every comparable CLI refusal already
-    produces (see e.g. `_context_from_run_document`'s
-    `run_document_unreadable` payload) -- never a raw traceback."""
+    """P1's `cli.main` fix: a `TutorialRecordError` becomes the same structured JSON failure payload every comparable CLI refusal already produces (see e.g. `_context_from_run_document`'s `run_document_unreadable` payload) -- never a raw traceback."""
     empty_cases_root = tmp_path / "empty"
     empty_cases_root.mkdir()
 
@@ -128,10 +105,7 @@ def test_plan_strict_over_a_tutorial_record_whose_native_case_is_missing_refuses
     "plugins.conformance_toy:RefusingResolverPlugin",
 ])
 def test_a_renderer_or_resolver_refusal_comes_back_as_structured_json_I2(tmp_path, capsys, plugin):
-    """Wave-2 review I2: a refusal the plugin's case writer raises (a
-    ``ValueError`` subclass, like openCARP's ``ParFormatError``) used to escape
-    ``plan --strict`` as a traceback with empty stdout, while a validator
-    refusal came back as JSON. Both now take the same path."""
+    """A refusal the plugin's case writer raises (a `ValueError` subclass, like openCARP's `ParFormatError`) must come back as structured JSON, not a traceback."""
     from plugins.conformance_toy import TOY_REFUSAL
 
     cases_root = _native_toy_case(tmp_path)
@@ -153,11 +127,7 @@ def test_a_renderer_or_resolver_refusal_comes_back_as_structured_json_I2(tmp_pat
 def test_a_config_reader_refusal_comes_back_as_structured_json_naming_document_and_key_S_M1(
     tmp_path, capsys, action,
 ):
-    """Final review S-M1: a refusal the config-value reader raises (openCARP's
-    F1/F10 ``ParFormatError``) is a third refusal layer, reached through
-    ``split_unchanged``. It escaped both ``plan --strict`` and ``describe`` as
-    a traceback with empty stdout; it now comes back as JSON naming the
-    document and key it was reading."""
+    """A refusal the config-value reader raises (openCARP's `ParFormatError`) is a third refusal layer, reached through `split_unchanged`."""
     from plugins.conformance_toy import REFUSING_READER_PLUGIN, TOY_REFUSAL
 
     cases_root = _native_toy_case(tmp_path)
@@ -230,9 +200,7 @@ def _write_spec(tmp_path: Path, spec: dict) -> Path:
 def test_a_record_sweep_refusal_is_the_clis_json_failure(
     tmp_path, capsys, action, base_extra, sweep, fragment,
 ):
-    """Review 54b M12: a refusal of a record sweep as a whole used to escape
-    `sweep-plan`/`sweep-run` as a Python traceback with nothing on stdout.
-    It is now the same JSON failure `plan --strict` and `describe` give."""
+    """Review 54b M12: a refusal of a record sweep as a whole used to escape `sweep-plan`/`sweep-run` as a Python traceback with nothing on stdout."""
     cases_root = _native_toy_case(tmp_path)
     base = {"entry": "toyTutorial"}
     for key, value in base_extra.items():

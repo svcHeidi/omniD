@@ -1,10 +1,4 @@
-"""The group constant and the packaging metadata must name the same group.
-
-They did not, from the monorepo rename until this test existed: packaging moved
-to 'omnidriver.plugins' and plugin_discovery.py kept reading 'driverfoam.plugins',
-so --plugin <name> resolved nothing in any install. Every other discovery test
-monkeypatches the _entry_points() seam and therefore cannot catch this.
-"""
+"""The group constant and the packaging metadata must name the same group."""
 from __future__ import annotations
 
 import tomllib
@@ -16,8 +10,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 def _declared_plugin_groups() -> dict[str, list[str]]:
-    """Map each packages/*/pyproject.toml to the entry-point groups it declares
-    that look like a plugin group (contain '.plugins')."""
+    """Map each packages/*/pyproject.toml to the entry-point groups it declares that look like a plugin group (contain '.plugins')."""
     found: dict[str, list[str]] = {}
     for pyproject in sorted((_REPO_ROOT / "packages").glob("*/pyproject.toml")):
         data = tomllib.loads(pyproject.read_text())

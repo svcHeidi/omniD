@@ -1,10 +1,4 @@
-"""The toy conformance target: E2ERecordPlugin's toyTutorial.
-
-The native case is written into tmp_path by the caller's test, the same way
-test_sweep_run_plugin_propagation builds it, but with a second key
-(``label``). A one-key document cannot show a sibling key being lost; that
-is how P2 hid.
-"""
+"""The toy conformance target: E2ERecordPlugin's toyTutorial."""
 from __future__ import annotations
 
 import json
@@ -29,8 +23,7 @@ NO_CONSUMES_PLUGIN = "plugins.conformance_toy:NoConsumesPlugin"
 
 
 class ReplacingRendererPlugin(E2ERecordPlugin):
-    """Truthful about exists_before, but writes a document holding only the
-    patched keys. case_transaction accepts it; only C4 can catch it."""
+    """Truthful about exists_before, but writes a document holding only the patched keys."""
 
     def render_case_files(self, resolved, *, snapshot_root, driver_context, execution_env=None):
         rendered = []
@@ -90,8 +83,7 @@ GHOST_CONSUMES_PLUGIN = "plugins.conformance_toy:GhostConsumesPlugin"
 
 
 class GhostConsumesPlugin(E2ERecordPlugin):
-    """Declares it consumes a file the native case does not have. Provenance
-    still lists the path (as ``unavailable``); C8 must not count that."""
+    """Declares it consumes a file the native case does not have."""
 
     def get_tutorial_records(self):
         return {"toyTutorial": TutorialRecord(
@@ -111,9 +103,7 @@ STRAY_NAME = "stray-from-axis.txt"
 
 
 class NativeWritingPlugin(E2ERecordPlugin):
-    """Its number_cells axis also writes a file straight into the directory
-    named by ``STRAY_ROOT_VARIABLE`` -- the native cases root, in the bite
-    test -- outside the record's own subtree, where C7's digest never looks."""
+    """Its number_cells axis also writes a file straight into the directory named by ``STRAY_ROOT_VARIABLE`` -- the native cases root, in the bite test -- outside the record's own subtree, where C7's digest never looks."""
 
     def get_tutorial_records(self):
         from dataclasses import replace
@@ -158,11 +148,7 @@ AUXILIARY_ONLY_PREFLIGHT_PLUGIN = "plugins.conformance_toy:AuxiliaryOnlyPrefligh
 
 
 class AuxiliaryOnlyPreflightPlugin(E2ERecordPlugin):
-    """With the solver off PATH, reports only an auxiliary command missing,
-    and echoes the PATH it searched -- as openCARP's preflight does for every
-    missing command. It never names the solver, so C9 must fail it even when
-    that echoed PATH (under the scratch root) contains the solver's name
-    (final review S-I2)."""
+    """With the solver off PATH, reports only an auxiliary command missing, and echoes the PATH it searched -- as openCARP's preflight does for every missing command."""
 
     def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None) -> tuple:
         import shutil
@@ -184,8 +170,7 @@ DOCUMENTED_PLUGIN = "plugins.conformance_toy:DocumentedCasePlugin"
 
 
 class SilentSurfacePlugin(E2ERecordPlugin):
-    """Implements neither record-surface hook, as a plugin that predates C10
-    would: an agent reading describe learns nothing it may address."""
+    """Implements neither record-surface hook, as a plugin that predates C10 would: an agent reading describe learns nothing it may address."""
 
     get_record_key_catalog = None
     get_agent_guidance = None
@@ -214,8 +199,7 @@ VALIDATED_KINDLESS_PLUGIN = "plugins.conformance_toy:ValidatedKindlessPlugin"
 
 
 class NamedKeyPlugin(E2ERecordPlugin):
-    """Lists a key with a named segment, ``<region_name>``, in template form
-    only (2026-09-26, conformance Task 14 step 4)."""
+    """Lists a key with a named segment, `<region_name>`, in template form only."""
 
     def get_record_key_catalog(self, case_root):
         del case_root
@@ -223,8 +207,7 @@ class NamedKeyPlugin(E2ERecordPlugin):
 
 
 class OpenDocumentPlugin(E2ERecordPlugin):
-    """Lists ``constant/mesh.json`` as an open document: its keys are
-    written as asked, with no catalogue behind them (``validated: False``)."""
+    """Lists ``constant/mesh.json`` as an open document: its keys are written as asked, with no catalogue behind them (``validated: False``)."""
 
     def get_record_key_catalog(self, case_root):
         del case_root
@@ -277,10 +260,7 @@ FAKE_CREDENTIAL_URL = "https://user:SECRET@host/x.git"
 
 
 class LogRedactingPlugin(E2ERecordPlugin):
-    """Its solve step prints a fake credential URL to stdout, the way
-    openCARP's build header embeds a CI token in every real run. Declares
-    ``get_log_redaction_patterns`` so ``workflow_runner`` scrubs the secret
-    from the kept step log (K9)."""
+    """Its solve step prints a fake credential URL to stdout, the way openCARP's build header embeds a CI token in every real run."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -315,8 +295,7 @@ class ToyFormatError(ValueError):
 
 
 class RefusingRendererPlugin(E2ERecordPlugin):
-    """Its renderer refuses a value the key validator accepted, the way
-    openCARP's refuses an index beyond its count (F2) only at render."""
+    """Its renderer refuses a value the key validator accepted, the way openCARP's refuses an index beyond its count (F2) only at render."""
 
     def render_case_files(self, resolved, *, snapshot_root, driver_context, execution_env=None):
         raise ToyFormatError(TOY_REFUSAL)
@@ -333,8 +312,7 @@ REFUSING_READER_PLUGIN = "plugins.conformance_toy:RefusingReaderPlugin"
 
 
 class RefusingReaderPlugin(E2ERecordPlugin):
-    """Its config-value reader refuses the native value it finds, the way
-    openCARP's refuses a non-0/1 Flag (F1) or an unquoted ``a=b`` (F10)."""
+    """Its config-value reader refuses the native value it finds, the way openCARP's refuses a non-0/1 Flag (F1) or an unquoted ``a=b`` (F10)."""
 
     def get_config_value_reader(self):
         def _read(document_path, key_path):
@@ -347,9 +325,7 @@ NO_RUNNABLE_HOOK_PLUGIN = "plugins.conformance_toy:NoRunnableHookPlugin"
 
 
 class NoRunnableHookPlugin(E2ERecordPlugin):
-    """Declares no ``is_case_runnable_without_workflow``, explicitly, whatever
-    its base does. A record run is runnable because the record declares its
-    steps (wave-2 review I4); core must not ask the plugin to vouch for it."""
+    """Declares no ``is_case_runnable_without_workflow``, explicitly, whatever its base does."""
 
     is_case_runnable_without_workflow = None
 
@@ -358,8 +334,7 @@ UNDECLARED_OUTPUT_PLUGIN = "plugins.conformance_toy:UndeclaredOutputPlugin"
 
 
 class UndeclaredOutputPlugin(E2ERecordPlugin):
-    """Its solve step writes a file it does not declare in ``produces``, so
-    staging cannot know the file is generated. C11 must name it."""
+    """Its solve step writes a file it does not declare in ``produces``, so staging cannot know the file is generated."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -380,11 +355,7 @@ OVER_GENERATED_CONVENTIONS_PLUGIN = "plugins.conformance_toy:OverGeneratedConven
 
 
 class OverGeneratedConventionsPlugin(E2ERecordPlugin):
-    """Wrongly declares the native case's own authored input
-    (``constant/mesh.json``) as a generated file name, so staging drops it
-    even from the untouched native case's own restage. C11's equality
-    check (R1 fix, finding M1) must name it as dropped; the old
-    subset-only check could not see this at all."""
+    """Wrongly declares the native case's own authored input (``constant/mesh.json``) as a generated file name, so staging drops it even from the untouched native case's own restage."""
 
     def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
         return CaseRuntimeConventions(generated_file_names=("mesh.json",))
@@ -398,9 +369,7 @@ OTHER_ROUTE_MARKER = "other-route.marker"
 
 
 class DefaultRoutePlugin(E2ERecordPlugin):
-    """Its record has two routes and names the native one its default
-    (``default_variant``, owner Q2, 2026-09-26). A target with no study
-    values must describe, plan, run and sweep the default route."""
+    """Its record has two routes and names the native one its default (``default_variant``, owner Q2, 2026-09-26)."""
 
     def get_tutorial_records(self):
         return {"toyTutorial": TutorialRecord(
@@ -441,16 +410,14 @@ class WithInputPlugin(E2ERecordPlugin):
 
 
 def write_toy_input_bundle(root: Path) -> Path:
-    """A directory holding step S's one supplied file, for
-    ``--input anatomy=<this>`` / ``ConformanceTarget.inputs``."""
+    """A directory holding step S's one supplied file, for ``--input anatomy=<this>`` / ``ConformanceTarget.inputs``."""
     root.mkdir(parents=True, exist_ok=True)
     (root / INPUT_BUNDLE_FILE).write_text(json.dumps({"from": "the supplied bundle"}))
     return root
 
 
 def toy_conformance_target_with_input(tmp_path: Path) -> ConformanceTarget:
-    """Step S's own proof (design table, S2): a toy record with a supplied
-    bundle, passing C1-C12 in core -- no native tree, no solver, needed."""
+    """Step S's own proof (design table, S2): a toy record with a supplied bundle, passing C1-C12 in core -- no native tree, no solver, needed."""
     from dataclasses import replace
 
     bundle = write_toy_input_bundle(tmp_path / "bundle")
@@ -476,10 +443,7 @@ def _marker_axis():
 
 
 class DefaultArgumentPlugin(E2ERecordPlugin):
-    """Its solve step's file name is a replaceable default argument
-    (``DefaultArgument``, owner Q3/Q7, 2026-09-26): ``sh -c 'touch "$2"' sh
-    --marker default-argument.marker``. Its ``marker`` axis passes
-    ``--marker <value>.marker``, which replaces the default."""
+    """Its solve step's file name is a replaceable default argument (``DefaultArgument``, owner Q3/Q7, 2026-09-26): ``sh -c 'touch "$2"' sh --marker default-argument.marker``."""
 
     def __init__(self) -> None:
         super().__init__()

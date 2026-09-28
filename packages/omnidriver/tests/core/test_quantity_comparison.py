@@ -90,8 +90,7 @@ def test_sentinels_compare_as_statements_not_numbers(tmp_path):
 
 
 def test_both_not_reached_is_required_with_no_default(tmp_path):
-    """I2/M1, controller review 2026-09-26: no default -- every request
-    states its choice, or the schema refuses it before anything is read."""
+    """No default: every request states its choice, or the schema refuses it before anything is read."""
     sweep, runs = _two_runs(tmp_path)
     reference = write_toy_reference(tmp_path / "reference.json")
     path = tmp_path / "request.json"
@@ -103,8 +102,7 @@ def test_both_not_reached_is_required_with_no_default(tmp_path):
 
 
 def test_both_not_reached_agree_does_not_fail_the_report(tmp_path):
-    """SAME/SAME: 'a' is within_tolerance on both sides, 'b' is -1 on both
-    (both_not_reached). With 'agree' that does not fail the report."""
+    """SAME/SAME: 'a' is within_tolerance on both sides, 'b' is -1 on both (both_not_reached)."""
     sweep, runs = _two_runs(tmp_path)
     report = run_quantity_comparison(
         _request(tmp_path, runs, [_pair("A", "one", "two"), _pair("B", "one", "two")], both_not_reached="agree"),
@@ -117,9 +115,7 @@ def test_both_not_reached_agree_does_not_fail_the_report(tmp_path):
 
 
 def test_both_not_reached_fail_fails_the_report(tmp_path):
-    """I2, controller review 2026-09-26: the pre-registered alternative --
-    'fail' turns a both_not_reached pair into a failure, exactly like any
-    other failing status."""
+    """'fail' turns a both_not_reached pair into a failure, exactly like any other failing status."""
     sweep, runs = _two_runs(tmp_path)
     report = run_quantity_comparison(
         _request(tmp_path, runs, [_pair("A", "one", "two"), _pair("B", "one", "two")], both_not_reached="fail"),
@@ -130,8 +126,7 @@ def test_both_not_reached_fail_fails_the_report(tmp_path):
 
 
 def test_status_is_unavailable_when_nothing_is_compared_numerically(tmp_path):
-    """I2/M1: a report full of both_not_reached pairs must never claim
-    'passed' -- it says why in status_reason."""
+    """I2/M1: a report full of both_not_reached pairs must never claim 'passed' -- it says why in status_reason."""
     sweep, runs = _two_runs(tmp_path)
     report = run_quantity_comparison(
         _request(tmp_path, runs, [_pair("B", "one", "two")], both_not_reached="agree"), tmp_path / "report.json",
@@ -163,10 +158,9 @@ def test_a_report_is_written_once(tmp_path):
     (lambda runs, pairs: pairs.append(_pair("A", "one", "one")), "itself"),
     (lambda runs, pairs: runs["one"].update(case_id="nine"), "'nine'"),
     (lambda runs, pairs: runs["one"].update(artifact_id="record.solve.7"), "record.solve.7"),
-    # I3, controller review 2026-09-26: a self-sampling reader (takes_points
-    # is false) now *accepts* 'points' as expected locations, so this no
-    # longer fails with "takes no points" -- it fails because 'points' is
-    # given without the now-required 'max_sampling_offset' (I2/M1).
+    # A self-sampling reader (takes_points is false) accepts 'points' as an
+    # expected location, so this fails on the missing 'max_sampling_offset',
+    # not on "takes no points".
     (lambda runs, pairs: runs["one"].update(points={"unit": "m", "at": {"a": [0, 0, 0]}}), "max_sampling_offset"),
     (lambda runs, pairs: runs.update(spare=dict(runs["one"])), "'spare'.*no pair"),
 ])
@@ -232,12 +226,7 @@ def test_a_reader_unit_that_cannot_become_the_reference_unit_is_refused(tmp_path
 
 
 def test_a_run_planned_with_another_stack_is_refused(tmp_path):
-    """A stack that really differs (here, a declared plugin_version a real
-    version bump would change) is refused. Rewritten per controller review
-    B1 (2026-09-26): two distinct classes sharing MinimalTestPlugin's
-    hardcoded plugin_id are NOT a different stack by the shared
-    `stack_identity_mismatch` check (only `source`, deliberately excluded,
-    told them apart) -- see `test_the_same_plugin_loaded_by_import_path_and_by_name_is_accepted`."""
+    """A stack that really differs (here, a declared plugin_version a real version bump would change) is refused."""
     sweep = write_toy_sweep(tmp_path / "sweep", {"one": SAME, "two": SAME}, plugin=QUANTITY_TOY_PLUGIN)
     runs = {"one": _run(sweep, "one", plugin=DIFFERENT_VERSION_QUANTITY_TOY_PLUGIN), "two": _run(sweep, "two")}
     with pytest.raises(QuantityComparisonError, match="was planned with"):
@@ -245,8 +234,7 @@ def test_a_run_planned_with_another_stack_is_refused(tmp_path):
 
 
 class _FakeQuantityToyEntryPoint:
-    """A discovered (no-colon) form of QUANTITY_TOY_PLUGIN, so a run can be
-    re-loaded by name instead of by its trusted import path."""
+    """A discovered (no-colon) form of QUANTITY_TOY_PLUGIN, so a run can be re-loaded by name instead of by its trusted import path."""
 
     name = "quantity-toy"
     value = "plugins.quantity_toy:QuantityToyPlugin"
@@ -259,9 +247,7 @@ class _FakeQuantityToyEntryPoint:
 
 
 def test_the_same_plugin_loaded_by_import_path_and_by_name_is_accepted(tmp_path, monkeypatch):
-    """B1: the stack comparison is insensitive to `source` on purpose --
-    reloading the identical provider through a different install/import
-    path is not a "different stack" refusal."""
+    """B1: the stack comparison is insensitive to `source` on purpose -- reloading the identical provider through a different install/import path is not a "different stack" refusal."""
     monkeypatch.setattr(plugin_discovery, "_entry_points", lambda: (_FakeQuantityToyEntryPoint(),))
     sweep = write_toy_sweep(tmp_path / "sweep", {"one": SAME, "two": SAME}, plugin=QUANTITY_TOY_PLUGIN)
     runs = {"one": _run(sweep, "one", plugin="quantity-toy"), "two": _run(sweep, "two")}
@@ -286,9 +272,8 @@ def test_points_are_converted_to_the_reader_unit_and_an_off_point_sample_fails(t
     assert metric["left"]["sampled_at"] == [1.0, 0.0, 0.0] and metric["left"]["sampled_at_unit"] == "mm"
     assert metric["right"]["sampling_offset"] == pytest.approx(0.1)
     assert metric["status"] == "sampled_off_point" and report["status"] == "failed"
-    # M7, controller review 2026-09-26: every location number carries its
-    # unit -- these are all in the reader's coordinate_unit ("mm"), not the
-    # request's own ("m").
+    # Every location number carries its unit -- these are all in the
+    # reader's coordinate_unit ("mm"), not the request's own ("m").
     assert metric["left"]["requested_at_unit"] == "mm"
     assert metric["right"]["sampling_offset_unit"] == "mm"
     assert report["runs"]["two"]["max_sampling_offset_unit"] == "mm"
@@ -331,10 +316,7 @@ def test_max_sampling_offset_for_a_stack_with_no_reader_is_also_refused(tmp_path
 
 
 def test_expected_points_for_a_self_sampling_reader_pass_within_the_offset(tmp_path):
-    """I3, controller review 2026-09-26: a reader that samples where it
-    chooses (ToyRowReader, takes_points is false) may still be given
-    'points' -- as the agent's *expected* location, checked against
-    ToyRowReader's own sampled_at, never handed to the reader."""
+    """A self-sampling reader (takes_points is false) may still be given 'points', as an *expected* location checked against its own sampled_at, never handed to the reader."""
     sweep, runs = _two_runs(tmp_path)
     points = {"unit": "m", "at": {"a": [0, 0, 0.007], "b": [0.02, 0.003, 0]}}
     runs["one"].update(points=points, max_sampling_offset=0.001)
@@ -350,8 +332,7 @@ def test_expected_points_for_a_self_sampling_reader_pass_within_the_offset(tmp_p
 
 
 def test_expected_points_for_a_self_sampling_reader_catch_a_mispairing(tmp_path):
-    """I3: a far expected location becomes sampled_off_point, exactly as
-    for a points-taking reader -- a wrong pairing is visible, not silent."""
+    """I3: a far expected location becomes sampled_off_point, exactly as for a points-taking reader -- a wrong pairing is visible, not silent."""
     sweep, runs = _two_runs(tmp_path)
     points = {"unit": "m", "at": {"a": [5, 5, 5], "b": [0.02, 0.003, 0]}}
     runs["one"].update(points=points, max_sampling_offset=0.001)
@@ -375,9 +356,7 @@ def test_points_for_a_self_sampling_reader_without_max_sampling_offset_is_refuse
 
 
 def test_a_self_sampling_reader_with_no_location_is_a_named_gap_when_points_are_given(tmp_path):
-    """I3: NoWhereReaderPlugin's reader never reports sampled_at (like I1,
-    but for a self-sampling reader) -- with expected points given, that is
-    a named not_evaluated gap, not a silently unchecked pass."""
+    """I3: NoWhereReaderPlugin's reader never reports sampled_at (like I1, but for a self-sampling reader) -- with expected points given, that is a named not_evaluated gap, not a silently unchecked pass."""
     sweep = write_toy_sweep(tmp_path / "sweep", {"one": SAME, "two": SAME}, plugin=NO_WHERE_READER_PLUGIN)
     points = {"unit": "m", "at": {"a": [0, 0, 0.007]}}
     runs = {"one": _run(sweep, "one", plugin=NO_WHERE_READER_PLUGIN, points=points, max_sampling_offset=0.001),
@@ -390,9 +369,7 @@ def test_a_self_sampling_reader_with_no_location_is_a_named_gap_when_points_are_
 
 
 def test_a_pair_naming_two_different_runs_that_resolve_to_the_same_place_is_refused(tmp_path):
-    """N1 (controller review 2026-09-26): the refusal is about what a pair's
-    two sides actually resolve to, not whether they spell the same run
-    name."""
+    """The refusal is about what a pair's two sides resolve to, not whether they spell the same run name."""
     sweep, runs = _two_runs(tmp_path)
     runs["one_alias"] = dict(runs["one"])
     with pytest.raises(QuantityComparisonError, match="itself"):
@@ -401,10 +378,7 @@ def test_a_pair_naming_two_different_runs_that_resolve_to_the_same_place_is_refu
 
 
 def test_two_run_names_for_the_same_case_are_not_double_counted_as_evidence(tmp_path):
-    """B2 (controller review 2026-09-26): two run names that resolve to one
-    case must not produce two identical run_evidence entries, or
-    `experiments._association_status`'s "exactly one match" rule would see
-    two and call it unverified."""
+    """Two run names resolving to one case must not produce two run_evidence entries, or `experiments._association_status`'s "exactly one match" rule would call it unverified."""
     sweep, runs = _two_runs(tmp_path)
     runs["one_again"] = dict(runs["one"])
     report_path = tmp_path / "report.json"
@@ -445,8 +419,6 @@ def test_relative_reference_and_sweep_output_resolve_against_the_requests_direct
 
 
 def test_a_reader_exception_other_than_valueerror_becomes_a_named_gap(tmp_path):
-    """N3 (controller review 2026-09-26): a report is always written, even
-    when a reader raises something core never anticipated."""
     sweep = write_toy_sweep(tmp_path / "sweep", {"one": SAME, "two": SAME}, plugin=RAISING_READER_PLUGIN)
     runs = {"one": _run(sweep, "one", plugin=RAISING_READER_PLUGIN),
             "two": _run(sweep, "two", plugin=RAISING_READER_PLUGIN)}
@@ -458,8 +430,6 @@ def test_a_reader_exception_other_than_valueerror_becomes_a_named_gap(tmp_path):
 
 
 def test_a_hard_link_failure_is_a_named_refusal_not_a_traceback(tmp_path, monkeypatch):
-    """N3 (controller review 2026-09-26): a filesystem without hard-link
-    support refuses by name and never overwrites -- it is not a traceback."""
     from omnidriver.core.quantities import comparison as comparison_module
 
     def _no_hardlinks(*_args, **_kwargs):
@@ -474,8 +444,6 @@ def test_a_hard_link_failure_is_a_named_refusal_not_a_traceback(tmp_path, monkey
 
 
 def test_a_report_directory_creation_failure_is_a_named_refusal(tmp_path, monkeypatch):
-    """M10, controller review 2026-09-26: `_write_once`'s `mkdir` used to be
-    a bare `OSError` traceback."""
     from omnidriver.core.quantities import comparison as comparison_module
 
     def _no_mkdir(self, *args, **kwargs):
@@ -489,8 +457,6 @@ def test_a_report_directory_creation_failure_is_a_named_refusal(tmp_path, monkey
 
 
 def test_a_report_write_failure_is_a_named_refusal(tmp_path, monkeypatch):
-    """M10: `_write_once`'s `write_text` used to be a bare `OSError`
-    traceback."""
     from omnidriver.core.quantities import comparison as comparison_module
 
     sweep, runs = _two_runs(tmp_path)
@@ -505,9 +471,7 @@ def test_a_report_write_failure_is_a_named_refusal(tmp_path, monkeypatch):
 
 
 def test_a_malformed_expected_artifact_entry_is_refused_by_name(tmp_path):
-    """M10: `data_artifact_from_json` can raise KeyError/ValueError for a
-    malformed `expectedArtifacts` entry; that must be a named
-    QuantityComparisonError, not a traceback."""
+    """M10: `data_artifact_from_json` can raise KeyError/ValueError for a malformed `expectedArtifacts` entry; that must be a named QuantityComparisonError, not a traceback."""
     sweep, runs = _two_runs(tmp_path)
     document_path = sweep / "cases" / "one" / "run_document.json"
     document = json.loads(document_path.read_text())
@@ -519,8 +483,7 @@ def test_a_malformed_expected_artifact_entry_is_refused_by_name(tmp_path):
 
 
 def test_the_report_is_written_read_only(tmp_path):
-    """M6, controller review 2026-09-26: pre-registration is not just
-    asserted -- the written report is chmod'd read-only."""
+    """Pre-registration is not just asserted: the written report is chmod'd read-only."""
     import stat
 
     sweep, runs = _two_runs(tmp_path)
@@ -530,10 +493,7 @@ def test_the_report_is_written_read_only(tmp_path):
 
 
 def test_the_n1_guard_is_not_bypassed_by_an_unnormalised_path(tmp_path):
-    """M2, controller review 2026-09-26: `_location` used to compare a
-    resolved-but-not-normalised path, so 'sweep' and 'sweep/../sweep' -- the
-    same place, spelled differently -- were not recognised as one run, and
-    N1's self-comparison guard was bypassed."""
+    """`_location` must normalise the path: 'sweep' and 'sweep/../sweep' are the same place, spelled differently."""
     sweep, runs = _two_runs(tmp_path)
     runs["one_unnormalised"] = {**runs["one"], "sweep_output": str(sweep) + "/../" + sweep.name}
     with pytest.raises(QuantityComparisonError, match="itself"):
@@ -542,9 +502,7 @@ def test_the_n1_guard_is_not_bypassed_by_an_unnormalised_path(tmp_path):
 
 
 def test_a_refused_request_never_calls_the_reader(tmp_path, monkeypatch):
-    """A spy reader proves refusal happens before any read (N5, controller
-    review 2026-09-26): a bad-tolerance request is refused before any run
-    is even resolved, so patching the reader to explode changes nothing."""
+    """A bad-tolerance request is refused before any run is resolved, so patching the reader to explode changes nothing."""
     from plugins.quantity_toy import ToyRowReader
 
     def _spy(self, case_root, artifact, request):

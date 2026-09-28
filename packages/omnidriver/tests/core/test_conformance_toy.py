@@ -29,19 +29,14 @@ def test_toy_passes(check_id, tmp_path):
 
 @pytest.mark.parametrize("check_id", sorted(CHECKS))
 def test_a_record_with_a_supplied_input_passes(check_id, tmp_path):
-    """Step S's own proof (2026-09-28-supplied-inputs-design.md §5, S2): a
-    toy record with a supplied bundle passes C1-C12 in core, no native tree
-    or solver needed."""
+    """Step S's own proof (2026-09-28-supplied-inputs-design.md §5, S2): a toy record with a supplied bundle passes C1-C12 in core, no native tree or solver needed."""
     verdict = run_check(check_id, toy_conformance_target_with_input(tmp_path))
     assert verdict.passed, verdict.detail
 
 
 @pytest.mark.parametrize("check_id", sorted(CHECKS))
 def test_a_record_with_a_default_route_passes_with_no_study_values(check_id, tmp_path):
-    """Owner Q2, 2026-09-26: a record with two routes and a
-    ``default_variant`` is a full conformance target with an empty base
-    study. Before ``default_variant``, C2 and every check that plans refused
-    it: the study had to name a route."""
+    """Owner Q2, 2026-09-26: a record with two routes and a ``default_variant`` is a full conformance target with an empty base study."""
     verdict = run_check(check_id, toy_conformance_target(tmp_path, plugin=DEFAULT_ROUTE_PLUGIN))
     assert verdict.passed, verdict.detail
     if check_id == "C6":
@@ -49,8 +44,7 @@ def test_a_record_with_a_default_route_passes_with_no_study_values(check_id, tmp
 
 
 def test_the_default_route_is_the_one_that_runs(tmp_path):
-    """C6 counts declared artifacts of the selected route only; this checks
-    by name that the route which ran is the native one, not the other."""
+    """C6 counts declared artifacts of the selected route only; this checks by name that the route which ran is the native one, not the other."""
     from omnidriver.conformance.checks import _context, _plan
 
     target = toy_conformance_target(tmp_path, plugin=DEFAULT_ROUTE_PLUGIN)
@@ -64,9 +58,7 @@ def test_the_default_route_is_the_one_that_runs(tmp_path):
 
 @pytest.mark.parametrize("check_id", sorted(CHECKS))
 def test_a_record_whose_step_has_a_default_argument_passes(check_id, tmp_path):
-    """Owner Q3/Q7, 2026-09-26: a step's default argument is fixed on the
-    step and needs no study value. C6 finds the one file the default
-    argument names, so the default reached the real command line."""
+    """Owner Q3/Q7, 2026-09-26: a step's default argument is fixed on the step and needs no study value."""
     verdict = run_check(check_id, toy_conformance_target(tmp_path, plugin=DEFAULT_ARGUMENT_PLUGIN))
     assert verdict.passed, verdict.detail
 
@@ -110,8 +102,7 @@ def test_c4_bites_a_renderer_that_replaces_the_document(tmp_path):
 
 @pytest.mark.parametrize("check_id", sorted(CHECKS))
 def test_a_check_that_cannot_run_is_a_failed_verdict(check_id, tmp_path):
-    """I3: a misnamed record yields a failed verdict naming why, never a raise
-    that would abort a runner looping over CHECKS."""
+    """I3: a misnamed record yields a failed verdict naming why, never a raise that would abort a runner looping over CHECKS."""
     target = dataclasses.replace(toy_conformance_target(tmp_path), record="nope")
     verdict = run_check(check_id, target)
     assert not verdict.passed
@@ -124,8 +115,7 @@ def test_an_unknown_check_id_still_raises(tmp_path):
 
 
 def test_c8_bites_a_consumed_file_that_does_not_exist(tmp_path):
-    """I1: enumerate_case_inputs lists every consumed path, even a missing
-    one (strength ``unavailable``), so listing alone proves nothing."""
+    """I1: enumerate_case_inputs lists every consumed path, even a missing one (strength ``unavailable``), so listing alone proves nothing."""
     verdict = run_check("C8", toy_conformance_target(tmp_path, plugin=GHOST_CONSUMES_PLUGIN))
     assert not verdict.passed
     assert "does/not/exist.json" in verdict.detail
@@ -133,11 +123,7 @@ def test_c8_bites_a_consumed_file_that_does_not_exist(tmp_path):
 
 
 def test_checks_take_the_scratch_root_as_an_argument_so_threads_do_not_interleave(tmp_path, monkeypatch):
-    """Replaces the I2 lock test (2026-09-26). Checks used to point core at
-    the target's scratch root by overriding ``OMNIDRIVER_SCRATCH_DIR`` in
-    ``os.environ`` behind a lock. Core takes the scratch root as an argument
-    now, so two targets planned in parallel threads each stage under their
-    own scratch root, and the process environment is never written."""
+    """Replaces the I2 lock test (2026-09-26)."""
     import os
     import threading
 
@@ -168,8 +154,7 @@ def test_checks_take_the_scratch_root_as_an_argument_so_threads_do_not_interleav
 
 
 def test_a_write_into_the_native_cases_root_fails_the_check(tmp_path):
-    """I4: the suite-wide guard watches all of cases_root, not only the
-    record's subtree that C7 digests."""
+    """I4: the suite-wide guard watches all of cases_root, not only the record's subtree that C7 digests."""
     target = toy_conformance_target(tmp_path, plugin=NATIVE_WRITING_PLUGIN)
     target = dataclasses.replace(
         target, environment={**target.environment, STRAY_ROOT_VARIABLE: str(target.cases_root)},
@@ -302,7 +287,6 @@ def test_c6_bites_a_record_that_declares_no_outputs(tmp_path):
 
 
 def test_c9_bites_a_preflight_that_never_reports_a_missing_solver(tmp_path):
-    """M7."""
     verdict = run_check("C9", toy_conformance_target(tmp_path, plugin=SILENT_PREFLIGHT_PLUGIN))
     assert not verdict.passed
     assert "'touch' off PATH" in verdict.detail
@@ -310,11 +294,7 @@ def test_c9_bites_a_preflight_that_never_reports_a_missing_solver(tmp_path):
 
 @pytest.mark.parametrize("scratch_dir", ["touch", "my touch runs", "the 'touch' runs", 'a "touch" dir'])
 def test_c9_is_not_satisfied_by_the_solver_name_in_the_echoed_scratch_path_S_I2(tmp_path, scratch_dir):
-    """Final review S-I2 (A-M5, W2-M2): C9 matched ``solver_command in m``, so
-    a preflight that never names the solver passed whenever the PATH it
-    echoed -- under the scratch root -- contained the solver's name, e.g.
-    ``~/openCARP-runs/``. C9 now drops that PATH from each message and
-    requires the command as a quoted token."""
+    """A preflight that never names the solver must not pass just because the scratch path it echoes happens to contain the solver's name."""
     from plugins.conformance_toy import AUXILIARY_ONLY_PREFLIGHT_PLUGIN
 
     target = toy_conformance_target(tmp_path, plugin=AUXILIARY_ONLY_PREFLIGHT_PLUGIN)
@@ -339,9 +319,7 @@ def test_c10_surface_lists_the_toy_axis_key_and_guidance(tmp_path):
 
 
 def test_describe_of_a_record_carries_its_keys_only_in_the_record_surface(tmp_path):
-    """One canonical catalogue for a record (2026-09-26, conformance Task 14
-    step 4, decision 4): ``record_surface.keys``, never ``dict_entries``
-    beside it. Factory and case-folder entries keep ``dict_entries``."""
+    """One canonical catalogue for a record: `record_surface.keys`, never `dict_entries` beside it."""
     from omnidriver.core.introspection import describe_entry
     from omnidriver.core.plugin_interface import load_plugin_context
 
@@ -360,11 +338,7 @@ def test_c10_bites_a_stack_that_declares_no_surface(tmp_path):
 
 
 def _break_the_surface(monkeypatch, breaker):
-    """Wrap core's ``record_surface`` so the ``describe`` C10 reads lists a
-    deliberately wrong axis set. Review 54b M3: C10 compared
-    ``record_surface.axes`` with ``record.axis_names()``, both built from
-    ``record.axes``, so no plugin could ever make it fail; these tests break
-    the surface itself and require C10 to notice."""
+    """Wrap core's ``record_surface`` so the ``describe`` C10 reads lists a deliberately wrong axis set."""
     from omnidriver.core.runtime import record_surface as module
 
     real = module.record_surface
@@ -421,8 +395,7 @@ def test_c10_matches_a_concrete_index_against_its_int_template(tmp_path):
     ("regions.count", False),
 ])
 def test_c10_matches_a_named_segment_against_its_template(key, listed, tmp_path):
-    """``<region_name>`` in a catalogue key stands for any single dot-free
-    segment (2026-09-26, conformance Task 14 step 4, decision 2)."""
+    """`<region_name>` in a catalogue key stands for any single dot-free segment."""
     target = dataclasses.replace(
         toy_conformance_target(tmp_path, plugin=NAMED_KEY_PLUGIN), patch=(f"constant/mesh.json:{key}", 7),
     )
@@ -442,8 +415,7 @@ def test_c10_an_int_template_does_not_match_a_named_index(tmp_path):
 
 
 def test_c10_matches_any_key_of_an_open_document_through_its_document(tmp_path):
-    """A document-level entry (``key: "<any>"``, ``validated: False``) needs
-    no value kind, and lists every key of its document (decision 3)."""
+    """A document-level entry (``key: "<any>"``, ``validated: False``) needs no value kind, and lists every key of its document (decision 3)."""
     target = dataclasses.replace(
         toy_conformance_target(tmp_path, plugin=OPEN_DOCUMENT_PLUGIN), patch=("constant/mesh.json:a.b[2].c", 7),
     )
@@ -484,10 +456,7 @@ def test_c10_bites_a_catalogue_entry_without_a_value_kind(tmp_path):
 
 @pytest.mark.parametrize("check_id", ["C5", "C6", "C7"])
 def test_a_record_plugin_without_the_runnable_hook_passes_I4(check_id, tmp_path):
-    """Wave-2 review I4: core's run-document gate asked the plugin whether a
-    case "without driver-owned workflow metadata" is runnable -- the wrong
-    question for a record run, whose document carries the record's own
-    steps. openCARP and the toy answered it only to get past the gate."""
+    """A record run's document carries its own steps, so the plugin's runnable-without-workflow hook is the wrong question to ask."""
     from plugins.conformance_toy import NO_RUNNABLE_HOOK_PLUGIN
 
     verdict = run_check(check_id, toy_conformance_target(tmp_path, plugin=NO_RUNNABLE_HOOK_PLUGIN))
@@ -502,10 +471,7 @@ def test_c11_names_an_output_the_record_does_not_declare(tmp_path):
 
 
 def test_c11_names_an_authored_path_wrongly_dropped(tmp_path):
-    """R1 fix, finding M1: C11 used to assert ``restaged <= native`` only,
-    so a plugin whose conventions wrongly claim an authored native file is
-    "generated" -- and so get dropped during staging -- passed cleanly.
-    It is now checked both ways."""
+    """C11 must also catch a plugin whose conventions wrongly claim an authored native file is "generated" and drop it during staging."""
     verdict = run_check(
         "C11", toy_conformance_target(tmp_path, plugin=OVER_GENERATED_CONVENTIONS_PLUGIN),
     )

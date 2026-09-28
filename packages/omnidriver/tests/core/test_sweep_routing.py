@@ -1,14 +1,4 @@
-"""Tests routing of resolved sweep values to build_and_launch parameters.
-
-Phase 2 Task M2: every test that asserted cardiacFoam's own routing
-catalog (electro_selectors/electro_overrides shapes, dict-builder text
-placement) moved to
-packages/omnidriver-cardiacfoam/tests/test_sweep_routing.py. What
-remains here is core's own refusal-by-name mechanism: routing consults
-the SELECTED plugin rather than a hardcoded cardiac vocabulary, and a
-plugin lacking route_sweep_case_values() is told so by name instead of
-silently running cardiac validation over its axes.
-"""
+"""Tests routing of resolved sweep values to build_and_launch parameters."""
 
 import pytest
 

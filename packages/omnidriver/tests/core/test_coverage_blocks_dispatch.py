@@ -1,22 +1,4 @@
-"""A required check that could not run must block the launch it covers.
-
-`is_launchable` has modelled this since 2026-09-19 and its own docstring
-recorded that nothing supplied `simulation_audit`, so `coverage_ok` was always
-True at the gate. An introspection field that always says yes is worse than no
-field: it reads as a guarantee.
-
-Phase 2 makes post-write effective-value readback a required check. If an
-unavailable check cannot block, a write whose result could not be verified
-dispatches anyway.
-
-Wired 2026-09-22 (audit finding C2): `StepExecutionContext` now carries
-`simulation_audit`, and `cli._refuse_environment_errors` -- the one
-dispatch-time gate -- passes it to `is_launchable`. The behavioural test below
-drives that path for real: it builds a dispatch context the way
-`cli._context_from_entry` does (from a stubbed `strict_plan` report carrying an
-`unavailable` stage) and confirms the dispatch-time gate refuses it, rather
-than inspecting `cli`'s source text for the keyword.
-"""
+"""A required check that could not run must block the launch it covers."""
 
 from pathlib import Path
 from types import SimpleNamespace
@@ -63,16 +45,7 @@ def test_omitting_the_audit_still_never_blocks():
 
 
 def test_the_dispatch_gate_receives_the_audit(tmp_path: Path):
-    """The half that was missing: the predicate was correct and unfed.
-
-    Drives `cli._context_from_entry` -- the real producer of a dispatch-time
-    `StepExecutionContext` -- with a stubbed `strict_plan()` report whose
-    `simulation_audit` carries a genuinely `unavailable` stage, then calls
-    `cli._refuse_environment_errors` -- the real dispatch-time gate -- on the
-    context it built. `is_launchable` is not mocked anywhere in this test: if
-    the audit were dropped anywhere along the way (as it was before this
-    fix), this test would see `blocked is None` and fail.
-    """
+    """The half that was missing: the predicate was correct and unfed."""
     from omnidriver import cli
 
     case_root = tmp_path / "case"

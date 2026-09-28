@@ -1,24 +1,4 @@
-"""Tests for filesystem case workflow ownership.
-
-Plain case folders are owned by their plugin-declared case script. Registry discovery may
-still find a non-runnable marked folder, but it must not invent a
-workflow_dag unless that script exists.
-
-Phase 2 Task M2: ``test_variant_electro_properties_case_is_discoverable_and_runnable``
-moved to
-packages/omnidriver-cardiacfoam/tests/test_workflow_dag_filesystem_ingest.py
--- it asserts cardiacFoam's own electroProperties-variant case marker. The
-two tests kept here assert core's own DAG-synthesis rule (a declared script
-present -> single-step DAG; absent -> None), independent of what marks a folder
-case at all, so the local ``_FilesystemMarkerPlugin`` explicitly defines a
-test-only ``metadata/case.txt`` + ``inputs/`` marker. It wires
-``make_generic_case_spec`` into its own ``get_generic_case_factory`` (step S6
-replaced the deleted ``get_tutorial_catalog``'s smuggled
-``"make_generic_case_spec"`` key with this narrower hook) -- the same
-core-owned factory ``resolve_entry`` already falls back to when no marker
-matches, so both branches behave identically and no cardiac vocabulary is
-reachable.
-"""
+"""Tests for filesystem case workflow ownership."""
 from __future__ import annotations
 
 import unittest
@@ -33,11 +13,7 @@ from plugins.minimal_plugin import MinimalTestPlugin
 
 
 class _FilesystemMarkerPlugin(MinimalTestPlugin):
-    """A test-only case marker with no solver vocabulary.
-
-    The marker is deliberately plain filesystem evidence; it carries no
-    solver vocabulary.
-    """
+    """A test-only case marker with no solver vocabulary."""
 
     def has_case_marker(self, case_root: Path) -> bool:
         return (

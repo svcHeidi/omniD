@@ -87,10 +87,7 @@ def test_a_refusal_names_the_step_once():
 
 
 def test_a_step_keeps_its_utility_manifest_produces_beside_its_own():
-    """I6: a step's declared ``produces`` is unioned with its command's
-    utility-manifest ``produces``, never a replacement. Replacing left the
-    manifest ids unclaimed, and the unclaimed branch credited them to the
-    last solver step -- which then failed for a file it never writes."""
+    """I6: a step's declared ``produces`` is unioned with its command's utility-manifest ``produces``, never a replacement."""
     from omnidriver.core.runtime.workflow import normalize_workflow_dag
 
     dag, _diagnostics = normalize_workflow_dag(

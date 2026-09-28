@@ -1,8 +1,4 @@
-"""The six composition rules from spec §4.3, as behaviour.
-
-Deliberately mechanism-independent: whichever dispatch mechanism Phase 0's
-spike selected, these must pass unchanged.
-"""
+"""The six composition rules from spec §4.3, as behaviour, independent of the dispatch mechanism."""
 
 import pytest
 
@@ -150,15 +146,7 @@ def test_one_provider_supplying_both_is_accepted():
 
 
 def test_resolve_and_supported_modes_must_come_from_one_provider():
-    """Reclassified 2026-09-23 (R2 finding 2): `get_supported_mutation_modes`
-    was `set`-shaped (union across the stack) while `resolve_case_mutation` is
-    `single`-shaped (most specific only). A stack where one provider declared
-    supported modes and a DIFFERENT, more specific provider implemented the
-    resolver composed to the union of both providers' declared modes, so
-    `resolve()` could pass a mode into a resolver that never claimed to accept
-    it. Reclassified to `single` and paired here, the same guarantee
-    `apply_overrides`/`get_override_target_paths` already give.
-    """
+    """`get_supported_mutation_modes` is `set`-shaped (union across the stack) while `resolve_case_mutation` is `single`-shaped (most specific only)."""
     a = _Provider("org.a", get_supported_mutation_modes=lambda: frozenset({"synthesize"}))
     b = _Provider("org.b", requires=("org.a",),
                   resolve_case_mutation=lambda *a, **k: None)
@@ -176,14 +164,7 @@ def test_one_provider_supplying_both_modes_and_resolver_is_accepted():
 
 
 def test_override_scopes_concatenate_across_providers():
-    """`get_override_scopes` fits none of the original six shapes.
-
-    Spike finding #1, 2026-09-20. Classified here as a concatenating sequence:
-    scopes an environment provider offers and scopes a solver provider offers
-    should BOTH be available, since they address different files. If Task 6
-    concludes another shape is right, change this test and record why in the
-    spec -- do not leave it unclassified.
-    """
+    """`get_override_scopes` fits none of the original six shapes."""
     env = _Provider("org.env", get_override_scopes=lambda: ("env-scope",))
     solver = _Provider("org.solver", requires=("org.env",),
                        get_override_scopes=lambda: ("solver-scope",))
@@ -193,8 +174,7 @@ def test_override_scopes_concatenate_across_providers():
 
 
 def test_a_case_file_path_declared_twice_is_an_error():
-    """Spec §2.1: one fact, one declarer. Tolerance is how two sources of
-    truth are born."""
+    """Spec §2.1: one fact, one declarer."""
     rule = type("_R", (), {"path": "system/controlDict", "role": "openfoam.control_dict"})()
     env = _Provider("org.env")
     env.get_profile().case_files = (rule,)

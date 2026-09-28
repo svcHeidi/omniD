@@ -1,16 +1,4 @@
-"""``plan --strict`` must always answer in its own contract.
-
-Every failure mode omnidriver knows about is reported as a JSON document with
-``status: "failed"`` and structured diagnostics -- that document IS the
-interface an agent consumes. A failure that escapes as an unhandled exception
-gives the caller a traceback on stderr and nothing on stdout, so
-``json.load()`` raises and the agent has to parse English prose to find out
-what went wrong.
-
-``myocardiumSolver`` is the selector the whole coeffs scope name is derived
-from, so a case missing it genuinely cannot be planned. Failing is correct;
-failing outside the contract is not.
-"""
+"""``plan --strict`` must always answer in its own contract."""
 
 from __future__ import annotations
 

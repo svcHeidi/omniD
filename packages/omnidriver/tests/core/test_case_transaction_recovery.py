@@ -1,17 +1,4 @@
-"""An interrupted or retried transaction has one correct outcome.
-
-Three situations, three answers:
-
-* Interrupted mid-apply -> recovery restores the before-images and the case
-  is back where it started. Until recovery runs, dispatch is blocked: a case
-  whose inputs are half-written is not a case whose inputs are known.
-* Retried after an uncertain response, same transaction id -> the existing
-  record is returned. Reapplying would write over a case that may have moved
-  on.
-* Retried with a plan whose preconditions no longer hold -> refused as stale,
-  naming what changed (covered by test_case_transaction.py's precondition
-  tests; this file covers the transaction-id replay path instead).
-"""
+"""An interrupted or retried transaction has one correct outcome."""
 import json
 import os
 from pathlib import Path
@@ -84,12 +71,7 @@ def test_an_interrupted_transaction_is_recoverable(tmp_path, monkeypatch):
 
 
 def test_a_journal_with_an_unrecognised_state_is_refused(tmp_path):
-    """R3 finding 5 (2026-09-23): `TRANSACTION_STATES` was declared but never
-    validated by `_read_journal` -- any `state` value was accepted.
-    Behaviour was safe today (rollback is unconditional on this field), but
-    the invariant was dead. Matches
-    `remediation_transaction.read_remediation_transaction`'s own
-    status-validation pattern."""
+    """`_read_journal` must validate `state` against `TRANSACTION_STATES`, not accept any value."""
     (tmp_path / ".omnidriver").mkdir(parents=True, exist_ok=True)
     case_transaction._write_journal(tmp_path, {
         "transaction_id": "t-bogus", "state": "definitely_not_a_real_state",
@@ -143,8 +125,7 @@ def test_a_replay_with_a_different_plan_under_one_id_is_refused(tmp_path):
     reason="root ignores the write-permission bit this test injects a failure with",
 )
 def test_a_rollback_that_itself_fails_leaves_the_journal_and_says_so(tmp_path, monkeypatch):
-    """The worst case must be loud. A failed rollback leaves a case in an
-    unknown state, and the journal is the only record of what it was."""
+    """The worst case must be loud."""
     (tmp_path / "constant").mkdir()
     (tmp_path / "constant" / "a").write_bytes(b"original\n")
     before = case_write._digest_bytes(b"original\n")
@@ -170,11 +151,7 @@ def test_a_rollback_that_itself_fails_leaves_the_journal_and_says_so(tmp_path, m
 
 
 def test_a_persisted_plan_round_trips(tmp_path):
-    """`CaseWritePlan.from_json` was already implemented before this task, not
-    left as a `NotImplementedError` the way the plan's own snippet describes
-    (a stale plan claim, reported rather than followed): `RenderedFile`
-    embeds its content as base64 directly, so `to_json()`/`from_json()`
-    round-trip with no separate ``contents`` side-channel needed."""
+    """`CaseWritePlan.from_json` was already implemented before this task, not left as a `NotImplementedError` the way the plan's own snippet describes (a stale plan claim, reported rather than followed): `RenderedFile` embeds its content as base64 directly, so `to_json()`/`from_json()` round-trip with no separate ``contents`` side-channel needed."""
     plan = _plan(tmp_path, [_rendered("constant/a", b"one\n")])
     payload = json.loads(case_write.canonical_json(plan.to_json()))
     restored = case_write.CaseWritePlan.from_json(payload)

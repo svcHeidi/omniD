@@ -1,23 +1,4 @@
-"""The frozen tolerance protocol for E1.
-
-EXPERIMENTAL_EVIDENCE_TABLE.md requires that thresholds "must not be selected
-after seeing the final comparison". Most rows need no pilot: the committed
-``.reference`` files already carry per-point tolerances authored long before E1
-existed, so adopting them is preregistration-safe by construction. Each row
-records where its tolerance came from, so that is auditable rather than
-asserted.
-
-Two committed reference layouts exist and both carry tolerances:
-
-- columnar, ``file time variable expected tolerance`` -- time-series probe
-  points (singleCell, Niederer, electromechanical, rotorInstability);
-- metric, ``kind key metric expected tolerance`` -- the manufactured-solution
-  and purkinje cases, carrying the solver-emitted L1/L2/Linf norm tolerances
-  alongside summary and topology checks.
-
-Both predate E1, so both are preregistration-safe to adopt. No pilot study is
-required for the norm rows: their tolerances are already committed.
-"""
+"""The frozen tolerance protocol for E1."""
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
@@ -42,23 +23,7 @@ class _ReferencePoint:
 
 
 def _parse_columnar_reference(text: str) -> list[_ReferencePoint]:
-    """Parse a `file time variable expected tolerance` reference file.
-
-    Returns [] for reference files that don't follow this columnar layout
-    (e.g. the bidomain `kind key metric ...` metric style), signalling the
-    caller to fall back to the case's own regressionTest.sh as the gate.
-
-    Duplicated (not imported) from
-    ``regression_equivalence.dual_run.parse_columnar_reference`` in
-    cardiacfoam's test tree: that module imports
-    ``regression_equivalence.registry``, a sibling module that lives only in
-    cardiacfoam's own tests directory, so importing it from core's test suite
-    would pull a cardiacfoam-only test package into a core-only install (the
-    regression this duplication fixes, see
-    docs/superpowers/plans/2026-08-27-core-completion-phase-2.md, Task 1).
-    This function itself is generic -- no cardiac knowledge -- so copying it
-    is safe and cheaper than relocating this whole module.
-    """
+    """Parse a `file time variable expected tolerance` reference file."""
     points: list[_ReferencePoint] = []
     for raw in text.splitlines():
         line = raw.strip()
@@ -116,12 +81,7 @@ class ToleranceRow:
 def transcribe_reference(
     case_dir: str, reference_relpath: str, reference_text: str
 ) -> list[ToleranceRow]:
-    """Turn one committed columnar reference into frozen tolerance rows.
-
-    Returns [] for references that are not in the columnar
-    `file time variable expected tolerance` layout (e.g. the bidomain
-    `kind key metric ...` style), which carry no per-point tolerance to adopt.
-    """
+    """Turn one committed columnar reference into frozen tolerance rows."""
     return [
         ToleranceRow(
             case_dir=case_dir,
@@ -138,12 +98,7 @@ def transcribe_reference(
 
 
 def _metric_records(reference_text: str) -> list[tuple[str, str, str, float, float]]:
-    """Parse the `kind key metric expected tolerance` layout.
-
-    Returns [] for the columnar layout, which is distinguished by its second
-    column parsing as a float (a time), where this layout's second column is a
-    field or quantity name.
-    """
+    """Parse the `kind key metric expected tolerance` layout."""
     records: list[tuple[str, str, str, float, float]] = []
     for raw in reference_text.splitlines():
         line = raw.strip()

@@ -1,9 +1,8 @@
-"""Canonical input enumeration (Task 2b): which on-disk files, case
-scripts, and runtime dependencies a workflow run actually consumes.
-Classification is by consumption, not authorship (I1) -- an
-unclassified file defaults to required_input, since a spurious refusal
-is recoverable and a silent stale replay is the incident this phase
-exists to prevent.
+"""Canonical input enumeration: which on-disk files, case scripts, and runtime dependencies a workflow run actually consumes.
+
+Classification is by consumption, not authorship: an unclassified file
+defaults to required_input, since a spurious refusal is recoverable and a
+silent stale replay is not.
 """
 
 from __future__ import annotations
@@ -75,11 +74,7 @@ def _make_executable(path: Path, content: bytes) -> None:
 
 
 class _FakePlugin(MinimalTestPlugin):
-    """A v1 plugin that declares CaseProvenanceCapability / RuntimeEvidence
-    hooks inline, so precedence can be exercised without a tutorial.
-
-    Its selected-time convention is supplied below, because Core does not
-    infer a restart directory from case-file syntax."""
+    """A v1 plugin that declares CaseProvenanceCapability / RuntimeEvidence hooks inline, so precedence can be exercised without a tutorial."""
 
     def __init__(self, *, required_inputs=(), generated_output_globs=(), extra_provenance_paths=()):
         self._required_inputs = required_inputs
@@ -96,8 +91,7 @@ class _FakePlugin(MinimalTestPlugin):
         return self._extra_provenance_paths
 
     def get_input_roots(self, case_root, resolved_case, *, conventions):
-        """The toy's state directory "0", serially and in each processor*
-        replica: the shape an OpenFOAM stack declares, stated by hand."""
+        """The toy's state directory "0", serially and in each processor* replica: the shape an OpenFOAM stack declares, stated by hand."""
         del resolved_case, conventions
         replicas = sorted(p.name for p in Path(case_root).glob("processor*") if p.is_dir())
         return ("0", *(f"{name}/0" for name in replicas))
@@ -257,9 +251,7 @@ def test_a_case_with_no_constant_does_not_raise(tmp_path: Path) -> None:
 
 
 def test_generic_plugin_still_requires_unknown_files(tmp_path: Path) -> None:
-    """Under the generic plugin (declares nothing), the same file cardiacFoam
-    would exclude stays required -- an unclassified file always defaults to
-    required_input (I1)."""
+    """Under the generic plugin (declares nothing), the same file cardiacFoam would exclude stays required -- an unclassified file always defaults to required_input (I1)."""
     _write_control_dict(tmp_path, start_from="startTime", start_time="0")
     (tmp_path / "constant").mkdir()
     (tmp_path / "constant" / "C").write_bytes(b"mesh-diagnostic-byproduct")
@@ -356,8 +348,7 @@ def test_plugin_runtime_dependency_entries_appear_and_missing_required_is_unavai
 
 
 def test_dag_consumes_declaration_wins_over_a_generated_output_glob(tmp_path: Path) -> None:
-    """I1's resolution precedence: a DAG step's consumes declaration beats a
-    plugin's generated_output_globs exclusion."""
+    """I1's resolution precedence: a DAG step's consumes declaration beats a plugin's generated_output_globs exclusion."""
     _write_control_dict(tmp_path, start_from="startTime", start_time="0")
     (tmp_path / "constant").mkdir()
     (tmp_path / "constant" / "C").write_bytes(b"mesh-diagnostic-byproduct")
@@ -380,8 +371,7 @@ def test_dag_consumes_declaration_wins_over_a_generated_output_glob(tmp_path: Pa
 
 
 def test_plugin_required_inputs_entry_wins_over_a_generated_output_glob(tmp_path: Path) -> None:
-    """I1's resolution precedence: a plugin required_inputs() entry beats its
-    own generated_output_globs exclusion."""
+    """I1's resolution precedence: a plugin required_inputs() entry beats its own generated_output_globs exclusion."""
     _write_control_dict(tmp_path, start_from="startTime", start_time="0")
     (tmp_path / "constant").mkdir()
     target = tmp_path / "constant" / "C"
@@ -401,8 +391,7 @@ def test_plugin_required_inputs_entry_wins_over_a_generated_output_glob(tmp_path
 
 
 def test_optional_required_input_that_is_absent_is_not_added(tmp_path: Path) -> None:
-    """READ_IF_PRESENT and absent is not the same as MUST_READ and missing --
-    nothing was going to be consumed, so nothing is fingerprinted."""
+    """READ_IF_PRESENT and absent is not the same as MUST_READ and missing -- nothing was going to be consumed, so nothing is fingerprinted."""
     _write_control_dict(tmp_path, start_from="startTime", start_time="0")
     plugin = _FakePlugin(
         required_inputs=(ResolvedInput(name="Optional", path=None, required=False, consumer="test"),),
@@ -491,8 +480,7 @@ def test_sequential_repairs_conservatively_retain_prior_external_dependencies(
 
 
 def test_processor_selected_time_is_included_other_processor_times_excluded(tmp_path: Path) -> None:
-    """I9: processor*/<selected-time>/** is a required input on the same
-    footing as the serial case; other times under processor*/ are outputs."""
+    """I9: processor*/<selected-time>/** is a required input on the same footing as the serial case; other times under processor*/ are outputs."""
     _write_control_dict(tmp_path, start_from="startTime", start_time="0")
     proc0 = tmp_path / "processor0"
     (proc0 / "0").mkdir(parents=True)
