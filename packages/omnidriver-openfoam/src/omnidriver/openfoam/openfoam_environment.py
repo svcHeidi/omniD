@@ -11,14 +11,7 @@ from typing import Any, Mapping
 
 
 def _discover_openfoam_bashrcs() -> tuple[Path, ...]:
-    """Discover OpenFOAM installations across common locations.
-
-    Searches (in order):
-      - /opt/openfoam* (Linux)
-      - /usr/local/openfoam* (Linux/macOS)
-      - /Volumes/OpenFOAM-v* (macOS)
-      - Result of `which foamVersion` if available
-    """
+    """Search common OpenFOAM install locations and `which foamVersion`."""
     candidates: set[Path] = set()
 
     for search_pattern in [
@@ -212,16 +205,9 @@ def _configure_plugin_environment(
     environment: OpenFOAMEnvironment,
     driver_context: Any | None,
 ) -> OpenFOAMEnvironment:
-    """Return the sourced environment unchanged.
-
-    OpenFOAM sourcing is generic; project-specific library selection belongs
-    to whichever other provider composes with this one (via `.capabilities`,
-    e.g. ``get_configured_environment``'s ``chain`` composition in
-    `provider_stack.py`), not to a hook this module reaches for on
-    ``driver_context`` itself. ``driver_context`` is accepted for signature
-    stability with the two call sites above, but this function no longer
-    reads it.
-    """
+    """Return the sourced environment unchanged; project-specific library
+    selection belongs to whichever provider composes with this one, not here.
+    ``driver_context`` is kept only for signature stability."""
     return environment
 
 

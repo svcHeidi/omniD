@@ -1,57 +1,9 @@
 """An etc dependency must be the file the native runtime would select.
-
-`#includeEtc "caseDicts/x"` was resolved as `$FOAM_ETC/caseDicts/x` and nothing
-else. Native `findEtcFile` searches up to six locations -- user, then site,
-then other/distribution, each gated by a `u`/`g`/`o` mode letter -- so an
-override at any of those levels, or an explicit `FOAM_CONFIG_ETC`/
-`FOAM_CONFIG_MODE`, can change which file the solver reads while the inspector
-recorded a different one. Dependency closure then names a file the run did
-not use, and a precondition digest over that file proves nothing about the
-run.
-
-These fixtures are directory layouts, not an OpenFOAM installation. They assert
-which candidate is selected and which candidates were searched, not what
-foamDictionary would print. The native comparison lives in
-``tests/core/test_effective_dictionary.py``, guarded by the same ``@native``
-marker as the rest of that file's runtime-backed tests, so it runs only when
-an OpenFOAM installation is actually discoverable.
-
-Corrected 2026-09-22, three times:
-
-1. First version modelled only three locations (versioned user, versioned
-   site, distribution) and built the user/site directories from
-   ``WM_PROJECT_VERSION``. Measured against a real ESI v2412 install, native's
-   own ``foamEtcFile -list`` names five locations -- user/site qualified by
-   ``FOAM_API``, not ``WM_PROJECT_VERSION`` (they differ on ESI builds, e.g.
-   ``2412`` vs ``v2412``) -- plus unversioned user and site fallbacks.
-   ``test_a_wm_project_version_qualified_user_file_is_ignored...`` is the
-   fixture form of that regression: the first draft's own
-   ``$HOME/.OpenFOAM/v2412`` candidate is a location native never reads, so a
-   file placed there was selected by the driver while the real run kept
-   reading straight through to the distribution file underneath it.
-2. Second version covered those five locations but not ``FOAM_CONFIG_ETC``
-   (an explicit override, searched immediately before the distribution
-   file) or ``FOAM_CONFIG_MODE`` (restricts the search to a subset of
-   user/group/other). An independent review reproduced both live:
-   ``FOAM_CONFIG_ETC`` set with nothing else shadowing it selected the
-   override natively while this function still selected the distribution
-   file; ``FOAM_CONFIG_MODE=o`` with a user file present had native
-   deliberately skip user/group entirely while this function still selected
-   the user file. ``test_foam_config_mode_o_excludes_user_and_group_entirely``
-   is that second regression's fixture form.
-3. Same review: the Foundation (openfoam.org) branch modelled the site
-   default from ``WM_PROJECT_DIR`` -- correct for ESI, but Foundation's own
-   published source defaults the site root from the *parent* of the versioned
-   install (``WM_PROJECT_INST_DIR``), not from ``WM_PROJECT_DIR`` itself.
-   ``_foundation_environment`` below pinned ``WM_PROJECT_SITE`` explicitly, so
-   it never actually exercised either family's *default*,
-   ``test_foundation_style_site_root_defaults_from_wm_project_inst_dir`` does.
-   Foundation is verified against its **published source only**
-   (``raw.githubusercontent.com/OpenFOAM/OpenFOAM-dev/master/{bin/foamEtcFile,
-   etc/bashrc}``, fetched 2026-09-22) -- no Foundation installation exists on
-   this machine, so this family has no live comparison the way ESI does in
-   ``test_effective_dictionary.py``. That gap is recorded, not guessed away.
-"""
+Native `findEtcFile` searches up to six locations (user/site/distribution,
+each gated by a `u`/`g`/`o` mode letter, plus `FOAM_CONFIG_ETC`/
+`FOAM_CONFIG_MODE`); these fixtures model that chain, not an OpenFOAM
+installation. The native comparison lives in
+``tests/core/test_effective_dictionary.py``."""
 
 from pathlib import Path
 
@@ -107,10 +59,9 @@ def _esi_environment(
 def _foundation_environment(tmp_path: Path, dirs: dict[str, Path]) -> dict[str, str]:
     """FOAM_API unset -- the shape a Foundation (openfoam.org) install such as
     ``~/.OpenFOAM/11`` exports; WM_PROJECT_VERSION alone names the directory.
-    WM_PROJECT_SITE is pinned explicitly here, so this exercises the
-    version-segment fallback only, not Foundation's site-root *default* --
-    see ``test_foundation_style_site_root_defaults_from_wm_project_inst_dir``
-    for that."""
+    WM_PROJECT_SITE is pinned explicitly, so this covers the version-segment
+    fallback only, not Foundation's site-root default (see
+    ``test_foundation_style_site_root_defaults_from_wm_project_inst_dir``)."""
     return {
         "HOME": str(tmp_path / "home"),
         "WM_PROJECT_VERSION": "2412",
@@ -158,11 +109,9 @@ def test_the_full_five_location_order_for_a_foundation_shaped_environment(tmp_pa
 
 
 def test_a_wm_project_version_qualified_user_file_is_ignored_when_foam_api_differs(tmp_path):
-    """The regression a real installation exposed: a file at
-    ``$HOME/.OpenFOAM/<WM_PROJECT_VERSION>`` must not be searched, let alone
-    selected, when FOAM_API names a different directory. Native's own
-    `userDir/$projectApi` is built from `$FOAM_API`; a `WM_PROJECT_VERSION`-
-    qualified sibling has no native reader at all."""
+    """Native's own `userDir/$projectApi` is built from `$FOAM_API`, so a
+    `WM_PROJECT_VERSION`-qualified sibling has no native reader at all and
+    must not be searched, let alone selected."""
     dirs = _layout(tmp_path)
     wrong_version_dir = dirs["user_unversioned"] / "v2412"
     (wrong_version_dir / "caseDicts").mkdir(parents=True)
@@ -208,9 +157,8 @@ def test_a_user_file_shadows_site_and_distribution(tmp_path):
 
 
 def test_every_candidate_is_reported_in_search_order(tmp_path):
-    """A file appearing at a higher-priority location later changes which file
-    the run reads. Phase 2 records the absent candidates as preconditions, so
-    they must be reported even when nothing is there."""
+    """Absent candidates are recorded as preconditions too, since a file
+    appearing later at a higher-priority location changes which file is read."""
     dirs = _layout(tmp_path)
     (dirs["dist"] / "caseDicts" / "x").write_text("vendor\n")
     _, candidates = find_etc_file("caseDicts/x", _esi_environment(tmp_path, dirs))
@@ -245,7 +193,7 @@ def test_the_closure_records_the_shadowing_file(tmp_path):
     assert str(dirs["dist"] / "caseDicts" / "x") not in result.inspected_files
 
 
-# -- FOAM_CONFIG_ETC (mismatch 1) --------------------------------------------
+# -- FOAM_CONFIG_ETC ----------------------------------------------------------
 
 def test_full_six_location_order_with_foam_config_etc_set(tmp_path):
     """FOAM_CONFIG_ETC inserts one more candidate, immediately before the
@@ -265,8 +213,8 @@ def test_full_six_location_order_with_foam_config_etc_set(tmp_path):
 
 
 def test_foam_config_etc_is_selected_when_nothing_shadows_it(tmp_path):
-    """Mismatch 1's regression: with FOAM_CONFIG_ETC set and no user/site
-    shadow, native selects the override, not the distribution file."""
+    """With FOAM_CONFIG_ETC set and no user/site shadow, native selects the
+    override, not the distribution file."""
     dirs = _layout(tmp_path)
     (dirs["dist"] / "caseDicts" / "x").write_text("vendor\n")
     (dirs["config_etc"] / "caseDicts" / "x").write_text("config-etc-override\n")
@@ -278,14 +226,11 @@ def test_foam_config_etc_is_selected_when_nothing_shadows_it(tmp_path):
     assert selected == dirs["config_etc"] / "caseDicts" / "x"
 
 
-# -- FOAM_CONFIG_MODE (mismatch 2) -------------------------------------------
+# -- FOAM_CONFIG_MODE ----------------------------------------------------------
 
 def test_foam_config_mode_o_excludes_user_and_group_entirely(tmp_path):
-    """Mismatch 2's regression, the dangerous direction: under
-    FOAM_CONFIG_MODE=o a user file must not be selected, and must not even
-    appear in candidates -- native deliberately skips user/group, so
-    recording that file as a dependency would take a precondition digest
-    over a file with no bearing on the run."""
+    """Under FOAM_CONFIG_MODE=o a user file must not be selected, and must
+    not even appear in candidates -- native deliberately skips user/group."""
     dirs = _layout(tmp_path)
     (dirs["user_versioned"] / "caseDicts" / "x").write_text("user-shadow\n")
     (dirs["dist"] / "caseDicts" / "x").write_text("vendor\n")
@@ -385,14 +330,10 @@ def _foundation_inst_dir_layout(tmp_path: Path) -> dict[str, Path]:
 
 def _foundation_inst_dir_environment(tmp_path: Path, dirs: dict[str, Path]) -> dict[str, str]:
     """No FOAM_API, no WM_PROJECT_SITE: WM_PROJECT_INST_DIR is the only site
-    hint, exactly as Foundation's own etc/bashrc exports it. Source-verified
-    against ``raw.githubusercontent.com/OpenFOAM/OpenFOAM-dev/master/{
-    bin/foamEtcFile,etc/bashrc}`` (fetched 2026-09-22): bashrc's own comment
-    reads "unset is equivalent to $WM_PROJECT_INST_DIR/site", and
-    bin/foamEtcFile's own ``siteDir="${WM_PROJECT_SITE:-$prefixDir/site}"``
-    where ``prefixDir`` is the parent of the versioned project directory.
-    **Not** verified against a running Foundation installation -- none exists
-    on this machine."""
+    hint, per Foundation's published ``etc/bashrc``/``bin/foamEtcFile``
+    (``siteDir="${WM_PROJECT_SITE:-$prefixDir/site}"``, ``prefixDir`` the
+    parent of the versioned install) -- source-verified only, no Foundation
+    installation exists on this machine."""
     return {
         "HOME": str(tmp_path / "home"),
         "WM_PROJECT_VERSION": "11",
@@ -402,11 +343,6 @@ def _foundation_inst_dir_environment(tmp_path: Path, dirs: dict[str, Path]) -> d
 
 
 def test_foundation_style_site_root_defaults_from_wm_project_inst_dir(tmp_path):
-    """Source-verified only (see `_foundation_inst_dir_environment`): the
-    previous version of this function applied ESI's site-root rule
-    (`$WM_PROJECT_DIR/site`) unconditionally, which is wrong for Foundation's
-    documented `$WM_PROJECT_INST_DIR/site` default -- a sibling of the
-    versioned install, not a child of it."""
     dirs = _foundation_inst_dir_layout(tmp_path)
     (dirs["site_versioned"] / "caseDicts" / "x").write_text("site\n")
     (dirs["dist"] / "caseDicts" / "x").write_text("vendor\n")
@@ -424,11 +360,8 @@ def test_foundation_style_site_root_defaults_from_wm_project_inst_dir(tmp_path):
 
 
 def test_foundation_style_environment_with_neither_site_hint_adds_no_site_candidate(tmp_path):
-    """Neither WM_PROJECT_SITE nor WM_PROJECT_INST_DIR present, and FOAM_API
-    absent (so the ESI default does not apply either): no site candidate is
-    added at all, rather than guessing which family's rule to fall back to.
-    An honest gap, per this function's own documented rule against
-    unverified defaults."""
+    """With no site hint and no FOAM_API, no site candidate is added at all,
+    rather than guessing which family's rule to fall back to."""
     dirs = _foundation_inst_dir_layout(tmp_path)
     (dirs["dist"] / "caseDicts" / "x").write_text("vendor\n")
     environment = _foundation_inst_dir_environment(tmp_path, dirs)

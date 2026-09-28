@@ -25,20 +25,9 @@
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-"""Scanner for OpenFOAM runtime-selection-table registrations.
-
-For each `addToRunTimeSelectionTable(base, derived, ctor)` call in
-`src/**/*.C` (skipping `lnInclude/` and `Make/`), this resolves the registered
-type name used as the dictionary value (which may differ from the C++ class
-name via `OverrideTypeName(...)`) by reading the derived class's header.
-
-:func:`runtime_selection_report` compares a catalogue's ``enum`` entries with
-those registrations, through the plugin's reviewed mapping (the
-``runtime_selection`` section of its scanner allowlist). It runs inside the
-strict dictionary-key report, so ``plan --strict`` checks it whenever the
-source root is supplied, and ``omnidriver catalog`` shows the registered names.
-Moved here from omnidriver-cardiacfoam 2026-09-28 (one reality): the
-registration syntax is OpenFOAM's, not a solver's.
+"""Scans OpenFOAM C++ for `addToRunTimeSelectionTable` registrations and
+resolves each derived class's registered type name (which may differ via
+`OverrideTypeName`), for comparison against a catalogue's enum entries.
 """
 
 from __future__ import annotations
@@ -89,19 +78,10 @@ def _iter_src_files(src_root: Path, suffix: str) -> Iterable[Path]:
 
 
 def _index_override_type_names(src_root: Path) -> dict[str, str]:
-    """Map *C++ class name* -> registered name (via `OverrideTypeName`).
-
-    Each header is scanned for `class Foo { ... OverrideTypeName("X") ... }`
-    patterns; each `OverrideTypeName` is paired with the nearest preceding
-    `class <Name>` declaration in the same file. This handles the general
-    case where a model's C++ class name could differ from its registered
-    type string, and works uniformly for the common case (`BuenoOrovio`,
-    `ORd`, `PerisYague`, …) where the class name and the override name are
-    the same.
-
-    Classes without an `OverrideTypeName` simply do not appear in the
-    index; the caller falls back to the class name.
-    """
+    """Map C++ class name -> registered name, pairing each `OverrideTypeName`
+    with the nearest preceding `class <Name>` declaration in the same file.
+    A class absent from the index has no override; the caller falls back to
+    the class name."""
     index: dict[str, str] = {}
     for header in _iter_src_files(src_root, ".H"):
         text = header.read_text(encoding="utf-8", errors="replace")
@@ -115,7 +95,6 @@ def _index_override_type_names(src_root: Path) -> dict[str, str]:
             continue
         for override in _OVERRIDE_TYPENAME_RE.finditer(text):
             pos = override.start()
-            # Nearest preceding class declaration.
             enclosing = None
             for cls_pos, cls_name in class_positions:
                 if cls_pos < pos:
@@ -131,14 +110,11 @@ def scan_rtst_registrations(
     src_root: Path,
 ) -> dict[str, dict[str, RtstReg]]:
     """Return `{base_class: {registered_name: RtstReg}}` for every RTST
-    registration found under `src_root`.
-    """
+    registration found under `src_root`."""
     override_map = _index_override_type_names(src_root)
     out: dict[str, dict[str, RtstReg]] = {}
     for source in _iter_src_files(src_root, ".C"):
         text = source.read_text(encoding="utf-8", errors="replace")
-        # Strip block comments so we don't pick up commented-out
-        # registrations.
         text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
         text = re.sub(r"//[^\n]*", "", text)
         for match in _RTST_RE.finditer(text):

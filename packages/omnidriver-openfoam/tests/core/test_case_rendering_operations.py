@@ -1,18 +1,8 @@
-"""`ParameterAssignment.operation` reaches the renderer -- 2026-09-23
-decision, "a parameter asserts a final state, not only a value"
-(``docs/superpowers/plans/2026-09-23-phase3-finish-the-write-channel.md``).
+"""`ParameterAssignment.operation` reaches the renderer: a parameter asserts a final state, not only a value.
 
-``render_patch_case_files`` is the one place OpenFOAM syntax may answer what
-``set``/``ensure``/``remove`` mean: ``set`` keeps the pre-existing, strict
-``update_foam_entry`` behaviour (no key creation); ``ensure`` maps onto
-``update_foam_entry``'s own ``add_if_missing``; ``remove`` calls
-``remove_foam_entry`` instead. A ``dict_operation`` target -- not a
-``ParameterAssignment`` at all, the same "not a key/value edit" reasoning
-the hex-block target already has -- deletes a whole named sub-dictionary.
-Corrected 2026-09-26 (5.4a): it also inserted one verbatim ("ensure", for
-the bath tutorial module's ``ecgDomains`` block); that insert and its two
-tests are deleted with its one caller, and "ensure" is now refused as an
-unknown dict operation (``test_dict_operation_ensure_is_refused``).
+``set``/``ensure``/``remove`` map onto ``update_foam_entry``/
+``remove_foam_entry``; a ``dict_operation`` target -- not a
+``ParameterAssignment`` -- deletes a whole named sub-dictionary instead.
 """
 from __future__ import annotations
 
@@ -96,11 +86,6 @@ def test_set_on_an_existing_key_still_writes(tmp_path):
 
 
 def test_set_on_a_missing_key_now_raises(tmp_path):
-    """Corrected 2026-09-23: before this, every channel-routed edit was
-    applied with ``add_if_missing=True`` regardless of what it asserted,
-    silently more permissive than the direct writer it replaces
-    (``apply_entry_overrides``, which has never allowed a missing key for a
-    plain ``set``)."""
     case_root = _case(tmp_path)
     parameter = _assignment(key_path=("noSuchKey",), value=9, operation="set")
     with pytest.raises(KeyError, match="noSuchKey"):
@@ -137,9 +122,7 @@ def test_remove_deletes_an_existing_key(tmp_path):
 
 
 def test_remove_of_an_already_absent_key_is_a_no_op(tmp_path):
-    """`remove` asserts the document's final state -- the key is gone -- not
-    that a deletion action occurred. A key already absent already satisfies
-    that assertion, so this must not raise."""
+    """`remove` asserts the document's final state, not that a deletion action occurred."""
     case_root = _case(tmp_path)
     parameter = _assignment(
         key_path=("bathPotentialDomain", "groundPatches", "neverExisted"),
@@ -153,10 +136,8 @@ def test_an_unknown_operation_on_a_target_is_refused_by_name(tmp_path):
     case_root = _case(tmp_path)
     parameter = _assignment(key_path=("existingScalar",), value=9)
     resolved = _resolved(case_root, parameter)
-    # Corrupt the target's operation directly -- a real resolver only ever
-    # emits `set`/`ensure`/`remove` (`ParameterAssignment` itself refuses
-    # any other name), so this exercises the renderer's own defensive check
-    # against a malformed target from a future or misbehaving resolver.
+    # Corrupt the target directly to exercise the renderer's own defensive
+    # check; a real resolver only ever emits set/ensure/remove.
     bad_target = dict(resolved.targets[0])
     bad_target["operation"] = "banana"
     resolved = ResolvedMutation(
@@ -168,9 +149,7 @@ def test_an_unknown_operation_on_a_target_is_refused_by_name(tmp_path):
 
 
 def test_a_target_with_no_operation_key_defaults_to_set(tmp_path):
-    """A target built before this field existed (no `"operation"` key at
-    all, the shape every pre-2026-09-23 caller still produces) must behave
-    exactly as `set` always has."""
+    """A target with no ``"operation"`` key (the pre-existing shape) behaves as ``set`` always has."""
     case_root = _case(tmp_path)
     request = CaseMutationRequest(
         mode="clone_and_patch", case_root=case_root, adapter_id="org.omnidriver.test",
@@ -194,8 +173,8 @@ def test_a_target_with_no_operation_key_defaults_to_set(tmp_path):
     assert "existingScalar    9;" in content
 
 
-# --- dict_operation: a whole sub-dictionary inserted/removed verbatim, not
-# a ParameterAssignment (see this module's docstring). ---
+# --- dict_operation: a whole sub-dictionary removed, not a
+# ParameterAssignment (see this module's docstring). ---
 
 _ECG_BLOCK = """    ecgDomains
     {

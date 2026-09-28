@@ -1,16 +1,6 @@
 """Parity proof: the corrected ``selected_start_time`` picks the same start
-folder, for every real native cardiacFOAM ``controlDict``, as the pre-fix
-code did (final review M5's restored version, before the 2026-09-26 owner
-correction). Supplied only through ``OMNIDRIVER_NATIVE_TUTORIALS``, never
-discovered -- FAILS, not skips, when it is unset (CLAUDE.md's native-tree
-row).
-
-All 17 native ``controlDict``s set ``startFrom`` explicitly (16
-``startTime``, 1 ``latestTime``), and every one that sets ``startFrom
-startTime`` also sets ``startTime`` -- so none of them ever exercises the
-rows this fix actually changes (``startFrom`` absent, or malformed): the two
-implementations can only disagree by construction if one of those facts
-stops holding, which this test would then catch.
+folder as the pre-fix implementation for every real native cardiacFOAM
+``controlDict``. Needs ``OMNIDRIVER_NATIVE_TUTORIALS``; FAILS, not skips, if unset.
 """
 
 from __future__ import annotations
@@ -47,9 +37,7 @@ def _native_tutorials_root() -> Path:
 
 
 def _native_case_roots(root: Path) -> list[Path]:
-    """Every native case with a ``system/controlDict``, excluding
-    ``results/`` (the same exclusion the task's own evidence-gathering
-    used)."""
+    """Every native case with a ``system/controlDict``, excluding ``results/``."""
     return sorted(
         {
             p.parent.parent
@@ -62,13 +50,10 @@ def _native_case_roots(root: Path) -> list[Path]:
 def _pre_fix_selected_start_time(
     case_root: Path, *, control_dict_relpath: str, read_value, instance_directory_pattern: str,
 ) -> str:
-    """The restored-after-M5-revert implementation, verbatim (before the
-    2026-09-26 owner correction): missing ``controlDict``/``startTime``
-    silently answered ``"0"``, and ``startFrom`` absent defaulted to
-    ``"startTime"`` -- both wrong per OpenFOAM's own ``Time::setControls``,
-    but this is what every native case's start folder was computed with
-    until now. Kept here only as this test's own fixed reference point, not
-    reintroduced anywhere real."""
+    """Pre-fix reference implementation, kept only for this parity test:
+    silently answered ``"0"`` for a missing controlDict/startTime, and
+    defaulted absent ``startFrom`` to ``"startTime"`` -- both wrong per
+    OpenFOAM's ``Time::setControls``."""
     default = "0"
     control_dict = case_root / control_dict_relpath
     if not control_dict.is_file():

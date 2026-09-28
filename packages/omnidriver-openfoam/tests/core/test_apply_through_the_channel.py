@@ -1,29 +1,8 @@
-"""`--apply` joins the case-write channel -- Phase 3 Task 5, bypass 4
-(``docs/superpowers/plans/2026-09-23-phase3-finish-the-write-channel.md``).
-
-``apply_overrides()`` used to write directly into ``case_root`` with its own
-in-process backup/restore (``_restore_on_failure``, removed). It now stages
+"""`apply_overrides()` applies through the case-write channel: it stages
 every touched document into a private snapshot, describes the change as a
-`CaseMutationRequest`/`ParameterAssignment` per override, and commits through
-``case_transaction.commit_case_write`` -- the same channel
-``cardiaccore.workflows.overrides.apply_input_overrides_planned`` (Task 8)
-already uses.
-
-The bar is parity, not improvement (see the plan's own framing): most tests
-below prove the OBSERVABLE write behaviour is unchanged -- same bytes, same
-exceptions, same no-op-on-empty-overrides. A few prove genuinely NEW
-properties the channel adds (precondition drift refusal, journal-based
-crash safety) and are labelled as such; these could not have passed against
-the pre-channel implementation, which had no such protection at all.
-
-No monorepo dependency: unlike ``test_apply_overrides.py`` (whose whole
-module is ``skip_without_monorepo``, because its fixtures come from real
-tutorial dicts), every test here builds its own minimal catalog/context with
-``omnidriver.core.contracts.dictionary.DictEntry`` and a bare
-``SimpleNamespace`` context -- the same pattern
-``test_apply_effective_resolution.py`` already established. This is testing
-plumbing (dictionary structure, catalog wiring), not geometry, so it is not
-the "invented-geometry" fixture this repository's tests otherwise avoid.
+`CaseMutationRequest`/`ParameterAssignment` per override, and commits via
+`case_transaction.commit_case_write`. Builds its own minimal catalog/context
+rather than depending on the monorepo's real tutorial dicts.
 """
 from __future__ import annotations
 
@@ -82,9 +61,8 @@ def _control_dict_case(tmp_path: Path, text: str = "deltaT 0.001;\nendTime 1;\n"
 
 
 def test_apply_writes_the_same_bytes_with_no_execution_env(tmp_path):
-    """The write-only path (no readback requested) still writes case_root
-    directly-observable content, and still returns `()` -- unchanged from
-    the pre-channel contract."""
+    """The write-only path (no readback requested) writes case_root's
+    directly-observable content and returns `()`."""
     case = _control_dict_case(tmp_path)
     context = _context(control_dict_entries=(
         DictEntry(driver_path="deltaT", description="time step", value_kind="scalar"),
@@ -102,8 +80,7 @@ def test_apply_writes_the_same_bytes_with_no_execution_env(tmp_path):
 def test_apply_preserves_the_original_spelling_verbatim(tmp_path):
     """A value that round-trips through parsing for the audit record must
     still be WRITTEN verbatim -- "1e-3" stays "1e-3" on disk, it does not
-    become a re-rendered "0.001" (Gap 1's "preserving what they typed
-    matters", carried into `--apply` specifically)."""
+    become a re-rendered "0.001"."""
     case = _control_dict_case(tmp_path, "deltaT 0.001;\n")
     context = _context(control_dict_entries=(
         DictEntry(driver_path="deltaT", description="time step", value_kind="scalar"),
@@ -118,9 +95,7 @@ def test_apply_preserves_the_original_spelling_verbatim(tmp_path):
 
 def test_apply_of_an_empty_override_list_is_a_no_op(tmp_path):
     """`clone_and_patch` requires >=1 parameter; an empty override list must
-    stay a well-defined no-op (matches
-    `test_applying_overrides_is_supported`, cardiaccore's stack-composed
-    version of this same call) -- not attempt a zero-parameter request."""
+    stay a well-defined no-op, not attempt a zero-parameter request."""
     case = _control_dict_case(tmp_path)
     original = (case / "system" / "controlDict").read_bytes()
     context = _context()
@@ -131,9 +106,7 @@ def test_apply_of_an_empty_override_list_is_a_no_op(tmp_path):
 
 def test_apply_wraps_a_missing_target_as_override_error(tmp_path):
     """No controlDict at all: the mutator's FileNotFoundError must surface
-    as OverrideError, not raw -- unchanged from the pre-channel contract
-    (only the underlying path in the message changes, from case_root to the
-    snapshot copy; no test pins that text)."""
+    as OverrideError, not raw."""
     tmp_path.mkdir(exist_ok=True)
     context = _context(control_dict_entries=(
         DictEntry(driver_path="deltaT", description="time step", value_kind="scalar"),
@@ -147,11 +120,8 @@ def test_apply_wraps_a_missing_target_as_override_error(tmp_path):
 
 def test_a_failure_partway_through_a_batch_leaves_case_root_completely_untouched(tmp_path):
     """Two overrides, the second fails (an unknown controlDict key raises
-    KeyError from the structured editor). Under the channel, case_root is
-    NEVER written at all until every override in the batch has staged
-    successfully -- stronger than the pre-channel `_restore_on_failure`,
-    which wrote case_root for the first override and only restored it
-    after the second one failed."""
+    KeyError from the structured editor). case_root is never written at
+    all until every override in the batch has staged successfully."""
     case = _control_dict_case(tmp_path, "deltaT 0.001;\n")
     original = (case / "system" / "controlDict").read_bytes()
     context = _context(control_dict_entries=(
@@ -181,14 +151,11 @@ def test_a_failure_partway_through_a_batch_leaves_case_root_completely_untouched
 
 
 def test_a_change_between_precondition_capture_and_commit_refuses_the_apply(tmp_path, monkeypatch):
-    """The pre-channel direct-write path had NO protection against a
-    concurrent edit: it would have silently overwritten whatever was on
-    disk. `commit_case_write`'s precondition recheck -- reachable here only
-    because `apply_overrides()` now calls `case_rendering.patch_preconditions`
-    -- refuses instead. Simulated deterministically by monkeypatching
-    `patch_preconditions` to mutate case_root immediately after it captures
-    the (still-correct) before-digest, standing in for a race that would
-    otherwise need real concurrency to observe."""
+    """`commit_case_write`'s precondition recheck refuses a concurrent edit
+    rather than silently overwriting it. Simulated deterministically by
+    monkeypatching `patch_preconditions` to mutate case_root immediately
+    after it captures the (still-correct) before-digest, standing in for a
+    race that would otherwise need real concurrency to observe."""
     case = _control_dict_case(tmp_path, "deltaT 0.001;\nendTime 1;\n")
     control_dict = case / "system" / "controlDict"
     context = _context(control_dict_entries=(
@@ -219,12 +186,9 @@ def test_a_change_between_precondition_capture_and_commit_refuses_the_apply(tmp_
 
 
 def test_environment_precondition_is_a_genuine_second_consumer(tmp_path, monkeypatch):
-    """`patch_preconditions`'s `environment` precondition kind had exactly
-    one caller before this task (cardiacCore's Task 8 channel consumer).
-    `--apply` reading a dict with a real `#includeEtc` directive must now
-    also produce `environment` preconditions -- proving this is a second,
-    independent call site, not a mocked assertion that the function was
-    merely invoked."""
+    """`--apply` reading a dict with a real `#includeEtc` directive must
+    produce `environment` preconditions -- proving this is a genuine call
+    site, not a mocked assertion that the function was merely invoked."""
     case = _control_dict_case(tmp_path, "deltaT 0.001;\n")
     control_dict = case / "system" / "controlDict"
     control_dict.write_text('#includeEtc "controlDict"\n' + control_dict.read_text())
@@ -279,12 +243,10 @@ def test_apply_file_path_route_still_works_without_a_catalog_entry(tmp_path):
 
 
 def test_apply_file_path_route_refuses_a_value_with_no_closed_shape(tmp_path):
-    """Narrow, intentional tightening (2026-09-23): this route has no
-    catalog entry to supply a `value_kind`, so a value this module cannot
-    classify (here: a string containing whitespace, which is neither a
-    number nor a single word) is refused rather than silently written --
-    `_format_value` would have accepted it before (a pre-existing,
-    untested gap; no currently-passing test exercises this shape)."""
+    """This route has no catalog entry to supply a `value_kind`, so a
+    value this module cannot classify (here: a string containing
+    whitespace, neither a number nor a single word) is refused rather
+    than silently written."""
     (tmp_path / "system").mkdir()
     (tmp_path / "system" / "fvSchemes").write_text(
         "ddtSchemes { default Euler; }\n"
@@ -335,10 +297,7 @@ def test_regeneration_scope_writes_through_a_snapshot(tmp_path):
 
 def test_regeneration_failure_leaves_case_root_untouched(tmp_path):
     """`regenerate()` runs against the snapshot copy, never `case_root`
-    directly -- a raise from it must leave the real file exactly as it was,
-    the same guarantee `test_apply_regenerates_electro_properties_for_a_
-    myocardium_solver_override` pins against the real cardiacFoam
-    regenerator."""
+    directly -- a raise from it must leave the real file exactly as it was."""
     (tmp_path / "constant").mkdir()
     electro = tmp_path / "constant" / "electro"
     electro.write_text("solver oldSolver;\n")
@@ -373,9 +332,9 @@ def test_regeneration_failure_leaves_case_root_untouched(tmp_path):
 
 
 def test_regeneration_receives_the_extra_overrides_from_the_same_batch(tmp_path):
-    """`extra_overrides` -- the OTHER `$TOKEN.`-scoped overrides in this
-    same call that target the regeneration scope's own file -- must still
-    reach `regenerate()`, unchanged from the pre-channel behaviour."""
+    """`extra_overrides` -- the other `$TOKEN.`-scoped overrides in this
+    same call that target the regeneration scope's own file -- must reach
+    `regenerate()`."""
     (tmp_path / "constant").mkdir()
     electro = tmp_path / "constant" / "electro"
     electro.write_text("solver oldSolver;\nfoo old;\n")
@@ -423,15 +382,11 @@ def test_regeneration_receives_the_extra_overrides_from_the_same_batch(tmp_path)
 
 
 def test_scope_resolve_entry_sees_a_prior_regeneration_in_the_same_batch(tmp_path):
-    """The one behaviour a naive "copy touched files, then apply each one"
-    split could have silently broken: within a single `apply_overrides()`
-    call, a LATER override's `scope.resolve_entry` must see what an
-    EARLIER override in the SAME call already wrote -- exactly as it would
-    reading `case_root` directly (the pre-channel behaviour) -- not the
-    pristine, pre-batch case_root. Mirrors cardiacFoam's real
-    `resolve_entry`, which detects the active `<solver>Coeffs` block by
-    reading `constant/electroProperties` -- the same file a regeneration
-    earlier in the batch may have just rewritten."""
+    """Within a single `apply_overrides()` call, a later override's
+    `scope.resolve_entry` must see what an earlier override in the same
+    call already wrote, not the pristine, pre-batch case_root -- mirrors
+    cardiacFoam's real `resolve_entry`, which detects the active
+    `<solver>Coeffs` block by reading `constant/electroProperties`."""
     (tmp_path / "constant").mkdir()
     electro = tmp_path / "constant" / "electro"
     electro.write_text(
@@ -481,17 +436,16 @@ def test_scope_resolve_entry_sees_a_prior_regeneration_in_the_same_batch(tmp_pat
 
 
 # --------------------------------------------------------------------------
-# case_lease_held threading (Phase 3 Task 5's core.case_transaction change)
+# case_lease_held threading
 # --------------------------------------------------------------------------
 
 
 def test_apply_reuses_an_already_held_case_lease(tmp_path):
     """`--apply` reached via `cli.py` already holds the case lease for the
     whole `step` (`_dispatch_context`) before `apply_overrides()` runs.
-    `commit_case_write`'s own lease is not reentrant (see
-    `case_transaction.py`'s `test_a_second_attempt_under_a_held_lease_is_
-    refused`), so `apply_overrides()` must detect the held lease and pass
-    `case_lease_held=True` rather than try to acquire a second one."""
+    `commit_case_write`'s own lease is not reentrant, so `apply_overrides()`
+    must detect the held lease and pass `case_lease_held=True` rather than
+    try to acquire a second one."""
     case = _control_dict_case(tmp_path)
     context = _context(control_dict_entries=(
         DictEntry(driver_path="deltaT", description="d", value_kind="scalar"),
@@ -507,9 +461,8 @@ def test_apply_reuses_an_already_held_case_lease(tmp_path):
 
 
 def test_apply_acquires_its_own_lease_when_none_is_held(tmp_path):
-    """The ordinary case (a standalone call, e.g. this module's own other
-    tests): no lease held beforehand, `commit_case_write` acquires and
-    releases its own, exactly as before."""
+    """The ordinary case (a standalone call): no lease held beforehand,
+    `commit_case_write` acquires and releases its own."""
     case = _control_dict_case(tmp_path)
     context = _context(control_dict_entries=(
         DictEntry(driver_path="deltaT", description="d", value_kind="scalar"),
@@ -539,16 +492,15 @@ def test_the_pre_channel_direct_write_helpers_are_removed():
 
 
 # --------------------------------------------------------------------------
-# F1/F1b readback against the real OpenFOAM install, not a fixture
+# Readback against the real OpenFOAM install, not a fixture
 # --------------------------------------------------------------------------
 
 
 def test_apply_readback_matches_the_real_foamdictionary(tmp_path):
-    """F1/F1b verified against a real, sourced OpenFOAM v2412 install
-    (`/Volumes/OpenFOAM-v2412`, found by `discover_openfoam_bashrc()`) --
-    not a monkeypatched resolver. A requested "1e-3" must resolve through
-    the real `foamDictionary` as "0.001" and still be reported as a match
-    (F1b: values are compared, not spellings)."""
+    """Verified against a real, sourced OpenFOAM install, not a
+    monkeypatched resolver. A requested "1e-3" must resolve through the
+    real `foamDictionary` as "0.001" and still be reported as a match:
+    values are compared, not spellings."""
     from omnidriver.openfoam.openfoam_environment import (
         discover_openfoam_bashrc,
         load_openfoam_environment,
@@ -576,12 +528,11 @@ def test_apply_readback_matches_the_real_foamdictionary(tmp_path):
     assert len(evidence) == 1
     assert evidence[0]["status"] == "resolved"
     assert evidence[0]["parser"] == "foamDictionary"
-    # The real foamDictionary re-serialises "1e-3" as "0.001" -- proving F1b
-    # compares values, not text, over a real native parse rather than an
-    # assumption about what one would say.
+    # The real foamDictionary re-serialises "1e-3" as "0.001" -- confirming
+    # values are compared, not text, over a real native parse.
     assert evidence[0]["value"] == "0.001"
     assert evidence[0]["matches_requested"] is True
-    # And the file on disk keeps the ORIGINAL spelling regardless (Gap 1 /
-    # "preserving what they typed matters") -- the native re-serialisation
-    # above is what foamDictionary reports back, not what was written.
+    # The file on disk keeps the original spelling regardless -- the native
+    # re-serialisation above is what foamDictionary reports back, not what
+    # was written.
     assert "1e-3" in (case / "system" / "controlDict").read_text()

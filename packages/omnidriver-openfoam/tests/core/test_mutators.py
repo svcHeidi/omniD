@@ -18,9 +18,7 @@ from openfoam_assertions import assert_foam_entry
 
 
 def assert_entry_present(testcase: unittest.TestCase, text: str, key: str, value: str) -> None:
-    """Assert `key <value>;` appears in `text`, tolerant of the column
-    alignment foamDictionary applies when it re-serializes a whole file
-    (e.g. `keep 1;` becomes `keep            1;`)."""
+    """Assert `key <value>;` appears in `text`, tolerant of column alignment."""
     pattern = rf"{re.escape(key)}\s+{re.escape(value)};"
     testcase.assertRegex(text, pattern)
 
@@ -85,12 +83,9 @@ class TestScopedMutators(unittest.TestCase):
 
     def test_quoted_regex_style_scope_name_is_matched(self) -> None:
         # OpenFOAM's fvSolution commonly names a solver block with a quoted
-        # alternation, e.g. "phiE|phiEFinal|phiI|phiIFinal" { ... } -- the
-        # scope-boundary regex's old trailing \b failed to match here because
-        # both the character before and after the closing quote are
-        # non-word characters, so there is no word boundary at all at that
-        # position (verified: re.match(r'^\s*"foo"\b', '    "foo"\n') is
-        # None). This is the quoted equivalent of test_nested_scope_path.
+        # alternation, e.g. "phiE|phiEFinal|phiI|phiIFinal" { ... }; a
+        # trailing \b would not match here since both characters around the
+        # closing quote are non-word.
         text = "\n".join(
             [
                 "solvers",
@@ -123,13 +118,8 @@ class TestScopedMutators(unittest.TestCase):
                 update_foam_entry(path, "b", 2, scope="missing")
 
     def test_falls_back_for_c_style_comments(self) -> None:
-        """Tier 1's brace counting is comment-unaware (it only strips ``//``),
-        so a ``/* ... { ... */`` block comment's literal brace throws off its
-        depth tracking and it reports the enclosing scope as having
-        unbalanced braces. That KeyError is exactly the class the foamlib
-        tier exists to catch: a real parser understands ``/* */`` natively,
-        so the update now succeeds instead of raising.
-        """
+        """A ``/* ... { ... */`` block comment's literal brace defeats tier
+        1's comment-unaware brace counting; the foamlib tier picks it up."""
         text = "\n".join(
             [
                 "someDict",
@@ -185,10 +175,8 @@ class TestScopedMutators(unittest.TestCase):
     def test_remove_foam_dict_missing_ok_tolerates_absent_scope(
         self,
     ) -> None:
-        # _resolve_search_region(lines, scope) previously raised
-        # KeyError("Scope '<name>' not found") before missing_ok was ever
-        # consulted -- missing_ok only guarded the "dict_name not found
-        # inside an existing scope" case, not "scope itself absent".
+        # missing_ok must also cover the scope itself being absent, not just
+        # dict_name being absent within an existing scope.
         text = "\n".join(
             [
                 "outer",
@@ -256,17 +244,10 @@ class TestScopedMutators(unittest.TestCase):
 
 
 class TestScopeDoesNotDescendIntoNestedDicts(unittest.TestCase):
-    """A scope names one dictionary, not that dictionary and everything under
-    it. The pure-Python fallback resolves a scope to a line *span* and then
-    scans it, which without a depth check also matches keys belonging to
-    nested sub-dictionaries -- so a read scoped to the parent returned a
-    child's value, and a write scoped to the parent silently edited the
-    child. foamDictionary is path-exact and does neither, so this divergence
-    only appeared when OpenFOAM was sourced.
-
-    These tests pin the Python implementation directly, which is the side
-    that was wrong.
-    """
+    """A scope names one dictionary, not that dictionary and everything
+    under it: resolving a scope to a line span and scanning it without a
+    depth check would otherwise match keys belonging to nested
+    sub-dictionaries too."""
 
     NESTED = "\n".join(
         [
@@ -370,23 +351,9 @@ class TestScopeDoesNotDescendIntoNestedDicts(unittest.TestCase):
 
 
 class TestReadFoamEntryIsEnvironmentIndependent(unittest.TestCase):
-    """Reading a dict must not depend on whether OpenFOAM is sourced.
-
-    foamDictionary parses each value into a double and re-serialises it, so
-    reading through it respells the source text (``0.0`` -> ``0``,
-    ``5.5e-3`` -> ``0.0055``, ``(a b c)`` -> ``( a b c )``). Those respelt
-    values flow into build_electro_properties, which made generated dicts --
-    and therefore run documents and provenance digests -- differ between a
-    sourced and an unsourced shell.
-
-    Reading through foamDictionary also *evaluates* the dictionary: a
-    ``#calc`` / ``#codeStream`` entry is compiled, linked and executed to
-    produce the value. Reading a case must never run code, least of all
-    because override values are written verbatim into these dicts.
-
-    These tests hold in either environment; before the fix the second one
-    also left a ``dynamicCode/`` build directory behind.
-    """
+    """Reading a dict must not depend on whether OpenFOAM is sourced:
+    foamDictionary would respell values (``0.0`` -> ``0``) and evaluate
+    ``#calc``/``#codeStream`` entries, neither acceptable for a read."""
 
     def test_returns_the_literal_spelling_from_the_file(self) -> None:
         text = "\n".join(
@@ -416,10 +383,8 @@ class TestReadFoamEntryIsEnvironmentIndependent(unittest.TestCase):
             )
 
     def test_resolves_a_scope_written_as_an_inline_block(self) -> None:
-        # `solvers { V { tolerance 1e-5; } }` is legal OpenFOAM and appears in
-        # 10 tracked tutorial dicts. The scope machinery works on whole lines,
-        # so an inline block used to resolve to a degenerate range and read as
-        # None -- previously masked because foamDictionary parsed these.
+        # `solvers { V { tolerance 1e-5; } }` is legal OpenFOAM, and the
+        # line-based scope machinery must not resolve it to a degenerate range.
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "fvSolution"
             path.write_text(
@@ -468,8 +433,7 @@ class TestReadFoamEntryIsEnvironmentIndependent(unittest.TestCase):
 
 
 class TestUpdateFoamEntryUsesLineTier(unittest.TestCase):
-    """update_foam_entry runs the line-based tier 1 unconditionally now --
-    there is no foamDictionary preference or availability check left to pin."""
+    """update_foam_entry runs the line-based tier 1 unconditionally."""
 
     def test_updates_an_existing_scalar_entry(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -482,12 +446,8 @@ class TestUpdateFoamEntryUsesLineTier(unittest.TestCase):
 
 
 def test_update_foam_entry_falls_back_for_brace_in_quoted_string(tmp_path):
-    """Tier 1 cannot parse this; the foamlib tier must pick it up.
-
-    A brace inside a quoted value defeats brace counting, so the line scanner
-    reports the enclosing scope as missing. Before the foamlib backend this
-    raised KeyError whenever OpenFOAM was not sourced.
-    """
+    """A brace inside a quoted value defeats tier 1's brace counting; the
+    foamlib tier must pick it up."""
     path = tmp_path / "d"
     path.write_text(
         "FoamFile { version 2.0; class dictionary; object d; }\n"
@@ -502,12 +462,7 @@ def test_update_foam_entry_falls_back_for_brace_in_quoted_string(tmp_path):
 
 def test_remove_foam_dict_falls_back_for_brace_in_quoted_string(tmp_path):
     """Same defeats-the-scanner fixture as the update_foam_entry test above,
-
-    but for remove_foam_dict's own early _resolve_search_region call. Before
-    this fix, remove_foam_dict raised the same KeyError update_foam_entry
-    used to raise here, with no fallback -- a real regression versus the old
-    foamDictionary-first behaviour in a sourced environment.
-    """
+    for remove_foam_dict's own early _resolve_search_region call."""
     path = tmp_path / "d"
     path.write_text(
         "FoamFile { version 2.0; class dictionary; object d; }\n"
@@ -521,16 +476,8 @@ def test_remove_foam_dict_falls_back_for_brace_in_quoted_string(tmp_path):
 
 
 def test_remove_foam_dict_falls_back_when_name_matches_a_scalar_entry(tmp_path):
-    """remove_foam_dict must handle a name that's a scalar, not a block.
-
-    Reproduced directly: before this fix, remove_foam_dict("xMin", ...)
-    raised KeyError("... has no opening brace") unconditionally -- not even
-    honoring missing_ok=True -- whenever the matched name turned out to be a
-    plain `xMin -1.0;` entry rather than a `{ ... }` block. This is exactly
-    the case plugins/cardiacfoam/tutorials/manufactured_bath_bidomain.py
-    worked around by calling the separate remove_foam_entry function
-    instead. foamlib's `del` has no such shape restriction.
-    """
+    """remove_foam_dict must handle a name that's a scalar (`xMin -1.0;`),
+    not a `{ ... }` block."""
     path = tmp_path / "d"
     path.write_text(
         "FoamFile { version 2.0; class dictionary; object d; }\n"
@@ -543,16 +490,9 @@ def test_remove_foam_dict_falls_back_when_name_matches_a_scalar_entry(tmp_path):
 
 
 def test_remove_foam_dict_missing_ok_still_uses_fallback(tmp_path):
-    """missing_ok=True must not disable the foamlib fallback entirely.
-
-    Before this fix, both of remove_foam_dict's delegation points checked
-    `if missing_ok: return` before ever calling foam_backend -- so a caller
-    that set missing_ok=True got a silent no-op even when the target
-    genuinely existed in a file the line scanner couldn't parse. This
-    fixture is deletable via foam_backend (the same brace-in-quoted-string
-    case the other fallback tests use); it must actually be removed, not
-    silently skipped, when missing_ok=True.
-    """
+    """missing_ok=True must not disable the foamlib fallback entirely: a
+    target the line scanner can't parse but that genuinely exists must
+    still be removed, not silently skipped."""
     path = tmp_path / "d"
     path.write_text(
         "FoamFile { version 2.0; class dictionary; object d; }\n"
@@ -567,13 +507,7 @@ def test_remove_foam_dict_missing_ok_still_uses_fallback(tmp_path):
 
 def test_scope_resolution_does_not_treat_a_scalar_entry_as_a_block(tmp_path):
     """A scalar entry sharing a scope name must not be silently treated as
-
-    a block by walking forward into an unrelated sibling's braces.
-    Reproduced directly: scope=["outer", "Vm"] against a scalar "Vm 5;"
-    line followed by an unrelated "unrelatedBlock { tolerance 1e-9; }"
-    previously returned unrelatedBlock's tolerance as if it belonged to
-    Vm's scope -- a silent wrong answer, not even a KeyError.
-    """
+    a block by walking forward into an unrelated sibling's braces."""
     path = tmp_path / "d"
     path.write_text(
         "FoamFile { version 2.0; class dictionary; object d; }\n"
@@ -657,15 +591,9 @@ _SINGLE_PATTERN_BLOCK = (
 
 
 def test_remove_foam_dict_resolves_a_pattern_keyed_member(tmp_path):
-    """remove_foam_dict's own target-name matching must resolve patterns too.
-
-    _find_dict_block_bounds (used for scope-PATH segments) already resolves
-    quoted-regex headers. remove_foam_dict has its own separate scan for the
-    dict being removed, which did not reuse that resolution -- so removing
-    "Vm" from a block keyed only by "Vm|VmFinal" fell through to the
-    foamlib fallback and raised KeyError, even though "Vm" plainly resolves
-    against the pattern by OpenFOAM's own rules.
-    """
+    """remove_foam_dict's own separate scan for the dict being removed must
+    also resolve quoted-regex headers, like _find_dict_block_bounds does
+    for scope-path segments."""
     path = tmp_path / "fvSolution"
     path.write_text(_SINGLE_PATTERN_BLOCK)
     remove_foam_dict(path, "Vm", scope=["solvers"])
@@ -675,13 +603,10 @@ def test_remove_foam_dict_resolves_a_pattern_keyed_member(tmp_path):
 
 
 def test_ensure_foam_dict_does_not_duplicate_a_pattern_covered_member(tmp_path):
-    """ensure_foam_dict must recognize a name already covered by a pattern.
-
-    Without pattern resolution, ensure_foam_dict("Vm", ...) on a block keyed
-    only by "Vm|VmFinal" reports "Vm" as missing and inserts a duplicate
-    literal Vm block -- which OpenFOAM's literal-beats-pattern precedence
-    then silently prefers over the existing, intentionally-shared one.
-    """
+    """ensure_foam_dict must recognize a name already covered by a pattern,
+    not insert a duplicate literal block that OpenFOAM's
+    literal-beats-pattern precedence would then shadow the existing one
+    with."""
     path = tmp_path / "fvSolution"
     path.write_text(_SINGLE_PATTERN_BLOCK)
     inserted = ensure_foam_dict(

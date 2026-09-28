@@ -1,25 +1,7 @@
-"""A module with TYPE_CHECKING imports must defer its annotations.
-
-This guards a bug that took out this project's entire CI and was invisible
-locally.
-
-``core/plugin_interface.py`` annotated ``get_dict_entries(self) -> tuple[DictEntry, ...]``
-while importing ``DictEntry`` only under ``if TYPE_CHECKING:``. Without
-``from __future__ import annotations`` that name is resolved when the class body
-executes, so merely importing the module raised::
-
-    NameError: name 'DictEntry' is not defined
-
-on every Python before 3.14. The CI matrix is 3.11 and 3.12, so all six jobs
-died at collection -- 38 collection errors in the core package alone.
-
-It was invisible to anyone developing here because this repo's virtualenv is
-Python 3.14, where PEP 649 defers annotation evaluation: the same tree showed a
-green local suite and a CI that could not collect a single test.
-
-The rule is mechanical: if a module has an ``if TYPE_CHECKING:`` block, its
-annotations may name types that do not exist at runtime, so it must defer them.
-"""
+"""A module with an ``if TYPE_CHECKING:`` block must defer annotation
+evaluation (``from __future__ import annotations``), or a TYPE_CHECKING-only
+name in an annotation raises ``NameError`` on any Python before 3.14 (PEP 649
+defers it from 3.14 on, which can mask this in a newer local interpreter)."""
 from __future__ import annotations
 
 import ast

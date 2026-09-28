@@ -34,11 +34,10 @@ if TYPE_CHECKING:
     from omnidriver.core.plugin_interface import DriverContext
 
 #: This module's identity on every `ParameterAssignment`/`CaseMutationRequest`
-#: it produces (Phase 3 Task 5, "--apply joins the channel"). Deliberately
-#: not a solver plugin's own identity (e.g. cardiacFoam's `"org.cardiacfoam"`):
-#: this module resolves overrides against WHICHEVER plugin's declared
-#: `override_scopes`/`dict_regeneration` the composed stack carries, so it
-#: cannot claim to be any one of them.
+#: it produces. Not a solver plugin's own identity: this module resolves
+#: overrides against whichever plugin's declared `override_scopes`/
+#: `dict_regeneration` the composed stack carries, so it cannot claim to be
+#: any one of them.
 _OWNER = "org.omnidriver.openfoam.apply_overrides"
 
 
@@ -47,19 +46,14 @@ class OverrideScope:
     """One ``$TOKEN.`` override scope a plugin declares for `step --strict
     --apply`.
 
-    token: the bare scope name after ``$`` and before the first ``.`` (e.g.
-        ``"ELECTRO_MODEL_COEFFS"`` for ``"$ELECTRO_MODEL_COEFFS.myocardiumSolver"``).
-    file_relpath: the case-relative dict file this scope's overrides write
-        into (e.g. ``"constant/electroProperties"``).
-    catalog_group: the dictionary-catalog group name this scope's overrides
-        are validated against (``DictionaryCatalogCapability.catalog()
-        .entries_for(catalog_group)``).
-    resolve_entry: given the full ``driver_path`` and the case root, return
-        ``(scope_path, key)`` ready for
-        :func:`omnidriver.openfoam.mutators.update_foam_entry`.
-        Plugin-owned: how a token's dotted suffix maps onto nested OpenFOAM
-        scope segments is catalog-specific (e.g. which ``<solver>Coeffs``
-        block is active for this case), not something core can infer.
+    token: bare scope name after ``$`` and before the first ``.``.
+    file_relpath: case-relative dict file this scope's overrides write into.
+    catalog_group: catalog group its overrides are validated against.
+    resolve_entry: given ``driver_path`` and the case root, returns
+        ``(scope_path, key)`` for
+        :func:`omnidriver.openfoam.mutators.update_foam_entry`. Plugin-owned:
+        the mapping from a token's dotted suffix to nested OpenFOAM scope
+        segments is catalog-specific.
     """
 
     token: str
@@ -71,45 +65,26 @@ class OverrideScope:
 @dataclass(frozen=True)
 class RegenerationScope:
     """One bare (non-``$``-prefixed) "selector" override a plugin declares
-    for `step --strict --apply` that must REGENERATE a dict file rather
-    than key-patch it, because changing the value restructures the file --
-    renames a sub-block, changes which sibling keys are legal -- instead of
-    changing one leaf in place. The motivating case is cardiacFoam's
-    ``myocardiumSolver``: switching it renames ``<oldSolver>Coeffs`` to
-    ``<newSolver>Coeffs`` and flips which keys the catalog's
-    ``applicable_when``/``required_when``/``forbidden_when`` predicates
-    allow, none of which ``update_foam_entry`` (a single key/value/scope
-    patch) can express.
+    for `step --strict --apply` that must regenerate a dict file rather than
+    key-patch it, because changing the value restructures the file -- renames
+    a sub-block, changes which sibling keys are legal -- instead of changing
+    one leaf in place.
 
-    selector_keys: the bare ``driver_path`` names this scope owns (e.g.
-        ``{"myocardiumSolver"}`` for the cardiac plugin). Deliberately a
-        small, explicit set: a selector only belongs here if changing it
-        actually restructures the file. Plain leaf selectors that only
-        change a value in place (e.g. cardiacFoam's ``ionicModel``,
-        ``tissue``) stay on the ordinary ``$TOKEN.`` :class:`OverrideScope`
-        path instead -- routing them through regeneration too would be a
-        capability the catalog does not need yet.
-    file_relpath: the case-relative dict file this scope regenerates (e.g.
-        ``"constant/electroProperties"``).
-    catalog_group: the dictionary-catalog group name used to validate enum
-        values for these selector keys (mirrors
-        :attr:`OverrideScope.catalog_group`).
+    selector_keys: the bare ``driver_path`` names this scope owns. Only
+        selectors that actually restructure the file belong here; plain leaf
+        selectors that change a value in place stay on the ordinary
+        ``$TOKEN.`` :class:`OverrideScope` path.
+    file_relpath: case-relative dict file this scope regenerates.
+    catalog_group: catalog group used to validate enum values for these
+        selector keys.
     regenerate: given the on-disk file path, the full ``driver_path``, the
-        new value, and any OTHER ``$TOKEN.``-scoped overrides from the same
-        `step --strict --apply` call that target this same
-        ``file_relpath`` (``{driver_path: value}``, empty if none),
-        rewrite the file in place from its current content with that one
-        selector changed. The extra-overrides map exists because
-        ``update_foam_entry`` can only patch a key that already exists --
-        a solver switch can make a *new* key required with no catalog
-        default (e.g. eikonalSolver's ``stimulusLocationMin``, absent from
-        a monodomain source and un-defaultable, case-specific geometry),
-        and there would otherwise be no way for such a value to reach the
-        file: too late to key-patch it in afterward (nothing to patch),
-        and the rebuild has no default to fall back on. Plugin-owned: how
-        to decompose the existing file into selectors/overrides, rebuild
-        it, and preserve whatever the rebuild pipeline cannot itself
-        round-trip is catalog-specific, not something core can infer.
+        new value, and any other ``$TOKEN.``-scoped overrides from the same
+        call targeting this same ``file_relpath`` (``{driver_path: value}``,
+        empty if none), rewrite the file in place with that one selector
+        changed. The extra-overrides map covers a key the new selector value
+        requires but that ``update_foam_entry`` cannot patch because it does
+        not yet exist in the file. Plugin-owned: decomposing and rebuilding
+        the file is catalog-specific.
     """
 
     selector_keys: frozenset[str]
@@ -172,9 +147,7 @@ def _match_dynamic_entry(dp: str, all_entries: Iterable[Any]) -> Any | None:
 
 
 def _scope_token(dp: str) -> str:
-    """Return the bare token between "$" and the first "." (or the whole
-    remainder if there is no "."). ``dp`` must already be known to start
-    with "$"."""
+    """Bare token between ``$`` and the first ``.``; ``dp`` must start with ``$``."""
     return dp[1:].split(".", 1)[0]
 
 
@@ -184,14 +157,8 @@ def _document_relpath_for(
     scope_by_token: dict[str, "OverrideScope"],
     regen_scope_by_key: dict[str, "RegenerationScope"],
 ) -> str:
-    """The case-relative document one override's ``driver_path`` addresses.
-
-    Factored out of ``override_target_paths`` (2026-09-23, Phase 3 Task 5) so
-    the channel migration's own document-set computation (which relpaths to
-    snapshot-copy before staging) shares one routing decision with the
-    existing path-safety check, rather than a second copy that could drift
-    from it. ``dp`` must already have passed ``validate_overrides``.
-    """
+    """The case-relative document one override's ``driver_path`` addresses;
+    ``dp`` must already have passed ``validate_overrides``."""
     if ":" in dp:
         return dp.partition(":")[0]
     if dp in regen_scope_by_key:
@@ -231,12 +198,8 @@ def validate_overrides(overrides: Any, *, driver_context: "DriverContext") -> No
             continue
         elif not dp.startswith("$"):
             if dp in regen_scope_by_key:
-                # A bare selector that RESTRUCTURES the file (renames a
-                # sub-block, changes which sibling keys are legal) rather
-                # than patching one leaf in place -- e.g. myocardiumSolver.
-                # Still enum-checked against the catalog exactly like any
-                # other entry; only the *application* differs (regenerate
-                # vs. key-patch), not the trust boundary.
+                # A regeneration selector is enum-checked exactly like any
+                # other entry; only the application differs.
                 entry = scoped_entries.get(dp)
                 enum_values = getattr(entry, "enum_values", None)
                 if enum_values and ov["value"] not in enum_values:
@@ -244,11 +207,9 @@ def validate_overrides(overrides: Any, *, driver_context: "DriverContext") -> No
                         f"override {dp!r} value {ov['value']!r} not in enum {tuple(enum_values)}"
                     )
                 continue
-            # Backward compatibility: flat strings are treated as controlDict entries.
-            # Still must be a real controlDict key -- otherwise this silently passes
-            # validation and, at apply time, either raises a raw KeyError (no
-            # foamDictionary) or silently writes a brand-new bogus key into
-            # controlDict (foamDictionary auto-creates missing keys on `-set`).
+            # Must be a real controlDict key: foamDictionary auto-creates a
+            # missing key on `-set`, so an unchecked one would silently write
+            # a bogus new key instead of failing.
             if dp not in control_dict_keys:
                 known = ", ".join(sorted(control_dict_keys))
                 raise OverrideError(
@@ -292,40 +253,17 @@ def apply_overrides(
     driver_context: "DriverContext",
     execution_env: Mapping[str, str] | None = None,
 ) -> tuple[dict[str, Any], ...]:
-    """Apply overrides through the case-write channel (Phase 3 Task 5,
-    "--apply joins the channel" -- bypass 4).
+    """Validate every override's routing, then stage the writes into a
+    private snapshot and commit them atomically via
+    `case_transaction.commit_case_write`. ``case_root`` is never read or
+    written directly, and is left untouched if validation, staging, or the
+    commit itself fails.
 
-    Validate routing before any writes, exactly as before. What changes is
-    where the writes land: every touched document is staged into a private
-    snapshot (case_root is never read or written directly), a
-    `CaseMutationRequest`/`ParameterAssignment` per override describes what
-    is about to change, and `case_transaction.commit_case_write` replaces
-    the real files atomically, journalled, with automatic rollback on
-    failure -- case_root is untouched on any validation or staging failure
-    (stronger than the pre-channel `_restore_on_failure`, which restored
-    case_root only after writing to it), and crash-recoverable via the
-    journal on a failure during the commit itself, which no prior mechanism
-    on this path provided at all.
-
-    `commit_case_write` is called with ``case_lease_held=True`` when this
-    thread already holds the case lease -- true for `--apply` reached via
-    `cli.py`'s `--apply` dispatch (`_dispatch_context` holds it for the
-    whole `step`), which is why `case_transaction.py` grew that parameter.
-    A standalone caller (e.g. this module's own unit tests, calling
-    `apply_overrides()` directly with no lease held) is unaffected: the
-    flag is only passed when a held lease is actually detected, and
-    `commit_case_write` acquires its own otherwise, exactly as it always has.
+    Raises `OverrideError` on a failed validation or a failed commit.
     """
     validate_overrides(overrides, driver_context=driver_context)
     if not overrides:
-        # `clone_and_patch` requires at least one parameter
-        # (`CaseMutationRequest.__post_init__`); an override list that
-        # resolves to nothing is a no-op, not a mutation with zero effects
-        # -- the same rule `cardiaccore.workflows.overrides
-        # .apply_input_overrides_planned` already applies. Matches this
-        # function's own pre-channel behaviour: `apply_overrides([], ...)`
-        # has always been a well-defined no-op
-        # (`test_applying_overrides_is_supported`).
+        # CaseMutationRequest.__post_init__ requires at least one parameter.
         return ()
 
     case_root = Path(case_root)
@@ -341,11 +279,8 @@ def apply_overrides(
     _, scoped_entries, _, _ = _catalog_entries(driver_context)
     controldict_entries = _control_dict_entries(driver_context)
 
-    # Re-validates and raises OverrideError on a symlinked/escaping target
-    # BEFORE anything is staged -- override_target_paths's own refusal,
-    # unchanged; its return value itself isn't otherwise needed below,
-    # which computes case-relative strings (for the snapshot copy and
-    # RenderedFile.path) via the same routing decision.
+    # Re-validates and raises on a symlinked/escaping target before anything
+    # is staged; the return value itself isn't needed here.
     override_target_paths(overrides, case_root=case_root, driver_context=driver_context)
     relpaths = sorted({
         _document_relpath_for(
@@ -372,11 +307,8 @@ def apply_overrides(
         rendered: list[RenderedFile] = []
         for relpath in relpaths:
             source = case_root / relpath
-            # Every relpath above was written by _stage_overrides_into_snapshot
-            # without raising, which -- since every route requires its target
-            # to already exist (add_if_missing is never set) -- proves this
-            # source existed the whole time and is untouched (only the
-            # snapshot copy was ever written to).
+            # Every route requires its target to exist already, so source
+            # is guaranteed to exist and is untouched here.
             before_digest = _digest_bytes(source.read_bytes())
             mode = source.stat().st_mode & 0o7777
             content = (snapshot_root / relpath).read_bytes()
@@ -408,12 +340,6 @@ def apply_overrides(
             ),
             semantic_owner_id=_OWNER,
         )
-        # Gives the `environment` precondition kind (declared in
-        # `core.case_write`, implemented here, checked in
-        # `core.case_transaction`) its second real emitter -- until now the
-        # only caller was cardiacCore's Task 8 channel consumer
-        # (`workflows.overrides.apply_input_overrides_planned`). Discharges
-        # the note Task 1 Step 3 recorded ("implemented-and-thin").
         preconditions = case_rendering.patch_preconditions(
             resolved, case_root=case_root, execution_env=execution_env,
         )
@@ -466,9 +392,8 @@ def apply_overrides(
         evidence.append({
             "driver_path": driver_path,
             "requested_value": override["value"],
-            # Raw spellings are preserved on both sides: `requested_value`
-            # above and `value` from `asdict(result)` below. `matches_requested`
-            # is a typed comparison of the two, not a rewrite of either.
+            # `matches_requested` is a typed comparison; the raw spellings
+            # above and in `asdict(result)` below are left as-is.
             "matches_requested": (
                 result.status == "resolved"
                 and effective_values_agree(override["value"], result.value)
@@ -517,7 +442,6 @@ def override_target_paths(
 
 
 def _effective_value_text(value: Any) -> str:
-    """Render an override as the scalar text the native query must observe."""
     from .literals import _format_value
 
     return _format_value(value).strip()
@@ -527,24 +451,9 @@ def _as_comparable_text(text: str):
     """Parse one native scalar/word/vector spelling into a comparable value.
 
     Returns a float for a number, a bool for an OpenFOAM boolean word, a tuple
-    of floats for a parenthesised vector OR an unparenthesised
-    whitespace-separated one, and the stripped text otherwise.
-
-    **Corrected 2026-09-25** (the ``restitutionCurves`` real-run test's own
-    regression, via ``block_mesh_resolution_axis``'s typed-tuple value): a
-    ``blockMeshDict``'s hex-cell-counts convention (``case_planning
-    .read_hex_cell_counts``/``plan_block_mesh_resolution``) spells its
-    vector WITHOUT parentheses (``"40 6 14"``, not ``"(40 6 14)"``) --
-    unlike every other vector this function already parsed. Before this, a
-    real requested value of ``(40, 6, 14)`` compared against that exact
-    text always disagreed (a tuple of floats never equals a plain string),
-    so a study naming the case's own current resolution could never be
-    reported ``"unchanged"``. Added as its own branch, after the
-    parenthesised one and before the single-float attempt, so it only
-    fires for a genuinely all-numeric, multi-token spelling -- anything
-    that fails to parse (``"uniform 0.001"``, a real word with an
-    embedded space) falls through to plain text comparison exactly as
-    before.
+    of floats for a parenthesised or unparenthesised whitespace-separated
+    vector (``blockMeshDict``'s hex-cell-counts convention omits the
+    parentheses), and the stripped text otherwise.
     """
     stripped = text.strip().rstrip(";").strip()
     if not stripped:
@@ -573,21 +482,13 @@ def _as_comparable_text(text: str):
 
 def _as_comparable(value: Any):
     """Parse a requested override *or* a native resolution into a comparable
-    value, dispatching on the Python type actually in hand.
+    value, dispatching on the Python type actually in hand rather than
+    round-tripping through ``str()`` first (``str([1, 2, 3])`` is not the
+    OpenFOAM vector spelling ``"(1 2 3)"``).
 
     A number becomes a ``float``, an OpenFOAM boolean word or a Python ``bool``
-    stays a ``bool``, a list/tuple and a parenthesised OR unparenthesised
-    (``_as_comparable_text``'s 2026-09-25 addition, for the hex-cell-counts
-    convention) vector string all become a tuple of floats, and anything
-    else is compared as text.
-
-    Corrected 2026-09-22 (audit finding F1b, second pass): the first draft
-    always rendered the *requested* side through ``_effective_value_text``
-    (``str(value)``) before parsing it back. ``str([1, 2, 3])`` is the Python
-    literal ``"[1, 2, 3]"``, not the OpenFOAM vector spelling ``"(1 2 3)"``, so
-    a correct vector override compared unequal to its own resolution. Dispatch
-    on the requested value's own type instead of round-tripping it through
-    text formatting meant for writing a dictionary, not for comparison.
+    stays a ``bool``, a list/tuple or vector string becomes a tuple of floats,
+    and anything else is compared as text.
     """
     if isinstance(value, bool):
         return value
@@ -604,21 +505,13 @@ def _as_comparable(value: Any):
 
 
 def effective_values_agree(requested: Any, resolved: str | None) -> bool:
-    """Whether a native resolution is the value that was requested.
+    """Whether a native resolution is the value that was requested, compared
+    as parsed values rather than text (a requested ``1e-3`` resolves through
+    ``foamDictionary`` as ``0.001``).
 
-    Compared as parsed values, not as text: a requested ``1e-3`` resolves
-    through ``foamDictionary`` as ``0.001``, and rejecting that is rejecting a
-    correct edit. Added 2026-09-22 (audit finding F1b).
-
-    Deliberately NOT a tolerance. ``0.001`` and ``0.0010000001`` are different
-    configurations, and a comparison that calls them equal hides exactly the
-    drift this check exists to find. The raw spellings are preserved in the
-    evidence record either way, so a reader can always see what was written and
-    what came back.
-
-    An unparseable or absent resolution is not agreement. "I could not read it"
-    is reported as a non-match so the caller sees an unverified edit, never a
-    passed check.
+    Deliberately not a tolerance: two different values are never called
+    equal. An unparseable or absent resolution is reported as a non-match,
+    never a passed check.
     """
     if resolved is None:
         return False
@@ -633,17 +526,11 @@ def effective_values_agree(requested: Any, resolved: str | None) -> bool:
 
 #: value_kind -> text-to-typed parser, for a raw string override value that
 #: needs interpreting before it fits `validate_value_shape`'s closed shape
-#: vocabulary. Mirrors `omnidriver.cardiacfoam.overrides._TEXT_PARSERS`
-#: (same reasoning, same `omnidriver.openfoam.literals` functions -- see
-#: that module's own docstring on why parsing lives there and not here) but
-#: widened with `scalar`/`integer`: cardiacFoam's tutorial call sites always
-#: pass an already-typed Python float for those two kinds (Task 3's own
-#: finding), but `--apply` values arrive from the CLI and `sweep.json` as
-#: strings (``{"driver_path": "deltaT", "value": "0.0005"}``), so this route
-#: needs a parser those production call sites never did. `word`/`enum` are
-#: excluded: a JSON string already IS the correct shape for those, and
-#: `validate_value_shape` accepts any non-empty, whitespace-free string
-#: (a plausible number like "1e-6" is a perfectly valid "word" spelling too).
+#: vocabulary. Widened with `scalar`/`integer` beyond
+#: `omnidriver.cardiacfoam.overrides._TEXT_PARSERS`: `--apply` values arrive
+#: from the CLI and `sweep.json` as strings, unlike cardiacFoam's own
+#: already-typed call sites. `word`/`enum` are excluded: a JSON string
+#: already is the correct shape for those.
 _TEXT_PARSERS: dict[str, Callable[[str], Any]] = {
     "scalar": lambda text: _parse_number_text(text, what="scalar"),
     "integer": lambda text: _parse_integer_text(text),
@@ -677,19 +564,11 @@ def _parse_integer_text(text: str) -> int:
 
 def _typed_value_for_apply(value_kind: str, value: Any) -> tuple[Any, tuple[str, ...]]:
     """The typed value a `ParameterAssignment` records, plus any raw-text
-    evidence to write back verbatim.
-
-    Mirrors `cardiaccore.overrides._typed_value_for_entry` /
-    `cardiacfoam.overrides._typed_value_for_entry` (Gap 1's "the raw
-    spelling is still evidence"): unlike those two, the caller here
-    (`_stage_overrides_into_snapshot`) does not use this typed value or its
-    evidence to decide what gets WRITTEN at all -- the write call already
-    happened with the raw override value, unchanged from the pre-channel
-    write path, which is what guarantees byte-for-byte parity with it. This
-    function exists purely to produce a typed, shape-valid value for the
-    `ParameterAssignment` AUDIT record; `evidence_refs` records the original
-    spelling there too, so a reader of the plan can see what was actually
-    typed even though it is not what drove the write.
+    evidence to write back verbatim. Unlike its cardiacCore/cardiacFoam
+    counterparts, this typed value is never used to decide what gets
+    written -- `_stage_overrides_into_snapshot` already wrote the raw
+    override value; this exists only to produce a shape-valid value for
+    the `ParameterAssignment` audit record.
     """
     parse = _TEXT_PARSERS.get(value_kind)
     if parse is not None and isinstance(value, str):
@@ -698,18 +577,13 @@ def _typed_value_for_apply(value_kind: str, value: Any) -> tuple[Any, tuple[str,
 
 
 def _inferred_value_kind(value: Any) -> str | None:
-    """A `value_kind` for an override this module's catalog cannot
-    declare -- the ``system/<file>:<entry>`` route, which
-    `validate_overrides` only path-safety-checks, never catalog-validates
-    (see its own docstring). Dispatches on the Python type actually in
-    hand, never on whether the text *looks* numeric: `validate_value_shape`
-    accepts any non-empty, whitespace-free string as a "word", including one
-    that also happens to parse as a number ("1e-6"), so classifying every
-    such string as "word" is not imprecise -- it is the most conservative
-    true statement this route can make with no catalog entry to consult.
-    ``None`` means genuinely unclassifiable (empty string, a string
-    containing whitespace, or an unsupported JSON type such as a list or a
-    mapping) -- refused by the caller rather than guessed at.
+    """A `value_kind` for the ``system/<file>:<entry>`` route, which
+    `validate_overrides` never catalog-validates, so there is no declared
+    kind to look up. Dispatches on the Python type in hand, not on whether
+    the text looks numeric: a numeric-looking string is still classified
+    as "word", the most conservative true statement with no catalog entry
+    to consult. Returns ``None`` when genuinely unclassifiable, so the
+    caller refuses rather than guesses.
     """
     if isinstance(value, bool):
         return "boolean"
@@ -723,12 +597,9 @@ def _inferred_value_kind(value: Any) -> str | None:
 
 
 def _control_dict_entries(driver_context: "DriverContext") -> dict[str, Any]:
-    """driver_path -> `DictEntry`, for every controlDict entry the catalog
-    declares -- `_catalog_entries` discards everything but the bare path
-    set (`validate_overrides` only ever needed membership), so this is
-    built separately, for the one extra fact the channel needs: each
-    entry's `value_kind`.
-    """
+    """driver_path -> `DictEntry` for every controlDict entry the catalog
+    declares, including each entry's `value_kind` (`_catalog_entries`
+    discards that, keeping only the bare path set)."""
     catalog = driver_context.capabilities.dictionaries.catalog()
     return {entry.driver_path: entry for entry in catalog.entries_for("controlDict")}
 
@@ -739,14 +610,10 @@ def _catalog_entry_for_apply(
     scoped_entries: dict[str, Any],
 ) -> Any | None:
     """The catalog `DictEntry` a ``$TOKEN.``/regeneration-selector
-    ``driver_path`` addresses -- the direct-or-dynamic match
-    `validate_overrides` already performed to accept ``dp`` in the first
-    place (see that function), re-run here for the one additional fact it
-    does not return: the matched entry's `value_kind`. Kept as its own,
-    small function rather than threading a return value back through
-    `validate_overrides` -- that function's control flow (and its 20-plus
-    pinned error messages) stays untouched; this duplicates roughly four
-    lines of matching, not `validate_overrides`'s trust decisions."""
+    ``driver_path`` addresses. Re-runs the direct-or-dynamic match
+    `validate_overrides` already performed, to get its `value_kind`, rather
+    than threading a return value back through that function's control flow.
+    """
     entry = scoped_entries.get(dp)
     if entry is not None:
         return entry
@@ -763,31 +630,13 @@ def _stage_overrides_into_snapshot(
     controldict_entries: dict[str, Any],
 ) -> list[ParameterAssignment]:
     """Apply every override into `snapshot_root`, building one
-    `ParameterAssignment` per override as a byproduct.
-
-    Byte-for-byte the same routing and write calls as the pre-channel
-    `_apply_validated_overrides` (removed 2026-09-23, Phase 3 Task 5) --
-    ``case_root`` replaced by ``snapshot_root`` throughout, so `case_root`
-    is never read or written by this function at all. `scope.resolve_entry`
-    and `regen_scope.regenerate` are given `snapshot_root` too (not the real
-    `case_root`), which is what preserves the one behaviour that a naive
-    "copy touched files, then apply" split would have broken: within a
-    single `apply_overrides()` call, cardiacFoam's `resolve_entry` detects
-    the ACTIVE `<solver>Coeffs` block by reading `constant/electroProperties`
-    (see `overrides._resolve_electro_model_coeffs_entry`) -- the same file a
-    prior override in the SAME call may have just regenerated. Passing
-    `snapshot_root` throughout means a later override's `resolve_entry` sees
-    that prior write, exactly as it would reading `case_root` directly today;
-    passing the untouched `case_root` instead would silently resolve against
-    the pre-regeneration solver.
-
-    The caller has already copied every document `override_target_paths`
-    names into `snapshot_root`, so every read/write below targets a file
-    that already exists there -- an override addressing one that does not
-    exist under the real case still raises the same `FileNotFoundError`,
-    now surfacing from the snapshot copy instead of `case_root` (message
-    unchanged; only the path differs), wrapped into `OverrideError` exactly
-    as before.
+    `ParameterAssignment` per override as a byproduct. `case_root` is never
+    read or written by this function; `scope.resolve_entry` and
+    `regen_scope.regenerate` are given `snapshot_root` instead, so that
+    within one call, a later override's `resolve_entry` (e.g. cardiacFoam's,
+    detecting the active `<solver>Coeffs` block) sees a prior override's
+    write to the same file rather than resolving against the file's
+    pre-call state.
     """
     parameters: list[ParameterAssignment] = []
     for ov in overrides:
@@ -814,11 +663,8 @@ def _stage_overrides_into_snapshot(
                     )
             elif not dp.startswith("$") and dp in regen_scope_by_key:
                 regen_scope = regen_scope_by_key[dp]
-                # Other $TOKEN. overrides in this same call that target the
-                # scope's file: the rebuild needs to see these (not just
-                # the selector) because update_foam_entry can only patch a
-                # key that already exists, and the new solver may require
-                # a key the old file never had (see RegenerationScope.regenerate).
+                # See RegenerationScope.regenerate: the rebuild needs sibling
+                # $TOKEN. overrides in this same call, not just the selector.
                 extra_overrides = {
                     other["driver_path"]: other["value"]
                     for other in overrides

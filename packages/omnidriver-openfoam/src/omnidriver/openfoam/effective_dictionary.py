@@ -1,9 +1,7 @@
 """Explicit native effective-dictionary inspection for OpenFOAM.
 
-This is deliberately separate from :func:`mutators.read_foam_entry`, which
-only inspects lexical source.  ``foamDictionary`` can resolve includes and
-substitutions, but may also execute dictionary directives; callers must opt in
-to that capability rather than receiving it as an incidental parsing effect.
+Separate from :func:`mutators.read_foam_entry`, which only inspects lexical
+source: ``foamDictionary`` can also execute directives, so callers must opt in.
 """
 from __future__ import annotations
 
@@ -33,8 +31,7 @@ def _mask_quoted_strings(text: str) -> str:
 
 
 class _Unset:
-    """Marks ``bashrc`` as unspecified, so a default can be discovered lazily
-    instead of a fixed path being invented for every machine."""
+    """Marks ``bashrc`` as unspecified, so it is discovered lazily rather than defaulted eagerly."""
 
     def __repr__(self) -> str:
         return "<discover ambient OpenFOAM installation>"
@@ -79,110 +76,25 @@ def find_etc_file(
     """Locate an ``#includeEtc`` dependency the way the native runtime does.
 
     Returns ``(selected, candidates)``: the first existing file in search order,
-    and every location searched whether or not it exists. The absent candidates
-    matter as much as the selected one -- a file appearing at a higher-priority
-    location changes which file the next run reads, so a plan's preconditions
-    must record that those locations were empty.
+    and every location searched whether or not it exists. An absent candidate
+    still matters -- a file later appearing at a higher-priority location
+    changes which file the next run reads, so a plan's preconditions must
+    record that those locations were empty.
 
-    Modelled on two sources, read directly rather than assumed:
-
-    * ESI (openfoam.com) ``bin/foamEtcFile``, present on this machine's
-      discoverable v2412 install at ``/Volumes/OpenFOAM-v2412/bin/foamEtcFile``,
-      and confirmed live via ``foamEtcFile -list``/``foamEtcFile`` under a
-      scratch ``HOME`` -- see ``test_find_etc_file_agrees_with_native_foam_etc_file``
-      in ``tests/core/test_effective_dictionary.py``.
-    * Foundation (openfoam.org) ``bin/foamEtcFile`` and ``etc/bashrc``, fetched
-      2026-09-22 from ``raw.githubusercontent.com/OpenFOAM/OpenFOAM-dev/master/``
-      (``bin/foamEtcFile``, ``etc/bashrc``). No Foundation installation exists on
-      this machine, so this family is verified against its **published source
-      only**, not against a running instance -- recorded honestly rather than
-      guessed. See "Foundation, source-verified but not runtime-verified" below.
-
-    Both scripts build the same three-group, six-slot search order (``dirList``
-    in ESI, also ``dirList`` in Foundation) -- user, then group/site, then
-    other/distribution -- gated by a mode string of ``u``/``g``/``o`` letters
-    whose *membership*, not order, selects which groups run (confirmed by
-    diffing ``foamEtcFile -list`` output across ``-mode`` orderings ``ug`` vs
-    ``gu``, ``go`` vs ``og``: identical output both times). Unset
-    ``FOAM_CONFIG_MODE`` -- or one whose first character isn't ``u``/``g``/``o``
-    -- means all three (``ugo``), per ESI's own
-    ``case "$FOAM_CONFIG_MODE" in ([ugo]*) optMode="$FOAM_CONFIG_MODE" ;; esac``.
-    Foundation has no ``FOAM_CONFIG_MODE``/``FOAM_CONFIG_ETC`` environment
-    fallback at all (only a CLI ``-mode`` flag with no environment-variable
-    equivalent) -- confirmed absent from its fetched source -- so those two
-    variables are an ESI-only mechanism; modelling them unconditionally is
-    harmless for Foundation because Foundation never sets them.
-
-    Up to six locations, in the fixed ``u``, then ``g``, then ``o`` order
-    (present only when its mode letter is active):
-
-    1. ``$HOME/.OpenFOAM/<version>``   -- versioned user directory      (u)
-    2. ``$HOME/.OpenFOAM``             -- unversioned user fallback     (u)
-    3. ``<site>/<version>/etc``        -- versioned site directory     (g)
-    4. ``<site>/etc``                  -- unversioned site fallback     (g)
-    5. ``$FOAM_CONFIG_ETC``            -- explicit shipped-file override (o)
-    6. ``$WM_PROJECT_DIR/etc``         -- the distribution's own etc   (o)
-
-    ``<version>`` is ``$FOAM_API`` when set (ESI: exported by ``etc/bashrc``,
-    read from ``META-INFO/api-info`` if not, e.g. ``"2412"``), else
-    ``$WM_PROJECT_VERSION`` (Foundation: no ``FOAM_API`` exists there at all,
-    and ``WM_PROJECT_VERSION`` -- e.g. ``"11"`` -- is exactly the version
-    segment Foundation's own script derives from its install directory name;
-    confirmed from its fetched source, not assumed). On ESI the two env vars
-    differ (``WM_PROJECT_VERSION="v2412"`` vs ``FOAM_API="2412"``) -- native
-    reads the ``FOAM_API`` spelling, so preferring ``WM_PROJECT_VERSION``
-    outright is wrong for that family, not merely incomplete.
-
-    ``<site>`` is ``$WM_PROJECT_SITE`` if set. Its default differs by family,
-    and is *not* interchangeable -- this is the second, subtler mistake this
-    function made:
-
-    * ESI: ``groupDir="${WM_PROJECT_SITE:-$projectDir/site}"`` -- the versioned
-      project directory itself, i.e. ``$WM_PROJECT_DIR/site``. Confirmed live.
-    * Foundation: ``siteDir="${WM_PROJECT_SITE:-$prefixDir/site}"`` where
-      ``prefixDir`` is the *parent* of the versioned project directory --
-      Foundation's own ``etc/bashrc`` exports that parent as
-      ``WM_PROJECT_INST_DIR`` and says so in a comment ("unset is equivalent to
-      ``$WM_PROJECT_INST_DIR/site``"). So Foundation's default site root is
-      ``$WM_PROJECT_INST_DIR/site``, a sibling of the versioned install, not a
-      child of it.
-
-    Since ``FOAM_API`` is the one variable confirmed present only for ESI and
-    absent from Foundation's source entirely, its presence selects which
-    default applies. If ``WM_PROJECT_SITE`` is unset and the applicable
-    family-specific root variable (``WM_PROJECT_DIR`` for ESI,
-    ``WM_PROJECT_INST_DIR`` for Foundation) is *also* unset, no site candidate
-    is added at all -- an honest gap rather than a guessed fallback, per the
-    rule this function was corrected under twice already: an unverified
-    default is worse than a recorded absence.
-
-    Added 2026-09-22 (audit finding F2). Corrected twice the same day:
-
-    1. First draft searched three ``$WM_PROJECT_VERSION``-qualified locations
-       and defaulted the site root from ``$WM_PROJECT_INST_DIR``. Measured
-       against the real ESI v2412 install, both were wrong -- its own
-       ``$HOME/.OpenFOAM/v2412`` candidate is a location native never reads at
-       all on that install, so a file placed there was selected while the
-       native run kept reading the distribution file underneath it, which is
-       strictly worse than the F2 defect being fixed (F2 was a wrong
-       *attribution*; that draft could produce a wrong *selection*).
-    2. Second draft covered five locations but not ``FOAM_CONFIG_ETC`` /
-       ``FOAM_CONFIG_MODE``, and hard-coded the ESI site-root rule
-       unconditionally. An independent review reproduced both gaps live: with
-       ``FOAM_CONFIG_ETC`` set and nothing shadowing it, native selected the
-       override and this function still selected the distribution file; with
-       ``FOAM_CONFIG_MODE=o`` and a user file present, native deliberately
-       skipped user/group entirely and this function still selected the user
-       file -- the same class of error as (1), a file with no bearing on the
-       run.
-
-    Every location either published script's own logic can produce, given the
-    environment variables it documents, is searched.
+    Modelled on ESI's (openfoam.com) and Foundation's (openfoam.org) own
+    ``bin/foamEtcFile``/``etc/bashrc``: both build the same six-slot search
+    order -- user, then group/site, then distribution, each in a versioned and
+    unversioned form -- gated by a ``FOAM_CONFIG_MODE`` string whose
+    *membership* of ``u``/``g``/``o`` letters, not order, selects which groups
+    run; unset or unrecognised means all three. The two families disagree on
+    where the site root and version default from when unset (see the ``if
+    api:`` branch below) and only ESI has ``FOAM_CONFIG_MODE``/
+    ``FOAM_CONFIG_ETC`` at all -- modelling them unconditionally is harmless
+    for Foundation, which never sets them.
     """
     mode = environment.get("FOAM_CONFIG_MODE") or ""
     if not mode or mode[0] not in "ugo":
-        mode = "ugo"  # Unset, or an unrecognised value: both scripts fall
-        # back to searching all three groups.
+        mode = "ugo"  # unset or unrecognised: both scripts search all three groups
 
     api = environment.get("FOAM_API")
     version = api if api else environment.get("WM_PROJECT_VERSION", "")
@@ -199,16 +111,13 @@ def find_etc_file(
         site = environment.get("WM_PROJECT_SITE")
         if not site:
             if api:
-                # ESI: groupDir defaults from the project dir itself.
+                # ESI's groupDir defaults from the project dir itself (etc/bashrc).
                 project_dir = environment.get("WM_PROJECT_DIR")
                 if project_dir:
                     site = str(Path(project_dir) / "site")
             else:
-                # Foundation (or unrecognised): siteDir defaults from the
-                # *parent* of the project dir, which Foundation's own bashrc
-                # exports as WM_PROJECT_INST_DIR. No fallback beyond that --
-                # guessing an ESI-shaped root here would be exactly the
-                # unverified default this function was corrected over twice.
+                # Foundation's siteDir defaults from the project dir's *parent*,
+                # exported as WM_PROJECT_INST_DIR by its own etc/bashrc.
                 inst_dir = environment.get("WM_PROJECT_INST_DIR")
                 if inst_dir:
                     site = str(Path(inst_dir) / "site")
@@ -225,12 +134,10 @@ def find_etc_file(
         if project_dir:
             candidates.append(Path(project_dir) / "etc" / name)
         else:
-            # Some callers in this repository only ever populate FOAM_ETC
-            # (e.g. resolve_effective_foam_entry's bashrc-derived environment
-            # does not independently expose WM_PROJECT_DIR); neither published
-            # script reads FOAM_ETC itself, but it is normally exported equal
-            # to $WM_PROJECT_DIR/etc, so it stands in for that candidate when
-            # WM_PROJECT_DIR itself is not available.
+            # FOAM_ETC stands in for WM_PROJECT_DIR/etc when only it is set
+            # (resolve_effective_foam_entry's environment is such a caller);
+            # neither published script reads FOAM_ETC itself, but it is
+            # normally exported equal to that path.
             etc_root = environment.get("FOAM_ETC")
             if etc_root:
                 candidates.append(Path(etc_root) / name)
@@ -279,20 +186,10 @@ def _inspect_source_closure(
             )
         for match in _ETC_INCLUDE.finditer(lexical_text):
             environment_keys.add("FOAM_ETC")
-            # Every key `find_etc_file` reads, recorded unconditionally
-            # whenever an #includeEtc directive is present -- not only the
-            # ones this particular install happens to set. This is the
-            # conservative direction (a change to an unused key invalidates a
-            # precondition that did not need it; a change to an unrecorded key
-            # would not, which is the actual hazard F2 exists to close). Two
-            # families read disjoint subsets (WM_PROJECT_DIR for ESI's site
-            # default, WM_PROJECT_INST_DIR for Foundation's; FOAM_API exists
-            # only on ESI) and FOAM_CONFIG_ETC/FOAM_CONFIG_MODE are an ESI-only
-            # mechanism -- see find_etc_file's docstring for the source
-            # citations. Corrected 2026-09-22, third pass: FOAM_CONFIG_ETC and
-            # FOAM_CONFIG_MODE can each change which file is selected and were
-            # not recorded; WM_PROJECT_INST_DIR was dropped in the second pass
-            # and is needed again for the Foundation site-root branch.
+            # Every key find_etc_file reads is recorded unconditionally, not only
+            # the ones this install happens to set: recording an unused key is
+            # harmless, but an unrecorded one would silently invalidate a
+            # precondition (see find_etc_file's docstring for the two families).
             environment_keys.update(
                 ("FOAM_API", "FOAM_CONFIG_ETC", "FOAM_CONFIG_MODE", "HOME",
                  "WM_PROJECT_VERSION", "WM_PROJECT_SITE", "WM_PROJECT_DIR",
@@ -349,15 +246,11 @@ def resolve_effective_foam_entry(
 ) -> EffectiveDictionaryResult:
     """Resolve one entry through native ``foamDictionary`` explicitly.
 
-    The supported profile is an ambient OpenFOAM installation, discovered via
-    :func:`discover_openfoam_bashrc` unless the caller supplies ``bashrc``
-    explicitly. Passing ``bashrc=None`` explicitly opts out of bashrc sourcing
-    entirely and resolves ``foamDictionary`` from ``PATH`` instead. Simple
-    quoted local includes are inspected recursively before execution.
-    Runtime-dependent include forms always return explicit unresolved status.
-    Executable directives return ``execution_required`` unless the caller opts
-    into that capability. Even with that opt-in, dependency closure remains a
-    runtime concern and is reported only by the native command's outcome.
+    ``bashrc`` defaults to :func:`discover_openfoam_bashrc`; passing ``None``
+    resolves ``foamDictionary`` from ``PATH`` instead. Executable directives
+    return ``execution_required`` unless ``allow_executable_directives`` opts
+    in; dependency closure past that gate is still reported only by the
+    native command's outcome.
     """
     dictionary = Path(path)
     if bashrc is _UNSET:
@@ -376,10 +269,7 @@ def resolve_effective_foam_entry(
         )
     source_environment = dict(os.environ) if env is None else dict(env)
     if runtime is not None:
-        # Supported OpenFOAM layouts place ``bashrc`` directly in the etc
-        # directory it exports as FOAM_ETC. Resolution inspects dependencies
-        # before starting the native process, so make that selected-runtime
-        # fact available to the inert closure walk as well.
+        # bashrc lives directly in the etc directory it exports as FOAM_ETC.
         source_environment.setdefault("FOAM_ETC", str(runtime.parent))
     runtime_label = (
         str(runtime) if runtime is not None

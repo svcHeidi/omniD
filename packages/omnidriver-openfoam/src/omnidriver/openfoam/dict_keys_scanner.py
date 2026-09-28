@@ -1,33 +1,6 @@
-"""Scanner for OpenFOAM dictionary-read call sites in C++ source.
-
-For each `.C` / `.H` file under a given `src_root` (skipping `lnInclude/`,
-`Make/`, and `*_Names.H` files), this module detects patterns of the form:
-
-    <receiver>.lookup("key")
-    <receiver>.lookupOrDefault<T>("key", default)
-    <receiver>.get<T>("key")
-    <receiver>.getOrDefault<T>("key", default)
-    <receiver>.found("key")
-    <receiver>.readEntry("key", out)
-    <receiver>.subDict("name")
-    <receiver>.subOrEmptyDict("name")
-    <receiver>.optionalSubDict("name")
-    readScalar(<receiver>.lookup("key"))
-    readLabel(<receiver>.lookup("key"))
-    readBool(<receiver>.lookup("key"))
-
-Returns a flat list of `DictRead` records.  Sub-dict opens are flagged with
-``kind="subdict"``; all other patterns use ``kind="key"``.
-
-Comments are stripped before scanning so commented-out code is never matched.
-
-Catalogue-side helpers receive an explicit plugin catalogue and parse each
-entry's `driver_path` into a structured form for comparison against the
-scanner output. This module deliberately has no default solver catalogue or
-allowlist: both are plugin-owned provenance inputs.
-
-Accuracy is ~80%; false positives/negatives are expected.  The output is for
-human review only.
+"""Scans OpenFOAM C++ source for dictionary-read call sites (`.lookup`,
+`.get<T>`, `subDict`, etc.) and reports drift against a plugin-supplied
+catalogue. Heuristic (~80% accurate); output is for human review only.
 """
 
 from __future__ import annotations
@@ -52,8 +25,7 @@ _LINE_COMMENT = re.compile(r"//[^\n]*")
 
 
 def _strip_comments(text: str) -> str:
-    # Preserve offsets/lines so a source reference points to the original
-    # file, and a comment cannot concatenate two otherwise separate tokens.
+    # Mask with spaces (not delete) to keep line numbers and avoid concatenating tokens.
     def mask(match: re.Match[str]) -> str:
         return "".join(c if c in "\r\n" else " " for c in match.group())
 
@@ -65,12 +37,9 @@ def _strip_comments(text: str) -> str:
 # ---------------------------------------------------------------------------
 # Patterns for dictionary key reads
 #
-# Strategy: one combined regex with named groups.  The receiver identifier is
-# captured but not used for path reconstruction (see module docstring).
-#
-# The string literal is always a double-quoted token without embedded quotes.
-# We allow arbitrary whitespace (including newlines) between the method name,
-# the opening paren, and the first argument.
+# The string literal is always a double-quoted token without embedded quotes;
+# arbitrary whitespace (including newlines) is allowed between the method
+# name, the opening paren, and the first argument.
 
 _STRING_LIT = r'"([^"]+)"'
 
@@ -92,8 +61,8 @@ _SUBDICT_METHOD = r"(?:subDict|subOrEmptyDict|optionalSubDict)"
 # readScalar/readLabel/readBool wrapping a .lookup("key")
 _WRAP_FUNC = r"(?:readScalar|readLabel|readBool)"
 
-# Rather than one combined regex (hard to maintain), use three focused ones.
-# Each captures the string literal as the *last* group in the pattern.
+# Three focused regexes rather than one combined (hard to maintain); each
+# captures the string literal as the last group in the pattern.
 
 _KEY_RE = re.compile(
     r"[A-Za-z_]\w*(?:\s*\.\s*[A-Za-z_]\w*)*"
@@ -150,11 +119,9 @@ def _line_of(text: str, pos: int) -> int:
 
 
 def scan_dict_reads(src_root: Path) -> list[DictRead]:
-    """Return all dictionary-read sites found under *src_root*.
-
-    Files in ``lnInclude/``, ``Make/``, and ``*Names.H`` are skipped.
-    Comments are stripped before scanning.
-    """
+    """Return all dictionary-read sites found under `src_root`, skipping
+    `lnInclude/`, `Make/`, `*Names.H`, and comments. Heuristic (~80%
+    accurate); for human review, not automated enforcement."""
     results: list[DictRead] = []
 
     for source in _iter_src_files(src_root):
@@ -201,15 +168,9 @@ def scan_dict_reads(src_root: Path) -> list[DictRead]:
 
 
 # ---------------------------------------------------------------------------
-# Catalogue-side helper
-
-# ---------------------------------------------------------------------------
-# Catalogue-side vocabulary -- owned by core, re-exported here.
-#
-# CataloguePath and friends parse core's own DictEntry.driver_path; they read
-# no file and know no C++. They lived here until core's strict_planning could
-# no longer import them without pulling in omnidriver.openfoam. Re-exported so
-# this module's own drift checks (and its tests) keep their existing names.
+# Catalogue-side vocabulary, owned by core: re-exported so this module's own
+# drift checks (and its tests) can keep using these names without pulling
+# omnidriver.openfoam into core's strict_planning.
 from omnidriver.core.contracts.catalogue_paths import (  # noqa: F401
     _WILDCARD_RE,
     CataloguePath,
@@ -224,26 +185,14 @@ from omnidriver.core.contracts.catalogue_paths import (  # noqa: F401
 class DictKeyStrictReport:
     """Allowlist-backed catalogue drift report used by strict planning.
 
-    ``unmatched_cxx_reads`` is deliberately NOT called "absent keys". A name
-    lands there because the scanner could not match a C++ string literal to
-    the catalogue, and there are four quite different reasons for that --
-    only the first is a catalogue bug:
-
-    1. **A genuinely uncatalogued key.** Someone added a read in C++ and did
-       not add the ``driver_path``. This is the signal the check exists for.
-    2. **Not this catalogue's key.** The read belongs to another dictionary
-       file (``electroMechanicalProperties``, a generated
-       ``constant/purkinjeGraph``) that this catalogue does not address.
-    3. **Upstream OpenFOAM's key.** e.g. ``nNonOrthogonalCorrectors``, read
-       from a ``pimpleDict``. OpenFOAM owns it; documenting it here would be
-       claiming someone else's contract.
-    4. **Not a dictionary key at all.** The regex matched a field name in a
-       string comparison (``var == "Vm"``) or a value rather than a key.
-
-    Because 2-4 are permanent and expected, the set is only meaningful
-    against the plugin's reviewed allowlist -- which is why the strict report
-    subtracts it, and why ``unused_allowlist`` exists to catch waivers whose
-    underlying read has since disappeared.
+    `unmatched_cxx_reads` is not "absent keys": the scanner can fail to match
+    a C++ string literal to the catalogue for reasons other than a catalogue
+    bug -- the key may belong to another dictionary file, to upstream
+    OpenFOAM (e.g. `nNonOrthogonalCorrectors` from a `pimpleDict`), or to a
+    string comparison rather than an actual dict read. Only a reviewed
+    allowlist can tell those apart from a genuinely uncatalogued key, which is
+    why the report subtracts it, and why `unused_allowlist` catches waivers
+    whose underlying read has since disappeared.
     """
 
     status: str
@@ -264,7 +213,6 @@ class DictKeyStrictReport:
             "unused_allowlist": list(self.unused_allowlist),
             **self.runtime_selection,
         }
-
 
 
 IGNORED_FOAMFILE_KEYS: frozenset[str] = frozenset(
@@ -289,11 +237,8 @@ IGNORED_FOAMFILE_KEYS: frozenset[str] = frozenset(
 
 
 def load_dict_key_allowlist(path: Path) -> dict[str, set[str]]:
-    """Load the reviewed strict-scanner allowlist.
-
-    The file is intentionally JSON so a plugin can review and distribute its
-    own scanner exceptions without coupling this core utility to that plugin.
-    """
+    """Load the reviewed strict-scanner allowlist (JSON, so a plugin can own
+    its exceptions without coupling this utility to that plugin)."""
     payload = json.loads(path.read_text())
     return {
         "unmatched_cxx_reads": set(payload.get("unmatched_cxx_reads", [])),
@@ -302,24 +247,15 @@ def load_dict_key_allowlist(path: Path) -> dict[str, set[str]]:
     }
 
 
-
 def catalogued_names(entries: Iterable["DictEntry"]) -> set[str]:
-    """Every name the catalogue knows anywhere, as a flat set.
+    """Every name the catalogue knows anywhere: leaves of concrete and
+    wildcard paths, plus every non-wildcard container segment.
 
-    Leaves of concrete AND wildcard paths, plus every non-wildcard container
-    segment. This is the "does the catalogue know this name?" set, shared by
-    both drift directions:
-
-      * :func:`compute_dict_key_drift` -- C++ reads with no catalogue match
-      * ``core/specs/case_dict_keys.py`` -- case-file keys with no match
-
-    They must not keep separate copies. A second, subtly different set is
-    exactly what produced the 71% false-positive rate the ``absent_keys`` ->
-    ``unmatched_cxx_reads`` rename fixed.
-
-    Note this is deliberately NOT ``cat_leaves``, which is concrete-only
-    because it also feeds ``stale_paths``, where excluding wildcard paths is
-    correct.
+    Shared, not reimplemented, by both `compute_dict_key_drift` (C++ reads)
+    and `case_dict_keys.py` (case-file keys) -- a second, subtly different
+    set is what produced a large false-positive rate before. Deliberately
+    not `cat_leaves` (concrete-only), which is the correct, narrower set for
+    `stale_paths`.
     """
     names: set[str] = set()
     for path in _as_paths(entries):
@@ -348,24 +284,12 @@ def compute_dict_key_drift(
             subdict_reads[read.name].append(read)
 
     code_keys_set: set[str] = set(key_reads.keys())
-    # Two different questions need two different views of the catalogue.
-    #
-    #   cat_leaves         -- leaves of CONCRETE paths only. Used by
-    #                         stale_paths: you cannot expect the C++ to read a
-    #                         literal "<name>", so wildcard paths must be
-    #                         excluded from "is anyone reading this?".
-    #   catalogued_names   -- every name the catalogue knows anywhere: leaves
-    #                         of concrete AND wildcard paths, plus every
-    #                         non-wildcard parent segment. Used by
-    #                         unmatched_cxx_reads: the C++ really does read
-    #                         "sigmaExtracellular" (catalogued under
-    #                         ecgDomains.<name>.sigmaExtracellular) and really
-    #                         does read the container name "outputVariables",
-    #                         so both must count as known.
-    #
-    # Sharing one set between them was the historical defect: 71% of the
-    # reported drift was catalogued all along, just invisible to a
-    # concrete-leaf-only comparison.
+    # Two different catalogue views for two different checks: cat_leaves is
+    # concrete-only, since stale_paths must not expect the C++ to read a
+    # literal "<name>"; catalogued_names also counts wildcard leaves and
+    # parent segments, since unmatched_cxx_reads must recognize a real read
+    # like "sigmaExtracellular" under ecgDomains.<name>.sigmaExtracellular.
+    # Sharing one set between the two produces false positives.
     cat_leaves: set[str] = set()
     cat_parent_segs: set[str] = set()
     for path in cat_paths:

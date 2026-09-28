@@ -44,8 +44,7 @@ def test_optional_include_absence_resumes_but_appearance_refuses(tmp_path) -> No
     optional = tmp_path / "runtime" / "optional.cfg"
     control_dict = tmp_path / "system" / "controlDict"
     control_dict.write_text(f'#includeIfPresent "{optional}"\nstartTime 0;\n')
-    # Recreate the checkpoint after adding the optional declaration, while it
-    # remains absent. The absence witness is complete resume evidence.
+    # The optional include's absence is itself complete resume evidence.
     result = run_workflow_step(
         dag,
         initial_workflow_state(dag),

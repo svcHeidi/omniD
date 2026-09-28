@@ -1,22 +1,8 @@
-"""The ConfigValueCapability reader contract (review finding B1).
+"""The ``ConfigValueCapability`` reader contract: callers pass a key-path tuple; the adapter splits it into ``scope``/``key`` for ``mutators.read_foam_entry``.
 
-``tutorial_records.split_unchanged`` / ``record_execution._resolve_and_split``
-call the reader with a KEY-PATH TUPLE (design doc
-``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md`` §4
-step 7), but the real reader this adapter used to hand back,
-``mutators.read_foam_entry(file_path, key, *, scope=None)``, takes a plain
-leaf key plus a separate ``scope``. Before this fix,
-``OpenFOAMEnvironmentPlugin.get_config_value_reader()`` returned
-``read_foam_entry`` unwrapped, so a caller passing a tuple got a scope
-argument's worth of nonsense (a ``key`` that was never a single string).
-
-This module proves the adapter now splits a key-path tuple into
-``scope``/``key`` itself, against a REAL native file -- not an invented
-fixture (CLAUDE.md's "testing against real meshes": real case or native-
-source drift gate, nothing invented). The native tutorials root comes ONLY
-from ``OMNIDRIVER_NATIVE_TUTORIALS`` (supplied, not discovered); when unset,
-this FAILS rather than skipping, so a run that meant to exercise it cannot
-silently pass by omission.
+Proven against a real native tutorials tree, never an invented fixture.
+``OMNIDRIVER_NATIVE_TUTORIALS`` is supplied, never discovered; this test
+fails rather than skips when it is unset.
 """
 
 from __future__ import annotations

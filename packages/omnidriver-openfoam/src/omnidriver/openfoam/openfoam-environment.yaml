@@ -2,43 +2,27 @@ schema_version: 1
 plugin:
   id: org.omnidriver.openfoam.environment
   api_version: "2"
-# Verified 2026-09-21 against provider_stack.implemented_capabilities() after
-# deleting the nine hollow stubs (Phase 0 Task 4's census): a capability is
-# declared here only if every member it adapts is a real, non-stub method on
-# this class -- check_provides() (provider_stack.py) enforces exactly that at
-# driver_context() construction, per provider, before composition ever runs.
-# Deliberately NOT declared, though implemented_capabilities() reports them
-# with the stubs still present: command_authorization (get_solver_commands,
-# get_auxiliary_commands, get_utility_manifests, get_utility_roots were the
-# solver-vocabulary stubs; this adapter genuinely knows only
-# get_environment_commands/is_installed_environment_command), case_introspection
-# (get_samplable_fields, resolve_case_models were stubs), and
-# run_document_configuration / override_schema (get_run_document_config_schema,
-# get_dict_entry_catalog, get_override_schema were stubs). Also not declared,
-# and never implemented by this adapter at all (not part of the stub census,
-# just genuinely absent): case_files (no get_config_resolution_description),
-# dict_regeneration (no get_regeneration_scopes), mesh_diagnostic_policy (no
-# get_mesh_geometry_diagnostics/is_nondimensional_case) -- those three are
+# A capability is declared here only if every member it adapts is a real,
+# non-stub method on this class -- check_provides() (provider_stack.py)
+# enforces that at driver_context() construction, per provider, before
+# composition runs.
+#
+# Not declared, though implemented_capabilities() reports them with stubs
+# still present: command_authorization (only get_environment_commands /
+# is_installed_environment_command are real here), case_introspection,
+# run_document_configuration, override_schema. Not implemented at all:
+# case_files, dict_regeneration, mesh_diagnostic_policy -- those three are
 # solver-specific and cardiacFoam is the only current implementer.
 #
-# Added 2026-09-22 (Task 11): dict_key_scanner. get_dict_key_scanner returns
-# dict_keys_scanner.strict_dict_key_report unconditionally -- a real scanner,
-# not a stub -- so it passes the same realness bar as everything else here.
+# get_dict_key_scanner returns dict_keys_scanner.strict_dict_key_report
+# unconditionally: a real scanner, not a stub.
 #
-# Correction, 2026-09-22 (final whole-branch review, Finding 4): this
-# realness standard is still correct about what check_provides() enforces --
-# a hollow member declared here would fail it. It does NOT, as the
-# surrounding reasoning implies, prevent resolutions()/the stack digest from
-# crediting this provider for a withheld capability: resolutions()
+# `provides:` is a realness declaration only -- resolutions()
 # (provider_stack.py) picks each capability's winner purely by which
-# provider has a callable member, never by consulting provides: at all. So a
+# provider has a callable member, never by consulting this list. A
 # capability withheld here for realness can still win resolutions() if this
-# provider is the most-specific implementer -- the same "false provenance
-# claim" this audit was meant to prevent still happens, just silently, in
-# the digest. See ARCHITECTURE.md's "Provider composition" > "provides: /
-# requires:" section for the full explanation; not fixed there or here,
-# since changing resolutions() would change every capability_digest this
-# codebase has ever computed.
+# provider is the most-specific implementer. See ARCHITECTURE.md's
+# "Provider composition" section.
 provides:
   - case_runtime_conventions
   - environment_preflight
@@ -46,10 +30,9 @@ provides:
   - override_scopes
   - config_value
   - dict_key_scanner
-  # Added step 4a (2026-09-25, tutorial-records design doc §5):
-  # get_case_value_comparator returns `_case_value_agree`, a real
-  # (non-stub) typed comparison delegating to `apply_overrides
-  # .effective_values_agree` -- not a constant, not an unconditional `None`.
+  # get_case_value_comparator returns `_case_value_agree`, a real typed
+  # comparison delegating to `apply_overrides.effective_values_agree` --
+  # not a stub.
   - case_value_comparison
 case_profile:
   dictionaries:
@@ -67,8 +50,7 @@ case_profile:
       required: conditional
 # The shell every OpenFOAM-based stack (cardiacFOAM, cardiacCore) runs in,
 # declared once here (one reality). `omnidriver env --plugin P` renders and
-# checks it; nothing is searched for. Added 2026-09-28: this recipe lived only
-# as prose in CLAUDE.md.
+# checks it; nothing is searched for.
 environment:
   supplied:
     - name: OPENFOAM_BASHRC

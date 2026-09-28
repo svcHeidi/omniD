@@ -50,10 +50,8 @@ def _required_executables(
         args = tuple(str(arg) for arg in step.get("args", ()))
         if not raw_command:
             continue
-        # A step may carry its entire invocation in "command", for example
-        # "postProcess -func Niedererpoints -latestTime". Only the leading
-        # token names an executable; the remainder are arguments and must not
-        # be passed to a PATH lookup.
+        # "command" may carry the whole invocation (e.g. "postProcess -func
+        # Niedererpoints -latestTime"); only the leading token is the executable.
         try:
             command, *inline_args = shlex.split(raw_command)
         except ValueError:
@@ -85,9 +83,7 @@ _SOURCE_SUFFIXES = frozenset({".C", ".H", ".cu", ".cuh"})
 
 def _supplied_src_root(driver_context: Any | None) -> Path | None:
     """The stack's C++ source root, as supplied (``cxx_mapping.source_root``),
-    or ``None``. Corrected 2026-09-28: this walked up from this module's own
-    location for a ``src/`` beside ``tutorials/``, the retired in-monorepo
-    layout, so the stale-build check never fired."""
+    or ``None`` -- never discovered by walking up from this module."""
     if driver_context is None:
         return None
     mapping = driver_context.capabilities.cxx_mapping.profile().cxx_mapping
@@ -114,13 +110,10 @@ def _build_staleness_diagnostics(
     src_root: Path | str | None,
     driver_context: Any | None = None,
 ) -> tuple[StrictDiagnostic, ...]:
-    """Warn (never block) when a user-compiled utility the plan invokes is older
-    than the newest C++/CUDA source under ``src_root`` -- i.e. the binary was
-    not rebuilt after the source changed (the classic stale-``libso`` footgun).
-
-    Only executables that resolve under ``$FOAM_USER_APPBIN`` are policed; core
-    OpenFOAM apps and system binaries are never flagged.
-    """
+    """Warn (never block) when a user-compiled utility under
+    ``$FOAM_USER_APPBIN`` is older than the newest source under ``src_root``
+    -- the classic stale-``libso`` footgun; core OpenFOAM apps are never
+    flagged."""
     if src_root is None:
         return ()
     src_root = Path(src_root)
@@ -178,12 +171,10 @@ _MPI_FAMILY_MARKERS = {
 
 
 def _mpi_family_diagnostics(checked_env: dict[str, str]) -> tuple[StrictDiagnostic, ...]:
-    """The ``mpirun`` on PATH must be the MPI OpenFOAM was sourced with.
-
-    Another MPI's launcher first on PATH (openCARP's bundled MPICH, say)
-    starts N separate serial solvers instead of one N-rank run; two parallel
-    tests failed that way on 2026-09-28. ``WM_MPLIB`` names the family the
-    sourced environment built against; an unknown family is not checked."""
+    """The ``mpirun`` on PATH must match ``WM_MPLIB``, the MPI family
+    OpenFOAM was sourced with -- another MPI's launcher first on PATH
+    (openCARP's bundled MPICH, say) starts N separate serial solvers instead
+    of one N-rank run. An unknown family is not checked."""
     mplib = checked_env.get("WM_MPLIB", "")
     markers = next((words for family, words in _MPI_FAMILY_MARKERS.items() if family in mplib), None)
     launcher = shutil.which("mpirun", path=checked_env.get("PATH"))
@@ -241,14 +232,8 @@ def _environment_diagnostics(
             field=loaded_environment.bashrc or bashrc_path or "",
         ))
 
-    # Derived before the environment checks, because whether an unsourced
-    # environment is a problem depends on what this plan actually invokes --
-    # the question `missing_executable` and `missing_mpi` below already ask.
-    # Until 2026-09-19 the WM_PROJECT_DIR check sat between them asking nothing,
-    # so it blocked every plan whenever OpenFOAM was not sourced, including one
-    # that invokes no OpenFOAM executable at all. That refused a cardiacCore
-    # case whose whole DAG is a two-line Allrun on any machine without OpenFOAM,
-    # while passing on one that happens to have it.
+    # Derived before the environment checks: whether an unsourced environment
+    # is a problem depends on what this plan actually invokes.
     requirements = _required_executables(workflow_dag, driver_context)
     plan_needs_openfoam = bool(requirements.executables) or requirements.is_parallel
 
@@ -261,11 +246,8 @@ def _environment_diagnostics(
                 source="environment",
             ))
         else:
-            # Not blocking is not the same as saying nothing. A case script this
-            # preflight cannot read into may still want an environment, so the
-            # absence is recorded rather than passed over -- treating "nothing
-            # declared it" as "nothing needs it" would be the same defect one
-            # level down.
+            # Not blocking is not the same as saying nothing: a case script
+            # this preflight cannot read into may still want an environment.
             diagnostics.append(diagnostic(
                 "warning",
                 "openfoam_env_not_sourced",

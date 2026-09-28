@@ -1,17 +1,6 @@
-"""Warn-level sweep of a case dictionary's keys against the plugin catalogue.
-
-This is the direction the C++ scanner cannot see. ``unmatched_cxx_reads``
-asks "what keys does the solver accept?", which lives only in C++ source.
-This asks "what keys did the user actually write?", which lives only in the
-case file -- and a key nobody catalogued is silently ignored by OpenFOAM.
-
-Measured motivation: misspelling ``activeTensionModel`` in singleCell
-produces exit 0, a clean solver log, and an output set quietly missing the
-active-tension trace, because the read site is guarded by ``found()``.
-
-Warn, never error: cardiacFoam does not own every key that may legitimately
-appear in these dictionaries.
-"""
+"""Warn-level sweep of a case dictionary's keys against the plugin catalogue
+-- the direction the C++ scanner cannot see, since a key nobody catalogued
+is silently ignored by OpenFOAM rather than appearing anywhere in C++."""
 
 from __future__ import annotations
 
@@ -113,9 +102,7 @@ singleCellSolverCoeffs
 """)
     diags = case_dict_key_diagnostics(
         tmp_path,
-        # Catalogue paths are SCOPE-RELATIVE: _parse_path strips the
-        # "$ELECTRO_MODEL_COEFFS." prefix, so they describe the inside of the
-        # <model>Coeffs dictionary, not the file root.
+        # Scope-relative: _parse_path strips the "$ELECTRO_MODEL_COEFFS." prefix.
         catalogued_paths=("myocardiumSolver", "ionicModel", "activeTensionModel"),
         dict_relpaths=("constant/electroProperties",),
     )
@@ -130,13 +117,8 @@ singleCellSolverCoeffs
 
 
 def test_runtime_selection_coeffs_dict_is_not_reported(tmp_path):
-    """``<model>Coeffs`` is OpenFOAM's runtime-selection convention.
-
-    The catalogue writes these paths with a ``$SCOPE_TOKEN.`` prefix that
-    parsing strips, so the literal name never enters the known set. It is
-    OpenFOAM's convention, not a cardiacFoam key, and warning about it would
-    fire on every single case.
-    """
+    # <model>Coeffs is OpenFOAM's runtime-selection convention, not a plugin
+    # key, so warning about it would fire on every case.
     _write(tmp_path, """
 myocardiumSolver singleCellSolver;
 singleCellSolverCoeffs
@@ -153,7 +135,6 @@ singleCellSolverCoeffs
 
 
 def test_a_misspelled_coeffs_dict_is_still_reported(tmp_path):
-    """The convention allowance must not swallow an actual typo."""
     _write(tmp_path, """
 myocardiumSolver singleCellSolver;
 singleCellSolverCoefs
@@ -171,11 +152,8 @@ singleCellSolverCoefs
 
 @skip_without_monorepo
 def test_strict_plan_reports_a_misspelled_key_without_failing(tmp_path):
-    """A misspelled key must surface as a warning and leave the plan valid.
-
-    cardiacFoam does not own every key that may appear in these dicts, so an
-    unmatched key can never be allowed to fail a plan.
-    """
+    # cardiacFoam does not own every key that may appear in these dicts, so
+    # an unmatched key can never be allowed to fail a plan.
     import shutil
 
     from omnidriver.core.plugin_interface import default_driver_context
@@ -224,11 +202,8 @@ def test_strict_plan_reports_a_misspelled_key_without_failing(tmp_path):
 
 
 def test_catalogued_names_covers_wildcard_leaves_and_containers():
-    """Both directions must agree on what "the catalogue knows" means.
-
-    A second, subtly different copy of this set is what produced the 71%
-    false-positive rate on the C++ side.
-    """
+    # Both directions must share this exact set: a second, subtly different
+    # copy produced false positives on the C++ side before.
     from omnidriver.core.contracts.dictionary import DictEntry
     from omnidriver.openfoam.dict_keys_scanner import catalogued_names
 
@@ -262,12 +237,8 @@ def test_catalogued_names_covers_wildcard_leaves_and_containers():
 
 
 def test_user_chosen_instance_name_under_a_wildcard_is_not_reported(tmp_path):
-    """``ecgDomains { ECG { ... } }`` -- "ECG" is the author's own label.
-
-    The catalogue models it as ``ecgDomains.<name>.sigmaExtracellular``. A
-    flat name-set cannot tell "ECG" from a typo, but the key's position can:
-    it sits exactly where the catalogue expects a ``<name>``.
-    """
+    # "ECG" is the author's own instance label, matched by position (it sits
+    # where the catalogue's <name> placeholder expects it), not by name.
     _write(tmp_path, """
 ecgDomains
 {
@@ -286,7 +257,6 @@ ecgDomains
 
 
 def test_a_typo_beneath_a_wildcard_is_still_reported(tmp_path):
-    """Wildcard tolerance must not extend to the leaves underneath it."""
     _write(tmp_path, """
 ecgDomains
 {
@@ -311,21 +281,9 @@ ecgDomains
 
 @skip_without_monorepo
 def test_a_misspelled_key_is_silently_replaced_by_the_catalogue_default(tmp_path):
-    """The catalogue's own required_when rule cannot catch a misspelling.
-
-    ``stim_amplitude`` is ``required: True`` when ``$singleCellStimulus_present``,
-    and that virtual token IS inferred on the read path. The rule is live. It
-    still cannot fire, because the builder fills every entry's
-    ``typical_value`` BEFORE validation runs -- so requiredness is satisfied
-    by construction, and any key carrying a typical_value is structurally
-    immune to the required-field check.
-
-    The visible consequence: an author writing ``stim_amplitud 25`` gets
-    ``stim_amplitude 60`` -- their value discarded, the catalogue default
-    silently substituted. Nothing in the required-field machinery objects.
-    The uncatalogued-key warning is the only signal anywhere in the system,
-    which is precisely why it is worth having at warn level.
-    """
+    # stim_amplitude's required_when rule is live but cannot fire here: the
+    # builder fills every entry's typical_value before validation runs, so a
+    # key carrying one is structurally immune to the required-field check.
     import shutil
 
     from omnidriver.cardiacfoam import dict_builder as DB

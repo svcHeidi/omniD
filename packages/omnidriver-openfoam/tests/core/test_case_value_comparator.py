@@ -1,11 +1,7 @@
-"""``OpenFOAMEnvironmentPlugin.get_case_value_comparator`` -- the typed
-``CaseValueComparisonCapability`` answer (step 4a of
-``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md`` §5).
+"""``OpenFOAMEnvironmentPlugin.get_case_value_comparator`` is typed, not string/``==`` equality.
 
-Every case here is one design step 4a itself names: "0.000560538" agrees
-with "0.000560538", "yes" with True, "(1 2 3)" with [1, 2, 3], and 1 does
-NOT agree with True -- proving the comparator is typed, not string/``==``
-equality.
+"0.000560538" agrees with "0.000560538", "yes" with True, "(1 2 3)" with
+[1, 2, 3], and 1 does NOT agree with True.
 """
 
 from __future__ import annotations
@@ -39,8 +35,7 @@ def test_vector_text_agrees_with_a_python_list():
 
 
 def test_an_integer_does_not_agree_with_a_boolean_word():
-    """1 must NOT agree with True -- an int and a bool are different kinds
-    even though Python's own `1 == True` says otherwise."""
+    """An int and a bool are different kinds, even though Python's own `1 == True` says otherwise."""
     agree = _comparator()
     assert agree("integer", 1, "true") is False
 
@@ -56,10 +51,7 @@ def test_a_missing_current_value_never_agrees():
 
 
 def test_value_kind_is_accepted_but_never_drives_the_comparison():
-    """The composed stack is single-shape (only one provider's comparator
-    ever answers) -- this one must be correct for every value_kind a study
-    names, cardiac or OpenFOAM-owned, so it does not attempt to dispatch on
-    value_kind at all."""
+    """The composed stack is single-shape: only one provider's comparator ever answers, for every value_kind."""
     agree = _comparator()
     assert agree("word", "80 80 80", "80 80 80") is True
     assert agree("hex_cell_counts", "80 80 70", "80 80 30") is False

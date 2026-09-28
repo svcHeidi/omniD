@@ -1,12 +1,6 @@
-"""``case_planning.read_hex_cell_counts`` -- the ``ConfigValueCapability``
-reader for the synthetic ``HEX_CELL_COUNTS_KEY_PATH`` (step 4a of
-``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md`` §5).
-
-Unit-level, against hand-built fixture text -- see
-``test_axes_block_mesh_resolution_native.py``/
-``test_record_key_validation_native.py`` (cardiacfoam package) for the same
-reader wired through a real environment against the real native tree.
-"""
+"""Unit tests for `case_planning.read_hex_cell_counts`, the
+`ConfigValueCapability` reader for the synthetic `HEX_CELL_COUNTS_KEY_PATH`
+(see docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md)."""
 
 from __future__ import annotations
 
@@ -36,8 +30,6 @@ _TWO_HEX_BLOCK_DICT = (
     ");\n"
 )
 
-#: Added 2026-09-26 (P2): two real blocks that do NOT share one cell count --
-#: the case `read_hex_cell_counts` never checked before this task.
 _TWO_HEX_BLOCK_DICT_DISAGREEING = (
     "FoamFile\n{\n    object blockMeshDict;\n}\n"
     "blocks\n(\n"
@@ -46,9 +38,8 @@ _TWO_HEX_BLOCK_DICT_DISAGREEING = (
     ");\n"
 )
 
-#: The same real bathBidomain shape (three agreeing blocks), transcribed
-#: with extra whitespace between tokens in one block -- proves agreement is
-#: checked on the PARSED tokens, not the raw substring.
+#: Extra whitespace between tokens in one block proves agreement is checked
+#: on the parsed tokens, not the raw substring.
 _THREE_HEX_BLOCK_DICT_AGREEING_MODULO_WHITESPACE = (
     "FoamFile\n{\n    object blockMeshDict;\n}\n"
     "blocks\n(\n"
@@ -79,9 +70,8 @@ def test_reads_the_current_cell_counts_of_the_one_hex_block(tmp_path: Path):
 
 
 def test_skips_a_commented_out_hex_block(tmp_path: Path):
-    """A real native file (restitutionCurves_s1s2Protocol's own
-    blockMeshDict) comments out alternative resolutions with a leading
-    `//` -- those must not be counted as real hex ( blocks."""
+    # Mirrors restitutionCurves_s1s2Protocol's blockMeshDict, which comments
+    # out alternative resolutions with a leading `//`.
     document = tmp_path / "blockMeshDict"
     document.write_text(_COMMENTED_AND_ONE_REAL_HEX_BLOCK_DICT)
 
@@ -118,10 +108,8 @@ def test_a_document_with_zero_hex_blocks_is_refused_by_name(tmp_path: Path):
 
 
 def test_dispatched_through_the_config_value_reader(tmp_path: Path):
-    """The environment's `get_config_value_reader()` answer dispatches this
-    synthetic key path to `read_hex_cell_counts` instead of `read_foam_entry`
-    -- proven here without going through a real native file (that is
-    `test_record_key_validation_native.py`'s job)."""
+    # get_config_value_reader() dispatches this synthetic key path to
+    # read_hex_cell_counts instead of read_foam_entry.
     from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
     document = tmp_path / "blockMeshDict"
@@ -132,8 +120,8 @@ def test_dispatched_through_the_config_value_reader(tmp_path: Path):
 
 
 # ---------------------------------------------------------------------------
-# Added 2026-09-26 (P2): "the reader answers the triple every block shares,
-# and refuses blocks that disagree".
+# The reader answers the triple every block shares, and refuses blocks that
+# disagree.
 # ---------------------------------------------------------------------------
 
 
@@ -153,9 +141,9 @@ def test_two_disagreeing_blocks_are_refused_by_name(tmp_path: Path):
 
 
 # ---------------------------------------------------------------------------
-# Added 2026-09-26 (P2): the block count travels through the key path
-# (`hex_cell_counts_key_path`'s own grammar) instead of the reader
-# defaulting to 1 regardless of what a patch actually carries.
+# The block count travels through the key path (`hex_cell_counts_key_path`'s
+# own grammar) instead of the reader defaulting to 1 regardless of what a
+# patch actually carries.
 # ---------------------------------------------------------------------------
 
 
@@ -188,13 +176,13 @@ def test_config_value_reader_refuses_the_wrong_explicit_expected_blocks(tmp_path
 # `hex_cell_counts_key_path`/`hex_cell_counts_expected_blocks` -- the one
 # shared grammar the reader and the writer
 # (`cardiacfoam.overrides._target_for_parameter`) each parse rather than
-# independently deciding what a key path means (added 2026-09-26, P2).
+# independently deciding what a key path means.
 # ---------------------------------------------------------------------------
 
 
 def test_expected_blocks_one_produces_the_bare_key_path():
-    """Backward compatible byte for byte: a single-block record (every
-    record so far) is unaffected by this task's change."""
+    # Backward compatible byte for byte: every existing single-block record
+    # is unaffected.
     assert hex_cell_counts_key_path(expected_blocks=1) == ("hex_cell_counts",)
 
 

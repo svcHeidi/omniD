@@ -1,10 +1,6 @@
-"""Unit coverage for the C++/catalog drift scanner's path normalization.
-
-_parse_path's scope-token stripping is a syntactic transform (recognize and
-strip a "$SCOPE_TOKEN." shape) -- it must not hardcode the one token the
-built-in cardiac plugin happens to declare, since a future plugin can
-register its own scope token under the same $TOKEN. convention.
-"""
+"""Coverage for `_parse_path`'s scope-token stripping: a syntactic transform
+that must not hardcode the cardiac plugin's token, since another plugin can
+register its own under the same `$TOKEN.` convention."""
 from __future__ import annotations
 
 from omnidriver.openfoam.dict_keys_scanner import _parse_path

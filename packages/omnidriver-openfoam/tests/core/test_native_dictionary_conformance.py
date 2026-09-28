@@ -1,10 +1,6 @@
-"""Small, explicit conformance probes against the local OpenFOAM v2412 runtime.
-
-The Python mutators intentionally perform lexical inspection (and preserve
-source text), whereas ``foamDictionary`` parses and resolves an effective
-dictionary.  These tests keep those contracts distinct and are marked native
-so a missing installation cannot silently count as a passing runtime check.
-"""
+"""Conformance probes against the local OpenFOAM v2412 runtime: the Python
+mutators perform lexical inspection and preserve source text, unlike
+`foamDictionary`, which resolves an effective dictionary."""
 
 from __future__ import annotations
 

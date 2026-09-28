@@ -1,20 +1,6 @@
-"""Solver-neutral primitives for synthesising OpenFOAM dictionary text.
-
-This module owns the parts of dictionary synthesis that do not name any
-particular solver's vocabulary:
-
-- entry selection against a caller-supplied pool (`select_applicable_entries`),
-- required-field checking (`check_required`),
-- value resolution with `typical_value` fallback (`populate_values`),
-- nested OpenFOAM block emission (`_set_nested`, `_serialize_block`) and
-  value tokenisation (`_openfoam_value_token`),
-- catalog-membership checks for caller-supplied override paths
-  (`is_known_override_driver_path`).
-
-The solver-specific builders that compose these primitives into concrete
-`constant/` dictionaries — together with whatever scope-sentinel convention
-their catalog uses — belong to the plugin that owns that vocabulary; for
-cardiacFoam they live in `omnidriver.cardiacfoam.dict_builder`.
+"""Solver-neutral primitives for synthesising OpenFOAM dictionary text: entry
+selection, required-field checking, value resolution, and block
+serialisation. Solver-specific builders live in the owning plugin.
 """
 from __future__ import annotations
 
@@ -29,15 +15,6 @@ from omnidriver.core.specs.validation import (
 )
 
 if TYPE_CHECKING:
-    # DictEntry appears only in annotations here, and this module has
-    # `from __future__ import annotations`, so it is never needed at runtime.
-    # It used to be imported at MODULE SCOPE from `openfoam_driver.dict_entries`
-    # -- the pre-migration package name, which exists in no install. That made
-    # `import omnidriver.openfoam.dict_builder` raise ModuleNotFoundError from
-    # any cwd outside this repo, and it went unnoticed because the retired
-    # `openfoam_driver/` tree was still tracked at the repo root at the time:
-    # running pytest from there put cwd on sys.path and the stale package
-    # resolved. That tree was deleted in `4a5fb48`, so the cover is gone too.
     from omnidriver.core.contracts.dictionary import DictEntry
     from omnidriver.core.plugin_interface import DriverContext
 
@@ -47,11 +24,9 @@ def select_applicable_entries(
     *,
     entries: list[DictEntry],
 ) -> list[DictEntry]:
-    """Return only entries whose `applicable_when` predicate matches the
-    context and whose `forbidden_when` predicate does NOT match. Entries
-    with no `applicable_when` are always included. The `entries` pool is
-    always supplied by the caller — this module knows no solver's catalog.
-    Plugins may wrap this with their own default pool."""
+    """Return entries whose `applicable_when` predicate matches `context` and
+    whose `forbidden_when` predicate does not. `entries` is always supplied
+    by the caller; this module knows no solver's catalog."""
     return [
         e for e in entries
         if _entry_is_applicable(e, context)
@@ -66,19 +41,9 @@ def _is_required_in_context(
     entry: DictEntry,
     context: dict[str, Any],
 ) -> bool:
-    """Decide whether an entry is required *for this context*.
-
-    Three cases:
-    - `required=True` AND `required_when` empty → always required.
-    - `required=True` AND `required_when` non-empty → required ONLY when at
-      least one `required_when` predicate matches. This reads the two fields
-      together as the entry author's intent ("required, but only under
-      these conditions"). Without this rule, an entry that is required only
-      for one solver variant would fire missing-required errors on every
-      other variant too.
-    - `required=False` AND `required_when` non-empty → required only when a
-      predicate matches (the validator's existing semantics).
-    """
+    """When `required_when` is set it narrows `required` to matching
+    predicates only — otherwise an entry required for one solver variant
+    would fire missing-required errors on every other variant too."""
     if entry.required_when:
         return any(
             _predicate_matches(context, key, expected)
@@ -93,23 +58,13 @@ def check_required(
     *,
     context: dict[str, Any] | None = None,
 ) -> None:
-    """Raise `ValueError` if any required entry in `entries` is missing from
-    `populated`. Inapplicable entries are assumed already filtered out by
-    `select_applicable_entries`; optional entries are silently ignored.
+    """Raise `ValueError` if any required entry in `entries` has no value in
+    `populated`. Assumes inapplicable entries are already filtered out by
+    `select_applicable_entries`.
 
-    `dynamic_path=True` entries are skipped — they describe template paths
-    (e.g. ``domainCouplings.<name>.electroDomainCoupler``) rather than
-    concrete required leaves, and this generic, plugin-agnostic function has
-    no way to discover which concrete ``<name>`` instances a given run
-    actually configures. Required-field enforcement for those concrete
-    instances, if any, is a plugin concern: see e.g. the cardiacfoam
-    plugin's ``_evaluate_dynamic_required_fields``
-    (``plugins/cardiacfoam/validation.py``), which is not guaranteed to
-    exist for every plugin's dynamic-path entries.
-
-    The optional `context` enables `_is_required_in_context` to honour
-    `required_when` predicates; when omitted, `required=True` is treated
-    unconditionally for backward compat with simple callers.
+    `dynamic_path=True` entries are skipped: this generic function cannot
+    discover which concrete `<name>` instances a run configures, so
+    required-field enforcement for those is left to the owning plugin.
     """
     missing: list[str] = []
     ctx = context if context is not None else {}
@@ -135,14 +90,9 @@ def populate_values(
     *,
     typical_value_fallback: bool = True,
 ) -> dict[str, str]:
-    """For each entry, resolve the final value to write into the dict.
-
-    Precedence per entry:
-      1. Explicit value already in `context` (from selectors or overrides).
-      2. `entry.typical_value` if non-empty AND `typical_value_fallback`.
-      3. Omit — caller's downstream `check_required` decides whether that's
-         a problem for required entries.
-    """
+    """Resolve each entry's value to write: an explicit value in `context`,
+    else `entry.typical_value` when `typical_value_fallback`, else omitted
+    (left for the caller's `check_required` to flag if required)."""
     import re
     populated: dict[str, str] = {}
 
@@ -150,12 +100,8 @@ def populate_values(
     for entry in entries:
         if getattr(entry, "dynamic_path", False):
             template = slot_key(entry.driver_path)
-            # ANY <placeholder> is a wildcard, not just <name>/<electrode>.
-            # Hardcoding those two silently dropped every override whose
-            # template used a different placeholder -- including the ionic
-            # constant overrides, whose <AC_name> segment never matched, so a
-            # driver-written drug/channelopathy override emitted nothing at
-            # all while validation reported success.
+            # Any <placeholder> segment is a wildcard, not a fixed set of names --
+            # a template can use any placeholder name and must still match.
             pattern = _PLACEHOLDER_RE.sub(r"([^.]+)", re.escape(template))
             dynamic_entries.append((entry, template, re.compile(f"^{pattern}$")))
 
@@ -176,8 +122,6 @@ def populate_values(
             prefix = template.split(".<")[0]
             if prefix in active_instances:
                 for groups in active_instances[prefix]:
-                    # Substitute captured groups positionally, so a template
-                    # with any number of placeholders reconstructs correctly.
                     concrete_key = template
                     for captured in groups:
                         concrete_key = _PLACEHOLDER_RE.sub(captured, concrete_key, count=1)
@@ -210,12 +154,10 @@ def _populated_to_run(
     entries: list[DictEntry],
     phase_order: tuple[str, ...],
 ) -> RunDocument:
-    """Distribute populated values into a Run document keyed by each
-    entry's primary phase. Selector keys (which may not correspond to any
-    entry, but always do here for the dict-builder entry pool) are placed
-    in the first declared phase's slice as a sensible default."""
-    # Slices come from the ACTIVE PLUGIN's declared phases, not a hardcoded
-    # cardiac four -- a plugin with different phase words must not KeyError here.
+    """Distribute populated values into a Run document keyed by each entry's
+    primary phase; unmatched keys go to the first declared phase."""
+    # phase_order comes from the active plugin's declared phases, never a
+    # hardcoded cardiac set -- a plugin with different phase words must not KeyError.
     config: dict[str, dict[str, str]] = {ph: {} for ph in phase_order}
     default_phase = phase_order[0] if phase_order else ""
     placed: set[str] = set()
@@ -226,18 +168,12 @@ def _populated_to_run(
         ph = primary_phase(entry, phase_order) or default_phase
         config[ph][key] = populated[key]
         placed.add(key)
-    # Any populated keys without a matching entry land in the default phase.
-    # This only triggers for selector keys that don't correspond to
-    # DictEntry -- uncommon, but safe.
+    # A populated key with no matching DictEntry (a selector key) lands in the default phase.
     for key, val in populated.items():
         if key not in placed:
             config[default_phase][key] = val
-    # This document is an ephemeral, in-memory value used only to run
-    # validate_run's dictionary/semantic checks over the values `synthesize`
-    # just populated -- it is never serialized via to_json() or executed.
-    # `config` is exactly the configuration being checked, so
-    # configurationSource is "document" as a statement of fact about this
-    # value, not a change to synthesize's own (frozen) behavior.
+    # Ephemeral, in-memory: exists only for validate_run's checks over what
+    # `synthesize` just populated, never serialized or executed.
     return RunDocument(id="dict_builder", name="dict_builder",
                        status="draft", config=config,
                        configurationSource="document")
@@ -257,15 +193,9 @@ def is_known_override_driver_path(
     plugin's catalog.
 
     Matching is prefix-agnostic (via `slot_key`) and honours `dynamic_path`
-    templates (e.g. ``domainCouplings.<name>.electroDomainCoupler``) by
-    treating any ``<placeholder>`` segment as a wildcard. This is a pure
-    catalog-membership check — it does not consider whether the entry is
-    *applicable* in a given selector context (that's `select_applicable_entries`'s
-    job, run later inside the plugin's builder). Used by callers that
-    need to reject a caller-supplied override path outright before it is ever
-    passed to `build_and_launch` (e.g. `sweep_routing.route_case_values`),
-    rather than silently accepting an override that has no matching entry
-    anywhere and therefore no effect.
+    templates by treating any `<placeholder>` segment as a wildcard. A pure
+    membership check: it does not consider whether the entry is *applicable*
+    in a given selector context (`select_applicable_entries`'s job).
     """
     normalized = slot_key(key)
     for entry in driver_context.capabilities.dictionaries.catalog().entries:
@@ -284,22 +214,12 @@ def is_known_override_driver_path(
 def match_dynamic_entry(
     key: str, entries,
 ) -> "tuple[DictEntry, dict[str, str]] | None":
-    """Match ``key`` against a ``dynamic_path`` entry's template, returning
-    the entry and the concrete value each placeholder captured.
+    """Match `key` against a `dynamic_path` entry's template, returning the
+    entry and the concrete value each placeholder captured (or None). Same
+    wildcard convention as `is_known_override_driver_path`.
 
-    Added 2026-09-23 (Phase 3, the decision closing Task 2's two gaps).
-    ``is_known_override_driver_path`` above already answers *whether*
-    ``key`` names something the catalog declares; a caller that must also
-    validate *what was bound* -- e.g. a per-case ``ecgDomains`` name against
-    its entry's declared binding domain -- needs the captured groups
-    themselves, not a bare membership bool. Same wildcard convention as that
-    function (any ``<placeholder>`` segment matches one ``.``-free run of
-    characters, prefix-agnostic via `slot_key`), so a path that
-    `is_known_override_driver_path` accepts is exactly one this also
-    matches. Returns the first match; the catalog has no two dynamic
-    entries whose templates collide at the same segment length today (a
-    real collision would be a catalog defect worth its own test, not a
-    silent pick between candidates).
+    Returns the first match; the catalog has no two dynamic entries whose
+    templates collide at the same segment length today.
     """
     normalized = slot_key(key)
     for entry in entries:
@@ -316,14 +236,10 @@ def match_dynamic_entry(
 
 def _set_nested(node: dict, path: list[str], value: Any) -> None:
     """Insert `value` at `path` inside the nested dict `node`, creating
-    intermediate sub-dicts as needed. A leaf already present is
-    overwritten — the populated dict has unique slot_keys so this is safe."""
+    intermediate sub-dicts as needed."""
     cursor = node
     for segment in path[:-1]:
         cursor = cursor.setdefault(segment, {})
-        # If a prior leaf collided with a sub-block name, replace the leaf
-        # with a sub-block — should not happen with the current catalog but
-        # is defensive.
         if not isinstance(cursor, dict):
             raise ValueError(
                 f"Path collision in serialiser at segment {segment!r}: a leaf "
@@ -333,18 +249,8 @@ def _set_nested(node: dict, path: list[str], value: Any) -> None:
 
 
 def _openfoam_value_token(value: str) -> str:
-    """Return `value` in a form OpenFOAM's tokenizer accepts as a dict value.
-
-    OpenFOAM lexes a bare token starting with a digit as a number. A word like
-    ``3D`` therefore reads as label ``3`` followed by junk, and the run dies
-    with "expected word, found label 3" -- which is exactly what made
-    ``$ELECTRO_MODEL_COEFFS.dimension`` unusable through the driver. Tutorials
-    write ``dimension "3D";``.
-
-    Quote ONLY that case. Anything that parses as a number, is already quoted,
-    or is a compound token (vector, list, dimension set) must pass through
-    untouched -- quoting those would break dictionaries that work today.
-    """
+    # OpenFOAM's tokenizer reads a bare token starting with a digit as a number
+    # (e.g. `3D` becomes label `3` plus junk), so only that case needs quoting.
     if not isinstance(value, str) or not value:
         return value
     token = value.strip()

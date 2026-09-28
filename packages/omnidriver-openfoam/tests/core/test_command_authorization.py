@@ -28,7 +28,6 @@ def test_openfoam_allrun_family_is_authorized() -> None:
 
 
 def test_an_installed_openfoam_app_is_authorized(monkeypatch) -> None:
-    """An executable under an OpenFOAM app root is adapter-owned authorization."""
     monkeypatch.setattr(
         "omnidriver.openfoam.environment.is_installed_openfoam_application",
         lambda command: command == "someInstalledApp",

@@ -1,25 +1,6 @@
-"""``block_mesh_resolution_axis`` -- the OpenFOAM package's one generic axis
-(design doc ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-
-design.md`` §3, corrected 2026-09-25; extended 2026-09-26, P2,
-``docs/superpowers/plans/2026-09-25-tutorials-are-pointers-remaining.md``
-§5e, to several documents and several ``hex (`` blocks).
-
-TDD: every test in this module failed before ``axes/block_mesh_resolution.py``
-existed (``ModuleNotFoundError: No module named
-'omnidriver.openfoam.axes.block_mesh_resolution'``), then failed again on the
-first working draft that read the whole document instead of only checking
-its existence -- see ``test_resolve_succeeds_against_a_document_with_more_
-than_one_hex_block`` below.
-
-**Corrected 2026-09-26 (P2).** ``document`` (one path) became ``documents``
-(one or more); ``expected_blocks`` became a required, per-axis-instance
-argument instead of each downstream reader/writer independently defaulting
-it to 1; ``resolution`` now takes the study value AND the document's own
-current cell counts. Every test below that built an axis with the old
-``document=``/one-argument-``resolution`` signature is rewritten for the
-new one; several new tests exercise what changed (``expected_blocks``
-threading through the patch's key path, several documents, and a
-document's current counts reaching ``resolution``).
+"""``block_mesh_resolution_axis`` -- the OpenFOAM package's one generic axis:
+a tutorial record instantiates it to patch one or more ``blockMeshDict``
+documents' hex-block cell counts.
 """
 
 from __future__ import annotations
@@ -36,11 +17,8 @@ from omnidriver.openfoam.case_planning import plan_block_mesh_resolution
 
 
 def _delta_t_assignment(value: float) -> ParameterAssignment:
-    """A `system/controlDict` `deltaT` edit -- what `plan_delta_t` used to
-    build before it was deleted 2026-09-27 (tutorials-are-pointers step C,
-    its only production caller). This file needs a real, ordinary key/value
-    `ParameterAssignment` to combine with the hex-rewrite target; which
-    document/key it addresses is incidental to what these tests check."""
+    """An ordinary key/value `ParameterAssignment` to combine with the
+    hex-rewrite target; which document/key it addresses is incidental."""
     return ParameterAssignment(
         qualified_id="deltaT", owner="test", document="system/controlDict",
         key_path=("deltaT",), binding={}, value=value, value_kind="scalar",
@@ -147,13 +125,11 @@ def test_resolve_produces_the_planners_hex_cell_counts_patch(tmp_path):
     assert len(result.patches) == 1
     patch = result.patches[0]
     assert patch.document == "system/blockMeshDict"
-    # expected_blocks=1 (the default) still produces the bare key path --
-    # byte-for-byte the same spelling a direct `document:hex_cell_counts`
-    # study key already sorts to (P2's own backward-compatibility decision).
+    # expected_blocks=1 (the default) still produces the bare key path -- the
+    # same spelling a direct `document:hex_cell_counts` study key sorts to.
     assert patch.key_path == ("hex_cell_counts",)
-    # Typed data (2026-09-25 correction), not `plan_block_mesh_resolution`'s
-    # own pre-joined text -- see the module docstring's dated correction for
-    # why a `ParameterAssignment` must never carry rendered text as a value.
+    # Typed data, not `plan_block_mesh_resolution`'s own pre-joined text: a
+    # `ParameterAssignment` must never carry rendered text as a value.
     assert patch.value == (20, 20, 20)
     # The writer that actually rewrites bytes reconstructs the exact string
     # `plan_block_mesh_resolution` would produce from this same tuple.
@@ -177,9 +153,9 @@ def test_resolve_supports_a_non_isotropic_resolution_formula(tmp_path):
 
 
 def test_resolution_receives_the_documents_own_current_cell_counts(tmp_path):
-    """P2's own point: `resolution` sees the document's current counts, not
-    only the study value -- the reusable "a direction at 1 stays 1" shape
-    (owner decision (d)) is impossible without this."""
+    """`resolution` sees the document's current counts, not only the study
+    value -- the reusable "a direction at 1 stays 1" shape is impossible
+    without this."""
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _ONE_HEX_BLOCK_DICT)
     seen = []
 
@@ -242,13 +218,10 @@ def test_several_documents_each_get_their_own_current_counts_and_own_patch(tmp_p
 
 
 # ---------------------------------------------------------------------------
-# ``extents`` (added 2026-09-26, controller review of `2125168`). What a
-# ``resolution`` sees of the document's own geometry is tested against the
-# real native files in ``test_axes_block_mesh_resolution_native.py``.
-# Corrected 2026-09-26 (review 54b M5): a test here built 20x3x7 and
-# 40x6x14 mm ``blockMeshDict``s from nothing, against the owner's "testing
-# against real meshes" rule; it is replaced there. The case below uses no
-# geometry: it pins that a document with no ``vertices`` gives ``None``.
+# extents: what `resolution` sees of a document's own geometry is tested
+# against real native files in test_axes_block_mesh_resolution_native.py.
+# The case below uses no geometry: it pins that a document with no
+# `vertices` gives None.
 # ---------------------------------------------------------------------------
 
 
@@ -348,8 +321,8 @@ def test_resolve_refuses_when_one_of_several_documents_is_missing(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# expected_blocks: now checked at resolve() time (P2's own behaviour change
-# -- see below), and threaded through the produced patch's key path.
+# expected_blocks: checked at resolve() time, and threaded through the
+# produced patch's key path.
 # ---------------------------------------------------------------------------
 
 
@@ -381,20 +354,10 @@ def test_resolve_succeeds_against_a_document_with_the_correctly_declared_block_c
 def test_resolve_refuses_a_document_whose_real_block_count_disagrees_with_expected_blocks(
     tmp_path,
 ):
-    """**Corrected 2026-09-26 (P2).** Before this axis had to read a
-    document's current cell counts (to hand them to `resolution`), a
-    mismatched `expected_blocks` was NOT caught here at all -- `resolve()`
-    only ever checked document existence, and the real block-count check
-    was deferred all the way to whichever writer eventually rendered the
-    patch (see `test_the_axis_produced_value_still_refuses_the_wrong_
-    block_count_when_rendered`'s OLD docstring, and this module's own
-    dated correction). Now that `resolution` needs the document's own
-    current counts as an input, this axis already reads the document via
-    `read_hex_cell_counts` -- which performs the SAME `expected_blocks`
-    check `plan_block_mesh_resolution`'s renderer always has -- so a
-    record that declares the wrong `expected_blocks` for a real document is
-    refused immediately, at `resolve()` time, not only when a future writer
-    commits the patch.
+    """Reading the document for its current counts already performs the same
+    `expected_blocks` check `plan_block_mesh_resolution`'s renderer has, so a
+    wrong `expected_blocks` is refused at `resolve()` time, not deferred to
+    a future writer.
     """
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _TWO_HEX_BLOCK_DICT)
     axis = block_mesh_resolution_axis(
@@ -420,27 +383,12 @@ def test_resolve_refuses_a_document_whose_blocks_disagree_with_each_other(tmp_pa
 
 
 # ---------------------------------------------------------------------------
-# The pinning test, corrected 2026-09-26 (P2). The OLD version proved a
-# mismatched real block count was refused only when a patch was actually
-# RENDERED, never at `axis.resolve()` time (the axis, by design, never read
-# the document at all -- only checked its existence). That is no longer
-# true: `resolve()` now must read each document's current cell counts to
-# hand them to `resolution`, and that read already performs the exact same
-# `expected_blocks` check -- so a record declaring the wrong count is now
-# refused immediately, at `resolve()` time
-# (`test_resolve_refuses_a_document_whose_real_block_count_disagrees_with_
-# expected_blocks`, above), not deferred to whichever writer eventually
-# commits the patch.
-#
-# This test instead proves the RENDERER's own `expected_blocks` check
+# Proves the RENDERER's own `expected_blocks` check
 # (`plan_block_mesh_resolution`/`_rewrite_hex_block_lines`, reused by
-# `render_patch_case_files`) still fires independently of the axis
-# entirely: a caller can build a `plan_block_mesh_resolution` target
-# directly (as `cardiacfoam.overrides._target_for_parameter` does, from
-# whatever `expected_blocks` a `ParameterAssignment`'s key path carries) and
-# the renderer still refuses a real document whose block count disagrees --
-# the check the axis's own module docstring used to describe as "deferred
-# to the renderer" is still there, just no longer the ONLY place it fires.
+# `render_patch_case_files`) fires independently of the axis: a caller can
+# build a `plan_block_mesh_resolution` target directly (as
+# `cardiacfoam.overrides._target_for_parameter` does) and the renderer still
+# refuses a real document whose block count disagrees.
 # ---------------------------------------------------------------------------
 
 
@@ -465,9 +413,8 @@ def test_the_renderer_still_refuses_the_wrong_expected_blocks_independently_of_t
                 "format": "openfoam_dictionary",
             },
             # A real document with two hex ( blocks, but a target declaring
-            # expected_blocks=1 -- exactly the mismatch this whole task
-            # fixes the WRITER/READER side of (P2); the RENDERER's own
-            # check is unrelated to that fix and still catches it here.
+            # expected_blocks=1: the renderer's own check catches this
+            # independently of the axis.
             plan_block_mesh_resolution("system/blockMeshDict", "20 20 20", expected_blocks=1),
         ),
         preconditions=(), expected_effects=(), semantic_owner_id="org.omnidriver.test",

@@ -1,16 +1,8 @@
-"""`omnidriver.openfoam.literals` -- the parser Phase 2 asserted existed.
+"""Round-trip proof for `omnidriver.openfoam.literals`.
 
-Phase 2's "a parameter value is typed data" decision said an adapter parses
-a rendered OpenFOAM literal when it holds one. No such parser existed
-anywhere in this repository until this module. This test module is the
-round-trip proof the Phase 3 decision ("close the two gaps Task 2 hit")
-requires: every dimensioned literal actually found in this repository's real
-catalog, tutorial defaults, and tests -- not a fixture invented for this
-test -- parses and, on a parse -> format -> parse round trip, reproduces the
-same VALUE. See `literals.py`'s module docstring for why value-identical,
-not byte-identical, is the claim this proves (F1b: comparing spellings, not
-values, is the wrong axis; a spelling can carry an insignificant trailing
-zero or bracket padding no OpenFOAM parser cares about).
+Every dimensioned literal actually found in this repository's real catalog,
+tutorial defaults, and tests -- not an invented fixture -- parses and, on a
+parse -> format -> parse round trip, reproduces the same value.
 """
 
 from __future__ import annotations
@@ -49,12 +41,10 @@ REAL_DIMENSIONED_LITERALS = (
     # dict_entries_catalog.py DictEntry.typical_value (conductivityExtracellular)
     "[-1 -3 3 0 0 2 0] (0.2668 0 0 0.03521 0 0.03521)",
     # cable1DCVConvergence's native default conductivity (records/
-    # cable_1d_cv_convergence.py; its old defaults module carried this
-    # literal until 2026-09-27's migration onto a tutorial record)
+    # cable_1d_cv_convergence.py)
     "[-1 -3 3 0 0 2 0] (0.1334 0 0 0.1334 0 0.1334)",
     # cable1DRestitution's native default conductivity (records/
-    # cable_1d_restitution.py; its old defaults module carried this literal
-    # until 2026-09-27's migration onto a tutorial record)
+    # cable_1d_restitution.py)
     "[-1 -3 3 0 0 2 0] (2.3 0 0 2.3 0 2.3)",
     # tests/test_dict_entries_catalog.py::
     # test_apply_electro_property_overrides_updates_dimensioned_and_dynamic_entries
@@ -71,15 +61,12 @@ REAL_DIMENSIONED_LITERALS = (
 )
 
 # Real literals found (same provenance as above) that do NOT survive a
-# byte-for-byte round trip, each for a stated, evidence-backed reason. A
-# float fundamentally cannot distinguish "2" from "2.0", or "0.03" from
-# "0.030" -- there is no formatting rule that reproduces both a corpus that
-# spells a whole-number magnitude as "60"/"75000" (no decimal) AND one that
-# spells it "2.0"/"1.0" (explicit decimal): the two conventions coexist in
-# this repository's own real literals, so no universal renderer satisfies
-# both. This is exactly F1b's point generalised: comparing spellings, not
-# values, is the wrong axis. Every one of these still round-trips at the
-# VALUE level (test_every_real_dimensioned_literal_round_trips_at_the_value_level).
+# byte-for-byte round trip. A float cannot distinguish "2" from "2.0", or
+# "0.03" from "0.030" -- this repository's own real literals spell a
+# whole-number magnitude both ways ("60"/"75000" vs "2.0"/"1.0"), so no
+# universal renderer satisfies both; comparing spellings, not values, is the
+# wrong axis. Every one of these still round-trips at the VALUE level
+# (test_every_real_dimensioned_literal_round_trips_at_the_value_level).
 KNOWN_BYTE_ROUND_TRIP_EXCEPTIONS = (
     # tests/test_dict_builder.py (purkinjeCV override): whole-number
     # magnitude spelled with an explicit ".0".
@@ -102,26 +89,19 @@ def test_every_real_dimensioned_literal_parses(text):
 
 @pytest.mark.parametrize("text", REAL_DIMENSIONED_LITERALS)
 def test_every_real_dimensioned_literal_round_trips_byte_for_byte(text):
-    """The stronger claim, proven wherever it actually holds -- which, for
-    every literal in this list, is everywhere. `KNOWN_BYTE_ROUND_TRIP_EXCEPTIONS`
-    documents, rather than hides, the real literals where it does not."""
     assert format_dimensioned_literal(parse_dimensioned_literal(text)) == text
 
 
 @pytest.mark.parametrize("text", REAL_DIMENSIONED_LITERALS + KNOWN_BYTE_ROUND_TRIP_EXCEPTIONS)
 def test_every_real_dimensioned_literal_round_trips_at_the_value_level(text):
-    """The claim that always holds, including for the three known
-    byte-exceptions above: re-parsing a re-rendering reproduces the same
-    value. F1b: comparing spellings, not values, is the wrong axis."""
+    """Holds even for the known byte-exceptions above: comparing spellings, not values, is the wrong axis."""
     once = parse_dimensioned_literal(text)
     twice = parse_dimensioned_literal(format_dimensioned_literal(once))
     assert twice == once
 
 
 def test_the_known_exceptions_really_do_differ_only_insignificantly():
-    """Documents, rather than hides, the real literals where
-    format(parse(text)) != text -- and pins exactly what the difference is,
-    so a future reader does not have to re-derive it."""
+    """Pins exactly what each ``format(parse(text)) != text`` difference is."""
     assert (
         format_dimensioned_literal(parse_dimensioned_literal("[0 1 -1 0 0 0 0] 2.0"))
         == "[0 1 -1 0 0 0 0] 2"
@@ -163,14 +143,10 @@ def test_format_produces_the_expected_openfoam_spelling(value, text):
     assert format_dimensioned_literal(value) == text
 
 
-# --- vector3 literal: found necessary while closing this decision's Gap 2,
-# not anticipated by it -- a real catalog entry
-# ($ELECTRO_MODEL_COEFFS.ecgDomains.<name>.electrodePositions.<electrode>)
-# is value_kind="vector3", and a real caller
-# (tests/test_dict_entries_catalog.py::
-# test_apply_electro_property_overrides_updates_dimensioned_and_dynamic_entries)
-# passes it as already-rendered text ("(1 2 3)"), the same gap Phase 2's
-# decision named for the dimensioned kinds. ---
+# --- vector3 literal: a real catalog entry
+# ($ELECTRO_MODEL_COEFFS.ecgDomains.<name>.electrodePositions.<electrode>) is
+# value_kind="vector3", and a real caller passes it as already-rendered text
+# ("(1 2 3)"), not a Python tuple. ---
 
 
 @pytest.mark.parametrize("text", [
@@ -189,8 +165,8 @@ def test_a_malformed_vector3_literal_is_refused():
         parse_vector3_literal("(1 2)")
 
 
-# --- list literals: found necessary for the same reason as vector3 -- a
-# real override (manufactured_monodomain_pseudo_ecg.py's
+# --- list literals: a real override
+# (manufactured_monodomain_pseudo_ecg.py's
 # verificationModel.checkQuadratureOrders, value_kind="integer_list") is
 # passed as "(6 12 24 48)", not a Python tuple. ---
 
@@ -225,10 +201,9 @@ def test_a_malformed_list_literal_is_refused():
         parse_word_list_literal("alpha beta")
 
 
-# --- boolean (Switch) literal: found necessary for the same reason again --
-# manufactured_eikonal_ecg.py's eikonal_advection_diffusion_approach is a
-# `str | None` parameter, and its real test passes "false" through to a
-# value_kind="boolean" entry. ---
+# --- boolean (Switch) literal: manufactured_eikonal_ecg.py's
+# eikonal_advection_diffusion_approach is a `str | None` parameter, and its
+# real test passes "false" through to a value_kind="boolean" entry. ---
 
 
 @pytest.mark.parametrize("text,expected", [

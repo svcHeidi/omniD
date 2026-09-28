@@ -8,11 +8,9 @@ os.environ["SKIP_ENV_DIAGNOSTICS"] = "1"
 
 def _cardiacfoam_monorepo_root() -> Path | None:
     """The cardiacFoam monorepo this repository was extracted from, if this
-    checkout sits inside one: the first ancestor holding both ``tutorials/``
-    and ``applications/``. Test-local since 2026-09-26 (spec A6): shipped
-    core names no solver, and this package's tests cannot import
-    omnidriver-cardiacfoam's copy (``omnidriver.cardiacfoam.monorepo``,
-    deleted 2026-09-28: the C++ source root is supplied now)."""
+    checkout sits inside one: the first ancestor holding both `tutorials/`
+    and `applications/`. Test-local because this package's tests cannot
+    import omnidriver-cardiacfoam's copy."""
     for parent in Path(__file__).resolve().parents:
         if (parent / "tutorials").exists() and (parent / "applications").exists():
             return parent

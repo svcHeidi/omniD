@@ -19,12 +19,6 @@ def _touch(case_root: Path, relative: str) -> None:
 
 
 def test_openfoam_declares_allrun_case_scripts() -> None:
-    # Corrected 2026-09-22 (final whole-branch review, bundled Minor):
-    # `OpenFOAMEnvironmentPlugin.get_capabilities()` now returns `{}`,
-    # matching `CardiacCorePlugin.get_capabilities()` (Task 10's rule --
-    # a provider builds no manifest of its own when core can compose one).
-    # The composed manifest capability is the real assertion now, same
-    # correction `test_plugin_capabilities.py` made for Task 10 itself.
     manifest = openfoam_environment_context().capabilities.manifest.manifest()
     assert manifest["allowed_commands"]["case_scripts"] == sorted(
         openfoam_case_runtime_conventions().case_script_commands
@@ -48,8 +42,7 @@ def test_openfoam_hides_parallel_decomposition_output(tmp_path: Path) -> None:
 
 
 def test_openfoam_time_directories_are_its_instances(tmp_path: Path) -> None:
-    """OpenFOAM declares its numeric time directories as instances, and
-    "0" as preserved (spec 2026-09-26 A2): byte-for-byte the old rule."""
+    """"0" is a preserved instance, not just a numeric one."""
     for name in ("0", "0.001", "1e-05", "constant", "processor0", "postProcessing"):
         (tmp_path / name).mkdir()
     assert declared_instance_names(tmp_path, driver_context=openfoam_environment_context()) == ("0", "0.001", "1e-05")

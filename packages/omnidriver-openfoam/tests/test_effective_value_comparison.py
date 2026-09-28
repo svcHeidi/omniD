@@ -1,12 +1,8 @@
-"""A requested value and its native resolution are compared as values.
+"""A requested value and its native resolution are compared as values, not text.
 
-`1e-3` written into a dictionary resolves through `foamDictionary` as `0.001`.
-Compared as text those differ, so the post-write check reported a mismatch for a
-correct edit. Compared as numbers they agree.
-
-This must not become a tolerance. `0.001` and `0.0010000001` are different
-configurations and a check that hides that is worse than no check. Equality of
-the parsed value, exactly -- nothing looser.
+`1e-3` resolves through `foamDictionary` as `0.001`; comparing as text would
+report a mismatch for a correct edit. This is exact value equality, never a
+tolerance -- `0.001` and `0.0010000001` are different configurations.
 """
 
 import pytest
@@ -25,8 +21,8 @@ from omnidriver.openfoam.apply_overrides import effective_values_agree
     (False, "false"),
     ([1, 2, 3], "(1 2 3)"),
     ("(1 2 3)", "(1 2 3)"),
-    # 2026-09-25: the blockMeshDict hex-cell-counts convention spells its
-    # triple WITHOUT parentheses (`case_planning.read_hex_cell_counts`/
+    # blockMeshDict's hex-cell-counts convention spells its triple WITHOUT
+    # parentheses (`case_planning.read_hex_cell_counts`/
     # `plan_block_mesh_resolution`) -- a requested tuple must still agree
     # with that unparenthesised text.
     ((40, 6, 14), "40 6 14"),
@@ -50,8 +46,6 @@ def test_different_values_do_not_agree(requested, resolved):
 
 
 def test_an_unparseable_resolution_does_not_agree_silently():
-    """Unknown is not agreement. A resolution the comparison cannot read must
-    be reported as a non-match, so the caller sees an unverified edit rather
-    than a passed check."""
+    """Unknown is not agreement."""
     assert not effective_values_agree(1e-3, None)
     assert not effective_values_agree(1e-3, "")
