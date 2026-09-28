@@ -132,6 +132,15 @@ def environment_report(driver_context: "DriverContext", environ: Mapping[str, st
                     f"{item['name']} is not set: {item['why']}", item["name"])
         for item in variables if item["required"] and not item["set"]
     ]
+    for provider in driver_context.providers:
+        mapping = provider.get_profile().cxx_mapping
+        root = mapping.source_root(environ) if mapping is not None else None
+        if root is not None and not root.is_dir():
+            diagnostics.append(_diagnostic(
+                "error", "plugin_cxx_source_unavailable",
+                f"{mapping.source_root_variable} is supplied, but its C++ source {root} is not a "
+                "directory; every strict plan would refuse it", mapping.source_root_variable,
+            ))
     report: dict[str, Any] = {
         "plugin": [provider["id"] for provider in driver_context.identity.to_json()["providers"]],
         "variables": variables,

@@ -64,8 +64,8 @@ def test_a_manifest_names_only_supplied_variables(tmp_path):
 
 
 class _Provider:
-    def __init__(self, connection):
-        self._profile = SimpleNamespace(environment=connection, cxx_mapping=None, plugin_id="toy")
+    def __init__(self, connection, cxx_mapping=None):
+        self._profile = SimpleNamespace(environment=connection, cxx_mapping=cxx_mapping, plugin_id="toy")
 
     def get_profile(self):
         return self._profile
@@ -160,3 +160,14 @@ def test_every_step_attempt_records_its_host(tmp_path, capsys):
     assert step["status"] == "completed"
     assert step["host"]["hostname"] == socket.gethostname()
     assert "launcher" not in step["host"]
+
+
+def test_a_supplied_source_root_that_is_not_a_directory_is_refused(tmp_path):
+    from omnidriver.core.plugin_profile import CxxMapping
+
+    context, calls = _context(_connection())
+    context.providers = (_Provider(None, CxxMapping("TOY_TREE", "src", tmp_path / "a.json")),)
+    report = environment_report(context, {"PATH": os.environ["PATH"], "TOY_TREE": str(tmp_path / "absent")})
+    assert [d["code"] for d in report["preflight"]] == ["plugin_cxx_source_unavailable"]
+    assert report["status"] == "failed" and calls == []
+    assert report["variables"][0]["name"] == "TOY_TREE"
