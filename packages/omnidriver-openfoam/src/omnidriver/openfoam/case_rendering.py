@@ -1,45 +1,8 @@
 """Render case-write-channel mutations into OpenFOAM dictionary bytes.
 
-The only place OpenFOAM dictionary syntax appears in the case-write channel
-(``docs/superpowers/plans/2026-09-20-phase2-one-write-channel.md``, Tasks 8
-and 9). Two creation modes land here:
-
-``clone_and_patch``  edits one or more keys in documents that already exist.
-``synthesize``       authors documents from scratch, optionally folding a
-                     later patch onto one of them into a single rendering
-                     (the ``repeated_edits_to_one_file`` conformance case, in
-                     its real setting -- see :func:`render_synthesis_case_files`).
-
-Reuses :func:`mutators.update_foam_entry` for every key/value edit; this module
-does not implement a second dictionary writer. **Corrected 2026-09-23 (Phase 3
-Task 4):** a `clone_and_patch` edit is not always a key/value set -- a target
-carrying ``"hex_cell_counts"`` (see :func:`case_planning.plan_block_mesh_resolution`)
-is a structural rewrite of an existing document's ``hex (`` block
-declarations instead, and :func:`render_patch_case_files` reuses
-:func:`case_planning._rewrite_hex_block_lines` for it the same way it reuses
-`update_foam_entry` for everything else -- one implementation of the ``hex (``
-grammar, not a second one living beside this module's key/value path.
-
-Every rendering happens against a copy
-under ``snapshot_root`` -- the real case is read only to seed that copy (and,
-for a patch, to discover what the edit's precondition set must cover), never
-written to directly. Core reads the returned bytes and commits them through
-the transaction channel (:mod:`omnidriver.core.case_transaction`).
-
-Preconditions -- everything a rendering's correctness depends on staying
-true -- are a separate concern from the bytes themselves, because
-``render_case_files`` returns only ``RenderedFile`` objects per the
-``CaseWriterCapability`` protocol. :func:`patch_preconditions` is the sibling
-an orchestrator calls directly (cardiacCore's ``workflows.overrides``, Task 8)
-to build the complete set: the document itself, every file it transitively
-includes, the *absence* of any higher-priority ``#includeEtc`` candidate
-that would change which file a later run selects (audit finding F2 -- this is
-the entire reason F2 was sequenced before this task), and every environment
-key that selection depended on (``WM_PROJECT_DIR``, ``FOAM_ETC`` and
-siblings -- recorded, since F2, as ``environment`` preconditions rather than
-discarded; corrected 2026-09-23, R3 finding 3, which found them bound to `_`
-and dropped). Reuses :func:`effective_dictionary._inspect_source_closure` for
-that walk rather than re-deriving it.
+``clone_and_patch`` edits documents that already exist; ``synthesize``
+authors them from scratch. Every rendering happens against a copy under
+``snapshot_root``; the real case is only ever read, never written, here.
 """
 from __future__ import annotations
 
@@ -54,20 +17,14 @@ from .effective_dictionary import _inspect_source_closure
 from .mutators import remove_foam_dict, remove_foam_entry, update_foam_entry
 from .case_planning import _rewrite_hex_block_lines
 
-#: The one format this module renders. Declared truthfully by whichever
-#: provider composes it in (``OpenFOAMEnvironmentPlugin.get_rendered_formats``)
-#: -- ``_CaseWriterAdapter.render`` refuses a ``RenderedFile`` whose format its
-#: returning provider did not declare, so this string must match exactly.
+#: Must match what ``OpenFOAMEnvironmentPlugin.get_rendered_formats`` declares;
+#: ``_CaseWriterAdapter.render`` refuses a ``RenderedFile`` whose format its
+#: provider did not declare.
 FORMAT = "openfoam_dictionary"
 
 
 def _snapshot_copy(case_root: Path, snapshot_root: Path, relpath: str) -> Path:
-    """Copy ``relpath`` from the real case into the snapshot, preserving mode.
-
-    ``render_case_files`` must write nothing outside ``snapshot_root``; this
-    is the one read of the real case a patch renderer performs, and it reads,
-    never writes, ``case_root``.
-    """
+    """Copy ``relpath`` from the real case into the snapshot, preserving mode."""
     source = case_root / relpath
     destination = snapshot_root / relpath
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -94,70 +51,24 @@ def render_patch_case_files(
 ) -> tuple[RenderedFile, ...]:
     """Render a ``clone_and_patch`` resolution: one file per edited document.
 
-    Two parameters landing in one document are folded into a single
-    ``update_foam_entry`` pass over one snapshot copy, because
-    ``CaseWritePlan`` refuses two ``RenderedFile``s claiming one path (the
-    ``repeated_edits_to_one_file`` conformance case).
+    Multiple edits landing on one document are folded into a single pass over
+    one snapshot copy (``CaseWritePlan`` refuses two ``RenderedFile``s
+    claiming one path). A target may instead carry:
 
-    **A target may instead carry ``"content"``** (Phase 3 Task 7,
-    :func:`case_planning.plan_verbatim_content`) -- a whole document's exact bytes,
-    supplied by the caller rather than assembled from a key/value edit. See
-    the inline comment where it is applied, below, for the full reasoning;
-    the short version is that this mirrors :func:`render_synthesis_case_files`'s
-    own ``"content"`` target, widened to a mode whose document may already
-    exist.
+    - ``"content"`` -- the document's exact bytes, supplied by the caller
+      rather than assembled from a key/value edit.
+    - ``"hex_cell_counts"`` -- a structural rewrite of every ``hex (`` block
+      declaration via :func:`case_planning._rewrite_hex_block_lines`,
+      validated against ``expected_blocks``. At most one per document.
+    - ``"dict_operation": "remove"`` -- a whole named sub-dictionary deleted
+      via :func:`mutators.remove_foam_dict`, applied before the key/value
+      edits below, with ``missing_ok=True``.
 
-    **A target may instead carry ``"hex_cell_counts"``** (Phase 3 Task 4,
-    :func:`case_planning.plan_block_mesh_resolution`) rather than
-    ``"expanded_key_path"``/``"value"``: a structural rewrite of every
-    ``hex (`` block declaration in the document, not a key/value edit.
-    Applied via :func:`case_planning._rewrite_hex_block_lines` -- reused, the same
-    grammar `replace_block_mesh_resolutions` still writes directly today --
-    instead of ``update_foam_entry``, and validated against that target's
-    own ``expected_blocks`` the same way that function always has: silently
-    replacing the wrong number of blocks is exactly the failure this check
-    exists to prevent. At most one such target per document is accepted;
-    two would make "how many blocks changed" depend on application order,
-    the same duplicate-slot reasoning ``CaseMutationRequest`` already applies
-    to ``ParameterAssignment``\\ s.
-
-    **A target may instead carry ``"dict_operation": "remove"``** (Phase 3
-    Task 6's completion, 2026-09-23) -- a whole named sub-dictionary deleted,
-    rather than one key set to one value. Not a ``ParameterAssignment``: like
-    the hex rewrite above, there is no single ``key_path`` a typed value sits
-    at. Delegates to :func:`mutators.remove_foam_dict`, applied **before**
-    the ordinary key/value edits below, always with ``missing_ok=True``:
-    a removal asserts the document's *final* state (the block is gone), not
-    that a deletion action occurred.
-
-    Corrected 2026-09-26 (tutorials-are-pointers 5.4a): this also took
-    ``"ensure"`` with a ``"block_text"``, a whole hand-authored block
-    inserted verbatim. Its one caller, the bath tutorial module's
-    ``ecgDomains`` insert, is deleted with that module (the bath record's
-    native case has no ``ecgDomains``), so ``"ensure"`` is refused like any
-    unknown operation.
-
-    **A value edit's ``"operation"``** (same 2026-09-23 decision) selects
-    which write `mutators.update_foam_entry`/`mutators.remove_foam_entry`
-    performs, defaulting to ``"set"`` for a target built before the field
-    existed:
-
-    - ``"set"`` -- ``add_if_missing=False``. The key must already be there;
-      a typo fails loudly. **Corrected 2026-09-23:** before this, every edit
-      here was applied with ``add_if_missing=True`` regardless, which made a
-      channel-routed ``set`` silently more permissive than the direct writer
-      it replaces (`cardiacfoam.overrides.apply_entry_overrides`, which has
-      never allowed a missing key). No currently-migrated tutorial's real
-      template was missing any of its overridden keys, so tightening this
-      changed no test's outcome -- confirmed by running the full suite
-      after the change, not assumed.
-    - ``"ensure"`` -- ``add_if_missing=True``, the typed counterpart of an
-      upsert (e.g. a bath-boundary patch entry whose presence varies with
-      which boundary variant a reused ``case_root`` was last written for).
-    - ``"remove"`` -- :func:`mutators.remove_foam_entry`, not
-      ``update_foam_entry`` at all, also with ``missing_ok=True`` for the
-      same "final-state assertion, not an action" reasoning ``dict_operation``
-      removal gives above.
+    Otherwise a target is a key/value edit whose ``"operation"`` (default
+    ``"set"``) selects between :func:`mutators.update_foam_entry` and
+    :func:`mutators.remove_foam_entry`: ``"set"`` requires the key to already
+    exist (``add_if_missing=False``), ``"ensure"`` upserts it, and
+    ``"remove"`` deletes it with ``missing_ok=True``.
     """
     del driver_context, execution_env
     case_root = Path(resolved.request.case_root)
@@ -177,31 +88,15 @@ def render_patch_case_files(
         exists_before = source.is_file()
 
         if content_edits:
-            # **A target may instead carry ``"content"`` (Phase 3 Task 7)** --
-            # a whole document's exact bytes, supplied by the caller rather
-            # than composed from a key/value edit -- e.g. a whole
-            # solver-variant template file, copied in verbatim rather than
-            # patched key by key. Mirrors
-            # `render_synthesis_case_files`'s own ``"content"`` target
-            # (this module carries no cardiac vocabulary and does not author
-            # that text, only turns it into bytes), widened to `clone_and_patch`
-            # because the document here may or may not already exist under
-            # `case_root` -- unlike every other patch target, which always
-            # edits a document already there. `mode` is only known when the
-            # document already existed; a freshly authored one gets none, the
-            # same as synthesis.
+            # mode is only known when the document already existed; a freshly
+            # authored one gets none, matching render_synthesis_case_files.
             body = content_edits[0]["content"]
             if isinstance(body, str):
                 body = body.encode()
             before_digest = _digest_bytes(source.read_bytes()) if exists_before else None
             if content_edits[0].get("executable"):
-                # Phase 3 Task 10: a script (``Allrun``) rather than a
-                # dictionary -- fold the execute bits onto whatever mode
-                # the file already had (a reused case_root), or 0o755 for
-                # one authored fresh (0o644, this environment's standard
-                # 022-umask default for a new file, with the same bits
-                # added) -- matching sweep.py's pre-migration
-                # `write_text` + `chmod(mode | S_IEXEC|S_IXGRP|S_IXOTH)`.
+                # a script (e.g. Allrun): fold exec bits onto the existing
+                # mode, or 0o644 (this environment's default new-file mode).
                 base_mode = (source.stat().st_mode & 0o7777) if exists_before else 0o644
                 mode = base_mode | 0o111
             else:
@@ -279,14 +174,7 @@ def render_patch_case_files(
 
 
 def _case_relative(case_root: Path, path: Path) -> str:
-    """A read dependency's precondition target: case-relative when it is
-    under the case, the resolved absolute path otherwise (an ``etc`` file,
-    typically). ``Precondition`` carries no case-relative constraint --
-    unlike ``RenderedFile``/``ParameterAssignment``, a read dependency is
-    legitimately outside the case -- and ``Path(case_root) / target`` in
-    ``case_transaction._check_preconditions`` resolves an absolute ``target``
-    to itself, so both forms are checked correctly at commit time.
-    """
+    """Case-relative target when under the case, else the resolved absolute path (an ``etc`` file, typically)."""
     resolved = path.resolve()
     try:
         return resolved.relative_to(case_root.resolve()).as_posix()
@@ -304,31 +192,15 @@ def render_synthesis_case_files(
 ) -> tuple[RenderedFile, ...]:
     """Render a ``synthesize`` resolution.
 
-    Two kinds of target may land on one document, and both may be present at
-    once -- this is the ``repeated_edits_to_one_file`` conformance case in
-    its real setting, ``system/controlDict`` synthesized from a template and
-    then patched with an explicit ``deltaT``/``endTime`` (characterized
-    against the pre-migration ``build_and_launch``, which produced exactly
-    this by writing the file and then calling ``update_control_dict`` on it
-    a second time -- reproduced here as one rendering, not two writes):
-
-    * a ``"content"`` target -- a whole document body, authored from scratch
-      by the semantic owner (e.g. cardiacFoam's ``build_electro_properties``
-      and siblings). This module carries no cardiac vocabulary and does not
-      generate that text, only turns it into bytes.
-    * an edit target (``"expanded_key_path"``/``"value"``, no ``"content"``)
-      -- one key folded into the document's current body via
-      ``update_foam_entry``, applied after the content target (if any) is
-      decided.
+    A document may carry a ``"content"`` target (a whole document body,
+    authored by the semantic owner -- this module only turns it into bytes)
+    and/or an edit target (``"expanded_key_path"``/``"value"``), applied
+    after the content target, if any, is decided.
 
     A ``"content"`` target marked ``"skip_if_present": True`` does not
-    replace an already-present file (a resolution that always proposes a
-    generic ``blockMeshDict`` must not force it back through the channel
-    where the real case already has a hand-authored one) -- but any edit
-    targets for that same document still apply, atop the existing file,
-    exactly as they would atop freshly authored content. A document with
-    only edit targets and no already-existing file is refused: there is
-    nothing to fold them onto.
+    replace an already-present file, but any edit targets for that document
+    still apply atop it. A document with only edit targets and no existing
+    file is refused: there is nothing to fold them onto.
     """
     del driver_context, execution_env
     case_root = Path(resolved.request.case_root)
@@ -357,11 +229,7 @@ def render_synthesis_case_files(
             exists_before = file_exists
             before_digest = _digest_bytes(source.read_bytes()) if file_exists else None
             if content_edit.get("executable"):
-                # Phase 3 Task 10: same rule as render_patch_case_files's
-                # own "executable" content target -- a synthesized script
-                # (``Allrun``) gets the execute bits folded onto whatever
-                # mode a reused case_root's file already had, or 0o755 for
-                # one authored fresh.
+                # same rule as render_patch_case_files's executable branch.
                 base_mode = (source.stat().st_mode & 0o7777) if file_exists else 0o644
                 mode = base_mode | 0o111
             else:
@@ -388,16 +256,9 @@ def render_synthesis_case_files(
             key_path = tuple(edit["expanded_key_path"])
             scope = key_path[:-1] or None
             key = key_path[-1]
-            # Unlike a patch's declared-but-possibly-absent key (Task 8,
-            # `render_patch_case_files`), a synthesis edit targets a key its
-            # own just-authored template always declares (`deltaT`/`endTime`
-            # in `controlDict`) -- `add_if_missing` defaults False here,
-            # matching the pre-migration `update_control_dict`'s own
-            # `update_foam_entry(path, key, value)` call exactly. Requesting
-            # it anyway with no scope is refused by the structured-editor
-            # tier before it even looks for the key (every template's
-            # FoamFile header's `/*...*/` banner routes it there), for a key
-            # that would have been found regardless.
+            # add_if_missing defaults False: a synthesis edit targets a key
+            # its own just-authored template always declares (e.g.
+            # deltaT/endTime in controlDict), unlike a patch's key.
             update_foam_entry(
                 snapshot_path, key, edit["value"], scope=scope,
                 add_if_missing=edit.get("add_if_missing", False),
@@ -414,19 +275,7 @@ def render_synthesis_case_files(
 def _environment_preconditions(
     keys: tuple[str, ...], environment: Mapping[str, str],
 ) -> tuple[Precondition, ...]:
-    """One ``environment`` precondition per key the resolution depended on
-    (R3 finding 3, 2026-09-23).
-
-    A key present at planning time is recorded as a value precondition
-    (``digest`` of its value, ``must_be_absent=False``); a key absent at
-    planning time is recorded as an absence precondition (``digest=None``,
-    ``must_be_absent=True``) rather than skipped. Skipping it would lose the
-    dependency entirely: an absent ``FOAM_CONFIG_ETC`` (say) can change which
-    file ``findEtcFile`` selects exactly as much as a changed one can (the
-    same "absence is a dependency" principle audit finding F2 established for
-    include candidates -- a candidate that does not exist yet is still part
-    of what the resolution depends on staying true).
-    """
+    """One ``environment`` precondition per key; an unset key is recorded as an absence, not skipped, since it can affect ``findEtcFile`` selection as much as a changed one can."""
     preconditions: list[Precondition] = []
     for key in sorted(set(keys)):
         value = environment.get(key)
@@ -448,22 +297,15 @@ def patch_preconditions(
     case_root: Path,
     execution_env: Mapping[str, str] | None = None,
 ) -> tuple[Precondition, ...]:
-    """Every file -- and every environment value -- a patch's rendering
-    depends on, as preconditions.
+    """Every file -- and every environment value -- a patch's rendering depends on, as preconditions.
 
-    Reuses ``effective_dictionary._inspect_source_closure`` for the include
-    set: after audit finding F2 it follows the real ``findEtcFile`` chain, and
-    the *absent* higher-priority candidates it reports become ``absence``
-    preconditions -- a file appearing at one of them changes which file the
-    next run reads, which is exactly why F2 was sequenced before this task.
-
-    The closure also reports the environment keys resolution actually
-    consulted (``WM_PROJECT_DIR``, ``FOAM_ETC`` and siblings, recorded since
-    audit finding F2 precisely so this could be done) -- these become
-    ``environment`` preconditions (R3 finding 3, 2026-09-23) rather than
-    being bound to ``_`` and discarded: a changed ``WM_PROJECT_DIR`` between
-    planning and commit is exactly the kind of drift a patch that reads
-    ``#includeEtc`` needs to notice, and until now it could not.
+    Follows the real ``findEtcFile`` search via
+    :func:`effective_dictionary._inspect_source_closure`: an absent
+    higher-priority candidate becomes an ``absence`` precondition, since a
+    file later appearing there would change which file the next run reads.
+    The environment keys that search consulted become ``environment``
+    preconditions, so drift (e.g. a changed ``WM_PROJECT_DIR``) between
+    planning and commit is caught.
     """
     case_root = Path(case_root)
     environment: Mapping[str, str] = (

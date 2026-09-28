@@ -37,12 +37,9 @@ def _write_ascii_points(path: Path, pts):
 
 
 def _write_binary_points(path: Path, pts):
-    # Matches real OpenFOAM binary output byte-for-byte (verified against
-    # every polyMesh/points file in this repo's tutorial corpus, 31/31): the
-    # raw binary payload starts immediately after the opening '(', with no
-    # separating newline or whitespace. An earlier version of this helper
-    # inserted one defensively; foamlib does not tolerate it, and no real
-    # file in this repo's corpus was ever found to need that tolerance.
+    # Matches real OpenFOAM binary output: the payload starts immediately
+    # after the opening '(', with no separating whitespace -- foamlib does
+    # not tolerate any.
     header = _HEADER.format(fmt="binary").encode("latin-1")
     flat = [c for triple in pts for c in triple]
     block = struct.pack(f"<{len(flat)}d", *flat)
@@ -224,11 +221,8 @@ class TestMeshGeometryDiagnostics(unittest.TestCase):
 
 
 def test_read_bounding_box_matches_real_repo_points_file():
-    """Cross-check against a real ASCII points file committed to the repo.
-
-    The idealized-heart mesh is stored in Git LFS; a checkout without LFS
-    holds a pointer file instead, and the test skips.
-    """
+    # Skips without Git LFS: the idealized-heart mesh is an LFS pointer file
+    # in a checkout that hasn't pulled it.
     repo_root = monorepo_root or repo_root_default()
     points_path = (
         repo_root
@@ -249,11 +243,7 @@ def test_read_bounding_box_matches_real_repo_points_file():
 
 
 def test_read_bounding_box_raises_on_zero_points(tmp_path):
-    """foamlib returns [] (not an error) for a zero-point file -- the
-
-    replacement must still route that through bounding_box_from_flat_coords
-    to preserve the existing MeshParseError contract.
-    """
+    # foamlib returns [] (not an error) for a zero-point file.
     points_path = tmp_path / "points"
     points_path.write_text(
         "FoamFile{ version 2.0; format ascii; class vectorField; object points; }\n"

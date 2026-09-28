@@ -1,24 +1,6 @@
-"""Warn about case-dictionary keys the active plugin's catalogue does not know.
-
-This is the opposite direction to ``openfoam/dict_keys_scanner.py``. That one
-asks *what keys does the C++ accept?* -- information that lives only in C++
-source, because a defaulted read nobody sets appears in no dictionary at all.
-This one asks *what keys did the author actually write?* -- information that
-lives only in the case file, because omnidriver's builder only ever writes
-keys it already knows and the solver only ever asks "is key X present?".
-
-Nothing else closes this gap. OpenFOAM ignores unrecognised keys by design, so
-a misspelled optional key is silently dropped: misspelling
-``activeTensionModel`` in singleCell yields exit 0, a clean solver log, and an
-output set quietly missing the active-tension trace. omnidriver's artifact
-reconciliation cannot catch it either -- it reads the same misspelled file, so
-it never expects the missing artifact and the two agree on the wrong thing.
-
-**Warn, never error.** cardiacFoam does not own every key that may legitimately
-appear in these dictionaries: OpenFOAM's own machinery reads some of them, and
-the catalogue deliberately documents only keys subject to programmatic
-override. An unmatched key is a question for a human, not a failed plan.
-"""
+"""Warn about case-dictionary keys the active plugin's catalogue does not
+know: the reverse of `dict_keys_scanner` (what C++ accepts vs. what was
+actually written). OpenFOAM ignores an unrecognised key silently."""
 
 from __future__ import annotations
 
@@ -34,33 +16,24 @@ _WILDCARD = re.compile(r"<[^>]+>")
 SKIP_ENV_VAR = "SKIP_CASE_DICT_KEY_DIAGNOSTICS"
 
 # OpenFOAM's runtime-selection convention: a model selected by <key> reads its
-# settings from a sibling <modelName>Coeffs sub-dictionary. Catalogue paths
-# address the inside of that dictionary through a stripped $SCOPE_TOKEN.
-# prefix, so the literal name never enters the known set. It belongs to
-# OpenFOAM, not to any plugin's catalogue, and warning about it would fire on
-# every case. A misspelling ("...Coefs") still fails this test and is reported.
+# settings from a sibling <modelName>Coeffs sub-dictionary, which belongs to
+# OpenFOAM rather than any plugin's catalogue -- so it's exempted here rather
+# than warned on every case (a misspelling, e.g. "...Coefs", still is).
 _RTS_COEFFS_SUFFIX = "Coeffs"
 
 
 def _scope_relative(trail: tuple[str, ...]) -> tuple[str, ...]:
-    """Drop a leading runtime-selection scope dict from a trail.
-
-    Catalogue paths carry a ``$SCOPE_TOKEN.`` prefix that parsing strips, so
-    they are expressed *relative to the inside* of the ``<model>Coeffs``
-    dictionary. A trail walked from the file root is absolute. Align them, or
-    every single key inside the coeffs dict reports as unknown.
-    """
+    """Drop a leading runtime-selection scope dict, aligning an absolute
+    trail with catalogue paths (expressed relative to inside `<model>Coeffs`,
+    since parsing strips their `$SCOPE_TOKEN.` prefix)."""
     if trail and trail[0].endswith(_RTS_COEFFS_SUFFIX):
         return trail[1:]
     return trail
 
 
 def _prefixes(catalogued_paths: Iterable[str]) -> set[tuple[str, ...]]:
-    """Every catalogue path and every prefix of one, as segment tuples.
-
-    Prefixes matter because a container (``ecgDomains``) is legitimate even
-    though no catalogue path ends there.
-    """
+    """Every catalogue path and every prefix of one, as segment tuples --
+    a container (`ecgDomains`) is legitimate even with no path ending there."""
     out: set[tuple[str, ...]] = set()
     for path in catalogued_paths:
         segments = tuple(path.split("."))
@@ -88,19 +61,16 @@ def case_dict_key_diagnostics(
     catalogued_paths: Iterable[str],
     dict_relpaths: Sequence[str],
 ) -> tuple[StrictDiagnostic, ...]:
-    """Warn (never error) about keys in ``dict_relpaths`` absent from the catalogue.
+    """Warn (never error) about keys in `dict_relpaths` absent from the
+    catalogue; the catalogue deliberately omits keys OpenFOAM itself owns, so
+    an unmatched key needs human judgement rather than a failed plan.
 
-    ``catalogued_paths`` are scope-stripped catalogue ``driver_path`` strings.
-    Matching is by *position*, not by bare name: a key is known when its full
-    trail matches a catalogue path or a prefix of one, with ``<placeholder>``
-    segments matching any single name. That is what distinguishes an author's
-    own instance label (``ecgDomains { ECG { ... } }``, where the catalogue
-    says ``ecgDomains.<name>...``) from a genuine misspelling -- a flat set of
-    names cannot tell them apart, and would warn on every case that names an
-    ECG domain.
-
-    Reports unavailable inspection on parse or IO failure, without emitting
-    potentially spurious key warnings for that file. Honors ``SKIP_ENV_VAR``.
+    Matching is by position, not bare name: a trail matches a catalogue path
+    (or a path prefix) with `<placeholder>` segments matching any name --
+    otherwise an author's own instance label (e.g. `ecgDomains { ECG {...} }`)
+    is indistinguishable from a misspelling. Honors `SKIP_ENV_VAR`; a parse
+    or IO failure reports `case_dict_inspection_unavailable` instead of
+    emitting spurious key warnings for that file.
     """
     if os.environ.get(SKIP_ENV_VAR):
         return ()
@@ -153,12 +123,9 @@ def _unmatched(
     known: set[tuple[str, ...]],
     trail: tuple[str, ...] = (),
 ) -> list[tuple[str, ...]]:
-    """Outermost unmatched keys, depth-first.
-
-    An unmatched container is reported once and NOT descended into: if
-    ``singleCellSolverCoefs`` is misspelled then every key beneath it is
-    unreachable too, and reporting all of them buries the one that matters.
-    """
+    """Outermost unmatched keys, depth-first; an unmatched container is
+    reported once and not descended into, so one misspelled container
+    doesn't bury the reported key under every key beneath it."""
     found: list[tuple[str, ...]] = []
     for key in node:
         value = node[key]

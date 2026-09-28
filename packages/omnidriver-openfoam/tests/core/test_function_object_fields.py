@@ -117,16 +117,9 @@ def test_electro_controldict_subdir_scanned(tmp_path):
     assert len(warns) == 1 and warns[0].field == "bananas"
 
 
-# --- an unrecognized region is skipped, never forced into "electro" --------
-#
-# _region_of() used to collapse any region that wasn't literally "solid"
-# into "electro" -- so a case with a third region (a bath/torso domain, or
-# any not-yet-cataloged region) would get spurious warnings for fields the
-# electro bucket never claimed to cover. A region samplable() doesn't know
-# about should be silently skipped, matching this module's own stated
-# principle: "a parser limitation must never surface as a spurious field
-# warning" -- not knowing a region's vocabulary yet is the same kind of
-# limitation.
+# An unrecognized region is skipped, never forced into "electro": a region
+# samplable() doesn't know about (e.g. a bath/torso domain) is treated as a
+# parser limitation, not a source of spurious warnings.
 
 def test_unrecognized_region_is_skipped_not_forced_into_electro(tmp_path):
     root = _write_controldict(
@@ -139,9 +132,8 @@ def test_unrecognized_region_is_skipped_not_forced_into_electro(tmp_path):
 
 
 def test_no_declared_region_still_checked_against_electro(tmp_path):
-    """No region declared -- the pre-existing default -- must still check
-    against electro, not be silently skipped like a genuinely unknown
-    region name would be."""
+    """No declared region defaults to "electro" and is still checked, unlike
+    a genuinely unknown region name."""
     root = _write_controldict(tmp_path, "p{ type probes; fields (bananas); }")
     diags = function_object_field_diagnostics(
         root, samplable={"electro": {"Vm"}, "solid": {"Ta"}}
@@ -162,17 +154,12 @@ def test_solid_region_still_checked_against_solid_after_the_lookup_change(tmp_pa
 
 
 def test_unknown_field_still_warns_with_a_lookalike_string_earlier_in_the_file(tmp_path):
-    """A quoted string containing 'functions {' must not hide the real block.
-
-    Reproduced against the pre-migration scanner: re.search(r"\\bfunctions\\b\\s*", text)
-    matches the fake occurrence inside the quoted string first, so the real
-    functions block -- which has a genuinely bad sampled field -- is never
-    scanned, and function_object_field_diagnostics silently returns ().
-    """
     system = tmp_path / "system"
     system.mkdir(parents=True, exist_ok=True)
     (system / "controlDict").write_text(
         _HEADER
+        # A naive `functions` scan would match this quoted decoy before the
+        # real block.
         + 'someEntry "this string mentions functions { in a sentence";\n'
         + "functions\n{\nprobe1{ type probes; fields (Vm bogusField); }\n}\n"
     )
@@ -185,12 +172,8 @@ def test_unknown_field_still_warns_with_a_lookalike_string_earlier_in_the_file(t
 
 
 def test_includeFunc_alongside_a_real_function_object_is_skipped_not_crashed_on(tmp_path):
-    """#includeFunc is a directive, not a field-sampling sub-dict -- must not
-
-    error, and must not stop the real sibling function object from being
-    checked (distinct from test_includefunc_not_flagged, which only has the
-    includeFunc line and nothing else to iterate past).
-    """
+    """Distinct from test_includefunc_not_flagged: here a real sibling
+    function object must still be checked."""
     root = _write_controldict(
         tmp_path, "#includeFunc residuals\nprobe1{ type probes; fields (Vm); }"
     )

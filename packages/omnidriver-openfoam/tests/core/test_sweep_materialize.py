@@ -1,12 +1,6 @@
-"""Moved from omnidriver/tests/core/test_sweep_materialize.py (Phase 2
-Task 4): this is the one test in that module that asserts on OpenFOAM
-output directly (omnidriver.openfoam.mesh_provisioning's
-default_block_mesh_dict_text), rather than on materialize_case's own
-core-owned routing/dispatch. The rest of that module stays in
-omnidriver/tests/core/ -- it fails core-only for an unrelated reason
-(the default cardiacFoam plugin selection), not because it needs
-OpenFOAM.
-"""
+"""Sweep-materialize test that asserts on OpenFOAM output directly, unlike
+its sibling tests in omnidriver's own core test tree, which assert only on
+materialize_case's core-owned routing/dispatch."""
 
 import pytest
 
@@ -23,11 +17,8 @@ def test_materialize_case_honours_dx_for_spatial_solver(tmp_path):
             "omnidriver-cardiacfoam is not installed"
         ),
     )
-    # The importorskip above already establishes which adapter this test means:
-    # materialize_case()'s only non-refusing implementation is cardiacFOAM's.
-    # Saying so beats asking the registry, which has no unique answer once
-    # cardiacfoam and openfoam-environment are both installed -- exactly the
-    # situation this skip guard implies.
+    # Pins the adapter explicitly: the registry has no unique answer once
+    # cardiacfoam and openfoam-environment are both installed.
     from omnidriver.core.plugin_interface import driver_context as _driver_context
     from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
     from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin

@@ -73,16 +73,9 @@ def test_validate_accepts_control_and_electro():
 
 
 def test_validate_accepts_keys_at_the_scopes_that_actually_read_them():
-    """A key catalogued at the top coeffs level is not thereby addressable at
-    the nested scopes that separately read it.
-
-    conductionSystemDomain.C:508 binds coeffsDict_ to the
-    purkinjeGraphModelCoeffs sub-dict and hands it to ionicModel::New
-    (:282), which passes it to ODESolver::New (ionicModel.H:275) -- so
-    upstream OpenFOAM reads solver/maxSteps from *that* dict, not from the
-    top-level one. Both are used by real tutorials but were rejected by
-    validate_overrides, making them unsettable through the CLI.
-    """
+    # conductionSystemDomain binds coeffsDict_ to the purkinjeGraphModelCoeffs
+    # sub-dict and hands it to ionicModel::New, so upstream OpenFOAM reads
+    # solver/maxSteps from that dict, not the top-level one.
     validate_overrides([
         {"driver_path": "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.LV"
                         ".purkinjeGraphModelCoeffs.solver", "value": "RKF45"},
@@ -92,18 +85,9 @@ def test_validate_accepts_keys_at_the_scopes_that_actually_read_them():
 
 
 def test_validate_accepts_purkinje_conduction_velocity_and_ode_tolerances():
-    """The Purkinje graph carries its own purkinjeCV and its own ODE tolerances.
-
-    purkinjeGraphModelCoeffs.purkinjeCV is a literal conduction velocity in
-    m/s (eikonalSolver1D.C:134 -- t = Tact + edgeLength/purkinjeCV), NOT the
-    same quantity as the top-level eikonal c0, which has dimensions s^-1/2
-    and only becomes a velocity via c0*sqrt(M) (eikonalMyocardiumDomain.C:359).
-    The two used to share the bare key 'c0' at different scopes of one file;
-    the Purkinje side was renamed to purkinjeCV to remove the ambiguity.
-
-    absTol/relTol reach upstream ODESolver.C:68-69 through the same
-    sub-dict binding as the already-catalogued solver/maxSteps.
-    """
+    # purkinjeGraphModelCoeffs.purkinjeCV (eikonalSolver1D) is a literal
+    # conduction velocity in m/s, not the same quantity as the top-level
+    # eikonal c0, which has dimensions s^-1/2.
     purkinje = "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.LV.purkinjeGraphModelCoeffs"
     validate_overrides([
         {"driver_path": f"{purkinje}.purkinjeCV", "value": "[0 1 -1 0 0 0 0] 4.2"},
@@ -113,10 +97,8 @@ def test_validate_accepts_purkinje_conduction_velocity_and_ode_tolerances():
 
 
 def test_validate_rejects_unknown_flat_controldict_key():
-    # A flat (non-$, non-":") driver_path is routed to controlDict for backward
-    # compatibility, but must still be a real controlDict key -- not silently
-    # accepted and only discovered to be bogus (or worse, silently written) at
-    # apply time.
+    # A flat (non-$, non-":") driver_path is routed to controlDict, but must
+    # still be a real controlDict key.
     with pytest.raises(OverrideError) as exc:
         validate_overrides([{"driver_path": "notAKey", "value": "1"}])
     assert "notAKey" in str(exc.value)
@@ -222,13 +204,6 @@ def test_apply_region_fvSolution_edits_file(tmp_path, monkeypatch):
 
 
 def test_apply_system_file_override_works_without_foamdictionary(tmp_path):
-    """A system/<file>:<entry> override must not require a sourced OpenFOAM.
-
-    This route used to call a foamDictionary-only writer directly, so
-    fvSolution/fvSchemes overrides only worked in a sourced shell. It now
-    goes through the same pure-Python mutator path as the rest of the
-    override machinery.
-    """
     case = _case(tmp_path)
     apply_overrides(
         [{"driver_path": "system/fvSolution:solvers/V/tolerance", "value": "1e-9"}],
@@ -241,20 +216,10 @@ def test_apply_system_file_override_works_without_foamdictionary(tmp_path):
 
 
 def test_validate_accepts_the_manufactured_solution_switches():
-    """The keys that turn manufactured-solution verification on.
-
-    electroVerificationModel::New is called unconditionally
-    (myocardiumDomainInterface.C:223); selectedType looks for a
-    verificationModel sub-dict and reads `type`, returning nullptr when it is
-    absent, empty or "none" (electroVerificationModel.C:42-45). So `type` is
-    the one switch -- the redundant `enabled` key it used to share that job
-    with is gone, and all four verifier tables now accept "none" alike.
-
-    The Purkinje graph and the PVJ coupling each have their own verifier
-    table, so each needs its own `type` at its own scope; the manufactured
-    ionic models additionally require `dimension`, which is per-domain (the
-    coupled 1D-3D case runs the myocardium at "3D" and the graph at "1D").
-    """
+    # electroVerificationModel::New reads a verificationModel sub-dict's
+    # `type`, treating it as off when absent, empty or "none"; each domain
+    # needs its own `type` at its own scope, and manufactured ionic models
+    # additionally need `dimension`, which is per-domain.
     purkinje = "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.LV.purkinjeGraphModelCoeffs"
     validate_overrides([
         {"driver_path": f"{purkinje}.dimension", "value": "1D"},
@@ -268,10 +233,9 @@ def test_validate_accepts_the_manufactured_solution_switches():
 
 # --- override scopes are plugin-declared, not core-hardcoded ---------------
 #
-# P2.5-followup: $ELECTRO_MODEL_COEFFS is no longer the one scope token core
-# assumes exists. A plugin declares its own scopes via
-# PluginCapabilities.override_scopes; core only knows how to route a "$TOKEN."
-# override to whichever scope's token matches.
+# A plugin declares its own scopes via PluginCapabilities.override_scopes;
+# core only knows how to route a "$TOKEN." override to whichever scope's
+# token matches.
 
 def test_validate_rejects_an_unknown_scope_token():
     with pytest.raises(OverrideError) as exc:
@@ -313,8 +277,6 @@ def test_cardiac_plugin_declares_the_electro_model_coeffs_scope():
 
 
 def test_cardiac_scope_resolve_entry_matches_the_old_hardcoded_behavior(tmp_path):
-    """Same (scope_path, key) shape apply_overrides used to compute inline
-    via detect_myocardium_solver_name + _entry_scope_and_key."""
     from omnidriver.core.plugin_interface import default_driver_context
 
     case = _case(tmp_path)
@@ -361,8 +323,6 @@ def test_cardiac_plugin_declares_the_myocardium_solver_regeneration_scope():
 
 
 def test_validate_accepts_a_bare_myocardium_solver_override_with_a_valid_enum_value():
-    # Previously rejected outright: "not a known controlDict entry" (VERIFIED
-    # FACT #1 in the task this test guards). Now routed to regeneration.
     validate_overrides([{"driver_path": "myocardiumSolver", "value": "eikonalSolver"}])
 
 
@@ -373,37 +333,19 @@ def test_validate_rejects_a_bare_myocardium_solver_override_with_an_invalid_enum
 
 
 def test_validate_still_rejects_other_bare_selector_keys_as_unknown_controlDict_entries():
-    """ionicModel/tissue/conductivitySource are also _SELECTOR_KEYS, but are
-    NOT wired into regeneration (see dict_builder._SELECTOR_KEYS docstring
-    and electro_properties_regeneration_scope): they change a value in
-    place without renaming anything, so they stay on the ordinary
-    $ELECTRO_MODEL_COEFFS.* key-patch route. A bare (un-scoped) override
-    for one of them is still just an unrecognised controlDict entry."""
+    # ionicModel/tissue/conductivitySource change a value in place without
+    # renaming anything, so they stay on the ordinary key-patch route
+    # instead of being wired into regeneration.
     with pytest.raises(OverrideError) as exc:
         validate_overrides([{"driver_path": "ionicModel", "value": "TNNP"}])
     assert "not a known controlDict entry" in str(exc.value)
 
 
 def test_apply_regenerates_electro_properties_for_a_myocardium_solver_override(tmp_path):
-    """End-to-end through the public apply_overrides() entry point (not the
-    dict_builder function directly): on a copy of the real
-    purkinjeRestitution2D monodomain fixture, myocardiumSolver=eikonalSolver
-    -- bundled, in the same call, with the handful of new fields eikonalSolver
-    requires with no catalog default -- must now be REJECTED, propagated as
-    an OverrideError.
-
-    The fixture's Purkinje network uses conductionSystemSolver=
-    monodomain1DSolver / electroDomainCoupler=reactionDiffusionPvjCoupler.
-    regenerate_electro_properties carries that network forward verbatim
-    rather than resynthesising it, and eikonalSolver+monodomain1DSolver is
-    explicitly invalid per solver_coupling.SOLVER_COMPATIBILITY_RULES
-    ("eikonal myocardium cannot couple to reaction-diffusion Purkinje") --
-    confirmed against the real, hand-authored electroProperties.eikonal
-    fixture of idealizedHeart/electroHeart, which uses a different, compatible
-    pairing (eikonalSolver1D / eikonalPvjCoupler) instead of a bare carry-
-    forward. See test_dict_builder.py's
-    test_purkinje_monodomain_to_eikonal_end_to_end for the same
-    scenario exercised directly against regenerate_electro_properties."""
+    # The fixture's Purkinje network uses conductionSystemSolver=
+    # monodomain1DSolver / electroDomainCoupler=reactionDiffusionPvjCoupler,
+    # carried forward verbatim; eikonalSolver+monodomain1DSolver is invalid
+    # per solver_coupling.SOLVER_COMPATIBILITY_RULES, so this must raise.
     if not (PURKINJE_RESTITUTION_2D / "constant" / "electroProperties.monodomain").exists():
         pytest.skip("tutorial fixture not present in this checkout")
 

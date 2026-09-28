@@ -13,29 +13,8 @@ from .profile import load_openfoam_profile
 
 
 def _read_config_value_by_key_path(file_path: Path, key_path):
-    """Adapt core's ``ConfigValueCapability`` contract to ``read_foam_entry``.
-
-    Core (``tutorial_records.split_unchanged``) always calls this with a
-    KEY-PATH TUPLE -- never a dotted string -- e.g.
-    ``("bidomainSolverCoeffs", "conductivitySource")`` for a nested key, or a
-    one-element tuple such as ``("myocardiumSolver",)`` for a top-level one.
-    ``read_foam_entry(file_path, key, *, scope=None)`` itself takes a plain
-    leaf key plus a separate scope, so this is the split: every segment but
-    the last is the scope, the last is the key.
-
-    Before this existed, ``get_config_value_reader()`` handed back
-    ``read_foam_entry`` unwrapped, so a caller passing a tuple silently
-    handed it a ``key`` that was never a string at all (review finding B1).
-
-    **Refuses a bare string outright (minor), rather than splitting it into
-    characters.** ``tuple("myKey")`` silently produces
-    ``('m', 'y', 'K', 'e', 'y')`` -- a caller that passed a single string
-    instead of a one-element tuple would have every character treated as
-    its own nested scope segment, reading nothing and returning ``None``
-    with no error at all. The contract requires a tuple; a string (which
-    Python happily iterates character-by-character) is refused by name
-    instead of silently misinterpreted.
-    """
+    """Split a key-path tuple into ``read_foam_entry``'s scope/key pair; a
+    bare string is refused rather than iterated character-by-character."""
     from .case_planning import (
         HEX_CELL_COUNTS_KEY_PATH,
         hex_cell_counts_expected_blocks,
@@ -53,16 +32,10 @@ def _read_config_value_by_key_path(file_path: Path, key_path):
     if not segments:
         raise ValueError("a config value read needs a non-empty key path")
     if segments[:1] == HEX_CELL_COUNTS_KEY_PATH:
-        # The one synthetic key path this reader answers specially (step 4a,
-        # 2026-09-25): `plan_block_mesh_resolution`'s own target shape has no
-        # single literal dictionary key (module docstring), so
-        # `read_hex_cell_counts` parses the `hex (` grammar directly rather
-        # than going through `read_foam_entry`'s scope/key split below.
-        #
-        # **P2, 2026-09-26**: the block count travels with the key path
-        # (`case_planning.hex_cell_counts_key_path`'s own grammar) instead of
-        # this reader defaulting to 1 regardless of what the record actually
-        # declared -- see `hex_cell_counts_expected_blocks`'s own docstring.
+        # This key path has no single literal dictionary key, so
+        # `read_hex_cell_counts` parses the `hex (` grammar directly instead
+        # of going through the scope/key split below; the expected block
+        # count travels with the key path itself (`hex_cell_counts_expected_blocks`).
         expected_blocks = hex_cell_counts_expected_blocks(segments)
         return read_hex_cell_counts(file_path, expected_blocks=expected_blocks)
     *scope, key = segments
@@ -70,26 +43,9 @@ def _read_config_value_by_key_path(file_path: Path, key_path):
 
 
 def _case_value_agree(value_kind: str, requested, current) -> bool:
-    """``CaseValueComparisonCapability``'s one answer for a whole OpenFOAM-
-    owned stack (design doc
-    ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md``
-    §5, step 4a).
-
-    ``get_case_value_comparator`` is a ``single``-shape composed member
-    (``provider_stack._SHAPE["get_case_value_comparator"] == "single"``):
-    this is the ONLY implementation on a real stack today (no cardiacFOAM
-    plugin declares its own), so it must be correct for every
-    ``value_kind`` a study might name, cardiac or OpenFOAM-owned alike --
-    and it is, because it does not attempt to dispatch on ``value_kind`` at
-    all. ``effective_values_agree`` (``apply_overrides.py``) already
-    dispatches purely on the REQUESTED value's own Python type (a bool
-    compares as a bool, a number as a float, a list/tuple/parenthesised
-    vector as a tuple of floats, anything else as text) -- exactly the
-    "typed, not string equality" comparison design step 4a asks for, reused
-    rather than re-implemented. ``value_kind`` is accepted only to satisfy
-    the capability's own contract (``(value_kind, requested, current) ->
-    bool``); nothing here branches on it.
-    """
+    """Compares by the requested value's own Python type via
+    ``effective_values_agree``; ``value_kind`` is unused, kept only to match
+    the capability's signature."""
     from .apply_overrides import effective_values_agree
 
     del value_kind
@@ -121,26 +77,8 @@ class OpenFOAMEnvironmentPlugin:
         return load_openfoam_profile(Path(__file__).with_name("openfoam-environment.yaml"))
 
     def get_capabilities(self):
-        """This provider has no domain catalogue core cannot already compose.
-
-        **Changed 2026-09-22 (final whole-branch review, bundled Minor).**
-        This used to build the whole manifest itself via
-        ``build_capability_manifest`` -- the exact plugin-assembles-its-own-
-        manifest pattern Task 10 removed from ``CardiacFoamPlugin``/
-        ``CardiacCorePlugin`` (see ``build_capability_manifest``'s own
-        docstring and ``CardiacCorePlugin.get_capabilities``). Harmless in
-        practice today, since ``get_capabilities`` is a ``single``-shape
-        composed member and this environment provider is never the most
-        specific in a composed stack, so this answer never won -- but
-        inconsistent with Task 10's rule and a latent risk if that stopped
-        holding. ``plugin_capabilities._CapabilityManifestAdapter.manifest``
-        already builds ``allowed_commands``/``samplable_fields`` from the
-        composed ``command_authorization``/``case_introspection``/
-        ``case_runtime_conventions`` reads (which include this provider's
-        own ``get_environment_commands``/``get_case_runtime_conventions``,
-        standalone or composed), so there is nothing left for this method to
-        add -- same as ``CardiacCorePlugin.get_capabilities()``.
-        """
+        """No domain catalogue beyond what ``_CapabilityManifestAdapter``
+        already composes from this provider's own reads."""
         return {}
 
     def validate_configuration(self, spec):
@@ -194,29 +132,18 @@ class OpenFOAMEnvironmentPlugin:
 
     def get_input_roots(self, case_root, resolved_case, *, conventions) -> tuple[str, ...]:
         """The state a run resumes from: the selected start-time directory,
-        and the same directory in every parallel replica (I9). OpenFOAM's
-        convention, moved here 2026-09-26 from core's provenance walk (spec
-        2026-09-26-core-generality-design.md §2, A2); core no longer knows
-        "start time" or replicas.
+        and the same directory in every parallel replica.
 
-        ``conventions`` is the STACK's merged declaration -- the same value
-        staging/discovery read -- not this plugin's own
-        ``openfoam_case_runtime_conventions()`` (R2 fix, finding I2): a
-        plugin stacked on top of OpenFOAM that redeclares
-        ``replica_directory_globs`` must have its replicas walked here too,
-        not just by staging.
+        ``conventions`` is the stack's merged declaration, not this plugin's
+        own ``openfoam_case_runtime_conventions()``: a plugin stacked on top
+        of OpenFOAM that redeclares ``replica_directory_globs`` must have its
+        replicas walked here too.
 
-        **Corrected 2026-09-26 (owner decision).** When ``selected_start_time``
-        answers ``None`` -- no ``system/controlDict`` at all, so this is not
-        (or not yet known to be) an OpenFOAM case by the owner's rule
-        ("controlDict is how we know an OpenFOAM case exists") -- this
-        contributes **no roots at all**: not a start folder, and not any
-        replica's start folder either. Previously this named the literal
-        string ``"0"`` in that case, indistinguishable from a real case that
-        deliberately starts at time zero. See ``time_selection
-        .selected_start_time``'s own docstring for the full rule and why
-        `omnidriver-cardiaccore`'s Allrun-only,
-        controlDict-less test case still needs exactly this answer."""
+        When ``selected_start_time`` answers ``None`` (no ``system/controlDict``,
+        so this is not known to be an OpenFOAM case), this contributes no
+        roots at all -- never the literal ``"0"``, which would be
+        indistinguishable from a case that genuinely starts at time zero. See
+        ``time_selection.selected_start_time``."""
         del resolved_case
         from omnidriver.core.plugin_profile import is_replica_directory_name
 
@@ -300,10 +227,9 @@ class OpenFOAMEnvironmentPlugin:
         return frozenset()
 
     def get_parallel_steps(self, step, *, request, read_value, allocation):
-        """A record's solve step in OpenFOAM's parallel form (PAR, owner Q6):
-        ``parallel_execution.parallel_steps_for_record``. The solve command
-        is the solver plugin's (``get_solve_step_commands``); how any
-        OpenFOAM solver runs in parallel is this layer's."""
+        """A record's solve step in OpenFOAM's parallel form. The solve
+        command is the solver plugin's (``get_solve_step_commands``); how
+        any OpenFOAM solver runs in parallel is this layer's."""
         from .parallel_execution import parallel_steps_for_record
 
         return parallel_steps_for_record(step, request=request, read_value=read_value, allocation=allocation)
@@ -346,8 +272,7 @@ class OpenFOAMEnvironmentPlugin:
         self, resolved, *, snapshot_root, driver_context, execution_env=None,
     ):
         """Render this provider's declared format for whichever mode
-        ``resolved`` carries. ``clone_and_patch`` is Task 8; ``synthesize``
-        is Task 9."""
+        ``resolved`` carries."""
         mode = resolved.request.mode
         if mode == "clone_and_patch":
             from .case_rendering import render_patch_case_files

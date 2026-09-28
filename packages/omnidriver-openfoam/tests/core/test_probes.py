@@ -1,20 +1,6 @@
-"""OpenFOAM's ``probes`` output layout, read from files OpenFOAM v2412 wrote.
-
-Every fixture under ``fixtures/probes/`` is a verbatim copy of a real run's
-output (docs/solver-learning/cardiacfoam.md, section Q):
-
-- ``Cx``: ``postProcess -func 'Niedererpoints(Cx,Cy,Cz)' -latestTime`` on
-  the cell-centre components ``postProcess -func writeCellCentres`` wrote
-  (Q3), the ``NiedererEtAl2011verification`` hex mesh at dx 0.5 mm -- kept as
-  a real scalar probe file to parse, though nothing produces it any more
-  (Q9, 2026-09-27: the reader now requires ``interpolationScheme cellPoint``
-  and reports the probe's own location, not a cell centre);
-- ``C``: the same function on the vector ``C`` (Q5);
-- ``Cx_not_found``: the same function with ``probeLocations`` replaced by
-  ``((1 1 1) (0 0 0))``, the first of which lies outside the mesh (Q6).
-
-The refusals below mutate a real file one fact at a time, so each names a
-single defect, never a layout invented from scratch.
+"""OpenFOAM's ``probes`` output layout, read from files a real OpenFOAM
+v2412 run wrote (fixtures under ``fixtures/probes/``; see
+docs/solver-learning/cardiacfoam.md).
 """
 from __future__ import annotations
 
@@ -25,6 +11,9 @@ import pytest
 from omnidriver.openfoam.probes import ProbeSeries, interpolation_scheme, parse_probe_series
 
 FIXTURES = Path(__file__).parent / "fixtures" / "probes"
+# Cx/C: `postProcess -func 'Niedererpoints(Cx,Cy,Cz)' -latestTime` on
+# NiedererEtAl2011verification (dx 0.5 mm). Cx_not_found: same, with
+# probeLocations replaced so the first probe lies outside the mesh.
 
 
 def _text(name: str) -> str:
@@ -43,8 +32,8 @@ def test_a_real_scalar_probe_file_is_read_as_locations_times_and_rows():
 
 
 def test_a_probe_openfoam_did_not_find_is_marked_not_found():
-    """Q6: OpenFOAM writes ``# Not Found`` on the header and -VGREAT
-    (``-1e+300``) in the column; the flag, not the number, says so."""
+    """OpenFOAM writes -VGREAT (``-1e+300``) in the column; the ``# Not
+    Found`` flag, not the number, is what's checked."""
     series = parse_probe_series(_text("Cx_not_found"), source="Cx_not_found")
     assert series.locations == ((0, (1.0, 1.0, 1.0)), (1, (0.0, 0.0, 0.0)))
     assert series.not_found == frozenset({0})
@@ -92,8 +81,8 @@ def test_a_time_header_naming_other_probes_is_refused():
 
 
 def test_interpolation_scheme_reads_the_cases_own_dict(tmp_path):
-    """Q9 (OpenFOAM v2412 ``probes.C``): ``interpolationScheme`` defaults to
-    ``cell`` when the function's own ``system/<function>`` dict has none."""
+    """``interpolationScheme`` defaults to ``cell`` (OpenFOAM's ``probes.C``)
+    when the function's own dict has none."""
     (tmp_path / "system").mkdir()
     (tmp_path / "system" / "Niedererpoints").write_text("interpolationScheme cellPoint;\n")
     assert interpolation_scheme(tmp_path, "postProcessing/Niedererpoints/0/activationTime") == "cellPoint"

@@ -1,17 +1,6 @@
 """OpenFOAM's parallel form of a solve step: ``decomposePar`` -> ``mpirun -np
 N <solve> -parallel`` -> ``reconstructPar``, with N the case's own
-``system/decomposeParDict:numberOfSubdomains``.
-
-One caller shares :func:`_parallel_form`: a tutorial record's solve step
-through core's optional ``get_parallel_steps`` hook
-(:func:`parallel_steps_for_record`; PAR, owner Q6, 2026-09-26).
-
-Corrected 2026-09-27 (5.4b-P): the factory path's own ``solve_steps`` was
-deleted here, ahead of step C, once its last caller (the
-``manufactured_monodomain_pseudo_ecg`` tutorial module) migrated onto a
-tutorial record -- no factory tutorial calls it any more (§1's "look one
-level further").
-"""
+``system/decomposeParDict:numberOfSubdomains``."""
 from __future__ import annotations
 
 from typing import Any, Callable, Mapping
@@ -24,27 +13,19 @@ _SUBDOMAINS = f"{DECOMPOSE_PAR_DICT}:{_SUBDOMAINS_KEY_PATH[0]}"
 def _parallel_form(
     solve: Mapping[str, Any], *, n: int, decompose_id: str, reconstruct_id: str,
 ) -> list[dict]:
-    """``solve`` (a DAG step) as its three parallel steps; the solve keeps
-    its id and every other field, and runs under ``mpirun -np n``."""
+    """``solve`` (a DAG step) as its three parallel steps under ``mpirun -np n``."""
     return [
         {
             "id": decompose_id,
             "command": "decomposePar",
-            # -force: entry-based sweeps reuse one shared case_root across
-            # cases, so a prior case's processor*/ dirs are still on disk --
-            # bare decomposePar refuses to run against those. -force deletes
-            # them before decomposing (confirmed via decomposePar.C: a full
-            # rmDir per processor* dir, not a merge -- no stale data survives
-            # to be read back).
-            # Deliberately no -time restriction here: OpenFOAM's -time
-            # <value> selects the *nearest* existing time to that value, not
-            # an exact match (timeSelector.C) -- for case families with no
-            # real 0/ (e.g. manufactured-solution verifiers, whose IC is
-            # computed by the solver, not read from disk), "-time 0" would
-            # silently match a leftover reconstructed time directory from a
-            # prior sweep case instead. Removing any such stale time
-            # directories between cases is the sweep runner's job (see
-            # sweep_runner._materialize_entry_case), not this step's.
+            # -force: a shared case_root across sweep entries can leave a prior
+            # case's processor*/ dirs on disk; bare decomposePar refuses to run
+            # against those, but -force rmDirs each one first (decomposePar.C).
+            # No -time restriction: OpenFOAM's -time <value> matches the
+            # *nearest* existing time, not an exact one (timeSelector.C), so a
+            # case with no real 0/ could otherwise pick up a leftover
+            # reconstructed time from a prior sweep case; clearing stale time
+            # dirs between cases is sweep_runner._materialize_entry_case's job.
             "args": ["-force"],
             "depends_on": list(solve["depends_on"]),
         },
@@ -62,21 +43,15 @@ def parallel_steps_for_record(
     step: Mapping[str, Any], *, request: Any,
     read_value: Callable[[str, tuple[str, ...]], Any], allocation: Any,
 ) -> list[dict]:
-    """The OpenFOAM layer's ``get_parallel_steps`` (contract on core's
+    """The OpenFOAM layer's ``get_parallel_steps`` (core's
     ``SolverPluginOptionalHooks``): a record's serial solve step as
     ``<id>.decompose`` -> ``<id>`` under ``mpirun -np N ... -parallel`` ->
-    ``<id>.reconstruct``. The steps after it (a ``postProcess -latestTime``)
-    follow the reconstruct step, so they read the reconstructed case.
+    ``<id>.reconstruct``; later steps follow the reconstruct step.
 
-    N is the case's ``numberOfSubdomains``, read through ``read_value`` as
-    the run will see it, so a study that sets
-    ``system/decomposeParDict:numberOfSubdomains`` changes N; nothing
-    restates it. Hence the only request understood is ``True``: a count
-    supplied with the request would be a second source for a fact the case
-    already states. A scheduler allocation that disagrees with N is refused,
-    and neither value overrides the other. The decompose step consumes the
-    dictionary, so a run's provenance fingerprints the value N came from.
-    """
+    N is read from the case's own ``numberOfSubdomains`` via ``read_value``,
+    so the only request understood is ``True`` -- a count would be a second
+    source for a fact the case already states. A scheduler allocation that
+    disagrees with N is refused rather than overriding either value."""
     if request is not True:
         raise ValueError(
             f"OpenFOAM runs parallel on the {_SUBDOMAINS} subdomains the case states, so the "

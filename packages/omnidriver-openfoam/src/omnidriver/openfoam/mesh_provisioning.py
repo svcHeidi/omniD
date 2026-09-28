@@ -1,30 +1,6 @@
-"""Generic default geometry for a case built from scratch.
-
-A case materialized purely from selectors/overrides has no geometry concept
-at all, yet OpenFOAM needs a real mesh before any solver can run. This module
-renders a sane generic default `system/blockMeshDict` (a small slab, "walls"
-patch) that `blockMesh` turns into a mesh at run time. It is not a
-scientifically tuned geometry for any specific tutorial -- callers that need
-particular dimensions should still author their own blockMeshDict.
-
-Which solver actually wants this default, versus `single_cell_block_mesh_dict_text`'s
-fixed one-cell resolution or a real anatomical mesh, is a solver-vocabulary
-decision and belongs to the active plugin; cardiacFoam's lives in
-`plugins/cardiacfoam/dict_builder.py::resolve_synthesis_mutation`/`build_case`.
-
-The default `blockMeshDict` is generated fresh from our own template each
-time (like the plugin's own `system_templates.py`) -- there is no
-pre-existing author file to parse or risk corrupting, so this does not need
-`mutators.py`'s dictionary mutation machinery (that's for patching
-values into an *already-written* file). `dx` (metres, isotropic cell size)
-derives the cell count via `cell_counts_from_dx`, a small pure function
-factored out so a tutorial's own resolution formula for an existing
-author-provided `blockMeshDict` (a genuinely different problem: patching,
-not generating) can share the exact same divide-or-error math instead of
-duplicating it -- e.g. `records/niederer_2011.py`'s own `dx` axis
-(**corrected 2026-09-26**: this used to cite the factory tutorial
-`niederer_2011.py`'s `_replace_blockmesh_resolution`, deleted when that
-tutorial migrated onto a tutorial record).
+"""Generic default `system/blockMeshDict` for a case with no author-supplied
+geometry: a small slab, not tuned to any tutorial's science. Which solver
+wants this vs. a fixed one-cell resolution is a plugin decision.
 """
 
 from __future__ import annotations
@@ -98,26 +74,18 @@ mergePatchPairs
 """
 
 
-# Fixed physical size of the generic default slab, in metres (matches the
-# `scale 0.001` + 0..2 vertex extent above: 2 * 0.001 = 0.002 m). `dx` sweeps
-# this domain's resolution by deriving a cell count from it -- there is no
-# independent geometry concept here, just this one slab's coarseness.
+# Matches `scale 0.001` and the 0..2 vertex extent in
+# _DEFAULT_BLOCK_MESH_DICT above (2 * 0.001 = 0.002 m).
 _DEFAULT_SLAB_SIZE_M: tuple[float, float, float] = (0.002, 0.002, 0.002)
 _DEFAULT_CELLS = 4
 
 
 def cell_counts_from_dx(dx: float, slab_size: Sequence[float]) -> tuple[int, ...]:
-    """Exact integer cell count per axis for isotropic cell size `dx` over
-    each of `slab_size`'s axis lengths (same unit for both -- this function
-    does no conversion).
+    """Integer cell count per axis for isotropic cell size `dx` over
+    `slab_size`'s axis lengths (same unit for both; no conversion).
 
-    Raises `ValueError` if `dx` does not evenly divide every axis length:
-    deliberately no rounding. A requested `dx` that doesn't fit the domain is
-    a caller error to surface, not something to approximate quietly (the
-    rigor the deleted factory `niederer_2011.py`'s
-    `_replace_blockmesh_resolution` established; corrected 2026-09-26,
-    review 54b M8: this cited it as live. Its successor, the niederer2011
-    record's `dx` axis, calls this function).
+    Raises `ValueError` if `dx` does not evenly divide an axis length,
+    deliberately, rather than rounding.
     """
     if dx <= 0:
         raise ValueError(f"dx must be positive; got {dx}")
@@ -140,10 +108,8 @@ def cell_counts_from_dx(dx: float, slab_size: Sequence[float]) -> tuple[int, ...
 def default_block_mesh_dict_text(*, dx_m: float | None = None) -> str:
     """Generic default `system/blockMeshDict` text (a small slab, "walls" patch).
 
-    `dx_m` (metres, isotropic cell size) derives the cell count for the
-    fixed `_DEFAULT_SLAB_SIZE_M` domain via `cell_counts_from_dx` -- since
-    that domain is a cube, all three axes always get the same count. Omit
-    `dx_m` for the fixed default cell count.
+    `dx_m` derives the cell count via `cell_counts_from_dx`; omit for the
+    fixed default cell count.
     """
     if dx_m is None:
         cells = _DEFAULT_CELLS
@@ -154,15 +120,11 @@ def default_block_mesh_dict_text(*, dx_m: float | None = None) -> str:
 
 
 def single_cell_block_mesh_dict_text() -> str:
-    """`system/blockMeshDict` for a solver with no real spatial geometry
-    (cardiacFoam's `singleCellSolver`): the same generic slab as
-    `default_block_mesh_dict_text`, resolved so `dx` exactly spans the whole
-    domain -- one hex cell in total, matching the native `singleCell`
-    tutorial's own one-cell block (`hex (0 1 2 3 4 5 6 7) (1 1 1)
-    simpleGrading (1 1 1)`).
+    """`system/blockMeshDict` for a solver with no real spatial geometry: the
+    generic slab resolved to exactly one hex cell, matching the native
+    `singleCell` tutorial.
 
-    A single-cell solver still needs a real mesh on disk (electroModel.C
-    requires a real `fvMesh` regardless of solver), so it goes through the
-    same `blockMeshDict`-then-`blockMesh` path as every other solver, just
-    at this one fixed resolution -- there is no dx to choose."""
+    electroModel.C requires a real `fvMesh` regardless of solver, so even a
+    single-cell solver goes through the same blockMeshDict/blockMesh path.
+    """
     return default_block_mesh_dict_text(dx_m=_DEFAULT_SLAB_SIZE_M[0])

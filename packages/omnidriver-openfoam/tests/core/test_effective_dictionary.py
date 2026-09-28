@@ -24,7 +24,6 @@ native = pytest.mark.skipif(
 
 
 def test_bashrc_default_is_not_a_hardcoded_machine_path():
-    """The shipped default must not name one machine's absolute path."""
     sig = inspect.signature(resolve_effective_foam_entry)
     default = sig.parameters["bashrc"].default
     assert not isinstance(default, (str, Path)), (
@@ -34,8 +33,6 @@ def test_bashrc_default_is_not_a_hardcoded_machine_path():
 
 
 def test_unspecified_bashrc_does_not_mask_lexical_execution_required(monkeypatch, tmp_path):
-    """Purely-lexical classification needs no runtime and must not be
-    shadowed by a runtime-availability gate when nothing is discoverable."""
     import omnidriver.openfoam.effective_dictionary as effective_dictionary_module
 
     monkeypatch.setattr(effective_dictionary_module, "discover_openfoam_bashrc", lambda: None)
@@ -128,12 +125,7 @@ def test_runtime_dependent_include_is_explicitly_unresolved(tmp_path: Path) -> N
 
 
 def test_include_etc_requires_explicit_root_without_running(tmp_path: Path) -> None:
-    """Corrected 2026-09-22 (audit finding F2): resolution used to consult
-    ``$FOAM_ETC`` alone, so this asserted a single unset variable and a
-    message naming it. Resolution now follows the native ``findEtcFile``
-    chain -- user, site, then distribution -- so an empty environment reports
-    every key that chain depends on, and the message names the searched
-    locations (none configured) rather than one variable."""
+    """Every key find_etc_file's search chain depends on is reported, not just FOAM_ETC."""
     path = tmp_path / "d"
     path.write_text(HEADER + '#includeEtc "caseDicts/example"\n')
 
@@ -178,10 +170,8 @@ def test_include_etc_dependency_is_inspected_from_configured_root(
     )
 
     assert (result.status, result.value) == ("resolved", "23")
-    # Corrected 2026-09-22 (audit finding F2): every key the native
-    # `findEtcFile` chain depends on is now recorded, not just `FOAM_ETC` --
-    # whether HOME/WM_PROJECT_SITE/WM_PROJECT_DIR are set or not changes which
-    # file a future run would select.
+    # every key find_etc_file's search chain depends on is recorded, not just
+    # FOAM_ETC.
     assert result.environment_keys == (
         "FOAM_API", "FOAM_CONFIG_ETC", "FOAM_CONFIG_MODE", "FOAM_ETC", "HOME",
         "WM_PROJECT_DIR", "WM_PROJECT_INST_DIR", "WM_PROJECT_SITE",
@@ -201,8 +191,6 @@ def test_v2412_resolves_include_etc_and_records_runtime_dependency(
 
     dependency = NATIVE_BASHRC.parent / "caseDicts" / "profiling" / "parallel.cfg"
     assert (result.status, result.value) == ("resolved", "parProfiling")
-    # Corrected 2026-09-22 (audit finding F2): see the note in
-    # test_include_etc_dependency_is_inspected_from_configured_root.
     assert result.environment_keys == (
         "FOAM_API", "FOAM_CONFIG_ETC", "FOAM_CONFIG_MODE", "FOAM_ETC", "HOME",
         "WM_PROJECT_DIR", "WM_PROJECT_INST_DIR", "WM_PROJECT_SITE",
@@ -312,9 +300,7 @@ def test_v2412_resolves_explicit_environment_include_and_records_key(tmp_path: P
 
 
 def _sourced_native_environment(bashrc: Path, home: Path) -> dict[str, str]:
-    """The environment the real bashrc exports for a scratch ``HOME`` --
-    ``FOAM_API``, ``WM_PROJECT_VERSION``, ``WM_PROJECT_DIR``,
-    ``WM_PROJECT_SITE``, ``FOAM_ETC`` and everything else it sets."""
+    """The environment the real bashrc exports for a scratch ``HOME``."""
     script = f'export HOME="{home}"; source "{bashrc}" >/dev/null 2>&1; env'
     completed = subprocess.run(
         ["bash", "-lc", script], capture_output=True, text=True, check=True,
@@ -360,19 +346,7 @@ def _native_foam_etc_file_list(
 
 @native
 def test_find_etc_file_agrees_with_native_foam_etc_file(tmp_path: Path) -> None:
-    """Ground truth for audit finding F2, second pass: this repository's own
-    ``find_etc_file`` must select exactly what the real ``foamEtcFile`` binary
-    selects, both when nothing shadows the distribution file and when a file
-    placed at the top of the search chain does. A scratch ``HOME`` (never the
-    real ``~/.OpenFOAM``) is used throughout.
-
-    This is the test the coordinator's re-opened review demanded: the first
-    version of ``find_etc_file`` disagreed with native here -- it searched
-    ``$HOME/.OpenFOAM/$WM_PROJECT_VERSION`` (``v2412``), a location
-    ``foamEtcFile`` never reads on this ESI install, so a file placed there
-    was selected by the driver while native kept reading the distribution
-    file underneath it.
-    """
+    """Uses a scratch ``HOME``, never the real ``~/.OpenFOAM``."""
     from omnidriver.openfoam.effective_dictionary import find_etc_file
 
     home = tmp_path / "home"
@@ -400,13 +374,7 @@ def test_find_etc_file_agrees_with_native_foam_etc_file(tmp_path: Path) -> None:
 
 @native
 def test_find_etc_file_matches_native_list_entry_for_entry(tmp_path: Path) -> None:
-    """`find_etc_file`'s candidate order must match `foamEtcFile -list`
-    entry for entry, in order -- not merely agree on the final selection --
-    for the default mode, an explicit `FOAM_CONFIG_ETC`, and each
-    `FOAM_CONFIG_MODE` the second reopened review specifically asked for
-    (`o`, `u`, `go`). A scratch `HOME` is used throughout; nothing is ever
-    written under the real `~/.OpenFOAM`.
-    """
+    """Candidate order must match, entry for entry, not merely agree on the final selection."""
     from omnidriver.openfoam.effective_dictionary import find_etc_file
 
     home = tmp_path / "home"

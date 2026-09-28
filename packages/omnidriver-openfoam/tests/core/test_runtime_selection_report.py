@@ -1,7 +1,6 @@
-"""``rtst_scanner.runtime_selection_report``: a catalogue's enums against
-the C++'s runtime-selection tables, inside the strict key report. The real
-tree is checked by omnidriver-cardiacfoam's ``test_rtst_enum_contract.py``
-(native); this pins the comparison rules on two written registrations."""
+"""``rtst_scanner.runtime_selection_report``: catalogue enums vs C++
+runtime-selection tables. The real tree is covered by cardiacfoam's native
+``test_rtst_enum_contract.py``; this pins the comparison rules on fixtures."""
 from __future__ import annotations
 
 import json

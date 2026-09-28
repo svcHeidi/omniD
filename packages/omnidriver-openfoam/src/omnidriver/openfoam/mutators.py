@@ -9,21 +9,10 @@ from .literals import _format_value
 
 
 def check_dictionary_word_is_safe(word: str) -> str:
-    """Apply `_format_value`'s `;`/`#`/newline security refusals to a word
-    that will become a dictionary **key or sub-block name**, not a value.
-
-    Added 2026-09-23 (Phase 3, closing Task 2's Gap 2). A dynamic-path
-    binding bound against an explicitly *open* domain (see
-    `contracts.dictionary.DictEntry.allowed_bindings`) is validated as a
-    word by its caller (``omnidriver-cardiacfoam``'s ``overrides.py``) and
-    then becomes a segment of the key or scope passed to `update_foam_entry`
-    / `ensure_foam_dict` -- and those functions' own security check, right
-    above in `_format_value`, only ever inspects the right-hand-side
-    *value*, never the `key`/`scope` argument. Without this, an open
-    binding could carry a `;` or `#` into a newly-created sub-block name
-    (via `add_if_missing`/`ensure_foam_dict`) that nothing else refuses. See
-    SECURITY.md; this must not weaken -- only reuse -- that existing
-    refusal.
+    """Apply `_format_value`'s `;`/`#`/newline refusal to a word that will
+    become a dictionary key or sub-block name, not a value -- neither
+    `update_foam_entry` nor `ensure_foam_dict` otherwise checks that
+    argument. See SECURITY.md.
     """
     return _format_value(word)
 
@@ -46,12 +35,8 @@ def _strip_inline_comment(line: str) -> str:
 
 
 def _mask_comments(text: str) -> str:
-    """Hide comments without moving source positions or altering quoted values.
-
-    This is lexical inspection only: includes and directives are not evaluated.
-    Keeping newlines and character offsets permits the existing scope scanner
-    to ignore commented entries while preserving the original file on writes.
-    """
+    """Blank out comments in place, preserving offsets, so the scope scanner
+    ignores commented entries while writes keep the original file verbatim."""
     result = list(text)
     index = 0
     quoted = False
@@ -104,18 +89,11 @@ def _normalize_scope(scope: str | list[str] | tuple[str, ...] | None) -> list[st
 def _explode_inline_blocks_with_spans(
     lines: list[str],
 ) -> list[tuple[str, int, int, int]]:
-    """Rewrite ``a { b 1; }`` as one brace or entry per virtual line.
-
-    The scope machinery reasons in whole lines, so a block written inline --
-    legal OpenFOAM, and present in tracked tutorial dicts -- collapses to a
-    degenerate line range and resolves to nothing. Splitting at braces and
-    semicolons lets the existing line-based logic handle it unchanged.
-
-    Each result is ``(text, line_index, start_col, end_col)``, so the writing
+    """Rewrite ``a { b 1; }`` (legal OpenFOAM, otherwise a degenerate line
+    range for the line-based scope machinery) as one ``(text, line_index,
+    start_col, end_col)`` brace or entry per virtual line, so the writing
     path can splice a replacement back into the original line instead of
-    reformatting the file the way foamDictionary does. Comments are dropped
-    from the virtual text but survive in the untouched remainder of the line.
-    """
+    reformatting the file."""
     exploded: list[tuple[str, int, int, int]] = []
     for index, line in enumerate(lines):
         code = _strip_inline_comment(line)
@@ -161,13 +139,9 @@ def _explode_inline_blocks(lines: list[str]) -> list[str]:
 
 
 def _iter_direct_child_lines(lines: list[str], start: int, end: int):
-    """Yield the indices in ``[start, end)`` that sit at that span's own
-    level, skipping lines owned by a nested sub-dictionary.
-
-    A scope names one dictionary, not it and all its descendants -- so both
-    the key scans and the block-header scan below must ignore nested content.
-    Braces inside comments don't count; tracked dicts do contain ``// }``.
-    """
+    """Yield the indices in ``[start, end)`` at that span's own level,
+    skipping lines owned by a nested sub-dictionary. Braces inside comments
+    don't count; tracked dicts do contain ``// }``."""
     depth = 0
     for idx in range(start, end):
         # Yield before this line's braces, so a sub-dictionary's header and
@@ -184,13 +158,10 @@ def _iter_direct_child_lines(lines: list[str], start: int, end: int):
 def _quoted_pattern_headers(
     lines: list[str], start: int, end: int
 ) -> list[tuple[str, str]]:
-    """Return ``(regex_source, on_disk_name)`` for quoted block headers.
-
-    OpenFOAM lets a sub-dictionary be keyed by a quoted regex, e.g.
-    ``"Vm|VmFinal|u|uFinal"``, which matches the field ``Vm``. Both this
-    module's line scanner and foamlib match block names literally, so such a
-    block was previously unreachable by member name.
-    """
+    """Return ``(regex_source, on_disk_name)`` for quoted block headers --
+    OpenFOAM lets a sub-dictionary be keyed by a quoted regex (e.g.
+    ``"Vm|VmFinal|u|uFinal"``), which this module's line scanner and foamlib
+    otherwise only match literally."""
     headers: list[tuple[str, str]] = []
     for index in _iter_direct_child_lines(lines, start, end):
         candidate = _strip_inline_comment(lines[index]).strip()
@@ -206,12 +177,10 @@ def _quoted_pattern_headers(
 def _resolve_pattern_scope(
     lines: list[str], dict_name: str, *, start: int, end: int
 ) -> str | None:
-    """Map a member name onto the quoted-regex block header that matches it.
-
-    OpenFOAM's precedence: an exact literal key wins; otherwise the
-    *last-declared* matching pattern wins. Returns the on-disk header text
-    (quotes included) so the caller can match it literally, or ``None``.
-    """
+    """Map a member name onto the quoted-regex block header that matches it,
+    honoring OpenFOAM's precedence (exact literal wins; otherwise the
+    last-declared matching pattern). Returns the on-disk header text (quotes
+    included), or ``None``."""
     for regex_source, on_disk in reversed(
         _quoted_pattern_headers(lines, start, end)
     ):
@@ -230,14 +199,9 @@ def _find_dict_block_bounds(
     start: int,
     end: int,
 ) -> tuple[int, int]:
-    # A trailing \b fails to match a scope name ending in a non-word
-    # character (e.g. a quoted regex-style block name like
-    # "phiE|phiEFinal|phiI|phiIFinal" -- both the closing quote and whatever
-    # follows it, whitespace or newline, are non-word, so there is no word
-    # boundary there at all). Require whitespace, an opening brace, or
-    # end-of-line instead, which also still correctly rejects a longer name
-    # that merely has this one as a prefix (e.g. "singleCellSolverCoeffs"
-    # must not match a line starting "singleCellSolverCoeffsExtra").
+    # A trailing \b would not match a quoted regex-style block name (its
+    # closing quote is non-word), so require whitespace/brace/end-of-line
+    # instead; this still rejects a longer name with dict_name as a prefix.
     header_pattern = re.compile(rf"^\s*{re.escape(dict_name)}(?=\s|\{{|$)")
 
     for i in _iter_direct_child_lines(lines, start, end):
@@ -247,18 +211,10 @@ def _find_dict_block_bounds(
 
         stripped = candidate.strip()
         if stripped.endswith(";") and "{" not in stripped:
-            # This candidate is shaped like a scalar entry (name value;)
-            # sharing dict_name, not a block header. Scanning forward from
-            # here for the first '{' would silently walk into an unrelated
-            # sibling block and treat its contents as this scope's -- keep
-            # looking for a genuine block header with this name instead.
+            # A scalar entry (name value;) sharing dict_name, not a block
+            # header; keep looking rather than walk into a sibling block.
             continue
 
-        # OpenFOAM dicts commonly appear as:
-        #   someDict
-        #   {
-        # or
-        #   someDict {
         open_line = i
         while open_line < end and "{" not in _structural_text(lines[open_line]):
             open_line += 1
@@ -317,21 +273,13 @@ def read_foam_entry(
     scope: str | list[str] | tuple[str, ...] | None = None,
 ) -> str | None:
     """Read the value of a key from an OpenFOAM dictionary-like text file.
+    Returns the raw value string -- trailing semicolon and inline comments
+    stripped -- or ``None`` if the key or its scope block is absent.
 
-    Reuses the ``_resolve_search_region`` / ``_find_dict_block_bounds``
-    infrastructure from :func:`update_foam_entry`. Returns the raw value
-    string — trailing semicolon and inline comments stripped — or ``None``
-    if the key or its scope block is absent.
-
-    Deliberately does NOT shell out to foamDictionary, unlike its writing
-    siblings. foamDictionary re-serialises what it reads (``0.0`` -> ``0``,
-    ``5.5e-3`` -> ``0.0055``), and those values feed the dict builders, so
-    preferring it made generated dicts and their provenance digests depend on
-    whether OpenFOAM happened to be sourced. It also *evaluates* the file:
-    a ``#calc``/``#codeStream`` entry is compiled and executed to produce the
-    value, which is not an acceptable side effect of reading a case whose
-    override values are written in verbatim. Returning the literal source
-    text is both deterministic and inert.
+    Deliberately does not shell out to foamDictionary: it re-serialises
+    values (``0.0`` -> ``0``) and evaluates ``#calc``/``#codeStream``
+    entries, neither of which is acceptable for a read that feeds
+    dict-builder provenance digests.
     """
     if not file_path.exists():
         return None
@@ -352,8 +300,7 @@ def read_foam_entry(
             continue
         value_part = stripped[len(key):].strip()
         if not value_part.endswith(";"):
-            # A legal scalar/list entry can span lines. Never report just the
-            # key's first line as its value, or swallow a sub-dictionary.
+            # A legal scalar/list entry can span lines.
             for continuation in lines[idx + 1:search_end]:
                 if "{" in _structural_text(continuation) or "}" in _structural_text(continuation):
                     return None
@@ -407,23 +354,12 @@ def splice_raw_entry_text(
     *,
     scope: str | list[str] | tuple[str, ...] | None = None,
 ) -> bool:
-    """Replace ``key``'s value with ``raw_text``, written in verbatim.
-
-    The same line-location machinery ``update_foam_entry`` uses below
-    (``_explode_inline_blocks_with_spans`` / ``_resolve_search_region`` /
-    ``_iter_direct_child_lines``), factored out so it is reachable without
-    the ``"/*" in source`` gate that normally routes every real dict file
-    (they all carry the license banner) straight to ``foam_backend`` before
-    this logic ever runs. Needed by ``foam_backend.update_entry`` for a
-    value class that must never be reserialised by foamlib -- see its
-    docstring for why.
-
-    Returns ``True`` if an existing single-line scalar entry was found and
-    replaced, ``False`` if the scope could not be resolved, the key was not
-    found, or the matched entry spans multiple lines. Deliberately never
-    calls into ``foam_backend`` itself (unlike ``update_foam_entry``'s own
-    fallbacks) -- the two tiers must not call each other, or a value that
-    reaches here because tier 2 needs it would recurse.
+    """Replace ``key``'s value with ``raw_text``, written verbatim, bypassing
+    the ``"/*" in source`` gate that otherwise routes straight to
+    ``foam_backend``. Returns ``False`` if the scope or key isn't found, or
+    the matched entry spans multiple lines. Never calls into
+    ``foam_backend`` itself: the two tiers must not call each other, or a
+    value routed here because ``foam_backend`` needs it would recurse.
     """
     if not file_path.exists():
         raise FileNotFoundError(f"Dictionary file not found: {file_path}")
@@ -474,22 +410,15 @@ def update_foam_entry(
     scope: str | list[str] | tuple[str, ...] | None = None,
     add_if_missing: bool = False,
 ) -> None:
-    """
-    Update a key in an OpenFOAM dictionary-like text file.
+    """Update a key in an OpenFOAM dictionary-like text file, matching the
+    first non-comment line starting with `key` and rewriting it as
+    `<indent><key>    <value>;`. If `scope` is given, the update is
+    restricted to that dictionary block (or nested path of blocks).
 
-    Matches the first non-comment line starting with `key` and rewrites it as:
-        <indent><key>    <value>;
-
-    If `scope` is provided, the update is restricted to the named dictionary
-    block (or nested path of blocks).
-
-    add_if_missing=True appends `<key>    <value>;` as a new line at the end
-    of the scoped block instead of raising when the key isn't already
-    present -- e.g. an optional fvSolution PIMPLE control (nNonOrthogonal-
-    Correctors) that a case's committed dict may or may not already declare.
-    foamDictionary's own `-set` already does this implicitly (auto-creates a
-    missing key); this mirrors that for the pure-Python fallback path so
-    behaviour doesn't depend on whether OpenFOAM happens to be sourced.
+    `add_if_missing=True` appends the entry to the scoped block instead of
+    raising when the key isn't present, mirroring foamDictionary's own
+    `-set` (which auto-creates a missing key) so behaviour doesn't depend on
+    whether OpenFOAM happens to be sourced.
     """
     if not file_path.exists():
         raise FileNotFoundError(f"Dictionary file not found: {file_path}")
@@ -497,8 +426,8 @@ def update_foam_entry(
     key_pattern = re.compile(rf"^\s*{re.escape(key)}(?=\s|;|$)")
     source = file_path.read_text()
     if "/*" in source:
-        # The line writer cannot safely splice entries whose source spans
-        # cross comments. Use the structured editor; it never evaluates code.
+        # The line writer cannot safely splice entries whose source crosses
+        # block comments.
         return foam_backend.update_entry(
             file_path, key, value, scope=scope, add_if_missing=add_if_missing
         )
@@ -509,9 +438,7 @@ def update_foam_entry(
             [t for t, _, _, _ in virtual], scope
         )
     except KeyError:
-        # The line scanner couldn't even resolve the scope -- e.g. a brace
-        # inside a quoted value defeats its brace counting. Let a real parser
-        # have a go before giving up.
+        # e.g. a brace inside a quoted value defeats the scanner's brace count.
         return foam_backend.update_entry(
             file_path, key, value, scope=scope, add_if_missing=add_if_missing
         )
@@ -589,14 +516,9 @@ def remove_foam_dict(
         return foam_backend.remove_dict(
             file_path, dict_name, scope=scope, missing_ok=missing_ok
         )
-    # A trailing \b fails to match a scope name ending in a non-word
-    # character (e.g. a quoted regex-style block name like
-    # "phiE|phiEFinal|phiI|phiIFinal" -- both the closing quote and whatever
-    # follows it, whitespace or newline, are non-word, so there is no word
-    # boundary there at all). Require whitespace, an opening brace, or
-    # end-of-line instead, which also still correctly rejects a longer name
-    # that merely has this one as a prefix (e.g. "singleCellSolverCoeffs"
-    # must not match a line starting "singleCellSolverCoeffsExtra").
+    # A trailing \b would not match a quoted regex-style block name (its
+    # closing quote is non-word), so require whitespace/brace/end-of-line
+    # instead; this still rejects a longer name with dict_name as a prefix.
     header_pattern = re.compile(rf"^\s*{re.escape(dict_name)}(?=\s|\{{|$)")
 
     remove_start: int | None = None
@@ -660,20 +582,9 @@ def remove_foam_entry(
     scope: str | list[str] | tuple[str, ...] | None = None,
     missing_ok: bool = False,
 ) -> None:
-    """Remove a scalar entry (``name value;``) from an OpenFOAM dictionary file.
-
-    The scalar counterpart of :func:`remove_foam_dict`. That one deletes a
-    ``name { ... }`` block and raises if the matched name has no opening
-    brace; this one deletes the entry's line (or lines, for a value that
-    wraps before its terminating ``;``) and raises if the matched name turns
-    out to open a block instead.
-
-    Needed because a caller who wants a scalar gone has no way to say so with
-    the block remover: ``missing_ok`` covers only *absence*, so a key that is
-    present but the wrong shape raises regardless. Deleting
-    ``surfaceCurrentPatches.xMin`` when switching a bath-bidomain case between
-    boundary variants is exactly that case.
-    """
+    """Remove a scalar entry (``name value;``) from an OpenFOAM dictionary
+    file; the scalar counterpart of :func:`remove_foam_dict`, which raises
+    if the matched name turns out to open a block instead."""
     if not file_path.exists():
         raise FileNotFoundError(f"Dictionary file not found: {file_path}")
 
@@ -728,24 +639,11 @@ def read_foam_dict_block(
     scope: str | list[str] | tuple[str, ...] | None = None,
 ) -> str | None:
     """Read the raw text of a named sub-dictionary block -- header line,
-    braces, and body verbatim -- from an OpenFOAM dictionary-like text
-    file, or ``None`` if the file, its scope, or the block itself is
-    absent.
-
-    Block-location logic is the read-only twin of :func:`remove_foam_dict`'s
-    fallback scan (same header pattern, same brace-depth bookkeeping),
-    deliberately operating on raw, unexploded lines rather than
-    :func:`read_foam_entry`'s exploded ones: the goal here is to hand back
-    exactly what is on disk so it can be replayed verbatim via
-    :func:`ensure_foam_dict`'s ``block_text`` parameter elsewhere (e.g. a
-    dict regenerator carrying a ``conductionNetworkDomains`` block forward
-    unmodified across a top-level solver switch it has no way to
-    reconstruct from the catalog alone), not to reformat or reason about
-    individual leaf entries.
-
-    Deliberately text-based, not foamDictionary-based, for the same reason
-    as :func:`read_foam_entry`: foamDictionary re-serialises and evaluates
-    the file it reads, which is not an acceptable side effect of a read.
+    braces, and body verbatim -- from an OpenFOAM dictionary-like text file,
+    or ``None`` if the file, its scope, or the block itself is absent.
+    Operates on raw, unexploded lines so the result can be replayed verbatim
+    via :func:`ensure_foam_dict`'s ``block_text`` parameter. Text-based, not
+    foamDictionary-based, for the same reason as :func:`read_foam_entry`.
     """
     if not file_path.exists():
         return None
@@ -788,10 +686,9 @@ def read_foam_dict_block(
     return None
 
 
-# No foamlib fallback here, deliberately. block_text is inserted verbatim to
-# preserve comments and formatting for the dynamic-container carry-forward
-# in plugins/cardiacfoam/dict_builder.py; routing it through a parser would
-# re-serialise exactly what this path exists to keep intact.
+# No foamlib fallback here, deliberately: block_text is inserted verbatim
+# to preserve comments and formatting for cardiacfoam's dict_builder
+# carry-forward; routing it through a parser would re-serialise it.
 def ensure_foam_dict(
     file_path: Path,
     dict_name: str,
@@ -805,14 +702,9 @@ def ensure_foam_dict(
 
     lines = file_path.read_text().splitlines(keepends=True)
     search_start, search_end = _resolve_search_region(lines, scope)
-    # A trailing \b fails to match a scope name ending in a non-word
-    # character (e.g. a quoted regex-style block name like
-    # "phiE|phiEFinal|phiI|phiIFinal" -- both the closing quote and whatever
-    # follows it, whitespace or newline, are non-word, so there is no word
-    # boundary there at all). Require whitespace, an opening brace, or
-    # end-of-line instead, which also still correctly rejects a longer name
-    # that merely has this one as a prefix (e.g. "singleCellSolverCoeffs"
-    # must not match a line starting "singleCellSolverCoeffsExtra").
+    # A trailing \b would not match a quoted regex-style block name (its
+    # closing quote is non-word), so require whitespace/brace/end-of-line
+    # instead; this still rejects a longer name with dict_name as a prefix.
     header_pattern = re.compile(rf"^\s*{re.escape(dict_name)}(?=\s|\{{|$)")
 
     for idx in range(search_start, search_end):
@@ -821,12 +713,10 @@ def ensure_foam_dict(
             return False
 
     if not dict_name.startswith('"'):
-        # dict_name may already be covered by a quoted-regex block header
-        # (e.g. "Vm|VmFinal" already matches "Vm") even though no literal
-        # header matched above. Without this check, ensure_foam_dict would
-        # insert a duplicate literal block that OpenFOAM's own
-        # literal-beats-pattern precedence then shadows the existing one
-        # with -- a surprising side effect of a false "not found".
+        # dict_name may already be covered by a quoted-regex header (e.g.
+        # "Vm|VmFinal" matches "Vm") even with no literal match above;
+        # otherwise this would insert a block OpenFOAM's own
+        # literal-beats-pattern precedence then shadows.
         if (
             _resolve_pattern_scope(lines, dict_name, start=search_start, end=search_end)
             is not None

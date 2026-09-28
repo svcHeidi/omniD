@@ -1,17 +1,10 @@
-"""Differential harness: post-change mutators vs. the tier-1-only reference.
-
-The one-time byte-identity and semantic-preservation comparisons that used to
-live here (against ``_mutators_reference.py``, the pre-migration
-implementation) have been run and verified across the real ``tutorials/``
-corpus and removed per plan. What remains is the standing security
-regression: a directive embedded in a dict value must never be evaluated.
-"""
+"""Standing security regression: a directive embedded in a dict value must
+never be evaluated."""
 
 from omnidriver.openfoam import mutators
 
 
 def test_no_directive_is_evaluated(tmp_path):
-    """A #codeStream entry must survive as text, never execute."""
     sentinel = tmp_path / "PWNED_DIFF"
     path = tmp_path / "d"
     path.write_text(

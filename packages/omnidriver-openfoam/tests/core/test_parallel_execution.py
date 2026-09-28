@@ -1,10 +1,6 @@
 """Tests the shared decomposePar/mpirun/reconstructPar workflow_dag step
-builder. Corrected 2026-09-27 (5.4b-P): this used to say "used by every
-manufactured-solution tutorial's _workflow_dag_for" -- that factory-path
-caller (`solve_steps`) is deleted now that no factory tutorial calls it;
-`TestRecordParallelForm` below covers the one remaining caller, a tutorial
-record's solve step through `parallel_steps_for_record`.
-"""
+builder, via a tutorial record's solve step through
+`parallel_steps_for_record`."""
 
 from __future__ import annotations
 
@@ -16,10 +12,9 @@ from omnidriver.openfoam.parallel_execution import (
 )
 
 class TestRecordParallelForm(unittest.TestCase):
-    """PAR (owner Q6, 2026-09-26): the OpenFOAM layer's answer to core's
-    ``get_parallel_steps``, for a record's solve step. N is read only from
-    the case's ``system/decomposeParDict:numberOfSubdomains``, as the run
-    will see it; nothing restates it."""
+    """The OpenFOAM layer's answer to core's ``get_parallel_steps``, for a
+    record's solve step. N is read only from the case's
+    ``system/decomposeParDict:numberOfSubdomains``; nothing restates it."""
 
     SOLVE = {
         "id": "solve", "command": "cardiacFoam", "args": ["-noFunctionObjects"],

@@ -1,21 +1,7 @@
-"""`plan_verbatim_content` and `render_patch_case_files`'s `"content"` target
-join the resolve/render channel -- Phase 3 Task 7
-(``docs/superpowers/plans/2026-09-23-phase3-finish-the-write-channel.md``).
-
-This format behaviour (a whole document's exact bytes, supplied by the
-caller rather than assembled from a key/value edit) is owned by OpenFOAM, the
-same way Task 4's ``hex (`` rewrite is -- so it is pinned here, in
-``omnidriver-openfoam``'s own suite, not only through a cardiacFoam-side
-adapter test. Before this file, the `"content"` branch in
-`render_patch_case_files` had exactly one exerciser (a now-deleted
-cardiacFoam tutorial's own characterization test); changing or removing that
-one adapter test would have left the renderer itself untested.
-
-Mirrors `test_block_mesh_resolution_channel.py`'s own structure and fixture
-conventions (a real `CaseMutationRequest`/`ResolvedMutation` pair, built
-directly rather than through a plugin's resolver, since no plugin's own
-resolver builds a raw ``"content"`` target and a real edit in one request
-yet).
+"""`plan_verbatim_content` and `render_patch_case_files`'s `"content"`
+target: a whole document's exact bytes, supplied by the caller rather than
+assembled from a key/value edit. Owned by OpenFOAM and pinned here, in its
+own suite, rather than only through a downstream plugin's adapter test.
 """
 from __future__ import annotations
 
@@ -31,11 +17,8 @@ _TEMPLATE_TEXT = "FoamFile\n{\n}\ntype electroModel;\n"
 
 
 def _delta_t_assignment(value: float) -> ParameterAssignment:
-    """A `system/controlDict` `deltaT` edit -- what `plan_delta_t` used to
-    build before it was deleted 2026-09-27 (tutorials-are-pointers step C,
-    its only production caller). This file needs a real, ordinary key/value
-    `ParameterAssignment` to combine with a `"content"` target; which
-    document/key it addresses is incidental to what these tests check."""
+    """A real, ordinary key/value `ParameterAssignment` to combine with a
+    `"content"` target; which document/key it addresses is incidental."""
     return ParameterAssignment(
         qualified_id="deltaT", owner="test", document="system/controlDict",
         key_path=("deltaT",), binding={}, value=value, value_kind="scalar",
@@ -45,11 +28,7 @@ def _delta_t_assignment(value: float) -> ParameterAssignment:
 
 def _request(case_root: Path) -> CaseMutationRequest:
     """A zero-parameter `clone_and_patch` request, declaring a source
-    artifact instead -- a whole-template-file swap's own shape, and the real
-    reason `CaseMutationRequest`'s "clone_and_patch needs a parameter"
-    invariant was widened (2026-09-23, Phase 3 Task 7) to accept a source
-    artifact in its place.
-    """
+    artifact instead -- a whole-template-file swap's own shape."""
     return CaseMutationRequest(
         mode="clone_and_patch", case_root=case_root, adapter_id="org.omnidriver.test",
         workflow="test", source_artifacts=("test.template:electroModel",),
@@ -106,9 +85,7 @@ def test_two_content_targets_on_one_document_are_refused(tmp_path):
 
 def test_a_content_target_can_author_a_document_that_does_not_exist_yet(tmp_path):
     """Unlike every other patch target, `"content"` does not require the
-    document to already exist under `case_root` -- a whole-template-file
-    swap that reuses one `case_root` across several variants finds nothing
-    at the destination document on its very first `apply_case` call."""
+    document to already exist under `case_root`."""
     case_root = tmp_path / "case"
     (case_root / "constant").mkdir(parents=True)
     assert not (case_root / "constant" / "electroProperties").exists()
@@ -129,14 +106,9 @@ def test_a_content_target_can_author_a_document_that_does_not_exist_yet(tmp_path
 
 
 def test_a_non_content_patch_against_a_missing_document_is_still_refused(tmp_path):
-    """The other half of the previous test's distinction: a `"content"`
-    target relaxes the "document must already exist" rule *only* for
-    itself. An ordinary key/value edit against a document that is not there
-    must still fail loudly -- unchanged from before this task, and already
-    pinned by `test_block_mesh_resolution_channel.py`'s own
-    `test_the_renderer_refuses_a_missing_block_mesh_dict` for the hex-target
-    case; this is the same guarantee for the ordinary value-edit case,
-    confirmed here rather than assumed."""
+    """A `"content"` target relaxes the "document must already exist" rule
+    only for itself: an ordinary key/value edit against a document that is
+    not there must still fail loudly."""
     case_root = tmp_path / "case"
     (case_root / "constant").mkdir(parents=True)
     delta_t = _delta_t_assignment(1e-4)
@@ -162,10 +134,9 @@ def test_a_non_content_patch_against_a_missing_document_is_still_refused(tmp_pat
 
 
 def test_a_content_target_plus_a_value_edit_on_the_same_document_lands_on_top(tmp_path):
-    """Mirrors `render_synthesis_case_files`'s own combination case
-    (`repeated_edits_to_one_file`): a content target may author a document's
-    whole body, and a value edit on that same document is applied afterward,
-    atop the just-authored content -- not a second, independent write."""
+    """A content target may author a document's whole body, and a value
+    edit on that same document is applied afterward, atop the
+    just-authored content -- not a second, independent write."""
     case_root = tmp_path / "case"
     (case_root / "system").mkdir(parents=True)
     control_dict_text = "FoamFile\n{\n}\ndeltaT 1e-06;\nendTime 1;\n"
@@ -198,12 +169,9 @@ def test_a_content_target_plus_a_value_edit_on_the_same_document_lands_on_top(tm
 
 
 def test_before_digest_and_mode_are_preserved_when_the_document_already_existed(tmp_path):
-    """A `"content"` target against a document that *does* already exist
-    (e.g. re-running a whole-template-file swap for a second variant
-    against the same reused `case_root`) must still carry a real
-    `before_digest`/`mode` for the commit's own conflict check and journal --
-    exactly like every other patch target, not the `None`/`None` a freshly
-    authored document gets."""
+    """A `"content"` target against a document that already exists must
+    still carry a real `before_digest`/`mode`, like every other patch
+    target, not the `None`/`None` a freshly authored document gets."""
     case_root = tmp_path / "case"
     (case_root / "constant").mkdir(parents=True)
     existing_path = case_root / "constant" / "electroProperties"

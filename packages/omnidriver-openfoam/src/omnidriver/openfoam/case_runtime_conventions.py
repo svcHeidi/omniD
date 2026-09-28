@@ -1,10 +1,6 @@
-"""OpenFOAM's generated-case path declarations.
-
-These are conventions of the OpenFOAM runtime, not Core policy and not
-cardiacFOAM science.  Both the generic OpenFOAM plugin and cardiacFOAM reuse
-this one declaration; a non-OpenFOAM plugin supplies nothing unless its own
-environment needs an equivalent convention.
-"""
+"""OpenFOAM's generated-case path declarations: a runtime convention, not
+core policy or cardiacFOAM science, shared by the OpenFOAM plugin and
+cardiacFOAM alike."""
 
 from __future__ import annotations
 

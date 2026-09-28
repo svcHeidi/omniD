@@ -1,37 +1,6 @@
 """``block_mesh_resolution_axis`` against the REAL native cardiacFOAM
-tutorials tree -- CLAUDE.md's "testing against real meshes": real case or
-native-source drift gate, nothing invented. The native tutorials root comes
-ONLY from ``OMNIDRIVER_NATIVE_TUTORIALS`` (supplied, never discovered); this
-FAILS, not skips, when it is unset -- see ``_native_tutorials_root`` below,
-copied from ``test_config_value_reader_contract.py``'s own established
-pattern.
-
-Two tests, matching the task's own two native checks:
-
-1. ``block_mesh_resolution_axis`` against the real
-   ``manufacturedSolutions/bathBidomain/system/blockMeshDict.3D`` with
-   ``N=20`` produces a ``(20 20 20)`` patch. This file has THREE ``hex (``
-   blocks (all currently ``80 80 80``), not one -- read directly below, not
-   assumed.
-2. The same axis, wired into a real ``TutorialRecord`` and run through
-   ``record_execution.preview_record_case`` with the study value that
-   reproduces the file's OWN current resolution (``80``), reports that
-   patch ``"unchanged"`` -- design §4 step 7.
-
-**Extended 2026-09-26 (P2,
-``docs/superpowers/plans/2026-09-25-tutorials-are-pointers-remaining.md``
-§5e): several documents, over bath's three files and bidomain's.** Bath's
-``system/blockMeshDict.1D``/``.2D``/``.3D`` each have THREE agreeing
-``hex (`` blocks (``expected_blocks=3``), and each file refines a different
-subset of directions -- ``.1D`` is ``(80 1 1)``, ``.2D`` is ``(80 80 1)``,
-``.3D`` is ``(80 80 80)`` (read directly below, not assumed) -- exactly the
-real shape owner decision (d) describes ("a direction whose current count
-is 1 stays 1... reading which directions are refined FROM EACH FILE
-ITSELF"). Bidomain's own ``system/blockMeshDict.1D``/``.2D``/``.3D`` each
-have exactly ONE ``hex (`` block (``expected_blocks=1``), with three
-different current resolutions again (``(1280 1 1)``/``(640 640 1)``/
-``(20 20 20)``) -- the other real shape this axis must support: several
-single-block documents under one axis instance.
+tutorials tree. ``OMNIDRIVER_NATIVE_TUTORIALS`` supplies the root (never
+discovered); FAILS, not skips, when unset.
 """
 
 from __future__ import annotations
@@ -71,11 +40,8 @@ def _native_tutorials_root() -> Path:
 
 
 def _read_current_hex_cell_counts(text: str) -> str:
-    """Parse the (assumed uniform) current cell counts out of a real
-    ``blockMeshDict``'s first ``hex (`` line -- test-only scaffolding, not
-    part of the axis: a real ``ConfigValueCapability`` reader for
-    ``"hex_cell_counts"`` is future wiring (step 4/5), out of this task's
-    scope (only the axis itself)."""
+    """Parse the current cell counts out of a real `blockMeshDict`'s first
+    `hex (` line -- test-only scaffolding, not part of the axis."""
     match = re.search(r"hex \([^)]*\)\s*\(([^)]*)\)\s*simpleGrading", text)
     assert match is not None, "fixture has no `hex (` block to read"
     return match.group(1)
@@ -87,7 +53,7 @@ def _isotropic(n, current, extents=None):
 
 
 def _stays_at_one(n, current, extents=None):
-    """Owner decision (d): "a direction whose current count is 1 stays 1"."""
+    """A direction whose current count is 1 stays 1."""
     del extents
     return tuple(n if c != 1 else 1 for c in current)
 
@@ -98,10 +64,9 @@ def test_block_mesh_resolution_axis_against_the_real_bath_bidomain_block_mesh_di
     assert real_document.is_file(), f"fixture path missing: {real_document}"
     real_text = real_document.read_text()
 
-    # Read the real file's current resolution directly, rather than assuming
-    # it (task instruction: "Read the real file to learn its current
-    # counts; do not assume them"). Confirms this fixture really does have
-    # more than one `hex (` block, all at the same current resolution.
+    # Read the real file's current resolution directly rather than assuming
+    # it; confirms this fixture has more than one `hex (` block, all at the
+    # same current resolution.
     hex_lines = [line for line in real_text.splitlines() if "hex (" in line]
     assert len(hex_lines) == 3
     assert all(_read_current_hex_cell_counts(line) == "80 80 80" for line in hex_lines)
@@ -120,17 +85,16 @@ def test_block_mesh_resolution_axis_against_the_real_bath_bidomain_block_mesh_di
     assert len(result.patches) == 1
     patch = result.patches[0]
     assert patch.document == _BLOCK_MESH_DOCUMENT
-    # Typed data (2026-09-25 correction, `axes/block_mesh_resolution.py`'s
-    # own module docstring), not pre-joined text.
+    # Typed data, not pre-joined text.
     assert patch.value == (20, 20, 20)
-    # expected_blocks=3 travels through the patch's own key path (P2).
+    # expected_blocks=3 travels through the patch's own key path.
     assert patch.key_path == ("hex_cell_counts", "3")
 
 
 # ---------------------------------------------------------------------------
-# P2 (2026-09-26): several documents at once, over bath's three real
-# `blockMeshDict.<dim>` files -- decision (d)'s own reusable resolution,
-# "a direction whose current count is 1 stays 1", against real content.
+# Several documents at once, over bath's three real `blockMeshDict.<dim>`
+# files -- the reusable "a direction whose current count is 1 stays 1"
+# resolution, against real content.
 # ---------------------------------------------------------------------------
 
 
@@ -183,9 +147,9 @@ def test_block_mesh_resolution_axis_over_all_three_real_bath_bidomain_documents(
 
 
 # ---------------------------------------------------------------------------
-# P2 (2026-09-26): bidomain's own three real `blockMeshDict.<dim>`
-# documents -- the other real shape, one block per document
-# (`expected_blocks=1`), still handled under one axis instance.
+# Bidomain's own three real `blockMeshDict.<dim>` documents -- the other
+# real shape, one block per document (expected_blocks=1), still handled
+# under one axis instance.
 # ---------------------------------------------------------------------------
 
 
@@ -240,27 +204,22 @@ def test_block_mesh_resolution_axis_over_all_three_real_bidomain_documents(tmp_p
 # Test-only scaffolding for the full `preview_record_case` pipeline: a
 # record-key validator, case-value comparator and config-value reader for
 # this axis's own `("hex_cell_counts",)` patch shape. None of this lives in
-# `axes/block_mesh_resolution.py` or in `OpenFOAMEnvironmentPlugin` -- wiring
-# a real environment's `get_record_key_validator`/`get_case_value_comparator`
-# /`get_config_value_reader` for tutorial-record studies is step 4/5's job
-# (no real plugin implements any of the four record-pipeline hooks yet, by
-# inspection), not this axis's. This proves the AXIS's own output correctly
-# drives that pipeline once such an adapter exists, the same way core's own
-# tests (`test_tutorial_records.py`) prove the pipeline with their own toy
-# JSON-document adapter.
+# `axes/block_mesh_resolution.py` or in `OpenFOAMEnvironmentPlugin`; this
+# proves the AXIS's own output correctly drives that pipeline, the same way
+# core's own `test_tutorial_records.py` proves the pipeline with a toy JSON
+# adapter.
 # ---------------------------------------------------------------------------
 
 
 def _hex_cell_counts_validator(document, key_path, value):
-    # P2 (2026-09-26): matched by PREFIX, not exact equality -- a patch
-    # declaring `expected_blocks` > 1 now carries a second key-path segment
-    # (`case_planning.hex_cell_counts_key_path`), and this test-only catalog
-    # must recognise that shape too, the same way the real environment's
+    # Matched by PREFIX, not exact equality: a patch declaring
+    # `expected_blocks` > 1 carries a second key-path segment
+    # (`case_planning.hex_cell_counts_key_path`), which this test-only
+    # catalog must recognise too, the same way the real environment's
     # `_read_config_value_by_key_path` does.
     if key_path[:1] == ("hex_cell_counts",):
-        # design §5's environment-owned-key exception: no full OpenFOAM key
-        # catalog exists yet, so this is written (or, here, merely compared)
-        # unvalidated rather than refused.
+        # Environment-owned-key exception: no full OpenFOAM key catalog
+        # exists yet, so this is compared unvalidated rather than refused.
         return "hex_cell_counts", False
     raise KeyError(f"{document}:{'.'.join(key_path)} is not in this test's catalog")
 
@@ -268,9 +227,9 @@ def _hex_cell_counts_validator(document, key_path, value):
 def _hex_cell_counts_agree(value_kind, requested, current) -> bool:
     if current is None:
         return False
-    # `requested` is the axis's own typed tuple of ints (2026-09-25
-    # correction) -- space-join it the same way the real writer would
-    # before comparing token-for-token against `current`'s text.
+    # `requested` is the axis's own typed tuple of ints -- space-join it the
+    # same way the real writer would before comparing token-for-token
+    # against `current`'s text.
     if isinstance(requested, (tuple, list)):
         requested_text = " ".join(str(item) for item in requested)
     else:
@@ -287,9 +246,8 @@ def _read_current_value(document_path: Path, key_path):
 
 
 class _RecordTestPlugin(OpenFOAMEnvironmentPlugin):
-    """The real OpenFOAM environment plugin, plus the four tutorial-record
-    hooks this test needs -- see the scaffolding note above for why they are
-    supplied here rather than by the real plugin."""
+    """The real OpenFOAM environment plugin, plus the tutorial-record hooks
+    this test needs (see the scaffolding note above)."""
 
     def __init__(self, record: TutorialRecord) -> None:
         self._record = record
@@ -381,12 +339,8 @@ def test_preview_record_case_reports_a_different_resolution_as_changed():
 
 
 # ---------------------------------------------------------------------------
-# ``extents``, read from the real native files (review 54b M5, 2026-09-26).
-# These replace ``test_axes_block_mesh_resolution.py``'s
-# ``test_resolution_receives_the_documents_own_extent_in_metres``, which
-# built 20x3x7 and 40x6x14 mm ``blockMeshDict``s from nothing (the owner's
-# "testing against real meshes" rule). The Niederer slab is 20x3x7 mm under
-# ``scale 0.001``; bidomain's ``.3D`` is the unit cube with no ``scale``.
+# extents, read from the real native files: the Niederer slab is 20x3x7 mm
+# under `scale 0.001`; bidomain's `.3D` is the unit cube with no `scale`.
 # ---------------------------------------------------------------------------
 
 _NIEDERER_BLOCK_MESH = "NiedererEtAl2011verification/system/blockMeshDict"
@@ -438,11 +392,9 @@ def _niederer_copy(tmp_path: Path, edit) -> Path:
 
 
 def test_convert_to_meters_is_read_when_scale_is_absent(tmp_path):
-    """OpenFOAM v2412 ``blockMesh::readPointTransforms``
-    (``src/mesh/blockMesh/blockMesh/blockMesh.C``) reads the scale with
+    """OpenFOAM's ``blockMesh::readPointTransforms`` reads the scale with
     ``dict.findCompat("scale", {{"convertToMeters", 1012}})``: the pre-2010
-    keyword is still honoured. Read as scale 1.0 before this fix, it gave a
-    1000x extent and, at dx 0.5 mm, a silent (40000, 6000, 14000)."""
+    keyword is still honoured."""
     path = _niederer_copy(tmp_path, lambda text: text.replace("scale   0.001;", "convertToMeters 0.001;"))
     assert _extent(path) == pytest.approx((0.02, 0.003, 0.007))
 

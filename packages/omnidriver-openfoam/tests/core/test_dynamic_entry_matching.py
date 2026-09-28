@@ -1,13 +1,6 @@
 """`dict_builder.match_dynamic_entry` -- captures a dynamic-path binding,
-not just whether one matched.
-
-Added 2026-09-23 (Phase 3, closing Task 2's Gap 2), alongside this module's
-pre-existing `is_known_override_driver_path` (a bare membership check with
-the same wildcard convention). A caller that must also validate *what was
-bound* -- e.g. `omnidriver-cardiacfoam`'s `overrides.py` checking a
-per-case `ecgDomains` name against its entry's declared binding domain --
-needs the captured groups themselves.
-"""
+not just whether one matched, for a caller that must also validate what
+was bound (e.g. a per-case name against its entry's declared domain)."""
 
 from __future__ import annotations
 
@@ -68,8 +61,7 @@ def test_two_placeholder_templates_do_not_collide_by_segment_length():
 
 
 def test_a_non_dynamic_entry_is_never_matched():
-    """This function only ever matches `dynamic_path=True` entries -- a
-    static entry's own literal path is a plain-dict-lookup's job, not
+    """A static entry's literal path is a plain-dict-lookup's job, not
     this function's, even when the concrete path is an exact match."""
     assert match_dynamic_entry("$A.static.key", _ENTRIES) is None
 

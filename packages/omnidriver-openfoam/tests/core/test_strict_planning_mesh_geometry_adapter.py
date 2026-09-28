@@ -1,12 +1,6 @@
-"""Tests for omnidriver.core.strict_planning's mesh-geometry adapter.
-
-_mesh_geometry_diagnostics lives in core (it wraps detection into
-StrictDiagnostics for the plan report and owns the exempt/env-var gating),
-but its default detection backend is openfoam's mesh_geometry module -- a
-genuinely non-OpenFOAM plugin would have to override
-get_base_mesh_geometry_diagnostics itself (see compatibility.py). These
-tests exercise that default path, so they need omnidriver.openfoam
-installed even though the function under test is a core symbol.
+"""Tests omnidriver.core.strict_planning's mesh-geometry adapter: core wraps
+openfoam's mesh_geometry detection by default (see compatibility.py), so
+these tests need omnidriver.openfoam installed despite testing a core symbol.
 """
 
 from __future__ import annotations

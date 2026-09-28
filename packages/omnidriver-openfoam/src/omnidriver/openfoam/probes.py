@@ -1,23 +1,6 @@
-"""OpenFOAM's ``probes`` function-object output: its layout, with no field meaning.
-
-Each fact comes from OpenFOAM v2412 itself (``src/sampling/probes/probes.C``,
-``probes::prepare``) and a real run (docs/solver-learning/cardiacfoam.md,
-section Q):
-
-- one file per field at ``postProcessing/<function>/<startTime>/<field>``;
-- a header of ``# Probe <k> (<x> <y> <z>)`` lines, one per configured
-  location, echoing the location *as configured* -- ``# Not Found`` is
-  appended when no cell contains it (Q6), and OpenFOAM then writes -VGREAT
-  in its column, a number, not a statement, so the flag is kept here;
-- a ``# Time <k>...`` line naming each column's probe;
-- one row per written time: the time, then one value per probe. A vector or
-  tensor value is written in parentheses (Q5), and refused here: this parser
-  reads scalars only.
-
-Where OpenFOAM sampled is not in this file: it is the function's own
-``interpolationScheme`` (:func:`interpolation_scheme`), which the case's
-``system/<function>`` dict declares (default ``cell``, per source; Q9,
-2026-09-27).
+"""OpenFOAM's ``probes`` function-object output: file layout, with no field
+meaning. Verified against OpenFOAM v2412's own
+``src/sampling/probes/probes.C``.
 """
 from __future__ import annotations
 
@@ -27,16 +10,20 @@ from pathlib import Path, PurePosixPath
 
 Point = tuple[float, float, float]
 
+# One file per field at postProcessing/<function>/<startTime>/<field>: a
+# `# Probe <k> (<x> <y> <z>)` header per configured location (`# Not Found`
+# appended when no cell contains it), a `# Time <k>...` line naming each
+# column's probe, then one row per time: time + one value per probe.
 _PROBE = re.compile(r"^# Probe (\d+) \(([^()]*)\)(.*)$")
 _NOT_FOUND = "# Not Found"
 
 
 @dataclass(frozen=True)
 class ProbeSeries:
-    """``locations``: ``(index, configured location)`` in header order.
-    ``rows[i]`` holds one value per probe, in ``locations`` order, at
-    ``times[i]``. ``not_found``: the indices OpenFOAM marked ``# Not Found``,
-    whose values are OpenFOAM's -VGREAT placeholder, never a sample."""
+    """``rows[i]`` holds one value per probe, in ``locations`` order, at
+    ``times[i]``. ``not_found`` marks indices OpenFOAM wrote as
+    ``# Not Found``, holding its -VGREAT placeholder rather than a sample.
+    """
 
     locations: tuple[tuple[int, Point], ...]
     times: tuple[float, ...]
@@ -81,6 +68,7 @@ def parse_probe_series(text: str, *, source: str) -> ProbeSeries:
         if stripped.startswith("#"):
             continue
         if "(" in stripped or ")" in stripped:
+            # OpenFOAM writes vector/tensor probe values in parentheses (probes.C).
             raise ValueError(f"{where} holds a vector or tensor value; this parser reads scalar probe files only")
         if not locations:
             raise ValueError(f"{source} has no '# Probe <k> (<x> <y> <z>)' lines before its data")
@@ -108,7 +96,7 @@ def interpolation_scheme(case_root: Path, probe_path: str) -> str:
     ``probe_path`` (``postProcessing/<function>/<instance>/<field>``), read
     from the case's own ``system/<function>`` -- one source of truth, never
     restated. OpenFOAM's own default, ``cell``, applies when the key is
-    absent (``probes.C``, ``samplePointScheme_("cell")``; Q9)."""
+    absent (``probes.C``'s ``samplePointScheme_("cell")``)."""
     parts = PurePosixPath(probe_path).parts
     if len(parts) != 4 or parts[0] != "postProcessing":
         raise ValueError(f"{probe_path!r} is not a probes file, postProcessing/<function>/<instance>/<field>")

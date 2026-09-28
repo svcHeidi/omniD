@@ -150,8 +150,6 @@ def test_build_staleness_silent_when_binary_newer_than_source(tmp_path):
 
 
 def test_build_staleness_ignores_binaries_outside_user_appbin(tmp_path):
-    # A core/system binary (not under FOAM_USER_APPBIN) is never flagged even if
-    # older than source -- only user-compiled utilities are policed.
     import os
 
     from omnidriver.openfoam.environment_preflight import (
@@ -202,10 +200,7 @@ def test_missing_executable_is_error(clean_env):
     assert len(missing) == 1
     assert missing[0].level == "error"
     assert missing[0].field == "setExprFields"
-    # Added 2026-09-26 (conformance Task 14, C9): the message names the
-    # command as a quoted token, so a reader -- and conformance C9, which
-    # requires exactly that of every solver's preflight -- can tell which
-    # command is missing without parsing prose.
+    # Conformance C9 requires the missing command as a quoted token.
     assert missing[0].message == "'setExprFields' not found on PATH."
 
 
@@ -218,12 +213,8 @@ def test_present_executables_have_no_error(clean_env):
 
 
 def test_case_script_commands_are_not_path_checked(clean_env):
-    # OpenFOAM's Allrun/Allclean/etc are case-local scripts declared by the
-    # adapter, resolved relative to caseRoot at execution time -- they
-    # are never on PATH by design, so shutil.which() must never be asked
-    # about them. Previously this produced a false-positive
-    # "missing_executable" for every Allrun-routed plan (e.g. every
-    # sweep-run case), even with OpenFOAM fully sourced.
+    # Allrun/Allclean/etc are case-local scripts resolved relative to
+    # caseRoot at execution time, never on PATH by design.
     clean_env.setattr(strict_planning.shutil, "which", _which_factory(set()))
     diags = _diags(_dag("Allrun"), openfoam_environment_context())
     assert "missing_executable" not in {d.code for d in diags}
@@ -248,11 +239,6 @@ def _fake_context_declaring_entrypoint(relpath: str):
 
 
 def test_a_declared_entrypoint_is_also_not_path_checked():
-    """Tier 4 entrypoint slice (future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md):
-    a plugin's own declared entrypoint -- not just the fixed Allrun-family
-    names -- must be excluded from the must-exist-on-PATH check, or fixing
-    command resolution and the allowlist without this makes a *working* plan
-    get refused before it starts."""
     reqs_no_context = _required_executables(_dag("run.sh"))
     assert "run.sh" in reqs_no_context.executables
 
@@ -374,21 +360,7 @@ def test_report_to_json_environment_diagnostics_defaults_empty():
     assert report.to_json()["environment_diagnostics"] == []
 
 
-# --- WM_PROJECT_DIR is conditioned on the plan, like its neighbours ----------
-#
-# The missing_executable and missing_mpi checks both ask "what does this plan
-# actually invoke?". The WM_PROJECT_DIR check sat beside them asking nothing,
-# so it blocked any plan whenever OpenFOAM was not sourced -- including a plan
-# that invokes no OpenFOAM executable at all.
-#
-# That is what reddened the test-cardiaccore CI job on its first run:
-# CardiacCorePlugin delegates environment diagnostics to this module, and a
-# case whose whole DAG is a two-line Allrun was refused on a Linux runner with
-# no OpenFOAM, while passing on a machine that happens to have one.
-
-
 def test_unsourced_environment_does_not_block_a_plan_that_needs_no_openfoam(clean_env):
-    """A plan invoking no OpenFOAM executable must not be blocked by its absence."""
     clean_env.delenv("WM_PROJECT_DIR", raising=False)
     clean_env.setattr(strict_planning.shutil, "which", _which_factory(set()))
 
@@ -402,12 +374,6 @@ def test_unsourced_environment_does_not_block_a_plan_that_needs_no_openfoam(clea
 
 
 def test_an_unsourced_environment_is_still_reported_when_nothing_needs_it(clean_env):
-    """Not blocking is not the same as saying nothing.
-
-    The plan declares no OpenFOAM executable, but a case script this module
-    cannot see into might still want one. Silence here would be the same defect
-    one level down: absence of a declared need read as evidence of no need.
-    """
     clean_env.delenv("WM_PROJECT_DIR", raising=False)
     clean_env.setattr(strict_planning.shutil, "which", _which_factory(set()))
 
@@ -421,7 +387,6 @@ def test_an_unsourced_environment_is_still_reported_when_nothing_needs_it(clean_
 
 
 def test_the_stale_build_check_reads_the_supplied_source_root_only(tmp_path, monkeypatch):
-    """Corrected 2026-09-28: the root was a walk-up to a retired layout."""
     from types import SimpleNamespace
 
     from omnidriver.core.plugin_profile import CxxMapping
@@ -443,9 +408,8 @@ def test_the_stale_build_check_reads_the_supplied_source_root_only(tmp_path, mon
     ("HYDRA build details:\n    Version: 4.0.1", True),
 ])
 def test_an_mpirun_from_another_mpi_family_is_refused(tmp_path, version, mismatched):
-    """Added 2026-09-28: openCARP's MPICH first on PATH under OpenFOAM's
-    Open MPI failed two parallel tests. ``WM_MPLIB`` (from the sourced
-    bashrc) says which family ``mpirun --version`` must print."""
+    """``WM_MPLIB`` names the family ``mpirun --version`` must print; a
+    mismatch means the wrong MPI would silently run underneath."""
     from omnidriver.openfoam.environment_preflight import _mpi_family_diagnostics
 
     bin_dir = tmp_path / "bin"

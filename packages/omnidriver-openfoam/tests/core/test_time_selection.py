@@ -1,24 +1,6 @@
 """``time_selection.selected_start_time`` against OpenFOAM v2412's own rule
-(``src/OpenFOAM/db/Time/Time.C``, ``Foam::Time::setControls``). One test per
-row of the owner's table (2026-09-26):
-
-| situation | OpenFOAM | required behaviour |
-|---|---|---|
-| no ``system/controlDict`` | not an OpenFOAM case | no roots at all |
-| ``startFrom`` absent | defaults to ``latestTime`` | same |
-| ``startFrom startTime`` with no ``startTime`` | ``FatalIOError`` | refuse by name |
-| ``startFrom`` not startTime/firstTime/latestTime | ``FatalIOError`` | refuse by name |
-| ``firstTime``/``latestTime`` | ``findTimes``, skipping ``constant`` | same, via the conventions regex |
-| ``firstTime``/``latestTime``, no time folders | ``startTime_`` stays its ctor default 0 | ``"0"`` |
-
-cardiacCore has no time concept of its own: it always writes to ``0/`` and
-every one of its cases sets ``startFrom startTime; startTime 0;`` explicitly
--- never exercising the "absent" or "malformed" rows. Nothing here invents
-time semantics for a non-OpenFOAM folder; the "no controlDict" row is the
-seam that keeps such a folder OUT of this function's opinion entirely (see
-``selected_start_time``'s own docstring for the owner's rule verbatim, and
-``test_provenance_integration.py`` for the ``get_input_roots``-level proof
-that "no controlDict" really does mean "no roots at all", not ``"0"``).
+(``src/OpenFOAM/db/Time/Time.C``, ``Foam::Time::setControls``): one test per
+row of its startFrom/startTime state machine.
 """
 
 from __future__ import annotations
@@ -50,18 +32,14 @@ def _write_control_dict(case_root: Path, text: str) -> None:
 
 
 def test_no_control_dict_answers_none_not_zero(tmp_path: Path) -> None:
-    """No ``system/controlDict`` at all: not an OpenFOAM case by the owner's
-    rule ("controlDict is how we know an OpenFOAM case exists"). ``None``,
-    never the literal ``"0"`` -- that string would be indistinguishable from
-    a real, deliberate start time."""
+    """No ``controlDict`` means this isn't recognizably an OpenFOAM case:
+    ``None``, never the literal ``"0"``, which would be indistinguishable
+    from a real, deliberate start time."""
     assert _select(tmp_path) is None
 
 
 def test_start_from_absent_defaults_to_latest_time(tmp_path: Path) -> None:
-    """``Time.C``: ``controlDict_.getOrDefault<word>("startFrom",
-    "latestTime")`` -- the comment right above it says "default is to resume
-    calculation from 'latestTime'". Not ``startTime``, which today's
-    (pre-fix) code wrongly assumed."""
+    """Mirrors ``Time.C``'s ``getOrDefault<word>("startFrom", "latestTime")``."""
     _write_control_dict(tmp_path, "application cardiacFoam;\n")
     for name in ("0", "0.5", "1"):
         (tmp_path / name).mkdir()
@@ -70,10 +48,8 @@ def test_start_from_absent_defaults_to_latest_time(tmp_path: Path) -> None:
 
 
 def test_start_from_start_time_with_no_start_time_entry_refuses_by_name(tmp_path: Path) -> None:
-    """``startFrom startTime;`` with no ``startTime`` entry: real OpenFOAM's
-    ``controlDict_.readEntry("startTime", startTime_)`` is a ``FatalIOError``
-    when the key is absent -- refused here as ``TimeSelectionError``, not the
-    old silent ``"0"``."""
+    """Real OpenFOAM's ``controlDict_.readEntry("startTime", startTime_)``
+    raises ``FatalIOError`` when the key is absent."""
     _write_control_dict(tmp_path, "startFrom startTime;\n")
 
     with pytest.raises(TimeSelectionError, match="startTime"):

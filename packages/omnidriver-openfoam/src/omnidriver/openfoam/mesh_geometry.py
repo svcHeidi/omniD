@@ -1,19 +1,6 @@
-#----------------------------------------------------------------------------#
-# Module
-#     mesh_geometry
-#
-# Description
-#     Non-mutating, plan-time detection of mesh point scale. Reads polyMesh
-#     point bounding boxes directly (ASCII/binary/gz) so the strict planner can
-#     flag non-SI meshes and coupled-region scale mismatches before any compute.
-#     Plugins can add their own point-set checks (e.g. a conduction graph) on
-#     top, reusing this module's parsing and classification primitives.
-#     The rescaling *write* is delegated to the checkMeshGeometry utility.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
-"""Plan-time mesh-scale detection. Stdlib-only; never mutates the case."""
+"""Plan-time mesh-scale detection. Stdlib-only; never mutates the case.
+
+Rescaling is delegated to the ``checkMeshGeometry`` utility."""
 from __future__ import annotations
 
 import re
@@ -23,21 +10,15 @@ from pathlib import Path
 from foamlib import FoamFile
 
 
-# Thresholds MUST mirror applications/utilities/checkMeshGeometry/checkMeshGeometry.C.
-# A drift guard lives in test_mesh_geometry_contract.py.
-#
-# _MM_LOWER is the metres/mm cutoff. It is 20.0 (not 1.0) so that large SI
-# domains -- whole-torso / whole-body bidomain meshes (~1-2 m) -- are NOT
-# mis-flagged as millimetres, while a heart authored in mm (~50-150) still
-# lands at/above the cutoff and is flagged. This is the one knob to tune if
-# your physical meshes are larger than ~20 m in SI (they should not be).
+# Thresholds mirror checkMeshGeometry.C; see test_mesh_geometry_contract.py.
+# _MM_LOWER is 20.0, not 1.0, so whole-torso/whole-body domains (~1-2 m) are
+# not mis-flagged as millimetres, while a heart authored in mm (~50-150) is.
 _MM_LOWER = 20.0
 _UM_LOWER = 1000.0
 _UM_UPPER = 1.0e6
 
-# Below the mm cutoff but >= 1.0 raw units is ambiguous: it could be a large SI
-# domain (a whole-torso mesh) OR a small mm/cm mesh. The gate treats this band
-# as metres (no rescale) but emits an advisory warning -- it never hard-blocks.
+# Below _MM_LOWER but >= 1.0 is ambiguous (large SI domain vs. small mm/cm
+# mesh); treated as metres with an advisory warning, never a hard block.
 _AMBIGUOUS_LOWER = 1.0
 
 
@@ -50,13 +31,7 @@ class ScaleClass:
 
 
 def classify_scale(max_dim: float) -> ScaleClass:
-    """Classify a mesh by its largest bounding-box extent (raw units).
-
-    max_dim < 20      -> "m"  (covers all SI cardiac/torso/whole-body domains)
-    20  <= max_dim < 1e3 -> "mm"
-    1e3 <= max_dim < 1e6 -> "um"
-    max_dim >= 1e6    -> "m"  (implausibly large; fall back to metres)
-    """
+    """Classify a mesh by its largest bounding-box extent (raw units)."""
     if _MM_LOWER <= max_dim < _UM_LOWER:
         return ScaleClass("mm", 1e-3)
     if _UM_LOWER <= max_dim < _UM_UPPER:
@@ -104,10 +79,8 @@ def read_bounding_box(points_path: Path) -> BoundingBox:
             raise MeshParseError("fewer than one point parsed")
         coords = [float(v) for point in points for v in point]
     except (ValueError, OSError, TypeError) as exc:
-        # Not just a foamlib decode failure: a syntactically valid but
-        # non-points file (e.g. bare standalone words) parses without
-        # raising, so the failure only surfaces once we try to read the
-        # result as coordinates. Both cases map to the same MeshParseError.
+        # A non-points file can parse in FoamFile without raising; the
+        # failure surfaces only once read as coordinates, so both map here.
         raise MeshParseError(f"could not parse points file: {exc}") from exc
     return bounding_box_from_flat_coords(coords)
 
@@ -169,12 +142,10 @@ def mesh_geometry_diagnostics(
 ) -> tuple[MeshDiagnostic, ...]:
     """Detect non-SI meshes and coupled-region scale disagreement.
 
-    coupled_groups names regions that must share scale. When omitted, all
-    discovered regions are treated as one implicitly-coupled group — a
-    conservative heuristic that may over-warn for regions that are not actually
-    coupled. Deriving real groups from the case's own declared region couplings
-    is a deferred follow-up. To limit false blocking, a *unit* disagreement is
-    error-level but a same-unit *non-overlapping bbox* is only warning-level.
+    coupled_groups names regions that must share scale; when omitted, all
+    discovered regions are treated as one group. A unit disagreement between
+    coupled regions is error-level; a same-unit non-overlapping bbox is only
+    warning-level.
     """
     regions = discover_mesh_regions(case_root)
     if not regions:

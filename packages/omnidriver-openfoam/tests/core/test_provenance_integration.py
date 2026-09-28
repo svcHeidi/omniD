@@ -48,13 +48,6 @@ def test_latest_time_selection_is_an_openfoam_adapter_convention(tmp_path: Path)
 
 
 def test_latest_time_selection_uses_the_conventions_regex_not_float(tmp_path: Path) -> None:
-    """Final review M5: before this fix, ``latestTime`` picked a candidate
-    time directory by ``float(name)`` succeeding, a rule that disagreed with
-    ``instance_directory_pattern`` (the same rule staging/discovery use) on
-    names like ``inf``. A directory literally named ``inf`` parses as a
-    float but is not an instance by the conventions regex, so it must be
-    ignored here too -- the rule is stated once, not twice with different
-    answers."""
     _write_control_dict(tmp_path, "startFrom latestTime;\nstartTime 0;\n")
     for name in ("0", "0.5", "inf", "nan", "1_0", "+1"):
         (tmp_path / name).mkdir()
@@ -70,20 +63,8 @@ def test_latest_time_selection_uses_the_conventions_regex_not_float(tmp_path: Pa
 
 
 def test_a_missing_control_dict_contributes_no_roots_at_all(tmp_path: Path) -> None:
-    """**Corrected 2026-09-26 (owner decision):** this used to pin the
-    silent ``"0"`` default a stricter refusal broke and Final review M5
-    reverted the same day. The owner settled it instead: "``controlDict``
-    is how we know an OpenFOAM case exists; that is what we use. The rule
-    is mandatory and the same for every case, with no exceptions." A
-    missing ``controlDict`` is not this hook's problem to refuse OR to
-    silently answer ``"0"`` for -- it means the case may not be
-    OpenFOAM-shaped at all, so ``selected_start_time`` answers ``None`` and
-    ``get_input_roots`` contributes no roots at all, not even a start
-    folder. `omnidriver-cardiaccore`'s
-    `test_controlled_allrun_executes_without_domain_claims` (a real,
-    deliberately non-OpenFOAM Allrun-only case) keeps passing under this
-    rule too -- see the native/cardiacCore verification in this task's
-    report."""
+    """A missing controlDict means the case may not be OpenFOAM-shaped at
+    all, so it is neither refused nor defaulted to "0"."""
     from omnidriver.openfoam.mutators import read_foam_entry
 
     assert selected_start_time(
@@ -145,9 +126,6 @@ def _write(case_root: Path, relpath: str) -> None:
 
 
 def test_the_start_time_is_walked_serially_and_in_every_replica(tmp_path: Path) -> None:
-    """What an OpenFOAM stack fingerprints from its time and replica
-    directories (I9). A characterization: it passes before A2c moves the
-    rule out of core, and must pass unchanged after."""
     _write_control_dict(tmp_path, "startFrom startTime;\nstartTime 0;\n")
     for relpath in ("0/Vm", "0.5/Vm", "processor0/0/Vm", "processor0/0.5/Vm", "processor1/0/Vm"):
         _write(tmp_path, relpath)
@@ -166,13 +144,8 @@ def test_openfoam_declares_its_start_time_and_replicas_as_input_roots(tmp_path: 
 
 
 class _CollatedLayoutPlugin:
-    """A minimal companion provider stacked on top of
-    ``OpenFOAMEnvironmentPlugin`` that overrides only the replica
-    convention (a collated ``procs*`` layout instead of ``processor*``).
-    Implements exactly the required ``SolverPlugin`` contract -- nothing
-    solver-shaped beyond that -- so it can join a provider stack without
-    colliding with OpenFOAM's own case-file declarations or its exclusive
-    hooks (``apply_overrides``, ...)."""
+    """Minimal companion plugin overriding only the replica convention
+    (collated ``procs*`` instead of ``processor*``)."""
 
     plugin_name = "collated layout test plugin"
     plugin_id = "test.collated-layout"
@@ -214,14 +187,9 @@ class _CollatedLayoutPlugin:
 
 
 def test_a_stacked_providers_merged_replica_globs_are_what_provenance_walks(tmp_path: Path) -> None:
-    """R2 fix, finding I2: the OpenFOAM layer must read the STACK's merged
-    replica convention, not always its own default. A stacked provider that
-    redeclares ``replica_directory_globs`` (here, a collated ``procs*``
-    layout instead of ``processor*``) makes provenance follow it too, not
-    just staging/discovery -- both go through
-    ``case_runtime_conventions.conventions()``, and ``get_case_runtime_conventions``
-    composes ``single`` (most specific wins), so the companion's answer, not
-    OpenFOAM's, is what every core mechanic reads."""
+    """A stacked provider's own `replica_directory_globs` is what provenance
+    walks, not OpenFOAM's default -- `get_case_runtime_conventions` composes
+    "most specific wins"."""
     _write_control_dict(tmp_path, "startFrom startTime;\nstartTime 0;\n")
     for relpath in ("0/Vm", "procs4/0/Vm", "processor0/0/Vm"):
         _write(tmp_path, relpath)

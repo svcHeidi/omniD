@@ -67,9 +67,7 @@ def test_coerce_value_parses_bare_multiword_scheme_spec():
 
 def test_coerce_value_parses_uniform_field_shorthand():
     # foamlib recognises "uniform <value>" as OpenFOAM's field-uniform-value
-    # shorthand and collapses it straight to the scalar -- a deliberate,
-    # accepted behaviour change once coerce_value stopped scoping to a
-    # leading '['/'(' check (see module docstring).
+    # shorthand and collapses it straight to the scalar.
     assert foam_backend.coerce_value("uniform 0") == 0.0
 
 
@@ -82,12 +80,10 @@ def test_coerce_value_falls_back_to_string_on_unparseable_bracket_token():
 
 
 def test_update_entry_splices_multicomponent_dimensioned_tensor_verbatim(tmp_path):
-    # Regression test for a real cardiacFoam FATAL IO ERROR: writing a
-    # multi-component Dimensioned through foamlib's normal path produces
-    # "conductivity [...] 6(...)" (a generic sized-list), but the actual
-    # solver reads conductivity as a fixed-arity symmTensor VectorSpace,
-    # which rejects the leading count outright. Confirmed directly against
-    # the real solver before this fix existed.
+    # foamlib's normal path writes a multi-component Dimensioned as
+    # "conductivity [...] 6(...)" (a generic sized-list), but cardiacFoam
+    # reads conductivity as a fixed-arity symmTensor VectorSpace, which
+    # rejects the leading count outright (confirmed against the real solver).
     raw = "[-1 -3 3 0 0 2 0] (0.106875 -0.0084931 -0.022561 0.116682 -0.0130256 0.0398782)"
     path = _dict(
         tmp_path,
@@ -117,11 +113,8 @@ def test_update_entry_still_uses_foamlib_for_dimensioned_scalar(tmp_path):
 
 
 def test_update_entry_writes_bare_multiword_scheme_spec(tmp_path):
-    # Regression test for a real materialization failure across every
-    # gauss_linear sweep case: "cannot write value 'Gauss linear' to
-    # 'default': invalid string: 'Gauss linear'". Confirmed directly against
-    # the real solver before this fix: writes clean, foamDictionary reads it
-    # back as the same two tokens.
+    # Confirmed against the real solver: writes clean, foamDictionary reads
+    # it back as the same two tokens.
     path = _dict(
         tmp_path,
         "gradSchemes\n{\n    default leastSquares;\n}\n",
@@ -170,12 +163,7 @@ def test_update_entry_creates_key_when_add_if_missing(tmp_path):
 
 
 def test_update_entry_add_if_missing_requires_scope(tmp_path):
-    """Mirrors tier 1's mutators.py:434 guard so the two tiers agree.
-
-    Tier 1's ``update_foam_entry`` raises this *before* ever falling
-    through to this adapter, so a mismatched contract here would be
-    untestable through the real call path and misleading in isolation.
-    """
+    """Mirrors tier 1's ``mutators.update_foam_entry`` guard so the two tiers agree."""
     path = _dict(tmp_path, "endTime 0.3;\n")
     with pytest.raises(ValueError, match="add_if_missing requires a scope"):
         foam_backend.update_entry(path, "purgeWrite", "0", add_if_missing=True)
@@ -212,31 +200,14 @@ def test_update_entry_rejects_directive_value(tmp_path):
     ["#includeEtcFuncs", "#", "PCG#calc"],
 )
 def test_update_entry_rejects_directive_value_foamlib_would_have_allowed(tmp_path, payload):
-    """foamlib's own type-strictness is not a substitute for an explicit check.
-
-    Measured directly against 1.7.5: none of these three payloads look
-    type-inconsistent to foamlib (none reads back as another type), so
-    foamlib accepts and writes them completely unconverted -- e.g.
-    ``'#includeEtcFuncs'``, a bare ``'#'``, and ``'PCG#calc'`` all pass
-    through with no error. Only an explicit rejection (mirroring tier 1's
-    rule, not delegating to foamlib's incidental behaviour) closes this.
-    """
+    """foamlib's own type-strictness (confirmed against 1.7.5) accepts and writes all three payloads unconverted."""
     path = _dict(tmp_path, "solvers\n{\n    Vm { solver PCG; }\n}\n")
     with pytest.raises(ValueError):
         foam_backend.update_entry(path, "solver", payload, scope=["solvers", "Vm"])
 
 
 def test_update_entry_rejects_directive_shaped_container_value(tmp_path):
-    """A non-str value must not bypass the guard by skipping the string check.
-
-    Reproduced directly: an earlier version of _reject_directive_shaped
-    returned immediately for any non-str value, so a dict/list containing a
-    directive-shaped string inside it reached foamlib completely unscreened
-    -- e.g. {"codeInclude": '#{ system("id"); #}'} was accepted and written
-    as a live coded block. Tier 1's _format_value has no equivalent hole
-    because it stringifies unconditionally, for every type, before
-    screening; this guard must do the same.
-    """
+    """A non-str value (e.g. a dict) must not bypass the guard by skipping the string check."""
     path = _dict(tmp_path, "solvers\n{\n    Vm { solver PCG; }\n}\n")
     payload = {"codeInclude": '#{ system("id"); #}'}
     with pytest.raises(ValueError):
@@ -261,13 +232,7 @@ def test_remove_dict_missing_ok_true_is_silent(tmp_path):
 
 
 def test_remove_dict_leaves_no_whitespace_only_line(tmp_path):
-    """foamlib's ``del`` leaves the emptied block's line as spaces, not gone.
-
-    Measured directly: deleting ``solvers/Vm`` from
-    ``solvers\\n{\\n    Vm {...}\\n}\\n`` leaves ``solvers\\n{\\n    \\n}\\n`` --
-    the brace lines survive but the interior line is whitespace, not absent.
-    ``"Vm" not in text`` alone does not catch this.
-    """
+    """foamlib's ``del`` leaves the emptied block's line as spaces, not gone; ``"Vm" not in text`` alone would miss that."""
     path = _dict(tmp_path, "solvers\n{\n    Vm { tolerance 1e-11; }\n}\n")
     foam_backend.remove_dict(path, "Vm", scope=["solvers"])
     text = path.read_text()
@@ -276,15 +241,7 @@ def test_remove_dict_leaves_no_whitespace_only_line(tmp_path):
 
 
 def test_remove_dict_maps_decode_error_to_value_error(tmp_path):
-    """``del`` re-parses the whole file, so unrelated garbage elsewhere can
-
-    surface as a ``FoamFileDecodeError`` even when the delete target itself
-    is well-formed. Measured directly: deleting a perfectly valid
-    ``solvers/Vm`` from a file that *also* contains unrelated malformed text
-    raises ``foamlib.FoamFileDecodeError`` (a ``ValueError`` subclass) from
-    the ``del`` call, not a ``KeyError`` -- the bare ``except KeyError:`` an
-    earlier draft of this function had would let it escape unmapped.
-    """
+    """``del`` re-parses the whole file, so unrelated garbage elsewhere can surface as a ``FoamFileDecodeError``, not a ``KeyError``."""
     path = _dict(
         tmp_path,
         "solvers\n{\n    Vm { tolerance 1e-11; }\n}\n"

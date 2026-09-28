@@ -24,17 +24,14 @@ def _diagnostics_for_path(
     for name in functions.keys():
         subdict = functions[name]
         if not hasattr(subdict, "keys"):
-            # A non-dict entry inside functions -- e.g. #includeFunc, which
-            # carries no braces and samples nothing of its own.
+            # A non-dict entry (e.g. #includeFunc) carries no braces and
+            # samples nothing of its own.
             continue
         region = subdict.get("region", "electro")
         if region not in samplable:
-            # A region this plugin's samplable-fields map doesn't name
-            # (e.g. a not-yet-cataloged bath/torso domain) -- skip rather
-            # than guess. Forcing it into "electro" would fabricate a
-            # warning for a region electro never claimed to cover; the
-            # same "never surface a spurious warning from a limitation"
-            # rule this module already applies to parse/IO failures.
+            # Skip rather than guess: a region absent from samplable (e.g. an
+            # uncatalogued bath/torso domain) would otherwise fabricate a
+            # warning under "electro".
             continue
         allowed = samplable[region]
         for field_name in subdict.get("fields", []):
@@ -62,14 +59,12 @@ def function_object_field_diagnostics(
 ) -> tuple[StrictDiagnostic, ...]:
     """Warn (never error) about controlDict function objects sampling fields
     absent from ``samplable`` (an open ``{region_name: {field, ...}}`` map,
-    typically from :func:`capability_manifest.build_capability_manifest` --
-    the built-in cardiac plugin currently declares ``"electro"`` and
-    ``"solid"``, but core imposes no fixed key set). A function object whose
-    ``region`` isn't a key in ``samplable`` at all is skipped rather than
-    checked against a guessed bucket -- see :func:`_diagnostics_for_text`.
+    typically from :func:`capability_manifest.build_capability_manifest`;
+    core imposes no fixed key set). A function object whose ``region`` isn't
+    a key in ``samplable`` is skipped rather than checked against a guessed
+    bucket.
 
-    Degrades to silence on any parse or IO failure — a parser limitation must
-    never surface as a spurious field warning. Honors
+    Degrades to silence on any parse or IO failure. Honors
     ``SKIP_FUNCTION_OBJECT_DIAGNOSTICS`` to bypass the check entirely.
     """
     if os.environ.get("SKIP_FUNCTION_OBJECT_DIAGNOSTICS"):
@@ -84,10 +79,8 @@ def function_object_field_diagnostics(
         try:
             diagnostics.extend(_diagnostics_for_path(path, normalized, str(path)))
         except Exception:
-            # A parse failure must not fabricate a warning -- this module's
-            # entire contract is "degrade to silence," never surface a
-            # parser limitation as a false positive or a crash. Catches
-            # both OSError (unreadable file) and foamlib.FoamFileDecodeError
-            # (a ValueError subclass, malformed file) uniformly.
+            # Degrade to silence on any parse/IO failure (OSError, or
+            # foamlib.FoamFileDecodeError, a ValueError subclass) rather
+            # than crash or fabricate a warning.
             continue
     return tuple(diagnostics)

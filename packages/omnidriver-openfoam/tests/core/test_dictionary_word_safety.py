@@ -1,13 +1,6 @@
 """`mutators.check_dictionary_word_is_safe` -- `_format_value`'s security
-refusals, reused for a dictionary KEY or sub-block name rather than a value.
-
-Added 2026-09-23 (Phase 3, closing Task 2's Gap 2). A dynamic-path binding
-bound against an explicitly open domain becomes a segment of the `key`/
-`scope` argument to `update_foam_entry`/`ensure_foam_dict`, and neither of
-those routes it through `_format_value` (that only ever inspects the
-right-hand-side value) -- so without this, an open binding could carry a
-`;` or `#` into a newly-created sub-block name unrefused. See SECURITY.md.
-"""
+refusals, reused for a dictionary key or sub-block name, since neither
+`update_foam_entry` nor `ensure_foam_dict` routes those through it. See SECURITY.md."""
 
 from __future__ import annotations
 

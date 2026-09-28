@@ -1,8 +1,6 @@
 """OpenFOAM cannot lex a bare token that starts with a digit but is not a
-number: `dimension 3D;` raises a FatalIOError ("expected word, found label 3").
-Tutorials write `dimension "3D";`. The emitter must do the same, and must NOT
-quote anything else -- quoting a scalar, vector or dimension set would break
-dictionaries that work today.
+number (`dimension 3D;` raises a FatalIOError); the emitter quotes such a
+token, e.g. `dimension "3D";`, and nothing else.
 """
 
 from __future__ import annotations

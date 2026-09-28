@@ -21,11 +21,6 @@ values. That evidence is only as good as whichever installation was found; it
 does not claim support for other OpenFOAM versions or distributions, and the
 fixtures report what they resolved against rather than assuming one.
 
-**Corrected 2026-09-19:** this named `/Volumes/OpenFOAM-v2412` — one machine's
-external volume — as though it were the oracle everywhere. The same literal was
-a default argument of `resolve_effective_foam_entry`, which is why
-`test-openfoam` failed in CI on every runner.
-
 `resolve_effective_foam_entry(...)` exposes that native operation explicitly.
 It reports the parser/runtime identity and inspected local files, follows only
 quoted local includes it can inspect, records environment variables used to
