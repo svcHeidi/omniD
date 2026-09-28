@@ -21,14 +21,6 @@
 # Description
 #     Tests routing of resolved sweep values to build_and_launch parameters.
 #
-#     Moved from omnidriver/tests/core/test_sweep_routing.py (Phase 2 Task
-#     M2): these tests assert cardiacFoam's own routing catalog (e.g.
-#     routed["electro_selectors"] == {"ionicModel": "TNNP"}, and dict-builder
-#     text placement of cellZone inside <solver>Coeffs), which is
-#     cardiacFoam vocabulary, not core behaviour. The one test in that
-#     module that asserts core's plugin-agnostic refusal mechanism
-#     (test_routing_uses_the_selected_plugin_catalog) stayed in core.
-#
 # Author
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
@@ -41,10 +33,7 @@ from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.sweep_routing import route_case_values
 
-# These tests assert cardiacFoam's own routing catalog, so they name the
-# plugin they mean rather than leaning on the ambient default -- which has no
-# single answer once a second adapter is installed alongside this one
-# (future/ENVIRONMENT_CONTRACT.md §12).
+# Supplied, not discovered: the ambient default is ambiguous once a second adapter is installed.
 _CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:sweep_routing")
 
 
@@ -95,27 +84,19 @@ def test_derived_extra_keys_do_not_break_routing():
 
 
 def test_unsupported_control_dict_axis_is_rejected():
-    # build_and_launch only exposes delta_t/end_time today. Other controlDict
-    # entries must fail loudly instead of being misrouted as electro overrides.
+    # build_and_launch exposes only delta_t/end_time; other controlDict entries must not become electro overrides.
     with pytest.raises(SweepValidationError, match="startTime|controlDict"):
         route_case_values(driver_context=_CTX, base={}, resolved_axis_values={"startTime": 0.0})
 
 
 def test_unrecognized_axis_is_rejected_instead_of_silently_ignored():
-    # A genuinely unknown key matches no selector, no controlDict key, no
-    # catalog driver_path, and isn't the special-cased "dx" mesh-resolution
-    # axis -- it must fail loudly, not fall through to electro_overrides
-    # where it would have zero effect (see project_driverfoam_sweep_bugs_found
-    # memory item #2: this used to be a silent no-op).
+    # Falling through to electro_overrides would make an unknown key a silent no-op.
     with pytest.raises(SweepValidationError, match="bogusAxis"):
         route_case_values(driver_context=_CTX, base={}, resolved_axis_values={"bogusAxis": 0.5})
 
 
 def test_dx_routes_to_its_own_dedicated_kwarg():
-    # dx controls the generic default blockMeshDict's resolution for
-    # block-mesh solvers (mesh_provisioning.py); it isn't a catalog
-    # driver_path at all, so it needs its own routed field, same as
-    # deltaT/endTime.
+    # dx sizes the default blockMeshDict and is not a catalog driver_path.
     routed = route_case_values(driver_context=_CTX, base={}, resolved_axis_values={"dx": 0.2})
     assert routed["dx"] == 0.2
 
@@ -126,11 +107,7 @@ def test_dx_base_value_is_preserved_when_not_swept():
 
 
 def test_cellzone_routes_under_the_solver_coeffs_prefix():
-    """cellZone is read from the resolved <solver>Coeffs block, not the
-    electroProperties root (myocardiumDomain.C:35-52). It was previously
-    catalogued bare, which emitted it at the root where nothing reads it --
-    the run then silently used the whole mesh, bath included, instead of the
-    requested zone. This pins the corrected path."""
+    """cellZone is read from the resolved <solver>Coeffs block (myocardiumDomain.C), not the electroProperties root."""
     routed = route_case_values(
         driver_context=_CTX,
         base={},
@@ -142,9 +119,7 @@ def test_cellzone_routes_under_the_solver_coeffs_prefix():
 
 
 def test_bare_cellzone_axis_still_routes_as_a_backward_compatible_alias():
-    """Catalog matching is prefix-agnostic, so the bare spelling keeps working.
-    What changed is where the value LANDS -- see
-    test_cellzone_override_lands_inside_the_solver_coeffs_block."""
+    """Catalog matching is prefix-agnostic, so the bare spelling still routes."""
     routed = route_case_values(
         driver_context=_CTX, base={}, resolved_axis_values={"cellZone": "epicardium"},
     )
@@ -152,16 +127,7 @@ def test_bare_cellzone_axis_still_routes_as_a_backward_compatible_alias():
 
 
 def test_cellzone_override_lands_inside_the_solver_coeffs_block():
-    """The regression this catalog fix exists for.
-
-    cellZone is read from the resolved <solver>Coeffs block
-    (myocardiumDomain.C:35-52; electroModel.C:109 builds it as
-    subDict(type + "Coeffs")). It was catalogued with a bare driver_path,
-    and dict_builder emits bare paths at the electroProperties ROOT -- where
-    nothing reads them. found("cellZone") then returned false, no mesh subset
-    was created, and the run silently used the whole mesh, bath included,
-    instead of the requested zone. No error, plausible-looking results.
-    """
+    """At the root, ``found("cellZone")`` is false and the run silently uses the whole mesh, bath included."""
     from omnidriver.cardiacfoam.dict_builder import build_electro_properties
 
     text = build_electro_properties(

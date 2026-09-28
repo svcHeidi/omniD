@@ -1,9 +1,7 @@
-"""``manufacturedBathBidomain``'s tet route, run for real through the record
-(plan §5b T4; review 54b M2: a tet route is proved by a run, not only
-declared). The conformance target covers the default hex route; this is
-the one real gmsh -> gmshToFoam -> checkMesh -> setTorsoOrganConductivityField
--> cardiacFoam -> bathBidomainInterfaceMetrics run, at the tet studies'
-coarsest level (``tetNumberCells`` 10, ``lc = 0.1``) and ``endTime`` 0.02.
+"""``manufacturedBathBidomain``'s tet route, run for real through the record.
+
+Conformance covers the default hex route; this runs the tet route at its
+coarsest study level (``tetNumberCells`` 10) with ``endTime`` 0.02.
 """
 from __future__ import annotations
 
@@ -43,7 +41,6 @@ def test_the_tet_route_runs_through_the_record(tmp_path: Path) -> None:
     payload = json.loads(proc.stdout)
     (case,) = payload["cases"]
     assert case["status"] == "completed", (proc.stdout[-3000:], proc.stderr[-2000:])
-    # Every output the tet route declares was found, as C6 counts them.
     artifacts = case["artifact_reconciliation"]["artifacts"]
     missing = [a["artifact_id"] for a in artifacts if a["status"] == "missing" and not a.get("optional")]
     assert artifacts and not missing, missing

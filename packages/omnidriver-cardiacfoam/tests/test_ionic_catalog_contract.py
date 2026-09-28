@@ -27,14 +27,7 @@
 
 """Contract test: `ionic_model_catalog.py` matches each model's `*_Names.H`.
 
-When this fails, the catalogue has drifted from the C++ source of truth. Fix
-by running:
-
-    python scripts/regenerate-ionic-catalog.py
-
-Models in `EXCLUDED_FROM_HEADER_SYNC` (the FDA manufactured family) are
-intentionally documented with user-facing semantic labels rather than raw
-enum identifiers and are not checked here.
+On drift, run ``python scripts/regenerate-ionic-catalog.py``; models in `EXCLUDED_FROM_HEADER_SYNC` are not checked.
 """
 
 from __future__ import annotations
@@ -135,24 +128,17 @@ _FULL_IONIC_MODELS = {
     "ToRORd_dynCl", "Trovato", "Stewart", "Gaur", "PerisYague", "TWorld",
 }
 
-# Tokens in recommended_exports that are known V/Ca aliases carried over from
-# before P11b drift is resolved. These appear in the catalog's existing pair
-# but do not yet match a state/algebraic name — P11b will fix the drift.
-# We allow them so the P11c test does not force P11b work.
+# V/Ca aliases in recommended_exports that match no state/algebraic name (TNNP, Grandi, Trovato, Stewart).
 _ALLOWED_LEGACY_TOKENS: set[str] = {
-    # TNNP: states has "V" and "Ca_i"; legacy aliases used before P11b
     "membrane_V", "calcium_Cai",
-    # ORd, Grandi: states has "membrane_V"/"Ca_i"; legacy aliases
-    "Cass",  # not a state in ORd (Ca_ss is "Ca_ss") — legacy alias
-    # Trovato: no "Vm" in states
+    "Cass",
     "Vm",
-    # Stewart: no plain "V" in states (states has "membrane_V"); "Cai" alias
     "V", "Cai",
 }
 
 
 class TestRecommendedExportsExpanded(unittest.TestCase):
-    """P11c contract: full ionic models expose >= 4 recommended exports."""
+    """Full ionic models expose >= 4 recommended exports."""
 
     def test_full_models_have_at_least_four_exports(self) -> None:
         for name in _FULL_IONIC_MODELS:
@@ -184,16 +170,8 @@ class TestRecommendedExportsExpanded(unittest.TestCase):
 
 
 class TestRecommendedExportsExpansion(unittest.TestCase):
-    """Full ionic models must advertise at least
-    voltage + calcium + 3 main currents in recommended_exports — the agent
-    fallback path (when no outputVariables.ionic.export is declared) uses
-    this list, so a minimal 2-variable default is uninformative.
-    Phenomenological and manufactured models are intentionally exempt:
-    phenomenological models lack current variables; manufactured models
-    expose their analytic-solution components only.
-    """
+    """recommended_exports is the fallback when no ``outputVariables.ionic.export`` is declared, so it must be informative."""
 
-    # Full ionic models — must carry voltage + calcium + ≥3 currents.
     _FULL_IONIC_MODELS: frozenset[str] = frozenset({
         "TNNP", "Grandi", "Courtemanche", "Fabbri",
         "ToRORd_dynCl", "Trovato", "Stewart", "Gaur",
@@ -201,8 +179,7 @@ class TestRecommendedExportsExpansion(unittest.TestCase):
     })
 
     def test_every_full_model_has_at_least_5_exports(self) -> None:
-        """5 = voltage + calcium + 3 currents minimum. Models can carry more;
-        this is the floor."""
+        """5 = voltage + calcium + 3 currents, a floor."""
         for name in self._FULL_IONIC_MODELS:
             with self.subTest(model=name):
                 entry = IONIC_MODEL_CATALOG[name]
@@ -214,9 +191,6 @@ class TestRecommendedExportsExpansion(unittest.TestCase):
                 )
 
     def test_full_model_exports_include_total_ionic_current(self) -> None:
-        """Iion (or Iion_cm) appears in every full ionic model's catalogue
-        — it should be in every recommended_exports list as the
-        physiological 'output of last resort'."""
         for name in self._FULL_IONIC_MODELS:
             with self.subTest(model=name):
                 entry = IONIC_MODEL_CATALOG[name]

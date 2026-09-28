@@ -25,28 +25,9 @@
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-"""A predicate may not gate on a verifier the catalogue does not declare.
-
-Entries gate their applicability on which verification model a case selected,
-via ``applicable_when={"...verificationModel.type": (...)}``. The set of
-selectable models is itself declared, as the ``enum_values`` of the matching
-``verificationModel.type`` entry. Those two are the same fact, written twice,
-and until 2026-09-19 nothing compared them.
-
-They had drifted. Native commit ``5a8be782`` renamed
-``bathECGManufacturedVerifier`` to ``manufacturedBathBidomainECGVerifier`` and
-moved the dictionary it reads from ``manufacturedBidomain`` to
-``verificationModel``. The catalogue's ``enum_values`` were updated; one
-``applicable_when`` predicate was not. It gated on a name no case could ever
-set, so the entry it guarded was silently unreachable -- inapplicable to every
-case, forever, with nothing failing.
-
-This guard needs no native checkout: it is an internal-consistency check
-between two declarations in one file, so it runs everywhere, including in CI
-where the native tree is absent. That is deliberate. The native-resolution
-question -- does each ``source_refs`` path still exist? -- is a different check
-needing a supplied source root, and a test that silently skips without one
-would be no check at all.
+"""A predicate may not gate on a verifier the catalogue does not declare: every
+``applicable_when`` verificationModel.type name must be in that key's
+``enum_values``. An internal-consistency check, so it needs no native tree.
 """
 
 from __future__ import annotations

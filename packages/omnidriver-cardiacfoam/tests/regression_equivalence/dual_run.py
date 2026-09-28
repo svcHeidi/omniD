@@ -1,27 +1,6 @@
-"""Agent-reproduces-regression check (gated on a built/sourced cardiacFoam).
-
-The equivalence bar (per user, 2026-07-04): drive each regression case through
-the **agent's own run path** and require the agent-produced outputs to match the
-committed ``.reference`` within the case's own tolerances. The committed
-reference is the ground truth — the hand-authored path is not re-run.
-
-- Agent run (strict): ``omnidriver run --strict --entry <name> --cases-root
-  <staged>`` — the agent resolves the registered spec, plans it (non-mutating),
-  and executes the case's workflow (solver + post). No dictionary overrides are
-  applied; dict mutation lives only in the sweep path.
-- Agent run (generic): for committed regression cases, execute the staged
-  ``regression/regressionTest.sh`` verbatim. That preserves each case's
-  authored invocation details (for example ``./Allrun parallel`` and any
-  case-specific reference extractors) rather than approximating them through a
-  second Python-owned protocol layer. Cases without a committed regression
-  script fall back to the generic case-folder driver path.
-
-Then the agent's ``postProcessing`` outputs are checked against the committed
-reference points.
-
-Everything that touches a solver is gated by :func:`solver_available` and
-returns a ``skipped`` result when cardiacFoam is not built/sourced, so this
-module imports and its pure helpers unit-test anywhere.
+"""Drive each regression case through the agent's own run path and require its
+outputs to match the committed reference within the case's tolerances. Solver
+work is gated by :func:`solver_available`; the pure helpers run anywhere.
 """
 from __future__ import annotations
 
@@ -40,10 +19,6 @@ from regression_equivalence.tutorials_tree import tutorials_root
 from regression_equivalence.registry import RegressionCase
 
 
-# --------------------------------------------------------------------------- #
-# Pure helpers (solver-free, unit-tested)
-# --------------------------------------------------------------------------- #
-
 @dataclass(frozen=True)
 class ReferencePoint:
     data_file: str
@@ -54,12 +29,7 @@ class ReferencePoint:
 
 
 def parse_columnar_reference(text: str) -> list[ReferencePoint]:
-    """Parse a `file time variable expected tolerance` reference file.
-
-    Returns [] for reference files that don't follow this columnar layout
-    (e.g. the bidomain `kind key metric ...` metric style), signalling the
-    caller to fall back to the case's own regressionTest.sh as the gate.
-    """
+    """Parse `file time variable expected tolerance` rows; [] for any other layout."""
     points: list[ReferencePoint] = []
     for raw in text.splitlines():
         line = raw.strip()
@@ -77,7 +47,6 @@ def parse_columnar_reference(text: str) -> list[ReferencePoint]:
                 )
             )
         except ValueError:
-            # Non-numeric where numbers are expected -> not this layout.
             return []
     return points
 
@@ -85,12 +54,7 @@ def parse_columnar_reference(text: str) -> list[ReferencePoint]:
 def read_series_value(
     text: str, target_time: float, variable: str, *, time_atol: float = 1e-9
 ) -> float | None:
-    """Return `variable` at the row whose first column is nearest `target_time`.
-
-    Mirrors the awk extractor in the cases' regressionTest.sh: the first line is
-    a header of column names; data rows follow with time in column 1. A match
-    requires the nearest time to be within `time_atol` of the target.
-    """
+    """Mirrors the awk extractor in the cases' regressionTest.sh (header row, time in column 1)."""
     lines = [ln for ln in text.splitlines() if ln.strip()]
     if not lines:
         return None
@@ -252,14 +216,8 @@ def _check_manufactured_reference(case_path: Path, points: list[ManufacturedRefe
     return True, f"{checks} reference points reproduced within tolerance"
 
 
-# --------------------------------------------------------------------------- #
-# Gated agent-driven orchestration
-# --------------------------------------------------------------------------- #
-
-# Output write times carry a small offset from the requested grid (e.g.
-# 1.5000010 rather than 1.5000000), so we sample the row nearest each reference
-# time; this tolerance exceeds that offset while staying below the write
-# interval so the nearest row is unambiguous.
+# Write times carry a small offset from the requested grid (1.5000010, not
+# 1.5); this exceeds that offset but stays below the write interval.
 TIME_MATCH_ATOL = 1e-2
 
 
@@ -287,7 +245,6 @@ def _stage_tutorials_root(case: RegressionCase) -> tuple[Path, Path]:
     case_path = root / case.case_dir
     case_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(src, case_path)
-    # Remove any committed outputs so we prove the agent produced fresh ones.
     for stale in ("postProcessing", "workflow_state.json", "workflow_logs"):
         p = case_path / stale
         shutil.rmtree(p, ignore_errors=True) if p.is_dir() else p.unlink(missing_ok=True)
@@ -297,18 +254,7 @@ def _stage_tutorials_root(case: RegressionCase) -> tuple[Path, Path]:
 
 
 def _drive_agent(case: RegressionCase, driver: str, cases_root: Path) -> subprocess.CompletedProcess:
-    """Invoke the CLI using this interpreter's installed namespace packages.
-
-    Editable installs and wheels both register their packages with the same
-    interpreter. Injecting one source directory would bypass that installation
-    and cannot represent a namespace split across three distributions.
-
-    The child is a fresh interpreter, so it cannot be handed a DriverContext.
-    That same three-distribution namespace can leave more than one adapter
-    installed, and then there is no ambient default for the child to discover
-    -- so it is told which adapter to drive. These are cardiacFoam regression
-    cases; naming the plugin is the CLI's way of saying so.
-    """
+    """``--plugin`` is explicit: with several adapters installed the child has no default."""
     if driver == "strict":
         entry_args = ["--entry", case.entry_name]
     else:
@@ -322,7 +268,6 @@ def _drive_agent(case: RegressionCase, driver: str, cases_root: Path) -> subproc
 
 
 def _run_regression_script(case: RegressionCase, case_path: Path) -> subprocess.CompletedProcess:
-    """Run the committed regression harness from the staged case root."""
     script_path = case_path / case.regression_script
     return subprocess.run(
         ["/bin/bash", str(script_path)],
@@ -340,14 +285,7 @@ _PROTOCOL_FILENAME = "equivalence_protocol.yaml"
 
 
 def _omnidriver_checkout_root() -> Path:
-    """The omniD checkout this module sits in, recognised by the protocol it commits.
-
-    Walks up from this file by marker, never by a fixed ``parents[N]`` (see
-    ``repo_root_default``'s docstring for why). Deliberately not
-    ``repo_root_default()`` itself: its first tier returns a *cardiacFoam*
-    monorepo root when one encloses the checkout, and the protocol is omniD's
-    own committed file, at omniD's root.
-    """
+    """Not ``repo_root_default()``: that can return an enclosing cardiacFoam monorepo root."""
     here = Path(__file__).resolve()
     for parent in here.parents:
         if (parent / _PROTOCOL_FILENAME).is_file() and (parent / "packages").is_dir():
@@ -360,17 +298,8 @@ def _omnidriver_checkout_root() -> Path:
 
 @functools.cache
 def _protocol_module() -> ModuleType:
-    """Core's ``tests/equivalence/protocol.py``, loaded from its file.
-
-    It is the one definition of the protocol's row schema, but it lives in
-    *core's* tests tree, which is not importable when this package's tests
-    run on their own (CI's ``pytest packages/omnidriver-cardiacfoam/tests``
-    resolves this package's ``pythonpath = ["tests"]``). Putting core's tests
-    directory on the path would also expose core's ``conftest`` under the bare
-    name this tree's ``from conftest import ...`` relies on. The module
-    imports only the standard library and ``yaml``, so loading it by path is
-    exact.
-    """
+    """Core's ``tests/equivalence/protocol.py``, loaded by path: core's tests tree is
+    not importable here, and adding it to the path would shadow this tree's conftest."""
     path = _omnidriver_checkout_root() / "packages" / "omnidriver" / "tests" / "equivalence" / "protocol.py"
     name = "regression_equivalence._core_equivalence_protocol"
     spec = importlib.util.spec_from_file_location(name, path)
@@ -385,23 +314,11 @@ def _protocol_module() -> ModuleType:
 
 
 def load_equivalence_protocol():
-    """The committed ``equivalence_protocol.yaml``, parsed by core's loader."""
     return _protocol_module().load_protocol(_omnidriver_checkout_root() / _PROTOCOL_FILENAME)
 
 
 def check_protocol(case_dir: str, case_path: Path) -> tuple[bool, str]:
-    """Check agent outputs under `case_path` against the frozen equivalence protocol.
-
-    Returns (ok, detail). The protocol is the committed `equivalence_protocol.yaml`.
-    Raises NotImplementedError if no rules exist for the case (unsupported).
-
-    **Corrected 2026-09-25:** this located the protocol with
-    ``Path(omnidriver.__file__)``, a name this module never imported (and a
-    PEP 420 namespace package has no ``__file__``), and imported its loader as
-    ``equivalence.protocol``, which does not resolve in a per-package run.
-    Every test that reached it monkeypatched it out, so neither defect ever
-    surfaced; the ``test_check_protocol_*`` tests now call it for real.
-    """
+    """Returns (ok, detail); raises NotImplementedError when the protocol has no rows for the case."""
     protocol = load_equivalence_protocol()
 
     rows = [r for r in protocol.rows if r.case_dir == case_dir]
@@ -456,7 +373,6 @@ def check_protocol(case_dir: str, case_path: Path) -> tuple[bool, str]:
 
 
 def verify_reproduction(case: RegressionCase, *, driver: str) -> ReproResult:
-    """Drive `case` through the agent and check outputs vs committed reference."""
     if not solver_available():
         return ReproResult(
             case.case_dir, driver, "skipped",

@@ -34,12 +34,7 @@ os.environ["SKIP_ENV_DIAGNOSTICS"] = "1"
 
 
 def _cardiacfoam_monorepo_root() -> Path | None:
-    """The first ancestor of this file holding both ``tutorials/`` and
-    ``applications/``: the retired layout where this checkout sat inside the
-    native repository. Test-local since 2026-09-28, when the shipped
-    ``omnidriver.cardiacfoam.monorepo`` walk-up was deleted (the source root
-    is supplied now, ``cxx_mapping.source_root``). The tests gated on it
-    still skip everywhere; see ROADMAP item 7 (M12)."""
+    """First ancestor holding ``tutorials/`` and ``applications/`` (checkout inside the native repo)."""
     for parent in Path(__file__).resolve().parents:
         if (parent / "tutorials").exists() and (parent / "applications").exists():
             return parent
@@ -48,9 +43,7 @@ def _cardiacfoam_monorepo_root() -> Path | None:
 
 monorepo_root: Path | None = _cardiacfoam_monorepo_root()
 
-#: Apply this decorator to any test class/function that reads real tutorial
-#: case directories from the monorepo ``tutorials/`` tree.  The test is
-#: automatically skipped in standalone clones and CI environments.
+#: Skips a test that reads real tutorial cases from the monorepo ``tutorials/`` tree.
 skip_without_monorepo = pytest.mark.skipif(
     monorepo_root is None,
     reason=(
@@ -66,14 +59,7 @@ def _foam_tokens(value: str) -> list[str]:
 
 
 def foam_values_equal(actual: str, expected: str) -> bool:
-    """Compare two OpenFOAM values ignoring how they were spelled.
-
-    A dict written by the real ``foamDictionary`` and one written by the
-    pure-Python fallback carry the same values in different text: bracket
-    padding (``[-1 0]`` vs ``[ -1 0 ]``) and numeric spelling (``2e-5`` vs
-    ``2e-05``) both differ. Assertions that care about the value, not the
-    spelling, should use this so they hold in either environment.
-    """
+    """Compare OpenFOAM values ignoring bracket padding and numeric spelling (``foamDictionary`` vs pure-Python writer)."""
     actual_tokens, expected_tokens = _foam_tokens(actual), _foam_tokens(expected)
     if len(actual_tokens) != len(expected_tokens):
         return False

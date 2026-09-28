@@ -67,7 +67,6 @@ def _write_purkinje_graph(path: Path, pts, pvj_pts=None):
         pvj_pts = pts[:1]
     n_pvj = len(pvj_pts)
     n_pts = len(pts)
-    # pvjNodes (integer indices, no triples)
     pvj_nodes = "".join(f"{i}\n" for i in range(n_pvj))
     pvj_locs = "".join(f"({x} {y} {z})\n" for x, y, z in pvj_pts)
     pt_body = "".join(f"({x} {y} {z})\n" for x, y, z in pts)
@@ -108,13 +107,10 @@ class TestReadPurkinjeGraphBbox(unittest.TestCase):
             self.assertAlmostEqual(bb.max_dim, 45.0)  # X span: -5 to 40
 
     def test_pvj_nodes_integers_do_not_corrupt_bbox(self):
-        # pvjNodes contains bare integers (not triples); they must not be
-        # mistaken for coordinates. The bbox must reflect only the points section.
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "purkinjeGraph"
             _write_purkinje_graph(p, self.PTS, pvj_pts=[(10.0, 90.0, -190.0)])
             bb = read_purkinje_graph_bbox(p)
-            # X range of points only: -5 to 40 → span 45
             self.assertAlmostEqual(bb.min_pt[0], -5.0)
             self.assertAlmostEqual(bb.max_pt[0], 40.0)
 
@@ -180,8 +176,7 @@ class TestPurkinjeGraphDiagnostics(unittest.TestCase):
             self.assertIn("graph_not_si", codes)
 
     def test_mm_graph_with_mm_mesh_flagged_graph_only_no_mismatch(self):
-        # Both mesh and graph are in mm: the graph is flagged non-SI, but the
-        # two agree, so no mismatch. (mesh_not_si is core's own diagnostic.)
+        # mesh_not_si is core's own diagnostic, not this plugin's.
         with tempfile.TemporaryDirectory() as d:
             case = _make_case_with_graph(d, _MM, _MM_GRAPH)
             codes = {x.code for x in purkinje_graph_diagnostics(case)}
@@ -189,7 +184,6 @@ class TestPurkinjeGraphDiagnostics(unittest.TestCase):
             self.assertNotIn("graph_mesh_scale_mismatch", codes)
 
     def test_scale_mismatch_between_graph_and_mesh(self):
-        # SI mesh but mm graph → mismatch error in addition to graph_not_si.
         with tempfile.TemporaryDirectory() as d:
             case = _make_case_with_graph(d, _SI, _MM_GRAPH)
             codes = {x.code for x in purkinje_graph_diagnostics(case)}
@@ -215,8 +209,6 @@ class TestPurkinjeGraphDiagnostics(unittest.TestCase):
             self.assertIn(("graph_scale_not_checked", "warning"), codes_levels)
 
     def test_unparseable_mesh_suppresses_only_the_cross_check(self):
-        # The mesh's own unit is unknown, so no mismatch can be asserted --
-        # but the graph is still classified on its own.
         with tempfile.TemporaryDirectory() as d:
             case = Path(d)
             pm = case / "constant" / "polyMesh"
@@ -228,8 +220,6 @@ class TestPurkinjeGraphDiagnostics(unittest.TestCase):
             self.assertNotIn("graph_mesh_scale_mismatch", codes)
 
     def test_no_mesh_region_means_no_graph_diagnostics(self):
-        # Preserved from when this loop lived inside mesh_geometry_diagnostics,
-        # whose `if not regions: return ()` guard short-circuited it.
         with tempfile.TemporaryDirectory() as d:
             case = Path(d)
             (case / "constant").mkdir()
@@ -239,7 +229,6 @@ class TestPurkinjeGraphDiagnostics(unittest.TestCase):
 
 class TestPurkinjeDiagnosticsReachTheStrictPlanner(unittest.TestCase):
     def test_plugin_hook_is_wired_into_mesh_geometry_diagnostics(self):
-        # The move only holds if the plugin's checks still reach the report.
         from omnidriver.core.plugin_interface import default_driver_context
         from omnidriver.core.strict_planning import _mesh_geometry_diagnostics
 

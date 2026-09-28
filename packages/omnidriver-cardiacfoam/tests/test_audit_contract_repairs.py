@@ -1,4 +1,4 @@
-"""Focused guards for repository contracts repaired after the consistency audit."""
+"""Focused guards for repository packaging, catalog and README contracts."""
 
 from pathlib import Path
 

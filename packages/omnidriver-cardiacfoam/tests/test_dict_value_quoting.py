@@ -1,7 +1,5 @@
-"""End-to-end regression for the OpenFOAM value-quoting fix: this exact
-value produced an unparseable dictionary through the cardiac dict builder,
-making $ELECTRO_MODEL_COEFFS.dimension unusable through the driver. Found
-by running listCellModelsVariables for real."""
+"""Regression for OpenFOAM value quoting: an unquoted ``3D`` made the built
+electroProperties unparseable, so $ELECTRO_MODEL_COEFFS.dimension was unusable."""
 
 from __future__ import annotations
 

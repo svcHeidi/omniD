@@ -20,11 +20,8 @@
 #
 # Description
 #     Tests the cardiacFoam plugin's electroProperties detection helpers and
-#     the electro/physics-property override appliers that sit on top of them,
-#     including the plugin-local `$ELECTRO_MODEL_COEFFS` scope token. These
-#     moved out of `tests/core/test_mutators.py` alongside their modules'
-#     move out of `specs/`: the generic scope-resolution behaviour they lean
-#     on is still covered there, this file covers only the cardiac layer.
+#     the electro/physics-property override appliers on top of them, including
+#     the plugin-local `$ELECTRO_MODEL_COEFFS` scope token.
 #
 # Author
 #     Simao Nieto de Castro, UCD.
@@ -207,14 +204,7 @@ _QUOTED_BRACE_ELECTRO_PROPERTIES = (
 
 
 def test_detect_ionic_model_name_survives_a_quoted_brace_inside_the_active_scope():
-    """Reproduced against the pre-migration scanner: a brace inside a quoted
-
-    string *inside* the active Coeffs block throws off its manual depth
-    counter (the counter is only consulted once in_scope is True), raising
-    KeyError even though ionicModel is present and well-formed. A quoted
-    brace *before* the scope's own opening line does not trigger this --
-    the scanner ignores braces entirely until in_scope flips True.
-    """
+    """The quoted brace sits inside the active Coeffs block, where brace depth is counted."""
     with tempfile.TemporaryDirectory() as temp_dir:
         path = Path(temp_dir) / "electroProperties"
         path.write_text(_QUOTED_BRACE_ELECTRO_PROPERTIES)
@@ -232,12 +222,7 @@ _BLOCK_COMMENT_ELECTRO_PROPERTIES = (
 
 
 def test_detect_ionic_model_name_survives_a_block_comment_inside_the_active_scope():
-    """Reproduced against the pre-migration scanner: it only strips `//` line
-
-    comments, never `/* */` block comments, so a literal `{` inside one
-    corrupts the depth count the same way a quoted brace does, when the
-    comment sits inside the active Coeffs block.
-    """
+    """A `{` inside a `/* */` block comment in the active Coeffs block must not count as depth."""
     with tempfile.TemporaryDirectory() as temp_dir:
         path = Path(temp_dir) / "electroProperties"
         path.write_text(_BLOCK_COMMENT_ELECTRO_PROPERTIES)
@@ -260,12 +245,7 @@ _NESTED_SUBBLOCK_BEFORE_EXPORT = (
 
 
 def test_detect_ionic_export_list_survives_a_nested_subblock_before_export():
-    """Reproduced against the pre-migration scanner: _IONIC_EXPORT_RE's
-
-    [^}]* cannot cross a nested '}', so a sub-block placed before export(...)
-    makes the regex silently fail to match -- returning None (treated
-    downstream as "not declared") instead of the real export list.
-    """
+    """A nested sub-block before export(...) must not hide the list (None reads as "not declared")."""
     with tempfile.TemporaryDirectory() as temp_dir:
         path = Path(temp_dir) / "electroProperties"
         path.write_text(_NESTED_SUBBLOCK_BEFORE_EXPORT)

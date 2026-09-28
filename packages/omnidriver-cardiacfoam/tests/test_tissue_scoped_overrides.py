@@ -25,17 +25,9 @@
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-"""Region-specific ionic overrides.
-
-The solver applies `global` first, then the ONE tissue scope matching each
-cell's tissue flag (`ionicModelIO.C:824-848`; flag mapping at `:173-180`).
-Valid scopes are global / epicardialCells / mCells / endocardialCells /
-myocyte (`:182-189`).
-
-Only `global` used to be catalogued, so an agent asked for an epicardium-only
-channel block could only write a whole-tissue override -- which is a different
-experiment. `tutorials/PATHOS/BrugadaSyndrome/singleCell` uses exactly this
-composition, so it was expressible by hand but not through the driver.
+"""Region-specific ionic overrides. The solver (``ionicModelIO.C``) applies
+``global`` first, then the one tissue scope matching each cell's tissue flag:
+epicardialCells, mCells, endocardialCells or myocyte.
 """
 
 from __future__ import annotations
@@ -66,8 +58,6 @@ def test_every_solver_recognised_scope_is_writable(scope):
 
 
 def test_global_and_a_tissue_scope_compose_as_the_solver_applies_them():
-    """The Brugada shape: a whole-tissue INa reduction plus epicardium-only
-    Ito/ICaL changes. The solver applies global first, then the tissue scope."""
     text = build_electro_properties(
         selectors=_SELECTORS,
         overrides={
@@ -92,8 +82,6 @@ def test_set_is_writable_per_scope_too():
 
 
 def test_unprefixed_tnnp_constant_names_are_accepted():
-    """TNNP's runtime names carry no AC_ prefix. The catalog must not force a
-    convention the model does not use -- that would be a solver FatalError."""
     text = build_electro_properties(
         selectors=_SELECTORS,
         overrides={

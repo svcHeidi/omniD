@@ -27,10 +27,8 @@
 
 """Contract tests for solver_coupling.SOLVER_COMPATIBILITY_RULES.
 
-Locks the shape of the table so future edits do not silently drop a field
-that downstream consumers (currently introspection.py, the LLM-agent
-describe-tutorial payload) depend on.
-"""
+Locks the table's shape so an edit cannot silently drop a field that
+introspection and the describe-tutorial payload depend on."""
 from __future__ import annotations
 
 import unittest
@@ -72,9 +70,6 @@ class TestSolverCompatibilityRules(unittest.TestCase):
                 )
 
     def test_backward_compat_reexport_from_catalog(self) -> None:
-        """ionic_model_catalog.py still re-exports the rules for any consumer
-        that imported them from there before the extraction. Removing the
-        re-export is a breaking change."""
         from omnidriver.cardiacfoam.ionic_model_catalog import (
             SOLVER_COMPATIBILITY_RULES as catalog_rules,
         )

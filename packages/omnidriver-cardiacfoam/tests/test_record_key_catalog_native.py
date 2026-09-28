@@ -1,8 +1,6 @@
-"""``CardiacFoamPlugin.get_record_key_catalog`` against real native cases
-(conformance Task 14 step 4, decisions 1 and 3). The catalogue must list
-what ``record_key_validator`` accepts, and nothing it refuses: the two are
-the same three rules (``record_key_validation``'s module docstring).
-"""
+"""``CardiacFoamPlugin.get_record_key_catalog`` against real native cases.
+
+It lists what ``record_key_validator`` accepts and nothing it refuses: both are the same three rules (``record_key_validation``)."""
 from __future__ import annotations
 
 import pytest
@@ -41,11 +39,7 @@ def test_every_system_document_of_the_case_is_listed_open_and_nothing_else_is():
 
 
 def test_every_listed_key_the_case_holds_is_accepted_by_the_validator_with_its_kind():
-    """A drift gate between the two halves of one rule set: each concrete
-    catalogued key the native case holds, with the case's own value, is
-    accepted by the validator as that entry's ``value_kind``, validated.
-    Values are read typed, with foamlib (the stack's config reader answers
-    text, which the validator's shape check is not for)."""
+    """Values are read typed with foamlib: the stack's config reader answers text, which the shape check is not for."""
     case_root = native_tutorials_root() / RESTITUTION_CURVES_RELPATH
     checked = []
     for entry in _catalogue(RESTITUTION_CURVES_RELPATH):
@@ -62,10 +56,7 @@ def test_every_listed_key_the_case_holds_is_accepted_by_the_validator_with_its_k
 
 
 def test_a_region_split_case_is_refused_by_name():
-    """``physics_layout.json`` puts a region-split case's electroProperties
-    under ``constant/<region>/``; the validator addresses
-    ``constant/electroProperties`` only, so listing keys there would list
-    keys it refuses."""
+    """A region split puts electroProperties under ``constant/<region>/``, which the validator never addresses."""
     with pytest.raises(PhysicsLayoutError) as excinfo:
         _catalogue("electromechanicsProtocols/springSupportedSlab")
     assert "constant/electroProperties" in str(excinfo.value)

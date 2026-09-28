@@ -25,19 +25,9 @@
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-"""Tests for ``validate_run``.
+"""Tests for ``validate_run``: required fields, enums and cross-field constraints, per entry's primary phase.
 
-The validator walks every ``DictEntry``, attributes errors to the entry's
-*primary* (editing) phase, and reports three kinds of issue: required-field
-omissions, enum violations, and the small set of v1 cross-field
-constraints (currently: ``eikonalSolver`` is incompatible with an explicit
-``ionicModel``).
-
-Test 2 uses ``_filled_run`` rather than the plan's hand-written minimal
-config because ``dict_entries.py`` declares many required leaf-name keys
-inside ``$ELECTRO_MODEL_COEFFS.*``; supplying them programmatically keeps
-the test focused on validator behaviour rather than field enumeration.
-"""
+``_filled_run`` supplies every required ``$ELECTRO_MODEL_COEFFS.*`` leaf so a test isolates validator behaviour."""
 
 from __future__ import annotations
 
@@ -56,11 +46,6 @@ from omnidriver.core.planning_types import StrictDiagnostic
 from omnidriver.core.runtime.run_model import RunDocument
 from omnidriver.core.specs.validation import slot_key, validate_run
 
-# validate_run now takes a mandatory driver_context
-# (test_core_context_is_explicit.py). Every test in this file lives in
-# omnidriver-cardiacfoam's own tree and already exercised cardiac semantics
-# through the previous implicit default -- this makes that explicit rather
-# than deciding anything new about the tests' content.
 _CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:validation")
 
 _PHASE_ORDER = ("anatomy", "physics", "stimulus", "solver")
@@ -83,10 +68,7 @@ def _blank_run(**overrides) -> RunDocument:
 
 
 class TestSlotKeyScopeTokenStripping:
-    """slot_key's prefix strip is a syntactic transform (recognize and strip
-    a "$SCOPE_TOKEN." shape) -- it must not hardcode the one token the
-    built-in cardiac plugin happens to declare, since a future plugin can
-    register its own scope token under the same $TOKEN. convention."""
+    """slot_key strips any "$TOKEN." shape, not only the scope token the cardiac plugin declares."""
 
     def test_strips_the_cardiac_scope_token(self) -> None:
         assert slot_key("$ELECTRO_MODEL_COEFFS.myocardiumSolver") == "myocardiumSolver"
@@ -98,18 +80,12 @@ class TestSlotKeyScopeTokenStripping:
         assert slot_key("myocardiumSolver") == "myocardiumSolver"
 
     def test_leaves_a_dollar_sign_not_matching_the_scope_token_shape_unchanged(self) -> None:
-        # No trailing "." after an all-caps run means this isn't the
-        # $TOKEN. convention -- must not be stripped.
+        # No trailing "." after an all-caps run, so not the $TOKEN. convention.
         assert slot_key("$notAToken") == "$notAToken"
 
 
 def _filled_run(**overrides) -> RunDocument:
-    """A Run with every required leaf-name pre-populated with a plausible stub.
-
-    Keeps the validator's required-field check happy so the test can isolate
-    the behaviour we care about (no errors when the run is complete; or a
-    constraint violation when the user toggles an incompatible combination).
-    """
+    """A Run with every required leaf-name pre-populated with a plausible stub."""
     config: dict[str, dict] = {
         "anatomy": {}, "physics": {}, "stimulus": {}, "solver": {},
     }
@@ -133,10 +109,8 @@ def _filled_run(**overrides) -> RunDocument:
             config[ph][key] = "stub"
     for ph, slice_ in overrides.get("config", {}).items():
         config.setdefault(ph, {}).update(slice_)
-    # Normalize the stubbed tissue to one compatible with the final ionicModel
-    # so the helper yields a genuinely valid run (the generic enum_values[0]
-    # fill can otherwise pair, e.g., AlievPanfilov with epicardialCells, which
-    # the tissue-compatibility rule now rejects). Unknown models are left as-is.
+    # The enum_values[0] fill can pair e.g. AlievPanfilov with epicardialCells,
+    # which the tissue-compatibility rule rejects, so match tissue to ionicModel.
     from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG
     phys = config.get("physics", {})
     model = phys.get("ionicModel")
@@ -148,11 +122,7 @@ def _filled_run(**overrides) -> RunDocument:
 
 
 def test_empty_run_reports_missing_required_fields_per_phase():
-    # Corrected 2026-09-20 (Phase 0 Task 10): `validate_run` used to return
-    # `ValidationError` (four fields: `phase`, `field`, `message`, `level`).
-    # It now returns the canonical `core.planning_types.StrictDiagnostic`
-    # (`level`, `code`, `message`, `source`, `field`); `phase` maps to
-    # `source`.
+    # A diagnostic's phase is its `source`.
     errors = validate_run(_blank_run(), driver_context=_CTX)
     sources_with_errors = {e.source for e in errors}
     assert {"physics"} <= sources_with_errors
@@ -167,10 +137,9 @@ def test_valid_minimal_run_has_no_errors():
 
 @pytest.mark.parametrize(
     "write_control",
-    # OpenFOAM v2412 `Foam::Time::writeControlNames` (src/OpenFOAM/db/Time/
-    # Time.C). The native bathBidomain controlDict uses adjustableRunTime,
-    # and a real cardiacFoam run accepts it (docs/solver-learning/
-    # cardiacfoam.md, BB1).
+    # OpenFOAM v2412 `Foam::Time::writeControlNames`. The native bathBidomain
+    # controlDict uses adjustableRunTime and a real cardiacFoam run accepts it
+    # (see docs/solver-learning/cardiacfoam.md).
     ["none", "timeStep", "runTime", "adjustable", "adjustableRunTime", "clockTime", "cpuTime"],
 )
 def test_every_upstream_write_control_is_accepted(write_control):
@@ -265,15 +234,7 @@ monodomainSolverCoeffs
 
 
 def _context_from_electro_properties(path) -> dict:
-    """Build a real ``{slot_key: value}`` context from a small, hand-written
-    ``electroProperties`` file, the same way
-    ``run_document_config.build_config`` builds one for a plan/validate
-    pass: parse (round-trip catalog), resolve selectors+overrides, then fill
-    in each applicable entry's default where the file did not override it.
-    This is a real ``foamlib`` read, not a hand-constructed dict literal --
-    the plan's own rule that a native claim is settled by a real read/run,
-    not a fixture.
-    """
+    """Build the ``{slot_key: value}`` context from a real read, the way ``run_document_config.build_config`` does."""
     from omnidriver.cardiacfoam.dict_builder import (
         parse_electro_properties, resolve_context, select_applicable_entries,
     )
@@ -302,7 +263,6 @@ def _write_ecg_anisotropic_case(tmp_path, *, tissue_type: str, anisotropic: str)
 
 
 def test_ecg_anisotropic_matches_anisotropic_tissue_verifier_passes(tmp_path):
-    """anisotropic yes + the anisotropic tissue verifier: no diagnostic."""
     from omnidriver.cardiacfoam.validation import _evaluate_ecg_anisotropic_consistency
 
     context = _write_ecg_anisotropic_case(
@@ -315,7 +275,6 @@ def test_ecg_anisotropic_matches_anisotropic_tissue_verifier_passes(tmp_path):
 
 
 def test_ecg_anisotropic_matches_isotropic_tissue_verifier_passes(tmp_path):
-    """anisotropic no + a non-anisotropic tissue verifier: no diagnostic."""
     from omnidriver.cardiacfoam.validation import _evaluate_ecg_anisotropic_consistency
 
     context = _write_ecg_anisotropic_case(
@@ -328,9 +287,7 @@ def test_ecg_anisotropic_matches_isotropic_tissue_verifier_passes(tmp_path):
 
 
 def test_ecg_anisotropic_no_rejected_when_tissue_verifier_is_anisotropic(tmp_path):
-    """The direction Q11 actually found natively: anisotropic left `no`
-    (or unset) while the tissue verifier is
-    manufacturedAnisotropicMonodomainVerifier."""
+    """The mismatch found in the native case: anisotropic left `no` (or unset) under the anisotropic verifier."""
     from omnidriver.cardiacfoam.validation import _evaluate_ecg_anisotropic_consistency
 
     context = _write_ecg_anisotropic_case(
@@ -348,8 +305,6 @@ def test_ecg_anisotropic_no_rejected_when_tissue_verifier_is_anisotropic(tmp_pat
 
 
 def test_ecg_anisotropic_yes_rejected_when_tissue_verifier_is_not_anisotropic(tmp_path):
-    """The other direction: anisotropic yes while the tissue verifier is not
-    manufacturedAnisotropicMonodomainVerifier."""
     from omnidriver.cardiacfoam.validation import _evaluate_ecg_anisotropic_consistency
 
     context = _write_ecg_anisotropic_case(
@@ -367,14 +322,7 @@ def test_ecg_anisotropic_yes_rejected_when_tissue_verifier_is_not_anisotropic(tm
 
 
 def test_batched_integrator_does_not_constrain_active_tension_model():
-    """``batchedIntegrator`` is an ionic-model key only.
-
-    Batched active-tension models always integrate with explicit Euler and do
-    not read the key at all (``advanceSubstep`` in src/activeTensionModels/
-    activeTensionModel/batchedActiveTensionModel.H), so no pairing of it with
-    an ``activeTensionModel`` is invalid.  This previously rejected the two
-    Land variants on the strength of a constructor flag that no longer exists.
-    """
+    """Batched active-tension models always use explicit Euler and never read it (``batchedActiveTensionModel::advanceSubstep``)."""
     from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
     for model in (
@@ -410,7 +358,6 @@ def test_constraint_violation_is_flagged():
 
 
 def _entry(driver_path: str, **overrides) -> DictEntry:
-    """Tiny DictEntry builder for structured-constraint tests."""
     defaults = {
         "driver_path": driver_path,
         "description": "fixture",
@@ -443,7 +390,6 @@ def test_forbidden_when_flags_violation_in_run():
 
 
 def test_forbidden_when_silent_when_predicate_doesnt_match():
-    """Same entry; non-matching context → no forbidden_when violation."""
     entry = _entry(
         "$ELECTRO_MODEL_COEFFS.ionicModel",
         forbidden_when={"myocardiumSolver": "eikonalSolver"},
@@ -458,7 +404,6 @@ def test_forbidden_when_silent_when_predicate_doesnt_match():
 
 
 def test_required_when_flags_missing_value():
-    """required_when matches AND entry value missing → error."""
     entry = _entry(
         "$ELECTRO_MODEL_COEFFS.singleCellStimulus.stim_amplitude",
         required_when={"myocardiumSolver": "singleCellSolver"},
@@ -478,7 +423,6 @@ def test_required_when_flags_missing_value():
 
 
 def test_required_when_silent_when_value_present():
-    """required_when matches AND value present → no violation."""
     entry = _entry(
         "$ELECTRO_MODEL_COEFFS.singleCellStimulus.stim_amplitude",
         required_when={"myocardiumSolver": "singleCellSolver"},
@@ -488,14 +432,11 @@ def test_required_when_silent_when_value_present():
         "physics": {"myocardiumSolver": "singleCellSolver"},
         "stimulus": {"singleCellStimulus.stim_amplitude": "60"},
     })
-    # Corrected 2026-09-20 (Phase 0 Task 10): `validate_run` now returns a
-    # tuple, not a list -- `() != []`.
     errors = validate_run(run, entries=[entry], driver_context=_CTX)
     assert errors == ()
 
 
 def test_required_when_silent_when_predicate_doesnt_match():
-    """required_when doesn't fire when its context predicate doesn't match."""
     entry = _entry(
         "$ELECTRO_MODEL_COEFFS.singleCellStimulus.stim_amplitude",
         required_when={"myocardiumSolver": "singleCellSolver"},
@@ -504,15 +445,12 @@ def test_required_when_silent_when_predicate_doesnt_match():
     run = _blank_run(config={"physics": {
         "myocardiumSolver": "monodomainSolver",
     }})
-    # Corrected 2026-09-20 (Phase 0 Task 10): `validate_run` now returns a
-    # tuple, not a list -- `() != []`.
     errors = validate_run(run, entries=[entry], driver_context=_CTX)
     assert errors == ()
 
 
 def test_applicable_when_skips_inapplicable_entry():
-    """An entry whose applicable_when predicate fails should be entirely
-    skipped — even required=True does not fire."""
+    """Skipped entirely: even required=True does not fire."""
     entry = _entry(
         "$ELECTRO_MODEL_COEFFS.bidomainOnlyKey",
         required=True,
@@ -521,8 +459,6 @@ def test_applicable_when_skips_inapplicable_entry():
     run = _blank_run(config={"physics": {
         "myocardiumSolver": "monodomainSolver",
     }})
-    # Corrected 2026-09-20 (Phase 0 Task 10): `validate_run` now returns a
-    # tuple, not a list -- `() != []`.
     errors = validate_run(run, entries=[entry], driver_context=_CTX)
     assert errors == (), (
         f"inapplicable entry must not fire required check, got: "
@@ -531,12 +467,7 @@ def test_applicable_when_skips_inapplicable_entry():
 
 
 def test_mutually_exclusive_with_flags_violation():
-    """When both this entry and a mutex sibling are set → error.
-
-    mutually_exclusive_with paths must be unambiguous — full driver_path
-    or slot_key form. Leaf-only names are not supported (collision risk
-    across nested groups).
-    """
+    """mutually_exclusive_with takes full driver_path or slot_key form; leaf-only names would collide across groups."""
     entry_a = _entry(
         "$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusDuration",
         mutually_exclusive_with=(
@@ -560,7 +491,6 @@ def test_mutually_exclusive_with_flags_violation():
 
 
 def test_tuple_predicate_matches_membership():
-    """A tuple-valued predicate is satisfied by membership."""
     entry = _entry(
         "$ELECTRO_MODEL_COEFFS.manufacturedCoeff",
         applicable_when={"ionicModel": (
@@ -570,13 +500,9 @@ def test_tuple_predicate_matches_membership():
         )},
         required=True,
     )
-    # Not applicable → no required-check fire.
-    # Corrected 2026-09-20 (Phase 0 Task 10): `validate_run` now returns a
-    # tuple (`StrictDiagnostic`, ...) rather than a list -- `() != []`.
     run_inactive = _blank_run(config={"physics": {"ionicModel": "TNNP"}})
     assert validate_run(run_inactive, entries=[entry], driver_context=_CTX) == ()
 
-    # Applicable → required fires when value missing.
     run_active = _blank_run(config={"physics": {
         "ionicModel": "monodomainFDAManufactured",
     }})
@@ -586,15 +512,7 @@ def test_tuple_predicate_matches_membership():
 
 
 def test_applicable_when_matches_a_scope_prefixed_predicate_key():
-    """applicable_when keys are written in catalog form -- they carry the
-    leading "$ELECTRO_MODEL_COEFFS." scope token the same as any other
-    driver_path. The predicate lookup must strip that token before
-    comparing against context, which is always in slot_key (prefix-
-    stripped) form. Regression: before the fix, EVERY applicable_when
-    referencing a real driver_path -- not just the bare virtual
-    "$..._present"/"$..._supported" tokens -- silently never matched,
-    which is what made the restitutionEikonalSolver1D build drop its own
-    solver-specific keys without error."""
+    """applicable_when keys carry the scope token; it is stripped before comparing against slot_key context."""
     from omnidriver.openfoam.dict_builder import select_applicable_entries
 
     entry = _entry(
@@ -617,15 +535,7 @@ def test_applicable_when_matches_a_scope_prefixed_predicate_key():
 
 
 def test_applicable_when_matches_a_dynamic_placeholder_sibling_key():
-    """A dynamic_path entry's applicable_when may name a SIBLING leaf inside
-    the same <name>-templated block -- e.g. restitutionEikonalSolver1D's
-    useEdgeConductance gated on the sibling conductionSystemSolver leaf one
-    level up in the same conductionNetworkDomains.<name>.
-    purkinjeGraphModelCoeffs block. The predicate key still carries the
-    literal "<name>" placeholder while context carries the concrete
-    resolved instance name (e.g. "purkinjeNetwork"), so the two can never
-    be made equal by prefix-stripping alone -- the placeholder must be
-    treated as a wildcard and matched against any configured instance."""
+    """A ``<name>`` placeholder in a sibling predicate key matches any configured instance name."""
     from omnidriver.openfoam.dict_builder import select_applicable_entries
 
     entry = _entry(
@@ -659,8 +569,7 @@ def test_applicable_when_matches_a_dynamic_placeholder_sibling_key():
 
 
 def test_validate_run_accepts_default_entries_for_backward_compat():
-    """When no entries kwarg is supplied, validate_run uses the live
-    catalog (existing public API contract)."""
+    """With no ``entries`` kwarg, validate_run uses the live catalog."""
     run = _filled_run()
     errors = [e for e in validate_run(run, driver_context=_CTX) if e.level == "error"]
     assert errors == []
@@ -668,11 +577,8 @@ def test_validate_run_accepts_default_entries_for_backward_compat():
 
 # -------- Solver-coupling evaluator --------
 #
-# The three prose-only entries (conductionSystemSolver, electroDomainCoupler,
-# conductionNetworkDomain) don't fit the four DictEntry families, but the
-# rules they encode are already machine-readable via
-# SOLVER_COMPATIBILITY_RULES in solver_coupling.py. These tests pin the
-# behaviour we expect from _evaluate_solver_coupling.
+# conductionSystemSolver, electroDomainCoupler and conductionNetworkDomain fit
+# no DictEntry family; their rules live in SOLVER_COMPATIBILITY_RULES.
 
 
 def _coupling_run(myocardium: str, *,
@@ -680,12 +586,7 @@ def _coupling_run(myocardium: str, *,
                   coupler: str | None = None,
                   network_name: str = "purkinjeNet",
                   coupling_name: str = "lvCoupling") -> RunDocument:
-    """Build a run with selected solver + optional Purkinje pairing.
-
-    Dynamic-path slot_keys (e.g. domainCouplings.lvCoupling.electroDomainCoupler)
-    are written into the physics slice — matches how _flatten_context will
-    expose them.
-    """
+    """A run with the selected solver and optional Purkinje pairing; dynamic keys go in the physics slice."""
     config: dict[str, dict] = {
         "anatomy": {}, "physics": {}, "stimulus": {}, "solver": {},
     }
@@ -695,8 +596,7 @@ def _coupling_run(myocardium: str, *,
             f"conductionNetworkDomains.{network_name}."
             f"purkinjeGraphModelCoeffs.conductionSystemSolver"
         ] = purkinje
-        # The network must be declared as a block — i.e. at least one
-        # sub-key exists under conductionNetworkDomains.<name>.*.
+        # A network counts as declared once any sub-key exists under it.
         config["physics"][
             f"conductionNetworkDomains.{network_name}.purkinjeGraphModelCoeffs.someKey"
         ] = "x"
@@ -712,7 +612,6 @@ def _coupling_run(myocardium: str, *,
 
 
 def test_solver_coupling_silent_when_no_purkinje_pairing():
-    """No conductionSystemSolver in context → no coupling rules fire."""
     run = _coupling_run("monodomainSolver")
     errors = validate_run(run, entries=[], driver_context=_CTX)
     coupling_errors = [
@@ -723,8 +622,7 @@ def test_solver_coupling_silent_when_no_purkinje_pairing():
 
 
 def test_solver_coupling_valid_monodomain_pair_silent():
-    """Valid pair (mono + monodomain1D + reactionDiffusionPvjCoupler)
-    must not emit any solver-coupling error."""
+    """mono + monodomain1D + reactionDiffusionPvjCoupler emits no coupling error."""
     run = _coupling_run(
         "monodomainSolver",
         purkinje="monodomain1DSolver",
@@ -742,7 +640,6 @@ def test_solver_coupling_valid_monodomain_pair_silent():
 
 
 def test_solver_coupling_flags_incompatible_mono_eikonal_pair():
-    """mono myocardium + eikonal Purkinje is invalid per the rules table."""
     run = _coupling_run(
         "monodomainSolver",
         purkinje="eikonalSolver",
@@ -756,7 +653,6 @@ def test_solver_coupling_flags_incompatible_mono_eikonal_pair():
 
 
 def test_solver_coupling_allows_bidomain_with_monodomain1D():
-    """bidomainSolver supports monodomain1DSolver via reactionDiffusionPvjCoupler."""
     run = _coupling_run(
         "bidomainSolver",
         purkinje="monodomain1DSolver",
@@ -771,8 +667,7 @@ def test_solver_coupling_allows_bidomain_with_monodomain1D():
 
 
 def test_solver_coupling_flags_wrong_coupler_for_valid_pair():
-    """Valid mono+monodomain1D pair but the wrong coupler → error citing
-    the required_coupler."""
+    """The error cites the pair's required_coupler."""
     run = _coupling_run(
         "monodomainSolver",
         purkinje="monodomain1DSolver",
@@ -885,7 +780,6 @@ def test_solver_coupling_does_not_infer_missing_or_dangling_network_reference():
 
 
 def test_block_reference_silent_when_no_couplings():
-    """No domainCouplings in context → no block-reference rules fire."""
     run = _coupling_run("monodomainSolver")
     errors = validate_run(run, entries=[], driver_context=_CTX)
     ref_errors = [e for e in errors if "reference" in e.message.lower()]
@@ -893,8 +787,7 @@ def test_block_reference_silent_when_no_couplings():
 
 
 def test_block_reference_silent_when_target_block_declared():
-    """conductionNetworkDomain references a name that has at least one
-    sub-key under conductionNetworkDomains.<name>.* → no error."""
+    """A target counts as declared once any sub-key exists under conductionNetworkDomains.<name>."""
     run = _coupling_run(
         "monodomainSolver",
         purkinje="monodomain1DSolver",
@@ -912,8 +805,6 @@ def test_block_reference_silent_when_target_block_declared():
 
 
 def test_block_reference_flags_dangling_target():
-    """conductionNetworkDomain points at a name that has no matching block
-    declaration → error."""
     config: dict[str, dict] = {
         "anatomy": {}, "physics": {}, "stimulus": {}, "solver": {},
     }
@@ -937,12 +828,7 @@ def test_block_reference_flags_dangling_target():
 
 
 def test_dynamic_required_field_flags_missing_value_scoped_to_its_own_network():
-    """purkinjeCV is required_when conductionSystemSolver=eikonalSolver1D,
-    but only within the SAME conductionNetworkDomains.<name> block. Two
-    networks must be validated independently: a network missing purkinjeCV
-    must be flagged even though a sibling network satisfies every
-    requirement, and a network that doesn't select eikonalSolver1D must
-    never be told it needs purkinjeCV just because another network does."""
+    """purkinjeCV is required per network block: a sibling's solver neither satisfies nor triggers it."""
     config: dict[str, dict] = {
         "anatomy": {}, "physics": {}, "stimulus": {}, "solver": {},
     }
@@ -1041,19 +927,10 @@ def _all_entries():
 
 
 def _filled_run_for_solver(myocardium_solver: str, **extra_config) -> RunDocument:
-    """Build a RunDocument with every required entry pre-populated.
-
-    Uses the same pattern as ``_filled_run`` in test_validation.py, then
-    applies solver-specific overrides so the correct solver is selected and
-    any solver-specific required entries are populated.  ``extra_config``
-    maps phase → {slot_key: value} for additional overrides.
-    """
+    """``_filled_run`` for one myocardiumSolver; ``extra_config`` maps phase to {slot_key: value}."""
     config: dict[str, dict] = {
         "anatomy": {}, "physics": {}, "stimulus": {}, "solver": {},
     }
-    # Pre-populate all required=True entries with plausible stubs.
-    # Also pre-populate required_when entries where the predicate matches the
-    # known solver so the validator's required_when check passes.
     solver_context = {"myocardiumSolver": myocardium_solver}
     for e in _all_entries():
         is_unconditionally_required = e.required and not e.required_when
@@ -1072,7 +949,6 @@ def _filled_run_for_solver(myocardium_solver: str, **extra_config) -> RunDocumen
         else:
             config[ph][key] = "stub"
 
-    # Apply solver-specific overrides that match the fixture's actual configuration.
     config["physics"]["myocardiumSolver"] = myocardium_solver
 
     for ph, slice_ in extra_config.items():
@@ -1085,8 +961,7 @@ def _filled_run_for_solver(myocardium_solver: str, **extra_config) -> RunDocumen
 # Fixtures parameterised by spec name + representative run
 # ---------------------------------------------------------------------------
 
-# Each tuple is (spec_label, RunDocument).
-# The RunDocument is built to match the spec's actual solver and ionic model.
+# Each RunDocument matches its spec's actual solver and ionic model.
 
 _FIXTURE_RUNS = [
     (
@@ -1169,11 +1044,7 @@ _FIXTURE_RUNS = [
 
 @pytest.mark.parametrize("spec_label,run", _FIXTURE_RUNS, ids=[t[0] for t in _FIXTURE_RUNS])
 def test_representative_run_has_no_validator_errors(spec_label: str, run: RunDocument):
-    """validate_run must return zero error-level violations for each fixture.
-
-    Warnings are permitted.  An error-level violation indicates an over-
-    restrictive structured constraint.
-    """
+    """Warnings are permitted; an error-level violation means an over-restrictive structured constraint."""
     errors = [e for e in validate_run(run, driver_context=_CTX) if e.level == "error"]
     assert errors == [], (
         f"spec='{spec_label}': expected no validator errors for representative run, "
@@ -1183,17 +1054,11 @@ def test_representative_run_has_no_validator_errors(spec_label: str, run: RunDoc
 
 # -------- reactionDiffusionPvjCoupler's graph-aware rPvj requirement --------
 #
-# reactionDiffusionPvjCoupler.C (src/electroModels/electroCouplers/pvjCoupler/
-# reactionDiffusion/reactionDiffusionPvjCoupler.C:120-134): if the graph file
-# provides per-terminal resistances (a non-empty top-level "pvjResistances"
-# list), those are used and a dict-level "rPvj" is never read. Only when the
-# graph provides no such list does the C++ side fall back to
-# dict.get<scalar>("rPvj") -- a hard FatalError if that key is also absent.
-# This is a launch-time semantic check (needs the materialized graph file on
-# disk), not a generic catalog rule, so it lives in
-# _evaluate_pvj_resistance_requirement and is consumed by the cardiacfoam
-# plugin's validate_configuration (the strict pre-flight check gating
-# `omnidriver run --strict`), not validate_run_semantics.
+# reactionDiffusionPvjCoupler uses the graph's non-empty "pvjResistances" list
+# when present and never reads rPvj; otherwise it calls dict.get<scalar>("rPvj"),
+# a FatalError when absent. The check needs the materialized graph, so
+# _evaluate_pvj_resistance_requirement runs from validate_configuration (the
+# `omnidriver run --strict` pre-flight), not validate_run_semantics.
 
 def _build_pvj_case(tmp_path, *, coupler="reactionDiffusionPvjCoupler",
                      myocardium_solver="monodomainSolver",
@@ -1229,10 +1094,8 @@ def _build_pvj_case(tmp_path, *, coupler="reactionDiffusionPvjCoupler",
     if graph_file_key:
         overrides[f"{prefix}.graphFile"] = "purkinjeGraph"
     if set_rpvj:
-        # rPvj lives on the coupler's own dict block (domainCouplings.pvj),
-        # not on the network's purkinjeGraphModelCoeffs -- matches the
-        # catalog (domainCouplings.<name>.rPvj) and the real tutorial
-        # fixtures (see reactionDiffusionPvjCoupler.C's dict.get<scalar>).
+        # rPvj lives on the coupler's own block (domainCouplings.<name>.rPvj),
+        # not on the network's purkinjeGraphModelCoeffs.
         overrides["$ELECTRO_MODEL_COEFFS.domainCouplings.pvj.rPvj"] = "150.0"
 
     selectors = {"myocardiumSolver": myocardium_solver}
@@ -1270,8 +1133,7 @@ def test_pvj_resistance_silent_when_rpvj_explicitly_set(tmp_path):
 
 
 def test_pvj_resistance_defers_when_graph_not_yet_materialized(tmp_path):
-    """No rPvj, and the referenced graph file does not exist on disk yet
-    (cardiacCore generates it later) -- must defer, not error."""
+    """cardiacCore generates the graph later, so a missing graph defers rather than errors."""
     from omnidriver.cardiacfoam.validation import (
         _evaluate_pvj_resistance_requirement,
     )
@@ -1281,9 +1143,7 @@ def test_pvj_resistance_defers_when_graph_not_yet_materialized(tmp_path):
 
 
 def test_pvj_resistance_silent_when_graph_provides_terminal_resistances(tmp_path):
-    """No rPvj, but the materialized graph provides a non-empty
-    pvjResistances list -- valid, matching reactionDiffusionPvjCoupler.C's
-    terminalResistances() precedence over the dict-level rPvj lookup."""
+    """The graph's pvjResistances take precedence over rPvj, as in reactionDiffusionPvjCoupler::terminalResistances."""
     from omnidriver.cardiacfoam.validation import (
         _evaluate_pvj_resistance_requirement,
     )
@@ -1295,9 +1155,7 @@ def test_pvj_resistance_silent_when_graph_provides_terminal_resistances(tmp_path
 
 
 def test_pvj_resistance_errors_when_graph_materialized_without_resistances_and_no_rpvj(tmp_path):
-    """No rPvj, graph IS materialized, but it has no pvjResistances -- this
-    is the case reactionDiffusionPvjCoupler.C's dict.get<scalar>("rPvj")
-    would hard-FatalError on. Neither source exists: must be an error."""
+    """With neither source, reactionDiffusionPvjCoupler's dict.get<scalar>("rPvj") would FatalError."""
     from omnidriver.cardiacfoam.validation import (
         _evaluate_pvj_resistance_requirement,
     )
@@ -1312,10 +1170,7 @@ def test_pvj_resistance_errors_when_graph_materialized_without_resistances_and_n
 
 
 def test_pvj_resistance_irrelevant_for_a_different_coupler(tmp_path):
-    """The graph-aware rPvj requirement is specific to
-    reactionDiffusionPvjCoupler's own dict.get<scalar>("rPvj") fallback --
-    eikonalPvjCoupler doesn't read rPvj at all, so this check must never
-    fire for it regardless of graph/resistance state."""
+    """eikonalPvjCoupler never reads rPvj, so the check never fires for it."""
     from omnidriver.cardiacfoam.validation import (
         _evaluate_pvj_resistance_requirement,
     )

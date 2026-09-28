@@ -23,28 +23,16 @@ def test_generic_path_resolves(case):
     assert resolution["is_runnable"] is True, case.case_dir
 
 
-# NOT_ADDRESSABLE is currently empty (every regression case is generic-addressable);
-# pytest's empty-parametrize auto-skip for this is expected, not an environment gate.
-# If this ever collects >0 items, the intent is for it to run, not skip.
+# NOT_ADDRESSABLE is empty today; pytest's empty-parametrize skip is expected, not an environment gate.
 @pytest.mark.parametrize("case", NOT_ADDRESSABLE, ids=lambda c: c.case_dir)
 def test_non_addressable_case_is_not_discoverable(case):
-    # Documents a real limitation: the agent's case discovery does not recognize
-    # this layout, so it cannot be driven generically.
     with pytest.raises(KeyError, match="Unknown entry"):
         resolve_generic(case)
 
 
 @pytest.mark.parametrize("case", MAPPED, ids=lambda c: c.entry_name)
 def test_mapped_entry_resolves_registered(case):
-    """Each mapped case resolves to its own ``case.resolution``: still
-    ``"registered"`` for a factory tutorial, ``"tutorial_record"`` for
-    niederer2011, manufacturedBidomain and manufacturedEikonalECG since
-    5.4b. The name predates records.
-
-    Corrected 2026-09-26 (review 54b M7): the 5.4b wave changed these
-    expectations, but this module is ``skip_without_monorepo``-gated and
-    skips in every shape CLAUDE.md lists, so the new expectations have never
-    executed. Converting the gate is a later item."""
+    """Each mapped case resolves to its own ``case.resolution`` (``registered`` or ``tutorial_record``)."""
     resolution = resolve_strict(case)
     assert resolution["resolution"] == case.resolution, case.entry_name
     assert resolution["is_runnable"] is True, case.entry_name

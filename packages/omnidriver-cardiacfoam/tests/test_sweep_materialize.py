@@ -21,16 +21,6 @@
 # Description
 #     Tests sweep case materialization via build_and_launch.
 #
-#     Moved from omnidriver/tests/core/test_sweep_materialize.py (Phase 2
-#     Task M2): every test in that module asserted
-#     constant/electroProperties contents and that the generated Allrun
-#     invokes cardiacFoam -- cardiacFoam vocabulary, not core's own
-#     routing/dispatch. A sibling test in this same module,
-#     test_materialize_case_honours_dx_for_spatial_solver, had already moved
-#     to omnidriver-openfoam/tests/core/test_sweep_materialize.py for
-#     asserting OpenFOAM blockMeshDict output specifically; this is the rest
-#     of that module, one step further down the same seam.
-#
 # Author
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
@@ -42,10 +32,7 @@ from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.sweep_materialize import materialize_case
 
-# Every case below is a cardiacFoam case, so it says so. materialize_case
-# takes driver_context as a required keyword -- there is no ambient default
-# once a second adapter is installed alongside this one
-# (future/ENVIRONMENT_CONTRACT.md §12).
+# Two adapters are installed side by side, so there is no ambient default.
 _CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:sweep_materialize")
 
 
@@ -75,14 +62,7 @@ def test_materialize_case_writes_dict_files_and_allrun_only(tmp_path):
 
 
 def test_materialize_case_allrun_mode_on_a_fresh_case_is_0o755(tmp_path):
-    """Characterization, ahead of Phase 3 Task 10 folding this write into
-    the channel: pin the exact mode (not just "has some execute bit") and
-    the exact content, on a case_dir that does not exist yet. Captured
-    against the pre-Task-10 sweep.py::materialize_case, which write_text's
-    Allrun then ORs S_IEXEC|S_IXGRP|S_IXOTH onto whatever mode resulted
-    from that write -- under this environment's umask (022), a fresh file
-    is created 0o644, so 0o644 | 0o111 == 0o755. A mode-only or digest-only
-    check would miss either half of the trap Task 10 names."""
+    """Under umask 022 a fresh Allrun is 0o644, and the execute bits OR onto it."""
     case_dir = tmp_path / "fresh_case"
     materialize_case(
         case_dir=case_dir,
@@ -100,11 +80,7 @@ def test_materialize_case_allrun_mode_on_a_fresh_case_is_0o755(tmp_path):
 
 
 def test_materialize_case_allrun_mode_when_allrun_already_existed(tmp_path):
-    """Same trap, the other half: a case_dir reused for a second
-    materialize_case call (sweep.py always passes overwrite=True to
-    build_and_launch) must preserve whatever read/write bits the existing
-    Allrun already carried, only adding the execute bits -- not silently
-    reset to a fixed mode regardless of what was there."""
+    """An existing Allrun keeps its read/write bits; only execute bits are added."""
     case_dir = tmp_path / "reused_case"
     case_dir.mkdir()
     allrun = case_dir / "Allrun"
@@ -146,12 +122,7 @@ def test_materialize_case_two_cases_do_not_collide(tmp_path):
 
 
 def test_materialize_case_runs_block_mesh_first_for_spatial_solver(tmp_path):
-    # monodomainSolver needs a real fvMesh; build_case writes a default
-    # blockMeshDict for it (see dict_builder.py/mesh_provisioning.py), so the
-    # generated Allrun must run blockMesh before cardiacFoam -- otherwise
-    # cardiacFoam crashes with "Cannot find file points in polyMesh" (the
-    # exact failure this fix addresses, see project_driverfoam_sweep_bugs_found
-    # memory).
+    # Without blockMesh first, cardiacFoam fails with "Cannot find file points in polyMesh".
     case_dir = tmp_path / "TNNP_monodomain"
     materialize_case(
         case_dir=case_dir,
@@ -169,13 +140,6 @@ def test_materialize_case_runs_block_mesh_first_for_spatial_solver(tmp_path):
 
 
 def test_materialize_case_runs_block_mesh_first_for_single_cell_solver(tmp_path):
-    """Corrected 2026-09-28 (owner decision): `singleCellSolver` used to get
-    a bundled static 1-cell polyMesh, only when `not dry_run` -- and
-    `materialize_case` always passes `dry_run=True`, so a from-scratch
-    single-cell sweep case got no mesh at all (K4). It now meshes exactly
-    like every other solver: a fixed one-cell `blockMeshDict` joins the plan
-    unconditionally, and the generated `Allrun` runs `blockMesh` before
-    `cardiacFoam`."""
     case_dir = tmp_path / "TNNP_singleCell"
     materialize_case(
         case_dir=case_dir,

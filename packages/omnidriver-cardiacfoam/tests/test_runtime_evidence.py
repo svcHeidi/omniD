@@ -1,25 +1,5 @@
-"""RuntimeEvidence declarations specific to the cardiac plugin.
-
-Moved from packages/omnidriver/tests/core/test_runtime_evidence.py: these
-name the cardiac solver command (``cardiacFoam``), its post-processing
-utility (``bathBidomainInterfaceMetrics``), the ``Allrun``-redirected
-``log.*`` telemetry glob, and the cardiacFoam binary as a required runtime
-dependency -- all cardiac plugin knowledge. The generic-plugin tests in that
-file (which already passed without cardiacfoam installed) stayed in core,
-along with two cases (``test_a_command_with_no_declared_globs_returns_empty``
-and ``test_an_unknown_artifact_format_has_no_reader``) that are trivially
-true under any plugin -- ``artifact_value_reader`` has no real
-implementation yet, so moving them would not have been a meaningful split
-either. (Corrected 2026-09-26, topic B Task 7: cardiacFOAM's
-``artifact_value_reader`` now has one implementation, for its
-``cardiacfoam_activation_probes`` format; the core cases above still
-concern an unknown format, so the split stands.) A later pass (Phase 2, Milestone 4 test-ownership split) needed
-core-only to be genuinely green and found those two still calling
-``default_driver_context()`` (which unconditionally imports cardiacfoam)
-instead of ``openfoam_environment_context()`` like their neighbors in the same
-file; that was a leftover inconsistency, not a deliberate cardiac
-dependency, so it was corrected in place there rather than moved here.
-"""
+"""RuntimeEvidence declarations specific to the cardiac plugin: its solver command, a post-processing
+utility, the ``Allrun``-redirected ``log.*`` telemetry glob, and the cardiacFoam binary as a dependency."""
 
 from __future__ import annotations
 
@@ -29,10 +9,8 @@ from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
-# These declarations are cardiacFoam's own, so this module names the plugin
-# rather than asking the ambient default -- which has no single answer once a
-# second adapter is installed alongside this one
-# (future/ENVIRONMENT_CONTRACT.md §12).
+# These declarations are cardiacFoam's own, so name the plugin: the ambient default
+# has no single answer once a second adapter is installed.
 _CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:runtime_evidence")
 
 
@@ -42,15 +20,13 @@ def test_cardiac_declares_its_solver_as_a_solve_step() -> None:
 
 
 def test_a_post_processing_utility_is_not_a_solve_step() -> None:
-    """bathBidomainInterfaceMetrics is authorized to run but does not solve;
-    Phase 4 must not expect solver telemetry from it."""
+    """It is authorized to run but does not solve, so no solver telemetry is expected from it."""
     evidence = _CTX.capabilities.runtime_evidence
     assert "bathBidomainInterfaceMetrics" not in evidence.solve_step_commands()
 
 
 def test_allrun_declares_a_log_glob_so_redirected_output_is_findable() -> None:
-    """OpenFOAM's runApplication redirects solver output to log.<app>, so an
-    Allrun step produces no parseable driver-captured stdout."""
+    """OpenFOAM's runApplication redirects solver output to log.<app>, leaving no parseable stdout."""
     evidence = _CTX.capabilities.runtime_evidence
     globs = evidence.telemetry_source_globs("Allrun")
     assert any("log." in glob for glob in globs)
@@ -59,10 +35,7 @@ def test_allrun_declares_a_log_glob_so_redirected_output_is_findable() -> None:
 def test_cardiac_extra_provenance_paths_declares_the_solver_as_a_dependency(
     tmp_path: Path,
 ) -> None:
-    """End-to-end through the adapter: the whole reason extra_provenance_paths
-    was replaced with a typed RuntimeDependency form is so the cardiacFoam
-    binary itself -- never named by an Allrun-driven step's command -- is
-    still declared as something Phase 2 must fingerprint."""
+    """The binary is never named by an Allrun-driven step's command, yet must still be fingerprinted."""
     from omnidriver.core.plugin_capabilities import RuntimeDependency
 
     evidence = _CTX.capabilities.runtime_evidence

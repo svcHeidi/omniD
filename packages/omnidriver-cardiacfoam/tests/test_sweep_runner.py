@@ -28,25 +28,8 @@
 
 """Sweep-runner tests that exercise real cardiac routing/materialization.
 
-Moved out of core's test tree (Part B, test-ownership split): these eight
-tests run ``route_case_values``/``materialize_case``/``strict_plan`` for
-real (no mocking of the routing or materialization step) and assert on
-cardiac-specific output -- ``constant/electroProperties`` written to disk,
-TNNP accepted vs an unrecognized ionic model rejected, real solver
-invocation via subprocess. None of that is meaningful under a generic/
-neutral plugin, so unlike the tests that stayed in
-``packages/omnidriver/tests/core/test_sweep_runner.py`` (entry-mode tests
-that mock ``load_entry_spec``; resume/fresh/retry/timeout tests that mock
-``route_case_values`` directly with content-free axis vocabulary; the
-over-cap and hash-mismatch tests, which never reach routing at all), these
-cannot be made to pass under core alone without mocking away the exact
-behavior they exist to prove.
-
-This file used to be hidden from core's collection entirely behind a
-module-level ``pytest.importorskip("omnidriver.cardiacfoam...")`` (see
-``tests/core/test_no_new_core_tests_are_hidden.py``'s now-shrunk
-``KNOWN_HIDDEN_FILES``); it runs unconditionally here since
-omnidriver-cardiacfoam is this package's own subject.
+``route_case_values``/``materialize_case``/``strict_plan`` run unmocked and
+the assertions are on cardiac output, so these cannot live in core.
 """
 
 from __future__ import annotations
@@ -69,26 +52,9 @@ _CTX = _driver_context(
     OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:sweep_runner",
 )
 
-#: These two tests invoke a REAL solver run: sweep_run shells out to
-#: `python -m omnidriver run`, whose workflow executes `Allrun`, which invokes
-#: the `cardiacFoam` binary. Without an OpenFOAM environment they report every
-#: case failed, with no materialization_error and no plan_error -- the failure
-#: is in the subprocess, so nothing surfaces in the sweep result.
-#:
-#: They were silently environment-dependent: green on a machine where OpenFOAM
-#: happened to be reachable, red otherwise, with nothing in the test saying so.
-#: `run_case.sh` used to hardcode `/Volumes/OpenFOAM-v2412/etc/bashrc` as a
-#: fallback, which did not match this machine's `/Volumes/OpenFOAM/OpenFOAM-12`.
-#: That fallback is gone: the script now honours `WM_PROJECT_DIR` and otherwise
-#: fails with a message naming OPENFOAM_BASHRC. So a mounted install resolves
-#: only when the environment is actually sourced, which is what the skipif below
-#: is really testing for.
-#:
-#: The `integration` marker was declared in the root pyproject.toml for exactly
-#: this ("tests requiring a real cardiacFoam binary, skipped by default in CI")
-#: and had never been applied to anything. A marker alone does not skip, so the
-#: skipif is what actually makes the dependency honest; the marker lets CI
-#: deselect the whole class with -m "not integration".
+#: sweep_run executes Allrun, which invokes the real cardiacFoam binary. Without
+#: it every case fails inside the subprocess with no error in the sweep result,
+#: so the skipif is required; the `integration` marker lets CI deselect them.
 _HAS_SOLVER = shutil.which("cardiacFoam") is not None
 requires_solver = pytest.mark.skipif(
     not _HAS_SOLVER,
@@ -132,9 +98,6 @@ def test_sweep_run_writes_case_record_json_for_every_case(tmp_path):
 
 
 def test_sweep_run_writes_case_record_json_even_when_a_case_fails(tmp_path):
-    # case_record.json must exist for every case regardless of whether the
-    # whole sweep succeeded -- an agent diagnosing a partially-failed sweep
-    # needs the successful cases' records just as much as a clean sweep does.
     spec_path = tmp_path / "sweep.json"
     spec = {
         "base": {
@@ -159,10 +122,7 @@ def test_sweep_run_writes_case_record_json_even_when_a_case_fails(tmp_path):
 @pytest.mark.integration
 @requires_solver
 def test_sweep_run_archives_nothing_for_generic_case_folder_sweeps(tmp_path):
-    # archive_dir_name only applies to entry mode (see sweep_runner.sweep_run's
-    # archive_dir_name assignment) -- a generic/case-folder sweep must not
-    # gain a spurious "collectedOutput" subfolder just because the default
-    # changed from None to a string.
+    # sweep_run's archive_dir_name applies only to entry mode.
     spec_path = tmp_path / "sweep.json"
     _write_spec(spec_path)
     output_dir = tmp_path / "out"
@@ -212,12 +172,6 @@ def test_sweep_plan_records_materialization_failure_and_continues(tmp_path):
 
 
 def test_sweep_plan_records_unrecognized_axis_as_per_case_failure(tmp_path):
-    # route_case_values now raises SweepValidationError for an unrecognized
-    # axis like "bogusAxis" (see sweep_routing.py fix). That per-case error
-    # must be caught and recorded like any other materialization failure,
-    # not propagate uncaught and crash the whole sweep_plan call -- a caller
-    # sweeping N cases with one bad axis should still see a clean per-case
-    # report, the same as an invalid ionicModel does today.
     spec = {
         "base": {
             "electro_selectors": {"myocardiumSolver": "singleCellSolver", "tissue": "myocyte"},
@@ -246,9 +200,7 @@ def test_sweep_run_writes_run_documents_and_continues_past_failure(tmp_path):
     output_dir = tmp_path / "out"
 
     call_log = []
-    real_subprocess_run = subprocess.run  # captured before patching, so real internal
-    # subprocess calls materialize_case makes (e.g. foamDictionary, when it's on PATH)
-    # still execute for real instead of being swallowed by this fake.
+    real_subprocess_run = subprocess.run  # so materialize_case's own calls still run for real
 
     def fake_subprocess_run(cmd, **kwargs):
         if "--run-document" not in cmd:
@@ -295,9 +247,6 @@ def test_sweep_run_writes_run_documents_and_continues_past_failure(tmp_path):
 
 
 def test_sweep_run_records_unrecognized_axis_as_per_case_failure(tmp_path):
-    # Mirrors test_sweep_plan_records_unrecognized_axis_as_per_case_failure:
-    # route_case_values's SweepValidationError must be caught per-case inside
-    # sweep_run's loop too, not crash the whole call.
     spec = {
         "base": {
             "electro_selectors": {"myocardiumSolver": "singleCellSolver", "tissue": "myocyte"},

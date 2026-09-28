@@ -1,11 +1,4 @@
-"""Content pins for the bundled ``checkMeshGeometry`` utility manifest.
-
-Moved from ``omnidriver-openfoam``'s test suite: the manifest itself is
-cardiac-domain package data (``omnidriver/cardiacfoam/utilities/checkMeshGeometry/
-utility.manifest.toml``), so a test pinning its declared flags/artifacts
-belongs with the package that ships it, not with the mesh-geometry parser
-that happens to consume the same category.
-"""
+"""Content pins for the ``checkMeshGeometry`` utility manifest this package ships."""
 
 from __future__ import annotations
 
@@ -28,7 +21,7 @@ class TestCheckMeshGeometryCatalogued(unittest.TestCase):
         self.assertIn("-region", flag_names)
         self.assertIn("-scale", flag_names)
         self.assertIn("-rescale", flag_names)
-        # -noScale is gone: detect-only is now the default.
+        # Detect-only is the default, so there is no -noScale flag.
         self.assertNotIn("-noScale", flag_names)
 
     def test_artifact_id_typo_fixed(self):

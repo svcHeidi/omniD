@@ -21,14 +21,8 @@
 # Description
 #     Tests that the cardiac plugin's own config schema
 #     (``omnidriver.cardiacfoam.config_schema.CONFIG_SCHEMA``) still enforces
-#     the physics-phase vocabulary (heterogeneity mode, tissue).
-#
-#     Moved from core's ``tests/core/test_run_model.py`` (Phase 2, Milestone
-#     3): the physics-phase vocabulary moved to the cardiac plugin's own
-#     config schema (P2.2) -- core's run-document schema no longer enforces
-#     it, so these validate against the plugin schema directly. Their core
-#     counterpart, ``test_schema_still_allows_unlisted_physics_keys``, stays
-#     in core and proves core's schema is deliberately open.
+#     the physics-phase vocabulary (heterogeneity mode, tissue). Core's
+#     schema is deliberately open (test_schema_still_allows_unlisted_physics_keys).
 #
 # Author
 #     Simao Nieto de Castro, UCD.

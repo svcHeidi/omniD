@@ -1,12 +1,6 @@
-"""cardiacFOAM's activation-time probe reader, over files a real run wrote.
-
-``fixtures/niederer2011_probes/`` holds ``postProcessing/Niedererpoints/0/
-activationTime``, a verbatim copy of what ``niederer2011``'s ``samplePoints``
-step writes at dx 0.5 mm, ``endTime`` 0.015 s (docs/solver-learning/
-cardiacfoam.md, section Q, Q1), plus ``system/Niedererpoints`` declaring
-``interpolationScheme cellPoint`` (Q9, 2026-09-27), the scheme this reader
-requires.
-"""
+"""cardiacFOAM's activation-time probe reader, over a verbatim ``niederer2011`` ``samplePoints``
+output (dx 0.5 mm, endTime 0.015 s) whose ``system/Niedererpoints`` declares
+``interpolationScheme cellPoint``, the scheme this reader requires."""
 from __future__ import annotations
 
 import shutil
@@ -23,7 +17,7 @@ from omnidriver.core.runtime.models import DataArtifact
 FIXTURE = Path(__file__).parent / "fixtures" / "niederer2011_probes"
 POINTS = "postProcessing/Niedererpoints/0/activationTime"
 NAMES = tuple(str(k) for k in range(9))
-#: Q1: the header's configured locations, i.e. the native system/Niedererpoints.
+#: The header's configured locations, i.e. the native system/Niedererpoints.
 HEADER = ((0.0, 0.0, 0.007), (0.0, 0.0, 0.0), (0.019999, 0.0, 0.007), (0.019999, 0.0, 0.0),
           (0.0, 0.003, 0.007), (0.0, 0.003, 0.0), (0.019999, 0.003, 0.007), (0.019999, 0.003, 0.0),
           (0.01, 0.0015, 0.0035))
@@ -101,9 +95,7 @@ def test_a_probe_openfoam_did_not_find_is_refused_by_name(case_root):
 
 
 def test_a_cell_scheme_probe_is_refused_by_name(case_root):
-    """OpenFOAM's own default (no ``interpolationScheme``, or any value
-    other than ``cellPoint``) is refused: a ``cell`` probe's location is the
-    containing cell's centre, which this reader does not report."""
+    """OpenFOAM's default ``cell`` scheme reports the containing cell's centre, which this reader does not."""
     _edit(case_root / "system" / "Niedererpoints", "interpolationScheme cellPoint;\n", "")
     with pytest.raises(ValueError, match="interpolationScheme 'cell'.*cellPoint.*cell's centre"):
         ActivationProbeReader().read(case_root, _artifact(), ReadRequest(names=("0",)))

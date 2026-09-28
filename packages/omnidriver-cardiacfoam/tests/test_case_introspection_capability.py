@@ -1,11 +1,4 @@
-"""Samplable fields and case-model resolution the cardiac plugin exposes.
-
-Moved from packages/omnidriver/tests/core/test_case_introspection_capability.py:
-these assertions name cardiac-specific fields (``Vm``, ``activationTime``)
-and the cardiac dictionary layout (``constant/electroProperties``) -- all
-cardiac plugin knowledge. The generic-plugin test in that file (which
-already passed without cardiacfoam installed) stayed in core.
-"""
+"""Samplable fields and case-model resolution the cardiac plugin exposes."""
 
 from __future__ import annotations
 
@@ -44,7 +37,6 @@ def test_missing_case_file_resolves_to_none_without_raising(tmp_path: Path) -> N
 
 
 def test_no_active_tension_means_no_solid_region(tmp_path: Path) -> None:
-    """A spatial EP solver alone must not imply a mechanics region."""
     introspection = _CTX.capabilities.case_introspection
     resolved = introspection.resolve_case_models(_cardiac_case(tmp_path))
     assert introspection.samplable_fields(resolved)["solid"] == ()

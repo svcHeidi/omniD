@@ -13,8 +13,7 @@ from omnidriver.cardiacfoam.common_dict_entries import (
     PHYSICS_PROPERTY_ENTRIES,
 )
 
-# Two adapters are installed side by side, so there is no ambient default left
-# to discover. The catalog these hints are checked against is cardiacFoam's.
+# Two adapters are installed, so there is no ambient default to discover.
 _CTX = _driver_context(
     OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:remediation_catalog_addressability",
 )

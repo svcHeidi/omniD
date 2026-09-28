@@ -1,10 +1,6 @@
 """The capability manifest reaches describe/strict_plan for a real tutorial.
 
-Uses the ``singleCell`` tutorial record: cardiacFoam has no factory
-tutorial any more (tutorials-are-pointers step C), and the manifest itself
-is entry-agnostic (built from the driver context's plugin identity, not
-from which tutorial resolved) -- a record proves it exactly as well as a
-factory tutorial did.
+Uses the ``singleCell`` record; the manifest is built from the plugin identity, so any entry proves it.
 """
 from __future__ import annotations
 
@@ -31,10 +27,7 @@ _CTX = _driver_context(
 
 
 def _native_tutorials_root() -> Path:
-    """Copied (not imported) from other ``@pytest.mark.native`` modules'
-    own helper of the same name/shape -- each module is collected
-    standalone and intentionally carries no import-time dependency on a
-    sibling test module."""
+    """Copied, not imported: each native module is collected with no import-time dependency on a sibling."""
     value = os.environ.get("OMNIDRIVER_NATIVE_TUTORIALS")
     if not value:
         pytest.fail(
@@ -52,8 +45,7 @@ def _native_tutorials_root() -> Path:
 
 
 def _stage_single_cell(cases_root: Path) -> None:
-    """Copy only ``constant/``/``system/`` of the real native singleCell
-    case into ``cases_root`` -- everything resolving this record reads."""
+    """Copy only ``constant/`` and ``system/`` of the native singleCell case: all this record reads."""
     native_case = _native_tutorials_root() / _SINGLE_CELL_RELPATH
     if not native_case.is_dir():
         pytest.fail(f"native fixture case missing: {native_case}")

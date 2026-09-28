@@ -28,25 +28,8 @@
 
 """The live ratchet: does IONIC_MODEL_CATALOG match the built solver?
 
-This is the check that keeps the catalog honest. An agent writes
-``ionicConstantOverrides`` from the catalog, and an unknown name is a
-**FatalError** at solver startup (``src/genericWriter/ionicModelIO.C:245-255``).
-Constant naming follows no static rule -- ``AC_``-prefixed for most models,
-unprefixed for TNNP and BuenoOrovio, and *mixed* inside TWorld -- so only the
-solver can answer.
-
-It skips when ``listCellModelsVariables`` is not on ``PATH``, which is the
-normal state on a machine without OpenFOAM sourced. To run it::
-
-    source /Volumes/OpenFOAM-v2412/etc/bashrc
-    uv run pytest openfoam_driver/tests/plugins/cardiacfoam/\\
-test_ionic_catalog_live_verification.py -q -s
-
-**A skip is not a pass.** The predecessor of this module,
-``scripts/generate_catalog.py``, was never wired to anything and rotted until
-it no longer imported at all. A test that silently skips forever would repeat
-that, so the skip reason names exactly what to run.
-"""
+An unknown ``ionicConstantOverrides`` name is a FatalError at solver startup (genericWriter's ionicModelIO), and
+constant naming follows no static rule (``AC_`` for most, unprefixed for TNNP/BuenoOrovio, mixed in TWorld)."""
 
 from __future__ import annotations
 
@@ -71,14 +54,7 @@ requires_utility = pytest.mark.skipif(
 
 @requires_utility
 def test_every_catalogued_ionic_model_matches_the_built_solver():
-    """The whole point: catalog names are what the solver actually exposes.
-
-    On failure the message names the model and the direction, because the two
-    directions have different consequences. A name the runtime has and the
-    catalog lacks is invisible to an agent -- it never learns the override
-    exists. A name the catalog has and the runtime lacks is worse in a
-    different way: the agent writes it and the solver fatals at startup.
-    """
+    """A runtime-only name is invisible to an agent; a catalog-only name fatals the solver at startup."""
     result = verify_ionic_catalog()
 
     assert result.utility_available is True
@@ -110,9 +86,7 @@ def test_every_catalogued_ionic_model_matches_the_built_solver():
 
 @requires_utility
 def test_every_model_can_actually_be_instantiated():
-    """A model the driver cannot configure is a catalog problem in its own
-    right, distinct from a name mismatch. Reported separately so a broken
-    case-synthesis path is not mistaken for catalog drift."""
+    """Reported apart from name drift, so a broken case-synthesis path is not mistaken for it."""
     result = verify_ionic_catalog()
     errored = {
         name: model.reason

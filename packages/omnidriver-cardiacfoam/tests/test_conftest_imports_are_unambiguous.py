@@ -1,19 +1,7 @@
 """`from conftest import X` in this tree must resolve to a name core also has.
 
-When the whole repository is collected, both packages' ``tests`` directories
-are reachable and **core's conftest wins** -- so a cardiac test doing
-``from conftest import monorepo_root`` gets *core's* ``monorepo_root``, not the
-one beside it. That works today only because core's conftest happens to define
-the same names.
-
-The failure mode is silent until it is not: adding a cardiac-only helper to
-this package's conftest and importing it that way passes when the package is
-run alone and raises ImportError in a full-repo run. That happened on
-2026-09-04 and cost three attempts to place one helper.
-
-This makes it fail immediately instead. A package-specific helper belongs in a
-uniquely named module inside an importable package -- see
-``regression_equivalence/tutorials_tree.py``.
+In a full-repo run core's conftest wins; a package-specific helper belongs in
+a uniquely named module such as ``regression_equivalence/tutorials_tree.py``.
 """
 from __future__ import annotations
 
@@ -22,7 +10,6 @@ import re
 from pathlib import Path
 
 _CARDIAC_TESTS = Path(__file__).resolve().parent
-# packages/omnidriver-cardiacfoam/tests -> packages -> omnidriver/tests
 _CORE_CONFTEST = _CARDIAC_TESTS.parents[1] / "omnidriver" / "tests" / "conftest.py"
 
 

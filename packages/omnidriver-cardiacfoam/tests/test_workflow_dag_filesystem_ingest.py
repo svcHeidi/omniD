@@ -1,12 +1,5 @@
-"""cardiacFoam's electroProperties-variant case marker is discoverable.
-
-Moved from omnidriver/tests/core/test_workflow_dag_filesystem_ingest.py
-(Phase 2 Task M2): this test writes only a variant-suffixed
-``constant/electroProperties.monodomain`` file (no bare ``electroProperties``)
-and checks that cardiacFoam's own ``has_case_marker``/discovery still
-recognizes the folder as a runnable case folder -- cardiacFoam vocabulary,
-not core's Allrun-driven DAG synthesis rule (which stayed in core, see
-``test_workflow_dag_filesystem_ingest.py`` there).
+"""cardiacFoam's electroProperties-variant case marker is discoverable: a case
+with only ``constant/electroProperties.monodomain`` is a runnable case folder.
 """
 from __future__ import annotations
 

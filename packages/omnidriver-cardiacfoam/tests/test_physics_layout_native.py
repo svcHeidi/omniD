@@ -1,16 +1,6 @@
-"""physics_layout.json covers every native case, and every region it
-resolves exists (spec 2026-09-26 A7, owner amendment). Supplied only
-through OMNIDRIVER_NATIVE_TUTORIALS, never discovered.
-
-Widened 2026-09-26 (R1 fix, finding I1): the original test only globbed
-``constant/physicsProperties``, so a native case that has no such file
-(``electrophysiologyProtocols/ionicHeterogeneity``, which runs
-``ionicHeterogeneityProbe`` and reads ``constant/electroProperties``
-directly) was never examined here, even though it lost its mesh-scale
-exemption when the hook's swallow was widened to catch every exception.
-``test_a_case_without_physics_properties_is_single_region`` and
-``test_the_hook_still_exempts_a_case_without_physics_properties`` close
-that gap.
+"""physics_layout.json covers every native case, and every region it resolves
+exists, including cases with no ``constant/physicsProperties``. The tree is
+supplied only through OMNIDRIVER_NATIVE_TUTORIALS, never discovered.
 """
 from __future__ import annotations
 
@@ -45,10 +35,7 @@ def _cases() -> list[Path]:
 
 
 def _cases_without_physics_properties() -> list[Path]:
-    """Every native case with ``constant/electroProperties`` and no
-    ``constant/physicsProperties`` -- the layout ``_IMPLICIT_LAYOUT`` covers
-    (finding I1's fix direction 3: "widen the drift gate so it also finds
-    native cases with an electroProperties and no physicsProperties")."""
+    """Native cases with electroProperties and no physicsProperties (``_IMPLICIT_LAYOUT``)."""
     root = _native_root()
     found = sorted(
         p.parent.parent for p in root.rglob("constant/electroProperties")
@@ -63,8 +50,7 @@ class _Spec:
 
 
 def _pre_a7_answer(electro_properties_path: Path) -> bool:
-    """The pre-A7 hook, verbatim: it read ``constant/electroProperties``
-    directly, with no region split at all."""
+    """The hook's answer from a direct ``constant/electroProperties`` read, no region split."""
     try:
         return (
             detect_myocardium_solver_name(electro_properties_path) == "singleCellSolver"
@@ -97,10 +83,7 @@ def test_a_case_without_physics_properties_is_single_region():
 
 
 def test_the_hook_still_exempts_a_case_without_physics_properties_the_way_it_used_to():
-    """Finding I1's fix direction 4: the hook's answer for a case with no
-    ``physicsProperties`` (``ionicHeterogeneity``, among others) must match
-    what the pre-A7 direct read of ``constant/electroProperties`` gave --
-    it must not have silently regressed to "not exempt"."""
+    """For a case with no physicsProperties the hook matches a direct electroProperties read."""
     cases = _cases_without_physics_properties()
     assert cases, "no native case without physicsProperties found, so this proves nothing"
     mismatched = []

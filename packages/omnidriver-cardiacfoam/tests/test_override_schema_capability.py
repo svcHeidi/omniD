@@ -1,13 +1,5 @@
-"""The cardiac plugin's config-schema prose and dict-entry document shape.
-
-Moved from packages/omnidriver/tests/core/test_override_schema_capability.py:
-these assertions name cardiac vocabulary (``$ELECTRO_MODEL_COEFFS``,
-``electroProperties``, the ``singleCell`` worked example, the grouped
-``electroProperties`` document shape) that only the cardiac plugin supplies.
-The generic-plugin tests in that file (which already passed without
-cardiacfoam installed, asserting the *absence* of these tokens) stayed in
-core.
-"""
+"""The cardiac plugin's config-schema prose and dict-entry document shape: cardiac vocabulary
+only the cardiac plugin supplies. Core's tests assert the absence of these tokens."""
 
 from __future__ import annotations
 

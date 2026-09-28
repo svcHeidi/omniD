@@ -31,11 +31,8 @@
 
 """Unit tests: report parsing + catalog diffing, no OpenFOAM required.
 
-Covers the discrepancy that motivated this whole module: constant naming is
-not a static rule. `AC_`-prefixed convention for CellML-generated constants,
-unprefixed for hand-added ones, and mixed within a single model (TWorld: 273
-`AC_*` + one bare `gnalTissueScale`). See
-`ionic_catalog_verification.py`'s module docstring.
+Constant naming is not a static rule: CellML-generated constants carry ``AC_``,
+hand-added ones do not, and one model can mix both.
 """
 
 from __future__ import annotations
@@ -56,9 +53,7 @@ from omnidriver.cardiacfoam.ionic_model_catalog import IonicModelEntry
 
 
 def _entry(*, states=(), algebraic=(), constants=()) -> IonicModelEntry:
-    """Minimal synthetic catalog entry -- deliberately independent of the
-    real (large, drift-prone) IONIC_MODEL_CATALOG values so these tests stay
-    stable across catalog edits."""
+    """Synthetic entry, independent of the drift-prone IONIC_MODEL_CATALOG."""
     return IonicModelEntry(
         states=tuple(states),
         algebraic=tuple(algebraic),
@@ -74,8 +69,7 @@ def _entry(*, states=(), algebraic=(), constants=()) -> IonicModelEntry:
 
 
 def _make_report(*, constants=(), states=(), algebraic=(), ionic_model="Fixture") -> str:
-    """Build report text in the exact documented listCellModelsVariables.C
-    format (listCellModelsVariables.C:168-198)."""
+    """Report text in listCellModelsVariables' documented output format."""
     lines = [
         "",
         "========== listCellModelsVariables ==========",
@@ -117,8 +111,6 @@ def test_report_matching_catalog_is_reported_as_match():
 
 
 def test_extra_runtime_constant_is_missing_from_catalog():
-    """Runtime has a constant the catalog doesn't -- the dangerous direction:
-    an agent using the catalog wouldn't know this override name exists."""
     entry = _entry(constants=("R", "T"))
     report = _make_report(constants=["R", "T", "F"])
     parsed = parse_report_text(report)
@@ -131,8 +123,6 @@ def test_extra_runtime_constant_is_missing_from_catalog():
 
 
 def test_catalog_constant_absent_at_runtime_is_extra_in_catalog():
-    """Catalog claims a constant the solver no longer has -- an agent would
-    write a FatalError-triggering override."""
     entry = _entry(constants=("R", "T", "StaleConstant"))
     report = _make_report(constants=["R", "T"])
     parsed = parse_report_text(report)
@@ -161,7 +151,6 @@ def test_malformed_report_is_surfaced_as_mismatch_not_silently_ignored():
 
 
 def test_unprefixed_naming_convention_TNNP_style_matches_cleanly():
-    """TNNP-style: no AC_ prefix at all (R, T, F, g_Na, ...)."""
     names = ("R", "T", "F", "g_Na", "g_K1")
     entry = _entry(constants=names)
     report = _make_report(constants=list(names))
@@ -173,9 +162,7 @@ def test_unprefixed_naming_convention_TNNP_style_matches_cleanly():
 
 
 def test_mixed_naming_convention_TWorld_style_matches_cleanly():
-    """TWorld-style: CellML-generated constants carry AC_, plus exactly one
-    hand-added bare constant (the real case is gnalTissueScale). This is the
-    finding that makes a static prefix rule impossible."""
+    """TWorld mixes AC_ constants with one bare gnalTissueScale, so no static prefix rule holds."""
     names = ("AC_CaMK0", "AC_K_Phos_CaMK", "AC_Whole_cell_PP1", "gnalTissueScale")
     entry = _entry(constants=names)
     report = _make_report(constants=list(names))
@@ -220,7 +207,6 @@ def test_verify_ionic_catalog_reports_skipped_not_verified_when_utility_absent(m
     assert isinstance(result, VerificationResult)
     assert result.utility_available is False
     assert result.results["TNNP"].status == "skipped"
-    # A skip must never be mistaken for a pass.
     assert result.all_match is False
 
 
@@ -247,13 +233,7 @@ def test_verify_ionic_catalog_rejects_unknown_model():
 
 
 def test_case_synthesis_works_without_the_solver(tmp_path):
-    """The live check needs OpenFOAM, but its case-synthesis half does not.
-
-    Exercising it here catches signature errors in the driver APIs the live
-    path calls -- which would otherwise surface only on a user's first real
-    run, long after this code was written. It already caught one:
-    provision_mesh is keyword-only.
-    """
+    """Exercises the driver-API calls of the live check's OpenFOAM-free half."""
     from omnidriver.cardiacfoam.ionic_catalog_verification import (
         _synthesize_case,
     )
@@ -267,9 +247,7 @@ def test_case_synthesis_works_without_the_solver(tmp_path):
 
     assert (case / "constant" / "electroProperties").is_file()
     assert (case / "constant" / "physicsProperties").is_file()
-    # A fixed one-cell blockMeshDict, matching every other solver's mesh
-    # path -- running blockMesh itself is _verify_one's job (it already
-    # needs OpenFOAM for the solver binary), not this OpenFOAM-free half.
+    # Running blockMesh on this one-cell dict is _verify_one's job, not this half's.
     block_mesh_dict = case / "system" / "blockMeshDict"
     assert block_mesh_dict.is_file()
     assert "hex (0 1 2 3 4 5 6 7) (1 1 1)" in block_mesh_dict.read_text()
@@ -280,8 +258,6 @@ def test_case_synthesis_works_without_the_solver(tmp_path):
 
 
 def test_synthesis_is_attempted_for_every_catalogued_model(tmp_path):
-    """A model the driver cannot even configure is a catalog problem in its
-    own right -- report it per model rather than letting it blind the run."""
     from omnidriver.cardiacfoam.ionic_catalog_verification import (
         _synthesize_case,
     )

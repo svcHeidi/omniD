@@ -29,41 +29,7 @@
 
 """Drift guard: catalogue ``source_refs`` must resolve to real files on disk.
 
-Every ``DictEntry`` in the omnidriver catalogue carries a ``source_refs``
-tuple of relative paths that document *where in the C++ source tree* the
-dictionary key is actually read. This test verifies that every path in every
-``source_refs`` tuple points to a file that actually exists in the monorepo.
-
-Why this matters
-----------------
-When a C++ file is renamed, refactored, or deleted, the catalogue entry that
-references it silently becomes stale. The old path stays in ``source_refs``
-pointing at nothing, and omnidriver may open it to extract validation rules —
-crashing at runtime instead of at CI time.
-
-This is precisely what happened with the ``eikonalSolver`` refactor: the old
-``myocardiumModels/eikonalSolver/eikonalSolver.C`` was deleted and a new path
-(``eikonalMyocardiumDomain.C``) took over, but the catalogue reference to the
-old file was not removed.  This test would have caught that the moment the
-deletion PR landed.
-
-What is checked
----------------
-* ``PHYSICS_PROPERTY_ENTRIES`` (physicsModel / controlDict section)
-* ``CONTROL_DICT_ENTRIES`` (controlDict section)
-* All groups returned by ``get_electro_property_entry_groups()`` (the main
-  ``electroProperties`` catalogue)
-
-What is NOT checked
--------------------
-* ``source_refs`` that are empty tuples — no path, nothing to validate.
-* Paths inside ``notes`` or ``description`` fields (free text, not a contract).
-
-Failure message
----------------
-The test lists every missing file together with the ``driver_path`` of the
-entry that references it, so the fix is unambiguous: either update the path
-in the catalogue to the new file location, or remove the stale reference.
+A stale ref (a renamed or deleted C++ file) would otherwise fail at runtime when omnidriver opens it for validation rules.
 """
 
 from __future__ import annotations
@@ -78,12 +44,6 @@ from omnidriver.cardiacfoam.common_dict_entries import (
 )
 from conftest import monorepo_root
 
-# ---------------------------------------------------------------------------
-# Module-level skip (inherited from drift_guards/conftest.py pytestmark, but
-# also expressed explicitly here so the skip reason is self-contained when
-# this file is run in isolation).
-# ---------------------------------------------------------------------------
-
 pytestmark = pytest.mark.skipif(
     monorepo_root is None,
     reason=(
@@ -91,11 +51,6 @@ pytestmark = pytest.mark.skipif(
         "Clone the full repository to enable drift guard tests."
     ),
 )
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 def _collect_broken_refs(repo_root: Path) -> list[tuple[str, str]]:
@@ -137,26 +92,12 @@ def _collect_duplicate_refs_within_entry() -> list[tuple[str, str, int]]:
     return dups
 
 
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
-
-
 def test_all_source_refs_resolve_to_real_files():
-    """Every path in every DictEntry.source_refs must exist on disk.
-
-    Failure means a C++ file was renamed or deleted without updating the
-    catalogue. Fix: update the stale path to the new file location, or remove
-    the reference if the file no longer exists.
-
-    The failure message lists every missing path and the catalogue entry that
-    references it.
-    """
-    assert monorepo_root is not None  # guard; skip should have fired first
+    assert monorepo_root is not None
     broken = _collect_broken_refs(monorepo_root)
 
     if not broken:
-        return  # all good
+        return
 
     lines = [
         "Catalogue source_refs point to files that do not exist on disk.",
@@ -171,15 +112,10 @@ def test_all_source_refs_resolve_to_real_files():
 
 
 def test_no_duplicate_source_refs_within_a_single_entry():
-    """No DictEntry should list the same file twice in its source_refs tuple.
-
-    Duplicate refs are harmless but indicate a copy-paste error and make the
-    catalogue harder to audit. Remove the duplicate occurrence.
-    """
     dups = _collect_duplicate_refs_within_entry()
 
     if not dups:
-        return  # all good
+        return
 
     lines = [
         "DictEntry.source_refs tuples contain duplicate paths:",

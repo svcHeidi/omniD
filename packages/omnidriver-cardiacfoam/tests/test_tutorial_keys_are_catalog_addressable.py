@@ -26,25 +26,10 @@
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-"""Catalog coverage measured against real tutorial dicts.
+"""Catalog coverage measured against real tutorial dicts, by full scope path.
 
-The C++ key scanner (``_dict_keys_scanner``) compares *bare leaf names*, so a
-key catalogued at one scope masks its absence at another: ``solver`` counted
-as present because a top-level entry existed, while
-``…purkinjeGraphModelCoeffs.solver`` was unsettable. Making that scanner
-path-aware would need interprocedural analysis -- measured on this tree, only
-4 of 340 C++ reads have a scope resolvable from a local
-``member_(parent.subDict("X"))`` binding; the rest read from a dict handed in
-by a caller.
-
-This test closes the same gap from the data side instead. It walks the
-tracked tutorial dicts, reconstructs the full scope path of every entry, and
-asserts the driver can address it. That catches a key catalogued at the wrong
-scope, a key added to a tutorial with no catalog entry, and a catalog entry
-deleted while tutorials still set it -- with no C++ parsing at all.
-
-Keys that are genuinely unaddressable are waived below *with a reason*, so
-the set stays an explicit, reviewed list rather than silent drift.
+``_dict_keys_scanner`` compares bare leaf names, so a key catalogued at one
+scope would mask its absence at another; this checks from the data side.
 """
 
 from __future__ import annotations
@@ -70,9 +55,7 @@ _BLOCK_HEADER = re.compile(r"([A-Za-z_][\w.|\"]*)\s*$")
 #: Unaddressable on purpose. Each entry needs a reason; delete the entry when
 #: the reason stops holding, rather than widening the waiver.
 WAIVED: dict[str, str] = {
-    # Empty, and worth keeping that way. Every key a tracked tutorial sets is
-    # a key something reads. Dead entries were deleted from the dicts rather
-    # than waived here -- a waiver hides drift, deleting the key removes it.
+    # Empty: a dead tutorial key is deleted from the dict, not waived here.
 }
 
 

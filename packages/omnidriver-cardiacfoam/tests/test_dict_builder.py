@@ -25,13 +25,9 @@
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-"""Tests for the dict_builder.
-
-The builder synthesizes a complete electroProperties dict from
-minimum-viable agent intent (selectors + overrides). It enforces the same
-constraints the validator does, so its output is guaranteed validator-clean
-by construction.
-"""
+"""Tests for the dict builder, which synthesizes a complete electroProperties dict from
+selectors and overrides and enforces the validator's constraints, so its output is
+validator-clean by construction."""
 from __future__ import annotations
 
 import unittest
@@ -45,8 +41,7 @@ from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
 REPO_ROOT = monorepo_root or repo_root_default()
 
-# Two adapters are installed side by side, so there is no ambient default left
-# to discover. build_and_launch here is always driving cardiacFoam.
+# Two adapters are installed side by side, so there is no ambient default to discover.
 _CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:dict_builder")
 SINGLE_CELL_ELECTRO_PROPERTIES = (
     REPO_ROOT / "tutorials" / "electrophysiologyProtocols" / "singleCell"
@@ -61,8 +56,6 @@ PURKINJE_ELECTRO_PROPERTIES_MONODOMAIN = (
 
 
 class TestDictBuilderModule(unittest.TestCase):
-    """Module-level structural contract — the import path + signature."""
-
     def test_module_exposes_build_electro_properties(self) -> None:
         from omnidriver.cardiacfoam.dict_builder import build_electro_properties
         self.assertTrue(callable(build_electro_properties))
@@ -75,16 +68,11 @@ class TestDictBuilderModule(unittest.TestCase):
         self.assertIn("selectors", params)
         self.assertIn("overrides", params)
         self.assertIn("typical_value_fallback", params)
-        # selectors is required positional/keyword; overrides + fallback are keyword-only.
         self.assertEqual(params["overrides"].kind, inspect.Parameter.KEYWORD_ONLY)
         self.assertEqual(params["typical_value_fallback"].kind, inspect.Parameter.KEYWORD_ONLY)
 
 
 class TestMinimalSingleCellBuild(unittest.TestCase):
-    """First behavioural test: a singleCellSolver + AlievPanfilov case must
-    produce a string containing the FoamFile preamble and the chosen solver
-    selector. Drives the bare-minimum end-to-end pipeline."""
-
     def test_returns_string_with_foamfile_preamble(self) -> None:
         from omnidriver.cardiacfoam.dict_builder import build_electro_properties
         text = build_electro_properties(
@@ -101,9 +89,6 @@ class TestMinimalSingleCellBuild(unittest.TestCase):
 
 
 class TestContextResolution(unittest.TestCase):
-    """The builder must expose its context-resolution step so tests and
-    callers can introspect what slot_keys + values the pipeline will use."""
-
     def test_resolve_context_collapses_selectors_and_overrides(self) -> None:
         from omnidriver.cardiacfoam.dict_builder import resolve_context
         ctx = resolve_context(
@@ -113,8 +98,7 @@ class TestContextResolution(unittest.TestCase):
                 "$ELECTRO_MODEL_COEFFS.singleCellStimulus.stim_amplitude": "60",
             },
         )
-        # Selectors land at their raw key; overrides are stripped of the
-        # $ELECTRO_MODEL_COEFFS prefix to match slot_key convention.
+        # Overrides lose the $ELECTRO_MODEL_COEFFS prefix to match the slot_key convention.
         self.assertEqual(ctx["myocardiumSolver"], "monodomainSolver")
         self.assertEqual(ctx["ionicModel"], "TNNP")
         self.assertEqual(ctx["solutionAlgorithm"], "implicit")
@@ -130,14 +114,8 @@ class TestContextResolution(unittest.TestCase):
 
 
 class TestApplicableEntrySelection(unittest.TestCase):
-    """Walks IONIC catalog + dict_entries, returns only entries whose
-    applicable_when predicate (if any) matches the resolved context."""
-
     def test_eikonal_context_excludes_ionic_model_entry(self) -> None:
-        """ionicModel carries forbidden_when={myocardiumSolver: eikonalSolver}
-        — but the *applicable_when*-based exclusion is the tissue entry,
-        which applies only to mono/bi/single-cell solvers. Under eikonal,
-        the tissue entry must be filtered out by select_applicable_entries."""
+        """ionicModel is forbidden_when under eikonal; the applicable_when-filtered entry is tissue."""
         from omnidriver.cardiacfoam.dict_builder import (
             resolve_context,
             select_applicable_entries,
@@ -206,9 +184,7 @@ class TestApplicableEntrySelection(unittest.TestCase):
 
 
 class TestValuePopulation(unittest.TestCase):
-    """Precedence: explicit override > typical_value (when fallback enabled)
-    > omit. Returns a dict slot_key -> value for entries that survived
-    the applicability filter."""
+    """Precedence: explicit override, then typical_value (when fallback is enabled), then omit."""
 
     def test_override_wins_over_typical_value(self) -> None:
         from omnidriver.openfoam.dict_builder import populate_values
@@ -224,7 +200,6 @@ class TestValuePopulation(unittest.TestCase):
         )
         entries = select_applicable_entries(ctx)
         populated = populate_values(entries, ctx, typical_value_fallback=True)
-        # Override value wins, not the typical_value="60" from dict_entries.
         self.assertEqual(populated["singleCellStimulus.stim_amplitude"], "0.4")
 
     def test_typical_value_fills_when_no_override(self) -> None:
@@ -233,10 +208,7 @@ class TestValuePopulation(unittest.TestCase):
             resolve_context,
             select_applicable_entries,
         )
-        # A stimulus override makes the block "configured", which is what the
-        # family is gated on -- an unconfigured case must NOT get a stimulus
-        # invented for it (stimulusIO.C:149-155 treats an absent block as a
-        # legal no-op protocol).
+        # The stimulus family is gated on a configured block; stimulusIO treats an absent one as a no-op.
         ctx = resolve_context(
             selectors={"myocardiumSolver": "singleCellSolver", "ionicModel": "AlievPanfilov", "tissue": "myocyte"},
             overrides={"$ELECTRO_MODEL_COEFFS.singleCellStimulus.stim_start": "20"},
@@ -257,13 +229,9 @@ class TestValuePopulation(unittest.TestCase):
         )
         entries = select_applicable_entries(ctx)
         populated = populate_values(entries, ctx, typical_value_fallback=False)
-        # No fallback → entry is absent from the populated dict.
         self.assertNotIn("singleCellStimulus.stim_amplitude", populated)
 
     def test_selector_values_are_present_in_populated_dict(self) -> None:
-        """Selectors are part of the context AND many of them correspond to
-        DictEntry paths (myocardiumSolver, ionicModel, tissue). Those entries
-        must end up in the populated dict using the selector's own value."""
         from omnidriver.openfoam.dict_builder import populate_values
         from omnidriver.cardiacfoam.dict_builder import (
             resolve_context,
@@ -280,10 +248,7 @@ class TestValuePopulation(unittest.TestCase):
 
 
 class TestRequiredCheck(unittest.TestCase):
-    """check_required raises ValueError listing every required+applicable
-    entry whose slot is missing from the populated dict. Optional entries
-    are silently ignored; inapplicable entries are also ignored (filtered
-    earlier by select_applicable_entries)."""
+    """check_required reports only required, applicable entries missing from the populated dict."""
 
     def test_silent_when_all_required_present(self) -> None:
         from omnidriver.openfoam.dict_builder import (
@@ -299,7 +264,7 @@ class TestRequiredCheck(unittest.TestCase):
         )
         entries = select_applicable_entries(ctx)
         populated = populate_values(entries, ctx, typical_value_fallback=True)
-        # Should not raise — typical_value fallback fills all required leaves.
+        # typical_value fallback fills every required leaf.
         check_required(entries, populated, context=ctx)
 
     def test_raises_listing_missing_required_paths(self) -> None:
@@ -316,19 +281,14 @@ class TestRequiredCheck(unittest.TestCase):
             overrides={"$ELECTRO_MODEL_COEFFS.singleCellStimulus.stim_start": "20"},
         )
         entries = select_applicable_entries(ctx)
-        # Fallback OFF — no typical_value fills happen → required-but-no-override
-        # entries are missing. The stimulus override above makes the stimulus
-        # family applicable, so its four guarded keys appear in the listing.
+        # The stimulus override makes the stimulus family applicable, so its guarded keys are listed.
         populated = populate_values(entries, ctx, typical_value_fallback=False)
         with self.assertRaises(ValueError) as ctx_mgr:
             check_required(entries, populated, context=ctx)
-        # Error message must enumerate concrete missing paths.
         msg = str(ctx_mgr.exception)
         self.assertIn("singleCellStimulus", msg)
 
     def test_optional_unset_entries_do_not_raise(self) -> None:
-        """A required=False entry that is absent from the populated dict
-        is not a violation, even when no typical_value fallback was used."""
         from omnidriver.dict_entries import DictEntry
         from omnidriver.openfoam.dict_builder import check_required
 
@@ -342,18 +302,13 @@ class TestRequiredCheck(unittest.TestCase):
                 phases=frozenset({"physics"}),
             ),
         ]
-        # populated dict deliberately empty
         check_required(only_optional, {})
 
 
 class TestValidatorIntegration(unittest.TestCase):
-    """build_electro_properties must pass through validate_run before
-    returning, so any output an agent receives is validator-clean."""
+    """build_electro_properties runs validate_run before returning."""
 
     def test_build_raises_on_mutex_violation_via_overrides(self) -> None:
-        """Setting both stimulusDuration and stimulusDurationList violates the
-        structured mutually_exclusive_with constraint — the builder must
-        catch it before returning the synthesised text."""
         from omnidriver.cardiacfoam.dict_builder import build_electro_properties
         with self.assertRaises(ValueError) as ctx:
             build_electro_properties(
@@ -370,8 +325,6 @@ class TestValidatorIntegration(unittest.TestCase):
         self.assertIn("mutually exclusive", str(ctx.exception).lower())
 
     def test_build_raises_on_forbidden_when_violation(self) -> None:
-        """ionicModel under eikonalSolver triggers forbidden_when — builder
-        must reject this combination."""
         from omnidriver.cardiacfoam.dict_builder import build_electro_properties
         with self.assertRaises(ValueError) as ctx:
             build_electro_properties(
@@ -384,9 +337,6 @@ class TestValidatorIntegration(unittest.TestCase):
 
 
 class TestSerialisation(unittest.TestCase):
-    """The output must be a real OpenFOAM dict. We use a snapshot test
-    to verify the generated electroProperties output matches expectations."""
-
     def test_singlecell_output_matches_snapshot(self) -> None:
         from omnidriver.cardiacfoam.dict_builder import build_electro_properties
         text = build_electro_properties(
@@ -400,9 +350,7 @@ class TestSerialisation(unittest.TestCase):
         self.assertIn("singleCellSolverCoeffs", text)
         self.assertIn("ionicModel AlievPanfilov;", text)
         self.assertIn("tissue myocyte;", text)
-        # No stimulus was asked for, so none is invented. stimulusIO.C:149-155
-        # treats an absent singleCellStimulus block as a legal no-op protocol;
-        # filling it from typical_value would silently pace a quiescent case.
+        # stimulusIO treats an absent singleCellStimulus as a no-op; inventing one would pace a quiescent case.
         self.assertNotIn("singleCellStimulus", text)
         self.assertNotIn("stim_amplitude", text)
 
@@ -418,9 +366,7 @@ class TestSerialisation(unittest.TestCase):
                 "$ELECTRO_MODEL_COEFFS.singleCellStimulus.stim_start": "20",
             },
         )
-        # One override configures the block; the rest of the family then fills
-        # from typical_value, so the four keys stimulusIO.C:159-176 requires
-        # together are never half-written.
+        # The rest of the family fills from typical_value, so stimulusIO's four joint keys are never half-written.
         self.assertIn("singleCellStimulus", text)
         self.assertIn("stim_start 20;", text)
         self.assertIn("stim_amplitude 60;", text)
@@ -440,9 +386,7 @@ class TestSerialisation(unittest.TestCase):
 
 
 class TestPhysicsPropertiesBuilder(unittest.TestCase):
-    """build_physics_properties mirrors the electroProperties pipeline
-    against the small PHYSICS_PROPERTY_ENTRIES set. No <solver>Coeffs
-    wrapper — physics keys live at the dict root."""
+    """Physics keys live at the dict root, with no <solver>Coeffs wrapper."""
 
     def test_function_accepts_documented_kwargs(self) -> None:
         import inspect
@@ -459,10 +403,8 @@ class TestPhysicsPropertiesBuilder(unittest.TestCase):
         text = build_physics_properties(selectors={"type": "electroModel"})
         self.assertIn("type electroModel;", text)
         self.assertIn("FoamFile", text)
-        # Preamble must point at physicsProperties, not electroProperties.
         self.assertIn("object      physicsProperties", text)
         self.assertNotIn("electroProperties", text)
-        # No <solver>Coeffs block — physics keys are root-level.
         self.assertNotIn("Coeffs", text)
 
     def test_missing_required_type_raises(self) -> None:
@@ -479,14 +421,10 @@ class TestPhysicsPropertiesBuilder(unittest.TestCase):
 
 
 class TestBuildAndLaunch(unittest.TestCase):
-    """build_and_launch closes the last gap between "agent can construct
-    a dict" and "agent can launch a run". It writes both dicts to a case
-    directory and invokes the engine via the generic_case spec factory.
-    """
+    """build_and_launch writes both dicts to a case directory and launches via the generic_case spec factory."""
 
     def test_writes_both_dicts_to_case_dir(self) -> None:
-        """The dry_run=True path writes the dicts and exits without
-        running cardiacFoam, so the test never needs the binary."""
+        """dry_run=True writes the dicts without running cardiacFoam."""
         import tempfile
         from pathlib import Path
         from omnidriver.cardiacfoam.dict_builder import build_and_launch
@@ -509,8 +447,6 @@ class TestBuildAndLaunch(unittest.TestCase):
             self.assertEqual(result["status"], "dry_run_complete")
 
     def test_existing_case_dir_is_not_overwritten_without_consent(self) -> None:
-        """The wrapper must refuse to clobber an existing case_dir unless
-        the caller explicitly passes `overwrite=True`."""
         import tempfile
         from pathlib import Path
         from omnidriver.cardiacfoam.dict_builder import build_and_launch
@@ -560,25 +496,10 @@ class TestBuildAndLaunch(unittest.TestCase):
 
 
 class TestBuildAndLaunchMeshProvisioning(unittest.TestCase):
-    """build_and_launch must leave every case with a real mesh on disk.
-
-    electroModel.C requires a real fvMesh regardless of solver (confirmed via
-    `refCast<const fvMesh>(mesh())` at electroModel.C:344) -- even
-    singleCellSolver needs one. Neither build_and_launch nor
-    sweep_runner.materialize_case provisioned any mesh before this fix, so no
-    solver built from scratch via sweep-run/case_folder could ever complete
-    (see project_driverfoam_sweep_bugs_found memory item #3).
-    """
+    """electroModel requires a real fvMesh regardless of solver, even singleCellSolver."""
 
     def test_single_cell_solver_gets_a_block_mesh_dict(self) -> None:
-        """Corrected 2026-09-28 (owner decision): `singleCellSolver` used to
-        get a bundled static 1-cell `constant/polyMesh` copied directly
-        (only when not `dry_run`), so a from-scratch single-cell sweep case
-        -- which always calls `dry_run=True` -- got no mesh at all. It now
-        meshes exactly like every other solver: a `system/blockMeshDict`
-        (fixed at one cell, since it has no geometry to derive a resolution
-        from) joins the plan unconditionally, and `blockMesh` runs from
-        `Allrun` before the solver -- never from Python."""
+        """A one-cell `system/blockMeshDict` joins the plan; `blockMesh` runs from `Allrun`, never Python."""
         import tempfile
         from pathlib import Path
         from omnidriver.cardiacfoam.dict_builder import build_and_launch
@@ -602,10 +523,6 @@ class TestBuildAndLaunchMeshProvisioning(unittest.TestCase):
             self.assertTrue(result.get("needs_block_mesh", False))
 
     def test_single_cell_solver_dx_validation_still_fires_under_dry_run(self) -> None:
-        """`dx` is rejected for a single-cell solver (no geometry for it to
-        resolve) unconditionally, whether or not `dry_run` is set. Companion
-        to `test_dx_kwarg_rejected_for_single_cell_solver` below, stated at this
-        class's level."""
         import tempfile
         from pathlib import Path
         from omnidriver.cardiacfoam.dict_builder import build_and_launch
@@ -782,15 +699,11 @@ class TestParseElectroProperties(unittest.TestCase):
                  "tissue": "epicardialCells"},
             )
             result = parse_electro_properties(p)
-            # Backward compatible: selectors/overrides still present.
             self.assertIn("selectors", result)
             self.assertIn("overrides", result)
-            # New: the parser now surfaces the driver_path families it does not
-            # round-trip instead of dropping them silently.
+            # The parser surfaces the driver_path families it does not round-trip.
             self.assertIn("ignored_keys", result)
             self.assertIsInstance(result["ignored_keys"], list)
-            # dynamic_path entries exist in the catalog, so the list is non-empty
-            # and every entry is a $ELECTRO_MODEL_COEFFS driver_path.
             self.assertTrue(result["ignored_keys"])
             self.assertTrue(
                 all(k.startswith("$ELECTRO_MODEL_COEFFS") for k in result["ignored_keys"])
@@ -816,7 +729,6 @@ class TestParseElectroProperties(unittest.TestCase):
             )
 
     def test_default_value_absent_from_overrides(self) -> None:
-        """typical_value entries that were not changed must not appear as overrides."""
         import tempfile
         from omnidriver.cardiacfoam.dict_builder import parse_electro_properties
         with tempfile.TemporaryDirectory() as d:
@@ -851,12 +763,7 @@ class TestParseElectroProperties(unittest.TestCase):
                 self.assertNotIn(sel_key, override_slot_keys)
 
     def test_active_tension_model_survives_singlecell_roundtrip(self) -> None:
-        """Regression test: activeTensionModel is a flat word entry directly
-        inside singleCellSolverCoeffs (see singleCellSolver.C's
-        electroProperties().found("activeTensionModel")) — not a
-        'activeTensionModel { activeTensionModel <x>; }' sub-block. Both
-        build_electro_properties (synthesis) and parse_electro_properties
-        (round-trip) must preserve it for singleCellSolver."""
+        """singleCellSolver reads activeTensionModel as a flat word in its Coeffs, not a sub-block."""
         import tempfile
         from pathlib import Path
         from omnidriver.cardiacfoam.dict_builder import (
@@ -885,9 +792,6 @@ class TestParseElectroProperties(unittest.TestCase):
         )
 
     def test_active_tension_model_recovered_from_real_singlecell_tutorial(self) -> None:
-        """The hand-authored singleCell tutorial dict declares
-        'activeTensionModel LandNiederer;' as a flat entry — parsing it must
-        not silently drop that setting."""
         from omnidriver.cardiacfoam.dict_builder import parse_electro_properties
 
         if not SINGLE_CELL_ELECTRO_PROPERTIES.exists():
@@ -900,15 +804,7 @@ class TestParseElectroProperties(unittest.TestCase):
         )
 
     def test_roundtrip_produces_equivalent_text(self) -> None:
-        """build → write → parse → rebuild must produce a semantically
-        equivalent FoamFile: re-parsing the rebuilt text must yield the same
-        selectors/overrides as the original. We deliberately don't compare
-        raw text here — `parse_electro_properties` reads values back via
-        `foamDictionary`, which canonicalizes numeric formatting as a side
-        effect of parsing (e.g. `0.0` -> `0`, `1e-6` -> `1e-06`), so the
-        rebuilt text can legitimately differ cosmetically from the original
-        while still describing the same dict.
-        """
+        """Compares re-parsed dicts, not raw text: `foamDictionary` canonicalizes numbers (`1e-6` -> `1e-06`)."""
         import tempfile
         from pathlib import Path
         from omnidriver.cardiacfoam.dict_builder import (
@@ -1035,12 +931,10 @@ class TestBuildAndLaunchControlDict(unittest.TestCase):
 
 
 class TestEikonalECGHeterogeneity(unittest.TestCase):
-    """sigmaExtracellular and ionicHeterogeneity entries for eikonalSolver +
-    eikonalECG: catalog visibility, applicable_when firing, and round-trip."""
+    """sigmaExtracellular and ionicHeterogeneity entries under eikonalSolver + eikonalECG."""
 
     def test_sigmaExtracellular_in_catalog_when_ecgDomains_present(self) -> None:
-        """sigmaExtracellular must appear in select_applicable_entries whenever
-        any ecgDomains override is set ($ecgDomains_present virtual key)."""
+        """Any ecgDomains override sets the virtual ``$ecgDomains_present`` key."""
         from omnidriver.cardiacfoam.dict_builder import (
             resolve_context,
             select_applicable_entries,
@@ -1061,7 +955,6 @@ class TestEikonalECGHeterogeneity(unittest.TestCase):
         )
 
     def test_sigmaExtracellular_absent_without_ecgDomains(self) -> None:
-        """sigmaExtracellular must NOT appear when no ecgDomains are configured."""
         from omnidriver.cardiacfoam.dict_builder import (
             resolve_context,
             select_applicable_entries,
@@ -1076,7 +969,6 @@ class TestEikonalECGHeterogeneity(unittest.TestCase):
         )
 
     def test_ionic_heterogeneity_entries_applicable_for_eikonalSolver(self) -> None:
-        """All ionicHeterogeneity sub-entries must be selectable for eikonalSolver."""
         from omnidriver.cardiacfoam.dict_builder import (
             resolve_context,
             select_applicable_entries,
@@ -1085,9 +977,6 @@ class TestEikonalECGHeterogeneity(unittest.TestCase):
         context = resolve_context(selectors={"myocardiumSolver": "eikonalSolver"})
         entries = select_applicable_entries(context)
         paths = {e.driver_path for e in entries}
-        # endoMInterface/mEpiInterface deleted 2026-09-26 (catalog drift fix):
-        # native c7d6dd551 removed both, and the transmuralBands mode that
-        # used them, with no replacement.
         expected = {
             "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.field",
             "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.mode",
@@ -1098,7 +987,6 @@ class TestEikonalECGHeterogeneity(unittest.TestCase):
         self.assertTrue(expected.issubset(paths), f"Missing: {expected - paths}")
 
     def test_ionic_heterogeneity_entries_applicable_for_monodomainSolver(self) -> None:
-        """ionicHeterogeneity entries must still fire for monodomainSolver (no regression)."""
         from omnidriver.cardiacfoam.dict_builder import (
             resolve_context,
             select_applicable_entries,
@@ -1113,8 +1001,6 @@ class TestEikonalECGHeterogeneity(unittest.TestCase):
         self.assertIn("$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.smoothing", paths)
 
     def test_eikonalSolver_with_ionicHeterogeneity_overrides_round_trips(self) -> None:
-        """build_electro_properties must accept eikonalSolver with an explicit
-        ionicHeterogeneity block and write the values into the output dict."""
         from omnidriver.cardiacfoam.dict_builder import build_electro_properties
 
         text = build_electro_properties(
@@ -1125,10 +1011,7 @@ class TestEikonalECGHeterogeneity(unittest.TestCase):
                 "$ELECTRO_MODEL_COEFFS.stimulusLocationMin": "(0 0 0)",
                 "$ELECTRO_MODEL_COEFFS.stimulusLocationMax": "(0.01 0.01 0.01)",
                 "$ELECTRO_MODEL_COEFFS.c0": "60",
-                # ionicHeterogeneity block for eikonalECG blend mode. mode is
-                # namedRegions, not transmuralBands (deleted 2026-09-26,
-                # catalog drift fix -- native c7d6dd551 removed it along with
-                # endoMInterface/mEpiInterface), with a regions block to match.
+                # ionicHeterogeneity block for eikonalECG blend mode, namedRegions with its regions.
                 "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.field": "uvc_transmural",
                 "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.mode": "namedRegions",
                 "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.regions.endocardialCells.range": "(0 0.3)",
@@ -1147,20 +1030,7 @@ class TestEikonalECGHeterogeneity(unittest.TestCase):
 
 
 class TestRestitutionEikonalSolver1D(unittest.TestCase):
-    """Regression coverage for the conductionSystemSolver applicable_when
-    bug: selecting restitutionEikonalSolver1D must emit its own
-    solver-specific keys (useEdgeConductance, referenceConductance), not a
-    dict that is byte-identical to plain eikonalSolver1D apart from the
-    solver name.
-
-    Root cause was that select_applicable_entries never resolved the
-    "$SCOPE." prefix or the "<name>" placeholder on applicable_when
-    predicate keys before comparing them against the (prefix-stripped,
-    instance-resolved) context -- so any applicable_when that referenced a
-    real driver_path instead of a bare virtual "$..._present" token could
-    never match, silently dropping the gated entry regardless of context.
-    See openfoam_driver/specs/validation.py's _predicate_matches.
-    """
+    """applicable_when keys naming a real driver_path resolve ``$SCOPE.`` and ``<name>`` before matching."""
 
     _NETWORK_NAME = "purkinjeNetwork"
     _COUPLING_NAME = "pvj"
@@ -1188,10 +1058,7 @@ class TestRestitutionEikonalSolver1D(unittest.TestCase):
             f"{coupling}.conductionNetworkDomain": cls._NETWORK_NAME,
             f"{coupling}.couplingMode": "unidirectional",
             f"{coupling}.electroDomainCoupler": "eikonalMonodomainPvjCoupler",
-            # eikonalMonodomainPvjCoupler.C:47-55 FatalErrors at construction
-            # when rPvj is absent -- no graph-file escape, unlike
-            # reactionDiffusionPvjCoupler. Without it this fixture built a
-            # dictionary the solver would refuse to start on.
+            # eikonalMonodomainPvjCoupler FatalErrors at construction without rPvj, unlike reactionDiffusionPvjCoupler.
             f"{coupling}.rPvj": "1e5",
             f"{purkinje}.conductionSystemSolver": conduction_system_solver,
         }
@@ -1209,9 +1076,6 @@ class TestRestitutionEikonalSolver1D(unittest.TestCase):
         )
 
     def test_restitution_specific_keys_appear_in_applicable_entries(self) -> None:
-        """useEdgeConductance/referenceConductance must be selectable once
-        conductionSystemSolver=restitutionEikonalSolver1D is set -- not
-        silently dropped as inapplicable."""
         from omnidriver.cardiacfoam.dict_builder import (
             resolve_context,
             select_applicable_entries,
@@ -1235,19 +1099,13 @@ class TestRestitutionEikonalSolver1D(unittest.TestCase):
         )
 
     def test_restitution_build_emits_solver_specific_keys(self) -> None:
-        """The synthesised dict must contain the restitution-only keys with
-        their typical_value fallback, keyed under the concrete instance
-        name (not the "<name>" template)."""
+        """The keys are written under the concrete instance name, not the "<name>" template."""
         text = self._build("restitutionEikonalSolver1D")
         self.assertIn("conductionSystemSolver restitutionEikonalSolver1D;", text)
         self.assertIn("useEdgeConductance true;", text)
         self.assertIn("referenceConductance 1.0;", text)
 
     def test_restitution_build_differs_from_plain_eikonal_by_more_than_the_solver_name(self) -> None:
-        """The two builds must NOT be identical apart from the solver-name
-        line -- that was exactly the reported defect (a dict claiming to be
-        restitutionEikonalSolver1D while carrying none of what makes it
-        one)."""
         restitution_lines = self._build("restitutionEikonalSolver1D").splitlines()
         plain_lines = self._build("eikonalSolver1D").splitlines()
 
@@ -1260,8 +1118,6 @@ class TestRestitutionEikonalSolver1D(unittest.TestCase):
             f"by only {differing} line(s) -- restitution-specific keys are "
             "being dropped again",
         )
-        # useEdgeConductance/referenceConductance must be present in the
-        # restitution build and absent from the plain eikonalSolver1D build.
         restitution_text = "\n".join(restitution_lines)
         plain_text = "\n".join(plain_lines)
         self.assertIn("useEdgeConductance", restitution_text)
@@ -1270,9 +1126,6 @@ class TestRestitutionEikonalSolver1D(unittest.TestCase):
         self.assertNotIn("referenceConductance", plain_text)
 
     def test_plain_eikonalSolver1D_does_not_gain_restitution_keys(self) -> None:
-        """Non-regression: plain eikonalSolver1D must still NOT carry the
-        restitution-only keys (they must stay conditional, not become
-        unconditionally applicable)."""
         text = self._build("eikonalSolver1D")
         self.assertIn("conductionSystemSolver eikonalSolver1D;", text)
         self.assertNotIn("useEdgeConductance", text)
@@ -1280,11 +1133,7 @@ class TestRestitutionEikonalSolver1D(unittest.TestCase):
 
 
 class TestRegenerateElectroProperties(unittest.TestCase):
-    """`regenerate_electro_properties` -- the "route myocardiumSolver
-    through the override channel" mechanism: rewrite an existing
-    electroProperties file in place with one selector switched, rather
-    than key-patching (which cannot rename the active <solver>Coeffs
-    sub-block or drop now-illegal siblings)."""
+    """Rewriting beats key-patching, which cannot rename the active <solver>Coeffs block or drop illegal siblings."""
 
     def test_module_exposes_regenerate_electro_properties(self) -> None:
         from omnidriver.cardiacfoam.dict_builder import (
@@ -1332,11 +1181,7 @@ class TestRegenerateElectroProperties(unittest.TestCase):
             self.assertNotIn("monodomainSolverCoeffs", text)
 
     def test_prunes_a_selector_that_becomes_forbidden_under_the_new_value(self) -> None:
-        """ionicModel/tissue are forbidden_when myocardiumSolver=eikonalSolver
-        (eikonalSolverCoeffs has no such keys at all). A regeneration that
-        did not drop them would hand build_electro_properties a
-        self-contradictory context and (correctly) fail -- this is the
-        pruning that makes the solver-switch case succeed."""
+        """ionicModel/tissue are forbidden_when myocardiumSolver=eikonalSolver."""
         import tempfile
         from omnidriver.cardiacfoam.dict_builder import (
             build_electro_properties,
@@ -1361,11 +1206,7 @@ class TestRegenerateElectroProperties(unittest.TestCase):
             self.assertNotIn("tissue", text)
 
     def test_raises_when_new_solver_requires_a_key_with_no_default_and_no_extra_override(self) -> None:
-        """eikonalSolver's stimulusLocationMin/Max and
-        eikonalAdvectionDiffusionApproach are required with no
-        typical_value -- a solver switch that doesn't supply them must
-        fail loudly (build_electro_properties's own validator), not emit
-        an invalid dict."""
+        """eikonalSolver's stimulusLocationMin/Max and eikonalAdvectionDiffusionApproach have no typical_value."""
         import tempfile
         from omnidriver.cardiacfoam.dict_builder import (
             build_electro_properties,
@@ -1391,24 +1232,12 @@ class TestRegenerateElectroProperties(unittest.TestCase):
         "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.purkinjeNetwork.purkinjeGraphModelCoeffs.rootStimulus.intensity": "500000.0",
         "$ELECTRO_MODEL_COEFFS.domainCouplings.couplingA.electroDomainCoupler": "reactionDiffusionPvjCoupler",
         "$ELECTRO_MODEL_COEFFS.domainCouplings.couplingA.conductionNetworkDomain": "purkinjeNetwork",
-        # pvjCoupler.C:90 reads couplingMode with a hard dict.get<word>, so
-        # every coupler needs it; the fixture predates that being enforced.
+        # pvjCoupler reads couplingMode with a hard dict.get<word>, so every coupler needs it.
         "$ELECTRO_MODEL_COEFFS.domainCouplings.couplingA.couplingMode": "unidirectional",
     }
 
     def test_carries_forward_a_dynamic_container_verbatim(self) -> None:
-        """conductionNetworkDomains is dynamic_path=True. Even though
-        parse_electro_properties can now structurally round-trip most of it
-        into overrides, regenerate_electro_properties still carries it
-        forward verbatim (see _capture_dynamic_containers) rather than
-        resynthesising it -- this is the hazard originally flagged: a naive
-        rebuild must not silently drop a case's Purkinje network.
-
-        Switches to bidomainSolver, which -- like the monodomainSolver this
-        file started with -- physically supports a monodomain1DSolver
-        Purkinje network via reactionDiffusionPvjCoupler (see
-        solver_coupling.SOLVER_COMPATIBILITY_RULES), so the carried-forward
-        network remains valid post-switch and the regeneration succeeds."""
+        """The dynamic conductionNetworkDomains is carried forward verbatim into a solver that supports it."""
         import tempfile
         from omnidriver.cardiacfoam.dict_builder import (
             build_electro_properties,
@@ -1427,8 +1256,6 @@ class TestRegenerateElectroProperties(unittest.TestCase):
             )
             text = p.read_text()
             self.assertIn("bidomainSolverCoeffs", text)
-            # The Purkinje block must still be present, verbatim, under the
-            # renamed coeffs scope -- not dropped.
             self.assertIn("conductionNetworkDomains", text)
             self.assertIn("purkinjeNetwork", text)
             self.assertIn("conductionSystemSolver monodomain1DSolver;", text)
@@ -1436,14 +1263,7 @@ class TestRegenerateElectroProperties(unittest.TestCase):
             self.assertIn("purkinjeGraph", text)
 
     def test_switching_to_a_physically_incompatible_solver_raises(self) -> None:
-        """singleCellSolver has no PDE domain at all -- SOLVER_COMPATIBILITY_RULES
-        marks ANY Purkinje pairing under it unconditionally invalid. Carrying
-        the same monodomain1DSolver Purkinje network forward into a
-        singleCellSolver switch must now be rejected instead of silently
-        shipping a physically-meaningless file: the final safety net in
-        regenerate_electro_properties validates the actually-shipped file,
-        after the carried-forward block is reinserted, not just the
-        intermediate rebuild the carried-forward block is invisible to."""
+        """The final check validates the shipped file, after the carried-forward block is reinserted."""
         import tempfile
         from omnidriver.cardiacfoam.dict_builder import (
             build_electro_properties,
@@ -1462,11 +1282,7 @@ class TestRegenerateElectroProperties(unittest.TestCase):
             message = str(exc.exception)
             self.assertIn("singleCellSolver", message)
             self.assertIn("incompatible", message.lower())
-            # The rejected attempt must leave the ORIGINAL file completely
-            # untouched -- the rewrite is staged on a scratch copy and only
-            # committed to `path` once the final check passes, so a
-            # rejection here must never ship a known-invalid intermediate
-            # result.
+            # The rewrite is staged on a scratch copy and committed only once the final check passes.
             from omnidriver.cardiacfoam.dict_builder import parse_electro_properties
             self.assertEqual(
                 parse_electro_properties(p)["selectors"]["myocardiumSolver"],
@@ -1474,30 +1290,7 @@ class TestRegenerateElectroProperties(unittest.TestCase):
             )
 
     def test_purkinje_monodomain_to_eikonal_end_to_end(self) -> None:
-        """Acceptance scenario, on a throwaway copy of the real
-        purkinjeRestitution2D tutorial's monodomain fixture: a bare
-        myocardiumSolver switch to eikonalSolver, carrying the existing
-        Purkinje network (conductionSystemSolver=monodomain1DSolver,
-        electroDomainCoupler=reactionDiffusionPvjCoupler) forward verbatim,
-        must now be REJECTED.
-
-        This is not a hypothetical: the real, hand-authored, committed
-        electroProperties.eikonal fixture of idealizedHeart/electroHeart does NOT
-        carry that Purkinje network forward -- it uses a different, physically
-        compatible pairing instead (conductionSystemSolver=eikonalSolver1D,
-        electroDomainCoupler=eikonalPvjCoupler; see
-        solver_coupling.SOLVER_COMPATIBILITY_RULES, which marks
-        eikonalSolver+monodomain1DSolver invalid: "eikonal myocardium cannot
-        couple to reaction-diffusion Purkinje"). Producing a genuinely valid
-        eikonal file from this tutorial requires resynthesising the Purkinje
-        network's own selector/coupler -- a separate, deliberate step left to
-        ordinary $ELECTRO_MODEL_COEFFS.* overrides applied after this one
-        (regenerate_electro_properties's own documented contract), not
-        something a bare myocardiumSolver switch can produce by carrying the
-        old network forward unmodified. This test previously asserted the
-        opposite (that carrying it forward verbatim succeeds and its static
-        leaves are acceptable) without ever checking whether the carried-
-        forward result was physically valid; it wasn't."""
+        """A bare switch to eikonalSolver carrying a reaction-diffusion Purkinje network forward is rejected."""
         import shutil
         import tempfile
         from omnidriver.cardiacfoam.dict_builder import (
@@ -1525,7 +1318,6 @@ class TestRegenerateElectroProperties(unittest.TestCase):
             self.assertIn("eikonal", message.lower())
             self.assertIn("reaction-diffusion", message.lower())
 
-            # Original file untouched: still the monodomain tutorial fixture.
             self.assertEqual(
                 parse_electro_properties(p)["selectors"]["myocardiumSolver"],
                 "monodomainSolver",

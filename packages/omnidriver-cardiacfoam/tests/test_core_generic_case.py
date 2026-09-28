@@ -19,21 +19,9 @@
 #     test_core_generic_case
 #
 # Description
-#     Proves cardiacFoam's generic-case factory still applies the cardiac
-#     dictionary mutation, and still addresses electroProperties/
-#     physicsProperties, now that neither default lives in core.
-#
-#     Moved from core's ``tests/core/test_core_generic_case.py`` (Phase 2,
-#     Milestone 3), where it proved the *opposite* arrangement: that core's
-#     own make_spec defaulted to the cardiac mutation seam when a direct
-#     caller supplied no callback. Core no longer has that default -- it
-#     imported omnidriver.cardiacfoam to honour it, the last runtime cardiac
-#     import in the package. The observable behaviour is unchanged and is
-#     asserted here against the plugin's wrapper, which is what supplies both
-#     defaults now. Its neutral counterpart,
-#     ``test_make_generic_case_spec_applies_no_solver_mutation``, stays in
-#     core and proves the dedicated generic entry point never reaches into a
-#     plugin's mutator.
+#     Proves cardiacFoam's generic-case factory applies the cardiac
+#     dictionary mutation and addresses electroProperties/physicsProperties
+#     by default; core supplies neither default.
 #
 # Author
 #     Simao Nieto de Castro, UCD.
@@ -51,14 +39,7 @@ def _spec(tmp_path: Path, **kwargs):
 
 
 def test_bare_make_spec_still_applies_the_cardiac_mutation(tmp_path: Path) -> None:
-    """Same observable behaviour as before, supplied by the plugin.
-
-    A caller who names no mutation callback still gets the cardiac one, and
-    the file it writes is unchanged. What changed is who supplies it: core
-    used to import omnidriver.cardiacfoam to do this. The assertion that no
-    compatibility fallback fires at all is the half that would have failed
-    before -- it went through legacy_generic_case_mutation.
-    """
+    """A caller naming no mutation callback gets the cardiac one, and no compatibility fallback fires."""
     from omnidriver.core import compatibility
 
     case_root = tmp_path / "aCase"
@@ -76,13 +57,7 @@ def test_bare_make_spec_still_applies_the_cardiac_mutation(tmp_path: Path) -> No
 def test_the_cardiac_dict_file_relpaths_default_comes_from_the_plugin(
     tmp_path: Path,
 ) -> None:
-    """The electroProperties/physicsProperties pair core used to hardcode.
-
-    Core's make_spec now defaults to no dictionary files at all, so a folder
-    with neither file is generic to it. This wrapper restores the historical
-    pair -- same values, same insertion order, so electroProperties stays the
-    primary marker that makes a folder non-generic.
-    """
+    """Insertion order keeps electroProperties the primary marker that makes a folder non-generic."""
     assert _spec(tmp_path).metadata["dict_file_relpaths"] == {
         "electro": "constant/electroProperties",
         "physics": "constant/physicsProperties",

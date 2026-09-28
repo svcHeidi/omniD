@@ -1,17 +1,6 @@
-"""cardiacFoam's own capability hooks, not a core fallback, decide these.
+"""cardiacFoam's own capability hooks, not a core fallback, decide case compatibility.
 
-Moved from core's ``tests/core/test_capability_fallback_neutrality.py``
-(Phase 2, Milestone 3): Phase 2 Task 7 deleted the thirteen ``plugin_id ==
-"org.cardiacfoam"`` gates once the standing census
-(``test_no_cardiac_gate_is_reached.py``) proved none of them was still
-reached -- ``CardiacFoamPlugin`` now implements every hook directly, so
-``TestCardiacPluginBehaviourIsUnchanged`` no longer exercises any core
-dispatch decision; it now asserts only cardiacFoam's own hook
-implementations (``has_case_marker`` / ``is_runnable_without_workflow``).
-Its generic counterpart, ``TestGenericPluginDoesNotInheritCardiacSemantics``,
-stays in core: ``OpenFOAMEnvironmentPlugin`` implements none of the corresponding
-hooks, so those four tests still exercise core's now-unconditional (ungated)
-fallback refusals.
+The generic counterpart, ``TestGenericPluginDoesNotInheritCardiacSemantics``, stays in core.
 """
 
 from __future__ import annotations
@@ -26,11 +15,7 @@ from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
 
 def _cardiac_looking_case() -> Path:
-    """A case carrying every marker the cardiac fallbacks look for.
-
-    If a cardiac fallback answers for the generic plugin, this case is
-    claimed. If the fallback is correctly gated, it is not.
-    """
+    """A case carrying every marker the cardiac fallbacks look for."""
     case_root = Path(tempfile.mkdtemp())
     constant = case_root / "constant"
     system = case_root / "system"

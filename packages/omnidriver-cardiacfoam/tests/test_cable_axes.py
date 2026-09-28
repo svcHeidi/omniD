@@ -1,5 +1,4 @@
-"""The ``dx`` axis both cable records share (:mod:`records.cable_axes`,
-tutorials-are-pointers plan §5e, steps 5.2/5.3)."""
+"""The ``dx`` axis both cable records share (:mod:`records.cable_axes`)."""
 
 from __future__ import annotations
 
@@ -13,9 +12,7 @@ def test_axis_declares_a_scalar_value_kind():
 
 
 def test_dx_resolves_the_along_cable_direction_only():
-    """The cable's own extent is 0.02 m x 0.0001 m x 0.0001 m (README:
-    20 mm x 0.1 mm x 0.1 mm); only the along-cable direction is ever
-    refined (decision (d): a direction whose CURRENT count is 1 stays 1)."""
+    """The cable is 0.02 m x 0.0001 m x 0.0001 m; a direction whose current count is 1 stays 1."""
     counts = _dx_to_hex_cell_counts(0.0001, current=(100, 1, 1), extents=(0.02, 0.0001, 0.0001))
     assert counts == (200, 1, 1)
 

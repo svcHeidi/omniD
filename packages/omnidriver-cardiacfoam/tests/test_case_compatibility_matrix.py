@@ -1,13 +1,6 @@
-"""Existing-case discovery/runnability, for cardiacFoam's own markers.
-
-Moved from omnidriver/tests/core/test_case_compatibility_matrix.py (Phase 2
-Task M2): these three parametrized rows -- a bare electroProperties file, an
-electroProperties.variant file, and the full dict-set row -- exercise
-cardiacFoam's own has_case_marker/is_runnable_without_workflow (an
-electroProperties file marks a folder as a cardiacFoam case), not core's
-generic entrypoint-based discovery. The two rows that test only core's own
-mechanism (an empty folder, and a bare Allrun) stayed in core, run under
-openfoam_environment_context().
+"""Existing-case discovery/runnability for cardiacFoam's own markers
+(has_case_marker/is_runnable_without_workflow: an electroProperties file marks
+a cardiacFoam case), not core's generic entrypoint-based discovery.
 """
 
 from __future__ import annotations

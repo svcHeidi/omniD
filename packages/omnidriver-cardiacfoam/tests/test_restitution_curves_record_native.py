@@ -1,29 +1,6 @@
-"""Step 4b (pilot) of docs/superpowers/specs/2026-09-24-tutorials-are-pointers-
-design.md against the REAL native cardiacFOAM tutorials tree (CLAUDE.md's
-"testing against real meshes": real case or native-source drift gate,
-nothing invented). ``OMNIDRIVER_NATIVE_TUTORIALS`` is supplied, never
-discovered -- every test here FAILS, not skips, when it is unset
-(``cardiacfoam_native.native_tutorials_root``).
-
-Covers the two native-evidence claims design step 4b's own instructions
-make:
-
-1. **The zero-changes design test (design §6).** ``restitutionCurves``,
-   previewed with NO study values at all against the real native case,
-   proposes ZERO changed patches -- the native case IS the default, with no
-   Python restating it.
-2. **The catalog migration's own native confirmation.** The ionic model
-   catalog's ``single_cell_stimulus_amplitude`` field docstring claims
-   ``TWorld`` reads ``60`` and ``BuenoOrovio`` reads ``0.4`` against real
-   checked-in cases -- checked here against BOTH real files (``singleCell``'s
-   own default case for ``TWorld``, ``restitutionCurves_s1s2Protocol``'s own
-   default case for ``BuenoOrovio``), and cross-checked against the
-   ``ionicModel`` axis's own output for each.
-
-Added 2026-09-25: the ``blockMeshResolution`` axis (§1b below), the
-counterpart to the zero-changes test for the mesh-resolution study choice
-the real-run test (``test_restitution_curves_real_solver_run_native.py``)
-now drives through the study rather than a direct case edit.
+"""``restitutionCurves`` against the real native tree: an empty study proposes
+zero patches (the native case is the default), and the ionic-model catalog's
+stimulus amplitudes (TWorld 60, BuenoOrovio 0.4) match the real case files.
 """
 
 from __future__ import annotations
@@ -65,11 +42,6 @@ def _read_ionic_model(case_root: Path) -> str:
     return match.group(1)
 
 
-# ---------------------------------------------------------------------------
-# 1. Design §6's own per-tutorial test: zero changes with no study values.
-# ---------------------------------------------------------------------------
-
-
 def test_restitution_curves_preview_with_no_study_values_shows_zero_changes():
     tutorials_root = native_tutorials_root()
     case_root = tutorials_root / _RESTITUTION_CURVES_RELPATH
@@ -86,14 +58,6 @@ def test_restitution_curves_preview_with_no_study_values_shows_zero_changes():
         f"nothing, got {preview['patches']!r}"
     )
     assert preview["workflow_step_ids"] == ["mesh", "solve"]
-
-
-# ---------------------------------------------------------------------------
-# 1b. The `blockMeshResolution` axis (added 2026-09-25, for the real-run
-#     regression test's coarse mesh): naming the case's OWN active
-#     resolution is reported "unchanged", never written -- read from the
-#     real file, never assumed (CLAUDE.md's "no invented-geometry tests").
-# ---------------------------------------------------------------------------
 
 
 def test_restitution_curves_block_mesh_resolution_axis_reports_the_active_resolution_unchanged():
@@ -115,16 +79,9 @@ def test_restitution_curves_block_mesh_resolution_axis_reports_the_active_resolu
 
     [patch] = preview["patches"]
     assert patch["document"] == "system/blockMeshDict"
-    # The axis's own typed tuple (2026-09-25 correction,
-    # `axes/block_mesh_resolution.py`'s module docstring), not the file's
-    # pre-joined text -- compared as the same three ints either way.
+    # The axis patches a typed tuple, not the file's pre-joined text.
     assert patch["value"] == tuple(active_resolution)
     assert patch["status"] == "unchanged", preview
-
-
-# ---------------------------------------------------------------------------
-# 2. The catalog migration's native confirmation: TWorld 60, BuenoOrovio 0.4.
-# ---------------------------------------------------------------------------
 
 
 def test_the_single_cell_native_case_confirms_tworld_sixty():
@@ -161,15 +118,8 @@ def test_the_restitution_curves_native_case_confirms_buenoorovio_zero_point_four
     assert axis_amplitude == native_amplitude
 
 
-# ---------------------------------------------------------------------------
-# 3. commit_record_case against the real cardiac stack + real OpenFOAM
-#    dictionary renderer (regression test for the snapshot_root/case_root
-#    conflation this pilot found -- see record_execution.commit_record_case's
-#    own updated docstring/comment).
-# ---------------------------------------------------------------------------
-
-
 def test_commit_record_case_writes_a_real_case_via_the_real_renderer(tmp_path):
+    """Guards against commit_record_case conflating snapshot_root and case_root."""
     tutorials_root = native_tutorials_root()
     case_root = tutorials_root / _RESTITUTION_CURVES_RELPATH
     assert case_root.is_dir(), f"fixture case missing: {case_root}"
@@ -198,6 +148,5 @@ def test_commit_record_case_writes_a_real_case_via_the_real_renderer(tmp_path):
     assert "ionicModel    TWorld;" in written
     assert "stim_amplitude    60.0;" in written
     control_dict = (staged_case_root / "system" / "controlDict").read_text()
-    # end_time = (1000 * 9 + 250 * 2) / 1000.0 + 2.0 == 11.5 (the old
-    # module's own arithmetic, s1_s2_protocol_axis.py's docstring).
+    # end_time = (1000 * 9 + 250 * 2) / 1000.0 + 2.0 == 11.5
     assert re.search(r"endTime\s+11\.5;", control_dict)

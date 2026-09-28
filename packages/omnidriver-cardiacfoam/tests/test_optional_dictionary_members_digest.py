@@ -1,5 +1,4 @@
-"""Deleting the OpenFOAM layer's empty dictionary stubs changes no cardiac
-stack's identity (spec 2026-09-26-core-generality-design.md §2, A3)."""
+"""Empty dictionary stubs on the OpenFOAM layer change no cardiac stack's identity."""
 from __future__ import annotations
 
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
@@ -9,7 +8,7 @@ from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
 
 class _EnvironmentWithStubs(OpenFOAMEnvironmentPlugin):
-    """The OpenFOAM layer as it was before A3."""
+    """The OpenFOAM layer carrying empty dictionary stubs."""
 
     def get_dict_entries(self):
         return ()

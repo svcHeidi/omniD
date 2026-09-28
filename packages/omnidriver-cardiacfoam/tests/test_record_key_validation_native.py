@@ -1,29 +1,6 @@
-"""Step 4a of ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-
-design.md`` (§5) against the REAL native cardiacFOAM tutorials tree --
-CLAUDE.md's "testing against real meshes": real case or native-source drift
-gate, nothing invented. The native tutorials root comes ONLY from
-``OMNIDRIVER_NATIVE_TUTORIALS`` (supplied, never discovered); every test in
-this module calls :func:`_native_tutorials_root` and so FAILS, not skips,
-when it is unset -- pattern copied from ``omnidriver-openfoam``'s
-``test_config_value_reader_contract.py``.
-
-The real case exercised throughout is
-``electrophysiologyProtocols/restitutionCurves_s1s2Protocol``. Every value
-this module asserts against is read from that case's own checked-in files at
-test time (:func:`_read_stim_amplitude`/:func:`_read_delta_t`/
-:func:`_read_hex_cell_counts`), never hard-coded -- at the time of writing
-these were: ``myocardiumSolver singleCellSolver;``,
-``singleCellSolverCoeffs.singleCellStimulus.stim_amplitude`` = ``0.4``,
-``system/controlDict`` ``deltaT`` = ``1e-5``, and exactly one real
-(non-commented) ``hex (`` block in ``system/blockMeshDict``,
-``(200 30 70)`` -- the other two candidate resolutions in that file are
-commented out with ``//``.
-
-Every check here uses the REAL cardiac stack
-(``load_discovered_plugin("cardiacfoam")``) and the REAL
-``record_key_validator``/``_case_value_agree``/``_read_config_value_by_key_path``
-this task wired up -- no test doubles for validator, comparator or reader,
-per the task's own instruction.
+"""Record key validation, comparison and reading on the real cardiac stack against
+the native ``restitutionCurves_s1s2Protocol`` case. Every asserted value is read
+from the case's own files at test time; no test doubles.
 """
 
 from __future__ import annotations
@@ -104,10 +81,7 @@ def _read_hex_cell_counts(case_root: Path) -> str:
 
 
 def _test_record() -> TutorialRecord:
-    """A test-only DATA record (design §3: "resolving a record calls no
-    plugin code at all") -- no axis is needed for either restated value
-    below, since both ``deltaT`` and the synthetic ``hex_cell_counts`` are
-    named as plain ``document:dotted.path`` study keys, not axes."""
+    """No axes: every restated value is a plain ``document:dotted.path`` study key."""
     return TutorialRecord(
         name="restitutionCurvesRecordTest",
         native_case_relpath=_RESTITUTION_CURVES_RELPATH,
@@ -119,12 +93,6 @@ def _cardiac_stack():
     return load_discovered_plugin("cardiacfoam")
 
 
-# ---------------------------------------------------------------------------
-# Item 4: the real cardiac stack answers all three capabilities, and record
-# execution no longer refuses for a missing one.
-# ---------------------------------------------------------------------------
-
-
 def test_the_real_cardiac_stack_answers_all_three_capabilities():
     case_root = _real_case_root()  # every test in this module needs the native root
     del case_root
@@ -132,11 +100,6 @@ def test_the_real_cardiac_stack_answers_all_three_capabilities():
     assert context.capabilities.record_key_validation.validator() is not None
     assert context.capabilities.case_value_comparison.comparator() is not None
     assert context.capabilities.config_value.reader() is not None
-
-
-# ---------------------------------------------------------------------------
-# Native check 1: a catalogued electroProperties key validates True.
-# ---------------------------------------------------------------------------
 
 
 def test_a_catalogued_electro_properties_key_validates_true():
@@ -150,11 +113,6 @@ def test_a_catalogued_electro_properties_key_validates_true():
 
     assert value_kind == "scalar"
     assert validated is True
-
-
-# ---------------------------------------------------------------------------
-# Native check 2: a misspelled key is refused.
-# ---------------------------------------------------------------------------
 
 
 def test_a_misspelled_key_is_refused():
@@ -189,11 +147,6 @@ def test_a_misspelled_key_is_refused_through_preview_record_case():
         )
 
 
-# ---------------------------------------------------------------------------
-# Native check 3: system/controlDict:deltaT validates False.
-# ---------------------------------------------------------------------------
-
-
 def test_system_control_dict_delta_t_validates_false():
     case_root = _real_case_root()
     delta_t = _read_delta_t(case_root)
@@ -203,13 +156,6 @@ def test_system_control_dict_delta_t_validates_false():
 
     assert value_kind == "scalar"
     assert validated is False
-
-
-# ---------------------------------------------------------------------------
-# Native check 4: restating the case's own current deltaT and its own
-# blockMeshDict hex counts is reported unchanged through
-# record_execution.preview_record_case on the REAL cardiac stack.
-# ---------------------------------------------------------------------------
 
 
 def test_restating_the_cases_own_current_values_is_reported_unchanged():
@@ -251,8 +197,6 @@ def test_restating_the_cases_own_current_values_is_reported_unchanged():
 
 
 def test_a_different_value_is_reported_changed_not_unconditionally_unchanged():
-    """The contrast case: proves "unchanged" above is a real comparison, not
-    every patch reported unchanged unconditionally."""
     case_root = _real_case_root()
     delta_t = _read_delta_t(case_root)
     context = _cardiac_stack()

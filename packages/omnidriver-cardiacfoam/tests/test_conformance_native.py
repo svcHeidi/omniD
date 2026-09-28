@@ -1,13 +1,6 @@
-"""cardiacFOAM passes the conformance suite, every check in ``CHECKS``,
-against the real cardiacFoam binary and the native tutorials tree
-(conformance Task 14; tutorials-are-pointers plan §5f). Every migrated
-record joins ``_TARGETS``; leaving a check out would be a waiver.
-
-``SKIP_ENV_DIAGNOSTICS`` (set suite-wide by this package's conftest, and by
-core's and OpenFOAM's) turns OpenFOAM's preflight off. C9 is that preflight,
-so this module removes the variable for its own tests, as
-``omnidriver-openfoam``'s ``test_environment_preflight.py`` does.
-"""
+"""Every cardiacFOAM record in ``_TARGETS`` passes every conformance check against the real binary.
+C9 is OpenFOAM's preflight, which the suite-wide ``SKIP_ENV_DIAGNOSTICS`` turns off, so this
+module removes that variable for its own tests."""
 from __future__ import annotations
 
 import pytest

@@ -1,15 +1,7 @@
 """Guards for the cardiacFOAM stimulus-schedule emitters.
 
-The regression these exist for: `generate_spatial_s1_s2_stimulus_lists` once
-formatted its own times with `.6g` instead of delegating, so a derived stimulus
-time was silently truncated. Nothing tested this module at all, which is why it
-survived the driverFOAM -> OmniD migration unnoticed.
-
-Corrected 2026-09-27 (tutorials-are-pointers plan §5e, step 5.2): both
-emitters now return native Python sequences (catalogued
-``scalar_list``/``vector3_list``), not pre-joined OpenFOAM list text --
-these tests were rewritten for that shape, not the formatting bug they
-guard.
+Both return native sequences (``scalar_list``/``vector3_list``); a derived
+stimulus time must survive to sub-timestep accuracy, never truncated.
 """
 
 from __future__ import annotations
@@ -41,8 +33,7 @@ def test_a_derived_stimulus_time_survives_to_sub_timestep_accuracy():
 
 
 def test_the_s1_s2_emitter_shares_that_precision():
-    # Drive it with a cycle length that does not land on a round number of
-    # seconds.
+    # A cycle length that does not land on a round number of seconds.
     lists = generate_spatial_s1_s2_stimulus_lists(
         s1_interval_ms=1000.0 / 3.0, n_s1=4,
         s2_interval_ms=333.0 + 1.0 / 7.0, n_s2=1,

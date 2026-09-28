@@ -1,20 +1,6 @@
-"""Step 4b (pilot ``restitutionCurves``) of docs/superpowers/specs/2026-09-24-
-tutorials-are-pointers-design.md: the ionic-model axis.
-
-Design's own words for this axis (owner instruction for step 4b, item 2):
-"the model name gives ``<solver>Coeffs.ionicModel`` plus
-``singleCellStimulus.stim_amplitude`` from the catalog field. Refuse a model
-with no amplitude, or one the catalog does not know."
-
-This axis is a parameterised BUILDER (``ionic_model_axis(name, *, document,
-scope)``), the same shape as OpenFOAM's ``block_mesh_resolution_axis``: this
-module knows the ``electroProperties`` grammar (a ``<solver>Coeffs`` scope's
-``ionicModel``/``singleCellStimulus.stim_amplitude`` keys) and the ionic
-model catalog, not any particular tutorial's choice of document/scope --
-``restitutionCurves``'s own record registers this builder under its own
-name, with ``document="constant/electroProperties"`` and
-``scope=("singleCellSolverCoeffs",)``.
-"""
+"""The ionic-model axis: a model name gives ``<solver>Coeffs.ionicModel`` plus the catalog's
+``singleCellStimulus.stim_amplitude``, refusing a model with no amplitude or one the catalog
+does not know. It is a builder; each record supplies the document and scope."""
 
 from __future__ import annotations
 
@@ -60,8 +46,6 @@ def test_a_known_model_produces_ionic_model_and_stim_amplitude_patches(tmp_path)
 
 
 def test_bueno_orovio_confirms_the_native_amplitude(tmp_path):
-    """The design's own migration note: BuenoOrovio's amplitude is 0.4,
-    confirmed against the native singleCell tutorial's default case."""
     axis = _axis()
     case_root = _staged_case(tmp_path)
 

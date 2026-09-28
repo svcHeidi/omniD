@@ -1,46 +1,6 @@
-"""An agent benchmarks openCARP against cardiacFOAM on the Niederer 2011
-N-version slab, end to end, exactly as it would: one ``sweep-run`` per
-solver, read each run document, write one comparison request from the
-reference, ``omnidriver compare``, attach the report to both experiments
-(spec 2026-09-26 §4; topic B Task 8, the benchmarker's step 3).
-
-**The agent's orientation, read from the native files before any run.**
-Nothing below converts a frame; each side's points are written in its own
-solver's frame, and the pairing is the literal table :data:`PROBES`.
-
-- cardiacFOAM (``NiedererEtAl2011verification``):
-  ``constant/electroProperties``, ``monodomainSolverCoeffs.externalStimulus``,
-  is the box ``stimulusLocationMin (0 0 5.5e-3)`` to
-  ``stimulusLocationMax (1.5e-3 1.5e-3 7e-3)`` m, so the stimulus corner is
-  (0, 0, 7) mm. ``system/blockMeshDict`` spans x 0-20, y 0-3, z 0-7 mm
-  (``scale 0.001``). The conductivity tensor (xx xy xz yy yz zz) is
-  (0.1334 0 0 0.0176 0 0.0176) S/m, so the fibres run along x.
-- The reference frame (``benchmarks/niederer2011.json``): origin at P1, the
-  stimulus corner; axis a along the 20 mm (fibre) edge, b along the 7 mm
-  edge, c along the 3 mm edge, each pointing into the slab. So, in mm,
-  x = a, y = c and z = 7 - b, and cardiacFOAM probe ``k`` of
-  ``system/Niedererpoints`` is P(k+1) (:data:`PROBES`). This is the owner's
-  convention, confirmed here against the stimulus box, not taken from it.
-- openCARP (``02_EP_tissue/03E_study_resolution``): ``nversion.par``'s
-  ``stim[0].elec`` is the box p0 (0, 0, 0) to p1 (1500, 1500, 1500) µm, and
-  the record's ``mesher`` slab spans 0-20000 x 0-7000 x 0-3000 µm with
-  fibres along x (``docs/solver-learning/opencarp.md`` F3). openCARP's
-  frame is the reference frame, in µm: its points are the reference's own
-  coordinates, in the reference's unit (mm; core converts to the reader's
-  µm).
-
-**Pre-registered (topic B Task 8, 2026-09-26), before either run was
-read, and not to be changed after:** everything in the module constants
-below, and the request built from them in the test. Both solvers use the
-same dx (0.5 mm) and the same time step (0.01 ms) for 200 ms, the native
-``cartesianConvergence`` study's own ``endTime`` for dx 0.5 mm
-(``setup/studies/cartesianConvergence/sweep_hex_convergence.json``). That
-is past the ~143 ms cardiacFOAM needed for its slowest probe at dx 0.5 mm
-(``docs/solver-learning/cardiacfoam.md`` Q7) and the ~126 ms openCARP needed
-for P8 at dx 500 µm, dt 50 µs (``opencarp.md`` G4). A point either solver
-does not reach fails the report (``both_not_reached: "fail"``) and fails
-this test's premise, never silently.
-"""
+"""An agent benchmarks openCARP against cardiacFOAM on the Niederer 2011 N-version slab end to end:
+one ``sweep-run`` per solver, one comparison request, ``omnidriver compare``. Each side's points stay in
+its own solver's frame; the pairing :data:`PROBES` and the constants were pre-registered before any run."""
 from __future__ import annotations
 
 import importlib.util
@@ -69,10 +29,12 @@ REFERENCE = Path(__file__).resolve().parents[3] / "benchmarks" / "niederer2011.j
 _OPENCARP_NATIVE = Path(__file__).resolve().parents[2] / "omnidriver-opencarp" / "tests" / "opencarp_native.py"
 
 # --- pre-registered: the same resolution, step and duration on both sides ---
+# 200 ms is the native cartesianConvergence endTime at dx 0.5 mm, past the ~143 ms cardiacFOAM
+# and ~126 ms openCARP need for their slowest probe.
 CARDIACFOAM_DX_M = 0.0005          # the record's dx axis, metres
 OPENCARP_DX_UM = 500.0             # the record's dx axis, µm: the same 0.5 mm
 CARDIACFOAM_DELTA_T_S = 1e-5       # system/controlDict:deltaT, the native value
-OPENCARP_DT_US = 10.0              # nversion.par:dt, µs (opencarp.md G2): the same 0.01 ms
+OPENCARP_DT_US = 10.0              # nversion.par:dt, µs: the same 0.01 ms
 CARDIACFOAM_END_TIME_S = 0.2       # system/controlDict:endTime
 OPENCARP_TEND_MS = 200.0           # nversion.par:tend, ms: the same 200 ms
 TOLERANCE_MS = 5.0
@@ -86,16 +48,16 @@ TOLERANCE_RATIONALE = (
 #: A point either solver leaves unactivated by 200 ms means the duration was
 #: too short for that point; it must fail the report, not agree.
 BOTH_NOT_REACHED = "fail"
-#: Updated 2026-09-27 (native `interpolationScheme cellPoint`, e9439c4f):
-#: cardiacFOAM now reports each probe's own configured location exactly
-#: (offset 0), not the containing cell's centre.
+#: With `interpolationScheme cellPoint`, cardiacFOAM reports each probe's configured location exactly.
 CARDIACFOAM_MAX_OFFSET_M = 0.0
 #: openCARP samples the nearest mesh node. At dx 500 µm every P1-P9 is a
-#: node of the slab (F3's 41 x 15 x 7 grid), so any offset beyond rounding is
+#: node of the slab (a 41 x 15 x 7 grid), so any offset beyond rounding is
 #: an orientation error. In the reference's unit, mm: 1 µm.
 OPENCARP_MAX_OFFSET_MM = 0.001
 
-#: The agent's pairing, written from the orientation above:
+#: The reference frame has its origin at P1, the stimulus corner, with a along the 20 mm fibre edge,
+#: b along the 7 mm edge and c along the 3 mm edge, so x = a, y = c, z = 7 - b (mm) in cardiacFOAM's
+#: frame; openCARP's frame is the reference frame in µm.
 #: cardiacFOAM probe -> (its configured location in cardiacFOAM's frame, m;
 #: the reference label; that label's reference coordinates, mm).
 PROBES = {
@@ -118,10 +80,7 @@ def _note(probe: str) -> str:
 
 
 def _opencarp_native() -> ModuleType:
-    """openCARP's own native helper, loaded from its file. This module lives
-    in cardiacFOAM's tests, and a per-package run of them
-    (``packages/omnidriver-cardiacfoam/pyproject.toml``, ``pythonpath =
-    ["tests"]``) does not put openCARP's tests on ``sys.path``."""
+    """Loaded from its file: a per-package run does not put openCARP's tests on ``sys.path``."""
     spec = importlib.util.spec_from_file_location("opencarp_native_for_cross_solver", _OPENCARP_NATIVE)
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module     # its dataclass resolves its own module while it executes
@@ -136,8 +95,7 @@ def _artifact_id(output: Path, case, artifact_format: str) -> str:
 
 
 def _slab_nodes(case_root: Path) -> list[tuple[float, float, float]]:
-    """The openCARP mesh's nodes, µm: the record's ``mesher ... -mesh slab``
-    writes ``slab.pts``, a point count and then ``x y z`` per node (F3)."""
+    """The openCARP mesh's nodes, µm: ``slab.pts`` holds a point count, then ``x y z`` per node."""
     count, *rows = (case_root / "slab.pts").read_text().split("\n")
     nodes = [tuple(float(v) for v in row.split()) for row in rows if row.strip()]
     assert len(nodes) == int(count)
@@ -145,8 +103,7 @@ def _slab_nodes(case_root: Path) -> list[tuple[float, float, float]]:
 
 
 def test_an_agent_compares_opencarp_with_cardiacfoam_at_p1_to_p9(tmp_path):
-    # The orientation's drift gate: the pairing above names the probes the
-    # native case configures, in its order.
+    # Drift gate: the pairing names the probes the native case configures, in its order.
     native = FoamFile(native_tutorials_root() / NIEDERER_2011_RELPATH / "system" / "Niedererpoints")["probeLocations"]
     assert [tuple(float(v) for v in xyz) for xyz in native] == [at for at, _, _ in PROBES.values()]
     reference = load_point_reference(REFERENCE)
@@ -205,16 +162,13 @@ def test_an_agent_compares_opencarp_with_cardiacfoam_at_p1_to_p9(tmp_path):
         assert (oc["run"], oc["quantity"], cf["run"], cf["quantity"]) == ("opencarp", label, "cardiacfoam", probe)
         # The premise: 200 ms activates every point on both solvers.
         assert (oc["status"], cf["status"]) == ("evaluated", "evaluated"), (label, oc, cf)
-        # openCARP: declared and reported in ms, linearly interpolated at
-        # the requested point (a mesh node here, dx 0.5 mm), in its own µm.
+        # openCARP: linearly interpolated at the requested point, a mesh node at dx 0.5 mm.
         assert (oc["declared_unit"], oc["unit"], oc["sampling_rule"], oc["sampled_at_unit"], oc["requested_at_unit"]) == (
             "ms", "ms", "linear", "um", "um")
         assert oc["requested_at"] == [1000.0 * v for v in reference_at]
         assert tuple(oc["sampled_at"]) in oc_nodes
         assert math.dist(oc["sampled_at"], oc["requested_at"]) == min(math.dist(n, oc["requested_at"]) for n in oc_nodes)
-        # cardiacFOAM: declared in s, reported in ms, at the probe's own
-        # configured point exactly (interpolationScheme cellPoint, offset 0),
-        # in its own metres.
+        # cardiacFOAM: at the probe's configured point exactly (interpolationScheme cellPoint).
         assert (cf["declared_unit"], cf["unit"], cf["sampling_rule"], cf["sampled_at_unit"], cf["requested_at_unit"]) == (
             "s", "ms", "point", "m", "m")
         assert cf["requested_at"] == list(at)

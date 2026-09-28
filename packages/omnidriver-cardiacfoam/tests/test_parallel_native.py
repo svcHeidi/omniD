@@ -1,24 +1,5 @@
-"""PAR (owner Q6, 2026-09-26): ``niederer2011`` run serial and parallel
-gives the same P1-P9 activation times, on the real solver.
-
-Both runs are the record unchanged: hex route at the coarsest resolution its
-``cartesianConvergence`` study defines (dx 0.5 mm, cells (40 6 14)), with
-``endTime`` 0.15 s so that all nine points activate (section Q7 of
-docs/solver-learning/cardiacfoam.md: the last, P8, at 0.143 s). The parallel
-run asks for it with the study value ``parallel: true`` and gets N from the
-staged ``system/decomposeParDict``, which the study sets to 2 (the native
-case says 6). The two runs start concurrently, each in its own sweep.
-
-Tolerance, fixed before the first comparison was run: 1e-9 s absolute, a
-ten-thousandth of the case's ``deltaT`` (1e-5 s). A decomposed linear solve
-sums in a different order and its preconditioner is processor-local, so the
-iterates differ at the solver's tolerance; an activation time is
-interpolated within one step from Vm, so such a difference moves it by far
-less than this. The case writes its probes at ``writePrecision 6``, so this
-tolerance in fact requires the written values to be equal; on the first run
-they were, in every probe (docs/solver-learning/cardiacfoam.md, P3). The
-values are read through the Task 7 reader (``ActivationProbeReader``), as a
-quantity comparison reads them.
+"""``niederer2011`` run serial and parallel (N=2) gives the same P1-P9 activation
+times on the real solver; endTime 0.15 s so all nine points activate (P8 at 0.143 s).
 """
 from __future__ import annotations
 
@@ -41,6 +22,8 @@ NAMES = tuple(str(k) for k in range(9))
 DX_M = 0.0005
 END_TIME_S = 0.15
 RANKS = 2
+# 1e-4 of deltaT: a decomposed solve differs only at the solver tolerance, and
+# probes are written at writePrecision 6, so this requires equal written values.
 TOLERANCE_S = 1e-9
 
 
@@ -89,7 +72,6 @@ def test_the_parallel_run_ran_on_the_decomposed_ranks_and_says_so(runs):
     log = (parallel_root / "workflow_logs" / "solve.attempt1.stdout.log").read_text()
     assert f"nProcs : {RANKS}" in log
     assert sorted(p.name for p in parallel_root.glob("processor*")) == [f"processor{k}" for k in range(RANKS)]
-    # the serial run is the native default, untouched
     assert "parallel" not in serial_doc["resolvedEntry"]
     assert [step["command"] for step in serial_doc["workflowDag"]["steps"]].count("mpirun") == 0
     assert not list(serial_root.glob("processor*"))

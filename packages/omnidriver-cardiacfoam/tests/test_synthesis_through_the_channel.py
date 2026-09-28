@@ -1,26 +1,6 @@
 """cardiacFoam's `build_and_launch` splits into `build_case` + orchestration.
-
-Phase 2 Task 9 (docs/superpowers/plans/2026-09-20-phase2-one-write-channel.md):
-the second vertical slice, one synthesis path. `build_and_launch` used to
-write five files with bare `write_text` -- `constant/electroProperties`,
-`constant/physicsProperties`, `system/fvSchemes`, `system/fvSolution`,
-`system/controlDict` -- then provision a mesh and mutate `controlDict` a
-SECOND time via `update_control_dict`. Every one of those five is a
-framework-authored input; `build_case(...) -> CaseWritePlan` now resolves and
-renders all of them (plus a conditional `system/blockMeshDict`) as one
-reviewable plan, and `build_and_launch` commits it through
-`commit_case_write` before provisioning the mesh and (if not `dry_run`)
-launching.
-
-`test_build_and_launch_produces_this_exact_case` is the characterization:
-captured against the pre-migration `build_and_launch`, commit `dc7fbef`
-(2026-09-23, HEAD at the start of this task), by running the OLD code
-(`git stash` of this migration's changes) against the exact scenario below
-and hashing every file `build_and_launch` left behind. It must pass
-unchanged. `.omnidriver/` is excluded from the comparison: it is new
-bookkeeping this migration adds (the transaction journal and the completed-
-transaction record), not a case input, and its own transaction id is
-random per run.
+`build_case` renders every framework-authored input as one `CaseWritePlan`, committed through `commit_case_write`.
+`.omnidriver/` is excluded from digests: it is transaction bookkeeping with a random id, not a case input.
 """
 from __future__ import annotations
 
@@ -33,12 +13,7 @@ import pytest
 from omnidriver.cardiacfoam.dict_builder import build_and_launch, build_case
 from omnidriver.core.case_write import CaseMutationRequest
 
-#: Captured 2026-09-23 against commit dc7fbef (pre-Task-9 `build_and_launch`,
-#: run via `git stash` of this task's changes), for:
-#:   electro_selectors={"myocardiumSolver": "monodomainSolver",
-#:                       "ionicModel": "TNNP", "tissue": "epicardialCells"}
-#:   physics_selectors={"type": "electroModel"}
-#:   delta_t=2e-4, end_time=0.5, dx=0.0004, dry_run=True
+#: Digests of the case ``_scenario`` builds.
 EXPECTED_DIGESTS = {
     "constant/electroProperties": "d03af090622600d49d9c9685b7c209e6a485e74ae7ef5e148ed69b2a0db3d9b2",
     "constant/physicsProperties": "7be93ad559071b564d00f9595041df7ba0910caf2cb825b23a4d1ec111182e32",
@@ -58,7 +33,7 @@ def _case_digests_and_modes(case_dir: Path) -> tuple[dict[str, str], dict[str, s
             continue
         relpath = str(path.relative_to(case_dir))
         if relpath.startswith(".omnidriver"):
-            continue  # new bookkeeping this migration adds, not a case input
+            continue  # transaction bookkeeping, not a case input
         digests[relpath] = hashlib.sha256(path.read_bytes()).hexdigest()
         modes[relpath] = oct(path.stat().st_mode & 0o777)
     return digests, modes
@@ -76,8 +51,7 @@ def _scenario(case_dir: Path) -> dict:
 
 
 def test_build_and_launch_produces_this_exact_case(tmp_path):
-    """Characterization. Content digests and modes, not existence -- a
-    migration that produced six empty files would pass an existence check."""
+    """Content digests and modes, not existence: six empty files would pass an existence check."""
     result = _scenario(tmp_path)
     digests, modes = _case_digests_and_modes(tmp_path)
     assert digests == EXPECTED_DIGESTS
@@ -87,8 +61,6 @@ def test_build_and_launch_produces_this_exact_case(tmp_path):
 
 
 def test_build_and_launch_declares_the_same_workflow_effects(tmp_path):
-    """Declared workflow effects, not just bytes -- a synthesis producing
-    identical bytes but declaring different steps is not parity."""
     from omnidriver.cardiacfoam.own_context import own_driver_context
 
     plan = build_case(
@@ -100,15 +72,7 @@ def test_build_and_launch_declares_the_same_workflow_effects(tmp_path):
     assert authored == set(EXPECTED_DIGESTS)
 
 
-# --------------------------------------------------------------------------
-# The new path
-# --------------------------------------------------------------------------
-
-
 def test_synthesis_refuses_without_a_source_artifact():
-    """`synthesize` with no declared source is not a supported mode. The
-    refuted draft treated synthesis and patching as one operation at
-    different arities, which is how asset-free synthesis looked supported."""
     with pytest.raises(ValueError, match="source artifact"):
         CaseMutationRequest(
             mode="synthesize", case_root=Path("/tmp/case"), adapter_id="org.cardiacfoam",
@@ -118,9 +82,6 @@ def test_synthesis_refuses_without_a_source_artifact():
 
 
 def test_controldict_is_rendered_once_with_both_effects(tmp_path):
-    """Today `controlDict` is written from a template and then mutated a
-    second time. One rendering carries both -- the plan shows the final
-    content, and there is exactly one `RenderedFile` for the path."""
     from omnidriver.cardiacfoam.own_context import own_driver_context
 
     plan = build_case(
@@ -136,16 +97,7 @@ def test_controldict_is_rendered_once_with_both_effects(tmp_path):
 
 
 def test_allrun_joins_the_same_plan_build_case_returns(tmp_path):
-    """Phase 3 Task 10 (bypass 5): `Allrun` is not a second write bolted on
-    after `build_and_launch` returns -- `include_allrun=True` makes it one
-    more `RenderedFile` in the exact same `CaseWritePlan` `build_case`
-    resolves and renders, alongside the dictionaries, so `build_and_launch`'s
-    one `commit_case_write` call commits both in the same transaction. A
-    failure between two separate writes -- the pre-migration shape, a bare
-    `write_text` after `build_and_launch` had already returned -- could leave
-    a case with inputs but no runnable `Allrun`; a single `CaseWritePlan`
-    cannot leave that half-written state, since `commit_case_write` commits
-    every one of its `files` together."""
+    """One plan is one transaction, so a case cannot end up with inputs but no runnable `Allrun`."""
     from omnidriver.cardiacfoam.own_context import own_driver_context
 
     plan = build_case(
@@ -167,9 +119,6 @@ def test_allrun_joins_the_same_plan_build_case_returns(tmp_path):
 
 
 def test_build_case_without_include_allrun_does_not_author_it(tmp_path):
-    """Default `include_allrun=False` -- every existing caller of `build_case`
-    (this test module's own characterizations, direct callers other than
-    `sweep.py::materialize_case`) is unaffected."""
     from omnidriver.cardiacfoam.own_context import own_driver_context
 
     plan = build_case(
@@ -181,11 +130,7 @@ def test_build_case_without_include_allrun_does_not_author_it(tmp_path):
 
 
 def test_an_existing_case_is_not_silently_overwritten(tmp_path):
-    """`overwrite=False` raises FileExistsError, preserved exactly (see
-    `build_case`'s docstring): the pre-existing regression test
-    `test_dict_builder.py::test_existing_case_dir_is_not_overwritten_without_consent`
-    asserts that specific type, so this migration keeps it rather than
-    routing this particular guard through the channel as a precondition."""
+    """`overwrite=False` raises FileExistsError, the type `test_existing_case_dir_is_not_overwritten_without_consent` asserts."""
     (tmp_path / "constant").mkdir(parents=True)
     (tmp_path / "constant" / "electroProperties").write_text("# pre-existing\n")
     with pytest.raises(FileExistsError, match="electroProperties"):
@@ -196,10 +141,6 @@ def test_an_existing_case_is_not_silently_overwritten(tmp_path):
 
 
 def test_a_failed_synthesis_leaves_no_partial_case(tmp_path, monkeypatch):
-    """The old path wrote electroProperties, then physicsProperties, then
-    three system files in sequence. A failure partway through left a case
-    that looked built. Through the channel, an injected failure mid-commit
-    rolls back every file this transaction touched."""
     from omnidriver.core import case_transaction
 
     real_write_one = case_transaction._write_one
@@ -223,16 +164,6 @@ def test_a_failed_synthesis_leaves_no_partial_case(tmp_path, monkeypatch):
 
 def test_build_case_keeps_the_signature_build_and_launch_needs(tmp_path):
     signature = inspect.signature(build_and_launch)
-    # Unchanged from before this migration.
-    # Corrected 2026-09-24 (Phase 3 Task 10, bypass 5): `include_allrun`
-    # added, keyword-only, defaulting False -- sweep.py::materialize_case
-    # is the one caller that sets it, folding its Allrun write into this
-    # same commit. Every parameter this test originally pinned is still
-    # here, in the same order; only the new one is added, before
-    # `driver_context` (which stays last, matching every other call site's
-    # `build_case`/`build_and_launch` keyword-argument ordering).
-    # Corrected 2026-09-27 (compat audit): `pre_solve_commands` and
-    # `openfoam_bashrc` removed with the launch half they fed.
     assert list(signature.parameters) == [
         "electro_selectors", "physics_selectors", "case_dir", "electro_overrides",
         "physics_overrides", "overwrite", "dry_run", "delta_t", "end_time",
@@ -241,8 +172,7 @@ def test_build_case_keeps_the_signature_build_and_launch_needs(tmp_path):
 
 
 def test_a_controldict_patch_targets_only_the_key_explicitly_given(tmp_path):
-    """`update_control_dict`'s pre-migration per-key `is not None` guard:
-    passing only `delta_t` must not also force `endTime` to the default."""
+    """Passing only `delta_t` must not also force `endTime` to the default."""
     from omnidriver.cardiacfoam.own_context import own_driver_context
 
     plan = build_case(
@@ -256,9 +186,6 @@ def test_a_controldict_patch_targets_only_the_key_explicitly_given(tmp_path):
 
 
 def test_a_pre_existing_control_dict_is_only_patched_not_replaced(tmp_path):
-    """Mirrors the pre-migration behaviour this characterizes: a controlDict
-    that already exists (overwrite=False) is left alone except for the keys
-    explicitly given."""
     (tmp_path / "system").mkdir(parents=True)
     (tmp_path / "system" / "controlDict").write_text("deltaT    0.05;\nendTime   1.0;\n")
     from omnidriver.cardiacfoam.own_context import own_driver_context
@@ -286,25 +213,11 @@ def test_blockmeshdict_never_clobbers_a_hand_authored_one(tmp_path):
     assert (tmp_path / "system" / "blockMeshDict").read_text() == "// pre-existing custom mesh\n"
 
 
-# --------------------------------------------------------------------------
-# Single-cell solver meshing (2026-09-28, owner decision)
-# --------------------------------------------------------------------------
+# Single-cell solver meshing
 
 
 def test_single_cell_solver_block_mesh_dict_is_written_through_the_channel(tmp_path):
-    """Characterization: `singleCellSolver` used to get a bundled static
-    1-cell `constant/polyMesh` copied directly, skipped whenever `dry_run`
-    (so a from-scratch single-cell sweep case, which always passes
-    `dry_run=True`, got no mesh at all). It now meshes like every other
-    solver: `system/blockMeshDict` joins the same one plan, unconditionally,
-    and goes through `commit_case_write` (a completed-transaction record
-    under `.omnidriver/`) like every other document.
-
-    Calls `build_case`/`commit_case_write` directly rather than
-    `build_and_launch(dry_run=False, ...)`: no existing test in this package
-    exercises `build_and_launch`'s real (non-dry-run) path at all, because it
-    also launches the solver, which this environment cannot do. This is the
-    same split `build_and_launch` itself uses internally."""
+    """Calls `build_case`/`commit_case_write` directly: non-dry-run `build_and_launch` would also launch the solver."""
     from omnidriver.cardiacfoam.own_context import own_driver_context
     from omnidriver.core.case_transaction import commit_case_write
     from omnidriver.openfoam.mesh_provisioning import single_cell_block_mesh_dict_text
@@ -332,9 +245,7 @@ def test_single_cell_solver_block_mesh_dict_is_written_through_the_channel(tmp_p
 
 
 def test_single_cell_solver_block_mesh_dict_is_not_dry_run_gated(tmp_path):
-    """Unlike the deleted bundled-polyMesh copy, `blockMeshDict` is a case
-    input, not a launch effect -- it joins the plan the same way whether or
-    not `dry_run` is set, matching every other solver."""
+    """`blockMeshDict` is a case input, not a launch effect."""
     from omnidriver.cardiacfoam.own_context import own_driver_context
 
     plan = build_case(

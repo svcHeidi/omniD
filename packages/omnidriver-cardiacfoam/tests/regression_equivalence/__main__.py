@@ -1,17 +1,7 @@
-"""CLI: print the regression-equivalence matrix.
+"""CLI ``python -m regression_equivalence [--run-phase2]``: print the regression-equivalence matrix.
 
-    python -m regression_equivalence [--run-phase2]
-
-Phase 1 (solver-free) always runs: agent dict-layer idempotence + agent
-addressability of each case/driver.
-
-Phase 2 (--run-phase2) runs the numeric comparison only through the committed
-case-folder path. This is deliberate: numerical regression must execute the
-checked-in case state (its committed dictionaries and Allrun), not a registered
-tutorial family's default case selection or workflow interpretation. Registered
-entry checks therefore remain in Phase 1 (resolution/idempotence), while
-Phase 2 reproduces the committed case exactly as authored on disk.
-"""
+Phase 1 (solver-free) checks dict-layer idempotence and addressability; phase 2 runs the
+numeric comparison only through the committed case folder, exactly as authored on disk."""
 from __future__ import annotations
 
 import argparse

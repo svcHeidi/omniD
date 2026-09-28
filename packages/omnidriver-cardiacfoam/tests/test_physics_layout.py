@@ -1,9 +1,8 @@
-"""Non-native tests of every ``physics_layout.py`` refusal path (R1 fix,
-findings I1 and M2). Every fixture is a tiny synthetic dictionary written to
-``tmp_path`` -- data, not invented geometry (memory: fixtures can't settle
-external claims applies to solver *behaviour*, not to exercising this
-module's own parsing/refusal code against small, deliberately malformed
-inputs)."""
+"""Non-native tests of every ``physics_layout`` refusal path.
+
+Fixtures are tiny synthetic dictionaries exercising this module's own parsing,
+not claims about solver behaviour.
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -31,9 +30,7 @@ def _write(path: Path, text: str) -> None:
 
 
 def test_physics_layout_error_is_a_tutorial_record_error(tmp_path):
-    """So an unknown physics type reaches the CLI's existing ``plan
-    --strict`` refusal handling (``except TutorialRecordError``) instead of
-    becoming a traceback (finding I1's fix direction)."""
+    """So an unknown physics type reaches ``plan --strict``'s refusal handling, not a traceback."""
     assert issubclass(PhysicsLayoutError, TutorialRecordError)
 
 
@@ -103,18 +100,12 @@ def test_a_case_without_physics_properties_still_refuses_an_unknown_role(tmp_pat
 
 
 def test_the_hook_lets_a_physics_layout_error_propagate(tmp_path):
-    """R1 fix, finding I1: this used to be a bare ``except Exception``, so
-    an unknown physics type silently answered "not exempt" instead of being
-    refused by name."""
     _write(tmp_path / "constant" / "physicsProperties", "type fsiModel;\n")
     with pytest.raises(PhysicsLayoutError, match="fsiModel"):
         is_nondimensional_case(_Spec(tmp_path))
 
 
 def test_the_hook_still_swallows_the_detectors_own_parse_failure(tmp_path):
-    """The one swallow finding I1 keeps: a well-formed, resolvable
-    ``electroProperties`` whose active ``myocardiumSolver`` block is itself
-    unreadable (``detect_myocardium_solver_name`` raises ``KeyError``) still
-    answers "not exempt", not a raise -- exactly as it did before A7."""
+    """A ``KeyError`` from ``detect_myocardium_solver_name`` still answers "not exempt"."""
     _write(tmp_path / "constant" / "electroProperties", "myocardiumSolver monodomainSolver;\n")
     assert is_nondimensional_case(_Spec(tmp_path)) is False

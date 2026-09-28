@@ -1,4 +1,4 @@
-"""T7's opt-in driver/checker harness has no tutorial-marker dependency."""
+"""The opt-in driver/checker harness has no tutorial-marker dependency."""
 
 from __future__ import annotations
 

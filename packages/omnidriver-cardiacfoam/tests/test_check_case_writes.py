@@ -1,20 +1,6 @@
-"""``scripts/check-case-writes.py``: the static gate for design §5's
-"records and axes write nothing" rule
-(docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md).
-
-This test lives here (not under ``packages/omnidriver`` -- core stays free
-of cardiac/OpenFOAM vocabulary, including its own tests) even though the
-gate itself scans BOTH ``omnidriver-openfoam/.../axes`` and
-``omnidriver-cardiacfoam/.../records``: it is a single repo-level script,
-like ``check-import-boundaries.py``, with no one package that owns it
-alone.
-
-Repo-only: the gate script lives at ``scripts/check-case-writes.py``, a
-sibling of the packages, not inside any installed package -- unreachable
-from a standalone wheel install. Per CLAUDE.md's own trap note, the lookup
-below never raises at import time; it only returns ``None``, and the
-skip marker (not a module-scope raise) is what makes this test skip cleanly
-outside the monorepo checkout.
+"""``scripts/check-case-writes.py``: the static "records and axes write nothing"
+gate. Here, not in core, since core's tests stay free of OpenFOAM vocabulary.
+Repo-only: the lookup never raises at import time, so the test skips cleanly.
 """
 
 from __future__ import annotations
@@ -60,28 +46,12 @@ def _violations_for(tmp_path: Path, source: str) -> list[str]:
     return [msg for _key, msg in gate._check_file(module_path, tmp_path)]
 
 
-# ---------------------------------------------------------------------------
-# The real tree passes.
-# ---------------------------------------------------------------------------
-
-
 def test_the_real_axes_and_records_trees_pass_the_gate():
     gate = _load_gate_module()
     assert gate.main() == 0
 
 
 def test_scanned_roots_are_exactly_the_axes_records_and_planner_paths():
-    """Corrected 2026-09-25: this asserted the two directories only. The
-    writer-free planner module axes import (``openfoam/case_planning.py``)
-    is scanned too, since it was found importing from ``mutators``.
-
-    Corrected again 2026-09-25 (solver-conformance Task 8): openCARP's own
-    records tree (``omnidriver-opencarp/.../records``) joined the scan --
-    the same "records and axes write nothing" rule applies to every solver
-    adapter, not only cardiacFOAM's.
-
-    Corrected again 2026-09-28 (step S): cardiacCore's own records tree
-    joined the scan too, for the same reason."""
     gate = _load_gate_module()
     relpaths = {
         str(root.relative_to(_REPO_ROOT)) for root in gate.SCANNED_ROOTS
@@ -101,12 +71,7 @@ def test_scanned_roots_are_exactly_the_axes_records_and_planner_paths():
     "from ..utils import set_delta_t as s\n",
 ])
 def test_refuses_a_writer_module_reached_by_a_relative_import(tmp_path, source):
-    """A relative import names the same module an absolute one does. The gate
-    used to compare only the literal text (`mutators`), never the resolved
-    `omnidriver.openfoam.mutators`, so any name not on the forbidden-name
-    list -- `_format_value`, or the module itself -- passed. Found 2026-09-25
-    when `case_planning.py`'s `from .mutators import _format_value` was not
-    flagged."""
+    """A relative import is resolved before matching, so it names the same module an absolute one does."""
     gate = _load_gate_module()
     axes = tmp_path / "src" / "omnidriver" / "openfoam" / "axes"
     axes.mkdir(parents=True)
@@ -119,11 +84,6 @@ def test_refuses_a_writer_module_reached_by_a_relative_import(tmp_path, source):
 def test_known_violations_is_empty():
     gate = _load_gate_module()
     assert gate.KNOWN_VIOLATIONS == frozenset()
-
-
-# ---------------------------------------------------------------------------
-# Every forbidden form fails the gate.
-# ---------------------------------------------------------------------------
 
 
 def test_refuses_importing_update_foam_entry_from_mutators(tmp_path):
@@ -175,10 +135,7 @@ def test_refuses_importing_shutil(tmp_path):
 
 
 def test_refuses_shutil_copytree_call():
-    """The whole `shutil` module is forbidden to import at all (the same
-    "forbid the whole module" shape check-import-boundaries.py uses for
-    `foamlib`) -- reaching `copytree` needs importing it first, so the
-    import violation alone already refuses this whole shape."""
+    """Importing `shutil` at all is forbidden, so the import alone refuses `copytree`."""
     gate = _load_gate_module()
     assert "shutil" in gate.FORBIDDEN_IMPORT_MODULES
 
@@ -302,8 +259,7 @@ def test_type_checking_guarded_imports_are_exempt(tmp_path):
 
 
 def test_a_clean_axis_style_module_passes(tmp_path):
-    """The shape a real axis module actually takes: reads, returns patches
-    and command arguments, writes nothing."""
+    """Reads, returns patches and command arguments, writes nothing."""
     violations = _violations_for(
         tmp_path,
         "from pathlib import Path\n"

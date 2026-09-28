@@ -1,21 +1,6 @@
-"""The manufactured-solution axes, one builder for every record that uses
-them (``records/manufactured_solution_axes.py``), and record-scoped
-resolution through the real cardiac stack (2026-09-26).
+"""Manufactured-solution axes, resolved per record through the real cardiac stack.
 
-``manufacturedBidomain`` and ``manufacturedEikonalECG`` both declare
-``dimension``, and the two mean different things: bidomain's native
-``bidomainSolverCoeffs`` has a ``dimension`` key, eikonalECG's
-``eikonalSolverCoeffs`` does not. With one stack-wide axis catalog the
-record registered last won, and a 1D bidomain case kept ``dimension "3D"``.
-These tests resolve each record's own axes through core, from the records
-the composed stack itself registers.
-
-The ``dimension`` and ``tetNumberCells`` axes read nothing from the staged
-case, so an empty staged directory is enough: no geometry is invented here.
-The hex ``numberCells`` axis reads each ``blockMeshDict.<dim>``; it is
-checked against the real native case by the before/after ``sweep-plan``
-comparison and the native conformance suite, not here.
-"""
+``dimension`` differs per record (bidomain's solver has the key, eikonalECG's does not); the hex ``numberCells`` axis reads real blockMeshDicts, so native conformance checks it."""
 
 from __future__ import annotations
 
@@ -48,18 +33,14 @@ def test_bidomain_dimension_writes_its_solver_coefficient_and_picks_the_mesh_dic
 
 
 def test_eikonal_ecg_dimension_only_picks_the_mesh_dict(tmp_path):
-    """eikonalECG's solver has no ``dimension`` key: its axis of the same
-    name writes nothing, and resolving it must not borrow bidomain's."""
+    """eikonalECG's solver has no ``dimension`` key, so its axis writes nothing and must not borrow bidomain's."""
     patches, command_arguments = _resolve("manufacturedEikonalECG", {"dimension": "2D"}, tmp_path)
     assert patches == {}
     assert command_arguments == {"mesh": ("-dict", "system/blockMeshDict.2D")}
 
 
 def test_pseudo_ecg_dimension_writes_both_the_tissue_and_ecg_verifier_dimension(tmp_path):
-    """pseudo-ECG's ``dimension`` axis models the relation the plan names:
-    one study value drives both the tissue solver's own ``dimension`` and
-    the pseudo-ECG verifier's echoed ``verificationModel.dimension``, so a
-    study can never state one without the other."""
+    """One study value drives both, so a study can never state one without the other."""
     patches, command_arguments = _resolve("manufacturedMonodomainPseudoECG", {"dimension": "1D"}, tmp_path)
     assert patches == {
         "constant/electroProperties::monodomainSolverCoeffs.dimension": '"1D"',
@@ -93,13 +74,7 @@ def test_the_tet_axis_refuses_a_cell_count_that_is_not_positive(value, tmp_path)
 
 
 def test_a_record_refuses_an_axis_only_another_record_declares():
-    """``ionicModel`` is restitutionCurves' axis; bidomain refuses it by name
-    rather than borrowing it. Corrected 2026-09-26 (review 54b M3): this
-    test also resolved every record's axis names against the same record's
-    axes, which could fail only on a duplicate ``TutorialRecord`` already
-    refuses; that half is replaced by ``test_record_studies_native.py``,
-    which resolves every name a real native study uses through the study's
-    own expansion."""
+    """``ionicModel`` is restitutionCurves' axis; bidomain refuses it by name rather than borrowing it."""
     from omnidriver.core.tutorial_records import sort_study_name
 
     catalog = _CTX.capabilities.tutorial_records.catalog()
@@ -108,10 +83,8 @@ def test_a_record_refuses_an_axis_only_another_record_declares():
         sort_study_name("ionicModel", axes=catalog["manufacturedBidomain"].axes)
 
 
-#: Every tet route of every record that has a ``dimension`` axis. The old
-#: pseudo-ECG and eikonalECG ``make_spec`` refused ``mesh_family='tet'``
-#: with any dimension but ``3D`` ("the unit-cube tet mesh has no 1D/2D
-#: variant"); review 54b I3 found the records had lost that refusal.
+#: Every tet route of every record that has a ``dimension`` axis; the
+#: unit-cube tet mesh has no 1D/2D variant.
 _TET_ROUTES = [
     ("manufacturedBidomain", "tet"),
     ("manufacturedEikonalECG", "tet"),
@@ -155,11 +128,7 @@ def test_the_hex_route_admits_every_dimension(record_name, dimension):
 
 
 def test_every_route_that_skips_the_mesh_step_constrains_dimension():
-    """The relation behind the constraint, checked for every record the
-    stack registers, so a new tet route (bath, pseudo-ECG) cannot forget it:
-    ``dimension`` chooses the blockMesh dictionary, so a route without the
-    ``mesh`` step builds its own geometry, and must admit only the one its
-    template builds."""
+    """``dimension`` picks the blockMesh dict, so a route without ``mesh`` must admit only its template's 3D."""
     for record in _CTX.capabilities.tutorial_records.catalog().values():
         if "dimension" not in record.axis_names():
             continue
@@ -179,11 +148,7 @@ def _records_with_a_gmsh_step():
 
 
 def test_no_gmsh_step_restates_its_templates_lc_default():
-    """Review 54b M1: each record declared a ``-setnumber lc`` default copied
-    from its template's ``DefineConstant``, so a template change would have
-    been silently overridden. With no study value gmsh now runs without
-    ``-setnumber`` and the template's own default applies; a tet axis adds
-    it."""
+    """With no study value gmsh runs without ``-setnumber``, so the template's own DefineConstant default applies."""
     records = list(_records_with_a_gmsh_step())
     assert {record.name for record, _ in records} >= {
         "manufacturedBidomain", "manufacturedEikonalECG", "niederer2011",
@@ -209,10 +174,7 @@ def test_a_tet_axis_adds_lc_to_the_gmsh_command_line(record_name, study, lc, tmp
 
 
 def test_every_gmsh_route_hands_its_mesh_file_from_gmsh_to_gmsh_to_foam():
-    """Review 54b M2: eikonalECG's ``gmsh`` step declared no ``produces``
-    and its ``gmshToFoam`` no ``consumes``, so C6/C8 could not see the
-    ``.msh`` hand-off bidomain and niederer2011 declare. The file gmsh writes
-    (its ``-o`` argument) is what gmshToFoam reads, on both sides."""
+    """The file gmsh writes (its ``-o`` argument) is what gmshToFoam consumes, declared on both sides."""
     for record, steps in _records_with_a_gmsh_step():
         gmsh, to_foam = steps["gmsh"], steps["gmshToFoam"]
         msh = gmsh.command[gmsh.command.index("-o") + 1]
@@ -222,11 +184,7 @@ def test_every_gmsh_route_hands_its_mesh_file_from_gmsh_to_gmsh_to_foam():
 
 
 def test_every_gmsh_to_foam_step_declares_the_zone_files_it_writes():
-    """Review 54b M2: a real ``gmshToFoam`` on each template (one
-    ``Physical Volume("internal")``) writes the three zone files and
-    ``sets/internal`` beside the hex route's six; bidomain declared all
-    nine, eikonalECG and niederer2011 only the six. Proved by the tet runs
-    through each record logged in docs/solver-learning/cardiacfoam.md."""
+    """A real gmshToFoam writes three zone files and a cell set beyond the hex six (see docs/solver-learning/cardiacfoam.md)."""
     for record, steps in _records_with_a_gmsh_step():
         produced = set(steps["gmshToFoam"].produces)
         assert {

@@ -36,9 +36,7 @@ def _resolved(
     ionic_model: str | None = None,
     active_tension: str | None = None,
 ):
-    """Field names the cardiac plugin's own case_introspection module names
-    for a resolved model -- what CardiacFoamPlugin.get_samplable_fields would
-    produce, without going through the filesystem."""
+    """What CardiacFoamPlugin.get_samplable_fields yields, without the filesystem."""
 
     return _samplable_fields(
         {"solver": solver, "ionic_model": ionic_model, "active_tension": active_tension}
@@ -92,7 +90,6 @@ def test_samplable_fields_for_tnnp_single_cell():
     assert "membrane_V" in electro
     assert "Vm" in electro
     assert "bananas" not in electro
-    # single-cell has no mechanics region
     assert manifest["samplable_fields"]["solid"] == []
 
 
@@ -132,19 +129,11 @@ def test_samplable_fields_multi_region_tags_solid():
     solid = manifest["samplable_fields"]["solid"]
     assert "Ta" in solid
     assert "lambda" in solid
-    # active-tension state variables are included
     assert "XW" in solid
 
 
 def test_unknown_model_is_not_an_error():
-    # An unresolved / unknown model just yields the fixed solver fields, no crash.
     manifest = build_capability_manifest(
         samplable_fields=_resolved(ionic_model="NotARealModel")
     )
     assert "Vm" in manifest["samplable_fields"]["electro"]
-
-
-# test_describe_entry_includes_capability_manifest and
-# test_strict_plan_carries_capability_manifest moved to
-# test_capability_manifest_native.py: the contract holds for a tutorial
-# record too, and a record needs the real native case files to resolve.

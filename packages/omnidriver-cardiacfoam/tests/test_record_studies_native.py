@@ -1,24 +1,7 @@
-"""Every native study of every cardiacFOAM tutorial record expands through
-its own entry point: ``sweep_plan`` over the study file, the way an agent
-runs it, with every case planned ``ok``.
+"""Every native study of every cardiacFOAM tutorial record plans every case ``ok`` through ``sweep_plan``, as an agent runs it.
 
-Added 2026-09-26 (review 54b). The 5.4b wave proved its rewritten studies
-with one hand-built case per study passed straight to ``strict_plan``,
-which bypasses a study's own expansion. Five of fifteen studies could not
-run at all: niederer2011's two named no ``cases_root`` (I1), and three of
-bidomain's derived a case id with a space in it (I2). This test would have
-failed on both. It also replaces
-``test_manufactured_solution_axes.py::test_every_cardiac_record_resolves_each_of_its_axis_names_to_its_own_contract``,
-which resolved each record's axis names against the same record's axes and
-so could fail only on a duplicate (review 54b M3): here every bare name a
-real study uses must resolve in its record, and every value must plan.
-
-A study states ``"cases_root": "tutorials"``, relative to the native
-repository root (every record study in the tree does), so the sweep runs
-from the parent of ``OMNIDRIVER_NATIVE_TUTORIALS``, as the native READMEs'
-commands do. Planning stages each case into ``tmp_path``; nothing is
-written into the native tree and no solver runs.
-"""
+Studies state ``"cases_root": "tutorials"`` relative to the native repository root, so the sweep runs from the parent of
+``OMNIDRIVER_NATIVE_TUTORIALS``."""
 from __future__ import annotations
 
 import json

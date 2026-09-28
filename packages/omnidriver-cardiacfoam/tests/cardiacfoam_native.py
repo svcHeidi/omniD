@@ -1,18 +1,6 @@
-"""Supplied inputs for native cardiacFOAM tests, and one conformance target
-per tutorial record (tutorials-are-pointers plan §5f; conformance Task 14).
-
-A uniquely named module, not ``conftest``: CLAUDE.md's conftest trap (core's
-conftest wins a ``from conftest import X`` when the whole repo is collected).
-
-Nothing here is discovered. The native tutorials tree comes from
-``OMNIDRIVER_NATIVE_TUTORIALS``, and the OpenFOAM environment from the shell
-the tests run in, already sourced (plan §2 item 6): every child process a
-conformance check starts inherits it (``conformance.checks._child_env``).
-Point ``OMNIDRIVER_NATIVE_TUTORIALS`` at a clean native worktree's
-``tutorials/`` (plan §4), never at a checkout holding run output in place.
-
-Every tutorial record adds its own ``*_conformance_target(tmp_path)`` here
-and joins ``test_conformance_native.py``'s parametrization.
+"""Supplied inputs for native cardiacFOAM tests, and one conformance target per
+tutorial record. Not ``conftest``: core's conftest wins ``from conftest import``.
+Nothing is discovered: the tree and the sourced OpenFOAM shell are supplied.
 """
 from __future__ import annotations
 
@@ -36,8 +24,7 @@ NIEDERER_2011_RELPATH = "NiedererEtAl2011verification"
 
 
 def native_tutorials_root() -> Path:
-    """The supplied native tutorials tree. FAILS, never skips, when unset:
-    a ``native`` test that cannot see the real tree proves nothing."""
+    """FAILS, never skips, when unset: a native test without the real tree proves nothing."""
     value = os.environ.get("OMNIDRIVER_NATIVE_TUTORIALS")
     if not value:
         pytest.fail(
@@ -55,9 +42,7 @@ def native_tutorials_root() -> Path:
 
 
 def require_sourced_openfoam(*commands: str) -> None:
-    """The calling shell has OpenFOAM sourced and ``commands`` on its PATH.
-    Checked up front so a missing environment fails naming the fix, rather
-    than as C5-C11 verdicts about a plan that could not run."""
+    """Fail up front naming the fix, not as C5-C11 verdicts on a plan that could not run."""
     if "WM_PROJECT_DIR" not in os.environ:
         pytest.fail(
             "WM_PROJECT_DIR is not set: run the native cardiacFOAM conformance "
@@ -70,11 +55,7 @@ def require_sourced_openfoam(*commands: str) -> None:
 
 
 def manufactured_eikonal_ecg_conformance_target(tmp_path: Path) -> ConformanceTarget:
-    """``manufacturedEikonalECG`` at the coarsest resolution any of its
-    studies define (``numberCells: 10``, ``cartesianConvergence``'s own
-    coarsest point) -- a real hex/blockMesh run takes well under a minute
-    (docs/solver-learning/cardiacfoam.md, section E: 10x10x10 completed in
-    13 s)."""
+    """Coarsest study resolution (numberCells 10); a real run takes ~13 s."""
     require_sourced_openfoam("blockMesh", "cardiacFoam")
     return ConformanceTarget(
         plugin="cardiacfoam",
@@ -94,10 +75,7 @@ def manufactured_eikonal_ecg_conformance_target(tmp_path: Path) -> ConformanceTa
 
 
 def single_cell_conformance_target(tmp_path: Path) -> ConformanceTarget:
-    """``singleCell`` at a shortened ``endTime`` (the native default is
-    2 s at ``deltaT`` 1e-6 s -- 2,000,000 steps, ~25 s wall clock for a real
-    run, section SC1; 0.05 s keeps each of this target's several real runs
-    to well under a second)."""
+    """endTime 0.05 s, not the native 2 s (2e6 steps, ~25 s per real run)."""
     require_sourced_openfoam("blockMesh", "cardiacFoam")
     return ConformanceTarget(
         plugin="cardiacfoam",
@@ -105,18 +83,12 @@ def single_cell_conformance_target(tmp_path: Path) -> ConformanceTarget:
         cases_root=native_tutorials_root(),
         scratch_root=tmp_path / "scratch",
         base_study={"system/controlDict:endTime": 0.05},
-        # A catalogued enum key (`$ELECTRO_MODEL_COEFFS.tissue`), the same
-        # one restitutionCurves's own target patches.
         patch=("constant/electroProperties:singleCellSolverCoeffs.tissue", "epicardialCells"),
         untouched=("constant/electroProperties", ("singleCellSolverCoeffs", "ionicModel")),
         sweep_name="ionicModel",
-        # Not BuenoOrovio (section SC2, docs/solver-learning/cardiacfoam.md):
-        # the native case's own activeTensionModel LandNiedererTWorld
-        # requires a Cai signal BuenoOrovio's ionic model does not supply,
-        # fatal at solve time -- a native-case quirk this axis (unchanged
-        # from restitutionCurves, whose own case sets no activeTensionModel)
-        # has no reason to guard against. TNNP and TWorld (the native
-        # default) both supply it.
+        # Not BuenoOrovio: the native case's activeTensionModel
+        # LandNiedererTWorld needs a Cai signal BuenoOrovio does not supply,
+        # fatal at solve time. TNNP and TWorld both supply it.
         sweep_values=("TNNP", "TWorld"),
         unknown_name="constant/electroProperties:singleCellSolverCoeffs.tissu",
         solver_command="cardiacFoam",
@@ -125,10 +97,7 @@ def single_cell_conformance_target(tmp_path: Path) -> ConformanceTarget:
 
 
 def restitution_curves_conformance_target(tmp_path: Path) -> ConformanceTarget:
-    """``restitutionCurves`` at the coarsest mesh ``system/blockMeshDict``
-    documents (40x6x14, deltaX 0.5 mm), the one step 4c ran. Everything
-    else is the native case's own: BuenoOrovio, epicardialCells, S1 2000 ms
-    x10 then S2 250 ms x2, endTime 20.5 -- a real run takes seconds."""
+    """Coarsest mesh the native blockMeshDict documents (40x6x14); a real run takes seconds."""
     require_sourced_openfoam("blockMesh", "cardiacFoam")
     return ConformanceTarget(
         plugin="cardiacfoam",
@@ -136,12 +105,9 @@ def restitution_curves_conformance_target(tmp_path: Path) -> ConformanceTarget:
         cases_root=native_tutorials_root(),
         scratch_root=tmp_path / "scratch",
         base_study={"blockMeshResolution": [40, 6, 14]},
-        # A catalogued enum key (``$ELECTRO_MODEL_COEFFS.tissue``), and its
-        # sibling in the same ``singleCellSolverCoeffs`` scope.
         patch=("constant/electroProperties:singleCellSolverCoeffs.tissue", "endocardialCells"),
         untouched=("constant/electroProperties", ("singleCellSolverCoeffs", "ionicModel")),
-        # The two coarsest of the three resolutions the native
-        # blockMeshDict documents (deltaX 0.5 mm and 0.2 mm).
+        # The two coarsest resolutions the native blockMeshDict documents.
         sweep_name="blockMeshResolution",
         sweep_values=([40, 6, 14], [100, 15, 35]),
         unknown_name="constant/electroProperties:singleCellSolverCoeffs.tissu",
@@ -151,11 +117,7 @@ def restitution_curves_conformance_target(tmp_path: Path) -> ConformanceTarget:
 
 
 def manufactured_bidomain_conformance_target(tmp_path: Path) -> ConformanceTarget:
-    """``manufacturedBidomain`` on its hex route, 1D at ``numberCells`` 10
-    (``(10 1 1)``, ``cartesianConvergence``'s coarsest 1D point), a real run
-    in well under a second. Corrected 2026-09-26 (review 54b M8): this said
-    "a 5x5x5 box", which is B1/B2's manual run, not this target's
-    ``base_study``."""
+    """Hex route, 1D at numberCells 10; a real run takes well under a second."""
     require_sourced_openfoam("blockMesh", "cardiacFoam")
     return ConformanceTarget(
         plugin="cardiacfoam",
@@ -163,11 +125,7 @@ def manufactured_bidomain_conformance_target(tmp_path: Path) -> ConformanceTarge
         cases_root=native_tutorials_root(),
         scratch_root=tmp_path / "scratch",
         base_study={"mesh": "hex", "dimension": "1D", "numberCells": 10},
-        # A catalogued scalar key (`$ELECTRO_MODEL_COEFFS.verificationModel.k`,
-        # applicable to `manufacturedFDABidomainVerifier` since the
-        # 2026-09-26 catalogue correction), read at the native default
-        # 1.0/sqrt(2) when absent (manufacturedFDABidomainVerifier.C).
-        # Corrected 2026-09-26 (review 54b M8): this said "enum".
+        # A scalar manufacturedFDABidomainVerifier reads at 1.0/sqrt(2) when absent.
         patch=("constant/electroProperties:bidomainSolverCoeffs.verificationModel.k", 0.5),
         untouched=(
             "constant/electroProperties",
@@ -182,10 +140,7 @@ def manufactured_bidomain_conformance_target(tmp_path: Path) -> ConformanceTarge
 
 
 def manufactured_bath_bidomain_conformance_target(tmp_path: Path) -> ConformanceTarget:
-    """``manufacturedBathBidomain`` on its default hex route at the coarsest
-    resolution its studies define (``cartesianConvergence``'s 1D ``N=10``:
-    three blocks of ``(10 1 1)``), to the tet studies' ``endTime`` 0.02
-    (36 steps; a real run takes about a second)."""
+    """Hex route, 1D N=10, endTime 0.02 (36 steps); a real run takes about a second."""
     require_sourced_openfoam("blockMesh", "topoSet", "setTorsoOrganConductivityField", "cardiacFoam")
     return ConformanceTarget(
         plugin="cardiacfoam",
@@ -205,29 +160,17 @@ def manufactured_bath_bidomain_conformance_target(tmp_path: Path) -> Conformance
 
 
 def manufactured_monodomain_pseudo_ecg_conformance_target(tmp_path: Path) -> ConformanceTarget:
-    """``manufacturedMonodomainPseudoECG`` on its default hex route, 3D at
-    ``numberCells`` 5 (a real ``blockMesh``/``cardiacFoam`` run at ``(5 5
-    5)`` took about 4 s, ``docs/solver-learning/cardiacfoam.md`` section PE).
-
-    ``dimension`` stays at the native default ``"3D"``, not a coarser 1D/2D
-    choice like the other manufactured-solution targets: the native default
-    tissue verifier is ``manufacturedAnisotropicMonodomainVerifier``
-    (``anisotropic yes``), and that verifier's own catalogued constraint is
-    3D-only (a native ``FatalError`` at any other dimension) -- switching
-    ``dimension`` alone, with no matching change to
-    ``verificationModel.type``/``anisotropic``, would otherwise plan a
-    combination the real solver refuses. Every rewritten study that varies
-    ``dimension`` away from 3D also sets both of those (the record's own
-    docstring accounting), so a target base_study either does the same or,
-    more simply, keeps ``dimension`` at the native default -- taken here."""
+    """Hex route, 3D at numberCells 5 (~4 s real run)."""
     require_sourced_openfoam("blockMesh", "cardiacFoam")
     return ConformanceTarget(
         plugin="cardiacfoam",
         record="manufacturedMonodomainPseudoECG",
         cases_root=native_tutorials_root(),
         scratch_root=tmp_path / "scratch",
+        # 3D, unlike the other manufactured targets: the native default
+        # verifier manufacturedAnisotropicMonodomainVerifier is FatalError at
+        # any other dimension unless verificationModel.type/anisotropic change too.
         base_study={"mesh": "hex", "dimension": "3D", "numberCells": 5},
-        # A catalogued integer key the native case sets to 96 by default.
         patch=(
             "constant/electroProperties:monodomainSolverCoeffs.ecgDomains.ECG"
             ".verificationModel.referenceQuadratureOrder",
@@ -252,15 +195,9 @@ _CABLE_CONDUCTIVITY = {
 
 
 def cable_1d_restitution_conformance_target(tmp_path: Path) -> ConformanceTarget:
-    """``cable1DRestitution`` at a coarse mesh (``dx`` 1 mm -> 20 cells) and
-    the ``requested_di90_ms`` branch of its own ``s1s2SpatialProtocol`` axis
-    at its smallest legal values, so ``endTime`` resolves to 1.5 ms (150
-    steps at the native ``deltaT`` 1e-5 s -- well under a second). Also
-    pins ``system/controlDict:writeInterval`` short of that ``endTime``:
-    ``predict_data_artifacts`` unconditionally requires one elapsed
-    ``monodomainSolver`` field write (``docs/solver-learning/cardiacfoam.md``
-    section CABLE, CABLE3/CABLE4), which the native default (4.25 s) never
-    reaches at this ``endTime``."""
+    """dx 1 mm and the smallest legal s1s2SpatialProtocol, so endTime is 1.5 ms.
+    writeInterval is pinned below endTime: ``predict_data_artifacts`` requires
+    one elapsed monodomainSolver field write, which the native 4.25 s never reaches."""
     require_sourced_openfoam("blockMesh", "cardiacFoam")
     return ConformanceTarget(
         plugin="cardiacfoam",
@@ -276,8 +213,6 @@ def cable_1d_restitution_conformance_target(tmp_path: Path) -> ConformanceTarget
                 "requested_di90_ms": 0.0, "reference_repolarization90_s": 0.001,
             },
         },
-        # A catalogued enum key (`$ELECTRO_MODEL_COEFFS.tissue`), the same
-        # one every other migrated record's own target patches.
         patch=("constant/electroProperties:monodomainSolverCoeffs.tissue", "endocardialCells"),
         untouched=("constant/electroProperties", ("monodomainSolverCoeffs", "ionicModel")),
         sweep_name="dx",
@@ -289,11 +224,7 @@ def cable_1d_restitution_conformance_target(tmp_path: Path) -> ConformanceTarget
 
 
 def cable_1d_cv_convergence_conformance_target(tmp_path: Path) -> ConformanceTarget:
-    """``cable1DCVConvergence``, mesh + solve only (no postprocess step:
-    the old factory's own ``workflow_dag`` had none either). Its own study
-    states ``externalStimulus`` explicitly (owner decision); ``endTime``
-    and ``writeInterval`` are pinned short for the same reason as
-    ``cable1DRestitution``'s own target."""
+    """Mesh + solve only; endTime/writeInterval pinned short as for cable1DRestitution."""
     require_sourced_openfoam("blockMesh", "cardiacFoam")
     return ConformanceTarget(
         plugin="cardiacfoam",
@@ -323,13 +254,7 @@ def cable_1d_cv_convergence_conformance_target(tmp_path: Path) -> ConformanceTar
 
 def niederer_sweep(tmp_path: Path, *, dx_values: Sequence[float], end_time: float | None = None,
                     extra: Mapping[str, Any] | None = None) -> Path:
-    """Run ``niederer2011`` (hex route) at each of ``dx_values`` (metres)
-    through ``omnidriver sweep-run``, against the supplied native tree.
-    Returns the sweep's output directory. Any case that does not complete
-    fails the caller loudly (mirrors ``omnidriver-opencarp``'s
-    ``opencarp_native.niederer_sweep``). (Corrected 2026-09-26, topic B Task
-    7: took one ``dx``; the cross-resolution comparison needs two cases in
-    one sweep.)"""
+    """Run ``niederer2011`` via ``sweep-run`` at each ``dx`` (metres); returns the output dir."""
     require_sourced_openfoam("blockMesh", "cardiacFoam")
     base: dict[str, Any] = {
         "entry": "niederer2011", "cases_root": str(native_tutorials_root()),
@@ -363,13 +288,7 @@ def niederer_sweep(tmp_path: Path, *, dx_values: Sequence[float], end_time: floa
 
 
 def niederer_run(tmp_path: Path, *, dx: float, end_time: float | None = None) -> tuple[Path, DataArtifact]:
-    """``niederer2011`` at one ``dx``, run for real -- the counterpart of
-    ``omnidriver-opencarp``'s ``opencarp_native.niederer_run``, for topic B
-    Task 7's own tests. Returns ``(case_root, probe)``, where ``probe`` is
-    the declared ``samplePoints`` artifact for the record's own
-    ``POINTS_PATH``. Corrected 2026-09-26 (review 54b M6): this module kept
-    its own copy of that path, ``NIEDERER_POINTS_PATH``; it now reads the
-    record's."""
+    """Returns ``(case_root, probe)``; ``probe`` is the artifact at ``niederer_2011.POINTS_PATH``."""
     output = niederer_sweep(tmp_path, dx_values=(dx,), end_time=end_time)
     (case,) = build_sweep_context(output).cases
     document = json.loads((output / case.run_document_path).read_text())
@@ -381,14 +300,7 @@ def niederer_run(tmp_path: Path, *, dx: float, end_time: float | None = None) ->
 
 
 def manufactured_monodomain_1d3d_conformance_target(tmp_path: Path) -> ConformanceTarget:
-    """``manufacturedMonodomain1D3D`` on its default ``coupled`` route, at
-    the coarsest of ``coupledConvergence``'s own resolutions
-    (``numberCells`` 10, ``graphFile`` ``purkinjeGraph.nodes011``, ``dt``
-    0.008971136 s) -- a real run takes well under a second
-    (``docs/solver-learning/cardiacfoam.md``, section MD1D3D). Not the
-    native default N=20 (~13 s): conformance runs several plans per check,
-    and this record's own coarsest committed study point is already a
-    fast, real, non-invented resolution."""
+    """Coarsest coupledConvergence point, not the native N=20 (~13 s per run)."""
     require_sourced_openfoam("blockMesh", "cardiacFoam")
     return ConformanceTarget(
         plugin="cardiacfoam",
@@ -416,10 +328,7 @@ def manufactured_monodomain_1d3d_conformance_target(tmp_path: Path) -> Conforman
 
 
 def niederer2011_conformance_target(tmp_path: Path) -> ConformanceTarget:
-    """``niederer2011`` (hex route) at the coarsest resolution its own
-    ``cartesianConvergence`` study defines (dx 0.5 mm -> cells (40 6 14)),
-    the native ``endTime`` (0.015 s) left unchanged so the real run stays a
-    few seconds long."""
+    """Hex route at the coarsest cartesianConvergence dx (0.5 mm); a few seconds."""
     require_sourced_openfoam("blockMesh", "cardiacFoam")
     return ConformanceTarget(
         plugin="cardiacfoam",
