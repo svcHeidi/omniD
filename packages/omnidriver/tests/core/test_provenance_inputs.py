@@ -1,8 +1,6 @@
 """Canonical input enumeration: which on-disk files, case scripts, and runtime dependencies a workflow run actually consumes.
 
-Classification is by consumption, not authorship: an unclassified file
-defaults to required_input, since a spurious refusal is recoverable and a
-silent stale replay is not.
+Classification is by consumption, not authorship: an unclassified file defaults to required_input.
 """
 
 from __future__ import annotations
