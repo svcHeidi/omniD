@@ -88,6 +88,7 @@ def require_sourced_openfoam(*commands: str) -> None:
 HUMAN_SLAB_UTILITIES = (
     "setCardiacConductivity", "setCardiacAnatomy", "setPurkinjeSlab", "setPurkinjeMorphometry",
 )
+TREE_UTILITIES = ("setCardiacConductivity", "setCardiacAnatomy", "generatePurkinjeTree")
 
 
 def human_slab_conformance_target(tmp_path: Path) -> ConformanceTarget:
@@ -115,4 +116,53 @@ def human_slab_conformance_target(tmp_path: Path) -> ConformanceTarget:
         environment={},
         # Real utilities over a real anatomy bundle; generous but bounded.
         timeout_s=900.0,
+    )
+
+
+def _idealized_target(
+    record: str, tmp_path: Path, *, utilities: tuple[str, ...], timeout_s: float,
+) -> ConformanceTarget:
+    """Every idealized-heart variant shares one native mesh (no supplied
+    input at all -- design §3's own "native location" pattern) and one
+    physics phase (setCardiacConductivity + setCardiacAnatomy), so C4/C7's
+    patch/sweep keys are the same real, pre-existing `setCardiacAnatomyDict`
+    entries for all three (step S4)."""
+    require_sourced_openfoam(*utilities)
+    return ConformanceTarget(
+        plugin="cardiaccore",
+        record=record,
+        cases_root=native_cardiaccore_tree(),
+        scratch_root=tmp_path / "scratch",
+        base_study={},
+        patch=("system/setCardiacAnatomyDict:zApicalMid", 0.30),
+        untouched=("system/setCardiacAnatomyDict", ("zMidBasal",)),
+        sweep_name="system/setCardiacAnatomyDict:zApexCap",
+        sweep_values=(0.06, 0.10),
+        unknown_name="system/setCardiacAnatomyDict:zApicalMi",
+        solver_command="setCardiacConductivity",
+        environment={},
+        timeout_s=timeout_s,
+    )
+
+
+def idealized_heart_conformance_target(tmp_path: Path) -> ConformanceTarget:
+    """``idealizedHeart``: conductivity + anatomy + slab + morphometry, on
+    the idealized mesh -- no supplied input needed."""
+    return _idealized_target("idealizedHeart", tmp_path, utilities=HUMAN_SLAB_UTILITIES, timeout_s=300.0)
+
+
+def idealized_heart_endocardial_conformance_target(tmp_path: Path) -> ConformanceTarget:
+    """``idealizedHeartEndocardial``: conductivity + anatomy +
+    generatePurkinjeTree (LV/RV allLeaves+endocardial)."""
+    return _idealized_target("idealizedHeartEndocardial", tmp_path, utilities=TREE_UTILITIES, timeout_s=300.0)
+
+
+def idealized_heart_pig_transmural_conformance_target(tmp_path: Path) -> ConformanceTarget:
+    """``idealizedHeartPigTransmural``: conductivity + anatomy + morphometry
+    + generatePurkinjeTree (LV weightedField+transmural, RV
+    allLeaves+transmural)."""
+    return _idealized_target(
+        "idealizedHeartPigTransmural", tmp_path,
+        utilities=("setCardiacConductivity", "setCardiacAnatomy", "setPurkinjeMorphometry", "generatePurkinjeTree"),
+        timeout_s=300.0,
     )

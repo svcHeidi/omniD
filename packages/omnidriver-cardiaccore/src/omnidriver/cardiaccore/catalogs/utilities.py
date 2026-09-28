@@ -107,7 +107,12 @@ UTILITY_MANIFESTS = {
             ProducesEntry("lv_endo_faces", "constant/polyMesh/sets/LVEndoFaces", "openfoam_face_set", "Generated LV endocardial face set", "generatePurkinjeTree"),
             ProducesEntry("rv_endo_faces", "constant/polyMesh/sets/RVEndoFaces", "openfoam_face_set", "Generated RV endocardial face set", "generatePurkinjeTree"),
             ProducesEntry("epi_faces", "constant/polyMesh/sets/EpiFaces", "openfoam_face_set", "Generated epicardial face set", "generatePurkinjeTree"),
-            ProducesEntry("rv_septal_endo_faces", "constant/polyMesh/sets/RVSeptalEndoFaces", "openfoam_face_set", "Generated RV septal-recovery face set", "generatePurkinjeTree"),
+            # Added 2026-09-28 (step S4): optional=True, not required -- generatePurkinjeTree's
+            # own README says it is built only under `coordinateSystem uvc` (the RV-facing
+            # septal surface needs recovering there); `cobiveco` (the idealized-heart records)
+            # needs no septal recovery and never constructs it, confirmed running a real
+            # generatePurkinjeTree over a cobiveco case.
+            ProducesEntry("rv_septal_endo_faces", "constant/polyMesh/sets/RVSeptalEndoFaces", "openfoam_face_set", "Generated RV septal-recovery face set (uvc only)", "generatePurkinjeTree", optional=True),
             ProducesEntry("purkinje_vtk", "postProcessing/generatePurkinjeTree/purkinje.vtk", "vtk_polydata", "Glued solver-facing Purkinje tree", "generatePurkinjeTree"),
             ProducesEntry("lv_purkinje_vtk", "postProcessing/generatePurkinjeTree/lv-purkinje.vtk", "vtk_polydata", "LV inspection tree", "generatePurkinjeTree"),
             ProducesEntry("rv_purkinje_vtk", "postProcessing/generatePurkinjeTree/rv-purkinje.vtk", "vtk_polydata", "RV inspection tree", "generatePurkinjeTree"),
