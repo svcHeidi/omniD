@@ -137,13 +137,12 @@ def test_loading_an_ambiguous_name_fails_loudly(monkeypatch) -> None:
         plugin_discovery.load_discovered_plugin("fakeplugin")
 
 
-# -- Solver-tier root detection (Task 9's second correction) ------------------
+# -- Solver-tier root detection -----------------------------------------------
 #
-# `_default_selection` used to compose every unambiguous adapter together
-# unconditionally. These fakes are `MinimalTestPlugin` with a chosen
-# `plugin_id` and `requires:`, so the graph these tests exercise (one shared
-# "environment" id, one or two "solver" ids that only require it) does not
-# depend on any real adapter package being installed.
+# These fakes are `MinimalTestPlugin` with a chosen `plugin_id` and
+# `requires:`, so the graph these tests exercise (one shared "environment"
+# id, one or two "solver" ids that only require it) does not depend on any
+# real adapter package being installed.
 
 
 class _NamedTestPlugin(MinimalTestPlugin):

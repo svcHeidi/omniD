@@ -1,28 +1,8 @@
 """A mutation request names its mode, its owner, and its sources.
 
-Two creation modes with different prerequisites, deliberately not collapsed:
-
-``clone_and_patch``  an existing case is edited. Source: that case.
-``synthesize``       a case is built from a catalog. Needs explicit source
-                     artifacts -- a mesh, a template tree -- which a patch does
-                     not.
-
-The refuted draft had two kinds, ``patch`` and ``synthesize``, and described
-them as "the same operation at different arities". They are not: a synthesis
-with no source artifact declared is a case built from nothing, and that is how
-asset-free synthesis came to look like a supported mode.
-
-**Corrected 2026-09-23 (Phase 3 Task 1):** a third mode, ``generated_input``,
-lived here between Phase 2 and Phase 3, with its own invented prerequisite
-(exactly one distinct document) manufactured so it would differ from
-``clone_and_patch`` -- review R2 had found the two "distinct in name only".
-Counting production consumers (`grep -rn "generated_input" packages/*/src/`)
-found zero: no adapter ever declared support for it, no renderer ever handled
-it, and neither production constructor of a `CaseMutationRequest` ever built
-one. It was removed along with its prerequisite; the tests that exercised
-that prerequisite are replaced below by one asserting the mode is now simply
-unknown, per this repository's rule that a removed mode's refusal test gets
-replaced, not deleted.
+Two creation modes, deliberately not collapsed: ``clone_and_patch`` edits an
+existing case (source: that case); ``synthesize`` builds one from a catalog
+and needs explicit source artifacts (a mesh, a template tree).
 """
 
 from pathlib import Path
@@ -57,15 +37,6 @@ def test_an_unsupported_mode_is_refused_by_name():
 
 
 def test_generated_input_is_no_longer_a_supported_mode():
-    """Phase 3 Task 1, 2026-09-23: `generated_input` had no production
-    consumer (see the module docstring's dated note) and was removed from
-    `MUTATION_MODES`. This replaces the three tests that used to assert its
-    invented single-document prerequisite
-    (`test_generated_input_with_no_parameters_is_refused`,
-    `test_generated_input_with_more_than_one_document_is_refused`,
-    `test_generated_input_with_exactly_one_document_is_accepted`) -- removing
-    a mode means the refusal test is replaced by one asserting the mode is
-    unknown, not deleted outright."""
     with pytest.raises(ValueError, match="generated_input"):
         case_write.CaseMutationRequest(
             mode="generated_input", case_root=Path("/tmp/case"),
@@ -189,36 +160,13 @@ def test_a_value_not_matching_its_declared_kind_is_refused():
         )
 
 
-# --- R2 finding 7: each mode's stated prerequisite is enforced, not merely
-# documented. Decided per mode: `clone_and_patch` means at least one parameter
-# (a patch that patches nothing is not a creation, it is a no-op masquerading
-# as one); `synthesize` already required a non-empty source_artifacts, and
-# now every declared artifact must be a real, non-whitespace identifier -- an
-# empty string names nothing. `generated_input`'s invented "exactly one
-# document" prerequisite was removed 2026-09-23 along with the mode itself
-# (Phase 3 Task 1) -- see `test_generated_input_is_no_longer_a_supported_mode`
-# above and the module docstring's dated note. ---
+# Each mode's stated prerequisite is enforced, not merely documented:
+# `clone_and_patch` needs at least a parameter or a source artifact (a patch
+# that names neither is a no-op masquerading as a mutation); `synthesize`
+# needs a non-empty, non-whitespace source_artifacts.
 
 
 def test_a_patch_with_no_parameters_is_refused():
-    """Reconsidered 2026-09-23 (Phase 3 Task 1): kept. The one production
-    caller that could produce a zero-parameter patch
-    (`cardiaccore.workflows.overrides.apply_input_overrides_planned`) already
-    returns `None` before constructing a request when its overrides resolve
-    to nothing -- it does not rely on this guard to catch a real
-    zero-parameter patch. No caller needs this rule relaxed.
-
-    **Corrected 2026-09-23 (Phase 3 Task 7):** that last sentence no longer
-    holds -- `heart_solver_comparison` was a real zero-parameter
-    `clone_and_patch` caller (see
-    `test_a_clone_and_patch_request_with_no_parameters_but_a_source_artifact_is_accepted`
-    below). The rule was widened, not dropped: a request with *neither* a
-    parameter *nor* a source artifact -- this test -- still names nothing it
-    did, and is still refused.
-
-    **Corrected 2026-09-24:** `heart_solver_comparison` was deleted (it
-    pointed at no native case); the widened rule stays regardless, since a
-    future `clone_and_patch` whole-file swap would need it again."""
     with pytest.raises(ValueError, match="at least one"):
         case_write.CaseMutationRequest(
             mode="clone_and_patch", case_root=Path("/tmp/case"),
@@ -228,11 +176,6 @@ def test_a_patch_with_no_parameters_is_refused():
 
 
 def test_a_clone_and_patch_request_with_no_parameters_but_a_source_artifact_is_accepted():
-    """Phase 3 Task 7's widened invariant: a `clone_and_patch` request that
-    assigns no `ParameterAssignment` at all still declares a real mutation
-    when it names a source artifact -- the shape the now-deleted
-    `heart_solver_comparison` motivated this widening with (whole template
-    files copied in verbatim, no key/value edits)."""
     request = case_write.CaseMutationRequest(
         mode="clone_and_patch", case_root=Path("/tmp/case"),
         adapter_id="org.a", workflow="w",

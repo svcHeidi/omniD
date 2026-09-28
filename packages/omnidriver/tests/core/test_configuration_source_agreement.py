@@ -138,23 +138,7 @@ def test_tutorial_record_entry_is_case_sourced(tmp_path: Path) -> None:
 
 
 def test_factory_tutorial_entry_is_document_sourced(tmp_path: Path) -> None:
-    """A registered factory tutorial's config lives in the document (§3: "a
-    tutorial is a data record" is the RECORD shape; a factory spec's is
-    not) -- ``configurationSource`` must be "document", and both
-    ``validate_run`` and the plugin's declared schema still apply (unlike
-    the two case-sourced kinds above).
-
-    Corrected 2026-09-28 (step S5): no adapter in this repository declares a
-    real factory tutorial any more -- cardiacFOAM's and openCARP's own last
-    ones were deleted earlier (see this test's own prior revisions), and
-    cardiacCore's (``cardiaccore/workflows/preprocessing.py``) went with
-    step S5's factory deletion, the last holdout. The "document-sourced"
-    contract itself is still real core behaviour with real callers
-    (``run_document_adapter``/``run_document_exec``), so it is tested here
-    against a synthetic factory-shaped spec (a real, catalog-backed
-    ``DictEntry``, a real ``TutorialSpec`` with no ``generic_case`` marker)
-    rather than skipped for want of a live adapter fixture.
-    """
+    """Tested against a synthetic factory-shaped spec, since no adapter declares a real factory tutorial."""
     from omnidriver.core.contracts.dictionary import DictEntry
     from omnidriver.core.runtime.models import TutorialSpec
 

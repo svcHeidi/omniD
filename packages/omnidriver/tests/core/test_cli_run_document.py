@@ -329,24 +329,7 @@ def invalid_run_document_report() -> dict:
 
 
 def test_every_diagnostic_carries_the_same_five_fields(invalid_run_document_report) -> None:
-    """An agent repairs against one shape or it repairs against none.
-
-    ``run_document_exec._diag`` used to drop ``source`` even when
-    re-serializing a ``StrictDiagnostic`` that had one, so the same logical
-    error reached an agent with four fields from one path and five from
-    another. This is the run-document CLI's own regression gate for Phase 0
-    Task 10's "one diagnostic shape".
-
-    Corrected 2026-09-20: the plan this test was written from
-    (``docs/superpowers/plans/2026-09-20-phase0-contract-coherence.md``
-    Task 10) assumed the payload split diagnostics into
-    ``validation_diagnostics``/``workflow_diagnostics``/
-    ``configuration_diagnostics`` keys. That three-key split is
-    ``strict_planning.StrictPlanningReport``'s shape (the ``plan --strict``
-    report), not this one -- the ``--run-document`` CLI path
-    (``cli._context_from_run_document``) emits one flat ``diagnostics``
-    list instead, so this test reads that.
-    """
+    """Reads the flat ``diagnostics`` list the ``--run-document`` CLI path emits, not ``StrictPlanningReport``'s three-key shape."""
     expected = {"level", "code", "message", "source", "field"}
     diagnostics = invalid_run_document_report["diagnostics"]
     assert diagnostics, invalid_run_document_report

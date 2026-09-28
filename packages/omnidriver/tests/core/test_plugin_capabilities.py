@@ -41,17 +41,10 @@ def test_context_exposes_focused_adapters_without_replacing_public_plugin(
     assert context.providers == (plugin,)
     assert context.capabilities.generic_case_factory.factory() is None
     assert context.capabilities.dictionaries.entries() == ()
-    # Corrected 2026-09-22 (Task 10): this used to assert
-    # `manifest.manifest() == plugin.get_capabilities()` -- true only because
-    # `MinimalTestPlugin.get_capabilities()` happened to return `{}` and
-    # `manifest()` was a bare pass-through of whatever the plugin built
-    # itself. Core now builds `allowed_commands`/`samplable_fields` itself
-    # from the SAME composed reads a plugin's own get_capabilities() used to
-    # gather privately, and merges in only what a plugin's own
-    # get_capabilities() adds (nothing, for this plugin). Building the
-    # expected value the same way core does is the real assertion now: that
-    # core no longer needs the plugin to hand back an already-assembled
-    # manifest.
+    # Builds the expected manifest the same way core does, from the composed
+    # capability reads, rather than comparing against the plugin's own
+    # get_capabilities() -- core no longer needs a plugin to hand back an
+    # already-assembled manifest.
     command_authorization = context.capabilities.command_authorization
     case_introspection = context.capabilities.case_introspection
     conventions = context.capabilities.case_runtime_conventions.conventions()
@@ -175,13 +168,7 @@ def test_capability_adapter_preserves_plugin_exceptions(tmp_path: Path) -> None:
 
 
 def test_config_value_reader_is_none_for_a_plugin_that_declares_nothing() -> None:
-    """ConfigValueCapability's fallback is `none`: absence means `None`.
-
-    Added 2026-09-20 (Phase 0 Task 9), alongside the Protocol itself --
-    `get_config_value_reader` had no capability at all before this, so
-    nothing exercised the adapter's behaviour for a plugin that never
-    implements the hook.
-    """
+    """ConfigValueCapability's fallback is `none`: absence means `None`."""
     plugin = MinimalTestPlugin()
     context = driver_context(plugin, source="test")
 
@@ -189,8 +176,7 @@ def test_config_value_reader_is_none_for_a_plugin_that_declares_nothing() -> Non
 
 
 def test_config_value_reader_calls_through_to_the_plugin_hook() -> None:
-    """When a plugin implements the hook, the adapter returns its callable
-    unchanged -- it does not wrap or reinterpret it."""
+    """The adapter returns the plugin's callable unchanged; it does not wrap or reinterpret it."""
 
     def _read(path, key):
         del path, key
@@ -209,15 +195,7 @@ def test_config_value_reader_calls_through_to_the_plugin_hook() -> None:
 
 
 def test_dict_key_scanner_uses_the_fallback_for_a_plugin_that_declares_nothing() -> None:
-    """DictKeyScannerCapability's fallback is absent_dict_key_scanner: absence
-    means an empty drift report, not an AttributeError.
-
-    Added 2026-09-22 (Task 11), alongside the Protocol itself --
-    `get_dict_key_scanner` had no capability at all before this; strict
-    planning imported and called `compatibility.absent_dict_key_scanner`
-    directly at module scope, so nothing exercised the adapter's own
-    fallback routing.
-    """
+    """DictKeyScannerCapability's fallback is absent_dict_key_scanner: absence means an empty drift report, not an AttributeError."""
     plugin = MinimalTestPlugin()
     context = driver_context(plugin, source="test")
 

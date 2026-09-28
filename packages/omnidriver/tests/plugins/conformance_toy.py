@@ -419,17 +419,14 @@ class DefaultRoutePlugin(E2ERecordPlugin):
 
 
 WITH_INPUT_PLUGIN = "plugins.conformance_toy:WithInputPlugin"
-#: The one file step S's toy bundle carries, and the destination its
-#: record's ``anatomy`` input writes it to.
+#: The one file the toy bundle carries, and the destination its record's
+#: ``anatomy`` input writes it to.
 INPUT_BUNDLE_FILE = "bundle.json"
 INPUT_DESTINATION = "0/bundle.json"
 
 
 class WithInputPlugin(E2ERecordPlugin):
-    """Its record declares one input with no native location (step S,
-    design 2026-09-28-supplied-inputs §2.1): a toy stand-in for cardiacCore's
-    anatomy bundle. ``solve`` consumes the input's destination, so C8 covers
-    it and C11 expects it carried, never taken from the case folder."""
+    """Declares one input with no native location, a toy stand-in for cardiacCore's anatomy bundle; covers conformance C8/C11."""
 
     def get_tutorial_records(self):
         return {"toyTutorial": TutorialRecord(

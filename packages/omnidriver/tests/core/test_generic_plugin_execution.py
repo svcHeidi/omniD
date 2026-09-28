@@ -101,38 +101,14 @@ def test_run_document_rejects_a_mismatched_supplied_plugin(tmp_path: Path) -> No
     )
 
     assert inputs is None
-    # Corrected 2026-09-20 (Phase 0 Task 10): diagnostics are now the
-    # canonical `StrictDiagnostic` dataclass, not `{code: ...}` dicts.
+    # Diagnostics are the canonical StrictDiagnostic dataclass, not {code: ...} dicts.
     assert [item.code for item in diagnostics] == ["plugin_identity_mismatch"]
 
 
 def test_cli_context_from_run_document_rejects_a_mismatched_supplied_plugin(
     tmp_path: Path, capsys,
 ) -> None:
-    """Final whole-branch review, Finding 2 (2026-09-22): `cli.py`'s own
-    identity gate (`_context_from_run_document`, checked before
-    `build_execution_inputs`'s twin gate ever runs) used to compare
-    `id`/`version`/`api_version` -- keys `StackIdentity.to_json()` never
-    emits, so `planned.get(key) != selected.get(key)` was always
-    `None != None` -> `False`. Only the fourth, `capability_digest`, was a
-    real (and, alone, already sufficient) comparison -- so a digest mismatch
-    alone does not distinguish old from new code. What genuinely
-    distinguishes them is a `resolutions` mismatch presented alongside an
-    UNCHANGED `capability_digest`: contrived (a real digest folds
-    `resolutions` in, so the two cannot really diverge), but it isolates
-    exactly the bug -- proof the `resolutions` comparison itself is now
-    wired in, not just present in the tuple's reasoning comment.
-
-    Confirmed by running this test against the pre-fix code (`git stash` on
-    `cli.py` alone): the old gate let the document through with no error at
-    all from itself, and this document was *only* rejected because
-    `build_execution_inputs`'s own (already-correct) twin gate caught it one
-    call later, via a `plugin_identity_mismatch` diagnostic -- not because
-    `_context_from_run_document`'s own gate, the one this test targets,
-    did its job. `result is None` was therefore true either way; this test
-    additionally pins the top-level ``error`` message so it fails the way
-    Finding 2 actually regresses, not just on the coarser return-value check.
-    """
+    """Pins the top-level error message from `_context_from_run_document`'s own identity gate, since `result is None` alone would also pass via `build_execution_inputs`'s twin gate."""
     import argparse
 
     from omnidriver.cli import _context_from_run_document

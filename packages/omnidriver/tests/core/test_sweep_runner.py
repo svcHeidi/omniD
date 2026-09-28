@@ -25,22 +25,10 @@ from omnidriver.core.runtime.sweep_manifest import CaseManifestEntry, compute_ov
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError
 from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 
-# Phase 2 Task 5b / test-ownership split: this file used to require
-# omnidriver-cardiacfoam (its specs were cardiac vocabulary throughout --
-# a real tutorial entry name, ionic models, electro/physics selectors) and
-# was hidden from core's collection behind an importorskip. The remaining
-# fixture names below are now neutral placeholders (review's own vocabulary
-# cleanup, 2026-09-24) -- they never named real cardiac routing to begin
-# with. The 11 tests that genuinely
-# exercise real cardiac routing/materialization moved to
-# packages/omnidriver-cardiacfoam/tests/test_sweep_runner.py, where they run
-# against the real plugin. What remains here either never reaches routing at
-# all (entry-mode tests mock load_entry_spec; the over-cap/hash-mismatch
-# tests raise before any per-case work), or mocks
-# omnidriver.core.runtime.sweep_runner.route_case_values directly and uses
-# content-free axis vocabulary -- so it needs only *a* plugin, not the
-# cardiac one, to prove core's own sweep bookkeeping (resume/fresh/retry/
-# timeout/archive) still works.
+# Uses neutral placeholder plugins, not cardiacFoam: this file proves core's
+# own sweep bookkeeping (resume/fresh/retry/timeout/archive), not cardiac
+# routing/materialization, which is tested against the real plugin in
+# packages/omnidriver-cardiacfoam/tests/test_sweep_runner.py.
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from plugins.declared_case_plugin import DeclaredCasePlugin
 from plugins.resume_test_plugin import ResumeTestPlugin
@@ -438,15 +426,9 @@ def test_a_factory_that_ignores_the_staging_overrides_is_refused(tmp_path):
 
 
 def test_sweep_run_entry_mode_executes_run_document_sequentially(tmp_path):
-    # Because case_mutation mutates the tutorial's shared case_root in place,
-    # entry-mode sweep-run must process cases strictly one at a time (never
-    # in parallel) -- already guaranteed by sweep_run's plain synchronous
-    # for-loop, verified here by asserting case_mutation/subprocess.run calls
-    # happen in resolved-case order.
-    # Corrected 2026-09-24: case_mutation no longer mutates a shared
-    # case_root; each case is staged and mutated in its own copy, and a
-    # factory that ignores staging is refused. Sequential order still
-    # matters and is what this asserts.
+    # Each case is staged and mutated in its own copy; sweep_run's plain
+    # synchronous for-loop still must process them in resolved-case order,
+    # verified here via the case_mutation/subprocess.run call order.
     spec_path = tmp_path / "sweep.json"
     _write_entry_spec(spec_path)
     output_dir = tmp_path / "out"

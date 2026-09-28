@@ -32,19 +32,7 @@ def test_no_patterns_leave_the_file_untouched(tmp_path):
 
 
 def test_a_plugin_declared_pattern_redacts_the_real_workflow_runner_s_kept_log(tmp_path):
-    """K9 end to end, through a toy plugin whose solve step prints a fake credential
-    URL -- standing in for openCARP's build header, which embeds a real CI
-    token in every run (G3) -- and declares ``get_log_redaction_patterns``.
-    Runs through the real, unmodified workflow runner (conformance C6, the
-    same path ``omnidriver run`` takes), not a direct call to
-    ``redact_step_logs``, so a wiring mistake in ``workflow_runner`` itself
-    would still be caught here.
-
-    Corrected 2026-09-25: this said no openCARP plugin existed on this
-    branch; it does now, and ``packages/omnidriver-opencarp/tests/
-    test_conformance_native.py::test_no_token_survives_in_workflow_logs``
-    proves the same against the real binary. This toy test keeps core's own
-    proof independent of any solver."""
+    """Runs through the real workflow runner (conformance C6), not a direct call to `redact_step_logs`, so a wiring mistake there is still caught."""
     from omnidriver.conformance import run_check
     from plugins.conformance_toy import FAKE_CREDENTIAL_URL, LOG_REDACTION_PLUGIN, toy_conformance_target
 

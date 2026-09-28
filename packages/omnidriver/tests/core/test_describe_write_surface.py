@@ -1,11 +1,7 @@
-"""`describe`'s write surface (Phase 2 Task 13,
-docs/superpowers/plans/2026-09-20-phase2-one-write-channel.md).
+"""`describe`'s write surface.
 
-The plan's own sketched test imports `CATALOG.entries` directly -- cardiac
-vocabulary a core test must not import. Corrected 2026-09-23: this uses a
-fake plugin double (the same pattern `test_case_writer_capability.py`
-already uses via `plugin_capabilities.adapt_plugin_capabilities`), not a
-real adapter's catalog.
+Uses a fake plugin double, not a real adapter's catalog: a core test must
+not import cardiac vocabulary. See `test_case_writer_capability.py`.
 """
 from __future__ import annotations
 
@@ -155,9 +151,7 @@ def test_a_spec_with_no_case_mutation_falls_back_with_a_stated_reason():
     assert described["proposed_changes_source"] == "supplied_qualified_ids_only"
     assert "no case_mutation" in described["proposed_changes_reason"]
     assert described["expected_effects"] == []
-    # The fallback path's own items are enriched with an explicit "operation"
-    # (Task 9) -- previously absent, since a flat qualified-id match can only
-    # ever represent a "set".
+    # A flat qualified-id match can only ever represent a "set".
     assert described["proposed_changes"][0]["operation"] == "set"
 
 

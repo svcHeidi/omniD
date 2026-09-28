@@ -153,14 +153,9 @@ class TestBuildExecutionInputsDiagnostics(unittest.TestCase):
         self.assertIn("invalid_workflow_state", codes)
 
     def test_every_diagnostic_has_required_keys(self) -> None:
-        # Corrected 2026-09-20 (Phase 0 Task 10): `build_execution_inputs`
-        # used to emit plain `{level, code, message, field}` dicts
-        # (`run_document_exec._diag`, no `source`); it now returns the one
-        # canonical shape, `core.planning_types.StrictDiagnostic`
-        # (`level, code, message, source, field`). See also
-        # test_cli_run_document.py::
-        # test_every_diagnostic_carries_the_same_five_fields for the same
-        # guard at the CLI/JSON boundary.
+        # The canonical shape is core.planning_types.StrictDiagnostic
+        # (level, code, message, source, field); see also
+        # test_cli_run_document.py::test_every_diagnostic_carries_the_same_five_fields.
         doc = _minimal_doc(workflowDag=None, launch={})
         _inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
         expected = {"level", "code", "message", "source", "field"}

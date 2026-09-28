@@ -1773,12 +1773,7 @@ def test_preview_record_case_refuses_when_the_stack_has_no_config_value_reader(t
 
 
 class _DeclaresNoneOfTheFourHooks(MinimalTestPlugin):
-    """Unlike plain `MinimalTestPlugin` -- which always implements all four
-    hooks, just returning empty/None defaults -- this plugin declares NONE
-    of them at all, the shape a pre-2026-09-24 plugin actually has.
-    Corrected 2026-09-26 (record-scoped axes): three hooks now; the fourth,
-    ``get_axis_catalog``, left the contract, and a plugin declaring it at
-    all is refused at load."""
+    """Unlike `MinimalTestPlugin`, which implements all three hooks with empty/None defaults, this plugin declares none of them."""
 
     get_tutorial_records = None
     get_record_key_validator = None
@@ -1786,11 +1781,7 @@ class _DeclaresNoneOfTheFourHooks(MinimalTestPlugin):
 
 
 def test_tutorial_record_capability_seams_call_no_legacy_fallback_when_absent():
-    """M1: legacy_tutorial_records, legacy_axis_catalog,
-    legacy_record_key_validation, and legacy_case_value_comparator are
-    deleted outright, not merely unused -- the four capabilities they used
-    to back are `:fallback: none`, like ConfigValueCapability/
-    CaseWriterCapability, and their adapters return None directly."""
+    """The four legacy_* fallbacks are deleted outright, not merely unused; their adapters return None directly."""
     for legacy_name in (
         "legacy_tutorial_records", "legacy_axis_catalog",
         "legacy_record_key_validation", "legacy_case_value_comparator",

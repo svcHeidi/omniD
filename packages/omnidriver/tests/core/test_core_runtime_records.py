@@ -31,24 +31,7 @@ def _tree(root: Path) -> list[str]:
 
 
 def test_core_names_every_file_it_writes_into_a_case():
-    """Corrected 2026-09-26 (R1 fix, finding I3): two names were missing --
-    the remediation-transaction marker and its directories
-    (``runtime.remediation_transaction``). The expected set is now derived
-    from each owning module's own constant, not restated as a literal, so a
-    name missing from ``CORE_RUNTIME_RECORDS`` still fails this even if it
-    is also missing here.
-
-    Corrected again 2026-09-26 (final review M6): "derived from each
-    owning module's own constant" was true for two of the seven names and
-    restated as a literal for the rest (``workflow_state.json``,
-    ``run_document.json``, ``sweep_manifest.json``, ``case_record.json``,
-    ``workflow_logs``) -- both here and in ``CORE_RUNTIME_RECORDS`` itself.
-    Every name below is now imported from its owner
-    (``workflow_orchestrator.STATE_FILENAME``/``WORKFLOW_LOGS_DIRNAME``,
-    ``run_document_exec.RUN_DOCUMENT_FILENAME``,
-    ``sweep_manifest.SWEEP_MANIFEST_FILENAME``,
-    ``postprocess_phase.CASE_RECORD_FILENAME``), so a rename at the owner
-    is what this test would actually catch."""
+    """Every expected name is imported from its owning module's constant, so a rename there is what this test catches."""
     assert set(CORE_RUNTIME_RECORDS.generated_file_names) == {
         STATE_FILENAME, RUN_DOCUMENT_FILENAME, SWEEP_MANIFEST_FILENAME, CASE_RECORD_FILENAME,
         ATTEMPT_LOCK_FILENAME, ATTEMPT_LOCK_GUARD_FILENAME, REMEDIATION_MARKER_NAME,

@@ -112,9 +112,6 @@ def test_openfoam_never_resolves_an_implicit_driver_context() -> None:
 # miss functions or fire on unrelated same-named calls; an explicit list is
 # greppable, and _test_the_guarded_names_still_exist below fails loudly if one
 # of these stops existing rather than letting the guard quietly shrink.
-# Corrected 2026-09-26 (spec 2026-09-26 A6): get_heterogeneity_models and
-# get_electro_property_entry_groups were listed here; they moved to
-# omnidriver.cardiacfoam.dict_entries, so core has none of theirs to call.
 _CONTEXT_TAKING_PUBLIC_EDGE = {
     "materialize_case": "omnidriver.sweep_materialize",
     "route_case_values": "omnidriver.sweep_routing",
@@ -184,8 +181,6 @@ def test_core_threads_its_context_through_the_public_edge() -> None:
 # from a wheel install. Written out explicitly, like
 # _CONTEXT_TAKING_PUBLIC_EDGE above, with a companion test that fails if a
 # name here stops existing -- a guard naming nothing guards nothing.
-# Corrected 2026-09-26 (spec A6): cardiacfoam_monorepo_root was listed here;
-# it moved to omnidriver.cardiacfoam.monorepo, so core cannot call it.
 _ROOT_INVENTING = {"repo_root_default"}
 
 # capability_seams.architecture_path() legitimately needs a checkout: it

@@ -59,12 +59,8 @@ class TestCliSweepActions(unittest.TestCase):
                 "sweep-plan", "--spec", "paperI_methods.json", "--scratch-dir", "/tmp/od-scratch",
             ]) == 0
 
-        # Was `.tmp/driverfoam/sweeps/...` INSIDE the repository, which is
-        # unwritable on a read-only install and solver-branded, then
-        # `<cases root>/.omnidriver/sweeps/...`. Corrected 2026-09-26: the
-        # scratch root is supplied (--scratch-dir / OMNIDRIVER_SCRATCH_DIR) or
-        # refused -- still deliberately not the OS temp directory by default,
-        # since sweep outputs default under it.
+        # Not the OS temp directory by default: sweep outputs default under
+        # the scratch root, so having the OS reap it would be worse.
         assert str(mock_fn.call_args.kwargs["output_dir"]) == str(
             Path("/tmp/od-scratch") / "sweeps" / "paperI_methods"
         )
@@ -78,12 +74,8 @@ class TestCliSweepActions(unittest.TestCase):
                 "sweep-run", "--spec", "paperI_methods.json", "--scratch-dir", "/tmp/od-scratch",
             ]) == 0
 
-        # Was `.tmp/driverfoam/sweeps/...` INSIDE the repository, which is
-        # unwritable on a read-only install and solver-branded, then
-        # `<cases root>/.omnidriver/sweeps/...`. Corrected 2026-09-26: the
-        # scratch root is supplied (--scratch-dir / OMNIDRIVER_SCRATCH_DIR) or
-        # refused -- still deliberately not the OS temp directory by default,
-        # since sweep outputs default under it.
+        # Not the OS temp directory by default: sweep outputs default under
+        # the scratch root, so having the OS reap it would be worse.
         assert str(mock_fn.call_args.kwargs["output_dir"]) == str(
             Path("/tmp/od-scratch") / "sweeps" / "paperI_methods"
         )

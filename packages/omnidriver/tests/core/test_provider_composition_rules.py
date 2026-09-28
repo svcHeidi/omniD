@@ -10,14 +10,10 @@ from omnidriver.core import provider_stack
 
 
 class _Provider:
-    """Minimal provider; attributes are set per test.
+    """Minimal provider; attributes are set per test."""
 
-    The profile is built ONCE and memoized. Corrected 2026-09-21: it used to be
-    rebuilt per call, so a test that did `p.get_profile().case_files = (rule,)`
-    set the attribute on a throwaway object and composition could never see it.
-    That made `test_a_case_file_path_declared_twice_is_an_error` unsatisfiable
-    by any implementation -- a fixture defect masquerading as a failing rule.
-    """
+    # The profile is built once and memoized, so a test mutating
+    # `.get_profile().case_files` in place actually sticks for composition to see.
 
     def __init__(self, plugin_id, provides=frozenset(), requires=(),
                  case_files=(), **members):
@@ -136,13 +132,7 @@ def test_zero_providers_implementing_a_refusing_hook_still_refuses_by_name():
 
 
 def test_apply_and_target_paths_must_come_from_one_provider():
-    """The refusing-hook rule is CROSS-member, not per-member.
-
-    Added 2026-09-20 after the spike. Split across two providers, before-images
-    are computed by a different provider than the one mutating, and rollback
-    breaks silently. `_OverrideScopeAdapter.target_paths` already enforces this
-    for a single plugin; composition must generalise it, not lose it.
-    """
+    """The refusing-hook rule is CROSS-member, not per-member: split across two providers, rollback would break silently."""
     a = _Provider("org.a", apply_overrides=lambda *a, **k: ())
     b = _Provider("org.b", requires=("org.a",),
                   get_override_target_paths=lambda *a, **k: ())

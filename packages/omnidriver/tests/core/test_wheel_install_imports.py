@@ -197,16 +197,7 @@ print("embedded RunDocument resume evidence rejected after input drift")
 
 
 def _fail_environment(what: str, detail: str) -> None:
-    """Fail loudly, and say the failure is the harness rather than the wheel.
-
-    Added 2026-09-23. Everything before the final assertion builds this test's
-    own environment; none of it says anything about the wheel under test. When
-    that construction broke, it surfaced as a bare CalledProcessError -- and
-    because every step here passes ``check=True, capture_output=True``, the
-    exception carried no output whatsoever. Reading it as a finding about the
-    packaging cost real time. Name the phase and print what the subprocess
-    actually said.
-    """
+    """Fail loudly, naming the failure as the harness (not the wheel) and printing what the subprocess said."""
     pytest.fail(
         f"test environment could not be built ({what}); this is an "
         f"infrastructure failure, not a defect in the wheel:\n{detail}"
@@ -252,13 +243,9 @@ def test_every_core_module_imports_from_a_wheel(tmp_path) -> None:
         "pip install build",
     )
     # setuptools keeps a build/lib cache in the package directory and reuses
-    # it, so a module deleted or MOVED since the last build is still packaged
-    # from that cache. That is not hypothetical: after Phase 2 Task 2 moved
-    # scripts/_rtst_scanner.py to omnidriver-cardiacfoam, a stale build/lib
-    # put the old file back into the wheel and failed this test against a
-    # module the source tree no longer contains. The same staleness can fail
-    # in the other direction and pass a wheel that is missing something.
-    # build/ is gitignored, so nothing else cleans it.
+    # it, so a module deleted or moved since the last build can still be
+    # packaged from that stale cache (in either direction); build/ is
+    # gitignored, so nothing else cleans it.
     shutil.rmtree(_REPO_ROOT / "packages" / "omnidriver" / "build", ignore_errors=True)
     _run_environment_step(
         [str(python), "-m", "build", "--wheel",

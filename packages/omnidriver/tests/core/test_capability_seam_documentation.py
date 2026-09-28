@@ -56,10 +56,8 @@ def _resolve_consumed_by(relpath: str) -> Path | None:
     return None
 
 REQUIRED_FIELDS = ("adapts", "consumed-by", "fallback", "status")
-# The closed tier vocabulary lives on capability_seams.TIERS (Task 1,
-# 2026-09-20) -- this used to hand-duplicate the old free-text values
-# ("mandatory", "optional", "mixed") here, which is exactly the kind of
-# restated fact this repository's tests exist to catch elsewhere.
+# The closed tier vocabulary lives on capability_seams.TIERS; restating it
+# here would be exactly the kind of duplicated fact this test exists to catch.
 VALID_STATUSES = capability_seams.TIERS
 
 CAPABILITY_FIELDS = tuple(plugin_capabilities.PluginCapabilities.__annotations__)

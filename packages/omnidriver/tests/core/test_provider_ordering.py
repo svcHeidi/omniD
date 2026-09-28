@@ -134,15 +134,7 @@ def test_a_missing_requirement_is_refused_by_name():
 
 
 def _fake_with_profile(plugin_id, *, requires=(), case_files=(), **members):
-    """A provider whose ``get_profile()`` returns the SAME object every call.
-
-    Added 2026-09-20 (Phase 1 Task 6). ``test_provider_composition_rules``'s
-    own ``_Provider`` builds a fresh profile object per call, so
-    ``env.get_profile().case_files = (rule,)`` there sets an attribute on a
-    throwaway and nothing downstream can observe it -- which is why that
-    file's case-file test cannot exercise the rule it names. This fixture
-    keeps the profile, so §2.1's one-declarer rule is actually tested.
-    """
+    """A provider whose ``get_profile()`` returns the same object every call, so mutating it after construction is observed."""
     class _Profile:
         pass
 

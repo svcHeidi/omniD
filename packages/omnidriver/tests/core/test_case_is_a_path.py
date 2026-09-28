@@ -99,9 +99,6 @@ def test_a_directory_that_is_not_a_case_is_still_refused(tmp_path: Path) -> None
 
 
 def test_listing_an_empty_directory_returns_nothing(tmp_path: Path) -> None:
-    """Zero results is a legitimate answer to "what cases are here", and must
-    not be a RuntimeError. Before this, core walked up from its own __file__
-    looking for repository markers and raised when it found none."""
     from omnidriver.core.runtime.registry import list_case_directories
 
     ctx = driver_context(MinimalTestPlugin(entrypoint="run-case"), source="test:case-path")
@@ -116,17 +113,13 @@ def test_core_exposes_no_ambient_root_default() -> None:
 
 
 def test_scratch_is_supplied_not_repository_or_workspace_local(tmp_path: Path, monkeypatch) -> None:
-    """`.tmp/driverfoam` wrote inside the repository, which fails on a
-    read-only install and is solver-branded. It then became workspace-local,
-    ``<cases_root>/.omnidriver`` -- which wrote into native tutorials trees.
-    Corrected 2026-09-26 (owner decision): it is supplied or refused, never
-    defaulted -- still deliberately NOT the OS temp directory, because sweep
-    outputs default under it and having the OS reap them would be worse."""
     from omnidriver.core.specs.paths import (
         ScratchRootNotSupplied, default_sweep_output_dir, resolve_scratch_root,
     )
 
     monkeypatch.delenv("OMNIDRIVER_SCRATCH_DIR", raising=False)
+    # Deliberately not the OS temp directory: sweep outputs default under
+    # the scratch root, and having the OS reap them would be worse.
     with pytest.raises(ScratchRootNotSupplied):
         resolve_scratch_root(None)
     with pytest.raises(ScratchRootNotSupplied):

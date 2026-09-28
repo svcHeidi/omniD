@@ -178,14 +178,7 @@ def test_a_config_reader_refusal_comes_back_as_structured_json_naming_document_a
 def test_plan_strict_against_a_read_only_tree_without_a_scratch_dir_refuses_as_json_S_I3(
     tmp_path, capsys, monkeypatch,
 ):
-    """Final review S-I3: a record's scratch defaulted to
-    ``<cases_root>/.omnidriver``. Against a read-only tutorials tree (openCARP's
-    installer leaves its tree root-owned) with ``OMNIDRIVER_SCRATCH_DIR``
-    unset, ``plan --strict`` died with a ``PermissionError`` traceback and
-    empty stdout. Corrected 2026-09-26 (owner decision, fixed): there is no
-    default any more. With nothing supplied the plan is refused as JSON naming
-    ``--scratch-dir`` before anything is written; with one supplied, the
-    read-only tree plans cleanly and is left untouched."""
+    """With a scratch dir supplied, a read-only tutorials tree plans cleanly and is left untouched."""
     import os
     import stat
 

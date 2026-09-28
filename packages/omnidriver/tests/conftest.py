@@ -9,36 +9,25 @@ from omnidriver.core.specs.paths import repo_root_default
 
 
 def _repo_root_or_none() -> Path | None:
-    """The repository root, or ``None`` when there is no checkout.
-
-    ``repo_root_default()`` raises rather than guessing, which is right for
-    runtime code -- silently resolving to the wrong ancestor is worse than
-    failing. But a *test module* that calls it at import time turns "no
-    checkout" into a collection error, which no skipif marker can catch
-    because the module never finishes importing. Eight modules did exactly
-    that, so `pytest packages/omnidriver/tests` could not even be collected
-    against an installed wheel; see scripts/check-wheel-artifact.py.
-    """
+    """The repository root, or ``None`` outside a checkout (e.g. an installed wheel)."""
+    # A module that calls repo_root_default() at import time would turn "no
+    # checkout" into an uncatchable collection error; see check-wheel-artifact.py.
     try:
         return repo_root_default()
     except RuntimeError:
         return None
 
 
-#: The repository root resolved once at collection time. ``None`` when running
-#: against an installed distribution with no checkout above it.
+#: The repository root, resolved once at collection time; ``None`` outside a checkout.
 repo_root: Path | None = _repo_root_or_none()
 
-#: Stand-in so a module-level ``REPO_ROOT / "schemas" / ...`` expression stays
-#: constructible when there is no checkout. Building a Path touches no
-#: filesystem; every test that would dereference it is skipped by
-#: ``skip_without_repo``, so this value is never read.
+#: Placeholder so a module-level ``REPO_ROOT / ...`` expression still constructs
+#: without a checkout; never read, since ``skip_without_repo`` skips first.
 NO_REPO_ROOT = Path("/nonexistent-no-repository-checkout")
 
 #: Apply to any test module that reads files out of the repository itself --
 #: schemas, scripts, ARCHITECTURE.md, the tutorials tree. Distinct from
-#: ``skip_without_monorepo``: that one asks for the *cardiacFoam* tree, this
-#: one only asks that we are running inside a checkout at all.
+#: ``skip_without_monorepo``, which asks for the cardiacFoam tree specifically.
 skip_without_repo = pytest.mark.skipif(
     repo_root is None,
     reason=(
@@ -48,12 +37,9 @@ skip_without_repo = pytest.mark.skipif(
 )
 
 def _cardiacfoam_monorepo_root() -> Path | None:
-    """The cardiacFoam monorepo this repository was extracted from, if this
-    checkout sits inside one: the first ancestor holding both ``tutorials/``
-    and ``applications/``. Test-local since 2026-09-26 (spec A6): shipped
-    core names no solver, and this package's tests cannot import
-    omnidriver-cardiacfoam's copy (``omnidriver.cardiacfoam.monorepo``,
-    deleted 2026-09-28: the C++ source root is supplied now)."""
+    """The cardiacFoam monorepo root, if this checkout sits inside one."""
+    # Local copy, not an import of omnidriver-cardiacfoam: core tests must
+    # not import cardiac vocabulary (scripts/check-import-boundaries.py).
     for parent in Path(__file__).resolve().parents:
         if (parent / "tutorials").exists() and (parent / "applications").exists():
             return parent
@@ -76,39 +62,7 @@ skip_without_monorepo = pytest.mark.skipif(
 
 
 def _default_adapter_resolves() -> bool:
-    """Whether ``default_driver_context()`` resolves to a single clean answer.
-
-    ``default_driver_context()`` raises ``LookupError`` with zero adapters
-    installed (e.g. the ``test-core`` CI job, which installs none). Computed
-    once at collection time, matching ``repo_root``/``monorepo_root`` above.
-
-    **Corrected 2026-09-21 (Phase 1 Task 7).** Two or more adapters used to
-    mean the same ``LookupError``, because a single ``DriverContext.plugin``
-    field could not hold more than one. Composition removed that constraint:
-    several installed adapters are now composed rather than refused, which
-    means the failure this venv actually hits with three real adapters
-    installed together (``cardiacfoam``, ``cardiaccore``,
-    ``openfoam-environment``) is a packaging conflict from
-    ``provider_stack.compose`` -- e.g. two adapters declaring the same
-    case-file path -- surfaced as ``ValueError``, not ``LookupError``. Either
-    way the answer this predicate exists to give is the same: no, there is
-    not a single adapter's worth of semantics to assume implicitly, so a test
-    relying on that assumption must still skip. Catching only ``LookupError``
-    let that ``ValueError`` escape and abort collection for the whole suite
-    instead of skipping the tests that named the assumption.
-
-    **Corrected 2026-09-21 (later the same day, Task 9).** The above
-    correction over-corrected: composing every installed adapter together
-    unconditionally papered over cardiacCore and cardiacFoam -- two mutually
-    independent solver-tier plugins, neither requiring the other -- silently
-    landing in one stack and resolving `single`-shape members like
-    ``build_run_document_config`` by alphabetical accident.
-    ``plugin_discovery._default_selection`` now refuses that specific case by
-    name instead, which raises ``LookupError`` again (not ``ValueError``) for
-    this venv's three real adapters installed together. Both exception types
-    are still caught here, and the conclusion is unchanged either way: no,
-    there is not a single adapter's worth of semantics to assume implicitly.
-    """
+    """Whether ``default_driver_context()`` resolves to a single clean answer."""
     from omnidriver.core.plugin_interface import default_driver_context
 
     try:
@@ -138,20 +92,14 @@ skip_without_single_adapter = pytest.mark.skipif(
 
 @pytest.fixture
 def driver_context_for_installed_plugins() -> list:
-    """A :class:`DriverContext` per discoverable plugin, skipping when none is
-    installed.
-
-    ``plugin_discovery.discover_plugins()`` keys on entry-point name but its
-    values are ``EntryPoint`` objects, not plugin classes -- go through
-    ``load_discovered_plugin`` (which loads the class *and* builds the
-    context via ``driver_context()``) rather than calling ``entry_point()``
-    a second time.
-    """
+    """A :class:`DriverContext` per discoverable plugin, skipping when none is installed."""
     from omnidriver.core import plugin_discovery
 
     discovered = plugin_discovery.discover_plugins()
     if not discovered:
         pytest.skip("no omnidriver.plugins entry points installed")
+    # discover_plugins() values are EntryPoint objects, not plugin classes;
+    # load_discovered_plugin() loads the class and builds the context.
     return [
         plugin_discovery.load_discovered_plugin(name)
         for name in discovered

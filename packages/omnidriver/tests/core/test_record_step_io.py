@@ -117,8 +117,8 @@ def test_a_step_without_its_own_produces_still_takes_the_manifest():
 
 
 # ---------------------------------------------------------------------------
-# Task 1 (results-as-quantities, topic B): ProducedPath -- a produces entry
-# names its own format, read only through WorkflowStep.produced_format.
+# ProducedPath: a produces entry names its own format, read only through
+# WorkflowStep.produced_format.
 # ---------------------------------------------------------------------------
 
 

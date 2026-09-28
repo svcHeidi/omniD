@@ -48,18 +48,13 @@ def test_apply_requires_a_context_rather_than_resolving_one() -> None:
 
 
 def test_the_fallback_reaches_openfoam_with_the_context_it_was_given() -> None:
-    """A plugin with no apply_overrides hook takes absent_apply_overrides.
-
-    Skipped without omnidriver-openfoam, which owns the mutators the fallback
-    delegates to -- the point is the handoff, not the mutation.
-    """
+    """A plugin with no apply_overrides hook takes absent_apply_overrides; skipped without omnidriver-openfoam, which owns the mutators it delegates to."""
     pytest.importorskip(
         "omnidriver.openfoam.apply_overrides",
         reason="omnidriver-openfoam is not installed",
     )
     context = _context()
-    # `.plugin` was the retired single-plugin field (Task 7); `_context()`
-    # builds a one-provider stack, so the sole provider is `.providers[-1]`.
+    # _context() builds a one-provider stack, so the sole provider is providers[-1].
     assert not hasattr(context.providers[-1], "apply_overrides"), (
         "this test exists to exercise the FALLBACK; the minimal plugin must "
         "not implement the hook"

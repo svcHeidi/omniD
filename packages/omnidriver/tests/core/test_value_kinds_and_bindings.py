@@ -129,10 +129,7 @@ def test_a_partially_declared_binding_is_refused():
 
 
 def test_an_undeclared_dynamic_path_is_accepted():
-    """Most placeholders in this catalog (``<name>``, ``<electrode>``, ...)
-    are open-ended, case-author-chosen identifiers with no closed domain.
-    Leaving bindings undeclared entirely is honest, not an unchecked hole:
-    there is nothing to check for an open identifier."""
+    """Leaving bindings undeclared is honest, not an unchecked hole: there is nothing to check for an open, case-author-chosen identifier."""
     entry = dictionary.DictEntry(
         driver_path="$A.<name>.x", description="",
         value_kind="scalar", dynamic_path=True,
@@ -141,10 +138,7 @@ def test_an_undeclared_dynamic_path_is_accepted():
 
 
 def test_an_explicitly_open_domain_is_declared_not_absent():
-    """Corrected 2026-09-23 (Phase 3, the decision closing Task 2's Gap 2):
-    `None` is a legal domain, distinct from the placeholder being absent
-    from `allowed_bindings` altogether -- it is the STATED fact that this
-    placeholder has no closed domain, not silence about it."""
+    """`None` is a legal, stated domain, distinct from the placeholder being absent from `allowed_bindings` altogether."""
     entry = dictionary.DictEntry(
         driver_path="$A.<name>.x", description="",
         value_kind="scalar", dynamic_path=True,
@@ -155,9 +149,7 @@ def test_an_explicitly_open_domain_is_declared_not_absent():
 
 
 def test_an_open_domain_does_not_trip_the_empty_domain_refusal():
-    """`None` (open, declared) must not be confused with `()` (closed, and
-    therefore impossible to satisfy) -- the refusal below exists only for
-    the latter."""
+    """`None` (open, declared) must not be confused with `()` (closed and impossible to satisfy)."""
     entry = dictionary.DictEntry(
         driver_path="$A.<ventKey>.<name>.x", description="",
         value_kind="scalar", dynamic_path=True,

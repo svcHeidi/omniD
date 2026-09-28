@@ -1,31 +1,8 @@
-"""A module-level ``importorskip`` in core's tree hides a whole file.
+"""A module-level ``importorskip`` in core's tree hides a whole file from collection, not merely skips it.
 
-Task 5a converted core to require an explicit ``DriverContext``. Four core test
-files turned out to be inherently cardiac -- they exercise cardiacFoam's
-tutorial catalogue, not core behaviour -- and were given a module-level
-``pytest.importorskip("omnidriver.cardiacfoam...")`` so they skip cleanly in a
-core-only install instead of failing.
-
-That is defensible as an interim step and misleading as an end state. A
-module-level ``importorskip`` is reported by pytest as **one** skip, and the
-file's tests are never collected at all: core's collected count fell 760 -> 725
-while the headline failure count fell 140 -> 87. Roughly two thirds of that
-improvement is tests leaving the suite, not tests passing.
-
-The failure mode this guards is precise. Nothing is red, nothing is obviously
-wrong, and core's suite quietly measures less than it did -- which is the same
-class of false reassurance this repository has produced four times already: an
-import gate scanning only ``core/``, a collection check blind to function-scoped
-imports, a wheel guard reading a stale ``build/lib``, and discovery tests
-mocking the very seam that hid the entry-point bug.
-
-So the list below is **shrink-only**, exactly like
-``scripts/check-import-boundaries.py``'s ``KNOWN_VIOLATIONS`` and
-``test_wheel_install_imports.py``'s ``KNOWN_UNIMPORTABLE``. A new hidden file
-fails this test. A listed file that stops matching also fails it, so the list
-cannot rot into a lie once Task 5b relocates these to
-``packages/omnidriver-cardiacfoam/tests/``, where they belong and where they
-run.
+The list below is shrink-only, like ``check-import-boundaries.py``'s
+``KNOWN_VIOLATIONS``: a new hidden file fails this test, and a listed file
+that stops matching fails it too.
 """
 from __future__ import annotations
 
@@ -35,8 +12,7 @@ import pathlib
 _CORE_TESTS = pathlib.Path(__file__).resolve().parent.parent
 
 #: Core test files that skip wholesale without a sibling package, with the
-#: number of tests each removes from core's suite. Task 5b relocates them;
-#: this list may only shrink.
+#: number of tests each removes from core's suite. Shrink-only.
 KNOWN_HIDDEN_FILES: dict[str, int] = {}
 
 
