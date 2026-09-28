@@ -1,14 +1,8 @@
 """Internal, focused capability seams for solver plugins.
 
-The public :class:`SolverPlugin` protocol remains the compatibility contract for
-Plan 1.  Core code consumes this bundle instead of reaching through
-``DriverContext.plugin`` directly.  The adapters deliberately preserve the
-legacy method calls, return values, call order, and exception behaviour.
-
-Optional case-compatibility and sweep hooks let a plugin take ownership of
-solver-specific behaviour without adding new required members to the public
-protocol.  Plugins that do not provide those hooks retain the historical
-omnidriver fallbacks.
+Core consumes this bundle instead of reaching through ``DriverContext.plugin``
+directly; each capability adapts one plugin concern and degrades through
+``compatibility.py`` when the plugin declares no hook for it.
 """
 
 from __future__ import annotations
@@ -129,49 +123,27 @@ class CaseRuntimeConventions:
     #: holds one replica of the case per parallel rank (OpenFOAM:
     #: ``processor*``). Core skips them when staging and discovering cases
     #: at every depth, not only at the case root. Empty: the environment
-    #: declares no replicas. Renamed 2026-09-26 from
-    #: ``decomposition_directory_prefix`` (spec A2).
-    #:
-    #: Corrected 2026-09-26 (R2 fix, finding M2): this said "a case-root
-    #: directory" and "looks inside them for an instance-indexed output",
-    #: both wrong. ``_stage_entry_case.ignore_generated`` and ``registry``
-    #: apply the rule at every depth, not only the case root; and only
-    #: ``workflow_runner._artifact_snapshot`` looks inside a replica for an
-    #: instance-indexed output -- ``reconcile_artifacts``, which backs the
-    #: resume completion check and the CLI's reconciliation payload, never
-    #: does. Pre-existing, unchanged by A2 (verified byte-for-byte against
-    #: pre-A2 behaviour); flagged here as a generality-log row for later,
-    #: not fixed by this correction.
+    #: declares no replicas.
     replica_directory_globs: tuple[str, ...] = ()
     #: Regex a directory name, at any depth in the case tree, matches when
     #: it is one of the solver's output instances (OpenFOAM: a time
     #: directory). ``None``: the environment declares no instances, and core
-    #: treats no directory as one. Renamed 2026-09-26 from
-    #: ``time_directory_name_pattern`` (spec A2). The instance rule also
-    #: applies to files, not only directories -- corrected 2026-09-26 (R2
-    #: fix, finding M2), see ``replica_directory_globs``'s own correction
-    #: above for the same depth/scope caveat.
+    #: treats no directory as one. The instance rule also applies to files,
+    #: not only directories.
     instance_directory_pattern: str | None = None
     #: Instance names that are authored input and never cleaned (OpenFOAM:
-    #: ``"0"``). Renamed 2026-09-26 from ``preserved_time_directory_names``.
+    #: ``"0"``).
     preserved_instance_names: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        """Refuse a malformed A2 field by name at construction (R2 fix,
-        finding I3), rather than corrupting every staged case silently.
+        """Refuse a malformed field by name at construction rather than
+        corrupting every staged case silently.
 
-        The field this replaced, ``decomposition_directory_prefix``, was a
-        bare ``str`` -- a plugin author migrating to
-        ``replica_directory_globs`` naturally writes
-        ``replica_directory_globs="processor*"``. ``tuple(...)`` on a bare
-        string explodes it into one-character strings, ``'*'`` among them,
-        so ``is_replica_directory_name`` then matches every name and
-        ``_stage_entry_case`` silently drops every directory at every depth.
-        The same bare-``str`` mistake on ``preserved_instance_names`` gives
-        substring semantics (``name not in "0"``) instead of exact-name
-        membership. Neither is caught anywhere else -- refused here, once,
-        for every construction path (a plugin's own conventions, the merge
-        in ``runtime_records.with_core_runtime_records``, a test fixture).
+        A bare ``str`` for ``replica_directory_globs`` or
+        ``preserved_instance_names`` (e.g. ``"processor*"`` instead of
+        ``("processor*",)``) explodes into one-character strings under
+        ``tuple(...)``, so a naive construction would match or exclude every
+        name silently.
         """
         _require_tuple_of_names(self, "replica_directory_globs", noun="glob strings")
         _require_tuple_of_names(self, "preserved_instance_names", noun="name strings")
@@ -211,17 +183,9 @@ class RuntimeDependency:
     the case tree: the solver binary itself, a library it links or loads,
     or a case-local shared object built from sources inside the case.
 
-    Replaces the earlier ``extra_provenance_paths() -> tuple[Path, ...]``
-    stub, which could not express "this was required and I could not find
-    it" -- a tuple of paths can only omit, and omission reads as "nothing to
-    check". ``path is None`` on a ``required=True`` dependency must surface
-    as ``unavailable`` rather than silently vanishing from the list.
-
-    A workflow step may run through a case-local entrypoint, so its command
-    fingerprints that entrypoint, never an unobserved binary it invokes --
-    the exact gap that let a rebuilt solver replay a resumed
-    run's previous numbers as fresh. Declaring dependencies this way, apart
-    from however a step happens to be launched, is the fix.
+    ``path is None`` on a ``required=True`` dependency must surface as
+    ``unavailable`` rather than silently vanishing from the list -- a plain
+    tuple of paths cannot express "required and missing", only omission.
     """
 
     name: str
@@ -233,15 +197,8 @@ class GenericCaseFactoryCapability(Protocol):
     """A plugin's own generic-case-folder factory, when it wants to override
     core's own (``core.runtime.generic_case.make_generic_case_spec``).
 
-    Step S6 (docs/superpowers/specs/2026-09-28-supplied-inputs-design.md)
-    replaced ``TutorialCatalogCapability``/``get_tutorial_catalog`` with this
-    much narrower hook: the only thing that dict ever carried across a real
-    factory-tutorial deletion was cardiacFOAM's own marker-aware case-folder
-    wrapper (``cardiacfoam.generic_case.make_generic_case_spec``), smuggled
-    through an extra, un-namespaced key (``"make_generic_case_spec"``)
-    alongside the (now nonexistent) factory registry. Optional-neutral:
-    absent, or the whole hook, answers ``None`` -- ``registry.resolve_entry``
-    falls back to core's own factory.
+    Optional-neutral: absent, or the whole hook, answers ``None`` --
+    ``registry.resolve_entry`` falls back to core's own factory.
 
     :adapts: get_generic_case_factory
     :consumed-by: omnidriver/core/runtime/registry.py
@@ -261,12 +218,11 @@ class DictionaryCatalogCapability(Protocol):
     not know those names -- ``electroProperties`` is cardiac vocabulary, and a
     solids4foam plugin would say ``solidProperties`` instead.
 
-    All three are optional-neutral since 2026-09-26 (spec A3). A plugin
-    without dictionaries (openCARP, the toy) omits them, and each answers
-    empty: ``()``, ``DictionaryCatalog({})``, ``{}``. Corrected that day: they
-    were required, so every plugin had to stub them. This is the seam that
-    keeps dictionary *syntax* knowledge (core's) apart from dictionary
-    *meaning* (the plugin's).
+    All three are optional-neutral. A plugin without dictionaries (openCARP,
+    the toy) omits them, and each answers empty: ``()``,
+    ``DictionaryCatalog({})``, ``{}``. This is the seam that keeps dictionary
+    *syntax* knowledge (core's) apart from dictionary *meaning* (the
+    plugin's).
 
     :adapts: get_dict_entries, get_dict_groups, get_dictionary_catalog, get_phases
     :consumed-by: omnidriver/dict_entries.py, omnidriver/cardiacfoam/dict_entries.py, omnidriver/cardiacfoam/sweep.py, omnidriver/openfoam/apply_overrides.py, omnidriver/openfoam/dict_builder.py, omnidriver/core/specs/validation.py, omnidriver/core/strict_planning.py
@@ -470,17 +426,12 @@ class CaseCompatibilityCapability(Protocol):
     no-workflow run policy. Core first checks an adapter-declared entrypoint;
     the fallback returns ``False``.
 
-    ``is_case`` composes the THIRD filesystem question a caller used to ask
-    by hand: ``registry._is_case_directory`` was
-    ``has_case_marker(...) or _has_entrypoint(...)``, duplicated at every
-    discovery call site. This collapses that into one predicate and adds a
-    signal discovery never checked -- a case whose declared entrypoint was
-    since removed, but which still carries a generated marker from a prior
-    run (e.g. OpenFOAM's ``run_document.json``), is still this plugin's case.
-    Not a new plugin hook: it reads the already-adapted ``has_case_marker``
-    plus whatever ``get_case_runtime_conventions`` the stack composes (an
-    absent hook degrades through that capability's own neutral fallback, so
-    ``is_case`` needs none of its own). (Task 10, 2026-09-22.)
+    ``is_case`` composes both filesystem signals into one predicate: a case
+    whose declared entrypoint was since removed, but which still carries a
+    generated marker from a prior run (e.g. OpenFOAM's ``run_document.json``),
+    is still this plugin's case. Not a new plugin hook: it reads the
+    already-adapted ``has_case_marker`` plus whatever
+    ``get_case_runtime_conventions`` the stack composes.
 
     :adapts: has_case_marker, is_case_runnable_without_workflow
     :consumed-by: omnidriver/core/runtime/registry.py
@@ -557,9 +508,7 @@ class CaseIntrospectionCapability(Protocol):
     plugin with no solver semantics (the generic plugin) resolves nothing and
     exposes no fields.
 
-    Corrected 2026-09-26 (spec A2): this also answered ``selected_start_time``,
-    the directory a run resumes from. That was an OpenFOAM interpretation core
-    only used to walk provenance; the plugin now declares the walk itself,
+    The resumed-from start-time directory is a separate concern, declared
     through ``CaseProvenanceCapability.input_roots``.
 
     :adapts: get_samplable_fields, resolve_case_models
@@ -597,8 +546,7 @@ class CaseFileContractCapability(Protocol):
 
     ``get_profile`` deliberately backs this capability AND
     ``CxxMappingCapability``: one declaration, two consumers with different
-    concerns. Recorded 2026-09-20 because it reads as a duplicate intake and
-    is not one.
+    concerns, not a duplicate intake.
 
     :adapts: get_profile, get_config_resolution_description
     :consumed-by: omnidriver/core/runtime/strict_audit.py, omnidriver/core/runtime/provenance_inputs.py
@@ -619,9 +567,9 @@ class CaseRuntimeConventionsCapability(Protocol):
     output tree between cases. Those are Core mechanisms. The path names are
     environment conventions, so this capability supplies them as data. A
     plugin without the optional hook receives only core's own run records
-    (``runtime_records.CORE_RUNTIME_RECORDS``, merged into every answer since
-    2026-09-26, spec A5): Core preserves every authored path and does not
-    collect a convention-specific tree.
+    (``runtime_records.CORE_RUNTIME_RECORDS``, merged into every answer):
+    core preserves every authored path and does not collect a
+    convention-specific tree.
 
     :adapts: get_case_runtime_conventions
     :consumed-by: omnidriver/core/runtime/registry.py, omnidriver/core/runtime/sweep_runner.py
@@ -649,12 +597,6 @@ class EnvironmentPreflightCapability(Protocol):
     Core passes it through and never reads it; what it names is the plugin's
     business. The OpenFOAM layer sources it as a shell script; openCARP
     ignores it.
-
-    Renamed 2026-09-26 (spec 2026-09-26-core-generality-design.md §2, A1)
-    from ``explicit_bashrc``/``--environment-bashrc``, a shell-profile word
-    in a parameter every environment shares. It was ``openfoam_bashrc`` /
-    ``--openfoam-bashrc`` before that (future/ENVIRONMENT_CONTRACT.md §10).
-    No old name is aliased.
 
     :adapts: get_environment_diagnostics, get_configured_environment, get_loaded_environment
     :consumed-by: omnidriver/core/strict_planning.py, omnidriver/core/runtime/sweep_runner.py, omnidriver/cli.py, omnidriver/conformance/checks.py
@@ -708,14 +650,13 @@ class RuntimeEvidenceCapability(Protocol):
     ``artifact_value_reader(format)`` returns the reader for one artifact
     format (``core.quantities.ArtifactValueReader``) or ``None``. A ``None``
     makes that artifact's quantities ``not_evaluated`` with the format
-    named, never an implicit pass. Corrected 2026-09-26 (results as
-    quantities): it was declaration-only.
+    named, never an implicit pass.
 
     Telemetry collection consumes ``solve_step_commands`` and
-    ``telemetry_source_globs``. Phase 2 (provenance) now consumes
-    ``extra_provenance_paths`` for real. Since 2026-09-26 (PAR),
-    ``solve_step_commands`` is also how ``record_execution`` finds a
-    record's solve step, the one a parallel request rewrites.
+    ``telemetry_source_globs``; provenance consumes
+    ``extra_provenance_paths``. ``solve_step_commands`` is also how
+    ``record_execution`` finds a record's solve step, the one a parallel
+    request rewrites.
 
     Every member degrades to empty for a plugin that declares nothing, which
     is the honest answer rather than a solver-shaped guess -- so this
@@ -734,18 +675,18 @@ class RuntimeEvidenceCapability(Protocol):
     def log_redaction_patterns(self) -> frozenset[str]:
         """Patterns whose every match is replaced whole by ``[REDACTED]`` in a
         kept step log (``workflow_runner.redact_step_logs``); capture groups
-        are not kept (wave-2 review I3, 2026-09-25)."""
+        are not kept."""
         ...
 
 
 class RecordSurfaceCapability(Protocol):
     """What an agent may address in a record, and what it should read first.
 
-    Owner decision 2026-09-25 (spec 2026-09-25 §4, C10): discovering a
-    record's keys and guidance must not depend on knowing which solver is
-    underneath. ``key_catalog`` lists the keys a study may name for a case;
-    ``guidance`` is solver-level advice for agents. Both degrade to empty,
-    which C10 then reports as a failure for a real target.
+    Discovering a record's keys and guidance must not depend on knowing
+    which solver is underneath. ``key_catalog`` lists the keys a study may
+    name for a case; ``guidance`` is solver-level advice for agents. Both
+    degrade to empty, which the conformance suite reports as a failure for a
+    real target.
 
     :adapts: get_agent_guidance, get_record_key_catalog
     :consumed-by: omnidriver/core/runtime/record_surface.py
@@ -775,33 +716,21 @@ class CaseProvenanceCapability(Protocol):
     roots, whose files a run reads as state. For OpenFOAM, that is the
     selected start-time directory and the same directory in every parallel
     replica. Core walks each and classifies its files by the same precedence.
-    Added 2026-09-26 (spec A2) to replace core's own start-time and
-    ``processor*`` walk. Absent: ``()``, and core walks no state directory.
+    Absent: ``()``, and core walks no state directory.
 
     Composes as ``sequence`` (``provider_stack._SHAPE``), not ``single``: every
     provider in the stack that implements the hook contributes its own roots,
     concatenated, rather than the most specific provider's answer replacing
     the rest. A more specific provider can only add required inputs, never
-    remove one a less specific provider declared -- conservative, since the
-    superset can only make a case's provenance MORE complete, never drop a
-    root a less specific layer actually needs walked (R2 fix, finding M3;
-    before this note, the hook's own docstring did not say which shape it
-    composed as, though ``selected_start_time``, the seam this replaced, was
-    ``single`` -- a more specific provider there really did replace the
-    default outright, a semantic change worth documenting even though no
-    current stack overrides another's roots).
+    remove one a less specific provider declared, since the superset can only
+    make a case's provenance MORE complete.
 
     ``conventions`` is the stack's merged ``CaseRuntimeConventions`` -- the
     same value ``case_runtime_conventions.conventions()`` returns, and the
-    same source staging/discovery/snapshotting read (R2 fix, finding I2).
-    Before this, ``OpenFOAMEnvironmentPlugin.get_input_roots`` read its own
-    module-level ``openfoam_case_runtime_conventions()`` directly instead,
-    so a plugin stacked on top of OpenFOAM that declared a *different*
-    ``replica_directory_globs`` (e.g. a collated layout's ``"procs*"``) would
-    have its replicas honoured by staging and discovery but silently walked
-    past -- unfingerprinted -- by provenance: the exact silent stale-replay
-    direction this whole phase exists to prevent. No stack today overrides
-    the conventions, so this was latent, not yet observed.
+    same source staging/discovery/snapshotting read, so a plugin stacked on
+    top of OpenFOAM that declares a *different* ``replica_directory_globs``
+    has its replicas honoured consistently by staging, discovery and
+    provenance rather than walked past unfingerprinted by one of the three.
 
     Routed through the capability adapter exactly like every other plugin
     capability -- deliberately **not** a mandatory ``SolverPlugin``
@@ -919,13 +848,7 @@ class DictRegenerationCapability(Protocol):
     Not a mandatory ``SolverPlugin`` member, so existing v2 third-party
     plugins keep loading; the fallback (``absent_dict_regeneration_scopes``)
     declares no regeneration scopes for any plugin, matching
-    :class:`OverrideScopeCapability`. **Corrected 2026-09-20:** this used to
-    say the fallback "declares the cardiac plugin's one scope and an empty
-    tuple for everyone else" -- reading ``compatibility.py`` during the Phase
-    0 tier retag (Task 1) found no such branch; the function returns ``()``
-    unconditionally, with no ``plugin_id`` check, consistent with Phase 2
-    Task 7 having deleted the identity-branching fallbacks elsewhere in this
-    module.
+    :class:`OverrideScopeCapability`, with no ``plugin_id`` check.
 
     :adapts: get_regeneration_scopes
     :consumed-by: omnidriver/openfoam/apply_overrides.py
@@ -939,17 +862,11 @@ class DictRegenerationCapability(Protocol):
 class ConfigValueCapability(Protocol):
     """Read one configuration value from an adapter's own file format.
 
-    Before 2026-09-20 ``plugin_interface.py`` declared ``get_config_value_reader``
-    under a heading naming this Protocol, but no module defined it -- so
-    ``OpenFOAMEnvironmentPlugin`` and ``CardiacFoamPlugin`` each implemented
-    the hook and returned a different callable, while core read neither: the
-    only caller was ``CardiacFoamPlugin.get_selected_start_time`` invoking it
-    on ``self``. Phase 1's composed provider seam needs a real reader here,
-    so the hook is wired up rather than deleted. Not a mandatory
-    ``SolverPlugin`` member, so existing v2 third-party plugins keep loading;
-    a plugin that declares nothing has no adapter-specific format to read,
-    which is the honest answer rather than a solver-shaped guess -- so this
-    capability needs no compatibility fallback.
+    Not a mandatory ``SolverPlugin`` member, so existing v2 third-party
+    plugins keep loading; a plugin that declares nothing has no
+    adapter-specific format to read, which is the honest answer rather than
+    a solver-shaped guess -- so this capability needs no compatibility
+    fallback.
 
     :adapts: get_config_value_reader
     :consumed-by: omnidriver/cardiacfoam/run_document_config.py, omnidriver/core/runtime/record_execution.py, omnidriver/conformance/checks.py
@@ -963,19 +880,14 @@ class ConfigValueCapability(Protocol):
 class DictKeyScannerCapability(Protocol):
     """Scan an adapter's C++ source for dictionary-key reads.
 
-    ``_catalog_diagnostics`` (``strict_planning.py``) compares a solver
-    plugin's catalogue against what its C++ actually reads, and until this
-    capability existed it called ``compatibility.absent_dict_key_scanner``
-    directly, at module scope, unconditionally -- a "fallback" no adapter
-    could ever override, since nothing probed for a real one first. The scan
-    itself is C++/dictionary-format knowledge, not solver knowledge (the
-    regex over ``.lookup("key")``-shaped call sites in ``dict_keys_scanner.py``
-    knows nothing about ionic models or myocardium selectors), so it belongs
-    to the OpenFOAM environment adapter, not to a specific solver plugin. Not
-    a mandatory ``SolverPlugin`` member, so existing v2 third-party plugins
-    keep loading; the fallback (``absent_dict_key_scanner``) reports an empty
-    drift -- no unmatched reads, no stale paths -- until an adapter declares a
-    real scanner.
+    The scan itself is C++/dictionary-format knowledge, not solver knowledge
+    (the regex over ``.lookup("key")``-shaped call sites in
+    ``dict_keys_scanner.py`` knows nothing about ionic models or myocardium
+    selectors), so it belongs to the OpenFOAM environment adapter, not to a
+    specific solver plugin. Not a mandatory ``SolverPlugin`` member, so
+    existing v2 third-party plugins keep loading; the fallback
+    (``absent_dict_key_scanner``) reports an empty drift -- no unmatched
+    reads, no stale paths -- until an adapter declares a real scanner.
 
     :adapts: get_dict_key_scanner
     :consumed-by: omnidriver/core/strict_planning.py
@@ -992,25 +904,21 @@ class TutorialRecordCapability(Protocol):
     """The tutorial records this plugin registers -- data, not factories.
 
     A record (``core.tutorial_records.TutorialRecord``) names a native case
-    path relative to the environment's own cases root, its own axes, and
-    its workflow steps. Corrected 2026-09-26 (record-scoped axes): a record
-    named the axes it allowed and ``AxisCapability`` (``get_axis_catalog``,
-    deleted) provided them for the whole stack, so two records could not
-    give one axis name two meanings. Distinct from a factory tutorial (step
-    S6 deleted the last one): a factory built a ``TutorialSpec`` by calling
-    plugin code, and resolving a record calls no plugin code at all, until
-    an axis it names actually runs (design doc
+    path relative to the environment's own cases root, its own axes, and its
+    workflow steps. A record names the axes it allows itself, so two records
+    cannot give one axis name two meanings. Resolving a record calls no
+    plugin code at all, until an axis it names actually runs (see
     ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md``
     §3). ``runtime.registry.resolve_entry`` dispatches on this catalog
     explicitly, alongside the factory registry and a bare case path -- never
     trying one and falling back to another.
 
-    **No fallback (review finding M1).** ``catalog()`` returns ``None``, not
-    ``{}``, when the plugin declares no ``get_tutorial_records`` hook at all
-    -- distinct from a plugin that implements the hook and simply registers
-    no records yet. ``runtime.registry.resolve_entry`` treats ``None`` as
-    "this stack dispatches no tutorial records", skipping record dispatch
-    explicitly rather than iterating a fabricated empty mapping.
+    **No fallback.** ``catalog()`` returns ``None``, not ``{}``, when the
+    plugin declares no ``get_tutorial_records`` hook at all -- distinct from
+    a plugin that implements the hook and simply registers no records yet.
+    ``runtime.registry.resolve_entry`` treats ``None`` as "this stack
+    dispatches no tutorial records", skipping record dispatch explicitly
+    rather than iterating a fabricated empty mapping.
 
     :adapts: get_tutorial_records
     :consumed-by: omnidriver/core/runtime/registry.py, omnidriver/conformance/checks.py
@@ -1045,14 +953,11 @@ class RecordKeyValidationCapability(Protocol):
     between those two answers, and takes no closed list of "validated
     document prefixes" of its own.
 
-    **No fallback (review finding M1).** A stack with no validator has no
-    catalog to check ANY direct key -- or, since ``resolve_case_patches`` now
-    validates axis-produced patches too (M3), any axis output -- against.
+    **No fallback.** A stack with no validator has no catalog to check ANY
+    direct key -- or any axis-produced patch -- against.
     ``record_execution._resolve_and_split`` reads ``validator() is None`` and
     REFUSES BY NAME before running a record case at all, rather than letting
-    every key silently through unchecked the way ``legacy_record_key
-    _validation`` used to (by raising only once a direct key was actually
-    looked up, which an axis-only study could dodge entirely).
+    every key silently through unchecked.
 
     :adapts: get_record_key_validator
     :consumed-by: omnidriver/core/runtime/record_execution.py, omnidriver/conformance/checks.py
@@ -1078,15 +983,12 @@ class CaseValueComparisonCapability(Protocol):
     callable, or ``None`` when the adapter offers no such comparison.
     ``tutorial_records.split_unchanged``, called directly, still treats
     ``None`` as "cannot determine" and reports everything changed -- but
-    ``record_execution._resolve_and_split`` (review finding M1/M4) reads
-    ``comparator() is None`` first and REFUSES BY NAME before running a
-    record case at all: a stack that cannot tell "unchanged" from "changed"
-    must not silently report every no-op as a change and commit it, which is
-    what happened before this capability had no fallback of its own
-    (``legacy_case_value_comparator`` quietly returned ``None`` from a plugin
-    that never declared an opinion either way, and nothing upstream refused).
+    ``record_execution._resolve_and_split`` reads ``comparator() is None``
+    first and REFUSES BY NAME before running a record case at all: a stack
+    that cannot tell "unchanged" from "changed" must not silently report
+    every no-op as a change and commit it.
 
-    **No fallback (review finding M1).**
+    **No fallback.**
 
     :adapts: get_case_value_comparator
     :consumed-by: omnidriver/core/runtime/record_execution.py, omnidriver/conformance/checks.py
@@ -1100,9 +1002,9 @@ class CaseValueComparisonCapability(Protocol):
 class ParallelExecutionCapability(Protocol):
     """The parallel form of a record's solve step, if the stack has one.
 
-    Owner Q6, 2026-09-26: serial versus parallel belongs to the solver's own
-    layer, which must know how to run it; a record declares its solve step
-    once and carries no parallel variant. ``steps_for()`` returns the
+    Serial versus parallel belongs to the solver's own layer, which must
+    know how to run it; a record declares its solve step once and carries no
+    parallel variant. ``steps_for()`` returns the
     stack's ``get_parallel_steps`` callable (contract on
     ``SolverPluginOptionalHooks``), or ``None``. ``record_execution
     ._parallel_workflow_dag`` calls it for each step whose command the stack
@@ -1128,41 +1030,13 @@ class CaseWriterCapability(Protocol):
     the file's format, one declarer per format. Committing is core's and is not
     here at all -- see :mod:`omnidriver.core.case_transaction`.
 
-    The fallback cannot be neutral. An empty resolution silently yields a case
-    that is not the one requested, so an adapter without these hooks is refused
-    by name.
-
-    **Corrected 2026-09-23 (R2 finding 0):** ``get_supported_mutation_modes``
-    used to say ``optional-neutral`` here, with a fallback of "every mode the
-    adapter's ``resolve_case_mutation`` accepts". That default is exactly the
-    root cause: three installed providers, implementing no
-    ``resolve_case_mutation`` hook either, ended up reporting support for
-    every mode while implementing none of them. The real behaviour is
-    conditional and, once resolved, refusing rather than neutral: absent
-    alongside a resolver -> raise, naming the provider (its supported modes
-    are undeclared); absent alongside no resolver -> ``frozenset()``, which
-    changes nothing because ``resolve()`` already refuses a hook-less
-    provider by name before the mode check is ever reached. See
-    ``_CaseWriterAdapter.supported_modes`` for the three-state logic.
-
-    **Corrected 2026-09-23 (R2 finding 11):** ``get_rendered_formats`` said
-    ``optional-neutral`` here too, alongside ``:fallback: none`` and the
-    opening paragraph's own claim that "the fallback cannot be neutral" --
-    two of four members contradicted the paragraph directly above them. Its
-    OWN fallback, when the hook is absent, does return a neutral value
-    (``frozenset()``) -- but that empty set then reaches ``renderer_for``,
-    which refuses BY NAME the moment any format is looked up against it
-    (nothing declares anything, so nothing is ever found). A hook whose
-    absence is only neutral in isolation, and refuses on the very next step
-    every real caller takes, is ``optional-refusing`` here, matching
-    ``render_case_files`` and ``get_supported_mutation_modes``. All four
-    members of this capability now refuse; none is neutral in practice, which
-    is what the opening paragraph always claimed.
-
-    No consumer yet (2026-09-22): the real one, ``case_transaction.py``'s
-    ``commit_case_write``, is Phase 2 Task 5, a later batch in this plan.
-    Update ``:consumed-by:`` to name it once that module lands and calls
-    ``capabilities.case_writer``.
+    The fallback cannot be neutral for any of the four members. An empty
+    resolution silently yields a case that is not the one requested, so an
+    adapter without these hooks is refused by name; ``get_rendered_formats``'s
+    own fallback returns a neutral ``frozenset()``, but that empty set then
+    reaches ``renderer_for``, which refuses BY NAME the moment any format is
+    looked up against it. See ``_CaseWriterAdapter.supported_modes`` for the
+    three-state resolver/mode logic.
 
     :adapts: resolve_case_mutation, get_supported_mutation_modes, get_rendered_formats, render_case_files
     :consumed-by: none
@@ -1219,40 +1093,13 @@ class _DictionaryCatalogAdapter:
 
 @dataclass(frozen=True)
 class _CapabilityManifestAdapter:
-    """Assembles the accept-surface manifest from capabilities core already
-    holds, merging in only what a plugin alone can supply.
-
-    Before Task 10 (2026-09-22), ``manifest()`` was just
-    ``self.plugin.get_capabilities()`` -- the WHOLE manifest, including the
-    ``allowed_commands``/``samplable_fields`` sections, built and handed back
-    BY the plugin. Since ``get_capabilities`` is a ``single``-shape composed
-    member (:mod:`provider_stack`), that round trip meant only the
-    most-specific provider's own self-authored answer ever won, discarding
-    e.g. a companion environment provider's ``environment_commands``
-    entirely -- exactly the isolation a composed stack (Tasks 6-9) exists to
-    remove. Core now builds those two sections itself from the SAME
-    ``command_authorization``/``case_introspection``/
-    ``case_runtime_conventions`` reads every other capability here already
-    uses, and merges in only what a plugin's own ``get_capabilities()``
-    supplies that core cannot compose: a domain catalogue, such as
-    cardiacFoam's ionic-model table.
-
-    **No cache.** Phase 0 Task 12 made this a ``cached_property`` to avoid
-    recomputing an expensive, plugin-authored manifest. Combined with
-    ``DriverContext.capabilities`` also being cached, every ``.manifest()``
-    caller sharing one ``DriverContext`` ended up sharing the exact same
-    assembled dict -- including its ``ionic_models`` sub-dict -- for as long
-    as that context lived (three call sites read it per context:
-    ``dict_entries``, ``strict_planning``, ``introspection``). Nothing
-    mutates it today, but that narrows the very isolation ``DriverContext``
-    exists to provide (found by the Phase 0 review, 2026-09-20). Now that
-    assembly is a handful of cheap composed-capability reads plus a small,
-    already-copied domain dict, recomputing it on every call costs nothing,
-    so the cache bought nothing but that narrowing -- it is removed here.
-    **Corrected 2026-09-22:**
-    ``test_capability_calls_are_cheap.py::test_capability_manifest_adapter_caches_per_instance``
-    used to assert identity across two calls on one adapter; it now asserts
-    the opposite, since there is no longer a cached object to share.
+    """Assembles the accept-surface manifest, merging in only what a plugin
+    alone can supply (a domain catalogue such as cardiacFoam's ionic-model
+    table); the ``allowed_commands``/``samplable_fields`` sections are built
+    from the same composed capability reads every other adapter here uses,
+    not handed back whole by the plugin. Not cached: recomputing costs
+    nothing, and a cached dict shared across every caller of one
+    ``DriverContext`` would narrow the isolation it exists to provide.
     """
 
     plugin: "SolverPlugin"
@@ -1496,13 +1343,9 @@ class _SweepMaterializerAdapter:
     ) -> None:
         """Write one resolved sweep case, or refuse by name.
 
-        **Widened 2026-09-20 (Phase 1 Task 6).** Accepts the contract member's
-        own argument names (``case_dir``/``routed``) as well as the request
-        object. A composed stack is addressed in *member* terms -- that is what
-        ``provider_stack`` composes -- and ``test_provider_composition_rules``
-        calls this member's composed form that way. This is not a fallback: the
-        two shapes name the same two values, and the request is still what the
-        body works with.
+        Accepts the contract member's own argument names
+        (``case_dir``/``routed``) as well as the request object, since a
+        composed stack is addressed in *member* terms.
         """
         if request is None:
             request = SweepMaterializationRequest(case_dir=case_dir, routed=routed)
@@ -1627,9 +1470,9 @@ class _CaseRuntimeConventionsAdapter:
     def conventions(self) -> CaseRuntimeConventions:
         """The stack's declared generated paths, plus core's own run records
         (``runtime_records.CORE_RUNTIME_RECORDS``), whatever the plugin
-        declares. Corrected 2026-09-26 (spec 2026-09-26 A5): a plugin
-        without the hook used to receive an empty declaration, so staging a
-        case a run had written carried core's own state into the next stage."""
+        declares -- a plugin without the hook must still get core's own run
+        records, or staging a case a run had written carries core's own
+        state into the next stage."""
         from .runtime_records import with_core_runtime_records
 
         hook = getattr(self.plugin, "get_case_runtime_conventions", None)
@@ -1686,27 +1529,13 @@ class _EnvironmentPreflightAdapter:
     ) -> dict[str, str]:
         """Source the environment, then configure it. Both halves, always.
 
-        ``get_loaded_environment`` is classified ``single`` in
-        `provider_stack.py` -- most-specific provider wins, no combining --
-        so sourcing alone cannot reach every provider's runtime contract.
-        Configuration (backend/library selection, build-manifest validation)
-        is a separate, ``chain``-shape member, ``get_configured_environment``,
-        reachable only through :meth:`configure`. Before composition existed,
-        a single active plugin's sourcing step ended by reaching
-        ``driver_context.plugin``'s configure hook directly (a back-channel
-        `openfoam_environment.py`'s ``_configure_plugin_environment`` no
-        longer has, by design -- see that function's docstring), so "load"
-        always meant "source AND configure" as one step. Restoring that
-        combined contract here, via this adapter's own composed
-        :meth:`configure`, is what lets every future caller of ``.load()``
-        get the correct combined behaviour without every provider's
-        ``get_loaded_environment`` needing to remember to configure too.
-
-        Every current call site either calls ``.load()`` alone (`cli.py`'s
-        two run/step sites) or ``.configure()`` alone (`sweep_runner.py`'s
-        `sweep_run`, on an already-externally-sourced ``os.environ``) --
-        never both in sequence -- so this does not double-apply
-        configuration anywhere in this repository today.
+        ``get_loaded_environment`` is a ``single``-shape member (most-specific
+        provider wins, no combining), so sourcing alone cannot reach every
+        provider's runtime contract; configuration is the separate
+        ``chain``-shape ``get_configured_environment``, reachable only
+        through :meth:`configure`. Composing both here is what lets every
+        caller of ``.load()`` get the correct combined behaviour without
+        every provider remembering to configure too.
         """
         hook = getattr(self.plugin, "get_loaded_environment", None)
         if callable(hook):
@@ -1729,19 +1558,13 @@ class _OverrideSchemaAdapter:
     ) -> dict[str, Any]:
         """Return the plugin's config documentation, or the validated schema.
 
-        Two capabilities used to independently author an answer to "what may
-        config contain": this one (agent-facing documentation, keyed by
-        tutorial) and :class:`RunDocumentConfigurationCapability` (the schema
-        core actually validates against). A plugin with real per-tutorial
-        vocabulary to document (e.g. cardiacFoam's worked examples) still
-        supplies it here and that answer wins unchanged. But when a plugin
-        has nothing tutorial-specific to say -- an unrecognized tutorial
-        name, or no ``get_override_schema`` hook at all -- the old behaviour
-        was a second, independently-authored EMPTY answer (``{}``), which
-        documents nothing. That can no longer diverge from the validated
-        schema: an empty answer here now derives from
-        ``RunDocumentConfigurationCapability.schema()`` instead. (Task 10,
-        2026-09-22.)
+        A plugin with real per-tutorial vocabulary to document (e.g.
+        cardiacFoam's worked examples) supplies it here and that answer wins
+        unchanged. When a plugin has nothing tutorial-specific to say -- an
+        unrecognized tutorial name, or no ``get_override_schema`` hook at all
+        -- the answer derives from
+        ``RunDocumentConfigurationCapability.schema()`` instead, so it never
+        diverges from the schema core actually validates against.
         """
         hook = getattr(self.plugin, "get_override_schema", None)
         if callable(hook):
@@ -1814,10 +1637,7 @@ class _CaseProvenanceAdapter:
             return ()
         roots = tuple(hook(case_root, resolved_case, conventions=conventions))
         for root in roots:
-            # str-only, first (R2 fix, finding M8): a plugin returning
-            # pathlib.Path("0"), the natural type, used to be refused with
-            # "must return non-empty case-relative paths", which reads as
-            # though a Path is not a path. The real requirement is str.
+            # str only: a pathlib.Path is a natural but wrong type here.
             if not isinstance(root, str):
                 raise TypeError(
                     f"{self.plugin.plugin_id}.get_input_roots() must return "
@@ -1901,13 +1721,6 @@ class _OverrideScopeAdapter:
         read each written value back under the caller's runtime, rather than
         substituting either from itself. Core does not delegate to a
         solver-specific mutator when the hook is absent.
-
-        Corrected 2026-09-22 (audit finding F1): ``execution_env`` was accepted
-        and forwarded only to ``absent_apply_overrides``. Every real adapter
-        implements the hook, so on the path that runs it was silently dropped,
-        and the OpenFOAM implementation answers an absent environment with an
-        empty evidence tuple. A required readback was satisfied by evidence
-        that was never gathered.
         """
         hook = getattr(self.plugin, "apply_overrides", None)
         if callable(hook):
@@ -2016,9 +1829,9 @@ class _TutorialRecordAdapter:
     plugin: "SolverPlugin"
 
     def catalog(self) -> dict[str, Any] | None:
-        """``None`` when the plugin declares no hook (review finding M1) --
-        not ``{}``, which would be indistinguishable from a plugin that
-        implements the hook and simply registers nothing."""
+        """``None`` when the plugin declares no hook -- not ``{}``, which
+        would be indistinguishable from a plugin that implements the hook
+        and simply registers nothing."""
         hook = getattr(self.plugin, "get_tutorial_records", None)
         return dict(hook()) if callable(hook) else None
 
@@ -2058,31 +1871,14 @@ class _ParallelExecutionAdapter:
 def _resolved_purely(hook, request, *, driver_context):
     """Run a resolution hook and refuse one that touched the case.
 
-    Resolution is declared pure, and a dry run's promise rests on that.
-
-    **What this catches, precisely (R2 finding 12, narrowed 2026-09-23 to
-    match what is actually caught rather than what purity would ideally
-    mean):** a path added or removed under ``request.case_root`` BETWEEN the
-    before- and after-snapshot, taken by name only, via two full ``rglob``
-    walks of the case per resolve (including the mesh -- this is not cheap,
-    and a mode with a large tree pays it on every resolve, dry run or not).
-
-    **What this does NOT catch:**
-
-    - in-place content modification of a file whose path does not change
-      (only names are compared, not digests or mtimes);
-    - a permission/mode change (``chmod``) on an existing path;
-    - a write outside ``request.case_root`` entirely;
-    - a create-then-delete of the same path within one call (the name-set
-      comparison sees only the two endpoints, never an intermediate state);
-    - any read at all -- reading is not detected, and a resolver that reads
-      makes the dry run's result depend on case state at read time, which is
-      the entire point of the purity rule this hook exists to enforce. A
-      resolver that reads is not "less pure" in some acceptable, partial
-      sense; it has silently broken the guarantee a dry run promises, and
-      nothing here would tell you.
-
-    A renderer is where filesystem reads belong; it is declared to read.
+    Resolution is declared pure, and a dry run's promise rests on that. The
+    check compares path names under ``request.case_root`` before and after
+    (two full ``rglob`` walks, not cheap for a large mesh); it does not catch
+    in-place content edits, permission changes, writes outside the case root,
+    a create-then-delete within one call, or any read -- a resolver that
+    reads makes a dry run's result depend on case state at read time, which
+    breaks the purity guarantee silently. A renderer is where filesystem
+    reads belong.
     """
     root = Path(request.case_root)
     before = set(root.rglob("*")) if root.is_dir() else set()
@@ -2104,26 +1900,13 @@ class _CaseWriterAdapter:
     def supported_modes(self) -> "frozenset[str]":
         """Which creation modes this provider supports.
 
-        Three states (R2 finding 0 -- corrected 2026-09-23; the plain
-        ``frozenset()`` fix considered and rejected below):
-
-        - the modes hook is present -> its declared set.
-        - the modes hook is absent but a resolver is present -> raise, naming
-          the provider: an absent-but-resolving provider has NOT declared
-          which modes it supports, and defaulting to "every mode" is exactly
-          how three installed providers, implementing no resolver hooks
-          either, ended up silently claiming to support all of them.
-        - both are absent -> ``frozenset()``. Nothing here resolves, so an
-          empty set changes nothing: ``resolve()`` below already refuses this
-          provider by name before it would ever consult ``supported_modes()``.
-
-        A bare ``frozenset()`` for the middle case would have been the wrong
-        fix on its own: ``resolve()`` checks for the ``resolve_case_mutation``
-        hook FIRST and refuses by name when it is absent, so a hook-less
-        provider never reaches the mode check at all -- and a resolving
-        provider that silently supported zero modes would have its every
-        request refused with no indication that the omission, not a genuine
-        unsupported mode, was the cause.
+        Three states: the modes hook present -> its declared set; absent but
+        a resolver is present -> raise, naming the provider (which modes it
+        supports is undeclared, and defaulting to "every mode" is how a
+        provider implementing no resolver hooks either would silently claim
+        to support all of them); both absent -> ``frozenset()``, which
+        changes nothing since ``resolve()`` already refuses a hook-less
+        provider by name before consulting this.
         """
         modes_hook = getattr(self.plugin, "get_supported_mutation_modes", None)
         if callable(modes_hook):
@@ -2187,14 +1970,9 @@ class _CaseWriterAdapter:
         # Iterated per-provider, not through the pre-composed
         # `render_case_files` sequence callable, so each provider's returned
         # files can be checked against THAT provider's own declared formats
-        # before being concatenated (R2 finding 5). Nothing previously
-        # checked that a returned `RenderedFile.format` was one the
-        # returning provider actually declared via `get_rendered_formats()`,
-        # nor that `renderer_id` matched it -- a provider declaring only
-        # `other_format` could return a file claiming `openfoam_dictionary`
-        # and it would be concatenated alongside the real declarer's,
-        # unnoticed. `_check_format_declarers` guards the DECLARATION; this
-        # guards the bytes the declaration is supposed to describe.
+        # and `renderer_id` before being concatenated -- otherwise a provider
+        # declaring only `other_format` could return a file claiming
+        # `openfoam_dictionary` unnoticed.
         try:
             providers = self.plugin.providers
         except AttributeError:
@@ -2271,10 +2049,8 @@ class PluginCapabilities:
         ``override_scopes``) declares one ``member=tier`` entry per member
         on the same line instead of one tier for the whole seam --
         :func:`capability_seams.status_tiers` reads either shape.
-        **Corrected 2026-09-20:** this used to say ``mandatory``/
-        ``optional``/``mixed``, free text that let ``_REQUIRED_PLUGIN_MEMBERS``
-        disagree with what a Protocol's own docstring claimed. ``:status:``
-        is now the single declaration of a member's enforcement tier.
+        ``:status:`` is the single declaration of a member's enforcement
+        tier.
 
     Those fields are the single source of the "Plugin capability seams" table
     in ``ARCHITECTURE.md``, rendered by
@@ -2284,10 +2060,8 @@ class PluginCapabilities:
     compatibility function, so a stale reference fails rather than rots.
 
     **What a missing optional hook means.** The named fallback runs. No
-    fallback branches on plugin identity any more -- Phase 2 Task 7 deleted the
-    twenty ``plugin_id == "org.cardiacfoam"`` branches -- so a given fallback
-    returns the same answer for every plugin. Two fallbacks cannot be neutral:
-    a plugin
+    fallback branches on plugin identity, so a given fallback returns the
+    same answer for every plugin. Two fallbacks cannot be neutral: a plugin
     without the sweep hooks is refused by name rather than swept by another
     plugin's writer.
     """

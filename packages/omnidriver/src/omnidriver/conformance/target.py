@@ -1,8 +1,7 @@
 """What one solver hands the conformance suite, and what each check returns.
 
-Design: docs/superpowers/specs/2026-09-25-solver-conformance-and-opencarp-design.md §4.
-Everything here is supplied by the caller; the suite discovers nothing
-(future/ENVIRONMENT_CONTRACT.md §12).
+Everything here is supplied by the caller; the suite discovers nothing.
+See docs/superpowers/specs/2026-09-25-solver-conformance-and-opencarp-design.md §4.
 """
 from __future__ import annotations
 
@@ -17,17 +16,11 @@ from omnidriver.core.specs.paths import resolve_scratch_root
 class ConformanceTarget:
     """One solver record, and the study values that exercise it.
 
-    ``environment`` is an overlay on the calling process's environment for
-    every child process a check starts. ``scratch_root`` receives every
-    stage, plan and sweep: the native tree under ``cases_root`` is never
-    written. ``base_study`` pins values that keep a real run short (for
-    openCARP, mesh resolution and time step; evidence G7).
-
-    Corrected 2026-09-26: this said checks are not thread-parallel within one
-    process, because in-process planning took core's scratch root from the
-    process environment. Every check now passes ``scratch_root`` explicitly
-    (``strict_plan(scratch_root=...)``, ``--scratch-dir``, a child's own env
-    dict), and none writes ``os.environ``.
+    ``environment`` overlays the calling process's environment for every
+    child process a check starts. ``scratch_root`` receives every stage,
+    plan and sweep; the native tree under ``cases_root`` is never written.
+    ``base_study`` pins values (e.g. mesh resolution, time step) that keep
+    a real run short.
     """
 
     plugin: str
@@ -42,23 +35,21 @@ class ConformanceTarget:
     unknown_name: str
     solver_command: str
     environment: Mapping[str, str]
-    #: Step S: every ``--input NAME=PATH`` this record's own inputs need,
-    #: forwarded to every plan/run/sweep a check makes (C5-C7) and to a
-    #: direct ``commit_record_case`` call (C4, C11). Empty for a record with
-    #: no inputs, or one whose inputs all have a native location.
+    #: Every ``--input NAME=PATH`` this record's own inputs need, forwarded
+    #: to every plan/run/sweep a check makes (C5-C7) and to a direct
+    #: ``commit_record_case`` call (C4, C11). Empty for a record with no
+    #: inputs, or one whose inputs all have a native location.
     inputs: Mapping[str, str] = field(default_factory=dict)
     #: Wall-clock bound, in seconds, on each child process a check starts
     #: (C6's run, C7's sweep-run) and on each sweep case (``sweep-run
     #: --case-timeout-s``). A child that outlives it is a failed verdict
-    #: naming the timeout, never a check that does not return (fix round 1
-    #: I5, 2026-09-25).
+    #: naming the timeout, never a check that does not return.
     timeout_s: float = 600.0
 
     def __post_init__(self) -> None:
-        # M8 (fix round 1, 2026-09-25): every stage, plan and rmtree a check
-        # makes lands under scratch_root, so one inside cases_root would do
-        # all of it inside the native tree. Since 2026-09-26 this is core's
-        # own rule (`resolve_scratch_root`), not a second copy of it.
+        # scratch_root must be distinct from cases_root so nothing a check
+        # stages lands inside the native tree; delegates to core's own rule
+        # (resolve_scratch_root) rather than duplicating it here.
         resolve_scratch_root(self.scratch_root, cases_root=self.cases_root)
 
 

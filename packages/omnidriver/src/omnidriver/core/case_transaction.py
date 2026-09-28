@@ -8,16 +8,14 @@ What this guarantees:
   transaction is recoverable and a failed one is **rolled back when the
   rollback itself succeeds**: overwritten files are restored, created files
   are removed, and directories created only for the transaction are removed.
-  Rollback can itself fail -- :func:`_rollback`'s own docstring carries that
-  nuance, corrected here 2026-09-23 (R3 finding 9) because this summary used
-  to read as unconditional. When it does, the journal is left in place
-  rather than removed, and :func:`commit_case_write` raises naming every path
-  restoration failed for; the case's prior state remains recoverable from
-  that journal, but it is not restored automatically a second time.
+  Rollback can itself fail -- see :func:`_rollback`'s own docstring. When it
+  does, the journal is left in place rather than removed, and
+  :func:`commit_case_write` raises naming every path restoration failed for;
+  the case's prior state remains recoverable from that journal, but it is
+  not restored automatically a second time.
 * A case lease serializes this framework's attempts against one case.
 
-What this does NOT guarantee, and must not be documented as guaranteeing
-(proposal defect W2):
+What this does NOT guarantee, and must not be documented as guaranteeing:
 
 * Simultaneous atomic visibility of several files to an arbitrary outside
   process. A process reading the case during a multi-file commit can observe
@@ -28,11 +26,11 @@ What this does NOT guarantee, and must not be documented as guaranteeing
   prevented -- an edit that changes the file's content in place is detected
   at precondition recheck as drift, which refuses the commit. A read
   dependency replaced by a *symlink* is a different case and is refused
-  outright rather than detected as drift by digest (R3 finding 4, corrected
-  2026-09-23): dereferencing it would validate one file's identity while
-  reading another's content, so :func:`_check_preconditions` refuses to trust
-  a symlinked precondition target at all, the same way :func:`_resolve_target`
-  already refused a symlinked write target.
+  outright rather than detected as drift by digest: dereferencing it would
+  validate one file's identity while reading another's content, so
+  :func:`_check_preconditions` refuses to trust a symlinked precondition
+  target at all, the same way :func:`_resolve_target` already refused a
+  symlinked write target.
 * Durability beyond what ``fsync`` on the file and its directory provides on
   the host filesystem. Network filesystems that reorder or defer writes are
   outside the supported profile -- this module has been exercised only
@@ -40,9 +38,9 @@ What this does NOT guarantee, and must not be documented as guaranteeing
   claims about, not POSIX in general.
 
 This is the only module in the repository that writes a framework-authored
-case input, once G3 closes. It moves bytes and digests; it does not know what
-a ``;`` means. If a caller needs dictionary syntax, the caller's format owner
-renders it into a :class:`~omnidriver.core.case_write.RenderedFile` first.
+case input. It moves bytes and digests; it does not know what a ``;`` means.
+If a caller needs dictionary syntax, the caller's format owner renders it
+into a :class:`~omnidriver.core.case_write.RenderedFile` first.
 """
 
 from __future__ import annotations
@@ -124,12 +122,8 @@ def _read_journal(case_root: Path) -> dict[str, Any] | None:
         ) from exc
     if not isinstance(payload, dict):
         raise CaseTransactionError(f"case transaction journal is malformed: {path}")
-    # R3 finding 5 (2026-09-23): `TRANSACTION_STATES` was declared but never
-    # checked -- any `state` value was accepted. Rollback is unconditional on
-    # this field today, so an unrecognised state was not silently treated as
-    # "nothing to recover"; but the invariant was dead, and a corrupted or
-    # hand-edited journal with a bogus state would have been read as though
-    # it were legitimate. Matches
+    # A corrupted or hand-edited journal with a bogus `state` must not be
+    # read as though it were legitimate. Matches
     # `remediation_transaction.read_remediation_transaction`'s own
     # status-validation pattern.
     if payload.get("state") not in TRANSACTION_STATES:
@@ -203,14 +197,14 @@ def _check_environment_precondition(
     precondition: "Precondition", environment: Mapping[str, str],
 ) -> None:
     """Recheck one ``environment`` precondition against the environment the
-    commit is running under (R3 finding 3, 2026-09-23).
+    commit is running under.
 
     Recorded at planning time as either a value (``digest`` is that value's
     digest, ``must_be_absent`` is ``False``) or an absence (``digest`` is
     ``None``, ``must_be_absent`` is ``True``) -- there is no third state, so
     an absent variable that later appears is exactly as much a change as a
     present one whose value changed (the same "absence is a dependency"
-    principle audit finding F2 established for include candidates).
+    principle applied to include candidates).
     """
     key = precondition.target
     value = environment.get(key)
@@ -249,16 +243,14 @@ def _check_preconditions(
     refuses -- fail-closed, not silently accepted. ``environment`` is checked
     against ``environment`` (the execution environment the commit runs
     under, or ``os.environ`` when the caller supplied none), never the
-    filesystem -- implemented 2026-09-23 (R3 finding 3); see
-    :func:`_check_environment_precondition`.
+    filesystem -- see :func:`_check_environment_precondition`.
 
     A symlink at a ``file``/``include``/``source_artifact``/``absence``
     target is refused outright, mirroring :func:`_resolve_target`'s refusal
-    of a symlink write target (R3 finding 4, 2026-09-23): dereferencing it
-    would validate one file's identity while reading another's content,
-    which is exactly how a case-relative read dependency could be quietly
-    replaced by a symlink to content outside the case with its precondition
-    still reporting green.
+    of a symlink write target: dereferencing it would validate one file's
+    identity while reading another's content, which is exactly how a
+    case-relative read dependency could be quietly replaced by a symlink to
+    content outside the case with its precondition still reporting green.
     """
     for precondition in preconditions:
         if precondition.kind == "environment":
@@ -286,13 +278,11 @@ def _check_preconditions(
                 f"precondition on {precondition.target!r} expected digest "
                 f"{precondition.digest!r}, but the target is missing"
             )
-        # R3 blocker 1 (2026-09-23): this read used to be unguarded. A target
-        # with no read permission (``mode=0o000`` is a plan-legal
+        # A target with no read permission (``mode=0o000`` is a plan-legal
         # ``RenderedFile.mode``, so this is reachable by ordinary use, not a
-        # contrived edge case) raised a bare ``PermissionError`` here, which
-        # propagated straight out of ``commit_case_write`` past every
-        # caller's and every test's assumption that a commit failure
-        # surfaces as ``CaseTransactionError``.
+        # contrived edge case) must not raise a bare ``PermissionError`` here
+        # -- every caller assumes a commit failure surfaces as
+        # ``CaseTransactionError``.
         try:
             content = target.read_bytes()
         except OSError as exc:
@@ -313,9 +303,7 @@ def _check_render_exists_before(
     files: tuple[RenderedFile, ...], targets: Mapping[str, Path],
 ) -> None:
     """Refuse a rendered file whose ``exists_before`` claim contradicts the
-    real filesystem, before any write (P2 fix,
-    docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md,
-    "Owner decisions" dated 2026-09-25).
+    real filesystem, before any write.
 
     ``render_case_files``'s own contract (``plugin_interface.py``) says a
     renderer "reads the case ... to patch an existing file" through
@@ -384,11 +372,10 @@ def _resolve_target(case_root: Path, rendered_path: str) -> Path:
 def _before_image(rendered: RenderedFile, target: Path) -> dict[str, Any]:
     """What ``target`` looked like before this transaction touches it.
 
-    R3 blocker 1 (2026-09-23): this read used to be unguarded, with the same
-    unwrapped-``PermissionError`` failure mode as ``_check_preconditions``'s
-    own read (see its matching comment). Any ``OSError`` reading the
-    before-image is now reported as a ``CaseTransactionError`` naming the
-    path and the operation, with the original preserved as ``__cause__``.
+    Any ``OSError`` reading the before-image is reported as a
+    ``CaseTransactionError`` naming the path and the operation, with the
+    original preserved as ``__cause__`` -- the same guard
+    ``_check_preconditions``'s own read needs, and for the same reason.
     """
     if target.exists() and not target.is_dir():
         try:
@@ -511,11 +498,11 @@ def _check_stack_freshness(plan: CaseWritePlan, driver_context: Any) -> None:
     no-op for it; those tests are exercising journal and rollback mechanics,
     not stack binding.
 
-    Known limit, not fixed here (audit finding C4): most capabilities
-    contribute a placeholder digest to ``capability_digest``, so an edited
-    implementation in an editable install with no version bump is invisible
-    to this check. It catches a changed provider set, version, profile,
-    dictionary vocabulary or manifest -- not an edited renderer's content.
+    Known limit: most capabilities contribute a placeholder digest to
+    ``capability_digest``, so an edited implementation in an editable
+    install with no version bump is invisible to this check. It catches a
+    changed provider set, version, profile, dictionary vocabulary or
+    manifest -- not an edited renderer's content.
     """
     identity = getattr(driver_context, "identity", None)
     if identity is None:
@@ -545,29 +532,23 @@ def commit_case_write(
 ) -> CaseWriteRecord:
     """Commit a reviewed plan, or replay a completed one by id.
 
-    Ordering (roadmap lifecycle steps 5-6): replay check -> stack-freshness
-    check -> lease -> unrecovered-journal check -> preconditions -> path
-    safety -> journal -> writes -> (rollback on failure | completion record).
+    Ordering: replay check -> stack-freshness check -> lease ->
+    unrecovered-journal check -> preconditions -> path safety -> journal ->
+    writes -> (rollback on failure | completion record).
 
-    ``case_lease_held`` (added 2026-09-23, Phase 3 Task 5): the lease this
-    function acquires is host-local and **not reentrant** (see
-    ``runtime.attempt_lease``'s own docstring) -- a second
+    The lease this function acquires is host-local and **not reentrant**
+    (see ``runtime.attempt_lease``'s own docstring) -- a second
     ``acquire_case_lease`` from the same thread finds its own record already
-    on disk and refuses it as a conflicting owner. `--apply` joining this
-    channel exposed a caller shape Task 1-4 never exercised: `cli.py`'s
-    `--apply` dispatch already holds the case lease for the whole `step`
-    execution (`_dispatch_context`) before `apply_overrides.py` reaches this
-    function, so an unconditional acquire-here would refuse itself. Passing
-    ``case_lease_held=True`` tells this function the caller already owns the
-    lease for `plan.request.case_root` (verified, not merely trusted, against
-    `case_lease_is_held` -- a caller that lies about holding it is a bug
-    worth failing loudly for, not silently running unprotected) and this call
-    neither acquires nor releases a second one, relying on the caller's own
-    lease for the whole duration instead. Every existing caller (e.g.
-    `cardiaccore.workflows.overrides.apply_input_overrides_planned`, and this
-    module's own tests) omits it, defaults to ``False``, and keeps acquiring
-    its own lease exactly as before -- this is additive, not a behaviour
-    change for them.
+    on disk and refuses it as a conflicting owner. A caller that already
+    holds the case lease for the whole operation it is part of (e.g.
+    `cli.py`'s `--apply` dispatch, which holds it for the whole `step`
+    execution) passes ``case_lease_held=True`` to say so; this is verified,
+    not merely trusted, against `case_lease_is_held` -- a caller that lies
+    about holding it is a bug worth failing loudly for, not silently running
+    unprotected -- and this call then neither acquires nor releases a second
+    lease, relying on the caller's own for the whole duration. Every other
+    caller omits it, defaults to ``False``, and acquires its own lease as
+    usual.
     """
     case_root = Path(plan.request.case_root)
 
@@ -600,13 +581,8 @@ def commit_case_write(
             lease_context = acquire_case_lease(case_root)
             lease_context.__enter__()
         except AttemptLeaseError as exc:
-            # R3 finding 6 (2026-09-23): this used to always say "write lease is
-            # already held", regardless of *why* `acquire_case_lease` refused --
-            # including when the real reason was that `case_root` does not exist
-            # at all (a relative root that failed to resolve where the caller
-            # expected, before blocker 2's construction-time guard closed the
-            # most common way that happened). Report the cause `exc` actually
-            # gives, not an assumption about which one it must be.
+            # Report the cause `exc` actually gives (e.g. `case_root` not
+            # existing at all), not an assumed "write lease is already held".
             raise CaseTransactionError(
                 f"cannot acquire the write lease for case {case_root}: {exc}"
             ) from exc
@@ -667,10 +643,10 @@ def commit_case_write(
             committed=tuple(committed),
             evidence=(),
             status="committed",
-            # 2026-09-24 (Phase 3 Task 9): `expected_effects`'s first real
-            # consumer -- copied from the plan unchanged, alongside the same
-            # validated `ParameterAssignment`s the channel wrote from
-            # (`plan.request.parameters`, not a second description of them).
+            # `expected_effects` is copied from the plan unchanged, alongside
+            # the same validated `ParameterAssignment`s the channel wrote
+            # from (`plan.request.parameters`, not a second description of
+            # them).
             parameters=tuple(
                 parameter.to_json() for parameter in plan.request.parameters
             ),
@@ -696,8 +672,8 @@ def recover_case_transaction(case_root: Path) -> CaseWriteRecord | None:
         lease_context = acquire_case_lease(case_root)
         lease_context.__enter__()
     except AttemptLeaseError as exc:
-        # Same correction as commit_case_write's (R3 finding 6): report the
-        # cause acquire_case_lease actually gives.
+        # Same as commit_case_write's: report the cause acquire_case_lease
+        # actually gives.
         raise CaseTransactionError(
             f"cannot acquire the write lease to recover case {case_root}: {exc}"
         ) from exc

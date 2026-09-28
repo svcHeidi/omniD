@@ -11,19 +11,6 @@ Two creation modes, kept distinct because their prerequisites differ:
 ``synthesize``        a case is built from a catalog. Requires explicit source
                       artifacts; a case built from nothing is not a supported
                       mode.
-
-**Corrected 2026-09-23 (Phase 3 Task 1):** this used to declare a third mode,
-``generated_input`` ("one input file is authored by an operation"), with an
-invented prerequisite -- exactly one distinct document -- so it would differ
-from ``clone_and_patch``. Review R2 had already named the two "distinct in
-name only"; Phase 2 answered that by inventing a rule instead of finding a
-real distinction. Phase 3 Task 1 counted production consumers
-(`grep -rn "generated_input" packages/*/src/`): zero. Neither adapter's
-`get_supported_mutation_modes` ever named it, no renderer in
-`openfoam/case_rendering.py` ever handled it, and the only production
-constructors of a `CaseMutationRequest` (`cardiaccore/workflows/overrides.py`,
-`cardiacfoam/dict_builder.py`) never built one. It named nothing. Removed,
-along with its invented prerequisite.
 """
 
 from __future__ import annotations
@@ -54,25 +41,19 @@ PRECONDITION_KINDS = frozenset({
                          # appearing there changes which file is selected
 })
 
-#: **Implemented-and-thin, noted 2026-09-23 (Phase 3 Task 1 Step 3).**
 #: ``"environment"`` is implemented end to end -- built by
 #: ``openfoam/case_rendering.py::patch_preconditions`` and checked by
-#: ``case_transaction._check_preconditions`` -- and correct, but it has
-#: exactly one emitter today. Do not delete it: Phase 3 Task 5 (``--apply``
-#: joining the channel) gives it a second consumer, and it was built for
-#: exactly that (see that task's F1b readback). Thin is not the same claim
-#: as unused; a later reader should not conflate the two.
+#: ``case_transaction._check_preconditions`` -- but has exactly one emitter
+#: today. Thin is not the same claim as unused; do not delete it.
 
 MUTATION_MODES = frozenset({"clone_and_patch", "synthesize"})
 
 #: What a `ParameterAssignment` asserts about the document's *final* state,
-#: not merely the action that gets it there (2026-09-23 decision, "a
-#: parameter asserts a final state, not only a value"). ``set`` is the
-#: default and matches every assignment built before this field existed: the
-#: key already exists, and must hold this value. ``ensure`` is the same
+#: not merely the action that gets it there. ``set`` is the default: the key
+#: already exists, and must hold this value. ``ensure`` is the same
 #: assertion plus "...and if the key is absent, create it" -- the typed
 #: counterpart of `mutators.update_foam_entry`'s own `add_if_missing`.
-#: ``remove`` asserts the key does not exist; it carries no value at all
+#: ``remove`` asserts the key does not exist and carries no value at all
 #: (enforced in `ParameterAssignment.__post_init__`, the same "digest and
 #: must_be_absent are different claims" reasoning `Precondition` already
 #: applies). One vocabulary, not three types: a caller that wants to upsert
@@ -108,21 +89,17 @@ def _freeze(value: Any) -> Any:
     """Deep-freeze a payload so a "frozen" record has no mutable interior.
 
     ``@dataclass(frozen=True)`` prevents rebinding a field, not mutating the
-    object a field points at. A plan holding a ``dict`` is a reviewed plan whose
-    reviewed contents can change after review -- proposal defect W1.
+    object a field points at, so a dict held by a "frozen" record could
+    otherwise still change after review.
 
-    Also where "a plan payload must be JSON-shaped and immutable" is made
-    true rather than merely claimed (R2 finding 3): a mapping key must be a
-    ``str`` -- JSON has no other key type, and an int key silently becomes a
-    string on a real JSON round trip without changing the plan digest, which
-    is how a reviewed plan can drift after review without the stability check
-    noticing -- and a non-finite float is refused here too, the same
-    ``allow_nan=False`` reasoning ``canonical_json`` applies at digest time,
-    but at construction instead of two steps later. Anything that is not a
-    mapping, a list/tuple, or one of the JSON scalar types is refused outright
-    rather than passed through unchanged, which is what let an arbitrary
-    object slip through before while this docstring already promised
-    otherwise.
+    Also enforces "a plan payload must be JSON-shaped and immutable": a
+    mapping key must be a ``str`` (an int key silently becomes a string on a
+    real JSON round trip, changing the plan digest without the stability
+    check noticing), and a non-finite float is refused here too, at
+    construction rather than only at digest time (the same
+    ``allow_nan=False`` reasoning ``canonical_json`` applies). Anything else
+    -- not a mapping, list/tuple, or JSON scalar -- is refused outright
+    rather than passed through unchanged.
     """
     if isinstance(value, Mapping):
         for key in value:
@@ -165,35 +142,27 @@ class ParameterAssignment:
     evidence_refs: tuple[str, ...] = ()
     operation: str = "set"
     #: Whether the adapter that resolved this key checked it against a real
-    #: catalog. Added 2026-09-24 for tutorial-record studies (design doc
-    #: ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md``
-    #: §5): a solver-owned key (checked against that solver's own dictionary
-    #: catalog) is ``True``; an environment-owned key with no full catalog
-    #: yet is written anyway, flagged ``False`` -- "no check invented in
-    #: place of a catalog".
-    #: Core never decides this itself; whichever adapter resolves the key
-    #: (``core.tutorial_records.resolve_case_patches``'s ``direct_key_validator``,
-    #: via ``RecordKeyValidationCapability``) does.
+    #: catalog. A solver-owned key (checked against that solver's own
+    #: dictionary catalog) is ``True``; an environment-owned key with no
+    #: full catalog yet is written anyway, flagged ``False``. Core never
+    #: decides this itself; whichever adapter resolves the key
+    #: (``core.tutorial_records.resolve_case_patches``'s
+    #: ``direct_key_validator``, via ``RecordKeyValidationCapability``) does.
     #:
-    #: **Tri-state, not a default-True boolean (review finding M2, corrected
-    #: 2026-09-24).** This originally defaulted to ``True`` on the same "no
-    #: field means the prior, only behaviour" reasoning ``operation``/
-    #: ``evidence_refs`` use -- but unlike those fields, a validation OPINION
-    #: that was never actually formed is not the same as one that passed:
-    #: defaulting True asserted a catalog check for every one of the
-    #: thousands of pre-existing constructor sites that never touched this
-    #: field at all. ``None`` now means "not stated" -- neither validated nor
-    #: known-unvalidated -- and is the default; ``bool`` means an adapter
-    #: actually answered. ``from_json`` of a payload written before this
-    #: field existed deserializes as ``None``, never ``True``.
+    #: Tri-state, not a default-True boolean: a validation opinion that was
+    #: never formed is not the same as one that passed, so ``None`` means
+    #: "not stated" -- neither validated nor known-unvalidated -- and is the
+    #: default; ``bool`` means an adapter actually answered. ``from_json`` of
+    #: a payload written before this field existed deserializes as ``None``,
+    #: never ``True``.
     validated: bool | None = None
 
     def __post_init__(self) -> None:
-        # Coerced to a tuple before anything below reads it (R2 finding 3): a
-        # list `key_path` let a caller append to it *after* the duplicate-slot
-        # check in `CaseMutationRequest.__post_init__` had already run against
-        # the pre-append `slot()`, silently invalidating a check that had
-        # already passed.
+        # Coerced to a tuple before anything below reads it: a list
+        # `key_path` could otherwise be appended to after
+        # `CaseMutationRequest.__post_init__`'s duplicate-slot check already
+        # ran against the pre-append `slot()`, silently invalidating a check
+        # that had already passed.
         object.__setattr__(self, "key_path", tuple(self.key_path))
         object.__setattr__(self, "evidence_refs", tuple(self.evidence_refs))
         _check_case_relative("a parameter's document", self.document)
@@ -211,26 +180,23 @@ class ParameterAssignment:
                 f"{sorted(PARAMETER_OPERATIONS)}"
             )
         # `validated` is tri-state (`bool | None`), not merely truthy: a
-        # caller passing the STRING "false" must be refused rather than
-        # silently accepted as a non-empty, truthy string (review finding
-        # M2). `isinstance(True, int)` is also true in Python, but `bool` is
-        # checked directly here rather than excluding `int`, since there is
-        # no legitimate integer input to this field at all.
+        # caller passing the string "false" must be refused rather than
+        # silently accepted as a truthy string. `bool` is checked directly
+        # rather than excluding `int` (also true via `isinstance(True,
+        # int)`), since there is no legitimate integer input to this field.
         if self.validated is not None and not isinstance(self.validated, bool):
             raise TypeError(
                 f"parameter {self.qualified_id!r} declares validated="
                 f"{self.validated!r}; must be a bool or None (not stated), "
                 f"got {type(self.validated).__name__}"
             )
-        # 2026-09-23 decision ("a parameter asserts a final state, not only a
-        # value"): `remove` asserts absence, which is a different claim from
-        # "has this value" -- carrying a value alongside it would be two
-        # assertions on one field, so it is refused outright, the same way
-        # `Precondition` refuses a `digest` together with `must_be_absent`.
-        # `set`/`ensure` still require a value; every declared `VALUE_KINDS`
-        # shape check already rejects `None`, but refusing it here first
-        # gives a caller a direct answer instead of a shape-mismatch message
-        # about `None` not fitting `"scalar"`/`"boolean"`/etc.
+        # `remove` asserts absence, a different claim from "has this value"
+        # -- carrying a value alongside it would be two assertions on one
+        # field, the same way `Precondition` refuses `digest` together with
+        # `must_be_absent`. `set`/`ensure` still require a value; refusing
+        # `None` here first gives a direct answer instead of a
+        # shape-mismatch message about `None` not fitting
+        # `"scalar"`/`"boolean"`/etc.
         if self.operation == "remove":
             if self.value is not None:
                 raise ValueError(
@@ -246,16 +212,12 @@ class ParameterAssignment:
                 f"{self.operation!r}, which requires a value; only 'remove' "
                 f"may omit one"
             )
-        # Plan's 2026-09-23 decision ("a parameter value is typed data, never
-        # rendered text"): a value is native Python data, checked against its
-        # declared shape here, not rendered text checked nowhere. This closes
-        # R2 finding 4 -- `value_kind="scalar", value=float("nan")` and
-        # `value_kind="banana"` were both accepted before this call existed.
-        # `value_kind` itself is always checked, even for `remove` -- it
-        # still names the shape of the key being removed, for audit
-        # purposes, so `value_kind="banana"` is refused regardless of
-        # operation. Only the "does the value fit that shape" half is
-        # skipped for `remove`: there is no value to check.
+        # A parameter value is typed data, checked against its declared
+        # shape here -- never rendered text checked nowhere else. `value_kind`
+        # is always checked, even for `remove` (it still names the shape of
+        # the removed key, for audit purposes); only the "does the value fit
+        # that shape" half is skipped for `remove`, since there is no value
+        # to check.
         if self.value_kind not in VALUE_KINDS:
             raise ValueError(
                 f"parameter {self.qualified_id!r} declares value_kind "
@@ -335,16 +297,15 @@ class ParameterAssignment:
                 for key, values in payload.get("allowed_bindings", {}).items()
             },
             unit=payload.get("unit", ""),
-            # Absent in a plan written before this field existed (schema
-            # version unchanged -- see the 2026-09-23 decision's report):
-            # every such assignment was implicitly a `set`, so that is the
-            # neutral default here, the same "no field means the prior,
-            # only behaviour" reasoning `unit`/`evidence_refs` already use.
+            # Absent in a plan written before this field existed: every such
+            # assignment was implicitly a `set`, so that is the neutral
+            # default here, the same "no field means the prior, only
+            # behaviour" reasoning `unit`/`evidence_refs` already use.
             operation=payload.get("operation", "set"),
             evidence_refs=tuple(payload.get("evidence_refs", ())),
             # `None` ("not stated"), never `True`, for a plan payload written
-            # before this field existed (review finding M2) -- absence must
-            # not be read as an assertion that a catalog check happened.
+            # before this field existed -- absence must not be read as an
+            # assertion that a catalog check happened.
             validated=payload.get("validated"),
         )
 
@@ -361,51 +322,22 @@ def _json_value(value: Any) -> Any:
 class CaseMutationRequest:
     """An explicit request to author case inputs, in a declared mode.
 
-    Each mode's declared prerequisite is enforced, not merely documented (R2
-    finding 7): ``clone_and_patch`` assigns at least one parameter or names at
-    least one source artifact, and ``synthesize`` names at least one non-empty
-    source artifact.
-
-    **Corrected 2026-09-23 (Phase 3 Task 1):** a third prerequisite used to
-    live here too -- ``generated_input`` authors exactly one document -- for
-    a mode that had no production consumer at all. See the module docstring's
-    2026-09-23 note. `clone_and_patch`'s "at least one parameter" rule was
-    reconsidered in the same pass and kept as-was: the one production caller
-    that could produce a zero-parameter patch
-    (`cardiaccore.workflows.overrides.apply_input_overrides_planned`) already
-    returns `None` before constructing a request when its overrides resolve
-    to nothing, rather than relying on this guard to catch it. At the time,
-    "no caller exercises this rule as the thing that stops a real
-    zero-parameter patch" was true.
-
-    **Corrected again, 2026-09-23 (Phase 3 Task 7).** A real caller now does:
-    `heart_solver_comparison`'s whole-template-file swap assigns zero
-    `ParameterAssignment`s (its four documents are copied in verbatim, not
-    key/value-patched) but is still a genuine `clone_and_patch` mutation, not
-    a no-op. The rule is widened, not dropped: a `clone_and_patch` request
-    must still assign at least one parameter OR name at least one source
-    artifact -- the same "you must declare what you did" shape `synthesize`
-    already has, rather than accepting a request that does neither.
-
-    **Corrected 2026-09-24:** `heart_solver_comparison` was deleted (it
-    pointed at a native case that does not exist -- see
-    `docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md`
-    §2/§7). The rule stays widened regardless: `synthesize`'s own "declare
-    what you did" shape is the one this mirrors, and a future
-    `clone_and_patch` whole-file swap (the same class of mutation, tracked
-    for the tutorials still to migrate) would need it again. Weakening a
-    validation invariant is not a corollary of deleting the one caller that
-    happened to motivate it.
+    Each mode's declared prerequisite is enforced, not merely documented:
+    ``clone_and_patch`` assigns at least one parameter or names at least one
+    source artifact, and ``synthesize`` names at least one non-empty source
+    artifact. The ``clone_and_patch`` rule mirrors ``synthesize``'s own "you
+    must declare what you did" shape rather than requiring a parameter
+    outright, because a whole-file swap that copies documents in verbatim
+    (zero `ParameterAssignment`s, one or more source artifacts) is still a
+    genuine mutation, not a no-op.
 
     ``source_artifacts`` are opaque identifiers -- a path, a digest, a URI --
-    naming something a mutation consumed (a synthesis, per the original
-    design, but now also a `clone_and_patch` whose only content is a declared
-    artifact -- see above), and are deliberately NOT case-relative-checked
-    the way ``ParameterAssignment.document`` and ``RenderedFile.path`` are: a
-    mesh or template a mutation reads from may legitimately live outside the
-    case (an externally supplied source), where a document this framework
-    writes into never should. Only non-empty, non-whitespace-only is
-    enforced here.
+    naming something a mutation consumed, and are deliberately NOT
+    case-relative-checked the way ``ParameterAssignment.document`` and
+    ``RenderedFile.path`` are: a mesh or template a mutation reads from may
+    legitimately live outside the case (an externally supplied source),
+    where a document this framework writes into never should. Only
+    non-empty, non-whitespace-only is enforced here.
     """
 
     mode: str
@@ -417,20 +349,19 @@ class CaseMutationRequest:
     requested_by: str
 
     def __post_init__(self) -> None:
-        # Coerced before any check reads them (R2 finding 3): a list
-        # `parameters`/`source_artifacts` let a caller mutate the stored
-        # object in place *after* the duplicate-slot check below had already
-        # run against it, silently invalidating a check that had already
-        # passed. See the analogous comment on ParameterAssignment.
+        # Coerced before any check reads them: a list
+        # `parameters`/`source_artifacts` could otherwise be mutated in
+        # place after the duplicate-slot check below already ran against it,
+        # silently invalidating a check that had already passed. See the
+        # analogous comment on ParameterAssignment.
         object.__setattr__(self, "source_artifacts", tuple(self.source_artifacts))
         object.__setattr__(self, "parameters", tuple(self.parameters))
-        # R3 blocker 2 (2026-09-23): a relative `case_root` resolves against
-        # whatever directory happens to be current *at commit time*, not at
-        # plan time -- two different processes (or the same process after a
-        # `chdir`) can commit one plan into two different directories with no
-        # error at all. A channel whose entire purpose is auditability must
-        # refuse that at construction, before a plan built on this request
-        # can even exist, not discover it later inside `commit_case_write`.
+        # A relative `case_root` resolves against whatever directory happens
+        # to be current *at commit time*, not at plan time -- two different
+        # processes (or the same process after a `chdir`) could commit one
+        # plan into two different directories with no error at all. A
+        # channel whose entire purpose is auditability must refuse that at
+        # construction, not discover it later inside `commit_case_write`.
         if not Path(self.case_root).is_absolute():
             raise ValueError(
                 f"case_root must be absolute, not {str(self.case_root)!r}; a "
@@ -457,24 +388,10 @@ class CaseMutationRequest:
                 "case built from no declared source is not a supported creation "
                 "mode"
             )
-        # **Corrected 2026-09-23 (Phase 3 Task 7).** This used to require at
-        # least one `ParameterAssignment` outright. Task 1 kept that rule
-        # after finding "no caller needs this rule relaxed" -- true at the
-        # time, false then: `heart_solver_comparison`'s whole-template-file
-        # swap was a real `clone_and_patch` mutation with zero key/value
-        # assignments. Widened to mirror `synthesize`'s own "you must declare
-        # what you did" invariant: a clone_and_patch request now satisfies it
-        # with a parameter OR a named source artifact -- not neither. A
-        # request with both empty still patches nothing and is still refused.
-        #
-        # **Corrected 2026-09-24:** `heart_solver_comparison` was deleted --
-        # it pointed at no native case. `manufactured_purkinje_graph`'s own
-        # `purkinjeGraph.<id>` copy, once floated here as a second example,
-        # stays a direct write outside this channel entirely (no artifact
-        # staging primitive yet -- see that tutorial's own `_apply_case`
-        # docstring), so it does not actually exercise this branch. The rule
-        # stays widened anyway: it mirrors `synthesize`'s own invariant, and
-        # a future `clone_and_patch` whole-file swap would need it again.
+        # Mirrors `synthesize`'s own "you must declare what you did"
+        # invariant -- see the class docstring: a clone_and_patch request
+        # satisfies it with a parameter OR a named source artifact, not
+        # neither.
         if self.mode == "clone_and_patch" and not self.parameters and not self.source_artifacts:
             raise ValueError(
                 "a clone_and_patch request must assign at least one "
@@ -543,8 +460,8 @@ class RenderedFile:
     digested. The global "large assets are referenced by digest, never
     embedded" rule is about meshes and VTU output -- this channel's actual
     subject, a rendered dictionary or input file, is typically kilobytes, and
-    a reviewer (or a later recovery reader, Task 6) needs the real bytes, not
-    a hash of bytes it does not have. ``content_digest`` stays as a derived,
+    a reviewer (or a later recovery reader) needs the real bytes, not a hash
+    of bytes it does not have. ``content_digest`` stays as a derived,
     quick-to-compare integrity check over exactly those bytes.
     """
 
@@ -594,10 +511,10 @@ class RenderedFile:
 
     @classmethod
     def from_json(cls, payload: Mapping[str, Any]) -> "RenderedFile":
-        # R2 finding 12: this used to recompute content_digest from the
-        # decoded bytes and never compare it against the stored one, so a
-        # tampered or corrupted content_digest was silently discarded rather
-        # than caught -- the opposite of what "an integrity check" promises.
+        # Compares the decoded bytes' digest against the stored one rather
+        # than silently discarding a mismatch -- a tampered or corrupted
+        # content_digest must be caught, which is what "an integrity check"
+        # promises.
         content = base64.b64decode(payload["content_base64"])
         stored_digest = payload["content_digest"]
         computed_digest = _digest_bytes(content)
@@ -662,16 +579,13 @@ class CaseWritePlan:
     (:mod:`omnidriver.core.case_transaction`); before-*digests* live here,
     because a conflict check is part of what a reviewer approves.
 
-    ``expected_effects`` (added 2026-09-24, Phase 3 Task 9, "the `describe`
-    seam"): threaded straight from the ``ResolvedMutation`` every producer
-    already builds before constructing this plan. Task 1 (2026-09-23) found
-    this same data computed by both producers and read by nothing --
-    ``CaseWritePlan`` had no field for it, so it was discarded on every real
-    call. This gives it its first consumer: ``commit_case_write`` copies it
-    onto the returned ``CaseWriteRecord``, which is how ``describe`` (Task 9)
-    reads what a real ``plan_case`` invocation, run against a disposable
-    staged clone, actually proposes to change -- without core inventing a
-    second, hand-maintained description of the same facts.
+    ``expected_effects`` is threaded straight from the ``ResolvedMutation``
+    every producer already builds before constructing this plan.
+    ``commit_case_write`` copies it onto the returned ``CaseWriteRecord``,
+    which is how ``describe`` reads what a real ``plan_case`` invocation, run
+    against a disposable staged clone, actually proposes to change --
+    without core inventing a second, hand-maintained description of the same
+    facts.
     """
 
     request: CaseMutationRequest
@@ -684,19 +598,17 @@ class CaseWritePlan:
     expected_effects: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        # Coerced before the duplicate-path check below reads them (R2
-        # finding 3): a list `files` let a caller `.append()` a colliding
-        # path onto the SAME object this check had already approved,
-        # silently changing `plan_digest` after review. See the analogous
-        # comment on ParameterAssignment.
+        # Coerced before the duplicate-path check below reads them: a list
+        # `files` could otherwise be `.append()`ed onto after this check
+        # already approved it, silently changing `plan_digest` after review.
+        # See the analogous comment on ParameterAssignment.
         object.__setattr__(self, "files", tuple(self.files))
         object.__setattr__(self, "preconditions", tuple(self.preconditions))
         object.__setattr__(self, "expected_effects", tuple(self.expected_effects))
-        # R2 finding 12: schema_version was checked only in from_json, so a
-        # plan constructed directly (not read back from a persisted payload)
-        # with schema_version=99 was accepted outright. And a plan with zero
-        # files -- nothing to write, so committing it would be a no-op
-        # dressed as a mutation -- was also accepted.
+        # Checked here too, not only in `from_json`, so a plan constructed
+        # directly (not read back from a persisted payload) can't skirt
+        # either check: a wrong schema_version, or zero files -- nothing to
+        # write, so committing it would be a no-op dressed as a mutation.
         if self.schema_version != PLAN_SCHEMA_VERSION:
             raise ValueError(
                 f"plan schema version {self.schema_version!r} is not "
@@ -735,15 +647,14 @@ class CaseWritePlan:
     def _digest_payload(self) -> dict[str, Any]:
         """``to_json()`` with order-irrelevant lists canonically sorted.
 
-        R2 finding 12: ``files`` and ``request.parameters`` cannot contain
-        two entries at the same path/slot (enforced above and in
+        ``files`` and ``request.parameters`` cannot contain two entries at
+        the same path/slot (enforced above and in
         ``CaseMutationRequest.__post_init__``), so their as-written order is
-        not semantically meaningful -- but ``plan_digest`` hashed them
-        as-given, so two plans differing only in list order digested
-        differently. That breaks Task 6's replay/staleness comparison with a
-        spurious mismatch. Sorted here, not in ``to_json()``, so a reviewer
-        still sees the plan in the order it was authored; only the digest is
-        canonicalized.
+        not semantically meaningful -- but hashing them as-given would make
+        two plans differing only in list order digest differently, breaking
+        replay/staleness comparison with a spurious mismatch. Sorted here,
+        not in ``to_json()``, so a reviewer still sees the plan in the order
+        it was authored; only the digest is canonicalized.
         """
         payload = self.to_json()
         payload["files"] = sorted(payload["files"], key=lambda f: f["path"])
@@ -751,11 +662,11 @@ class CaseWritePlan:
             payload["request"]["parameters"],
             key=lambda p: f"{p['document']}::{'.'.join(p['expanded_key_path'])}",
         )
-        # Same reasoning as the two sorts above, extended 2026-09-24 (Task 9):
-        # `expected_effects` is positionally aligned with `targets`/
-        # `parameters` at construction time, not a keyed structure -- two
-        # plans differing only in that construction order would otherwise
-        # digest differently for no semantic reason.
+        # Same reasoning as the two sorts above: `expected_effects` is
+        # positionally aligned with `targets`/`parameters` at construction
+        # time, not a keyed structure -- two plans differing only in that
+        # construction order would otherwise digest differently for no
+        # semantic reason.
         payload["expected_effects"] = sorted(payload["expected_effects"])
         return payload
 
@@ -781,11 +692,10 @@ class CaseWritePlan:
             stack_identity=payload["stack_identity"],
             created_at=payload["created_at"],
             schema_version=version,
-            # Absent in a plan payload written before this field existed
-            # (schema_version unchanged -- the same "no field means the
-            # prior, only behaviour" reasoning `ParameterAssignment.from_json`
-            # already uses for `operation`): an empty tuple is the neutral,
-            # honest default, not a guess at what an old plan expected.
+            # Absent in a plan payload written before this field existed: an
+            # empty tuple is the neutral default, the same "no field means
+            # the prior, only behaviour" reasoning
+            # `ParameterAssignment.from_json` uses for `operation`.
             expected_effects=tuple(payload.get("expected_effects", ())),
         )
 
@@ -794,17 +704,15 @@ class CaseWritePlan:
 class CaseWriteRecord:
     """What a committed transaction actually did. Not part of the plan.
 
-    ``parameters`` and ``expected_effects`` (added 2026-09-24, Phase 3
-    Task 9): copied from the committed ``CaseWritePlan`` by
-    ``commit_case_write`` -- ``parameters`` is
+    ``parameters`` and ``expected_effects`` are copied from the committed
+    ``CaseWritePlan`` by ``commit_case_write`` -- ``parameters`` is
     ``[p.to_json() for p in plan.request.parameters]`` (the same validated
     ``ParameterAssignment``s the channel wrote from, not a second
     description of them), ``expected_effects`` is ``plan.expected_effects``
-    unchanged. This is ``expected_effects``'s first real consumer: Task 1
-    found it computed by every producer and read by nothing.  ``describe``
-    reads both off a real ``plan_case`` invocation run against a disposable
-    staged case clone (see ``core.introspection``) to answer "what will this
-    change" without core inventing a parallel, adapter-specific mapping.
+    unchanged. ``describe`` reads both off a real ``plan_case`` invocation
+    run against a disposable staged case clone (see ``core.introspection``)
+    to answer "what will this change" without core inventing a parallel,
+    adapter-specific mapping.
     """
 
     transaction_id: str
@@ -817,10 +725,10 @@ class CaseWriteRecord:
     expected_effects: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        # R2 finding 3: `rec.committed[0]["a"] = 999` worked, because these
-        # were plain dicts inside a tuple whose OWN outer immutability said
+        # `rec.committed[0]["a"] = 999` would otherwise work: these are
+        # plain dicts inside a tuple whose own outer immutability says
         # nothing about its elements. Deep-freeze each entry the same way
-        # `ResolvedMutation.targets` now is.
+        # `ResolvedMutation.targets` is.
         object.__setattr__(self, "committed", tuple(_freeze(entry) for entry in self.committed))
         object.__setattr__(self, "evidence", tuple(_freeze(entry) for entry in self.evidence))
         object.__setattr__(self, "parameters", tuple(_freeze(entry) for entry in self.parameters))
@@ -835,12 +743,12 @@ class CaseWriteRecord:
             "evidence": [dict(entry) for entry in self.evidence],
             "status": self.status,
             # `dict(entry)` (the shallow unfreeze `committed`/`evidence` use
-            # below) only un-wraps the outermost `MappingProxyType`; a
+            # above) only un-wraps the outermost `MappingProxyType`; a
             # parameter's own nested `binding`/`allowed_bindings` mappings
-            # would still be frozen underneath it and fail JSON
-            # serialization. `_json_value` already recurses through every
-            # `Mapping` (a `MappingProxyType` included) and `tuple`, which is
-            # exactly what `_freeze`'s deep-freeze needs undone by.
+            # would still be frozen underneath and fail JSON serialization.
+            # `_json_value` recurses through every `Mapping` (including
+            # `MappingProxyType`) and `tuple`, undoing `_freeze`'s
+            # deep-freeze.
             "parameters": [_json_value(entry) for entry in self.parameters],
             "expected_effects": list(self.expected_effects),
         }
@@ -853,31 +761,17 @@ class ResolvedMutation:
     Pure. Produced without reading the case, so a dry run costs nothing and
     changes nothing. The renderer reads; this does not.
 
-    **Audited 2026-09-23 (Phase 3 Task 1 Step 3).** Not a pure passthrough
-    container: it earns its type. ``targets`` is genuinely consumed, not
-    forwarded whole -- ``case_rendering._document_edits`` groups it by
-    document and ``formats()`` derives a value from it that neither producer
-    hands over directly. ``__post_init__`` also enforces a real invariant
-    (deep-freezing ``targets`` the same way every other declared-tuple field
-    in this module is, per R2 finding 3) that a plain container would not.
+    ``targets`` is genuinely consumed, not forwarded whole --
+    ``case_rendering._document_edits`` groups it by document and
+    ``formats()`` derives a value from it that neither producer hands over
+    directly.
 
-    ``preconditions`` and ``semantic_owner_id``, by contrast, *are* passed
-    straight through untouched by both producers
+    ``preconditions`` and ``semantic_owner_id``, by contrast, are passed
+    straight through unchanged by both producers
     (``cardiaccore/workflows/overrides.py::resolve_patch_mutation``,
     ``cardiacfoam/dict_builder.py``'s synthesis resolver) into
-    ``CaseWritePlan`` unchanged -- that is expected of a resolve/render
-    boundary and not itself a defect.
-
-    ``expected_effects`` is a different finding: both producers build one
-    (human-readable strings describing what will change), but
-    ``CaseWritePlan`` has no ``expected_effects`` field, and nothing else
-    reads this one either (checked: no reference outside its own producers,
-    this class, and tests that merely supply ``()``). It is computed and then
-    discarded on every real call. Recommendation: either give it a consumer
-    (an evidence/record field, or a `describe`-style preview) or drop it in
-    a later task once nothing writes it either -- but that is Tasks 2-6's
-    call, not this one's: removing a field mid-plan while those tasks still
-    build on this type is worse than carrying one thin field.
+    ``CaseWritePlan`` -- expected of a resolve/render boundary, not itself a
+    defect.
     """
 
     request: CaseMutationRequest
@@ -887,10 +781,10 @@ class ResolvedMutation:
     semantic_owner_id: str
 
     def __post_init__(self) -> None:
-        # Coerced and deep-frozen, the same as every other declared-tuple
-        # field in this module (R2 finding 3): `targets` holds plain mappings
-        # -- unlike `RenderedFile`/`Precondition`, which are themselves frozen
-        # dataclasses -- so it needs `_freeze`, not just a tuple() call.
+        # Coerced and deep-frozen the same as every other declared-tuple
+        # field in this module: `targets` holds plain mappings -- unlike
+        # `RenderedFile`/`Precondition`, which are themselves frozen
+        # dataclasses -- so it needs `_freeze`, not just `tuple()`.
         object.__setattr__(self, "targets", tuple(_freeze(target) for target in self.targets))
         object.__setattr__(self, "preconditions", tuple(self.preconditions))
         object.__setattr__(self, "expected_effects", tuple(self.expected_effects))

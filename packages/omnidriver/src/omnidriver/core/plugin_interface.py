@@ -1,29 +1,9 @@
 """Solver-agnostic plugin contract for omnidriver.
 
-Two Protocol classes define what a solver plugin must implement:
-
-- :class:`SolverPlugin` — the plugin contract, enforced in full by
-  :func:`validate_plugin`.
-- :class:`SolverPluginOptionalHooks` — the probe-based optional hooks that
-  unlock additional capabilities (sweeps, mesh diagnostics, report catalogs,
-  override scopes, …).  **Read this class** to discover all extension points
-  before deciding your plugin is complete.
-
-Use :func:`driver_context` or :func:`load_plugin_context` to create a
-validated, immutable :class:`DriverContext` for each public operation.
-Adapters may provide their own context factories for convenience, and
-:func:`default_driver_context` only at compatibility boundaries.
-
-Environment and solver adapters implement this contract directly. See
-``AGENT_GUIDE.md``, section "Plugin Guide -- Adding a New Solver".
-2026-09-14: this previously pointed at
-``.agents/skills/omnidriver-plugin-builder/SKILL.md``, a path that lived
-in the pre-migration cardiacFOAM tree and exists in no repository now.
-2026-09-20: the ``SolverPlugin`` bullet previously said "27 required
-members." That count went stale the moment :func:`_required_plugin_members`
-started deriving the required set from the capability seams' ``:status:``
-tiers instead of a hand-maintained literal; counting members in prose is
-exactly what rotted here, so the number is not restated.
+:class:`SolverPlugin` is the plugin contract, enforced in full by
+:func:`validate_plugin`; :class:`SolverPluginOptionalHooks` documents the
+probe-based optional hooks. See ``AGENT_GUIDE.md``, section "Plugin Guide --
+Adding a New Solver".
 """
 
 # REQUIRED, not stylistic. Several annotations below name types imported only
@@ -167,9 +147,8 @@ class SolverPlugin(Protocol):
         (for example a credential a solver prints in its build header).
 
         Every match is replaced whole by ``[REDACTED]``; capture groups are
-        not kept (clarified 2026-09-25, wave-2 review I3). Match only the
-        secret, using lookarounds for any context it needs, e.g.
-        ``(?<=://)[^/\\s@]+(?=@)`` for a URL's credential."""
+        not kept. Match only the secret, using lookarounds for any context
+        it needs, e.g. ``(?<=://)[^/\\s@]+(?=@)`` for a URL's credential."""
         ...
 
     def get_telemetry_source_globs(self, command: str) -> tuple[str, ...]:
@@ -225,12 +204,11 @@ class SolverPlugin(Protocol):
 class PluginIdentity:
     """Stable description of the plugin semantics attached to an operation.
 
-    **Superseded 2026-09-21.** :class:`DriverContext.identity` now holds a
-    :class:`~omnidriver.core.provider_identity.StackIdentity` -- one identity
-    per operation was an arity assumption that composition removes, the same
-    way :class:`DriverContext.plugin` was. This class is kept, unconstructed
-    by :func:`driver_context`, because nothing in this repository still names
-    it; delete it once that stays true across a survey.
+    Superseded by :class:`DriverContext.identity`, which holds a
+    :class:`~omnidriver.core.provider_identity.StackIdentity` (one identity
+    per operation was an arity assumption that composition removes). Kept,
+    unconstructed by :func:`driver_context`, until nothing in this repository
+    still names it.
     """
 
     id: str
@@ -254,12 +232,9 @@ class PluginIdentity:
 class DriverContext:
     """Per-operation provider stack for solver-specific behaviour.
 
-    Immutable and threaded through planning, discovery and execution, as
-    before. What changed 2026-09-20 is arity: this held a single `plugin`
-    because the migration it came from replaced a process-global active
-    plugin, and that migration was about isolation, not about how many
-    providers there are. Composition was consequently done by hand inside each
-    solver plugin, differently in each.
+    Immutable and threaded through planning, discovery and execution. Holds
+    any number of providers, composed once via :attr:`capabilities`, rather
+    than a single active plugin.
     """
 
     providers: tuple[SolverPlugin, ...]
@@ -268,13 +243,9 @@ class DriverContext:
     # recorded where a selector becomes a context (``load_plugin_context``,
     # ``load_discovered_plugin``) and ``None`` everywhere else: a hand-built
     # or default context was produced by no selector, and inventing one would
-    # be a guess. Added 2026-09-24: sweep_run's per-case ``python -m
-    # omnidriver run`` child was never told which plugin its parent had, so
-    # it resolved the entry-point default -- which refuses whenever two
-    # solver-tier adapters are installed. Excluded from equality because it
-    # says how to rebuild a context, not what the context is, and from
-    # ``identity`` for the same reason ``ProviderIdentity.source`` is kept out
-    # of ``capability_digest``.
+    # be a guess. Excluded from equality because it says how to rebuild a
+    # context, not what the context is, and from ``identity`` for the same
+    # reason ``ProviderIdentity.source`` is kept out of ``capability_digest``.
     plugin_selector: str | None = field(default=None, compare=False)
 
     @cached_property
@@ -294,11 +265,6 @@ class SolverPluginOptionalHooks(Protocol):
     ``_REQUIRED_PLUGIN_MEMBERS``, so this class is inert at load time:
     ``validate_plugin`` never consults it, and declaring or omitting any of
     these changes no plugin's loading behaviour.
-
-    **Corrected 2026-09-20:** this previously also named
-    ``_REQUIRED_V2_MEMBERS``, a constant that exists in no module -- it was
-    referenced only here. It named two hook counts, 14 and fifteen, where the
-    class declares neither.
 
     **Why this class exists.** Until it did, these hooks appeared
     nowhere in the plugin contract. They were reachable only by reading the
@@ -410,8 +376,7 @@ class SolverPluginOptionalHooks(Protocol):
         """Preflight the runtime environment a plan's workflow_dag will run
         in. Absent -> no adapter-specific environment evidence is claimed.
         ``environment_source`` is the operator's opaque ``--environment-source``
-        value; this plugin decides what it means (renamed from
-        ``explicit_bashrc`` 2026-09-26, spec A1)."""
+        value; this plugin decides what it means."""
         ...
 
     def get_configured_environment(self, env, driver_context) -> dict[str, str]:
@@ -464,12 +429,12 @@ class SolverPluginOptionalHooks(Protocol):
         the case-file roots: for example the directory a run resumes from,
         and that directory inside each parallel replica. Absent -> ``()``:
         core walks no state directory. Each must be a non-empty case-relative
-        ``str`` path inside the case (added 2026-09-26, spec A2).
+        ``str`` path inside the case.
 
         ``conventions`` is the stack's merged ``CaseRuntimeConventions`` --
         the same value staging and discovery read -- so a plugin computing
         replica roots reads its own replica globs from there rather than a
-        second, independent copy (R2 fix, finding I2)."""
+        second, independent copy."""
         ...
 
     # -- EnvironmentPreflightCapability --------------------------------------
@@ -505,10 +470,7 @@ class SolverPluginOptionalHooks(Protocol):
         wrote it and can say nothing about the result" is not a passed check.
         When it is absent the write still happens and the adapter reports
         whatever it can, which may be nothing. Absent -> applying overrides is
-        unsupported for this adapter.
-
-        Added 2026-09-22 (audit finding F1): the parameter existed on the
-        capability adapter and was never forwarded here."""
+        unsupported for this adapter."""
         ...
 
     def get_override_target_paths(
@@ -571,10 +533,10 @@ class SolverPluginOptionalHooks(Protocol):
         A record (``core.tutorial_records.TutorialRecord``) is inert data --
         a native case path, its own axes, its workflow steps -- not a
         callable factory; core never calls into the plugin to build one.
-        Absent -> ``None``, not ``{}`` (review finding M1: distinct from a
-        plugin that implements this hook and simply registers no records
-        yet) -- the ordinary case for a plugin that has not migrated any
-        tutorial onto this shape yet (design doc
+        Absent -> ``None``, not ``{}`` -- distinct from a plugin that
+        implements this hook and simply registers no records yet; the
+        ordinary case for a plugin that has not migrated any tutorial onto
+        this shape yet (see
         ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md``)."""
         ...
 
@@ -584,9 +546,7 @@ class SolverPluginOptionalHooks(Protocol):
         (``core.runtime.generic_case.make_generic_case_spec``) -- e.g.
         cardiacFOAM's marker-aware wrapper, which supplies its own dictionary
         files and mutation callback. Absent -> ``None``, meaning "use core's
-        own factory" (step S6, docs/superpowers/specs/2026-09-28-supplied-
-        inputs-design.md; replaces the deleted ``get_tutorial_catalog()``'s
-        ``"make_generic_case_spec"`` smuggled key)."""
+        own factory"."""
         ...
 
     # -- RecordKeyValidationCapability ------------------------------------------
@@ -603,9 +563,9 @@ class SolverPluginOptionalHooks(Protocol):
         but this plugin has no full catalog for yet) returns
         ``(inferred_kind, False)`` rather than raising -- both are
         legitimate, adapter-owned answers core does not choose between.
-        Absent -> ``None`` (review finding M1): a stack with no validator
-        REFUSES a record case outright (``record_execution
-        ._resolve_and_split``) rather than checking no direct key at all."""
+        Absent -> ``None``: a stack with no validator REFUSES a record case
+        outright (``record_execution._resolve_and_split``) rather than
+        checking no direct key at all."""
         ...
 
     # -- CaseValueComparisonCapability -------------------------------------------
@@ -618,14 +578,13 @@ class SolverPluginOptionalHooks(Protocol):
         every dictionary format this framework writes, so a tutorial-record
         patch's "is this unchanged" check (``core.tutorial_records``) must
         never fall back to string or Python ``==`` equality. Absent ->
-        ``None`` (review finding M1): a stack with no comparator REFUSES a
-        record case outright rather than reporting every patch "changed" and
-        committing it."""
+        ``None``: a stack with no comparator REFUSES a record case outright
+        rather than reporting every patch "changed" and committing it."""
         ...
 
     # -- ParallelExecutionCapability (PAR, 2026-09-26) ---------------------------
     def get_parallel_steps(self, step, *, request, read_value, allocation):
-        """The parallel form of one of a record's solve steps (owner Q6).
+        """The parallel form of one of a record's solve steps.
 
         Core calls this only when a run asks for parallel (the reserved study
         name ``tutorial_records.PARALLEL_STUDY_NAME``, or ``--parallel``), and
@@ -656,17 +615,15 @@ class SolverPluginOptionalHooks(Protocol):
 
         ``[Int]`` is generic index notation, not a solver's syntax: a key
         whose path segment carries a concrete index (``stim[0].start``) is
-        matched against its template (``stim[Int].start``). Absent -> no
-        keys, which the conformance check C10 reports as a failure.
-
-        Added 2026-09-26 (conformance Task 14 step 4): a whole segment
+        matched against its template (``stim[Int].start``). A whole segment
         ``<name>`` -- any identifier in angle brackets, e.g.
         ``regions.<region_name>.baseline`` -- stands for any single dot-free
-        segment (``regions.lv.baseline``). A document whose keys are
-        written as asked but have no catalogue is listed once as
+        segment (``regions.lv.baseline``). A document whose keys are written
+        as asked but have no catalogue is listed once as
         ``{"document": d, "key": "<any>", "validated": False}``, with no
         ``value_kind``; it lists every key of ``d``. The grammar, and its
-        matcher, live in ``runtime.record_surface``."""
+        matcher, live in ``runtime.record_surface``. Absent -> no keys, which
+        the conformance check C10 reports as a failure."""
         ...
 
     def get_agent_guidance(self) -> tuple[Mapping[str, str], ...]:
@@ -700,16 +657,14 @@ class SolverPluginOptionalHooks(Protocol):
 
         **Pure.** Must not read or write the filesystem. A dry run's promise of
         costing nothing rests on this, and core enforces it rather than
-        trusting it -- but only as far as that enforcement actually reaches
-        (**narrowed 2026-09-23, R2 finding 12**): what is enforced is that no
-        path is added or removed under ``request.case_root`` by name, between
-        two snapshots taken before and after this hook runs. In-place content
-        or permission changes, a write outside ``request.case_root``, a
-        create-then-delete of one path within the call, and -- the one that
-        matters most -- any READ at all, are none of them caught. A resolver
-        that reads makes the dry run's answer depend on case state at read
-        time, which defeats the entire reason this hook is declared pure; the
-        enforcement above will not tell you this happened. Raise a
+        trusting it -- but only as far as a before/after name-only snapshot of
+        ``request.case_root`` can: in-place content or permission changes, a
+        write outside ``request.case_root``, a create-then-delete of one path
+        within the call, and -- the one that matters most -- any READ at all,
+        are none of them caught. A resolver that reads makes the dry run's
+        answer depend on case state at read time, which defeats the entire
+        reason this hook is declared pure; the enforcement above will not
+        tell you this happened. Raise a
         ``ValueError`` naming the supported modes to refuse a mode this
         adapter does not support. Absent -> this adapter authors no case
         inputs."""
@@ -721,14 +676,9 @@ class SolverPluginOptionalHooks(Protocol):
         Adapters differ and are meant to: cardiacCore preprocessing patches
         declared dictionaries, cardiacFoam synthesizes a case from a catalog.
 
-        **Corrected 2026-09-23 (R2 finding 0):** this used to say "Absent ->
-        every mode the adapter's ``resolve_case_mutation`` accepts" -- a
-        promise core cannot keep, since nothing here introspects what a
-        resolver hook accepts, and it was the root cause of three installed
-        providers, implementing no resolver either, reporting support for
-        every mode. Absent alongside ``resolve_case_mutation`` -> refused by
-        name (an implemented resolver whose supported modes are undeclared).
-        Absent alongside no ``resolve_case_mutation`` -> no modes."""
+        Absent alongside ``resolve_case_mutation`` -> refused by name (an
+        implemented resolver whose supported modes are undeclared). Absent
+        alongside no ``resolve_case_mutation`` -> no modes."""
         ...
 
     def get_rendered_formats(self) -> "frozenset[str]":
@@ -794,10 +744,7 @@ def _required_plugin_members() -> tuple[str, ...]:
     """The contract members ``validate_plugin`` rejects a plugin for lacking.
 
     Derived from the capability seams' ``:status:`` tiers rather than
-    hand-maintained beside them. Before 2026-09-20 these were two independent
-    lists and they disagreed: the tuple named 27 members while the
-    ``SolverPlugin`` Protocol declared 29, and the two it omitted were exactly
-    the environment ones.
+    hand-maintained beside them, so the two cannot disagree.
     """
     from .capability_seams import members_by_tier
 
@@ -809,38 +756,27 @@ _REQUIRED_PLUGIN_MEMBERS = _required_plugin_members()
 _PLUGIN_ID_RE = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?")
 
 #: The exact retired member/keyword spellings below are built by
-#: concatenating two fragments rather than written as one literal (2026-09-26,
-#: final review M1). Spelled whole, each is exactly a token
-#: ``scripts/check-core-shape.py`` watches for regrowth of -- the retired
-#: vocabulary A1/A2c deliberately removed from core. Naming a retired member
-#: to REFUSE it is not regrowing that vocabulary (nothing calls these, and
-#: no behaviour reads their meaning back), but the shape gate's matching is
-#: lexical, not semantic, so it cannot tell the difference; splitting the
-#: string is the same technique the codebase already considered for
-#: `SECURITY.md`'s M10 (`OMNIDRIVER_ALLOWED_RUNS_ROOT`'s retired
-#: predecessor), here actually applied rather than left for the owner,
-#: since M1 (unlike M10) requires the check to exist. The runtime value is
-#: unaffected -- ``"get_selected_start" + "_time" == "get_selected_start_time"``.
+#: concatenating two fragments rather than written as one literal. Spelled
+#: whole, each is exactly a token ``scripts/check-core-shape.py`` watches for
+#: regrowth of -- the retired vocabulary deliberately removed from core.
+#: Naming a retired member to REFUSE it is not regrowing that vocabulary
+#: (nothing calls these, and no behaviour reads their meaning back), but the
+#: shape gate's matching is lexical, not semantic, so it cannot tell the
+#: difference. The runtime value is unaffected --
+#: ``"get_selected_start" + "_time" == "get_selected_start_time"``.
 
 #: Contract members retired since plugin_api_version "2" was introduced.
-#: Closed list (review finding M1, 2026-09-26): a plugin that still declares
-#: one of these is refused at load, not silently ignored. ``get_profile``'s
-#: ``input_roots`` seam replaced this hook in A2c -- core no longer calls
-#: it, so a v2 plugin implementing it would have its restart directory
-#: silently un-walked for provenance (the I9 walk would see nothing) rather
-#: than told to migrate. This list does not grow by renaming entries onto
-#: it; it exists only for hooks core used to call by this exact name and no
-#: longer does.
-#:
-#: ``get_axis_catalog`` added 2026-09-26 (record-scoped axes): each
-#: ``TutorialRecord`` now carries its own ``axes``, and core no longer asks a
-#: plugin for a stack-wide catalog, so a plugin still implementing it would
-#: have its axes silently unused rather than told to move them onto its
-#: records.
+#: Closed list: a plugin that still declares one of these is refused at
+#: load, not silently ignored, since core no longer calls it and the
+#: consequence of silently accepting it would be a silently unused
+#: declaration (e.g. an un-walked provenance directory) rather than a
+#: migration error. This list does not grow by renaming entries onto it; it
+#: exists only for hooks core used to call by this exact name and no longer
+#: does.
 _RETIRED_PLUGIN_MEMBERS = frozenset({"get_selected_start" + "_time", "get_axis_catalog"})
 
-#: Members whose contract dropped a keyword parameter (A1, 2026-09-26): the
-#: retired keyword (built below) became ``environment_source``. Detected by
+#: Members whose contract dropped a keyword parameter: the retired keyword
+#: (built below) became ``environment_source``. Detected by
 #: signature inspection rather than by name, since both are still-required
 #: members -- only their parameter changed. A plugin cannot be checked this
 #: way if ``getattr`` yields something ``inspect.signature`` cannot
@@ -888,8 +824,8 @@ def validate_plugin(plugin: Any) -> SolverPlugin:
             stale_keyword.append(f"{name}(...{retired_kw}=...)")
     if stale_keyword:
         raise TypeError(
-            "SolverPlugin declares a retired keyword parameter, renamed by "
-            "spec A1 (2026-09-26): " + ", ".join(sorted(stale_keyword))
+            "SolverPlugin declares a retired keyword parameter: "
+            + ", ".join(sorted(stale_keyword))
         )
     for name in ("plugin_name", "plugin_id", "plugin_version", "plugin_api_version"):
         value = getattr(plugin, name)
@@ -928,10 +864,9 @@ def validate_plugin(plugin: Any) -> SolverPlugin:
 def _declared_dict_entries(provider: Any) -> tuple[Any, ...]:
     """A provider's dictionary entries, or ``()`` when it declares none.
 
-    ``()`` is the identity digest's input for "none" (spec 2026-09-26 A3).
-    A provider without ``get_dict_entries`` digests exactly as one whose
-    stub returned ``()`` did, so deleting such a stub changes no provider
-    digest."""
+    ``()`` is the identity digest's input for "none": a provider without
+    ``get_dict_entries`` digests exactly as one whose stub returned ``()``
+    did, so deleting such a stub changes no provider digest."""
     hook = getattr(provider, "get_dict_entries", None)
     return tuple(hook()) if callable(hook) else ()
 

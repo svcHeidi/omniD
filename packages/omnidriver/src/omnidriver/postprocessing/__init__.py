@@ -27,9 +27,8 @@ class PostprocessingProtocol(Protocol):
     """Typing stub for tutorial post-processing entry points.
 
     Every tutorial postprocessing script must expose a function named
-    ``run_postprocessing`` that satisfies this signature.  Scripts are not
-    required to subclass this Protocol — IDEs and mypy will flag mismatches
-    when type-checking is enabled.
+    ``run_postprocessing`` that satisfies this signature. Scripts are not
+    required to subclass this Protocol.
     """
 
     def __call__(

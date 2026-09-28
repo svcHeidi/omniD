@@ -86,27 +86,19 @@ def _step_payload(
 
 
 def _terminal_status_label(workflow_status: str) -> str:
-    """Map a WorkflowStepState/WorkflowRunState status to the CLI's ok/failed label.
-
-    Delegates to ``is_execution_successful``, the shared post-execution
-    predicate, so step and run cannot drift from each other. Decisions
-    derive from status, never from a subprocess exit code.
-    """
+    """Map a workflow status to the CLI's ok/failed label via the shared
+    ``is_execution_successful`` predicate, never a subprocess exit code."""
     return "ok" if is_execution_successful(workflow_status) else "failed"
 
 
 def _refuse_environment_errors(context: _ExecutionContext, *, action: str) -> int | None:
-    # Structural validity was already established when this context was
-    # built (_context_from_entry / _context_from_run_document both refuse to
-    # hand back a context otherwise), so only the environment and coverage
-    # halves of is_launchable are relevant at this dispatch-time gate.
-    #
-    # Corrected 2026-09-22 (audit finding C2): `simulation_audit` was not
-    # threaded to this call, so `coverage_ok` was always True here regardless
-    # of what the plan's audit actually said -- a required check reported
-    # `unavailable` could never block. It is threaded now, from
-    # `context.simulation_audit` (see `execution_context.StepExecutionContext`
-    # for what populates it, and what does not yet).
+    # Structural validity was already established when this context was built
+    # (_context_from_entry / _context_from_run_document refuse to hand back a
+    # context otherwise), so only the environment and coverage halves of
+    # is_launchable are relevant at this dispatch-time gate. `simulation_audit`
+    # must be threaded from `context.simulation_audit`, or a required check
+    # reported `unavailable` could never block (see
+    # `execution_context.StepExecutionContext` for what populates it).
     readiness = is_launchable(
         plan_status="ok",
         environment_diagnostics=context.environment_diagnostics,
@@ -134,11 +126,8 @@ def _refuse_environment_errors(context: _ExecutionContext, *, action: str) -> in
 
 
 def _attach_failure_context(payload: dict, state, step_id: str | None, *, tail_lines: int) -> None:
-    """Attach a failure_context bundle when the named step state is failed.
-
-    Mutates ``payload`` in place. Shared by step and run so the two paths
-    surface failures identically. Never persisted into workflow_state.json.
-    """
+    """Mutate ``payload`` in place with a failure_context bundle when the named
+    step state is failed. Shared by step and run; never persisted to workflow_state.json."""
     if step_id is None:
         return
     step_state = _step_state_by_id(state, step_id)
@@ -254,12 +243,8 @@ def _execute_step(
 
 
 def _reconciliation_payload(case_root: Path, expected_artifacts, *, driver_context=None) -> dict:
-    """Reconcile predicted artifacts against what actually landed on disk.
-
-    Describes only: which predicted artifacts resolved to which files, their
-    size and sha256. It makes no judgement about the values inside them --
-    interpretation is the caller's job.
-    """
+    """Reconcile predicted artifacts against files on disk (path/size/sha256
+    only; no judgement about the values inside them)."""
     from .core.runtime.reconciler import declared_instance_names, reconcile_artifacts
 
     return reconcile_artifacts(
@@ -286,10 +271,8 @@ def _execute_run(
     driver_context: DriverContext | None = None,
 ) -> int:
     """Run a workflow to completion, print the JSON payload, return the exit code.
-
-    Shared by the --entry (strict_plan) path and the --run-document path.
-    Refuses to auto-resume a terminally-failed saved state (use action=step).
-    """
+    Shared by the --entry and --run-document paths. Refuses to auto-resume a
+    terminally-failed saved state (use action=step)."""
     state_path = output_dir / STATE_FILENAME
     workflow_state = planned_state
     if state_path.exists():
@@ -386,10 +369,9 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
     try:
         run_doc = load_run_document(args.run_document)
     except Exception as exc:
-        # The envelope has no other diagnostic to report -- it never reached
-        # validate_run -- but an agent parsing `diagnostics` should still
-        # find one here, in the one canonical shape, rather than needing a
-        # second, unstructured code path for "the document didn't load".
+        # A load failure never reached validate_run, so it has no other
+        # diagnostic -- synthesize one here in the one canonical shape an
+        # agent parsing `diagnostics` can rely on.
         print(json.dumps({
             "status": "failed",
             "error": f"Could not load run document: {exc}",
@@ -402,10 +384,9 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
     if run_doc.plugin is not None:
         planned = run_doc.plugin
         selected = driver_context.identity.to_json()
-        # One source of truth for this comparison: see
-        # `provider_identity.stack_identity_mismatch`'s docstring for what is
-        # compared and why (also called from `run_document_exec.py` and
-        # `quantities.comparison`).
+        # See `provider_identity.stack_identity_mismatch` for what is compared
+        # and why; the same comparison is shared with `run_document_exec.py`
+        # and `quantities.comparison`.
         mismatched = stack_identity_mismatch(planned, selected)
         if mismatched:
             print(json.dumps({
@@ -535,13 +516,11 @@ def _context_from_entry(
         }, indent=2))
         return None, 1
     source_case_root = Path(report.launch["case_root"]).resolve()
-    # Test/standalone case folders may intentionally live in a caller-owned
-    # temporary root. The repository-template protection applies to registered
-    # cases in this checkout; generic external cases retain their explicit
-    # launch root contract.
     # Staging protects this checkout's own tracked case content from being
-    # mutated by a run. Outside a checkout -- an installed wheel -- there is
-    # nothing of ours to protect, so nothing is staged; asking must not raise.
+    # mutated by a run; it applies only to registered cases inside this
+    # checkout. Outside a checkout (an installed wheel) there is nothing of
+    # ours to protect, so nothing is staged, and asking for the root must not
+    # raise.
     _repo_root = repo_root_or_none()
     if (
         stage_for_execution
@@ -552,8 +531,6 @@ def _context_from_entry(
             char if char.isalnum() or char in {"-", "_", "."} else "_"
             for char in selected_entry
         ).strip("._") or "entry"
-        # Supplied or refused (2026-09-26): this defaulted to
-        # <cases_root>/.omnidriver/runs, i.e. into the tree being planned.
         try:
             staged_case_root = resolve_scratch_root(
                 scratch_dir, cases_root=(overrides or {}).get("cases_root"),
@@ -571,17 +548,12 @@ def _context_from_entry(
         staged_overrides["cases_root"] = str(staged_case_root.parent)
         staged_overrides["case_dir_name"] = staged_case_root.name
         # Sanitisation above can flatten a name-bearing entry (e.g. one with
-        # "/" or other non alnum/-/_/. characters) into a different string,
-        # so `cases_root` now points at a flat staging directory that no
-        # longer contains whatever nested/named path `selected_entry`
-        # originally described. Re-resolving by that original name against
-        # the new root fails registry lookup entirely (KeyError: "Unknown
-        # entry"), even though the staged case is right there. Route through
-        # the registry's generic-alias resolution instead -- it resolves
-        # purely from the `case_dir_name` override above, bypassing
-        # name-based lookup -- but only when staging actually changed the
-        # name; an unflattened top-level entry still resolves by its own
-        # name and must keep doing so.
+        # "/" or other non alnum/-/_/. characters), so `cases_root` no longer
+        # contains a path `selected_entry` resolves by name (KeyError:
+        # "Unknown entry"). Route through the registry's generic-alias entry
+        # instead, which resolves purely from `case_dir_name` above -- but
+        # only when staging actually changed the name; an unflattened entry
+        # still resolves by its own name.
         if safe_entry != selected_entry:
             replan_entry = "genericcase"
             replan_entry_kind = "case_folder"
@@ -732,11 +704,9 @@ def _dispatch_context_owned(args, context: _ExecutionContext) -> int:
                 context.output_dir,
                 fresh=True,
                 allowed_root=_allowed_runs_root(),
-                # R1 fix, finding M3: these used to be spelled as literals
-                # here, a third spelling alongside attempt_lease.py's own
-                # constants -- a drift risk (a changed ATTEMPT_LOCK_FILENAME
-                # would let --fresh delete the live lease out from under
-                # itself).
+                # Use attempt_lease.py's own constants, not literals here, so
+                # a changed ATTEMPT_LOCK_FILENAME can't let --fresh delete the
+                # live lease out from under itself.
                 preserve_names=frozenset({
                     ATTEMPT_LOCK_FILENAME,
                     ATTEMPT_LOCK_GUARD_FILENAME,
@@ -866,16 +836,13 @@ def _compare_quantities(args) -> int:
 
 
 def resolve_cases_root(explicit: str | Path | None = None) -> Path:
-    """Where to look for cases, resolved at the public edge only.
-
+    """Where to look for cases, resolved at the public edge only:
     explicit -> OMNIDRIVER_CASES_ROOT -> current working directory.
 
     Three steps, no fourth. The environment variable covers CI, containers and
     HPC without a flag on every invocation; a config-file tier is deliberately
     omitted until there is evidence one is needed
-    (future/ENVIRONMENT_CONTRACT.md §12). Core itself resolves nothing -- it
-    used to walk up from its own __file__ for repository markers and raise
-    outside a checkout, which is why it could not plan a case from a wheel.
+    (future/ENVIRONMENT_CONTRACT.md §12). Core itself resolves nothing.
     """
     if explicit is not None:
         return Path(explicit).expanduser()
@@ -1269,7 +1236,6 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
             parser.error(f"--strict/--run-document/--step/--apply are not valid with action={args.action}")
     if args.action in {"sweep-plan", "sweep-run"} and not args.spec:
         parser.error(f"action={args.action} requires --spec")
-    # Sweep output defaults to the repository-local disposable workspace.
     if args.retry_failed and args.action != "sweep-run":
         parser.error("--retry-failed is only valid with action=sweep-run")
     if args.fresh and args.action not in {"step", "run", "sweep-run"}:
@@ -1313,12 +1279,10 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
 
 
 def _sweep_output_dir(args) -> str | Path | None:
-    """``--output-dir``, else ``<scratch>/sweeps/<spec-name>``; ``None``
-    after printing the JSON refusal when neither that nor a scratch root is
+    """``--output-dir``, else ``<scratch>/sweeps/<spec-name>``; ``None`` after
+    printing the JSON refusal when neither that nor a scratch root is
     supplied. The scratch default is computed only when ``--output-dir`` is
-    absent (lazily). Corrected 2026-09-26: it was
-    ``<cases root>/.omnidriver/sweeps/<spec-name>``, the cases root being
-    OMNIDRIVER_CASES_ROOT or the working directory."""
+    absent, so a run that supplies one never needs a scratch root."""
     if args.output_dir:
         return args.output_dir
     try:
@@ -1337,10 +1301,8 @@ def _sweep_refusal(args, exc: Exception) -> int:
     """A refusal of the sweep as a whole -- the spec's own shape, a record
     sweep's missing ``cases_root``, a study name the record does not
     resolve, a case id that is not path-safe -- printed as the CLI's JSON
-    failure, the shape ``_sweep_output_dir``'s refusal and ``plan --strict``
-    already use. Added 2026-09-26 (review 54b M12): these escaped
-    ``sweep-plan``/``sweep-run`` as a Python traceback with nothing on
-    stdout. A per-case refusal is not this: it is one case's
+    failure, matching ``_sweep_output_dir``'s refusal and ``plan --strict``.
+    A per-case refusal is not this: it is one case's
     ``materialization_error`` inside the sweep's own report."""
     print(json.dumps({
         "status": "failed",
@@ -1380,9 +1342,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if report["status"] == "ok" else 1
 
     selected_entry = args.entry
-    # PAR (2026-09-26): the CLI's own study source, beside --config's.
+    # The CLI's own study source, beside --config's.
     cli_study = {PARALLEL_STUDY_NAME: args.parallel} if args.parallel is not None else {}
-    # Step S: --input NAME=PATH, repeatable; never discovered (CLAUDE.md).
+    # --input NAME=PATH, repeatable; never discovered (CLAUDE.md).
     cli_inputs: dict[str, str] = {}
     for raw in args.inputs:
         name, separator, path = raw.partition("=")
@@ -1405,7 +1367,7 @@ def main(argv: list[str] | None = None) -> int:
     # `cases_root` is a genuine make_spec keyword, so it reads as a valid
     # config key -- but resolve_cases_root deliberately has no config-file
     # tier, and the assignment below would overwrite it. Refuse it by name
-    # rather than drop it silently (99f3168 did the latter until 2026-09-24).
+    # rather than drop it silently.
     if "cases_root" in overrides:
         parser.error(
             f"--config {args.config} sets 'cases_root', which is not read from "
@@ -1435,8 +1397,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.action == "describe":
-        # A record refusal is JSON here as in `plan --strict` (final review
-        # S-M1, 2026-09-25): it used to escape `describe` as a traceback.
+        # A record refusal is JSON here, as in `plan --strict`.
         try:
             description = describe_entry(
                 selected_entry,

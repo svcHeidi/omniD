@@ -1,21 +1,13 @@
 """Catalogue-path vocabulary over the plugin's own ``DictEntry`` values.
 
-Core owns ``DictEntry``, so it owns the parsing of a ``driver_path`` into its
-scope-stripped, wildcard-aware form. Nothing here reads a file, parses C++, or
-knows an OpenFOAM dictionary: it is string work over a core type.
-
-This lived in the OpenFOAM C++ dict-key scanner until Phase 2 Task 2 moved that
-scanner out of core -- which took these helpers with it, and broke
-``strict_planning``. That module calls ``catalogued_paths`` EAGERLY to build an
-argument for ``DictDiagnosticsCapability.case_dict_keys``, so the call happens
-before the capability can dispatch to a plugin's own hook: a plugin that
-implements ``get_case_dict_key_diagnostics`` still could not avoid importing
-``omnidriver.openfoam``. Splitting the vocabulary from the scanning fixes that
-at the root rather than making the argument lazy, which would have changed a
-Protocol every plugin author implements.
-
-``omnidriver.openfoam.dict_keys_scanner`` re-exports these for its own use and
-for the C++ drift direction, which is the legal direction.
+Core owns ``DictEntry``, so it owns parsing a ``driver_path`` into its
+scope-stripped, wildcard-aware form; nothing here reads a file, parses C++,
+or knows an OpenFOAM dictionary. This is split from the OpenFOAM C++ scanner
+because ``strict_planning`` calls ``catalogued_paths`` eagerly, before a
+capability can dispatch to a plugin's own hook -- keeping it here lets a
+plugin implement ``get_case_dict_key_diagnostics`` without importing
+``omnidriver.openfoam``. ``omnidriver.openfoam.dict_keys_scanner`` re-exports
+these for the legal C++ drift direction.
 """
 
 from __future__ import annotations
@@ -52,7 +44,6 @@ _SCOPE_TOKEN_PREFIX_RE = re.compile(r"^\$[A-Z][A-Z0-9_]*\.")
 
 
 def _parse_path(driver_path: str, is_dynamic: bool) -> CataloguePath:
-    # Strip a leading scope-token prefix, if present.
     normalised = _SCOPE_TOKEN_PREFIX_RE.sub("", driver_path, count=1)
 
     segments = normalised.split(".")

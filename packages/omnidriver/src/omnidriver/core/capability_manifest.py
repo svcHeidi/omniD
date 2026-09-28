@@ -49,32 +49,22 @@ def build_capability_manifest(
     Together with :data:`CORE_NEUTRAL_COMMANDS` the commands reproduce exactly
     what ``validate_workflow_commands`` accepts for that plugin.
     ``case_script_commands`` defaults to an empty set; adapters declare their
-    case-local command names explicitly
-    (its ``get_capabilities()`` has no ``DriverContext`` to read one from,
-    but does have its own ``get_profile()`` -- see
+    case-local command names explicitly (its ``get_capabilities()`` has no
+    ``DriverContext`` to read one from, but does have its own
+    ``get_profile()`` -- see
     future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md §5).
 
-    **Callers, since Task 10 (2026-09-22).** ``CardiacFoamPlugin`` and
-    ``CardiacCorePlugin`` used to gather these five arguments from
-    themselves and call this function directly inside their own
-    ``get_capabilities()``, then hand the whole assembled manifest back to
-    core -- a round trip that meant only their OWN commands/conventions
-    were ever reflected, never a composed stack's. Core now gathers these
-    arguments itself, from the composed ``command_authorization``/
-    ``case_introspection``/``case_runtime_conventions`` capabilities (see
+    Core gathers these arguments itself, from the composed
+    ``command_authorization``/``case_introspection``/
+    ``case_runtime_conventions`` capabilities (see
     ``plugin_capabilities._CapabilityManifestAdapter.manifest``), and calls
-    this function directly; a plugin's own ``get_capabilities()`` supplies
-    only what core cannot compose from those reads (a domain catalogue). The
-    keyword-argument shape here is unchanged -- several existing tests
-    (e.g. ``test_case_script_commands_entrypoint_seam.py``,
-    ``omnidriver-cardiacfoam/tests/test_capability_manifest.py``) still call
-    it this way directly, as a pure builder, and continue to.
-
-    **Corrected 2026-09-22 (final review fix round).** ``OpenFOAMEnvironmentPlugin``
-    no longer calls this function directly either -- its ``get_capabilities()``
-    now returns ``{}`` like ``CardiacCorePlugin``'s does, since it has no
-    domain catalogue of its own to add and self-assembling a manifest was the
-    exact pattern this task removed from the other two adapters.
+    this function directly, so the manifest reflects a composed stack rather
+    than only a single plugin's own commands/conventions; a plugin's own
+    ``get_capabilities()`` supplies only what core cannot compose from those
+    reads (a domain catalogue). This keyword-argument shape is also called
+    directly as a pure builder by existing tests (e.g.
+    ``test_case_script_commands_entrypoint_seam.py``,
+    ``omnidriver-cardiacfoam/tests/test_capability_manifest.py``).
 
     ``allowed_commands`` names exactly what a workflow DAG step may invoke;
     ``samplable_fields`` names the fields a function object may sample for the

@@ -1,11 +1,8 @@
 """Unit normalisation: a small declared table, nothing inferred.
 
-Each unit maps to (dimension, factor in the dimension's smallest listed
-unit). The factors are integers, so a conversion between listed units is one
-multiply and one divide. A unit outside the table is refused by name, and
-so is a conversion between dimensions. Spellings are ASCII (``us``, ``um``);
-a reader declares one of these strings and a request writes one.
-Design: docs/superpowers/specs/2026-09-26-results-as-quantities-design.md §2.
+Each unit maps to (dimension, integer factor in the dimension's smallest
+unit), so a conversion is one exact multiply/divide. An unlisted unit, or
+a conversion between dimensions, is refused by name. Spellings are ASCII.
 """
 from __future__ import annotations
 

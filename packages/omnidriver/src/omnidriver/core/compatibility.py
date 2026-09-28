@@ -1,11 +1,8 @@
 """Named fallback answers for optional plugin members.
 
-Each ``absent_*`` function below is the answer core gives when the active
-plugin stack does not implement one particular optional hook. These adapters
-intentionally preserve observable behavior. They produce no warnings and
-make no policy changes. Keeping them named and documented stops these
-decisions from being rediscovered deep inside solver-neutral code, and gives
-an explicit seam at which each one's behaviour may later change.
+Each ``absent_*`` function is the answer core gives when the active plugin
+stack does not implement one particular optional hook, kept named and
+documented rather than rediscovered ad hoc inside solver-neutral code.
 """
 
 from __future__ import annotations
@@ -49,26 +46,13 @@ def _instrumented(func):
 def absent_default_driver_context() -> "DriverContext":
     """Resolve the plugin to use when a public caller supplies no context.
 
-    Why: public CLI and Python callers have always been able to omit the
-    plugin/context entirely, and something has to answer. This used to import
-    ``CardiacFoamPlugin`` directly, which put a hard cardiac dependency in the
-    one package whose whole purpose is to know no cardiology -- touching the
-    public edge of a core-only install raised ``ModuleNotFoundError: No module
-    named 'omnidriver.cardiacfoam'``.
-
-    It now resolves through the same ``omnidriver.plugins`` entry-point group
-    that ``--plugin`` reads, so core names no solver at all. The selection rule
-    lives in :func:`plugin_discovery._default_selection`; in short, exactly one
-    installed adapter wins, no adapter is an error, and several adapters
-    require explicit selection. Core does not manufacture a solver context
-    when no adapter is installed.
-
-    The context is built fresh on each call, as it always has been -- core must
-    not retain one in module state.
-
-    Activation: the public boundary receives no explicit plugin context.
-    Preserved by: core plugin-context, CLI matrix, validation, and strict-plan
-    tests.
+    Resolves through the ``omnidriver.plugins`` entry-point group that
+    ``--plugin`` also reads, so core names no solver at all. The selection
+    rule lives in :func:`plugin_discovery._default_selection`: exactly one
+    installed adapter wins, no adapter is an error, and several unrelated
+    adapters require explicit selection. Core does not manufacture a solver
+    context when no adapter is installed, and never retains one in module
+    state -- the context is built fresh on each call.
     """
 
     from .plugin_discovery import default_discovered_context
@@ -261,18 +245,15 @@ def absent_dict_key_scanner():
     """Plugins predating a C++ dictionary-key scanner hook emit an empty
     report. Format-specific source scanning belongs to the adapter.
 
-    Returns only the C++ REPORT. The catalogue-path vocabulary that used to
-    come back alongside it is core's own (see
-    core/contracts/catalogue_paths.py) and must not be routed through here:
-    format-specific parsing must remain in the adapter even when the adapter
-    implements get_case_dict_key_diagnostics and never reaches this fallback.
+    Returns only the C++ REPORT. The catalogue-path vocabulary is core's own
+    (see core/contracts/catalogue_paths.py) and must not be routed through
+    here: format-specific parsing must remain in the adapter even when the
+    adapter implements get_case_dict_key_diagnostics and never reaches this
+    fallback.
 
-    **Corrected 2026-09-22:** this used to say "strict planning calls it
-    eagerly to build an argument" -- true when ``strict_planning.py`` imported
-    and invoked this function directly at module scope, which was the defect
-    Task 11 fixed. It is now reached only as ``DictKeyScannerCapability``'s
-    declared fallback (``plugin_capabilities._DictKeyScannerAdapter.scan``),
-    when a plugin implements no ``get_dict_key_scanner`` hook of its own."""
+    Reached only as ``DictKeyScannerCapability``'s declared fallback
+    (``plugin_capabilities._DictKeyScannerAdapter.scan``), when a plugin
+    implements no ``get_dict_key_scanner`` hook of its own."""
 
     class _EmptyReport:
         def to_json(self):
@@ -298,11 +279,7 @@ def absent_route_sweep_case(plugin, *, base, resolved_axis_values, driver_contex
     routing produces the values a case is then materialized from, so an empty
     routing silently yields a case that is not the one the sweep asked for.
     The honest neutral is to refuse, naming the hook the plugin must
-    implement.
-
-    Historical note: an earlier implementation routed against one solver's
-    dictionary vocabulary. That behavior is no longer active; routing now
-    refuses unless the selected adapter declares the operation."""
+    implement."""
 
     del base, resolved_axis_values, driver_context
     from omnidriver.core.sweep.sweep_expansion import SweepValidationError
@@ -318,12 +295,8 @@ def absent_route_sweep_case(plugin, *, base, resolved_axis_values, driver_contex
 @_instrumented
 def absent_materialize_sweep_case(plugin, *, case_dir, routed) -> None:
     """Plugins predating materialize_sweep_case(). Refuses for the same
-    reason as :func:`absent_route_sweep_case`.
-
-    This refusal is intentional. A missing materializer cannot be replaced by
-    another adapter's writer. The historical defect that motivated this seam
-    involved one solver's generated script, but that behavior is no longer
-    active."""
+    reason as :func:`absent_route_sweep_case`: a missing materializer cannot
+    be replaced by another adapter's writer."""
 
     del case_dir, routed
     from omnidriver.core.sweep.sweep_expansion import SweepValidationError
@@ -518,17 +491,12 @@ def absent_dict_regeneration_scopes(plugin) -> tuple:
     return ()
 
 
-#: legacy_tutorial_records, legacy_axis_catalog, legacy_record_key_validation,
-#: and legacy_case_value_comparator (2026-09-24, tutorial-record design) were
-#: deleted here (review finding M1). All four capabilities they backed
-#: (TutorialRecordCapability, AxisCapability, RecordKeyValidationCapability,
-#: CaseValueComparisonCapability) are now declared ``:fallback: none``, like
-#: ConfigValueCapability/CaseWriterCapability: their adapters
-#: (`plugin_capabilities.py`) return ``None`` directly when a plugin declares
-#: no hook, with no compatibility function standing in for one. A silent
-#: neutral fallback here was the wrong shape for what these four seams guard
-#: -- a missing record-key validator or case-value comparator must stop a
-#: record case from running at all (`record_execution._resolve_and_split`
-#: refuses by name), not quietly agree to run it unchecked.
-#: Corrected 2026-09-26 (record-scoped axes): AxisCapability itself is gone
-#: too; a record carries its own axes (``TutorialRecord.axes``).
+#: TutorialRecordCapability, RecordKeyValidationCapability and
+#: CaseValueComparisonCapability declare ``:fallback: none``, like
+#: ConfigValueCapability/CaseWriterCapability, and have no ``absent_*``
+#: function here: their adapters (`plugin_capabilities.py`) return ``None``
+#: directly when a plugin declares no hook. A silent neutral fallback is the
+#: wrong shape for what these seams guard -- a missing record-key validator
+#: or case-value comparator must stop a record case from running at all
+#: (`record_execution._resolve_and_split` refuses by name), not quietly agree
+#: to run it unchecked. A record carries its own axes (``TutorialRecord.axes``).

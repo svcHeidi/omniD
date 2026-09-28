@@ -31,7 +31,7 @@ _COMPARISON_STATUSES = frozenset({"passed", "failed", "unavailable", "not_reques
 # core.quantities.comparison.CHECKER_ID. Not imported: that module imports
 # ComparisonRequest from this one, so a module-level import here would be
 # circular. `test_the_quantities_checker_id_constant_matches_core` guards
-# against the two drifting apart (M6, controller review 2026-09-26).
+# against the two drifting apart.
 _QUANTITIES_CHECKER_ID = "omnidriver.quantities"
 
 
@@ -72,7 +72,7 @@ class ComparisonRequest:
 
     ``run_evidence`` may also be a list of such objects, for a report that
     compares several runs; the case is verified when exactly one entry
-    matches it (added 2026-09-26).
+    matches it.
     """
 
     case_id: str
@@ -346,11 +346,10 @@ def _read_comparison(
     status = stated_status if isinstance(stated_status, str) and stated_status in _COMPARISON_STATUSES else "unknown"
     reason: str | None = None
     if request.checker_id == _QUANTITIES_CHECKER_ID:
-        # M6, controller review 2026-09-26: never trust a checker
-        # omnidriver.quantities report's stated status verbatim -- it is
-        # written read-only, but nothing stops an edit after the fact, so
-        # recompute it from the report's own metrics with the function that
-        # wrote it in the first place.
+        # Never trust a checker omnidriver.quantities report's stated status
+        # verbatim -- it is written read-only, but nothing stops an edit
+        # after the fact, so recompute it from the report's own metrics with
+        # the function that wrote it in the first place.
         status, reason = _quantities_status(report, stated_status=status)
     metric_values, metric_truncated = _bounded_metrics(report.get("metrics"), limits)
     details, detail_truncated = _bounded_details(report, limits)
@@ -377,8 +376,7 @@ def _quantities_status(report: Mapping[str, Any], *, stated_status: str) -> tupl
     imported lazily here to avoid the cycle noted at ``_QUANTITIES_CHECKER_ID``).
     A report that cannot be recomputed at all, or recomputes to something
     other than what it states, is a named failure -- never a silent
-    pass-through of whatever ``status`` says (M6, controller review
-    2026-09-26)."""
+    pass-through of whatever ``status`` says."""
     from .quantities.comparison import overall_status
 
     metrics = report.get("metrics")
@@ -417,9 +415,9 @@ def _association_status(
         ),
     }
     if isinstance(evidence, list):
-        # A report comparing several runs (core.quantities, added 2026-09-26)
-        # lists one evidence object per run; this case is verified when
-        # exactly one entry carries all three of its identifiers.
+        # A report comparing several runs (core.quantities) lists one
+        # evidence object per run; this case is verified when exactly one
+        # entry carries all three of its identifiers.
         matches = [item for item in evidence if isinstance(item, Mapping)
                    and all(item.get(key) == value for key, value in expected.items())]
         evidence = matches[0] if len(matches) == 1 else None

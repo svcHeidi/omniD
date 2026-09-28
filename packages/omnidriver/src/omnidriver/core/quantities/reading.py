@@ -71,11 +71,10 @@ def read_quantities(reader: Any, case_root: Path, artifact: Any, request: ReadRe
             status, value = "evaluated", float(sample.value)
         sampled_at = tuple(float(c) for c in sample.sampled_at) if sample.sampled_at is not None else None
         if reader.takes_points and sampled_at is None:
-            # I1, controller review 2026-09-26: a pre-registered
-            # max_sampling_offset checks a sample's location, so a reader
-            # that samples at supplied points must report where -- silently
-            # accepting "no location" would let that stated guard pass
-            # unchecked (`comparison._metric` only compares an offset it has).
+            # A pre-registered max_sampling_offset checks a sample's location,
+            # so a reader that samples at supplied points must report where;
+            # silently accepting "no location" would let that stated guard
+            # pass unchecked (`comparison._metric` only compares an offset it has).
             raise QuantityReadError(
                 f"the {artifact.format!r} reader samples at supplied points, but reported no sampled_at for "
                 f"{name!r}; a stated max_sampling_offset could not be checked against an unknown location"

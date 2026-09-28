@@ -1,25 +1,9 @@
 """Discovery of installed omnidriver solver plugins via Python entry-points.
 
-Plugins register themselves in the installing package's ``pyproject.toml``
-under the ``[project.entry-points."omnidriver.plugins"]`` group::
-
-    [project.entry-points."omnidriver.plugins"]
-    mysolver = "my_package.my_solver_plugin:MySolverPlugin"
-
-The entry-point **name** (``mysolver`` above) is what users pass to
-``--plugin`` and what :func:`load_discovered_plugin` resolves.  It must be
-unique across all installed distributions; a name claimed by more than one
-distribution is reported by :func:`ambiguous_plugin_names` and excluded from
-:func:`discover_plugins`.
-
-Discovery is not sandboxed: loading a plugin executes its Python code in the
-same process, exactly as the trusted ``module:Class`` form does.
-
-Troubleshooting — plugin not found:
-  Verify the entry-point group name is exactly ``omnidriver.plugins``::
-
-      python -c "from importlib.metadata import entry_points; \\
-                 print(list(entry_points(group='omnidriver.plugins')))"
+Plugins register under the ``omnidriver.plugins`` entry-point group in their
+``pyproject.toml``; the entry-point name is what ``--plugin`` and
+:func:`load_discovered_plugin` resolve. Loading executes the plugin's Python
+code in-process, same as the trusted ``module:Class`` form.
 """
 
 from __future__ import annotations
@@ -36,28 +20,18 @@ def _scan_entry_points() -> tuple[Any, ...]:
     """Read the entry-point group off disk, once per process.
 
     ``importlib.metadata.entry_points()`` re-reads every installed
-    distribution's metadata on each call -- about 6 ms here. That was
-    invisible while discovery only ran when ``--plugin`` was passed, but
-    ``compatibility.absent_default_driver_context`` now resolves the implicit
-    default through this group, and the public edge calls it once per sweep
-    case. Uncached, that took the test suite from 35 s to 13 min.
-
-    Installed distributions do not change inside a running process, so this is
-    a cache over something genuinely immutable, not a bet. Tests that need
-    synthetic entry points patch ``_entry_points`` below -- which replaces the
-    whole function object, cache and all -- so this does not weaken that seam.
+    distribution's metadata on each call (~6 ms). Uncached, resolving the
+    implicit default per sweep case (see ``compatibility.absent_default_driver_context``)
+    took the test suite from 35 s to 13 min. Installed distributions do not
+    change inside a running process, so this caches something genuinely
+    immutable. Tests needing synthetic entry points patch ``_entry_points``
+    below, which replaces the whole function object, cache included.
     """
     return tuple(entry_points(group=ENTRY_POINT_GROUP))
 
 
 def _entry_points() -> tuple[Any, ...]:
-    """Indirection seam so tests can inject entry points without installing.
-
-    Tests monkeypatch this function to return synthetic entry-point objects,
-    avoiding the need for a real ``pip install`` of the plugin under test.
-    All public discovery functions call this; none call ``entry_points()``
-    directly.
-    """
+    """Indirection seam so tests can inject entry points without installing."""
     return _scan_entry_points()
 
 
@@ -65,8 +39,7 @@ def ambiguous_plugin_names() -> dict[str, tuple[str, ...]]:
     """Entry-point names claimed by more than one installed distribution.
 
     Two distributions exporting the same name is a packaging conflict, not
-    something to resolve by dictionary insertion order -- which distribution
-    won would depend on installation order and be invisible in the plan.
+    something to resolve by dictionary insertion order.
     """
     seen: dict[str, list[str]] = {}
     for entry_point in _entry_points():
@@ -86,8 +59,8 @@ def discover_plugins() -> dict[str, Any]:
     Never raises: a broken third-party distribution must not make the CLI
     unusable for everyone else. A name claimed by several distributions is
     omitted here and reported by :func:`ambiguous_plugin_names`, so it fails
-    loudly at load time rather than silently resolving to whichever
-    distribution happened to be enumerated last.
+    loudly at load time rather than silently picking whichever distribution
+    was enumerated last.
     """
     ambiguous = set(ambiguous_plugin_names())
     return {
@@ -100,15 +73,10 @@ def discover_plugins() -> dict[str, Any]:
 class BrokenPluginError(LookupError):
     """An installed entry point whose target cannot be imported or built.
 
-    Raised by name -- entry-point name, distribution, ``module:Class`` target
-    and the underlying error -- never skipped. **Added 2026-09-25
-    (solver-conformance B-I1).** Before this, one half-installed third-party
-    distribution anywhere in the group raised a bare ``ModuleNotFoundError``
-    out of default selection *and* out of an explicit ``--plugin`` for an
-    unrelated, working stack, contradicting :func:`discover_plugins`'s own
-    promise. A broken entry is refused rather than dropped because it may be
-    the very root the user meant: silently composing the others would change
-    which stack runs.
+    Raised by name (entry-point name, distribution, ``module:Class`` target,
+    underlying error) rather than skipped: a broken entry may be the very
+    provider the caller meant, so dropping it silently could change which
+    stack resolves.
     """
 
 
@@ -122,9 +90,9 @@ def _describe_entry_point(entry_point) -> str:
 def _instantiate(entry_point):
     """Load ``entry_point`` and build its plugin, or raise :class:`BrokenPluginError`.
 
-    Catches ``Exception`` deliberately: importing a third-party module can
-    raise anything, and whatever it raises means the same thing here -- this
-    entry cannot supply a plugin. The original error is chained and quoted.
+    Catches ``Exception`` deliberately: importing third-party code can raise
+    anything, and whatever it raises means the same thing here -- this entry
+    cannot supply a plugin. The original error is chained and quoted.
     """
     try:
         return entry_point.load()()
@@ -141,15 +109,11 @@ def _find_installed_provider(plugin_id: str):
 
     Loads every discovered entry point to read its ``plugin_id`` -- there is
     no id-keyed index, only the name-keyed one ``discover_plugins()``
-    returns. Only ever called to resolve a `requires:` declaration, which is
-    a CLI-startup-frequency operation, not a hot loop.
-
-    **Corrected 2026-09-25 (solver-conformance B-I1).** A broken entry point
-    used to abort this scan on the spot, so the answer depended on whether it
-    sorted before the provider actually needed. Load failures are now
-    collected: the loadable provider answering ``plugin_id`` is returned
-    whatever the order, and only if none answers is the refusal raised,
-    naming every broken entry as a possible provider.
+    returns. Only called to resolve a `requires:` declaration, a
+    CLI-startup-frequency operation, not a hot loop. Load failures are
+    collected rather than aborting the scan, so the answer does not depend on
+    enumeration order; the refusal (if no candidate answers) names every
+    broken entry as a possible provider.
     """
     broken: list[BrokenPluginError] = []
     for entry_point in discover_plugins().values():
@@ -173,19 +137,11 @@ def _expand_with_requirements(primary: Any, source: str):
     """Add whichever installed provider answers ``primary``'s `requires:`.
 
     ``--plugin`` (and the bare discovered-name form) select ONE provider by
-    design -- see ``_default_selection``'s docstring: "`--plugin` still
-    narrows the implicit stack to one provider". Task 9 gave cardiacCore and
-    cardiacFoam their first `requires:` declaration
-    (``org.omnidriver.openfoam.environment``), and ``order_providers`` raises
-    the instant a declared requirement is unmet -- so without this, selecting
-    either by name or by trusted import would refuse to compose at all,
-    turning "the environment adapter is now composed in, not hand-embedded"
-    into "cardiacCore/cardiacFoam are no longer usable outside a stack the
-    caller assembles by hand". Resolving `requires:` against what is already
-    installed keeps the single-name ``--plugin`` UX working. One level only
-    (no shipped profile declares a chain today); an unmet requirement that
-    resolution can't find is left for ``order_providers`` to report, which
-    names it more specifically than this function would.
+    design -- see ``_default_selection``'s docstring. Resolving `requires:`
+    against what is already installed keeps that single-name UX working
+    without the caller assembling a stack by hand. One level only (no shipped
+    profile declares a chain today); an unmet requirement this can't find is
+    left for ``order_providers`` to report by name.
     """
     providers = [primary]
     sources = [source]
@@ -232,12 +188,11 @@ def load_discovered_plugin(name: str):
 
 
 def _entry_point_source(entry_point) -> str:
-    """Provenance for a context built from an entry point.
+    """Provenance string for a context built from an entry point.
 
-    Records the installing distribution and version so a plan states which
-    package supplied the semantics it was built against. Shared by
-    :func:`load_discovered_plugin` and :func:`default_discovered_context` so
-    the two cannot drift into reporting the same plugin differently.
+    Shared by :func:`load_discovered_plugin` and
+    :func:`default_discovered_context` so the two cannot drift into reporting
+    the same plugin differently.
     """
     dist = getattr(entry_point, "dist", None)
     return (
@@ -256,50 +211,29 @@ def _default_selection(snapshot: tuple[Any, ...]) -> tuple[tuple[Any, str], ...]
     by entry-point name -- a stable input order, so the same installation
     always resolves to the same stack before ``driver_context()`` orders it
     again by declared ``requires:``. Raises ``LookupError`` when there is
-    nothing to compose at all (no adapter installed, or every installed name
+    nothing to compose (no adapter installed, or every installed name
     contested), or when the installed set names two or more mutually
     independent solver-tier candidates with no ``requires:`` relationship
-    tying them together. Core never manufactures an environment-specific
-    fallback.
+    tying them together -- e.g. cardiacCore and cardiacFoam installed side by
+    side, both requiring only the shared OpenFOAM environment adapter,
+    neither requiring the other: composing both together would let a
+    `single`-shape member like ``build_run_document_config`` resolve to
+    whichever sibling sorts last alphabetically, not to the one matching the
+    case. Exactly one root (see :func:`_solver_tier_roots`) composes with its
+    closure instead; two or more roots refuse by name, naming ``--plugin`` as
+    the escape hatch. Core never manufactures an environment-specific
+    fallback. ``--plugin`` bypasses this function entirely -- see
+    ``load_plugin_context``.
 
-    **Corrected 2026-09-21.** Two or more unambiguous adapters used to be a
-    third ``LookupError`` case. That error existed only because
-    ``DriverContext`` held a single ``plugin`` and two adapters could not
-    coexist in it; composing an ordered stack per capability removes that
-    constraint, so several unambiguous adapters were returned together rather
-    than refused. ``--plugin`` still narrows the implicit stack to one
-    provider by bypassing this function entirely -- see ``load_plugin_context``.
+    Cached per entry-point snapshot: the public edge resolves the implicit
+    default once per sweep case, and each recomputation reads every installed
+    distribution's metadata (uncached, 35 s -> 13 min on the test suite). The
+    cache key is the snapshot itself, so a test patching ``_entry_points`` to
+    return synthetic entries gets a fresh decision.
 
-    **Corrected 2026-09-21 (later the same day, Task 9).** The above
-    correction over-corrected: it composed *every* unambiguous adapter
-    together with no regard for whether they were actually related.
-    cardiacCore and cardiacFoam installed side by side -- both requiring only
-    the shared OpenFOAM environment adapter, neither requiring the other --
-    silently composed into one three-provider stack, and `single`-shape
-    members like ``build_run_document_config`` then resolved to whichever
-    sibling happened to sort last alphabetically, not to the one that
-    actually matched the case. `ARCHITECTURE.md` confirms cardiacCore and
-    cardiacFoam are meant to be installed independently by real users; the
-    "all four packages together" venv this repository's own verification
-    recipe builds (see CLAUDE.md) is a test shape, not a deployment scenario,
-    so a real installation never had exactly this ambiguity to silently paper
-    over. Now: exactly one candidate solver-tier adapter (a "root" -- see
-    :func:`_solver_tier_roots`) composes with its full transitive `requires:`
-    closure, unchanged from the single-adapter behaviour this correction never
-    touched; two or more roots refuse by name instead, naming
-    ``--plugin`` as the escape hatch that was always available at every real
-    call site.
-
-    Cached per entry-point snapshot rather than recomputed. The public edge
-    resolves the implicit default once per sweep case, and each recomputation
-    reads every installed distribution's metadata; leaving this uncached took
-    the test suite from 35 s to 13 min. The cache key is the snapshot itself,
-    so a test that patches ``_entry_points`` to return synthetic entries gets a
-    different key and a fresh decision -- the seam still works.
-
-    The *context* is deliberately not cached. Core must not retain a
-    DriverContext in module state; only the decision about which plugins to
-    build one from is stable.
+    The *context* is deliberately not cached: core must not retain a
+    DriverContext in module state, only the decision of which plugins to
+    build one from.
     """
     seen: dict[str, list[Any]] = {}
     for entry_point in snapshot:
@@ -323,9 +257,8 @@ def _default_selection(snapshot: tuple[Any, ...]) -> tuple[tuple[Any, str], ...]
         # Exactly one root: compose it with its full transitive requires:
         # closure. Zero roots (every candidate required by another -- only
         # reachable via a requires: cycle among installed adapters) falls
-        # through to every unambiguous name, same as before this correction;
-        # order_providers's own cycle detection reports that case specifically
-        # if anyone actually tries to compose it.
+        # through to every unambiguous name; order_providers's own cycle
+        # detection reports that case specifically if anyone tries to compose it.
         selected = (
             _transitive_requires_closure(roots[0], id_by_name, requires_by_id)
             if roots
@@ -371,16 +304,12 @@ def _requires_graph(unambiguous: dict[str, Any]) -> tuple[dict[str, str], dict[s
     Returns ``(id_by_name, requires_by_id)``. Building this needs one instance
     per candidate -- ``plugin_id`` is an instance property, not resolvable
     from the class alone, unlike ``get_profile()`` (a ``staticmethod`` on
-    every shipped plugin). This runs at most once per distinct entry-point
+    every shipped plugin). Runs at most once per distinct entry-point
     snapshot (the caller, :func:`_default_selection`, is itself cached), so
     it costs one extra instantiation per installed adapter at CLI-startup
-    frequency, not a hot loop.
-
-    **Corrected 2026-09-25 (solver-conformance B-I1).** A candidate that
-    cannot be loaded used to escape as a bare ``ModuleNotFoundError``. It is
-    now refused by name (:class:`BrokenPluginError`), every broken candidate
-    at once, and never skipped: it may be the root the caller meant, so
-    choosing a default without it would silently change which stack runs.
+    frequency. A candidate that cannot be loaded is refused by name
+    (:class:`BrokenPluginError`), every broken candidate at once, rather than
+    skipped: it may be the root the caller meant.
     """
     id_by_name: dict[str, str] = {}
     requires_by_id: dict[str, tuple[str, ...]] = {}
@@ -410,16 +339,11 @@ def _solver_tier_roots(id_by_name: dict[str, str], requires_by_id: dict[str, tup
 
     A root is a candidate solver-tier entry point: composing an implicit
     default from exactly one root (plus whatever it transitively requires) is
-    the case Task 7 rightly stopped refusing. Two or more roots means two or
-    more mutually independent solver-tier plugins are installed side by side
-    -- e.g. cardiacCore and cardiacFoam, neither requiring the other -- and
-    silently composing both together is exactly what produced Task 9's wrong
-    `single`-shape resolution (a sibling plugin winning `single`-shape members
-    like ``build_run_document_config`` by alphabetical accident, not because
-    it matches the case). An adapter required by no one and requiring nothing
-    (a lone environment-only install, or a single self-contained plugin) is
-    still its own root of one -- this degrades to the pre-existing
-    single-adapter behaviour exactly.
+    the intended case. Two or more roots means two or more mutually
+    independent solver-tier plugins are installed side by side, which must
+    not be silently composed together (see :func:`_default_selection`). An
+    adapter required by no one and requiring nothing (a lone environment-only
+    install, or a single self-contained plugin) is still its own root of one.
     """
     all_ids = set(id_by_name.values())
     required_ids = {
@@ -441,8 +365,7 @@ def _transitive_requires_closure(
     ``--plugin``): the implicit default has no caller to ask, so it must
     settle the whole chain itself. A `requires:` id with no installed
     candidate is left for :func:`~omnidriver.core.plugin_interface.driver_context`
-    (via ``order_providers``) to report -- that error names the specific
-    missing id, which silently omitting it here would not.
+    (via ``order_providers``) to report by name.
     """
     name_by_id = {plugin_id: name for name, plugin_id in id_by_name.items()}
     closure_ids: set[str] = set()
@@ -463,25 +386,13 @@ def default_discovered_context():
 
     See :func:`_default_selection` for the selection rule and
     ``compatibility.absent_default_driver_context`` for why the public edge
-    needs one at all. Whichever providers :func:`_default_selection` selects
-    (one solver-tier root plus its `requires:` closure, per its 2026-09-21
-    Task 9 correction -- not necessarily every unambiguous adapter installed)
-    are instantiated and handed to
+    needs one at all. The selected providers (one solver-tier root plus its
+    `requires:` closure) are instantiated and handed to
     :func:`~omnidriver.core.plugin_interface.driver_context` together, which
-    orders and composes them into one stack -- exactly as if a caller had
-    passed several providers explicitly.
-
-    **Corrected 2026-09-21.** This used to join every provider's source into
-    one ``"; "``-separated string and pass it as the single shared ``source``
-    -- so ``ProviderIdentity.source`` recorded the SAME joined string for
-    every provider in a multi-provider stack, rather than each provider's own
-    actual origin (e.g. ``entry-point:cardiacfoam=1.0`` vs
-    ``entry-point:openfoam-environment=1.0``). That directly defeated the
-    reason ``StackIdentity`` records one identity per provider at all: so a
-    provenance record can say which adapter came from where. Passing the
-    list of each selected entry point's own source, positionally against
-    ``providers``, lets :func:`~omnidriver.core.plugin_interface.driver_context`
-    attribute each one correctly.
+    orders and composes them into one stack, exactly as if a caller had
+    passed several providers explicitly. Each provider's own source is passed
+    positionally against ``providers`` so ``ProviderIdentity.source`` records
+    each adapter's actual origin rather than one joined string shared by all.
     """
     from .plugin_interface import driver_context
 

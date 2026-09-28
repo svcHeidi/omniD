@@ -1,4 +1,4 @@
-"""table_writer.py — Standard tabular output with metadata envelope."""
+"""Standard tabular output with metadata envelope."""
 from __future__ import annotations
 
 import json
@@ -10,17 +10,9 @@ from typing import Any
 
 @dataclass(init=False)
 class TableMetadata:
-    """Metadata envelope attached to every entry table output.
-
-    Attributes
-    ----------
-    entry:
-        Human-readable entry name, e.g. ``"ExampleTutorial2020"``.
-    units:
-        Mapping of column name → unit string, e.g.
-        ``{"elapsedTime": "s", "DX": "mm"}``.
-    generated_at:
-        UTC ISO-8601 timestamp string.  Auto-filled on construction if empty.
+    """Metadata envelope attached to every entry table output: entry name,
+    a column-name-to-unit mapping, and a UTC ISO-8601 timestamp (auto-filled
+    if empty).
     """
 
     entry: str
@@ -59,26 +51,11 @@ class TableWriter:
         label: str,
         metadata: TableMetadata,
     ) -> list[dict[str, Any]]:
-        """Write *rows* as ``<filename_stem>.csv`` and ``<filename_stem>.html``.
-
-        Parameters
-        ----------
-        rows:
-            List of dicts where every dict has the same keys (entry-defined
-            columns).  An empty list is allowed — only the envelope is written.
-        output_dir:
-            Directory into which the files are written.
-        filename_stem:
-            Base name without extension, e.g. ``"ExampleTutorial2020_summary"``.
-        label:
-            Human-readable description used in the artifact entry.
-        metadata:
-            :class:`TableMetadata` providing entry name, units, and timestamp.
-
-        Returns
-        -------
-        Two artifact dicts (CSV and HTML), each with keys ``path``, ``label``,
-        ``kind``, ``format``.  Paths are relative filenames (not absolute).
+        """Write *rows* as ``<filename_stem>.csv`` and ``<filename_stem>.html``
+        under ``output_dir``, each prefixed by a metadata envelope. ``rows``
+        may be empty (only the envelope is written). Returns two artifact
+        dicts (csv, html) with keys ``path`` (a relative filename), ``label``,
+        ``kind`` and ``format``.
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -88,9 +65,6 @@ class TableWriter:
 
         fieldnames: list[str] = list(rows[0].keys()) if rows else []
 
-        # ------------------------------------------------------------------
-        # CSV: comment-line envelope then data
-        # ------------------------------------------------------------------
         lines: list[str] = [
             f"# entry: {metadata.entry}",
             f"# generated_at: {metadata.generated_at}",
@@ -102,9 +76,6 @@ class TableWriter:
                 lines.append(",".join(str(row.get(f, "")) for f in fieldnames))
         csv_path.write_text("\n".join(lines) + "\n")
 
-        # ------------------------------------------------------------------
-        # HTML: styled table with metadata header block
-        # ------------------------------------------------------------------
         parts: list[str] = [
             "<!DOCTYPE html><html><head>",
             "<style>",

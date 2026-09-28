@@ -15,11 +15,8 @@ class SweepValidationError(ValueError):
 def load_sweep_spec_schema() -> dict[str, Any]:
     """The versioned JSON Schema a `sweep.json` document validates against.
 
-    Phase 2 Task 11 (docs/superpowers/plans/2026-09-20-phase2-one-write-channel.md):
-    ships inside the installed package (``omnidriver.schemas``, the same
-    resource package ``run-document.json`` already uses -- see
-    ``core/runtime/run_model.py``), not a repository-only ``schemas/``
-    directory, which is absent from every wheel.
+    Ships inside the installed package (``omnidriver.schemas``), not a
+    repository-only ``schemas/`` directory, which is absent from every wheel.
     """
     payload = (
         resources.files("omnidriver.schemas")

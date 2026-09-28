@@ -84,10 +84,10 @@ class PluginProfile:
     environment: EnvironmentConnection | None = None
     #: Capability names this provider supplies, validated against the seam
     #: vocabulary at load. Intent, not observation: what the provider MEANS to
-    #: supply. Core separately discovers what it actually implements, and a
-    #: future declared-vs-implemented guard errors when they disagree --
-    #: which is how a misspelled hook name becomes visible. Before this,
-    #: a typo'd hook silently routed to a fallback and nothing reported it.
+    #: supply. Core separately discovers what it actually implements; a
+    #: declared-vs-implemented guard errors when they disagree, which is how
+    #: a misspelled hook name becomes visible instead of silently routing to
+    #: a fallback.
     provides: frozenset[str] = frozenset()
     #: Provider ids this one layers on top of, least-specific first. Ordering
     #: is declared, never inferred from install order or entry-point name.
@@ -217,9 +217,8 @@ def replica_directory_globs(driver_context: Any | None) -> tuple[str, ...]:
 
 def is_replica_directory_name(name: str, globs: tuple[str, ...]) -> bool:
     """Whether a directory name, at any depth in the case tree, is one of
-    the declared replicas. Corrected 2026-09-26 (R2 fix, finding M2): said
-    "case-root directory name", but every caller (``registry``,
-    ``sweep_runner``) applies this at every depth, not only the case root."""
+    the declared replicas. Every caller (``registry``, ``sweep_runner``)
+    applies this at every depth, not only the case root."""
     return any(fnmatch.fnmatchcase(name, pattern) for pattern in globs)
 
 

@@ -1,39 +1,31 @@
 """Compare quantities read from runs, over pairs an agent states.
 
-Design: docs/superpowers/specs/2026-09-26-results-as-quantities-design.md.
 Everything comes from the agent's request: which runs, which artifact of
-each, where to sample (for a reader that samples at points), which
-reference, which pairs, and the tolerance, declared before any value is
-read. Core adds no frame conversion, pairing or tolerance of its own
-(owner, 2026-09-26). The report shows every value with its unit, sampling
+each, where to sample, which reference, which pairs, and the tolerance,
+declared before any value is read. Core adds no frame conversion, pairing or
+tolerance of its own. The report shows every value with its unit, sampling
 rule, sampled location and requested point, so a wrong pairing or
 orientation is visible.
 
-Order, so that nothing is decided after a value is seen:
-1. the request and the reference are validated and digested;
-2. every run's evidence, stack, artifact and reader are resolved, and every
-   unit is checked convertible. A refusal here reads no artifact;
-3. artifacts are read (sentinels resolved, then units converted) and the
-   pairs compared, location first, then value;
-4. the report is written once, to a path that must not exist.
+Order, so nothing is decided after a value is seen: (1) request and
+reference are validated and digested; (2) every run's evidence, stack,
+artifact and reader are resolved and every unit checked convertible -- a
+refusal here reads no artifact; (3) artifacts are read (sentinels resolved,
+then units converted) and pairs compared, location first, then value; (4) the
+report is written once, to a path that must not exist.
 
 The report is a checker report for ``experiments.inspect_sweep_experiment``:
-``status``, ``metrics`` (one per pair) and ``run_evidence`` (one per run).
-It is written read-only (`_write_once`); the request's ``both_not_reached``
-choice is echoed back in it, and ``status`` is never ``passed`` unless at
-least one pair is ``within_tolerance`` (I2/M1, controller review
-2026-09-26) -- ``experiments._read_comparison`` also recomputes it from the
-report's own ``metrics`` rather than trusting a stated ``status`` verbatim.
+``status``, ``metrics`` (one per pair) and ``run_evidence`` (one per run),
+written read-only. ``status`` is never ``passed`` unless at least one pair is
+``within_tolerance``, and ``experiments._read_comparison`` recomputes it from
+``metrics`` rather than trusting the stored value.
 
-**A run's ``points`` mean one of two things (I3, controller review
-2026-09-26), by whether its artifact's reader ``takes_points``:** for a
-reader that samples at supplied locations, they are where to sample, and
-the reader receives them; for a reader that samples where it chooses, they
-are the agent's *expected* location of each named quantity -- the reader
-never receives them, and the comparison checks each sample's reported
-``sampled_at`` against its expected point instead, exactly as it does for a
-points-taking reader. Either meaning requires ``max_sampling_offset``,
-pre-registered with no default (`_points`).
+**A run's ``points`` mean one of two things, by whether its artifact's
+reader ``takes_points``:** where to sample (the reader receives them), or --
+for a reader that samples where it chooses -- the agent's *expected*
+location of each named quantity, checked against the reader's reported
+``sampled_at`` instead. Either meaning requires ``max_sampling_offset``, with
+no default.
 """
 from __future__ import annotations
 
@@ -111,7 +103,7 @@ def compare_pair(left: Quantity, right: Quantity, *, unit: str, tolerance: Toler
 
 def overall_status(statuses: Iterable[str], *, both_not_reached: str) -> tuple[str, str | None]:
     """``(status, reason)``: ``reason`` is not ``None`` exactly when
-    ``status`` is ``unavailable`` (I2/M1, controller review 2026-09-26).
+    ``status`` is ``unavailable``.
 
     ``both_not_reached`` is the request's pre-registered, no-default choice:
     with ``"agree"`` a ``both_not_reached`` pair does not fail the report;
@@ -175,12 +167,11 @@ def _location(base: Path, runs: Mapping[str, Any], side: Mapping[str, str]) -> t
     """What ``side`` actually names, independent of which run name it spells:
     the resolved sweep output, the case, the artifact and the quantity. Two
     sides that resolve identically compare a run against itself even when
-    they name two different run keys (N1, controller review 2026-09-26)."""
+    they name two different run keys."""
     run = runs[side["run"]]
     # .resolve(): an unnormalised path (e.g. "sweep/../sweep", or a symlink)
     # must still compare equal to its normal form, or two sides naming the
-    # same place through different spellings pass N1 undetected (M2,
-    # controller review 2026-09-26).
+    # same place through different spellings pass this check undetected.
     return (str(_resolve(base, run["sweep_output"]).resolve()), run["case_id"], run["artifact_id"], side["quantity"])
 
 
@@ -218,9 +209,8 @@ def _artifact(name: str, document: Mapping[str, Any], artifact_id: str) -> DataA
             try:
                 artifact = data_artifact_from_json(raw)
             except (KeyError, ValueError, TypeError) as exc:
-                # M10, controller review 2026-09-26: a malformed
-                # expectedArtifacts entry is a named refusal, never a
-                # traceback.
+                # A malformed expectedArtifacts entry is a named refusal,
+                # never a traceback.
                 raise QuantityComparisonError(
                     f"run {name!r}: artifact {artifact_id!r} in expectedArtifacts is malformed: {type(exc).__name__}: {exc}"
                 ) from exc
@@ -235,14 +225,14 @@ def _artifact(name: str, document: Mapping[str, Any], artifact_id: str) -> DataA
 
 
 def _points(name: str, raw: Mapping[str, Any], reader: Any, names: tuple[str, ...]) -> tuple[Mapping[str, Point], float | None]:
-    """``points`` means one of two things, by ``reader.takes_points`` (I3,
-    controller review 2026-09-26): where to sample (the reader receives
-    them), or -- for a reader that samples where it chooses -- the agent's
-    *expected* location of each named quantity (the reader never receives
-    them; ``_quantities`` withholds them from the ``ReadRequest``, and
-    ``_side`` checks them against the reader's own ``sampled_at``). Either
-    meaning requires ``max_sampling_offset``, refused by name here, before
-    any read, when it is missing (I2/M1)."""
+    """``points`` means one of two things, by ``reader.takes_points``:
+    where to sample (the reader receives them), or -- for a reader that
+    samples where it chooses -- the agent's *expected* location of each
+    named quantity (the reader never receives them; ``_quantities``
+    withholds them from the ``ReadRequest``, and ``_side`` checks them
+    against the reader's own ``sampled_at``). Either meaning requires
+    ``max_sampling_offset``, refused by name here, before any read, when it
+    is missing."""
     supplied = raw.get("points")
     if reader.takes_points and supplied is None:
         raise QuantityComparisonError(f"run {name!r}: this artifact's reader samples at supplied points; give 'points' for {list(names)}")
@@ -293,8 +283,7 @@ def _resolve_run(name: str, raw: Mapping[str, Any], *, base: Path, reference_uni
     except Exception as exc:  # a plugin that does not load is refused by name
         raise QuantityComparisonError(f"run {name!r}: plugin {raw['plugin']!r} does not load: {type(exc).__name__}: {exc}") from exc
     stack = tuple(p["id"] for p in ctx.identity.to_json()["providers"])
-    # One source of truth for this comparison: see
-    # `provider_identity.stack_identity_mismatch`'s docstring for what is
+    # See `provider_identity.stack_identity_mismatch`'s docstring for what is
     # compared and why (also called from `cli.py` and `run_document_exec.py`).
     mismatched = stack_identity_mismatch(document.get("plugin") or {}, ctx.identity.to_json())
     if mismatched:
@@ -339,21 +328,21 @@ def _quantities(run: _Run, names: tuple[str, ...]) -> dict[str, Quantity]:
     entry = reconcile_artifacts(case_root, (run.artifact,), case_id=run.case.case_id).artifacts[0]
     if entry["status"] != "matched":
         return gap(f"artifact {run.artifact.artifact_id!r} ({source}) is missing under {case_root}")
-    # I3, controller review 2026-09-26: run.points may hold the agent's
-    # *expected* locations for a reader that samples where it chooses
-    # (takes_points is false); the reader itself never receives them --
-    # only `_side` compares them against what the reader actually reports.
+    # run.points may hold the agent's *expected* locations for a reader
+    # that samples where it chooses (takes_points is false); the reader
+    # itself never receives them -- only `_side` compares them against what
+    # the reader actually reports.
     request_points = run.points if run.reader.takes_points else {}
     try:
         read = read_quantities(run.reader, case_root, run.artifact, ReadRequest(names=names, points=request_points))
     except Exception as exc:  # any reader exception, not only ValueError, becomes a named gap; a report is always written
         return gap(f"the reader raised {type(exc).__name__}: {exc}")
     quantities = {q.name: q for q in read}
-    # I3, controller review 2026-09-26: an expected location was given for a
-    # self-sampling reader (`_points`'s second meaning) is only useful if it
-    # can be checked against a reported sampled_at; a reader that reports
-    # none is a named gap here, not a silently unchecked offset (`_side`
-    # would otherwise just show `sampling_offset: null` and pass).
+    # An expected location given for a self-sampling reader (`_points`'s
+    # second meaning) is only useful if it can be checked against a reported
+    # sampled_at; a reader that reports none is a named gap here, not a
+    # silently unchecked offset (`_side` would otherwise just show
+    # `sampling_offset: null` and pass).
     for name, expected in run.points.items():
         quantity = quantities.get(name)
         if quantity is not None and quantity.sampled_at is None:
@@ -368,10 +357,10 @@ def _side(run: _Run, quantity: Quantity, unit: str) -> dict[str, Any]:
     shown = converted(quantity, unit)
     requested = run.points.get(quantity.name)
     offset = math.dist(requested, quantity.sampled_at) if requested is not None and quantity.sampled_at is not None else None
-    # M7, controller review 2026-09-26: requested_at/sampling_offset are in
-    # the reader's own coordinate_unit (the same unit `_points` converted
-    # them into) -- a bare number here was ambiguous (mm requested read
-    # back as a bare 1.0 that was really 1 um).
+    # requested_at/sampling_offset are in the reader's own coordinate_unit
+    # (the same unit `_points` converted them into) -- a bare number here
+    # would be ambiguous (mm requested read back as a bare 1.0 that was
+    # really 1 um).
     coordinate_unit = run.reader.coordinate_unit if run.reader is not None else None
     return {
         "run": run.name, "quantity": quantity.name, "status": shown.status, "value": shown.value,
@@ -422,14 +411,12 @@ def _run_json(run: _Run) -> dict[str, Any]:
 
 
 def _write_once(path: Path, report: Mapping[str, Any]) -> None:
-    """Write ``report`` to ``path`` exactly once, then make it read-only
-    (M6, controller review 2026-09-26: pre-registration asserted nothing
-    about the report staying as written; ``chmod 0o444`` at least stops an
-    ordinary rewrite in place -- ``experiments._read_comparison`` also no
-    longer trusts a checker ``omnidriver.quantities`` report's stated
-    ``status`` verbatim, for a filesystem that permits it anyway). Every
+    """Write ``report`` to ``path`` exactly once, then make it read-only:
+    ``chmod 0o444`` stops an ordinary rewrite in place, and
+    ``experiments._read_comparison`` does not trust a stated ``status``
+    verbatim either, for a filesystem that permits a rewrite anyway. Every
     step here is a named ``QuantityComparisonError``, never a bare
-    ``OSError`` traceback (M10)."""
+    ``OSError`` traceback."""
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
@@ -515,10 +502,9 @@ def run_quantity_comparison(request_path: str | Path, report_path: str | Path) -
 
 def _deduplicated_run_evidence(runs: Iterable[_Run]) -> list[dict[str, str]]:
     """One entry per distinct case, even when two run *names* in the request
-    resolve to the same case (B2, controller review 2026-09-26): duplicate
-    identical entries would make ``experiments._association_status``'s
-    "exactly one match" check see more than one and report ``unverified``
-    for a genuinely verified case."""
+    resolve to the same case: duplicate identical entries would make
+    ``experiments._association_status``'s "exactly one match" check see more
+    than one and report ``unverified`` for a genuinely verified case."""
     seen: set[tuple[str, str, str]] = set()
     evidence: list[dict[str, str]] = []
     for run in runs:

@@ -186,15 +186,14 @@ def _artifact_diagnostics(
 def _owned_dict_relpaths(spec, driver_context: "DriverContext") -> tuple[str, ...]:
     """Case dictionaries the active plugin's catalogue actually addresses.
 
-    Only dictionaries the catalogue covers may be swept: warning about keys in
-    a file the catalogue never claimed to describe would be pure noise.
-
-    The spec's own generic ``dict_file_relpaths`` metadata is authoritative
-    when present. Older adapters may still expose ``*_relpath`` metadata; the
-    suffix-based compatibility read keeps that surface generic. A bare case
-    folder has no metadata, so the plugin's document names are matched against
-    the adapter's declared case-file rules. Core never supplies a directory
-    layout or document vocabulary.
+    Only dictionaries the catalogue covers may be swept -- warning about keys
+    in an uncatalogued file would be pure noise. The spec's own
+    ``dict_file_relpaths`` metadata is authoritative when present; older
+    adapters may instead expose ``*_relpath`` metadata, read via a
+    suffix-based compatibility fallback. A bare case folder has no metadata,
+    so the plugin's document names are matched against the adapter's declared
+    case-file rules -- core never supplies a directory layout or document
+    vocabulary itself.
     """
     metadata = getattr(spec, "metadata", None) or {}
     relpaths: list[str] = []
@@ -246,21 +245,15 @@ def _catalog_diagnostics(driver_context: "DriverContext") -> tuple[StrictDiagnos
     mapping = driver_context.capabilities.cxx_mapping.profile().cxx_mapping
     if mapping is None:
         return ()
-    # A diagnostic's `source=` names what reported it, not the whole stack --
-    # `StackIdentity` has no singular id to fall back on. `resolutions()`
-    # already records, per capability, which provider answered it; the
-    # provider that answered `cxx_mapping` is exactly the one whose profile
-    # supplied `mapping` above, so its plugin_id is the correct "what
-    # reported this" answer, not an arbitrary stand-in such as the
-    # most-specific provider or the stack's capability_digest.
+    # `source=` names whichever provider actually answered `cxx_mapping`, per
+    # `resolutions()` -- `StackIdentity` has no singular id to fall back on.
     cxx_mapping_source = driver_context.identity.resolutions.get(
         "cxx_mapping", "cxx_mapping",
     )
     source_root = mapping.source_root(os.environ)
     if source_root is None:
-        # Supplied, never discovered: an unsupplied root is one plain fact,
-        # not a warning on every plan (it was a stale package-relative path,
-        # so every cardiacFOAM plan warned and scanned nothing).
+        # Supplied, never discovered: an unsupplied root is reported as info,
+        # not a warning, so a plan that needs no C++ scanning isn't flagged.
         return (_diagnostic(
             "info",
             "plugin_cxx_source_not_supplied",
@@ -301,13 +294,7 @@ def _mesh_geometry_exempt(spec, driver_context: "DriverContext") -> bool:
 
     Two answers only: the plugin's own ``is_nondimensional_case``, read
     from the case's files, or a generic case, whose conventions core
-    does not know.
-
-    Corrected 2026-09-26 (spec 2026-09-26 A7): a third answer exempted
-    any case whose entry name or workflow family contained
-    "manufactured" or "verification", an exemption by *name*. It is
-    deleted. ``test_every_case_the_name_rule_exempted_is_exempted_by_the_hook``
-    (cardiacfoam, native) proved the hook covers every case it exempted.
+    does not know. There is no exemption by entry name or workflow family.
     """
     return (
         driver_context.capabilities.mesh_diagnostic_policy.is_nondimensional(spec)
@@ -323,11 +310,11 @@ def _mesh_geometry_diagnostics(
 ) -> tuple[StrictDiagnostic, ...]:
     """Adapt mesh-scale detection into StrictDiagnostics for the report.
 
-    The active plugin's base geometry check classifies its mesh regions' scale
-    (corrected 2026-09-26: this said core did); the plugin may add
-    checks for point sets that are not mesh regions (cardiacFoam's
-    ``constant/purkinjeGraph*``). Both report under the same
-    ``mesh_geometry`` source, and both are skipped by the same exemption.
+    The active plugin's base geometry check classifies its mesh regions'
+    scale; the plugin may add checks for point sets that are not mesh
+    regions (cardiacFoam's ``constant/purkinjeGraph*``). Both report under
+    the same ``mesh_geometry`` source, and both are skipped by the same
+    exemption.
     """
     if exempt or SKIP_GEOMETRY_DIAGNOSTICS_ENV in os.environ:
         return ()
@@ -413,40 +400,24 @@ def _run_launch_description(
     allow_unresolved_configuration: bool = False,
     is_tutorial_record: bool = False,
 ) -> dict[str, Any]:
-    """Describe the modern `run --strict --entry` invocation for this plan.
-
-    Replaces strict_plan's former reuse of describe_launch("sim", ...):
-    that call re-resolved the entry a second time (strict_plan already has
-    `spec` from load_entry_spec) purely to read these four paths off it, and
-    tied the strict/workflow-DAG path -- which never runs the legacy
-    sim/post/all CLI at all -- to describe_launch's action vocabulary.
-    `run --strict --entry` is the command that actually executes this exact
-    plan today.
+    """Describe the `run --strict --entry` invocation for this plan.
 
     The four paths are written absolute. They become the run document's
-    ``launch`` block, which another process reads under its own rule
-    (``run_document_exec.build_execution_inputs``: a relative ``outputDir`` is
-    under ``caseRoot``, a relative ``caseRoot`` is under the reader's working
-    directory). These paths arrive already joined under a possibly relative
-    ``cases_root``, so written as-is the reader nested ``outputDir`` twice.
-    Added 2026-09-24, after ``sweep-run --output-dir out`` recorded a completed
-    case as "pending". Anchoring here resolves a supplied relative path at the
-    moment it was supplied; it invents no root.
+    ``launch`` block, read by ``run_document_exec.build_execution_inputs``
+    under its own rule (a relative ``outputDir`` is under ``caseRoot``, a
+    relative ``caseRoot`` is under the reader's working directory) --
+    writing them as supplied, already joined under a possibly relative
+    ``cases_root``, would nest ``outputDir`` twice.
 
-    P1 fix (docs/superpowers/specs/2026-09-24-tutorials-are-pointers-
-    design.md, "Owner decisions" dated 2026-09-25): a tutorial record has no
-    ``load_entry_spec`` resolution at all (it is inert data, not a factory --
-    ``registry._materialize_resolved_entry`` refuses it by name), so
-    ``run --strict --entry <record>`` can never re-resolve the way a factory
-    entry's launch command does. A record's own case was already committed
-    once, by the caller that built this plan (``strict_plan``'s own
-    tutorial_record branch, or a sweep case) -- the launch command instead
-    points at the run document THIS PLAN becomes, once its caller persists it
-    at this exact path (``output_dir/run_document.json``, matching the
-    existing "sweep-run writes run_document.json right before running"
-    convention). ``entry_kind``/``config_path``/``allow_unresolved_
-    configuration`` name a ``load_entry_spec`` re-resolution that a record
-    never performs, so none of them apply to this branch.
+    A tutorial record has no ``load_entry_spec`` resolution at all (it is
+    inert data, not a factory -- ``registry._materialize_resolved_entry``
+    refuses it by name), so its launch command cannot re-resolve the way a
+    factory entry's does. Its case was already committed once by the caller
+    that built this plan, so the launch command instead points at the run
+    document THIS PLAN becomes, once its caller persists it at
+    ``output_dir/run_document.json``. ``entry_kind``/``config_path``/
+    ``allow_unresolved_configuration`` name a ``load_entry_spec``
+    re-resolution a record never performs, so none apply to this branch.
     """
     if is_tutorial_record:
         run_document_path = str(
@@ -488,40 +459,36 @@ def strict_plan(
     """Build a non-mutating strict simulation plan report.
 
     ``inputs`` (``--input NAME=PATH``, repeatable) supplies a tutorial
-    record's declared inputs (design 2026-09-28-supplied-inputs §2.2); it is
-    refused, by name, for any other entry (the same posture ``cli_study``
-    already has -- :func:`refuse_cli_study_for_non_record`).
+    record's declared inputs; refused by name for any other entry (the same
+    posture ``cli_study`` has -- :func:`refuse_cli_study_for_non_record`).
 
-    ``cli_study`` holds the study values the CLI itself supplies (PAR,
-    2026-09-26: ``--parallel``), a record study's ``"cli"`` source beside
+    ``cli_study`` holds the study values the CLI itself supplies (e.g.
+    ``--parallel``), kept as a record study's own ``"cli"`` source beside
     ``overrides``' ``"base"``, so a CLI value that disagrees with the
     study's is refused by name rather than merged. Only a tutorial record
     takes study values; any other entry given one is refused by name.
 
     ``scratch_root`` is where a tutorial record's case is staged
-    (``<scratch_root>/records/<name>``); resolved by
-    ``specs.paths.resolve_scratch_root`` only when the entry is a record, so
-    it is supplied (this keyword, else ``OMNIDRIVER_SCRATCH_DIR``) or refused
-    by name -- never defaulted under ``cases_root`` (2026-09-26).
+    (``<scratch_root>/records/<name>``), resolved via
+    ``specs.paths.resolve_scratch_root`` only when the entry is a record --
+    supplied (this keyword, else ``OMNIDRIVER_SCRATCH_DIR``) or refused by
+    name, never defaulted under ``cases_root``.
 
     Resolves ``entry`` to a spec via ``load_entry_spec`` (which refuses a
-    tutorial_record by name -- B2), then delegates every diagnostic/
-    run-document assembly step to :func:`_strict_plan_for_spec`. A caller
-    that already HAS a spec built some other way (item 2: a tutorial-record
-    case, whose spec ``record_execution.record_case_spec`` builds directly,
-    with no registry entry to resolve at all) calls
-    :func:`_strict_plan_for_spec` itself instead of going through here --
-    reusing the exact same diagnostics/run-document pipeline, not a second
-    one.
+    tutorial_record by name), then delegates every diagnostic/run-document
+    assembly step to :func:`_strict_plan_for_spec`. A caller that already
+    has a spec built some other way (a tutorial-record case, whose spec
+    ``record_execution.record_case_spec`` builds directly, with no registry
+    entry to resolve) calls :func:`_strict_plan_for_spec` itself instead,
+    reusing the same diagnostics/run-document pipeline.
     """
     incoming_overrides = dict(overrides or {})
     cases_root_value = incoming_overrides.get("cases_root")
     cases_root = Path(cases_root_value) if cases_root_value is not None else None
-    # P1 fix: a tutorial record is dispatched EXPLICITLY, the same way
-    # `sweep_runner._sweep_record` already dispatches one out of a sweep --
-    # never tried as a factory/case-folder entry first via `load_entry_spec`
-    # (which refuses a record by name; see `registry
-    # ._materialize_resolved_entry`'s own docstring, review finding B2).
+    # A tutorial record is dispatched explicitly, the same way
+    # `sweep_runner._sweep_record` dispatches one out of a sweep -- never
+    # tried as a factory/case-folder entry first via `load_entry_spec`
+    # (which refuses a record by name).
     classification = classify_entry(
         entry, entry_kind=entry_kind, cases_root=cases_root, driver_context=driver_context,
     )
@@ -566,7 +533,7 @@ def strict_plan(
 def refuse_cli_study_for_non_record(entry: str, cli_study: Mapping[str, Any] | None) -> None:
     """A CLI study value (``--parallel``) asks something of a tutorial
     record's run; a factory or case-folder entry has no record study to put
-    it in, so it is refused by name rather than dropped (PAR, 2026-09-26)."""
+    it in, so it is refused by name rather than dropped."""
     if cli_study:
         flags = ", ".join(f"--{name}" for name in sorted(cli_study))
         raise TutorialRecordError(
@@ -591,36 +558,30 @@ def _strict_plan_for_record(
     driver_context: "DriverContext",
 ) -> StrictPlanReport:
     """Plan (and commit) one tutorial-record case for `plan --strict --entry
-    <record>` / `step`/`run --entry <record>` -- P1 fix.
+    <record>` / `step`/`run --entry <record>`.
 
-    A record has no ambient cases root (CLAUDE.md's "supplied versus
-    discovered"; the same refusal `sweep_runner._sweep_record` already
-    raises for a swept record). Everything in ``overrides`` other than
-    ``cases_root`` is this single, non-swept case's own study values
-    (``base``, no ``sweep`` values -- "the way a one-case sweep does": one
+    A record has no ambient cases root, so it must be supplied (the same
+    refusal `sweep_runner._sweep_record` raises for a swept record).
+    Everything in ``overrides`` other than ``cases_root`` is this single,
+    non-swept case's own study values (``base``, no ``sweep`` values -- one
     resolved case, no axis expansion). The case is staged and committed via
-    the ONE shared ``commit_and_build_record_spec`` sequence sweep_runner
-    also calls -- design's own "no duplicate" instruction.
+    the same shared ``commit_and_build_record_spec`` sequence `sweep_runner`
+    also calls.
 
-    Where this stages: "supplied, not invented" (CLAUDE.md) -- there is no
-    sweep output_dir here to stage under, so this stages under the SUPPLIED
-    scratch root (``scratch_root``, else ``OMNIDRIVER_SCRATCH_DIR``, else
-    refused by name; `core.specs.paths.resolve_scratch_root`), under a
-    `records/<name>` subdirectory (parallel to `cli._context_from_entry`'s
-    own `runs/<name>` staging for a case-folder entry -- a different
-    subdirectory name because a record and a same-named case folder must
-    never collide, `registry.classify_entry`'s own invariant). Corrected
-    2026-09-26: this said the scratch rule was "anchored at the SUPPLIED
-    cases_root" -- which is exactly how it wrote `<cases_root>/.omnidriver`
-    into the native tree. A scratch root inside cases_root is now refused.
+    There is no sweep output_dir here to stage under, so this stages under
+    the supplied scratch root (``scratch_root``, else
+    ``OMNIDRIVER_SCRATCH_DIR``, else refused by name;
+    `core.specs.paths.resolve_scratch_root`), under a `records/<name>`
+    subdirectory -- distinct from `cli._context_from_entry`'s `runs/<name>`
+    staging for a case-folder entry, so a record and a same-named case
+    folder can never collide (`registry.classify_entry`'s invariant). A
+    scratch root inside `cases_root` is refused.
 
-    The plan this returns commits the record's case as a side effect (the
-    same thing `sweep_runner._record_sweep_plan`, i.e. `sweep-plan` over a
-    record entry, already does at plan time) and persists the resulting
-    `RunDocument` to `<output_dir>/run_document.json` -- the exact path
-    `_run_launch_description`'s record branch advertises as `run
-    --run-document <path>` -- so that advertised command is immediately
-    runnable, not a promise of a file nothing wrote yet.
+    The plan this returns commits the record's case as a side effect and
+    persists the resulting `RunDocument` to `<output_dir>/run_document.json`
+    -- the exact path `_run_launch_description`'s record branch advertises
+    as `run --run-document <path>` -- so that advertised command is
+    immediately runnable.
     """
     if cases_root is None:
         raise TutorialRecordError(
@@ -652,10 +613,9 @@ def _strict_plan_for_record(
             inputs=inputs,
         )
     except PermissionError as exc:
-        # Final review S-I3 (2026-09-25) made a read-only scratch a refusal
-        # rather than a traceback. Corrected 2026-09-26: the scratch root is
-        # now always supplied, so this only fires on a supplied root that
-        # cannot be written; it no longer describes a default.
+        # A read-only scratch root is refused by name rather than raising a
+        # raw traceback; since the root is always supplied, this only fires
+        # when the supplied root cannot be written.
         raise TutorialRecordError(
             f"tutorial record {entry!r} cannot be staged under {staged_case_root}: {exc}. "
             "Supply a writable scratch root outside the cases root with "
@@ -688,10 +648,8 @@ def _strict_plan_for_spec(
 ) -> StrictPlanReport:
     """The diagnostics/run-document assembly ``strict_plan`` performs, taking
     an already-resolved ``spec`` directly rather than resolving ``entry``
-    itself. Extracted from ``strict_plan`` (2026-09-24, item 2) so a caller
-    with a spec that did not come from the registry (a tutorial-record case)
-    can reuse this pipeline verbatim -- "map onto the same shape... through
-    the existing workflow runner. do not build a second runner."
+    itself -- so a caller whose spec did not come from the registry (a
+    tutorial-record case) can reuse this pipeline without a second runner.
     """
     execution_context = resolve_execution_context(spec)
     is_tutorial_record = bool(
@@ -740,11 +698,9 @@ def _strict_plan_for_spec(
         environment_source=environment_source,
         driver_context=driver_context,
     )
-    # Bound once and passed on: the audit has to know *why* the mesh
-    # diagnostics are empty. An exempt case (no physical scale, or a generic
-    # case whose conventions core does not know) produces the same empty tuple
-    # as a mesh that was examined and found clean, and used to be scored the
-    # same way.
+    # Bound once and passed on: the audit needs to know *why* mesh
+    # diagnostics are empty -- an exempt case produces the same empty tuple
+    # as a mesh that was examined and found clean.
     mesh_geometry_exempt = _mesh_geometry_exempt(spec, driver_context)
     mesh_diagnostics = _mesh_geometry_diagnostics(
         spec.case_root,
