@@ -110,6 +110,7 @@ from pathlib import Path
 
 from omnidriver.core.contracts.dictionary import DictEntry, validate_value_shape
 from omnidriver.core.runtime.record_surface import ANY_KEY
+from omnidriver.openfoam.record_key_validation import infer_unvalidated_value_kind
 
 from .detection import detect_myocardium_solver_name
 from .overrides import (
@@ -196,54 +197,12 @@ def _declares_members(document: str, key_path: "tuple[str, ...]") -> bool:
     )
 
 
-def _infer_unvalidated_value_kind(value: Any) -> str:
-    """The best-effort, purely descriptive shape tag for an OpenFOAM-owned
-    key this package has no catalog for (rule 2). Never checked against
-    anything -- there is no catalog to check it against -- and used
-    downstream only by the case-value comparator, which does its own typed
-    comparison independent of this tag (``omnidriver.openfoam.apply_overrides
-    .effective_values_agree`` dispatches on the requested value's own Python
-    type, not on this string).
-
-    ``bool`` is checked before ``int`` because ``bool`` is an ``int``
-    subclass in Python -- the same ordering the existing toy validator in
-    ``test_tutorial_records.py`` already established for this exact
-    "environment-owned-key exception" shape.
-    """
-    if isinstance(value, bool):
-        return "boolean"
-    if isinstance(value, int):
-        return "integer"
-    if isinstance(value, float):
-        return "scalar"
-    # Added 2026-09-25 (`restitutionCurves`'s `blockMeshResolution` axis,
-    # the first real caller of this validator carrying a typed tuple/list
-    # value -- `block_mesh_resolution_axis`'s own module docstring on why
-    # its patch value is typed data, not pre-joined text): a list/tuple of
-    # plain ints infers `integer_list`; anything else numeric-shaped infers
-    # `scalar_list` (still element-shape-only, same "no catalog, no
-    # opinion beyond Python type" posture as every other branch here).
-    # `bool` excluded from "int" the same way the module's docstring
-    # already explains for the scalar branches above.
-    if isinstance(value, (list, tuple)):
-        if all(isinstance(item, int) and not isinstance(item, bool) for item in value):
-            return "integer_list"
-        return "scalar_list"
-    # Corrected 2026-09-26 (tutorials-are-pointers, 5.4b-B): this fell
-    # through to "word" for every `str`, including one containing
-    # whitespace -- "word"'s own shape check then refuses it ("must contain
-    # no whitespace"), so a direct study key whose value is genuinely
-    # multi-word OpenFOAM text (e.g. `system/fvSchemes:gradSchemes.default`
-    # = "Gauss linear") could never be written at all. Never exercised until
-    # `manufacturedBidomain`'s grad_scheme studies became the first direct
-    # (not axis-derived) caller to carry one. K6 added "string" (any text,
-    # including spaces) for exactly this shape; used here whenever the
-    # value actually needs it, keeping "word" for a plain token (unchanged
-    # behaviour, and the case-value comparator downstream never reads this
-    # tag anyway -- module docstring).
-    if isinstance(value, str) and value.split() != [value]:
-        return "string"
-    return "word"
+#: Step S (2026-09-28), One reality: this used to be this module's own
+#: ``_infer_unvalidated_value_kind``, reimplementing exactly what
+#: cardiacCore's validator also needs for its own ``system/`` documents.
+#: Both now share ``omnidriver-openfoam``'s one copy -- the OpenFOAM half of
+#: rule 2, never a second variant (CLAUDE.md, "One reality").
+_infer_unvalidated_value_kind = infer_unvalidated_value_kind
 
 
 def record_key_validator(

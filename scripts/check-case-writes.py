@@ -68,7 +68,15 @@ PLANNERS_SRC = (
 OPENCARP_RECORDS_SRC = (
     REPO_ROOT / "packages/omnidriver-opencarp/src/omnidriver/opencarp/records"
 )
-SCANNED_ROOTS: tuple[Path, ...] = (AXES_SRC, RECORDS_SRC, PLANNERS_SRC, OPENCARP_RECORDS_SRC)
+# cardiacCore's own record modules (step S, 2026-09-28): the same shape as
+# cardiacfoam's -- humanSlab's workflow steps and its one anatomy input are
+# pure data, never a writer.
+CARDIACCORE_RECORDS_SRC = (
+    REPO_ROOT / "packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/records"
+)
+SCANNED_ROOTS: tuple[Path, ...] = (
+    AXES_SRC, RECORDS_SRC, PLANNERS_SRC, OPENCARP_RECORDS_SRC, CARDIACCORE_RECORDS_SRC,
+)
 
 # Forbidden by full or partial dotted module name: importing ANY name from
 # these modules is a writer import, regardless of which name is imported
@@ -540,7 +548,8 @@ def main() -> int:
 
     print(
         "Case-write boundaries OK: no writer import or call in "
-        "openfoam/axes, cardiacfoam/records or openfoam/case_planning.py."
+        "openfoam/axes, cardiacfoam/records, cardiaccore/records, "
+        "opencarp/records or openfoam/case_planning.py."
     )
     return 0
 

@@ -78,7 +78,10 @@ def test_scanned_roots_are_exactly_the_axes_records_and_planner_paths():
     Corrected again 2026-09-25 (solver-conformance Task 8): openCARP's own
     records tree (``omnidriver-opencarp/.../records``) joined the scan --
     the same "records and axes write nothing" rule applies to every solver
-    adapter, not only cardiacFOAM's."""
+    adapter, not only cardiacFOAM's.
+
+    Corrected again 2026-09-28 (step S): cardiacCore's own records tree
+    joined the scan too, for the same reason."""
     gate = _load_gate_module()
     relpaths = {
         str(root.relative_to(_REPO_ROOT)) for root in gate.SCANNED_ROOTS
@@ -88,6 +91,7 @@ def test_scanned_roots_are_exactly_the_axes_records_and_planner_paths():
         "packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/records",
         "packages/omnidriver-openfoam/src/omnidriver/openfoam/case_planning.py",
         "packages/omnidriver-opencarp/src/omnidriver/opencarp/records",
+        "packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/records",
     }
 
 

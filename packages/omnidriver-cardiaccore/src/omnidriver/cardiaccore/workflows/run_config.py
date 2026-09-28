@@ -46,6 +46,20 @@ def resolve_workflow_inputs(spec):
 
 
 def build_config(spec):
+    # Step S (2026-09-28): a generic case -- a tutorial record's committed
+    # case (spec.metadata["generic_case"], set by
+    # core.runtime.record_execution.record_case_spec) alike a plain
+    # case-folder entry -- has its configuration in the case files
+    # themselves (RunDocument.configurationSource == "case"), never in
+    # this document's own `config`. Building one anyway (by reading the
+    # whole catalog off the resolved case when `active_input_paths` is
+    # absent, as a record's spec always leaves it) contradicts that
+    # declared source and is refused by `run_document_adapter`'s own
+    # "case-sourced document must not also carry document config" check.
+    # `validate_configuration`, just above, already carries this same
+    # bypass for the same reason.
+    if spec.metadata and spec.metadata.get("generic_case"):
+        return {}, ()
     config = {"preprocessing": {}}
     values, diagnostics = resolve_workflow_inputs(spec)
     if diagnostics:

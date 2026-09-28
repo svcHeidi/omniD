@@ -21,3 +21,13 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "omnidriver.cardiaccore" = ["plugin.yaml", "agent_guidance/*.md", "agent_guidance/*.yaml"]
+
+[tool.pytest.ini_options]
+# Duplicated from the root pyproject.toml on purpose: a per-package run
+# resolves this file, a whole-repo run resolves the root's.
+markers = [
+    "native_cardiaccore: needs OMNIDRIVER_CARDIACCORE_TREE and OMNIDRIVER_CARDIACCORE_ANATOMY; fails (not skips) if unset",
+]
+testpaths = ["tests"]
+pythonpath = ["tests"]
+addopts = "--import-mode=importlib"

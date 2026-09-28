@@ -65,6 +65,12 @@ UTILITY_MANIFESTS = {
         (
             ProducesEntry("aha_segment", "0/AHA_Segment", "openfoam_field", "AHA segment label", "setCardiacAnatomy"),
             ProducesEntry("aha_angle", "0/aha_angle", "openfoam_field", "Short-axis polar angle", "setCardiacAnatomy"),
+            # Added 2026-09-28 (step S, design §1.2's first drift):
+            # setCardiacAnatomy.C's own four `.write()` calls also write
+            # these two -- omitted here and from the native README until
+            # now, which a record's restage (C11) would otherwise fail.
+            ProducesEntry("phi_rv", "0/phiRV", "openfoam_field", "RV-relative circumferential angle", "setCardiacAnatomy"),
+            ProducesEntry("groove_interface", "0/groove_interface", "openfoam_field", "Interventricular groove marker", "setCardiacAnatomy"),
         ),
     ),
     "setPurkinjeSlab": _manifest(

@@ -232,6 +232,38 @@ class CardiacCorePlugin:
         del artifact_format
         return None
 
+    # -- Tutorial records (step S; design 2026-09-28-supplied-inputs) --------
+    def get_tutorial_records(self) -> dict[str, Any]:
+        from .records import TUTORIAL_RECORDS
+
+        return TUTORIAL_RECORDS
+
+    def get_record_key_validator(self):
+        from .record_key_validation import record_key_validator
+
+        return record_key_validator
+
+    def get_record_key_catalog(self, case_root: Path) -> tuple:
+        from .record_key_validation import record_key_catalog
+
+        return record_key_catalog(case_root)
+
+    def get_agent_guidance(self) -> tuple[dict[str, str], ...]:
+        return (
+            {
+                "title": "cardiacCore tutorial records",
+                "text": (
+                    "humanSlab runs setCardiacConductivity, setCardiacAnatomy, "
+                    "setPurkinjeSlab and setPurkinjeMorphometry over cases/bivCase. "
+                    "It needs one supplied input, 'anatomy' (--input anatomy=<dir>): "
+                    "the mesh, fiber, sheet and uvc_* fields, none of which are in "
+                    "the tracked case folder. A study addresses "
+                    "system/<utility>Dict directly, e.g. "
+                    "system/setPurkinjeSlabDict:thickness."
+                ),
+            },
+        )
+
     # -- CaseWriterCapability -------------------------------------------------
     def get_supported_mutation_modes(self) -> "frozenset[str]":
         return frozenset({"clone_and_patch"})

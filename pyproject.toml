@@ -32,6 +32,13 @@ markers = [
     # unset. Also registered in packages/omnidriver-opencarp/pyproject.toml
     # for a per-package run.
     "native_opencarp: needs OMNIDRIVER_OPENCARP_TUTORIALS and the openCARP binary; fails (not skips) if unset",
+    # Step S (2026-09-28): needs a real cardiacCore native worktree
+    # (OMNIDRIVER_CARDIACCORE_TREE) and the humanSlab anatomy bundle
+    # (OMNIDRIVER_CARDIACCORE_ANATOMY), plus the cardiacCore utilities built
+    # from that same tree and on PATH. Same rule as `native`: FAILS, not
+    # skips, when either variable is unset. Also registered in
+    # packages/omnidriver-cardiaccore/pyproject.toml for a per-package run.
+    "native_cardiaccore: needs OMNIDRIVER_CARDIACCORE_TREE and OMNIDRIVER_CARDIACCORE_ANATOMY; fails (not skips) if unset",
 ]
 addopts = "--import-mode=importlib"
 pythonpath = [

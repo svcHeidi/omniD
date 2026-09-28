@@ -81,6 +81,13 @@ provides:
   - manifest
   - override_schema
   - run_document_configuration
+  # Added step S (2026-09-28, supplied-inputs design doc §5, S3): the sole
+  # member get_record_key_validator adapts (record_key_validation) answers
+  # for every document a cardiacCore stack might see (record_key_validation
+  # .record_key_validator's own module docstring has the three rules),
+  # never a stub -- the same standard cardiacFOAM's own plugin.yaml applies
+  # to its own record_key_validation entry.
+  - record_key_validation
 case_profile:
   dictionaries:
     - path: system/setCardiacConductivityDict
