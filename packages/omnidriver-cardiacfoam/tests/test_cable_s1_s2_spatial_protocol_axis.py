@@ -1,20 +1,6 @@
-"""``cable1DRestitution``'s ``s1s2SpatialProtocol`` axis (tutorials-are-
-pointers plan §5e, step 5.2), replacing
-``cardiacfoam.tutorials.cable_1d_restitution._build_cases``/``_plan_case``
-(deleted alongside this record) -- and the tests those functions had,
-``test_cable_restitution_di90.py`` (deleted in the same commit). That file's
-central claim survives here: conflating a coupling interval with a
-requested DI90 produced a restitution table whose abscissae were mislabelled,
-so the two modes must stay distinguishable in the axis's own resolved
-patches. Stimulus-list sub-timestep precision is
-``spatial_pacing.generate_spatial_stimulus_lists``'s own claim, already
-covered by ``test_spatial_pacing.py``; not re-tested here.
-
-The staged fixture below reproduces the native case's own
-``externalStimulus`` defaults exactly (docs/solver-learning/cardiacfoam.md,
-CABLE8): the axis reads its stimulus geometry/duration/intensity and its
-S1 interval from there, not from a Python constant.
-"""
+"""``cable1DRestitution``'s ``s1s2SpatialProtocol`` axis: coupling-interval and requested-DI90
+modes must stay distinguishable, or the restitution table's abscissae are mislabelled. The fixture
+reproduces the native ``externalStimulus`` defaults, which the axis reads instead of a Python constant."""
 
 from __future__ import annotations
 
@@ -80,8 +66,7 @@ def test_axis_declares_a_mapping_value_kind():
 
 
 def test_coupling_interval_mode_schedules_S2_after_the_last_S1_and_adds_a_propagation_margin(tmp_path):
-    """One extra S1 interval past the last S2 (a 1D cable needs propagation
-    time a 0-D single cell does not -- module docstring)."""
+    """A 1D cable needs propagation time, one S1 interval past the last S2, that a 0-D single cell does not."""
     by_key_path = _patches({
         "n_s1": 5, "n_s2": 1, "end_time_buffer_s": 0.1, "s2_interval_ms": 700.0,
     }, _staged_case(tmp_path))
@@ -111,8 +96,7 @@ def test_requested_di90_mode_schedules_S2_at_the_reference_plus_the_requested_in
     times = _start_time_list(by_key_path)
     expected_s2 = reference_repolarization90_s + 0.330
     assert times == pytest.approx([0.0, 1.0, 2.0, 3.0, 4.0, expected_s2])
-    # No extra S1-interval margin in this mode (unlike coupling_interval):
-    # the old module's own arithmetic, reproduced exactly.
+    # No extra S1-interval margin in this mode, unlike coupling_interval.
     assert by_key_path[("endTime",)].value == pytest.approx(expected_s2 + 1.0)
 
 
@@ -125,8 +109,7 @@ def test_requested_di90_mode_rejects_more_than_one_S2(tmp_path):
 
 
 def test_a_case_with_no_S2_schedules_only_the_drive_train(tmp_path):
-    """The automaticity control branch: n_s2 == 0 applies no premature
-    beat. endTime still carries the one-S1-interval propagation margin."""
+    """The automaticity control (n_s2 == 0) still carries the one-S1-interval endTime margin."""
     by_key_path = _patches({"n_s1": 5, "n_s2": 0, "end_time_buffer_s": 1.5}, _staged_case(tmp_path))
     times = _start_time_list(by_key_path)
     assert times == pytest.approx([0.0, 1.0, 2.0, 3.0, 4.0])
@@ -139,9 +122,7 @@ def test_n_s2_greater_than_zero_requires_one_of_the_two_pacing_keys(tmp_path):
 
 
 def test_the_axis_passes_the_S1_S2_split_to_the_postprocess_step(tmp_path):
-    """The postprocess step has no other way to know where the case's own
-    concatenated ``stimulusStartTimeList`` splits into S1 versus S2 --
-    this axis is the only thing that resolved that split."""
+    """Only this axis knows where the concatenated ``stimulusStartTimeList`` splits into S1 versus S2."""
     args = _postprocess_args({
         "n_s1": 5, "n_s2": 1, "end_time_buffer_s": 0.1, "s2_interval_ms": 700.0,
     }, _staged_case(tmp_path))
@@ -157,9 +138,7 @@ def test_the_axis_passes_the_di90_reference_when_this_run_has_one(tmp_path):
 
 
 def test_a_non_uniform_native_list_is_refused_by_name(tmp_path):
-    """The axis takes a list's first entry as the whole schedule's shared
-    geometry; if the native case ever stopped being uniform there, guessing
-    which entry is representative would be worse than refusing."""
+    """The axis takes a list's first entry as the shared geometry, so it refuses rather than guesses."""
     case_root = _staged_case(tmp_path)
     text = (case_root / "constant" / "electroProperties").read_text()
     text = text.replace(

@@ -1,10 +1,6 @@
-"""The four published distributions work together outside this checkout.
-
-This is deliberately an artifact gate, not a cardiacFoam scientific run.  It
-builds each distribution from a temporary copy, installs the resulting wheels
-into a fresh virtual environment, and exercises installed plugin discovery
-and the public ``describe`` edge.  No source case, OpenFOAM installation, or
-solver binary participates.
+"""The published distributions work together outside this checkout: an artifact
+gate that builds and installs every wheel into a fresh venv and exercises plugin
+discovery and ``describe``. No case, OpenFOAM or solver binary participates.
 """
 
 from __future__ import annotations
@@ -21,21 +17,12 @@ from pathlib import Path
 import pytest
 
 
-# This test is directly below ``tests/`` (unlike Core's wheel test, which is
-# below ``tests/core/``), so the repository root is parent 3 rather than 4.
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 _PACKAGES = (
     "omnidriver",
     "omnidriver-openfoam",
     "omnidriver-cardiacfoam",
     "omnidriver-cardiaccore",
-    # Added 2026-09-25 (solver-conformance B-I3): the fifth distribution. It
-    # registers no entry point until its plugin exists (Task 11), so here it
-    # proves only that its wheel installs beside the other four and ships its
-    # generated catalog -- the location check below covers it too.
-    # Corrected 2026-09-25 (final review S-M5): its entry point has been
-    # active since e4bc873 (Task 11), so this also installs a registered
-    # `opencarp` plugin beside the other four.
     "omnidriver-opencarp",
 )
 
@@ -48,7 +35,6 @@ def _run(command: list[str], *, cwd: Path, env: dict[str, str] | None = None) ->
 
 @pytest.mark.slow
 def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> None:
-    """Prove the declared four-distribution route without checkout imports."""
     source_root = tmp_path / "sources"
     dist_root = tmp_path / "dist"
     source_root.mkdir()
@@ -57,13 +43,8 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
         shutil.copytree(_REPOSITORY_ROOT / "packages" / package, source_root / package)
 
     environment_root = tmp_path / "venv"
-    # symlinks=True is load-bearing. 2026-09-23: venv.create defaults to
-    # symlinks=False, which *copies* the interpreter, and a copied uv-managed
-    # CPython cannot resolve @rpath/libpython3.11.dylib -- dyld aborts and
-    # ensurepip dies with SIGABRT before any repository code is imported. Both
-    # wheel tests are @pytest.mark.slow, so that abort was invisible to every
-    # `-m "not slow"` run. See Core's test_wheel_install_imports.py, where the
-    # same default had kept the test from ever executing on such a machine.
+    # symlinks=True: a copied uv-managed CPython cannot resolve
+    # @rpath/libpython3.11.dylib, so ensurepip dies with SIGABRT.
     venv.create(environment_root, with_pip=True, symlinks=True)
     python = environment_root / "bin" / "python"
     _run([str(python), "-m", "pip", "install", "-q", "build"], cwd=tmp_path)
@@ -173,12 +154,7 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
     )
     payload = json.loads(describe)
     assert payload["resolved_name"] == "niederer2011"
-    # `plugin_identity` is `StackIdentity.to_json()` (Task 7's migration,
-    # corrected 2026-09-22 here): no top-level `id`, only `providers`, one
-    # `ProviderIdentity` per composed provider, ordered least-specific first.
-    # cardiacFoam is the most specific (composed on top of the openfoam
-    # environment provider), so it is the last entry -- same `[-1]` idiom as
-    # `test_plugin_architecture.py`'s `identity.to_json()["providers"][-1]`.
+    # Providers are ordered least-specific first; cardiacFoam is the last.
     assert (
         payload["capability_manifest"]["plugin_identity"]["providers"][-1]["id"]
         == "org.cardiacfoam"
@@ -202,9 +178,6 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
     )
     cardiaccore_payload = json.loads(cardiaccore_describe)
     assert cardiaccore_payload["resolved_name"] == "humanSlab"
-    # Same migration as the cardiacFoam assertion above -- see
-    # `test_generic_contract.py`'s `identity.to_json()["providers"][-1]["id"]`
-    # for the established idiom this follows.
     assert (
         cardiaccore_payload["capability_manifest"]["plugin_identity"]["providers"][-1]["id"]
         == "org.omnidriver.cardiaccore"

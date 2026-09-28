@@ -1,23 +1,6 @@
-"""``cardiacfoam.overrides._target_for_parameter``'s hex-cell-counts branch --
-P2, 2026-09-26
-(``docs/superpowers/plans/2026-09-25-tutorials-are-pointers-remaining.md``
-§5e): "the writer... take[s] the block count through the patch instead of
-defaulting to 1".
-
-Before this task, `_target_for_parameter` always called
-``plan_block_mesh_resolution(document, cell_counts_str)`` -- that planner's
-OWN ``expected_blocks=1`` default, regardless of how many blocks the record
-that produced the parameter actually declared. Correct for every
-single-block document migrated so far, silently wrong for a multi-block one:
-a real rewrite of ``manufacturedSolutions/bathBidomain``'s three-block
-``blockMeshDict.<dim>`` files would have raised "Expected to update 1 hex
-blocks, but found 3" regardless of what the axis resolved.
-
-``_target_for_parameter`` now reads ``expected_blocks`` off
-``parameter.key_path`` itself (``case_planning
-.hex_cell_counts_expected_blocks``, the same grammar
-``block_mesh_resolution_axis`` writes via ``hex_cell_counts_key_path``), so
-the actual count the record declared reaches the renderer instead.
+"""``overrides._target_for_parameter`` reads ``expected_blocks`` off the parameter's
+key path (``case_planning.hex_cell_counts_expected_blocks``), so a multi-block
+blockMeshDict gets the block count its record declared instead of 1.
 """
 
 from __future__ import annotations
@@ -73,10 +56,7 @@ def test_target_for_parameter_honours_an_explicit_block_count_from_the_key_path(
 
 
 def test_resolve_patch_mutation_and_render_a_real_three_block_document(tmp_path: Path):
-    """End to end: a `ParameterAssignment` whose key path declares
-    `expected_blocks=3` reaches a real three-block document correctly --
-    the exact write bathBidomain needs and the old code (implicitly
-    `expected_blocks=1`) could never have performed without refusing."""
+    """A key path declaring `expected_blocks=3` rewrites all three blocks."""
     case_root = tmp_path / "case"
     (case_root / "system").mkdir(parents=True)
     (case_root / "system" / "blockMeshDict.3D").write_text(_THREE_HEX_BLOCK_DICT)
@@ -108,10 +88,7 @@ def test_resolve_patch_mutation_and_render_a_real_three_block_document(tmp_path:
 
 
 def test_resolve_patch_mutation_refuses_a_wrongly_declared_block_count(tmp_path: Path):
-    """The contrast case: declaring `expected_blocks=1` (the OLD implicit
-    default) against this same real three-block document still refuses --
-    proving the fix is additive (a record that states the right count now
-    works), not a loosening of the existing "wrong block count" guard."""
+    """`expected_blocks=1` against a three-block document still refuses."""
     case_root = tmp_path / "case"
     (case_root / "system").mkdir(parents=True)
     (case_root / "system" / "blockMeshDict.3D").write_text(_THREE_HEX_BLOCK_DICT)

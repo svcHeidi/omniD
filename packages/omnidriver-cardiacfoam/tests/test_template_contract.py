@@ -42,21 +42,13 @@ _CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source=
 
 
 def _template_path() -> Path:
-    """Resolve the canonical electroProperties template.
-
-    Tier 1: monorepo layout — ``tutorials/template/constant/electroProperties``
-        found somewhere in the ancestor tree.
-    Tier 2: bundled package fixture — shipped inside
-        ``omnidriver.cardiacfoam``'s own ``fixtures/template/constant/electroProperties``
-        for standalone / CI installs.
-    """
     current = Path(__file__).resolve()
-    # Tier 1: look for the live monorepo template
+    # Tier 1: the live monorepo template.
     for parent in current.parents:
         candidate = parent / "tutorials" / "template" / "constant" / "electroProperties"
         if candidate.exists():
             return candidate
-    # Tier 2: bundled fixture co-located with the installed omnidriver.cardiacfoam package
+    # Tier 2: the fixture bundled for standalone installs.
     import omnidriver.cardiacfoam
 
     fixture = (
@@ -95,7 +87,7 @@ class TestTemplateAndSchemaContract(unittest.TestCase):
         self.assertIn("phiERefPoint", template)
         self.assertIn("purkinjeGraphModelCoeffs", template)
 
-        # Bath-coupled ECG support keys (canonical C++ key set; see spec §3.1).
+        # Bath-coupled ECG support keys (canonical C++ key set).
         self.assertIn("bathPotentialDomain", template)
         self.assertIn("extracellularPotentialDomain", template)
         self.assertIn("bathCellZones", template)
@@ -192,11 +184,8 @@ class TestTemplateAndSchemaContract(unittest.TestCase):
             / "singleCellSolver"
             / "singleCellSolver.H"
         )
-        # In the new architecture, eikonalSolver is no longer a standalone class
-        # under myocardiumModels/.  It is registered as a named alias of
-        # electrophysiologyModel via addNamedToRunTimeSelectionTable in
-        # electrophysiologyModel.C, which then dispatches to
-        # EikonalMyocardiumDomain.  Read the registration file instead.
+        # eikonalSolver is a named alias of electrophysiologyModel
+        # (addNamedToRunTimeSelectionTable), dispatching to EikonalMyocardiumDomain.
         eikonal_runtime = _read(
             repo_root
             / "src"
@@ -238,9 +227,6 @@ class TestTemplateAndSchemaContract(unittest.TestCase):
         self.assertIn('OverrideTypeName("monodomainSolver")', monodomain_runtime)
         self.assertIn('OverrideTypeName("bidomainSolver")', bidomain_runtime)
         self.assertIn('OverrideTypeName("singleCellSolver")', single_cell_runtime)
-        # eikonalSolver is registered as a named alias of electrophysiologyModel
-        # via addNamedToRunTimeSelectionTable, not via OverrideTypeName on a
-        # separate class (the old standalone eikonalSolver class was removed).
         self.assertIn("addNamedToRunTimeSelectionTable", eikonal_runtime)
         self.assertIn("eikonalSolver", eikonal_runtime)
         self.assertIn('OverrideTypeName("monodomain1DSolver")', conduction_runtime)
@@ -290,13 +276,7 @@ class TestTemplateAndSchemaContract(unittest.TestCase):
         )
 
 class TestMakeSpecDirectRun(unittest.TestCase):
-    """make_spec records the solver command it was given.
-
-    Formerly also covered _run_direct vs _run_case dispatch; both were
-    removed with TutorialSpec.run_case, which nothing ever invoked. The
-    live pre-solve-then-solver ordering is covered by
-    test_dict_builder.py::TestBuildAndLaunchDirectRun.
-    """
+    """make_spec records the solver command it was given."""
 
     def test_spec_accepts_solver_command(self) -> None:
         import tempfile

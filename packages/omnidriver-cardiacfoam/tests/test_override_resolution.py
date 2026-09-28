@@ -1,20 +1,6 @@
-"""Phase 3 Task 2: `apply_entry_overrides` becomes a resolver.
-
-Two things are under test:
-
-1. A **characterization test** of `apply_electro_property_overrides` /
-   `apply_physics_property_overrides` as they behave today (content digests,
-   not existence -- an existence check passes for five empty files). It must
-   pass before Task 2's change and unchanged after, because the transitional
-   `apply_entry_overrides` keeps its write behaviour for one release.
-
-2. Tests for the new pure `resolve_entry_overrides`: it must round-trip a
-   representative override set (including a scoped nested key) to the same
-   document/key the old path wrote, it must refuse a shape mismatch
-   (`nan` for a `scalar`) at `ParameterAssignment` construction, and it must
-   touch no file at all -- checked against a directory snapshot, not an
-   assumption.
-"""
+"""The override writers' output bytes, pinned by content digest, and the pure `resolve_entry_overrides`:
+it resolves the same document/key the writers write, refuses a shape mismatch at `ParameterAssignment`
+construction, and touches no file, checked against a directory snapshot."""
 
 from __future__ import annotations
 
@@ -52,14 +38,8 @@ _ELECTRO_TEXT = "\n".join(
 
 _PHYSICS_TEXT = "type electroModel;\n"
 
-# The representative override set exercised below. It deliberately mixes both
-# calling conventions this codebase's own tutorials and tests use: a literal,
-# already-resolved <solver>Coeffs block name (every real tutorial call site --
-# e.g. `single_cell.py`'s `electro_properties_scope`) and the plugin-local
-# `$ELECTRO_MODEL_COEFFS` scope token (only `test_detection_and_overrides.py`
-# and the CLI's `--apply` path use the token form today). A scoped, two-deep
-# nested key (`singleCellStimulus.stim_period_S1`) is included, per Task 2
-# Step 2's instruction.
+# Mixes both calling conventions, a literal <solver>Coeffs block name and the
+# $ELECTRO_MODEL_COEFFS scope token, and includes a scoped two-deep nested key.
 _CASE_OVERRIDES = {
     "singleCellSolverCoeffs.tissue": "epicardialCells",
     "singleCellSolverCoeffs.ionicModel": "Gaur",
@@ -70,10 +50,7 @@ _TOKEN_OVERRIDES = {
 }
 _PHYSICS_OVERRIDES = {"type": "electroMechanicalModel"}
 
-# Captured 2026-09-23 against HEAD 722c1a4, from the unmodified
-# `apply_electro_property_overrides`/`apply_physics_property_overrides` --
-# see this task's report for the capture script. This is the "before" bytes
-# Task 2 must reproduce exactly through the new resolver + commit path.
+# The exact bytes the override writers produce for the inputs above.
 _ELECTRO_DIGEST_BEFORE = "fe7338046ef82b36772500cdd0e7921235aa851d35044870d240158275a960ed"
 _PHYSICS_DIGEST_BEFORE = "d09035a6fd22b88cca40153cc5a9f041943fc0e62232b2186895bac7d6713a0b"
 
@@ -87,8 +64,6 @@ def _mode(path: Path) -> int:
 
 
 class TestCharacterizeExistingOverrideBytes(unittest.TestCase):
-    """Pins today's exact output bytes. Must pass before AND after Task 2."""
-
     def test_apply_electro_property_overrides_bytes_are_unchanged(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "electroProperties"
@@ -112,9 +87,7 @@ class TestCharacterizeExistingOverrideBytes(unittest.TestCase):
 
 
 def _dir_snapshot(root: Path) -> dict[str, tuple[str, int]]:
-    """Path (relative) -> (content digest, mode). Purity means this is
-    identical before and after resolve_entry_overrides runs -- a dry run
-    that touches nothing costs nothing to prove wrong."""
+    """Relative path -> (content digest, mode)."""
     snapshot = {}
     for entry in sorted(root.rglob("*")):
         if entry.is_file():
@@ -221,18 +194,7 @@ class TestResolveEntryOverrides(unittest.TestCase):
             self.assertEqual(before, _dir_snapshot(Path(temp_dir)))
 
     def test_an_undeclared_key_is_refused_not_silently_written(self) -> None:
-        """`manufacturedBidomain.fdaBathVariant` was, until 2026-09-23, an
-        unconditional write the checked-in `manufactured_bath_bidomain`
-        tutorial made in production -- exactly this case, and the reason
-        that tutorial's `_apply_case`/`_plan_case` always raised (see
-        `manufactured_bath_bidomain.py`'s corrected `_plan_case` docstring
-        and `test_manufactured_bath_bidomain_write_channel.py`). The catalog's
-        own 2026-09-19 note records that no native utility reads that key
-        under `<solver>Coeffs`; writing it is a silent no-op the OLD unchecked
-        `apply_entry_overrides` could not detect and the resolver now can --
-        this test exercises that general mechanism directly, independent of
-        the tutorial, which no longer writes this key at all.
-        """
+        """No native utility reads `manufacturedBidomain.fdaBathVariant` under `<solver>Coeffs`."""
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "electroProperties"
             path.write_text(_ELECTRO_TEXT)

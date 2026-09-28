@@ -20,24 +20,16 @@
 #
 # Description
 #     Cross-checks resolve_runtime_dependencies against a real sourced
-#     OpenFOAM install, confirming the I3b findings the resolver is built on
+#     OpenFOAM install, confirming the findings the resolver is built on
 #     rather than assuming them. Skipped when OpenFOAM is not sourced.
 #
 # Author
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-"""The live ratchet for I3b: does the resolver actually behave the way the
-plan's verified-live findings say a sourced OpenFOAM install behaves?
-
-To run it::
-
-    source /Volumes/OpenFOAM-v2412/etc/bashrc
-    uv run pytest openfoam_driver/tests/plugins/cardiacfoam/\\
-test_runtime_dependencies_live_verification.py -v
-
-Skips (not fails) when ``cardiacFoam`` is not on ``PATH`` -- the normal state
-without a sourced OpenFOAM install. A skip is not a pass.
+"""Does the runtime-dependency resolver behave the way a sourced OpenFOAM
+install actually behaves? Skips (not fails) when ``cardiacFoam`` is not on
+``PATH``; a skip is not a pass.
 """
 
 from __future__ import annotations
@@ -62,9 +54,7 @@ requires_openfoam = pytest.mark.skipif(
 
 @requires_openfoam
 def test_foam_module_libbin_is_unset_in_this_sourced_shell() -> None:
-    """I3b finding 1. If this ever starts failing, the resolver's core
-    justification -- never map a name to one fixed lib variable -- needs
-    re-examining, not just this test."""
+    """The resolver's rule (never map a name to one fixed lib variable) rests on this."""
     assert "FOAM_MODULE_LIBBIN" not in os.environ
     assert "FOAM_USER_LIBBIN" in os.environ
 
@@ -85,8 +75,7 @@ def test_the_solver_and_its_always_linked_libraries_resolve(tmp_path) -> None:
 def test_physicsmodel_resolves_despite_make_files_declaring_the_other_variable(
     tmp_path,
 ) -> None:
-    """I3b finding 2: Make/files declares FOAM_MODULE_LIBBIN, but the
-    installed library actually lives in FOAM_USER_LIBBIN."""
+    """Make/files declares FOAM_MODULE_LIBBIN, but the library is installed in FOAM_USER_LIBBIN."""
     deps = {d.name: d for d in resolve_runtime_dependencies(tmp_path / "case")}
     assert deps["physicsModel"].path is not None
     user_libbin = os.environ.get("FOAM_USER_LIBBIN", "")
@@ -95,8 +84,7 @@ def test_physicsmodel_resolves_despite_make_files_declaring_the_other_variable(
 
 @requires_openfoam
 def test_electromechanicalmodels_is_genuinely_absent_in_this_install(tmp_path) -> None:
-    """I3b finding 4: absent entirely in the maintainer's lightweight
-    default -- reported unavailable, not an error, and not omitted."""
+    """Reported unavailable, not an error, and not omitted."""
     deps = {d.name: d for d in resolve_runtime_dependencies(tmp_path / "case")}
     assert "electroMechanicalModels" in deps
     assert deps["electroMechanicalModels"].path is None
@@ -105,11 +93,7 @@ def test_electromechanicalmodels_is_genuinely_absent_in_this_install(tmp_path) -
 
 @requires_openfoam
 def test_a_real_manufactured_solution_tutorials_controldict_resolves(tmp_path) -> None:
-    """I2c against the real repository file, not a synthetic fixture:
-    monodomainTotalLagrangianEM's controlDict declares libverificationModels
-    (bare) and a case-local .so built from sources inside the case. The
-    case-local .so is not built in this checkout, so it must resolve to
-    unavailable rather than a guessed path -- never a crash."""
+    """An unbuilt case-local .so resolves unavailable, never to a guessed path."""
     from conftest import monorepo_root
 
     if monorepo_root is None:
@@ -133,8 +117,6 @@ def test_a_real_manufactured_solution_tutorials_controldict_resolves(tmp_path) -
     assert "manufacturedMonodomainTotalLagrangianEM" in deps
     case_local = deps["manufacturedMonodomainTotalLagrangianEM"]
     assert case_local.required is True
-    # Not built in this checkout (no platforms/ dir under the tutorial) --
-    # must be unavailable, never a fabricated path.
     if not (case_root / "platforms").exists():
         assert case_local.path is None
     else:

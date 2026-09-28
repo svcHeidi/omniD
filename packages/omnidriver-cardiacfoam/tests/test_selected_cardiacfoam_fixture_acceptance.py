@@ -1,8 +1,6 @@
-"""Opt-in selected-source and selected-runtime preflight gates.
-
-With no fixture variables these tests skip.  Once any source or native input
-is supplied, incomplete or invalid selections fail before any case can be
-staged.  They intentionally do not execute a solver or create output.
+"""Opt-in selected-source and selected-runtime preflight gates. With no fixture
+variables these skip; once any input is supplied, an incomplete or invalid
+selection fails before any case is staged. No solver runs.
 """
 
 from __future__ import annotations

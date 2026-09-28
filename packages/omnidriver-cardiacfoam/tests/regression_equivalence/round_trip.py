@@ -1,22 +1,6 @@
-"""Round-trip stability of the agent's dict layer (solver-free).
+"""Round-trip stability of the agent's dict layer (solver-free): ``build ∘ parse`` must be idempotent on its own output.
 
-The agent's dict builders synthesize normalized dicts rather than copying the
-hand-authored tutorial files, so byte/key-set equality against the committed
-dicts is not a valid bar (see memory
-``project_driverfoam_dict_synthesizer_not_copier``). What *is* a valid, cheap
-invariant: ``build ∘ parse`` must be idempotent on its own generated text.
-
-    build(parse(committed))  ==  build(parse(build(parse(committed))))
-
-i.e. once the agent has synthesized a dict, re-parsing and re-building it must
-reproduce the same bytes. If it does not, the agent's generate/parse pair is
-internally inconsistent — a real defect independent of any tutorial's
-hand-formatting.
-
-Note: comparing the *parsed* selectors/overrides directly is NOT a valid test —
-# ``parse_electro_properties`` deliberately omits values equal to a catalog
-# ``typical_value``, so a default-valued override (e.g. ``fdaBathVariant groundElectrode``)
-# appears only on the first parse. The generated *text* is the stable object.
+Parsed selectors are not compared: ``parse_electro_properties`` omits values equal to a catalog ``typical_value``, so only the generated text is stable.
 """
 from __future__ import annotations
 
@@ -45,10 +29,7 @@ def _write_temp(text: str) -> Path:
 
 
 def electro_build_parse_fixpoint(case: RegressionCase) -> tuple[str, str]:
-    """Return (once, twice) generated electroProperties texts.
-
-    ``once == twice`` proves ``build ∘ parse`` is idempotent for this case.
-    """
+    """Return (once, twice) generated electroProperties texts; equal means idempotent."""
     committed = tutorials_root() / case.case_dir / "constant/electroProperties"
     once = _build_from_parse(committed)
     tmp = _write_temp(once)

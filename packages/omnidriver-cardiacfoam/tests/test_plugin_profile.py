@@ -16,11 +16,7 @@ def test_cardiac_profile_declares_case_files_and_cxx_provenance() -> None:
     profile = CardiacFoamPlugin().get_profile()
 
     assert profile.plugin_id == "org.cardiacfoam"
-    # `system/controlDict` is NOT here (Task 9): it duplicated the
-    # environment provider's own declaration (same path, same role), which
-    # spec §2.1's one-declarer rule forbids -- cardiacFoam's profile no
-    # longer declares it; the composed stack still does, via
-    # org.omnidriver.openfoam.environment.
+    # `system/controlDict` is declared by the environment provider, not here: one declarer per path.
     assert {rule.path for rule in profile.case_files} >= {
         "constant/physicsProperties",
         "constant/electroProperties",
@@ -31,10 +27,7 @@ def test_cardiac_profile_declares_case_files_and_cxx_provenance() -> None:
 
 
 def test_cardiac_profile_source_root_is_supplied_never_guessed(tmp_path: Path) -> None:
-    """The C++ source is ``<OMNIDRIVER_NATIVE_TUTORIALS>/../src``, and there
-    is none when nothing is supplied. Corrected 2026-09-28: this checked a
-    package-relative ``source_roots`` from the retired in-monorepo layout,
-    behind a walk-up skip that never ran."""
+    """The C++ source is ``<OMNIDRIVER_NATIVE_TUTORIALS>/../src``, and there is none when nothing is supplied."""
     mapping = CardiacFoamPlugin().get_profile().cxx_mapping
     assert mapping.source_root({}) is None
     tutorials = tmp_path / "tutorials"

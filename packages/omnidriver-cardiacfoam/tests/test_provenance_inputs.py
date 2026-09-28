@@ -19,18 +19,8 @@
 #     test_provenance_inputs
 #
 # Description
-#     Canonical input enumeration (Task 2b): which on-disk files a workflow
-#     run actually consumes, as seen through cardiacFoam's own
-#     CaseProvenanceCapability.
-#
-#     Moved from core's ``tests/core/test_provenance_inputs.py`` (Phase 2,
-#     Milestone 3): this test's own docstring frames it as proving
-#     cardiacFoam's ``CaseProvenanceCapability`` excludes mesh-diagnostic
-#     byproducts (``constant/C``, ``constant/skewness``) -- a cardiac-specific
-#     exclusion rule, not core mechanism. Its generic counterpart,
-#     ``test_generic_plugin_still_requires_unknown_files``, stays in core and
-#     asserts the opposite: an unclassified file always defaults to
-#     required_input.
+#     Which on-disk files a workflow run consumes, as seen through
+#     cardiacFoam's own CaseProvenanceCapability.
 #
 # Author
 #     Simao Nieto de Castro, UCD.
@@ -64,8 +54,7 @@ def _write_control_dict(case_root: Path, *, start_from: str, start_time: str = "
 
 
 def test_system_and_constant_are_required_and_diagnostic_outputs_are_excluded(tmp_path: Path) -> None:
-    """cardiacFoam's own CaseProvenanceCapability excludes the mesh-diagnostic
-    byproducts nothing reads (I1's worked example)."""
+    """constant/C and constant/skewness are mesh-diagnostic byproducts nothing reads."""
     _write_control_dict(tmp_path, start_from="startTime", start_time="0")
     (tmp_path / "constant").mkdir()
     (tmp_path / "constant" / "electroProperties").write_text("solver monodomain;\n")

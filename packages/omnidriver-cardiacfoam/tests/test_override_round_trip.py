@@ -28,27 +28,7 @@
 
 """An override that validates but emits nothing is the worst defect class here.
 
-Two instances shipped and survived review:
-
-* ``cellZone`` was catalogued with a bare ``driver_path``, so the emitter wrote
-  it at the ``electroProperties`` **root** while the solver reads it from the
-  resolved ``<solver>Coeffs`` block. Setting it did nothing, and the run
-  silently used the whole mesh -- bath included -- instead of the requested
-  zone.
-* The dynamic-path emitter expanded only two hardcoded placeholders,
-  ``<name>`` and ``<electrode>``. The ionic constant overrides used
-  ``<AC_name>``, so every driver-written drug or channelopathy override was
-  dropped entirely while validation reported success.
-
-Both passed validation. Both produced plausible results. Neither was caught by
-any test, because the suite checked that overrides were *accepted*, never that
-they were *emitted*.
-
-This module closes that gap generically: for every catalogued entry, set it and
-assert it appears in the output at the right nesting. It is deliberately a
-whole-catalog sweep rather than a handful of examples -- the two bugs above
-were in different entries, and picking examples is how they were missed.
-"""
+Every catalogued entry is set and must emit at the right nesting: a whole-catalog sweep, because hand-picked examples miss entries."""
 
 from __future__ import annotations
 
@@ -75,16 +55,6 @@ _COEFFS_PREFIX = "$ELECTRO_MODEL_COEFFS."
 
 # A plausible value per value_kind. The point is emission, not validity, so
 # these only need to survive the builder.
-#
-# Corrected 2026-09-22 (Phase 2 Task 4): the catalog's value_kind vocabulary
-# was closed in omnidriver.core.contracts.dictionary. "label" and "label_list"
-# renamed to "integer"/"integer_list" (the generic shape; "label" named
-# OpenFOAM's own type spelling), "wordList"/"scalarList" normalised to
-# "word_list"/"scalar_list" (same shape, one spelling), and
-# "dimensioned_scalar_literal"/"dimensioned_tensor_literal"/"openfoam_literal"
-# retired -- the first two renamed to "dimensioned_scalar"/"dimensioned_tensor"
-# (dropping the format-named "_literal" suffix) and every "openfoam_literal"
-# entry migrated to the generic "scalar" or "integer" shape it actually has.
 _VALUES = {
     "scalar": "1.5",
     "integer": "3",
@@ -134,8 +104,7 @@ def _electro_entries():
 
 
 def _emit_with(entry, selectors):
-    """Return (text, rejected). `rejected` means the builder raised -- which is
-    acceptable: a loud refusal is not a silent drop."""
+    """Return (text, rejected); a builder refusal is loud, so it is not a silent drop."""
     path = _concrete_path(entry.driver_path)
     try:
         return (
@@ -154,27 +123,13 @@ def _leaf(driver_path: str) -> str:
 
 @pytest.mark.parametrize("entry", _electro_entries(), ids=lambda e: e.driver_path)
 def test_an_accepted_override_is_never_silently_dropped(entry):
-    """The invariant, stated precisely.
-
-    An override must either reach the dictionary, or be **loudly refused**. What
-    must never happen is the third outcome: accepted without complaint, and
-    emitted nowhere. That is what made ``cellZone`` and the ionic constant
-    overrides inert -- the driver reported success and wrote nothing.
-
-    Refusal is fine and common here: many entries need a coherent multi-key
-    configuration (a declared conduction-network block, a matching coupler) and
-    the validator correctly rejects a single key set in isolation. Gating by
-    ``applicable_when`` is fine too. Only silence is a defect.
-    """
+    """Emitting or being refused (common for multi-key entries set alone) is fine; only silence is a defect."""
     leaf = _leaf(entry.driver_path)
     accepted_but_absent = []
 
     for selectors in _CONTEXTS:
-        # Only assert where the entry is actually applicable. An entry gated by
-        # applicable_when (a batched-only key, a TWorld-only key, a
-        # verifier-specific key) is CORRECTLY absent from a context that does
-        # not satisfy its gate -- that is selection working, not a silent drop.
-        # Consult the driver's own predicate rather than re-implementing it.
+        # An entry gated by applicable_when is correctly absent from a context
+        # that fails its gate; ask the driver's own predicate.
         context = dict(selectors)
         context[_concrete_path(entry.driver_path)] = _value_for(entry)
         if entry not in select_applicable_entries(context, entries=[entry]):
@@ -184,7 +139,7 @@ def test_an_accepted_override_is_never_silently_dropped(entry):
         if rejected:
             continue
         if leaf in text:
-            return  # emitted somewhere: invariant satisfied
+            return
         accepted_but_absent.append(selectors["myocardiumSolver"])
 
     if accepted_but_absent:
@@ -200,13 +155,7 @@ def test_an_accepted_override_is_never_silently_dropped(entry):
 
 @pytest.mark.parametrize("entry", _electro_entries(), ids=lambda e: e.driver_path)
 def test_coeffs_entries_land_inside_the_coeffs_block(entry):
-    """Nesting, not just presence.
-
-    The ``cellZone`` assertion generalised: a ``$ELECTRO_MODEL_COEFFS.*`` entry
-    must appear INSIDE the ``<solver>Coeffs`` block. Emitted at the file root it
-    parses fine and is silently ignored by the solver, which is exactly why the
-    original bug survived -- the key was present, just where nothing reads it.
-    """
+    """Emitted at the file root, a Coeffs entry parses fine and the solver silently ignores it."""
     leaf = _leaf(entry.driver_path)
     for selectors in _CONTEXTS:
         text, rejected = _emit_with(entry, selectors)

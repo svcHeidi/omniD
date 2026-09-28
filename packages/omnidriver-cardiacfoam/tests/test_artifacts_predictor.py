@@ -32,21 +32,9 @@ myocardiumSolver {myocardium_solver};
     return path
 
 
-# Regression coverage for a real false-positive "missing_artifacts" failure:
-# every non-Eikonal manufactured verifier writes "<...>_<N>_cells.dat" (no
-# trailing token after "cells" before the extension), confirmed directly
-# against each verifier's own OFstream call --
-#   3D_19_cells.dat                   manufacturedFDAMonodomainVerifier.C:186
-#   rotatedAnisotropy_3D_19_cells.dat manufacturedAnisotropicMonodomainVerifier.C:416
-#   3D_19_cells.dat                   manufacturedFDABathBidomainVerifier.C:425
-#     (corrected 2026-09-26, 5.4a: this said bathBidomain_3D_19_cells.dat;
-#     native 7ae47527c dropped the prefix, and a real bath run writes
-#     postProcessing/1D_80_cells.dat -- docs/solver-learning/cardiacfoam.md
-#     BB1)
-#   <dimension>_19_cells.dat          manufacturedFDABidomainVerifier.C:285
-# The previously declared pattern, "*_*_cells_*.dat", required a further
-# "_<token>" between "cells" and ".dat" that none of them have, so a
-# successful solve was always reported as missing this artifact.
+# Every non-Eikonal manufactured verifier's OFstream writes "<...>_<N>_cells.dat",
+# with no token between "cells" and the extension; the bath verifier writes no
+# "bathBidomain_" prefix.
 _CASES = (
     ("monodomainSolver", "manufacturedFDAMonodomainVerifier", "3D_19_cells.dat"),
     (
@@ -78,8 +66,6 @@ def test_verification_artifact_pattern_matches_every_real_verifier_filename(tmp_
             f"{verifier_type}: pattern {pattern!r} does not match real "
             f"filename {real_filename!r}"
         )
-        # Document the bug this replaces: the old pattern required a token
-        # after "cells" that no real filename has.
         assert not fnmatch.fnmatch(
             f"postProcessing/{real_filename}", "postProcessing/*_*_cells_*.dat"
         )

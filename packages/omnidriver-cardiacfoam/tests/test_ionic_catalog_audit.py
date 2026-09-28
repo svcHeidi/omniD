@@ -25,26 +25,9 @@
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-"""Audit test: ionic_model_catalog.py Role-A fields vs C++ Names.H enums.
-
-This regression guard directly parses each model's ``*_Names.H`` with an
-inline regex, extracts the three enum bodies in declaration order, and asserts
-exact equality against the catalogue's ``states``, ``algebraic``, and
-``constants`` tuples.
-
-Design choices
---------------
-* Manufactured-family models (monodomainFDAManufactured, bidomainFDAManufactured,
-  bathBidomainFDAManufactured) are excluded — their catalogue entries carry
-  user-facing semantic labels, not raw C++ enum tokens.  See §3d-3 in the plan.
-* Only Role-A fields (``states``, ``algebraic``, ``constants``) are checked.
-  Role-B metadata (``compatible_solvers``, ``species``, ``description``, etc.)
-  is hand-curated and not derivable from C++.
-* The enum-name matching is intentionally liberal: we look for any enum whose
-  name contains "STATE", "ALGEBRAIC", or "CONSTANT" (case-insensitive) to handle
-  variants like ``STATES_INDEX``, ``STATE_INDEX``, ``CONSTANT_INDEX``,
-  ``CONSTANTS_INDEX``.
-* ``NUM_*`` sentinels are stripped before comparison.
+"""Ionic catalog ``states``/``algebraic``/``constants`` equal the C++ ``*_Names.H`` enums, in order (``NUM_*`` sentinels stripped).
+Manufactured-family models are excluded: their entries carry semantic labels, not C++ enum tokens.
+Enum names are matched liberally (any name containing STATE/ALGEBRAIC/CONSTANT) to cover ``STATES_INDEX`` and similar.
 """
 
 from __future__ import annotations
@@ -58,15 +41,9 @@ from omnidriver.cardiacfoam.names_parser import EXCLUDED_FROM_HEADER_SYNC
 from conftest import monorepo_root, skip_without_monorepo
 from omnidriver.core.specs.paths import repo_root_default
 
-# ---------------------------------------------------------------------------
-# Repository layout
-# ---------------------------------------------------------------------------
 REPO_ROOT = monorepo_root or repo_root_default()
 IONIC_MODELS_DIR = REPO_ROOT / "src" / "ionicModels"
 
-# ---------------------------------------------------------------------------
-# Models to audit
-# ---------------------------------------------------------------------------
 _MANUFACTURED_FAMILY: frozenset[str] = frozenset(
     {
         "monodomainFDAManufactured",
@@ -81,17 +58,11 @@ NON_MANUFACTURED_MODELS: list[str] = [
     if name not in _MANUFACTURED_FAMILY
 ]
 
-# Models audited against C++ Names.H headers: excludes manufactured family
-# and any models explicitly excluded from header sync (e.g. compactBatched
-# GPU models that reuse the parent CPU model's header).
+# Excludes models that reuse a parent CPU model's header (``EXCLUDED_FROM_HEADER_SYNC``).
 HEADER_AUDITED_MODELS: list[str] = [
     name for name in NON_MANUFACTURED_MODELS
     if name not in EXCLUDED_FROM_HEADER_SYNC
 ]
-
-# ---------------------------------------------------------------------------
-# Inline parser (no dependency on the regenerate-script infrastructure)
-# ---------------------------------------------------------------------------
 
 _BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
 _LINE_COMMENT_RE = re.compile(r"//[^\n]*")
@@ -167,11 +138,6 @@ def _parse_model(model: str) -> tuple[tuple[str, ...], tuple[str, ...], tuple[st
     return states, algebraic, constants
 
 
-# ---------------------------------------------------------------------------
-# Test class
-# ---------------------------------------------------------------------------
-
-
 @skip_without_monorepo
 class TestIonicCatalogAudit(unittest.TestCase):
     """Parametrised audit: each non-manufactured model gets a subTest per field."""
@@ -218,18 +184,12 @@ class TestIonicCatalogAudit(unittest.TestCase):
                 self._assert_field_matches(model, "constants", cpp_constants, cat_constants)
 
     def test_manufactured_family_not_audited(self) -> None:
-        """Sanity-check: manufactured models are excluded from the audit list."""
         for name in _MANUFACTURED_FAMILY:
             self.assertNotIn(name, NON_MANUFACTURED_MODELS)
 
     def test_all_24_non_manufactured_models_present(self) -> None:
-        """All 24 expected non-manufactured models appear in the audit list.
-
-        12 CPU models + 12 compactBatched GPU models.
-        ORd removed (C++ implementation deleted as non-functional).
-        """
+        """12 CPU models plus their 12 compactBatched GPU variants."""
         expected = {
-            # CPU models (12)
             "AlievPanfilov",
             "BuenoOrovio",
             "Courtemanche",
@@ -242,7 +202,6 @@ class TestIonicCatalogAudit(unittest.TestCase):
             "ToRORd_dynCl",
             "Trovato",
             "TWorld",
-            # GPU compactBatched models (11)
             "AlievPanfilovcompactBatched",
             "BuenoOroviocompactBatched",
             "CourtemanchecompactBatched",

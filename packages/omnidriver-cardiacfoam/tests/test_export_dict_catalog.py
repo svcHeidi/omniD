@@ -27,17 +27,7 @@
 
 """Tests for the dict-catalog exporter.
 
-The exporter fans every ``DictEntry`` out into one record per declared
-phase: an entry with ``phases={"anatomy", "physics"}`` appears in BOTH
-the ``anatomy`` and ``physics`` buckets, and each emitted record is
-stamped with a single ``phase`` equal to its bucket. The full ``phases``
-list is preserved on every record for downstream validation and agent use.
-
-Moved out of core's test tree (Part A, test-ownership split): the
-exported script hardcodes ``from omnidriver.cardiacfoam.ionic_model_catalog
-import IONIC_MODEL_CATALOG`` with no generic-plugin abstraction, so there
-is no fixture swap that would keep this test meaningful under core alone.
-"""
+It fans each ``DictEntry`` into one record per declared phase, stamped with that bucket's ``phase`` plus the full ``phases`` list."""
 
 from __future__ import annotations
 
@@ -50,9 +40,8 @@ from omnidriver.core.specs.paths import repo_root_default
 
 REPO = repo_root_default()
 SCRIPT = REPO / "scripts" / "export-dict-catalog.py"
-# The exporter runs in a child interpreter, so a Python DriverContext cannot be
-# handed to it. More than one adapter may be installed, leaving no ambient
-# default for the child to discover, so the child is told which one to export.
+# The exporter runs in a child interpreter that cannot be handed a DriverContext,
+# and with several adapters installed there is no ambient default, so name it.
 PLUGIN = ("--plugin", "cardiacfoam")
 
 
@@ -79,7 +68,6 @@ def test_exporter_writes_grouped_json(tmp_path):
 
 
 def test_multi_phase_entry_appears_in_every_declared_phase(tmp_path):
-    """An entry with phases={'anatomy','physics'} must appear in BOTH phase buckets."""
     out = tmp_path / "catalog.json"
     subprocess.run(
         [sys.executable, str(SCRIPT), "--out", str(out), *PLUGIN],

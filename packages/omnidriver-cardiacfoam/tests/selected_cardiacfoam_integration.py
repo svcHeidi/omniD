@@ -70,12 +70,7 @@ def load_integration_commands(runtime: SelectedRuntime) -> IntegrationCommands:
 def run_selected_integration(
     runtime: SelectedRuntime, commands: IntegrationCommands
 ) -> IntegrationEvidence:
-    """Stage inputs, invoke omnidriver, then invoke the solver's own checker.
-
-    This is a test harness boundary, not a second process runner: retries,
-    transaction policy, and solver timeout semantics remain in the driver
-    command/RunDocument.  The outer timeout protects the test host only.
-    """
+    """Stage inputs, run the driver, then the solver's own checker; the outer timeout guards the host only."""
     staged = materialize_case_inputs(runtime, load_case_input_manifest(runtime))
     case_root = staged.root / "case"
     if not case_root.is_dir():
@@ -148,9 +143,8 @@ def _run_command(
                 cwd=cwd,
                 stdout=log,
                 stderr=subprocess.STDOUT,
-                # Reuse Core's process-group cleanup contract. The test
-                # harness has a host-level timeout, but it must not leave a
-                # solver/checker descendant running after that timeout.
+                # A new session lets Core's process-group cleanup reap any
+                # solver/checker descendant left after the host timeout.
                 start_new_session=(os.name == "posix"),
             )
             try:
@@ -161,11 +155,8 @@ def _run_command(
                 try:
                     _terminate_process_group(process)
                 except (OSError, subprocess.TimeoutExpired) as exc:
-                    # Timeout evidence must survive even if the normal
-                    # cleanup helper cannot reap the direct process. Kill is
-                    # the last local fallback; its outcome is made visible
-                    # in the durable integration evidence instead of
-                    # replacing the original timeout with a harness error.
+                    # Kill the direct process as a last resort and record the
+                    # failure in the evidence, keeping the original timeout.
                     termination_error = f"process-group cleanup failed: {type(exc).__name__}: {exc}"
                     try:
                         process.kill()

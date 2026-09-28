@@ -19,29 +19,17 @@
 #     test_environment_preflight_composition
 #
 # Description
-#     Final whole-branch review, Finding 1 (2026-09-22): the composed
-#     `environment_preflight.load()` must thread through
-#     `get_configured_environment` (the `chain`-shape member cardiacFoam's
-#     real backend/library-selection logic, `configure_runtime_environment`,
-#     answers), not just the `single`-shape `get_loaded_environment`. Before
-#     the fix, `cli.py`'s only two run/step call sites -- both `.load()`
-#     only -- never reached that logic at all. See
-#     `plugin_capabilities.py`'s `_EnvironmentPreflightAdapter.load()`
-#     docstring for the full trace.
+#     The composed `environment_preflight.load()` must thread through the
+#     `chain`-shape `get_configured_environment`, not just the `single`-shape
+#     `get_loaded_environment`.
 #
 # Author
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-"""Proves `.load()` on an `[env, cardiacfoam]` stack also configures.
-
-The assertion strategy: derive the build-manifest path from `FOAM_USER_LIBBIN`
-(see `configure_runtime_environment`'s fallback for `_MANIFEST_ENV`) instead
-of setting `OMNIDRIVER_CARDIACFOAM_BUILD_MANIFEST` directly, so the resolved
-manifest path is *output* of `configure_runtime_environment`, absent from the
-merely-sourced environment `get_loaded_environment` alone would return. If
-`.load()` stopped at sourcing (the bug), that key would never appear.
-"""
+"""Proves `.load()` on an `[env, cardiacfoam]` stack also configures: the build-manifest path is
+derived from `FOAM_USER_LIBBIN` by `configure_runtime_environment`, so it is absent from a merely
+sourced environment."""
 
 from __future__ import annotations
 
@@ -66,14 +54,7 @@ _REQUIRED_LIBRARIES = (
 
 
 def _write_valid_lightweight_install(tmp_path: Path) -> Path:
-    """A fake, but manifest-valid, cardiacFoam install under `tmp_path`.
-
-    Mirrors `test_build_manifest_contract.py`'s `complete_manifest` fixture
-    (same backend, same required/common libraries), except the manifest path
-    is left to be *derived* from `FOAM_USER_LIBBIN` rather than declared
-    directly, so its resolution is observable proof that
-    `configure_runtime_environment` ran.
-    """
+    """A fake, manifest-valid install whose manifest path is left to be derived from `FOAM_USER_LIBBIN`."""
     artifacts = []
     for name in _REQUIRED_LIBRARIES:
         path = tmp_path / name
@@ -110,9 +91,6 @@ def _configured_env(tmp_path: Path) -> dict[str, str]:
 
 
 def test_configure_runtime_environment_derives_the_manifest_path_from_foam_user_libbin(tmp_path):
-    """Sanity check on the fixture itself, isolated from composition/sourcing:
-    `configure_runtime_environment` alone must succeed and must add
-    `OMNIDRIVER_CARDIACFOAM_BUILD_MANIFEST`, not merely leave it unset."""
     manifest_path = _write_valid_lightweight_install(tmp_path)
 
     configured, error = configure_runtime_environment(_configured_env(tmp_path))
@@ -122,16 +100,9 @@ def test_configure_runtime_environment_derives_the_manifest_path_from_foam_user_
 
 
 def test_composed_load_threads_the_sourced_environment_through_configure(tmp_path, monkeypatch):
-    """The real regression test: an `[env, cardiacfoam]` composed stack's
-    `environment_preflight.load(...)` must return an environment carrying
-    `configure_runtime_environment`'s output, not just the sourced one.
-    """
     manifest_path = _write_valid_lightweight_install(tmp_path)
 
-    # A no-op bashrc: `get_loaded_environment` must still run bash sourcing
-    # (that is the `single`-shape half of `.load()`'s contract), but nothing
-    # about backend selection should depend on OpenFOAM actually being
-    # installed on this machine.
+    # A no-op bashrc: sourcing still runs, but backend selection must not need an installed OpenFOAM.
     bashrc = tmp_path / "bashrc"
     bashrc.write_text("# intentionally empty -- no OpenFOAM install required\n")
 
@@ -155,9 +126,6 @@ def test_composed_load_threads_the_sourced_environment_through_configure(tmp_pat
         environment_source=str(bashrc), driver_context=ctx,
     )
 
-    # Absent from what mere sourcing produces (bash only re-exports what was
-    # already in the process environment); present only because `.load()`
-    # also ran the chain-composed `get_configured_environment`, which is
-    # `CardiacFoamPlugin`'s real `configure_runtime_environment` call.
+    # Sourcing only re-exports the process environment; this key comes from `configure_runtime_environment`.
     assert loaded.get("OMNIDRIVER_CARDIACFOAM_BUILD_MANIFEST") == str(manifest_path)
     assert loaded.get("OMNIDRIVER_CARDIACFOAM_BACKEND") == "lightweight"

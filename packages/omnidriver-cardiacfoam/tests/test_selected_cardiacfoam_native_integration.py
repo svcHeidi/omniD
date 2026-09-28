@@ -1,4 +1,4 @@
-"""Opt-in T7 execution gate for a manifest-selected cardiacFoam case."""
+"""Opt-in execution gate for a manifest-selected cardiacFoam case."""
 
 from __future__ import annotations
 

@@ -19,12 +19,8 @@
 #     test_runtime_dependencies
 #
 # Description
-#     Resolves cardiacFoam's runtime dependencies -- the solver binary, its
-#     linked/runtime-loaded libraries, and anything the case's own
-#     controlDict pulls in via libs (...) -- entirely from an injected
-#     environment, so these tests need no sourced OpenFOAM. The live
-#     verification module cross-checks the same resolver against a real
-#     sourced install.
+#     Resolves cardiacFoam's runtime dependencies from an injected
+#     environment, so these tests need no sourced OpenFOAM.
 #
 # Author
 #     Simao Nieto de Castro, UCD.
@@ -56,11 +52,7 @@ def _write_control_dict(tmp_path: Path, body: str) -> Path:
 
 
 class TestParseControlDictLibs:
-    """Unit coverage for _parse_control_dict_libs, which reads a
-    controlDict's libs ( ... ) list via foamlib's structural, read-only
-    parsing rather than hand-rolled paren-counting. The higher-level
-    resolve_runtime_dependencies tests above exercise this indirectly for
-    the realistic multi-line layout; these pin its edge cases directly."""
+    """Edge cases of _parse_control_dict_libs."""
 
     def test_returns_empty_tuple_when_libs_is_absent(self, tmp_path: Path) -> None:
         p = _write_control_dict(tmp_path, "application cardiacFoam;\n")
@@ -100,9 +92,7 @@ def _make_executable(path: Path, content: str) -> Path:
 
 
 def test_finds_a_library_in_whichever_defined_directory_holds_it(tmp_path: Path) -> None:
-    """libphysicsModel is declared under FOAM_MODULE_LIBBIN in Make/files but
-    verified live to live in FOAM_USER_LIBBIN -- so the resolver must search
-    every defined lib directory for every name, never one fixed mapping."""
+    """libphysicsModel is declared under FOAM_MODULE_LIBBIN in Make/files but installs to FOAM_USER_LIBBIN."""
     user_libbin = tmp_path / "user_libbin"
     _make_lib(user_libbin, "physicsModel", ".dylib")
     env = {"FOAM_USER_LIBBIN": str(user_libbin), "PATH": ""}
@@ -112,11 +102,10 @@ def test_finds_a_library_in_whichever_defined_directory_holds_it(tmp_path: Path)
 
 
 def test_missing_foam_module_libbin_does_not_crash_the_search(tmp_path: Path) -> None:
-    """FOAM_MODULE_LIBBIN is unset in a plain sourced shell -- the resolver
-    must simply skip an undefined variable, not fail."""
+    """FOAM_MODULE_LIBBIN is unset in a plain sourced shell."""
     env = {"FOAM_USER_LIBBIN": str(tmp_path / "nonexistent"), "PATH": ""}
     deps = resolve_runtime_dependencies(tmp_path / "case", env=env)
-    assert deps  # did not raise
+    assert deps
 
 
 def test_tries_both_platform_extensions(tmp_path: Path) -> None:
@@ -137,9 +126,7 @@ def test_a_required_library_absent_everywhere_is_reported_not_omitted(tmp_path: 
 def test_an_optional_library_absent_in_lightweight_mode_is_still_reported(
     tmp_path: Path,
 ) -> None:
-    """libelectroMechanicalModels is absent entirely in the maintainer's
-    lightweight (no-solids4foam) default. Its absence is a normal state, not
-    an error -- but it must still appear, not be silently dropped, per I3b."""
+    """libelectroMechanicalModels is absent in the lightweight (no-solids4foam) build, a normal state."""
     env = {"PATH": ""}
     deps = {d.name: d for d in resolve_runtime_dependencies(tmp_path / "case", env=env)}
     assert "electroMechanicalModels" in deps
@@ -164,9 +151,7 @@ def test_the_solver_binary_absent_from_path_is_unavailable(tmp_path: Path) -> No
 
 
 def test_a_bare_library_named_in_controldict_libs_becomes_required(tmp_path: Path) -> None:
-    """libverificationModels is not linked into cardiacFoam at all -- every
-    manufactured-solution tutorial depends on its own controlDict libs (...)
-    entry to run at all (I2c)."""
+    """libverificationModels is not linked into cardiacFoam; manufactured tutorials load it via controlDict libs."""
     case_root = tmp_path / "case"
     lib_dir = tmp_path / "user_libbin"
     _make_lib(lib_dir, "verificationModels", ".dylib")
@@ -181,11 +166,7 @@ def test_a_bare_library_named_in_controldict_libs_becomes_required(tmp_path: Pat
 
 
 def test_a_case_local_library_path_expands_foam_case_and_wm_options(tmp_path: Path) -> None:
-    """monodomainTotalLagrangianEM loads
-    $FOAM_CASE/platforms/$WM_OPTIONS/lib/lib<name>.so -- a case-local library
-    built from sources inside the case. $FOAM_CASE is the case being
-    resolved; $WM_OPTIONS must come from the executor's own environment, not
-    a guess."""
+    """monodomainTotalLagrangianEM loads a case-local library; $WM_OPTIONS comes from the executor's environment."""
     case_root = tmp_path / "case"
     built_lib_dir = case_root / "platforms" / "myOptions" / "lib"
     built_lib_dir.mkdir(parents=True)
@@ -206,8 +187,6 @@ def test_a_case_local_library_path_expands_foam_case_and_wm_options(tmp_path: Pa
 def test_a_case_local_library_path_with_unset_wm_options_is_unavailable_not_guessed(
     tmp_path: Path,
 ) -> None:
-    """If the executor's own environment cannot resolve $WM_OPTIONS, the
-    dependency must come back unavailable -- never a guessed path."""
     case_root = tmp_path / "case"
     (case_root / "system").mkdir(parents=True, exist_ok=True)
     (case_root / "system" / "controlDict").write_text(
@@ -215,7 +194,7 @@ def test_a_case_local_library_path_with_unset_wm_options_is_unavailable_not_gues
         '    "$FOAM_CASE/platforms/$WM_OPTIONS/lib/libmanufacturedMonodomainTotalLagrangianEM.so"\n'
         ");\n"
     )
-    env = {"PATH": ""}  # WM_OPTIONS deliberately absent
+    env = {"PATH": ""}
     deps = {d.name: d for d in resolve_runtime_dependencies(case_root, env=env)}
     assert deps["manufacturedMonodomainTotalLagrangianEM"].path is None
     assert deps["manufacturedMonodomainTotalLagrangianEM"].required is True
@@ -229,8 +208,7 @@ def test_a_case_with_no_controldict_still_resolves_the_fixed_catalog(tmp_path: P
 
 @skip_without_monorepo
 def test_declared_library_catalog_covers_every_make_files_library() -> None:
-    """Ratchet: a newly added library under src/*/Make/files must not be
-    able to silently escape fingerprinting."""
+    """A library added under src/*/Make/files must not escape fingerprinting."""
     declared: set[str] = set()
     for make_file in (monorepo_root / "src").glob("*/Make/files"):
         text = make_file.read_text()
@@ -248,15 +226,7 @@ def test_declared_library_catalog_covers_every_make_files_library() -> None:
 
 
 def test_a_case_with_a_gmsh_geometry_declares_gmsh(tmp_path, monkeypatch):
-    """A case carrying a .geo cannot mesh without the gmsh binary, so it must
-    say so -- like the controlDict libs above, the case declares its own need.
-
-    Before this, gmsh was expressed only as a pip dependency of
-    omnidriver-openfoam (whose wheel ships a `gmsh` executable). Nothing
-    declared it, so a missing gmsh surfaced as a workflow step dying mid-run
-    instead of an unavailable dependency, and an import scan read the pip
-    dependency as unused because nothing imports the Python module.
-    """
+    """A case carrying a .geo cannot mesh without the gmsh binary, so it declares that need."""
     case = tmp_path / "case"
     (case / "system").mkdir(parents=True)
     (case / "box.geo").write_text("SetFactory(\"OpenCASCADE\");\n")
@@ -276,8 +246,7 @@ def test_a_case_with_a_gmsh_geometry_declares_gmsh(tmp_path, monkeypatch):
 
 
 def test_a_case_without_a_geometry_does_not_declare_gmsh(tmp_path):
-    """The contrast is the point: declaring gmsh for every case would make the
-    assertion above true regardless of the .geo."""
+    """Declaring gmsh for every case would make the test above pass regardless of the .geo."""
     case = tmp_path / "case"
     (case / "system").mkdir(parents=True)
 
@@ -286,8 +255,6 @@ def test_a_case_without_a_geometry_does_not_declare_gmsh(tmp_path):
 
 
 def test_a_missing_gmsh_is_reported_unavailable_not_omitted(tmp_path):
-    """RuntimeDependency exists so "required and not found" is expressible.
-    Omitting it would read as "nothing to check"."""
     case = tmp_path / "case"
     (case / "system").mkdir(parents=True)
     (case / "mesh" ).mkdir()

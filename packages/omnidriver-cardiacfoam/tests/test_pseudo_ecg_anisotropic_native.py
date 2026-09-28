@@ -1,20 +1,7 @@
-"""Q11 (plan §5g, owner 2026-09-26): the native pseudo-ECG case's
-``anisotropic`` must validate clean against the real, checked-in
-``constant/electroProperties``.
+"""The native pseudo-ECG case's ``anisotropic`` validates clean against its real, checked-in electroProperties.
 
-The owner's rule -- "get the physics right":
-``ecgDomains.<name>.verificationModel.anisotropic`` is ``yes`` exactly when
-the tissue verifier (``$ELECTRO_MODEL_COEFFS.verificationModel.type``) is
-``manufacturedAnisotropicMonodomainVerifier``. The native
-``manufacturedSolutions/monodomainPseudoECG`` case used the anisotropic
-tissue verifier with ``anisotropic no`` (native ``7ae47527c``); the native
-fix (this migration's Part A) sets it to ``yes``. This test reads the real
-file from the native tree -- supplied only through
-``OMNIDRIVER_NATIVE_TUTORIALS``, never discovered -- and proves
-``_evaluate_ecg_anisotropic_consistency``/``CardiacFoamPlugin
-.validate_run_semantics`` report no mismatch against it. A fixture cannot
-settle this; only the real, checked-in case can.
-"""
+``ecgDomains.<name>.verificationModel.anisotropic`` is ``yes`` exactly when the tissue verifier is
+``manufacturedAnisotropicMonodomainVerifier``; only the real case (``OMNIDRIVER_NATIVE_TUTORIALS``) can settle it."""
 from __future__ import annotations
 
 import os
@@ -52,11 +39,7 @@ def _real_electro_properties_path() -> Path:
 
 
 def _context_from_electro_properties(path: Path) -> dict:
-    """Build a real ``{slot_key: value}`` context from the real, checked-in
-    file, the same way ``run_document_config.build_config`` builds one for
-    a plan/validate pass: parse (round-trip catalog), resolve
-    selectors+overrides, then fill in each applicable entry's default where
-    the file did not override it."""
+    """Build the ``{slot_key: value}`` context the way ``run_document_config.build_config`` does for a plan."""
     from omnidriver.cardiacfoam.dict_builder import (
         parse_electro_properties, resolve_context, select_applicable_entries,
     )
@@ -78,10 +61,7 @@ def _context_from_electro_properties(path: Path) -> dict:
 
 
 def test_native_pseudo_ecg_tissue_verifier_is_anisotropic():
-    """Confirms the fact this test's premise depends on, from the real file:
-    the case's tissue verifier is manufacturedAnisotropicMonodomainVerifier.
-    If the native case ever stops using it, this test's scope no longer
-    applies and should be revisited, not silently passed."""
+    """This module's premise; if the native case stops using this verifier, revisit rather than pass."""
     context = _context_from_electro_properties(_real_electro_properties_path())
     assert context.get("verificationModel.type") == "manufacturedAnisotropicMonodomainVerifier"
 

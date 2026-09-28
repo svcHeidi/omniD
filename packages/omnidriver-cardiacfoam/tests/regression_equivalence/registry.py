@@ -1,10 +1,7 @@
 """Curated registry of the canonical regression-equivalence cases.
 
-This registry is owned by omnidriver, not auto-derived from every upstream
-cardiacFoam tutorial that happens to ship a ``regression/*.reference`` file.
-Upstream can add new tutorials without breaking this suite; we intentionally
-expand the registry only when we want omnidriver to take ownership of a new
-equivalence case.
+Owned by omnidriver, not derived from every upstream ``regression/*.reference``,
+so upstream can add tutorials without breaking this suite.
 """
 from __future__ import annotations
 
@@ -15,23 +12,16 @@ class RegressionCase:
     case_dir: str
     # Registered agent entry name, or None for cases with no agent spec.
     entry_name: str | None
-    # Case-authored dicts the agent regenerates (relpaths under the case dir).
-    # Used by the round-trip stability check for mapped cases.
+    # Case-authored dicts the agent regenerates, for the round-trip check.
     dicts: tuple[str, ...]
     # Representative reference-comparison file, relative to the case dir.
     reference_file: str
     regression_script: str = "regression/regressionTest.sh"
-    # Whether the agent's case discovery can address the case by folder path.
-    # False for layouts the agent does not recognize (e.g. electromechanical
-    # cases keep electroProperties at constant/electro/, but discovery requires
-    # constant/electroProperties).
+    # False for layouts case discovery does not recognize (e.g. electromechanical
+    # cases keep electroProperties at constant/electro/).
     generic_addressable: bool = True
-    # `resolve_strict`'s expected `resolution` value for a mapped case
-    # (`runtime.registry.classify_entry`'s own vocabulary): "registered" for
-    # a factory-tutorial entry, "tutorial_record" once that entry migrates
-    # onto a tutorial record (tutorials-are-pointers plan §2 item 5: "each
-    # mapped case changes as it migrates"). Added 2026-09-26 when
-    # `manufacturedBidomain` became the first entry here to migrate.
+    # Expected `resolve_strict` resolution (`runtime.registry.classify_entry`
+    # vocabulary): "registered" or "tutorial_record".
     resolution: str = "registered"
 
     @property
@@ -80,10 +70,7 @@ _KNOWN_CASES: tuple[RegressionCase, ...] = (
         (_ELECTRO, _PHYSICS), "regression/bathBidomainManufactured.reference",
         resolution="tutorial_record",
     ),
-    # NiedererEtAl2011/electroMechanicalNiedererEtAl2011 removed 2026-09-26
-    # (5.4b-N, plan §5d): native 7a04349b deleted that case. Its successor,
-    # electromechanicsProtocols/springSupportedSlab, has its own reference
-    # and is deliberately not added here (owner Q12).
+    # electromechanicsProtocols/springSupportedSlab is deliberately not registered.
     RegressionCase(
         "electrophysiologyProtocols/rotorInstability", None,
         (), "regression/rotorInstability.reference",

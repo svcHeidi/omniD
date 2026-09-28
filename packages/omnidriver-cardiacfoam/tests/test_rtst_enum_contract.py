@@ -25,24 +25,9 @@
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-"""Contract test: catalogue ``enum_values`` match the registered
-runtime-selection types in the native C++ source.
+"""Contract test: catalogue ``enum_values`` match the registered runtime-selection types in the native C++ source.
 
-Drift is reported in four ways (``rtst_scanner.runtime_selection_report``):
-
-* a catalogue enum's values diverge from the table it claims to expose;
-* a catalogue enum is neither mapped to a table nor classified as a plain word;
-* a table exists in the C++ with no catalogue mapping and no internal waiver;
-* a mapping or waiver names something that no longer exists.
-
-Corrected 2026-09-28: the mapping this test held as module constants
-(``RTST_BY_DRIVER_PATH``, ``NON_RTST_DRIVER_PATHS``,
-``INTERNAL_RTST_ALLOWLIST``) now lives in the plugin's reviewed allowlist
-(``dict_key_allowlist.json``, ``runtime_selection``), because every strict
-plan checks it too. The source root is the supplied one the plugin profile
-declares (``cxx_mapping.source_root``), never a walk-up: this test was
-``skip_without_monorepo`` and skipped silently everywhere, so 4 unclassified
-enums had accumulated unseen when it first ran for real.
+The mapping lives in ``dict_key_allowlist.json`` (``runtime_selection``); the source root is the supplied ``cxx_mapping.source_root``.
 """
 
 from __future__ import annotations

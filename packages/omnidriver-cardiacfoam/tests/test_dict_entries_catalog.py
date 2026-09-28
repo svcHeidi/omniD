@@ -15,16 +15,9 @@ from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from cardiacfoam_assertions import assert_foam_entry
 
-# This suite is cardiacFoam's own dictionary catalog, so it names the plugin
-# it means rather than relying on the ambient default -- which has no single
-# answer once a second adapter is installed alongside this one
-# (future/ENVIRONMENT_CONTRACT.md §12).
+# Two adapters are installed side by side, so there is no ambient default.
 _CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:dict_entries_catalog")
 
-# These four names are this plugin's, so they come from this plugin. They used
-# to be read out of core's ``Phase`` literal via typing.get_args -- core
-# spelling one solver's phases as a closed type, which is exactly what
-# get_phases() replaced.
 VALID_PHASES = set(CardiacFoamPlugin().get_phases())
 
 
@@ -97,11 +90,6 @@ class TestDictEntryCatalog(unittest.TestCase):
         )
         self.assertEqual(
             monodomain_entries["$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusIntensity"].value_kind,
-            # Renamed 2026-09-22 (Phase 2 Task 4): "dimensioned_scalar_literal"
-            # named a rendered-text FORMAT in a core vocabulary that must not
-            # know OpenFOAM syntax. "dimensioned_scalar" is the same generic
-            # shape (a magnitude plus a seven-exponent dimension vector)
-            # without the format-specific name.
             "dimensioned_scalar",
         )
 
@@ -388,15 +376,12 @@ class TestDomainCouplingSchemaContract(unittest.TestCase):
 
 
 def test_existing_entries_in_catalog_have_empty_defaults() -> None:
-    """Every entry in the live catalog must still construct cleanly
-    with empty structured-constraint fields — migration is opt-in
-    per-entry, not a forced rewrite."""
+    """Structured-constraint fields default empty; adopting them is opt-in per entry."""
     all_entries = list(PHYSICS_PROPERTY_ENTRIES)
     for group in get_electro_property_entry_groups(_CTX).values():
         all_entries.extend(group)
-    assert len(all_entries) > 80  # sanity: we have 87+ today
+    assert len(all_entries) > 80
     for entry in all_entries:
-        # No AttributeError accessing the new fields.
         assert isinstance(entry.applicable_when, dict)
         assert isinstance(entry.forbidden_when, dict)
         assert isinstance(entry.required_when, dict)
@@ -404,9 +389,7 @@ def test_existing_entries_in_catalog_have_empty_defaults() -> None:
 
 
 class TestElectroPropertiesPresenceScans(unittest.TestCase):
-    """Tests for the three presence helpers used by the predictor's
-    domain-aware handlers.
-    """
+    """Presence helpers used by the predictor's domain-aware handlers."""
 
     def _write(self, body: str) -> Path:
         import tempfile
@@ -437,8 +420,6 @@ class TestElectroPropertiesPresenceScans(unittest.TestCase):
         )
 
     def test_has_block_ignores_substring_matches(self) -> None:
-        """The scan must match block declarations, not keys whose names
-        happen to contain the target word."""
         from omnidriver.cardiacfoam.detection import electro_properties_has_block
         path = self._write(
             "myocardiumSolver monodomainSolver;\n"
@@ -540,16 +521,7 @@ class TestDetectActiveTensionExportList(unittest.TestCase):
 
 
 class TestEmptyExportListIsKnownEmpty(unittest.TestCase):
-    """An explicit ``export ()`` means "known, and empty" -- never "unknown".
-
-    Regression guard for the artifact-prediction bug in which an empty token
-    tuple was coerced to ``None`` (``tokens if tokens else None``).  ``None``
-    is the predictor's signal that nothing was declared, so it fell back to
-    the ionic/active-tension catalog's recommended exports and predicted
-    artifacts the solver was explicitly told not to write, failing the strict
-    run with ``missing_expected_artifacts``.  The detector's ``None`` must
-    mean "no ``export`` block found" and nothing else.
-    """
+    """An explicit ``export ()`` is known and empty; ``None`` means no ``export`` block."""
 
     def _case_root(self, text: str) -> Path:
         case_root = Path(tempfile.mkdtemp())
@@ -608,7 +580,6 @@ class TestEmptyExportListIsKnownEmpty(unittest.TestCase):
         self.assertEqual(declared, ())
 
     def test_predictor_honours_empty_export_over_catalog_defaults(self) -> None:
-        """The behaviour the detector fix exists to protect."""
         from omnidriver.cardiacfoam.artifacts_predictor import (
             _exported_ionic_variables,
         )
@@ -624,7 +595,6 @@ class TestEmptyExportListIsKnownEmpty(unittest.TestCase):
         self.assertEqual(_exported_ionic_variables(empty, "AlievPanfilov"), ())
 
     def test_predictor_still_falls_back_when_export_block_absent(self) -> None:
-        """The other half of the distinction: absent really is unknown."""
         from omnidriver.cardiacfoam.artifacts_predictor import (
             _exported_ionic_variables,
         )

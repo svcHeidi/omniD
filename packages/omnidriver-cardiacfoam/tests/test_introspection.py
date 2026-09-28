@@ -15,18 +15,11 @@ from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
-# These payloads are the cardiac adapter's own introspection, so the context
-# is supplied rather than discovered: the ambient default is ambiguous as soon
-# as a second adapter is installed (future/ENVIRONMENT_CONTRACT.md §12).
+# Supplied, not discovered: the ambient default is ambiguous once a second adapter is installed.
 _CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:introspection")
 
 
-#: Valid FoamFile content, not placeholder text: "singleCell" migrated onto
-#: a tutorial record 2026-09-27 (records/single_cell.py), whose `describe`
-#: path (unlike the old factory's) actually reads the case's own
-#: `constant/electroProperties`/`physicsProperties` to build its record key
-#: catalog (`cardiacfoam_plugin.get_record_key_catalog` ->
-#: `physics_layout.physics_type`, which parses `physicsProperties` for real).
+#: Valid FoamFile content: the singleCell record's key catalog (``get_record_key_catalog``) parses these files.
 _ELECTRO_PROPERTIES_TEXT = (
     "myocardiumSolver singleCellSolver;\n"
     "singleCellSolverCoeffs\n{\n"
@@ -73,11 +66,6 @@ def _describe_single_cell(cases_root: Path) -> dict:
 
 
 def test_describe_single_cell_reports_record_surface(tmp_path: Path) -> None:
-    """"singleCell" migrated onto a tutorial record 2026-09-27 (records/
-    single_cell.py): `describe`'s payload for a record carries
-    `record_surface`/`record_preview`, not the factory-only `make_spec`/
-    `dict_entries`/`spec`/`tutorial_contract`/`strict_launch` keys this test
-    used to check (see `core.introspection._describe_tutorial_record`)."""
     payload = _describe_single_cell(tmp_path)
 
     assert payload["resolution"] == "tutorial_record"
@@ -133,17 +121,7 @@ def test_cardiac_plugin_describes_an_explicit_case_folder(tmp_path: Path) -> Non
 
 
 def test_cardiac_profile_contract_file_order_is_declared(tmp_path: Path) -> None:
-    """This is the case PROFILE's own declared file order (the environment
-    adapter's + cardiacFoam's `case_files` rules) -- a fact about the
-    profile, not about any particular tutorial. It used to reuse
-    `_single_cell_case_root`/entry "singleCell", which resolved as a
-    `case_folder` only because the old factory tutorial did not shadow it;
-    now that "singleCell" is a tutorial record (records/single_cell.py,
-    2026-09-27), that same entry name resolves as `tutorial_record`
-    instead, which carries no `tutorial_contract` key at all (`core
-    .introspection._describe_tutorial_record`). A directory name that
-    matches no registered record or factory keeps this a `case_folder`
-    resolution, undisturbed by that migration."""
+    """The profile's declared order; the entry name matches no record, so it resolves as a ``case_folder``."""
     case_root = tmp_path / "electrophysiologyProtocols" / "genericProfileCase"
     for relative in (
         "constant/electroProperties", "constant/physicsProperties",
@@ -171,17 +149,11 @@ def test_cardiac_profile_contract_file_order_is_declared(tmp_path: Path) -> None
     assert contract["core_required_files"] == [
         "constant/electroProperties", "constant/physicsProperties",
     ]
-    # `constant` (role `openfoam.case_directory`) now appears: it was always
-    # required, but only became visible once the environment adapter (Task
-    # 9) actually composes into `_CTX` instead of cardiacFoam's own profile
-    # being the only one in a single-provider stack.
+    # `constant` (role `openfoam.case_directory`) comes from the environment adapter's profile.
     assert contract["solver_required_files"] == [
         "system/controlDict", "constant", "system/fvSchemes", "system/fvSolution",
     ]
-    # `Allrun` now leads: it is the environment adapter's declaration
-    # (composed first, being least-specific), not cardiacFoam's own -- the
-    # duplicate `Allrun` role cardiacFoam's own profile used to carry was
-    # removed as part of Task 9's case-file de-duplication.
+    # `Allrun` leads: the environment adapter's declaration is composed first, being least specific.
     assert contract["conditional_files"] == [
         "Allrun", "system/decomposeParDict", "system/blockMeshDict", "Allclean",
         "README.md", "runRegressionTest.sh",
@@ -200,8 +172,6 @@ def test_cli_describe_prints_cardiac_payload_for_explicit_case_root(tmp_path: Pa
     assert exit_code == 0
     payload = json.loads(stream.getvalue())
     assert payload["resolved_name"] == "singleCell"
-    # "singleCell" migrated onto a tutorial record 2026-09-27 -- a record's
-    # payload carries `record_preview`, not the factory-only `strict_launch`.
     assert "record_preview" in payload
 
 

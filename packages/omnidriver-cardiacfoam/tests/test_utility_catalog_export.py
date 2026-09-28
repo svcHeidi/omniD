@@ -25,25 +25,9 @@
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-"""Tests for the utility-catalog exporter.
-
-The utility catalog is an *agent tool catalog*: it is what lets a caller
-build a valid invocation of an OpenFOAM utility and know which artifacts
-come back. That makes ``positional_args``, ``flags`` (with their
-``argument_kind``) and ``produces`` load-bearing, not decoration — an
-earlier version of the exporter dropped all three, which is precisely why
-the emitted JSON had no consumer.
-
-Source of truth is the ``utility.manifest.toml`` sidecar bundled as package
-data next to each utility's C++ under this package's ``utilities/`` dir (see
-``pyproject.toml``'s ``package-data``), read through
-``omnidriver.cardiacfoam.command_authorization.utility_manifests()`` — the same
-capability path the exporter script itself now uses (previously it imported
-``omnidriver.core.utility_catalog.UTILITY_CATALOG`` directly, a catalog that
-only ever populated inside the full cardiacFoam monorepo; see
-future/UTILITY_CATALOG_STANDALONE_GAP.md for that history). These tests pin
-the exporter to the ``UtilityManifest`` dataclass so a new manifest field
-cannot be added without also reaching the JSON.
+"""The utility-catalog exporter: every ``UtilityManifest`` field, including
+``positional_args``, ``flags`` and ``produces``, reaches the JSON a caller uses
+to build a valid utility invocation.
 """
 
 from __future__ import annotations
@@ -65,21 +49,12 @@ SCRIPT = REPO / "scripts" / "export-utility-catalog.py"
 
 def _run(out_path: Path) -> dict:
     subprocess.run(
-        # The exporter falls back to the ambient default only when no plugin
-        # is named, and that default is ambiguous whenever a second adapter is
-        # installed alongside cardiacfoam. This module is about the cardiac
-        # utility catalog, so it names the plugin rather than leaving the
-        # child process to guess (future/ENVIRONMENT_CONTRACT.md §12).
+        # Named: with a second adapter installed there is no ambient default.
         [sys.executable, str(SCRIPT), "--out", str(out_path), "--plugin", "cardiacfoam"],
         cwd=REPO,
         check=True,
     )
     return json.loads(out_path.read_text())
-
-
-# ---------------------------------------------------------------------------
-# Schema / shape
-# ---------------------------------------------------------------------------
 
 
 def test_exporter_writes_versioned_utility_list(tmp_path):
@@ -99,17 +74,7 @@ def test_entries_are_sorted_by_name(tmp_path):
     assert names == sorted(names), "output must be stable across runs"
 
 
-# ---------------------------------------------------------------------------
-# Nothing may be silently dropped
-# ---------------------------------------------------------------------------
-
-
 def test_no_manifest_field_is_dropped(tmp_path):
-    """Every ``UtilityManifest`` field must reach the JSON.
-
-    Guards the failure mode this exporter actually had: fields present in
-    the TOML and in the dataclass, but absent from the exported record.
-    """
     data = _run(tmp_path / "u.json")
     expected = {f.name for f in dataclasses.fields(next(iter(UTILITY_CATALOG.values())))}
     for record in data["utilities"]:
@@ -153,11 +118,6 @@ def test_positional_args_survive_export(tmp_path):
     assert exported == expected
 
 
-# ---------------------------------------------------------------------------
-# Portability
-# ---------------------------------------------------------------------------
-
-
 def test_source_paths_are_relative(tmp_path):
     data = _run(tmp_path / "u.json")
     for record in data["utilities"]:
@@ -165,7 +125,6 @@ def test_source_paths_are_relative(tmp_path):
 
 
 def test_output_has_no_python_repr_leaks(tmp_path):
-    """No Python repr may reach the JSON (frozensets, Paths, tuples)."""
     raw = tmp_path / "u.json"
     _run(raw)
     text = raw.read_text()

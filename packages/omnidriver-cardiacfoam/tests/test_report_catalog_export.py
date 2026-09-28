@@ -25,27 +25,9 @@
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-"""Tests for the report-catalog exporter.
-
-Backend Python declares report *definitions* (id, title, kind, URL template,
-the ``applicable_when`` predicate, and a default-visible flag); the exporter
-serializes them to JSON. The Python side never substitutes ``{port}`` or
-``{kind}``, so 4Dpapers (or any future report backend) is swappable without
-re-exporting.
-
-For v1 the URL template is ``http://localhost:{port}/{kind}`` (no
-``{runId}`` — the user's 4Dpapers app does not route by run yet). The
-``applicable_when`` predicate language is flat key-equality:
-``None`` ⇒ always applicable, ``{"phase.field": value}`` ⇒ AND of
-equality checks. Anything else is invalid and the v1 evaluator throws.
-
-Moved out of core's test tree (Part A, test-ownership split): these four
-tests subprocess ``scripts/export-report-catalog.py``, which resolves a
-driver context and exports cardiacFoam's report catalog, so they are only
-non-vacuous against real cardiac content. The pure ``matches()`` predicate
-tests have no plugin dependency and stayed in core
-(``packages/omnidriver/tests/core/test_report_catalog_export.py``).
-"""
+"""Tests for the report-catalog exporter, which serializes report definitions to JSON and never
+substitutes ``{port}`` or ``{kind}``, so the report backend is swappable. The v1 URL template is
+``http://localhost:{port}/{kind}``, with no ``{runId}``; ``applicable_when`` is flat key-equality."""
 
 from __future__ import annotations
 
@@ -62,11 +44,7 @@ SCRIPT = REPO / "scripts" / "export-report-catalog.py"
 
 def _run(out_path: Path) -> dict:
     subprocess.run(
-        # The exporter falls back to the ambient default only when no plugin
-        # is named, and that default is ambiguous whenever a second adapter is
-        # installed alongside cardiacfoam. This module is about the cardiac
-        # report catalog, so it names the plugin rather than leaving the child
-        # process to guess (future/ENVIRONMENT_CONTRACT.md §12).
+        # The ambient default is ambiguous once a second adapter is installed, so name the plugin.
         [sys.executable, str(SCRIPT), "--out", str(out_path), "--plugin", "cardiacfoam"],
         cwd=REPO,
         check=True,
@@ -99,8 +77,7 @@ def test_exporter_writes_versioned_report_list(tmp_path):
 
 
 def test_stub_entry_present(tmp_path):
-    """v1 must ship the offline-bundled stub entry so the section
-    works even when 4Dpapers is not running."""
+    """The offline-bundled stub keeps the section working when 4Dpapers is not running."""
     data = _run(tmp_path / "r.json")
     ids = {r["id"] for r in data["reports"]}
     assert "stub" in ids, f"expected 'stub' entry; got {sorted(ids)}"
@@ -110,8 +87,7 @@ def test_stub_entry_present(tmp_path):
 
 
 def test_v1_url_templates_have_no_runid_placeholder(tmp_path):
-    """4Dpapers v1 does not route by run; runId is a v2 concern.
-    Any leaked ``{runId}`` here would force consumers to invent one."""
+    """4Dpapers v1 does not route by run; a leaked ``{runId}`` would force consumers to invent one."""
     data = _run(tmp_path / "r.json")
     for r in data["reports"]:
         assert "{runId}" not in r["url_template"], (
@@ -120,9 +96,7 @@ def test_v1_url_templates_have_no_runid_placeholder(tmp_path):
 
 
 def test_remote_entries_use_4dpapers_template(tmp_path):
-    """At least one non-stub entry should target the 4Dpapers backend
-    so the section is actually wired to the real app, not just the
-    bundled fallback."""
+    """At least one non-stub entry targets the real 4Dpapers backend, not just the bundled fallback."""
     data = _run(tmp_path / "r.json")
     remote = [r for r in data["reports"] if r["id"] != "stub"]
     assert remote, "expected at least one 4Dpapers-backed report entry"

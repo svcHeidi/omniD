@@ -1,12 +1,6 @@
-"""cardiacFOAM's agent guidance (what ``describe``'s ``record_surface.guidance``
-carries, conformance C10) states the owner's pre-processing rule.
-
-Added 2026-09-26 (review 54b M11). The owner decided how every record gets
-its starting state, "and the agent guidance says so" (plan §5g answered,
-"The pre-processing stage"); the first three variant records landed with the
-guidance unchanged, so an agent reading ``describe`` learnt nothing of the
-``mesh`` selector, the default route, or how a study replaces a default
-argument.
+"""cardiacFOAM's agent guidance (``describe``'s ``record_surface.guidance``,
+conformance C10) states the pre-processing rule: the ``mesh`` selector, the
+default route, and how a study replaces a default argument.
 """
 from __future__ import annotations
 

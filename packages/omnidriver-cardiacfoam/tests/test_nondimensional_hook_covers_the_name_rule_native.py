@@ -1,14 +1,6 @@
-"""Every case the old name rule exempted is exempted by the plugin hook.
-
-spec 2026-09-26-core-generality-design.md §2, A7.
-``strict_planning._is_nondimensional_entry`` exempted a case from
-mesh-scale checks when its entry name or workflow family contained
-"manufactured" or "verification". That rule is deleted. This proves that
-the plugin's own hook (``planning_policy.is_nondimensional_case``, which
-reads the case's files) exempts every case the rule did. It runs against
-the real native tree, supplied only through OMNIDRIVER_NATIVE_TUTORIALS
-and never discovered.
-"""
+"""Every case the name rule ("manufactured"/"verification" in the entry name or workflow family)
+exempts from mesh-scale checks is exempted by the plugin's ``is_nondimensional_case`` hook, which
+reads the case's files. Runs against the native tree supplied through OMNIDRIVER_NATIVE_TUTORIALS."""
 from __future__ import annotations
 
 import os
@@ -35,7 +27,7 @@ def _native_tutorials_root() -> Path:
 
 
 def _name_rule(spec) -> bool:
-    """The deleted rule, verbatim: whatever it exempted, the hook must exempt."""
+    """The name rule, verbatim: whatever it exempts, the hook must exempt."""
     metadata = spec.metadata or {}
     haystack = (
         f"{metadata.get('entry_name', '') or ''} "
@@ -47,8 +39,6 @@ def _name_rule(spec) -> bool:
 def test_every_case_the_name_rule_exempted_is_exempted_by_the_hook():
     root = _native_tutorials_root()
     ctx = load_discovered_plugin("cardiacfoam")
-    # Step S6 deleted the factory registry (`list_tutorials`/`load_entry_spec`
-    # over it): every case this proved anything about is a tutorial record now.
     specs = [
         record_case_spec(
             record, case_id=name, staged_case_root=root / record.native_case_relpath,

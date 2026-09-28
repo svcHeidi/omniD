@@ -1,19 +1,6 @@
 """No compatibility fallback may answer in cardiac terms for the cardiac plugin.
 
-core/compatibility.py used to have twenty branches gated on
-plugin_id == "org.cardiacfoam". Each existed only for plugins predating an
-optional hook; once CardiacFoamPlugin implemented every hook, the adapter
-called it directly and the gate was dead code. Phase 2 Task 7 measured that
-the census below still passed (proving the deletion was safe) and then
-deleted all twenty branches.
-
-This module now guards the result of that deletion, two ways:
-  1. the gated set must stay empty -- a plugin_id == "org.cardiacfoam" branch
-     reappearing anywhere in compatibility.py is a regression, not a new
-     optimization;
-  2. the standing behavioural check -- reading capabilities under an explicit
-     cardiac context must fire no gated fallback -- keeps running, since it
-     is a fact worth continuing to prove even with the gated set at zero.
+No ``absent_*`` fallback in ``core.compatibility`` may branch on ``"org.cardiacfoam"``, and none fires under a cardiac context.
 """
 from __future__ import annotations
 
@@ -45,8 +32,6 @@ def _gated_fallback_names() -> frozenset[str]:
 
 
 def test_no_gated_fallback_exists() -> None:
-    """Phase 2 Task 7 deleted the twenty cardiac-gated branches. A new one
-    appearing -- even a single one -- is a regression worth noticing."""
     assert _gated_fallback_names() == frozenset()
 
 

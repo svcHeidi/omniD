@@ -1,26 +1,6 @@
-"""Step 4b (pilot ``restitutionCurves``): the S1-S2 protocol axis.
-
-Owner instruction for step 4b, item 2: "an S1-S2 protocol axis: a mapping
-value (the protocol's parameters) gives the singleCellStimulus keys it sets
-plus the derived ``system/controlDict:endTime`` and ``writeAfterTime``,
-using the old module's arithmetic, not new formulas. An axis must not
-silently read case values that the same study could also patch directly;
-take the protocol as the axis value."
-
-"The old module's arithmetic" is
-``cardiacfoam.tutorials.restitution_curves._plan_case``/``make_spec``
-(deleted alongside this pilot, once parity is proven):
-
-    write_after_time_s = (s1_interval_ms * (n_s1 - 1)) / 1000.0 - 2.0
-    end_time = (
-        (s1_interval_ms * (n_s1 - 1) + s2_interval_ms * n_s2) / 1000.0
-        + 2.0  # end_time_buffer_s, never varied by any real study
-    )
-
-This module's tests recompute those same two formulas independently (not by
-importing the now-deleted old module) and check the axis's output against
-them -- byte-for-byte parity against the real native case is proven
-separately, by the native parity test/evidence for the whole record.
+"""The S1-S2 protocol axis: a mapping value sets the singleCellStimulus keys plus
+the derived ``endTime`` and ``writeAfterTime``. It takes the protocol as its value
+and never reads case values the same study could patch directly.
 """
 
 from __future__ import annotations
@@ -65,9 +45,7 @@ def test_axis_declares_a_mapping_value_kind():
 
 
 def test_the_native_default_protocol_reproduces_the_checked_in_case(tmp_path):
-    """s1=2000, n_s1=10, s2=250, n_s2=2 is the combination the CHECKED-IN
-    native electroProperties/controlDict hold today (writeAfterTime 16.0,
-    endTime 20.5) -- the exact old-module arithmetic, reproduced here."""
+    """The native case holds s1=2000, n_s1=10, s2=250, n_s2=2 (writeAfterTime 16.0, endTime 20.5)."""
     axis = _axis()
     case_root = _staged_case(tmp_path)
 
@@ -89,8 +67,7 @@ def test_the_native_default_protocol_reproduces_the_checked_in_case(tmp_path):
 
 
 def test_the_driver_config_protocol_computes_the_old_arithmetic(tmp_path):
-    """The native ``driver_config.json``'s own real intent (TWorld, s1=1000,
-    n_s1=10, n_s2=2), for the smallest S2 in its list (250)."""
+    """The native ``driver_config.json`` protocol (s1=1000, n_s1=10, n_s2=2), smallest S2 (250)."""
     axis = _axis()
     case_root = _staged_case(tmp_path)
 

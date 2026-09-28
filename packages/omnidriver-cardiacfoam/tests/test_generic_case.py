@@ -43,9 +43,7 @@ def _make_spec(tmp_path, **overrides):
 
 
 def test_default_run_script_path_uses_allrun_step(tmp_path):
-    # No solver_command: this is the registry's generic case-folder fallback
-    # (an arbitrary discovered case directory with its own Allrun script),
-    # unrelated to build_and_launch -- unchanged from before.
+    # No solver_command: the registry's generic case-folder fallback, running the case's own Allrun.
     spec = _make_spec(tmp_path)
     steps = spec.metadata["workflow_dag"]["steps"]
     assert steps == [{"id": "run", "command": "Allrun", "depends_on": []}]

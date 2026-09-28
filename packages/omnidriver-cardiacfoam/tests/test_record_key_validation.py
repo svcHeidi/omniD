@@ -1,11 +1,6 @@
-"""``record_key_validation.record_key_validator`` -- step 4a of
-``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md`` §5.
-
-Unit-level: exercises the catalog-matching logic directly against
-``dict_entries_catalog``/``common_dict_entries``'s real (checked-in) Python
-data, with no filesystem case involved -- see
-``test_record_key_validation_native.py`` for the same validator against the
-REAL ``restitutionCurves_s1s2Protocol`` case's own files.
+"""``record_key_validation.record_key_validator`` against the checked-in catalog
+data, with no case on disk; ``test_record_key_validation_native.py`` runs it
+against a real native case.
 """
 
 from __future__ import annotations
@@ -32,8 +27,7 @@ def test_catalogued_electro_properties_key_validates_true():
 
 
 def test_catalogued_electro_properties_key_via_a_different_solver_coeffs_block():
-    """The <solver>Coeffs first segment is derived from the catalog's own
-    myocardiumSolver enum_values, not hard-coded to one solver."""
+    """The <solver>Coeffs segment comes from the catalog's myocardiumSolver enum_values."""
     value_kind, validated = record_key_validator(
         "constant/electroProperties",
         ("monodomainSolverCoeffs", "conductivitySource"),
@@ -73,11 +67,7 @@ def test_misspelled_electro_properties_key_is_refused_by_name():
 
 
 def test_a_first_segment_not_in_the_solver_vocabulary_is_refused():
-    """'bogusCoeffs' is not any real <solver>Coeffs spelling the catalog's
-    own myocardiumSolver enum_values sanctions -- refused rather than
-    silently standing in for $ELECTRO_MODEL_COEFFS the way
-    overrides._catalog_entry_for's own (differently-trusted) caller would
-    accept it."""
+    """Refused, though ``overrides._catalog_entry_for`` would accept it as $ELECTRO_MODEL_COEFFS."""
     with pytest.raises(KeyError):
         record_key_validator(
             "constant/electroProperties",
@@ -97,9 +87,7 @@ def test_a_value_of_the_wrong_kind_is_refused():
 
 
 def test_a_dynamic_path_binding_is_checked_against_its_declared_domain():
-    """$ELECTRO_MODEL_COEFFS.ionicConstantOverrides.<scope>.scale.<constant_name>
-    declares a closed domain for <scope>; an out-of-domain binding is
-    refused, an in-domain one validates."""
+    """ionicConstantOverrides.<scope> has a closed domain: in-domain validates, out-of-domain refused."""
     value_kind, validated = record_key_validator(
         "constant/electroProperties",
         (
@@ -127,12 +115,7 @@ _BATH = ("bidomainSolverCoeffs", "bathPotentialDomain")
 
 @pytest.mark.parametrize("value", [{"xMax": 0.01}, {"xMin": 0}, {}])
 def test_a_whole_patch_map_validates_member_by_member(value):
-    """Owner Q4 (2026-09-26): a study replaces ``groundPatches`` /
-    ``surfaceCurrentPatches`` as whole dictionaries. The catalog declares
-    only their members (``...groundPatches.<patch>``, a scalar), so a map
-    is checked member by member against that entry; the map itself is a
-    ``mapping``. An empty map is a real value (``groundPatches {}`` is the
-    native electrodePair state)."""
+    """An empty map is real: ``groundPatches {}`` is the native electrodePair state."""
     for name in ("groundPatches", "surfaceCurrentPatches"):
         assert record_key_validator(
             "constant/electroProperties", _BATH + (name,), value,
@@ -148,8 +131,6 @@ def test_a_patch_map_member_of_the_wrong_kind_is_refused_by_name():
 
 
 def test_a_map_at_a_key_with_no_catalogued_members_is_refused():
-    """Only a key whose members the catalog declares takes a map; any other
-    uncatalogued key is still refused by name."""
     with pytest.raises(KeyError) as excinfo:
         record_key_validator(
             "constant/electroProperties", _BATH + ("groundPatchez",), {"xMin": 0},
@@ -168,20 +149,10 @@ def test_a_map_at_a_key_with_no_catalogued_members_is_refused():
         (True, "boolean"),
         (5, "integer"),
         (1e-5, "scalar"),
-        # Corrected 2026-09-26 (tutorials-are-pointers, 5.4b-B): this used
-        # to pin "word" for a whitespace-containing string, even though
-        # "word"'s own shape check refuses whitespace -- a value no direct
-        # study key could actually have written. See
-        # `record_key_validation._infer_unvalidated_value_kind`'s own
-        # 2026-09-26 correction.
+        # "word" refuses whitespace, so a whitespace-containing string is "string".
         ("80 80 80", "string"),
         ("Gauss linear", "string"),
         ("leastSquares", "word"),
-        # Added 2026-09-25 (`restitutionCurves`'s `blockMeshResolution`
-        # axis): a typed tuple/list of ints infers `integer_list`, the
-        # shape `block_mesh_resolution_axis`'s patch value actually has --
-        # see that module's own docstring for why it is no longer
-        # pre-joined text.
         ((40, 6, 14), "integer_list"),
         ([40, 6, 14], "integer_list"),
         ((1.5, 2.5), "scalar_list"),
@@ -204,16 +175,7 @@ def test_system_control_dict_delta_t_is_unvalidated():
 
 
 def test_system_block_mesh_dict_hex_cell_counts_is_unvalidated():
-    """A direct ``document:key`` study naming this key with pre-joined text
-    (rather than through ``block_mesh_resolution_axis``, which no longer
-    produces this shape -- see that module's own 2026-09-25 correction).
-
-    Corrected 2026-09-26 (tutorials-are-pointers, 5.4b-B): this pinned
-    ``"word"`` for a whitespace-containing string, which ``"word"``'s own
-    shape check refuses -- see
-    ``record_key_validation._infer_unvalidated_value_kind``'s own
-    2026-09-26 correction.
-    """
+    """A direct ``document:key`` study naming this key with pre-joined text."""
     value_kind, validated = record_key_validator(
         "system/blockMeshDict", ("hex_cell_counts",), "200 30 70",
     )
@@ -222,8 +184,7 @@ def test_system_block_mesh_dict_hex_cell_counts_is_unvalidated():
 
 
 def test_system_block_mesh_dict_hex_cell_counts_tuple_is_unvalidated():
-    """The shape ``block_mesh_resolution_axis`` actually produces since its
-    2026-09-25 correction (typed data, not pre-joined text)."""
+    """The typed shape ``block_mesh_resolution_axis`` produces."""
     value_kind, validated = record_key_validator(
         "system/blockMeshDict", ("hex_cell_counts",), (200, 30, 70),
     )

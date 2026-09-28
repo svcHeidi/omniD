@@ -1,18 +1,6 @@
-"""An agent compares cardiacFOAM with itself at two resolutions, end to end,
-exactly as it would: sweep-run, read the run documents, write a request from
-the reference, `omnidriver compare`, attach the report to the experiment
-(spec 2026-09-26 §4; topic B Task 7). Cross-solver is Task 8.
-
-The agent's pairing and expected locations, stated here, not derived by
-core: cardiacFOAM probe ``k`` is the reference's ``P<k+1>`` (the owner's
-appendix, via the reference's own ``niederer2011-owner-appendix`` source),
-and each probe's expected location is its configured one, read from the
-native ``system/Niedererpoints`` in cardiacFOAM's own frame, metres -- no
-frame conversion. **Updated 2026-09-27 (native `interpolationScheme
-cellPoint`, e9439c4f):** the reader now reports each probe's own configured
-location exactly (offset 0, ``sampling_rule == "point"``), not the
-containing cell's centre -- the pre-registered ``max_sampling_offset`` is 0.
-"""
+"""An agent compares cardiacFOAM with itself at two resolutions end to end. Probe ``k`` is the
+reference's ``P<k+1>``, expected at its configured location in cardiacFOAM's own frame (metres);
+with ``interpolationScheme cellPoint`` the sampling offset is 0."""
 from __future__ import annotations
 
 import json
@@ -35,7 +23,7 @@ REFERENCE = Path(__file__).resolve().parents[3] / "benchmarks" / "niederer2011.j
 DX_VALUES = (0.0005, 0.001)
 END_TIME = 0.1
 TOLERANCE_MS = 5.0
-#: Q7 (a real run of each resolution to 0.2 s, before this test was written):
+#: From a real run of each resolution to 0.2 s:
 #: by 0.1 s, P1 and P3 (probes 0 and 2) have activated at both resolutions;
 #: P5, P7 and P9 (probes 4, 6, 8) at dx 0.5 mm only; P2, P4, P6 and P8 at
 #: neither (dx 0.5 mm reaches them after 0.13 s; dx 1 mm not by 0.2 s).

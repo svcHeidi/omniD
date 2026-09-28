@@ -125,9 +125,7 @@ def selected_source_from_environment(
     if _git_exit_code(root, "diff", "--quiet", revision, "--", "src") != 0:
         raise FixtureInputError("Selected source src/ differs from the requested revision")
 
-    # Tutorials and characterization inputs may intentionally be candidates.
-    # Record all non-src worktree evidence rather than treating it as a new
-    # committed reference or silently reading it during source-only checks.
+    # Non-src drift is permitted (candidate inputs) but recorded, never read.
     permitted_status = _git(root, "status", "--porcelain", "--", ".", ":(exclude)src")
     permitted_diff = _git(root, "diff", "--binary", revision, "--", ".", ":(exclude)src")
     permitted_untracked = _git(
@@ -263,12 +261,7 @@ def load_case_input_manifest(runtime: SelectedRuntime) -> CaseInputManifest:
 def materialize_case_inputs(
     runtime: SelectedRuntime, manifest: CaseInputManifest
 ) -> StagedInputs:
-    """Materialize declared bytes into one unique child of the output root.
-
-    Committed mode reads bytes with git show at the selected revision.
-    Candidate mode is explicit in the named manifest and stages only declared
-    current-worktree files.  Neither mode discovers tutorials or writes source.
-    """
+    """Materialize declared bytes into one unique child of the output root."""
     stage_root = Path(
         tempfile.mkdtemp(prefix=f"omnidriver-{manifest.case_id}-", dir=runtime.output_root)
     )
@@ -357,9 +350,8 @@ def _git_bytes(root: Path, *args: str) -> bytes:
 
 def _source_openfoam_environment(bashrc: Path) -> dict[str, str]:
     """Source only the selected bashrc and capture the child environment."""
-    # OpenFOAM's bashrc forwards positional arguments to its setup script.
-    # Keep the selected path in a local variable, then clear ``$@`` before
-    # sourcing so the bashrc is not recursively interpreted as a config file.
+    # OpenFOAM's bashrc forwards positional arguments to its setup script, so
+    # clear ``$@`` before sourcing or the path is read as a config file.
     result = subprocess.run(
         [
             "bash",

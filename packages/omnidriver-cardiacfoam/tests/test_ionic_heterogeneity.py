@@ -25,29 +25,9 @@
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-"""Phase 2 — omnidriver tissue-heterogeneity wiring.
+"""Tissue-heterogeneity wiring: catalog flags, ``ionicHeterogeneity.*`` dict entries, builder round-trip, validation.
 
-Covers the four surfaces wired in Phase 2:
-  1. ionic_model_catalog: ``supports_heterogeneity`` and
-     ``supports_gradient_axis_heterogeneity`` flags plus tissue semantics.
-  2. dict_entries: the five transmural ``ionicHeterogeneity.*`` DictEntries
-     plus the five dynamic ``gradientAxes.<axis_name>.*`` entries (13 total
-     with the three ``regions.<region_name>.*`` entries, separately gated).
-  3. dict_builder: build + parse round-trip of a heterogeneity block
-     (proves the generic nested-path machinery needs no builder change).
-  4. validation: model-capability gates, named-region range checks,
-     gradient-axis numeric constraints, tissue compat.
-
-Corrected 2026-09-26 (catalog drift fix, final review AB Q7): this used to
-cover ``apexBaseBands`` and ``endoMInterface``/``mEpiInterface`` plus the
-``transmuralBands`` mode. Native ``3025230b9`` renamed ``apexBaseBands`` to
-the dynamic-name ``gradientAxes`` (any number of named axes, not one fixed
-block); native ``c7d6dd551`` deleted ``endoMInterface``/``mEpiInterface`` and
-the ``transmuralBands`` mode outright, with no replacement -- ``mode`` is now
-``namedRegions`` or ``cellZoneRegions`` only. Every test below that exercised
-a deleted key is deleted, not weakened; every test that exercised
-``apexBaseBands`` is reworked against ``gradientAxes.<axis_name>``, its exact
-native replacement.
+Native ``mode`` is ``namedRegions`` or ``cellZoneRegions``; gradient axes are dynamically named ``gradientAxes.<axis_name>``.
 """
 
 from __future__ import annotations
@@ -58,10 +38,6 @@ from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.core.runtime.run_model import RunDocument
 from omnidriver.core.specs.validation import validate_run
 
-# validate_run now takes a mandatory driver_context
-# (test_core_context_is_explicit.py); this file is cardiac ionic-model
-# vocabulary throughout, so the cardiac context reproduces the previous
-# implicit default exactly.
 _CTX = _driver_context(
     OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:ionic_heterogeneity",
 )
@@ -73,9 +49,7 @@ _OVERRIDE_ONLY_TISSUE_MODELS = (
 )
 
 
-# --------------------------------------------------------------------------
-# 1) Catalog flags
-# --------------------------------------------------------------------------
+# Catalog flags
 
 def test_supports_heterogeneity_flag_for_capable_scalar_models():
     from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG
@@ -133,26 +107,7 @@ def test_override_only_models_advertise_approximate_tissue_labels_explicitly():
 
 
 def test_planning_tissues_uses_native_tissues_only_for_other_models():
-    """`restitutionCurves`'s own defaults module (which used to duplicate
-    `single_cell`'s `IONIC_MODEL_TISSUE_MAP` construction verbatim) was
-    deleted 2026-09-25 when that tutorial migrated onto a tutorial record
-    (docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md) --
-    its `restitutionCurvesIonicModelAxis` now derives `tissue` from the same
-    `planning_tissues()` helper directly. This proves that helper's own
-    behaviour for two more models (`TNNP`/`Courtemanche`) the test above
-    does not cover, independent of any tutorial-specific module.
-
-    `single_cell`'s own defaults module (which this file used to test
-    directly, as `test_default_single_cell_tissue_map_uses_native_tissues_
-    only`) was deleted the same way 2026-09-27 (records/single_cell.py,
-    tutorials-are-pointers plan, step 5.1): the ionic-model axis its record
-    reuses (`ionic_model_axis`) does not derive `tissue` at all, by design
-    (a study states it directly) -- there is no successor construction left
-    to test, and `BuenoOrovio`/`Gaur`'s own native-vs-approximate tissue
-    labels are already pinned above by
-    `test_native_tissue_labels_mark_models_with_intrinsic_tissue_variants`/
-    `test_override_only_models_advertise_approximate_tissue_labels_
-    explicitly`."""
+    """``planning_tissues`` (which ``restitutionCurvesIonicModelAxis`` derives ``tissue`` from) for TNNP and Courtemanche."""
     from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG, planning_tissues
     assert planning_tissues(IONIC_MODEL_CATALOG["TNNP"]) == (
         "epicardialCells", "mCells", "endocardialCells",
@@ -161,8 +116,6 @@ def test_planning_tissues_uses_native_tissues_only_for_other_models():
 
 
 def test_manufactured_models_do_not_support_gradient_axis_heterogeneity():
-    # These models support neither transmural/named-region nor apex-base
-    # heterogeneity at all — the manufactured verification models.
     from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG
     for name in (
         "monodomainFDAManufactured", "bidomainFDAManufactured",
@@ -171,9 +124,7 @@ def test_manufactured_models_do_not_support_gradient_axis_heterogeneity():
         assert IONIC_MODEL_CATALOG[name].supports_gradient_axis_heterogeneity is False, name
 
 
-# --------------------------------------------------------------------------
-# 2) dict_entries
-# --------------------------------------------------------------------------
+# dict_entries
 
 def _het_entries():
     from omnidriver.cardiacfoam.dict_entries import get_electro_property_entry_groups
@@ -217,19 +168,12 @@ def test_all_thirteen_heterogeneity_entries_exist():
 
 
 def test_transmural_entries_gated_to_spatial_solvers():
-    """Transmural ionicHeterogeneity entries must fire for all spatial EP solvers."""
     for e in _transmural_entries():
         assert e.applicable_when.get("$ionicHeterogeneity_supported") is True, e.driver_path
 
 
 def test_gradient_axes_entries_gated_to_monodomain_and_bidomain():
-    """gradientAxes entries apply to monodomainSolver and bidomainSolver.
-
-    Both dispatch through the same myocardiumDomainInterface::New() codepath
-    (myocardiumDomainInterface.C) that parses ionicHeterogeneity.gradientAxes;
-    eikonalSolver returns early from that factory before ionic-model/heterogeneity
-    setup runs, and singleCellSolver bypasses the factory entirely.
-    """
+    """Only these reach ``myocardiumDomainInterface::New()``; eikonalSolver returns early and singleCellSolver bypasses it."""
     for e in _gradient_axes_entries():
         assert e.applicable_when.get("myocardiumSolver") == (
             "monodomainSolver", "bidomainSolver",
@@ -254,9 +198,7 @@ def test_heterogeneity_entries_are_optional():
         assert e.required is False
 
 
-# --------------------------------------------------------------------------
-# 3) dict_builder round-trip (no builder code change required)
-# --------------------------------------------------------------------------
+# dict_builder round-trip
 
 _HET_OVERRIDES = {
     "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.field": "t",
@@ -308,8 +250,6 @@ def test_build_then_parse_round_trips_heterogeneity(tmp_path):
 
 
 def test_default_build_omits_heterogeneity_block():
-    # Heterogeneity must be opt-in: a capable model with no het overrides
-    # produces no ionicHeterogeneity block.
     from omnidriver.cardiacfoam.dict_builder import build_electro_properties
     text = build_electro_properties(
         selectors={
@@ -321,9 +261,7 @@ def test_default_build_omits_heterogeneity_block():
     assert "ionicHeterogeneity" not in text
 
 
-# --------------------------------------------------------------------------
-# 4) Validation
-# --------------------------------------------------------------------------
+# Validation
 
 def _run(physics: dict) -> RunDocument:
     config = {"anatomy": {}, "physics": physics, "stimulus": {}, "solver": {}}
@@ -356,15 +294,10 @@ def test_heterogeneity_with_capable_model_no_het_error():
     assert het_errors == []
 
 
-# endoMInterface/mEpiInterface ordering tests were deleted 2026-09-26 (catalog
-# drift fix): native c7d6dd551 removed both keys and the transmuralBands mode
-# that used them, with no replacement -- there is nothing left to order.
-
-
 def test_tissue_incompatible_with_model_is_error():
     run = _run({
         "myocardiumSolver": "monodomainSolver",
-        "ionicModel": "AlievPanfilovcompactBatched",   # myocyte-only (not yet wired for heterogeneity)
+        "ionicModel": "AlievPanfilovcompactBatched",   # myocyte-only
         "tissue": "epicardialCells",
     })
     errors = [e for e in validate_run(run, driver_context=_CTX)
@@ -382,16 +315,7 @@ def test_tissue_compatible_with_model_is_silent():
     assert issues == []
 
 
-# --------------------------------------------------------------------------
-# 5) Gradient-axis heterogeneity validation
-#
-# Corrected 2026-09-26 (catalog drift fix): reworked from "apex-to-base
-# heterogeneity validation" against the deleted apexBaseBands.* keys onto
-# gradientAxes.<axis_name>.*, its exact native replacement (3025230b9). The
-# beta>0 tests are deleted, not reworked: validateGradientAxisConfig
-# (ionicHeterogeneity.C) never constrained beta, only scalingMin/scalingMax/
-# variables, so that check was never backed by a native read.
-# --------------------------------------------------------------------------
+# Gradient-axis heterogeneity validation
 
 def test_gradient_axes_with_incapable_model_is_error():
     run = _run({
@@ -423,8 +347,7 @@ def test_gradient_axes_with_capable_model_no_error():
 
 
 def test_gradient_axes_negative_beta_is_silent():
-    """beta carries no native constraint (apexBaseScale accepts any value);
-    a negative beta must not be rejected."""
+    """beta carries no native constraint: ``validateGradientAxisConfig`` checks only scalingMin/scalingMax/variables."""
     run = _run({
         "myocardiumSolver": "monodomainSolver",
         "ionicModel": "TNNP",

@@ -104,11 +104,8 @@ def test_parse_columnar_reference_singlecell():
 
 
 def test_parse_columnar_reference_rejects_metric_layout():
-    # 'summary cells value 20 0' -> col2 'value' non-numeric expected? expected=20
-    # ok; but 'error Vm L1 0.00025015 1e-6' has variable col fine — the giveaway
-    # is that data_file 'summary'/'error' are not paths, yet columns parse. This
-    # layout is still 5 cols and numeric, so it parses; ensure caller relies on
-    # file-existence at run time. Here we assert it does NOT crash.
+    # The metric layout is still five numeric-tailed columns, so it parses; only
+    # file existence at run time rejects it. This asserts it does not crash.
     points = parse_columnar_reference(BIDOMAIN_REF)
     assert isinstance(points, list)
 
@@ -245,23 +242,14 @@ def test_verify_reproduction_generic_maps_regression_skip(monkeypatch, tmp_path)
     assert "rc=77" in result.detail
 
 
-# check_protocol is monkeypatched out of every verify_reproduction test above,
-# which is how its real body went unexecuted: it computed
-# Path(omnidriver.__file__) with ``omnidriver`` never imported, and a PEP 420
-# namespace package has no __file__ to compute from anyway (recorded
-# 2026-09-18 in the coverage-as-evidence design's "found, not part of this
-# design" list). These call it for real, against the committed protocol.
+# check_protocol is monkeypatched out of every verify_reproduction test above;
+# these call it for real, against the committed protocol.
 
 _SERIES_CASE = "NiedererEtAl2011verification"
 
 
 def _write_series_outputs(case_path, rows) -> None:
-    """Write each protocol row's expected value where the checker reads it.
-
-    One whitespace table per data file: a header of ``time`` plus each
-    variable, then one line per distinct time -- the layout
-    ``read_series_value`` parses.
-    """
+    """Write each row's expected value as the whitespace table ``read_series_value`` parses."""
     by_file: dict[str, dict[float, dict[str, float]]] = {}
     for row in rows:
         by_file.setdefault(row.data_file, {}).setdefault(row.time, {})[row.variable] = row.expected

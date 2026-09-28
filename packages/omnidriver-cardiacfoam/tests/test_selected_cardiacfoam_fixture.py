@@ -196,8 +196,7 @@ def test_committed_manifest_stages_an_unmarked_case_without_source_mutation(
     root, revision = _selected_checkout(tmp_path)
     committed = (root / "tutorials" / "unmarkedCase" / "system" / "controlDict").read_bytes()
     source = selected_source_from_environment(_source_environment(root, revision))
-    # The selected worktree may evolve, but committed mode must read the
-    # named revision rather than silently treating it as a new baseline.
+    # Committed mode must read the named revision, not the evolved worktree.
     (root / "tutorials" / "unmarkedCase" / "system" / "controlDict").write_text(
         "endTime 99;\n"
     )
