@@ -8,6 +8,56 @@ from a ledger or report under `.superpowers/sdd/`, it says so.
 
 ---
 
+## 0. Checkpoint, 2026-09-28 (end of day), `main` at `dc021e0`
+
+This section supersedes sections 1, 8, 9 and the first items of 10 where they
+differ. The rest of the file is the 9ec4e69 review and still holds.
+
+**Clean state.**
+
+| repository | state |
+|---|---|
+| omniD (`svcHeidi/omniD`) | `main` = `origin/main` = `dc021e0`, nothing uncommitted, no other branch or worktree. Superseded local branches were deleted, and patch backups kept in the controller's scratchpad |
+| cardiacFOAM (`solids4foam/cardiacFoam`) | `omnid/tutorials-are-pointers` = `origin`, `c184d702`: every record's native changes. `omnid/scripts` is local, a stopped WIP (see "Next", item 3) |
+| cardiacCore (`svcHeidi/cardiacCore`) | `main` = `origin/main` = `f0fc231`: your fix branch merged, no dataset names, seeds documented. `omnid/records` is local at `6757536`, waiting on your review (see "Next", item 1) |
+
+**Landed since the 9ec4e69 review:**
+
+| what | commit |
+|---|---|
+| Compatibility cleanup: delete list applied, `omnidriver.postprocessing` kept, `DRIVERFOAM_*` → `OMNIDRIVER_*`, `legacy_*` → `absent_*`, single cell always meshes with `blockMesh` | omniD `01133f7`..`da0e8db` |
+| Step S: records take supplied inputs (`--input NAME=PATH`) | omniD `28845ac`..`dc021e0` |
+| Step S: four cardiacCore records (`humanSlab`, byte-identical to the old workflow; three idealized-heart variants), 48/48 conformance | same |
+| Step S: cardiacCore's and core's factory code deleted, net −1,944 lines | same |
+| cardiacCore `main`: fix branch merged, dataset names removed, `.gitignore` covers every local case and every wmake platform directory, seed docs point at `scripts/place_purkinje_seeds.py` | `1b7ebf1`, `9c0c77f`, `f0fc231` |
+| Niederer rerun with exact-point sampling on both solvers: 18/18 cases complete | report in the controller's scratchpad, `niederer-campaign-2026-09-28-report.md` |
+
+**Niederer, current numbers.**
+- **Agreement.** At Δx 0.1 mm and Δt 0.005 ms, P8 is 40.07 ms for openCARP and 45.50 ms for cardiacFOAM. Both are inside the paper's 37.8–48.7 ms, but the two differ by more than the pre-registered 5 ms, so all 9 cross-solver requests fail.
+- **Speed.** cardiacFOAM's solve step is 2.4–7.8× slower than openCARP's at N = 6. openCARP's own timing puts its time in the PDE solve (595 s) against 87 s in its ionic model. cardiacFOAM prints no breakdown. An estimate from `docs/solver-learning/cardiacfoam.md` T puts its ionic model at about 70% of the solve and about 15× openCARP's per node.
+
+**Next, in order:**
+1. **Owner: review cardiacCore `omnid/records`,** then merge it to `main`. It holds:
+   - the three idealized-heart cases, with the mesh in Git LFS;
+   - their regression tests;
+   - the `place_purkinje_seeds.py` change. The script now reads the coordinate convention and uses `RVEndoFaces` under cobiveco. Two risks: it defaults to `apicobasal` when `longitudinalField` is absent, and it skips the outflow-tract search on the idealized mesh.
+
+   The omniD idealized-heart records run from `main` only once this is merged.
+2. **Owner: the five cardiacCore binaries in `/Volumes/OpenFOAM-v2412`.** An agent overwrote them with builds from pre-merge `main`. Rebuild them from current `main`.
+3. **Native post-processing scripts:** point them at `omnidriver.postprocessing` and the sweep layout. This is branch `omnid/scripts`. Only `singleCell/calc_apd.py` and `plot_bueno.py` are deleted; every other script stays.
+4. **The truth layer made first-class:**
+   - fix `source_roots`, so `plan --strict` actually scans the C++;
+   - take `rtst_scanner` out of test-only use;
+   - add one query for "entries of dictionary X for solver Y".
+5. **Declare the environment and machine connections** (sections 4 and 10). Today they are `CLAUDE.md` prose and hand-typed variables.
+6. **Measure cardiacFOAM's speed:** a timing split inside cardiacFOAM (ionic, PDE, I/O) to confirm where it is slower.
+7. **Then,** from section 10:
+   - the solver-descriptions steps: `niedererNVersion` to TOML, argument merging, `run.py` defaults;
+   - SI values with native units per axis;
+   - mesh checks for records;
+   - conformance Task 15;
+   - the electromechanics record, which is the owner's.
+
 ## 1. Summary
 
 **Are most plans finished? Yes.** Of the 15 plans, 13 are done. The other two
