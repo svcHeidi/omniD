@@ -15,18 +15,16 @@ from omnidriver.core.runtime.sweep_runner import MaterializedEntry
 
 
 def test_direct_config_uses_the_selected_plugin_context(tmp_path: Path) -> None:
+    """Step S6 deleted the factory registry ``_load_spec_overrides`` used to
+    check known tutorial keys against (``driver_context.capabilities.tutorials``);
+    it now only refuses the two fixed generic-alias names, needing no
+    ``driver_context`` at all."""
     config_path = tmp_path / "config.json"
     config_path.write_text(json.dumps({"number_cells": [10]}))
-    context = SimpleNamespace(
-        capabilities=SimpleNamespace(
-            tutorials=SimpleNamespace(catalog=lambda: {"registered_tutorials": ()})
-        )
-    )
 
     assert _load_spec_overrides(
         str(config_path),
         "manufacturedBidomain",
-        driver_context=context,
     ) == {"number_cells": [10]}
 
 

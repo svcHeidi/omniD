@@ -10,7 +10,6 @@ from omnidriver.core.plugin_interface import (
     validate_plugin,
 )
 from omnidriver.core.plugin_profile import PluginProfile
-from omnidriver.core.runtime.registry import list_tutorials
 from omnidriver.core.contracts.dictionary import DictEntry
 from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 
@@ -62,11 +61,12 @@ class _Plugin:
     def get_capabilities(self):
         return {}
 
-    def get_tutorial_catalog(self):
-        return {"registered_tutorials": (self._tutorial_name,), "spec_factories": {}}
-
-    def get_tutorial_displays(self):
-        return ()
+    def get_generic_case_factory(self):
+        # A per-instance-distinguishable answer: proves context isolation
+        # the same way the deleted `get_tutorial_catalog`'s per-instance
+        # `registered_tutorials` name used to (step S6).
+        tutorial_name = self._tutorial_name
+        return lambda **_: tutorial_name
 
     def validate_configuration(self, spec):
         return ()
@@ -123,12 +123,16 @@ class _Plugin:
         return None
 
 
+def _named_factory(context) -> str:
+    return context.capabilities.generic_case_factory.factory()()
+
+
 def test_contexts_do_not_share_plugin_selection() -> None:
     alpha = driver_context(_Plugin("example.alpha", "alpha"), source="test")
     beta = driver_context(_Plugin("example.beta", "beta"), source="test")
 
-    assert list_tutorials(alpha) == ["alpha"]
-    assert list_tutorials(beta) == ["beta"]
+    assert _named_factory(alpha) == "alpha"
+    assert _named_factory(beta) == "beta"
     # StackIdentity.to_json() has no singular "id" -- one provider per entry
     # in "providers". Each of these contexts composes a one-provider stack.
     assert alpha.identity.to_json()["providers"][0]["id"] == "example.alpha"
@@ -144,16 +148,11 @@ def test_plugin_contexts_remain_isolated_sequentially_and_concurrently() -> None
         driver_context(_Plugin("example.gamma", "gamma"), source="test"),
         driver_context(_Plugin("example.delta", "delta"), source="test"),
     )
-    expected = (
-        ["alpha"],
-        ["beta"],
-        ["gamma"],
-        list(contexts[-1].capabilities.tutorials.catalog()["registered_tutorials"]),
-    )
+    expected = ("alpha", "beta", "gamma", "delta")
 
-    assert tuple(list_tutorials(context) for context in contexts) == expected
+    assert tuple(_named_factory(context) for context in contexts) == expected
     with ThreadPoolExecutor(max_workers=len(contexts)) as executor:
-        futures = [executor.submit(list_tutorials, context) for context in contexts]
+        futures = [executor.submit(_named_factory, context) for context in contexts]
     assert tuple(future.result() for future in futures) == expected
 
 

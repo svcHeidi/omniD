@@ -85,10 +85,8 @@ def _load_entry_spec_like_a_factory(fake_spec):
         overrides = overrides or {}
         spec = mock.Mock()
         spec.name = fake_spec.name
-        spec.plan_case = fake_spec.plan_case
         spec.metadata = fake_spec.metadata
-        spec.build_cases = fake_spec.build_cases
-        spec.apply_case = fake_spec.apply_case
+        spec.case_mutation = fake_spec.case_mutation
         spec.case_root = (
             Path(overrides["cases_root"]) / overrides["case_dir_name"]
             if "cases_root" in overrides
@@ -369,24 +367,21 @@ def test_entry_case_staging_recovers_prior_case_after_interrupted_promotion(tmp_
     assert not leftovers
 
 
-def test_sweep_plan_entry_mode_materializes_via_apply_case_and_audits(tmp_path):
+def test_sweep_plan_entry_mode_materializes_via_case_mutation_and_audits(tmp_path):
     # Entry-based sweeps target an existing registered tutorial whose
-    # apply_case()/build_cases() mutate its own shared case_root in place
-    # (confirmed empirically for sampleTutorial -- it is not a from-scratch
-    # case_folder). sweep_plan must call spec.build_cases() + spec.apply_case()
-    # directly instead of materialize_case()/build_and_launch, then audit via
+    # case_mutation() mutates its own shared case_root in place (confirmed
+    # empirically for sampleTutorial -- it is not a from-scratch
+    # case_folder). sweep_plan must call spec.case_mutation() directly
+    # instead of materialize_case()/build_and_launch, then audit via
     # strict_plan with the same routed overrides.
     spec_path = tmp_path / "sweep.json"
     _write_entry_spec(spec_path)
 
-    fake_case_config = mock.Mock(case_id="implicit_TNNP_DX0.5")
     fake_spec = mock.Mock()
-    fake_spec.plan_case = None
     # load_entry_spec always records how the entry resolved; a staged
     # case re-resolves differently for a case path than for a tutorial.
     fake_spec.metadata = {"resolution": "registered"}
     fake_spec.case_root = tmp_path / "case_root"
-    fake_spec.build_cases.return_value = [fake_case_config]
 
     fake_report = mock.Mock()
     fake_report.status = "ok"
@@ -407,8 +402,8 @@ def test_sweep_plan_entry_mode_materializes_via_apply_case_and_audits(tmp_path):
         assert args[0] == "sampleTutorial"
         assert "dx_values" in kwargs["overrides"]
         assert "caseId" not in kwargs["overrides"]
-    fake_spec.apply_case.assert_has_calls(
-        [mock.call(fake_spec.case_root, fake_case_config)] * 2
+    fake_spec.case_mutation.assert_has_calls(
+        [mock.call(fake_spec.case_root)] * 2
     )
     assert mock_strict_plan.call_count == 2
     assert result["case_count"] == 2
@@ -442,51 +437,25 @@ def test_a_factory_that_ignores_the_staging_overrides_is_refused(tmp_path):
     assert sorted(p.name for p in source_case_root.iterdir()) == ["authored"]
 
 
-def test_sweep_plan_entry_mode_rejects_axis_combination_resolving_to_multiple_cases(tmp_path):
-    # sweep-run's per-axis-combination model assumes exactly one case per
-    # resolved combination (see route_entry_case_values docstring); a
-    # combination that still fans out inside the tutorial's own build_cases()
-    # (e.g. missing a constraining kwarg like "solvers") must fail loudly as
-    # a per-case error, not silently apply_case() only the first of several.
-    spec_path = tmp_path / "sweep.json"
-    _write_entry_spec(spec_path, values=(0.5,))
-
-    fake_spec = mock.Mock()
-    fake_spec.plan_case = None
-    fake_spec.metadata = {"resolution": "registered"}
-    fake_spec.case_root = tmp_path / "case_root"
-    fake_spec.build_cases.return_value = [mock.Mock(), mock.Mock()]
-
-    with mock.patch("omnidriver.core.runtime.sweep_runner.load_entry_spec", return_value=fake_spec):
-        result = sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=_CTX)
-
-    fake_spec.apply_case.assert_not_called()
-    assert result["cases"][0]["status"] == "failed"
-    assert "2 cases" in result["cases"][0]["materialization_error"]
-
-
 def test_sweep_run_entry_mode_executes_run_document_sequentially(tmp_path):
-    # Because apply_case mutates the tutorial's shared case_root in place,
+    # Because case_mutation mutates the tutorial's shared case_root in place,
     # entry-mode sweep-run must process cases strictly one at a time (never
     # in parallel) -- already guaranteed by sweep_run's plain synchronous
-    # for-loop, verified here by asserting apply_case/subprocess.run calls
+    # for-loop, verified here by asserting case_mutation/subprocess.run calls
     # happen in resolved-case order.
-    # Corrected 2026-09-24: apply_case no longer mutates a shared case_root;
-    # each case is staged and mutated in its own copy, and a factory that
-    # ignores staging is refused. Sequential order still matters and is what
-    # this asserts.
+    # Corrected 2026-09-24: case_mutation no longer mutates a shared
+    # case_root; each case is staged and mutated in its own copy, and a
+    # factory that ignores staging is refused. Sequential order still
+    # matters and is what this asserts.
     spec_path = tmp_path / "sweep.json"
     _write_entry_spec(spec_path)
     output_dir = tmp_path / "out"
 
     call_order = []
-    fake_case_config = mock.Mock(case_id="implicit_TNNP")
     fake_spec = mock.Mock()
-    fake_spec.plan_case = None
     fake_spec.metadata = {"resolution": "registered"}
     fake_spec.case_root = tmp_path / "case_root"
-    fake_spec.build_cases.return_value = [fake_case_config]
-    fake_spec.apply_case.side_effect = lambda *a, **k: call_order.append("apply_case")
+    fake_spec.case_mutation.side_effect = lambda *a, **k: call_order.append("case_mutation")
 
     fake_report = mock.Mock()
     fake_report.status = "ok"
@@ -517,7 +486,7 @@ def test_sweep_run_entry_mode_executes_run_document_sequentially(tmp_path):
          mock.patch("omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run):
         result = sweep_run(spec_path, output_dir=output_dir, driver_context=_CTX)
 
-    assert call_order == ["apply_case", "run", "apply_case", "run"]
+    assert call_order == ["case_mutation", "run", "case_mutation", "run"]
     assert result["completed_count"] == 2
     assert result["failed_count"] == 0
     assert result["postprocess"]["status"] == "not_configured"

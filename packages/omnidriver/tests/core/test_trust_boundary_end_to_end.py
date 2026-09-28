@@ -29,7 +29,7 @@ from conftest import NO_REPO_ROOT, repo_root, skip_without_repo, skip_without_si
 pytestmark = [skip_without_repo, skip_without_single_adapter]
 
 from omnidriver.cli import main
-from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
+from omnidriver.core.runtime.models import TutorialSpec
 from omnidriver.core.runtime.workflow_runner import (
     _resolve_case_cwd,
     _resolve_command,
@@ -89,11 +89,10 @@ def _spec_with_workflow(case_root: Path, *, steps: list[dict]) -> TutorialSpec:
     return TutorialSpec(
         name=case_root.name,
         case_root=case_root,
-        setup_root=case_root,
-        output_dir=case_root / "postProcessing",
-        build_cases=lambda: [CaseConfig(case_id="default", params={})],
-        apply_case=lambda *_args, **_kwargs: None,
+        case_mutation=None,
         metadata={
+            "setup_root": str(case_root),
+            "output_dir": str(case_root / "postProcessing"),
             "entry_name": case_root.name,
             "entry_kind": "case_folder",
             "entry_path": case_root.name,

@@ -15,15 +15,20 @@ it (``sweep_runner``'s ``copytree``) -- not by this factory. When no adapter
 supplies its own mutation callback (the common case: a marker-less folder
 with no recognised dictionary catalog, e.g. the ``controlled-case`` fixture in
 ``test_generic_contract.py::test_controlled_allrun_executes_without_domain_claims``),
-``apply_case`` writes *nothing at all*; it is dispatch machinery, not a
-framework-authored mutation, the same reasoning that excludes declared
-workflow outputs (native solver/meshing output) from this channel. That case
-reports through ``plan_case`` instead, returning ``None`` honestly rather than
-through the deprecated non-reporting ``apply_case`` fallback. When an adapter
-*does* supply a real callback (e.g. cardiacfoam's own generic-case wrapper),
-this module cannot see what that callback writes or whether it already goes
-through the case-write channel, so it is left on ``apply_case`` rather than
-being misreported as channel-compliant.
+the spec's ``case_mutation`` writes *nothing at all*; it is dispatch
+machinery, not a framework-authored mutation, the same reasoning that
+excludes declared workflow outputs (native solver/meshing output) from this
+channel.
+
+**Step S6** (docs/superpowers/specs/2026-09-28-supplied-inputs-design.md):
+``TutorialSpec`` no longer distinguishes a deprecated, non-reporting
+``apply_case`` from a channel-compliant ``plan_case`` -- there is only
+``case_mutation``, called once against the staged case root, and its return
+is whatever the callback itself reports (``None`` for the no-op sentinel
+above; cardiacfoam's own callback also returns ``None``, unchanged, since it
+mutates through ``apply_electro_property_overrides``/
+``apply_physics_property_overrides`` for side effect and reports nothing of
+its own either).
 """
 
 from __future__ import annotations
@@ -34,12 +39,12 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
-from omnidriver.core.specs.common import (
+from omnidriver.core.specs.paths import (
     resolve_run_script_path,
     resolve_spec_paths,
 )
 
-from .models import CaseConfig, TutorialSpec
+from .models import TutorialSpec
 from omnidriver.core.plugin_profile import entrypoint_command
 
 # ``run_case.sh`` ships inside the installed package (``omnidriver/scripts/``),
@@ -58,74 +63,17 @@ RUN_CASE_SCRIPT_RELPATH = (
 DictFileOverrides = Mapping[str, "Mapping[str, Any] | Sequence[Mapping[str, Any]]"]
 
 
-def _merged_dict_file_overrides(
-    item: Mapping[str, Any],
-    default_overrides: Mapping[str, Any],
-) -> dict[str, Any]:
-    """Per-case ``dict_file_overrides``, falling back to the spec-level default.
-
-    A case entry may name only some of the dictionary files; the remaining ones
-    keep whatever the spec-level default declared for them.
-    """
-    merged = dict(default_overrides)
-    merged.update(item.get("dict_file_overrides") or {})
-    return {key: value for key, value in merged.items() if value}
-
-
-def _normalize_case_specs(
-    *,
-    cases: Sequence[Mapping[str, Any]] | None,
-    dict_file_overrides: Mapping[str, Any],
-    dimension: str | None,
-    parallel: bool,
-    touch_case_foam: bool,
-    solver_command: str | Sequence[str] | None,
-    pre_solve_commands: Sequence[str | Sequence[str]],
-) -> list[CaseConfig]:
-    if cases is None:
-        payload = {
-            "dict_file_overrides": dict(dict_file_overrides),
-            "dimension": dimension,
-            "parallel": parallel,
-            "touch_case_foam": touch_case_foam,
-            "solver_command": solver_command,
-            "pre_solve_commands": list(pre_solve_commands),
-        }
-        return [CaseConfig(case_id="default", params=payload)]
-
-    normalized: list[CaseConfig] = []
-    for index, item in enumerate(cases, start=1):
-        case_id = str(item.get("case_id", f"case{index:03d}"))
-        normalized.append(
-            CaseConfig(
-                case_id=case_id,
-                params={
-                    "dict_file_overrides": _merged_dict_file_overrides(
-                        item, dict_file_overrides,
-                    ),
-                    "dimension": item.get("dimension", dimension),
-                    "parallel": bool(item.get("parallel", parallel)),
-                    "touch_case_foam": bool(item.get("touch_case_foam", touch_case_foam)),
-                    "solver_command": item.get("solver_command", solver_command),
-                    "pre_solve_commands": list(item.get("pre_solve_commands", pre_solve_commands)),
-                },
-            )
-        )
-    return normalized
-
-
 def _apply_case(
     case_root: Path,
-    case: CaseConfig,
     *,
     dict_file_relpaths: Mapping[str, Path],
+    dict_file_overrides: Mapping[str, Any],
     mutation_callback,
-) -> None:
-    mutation_callback(
+) -> Any:
+    return mutation_callback(
         case_root,
-        case,
         dict_file_relpaths=dict(dict_file_relpaths),
-        dict_file_overrides=dict(case.params.get("dict_file_overrides") or {}),
+        dict_file_overrides=dict(dict_file_overrides),
     )
 
 
@@ -190,7 +138,6 @@ def make_spec(
     output_dir_name: str | None = None,
     dict_file_relpaths: Mapping[str, str | Path] | None = None,
     dict_file_overrides: DictFileOverrides | None = None,
-    cases: Sequence[Mapping[str, Any]] | None = None,
     dimension: str | None = None,
     parallel: bool = False,
     touch_case_foam: bool = False,
@@ -241,16 +188,6 @@ def make_spec(
         default_output_dir_name=output_convention,
     )
 
-    normalized_cases = _normalize_case_specs(
-        cases=cases,
-        dict_file_overrides=resolved_overrides,
-        dimension=dimension,
-        parallel=parallel,
-        touch_case_foam=touch_case_foam,
-        solver_command=solver_command,
-        pre_solve_commands=normalized_pre_solve,
-    )
-
     # Task 8 (bypass 2), 2026-09-24: a generic case folder declares no
     # catalog (module docstring), so this factory can never produce a
     # ParameterAssignment with a real qualified id, nor RenderedFile bytes of
@@ -258,16 +195,15 @@ def make_spec(
     # supplied" mistake CLAUDE.md names. The one honest claim it can make is
     # "nothing was written", and that claim is true only when no adapter
     # supplied its own callback above -- i.e. ``mutation_callback`` is still
-    # the ``_no_solver_mutation`` sentinel. When an adapter *did* supply a
-    # real callback (e.g. cardiacfoam's ``apply_case_mutation``), core has no
-    # visibility into what it writes or whether that write already goes
-    # through the case-write channel, so that case keeps going through the
-    # deprecated, non-reporting ``apply_case`` fallback rather than being
-    # misreported as a channel-compliant ``None`` via ``plan_case``.
-    mutation_is_genuinely_a_no_op = _apply_case_mutation is _no_solver_mutation
+    # the ``_no_solver_mutation`` sentinel. Step S6: there is no more
+    # deprecated ``apply_case``/channel-compliant ``plan_case`` split to
+    # choose between -- ``case_mutation`` is called once, either way, and its
+    # return (``CaseWriteRecord`` or ``None``) is exactly what the callback
+    # itself reports.
     dispatch_case_mutation = partial(
         _apply_case,
         dict_file_relpaths=resolved_relpaths,
+        dict_file_overrides=resolved_overrides,
         mutation_callback=_apply_case_mutation,
     )
 
@@ -280,7 +216,6 @@ def make_spec(
     primary_relpaths = list(resolved_relpaths.values())[:1]
     generic_case = (
         solver_command is None
-        and cases is None
         and not resolved_overrides
         and not collect_patterns
         and not any((case_root / relpath).exists() for relpath in primary_relpaths)
@@ -289,23 +224,23 @@ def make_spec(
     return TutorialSpec(
         name=case_dir_name,
         case_root=case_root,
-        setup_root=setup_root,
-        output_dir=output_dir,
-        build_cases=lambda: list(normalized_cases),
-        apply_case=None if mutation_is_genuinely_a_no_op else dispatch_case_mutation,
-        plan_case=dispatch_case_mutation if mutation_is_genuinely_a_no_op else None,
+        case_mutation=dispatch_case_mutation,
         metadata={
             "notes": "Core generic case runner for arbitrary tutorial folders.",
             "workflow_dag": workflow_dag,
+            "setup_root": str(setup_root),
+            "output_dir": str(output_dir),
             "dict_file_relpaths": {
                 key: str(value) for key, value in resolved_relpaths.items()
             },
             "run_script_relpath": str(run_script_path),
             "collect_patterns": list(collect_patterns),
-            "case_count": len(normalized_cases),
             "has_default_dict_file_overrides": bool(resolved_overrides),
             "solver_command": list(solver_command) if not isinstance(solver_command, str) and solver_command is not None else solver_command,
             "pre_solve_commands": list(pre_solve_commands or ()),
+            "dimension": dimension,
+            "parallel": parallel,
+            "touch_case_foam": touch_case_foam,
             "generic_case": generic_case,
         },
     )

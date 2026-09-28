@@ -15,7 +15,7 @@ from omnidriver.core import plugin_capabilities
 from omnidriver.core.case_write import CaseWriteRecord, MUTATION_MODES, VALUE_SOURCES
 from omnidriver.core.contracts.dictionary import DictEntry
 from omnidriver.core.introspection import _resolve_proposed_changes, _write_surface
-from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
+from omnidriver.core.runtime.models import TutorialSpec
 
 
 @dataclass
@@ -24,13 +24,15 @@ class _FakeDriverContext:
 
 
 def _spec(metadata: dict | None = None) -> TutorialSpec:
+    # `case_mutation=None`: no resolver for `_resolve_proposed_changes` to
+    # reuse -- every test below that does not build its own spec exercises
+    # the naive key-match fallback, matching this fixture's pre-S6 shape
+    # (`apply_case` only, no `plan_case`; step S6 collapsed both into one
+    # `case_mutation` field, so "no resolver" is now simply `None`).
     return TutorialSpec(
         name="fake",
         case_root=__import__("pathlib").Path("/tmp/fake-case-root-not-touched"),
-        setup_root=__import__("pathlib").Path("/tmp/fake-setup-root-not-touched"),
-        output_dir=__import__("pathlib").Path("/tmp/fake-output-dir-not-touched"),
-        build_cases=lambda: [CaseConfig(case_id="only", params={})],
-        apply_case=lambda case_root, case: None,
+        case_mutation=None,
         metadata=metadata or {},
     )
 
@@ -140,18 +142,18 @@ def test_consumed_is_empty_for_a_spec_with_no_workflow_dag():
     assert described["consumed"] == []
 
 
-def test_a_spec_with_no_plan_case_falls_back_with_a_stated_reason():
-    """Phase 3 Task 9: `_resolve_proposed_changes` requires `spec.plan_case`
+def test_a_spec_with_no_case_mutation_falls_back_with_a_stated_reason():
+    """Phase 3 Task 9: `_resolve_proposed_changes` requires `spec.case_mutation`
     to reuse the real resolver; this fake spec (like every fake spec in this
-    core-only test module) supplies only `apply_case`. The naive key-match
-    fallback must still run -- and say why it, not the richer path,
-    produced the result -- rather than going silently empty."""
+    core-only test module) supplies none. The naive key-match fallback must
+    still run -- and say why it, not the richer path, produced the result --
+    rather than going silently empty."""
     context = _context(_PluginNoWriter())
     described = _write_surface(
         driver_context=context, spec=_spec(), overrides={"$FAKE.deltaT": 1e-4},
     )
     assert described["proposed_changes_source"] == "supplied_qualified_ids_only"
-    assert "no plan_case" in described["proposed_changes_reason"]
+    assert "no case_mutation" in described["proposed_changes_reason"]
     assert described["expected_effects"] == []
     # The fallback path's own items are enriched with an explicit "operation"
     # (Task 9) -- previously absent, since a flat qualified-id match can only
@@ -159,46 +161,21 @@ def test_a_spec_with_no_plan_case_falls_back_with_a_stated_reason():
     assert described["proposed_changes"][0]["operation"] == "set"
 
 
-def _spec_with_plan_case(plan_case, *, case_root=None):
+def _spec_with_case_mutation(case_mutation, *, case_root=None):
     return TutorialSpec(
-        name="fake-with-plan-case",
+        name="fake-with-case-mutation",
         case_root=case_root or __import__("pathlib").Path(
             "/tmp/fake-plan-case-root-does-not-exist",
         ),
-        setup_root=__import__("pathlib").Path("/tmp/fake-setup-root-not-touched"),
-        output_dir=__import__("pathlib").Path("/tmp/fake-output-dir-not-touched"),
-        build_cases=lambda: [CaseConfig(case_id="only", params={})],
-        plan_case=plan_case,
+        case_mutation=case_mutation,
     )
 
 
-def test_a_sweep_that_has_not_collapsed_to_one_case_reports_a_reason():
-    def _build_cases():
-        return [
-            CaseConfig(case_id="a", params={}),
-            CaseConfig(case_id="b", params={}),
-        ]
-
-    spec = TutorialSpec(
-        name="fake-multi-case",
-        case_root=__import__("pathlib").Path("/tmp/fake-plan-case-root-does-not-exist"),
-        setup_root=__import__("pathlib").Path("/tmp/fake-setup-root-not-touched"),
-        output_dir=__import__("pathlib").Path("/tmp/fake-output-dir-not-touched"),
-        build_cases=_build_cases,
-        plan_case=lambda case_root, case: None,
-    )
-    context = _context(_PluginNoWriter())
-    proposed, effects, reason = _resolve_proposed_changes(driver_context=context, spec=spec)
-    assert proposed is None
-    assert effects == ()
-    assert "resolved to 2 cases" in reason
-
-
-def test_a_staged_plan_case_that_raises_reports_a_reason_not_a_crash():
-    def _plan_case(case_root, case):
+def test_a_staged_case_mutation_that_raises_reports_a_reason_not_a_crash():
+    def _case_mutation(case_root):
         raise ValueError("this tutorial's own resolution refused something")
 
-    spec = _spec_with_plan_case(_plan_case)
+    spec = _spec_with_case_mutation(_case_mutation)
     context = _context(_PluginNoWriter())
     proposed, effects, reason = _resolve_proposed_changes(driver_context=context, spec=spec)
     assert proposed is None
@@ -206,11 +183,11 @@ def test_a_staged_plan_case_that_raises_reports_a_reason_not_a_crash():
     assert "this tutorial's own resolution refused something" in reason
 
 
-def test_a_plan_case_no_op_is_an_empty_list_not_a_reason():
-    """`plan_case` returning `None` is the documented no-op contract
+def test_a_case_mutation_no_op_is_an_empty_list_not_a_reason():
+    """`case_mutation` returning `None` is the documented no-op contract
     (`commit_case_overrides`'s own docstring) -- a legitimate, different
     answer from "could not be determined"."""
-    spec = _spec_with_plan_case(lambda case_root, case: None)
+    spec = _spec_with_case_mutation(lambda case_root: None)
     context = _context(_PluginNoWriter())
     proposed, effects, reason = _resolve_proposed_changes(driver_context=context, spec=spec)
     assert proposed == []
@@ -219,7 +196,7 @@ def test_a_plan_case_no_op_is_an_empty_list_not_a_reason():
 
 
 def test_a_real_case_write_record_is_read_into_proposed_changes():
-    def _plan_case(case_root, case):
+    def _case_mutation(case_root):
         return CaseWriteRecord(
             transaction_id="t", plan_id="p", plan_digest="d",
             committed=(), evidence=(), status="committed",
@@ -232,7 +209,7 @@ def test_a_real_case_write_record_is_read_into_proposed_changes():
             expected_effects=("set '$FAKE.deltaT' in system/controlDict",),
         )
 
-    spec = _spec_with_plan_case(_plan_case)
+    spec = _spec_with_case_mutation(_case_mutation)
     context = _context(_PluginNoWriter())
     proposed, effects, reason = _resolve_proposed_changes(driver_context=context, spec=spec)
     assert reason == ""
@@ -256,8 +233,11 @@ def test_a_nested_parameter_value_reaches_describe_as_plain_json(tmp_path, monke
     that undoes the freeze. A scalar value (the test above) cannot see this.
 
     Runs the real public edge -- `describe_entry` then `json.dumps`, exactly
-    the CLI's call -- under a `MinimalTestPlugin` whose tutorial catalog
-    supplies the spec, so nothing here is cardiac.
+    the CLI's call -- under a `MinimalTestPlugin` whose ``get_generic_case_factory``
+    supplies the spec (step S6 deleted the factory-tutorial catalog this test
+    used to register through; a real case folder plus this plugin's own
+    ``get_generic_case_factory`` override is the equivalent surviving path,
+    so nothing here is cardiac).
     """
     from pathlib import Path
     import json
@@ -270,7 +250,7 @@ def test_a_nested_parameter_value_reaches_describe_as_plain_json(tmp_path, monke
     monkeypatch.setenv("SKIP_GEOMETRY_DIAGNOSTICS", "1")
     nested_value = {"dimensions": [0, 1, -1], "value": [1.5, 0.0, 2.5]}
 
-    def _plan_case(case_root, case):
+    def _case_mutation(case_root):
         return CaseWriteRecord(
             transaction_id="t", plan_id="p", plan_digest="d",
             committed=(), evidence=(), status="committed",
@@ -283,22 +263,33 @@ def test_a_nested_parameter_value_reaches_describe_as_plain_json(tmp_path, monke
             expected_effects=("set '$GENERIC.tensor' in system/generic",),
         )
 
-    def _make_spec(*, cases_root: str | Path) -> TutorialSpec:
+    def _make_spec(*, cases_root: str, case_dir_name: str, **_ignored) -> TutorialSpec:
+        case_root = Path(cases_root) / case_dir_name
         return TutorialSpec(
             name="nestedValue",
-            case_root=Path(cases_root) / "nestedValue",
-            setup_root=Path(cases_root) / "nestedValue",
-            output_dir=Path(cases_root) / "outputs",
-            build_cases=lambda: [CaseConfig(case_id="only", params={})],
-            plan_case=_plan_case,
+            case_root=case_root,
+            case_mutation=_case_mutation,
+            metadata={
+                "setup_root": str(case_root),
+                "output_dir": str(Path(cases_root) / "outputs"),
+            },
         )
 
     class _NestedValuePlugin(MinimalTestPlugin):
-        def get_tutorial_catalog(self):
-            return {
-                "registered_tutorials": ("nestedValue",),
-                "spec_factories": {"nestedValue": _make_spec},
-            }
+        def get_generic_case_factory(self):
+            return _make_spec
+
+        def has_case_marker(self, case_root) -> bool:
+            # Marks only the one real case folder as this plugin's own, so
+            # `resolve_entry` prefers this factory over core's neutral
+            # default -- the same role a real dictionary-file marker plays
+            # for a solver adapter. Must not match `cases_root` itself, or
+            # the case-directory walk (`_iter_case_directories_recursive`)
+            # stops there instead of descending into the real case folder.
+            return Path(case_root).name == "nestedValue"
+
+    case_root = tmp_path / "nestedValue"
+    case_root.mkdir()
 
     payload = describe_entry(
         "nestedValue",

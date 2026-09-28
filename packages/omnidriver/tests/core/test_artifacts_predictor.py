@@ -23,7 +23,6 @@ pytestmark = skip_without_monorepo
 
 from omnidriver.core.runtime.artifacts import predict_data_artifacts
 from omnidriver.core.runtime.models import (
-    CaseConfig,
     DataArtifact,
     TutorialSpec,
     expand_path_pattern,
@@ -34,18 +33,17 @@ def _make_spec(
     case_root: Path,
     *,
     expected_artifacts: tuple[DataArtifact, ...] = (),
-    cases: tuple[CaseConfig, ...] = (CaseConfig("only", {}),),
 ) -> TutorialSpec:
-    metadata: dict[str, object] = {}
+    metadata: dict[str, object] = {
+        "setup_root": str(case_root),
+        "output_dir": str(case_root / "output"),
+    }
     if expected_artifacts:
         metadata["expected_artifacts"] = expected_artifacts
     return TutorialSpec(
         name="fixture",
         case_root=case_root,
-        setup_root=case_root,
-        output_dir=case_root / "output",
-        build_cases=lambda: list(cases),
-        apply_case=lambda _c, _case: None,
+        case_mutation=None,
         metadata=metadata,
     )
 
@@ -727,11 +725,10 @@ class TestPredictorComposesUtilityProduces(unittest.TestCase):
             spec_with_dag = TutorialSpec(
                 name=spec.name,
                 case_root=spec.case_root,
-                setup_root=spec.setup_root,
-                output_dir=spec.output_dir,
-                build_cases=spec.build_cases,
-                apply_case=spec.apply_case,
+                case_mutation=spec.case_mutation,
                 metadata={
+                    "setup_root": spec.metadata["setup_root"],
+                    "output_dir": spec.metadata["output_dir"],
                     "workflow_dag": {
                         "steps": [
                             {"id": "solve", "command": "cardiacFoam",
@@ -774,11 +771,10 @@ class TestPredictorComposesUtilityProduces(unittest.TestCase):
             spec_with_dag = TutorialSpec(
                 name=base.name,
                 case_root=base.case_root,
-                setup_root=base.setup_root,
-                output_dir=base.output_dir,
-                build_cases=base.build_cases,
-                apply_case=base.apply_case,
+                case_mutation=base.case_mutation,
                 metadata={
+                    "setup_root": base.metadata["setup_root"],
+                    "output_dir": base.metadata["output_dir"],
                     "workflow_dag": {
                         "steps": [
                             {"id": "mesh", "command": "blockMesh",

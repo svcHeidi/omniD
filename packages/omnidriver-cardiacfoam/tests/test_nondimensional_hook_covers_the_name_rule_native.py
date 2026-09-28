@@ -18,7 +18,6 @@ import pytest
 
 from omnidriver.core.plugin_discovery import load_discovered_plugin
 from omnidriver.core.runtime.record_execution import record_case_spec
-from omnidriver.core.runtime.registry import list_tutorials, load_entry_spec
 
 pytestmark = pytest.mark.native
 
@@ -48,11 +47,9 @@ def _name_rule(spec) -> bool:
 def test_every_case_the_name_rule_exempted_is_exempted_by_the_hook():
     root = _native_tutorials_root()
     ctx = load_discovered_plugin("cardiacfoam")
+    # Step S6 deleted the factory registry (`list_tutorials`/`load_entry_spec`
+    # over it): every case this proved anything about is a tutorial record now.
     specs = [
-        load_entry_spec(name, overrides={"cases_root": str(root)}, driver_context=ctx)
-        for name in list_tutorials(ctx)
-    ]
-    specs += [
         record_case_spec(
             record, case_id=name, staged_case_root=root / record.native_case_relpath,
             workflow_step_ids=(), command_arguments={},

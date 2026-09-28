@@ -107,10 +107,10 @@ def _output_dir_prefix(spec: TutorialSpec) -> str:
     """The spec's output directory, as a case-relative POSIX prefix.
 
     ``path_pattern`` is case-relative (see ``models.DataArtifact``), and core
-    writes its own state and logs under ``spec.output_dir`` -- never under a
-    fixed ``postProcessing/``. Those two facts were previously connected by a
-    string literal, so overriding ``output_dir_name`` moved the files and left
-    the prediction behind.
+    writes its own state and logs under ``spec.metadata["output_dir"]`` --
+    never under a fixed ``postProcessing/``. Those two facts were previously
+    connected by a string literal, so overriding ``output_dir_name`` moved the
+    files and left the prediction behind.
 
     ``resolve_spec_paths`` builds ``output_dir`` as ``case_root / name``, so
     the relative form normally exists. An absolute ``output_dir_name`` escapes
@@ -118,8 +118,8 @@ def _output_dir_prefix(spec: TutorialSpec) -> str:
     nothing rather than predict a wrong path.
     """
     try:
-        return Path(spec.output_dir).relative_to(Path(spec.case_root)).as_posix()
-    except ValueError:
+        return Path(spec.metadata["output_dir"]).relative_to(Path(spec.case_root)).as_posix()
+    except (ValueError, KeyError):
         return ""
 
 

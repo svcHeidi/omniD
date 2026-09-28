@@ -42,12 +42,10 @@ from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 from omnidriver.cardiacfoam.active_tension_catalog import ACTIVE_TENSION_MODEL_CATALOG
 from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG
 from omnidriver.cardiacfoam.solver_coupling import SOLVER_COMPATIBILITY_RULES
-from omnidriver.core.runtime.registry import list_tutorials
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 
 if TYPE_CHECKING:
-    from omnidriver.core.runtime.models import TutorialSpec, CaseConfig, DataArtifact
-    from omnidriver.core.tutorials_display import TutorialDisplay
+    from omnidriver.core.runtime.models import TutorialSpec, DataArtifact
     from pathlib import Path
 
 
@@ -392,23 +390,14 @@ class CardiacFoamPlugin:
 
         return TUTORIAL_RECORDS
 
-    def get_tutorial_catalog(self) -> dict:
-        # No factory tutorial survives (tutorials-are-pointers step C,
-        # 2026-09-27): every one migrated onto a tutorial record, and
-        # electromechanics (the last holdout) was deleted outright rather
-        # than migrated -- see ``.superpowers/sdd/legacy-map.md``. Same
-        # empty shape openCARP's plugin already returns for these two keys.
+    def get_generic_case_factory(self):
+        # Step S6 (2026-09-28): replaces the deleted ``get_tutorial_catalog``'s
+        # smuggled ``"make_generic_case_spec"`` key -- this plugin's own
+        # marker-aware case-folder wrapper, supplying cardiacFOAM's dictionary
+        # files and mutation callback in place of core's neutral default.
         from omnidriver.cardiacfoam.generic_case import make_generic_case_spec
 
-        return {
-            "spec_factories": {},
-            "registered_tutorials": (),
-            "make_generic_case_spec": make_generic_case_spec,
-        }
-
-    def get_tutorial_displays(self) -> tuple[TutorialDisplay, ...]:
-        from omnidriver.cardiacfoam.tutorial_displays import TUTORIALS
-        return TUTORIALS
+        return make_generic_case_spec
 
     def validate_configuration(self, spec: TutorialSpec) -> tuple[StrictDiagnostic, ...]:
         from pathlib import Path

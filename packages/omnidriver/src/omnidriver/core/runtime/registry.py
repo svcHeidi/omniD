@@ -35,7 +35,6 @@ SpecFactory = Callable[..., TutorialSpec]
 
 
 ENTRY_KIND_VALUES = (
-    "registered_tutorial",
     "case_folder",
     "tutorial_record",
 )
@@ -113,46 +112,6 @@ def _iter_case_directories_recursive(
     return discovered
 
 
-def _registered_tutorial_entry(
-    tutorial: str,
-    cases_root: Path,
-    driver_context: "DriverContext | None" = None,
-) -> dict[str, object]:
-    factory = _normalized_registry(driver_context)[tutorial.casefold()]
-    try:
-        spec = factory(cases_root=cases_root)
-    except Exception:
-        # Cataloging is best-effort: describe_entry() derives cases_root
-        # from the *queried* entry's own case_root parent (see introspection.
-        # describe_entry), which does not necessarily hold every other
-        # registered tutorial's case directory -- e.g. singleCell nests one
-        # level deeper than the manufactured-solution tutorials. A factory
-        # that can't build its spec under this particular root (missing
-        # case files, wrong nesting, ...) is simply not runnable from here;
-        # that must not crash the listing for every other tutorial.
-        return {
-            "entry_name": tutorial,
-            "entry_kind": "registered_tutorial",
-            "entry_path": tutorial,
-            "is_runnable": False,
-            "source_type": "spec_factory",
-            "workflow_family": None,
-        }
-    case_root = Path(spec.case_root)
-    try:
-        entry_path = str(case_root.relative_to(cases_root))
-    except ValueError:
-        entry_path = case_root.name
-    return {
-        "entry_name": tutorial,
-        "entry_kind": "registered_tutorial",
-        "entry_path": entry_path,
-        "is_runnable": True,
-        "source_type": "spec_factory",
-        "workflow_family": None,
-    }
-
-
 def _classify_case_entry(
     case_root: Path,
     cases_root: Path,
@@ -185,14 +144,9 @@ def _entry_catalog_for_root(
     driver_context: "DriverContext",
 ) -> list[dict[str, object]]:
     entries: list[dict[str, object]] = [
-        _registered_tutorial_entry(tutorial, cases_root, driver_context)
-        for tutorial in list_tutorials(driver_context)
-    ]
-    entries.extend(
         _tutorial_record_entry(name, record)
         for name, record in (driver_context.capabilities.tutorial_records.catalog() or {}).items()
-    )
-    known_registered = {tutorial.casefold() for tutorial in list_tutorials(driver_context)}
+    ]
     for case_root in _iter_case_directories_recursive(cases_root, driver_context):
         classified = _classify_case_entry(case_root, cases_root, driver_context)
         entries.append(classified)
@@ -226,23 +180,6 @@ def list_case_directories(
     )
 
 
-def list_available_tutorials(
-    cases_root: Path | None = None,
-    *,
-    driver_context: "DriverContext | None" = None,
-) -> list[str]:
-    available = list_tutorials(driver_context)
-    known = {name.casefold() for name in available}
-    for case_dir in list_case_directories(
-        cases_root, driver_context=driver_context,
-    ):
-        if case_dir.casefold() in known:
-            continue
-        available.append(case_dir)
-        known.add(case_dir.casefold())
-    return available
-
-
 def list_entries(
     cases_root: Path | None = None,
     *,
@@ -256,19 +193,6 @@ def list_entries(
 
 
 
-
-
-def load_tutorial_spec(
-    name: str,
-    overrides: dict | None = None,
-    *,
-    driver_context: "DriverContext | None" = None,
-) -> TutorialSpec:
-    resolution = resolve_tutorial(name, overrides=overrides, driver_context=driver_context)
-    spec = _materialize_resolved_entry(
-        resolution, driver_context=driver_context, consumer="load_tutorial_spec",
-    )
-    return _with_entry_metadata(spec, resolution, driver_context=driver_context)
 
 
 def load_entry_spec(
@@ -433,11 +357,11 @@ def classify_entry(
     cases_root: Path | None,
     driver_context: "DriverContext",
 ) -> EntryClassification:
-    """Classify ``name`` among a literal case path (relative to cwd), a
-    tutorial record, and a registered (factory) tutorial -- refusing, BY
-    NAME, every ambiguity a tutorial record can have with each of the other
-    two, plus a same-named case folder under ``cases_root`` (design: "a
-    record must never be silently shadowed... one name must not name both").
+    """Classify ``name`` among a literal case path (relative to cwd) and a
+    tutorial record -- refusing, BY NAME, every ambiguity a tutorial record
+    can have with a same-named case path or case folder under ``cases_root``
+    (design: "a record must never be silently shadowed... one name must not
+    name both").
 
     ``cases_root=None`` skips only the case-folder-under-cases_root check --
     there is no root to search yet (used when a sweep's ``base`` has not
@@ -475,15 +399,6 @@ def classify_entry(
             f"Entry '{key}' is ambiguous: it is registered as a "
             "tutorial record AND names an existing case path "
             f"({case_path}); one name must not name both"
-        )
-
-    normalized_registry = _normalized_registry(driver_context)
-    is_factory = normalized_key in normalized_registry
-    if is_record and is_factory:
-        raise KeyError(
-            f"Entry '{key}' is ambiguous: it is registered as both a "
-            "tutorial record and a factory tutorial (spec_factories); "
-            "one name must not name both"
         )
 
     if is_record and cases_root is not None:
@@ -525,7 +440,6 @@ def resolve_entry(
 
     key = name.strip()
     normalized_key = key.casefold()
-    normalized_registry = _normalized_registry(driver_context)
     incoming_overrides = dict(overrides or {})
 
     if entry_kind is not None and entry_kind not in ENTRY_KIND_VALUES:
@@ -564,9 +478,7 @@ def resolve_entry(
         case_overrides = dict(incoming_overrides)
         case_overrides["cases_root"] = str(candidate.parent)
         case_overrides["case_dir_name"] = candidate.name
-        plugin_factory = _get_plugin_tutorials(driver_context).get(
-            "make_generic_case_spec",
-        )
+        plugin_factory = driver_context.capabilities.generic_case_factory.factory()
         factory = (
             plugin_factory
             if plugin_factory is not None
@@ -591,12 +503,11 @@ def resolve_entry(
         }
 
     # Tutorial records (docs/superpowers/specs/2026-09-24-tutorials-are-
-    # pointers-design.md §3) are dispatched EXPLICITLY, alongside the factory
-    # registry and a bare case path -- never tried as one kind and silently
-    # reinterpreted as another. A name registered as both a record and a
-    # factory (or a case path, or a case folder) is refused outright rather
-    # than picking one by search order -- `classify_entry` already checked
-    # that above.
+    # pointers-design.md §3) are dispatched EXPLICITLY, alongside a bare case
+    # path -- never tried as one kind and silently reinterpreted as another.
+    # A name registered as both a record and a case path (or a case folder)
+    # is refused outright rather than picking one by search order --
+    # `classify_entry` already checked that above.
     if classification.kind == "tutorial_record":
         record = classification.record
         return {
@@ -613,22 +524,6 @@ def resolve_entry(
             "workflow_family": None,
         }
 
-    if entry_kind in {None, "registered_tutorial"} and normalized_key in normalized_registry:
-        return {
-            "resolution": "registered",
-            "requested_name": key,
-            "requested_entry_kind": entry_kind,
-            "resolved_name": key,
-            "factory": normalized_registry[normalized_key],
-            "factory_overrides": incoming_overrides,
-            "entry_name": key,
-            "entry_kind": "registered_tutorial",
-            "entry_path": _registered_tutorial_entry(key, cases_root, driver_context)["entry_path"],
-            "is_runnable": True,
-            "source_type": "spec_factory",
-            "workflow_family": None,
-        }
-
     matched_entry = _match_entry(key, entry_kind, cases_root, driver_context)
     if matched_entry is not None:
         generic_overrides = dict(incoming_overrides)
@@ -637,7 +532,7 @@ def resolve_entry(
         # Let the selected adapter decide whether the folder has a domain
         # marker. Otherwise use Core's generic case-folder factory.
         generic_factory = (
-            _get_plugin_tutorials(driver_context).get("make_generic_case_spec")
+            driver_context.capabilities.generic_case_factory.factory()
             if driver_context.capabilities.case_compatibility.has_case_marker(
                 CaseCompatibilityRequest(matched_case_root),
             )
@@ -674,29 +569,8 @@ def resolve_entry(
             "workflow_family": None,
         }
 
-    valid = ", ".join(list_tutorials(driver_context))
     raise KeyError(
-        f"Unknown entry '{name}'. Valid registered tutorials: {valid}. "
-        "You can also pass any existing tutorial case folder or workflow entry path."
+        f"Unknown entry '{name}'. "
+        "Pass an existing tutorial case folder, workflow entry path, or "
+        "tutorial record name."
     )
-
-
-def resolve_tutorial(
-    name: str,
-    overrides: dict | None = None,
-    *,
-    driver_context: "DriverContext | None" = None,
-) -> dict[str, object]:
-    return resolve_entry(name, overrides=overrides, driver_context=driver_context)
-
-
-def _get_plugin_tutorials(driver_context: "DriverContext"):
-    return driver_context.capabilities.tutorials.catalog()
-
-def _normalized_registry(driver_context: "DriverContext | None" = None) -> dict[str, object]:
-    spec_factories = _get_plugin_tutorials(driver_context).get("spec_factories", {})
-    return {name.casefold(): factory for name, factory in spec_factories.items()}
-
-def list_tutorials(driver_context: "DriverContext | None" = None) -> list[str]:
-    registered = _get_plugin_tutorials(driver_context).get("registered_tutorials", ())
-    return list(registered)

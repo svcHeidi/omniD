@@ -25,14 +25,13 @@ DEFAULT_PHYSICS_PROPERTIES_RELPATH = Path("constant/physicsProperties")
 
 def apply_case_mutation(
     case_root: Path,
-    case,
     *,
     dict_file_relpaths: Mapping[str, str | Path] | None = None,
     dict_file_overrides: Mapping[str, Any] | None = None,
 ) -> None:
-    # The overrides now arrive explicitly rather than being dug out of
-    # ``case.params``; the case is still part of the callback contract.
-    del case
+    # Step S6: the overrides arrive explicitly; there is no ``CaseConfig``
+    # left to dig them out of, and no second case to distinguish this one
+    # from (TutorialSpec is always exactly one case now).
     relpaths = dict(dict_file_relpaths or {})
     overrides = dict(dict_file_overrides or {})
 

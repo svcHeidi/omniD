@@ -9,17 +9,15 @@ if TYPE_CHECKING:
     from .plugin_interface import DriverContext
 
 
-from .runtime.models import CaseConfig, TutorialSpec, invoke_case_mutation
+from .runtime.models import TutorialSpec
 from .runtime.registry import (
     list_entries,
-    list_available_tutorials,
     list_case_directories,
-    list_tutorials,
     resolve_entry,
 )
 from .runtime.execution_context import resolve_execution_context
+from .plugin_profile import is_environment_role
 from omnidriver.core.strict_planning import _run_launch_description
-from omnidriver.core.tutorial_contracts import describe_tutorial_contract
 
 COMMON_OVERRIDE_KEYS = (
     "case_dir_name",
@@ -30,8 +28,6 @@ COMMON_OVERRIDE_KEYS = (
     "dict_file_overrides",
     "postprocess_strict_artifacts",
 )
-
-SPECIAL_TUTORIAL_ALIASES = ("genericCase", "randomCase")
 
 
 def _serialize(value: Any) -> Any:
@@ -86,28 +82,56 @@ def _describe_factory(factory: object) -> dict[str, Any]:
     }
 
 
-def _describe_cases(cases: list[CaseConfig]) -> dict[str, Any]:
-    return {
-        "count": len(cases),
-        "items": [
-            {
-                "case_id": case.case_id,
-                "params": _serialize(case.params),
-            }
-            for case in cases
-        ],
-    }
-
-
 def _describe_spec(spec: TutorialSpec) -> dict[str, Any]:
-    cases = spec.build_cases()
     return {
         "name": spec.name,
         "case_root": str(spec.case_root),
-        "setup_root": str(spec.setup_root),
-        "output_dir": str(spec.output_dir),
+        "setup_root": str(spec.metadata.get("setup_root", spec.case_root)),
+        "output_dir": str(spec.metadata.get("output_dir", spec.case_root)),
         "metadata": _serialize(spec.metadata),
-        "cases": _describe_cases(cases),
+    }
+
+
+def _existing_relpaths(case_root: Path, candidates: tuple[str, ...]) -> list[str]:
+    return [relpath for relpath in candidates if (case_root / relpath).exists()]
+
+
+def _declared_case_files(
+    spec: TutorialSpec, *, driver_context: "DriverContext",
+) -> dict[str, Any]:
+    """Which of the profile's declared case files this case actually has,
+    split core's own (``plugin``/``case`` namespaces) from the active
+    environment's (every other namespace) -- a fact about the resolved
+    entry's declared profile, not about a factory (step S6 deleted the
+    factory-only ``tutorial_contracts.py`` this used to live in, along with
+    the ``case_parameters`` key it also carried, which needed `build_cases()`;
+    a spec is always exactly one case now, so there is nothing left to
+    enumerate there). Split on the profile's own ``role``, not on a path
+    prefix: the prefix would make core re-derive plugin semantics from a
+    string, and would misfile a plugin-owned dictionary that happens to live
+    under system/ (or a required initial-condition file that does not).
+    ``is_environment_role`` rather than a literal ``openfoam.`` prefix: the
+    escape tier admits other environments, and a FEniCS plugin's
+    ``x-fenics.mesh_file`` is environment-owned in exactly the sense this
+    split means. A prefix test files it under core's own required inputs.
+    """
+    case_root = spec.case_root
+    required_rules = driver_context.capabilities.case_files.required_rules()
+    core_required_files = tuple(
+        rule.path for rule in required_rules if not is_environment_role(rule.role)
+    )
+    solver_required_files = tuple(
+        rule.path for rule in required_rules if is_environment_role(rule.role)
+    )
+    conditional_files = tuple(driver_context.capabilities.case_files.conditional_files())
+    declared_files = tuple(
+        rule.path for rule in driver_context.capabilities.case_files.all_rules()
+    )
+    return {
+        "core_required_files": _existing_relpaths(case_root, core_required_files),
+        "solver_required_files": _existing_relpaths(case_root, solver_required_files),
+        "conditional_files": _existing_relpaths(case_root, conditional_files),
+        "declared_files": _existing_relpaths(case_root, declared_files),
     }
 
 
@@ -187,64 +211,53 @@ def _resolve_proposed_changes(
     so core may not hardcode a mapping between them (the plan's own
     constraint).
 
-    **Evaluated, not assumed: reusing `spec.plan_case` beats a declared
+    **Evaluated, not assumed: reusing `spec.case_mutation` beats a declared
     kwarg-to-qualified-id seam.** `spec` here is already the resolved,
     materialized spec `describe_entry` built from the caller's real
-    overrides (`_materialize_resolved_entry`) -- `spec.plan_case` is already
-    the tutorial's own bound resolution closure, carrying every kwarg the
-    caller named. Calling it needs no second, hand-maintained mapping at
-    all, and no per-tutorial edit: every migrated tutorial's `plan_case`
-    already has this exact two-argument shape (`PlanCaseFn`).
+    overrides (`_materialize_resolved_entry`) -- `spec.case_mutation` is
+    already the tutorial's own bound resolution closure, carrying every
+    kwarg the caller named. Calling it needs no second, hand-maintained
+    mapping at all, and no per-tutorial edit: every spec's `case_mutation`
+    already has this exact one-argument shape (`CaseMutationFn`; step S6
+    dropped the deprecated, non-reporting `apply_case` this used to have to
+    check for, and the `build_cases()`/one-case-only check -- a spec is
+    always exactly one case now).
 
     **The purity question this evaluation had to answer first: what does
-    calling it actually touch?** `plan_case` is not a pure resolver -- it
-    calls `commit_case_overrides`/`apply_input_overrides_planned`, which
+    calling it actually touch?** `case_mutation` is not a pure resolver --
+    it calls `commit_case_overrides`/`apply_input_overrides_planned`, which
     really commits through `commit_case_write` (journal, atomic replace).
     Calling it against the real `spec.case_root` would be a real, unaudited
     write from a read-only command. So this never passes `spec.case_root`
     itself: it stages a disposable clone in a fresh temporary directory
     (reusing `sweep_runner._stage_entry_case`, the exact mechanism a real
     sweep run already uses to isolate one case before mutating it -- not a
-    second copy of that logic) and calls `plan_case` against the clone. The
-    real `case_root` is read only by the staging copy step (when it exists
-    at all) and is never written; the caller of this function is expected
-    to (and this module's own tests do) prove that with a directory
-    snapshot, not merely assert it.
+    second copy of that logic) and calls `case_mutation` against the clone.
+    The real `case_root` is read only by the staging copy step (when it
+    exists at all) and is never written; the caller of this function is
+    expected to (and this module's own tests do) prove that with a
+    directory snapshot, not merely assert it.
 
     Returns ``(proposed_changes, expected_effects, reason)``:
 
     - ``proposed_changes`` is ``None`` when this could not be computed --
-      ``reason`` names why (no `plan_case`, a sweep that has not collapsed
-      to one case, or the staged preview itself raising), the same "state a
-      reason, never omit silently" policy `modes` already applies below.
-      An empty list is the legitimate, different answer "resolved cleanly,
-      and there is nothing to write" (`plan_case` returning `None` -- the
-      same no-op contract `commit_case_overrides` documents).
+      ``reason`` names why (no `case_mutation`, or the staged preview itself
+      raising), the same "state a reason, never omit silently" policy
+      `modes` already applies below. An empty list is the legitimate,
+      different answer "resolved cleanly, and there is nothing to write"
+      (`case_mutation` returning `None` -- the same no-op contract
+      `commit_case_overrides` documents).
     - ``expected_effects`` is `ResolvedMutation.expected_effects` (Task 1's
       finding: computed by every producer, read by nothing until this) as
       copied onto the committed `CaseWriteRecord`, covering targets with no
       single qualified id at all (a whole-block removal, a hex-line
       rewrite) that `proposed_changes` itself cannot address.
     """
-    if spec.plan_case is None:
+    if spec.case_mutation is None:
         return (
             None, (),
-            "this spec has no plan_case; only apply_case, which does not "
-            "report what it writes (or whether it goes through the case-write "
-            "channel at all)",
+            "this spec has no case_mutation; there is nothing to preview",
         )
-    try:
-        cases = spec.build_cases()
-    except Exception as exc:  # noqa: BLE001 -- reported as a reason, not raised
-        return None, (), f"spec.build_cases() raised: {exc}"
-    if len(cases) != 1:
-        return (
-            None, (),
-            f"build_cases() resolved to {len(cases)} cases; a proposed-changes "
-            f"preview needs exactly one case (add enough overrides to collapse "
-            f"the sweep to a single case)"
-        )
-    case = cases[0]
 
     import tempfile
 
@@ -259,9 +272,9 @@ def _resolve_proposed_changes(
                 )
             else:
                 staged_case_root.mkdir(parents=True, exist_ok=True)
-            record = invoke_case_mutation(spec, staged_case_root, case)
+            record = spec.case_mutation(staged_case_root)
         except Exception as exc:  # noqa: BLE001 -- reported as a reason, not raised
-            return None, (), f"the staged plan_case preview raised: {exc}"
+            return None, (), f"the staged case_mutation preview raised: {exc}"
 
     if record is None:
         # A genuine, legitimate no-op (`commit_case_overrides`'s own
@@ -304,7 +317,7 @@ def _write_surface(
     `modes` comes from `case_writer.supported_modes()`.
 
     **`proposed_changes` (Phase 3 Task 9, 2026-09-24): reuses the spec's own
-    `plan_case`, run against a disposable staged clone -- see
+    `case_mutation`, run against a disposable staged clone -- see
     `_resolve_proposed_changes`.** When that succeeds, its output -- the
     same validated `ParameterAssignment`s the real channel would write from
     -- replaces the naive key-match below entirely, because it is strictly
@@ -313,8 +326,8 @@ def _write_surface(
     with a catalog-shaped key.
 
     **The naive match survives as the stated fallback, but only when there is
-    no resolver at all.** A spec with no `plan_case` (not yet migrated onto
-    the channel) has no resolver to call, so `proposed_changes` falls back to
+    no resolver at all.** A spec with no `case_mutation` (nothing to write)
+    has no resolver to call, so `proposed_changes` falls back to
     the `mutable` entries whose qualified id the caller's raw `overrides`
     happens to name directly -- correct only for a caller sophisticated
     enough to pass catalog-shaped keys, which is the exact limitation Task 9
@@ -323,11 +336,10 @@ def _write_surface(
 
     **A resolver that exists but could not run is `None` (JSON `null`), never
     an empty list (corrected 2026-09-24, found by running `describe` against
-    a real fixture through the real CLI, not this module's own tests).** An
-    ambiguous sweep (`build_cases()` not resolving to one case) or the staged
-    preview itself raising (commonly: no case is materialized at this path
-    yet -- `describe` is used before a case exists, not only after) are both
-    genuine failures to determine what would change, not "nothing would
+    a real fixture through the real CLI, not this module's own tests).** The
+    staged preview itself raising (commonly: no case is materialized at this
+    path yet -- `describe` is used before a case exists, not only after) is
+    a genuine failure to determine what would change, not "nothing would
     change". Silently falling back to the naive match here would have
     reported `[]` -- correct-looking, and wrong: the naive match's own
     condition (a caller-supplied key that is already a catalog-shaped
@@ -380,8 +392,8 @@ def _write_surface(
     )
     if resolved_changes is not None:
         proposed_changes = resolved_changes
-        proposed_changes_source = "plan_case_preview"
-    elif spec.plan_case is None:
+        proposed_changes_source = "case_mutation_preview"
+    elif spec.case_mutation is None:
         # The only reason `_resolve_proposed_changes` returns `None` without
         # ever attempting a preview: no resolver exists for this spec at
         # all. The naive key match is the stated, pre-existing scope limit
@@ -395,14 +407,13 @@ def _write_surface(
         proposed_changes_source = "supplied_qualified_ids_only"
     else:
         # A resolver exists, but the attempt to run it could not complete
-        # (an ambiguous sweep, or the staged preview itself raising --
-        # found by running `describe` against a real fixture through the
-        # real CLI, 2026-09-24: a missing case document mid-preview reached
-        # here and the naive match below coincidentally computed `[]`,
-        # which reads as "nothing will change" when the true state is
-        # "could not be determined"). `None` here is JSON `null` -- an
-        # explicit, distinct third answer a consumer cannot mistake for an
-        # empty list of changes.
+        # (the staged preview itself raising -- found by running `describe`
+        # against a real fixture through the real CLI, 2026-09-24: a missing
+        # case document mid-preview reached here and the naive match below
+        # coincidentally computed `[]`, which reads as "nothing will change"
+        # when the true state is "could not be determined"). `None` here is
+        # JSON `null` -- an explicit, distinct third answer a consumer
+        # cannot mistake for an empty list of changes.
         proposed_changes = None
         proposed_changes_source = "unknown"
 
@@ -549,8 +560,9 @@ def _describe_tutorial_record(
     decision 4): a record's keys are in ``record_surface.keys`` only. This
     payload used to carry the stack's whole ``dict_entries`` beside it --
     a second, differently shaped answer to "which keys may I name", with
-    unconcretised scope tokens. Factory and case-folder entries keep
-    ``dict_entries`` until the factory path is deleted.
+    unconcretised scope tokens. A case-folder entry keeps ``dict_entries``
+    (step S6 deleted the factory path entirely, so it is the only other
+    entry kind left).
     """
     from .runtime.record_execution import preview_record_case
     from .runtime.record_surface import record_surface
@@ -599,11 +611,6 @@ def _describe_tutorial_record(
         "entry_kind": resolution["entry_kind"],
         "entry_catalog": _serialize(entry_catalog),
         "is_runnable": resolution["is_runnable"],
-        "registered_tutorials": list_tutorials(driver_context),
-        "special_tutorial_aliases": list(SPECIAL_TUTORIAL_ALIASES),
-        "available_tutorials": list_available_tutorials(
-            cases_root, driver_context=driver_context,
-        ),
         "case_directories": list_case_directories(
             cases_root, driver_context=driver_context,
         ),
@@ -684,11 +691,6 @@ def describe_entry(
         ),
         "workflow_catalog": _serialize(workflow_catalog),
         "is_runnable": resolution["is_runnable"],
-        "registered_tutorials": list_tutorials(driver_context),
-        "special_tutorial_aliases": list(SPECIAL_TUTORIAL_ALIASES),
-        "available_tutorials": list_available_tutorials(
-            cases_root, driver_context=driver_context,
-        ),
         "case_directories": list_case_directories(
             cases_root, driver_context=driver_context,
         ),
@@ -696,13 +698,7 @@ def describe_entry(
         "make_spec": make_spec_info,
         "factory_overrides": _serialize(resolution["factory_overrides"]),
         "spec": _describe_spec(spec),
-        "tutorial_contract": _serialize(
-            describe_tutorial_contract(
-                spec,
-                resolution=resolution["resolution"],
-                driver_context=driver_context,
-            )
-        ),
+        "tutorial_contract": _declared_case_files(spec, driver_context=driver_context),
         "dict_entries": _dict_entry_catalog(driver_context),
         "plugin_catalogs": _plugin_catalogs(driver_context),
         "write_surface": _write_surface(

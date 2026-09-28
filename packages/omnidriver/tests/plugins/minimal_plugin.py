@@ -137,9 +137,6 @@ class MinimalTestPlugin:
     def get_capabilities(self):
         return {}
 
-    def get_tutorial_catalog(self):
-        return {"registered_tutorials": (), "spec_factories": {}}
-
     def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
         entrypoints = () if self._entrypoint is None else (self._entrypoint,)
         return CaseRuntimeConventions(

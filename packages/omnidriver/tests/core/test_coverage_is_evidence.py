@@ -128,7 +128,7 @@ def test_an_inapplicable_check_leaves_the_denominator(tmp_path: Path) -> None:
     )
     assert inapplicable > 0, "this plan was expected to have inapplicable stages"
 
-    assert readiness["max_score"] == 100 - inapplicable, (
+    assert readiness["max_score"] == 85 - inapplicable, (
         "an inapplicable stage is still being counted as something this plan "
         "owed and did not deliver"
     )

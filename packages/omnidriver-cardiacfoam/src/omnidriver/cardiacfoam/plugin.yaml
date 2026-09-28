@@ -69,7 +69,7 @@ requires:
 # codebase has ever computed.
 provides:
   - dictionaries
-  - tutorials
+  - generic_case_factory
   - named_catalogs
   - artifacts
   - case_compatibility

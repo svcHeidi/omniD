@@ -143,18 +143,6 @@ def order_providers(providers) -> tuple:
 #:               rebuilt into a catalog. A catalog is not a mapping, so it
 #:               cannot go through ``map`` directly; core owns the type, so
 #:               merging it is core's to do rather than a provider's.
-#: ``tutorial_catalog`` a second not-actually-a-mapping case, added Task 9:
-#:               ``get_tutorial_catalog()`` is ``:status: required``, so
-#:               EVERY provider answers it, always with the same fixed keys
-#:               (``registered_tutorials``, ``spec_factories``) -- the ``map``
-#:               rule's duplicate-key error fires on every two-provider stack
-#:               ever composed, not on a genuine collision. Tutorial NAMES,
-#:               not those two container keys, are the actual declarations,
-#:               so this unions ``registered_tutorials`` and merges
-#:               ``spec_factories`` by tutorial name (duplicate name = error,
-#:               no override marker needed since names are namespaced by
-#:               convention); any other key a provider adds keeps only its
-#:               most-specific value, the same as ``single``.
 #: ``sequence``  concatenate every implementer's result, in stack order.
 #: ``single``    first non-``None``, most-specific provider first.
 #: ``chain``     thread the first argument through every implementer, in
@@ -173,8 +161,6 @@ _SHAPE: dict[str, str] = {
     "get_solve_step_commands": "set",
     "get_log_redaction_patterns": "set",
     "get_rendered_formats": "set",
-    # -- tutorial_catalog ----------------------------------------------------
-    "get_tutorial_catalog": "tutorial_catalog",
     # -- map ---------------------------------------------------------------
     "get_dict_groups": "map",
     "get_utility_manifests": "map",
@@ -186,7 +172,6 @@ _SHAPE: dict[str, str] = {
     # -- catalog -----------------------------------------------------------
     "get_dictionary_catalog": "catalog",
     # -- sequence ----------------------------------------------------------
-    "get_tutorial_displays": "sequence",
     "get_dict_entries": "sequence",
     "get_phases": "sequence",
     "validate_configuration": "sequence",
@@ -230,6 +215,7 @@ _SHAPE: dict[str, str] = {
     "has_case_marker": "single",
     "is_case_runnable_without_workflow": "single",
     "is_installed_environment_command": "single",
+    "get_generic_case_factory": "single",
     # -- chain -------------------------------------------------------------
     "get_configured_environment": "chain",
     # -- exclusive ---------------------------------------------------------
@@ -399,47 +385,6 @@ def _merge_catalog(ordered, implementers, member):
     return _composed
 
 
-def _merge_tutorial_catalog(ordered, implementers, member):
-    if not implementers:
-        return None
-
-    def _composed(*args, **kwargs):
-        registered: list = []
-        spec_factories: dict = {}
-        declared_by: dict = {}
-        extra: dict = {}
-        for provider in implementers:
-            catalog = dict(getattr(provider, member)(*args, **kwargs))
-            for name in catalog.get("registered_tutorials", ()) or ():
-                if name not in declared_by:
-                    registered.append(name)
-                    declared_by[name] = provider.plugin_id
-            for name, factory in dict(catalog.get("spec_factories", {}) or {}).items():
-                if name in spec_factories:
-                    raise ValueError(
-                        f"providers {spec_factories[name][1]!r} and "
-                        f"{provider.plugin_id!r} both register the tutorial "
-                        f"{name!r}"
-                    )
-                spec_factories[name] = (factory, provider.plugin_id)
-            for key, value in catalog.items():
-                if key in ("registered_tutorials", "spec_factories"):
-                    continue
-                # Most-specific value wins, same as the `single` shape -- an
-                # extra key (e.g. cardiacFoam's `make_generic_case_spec`) is
-                # provider-specific data, not a namespaced declaration.
-                extra[key] = value
-        return {
-            "registered_tutorials": tuple(registered),
-            "spec_factories": {
-                name: factory for name, (factory, _owner) in spec_factories.items()
-            },
-            **extra,
-        }
-
-    return _composed
-
-
 def _first_non_none(ordered, implementers, member):
     if not implementers:
         return None
@@ -566,7 +511,6 @@ _COMBINATORS = {
     "set": _union,
     "map": _merge_with_override,
     "catalog": _merge_catalog,
-    "tutorial_catalog": _merge_tutorial_catalog,
     "sequence": _concat,
     "single": _first_non_none,
     "chain": _chain,

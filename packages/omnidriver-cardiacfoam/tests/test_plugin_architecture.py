@@ -24,8 +24,9 @@ def test_cardiacfoam_plugin_satisfies_runtime_contract() -> None:
     assert ctx.identity.to_json()["providers"][-1]["id"] == "org.cardiacfoam"
     assert plugin.plugin_name == "cardiacFoam"
     assert plugin.get_dict_entries()
-    assert "registered_tutorials" in plugin.get_tutorial_catalog()
-    assert "spec_factories" in plugin.get_tutorial_catalog()
+    # Step S6 deleted `get_tutorial_catalog` outright; this plugin's own
+    # generic-case-folder override is `get_generic_case_factory` now.
+    assert callable(plugin.get_generic_case_factory())
     assert {"deltaT", "endTime"} <= {
         entry.driver_path
         for entry in plugin.get_dictionary_catalog().documents["controlDict"]
@@ -38,7 +39,9 @@ def test_generic_openfoam_plugin_satisfies_runtime_contract() -> None:
 
     assert ctx.identity.to_json()["providers"][-1]["id"] == "org.omnidriver.openfoam.environment"
     assert ctx.capabilities.dictionaries.entries() == ()
-    assert plugin.get_tutorial_catalog() == {"registered_tutorials": (), "spec_factories": {}}
+    # Step S6 deleted `get_tutorial_catalog`; this plugin never overrode the
+    # generic-case-folder factory either, so the hook is simply absent.
+    assert not hasattr(plugin, "get_generic_case_factory")
 
 
 def test_minimal_plugin_proves_non_cardiac_solver_contract() -> None:

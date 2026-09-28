@@ -195,9 +195,6 @@ class _CollatedLayoutPlugin:
     def get_capabilities(self):
         return {}
 
-    def get_tutorial_catalog(self):
-        return {"registered_tutorials": (), "spec_factories": {}}
-
     def validate_configuration(self, spec):
         return ()
 

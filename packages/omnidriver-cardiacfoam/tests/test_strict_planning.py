@@ -49,7 +49,7 @@ from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
-from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
+from omnidriver.core.runtime.models import TutorialSpec
 from omnidriver.core.strict_planning import strict_plan
 
 pytestmark = pytest.mark.native
@@ -108,11 +108,10 @@ def _spec_with_workflow(case_root: Path, *, steps: list[dict]) -> TutorialSpec:
     return TutorialSpec(
         name=case_root.name,
         case_root=case_root,
-        setup_root=case_root,
-        output_dir=case_root / "postProcessing",
-        build_cases=lambda: [CaseConfig(case_id="default", params={})],
-        apply_case=lambda *_args, **_kwargs: None,
+        case_mutation=None,
         metadata={
+            "setup_root": str(case_root),
+            "output_dir": str(case_root / "postProcessing"),
             "entry_name": case_root.name,
             "entry_kind": "case_folder",
             "entry_path": case_root.name,

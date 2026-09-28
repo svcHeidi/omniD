@@ -41,7 +41,7 @@ def test_mesh_gate_skipped_by_env(tmp_path: Path, monkeypatch) -> None:
 
 def test_a_plain_entry_is_not_exempt_through_this_adapter(tmp_path: Path) -> None:
     spec = TutorialSpec(
-        name="plainCase", case_root=tmp_path, setup_root=tmp_path, output_dir=tmp_path,
-        build_cases=lambda: [], metadata={"entry_name": "plainCase", "workflow_family": "plainCase"},
+        name="plainCase", case_root=tmp_path,
+        metadata={"entry_name": "plainCase", "workflow_family": "plainCase"},
     )
     assert _mesh_geometry_exempt(spec, openfoam_environment_context()) is False

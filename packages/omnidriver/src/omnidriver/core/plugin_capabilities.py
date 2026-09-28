@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any, Mapping, Protocol, TYPE_CHECKING
+from typing import Any, Callable, Mapping, Protocol, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .plugin_interface import SolverPlugin
@@ -229,24 +229,27 @@ class RuntimeDependency:
     required: bool
 
 
-class TutorialCatalogCapability(Protocol):
-    """The tutorials this plugin registers, and how to display them.
+class GenericCaseFactoryCapability(Protocol):
+    """A plugin's own generic-case-folder factory, when it wants to override
+    core's own (``core.runtime.generic_case.make_generic_case_spec``).
 
-    ``catalog`` returns the plugin's registry keyed by tutorial name -- the
-    entry names ``omnidriver`` accepts. ``displays`` returns the presentation
-    metadata ``describe`` renders. ``catalog`` is required: a plugin that
-    registers no tutorials returns empty rather than omitting it. ``displays``
-    is optional-neutral since 2026-09-26 (spec A3); absent, it answers ``()``,
-    and core has no runtime consumer of it.
+    Step S6 (docs/superpowers/specs/2026-09-28-supplied-inputs-design.md)
+    replaced ``TutorialCatalogCapability``/``get_tutorial_catalog`` with this
+    much narrower hook: the only thing that dict ever carried across a real
+    factory-tutorial deletion was cardiacFOAM's own marker-aware case-folder
+    wrapper (``cardiacfoam.generic_case.make_generic_case_spec``), smuggled
+    through an extra, un-namespaced key (``"make_generic_case_spec"``)
+    alongside the (now nonexistent) factory registry. Optional-neutral:
+    absent, or the whole hook, answers ``None`` -- ``registry.resolve_entry``
+    falls back to core's own factory.
 
-    :adapts: get_tutorial_catalog, get_tutorial_displays
+    :adapts: get_generic_case_factory
     :consumed-by: omnidriver/core/runtime/registry.py
     :fallback: none
-    :status: get_tutorial_catalog=required, get_tutorial_displays=optional-neutral
+    :status: get_generic_case_factory=optional-neutral
     """
 
-    def catalog(self) -> dict[str, Any]: ...
-    def displays(self) -> tuple[Any, ...]: ...
+    def factory(self) -> Callable[..., Any] | None: ...
 
 
 class DictionaryCatalogCapability(Protocol):
@@ -598,7 +601,7 @@ class CaseFileContractCapability(Protocol):
     is not one.
 
     :adapts: get_profile, get_config_resolution_description
-    :consumed-by: omnidriver/core/runtime/strict_audit.py, omnidriver/core/tutorial_contracts.py, omnidriver/core/runtime/provenance_inputs.py
+    :consumed-by: omnidriver/core/runtime/strict_audit.py, omnidriver/core/runtime/provenance_inputs.py
     :fallback: absent_describe_config_resolution
     :status: get_profile=required, get_config_resolution_description=optional-neutral
     """
@@ -993,10 +996,10 @@ class TutorialRecordCapability(Protocol):
     its workflow steps. Corrected 2026-09-26 (record-scoped axes): a record
     named the axes it allowed and ``AxisCapability`` (``get_axis_catalog``,
     deleted) provided them for the whole stack, so two records could not
-    give one axis name two meanings. Distinct from ``TutorialCatalogCapability
-    .catalog()``'s ``spec_factories``, which builds a ``TutorialSpec`` by
-    calling plugin code: resolving a record calls no plugin code at all,
-    until an axis it names actually runs (design doc
+    give one axis name two meanings. Distinct from a factory tutorial (step
+    S6 deleted the last one): a factory built a ``TutorialSpec`` by calling
+    plugin code, and resolving a record calls no plugin code at all, until
+    an axis it names actually runs (design doc
     ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md``
     §3). ``runtime.registry.resolve_entry`` dispatches on this catalog
     explicitly, alongside the factory registry and a bare case path -- never
@@ -1177,15 +1180,12 @@ class CaseWriterCapability(Protocol):
 
 
 @dataclass(frozen=True)
-class _TutorialCatalogAdapter:
+class _GenericCaseFactoryAdapter:
     plugin: "SolverPlugin"
 
-    def catalog(self) -> dict[str, Any]:
-        return self.plugin.get_tutorial_catalog()
-
-    def displays(self) -> tuple[Any, ...]:
-        hook = getattr(self.plugin, "get_tutorial_displays", None)
-        return tuple(hook()) if callable(hook) else ()
+    def factory(self) -> Callable[..., Any] | None:
+        hook = getattr(self.plugin, "get_generic_case_factory", None)
+        return hook() if callable(hook) else None
 
 
 @dataclass(frozen=True)
@@ -2292,7 +2292,7 @@ class PluginCapabilities:
     plugin's writer.
     """
 
-    tutorials: TutorialCatalogCapability
+    generic_case_factory: GenericCaseFactoryCapability
     dictionaries: DictionaryCatalogCapability
     manifest: CapabilityManifestCapability
     configuration_validator: ConfigurationValidatorCapability
@@ -2337,7 +2337,7 @@ def adapt_plugin_capabilities(plugin: "SolverPlugin") -> PluginCapabilities:
     """
 
     return PluginCapabilities(
-        tutorials=_TutorialCatalogAdapter(plugin),
+        generic_case_factory=_GenericCaseFactoryAdapter(plugin),
         dictionaries=_DictionaryCatalogAdapter(plugin),
         manifest=_CapabilityManifestAdapter(plugin),
         configuration_validator=_ConfigurationValidatorAdapter(plugin),

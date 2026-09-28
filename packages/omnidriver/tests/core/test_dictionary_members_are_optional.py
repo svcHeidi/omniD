@@ -13,13 +13,16 @@ from plugins.conformance_toy import toy_conformance_target
 from plugins.e2e_record_plugin import E2ERecordPlugin
 from plugins.minimal_plugin import MinimalTestPlugin
 
-_NOW_OPTIONAL = ("get_dict_entries", "get_dict_groups", "get_dictionary_catalog", "get_tutorial_displays")
+_NOW_OPTIONAL = ("get_dict_entries", "get_dict_groups", "get_dictionary_catalog")
 
 
-def test_the_four_are_optional_neutral_and_the_tutorial_catalog_stays_required():
+def test_the_three_are_optional_neutral():
+    """Step S6 deleted `get_tutorial_catalog` outright (the capability it
+    was `:status: required` for, `TutorialCatalogCapability`, no longer
+    exists), so this no longer also asserts a required tutorial catalog --
+    there is nothing left in that tier to name."""
     tiers = members_by_tier()
     assert set(_NOW_OPTIONAL) <= tiers["optional-neutral"]
-    assert "get_tutorial_catalog" in tiers["required"]
 
 
 @pytest.mark.parametrize("member", _NOW_OPTIONAL)
@@ -34,7 +37,6 @@ def test_a_plugin_without_them_loads_and_composes_to_empty_answers():
     assert ctx.capabilities.dictionaries.groups() == {}
     assert dict(ctx.capabilities.dictionaries.catalog().documents) == {}
     assert ctx.capabilities.dictionaries.phases() == ()
-    assert ctx.capabilities.tutorials.displays() == ()
 
 
 @pytest.mark.parametrize("check_id", ["C1", "C2", "C6", "C10"])
@@ -54,9 +56,6 @@ class _EmptyStubs(MinimalTestPlugin):
 
     def get_dict_groups(self):
         return {}
-
-    def get_tutorial_displays(self):
-        return ()
 
 
 def test_no_dictionary_entries_digests_exactly_as_an_empty_stub_did():

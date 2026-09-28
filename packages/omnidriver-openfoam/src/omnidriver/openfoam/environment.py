@@ -143,9 +143,6 @@ class OpenFOAMEnvironmentPlugin:
         """
         return {}
 
-    def get_tutorial_catalog(self):
-        return {"registered_tutorials": (), "spec_factories": {}}
-
     def validate_configuration(self, spec):
         return ()
 

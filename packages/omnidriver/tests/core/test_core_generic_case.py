@@ -201,8 +201,8 @@ class _MutationSpy:
     def __init__(self) -> None:
         self.calls: list[dict] = []
 
-    def __call__(self, case_root, case, **kwargs) -> None:
-        self.calls.append({"case_root": case_root, "case": case, **kwargs})
+    def __call__(self, case_root, **kwargs) -> None:
+        self.calls.append({"case_root": case_root, **kwargs})
 
 
 def _spec(tmp_path: Path, **kwargs):
@@ -220,11 +220,10 @@ def test_generic_dict_file_overrides_reach_the_mutation_callback(tmp_path: Path)
     """A plugin names its own dictionary files; core just carries the mapping
     through to the callback without knowing what the names mean.
 
-    Task 8, 2026-09-24: a real (non-sentinel) mutation callback keeps this
-    spec on the deprecated, non-reporting ``apply_case`` hook -- core cannot
-    see what an adapter-supplied callback writes or whether it already goes
-    through the case-write channel, so it must not be reported as
-    channel-compliant via ``plan_case``.
+    Step S6: there is no more deprecated/channel-compliant split to choose
+    between -- every spec's ``case_mutation`` is called the same way,
+    whether the underlying callback is the no-op sentinel or a real,
+    adapter-supplied one.
     """
     spy = _MutationSpy()
     spec = _spec(
@@ -233,9 +232,7 @@ def test_generic_dict_file_overrides_reach_the_mutation_callback(tmp_path: Path)
         dict_file_overrides={"turbulence": {"simulationType": "laminar"}},
         _apply_case_mutation=spy,
     )
-    assert spec.plan_case is None
-    case = spec.build_cases()[0]
-    spec.apply_case(spec.case_root, case)
+    spec.case_mutation(spec.case_root)
 
     assert spy.calls[0]["dict_file_relpaths"] == {
         "turbulence": Path("constant/turbulenceProperties"),
@@ -260,10 +257,11 @@ def test_cardiac_named_kwargs_are_no_longer_accepted(tmp_path: Path) -> None:
 
 def test_generic_case_takes_no_environment_parameter(tmp_path: Path) -> None:
     """A1 (2026-09-26): the environment source is the plugin's, passed at
-    plan and run time; a generic case never stored it (it was dead data)."""
+    plan and run time; a generic case never stored it (it was dead data).
+    Step S6 deleted the ``CaseConfig.params`` bag this used to also check
+    was never populated with it -- there is no such bag left at all now."""
     import pytest
 
-    assert "explicit_bashrc" not in _spec(tmp_path).build_cases()[0].params
     with pytest.raises(TypeError, match="explicit_bashrc"):
         _spec(tmp_path, explicit_bashrc="/opt/openfoam/etc/bashrc")
 
@@ -277,94 +275,6 @@ def test_openfoam_bashrc_kwarg_is_no_longer_accepted(tmp_path: Path) -> None:
 
     with pytest.raises(TypeError, match="openfoam_bashrc"):
         _spec(tmp_path, openfoam_bashrc="/opt/openfoam/etc/bashrc")
-
-
-def test_per_case_openfoam_bashrc_key_is_silently_unused(tmp_path: Path) -> None:
-    """An old "openfoam_bashrc" key in a cases[] entry is just an
-    unrecognised field, tolerated like any other (cases[] entries were never
-    validated against a closed field set), not translated.
-
-    Corrected 2026-09-26 (A1): this said a cases[] entry "only recognises
-    explicit_bashrc now"; since A1 it recognises no environment key at all
-    (the environment source is the plugin's, passed at plan and run time).
-
-    Corrected 2026-09-26 (R2 fix, finding M5): this asserted
-    ``"explicit_bashrc" not in case.params``, a key this test never
-    supplies, so the assertion could never fail regardless of what the
-    fix did. Asserts the key actually supplied, ``"openfoam_bashrc"``,
-    instead.
-
-    Corrected 2026-09-26 (final review M9): that fix was still, by the
-    R2 fix report's own admission, unfalsifiable -- ``_normalize_case_specs``
-    builds ``params`` from a fixed key set that never copies an arbitrary
-    ``cases[]`` key regardless of its name, so ``"openfoam_bashrc" not in
-    case.params`` cannot fail no matter what this test supplies. Asserts
-    instead that the built case is identical to one built from a ``cases[]``
-    entry that never carried the key at all -- a comparison that WOULD
-    fail if a future change started copying unrecognised keys through."""
-    with_key = _spec(
-        tmp_path,
-        cases=[{"case_id": "c1", "openfoam_bashrc": "/opt/openfoam/etc/bashrc"}],
-    ).build_cases()[0]
-    without_key = _spec(
-        tmp_path,
-        cases=[{"case_id": "c1"}],
-    ).build_cases()[0]
-    assert "openfoam_bashrc" not in with_key.params
-    assert with_key == without_key
-
-
-def test_per_case_explicit_bashrc_key_is_ignored(tmp_path: Path) -> None:
-    """R2 fix, finding M5: a cases[] entry carrying the key A1 removed,
-    ``explicit_bashrc``, is ignored -- not translated into anything -- the
-    same as any other unrecognised field a cases[] entry might carry.
-
-    Corrected 2026-09-26 (final review M9): the original assertion here had
-    the same unfalsifiable shape as
-    ``test_per_case_openfoam_bashrc_key_is_silently_unused`` -- see that
-    test's docstring. Asserts equality against a case built without the key
-    instead."""
-    with_key = _spec(
-        tmp_path,
-        cases=[{"case_id": "c1", "explicit_bashrc": "/opt/openfoam/etc/bashrc"}],
-    ).build_cases()[0]
-    without_key = _spec(
-        tmp_path,
-        cases=[{"case_id": "c1"}],
-    ).build_cases()[0]
-    assert "explicit_bashrc" not in with_key.params
-    assert with_key == without_key
-
-
-def test_per_case_entries_accept_generic_override_keys(tmp_path: Path) -> None:
-    spec = _spec(
-        tmp_path,
-        dict_file_overrides={"electro": {"spec.level": "0"}},
-        cases=[
-            {"case_id": "generic", "dict_file_overrides": {"electro": {"a": "1"}}},
-            {"case_id": "inherits"},
-        ],
-        _apply_case_mutation=_MutationSpy(),
-    )
-    by_id = {case.case_id: case.params["dict_file_overrides"] for case in spec.build_cases()}
-
-    assert by_id["generic"] == {"electro": {"a": "1"}}
-    assert by_id["inherits"] == {"electro": {"spec.level": "0"}}
-
-
-def test_per_case_deprecated_cardiac_override_key_is_silently_unused(
-    tmp_path: Path,
-) -> None:
-    """A cases[] entry only recognises "dict_file_overrides" now -- an old
-    cardiac-named key like "electro_property_overrides" is just an
-    unrecognised field, tolerated like any other, not translated."""
-    spec = _spec(
-        tmp_path,
-        cases=[{"case_id": "deprecated", "electro_property_overrides": {"a": "2"}}],
-        _apply_case_mutation=_MutationSpy(),
-    )
-    case = spec.build_cases()[0]
-    assert case.params["dict_file_overrides"] == {}
 
 
 def test_genuinely_unknown_keyword_still_raises_type_error(tmp_path: Path) -> None:
@@ -465,10 +375,12 @@ def test_make_generic_case_spec_applies_no_solver_mutation(tmp_path: Path) -> No
     mutator, even though bare make_spec still defaults to the legacy seam.
 
     Task 8, 2026-09-24: with no adapter-supplied mutation callback, this spec
-    genuinely writes nothing -- ``apply_case`` is ``None`` (not a fake no-op
-    standing in for a previously-required field), and the honest ``None``
-    report goes through ``plan_case`` instead.
-    """
+    genuinely writes nothing. Step S6 deleted the ``apply_case``/``plan_case``
+    split this used to also check (a real, adapter-supplied callback used to
+    be reachable only through the deprecated, non-reporting ``apply_case``
+    fallback; there is only ``case_mutation`` now, called the same way
+    either way -- see ``test_generic_dict_file_overrides_reach_the_mutation_callback``
+    for the real-callback counterpart)."""
     from omnidriver.core import compatibility
     from omnidriver.core.runtime.generic_case import make_generic_case_spec
 
@@ -477,58 +389,8 @@ def test_make_generic_case_spec_applies_no_solver_mutation(tmp_path: Path) -> No
         case_dir_name="aCase",
         driver_context=driver_context(DeclaredCasePlugin(), source="test:generic-case"),
     )
-    assert spec.apply_case is None
     with compatibility.track_fallback_calls() as calls:
-        result = spec.plan_case(spec.case_root, spec.build_cases()[0])
+        result = spec.case_mutation(spec.case_root)
 
     assert calls == []
     assert result is None
-
-
-def test_a_generic_case_with_no_mutation_reports_through_invoke_case_mutation_without_warning(
-    tmp_path: Path,
-) -> None:
-    """`invoke_case_mutation` must prefer `plan_case` here and emit no
-    `DeprecationWarning` -- the whole point of Task 8 is that this spec no
-    longer needs the deprecated, non-reporting `apply_case` fallback to
-    represent "nothing was written"."""
-    import warnings
-
-    from omnidriver.core.runtime.generic_case import make_generic_case_spec
-    from omnidriver.core.runtime.models import invoke_case_mutation
-
-    spec = make_generic_case_spec(
-        cases_root=tmp_path,
-        case_dir_name="aCase",
-        driver_context=driver_context(DeclaredCasePlugin(), source="test:generic-case"),
-    )
-    case = spec.build_cases()[0]
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
-        result = invoke_case_mutation(spec, spec.case_root, case)
-
-    assert result is None
-
-
-def test_a_generic_case_with_a_real_callback_still_falls_back_through_apply_case(
-    tmp_path: Path,
-) -> None:
-    """The counterpart to the no-mutation case above: a real, adapter-supplied
-    callback is not something core can vouch for, so `invoke_case_mutation`
-    still reaches it only through the deprecated `apply_case` fallback (and
-    still warns), rather than reporting it as channel-compliant."""
-    import pytest
-
-    from omnidriver.core.runtime.models import invoke_case_mutation
-
-    spy = _MutationSpy()
-    spec = _spec(tmp_path, _apply_case_mutation=spy)
-    case = spec.build_cases()[0]
-
-    assert spec.plan_case is None
-    with pytest.warns(DeprecationWarning, match="removed when no in-tree spec supplies apply_case"):
-        result = invoke_case_mutation(spec, spec.case_root, case)
-
-    assert result is None
-    assert spy.calls, "the real callback must still have run"

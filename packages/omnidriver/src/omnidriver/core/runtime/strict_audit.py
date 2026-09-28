@@ -7,7 +7,6 @@ from typing import Any, TYPE_CHECKING
 from omnidriver.core.planning_types import (
     StrictDiagnostic,
     SimulationAuditItem,
-    diagnostic,
     has_error,
     has_warning,
 )
@@ -25,7 +24,6 @@ SKIP_GEOMETRY_DIAGNOSTICS_ENV = "SKIP_GEOMETRY_DIAGNOSTICS"
 
 
 _READINESS_WEIGHTS = {
-    "simulation_generation": 15,
     "case_preparation_files": 15,
     "dictionary_resolution": 20,
     "workflow_preparation": 20,
@@ -114,67 +112,6 @@ def _score_from_diagnostics(
     )
 
 
-def _simulation_generation_audit(spec) -> tuple[SimulationAuditItem, tuple[StrictDiagnostic, ...]]:
-    max_points = _READINESS_WEIGHTS["simulation_generation"]
-    try:
-        cases = spec.build_cases()
-    except Exception as exc:
-        diag = diagnostic(
-            "error",
-            "case_generation_failed",
-            f"build_cases() failed while creating the simulation list: {exc}",
-            source="build_cases",
-        )
-        return (
-            SimulationAuditItem(
-                stage="simulation_generation",
-                status="blocked",
-                points=0,
-                max_points=max_points,
-                summary="The driver could not create the simulation case list.",
-                evidence={"error": str(exc)},
-            ),
-            (diag,),
-        )
-
-    case_ids = [getattr(case, "case_id", "") for case in cases]
-    evidence = {
-        "case_count": len(cases),
-        "case_ids_preview": case_ids[:20],
-        "case_ids_truncated": len(case_ids) > 20,
-    }
-    if not cases:
-        diag = diagnostic(
-            "error",
-            "no_simulations_generated",
-            "build_cases() returned no simulations.",
-            source="build_cases",
-        )
-        return (
-            SimulationAuditItem(
-                stage="simulation_generation",
-                status="blocked",
-                points=0,
-                max_points=max_points,
-                summary="The driver did not create any simulations to run.",
-                evidence=evidence,
-            ),
-            (diag,),
-        )
-
-    return (
-        SimulationAuditItem(
-            stage="simulation_generation",
-            status="passed",
-            points=max_points,
-            max_points=max_points,
-            summary="build_cases() created the simulation list consumed by the engine.",
-            evidence=evidence,
-        ),
-        (),
-    )
-
-
 def _case_preparation_files_audit(
     case_root: Path,
     *,
@@ -237,8 +174,7 @@ def _build_simulation_audit(
     mesh_geometry_diagnostics: tuple[StrictDiagnostic, ...],
     mesh_geometry_exempt: bool = False,
     required_case_files: tuple[str, ...] = (),
-) -> tuple[tuple[SimulationAuditItem, ...], tuple[StrictDiagnostic, ...], dict[str, Any]]:
-    generation_item, generation_diagnostics = _simulation_generation_audit(spec)
+) -> tuple[tuple[SimulationAuditItem, ...], dict[str, Any]]:
     generic_case = bool(spec.metadata.get("generic_case")) if spec.metadata else False
     case_files_item = _case_preparation_files_audit(
         Path(spec.case_root),
@@ -246,7 +182,6 @@ def _build_simulation_audit(
         required_files=required_case_files,
     )
     items = [
-        generation_item,
         case_files_item,
         _score_from_diagnostics(
             stage="dictionary_resolution",
@@ -381,4 +316,4 @@ def _build_simulation_audit(
         "uncovered_stages": uncovered,
         "inapplicable_stages": inapplicable,
     }
-    return tuple(items), generation_diagnostics, readiness
+    return tuple(items), readiness

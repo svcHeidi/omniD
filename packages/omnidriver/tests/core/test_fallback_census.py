@@ -39,7 +39,7 @@ def test_capability_reads_under_an_explicit_generic_context_use_no_default() -> 
         caps.dictionaries.entries()
         caps.dictionaries.groups()
         caps.manifest.manifest()
-        caps.tutorials.displays()
+        caps.generic_case_factory.factory()
 
     assert_no_default_context_fallback(op)
 

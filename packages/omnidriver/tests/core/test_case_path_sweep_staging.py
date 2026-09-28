@@ -34,7 +34,7 @@ class _WritesIntoItsCaseRoot:
     def __init__(self) -> None:
         self.case_roots: list[Path] = []
 
-    def __call__(self, case_root, _case, **_kwargs) -> None:
+    def __call__(self, case_root, **_kwargs) -> None:
         self.case_roots.append(Path(case_root))
         (Path(case_root) / "mutated").write_text("yes\n")
 
@@ -61,17 +61,14 @@ def test_a_case_path_entry_is_mutated_in_its_staged_copy(tmp_path: Path) -> None
     staged = tmp_path / "staging" / "sweep_case_001"
     mutation = _WritesIntoItsCaseRoot()
 
-    # A real callback keeps a generic case on the deprecated, non-reporting
-    # apply_case hook (generic_case's module docstring), which says so.
-    with pytest.warns(DeprecationWarning, match="apply_case"):
-        materialized = _materialize_entry_case(
-            str(source),
-            # MinimalTestPlugin declares no output convention, so the first
-            # (unstaged) resolution needs one supplied.
-            {"_apply_case_mutation": mutation, "output_dir_name": "out"},
-            staging_root=staged,
-            driver_context=ctx,
-        )
+    materialized = _materialize_entry_case(
+        str(source),
+        # MinimalTestPlugin declares no output convention, so the first
+        # (unstaged) resolution needs one supplied.
+        {"_apply_case_mutation": mutation, "output_dir_name": "out"},
+        staging_root=staged,
+        driver_context=ctx,
+    )
 
     assert mutation.case_roots == [staged.resolve()]
     assert (staged / "mutated").is_file()

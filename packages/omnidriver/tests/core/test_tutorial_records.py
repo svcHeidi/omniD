@@ -972,56 +972,19 @@ def test_resolve_entry_dispatches_a_tutorial_record_explicitly(tmp_path):
     assert resolution["record"] is record
 
 
-def test_a_record_is_never_resolved_as_a_factory_or_a_case_path(tmp_path):
+def test_a_record_is_never_resolved_as_a_case_folder(tmp_path):
+    """Step S6 deleted the factory registry entirely (there is no more
+    ``entry_kind="registered_tutorial"`` to refuse a record against); the
+    one other kind a record can still be asked for and refused against is
+    ``case_folder``."""
     record = _record()
     plugin = MinimalTestPlugin(tutorial_records={"toyTutorial": record})
     context = driver_context(plugin, source="test:records")
 
     with pytest.raises(KeyError):
         registry.resolve_entry(
-            "toyTutorial", entry_kind="registered_tutorial",
-            overrides={"cases_root": str(tmp_path)}, driver_context=context,
-        )
-    with pytest.raises(KeyError):
-        registry.resolve_entry(
             "toyTutorial", entry_kind="case_folder",
             overrides={"cases_root": str(tmp_path)}, driver_context=context,
-        )
-
-
-def test_a_factory_tutorial_is_never_resolved_as_a_record(tmp_path):
-    """The converse: a name registered only as a spec_factory must never
-    come back as a tutorial_record resolution."""
-    def _factory(**kwargs):
-        raise AssertionError("factory should not be invoked by resolve_entry")
-
-    class _FactoryPlugin(MinimalTestPlugin):
-        def get_tutorial_catalog(self):
-            return {"registered_tutorials": ("factoryOnly",), "spec_factories": {"factoryOnly": _factory}}
-
-    context = driver_context(_FactoryPlugin(), source="test:factory")
-    resolution = registry.resolve_entry(
-        "factoryOnly", overrides={"cases_root": str(tmp_path)}, driver_context=context,
-    )
-    assert resolution["resolution"] == "registered"
-    assert resolution["entry_kind"] == "registered_tutorial"
-
-
-def test_resolve_entry_refuses_a_name_registered_as_both_record_and_factory(tmp_path):
-    def _factory(**kwargs):
-        raise AssertionError("must not be reached")
-
-    record = _record(name="both")
-
-    class _BothPlugin(MinimalTestPlugin):
-        def get_tutorial_catalog(self):
-            return {"registered_tutorials": ("both",), "spec_factories": {"both": _factory}}
-
-    plugin = _BothPlugin(tutorial_records={"both": record})
-    context = driver_context(plugin, source="test:both")
-    with pytest.raises(KeyError, match="ambiguous"):
-        registry.resolve_entry(
-            "both", overrides={"cases_root": str(tmp_path)}, driver_context=context,
         )
 
 
@@ -1132,16 +1095,6 @@ def test_resolve_entry_never_resolves_a_records_own_relpath_as_a_case_folder(tmp
 # ---------------------------------------------------------------------------
 
 
-def test_load_tutorial_spec_refuses_a_tutorial_record_by_name(tmp_path):
-    record = _record()
-    plugin = MinimalTestPlugin(tutorial_records={"toyTutorial": record})
-    context = driver_context(plugin, source="test:b2")
-    with pytest.raises(TutorialRecordError, match="load_tutorial_spec"):
-        registry.load_tutorial_spec(
-            "toyTutorial", overrides={"cases_root": str(tmp_path)}, driver_context=context,
-        )
-
-
 def test_load_entry_spec_refuses_a_tutorial_record_by_name(tmp_path):
     record = _record()
     plugin = MinimalTestPlugin(tutorial_records={"toyTutorial": record})
@@ -1155,8 +1108,9 @@ def test_load_entry_spec_refuses_a_tutorial_record_by_name(tmp_path):
 def test_describe_entry_previews_a_tutorial_record_instead_of_refusing(tmp_path):
     """Item 1: describe_entry's own B2 refusal is replaced, for describe
     only, with a real preview through record_execution.preview_record_case.
-    Every other B2 consumer (load_tutorial_spec, load_entry_spec -- see the
-    two tests directly above) still refuses a tutorial_record by name."""
+    Every other B2 consumer (load_entry_spec -- see the test directly
+    above; step S6 deleted its sibling ``load_tutorial_spec``, the
+    factory-only resolver) still refuses a tutorial_record by name."""
     from omnidriver.core.introspection import describe_entry
 
     _native_case(tmp_path, {
@@ -2016,7 +1970,7 @@ def test_record_case_spec_builds_the_generic_workflow_dag_shape(tmp_path):
     }
     # The case was already committed by commit_record_case; this spec's own
     # mutation is a genuine no-op.
-    assert spec.plan_case(staged, spec.build_cases()[0]) is None
+    assert spec.case_mutation(staged) is None
 
 
 # ---------------------------------------------------------------------------

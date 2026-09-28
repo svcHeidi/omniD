@@ -19,7 +19,7 @@ from omnidriver.sweep_materialize import materialize_case
 from omnidriver.sweep_routing import route_case_values, route_entry_case_values
 from .fresh import ensure_fresh_output_dir
 from .attempt_lease import acquire_case_staging_lease
-from .models import data_artifact_from_json, invoke_case_mutation
+from .models import data_artifact_from_json
 from .output_collection import collect_new_output_tree, snapshot_output_tree
 from .postprocess_phase import CASE_RECORD_FILENAME, build_sweep_context, run_postprocessing_module
 from .record_execution import (
@@ -507,8 +507,8 @@ def _materialize_entry_case(
 ) -> MaterializedEntry:
     """Materialize one entry-based sweep case via the tutorial's own spec.
 
-    Entry-based sweeps target an existing registered tutorial or case path
-    whose apply_case()/build_cases() mutate a case root in place.  That root
+    Entry-based sweeps target an existing case path or tutorial record whose
+    ``case_mutation()`` mutates a case root in place.  That root
     must be a disposable staging copy, never the checked-in tutorial or the
     user's case directory.  The returned entry and overrides point at that
     staged case so strict planning and execution use exactly the same paths.
@@ -517,8 +517,9 @@ def _materialize_entry_case(
     tests that provide an already-isolated fake spec.  Real sweep callers
     always pass it.
 
-    Raises ValueError if the resolved overrides don't collapse to exactly one
-    case -- the sweep model is one case per resolved axis combination.
+    Step S6: a ``TutorialSpec`` is always exactly one case now (no factory
+    ever built several from one spec), so there is no case count left to
+    collapse or refuse -- ``case_mutation`` is called once, unconditionally.
     """
     spec = load_entry_spec(entry, overrides=routed, driver_context=driver_context)
     effective_entry = entry
@@ -572,13 +573,6 @@ def _materialize_entry_case(
                 "cases_root/case_dir_name it is given."
             )
         spec = staged_spec
-    cases = spec.build_cases()
-    if len(cases) != 1:
-        raise ValueError(
-            f"entry-based sweep axis combination resolved to {len(cases)} cases "
-            f"for entry '{entry}'; expected exactly 1 -- add enough constraining "
-            "overrides (e.g. 'solvers') to collapse this combination to a single case"
-        )
     from ..plugin_capabilities import CaseRuntimeConventions
 
     conventions = (
@@ -586,7 +580,8 @@ def _materialize_entry_case(
         if driver_context is not None else CaseRuntimeConventions()
     )
     _clean_stale_instances(spec.case_root, conventions=conventions)
-    invoke_case_mutation(spec, spec.case_root, cases[0])
+    if spec.case_mutation is not None:
+        spec.case_mutation(spec.case_root)
     return MaterializedEntry(effective_entry, effective_routed)
 
 

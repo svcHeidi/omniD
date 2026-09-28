@@ -156,7 +156,7 @@ def test_factory_tutorial_entry_is_document_sourced(tmp_path: Path) -> None:
     rather than skipped for want of a live adapter fixture.
     """
     from omnidriver.core.contracts.dictionary import DictEntry
-    from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
+    from omnidriver.core.runtime.models import TutorialSpec
 
     entry = DictEntry(
         driver_path="solverSettings.requiredField", description="A required field.",
@@ -181,10 +181,10 @@ def test_factory_tutorial_entry_is_document_sourced(tmp_path: Path) -> None:
     case_root.mkdir()
     (case_root / "run-test-case").write_text("#!/bin/sh\nexit 0\n")
     spec = TutorialSpec(
-        name="factoryOnly", case_root=case_root, setup_root=case_root, output_dir=case_root,
-        build_cases=lambda: [CaseConfig(case_id="factoryOnly", params={})],
-        apply_case=lambda root, case: None,
+        name="factoryOnly", case_root=case_root,
+        case_mutation=lambda root: None,
         metadata={
+            "setup_root": str(case_root), "output_dir": str(case_root),
             "entry_kind": "registered_tutorial", "entry_path": None, "source_type": "registered_tutorial",
             "workflow_family": None, "resolution": "registered_tutorial",
             "workflow_dag": {"steps": [{"id": "run", "command": "run-test-case", "args": [], "depends_on": []}]},

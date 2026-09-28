@@ -22,11 +22,12 @@ def _spec(tmp_path: Path) -> TutorialSpec:
     return TutorialSpec(
         name="minimal",
         case_root=tmp_path,
-        setup_root=tmp_path,
-        output_dir=tmp_path / "postProcessing",
-        build_cases=lambda: [],
-        apply_case=lambda *_args: None,
-        metadata={"generic_case": True},
+        case_mutation=None,
+        metadata={
+            "generic_case": True,
+            "setup_root": str(tmp_path),
+            "output_dir": str(tmp_path / "postProcessing"),
+        },
     )
 
 
@@ -38,7 +39,7 @@ def test_context_exposes_focused_adapters_without_replacing_public_plugin(
     spec = _spec(tmp_path)
 
     assert context.providers == (plugin,)
-    assert context.capabilities.tutorials.catalog() == plugin.get_tutorial_catalog()
+    assert context.capabilities.generic_case_factory.factory() is None
     assert context.capabilities.dictionaries.entries() == ()
     # Corrected 2026-09-22 (Task 10): this used to assert
     # `manifest.manifest() == plugin.get_capabilities()` -- true only because
@@ -97,7 +98,7 @@ def test_context_exposes_focused_adapters_without_replacing_public_plugin(
     # the context does not hide the provider behind the capability adapters.
     reconstructed = DriverContext((plugin,), context.identity)
     assert reconstructed.providers == (plugin,)
-    assert reconstructed.capabilities.tutorials.catalog() == plugin.get_tutorial_catalog()
+    assert reconstructed.capabilities.generic_case_factory.factory() is None
     # 2026-09-24: `plugin_selector` added deliberately -- the `--plugin` value
     # a child process needs to rebuild this context (sweep_run's per-case
     # subprocess). It is optional and trailing, so the positional

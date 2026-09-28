@@ -187,95 +187,40 @@ def data_artifact_from_json(data: dict[str, Any]) -> DataArtifact:
     )
 
 
-@dataclass(frozen=True)
-class CaseConfig:
-    """A single simulation configuration inside a tutorial sweep."""
-
-    case_id: str
-    params: dict[str, Any]
-
-
-BuildCasesFn = Callable[[], list[CaseConfig]]
-ApplyCaseFn = Callable[[Path, CaseConfig], None]
-
-#: Phase 2 Task 10 (docs/superpowers/plans/2026-09-20-phase2-one-write-channel.md):
-#: same two positional arguments as ``ApplyCaseFn``, but a spec that supplies
-#: this is expected to have routed its mutation through the case-write
-#: channel (``core.case_write``/``core.case_transaction``), and to say so by
-#: returning the ``CaseWriteRecord`` that produced (``None`` only when the
-#: mutation had nothing to write -- see ``apply_input_overrides_planned``'s
-#: own docstring for that case). A spec with no case inputs to plan simply
-#: does not need this field at all; it is optional, not a requirement every
-#: spec must satisfy.
-PlanCaseFn = Callable[[Path, CaseConfig], Any]
+CaseMutationFn = Callable[[Path], Any]
 
 
 @dataclass(frozen=True)
 class TutorialSpec:
-    """Full tutorial definition consumed by the driver engine."""
+    """Full tutorial definition consumed by the driver engine.
+
+    Step S6 (docs/superpowers/specs/2026-09-28-supplied-inputs-design.md):
+    shrunk to exactly what a case folder (``core.runtime.generic_case``) and
+    a tutorial record (``core.runtime.record_execution``) both actually
+    build -- the two remaining spec constructors, now that every factory
+    tutorial is gone (S5 deleted cardiacCore's, the last holdout). Dropped:
+    ``setup_root``/``output_dir`` (now ``metadata["setup_root"]``/
+    ``metadata["output_dir"]`` -- both builders already stashed comparable
+    strings in ``metadata``, e.g. ``run_script_relpath``), and
+    ``build_cases``/``apply_case``/``plan_case`` (a factory-tutorial spec
+    could build MULTIPLE ``CaseConfig``s from one spec -- a parameter sweep
+    baked into the factory itself; with no factory left, a spec is always
+    exactly one case, so ``case_mutation`` replaces all three: one optional
+    callable, called once, against the staged case root, returning whatever
+    ``CaseWriteRecord`` (or ``None``) it wrote -- no case-count check, no
+    deprecated non-reporting fallback, because there is no second authoring
+    style left to prefer between).
+    """
 
     name: str
     case_root: Path
-    setup_root: Path
-    output_dir: Path
-    build_cases: BuildCasesFn
-    #: Optional as of Phase 3 Task 8 (2026-09-24, corrected: this field used
-    #: to have no default, so every spec -- migrated or not, mutating or not
-    #: -- had to supply *something* here even when it had nothing to write.
-    #: ``core.runtime.generic_case``'s no-adapter-callback case is the
-    #: motivating example: it writes nothing, ever, and was still forced to
-    #: carry a no-op ``apply_case`` purely to satisfy this field. ``None`` is
-    #: now legal, but only when ``plan_case`` is supplied instead --
-    #: ``invoke_case_mutation`` below refuses by name if neither is.
-    apply_case: ApplyCaseFn | None = None
-    #: Preferred over ``apply_case`` when present (see ``invoke_case_mutation``
-    #: below). ``None`` for every spec not yet migrated onto the case-write
-    #: channel -- most of them, as of Task 10's first batch (2026-09-23): see
-    #: that task's filled-in plan section for the exact count and which specs
-    #: this covers. Also the honest home for a spec that writes nothing at
-    #: all (Task 8): returning ``None`` there is true, not a placeholder.
-    plan_case: PlanCaseFn | None = None
+    #: Optional: ``None`` when the spec mutates nothing (a marker-less
+    #: generic case folder with no adapter-supplied callback, or a tutorial
+    #: record, whose commit-time patches already happened before this spec
+    #: was ever built -- see ``record_execution.commit_record_case``).
+    #: Called with the staged case root only, once, by whichever caller
+    #: stages it (``sweep_runner._materialize_entry_case``,
+    #: ``introspection._resolve_proposed_changes``) -- never against
+    #: ``spec.case_root`` itself.
+    case_mutation: CaseMutationFn | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
-
-
-def invoke_case_mutation(spec: "TutorialSpec", case_root: Path, case: CaseConfig) -> Any:
-    """Apply one case's mutation, preferring the channel-routed path.
-
-    Phase 2 Task 10. There is exactly one production call site for this
-    today (``core.runtime.sweep_runner._materialize_entry_case``) -- see the
-    plan's filled-in Task 10 section for the grep that established that.
-    Centralized here rather than inlined at that call site so a future
-    second call site gets the same preference-and-deprecation policy for
-    free, instead of a second place that could drift from it.
-
-    Falls back to ``apply_case`` with a ``DeprecationWarning`` naming the
-    exact removal condition (Task 10: "removed when no in-tree spec supplies
-    apply_case") rather than silently preferring one path forever -- a
-    fallback with no stated removal condition is a fallback nobody is ever
-    wrong to leave in place.
-
-    Phase 3 Task 8 (2026-09-24): ``apply_case`` is now optional too, so a
-    spec that mutates nothing may supply neither. That is refused here by
-    name -- naming the spec and both missing hooks -- rather than letting
-    ``None(...)`` raise a bare ``TypeError``/``AttributeError`` a reader
-    would have to trace back to this function to understand.
-    """
-    if spec.plan_case is not None:
-        return spec.plan_case(case_root, case)
-    if spec.apply_case is not None:
-        import warnings
-
-        warnings.warn(
-            f"TutorialSpec {spec.name!r} supplies apply_case but not plan_case; "
-            f"apply_case does not report what it wrote through the case-write "
-            f"channel (if anything). This fallback is removed when no in-tree "
-            f"spec supplies apply_case any more.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        spec.apply_case(case_root, case)
-        return None
-    raise TypeError(
-        f"TutorialSpec {spec.name!r} supplies neither plan_case nor apply_case; "
-        f"there is no case mutation to invoke for it."
-    )

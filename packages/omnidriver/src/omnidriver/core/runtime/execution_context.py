@@ -69,10 +69,10 @@ class StepExecutionContext:
 
 
 def resolve_execution_context(spec: TutorialSpec) -> ExecutionContext:
-    output_dir = Path(spec.output_dir)
+    output_dir = Path(spec.metadata["output_dir"])
     return ExecutionContext(
         case_root=Path(spec.case_root),
-        setup_root=Path(spec.setup_root),
+        setup_root=Path(spec.metadata["setup_root"]),
         output_dir=output_dir,
         workflow_state_path=output_dir / STATE_FILENAME,
     )

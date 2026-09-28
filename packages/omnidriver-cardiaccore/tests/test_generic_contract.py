@@ -23,8 +23,11 @@ def test_plugin_has_a_valid_context() -> None:
     # No factory tutorial survives (S5): every one migrated onto a tutorial
     # record (see `context.capabilities.tutorial_records.catalog()`
     # instead) or, for cardiaccore-pig-transmural-purkinje (no native
-    # tutorial at all), was dropped outright.
-    assert context.capabilities.tutorials.catalog()["registered_tutorials"] == ()
+    # tutorial at all), was dropped outright. S6 then deleted the factory
+    # registry itself (and `TutorialCatalogCapability` it lived on);
+    # cardiacCore never overrode the generic-case factory that replaced it,
+    # so the new capability answers `None`.
+    assert context.capabilities.generic_case_factory.factory() is None
     assert set(context.capabilities.tutorial_records.catalog()) == {
         "humanSlab", "idealizedHeart", "idealizedHeartEndocardial", "idealizedHeartPigTransmural",
     }

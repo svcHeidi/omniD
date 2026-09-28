@@ -943,9 +943,8 @@ def record_case_spec(
 
     The case's content was already written by ``commit_record_case`` before
     this is ever called -- design §4 step 7 (commit) happens strictly before
-    step 8 (run). This spec's own case mutation is therefore a genuine no-op
-    (``plan_case`` returning ``None``), never a second write: there is
-    nothing left for it to do.
+    step 8 (run). This spec's own ``case_mutation`` is therefore a genuine
+    no-op, never a second write: there is nothing left for it to do.
 
     ``metadata["generic_case"] = True`` matches ``generic_case.make_spec``'s
     own convention for a spec with no solver-specific config to validate --
@@ -960,7 +959,7 @@ def record_case_spec(
     document carries it (``resolvedEntry.parallel``), so a serial and a
     parallel run of one case are told apart by more than their DAG digest.
     """
-    from .models import CaseConfig, TutorialSpec
+    from .models import TutorialSpec
 
     case_root = Path(staged_case_root)
     workflow_dag = _workflow_dag_for_record(
@@ -985,10 +984,7 @@ def record_case_spec(
     return TutorialSpec(
         name=case_id,
         case_root=case_root,
-        setup_root=case_root,
-        output_dir=case_root,
-        build_cases=lambda: [CaseConfig(case_id=case_id, params={})],
-        plan_case=lambda root, case: None,
+        case_mutation=lambda root: None,
         metadata={
             "entry_name": record.name,
             "entry_kind": "tutorial_record",
@@ -997,6 +993,8 @@ def record_case_spec(
             "workflow_family": None,
             "resolution": "tutorial_record",
             "workflow_dag": workflow_dag,
+            "setup_root": str(case_root),
+            "output_dir": str(case_root),
             "generic_case": True,
             "expected_artifacts": record_step_artifacts(record, workflow_step_ids),
             **metadata,

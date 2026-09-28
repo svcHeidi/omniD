@@ -27,8 +27,8 @@ exactly what rotted here, so the number is not restated.
 """
 
 # REQUIRED, not stylistic. Several annotations below name types imported only
-# under ``if TYPE_CHECKING`` (DictEntry, TutorialSpec, TutorialDisplay,
-# DataArtifact, Path). Without lazy annotations those are evaluated when the
+# under ``if TYPE_CHECKING`` (DictEntry, TutorialSpec, DataArtifact, Path).
+# Without lazy annotations those are evaluated when the
 # class body executes, so importing this module raises
 # ``NameError: name 'DictEntry' is not defined`` on every Python before 3.14 --
 # i.e. on 3.11/3.12, which is exactly this project's CI matrix. Python 3.14's
@@ -50,9 +50,8 @@ if TYPE_CHECKING:
     from omnidriver.core.plugin_capabilities import PluginCapabilities, RuntimeDependency
     from omnidriver.core.contracts.dictionary import DictEntry
     from omnidriver.core.quantities.model import ArtifactValueReader
-    from omnidriver.core.runtime.models import TutorialSpec, CaseConfig, DataArtifact
+    from omnidriver.core.runtime.models import TutorialSpec, DataArtifact
     from omnidriver.core.planning_types import StrictDiagnostic
-    from omnidriver.core.tutorials_display import TutorialDisplay
     from omnidriver.core.plugin_capabilities import ResolvedInput
     from omnidriver.core.report_catalog import ReportDefinition
     from omnidriver.core.provider_identity import StackIdentity, ProviderIdentity
@@ -201,12 +200,6 @@ class SolverPlugin(Protocol):
         """
         Return the capabilities of the solver (e.g., supported physics, 
         models, regions).
-        """
-        ...
-
-    def get_tutorial_catalog(self) -> dict:
-        """
-        Return the tutorial specs provided by this solver.
         """
         ...
 
@@ -577,14 +570,23 @@ class SolverPluginOptionalHooks(Protocol):
 
         A record (``core.tutorial_records.TutorialRecord``) is inert data --
         a native case path, its own axes, its workflow steps -- not a
-        callable factory. Distinct from ``get_tutorial_catalog()``'s
-        ``spec_factories``, which core calls; a record is core data core
-        never calls into the plugin to build. Absent -> ``None``, not
-        ``{}`` (review finding M1: distinct from a plugin that implements
-        this hook and simply registers no records yet) -- the ordinary
-        case for a plugin that has not migrated any tutorial onto this shape
-        yet (design doc ``docs/superpowers/specs/2026-09-24-tutorials-are-
-        pointers-design.md``)."""
+        callable factory; core never calls into the plugin to build one.
+        Absent -> ``None``, not ``{}`` (review finding M1: distinct from a
+        plugin that implements this hook and simply registers no records
+        yet) -- the ordinary case for a plugin that has not migrated any
+        tutorial onto this shape yet (design doc
+        ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md``)."""
+        ...
+
+    # -- GenericCaseFactoryCapability ------------------------------------------
+    def get_generic_case_factory(self):
+        """This plugin's own generic-case-folder factory, overriding core's
+        (``core.runtime.generic_case.make_generic_case_spec``) -- e.g.
+        cardiacFOAM's marker-aware wrapper, which supplies its own dictionary
+        files and mutation callback. Absent -> ``None``, meaning "use core's
+        own factory" (step S6, docs/superpowers/specs/2026-09-28-supplied-
+        inputs-design.md; replaces the deleted ``get_tutorial_catalog()``'s
+        ``"make_generic_case_spec"`` smuggled key)."""
         ...
 
     # -- RecordKeyValidationCapability ------------------------------------------
@@ -756,7 +758,7 @@ class SolverPluginOptionalHooks(Protocol):
         renders nothing."""
         ...
 
-    # -- DictionaryCatalogCapability / TutorialCatalogCapability ----------------
+    # -- DictionaryCatalogCapability -------------------------------------------
     # Optional-neutral since 2026-09-26 (spec 2026-09-26 A3).
     def get_dict_entries(self) -> tuple[DictEntry, ...]:
         """The plugin's dictionary entries. Absent -> ``()``; the identity
@@ -770,10 +772,6 @@ class SolverPluginOptionalHooks(Protocol):
 
     def get_dict_groups(self) -> dict[str, tuple[DictEntry, ...]]:
         """Entries by the plugin's own group names. Absent -> ``{}``."""
-        ...
-
-    def get_tutorial_displays(self) -> tuple[TutorialDisplay, ...]:
-        """Display cards for the registered tutorials. Absent -> ``()``."""
         ...
 
 

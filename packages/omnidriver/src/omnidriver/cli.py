@@ -20,7 +20,7 @@ from .core.runtime.postprocess_phase import (
     write_case_record,
 )
 from .core.runtime.workflow_orchestrator import STATE_FILENAME
-from .core.runtime.registry import ENTRY_KIND_VALUES, list_tutorials
+from .core.runtime.registry import ENTRY_KIND_VALUES
 from .core.runtime.sweep_runner import (
     _materialize_entry_case,
     _stage_entry_case,
@@ -30,7 +30,7 @@ from .core.runtime.sweep_runner import (
 from omnidriver.core.introspection import describe_entry
 from omnidriver.core.planning_types import diagnostic
 from omnidriver.core.provider_identity import stack_identity_mismatch
-from omnidriver.core.specs.common import default_setup_dir_name
+from omnidriver.core.specs.paths import default_setup_dir_name
 from omnidriver.core.specs.paths import (
     default_sweep_output_dir,
     repo_root_or_none,
@@ -1143,7 +1143,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _load_spec_overrides(config_path: str, entry: str, *, driver_context) -> dict:
+def _load_spec_overrides(config_path: str, entry: str) -> dict:
     payload = json.loads(Path(config_path).read_text())
     if not isinstance(payload, dict):
         raise ValueError("Config file must contain a JSON object")
@@ -1155,11 +1155,7 @@ def _load_spec_overrides(config_path: str, entry: str, *, driver_context) -> dic
                 raise ValueError(f"Config section '{key}' must be a JSON object")
             return _normalize_spec_overrides(value)
 
-    known_tutorial_keys = {
-        *(name.casefold() for name in list_tutorials(driver_context)),
-        "genericcase",
-        "randomcase",
-    }
+    known_tutorial_keys = {"genericcase", "randomcase"}
     if any(key.casefold() in known_tutorial_keys for key in payload):
         raise KeyError(
             f"No config section found for entry '{entry}'. "
@@ -1361,11 +1357,7 @@ def main(argv: list[str] | None = None) -> int:
         cli_inputs[name] = path
 
     overrides = (
-        _load_spec_overrides(
-            args.config,
-            selected_entry,
-            driver_context=driver_context,
-        )
+        _load_spec_overrides(args.config, selected_entry)
         if args.config
         else None
     )

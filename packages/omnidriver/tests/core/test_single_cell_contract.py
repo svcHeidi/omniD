@@ -4,7 +4,6 @@ import ast
 import unittest
 from pathlib import Path
 
-from omnidriver.core.runtime.registry import load_tutorial_spec
 from conftest import monorepo_root, skip_without_monorepo
 
 
@@ -12,11 +11,16 @@ from conftest import monorepo_root, skip_without_monorepo
 class TestSingleCellContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        spec = load_tutorial_spec(
-            "singleCell",
-            overrides={"cases_root": monorepo_root / "tutorials"},  # type: ignore[operator]
+        # Step S6 deleted `load_tutorial_spec` (the factory-tutorial
+        # registry it resolved through); this test only ever needed one
+        # known file's path, never spec resolution -- built directly from
+        # the monorepo layout `docs/superpowers/ROADMAP.md` itself records
+        # for `singleCell` (`electrophysiologyProtocols/singleCell`).
+        cls.module_path = (
+            monorepo_root  # type: ignore[operator]
+            / "tutorials" / "electrophysiologyProtocols" / "singleCell"
+            / "singleCellinteractivePlots.py"
         )
-        cls.module_path = spec.setup_root / "singleCellinteractivePlots.py"
         cls.tree = ast.parse(cls.module_path.read_text())
 
     def test_load_simulation_data_no_output_folder_dependency(self) -> None:

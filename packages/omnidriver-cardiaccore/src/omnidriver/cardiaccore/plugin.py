@@ -72,19 +72,6 @@ class CardiacCorePlugin:
         """
         return {}
 
-    def get_tutorial_catalog(self) -> dict[str, Any]:
-        # No factory tutorial survives (step S5, 2026-09-28): all four
-        # migrated onto a tutorial record (humanSlab; idealizedHeart,
-        # idealizedHeartEndocardial, idealizedHeartPigTransmural, the
-        # committed-mesh reconfiguration of humanEndocardial/
-        # pigMorphometricTransmural); cardiaccore-pig-transmural-purkinje had
-        # no native tutorial at all and was dropped outright. Same empty
-        # shape cardiacFOAM's and openCARP's plugins already return here.
-        return {"registered_tutorials": (), "spec_factories": {}}
-
-    def get_tutorial_displays(self) -> tuple[Any, ...]:
-        return ()
-
     def validate_configuration(self, spec: Any) -> tuple[Any, ...]:
         """Check this spec's workflow-relevant catalog entries at plan time.
 

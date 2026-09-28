@@ -31,10 +31,9 @@ def test_dictionary_resolution_audit_text_is_plugin_neutral_for_non_cardiac_plug
     spec = SimpleNamespace(
         case_root=tmp_path,
         metadata={},  # not a generic_case, exercises the plugin-sourced branch
-        build_cases=lambda: [],
     )
 
-    audit_items, _generation_diagnostics, _readiness = _build_simulation_audit(
+    audit_items, _readiness = _build_simulation_audit(
         spec=spec,
         driver_context=context,
         workflow_dag=None,

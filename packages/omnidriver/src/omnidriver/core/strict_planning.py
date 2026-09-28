@@ -750,7 +750,7 @@ def _strict_plan_for_spec(
     configuration_evidence_policy = (
         "exploratory" if allow_unresolved_configuration else "strict"
     )
-    simulation_audit, generation_diagnostics, readiness_score = _build_simulation_audit(
+    simulation_audit, readiness_score = _build_simulation_audit(
         spec=spec,
         driver_context=driver_context,
         workflow_dag=workflow_dag,
@@ -768,8 +768,7 @@ def _strict_plan_for_spec(
         ),
     )
     plan_diagnostics = (
-        generation_diagnostics
-        + validation_diagnostics
+        validation_diagnostics
         + workflow_diagnostics
         + catalog_diagnostics
         + artifact_diagnostics

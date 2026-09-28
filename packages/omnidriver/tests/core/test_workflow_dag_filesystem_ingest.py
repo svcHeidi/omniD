@@ -12,10 +12,12 @@ two tests kept here assert core's own DAG-synthesis rule (a declared script
 present -> single-step DAG; absent -> None), independent of what marks a folder
 case at all, so the local ``_FilesystemMarkerPlugin`` explicitly defines a
 test-only ``metadata/case.txt`` + ``inputs/`` marker. It wires
-``make_generic_case_spec`` into its tutorial catalog -- the
-same core-owned factory ``resolve_entry`` already falls back to when no
-marker matches, so both branches behave identically and no cardiac
-vocabulary is reachable.
+``make_generic_case_spec`` into its own ``get_generic_case_factory`` (step S6
+replaced the deleted ``get_tutorial_catalog``'s smuggled
+``"make_generic_case_spec"`` key with this narrower hook) -- the same
+core-owned factory ``resolve_entry`` already falls back to when no marker
+matches, so both branches behave identically and no cardiac vocabulary is
+reachable.
 """
 from __future__ import annotations
 
@@ -24,7 +26,7 @@ from pathlib import Path
 import tempfile
 
 from omnidriver.core.runtime.generic_case import make_generic_case_spec
-from omnidriver.core.runtime.registry import load_tutorial_spec, resolve_entry
+from omnidriver.core.runtime.registry import load_entry_spec
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 from plugins.minimal_plugin import MinimalTestPlugin
@@ -50,15 +52,12 @@ class _FilesystemMarkerPlugin(MinimalTestPlugin):
             case_script_commands=("run-case",),
         )
 
-    def get_tutorial_catalog(self):
-        # resolve_entry() looks up "make_generic_case_spec" in the selected
-        # plugin's own tutorial catalog once has_case_marker() is True (see
-        # registry.py); wire it to the same core factory the no-marker
-        # branch already falls back to, so which branch runs makes no
-        # behavioural difference here.
-        catalog = dict(super().get_tutorial_catalog())
-        catalog["make_generic_case_spec"] = make_generic_case_spec
-        return catalog
+    def get_generic_case_factory(self):
+        # resolve_entry() calls capabilities.generic_case_factory.factory()
+        # once has_case_marker() is True (see registry.py); wire it to the
+        # same core factory the no-marker branch already falls back to, so
+        # which branch runs makes no behavioural difference here.
+        return make_generic_case_spec
 
 
 _CTX = _driver_context(
@@ -82,7 +81,7 @@ class TestFilesystemCaseWorkflowOwnership(unittest.TestCase):
             self._write_case_files(case_root)
             (case_root / "run-case").write_text("#!/bin/sh\n")
 
-            spec = load_tutorial_spec(
+            spec = load_entry_spec(
                 "myCase",
                 overrides={"cases_root": cases_root},
                 driver_context=_CTX,)
@@ -99,7 +98,7 @@ class TestFilesystemCaseWorkflowOwnership(unittest.TestCase):
             case_root = cases_root / "bareCase"
             self._write_case_files(case_root)
 
-            spec = load_tutorial_spec(
+            spec = load_entry_spec(
                 "bareCase",
                 overrides={"cases_root": cases_root},
                 driver_context=_CTX,)

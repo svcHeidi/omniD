@@ -67,7 +67,7 @@ def test_bare_make_spec_still_applies_the_cardiac_mutation(tmp_path: Path) -> No
 
     spec = _spec(tmp_path, dict_file_overrides={"physics": {"type": "electroMechanicalModel"}})
     with compatibility.track_fallback_calls() as calls:
-        spec.apply_case(spec.case_root, spec.build_cases()[0])
+        spec.case_mutation(spec.case_root)
 
     assert calls == []
     assert "electroMechanicalModel" in (case_root / "constant" / "physicsProperties").read_text()

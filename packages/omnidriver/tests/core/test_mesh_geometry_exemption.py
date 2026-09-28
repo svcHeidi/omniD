@@ -14,10 +14,7 @@ from plugins.minimal_plugin import MinimalTestPlugin
 
 
 def _spec(root: Path, **metadata) -> TutorialSpec:
-    return TutorialSpec(
-        name="t", case_root=root, setup_root=root, output_dir=root,
-        build_cases=lambda: [], metadata=dict(metadata),
-    )
+    return TutorialSpec(name="t", case_root=root, metadata=dict(metadata))
 
 
 class _Nondimensional(MinimalTestPlugin):

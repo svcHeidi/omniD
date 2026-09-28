@@ -75,7 +75,6 @@ requires:
 # capability_digest this codebase has ever computed.
 provides:
   - dictionaries
-  - tutorials
   - named_catalogs
   - cxx_mapping
   - manifest

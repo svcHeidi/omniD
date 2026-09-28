@@ -124,67 +124,10 @@ def test_environment_ownership_is_not_an_openfoam_prefix_test(role, environment_
     assert is_environment_role(role) is environment_owned
 
 
-def test_an_escape_role_is_reported_as_the_environment_s_file(tmp_path) -> None:
-    """The call site, not just the helper.
-
-    Testing `is_environment_role` in isolation passes whether or not
-    `tutorial_contracts` actually calls it -- reverting that call site to
-    `role.startswith("openfoam.")` left the parametrized test above entirely
-    green. This exercises the split itself: a foreign environment's required
-    file must be reported under `solver_required_files`, not
-    `core_required_files`.
-    """
-    from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile
-    from omnidriver.core.runtime.generic_case import make_spec
-    from omnidriver.core.tutorial_contracts import describe_tutorial_contract
-
-    case_root = tmp_path / "myCase"
-    case_root.mkdir()
-    (case_root / "domain.xdmf").write_text("mesh")
-    (case_root / "plugin.cfg").write_text("cfg")
-
-    class _ForeignEnvironmentPlugin(minimal_plugin.MinimalTestPlugin):
-        def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
-            return CaseRuntimeConventions(output_collection_relpath="test-output")
-
-        def get_profile(self):
-            rules = (
-                CaseFileRule(
-                    path="domain.xdmf", kind="dictionary",
-                    role="x-fenics.mesh_file", required="always",
-                ),
-                CaseFileRule(
-                    path="plugin.cfg", kind="dictionary",
-                    role="plugin.configuration", required="always",
-                ),
-            )
-            return PluginProfile(
-                path=tmp_path / "plugin.yaml",
-                plugin_id=self.plugin_id,
-                api_version=self.plugin_api_version,
-                case_files=rules,
-                cxx_mapping=None,
-                payload={
-                    "schema_version": 1,
-                    "plugin": {"id": self.plugin_id,
-                               "api_version": self.plugin_api_version},
-                    "case_profile": {"dictionaries": []},
-                },
-            )
-
-    context = driver_context(_ForeignEnvironmentPlugin(), source="test:foreign")
-    spec = make_spec(
-        cases_root=tmp_path,
-        case_dir_name="myCase",
-        solver_command="foreign-runner",
-        driver_context=context,
-    )
-    contract = describe_tutorial_contract(
-        spec, resolution="test", driver_context=context,
-    )
-
-    assert "domain.xdmf" in contract["solver_required_files"], (
-        "a foreign environment's required file was filed as core's own"
-    )
-    assert "plugin.cfg" in contract["core_required_files"]
-    assert "domain.xdmf" not in contract["core_required_files"]
+# Step S6 (2026-09-28) deleted `tutorial_contracts.describe_tutorial_contract`,
+# `is_environment_role`'s only production call site (the
+# `core_required_files`/`solver_required_files` split it decided). The test
+# that exercised that call site (not just the pure helper above),
+# `test_an_escape_role_is_reported_as_the_environment_s_file`, went with it --
+# there is no longer a call site to exercise, only the helper the
+# parametrized test above already covers directly.
