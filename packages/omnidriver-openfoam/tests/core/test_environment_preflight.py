@@ -417,3 +417,22 @@ def test_an_unsourced_environment_is_still_reported_when_nothing_needs_it(clean_
         "nothing records that the environment was unsourced: "
         f"{[(d.level, d.code) for d in diags]}"
     )
+
+
+
+def test_the_stale_build_check_reads_the_supplied_source_root_only(tmp_path, monkeypatch):
+    """Corrected 2026-09-28: the root was a walk-up to a retired layout."""
+    from types import SimpleNamespace
+
+    from omnidriver.core.plugin_profile import CxxMapping
+    from omnidriver.openfoam.environment_preflight import _supplied_src_root
+
+    mapping = CxxMapping("TOY_TREE", "src", tmp_path / "allowlist.json")
+    context = SimpleNamespace(capabilities=SimpleNamespace(
+        cxx_mapping=SimpleNamespace(profile=lambda: SimpleNamespace(cxx_mapping=mapping)),
+    ))
+    monkeypatch.delenv("TOY_TREE", raising=False)
+    assert _supplied_src_root(context) is None
+    assert _supplied_src_root(None) is None
+    monkeypatch.setenv("TOY_TREE", str(tmp_path))
+    assert _supplied_src_root(context) == (tmp_path / "src").resolve()

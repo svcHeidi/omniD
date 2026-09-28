@@ -2,7 +2,7 @@
 
 Converted 2026-09-26 (R2 fix, finding M6) from ``skip_without_monorepo`` to
 ``@pytest.mark.native``: the old gate used ``conftest.cardiacfoam_monorepo_root``
-(now ``omnidriver.cardiacfoam.monorepo.cardiacfoam_monorepo_root``), which
+(later ``omnidriver.cardiacfoam.monorepo``, deleted 2026-09-28), which
 walks up from this file looking for ``tutorials/``+``applications/`` siblings
 -- a check that can only succeed when this checkout sits *inside* the full
 cardiacFoam monorepo. In a standalone ``omnidriver`` checkout it is always
@@ -363,12 +363,13 @@ def test_strict_plan_fails_when_artifact_prediction_is_empty() -> None:
 
 
 def test_strict_dict_key_scanner_allowlist_is_current() -> None:
-    """The committed ``dict_key_allowlist.json`` against the real native
-    C++ source (``<OMNIDRIVER_NATIVE_TUTORIALS>/../src``, the tutorials
-    tree's own monorepo sibling -- supplied via that one environment
-    variable, never independently discovered)."""
+    """The committed ``dict_key_allowlist.json`` (key reads and the
+    runtime-selection mapping) against the real native C++ source, where
+    the plugin profile says it is (``cxx_mapping.source_root``:
+    ``<OMNIDRIVER_NATIVE_TUTORIALS>/../src``)."""
     assert CARDIAC_MAPPING is not None
-    src_root = _native_tutorials_root().parent / "src"
+    _native_tutorials_root()
+    src_root = CARDIAC_MAPPING.source_root(os.environ)
     if not src_root.is_dir():
         pytest.fail(
             f"expected a 'src' sibling of OMNIDRIVER_NATIVE_TUTORIALS's "
@@ -380,8 +381,16 @@ def test_strict_dict_key_scanner_allowlist_is_current() -> None:
         allowlist_path=CARDIAC_MAPPING.allowlist_path,
         entries=CARDIAC_PLUGIN.get_dict_entries(),
     )
-    assert report.status == "ok"
+    assert report.status == "ok", report.to_json()
     assert report.to_json()["unused_allowlist"] == []
+
+
+def test_every_strict_plan_scans_the_supplied_source() -> None:
+    """Added 2026-09-28: with the source root supplied, a strict plan's
+    catalog diagnostics are the scan's (clean: none), not the
+    ``plugin_cxx_source_not_supplied`` note an unsupplied root gives."""
+    _native_tutorials_root()
+    assert strict_planning._catalog_diagnostics(_CTX) == ()
 
 
 def test_strict_dict_key_scanner_fails_on_unallowlisted_key() -> None:

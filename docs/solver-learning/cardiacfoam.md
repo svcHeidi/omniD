@@ -720,3 +720,16 @@ hand. `setup/post_processing_coupled_1D3D.py`/
 `post_processing_purkinje_graph.py` (the old sweep's own aggregation
 scripts, keyed on an old-shape output-directory-per-case layout) are not
 touched or exercised by this migration; see the report's concerns.
+
+## K. The C++ scans as production gates (truth layer, 2026-09-28)
+
+Native tree: `git archive omnid/tutorials-are-pointers` (`c184d702`) `tutorials src`, supplied as `OMNIDRIVER_NATIVE_TUTORIALS=<extract>/tutorials`; the profile's `cxx_mapping.source_root` makes the source `<that>/../src`.
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| K1 | `plan --strict --entry niederer2011` with the variable unset | one `info` `plugin_cxx_source_not_supplied`, plan `ok` | before this, `source_roots: ../../../../../../src` resolved to `/Users/simaocastro/src` and every plan warned `plugin_cxx_source_unavailable` and scanned nothing |
+| K2 | the same with the variable set | `catalog_coverage_errors: []`; the dictionary-key scan 0.66 s, the runtime-selection scan 0.10 s | the scan is cheap enough for every plan |
+| K3 | `test_rtst_enum_contract.py` logic against the tree, first run ever (it was `skip_without_monorepo`) | 4 unclassified enums: `ecgDomains.<name>.verificationModel.{type,dimension}`, `ecgDomains.<name>.personalizedTemplates.ionicModelConfig.{tissue,solver}` | `type` is the `ecgVerificationModel` table (`ecgVerificationModel.C` reads `verificationModel.type`), values equal; `dimension` is a plain `cfg.lookup` word; `tissue`/`solver` reach `ionicModel::New` through `eikonalTemplateGenerator.C` like the top-level ones. Classified in `dict_key_allowlist.json`'s `runtime_selection` |
+| K4 | the same check over the whole `get_dict_entries()` (the test read only the physics and electro catalogues) | 4 more: `startFrom`, `stopAt`, `writeControl`, `writeFormat` | upstream OpenFOAM `controlDict` words read by `Foam::Time`, not tables; classified the same way |
+| K5 | stale waivers the new `unused_selector_mapping` list reports | `ecgDomains.<name>.manufactured.dimension` (no longer catalogued); internal `ecgVerificationModel`, `couplingVerificationModel`, `graphVerificationModel` (all mapped) | removed |
+| K6 | `scripts/regenerate-ionic-catalog.py --check` against the same source | exit 0 | the committed ionic catalogue matches the `*_Names.H` headers |

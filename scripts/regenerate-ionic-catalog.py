@@ -40,6 +40,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 from pathlib import Path
@@ -50,7 +51,7 @@ from omnidriver.cardiacfoam.names_parser import (
     find_names_header,
     parse_names_header,
 )
-from omnidriver.cardiacfoam.monorepo import cardiacfoam_monorepo_root
+from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.core.specs.paths import repo_root_default
 
 REPO_ROOT = repo_root_default()
@@ -60,10 +61,11 @@ CATALOG_PATH = (
     / "ionic_model_catalog.py"
 )
 # The *_Names.H headers this script syncs against live in the C++ solver
-# source, which this Python-only repo doesn't ship (see
-# future/UTILITY_CATALOG_STANDALONE_GAP.md for the same class of gap) --
-# only resolvable when run from inside the full cardiacFoam monorepo.
-IONIC_MODELS_DIR = (cardiacfoam_monorepo_root() or REPO_ROOT) / "src" / "ionicModels"
+# source, which this Python-only repo doesn't ship: the supplied source root
+# the plugin profile declares (cxx_mapping.source_root), never a walk-up.
+_MAPPING = CardiacFoamPlugin.get_profile().cxx_mapping
+_SOURCE_ROOT = _MAPPING.source_root(os.environ)
+IONIC_MODELS_DIR = (_SOURCE_ROOT or Path(f"${_MAPPING.source_root_variable}")) / "ionicModels"
 
 
 def _format_tuple(items: tuple[str, ...]) -> str:
@@ -127,12 +129,12 @@ def main() -> int:
 
     if not IONIC_MODELS_DIR.is_dir():
         print(
-            f"No usable C++ source root at {IONIC_MODELS_DIR} -- this is a "
-            "Python-only repo, the ionic model headers live in the full "
-            "cardiacFoam monorepo. Nothing to regenerate from here.",
+            f"No C++ source at {IONIC_MODELS_DIR}: set "
+            f"{_MAPPING.source_root_variable} to the native tutorials tree "
+            f"(the source is ${_MAPPING.source_root_variable}/{_MAPPING.source_root_relative}).",
             file=sys.stderr,
         )
-        return 0
+        return 1
 
     original = CATALOG_PATH.read_text(encoding="utf-8")
     text = original

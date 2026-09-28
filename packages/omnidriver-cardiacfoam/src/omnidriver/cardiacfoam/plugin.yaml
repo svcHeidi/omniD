@@ -154,7 +154,15 @@ case_profile:
       kind: case_script
       role: case.regression_test
       required: conditional
+# The C++ source the key scanner reads: supplied, never discovered. The
+# variable is the native tutorials tree; `relative` is the native repository's
+# own layout (src/ beside tutorials/). Corrected 2026-09-28: this was
+# `source_roots: [../../../../../../src]`, a path relative to this package
+# from the retired layout where the driver sat inside the native repository.
+# It resolved to a directory that does not exist, so every strict plan warned
+# and scanned nothing.
 cxx_mapping:
-  source_roots:
-    - ../../../../../../src
+  source_root:
+    variable: OMNIDRIVER_NATIVE_TUTORIALS
+    relative: ../src
   reviewed_allowlist: dict_key_allowlist.json

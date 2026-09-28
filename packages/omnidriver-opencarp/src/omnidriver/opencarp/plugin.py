@@ -181,16 +181,20 @@ class OpenCARPPlugin:
         # no "every index but 0" form, and listing a key the validator refuses
         # is the defect I1 names.
         entries = []
+        catalog = load_catalog()
+        # The catalogue's only source is the binary's +Help (catalog_generation.py).
+        source_ref = f"openCARP {catalog.identity.get('tag')} +Help"
         documents = read_documents(TUTORIAL_RECORDS)
         for document in sorted(d for d in documents if (Path(case_root) / d).is_file()):
             owned_templates = {template_name(key) for key in documents[document]}
-            for spec in load_catalog().parameters.values():
+            for spec in catalog.parameters.values():
                 if spec.value_kind is None or spec.name in owned_templates:
                     continue
                 entries.append({
                     "document": document, "key": spec.name, "value_kind": spec.value_kind,
                     "default": spec.default, "description": spec.description,
                     "minimum": spec.minimum, "maximum": spec.maximum, "menu": list(spec.menu),
+                    "source_refs": [source_ref],
                 })
         return tuple(entries)
 

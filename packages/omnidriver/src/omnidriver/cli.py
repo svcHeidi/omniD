@@ -898,7 +898,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "action",
         choices=[
-            "describe", "plan", "step", "run", "recover", "sweep-plan", "sweep-run", "compare",
+            "describe", "catalog", "plan", "step", "run", "recover", "sweep-plan", "sweep-run",
+            "compare",
         ],
         help="Pipeline stage to execute",
     )
@@ -1132,6 +1133,20 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--document",
+        help=(
+            "For action=catalog: list only this document's entries, as the "
+            "record's key catalogue names it (e.g. constant/electroProperties)."
+        ),
+    )
+    parser.add_argument(
+        "--key",
+        help=(
+            "For action=catalog: list only the entries that list this key "
+            "(a concrete key such as stim[0].start matches its stim[Int].start template)."
+        ),
+    )
+    parser.add_argument(
         "--comparison-request",
         help="For action=compare: an agent's quantity comparison request (JSON; schema omnidriver/schemas/quantity-comparison.schema.json).",
     )
@@ -1194,6 +1209,13 @@ _FLAG_ERRORS_BY_ACTION = {
         ("dry_run", "--dry-run is not valid with action=run"),
         ("continue_on_error", "--continue-on-error is not valid with action=run"),
     ),
+    "catalog": (
+        ("dry_run", "--dry-run is not valid with action=catalog"),
+        ("continue_on_error", "--continue-on-error is not valid with action=catalog"),
+        ("config", "--config is not valid with action=catalog"),
+        ("parallel", "--parallel is not valid with action=catalog"),
+        ("inputs", "--input is not valid with action=catalog"),
+    ),
     "compare": (
         ("dry_run", "--dry-run is not valid with action=compare"),
         ("continue_on_error", "--continue-on-error is not valid with action=compare"),
@@ -1205,6 +1227,8 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
     for flag_name, message in _FLAG_ERRORS_BY_ACTION.get(args.action, ()):
         if getattr(args, flag_name):
             parser.error(message)
+    if (args.document or args.key) and args.action != "catalog":
+        parser.error("--document/--key are only valid with action=catalog")
     if args.action not in {"plan", "step", "run"} and args.strict:
         parser.error("--strict is only valid with action=plan, action=step, or action=run")
     if args.allow_unresolved_configuration and args.action not in {"plan", "step", "run"}:
@@ -1378,6 +1402,25 @@ def main(argv: list[str] | None = None) -> int:
             "(future/ENVIRONMENT_CONTRACT.md §12)"
         )
     overrides["cases_root"] = str(resolve_cases_root(args.cases_root))
+
+    if args.action == "catalog":
+        from .core.catalog_query import catalog_query
+
+        try:
+            result = catalog_query(
+                selected_entry,
+                cases_root=Path(overrides["cases_root"]),
+                document=args.document,
+                key=args.key,
+                driver_context=driver_context,
+            )
+        except (TutorialRecordError, KeyError) as exc:
+            print(json.dumps({
+                "status": "failed", "entry": selected_entry, "action": "catalog", "error": str(exc),
+            }, indent=2))
+            return 1
+        print(json.dumps(result, indent=2))
+        return 0
 
     if args.action == "describe":
         # A record refusal is JSON here as in `plan --strict` (final review

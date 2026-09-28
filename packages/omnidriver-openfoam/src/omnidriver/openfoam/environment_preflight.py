@@ -82,13 +82,15 @@ def _required_executables(
 _SOURCE_SUFFIXES = frozenset({".C", ".H", ".cu", ".cuh"})
 
 
-def _discover_src_root() -> Path | None:
-    """Locate the repository ``src/`` tree from this module's location, or
-    ``None`` if it cannot be found (e.g. an installed-package layout)."""
-    for parent in Path(__file__).resolve().parents:
-        if (parent / "src").is_dir() and (parent / "tutorials").is_dir():
-            return parent / "src"
-    return None
+def _supplied_src_root(driver_context: Any | None) -> Path | None:
+    """The stack's C++ source root, as supplied (``cxx_mapping.source_root``),
+    or ``None``. Corrected 2026-09-28: this walked up from this module's own
+    location for a ``src/`` beside ``tutorials/``, the retired in-monorepo
+    layout, so the stale-build check never fired."""
+    if driver_context is None:
+        return None
+    mapping = driver_context.capabilities.cxx_mapping.profile().cxx_mapping
+    return mapping.source_root(os.environ) if mapping is not None else None
 
 
 def _newest_source_mtime(src_root: Path) -> float | None:
@@ -266,7 +268,7 @@ def _environment_diagnostics(
 
     diagnostics.extend(
         _build_staleness_diagnostics(
-            workflow_dag, checked_env, src_root=_discover_src_root(),
+            workflow_dag, checked_env, src_root=_supplied_src_root(driver_context),
             driver_context=driver_context,
         )
     )

@@ -240,6 +240,18 @@ ANATOMY_ENTRIES: Final[tuple[DictEntry, ...]] = (
         value_kind="scalar",
         required=True,
     ),
+    # Added 2026-09-28: the first plan-time scan of main's src/ found this
+    # read (getOrDefault<label>, default 10) uncatalogued.
+    DictEntry(
+        driver_path="$CARDIAC_ANATOMY.rvLocalBands",
+        description=(
+            "Number of longitudinal bands used to recalibrate the RV free-wall "
+            "boundary. Optional; the C++ default is 10."
+        ),
+        source_refs=(_ANATOMY_SOURCE, "src/setCardiacAnatomy/README.md"),
+        value_kind="integer",
+        typical_value="10",
+    ),
 )
 
 SLAB_ENTRIES: Final[tuple[DictEntry, ...]] = (

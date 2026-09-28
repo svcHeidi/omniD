@@ -256,31 +256,44 @@ def _catalog_diagnostics(driver_context: "DriverContext") -> tuple[StrictDiagnos
     cxx_mapping_source = driver_context.identity.resolutions.get(
         "cxx_mapping", "cxx_mapping",
     )
-    diagnostics: list[StrictDiagnostic] = []
-    for source_root in mapping.source_roots:
-        if not source_root.is_dir():
-            diagnostics.append(_diagnostic(
-                "warning",
-                "plugin_cxx_source_unavailable",
-                f"Plugin C++ source root is unavailable: {source_root}",
-                source=cxx_mapping_source,
-            ))
-            continue
-        report = driver_context.capabilities.dict_key_scanner.scan(
-            source_root,
-            allowlist_path=mapping.allowlist_path,
-            entries=driver_context.capabilities.dictionaries.entries(),
+    source_root = mapping.source_root(os.environ)
+    if source_root is None:
+        # Supplied, never discovered: an unsupplied root is one plain fact,
+        # not a warning on every plan (it was a stale package-relative path,
+        # so every cardiacFOAM plan warned and scanned nothing).
+        return (_diagnostic(
+            "info",
+            "plugin_cxx_source_not_supplied",
+            f"C++ source not scanned: source root not supplied (set "
+            f"{mapping.source_root_variable}; the source is "
+            f"${mapping.source_root_variable}/{mapping.source_root_relative})",
+            source=cxx_mapping_source,
+        ),)
+    if not source_root.is_dir():
+        return (_diagnostic(
+            "error",
+            "plugin_cxx_source_unavailable",
+            f"{mapping.source_root_variable} is supplied, but its C++ source "
+            f"{source_root} is not a directory",
+            source=cxx_mapping_source,
+        ),)
+    report = driver_context.capabilities.dict_key_scanner.scan(
+        source_root,
+        allowlist_path=mapping.allowlist_path,
+        entries=driver_context.capabilities.dictionaries.entries(),
+    )
+    # Every list in the report is one kind of drift; core names none of them
+    # (the report's schema is the scanner's, not core's).
+    return tuple(
+        _diagnostic(
+            "error",
+            f"plugin_dict_key_{key}",
+            f"Plugin C++/catalog scanner reported {key}: {item}",
+            source=f"{cxx_mapping_source}:{source_root}",
         )
-        payload = report.to_json()
-        for key in ("unmatched_cxx_reads", "stale_paths", "unmatched_subdicts", "unused_allowlist"):
-            for item in payload[key]:
-                diagnostics.append(_diagnostic(
-                    "error",
-                    f"plugin_dict_key_{key}",
-                    f"Plugin C++/catalog scanner reported {key}: {item}",
-                    source=f"{cxx_mapping_source}:{source_root}",
-                ))
-    return tuple(diagnostics)
+        for key, items in report.to_json().items() if isinstance(items, list)
+        for item in items
+    )
 
 
 def _mesh_geometry_exempt(spec, driver_context: "DriverContext") -> bool:

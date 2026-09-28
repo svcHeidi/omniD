@@ -36,7 +36,7 @@ import re
 import json
 from collections import defaultdict
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
 
 # ---------------------------------------------------------------------------
-# Comment stripping  (identical pattern to rtst_scanner.py)
+# Comment stripping  (the pattern rtst_scanner.py also uses)
 
 _BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
 _LINE_COMMENT = re.compile(r"//[^\n]*")
@@ -251,6 +251,9 @@ class DictKeyStrictReport:
     stale_paths: tuple[str, ...]
     unmatched_subdicts: tuple[str, ...]
     unused_allowlist: tuple[str, ...]
+    #: ``rtst_scanner.runtime_selection_report``'s answer; empty when the
+    #: allowlist has no ``runtime_selection`` section.
+    runtime_selection: dict[str, object] = field(default_factory=dict)
 
     def to_json(self) -> dict[str, object]:
         return {
@@ -259,6 +262,7 @@ class DictKeyStrictReport:
             "stale_paths": list(self.stale_paths),
             "unmatched_subdicts": list(self.unmatched_subdicts),
             "unused_allowlist": list(self.unused_allowlist),
+            **self.runtime_selection,
         }
 
 
@@ -402,9 +406,19 @@ def strict_dict_key_report(
     allowlist_path: Path,
     entries: Iterable["DictEntry"],
 ) -> DictKeyStrictReport:
-    """Return the allowlist-backed strict scanner result."""
+    """Return the allowlist-backed strict scanner result, with the
+    runtime-selection check when the allowlist carries its mapping."""
+    entries = tuple(entries)
     drift = compute_dict_key_drift(src_root, entries=entries)
     allowlist = load_dict_key_allowlist(allowlist_path)
+    selection_mapping = json.loads(Path(allowlist_path).read_text()).get("runtime_selection")
+    runtime_selection: dict[str, object] = {}
+    if selection_mapping is not None:
+        from .rtst_scanner import runtime_selection_report
+
+        runtime_selection = runtime_selection_report(
+            src_root, entries=entries, mapping=selection_mapping,
+        )
 
     unexpected: dict[str, set[str]] = {}
     unused: set[str] = set()
@@ -412,11 +426,15 @@ def strict_dict_key_report(
         unexpected[key] = drift[key] - allowlist[key]
         unused.update(f"{key}:{item}" for item in sorted(allowlist[key] - drift[key]))
 
-    status = "ok" if not any(unexpected.values()) and not unused else "failed"
+    selection_failed = any(
+        items for items in runtime_selection.values() if isinstance(items, list)
+    )
+    status = "ok" if not any(unexpected.values()) and not unused and not selection_failed else "failed"
     return DictKeyStrictReport(
         status=status,
         unmatched_cxx_reads=tuple(sorted(unexpected["unmatched_cxx_reads"])),
         stale_paths=tuple(sorted(unexpected["stale_paths"])),
         unmatched_subdicts=tuple(sorted(unexpected["unmatched_subdicts"])),
         unused_allowlist=tuple(sorted(unused)),
+        runtime_selection=runtime_selection,
     )

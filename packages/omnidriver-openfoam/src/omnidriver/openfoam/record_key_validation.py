@@ -40,3 +40,21 @@ def infer_unvalidated_value_kind(value: Any) -> str:
     if isinstance(value, str) and value.split() != [value]:
         return "string"
     return "word"
+
+
+def listed_entry(document: str, key: str, entry: Any) -> dict[str, Any]:
+    """One key-catalogue listing (``record_surface``'s grammar) for a
+    catalogued ``DictEntry``: what ``describe`` and ``omnidriver catalog``
+    show for it. Shared by cardiacFOAM and cardiacCore (one reality). The
+    catalogues record no default, only a ``typical_value``."""
+    return {
+        "document": document, "key": key, "driver_path": entry.driver_path,
+        "value_kind": entry.value_kind, "unit": entry.unit,
+        "description": entry.description, "menu": list(entry.enum_values),
+        "typical_value": entry.typical_value,
+        "applicable_when": {
+            name: list(value) if isinstance(value, tuple) else value
+            for name, value in entry.applicable_when.items()
+        },
+        "source_refs": list(entry.source_refs),
+    }

@@ -108,9 +108,9 @@ from typing import Any
 
 from pathlib import Path
 
-from omnidriver.core.contracts.dictionary import DictEntry, validate_value_shape
+from omnidriver.core.contracts.dictionary import validate_value_shape
 from omnidriver.core.runtime.record_surface import ANY_KEY
-from omnidriver.openfoam.record_key_validation import infer_unvalidated_value_kind
+from omnidriver.openfoam.record_key_validation import infer_unvalidated_value_kind, listed_entry
 
 from .detection import detect_myocardium_solver_name
 from .overrides import (
@@ -254,13 +254,6 @@ def record_key_validator(
     )
 
 
-def _listed(document: str, key: str, entry: DictEntry) -> dict[str, Any]:
-    return {
-        "document": document, "key": key, "value_kind": entry.value_kind,
-        "description": entry.description, "menu": list(entry.enum_values),
-    }
-
-
 def record_key_catalog(case_root: Path) -> tuple[dict[str, Any], ...]:
     """Every key ``record_key_validator`` accepts for the case at
     ``case_root``, in ``runtime.record_surface``'s grammar (module
@@ -291,11 +284,11 @@ def record_key_catalog(case_root: Path) -> tuple[dict[str, Any], ...]:
                 "electroProperties catalog's myocardiumSolver enum does not list"
             )
         entries += [
-            _listed(_ELECTRO_DOCUMENT, entry.driver_path.replace(_COEFFS_TOKEN, coeffs, 1), entry)
+            listed_entry(_ELECTRO_DOCUMENT, entry.driver_path.replace(_COEFFS_TOKEN, coeffs, 1), entry)
             for entry in _ELECTRO_ENTRIES_BY_PATH.values()
         ]
     if (case_root / _PHYSICS_DOCUMENT).is_file():
-        entries += [_listed(_PHYSICS_DOCUMENT, path, entry) for path, entry in _PHYSICS_ENTRIES_BY_PATH.items()]
+        entries += [listed_entry(_PHYSICS_DOCUMENT, path, entry) for path, entry in _PHYSICS_ENTRIES_BY_PATH.items()]
     system = case_root / "system"
     entries += [
         {"document": path.relative_to(case_root).as_posix(), "key": ANY_KEY, "validated": False}

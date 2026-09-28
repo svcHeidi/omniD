@@ -920,6 +920,34 @@ What it adds to the steps above:
   `level_study.py` keeps one Δx's rows and adds the rank count, and
   changes nothing the study states.
 
+## The entries of one dictionary: `omnidriver catalog`
+
+```bash
+omnidriver catalog --plugin cardiacfoam --entry niederer2011 --cases-root <tutorials> \
+    --document constant/electroProperties --key monodomainSolverCoeffs.ionicModel
+```
+
+It prints the record's key catalogue as JSON, the same entries `describe`
+shows as `record_surface.keys` and the record-key validator refuses by.
+`--document` and `--key` filter it, and both are optional. A concrete key
+such as `stim[0].start` finds its `stim[Int].start` template. Each entry
+names its `document`, `key`, `value_kind` and `description`. cardiacFOAM and
+cardiacCore entries add `driver_path`, `unit`, `menu`, `typical_value`,
+`applicable_when` and `source_refs` (C++ files). openCARP entries add
+`default`, `minimum`, `maximum`, `menu` and `source_refs` (the binary's
+`+Help`). No catalogue here records a default for an OpenFOAM key.
+
+`cxx_source` says whether the C++ was read. The source root is supplied,
+never discovered. For cardiacFOAM it is `$OMNIDRIVER_NATIVE_TUTORIALS/../src`,
+and for cardiacCore `$OMNIDRIVER_CARDIACCORE_TREE/src`; the plugin profile's
+`cxx_mapping.source_root` declares both. When the root is supplied, the
+stack's scanner runs and reports any drift. Every entry whose values a C++
+runtime-selection table registers (every `ionicModel`, say) then carries
+them as `cxx_values`. `plan --strict` runs the same scan and fails on drift.
+Without the root it notes `plugin_cxx_source_not_supplied` and scans
+nothing. openCARP has no C++ mapping (`cxx_source: null`): its catalogue is
+generated from the binary.
+
 ## Discovering what's valid
 
 Three layers of discovery:
@@ -928,7 +956,7 @@ Three layers of discovery:
 2. **What dict keys can I set?** Iterate `omnidriver.cardiacfoam.dict_entries_catalog.ELECTRO_PROPERTY_ENTRY_GROUPS` and `omnidriver.cardiacfoam.common_dict_entries.PHYSICS_PROPERTY_ENTRIES` for case-physics entries. For time-control use `omnidriver.cardiacfoam.common_dict_entries.CONTROL_DICT_ENTRIES` (`deltaT`, `endTime`). Each entry carries `driver_path`, `value_kind`, `enum_values`, `unit`, `typical_value`, and structured constraints (`applicable_when`, `forbidden_when`, `required_when`, `mutually_exclusive_with`). (Corrected 2026-09-19: these live in the `omnidriver-cardiacfoam` package, not `omnidriver.dict_entries` in core — core's `dict_entries.py` only exposes context-aware helpers such as `get_electro_property_entry_groups(driver_context)`.)
 3. **What ionic models can I pick?** `from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG`. Each entry carries `states`, `algebraic`, `compatible_solvers`, `compatible_tissues`, `species`, `cardiac_region`, `recommended_exports`.
 4. **What utilities are known?** `from omnidriver.core.utility_catalog import load_utility_manifests`; call it with a plugin's utility root(s) (`plugin.get_utility_roots()`) to get a `dict[str, UtilityManifest]`. Strict planning fails when a workflow command has missing required `produces` metadata. (Corrected 2026-09-19: `UTILITY_CATALOG` was an eager module-level constant removed by design — core names no solver's utilities; see `future/UTILITY_CATALOG_STANDALONE_GAP.md`.)
-5. **What dict keys have parser limitations?** Read `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/dict_key_allowlist.json`. Strict dict-key scanning fails when new uncatalogued keys appear, stale catalog paths remain, or allowlist entries become unused. (Corrected 2026-09-19: was given as `omnidriver/plugins/cardiacfoam/dict_key_allowlist.json` — `omnidriver.plugins` is the entry-point group name, not a package path.)
+5. **What dict keys have parser limitations?** Read `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/dict_key_allowlist.json` (cardiacCore has its own beside its `plugin.yaml`). Strict dict-key scanning fails when new uncatalogued keys appear, stale catalog paths remain, or allowlist entries become unused, and, through its `runtime_selection` section, when an enum's values stop matching the C++ runtime-selection table they come from. (Corrected 2026-09-19: was given as `omnidriver/plugins/cardiacfoam/dict_key_allowlist.json` — `omnidriver.plugins` is the entry-point group name, not a package path.)
 6. **What commands may a workflow step run, and what fields may a function object sample?** Read the `capability_manifest` block emitted by both `describe --entry <name>` and `plan --strict --entry <name>` (and `describe_entry(...)` / `strict_plan(...).to_json()` programmatically). It is the authoritative, machine-readable accept-surface: `allowed_commands` (`core`, `case_scripts`, `utilities`, plus the `$FOAM_APPBIN` note) mirrors the command allowlist exactly, and `samplable_fields` lists the field names the *resolved* model exposes,
 keyed by region. **Both blocks are plugin-dependent.** For cardiacFoam the
 regions are `electro` / `solid`; under `--plugin none` neither key is

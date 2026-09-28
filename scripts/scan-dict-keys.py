@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -56,10 +57,6 @@ from omnidriver.openfoam.dict_keys_scanner import (
     scan_dict_reads,
     strict_dict_key_report,
 )
-from omnidriver.cardiacfoam.monorepo import cardiacfoam_monorepo_root
-from omnidriver.core.specs.paths import repo_root_default
-
-REPO_ROOT = cardiacfoam_monorepo_root() or repo_root_default()
 
 def _plugin_scan_inputs(plugin: str | None):
     """Resolve the active plugin's C++ mapping and dictionary catalogue.
@@ -107,10 +104,14 @@ IGNORED_KEYS: frozenset[str] = frozenset(
 # Helpers
 
 
+#: The native repository root (the source root's parent), set by main().
+_DISPLAY_ROOT = Path("/")
+
+
 def _short_path(p: Path) -> str:
-    """Return path relative to repo root for display."""
+    """Return path relative to the native repository root for display."""
     try:
-        return str(p.relative_to(REPO_ROOT))
+        return str(p.relative_to(_DISPLAY_ROOT))
     except ValueError:
         return str(p)
 
@@ -291,13 +292,18 @@ def main() -> int:
         )
         return 0
 
-    src_roots = [root for root in mapping.source_roots if root.is_dir()]
-    for root in mapping.source_roots:
-        if not root.is_dir():
-            print(f"Source root unavailable, skipped: {root}", file=sys.stderr)
-    if not src_roots:
-        print("No usable C++ source root; nothing to scan.", file=sys.stderr)
-        return 0
+    # Supplied, never discovered: the variable the plugin profile names.
+    root = mapping.source_root(os.environ)
+    if root is None or not root.is_dir():
+        print(
+            f"C++ source not scanned: set {mapping.source_root_variable} (the source is "
+            f"${mapping.source_root_variable}/{mapping.source_root_relative}); got {root}",
+            file=sys.stderr,
+        )
+        return 1
+    src_roots = [root]
+    global _DISPLAY_ROOT
+    _DISPLAY_ROOT = root.parent
 
     if args.strict:
         status = 0

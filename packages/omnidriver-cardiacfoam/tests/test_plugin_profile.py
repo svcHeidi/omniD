@@ -10,7 +10,6 @@ import pytest
 from omnidriver.cardiacfoam import runtime_profile
 from omnidriver.cardiacfoam.runtime_profile import configure_runtime_environment
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
-from conftest import skip_without_monorepo
 
 
 def test_cardiac_profile_declares_case_files_and_cxx_provenance() -> None:
@@ -31,15 +30,24 @@ def test_cardiac_profile_declares_case_files_and_cxx_provenance() -> None:
     assert profile.digest.startswith("sha256:")
 
 
-@skip_without_monorepo
-def test_cardiac_profile_cxx_source_roots_exist() -> None:
-    """cxx_mapping.source_roots points into the C++ solver source tree,
-    which this standalone Python-only repo doesn't ship (see
-    GITHUB_MIGRATION.md: "we are moving *only the Python framework*").
-    Only verifiable when checked out inside the full cardiacFoam monorepo."""
+def test_cardiac_profile_source_root_is_supplied_never_guessed(tmp_path: Path) -> None:
+    """The C++ source is ``<OMNIDRIVER_NATIVE_TUTORIALS>/../src``, and there
+    is none when nothing is supplied. Corrected 2026-09-28: this checked a
+    package-relative ``source_roots`` from the retired in-monorepo layout,
+    behind a walk-up skip that never ran."""
+    mapping = CardiacFoamPlugin().get_profile().cxx_mapping
+    assert mapping.source_root({}) is None
+    tutorials = tmp_path / "tutorials"
+    assert mapping.source_root({"OMNIDRIVER_NATIVE_TUTORIALS": str(tutorials)}) == tmp_path / "src"
 
-    profile = CardiacFoamPlugin().get_profile()
-    assert all(path.is_dir() for path in profile.cxx_mapping.source_roots)
+
+@pytest.mark.native
+def test_cardiac_profile_source_root_exists_in_the_native_tree() -> None:
+    mapping = CardiacFoamPlugin().get_profile().cxx_mapping
+    root = mapping.source_root(os.environ)
+    assert root is not None and root.is_dir(), (
+        f"{mapping.source_root_variable} must name the native tutorials tree beside src/; got {root}"
+    )
 
 
 def test_cardiac_catalog_partitions_entries_by_document() -> None:

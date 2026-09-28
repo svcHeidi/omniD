@@ -12,7 +12,7 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import yaml
 
@@ -29,8 +29,48 @@ class CaseFileRule:
 
 @dataclass(frozen=True)
 class CxxMapping:
-    source_roots: tuple[Path, ...]
+    """Where the plugin's C++ source is, and its reviewed scanner mapping.
+
+    The source root is supplied, never discovered (CLAUDE.md): the profile
+    names the supplied variable that holds the native tree and the C++
+    source's place inside it (``relative``, the native repository's own
+    layout). A root that nobody supplied is ``None``, never a guess.
+    """
+
+    source_root_variable: str
+    source_root_relative: str
     allowlist_path: Path
+
+    def source_root(self, environ: Mapping[str, str]) -> Path | None:
+        value = environ.get(self.source_root_variable)
+        if not value:
+            return None
+        return (Path(value).expanduser() / self.source_root_relative).resolve()
+
+
+@dataclass(frozen=True)
+class SuppliedVariable:
+    name: str
+    required: bool
+    why: str
+
+
+@dataclass(frozen=True)
+class EnvironmentConnection:
+    """How a shell must be prepared to run this plugin's commands.
+
+    ``supplied`` are variables the operator sets; nothing here holds a value.
+    ``source`` names the supplied variable whose file is sourced first;
+    every set supplied variable is exported after it (macOS strips
+    ``DYLD_*`` when bash starts, so an export before ``source`` is lost);
+    ``path_prepend`` names supplied directories put first on ``PATH``;
+    ``mpi_launcher`` is the launcher command a parallel run uses.
+    """
+
+    supplied: tuple[SuppliedVariable, ...] = ()
+    source: str | None = None
+    path_prepend: tuple[str, ...] = ()
+    mpi_launcher: str | None = None
 
 
 @dataclass(frozen=True)
@@ -41,6 +81,7 @@ class PluginProfile:
     case_files: tuple[CaseFileRule, ...]
     cxx_mapping: CxxMapping | None
     payload: dict[str, Any]
+    environment: EnvironmentConnection | None = None
     #: Capability names this provider supplies, validated against the seam
     #: vocabulary at load. Intent, not observation: what the provider MEANS to
     #: supply. Core separately discovers what it actually implements, and a
@@ -182,6 +223,43 @@ def is_replica_directory_name(name: str, globs: tuple[str, ...]) -> bool:
     return any(fnmatch.fnmatchcase(name, pattern) for pattern in globs)
 
 
+def _environment_connection(profile_path: Path, raw: Any) -> EnvironmentConnection | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise _mapping_error(profile_path, "environment must be a mapping")
+    unknown = sorted(set(raw) - {"supplied", "source", "path_prepend", "mpi_launcher"})
+    if unknown:
+        raise _mapping_error(profile_path, f"environment has unknown keys {unknown}")
+    supplied = []
+    for index, item in enumerate(raw.get("supplied", ())):
+        if (
+            not isinstance(item, dict)
+            or not isinstance(item.get("name"), str) or not item["name"]
+            or not isinstance(item.get("required"), bool)
+            or not isinstance(item.get("why"), str) or not item["why"]
+        ):
+            raise _mapping_error(
+                profile_path,
+                f"environment.supplied[{index}] needs a name, a boolean 'required' and a 'why'",
+            )
+        supplied.append(SuppliedVariable(item["name"], item["required"], item["why"]))
+    names = {item.name for item in supplied}
+    source = raw.get("source")
+    path_prepend = tuple(raw.get("path_prepend", ()) or ())
+    for name in ((source,) if source is not None else ()) + path_prepend:
+        if name not in names:
+            raise _mapping_error(
+                profile_path, f"environment names {name!r}, which is not one of its supplied variables",
+            )
+    launcher = raw.get("mpi_launcher")
+    if launcher is not None and (not isinstance(launcher, str) or not launcher):
+        raise _mapping_error(profile_path, "environment.mpi_launcher must be a command name")
+    return EnvironmentConnection(
+        supplied=tuple(supplied), source=source, path_prepend=path_prepend, mpi_launcher=launcher,
+    )
+
+
 def load_plugin_profile(path: str | Path) -> PluginProfile:
     """Load a small, safe YAML profile and convert it into immutable data.
 
@@ -245,16 +323,28 @@ def load_plugin_profile(path: str | Path) -> PluginProfile:
     if raw_mapping is not None:
         if not isinstance(raw_mapping, dict):
             raise _mapping_error(profile_path, "cxx_mapping must be a mapping")
-        roots = raw_mapping.get("source_roots")
+        root = raw_mapping.get("source_root")
         allowlist = raw_mapping.get("reviewed_allowlist")
-        if not isinstance(roots, list) or not roots or not all(isinstance(item, str) and item for item in roots):
-            raise _mapping_error(profile_path, "cxx_mapping.source_roots must be a non-empty string list")
+        if (
+            not isinstance(root, dict)
+            or not isinstance(root.get("variable"), str) or not root["variable"]
+            or not isinstance(root.get("relative"), str) or not root["relative"]
+        ):
+            raise _mapping_error(
+                profile_path,
+                "cxx_mapping.source_root must be a mapping with non-empty 'variable' "
+                "(the supplied variable naming the native tree) and 'relative' "
+                "(the C++ source inside it)",
+            )
         if not isinstance(allowlist, str) or not allowlist:
             raise _mapping_error(profile_path, "cxx_mapping.reviewed_allowlist must be a string")
         cxx_mapping = CxxMapping(
-            source_roots=tuple((profile_path.parent / item).resolve() for item in roots),
+            source_root_variable=root["variable"],
+            source_root_relative=root["relative"],
             allowlist_path=(profile_path.parent / allowlist).resolve(),
         )
+
+    environment = _environment_connection(profile_path, raw.get("environment"))
 
     known_capabilities = {seam.field for seam in collect_seams()}
     provides = frozenset(raw.get("provides", ()) or ())
@@ -274,6 +364,7 @@ def load_plugin_profile(path: str | Path) -> PluginProfile:
         case_files=tuple(rules),
         cxx_mapping=cxx_mapping,
         payload=raw,
+        environment=environment,
         provides=provides,
         requires=requires,
     )

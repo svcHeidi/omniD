@@ -49,5 +49,108 @@
     "global",
     "groundPatches",
     "surfaceCurrentPatches"
-  ]
+  ],
+  "runtime_selection": {
+    "description": "Reviewed mapping from catalogue enum entries to the C++ runtime-selection tables (addToRunTimeSelectionTable) that supply their values; checked by omnidriver.openfoam.rtst_scanner.runtime_selection_report inside every strict plan whose source root is supplied. Moved 2026-09-28 from test_rtst_enum_contract.py's constants, which that test now reads from here. by_path: the table each enum exposes, with a comparison mode (strict: equal; subset: the catalogue lists some; polymorphic: the catalogue lists all, possibly more). not_runtime_selected: enums whose values are plain words, not a table. internal_bases: tables with no catalogue enum of their own. 2026-09-28, first production run against native c184d702: ecgDomains.<name>.verificationModel.type mapped to ecgVerificationModel; its dimension and personalizedTemplates.ionicModelConfig.{tissue,solver} classified as plain words, and the controlDict words startFrom, stopAt, writeControl and writeFormat (which the test never saw: it read only the physics and electro catalogues) likewise; ecgDomains.<name>.manufactured.dimension (no longer catalogued) and the internal ecgVerificationModel, couplingVerificationModel and graphVerificationModel (all now mapped) removed.",
+    "by_path": {
+      "type": {
+        "base": "physicsModel",
+        "mode": "strict"
+      },
+      "$ELECTRO_MODEL_COEFFS.ionicModel": {
+        "base": "ionicModel",
+        "mode": "strict"
+      },
+      "$ELECTRO_MODEL_COEFFS.electrophysicsAdvanceScheme": {
+        "base": "electrophysicsAdvanceScheme",
+        "mode": "strict"
+      },
+      "$ELECTRO_MODEL_COEFFS.verificationModel.type": {
+        "base": "electroVerificationModel",
+        "mode": "polymorphic"
+      },
+      "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.verificationModel.type": {
+        "base": "graphVerificationModel",
+        "mode": "strict",
+        "why": "The Purkinje graph and the PVJ coupling each have their own verifier table, separate from the myocardium-side electroVerificationModel."
+      },
+      "$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.verificationModel.type": {
+        "base": "couplingVerificationModel",
+        "mode": "strict"
+      },
+      "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.ecgSolver": {
+        "base": "ecgSolver",
+        "mode": "strict"
+      },
+      "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.ecgVerificationModel": {
+        "base": "ecgVerificationModel",
+        "mode": "polymorphic",
+        "why": "ecgVerificationModel.H declares a runtime selection table; the bath/pseudo/eikonal verifiers register against the same base."
+      },
+      "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.type": {
+        "base": "ecgVerificationModel",
+        "mode": "strict",
+        "why": "ecgVerificationModel.C reads verificationModel.type (lookupOrDefault<word>, 'none' when absent)."
+      },
+      "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.coupling.electroDomainCoupler": {
+        "base": "electroDomainCoupler",
+        "mode": "strict"
+      },
+      "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.conductionSystemSolver": {
+        "base": "conductionSystemSolver",
+        "mode": "strict"
+      },
+      "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.ionicModel": {
+        "base": "ionicModel",
+        "mode": "subset",
+        "why": "Purkinje uses a subset of the ionicModel hierarchy."
+      },
+      "$ELECTRO_MODEL_COEFFS.activeTensionModel": {
+        "base": "activeTensionModel",
+        "mode": "strict"
+      },
+      "$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.electroDomainCoupler": {
+        "base": "electroDomainCoupler",
+        "mode": "strict"
+      }
+    },
+    "not_runtime_selected": {
+      "$ELECTRO_MODEL_COEFFS.solutionAlgorithm": "implicit/explicit",
+      "$ELECTRO_MODEL_COEFFS.tissue": "tissue enum",
+      "$ELECTRO_MODEL_COEFFS.sex": "biological-sex selector",
+      "$ELECTRO_MODEL_COEFFS.dimension": "1D/2D/3D",
+      "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.dimension": "the same 1D/2D/3D selector at Purkinje scope: ionicSelector maps the word to a flag, there is no runtime table",
+      "$ELECTRO_MODEL_COEFFS.solver": "OpenFOAM ODESolver",
+      "$ELECTRO_MODEL_COEFFS.couplingSignal": "plain word",
+      "$ELECTRO_MODEL_COEFFS.timeCouplingScheme": "a plain lookupOrDefault<word> compared against two literals in myocardiumDomain.C, with a FatalError otherwise: no runtime table, no registered classes",
+      "$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.couplingMode": "plain word",
+      "$ELECTRO_MODEL_COEFFS.verificationModel.fdaBathVariant": "groundElectrode/electrodePair selects the outer bath boundary-condition layout for the FDA bath-bidomain verifier; a plain NamedEnum word read by manufacturedFDABathBidomainVerifier.C",
+      "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.tissue": "tissue enum at Purkinje scope",
+      "$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.pvjKernel": "selects the PVJ spatial-spreading kernel via a plain lookupOrDefault<word> in pvjCoupler.C",
+      "$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.pvjCouplingScheme": "selects explicit vs split implicit source assembly by a plain word in reactionDiffusionPvjCoupler.C",
+      "myocardiumSolver": "a UNION of the electroModel table, the myocardiumSolver table and the eikonalMyocardiumDomain factory: no single base to check against",
+      "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.conductionSystemDomain": "a single accepted value (purkinjeGraphModel), registered in no table",
+      "$ELECTRO_MODEL_COEFFS.batchedIntegrator": "selects the ODE integrator for compactBatched GPU models (euler / rushLarsen / rushLarsenHeun): an internal solver-algorithm enum with no runtime table",
+      "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.mode": "namedRegions/cellZoneRegions, a plain word parsed by ionicHeterogeneity.C",
+      "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.transitionMode": "blend/hard, a plain word parsed by ionicHeterogeneity.C",
+      "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.smoothing": "smoothstep, a plain word parsed by ionicHeterogeneity.C",
+      "$ELECTRO_MODEL_COEFFS.bathPotentialDomain.interfaceConductivityInterpolation": "parsed by extracellularPotentialDomain.C (lookupOrDefault<word>)",
+      "$ELECTRO_MODEL_COEFFS.conductivitySource": "uniform dict literal / field read from disk, parsed as a plain word by conductivityFieldIO.C",
+      "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.dimension": "1D/2D/3D, a plain word (cfg.lookup) in manufacturedPseudoECGVerifier.C and manufacturedEikonalECGVerifier.C",
+      "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.tissue": "eikonalTemplateGenerator.C hands ionicModelConfig to ionicModel::New, which reads tissue as the top-level tissue enum",
+      "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.solver": "eikonalTemplateGenerator.C hands ionicModelConfig to ionicModel::New, which reads solver as an OpenFOAM ODESolver name",
+      "startFrom": "an upstream OpenFOAM controlDict word read by Foam::Time (group (g) above), not a runtime table of cardiacFoam's",
+      "stopAt": "an upstream OpenFOAM controlDict word read by Foam::Time (group (g) above), not a runtime table of cardiacFoam's",
+      "writeControl": "an upstream OpenFOAM controlDict word read by Foam::Time (group (g) above), not a runtime table of cardiacFoam's",
+      "writeFormat": "an upstream OpenFOAM controlDict word read by Foam::Time (group (g) above), not a runtime table of cardiacFoam's"
+    },
+    "internal_bases": {
+      "electroModel": "a lower-level table the myocardiumSolver key resolves through; its values appear in the union enum",
+      "myocardiumSolver": "a lower-level table the myocardiumSolver key resolves through; its values appear in the union enum",
+      "electroMechanicalModel": "selected via physicsProperties' type enum; sequentialElectroMechanical is the only option once that path is taken",
+      "electroStateDomain": "one bath-potential implementation; selected by adding bathPotentialDomain, not by typing a type",
+      "electromechanicalVerificationModel": "selected via the verificationModel subdict; no catalogue type selector",
+      "eikonalVerificationModel": "selected via the verificationModel subdict; no catalogue type selector"
+    }
+  }
 }

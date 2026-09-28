@@ -114,7 +114,7 @@ correction came from executing rather than reading.
 | ~~`RUN_CASE_SCRIPT_RELPATH` names `applications/scripts/driverFoam/...`, a path that **does not exist** in this repo. Anyone relying on the default gets `FileNotFoundError`~~ **fixed** (`96a9854`): resolved relative to the installed package instead | `generic_case.py:53` |
 | `run_case.sh` hardcodes `/Volumes/OpenFOAM-v2412/etc/bashrc` — a machine-specific absolute path in shipped source | `scripts/run_case.sh:26` |
 | dead `Phase` import | `contracts/dictionary.py:12`, `dict_entries.py:31` |
-| `cardiacfoam_monorepo_root()` — zero call sites in core; its docstring cites `utility_catalog.UTILITIES_ROOT`, which no longer exists | `specs/paths.py`. **Moved 2026-09-26 (spec A6, final review M13):** now `omnidriver.cardiacfoam.monorepo` -- core's own conftest keeps a test-local walk, but the function itself is no longer in `specs/paths.py` |
+| `cardiacfoam_monorepo_root()` — zero call sites in core; its docstring cites `utility_catalog.UTILITIES_ROOT`, which no longer exists | `specs/paths.py`. **Moved 2026-09-26 (spec A6, final review M13):** now `omnidriver.cardiacfoam.monorepo` -- core's own conftest keeps a test-local walk, but the function itself is no longer in `specs/paths.py`. **Deleted 2026-09-28:** the C++ source root is supplied (`cxx_mapping.source_root` in each plugin profile); only the three test conftests keep a local walk |
 | 55 of ~74 core files carry a `"This file is part of cardiacFoam"` GPL header | throughout |
 
 **Confirmed clean:** `postprocessing/` (all four modules) and `schemas/run-document.json` carry no bindings.

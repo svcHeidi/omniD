@@ -38,7 +38,7 @@ from typing import Any
 
 from omnidriver.core.contracts.dictionary import validate_value_shape
 from omnidriver.core.runtime.record_surface import ANY_KEY
-from omnidriver.openfoam.record_key_validation import infer_unvalidated_value_kind
+from omnidriver.openfoam.record_key_validation import infer_unvalidated_value_kind, listed_entry
 
 from .catalogs.inputs import CATALOG
 
@@ -118,7 +118,7 @@ def record_key_catalog(case_root: Path) -> "tuple[dict[str, Any], ...]":
     ``case_root``, in ``record_surface``'s grammar (C10)."""
     case_root = Path(case_root)
     entries: list[dict[str, Any]] = [
-        {"document": document, "key": key, "value_kind": entry.value_kind, "description": entry.description}
+        listed_entry(document, key, entry)
         for document, by_key in _ENTRIES_BY_DOCUMENT.items()
         for key, entry in by_key.items()
     ]

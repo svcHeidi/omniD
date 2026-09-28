@@ -18,7 +18,7 @@ def test_plugin_has_a_valid_context() -> None:
     # `identity.to_json()["providers"][-1]["id"]` -- `.identity.id` was the
     # retired single-plugin shape.
     assert context.identity.to_json()["providers"][-1]["id"] == "org.omnidriver.cardiaccore"
-    assert len(context.capabilities.dictionaries.entries()) == 87
+    assert len(context.capabilities.dictionaries.entries()) == 88   # +rvLocalBands, 2026-09-28
     assert context.capabilities.dictionaries.phases() == ("preprocessing",)
     # No factory tutorial survives (S5): every one migrated onto a tutorial
     # record (see `context.capabilities.tutorial_records.catalog()`

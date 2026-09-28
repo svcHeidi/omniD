@@ -32,8 +32,13 @@ For each `addToRunTimeSelectionTable(base, derived, ctor)` call in
 type name used as the dictionary value (which may differ from the C++ class
 name via `OverrideTypeName(...)`) by reading the derived class's header.
 
-Used by the RTST contract test to verify that catalogue `enum_values` match
-the names actually selectable at runtime.
+:func:`runtime_selection_report` compares a catalogue's ``enum`` entries with
+those registrations, through the plugin's reviewed mapping (the
+``runtime_selection`` section of its scanner allowlist). It runs inside the
+strict dictionary-key report, so ``plan --strict`` checks it whenever the
+source root is supplied, and ``omnidriver catalog`` shows the registered names.
+Moved here from omnidriver-cardiacfoam 2026-09-28 (one reality): the
+registration syntax is OpenFOAM's, not a solver's.
 """
 
 from __future__ import annotations
@@ -43,10 +48,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from omnidriver.cardiacfoam.common_dict_entries import PHYSICS_PROPERTY_ENTRIES
-from omnidriver.core.contracts.dictionary import DictEntry
-from omnidriver.cardiacfoam.dict_entries import get_electro_property_entry_groups
-from omnidriver.cardiacfoam.own_context import own_driver_context
+from typing import Any, Mapping
 
 
 # `addToRunTimeSelectionTable(base, derived, ctor);` — argument layout is
@@ -155,33 +157,72 @@ def scan_rtst_registrations(
 # ---------------------------------------------------------------------------
 # Catalogue side
 
+#: How a catalogue enum's values relate to the registered names of its base.
+#: strict: equal. subset: the catalogue lists some of them (one field exposes
+#: a curated part of a table). polymorphic: the catalogue lists all of them,
+#: and may list more (several tables share one selector).
+_MODES = frozenset({"strict", "subset", "polymorphic"})
 
-@dataclass(frozen=True)
-class CatalogueEnum:
-    driver_path: str
-    enum_values: tuple[str, ...]
-    source_refs: tuple[str, ...]
 
+def runtime_selection_report(
+    src_root: Path, *, entries: Iterable[Any], mapping: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Drift between a catalogue's enum entries and the C++ registrations.
 
-def iter_catalogue_enums() -> Iterable[CatalogueEnum]:
-    """Yield every `DictEntry` with `value_kind == "enum"` and a non-empty
-    `enum_values` tuple, across both the physics and electro catalogues.
+    ``mapping`` is the reviewed ``runtime_selection`` section: ``by_path``
+    (``driver_path`` -> ``{"base", "mode"}``), ``not_runtime_selected``
+    (``driver_path`` -> why) and ``internal_bases`` (base -> why). Each drift
+    list is empty when the catalogue and the C++ agree; ``selector_values``
+    maps every checked ``driver_path`` to the names the C++ registers.
     """
-    def from_entry(e: DictEntry) -> CatalogueEnum | None:
-        if e.value_kind != "enum" or not e.enum_values:
-            return None
-        return CatalogueEnum(
-            driver_path=e.driver_path,
-            enum_values=e.enum_values,
-            source_refs=e.source_refs,
-        )
+    registrations = scan_rtst_registrations(src_root)
+    enums = {
+        entry.driver_path: entry for entry in entries
+        if entry.value_kind == "enum" and entry.enum_values
+    }
+    by_path = dict(mapping.get("by_path", {}))
+    not_selected = dict(mapping.get("not_runtime_selected", {}))
+    internal = dict(mapping.get("internal_bases", {}))
+    mapped_bases = {rule["base"] for rule in by_path.values()}
 
-    for e in PHYSICS_PROPERTY_ENTRIES:
-        c = from_entry(e)
-        if c is not None:
-            yield c
-    for group in get_electro_property_entry_groups(own_driver_context()).values():
-        for e in group:
-            c = from_entry(e)
-            if c is not None:
-                yield c
+    drift: list[str] = []
+    unused: list[str] = []
+    values: dict[str, list[str]] = {}
+    for path, rule in sorted(by_path.items()):
+        base, mode = rule["base"], rule["mode"]
+        if mode not in _MODES:
+            drift.append(f"{path}: unknown comparison mode {mode!r}")
+            continue
+        if path not in enums:
+            unused.append(f"by_path:{path}")
+            continue
+        if base not in registrations:
+            drift.append(f"{path}: no addToRunTimeSelectionTable({base}, ...) found")
+            continue
+        registered = set(registrations[base])
+        catalogued = set(enums[path].enum_values)
+        values[path] = sorted(registered)
+        only_catalogue = sorted(catalogued - registered)
+        only_cxx = sorted(registered - catalogued)
+        if (mode == "strict" and (only_catalogue or only_cxx)) or (
+            mode == "subset" and only_catalogue
+        ) or (mode == "polymorphic" and only_cxx):
+            drift.append(
+                f"{path} ({mode}, {base}): catalogue only {only_catalogue}; C++ only {only_cxx}"
+            )
+    unused += [f"not_runtime_selected:{path}" for path in sorted(not_selected) if path not in enums]
+    unused += [
+        f"internal_bases:{base}" for base in sorted(internal)
+        if base not in registrations or base in mapped_bases
+    ]
+    return {
+        "selector_drift": drift,
+        "unclassified_selector_enums": sorted(
+            path for path in enums if path not in by_path and path not in not_selected
+        ),
+        "unmapped_selector_bases": sorted(
+            base for base in registrations if base not in mapped_bases and base not in internal
+        ),
+        "unused_selector_mapping": unused,
+        "selector_values": values,
+    }

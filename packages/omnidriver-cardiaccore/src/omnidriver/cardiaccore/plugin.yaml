@@ -90,6 +90,17 @@ provides:
   # (get_override_schema) served the factory workflows' own agent-requested
   # input_overrides channel, deleted with them -- a tutorial record
   # addresses a document/key directly, never through this schema.
+# The C++ source the key scanner reads (one mechanism with cardiacFOAM's,
+# omnidriver-openfoam's dict_keys_scanner): supplied, never discovered. The
+# variable is the native cardiacCore tree the native suite already takes;
+# `relative` is that repository's own layout. Added 2026-09-28: the catalog
+# (catalogs/inputs.py) came from a one-time manual scan and nothing
+# re-verified it.
+cxx_mapping:
+  source_root:
+    variable: OMNIDRIVER_CARDIACCORE_TREE
+    relative: src
+  reviewed_allowlist: dict_key_allowlist.json
 case_profile:
   dictionaries:
     - path: system/setCardiacConductivityDict
