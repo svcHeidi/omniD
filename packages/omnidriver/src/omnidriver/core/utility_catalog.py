@@ -1,69 +1,10 @@
 """
 Utility Manifest Catalog
 
-Utility manifests loaded from ``utility.manifest.toml`` sidecar files placed
-next to each utility source directory. The roots are supplied by the selected
-plugin, not hardcoded -- core names no solver's utilities, and the eager
-module-level catalog this header used to describe is gone (see
-``future/UTILITY_CATALOG_STANDALONE_GAP.md``).
-
-Schema
-------
-Each ``utility.manifest.toml`` must contain the following required fields:
-
-    name        (str)   – utility name; must match the parent directory name.
-    description (str)   – one-line purpose summary.
-    category    (str)   – one of ALLOWED_CATEGORIES.
-
-The following fields are optional:
-
-    purpose       (str)                – 2–4 sentence extended description.
-    inputs        (list[str])          – case-relative paths this utility reads.
-    requires_mesh (bool, default True) – False for 0-D / file-only tools.
-    example       (str)                – representative command-line invocation.
-
-    [[flags]]                          – zero or more [[flags]] tables, each
-        name          (str)              – flag name, e.g. "-noScale".
-        description   (str)              – what the flag does.
-        takes_value   (bool)             – whether the flag accepts an argument.
-        argument_kind (str, optional)    – a non-empty, plugin-chosen label for
-                                           the argument's shape (e.g. OpenFOAM
-                                           utilities use scalar/label/path/word/
-                                           word_list/switch). Core does not
-                                           validate the spelling — see
-                                           future/ENVIRONMENT_CONTRACT.md §10.
-        required      (bool, default False) – whether the flag is mandatory.
-        default       (str, optional)    – default value as a string.
-
-    positional_args = [...]            – ordered list of positional argument
-        tables, each with:
-        name          (str)
-        argument_kind (str)  – non-empty, plugin-chosen (see [[flags]] above)
-        description   (str)
-
-    produces = [...]                   – structured output declarations. Each
-        entry:
-        artifact_id   (str)   – stable identifier.
-        path_pattern  (str)   – case-relative path; may contain {case_id} or
-                                 {instance} placeholders (validated at load time
-                                 via models._validate_path_pattern — Gap B).
-        format        (str)   – non-empty, plugin-chosen (see
-                                 core.runtime.models.ArtifactFormat — open by
-                                 design, not a closed enum core validates).
-        description   (str, optional)
-        produced_by   (str, optional)  – utility/solver name.
-        variables     (list[str], optional)
-        optional      (bool, default False)
-        instance_indexed  (bool, default False)
-
-Public API
-----------
-    ALLOWED_CATEGORIES     – frozenset of valid category strings.
-    PositionalArg          – frozen dataclass for a positional argument.
-    UtilityFlag            – frozen dataclass for a single CLI flag.
-    ProducesEntry          – frozen dataclass for a produces entry.
-    UtilityManifest        – frozen dataclass for a parsed manifest.
-    load_utility_manifests(utilities_root) -> dict[str, UtilityManifest]
+Loads ``utility.manifest.toml`` sidecar files from a plugin-supplied
+utilities root -- core names no solver's utilities. See the dataclasses
+below (``UtilityManifest``, ``UtilityFlag``, ``PositionalArg``,
+``ProducesEntry``) for the schema each manifest must follow.
 """
 
 from __future__ import annotations
@@ -148,8 +89,8 @@ class PositionalArg:
     """Argument name, e.g. 'vtk_file'."""
 
     argument_kind: str
-    """Plugin-chosen, non-empty. Not validated against a closed set — see
-    module docstring."""
+    """Plugin-chosen, non-empty. Not validated against a closed set (see
+    ``future/ENVIRONMENT_CONTRACT.md`` §10)."""
 
     description: str
     """What the argument represents."""
@@ -169,8 +110,8 @@ class UtilityFlag:
     """Whether the flag accepts a follow-on argument."""
 
     argument_kind: str = ""
-    """Plugin-chosen. Empty string means not specified; not validated
-    against a closed set — see module docstring."""
+    """Plugin-chosen; empty means not specified. Not validated against a
+    closed set (see ``future/ENVIRONMENT_CONTRACT.md`` §10)."""
 
     required: bool = False
     """Whether the flag is mandatory."""
@@ -206,8 +147,7 @@ class ProducesEntry:
     """True when the artifact appears only under specific configurations."""
 
     instance_indexed: bool = False
-    """True for an output written once per declared instance (renamed from
-    time_indexed 2026-09-26, spec A2)."""
+    """True for an output written once per declared instance."""
 
 
 @dataclass(frozen=True)
@@ -300,9 +240,8 @@ def _parse_produces_entry(raw: object, manifest_path: Path) -> ProducesEntry:
             f"invalid format {fmt!r}; must be a non-empty string"
         )
     pattern: str = raw["path_pattern"]
-    # Gap B: validate placeholders at TOML-load time reusing the same validator
-    # used by DataArtifact.__post_init__ so utility-manifest authors cannot
-    # introduce a third placeholder convention.
+    # Reuse DataArtifact.__post_init__'s validator so a manifest author
+    # cannot introduce a third placeholder convention.
     try:
         _validate_path_pattern(pattern)
     except ValueError as exc:

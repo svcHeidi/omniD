@@ -1,21 +1,9 @@
 """Generic dictionary-catalog value objects.
 
-The core owns this shape and its generic constraint vocabulary. Individual
-plugins own the entries and document-specific catalogues built from it.
-
-``value_kind`` is a closed vocabulary of generic value *shapes* -- how a value
-is built, never what it means. No units, no ranges, no physical
-interpretation: those are the adapter's, supplied only where domain evidence
-justifies them, through ``unit`` and the applicability maps below.
-
-Closed 2026-09-22 (Phase 2, Task 4). The previous default was the string
-``"literal"``, which said nothing and was checked by nothing, so an adapter's
-own value check was the only barrier -- and it accepted ``nan`` for a scalar
-and any non-empty string for a vector (audit finding S1). See
-``docs/superpowers/plans/2026-09-20-phase2-one-write-channel.md`` Task 4 for
-the full migration evidence: 258 declarations were surveyed before this
-vocabulary was fixed, and every one of them was migrated to a kind that
-describes its actual shape, with no residual "unchecked" escape hatch.
+Core owns this shape and its closed ``value_kind`` vocabulary of generic
+value *shapes* -- how a value is built, never what it means, so no kind can
+mean "unchecked". Plugins own the entries; units, ranges and physical
+interpretation are the adapter's.
 """
 
 from __future__ import annotations
@@ -29,42 +17,32 @@ from typing import Any
 
 #: Generic value SHAPES, closed. Adding a member here is a real change to what
 #: every adapter and renderer must handle; do not add one that no declaration
-#: uses (see the plan's Task 4 instructions) and do not add a member that
-#: means "unchecked" -- that is exactly the hole this vocabulary closes.
+#: uses, and do not add a member that means "unchecked" -- that is exactly
+#: the hole this vocabulary closes.
 #:
 #: The typed-list members (``word_list``, ``scalar_list``, ``vector3_list``,
 #: ``integer_list``) are kept distinct from a bare ``list`` because the
-#: element type is information a renderer needs (a list of words and a list
-#: of scalars are spelled differently in every format this framework has),
-#: and a bare ``list`` is not what any current declaration means. No
-#: declaration currently needs a bare, untyped list, so one is not offered.
+#: element type is information a renderer needs -- a list of words and a
+#: list of scalars are spelled differently in every format this framework
+#: has. No declaration needs an untyped list, so one is not offered.
 #:
 #: ``dimensioned_scalar`` and ``dimensioned_tensor`` name a magnitude paired
 #: with a seven-exponent physical-dimension vector -- a dimensional-analysis
-#: concept older than and independent of OpenFOAM, not a file format. They
-#: replace the previous ``dimensioned_scalar_literal`` and
-#: ``dimensioned_tensor_literal``, whose ``_literal`` suffix named a
-#: rendered-text format rather than a shape (see the module docstring on
-#: layering). Kept as two kinds, not one, for the same reason as the typed
-#: lists: the magnitude's shape differs (one number vs. several).
+#: concept independent of any file format. They are two kinds, not one, for
+#: the same reason as the typed lists: the magnitude's shape differs (one
+#: number vs. several).
 #:
-#: ``tensor9`` and ``dictionary`` were in the plan's first proposal for this
-#: vocabulary and are deliberately absent here: no current ``DictEntry``
-#: declaration has that shape, and the plan's own instructions are not to add
-#: a kind nothing uses.
+#: ``tensor9`` and ``dictionary`` are deliberately absent: no current
+#: ``DictEntry`` declaration has that shape, and a kind nothing uses is not
+#: added.
 #:
-#: ``string`` (**added 2026-09-25, K6; this note added the same day after
-#: review B-I7**) is text whose *native type is text*: an openCARP
+#: ``string`` is text whose *native type is text*: an openCARP
 #: ``String``/``RFile``/``WFile`` parameter, which may be empty or contain
-#: spaces, both of which ``word`` refuses. It is **never** a pre-rendered
-#: native literal -- a vector, a list, a dimensioned value or a block-mesh
-#: count spelled out as text. That is the rendered-text-as-data hole
-#: ``case_write``'s 2026-09-23 decision closed and
-#: ``cardiacfoam.dict_builder`` refuses to reopen with a ``literal``/``text``
-#: kind; ``string`` does not reopen it, because a value is ``string`` only
-#: when the solver itself types the parameter as text. A declaration that
-#: reaches for ``string`` to carry rendered syntax is the defect, not this
-#: kind. Its only user today is omnidriver-opencarp's catalog.
+#: spaces, both of which ``word`` refuses. It is never a pre-rendered native
+#: literal -- a vector, a list, a dimensioned value or a count spelled out as
+#: text; a declaration that reaches for ``string`` to carry rendered syntax
+#: is the defect, not this kind. Its only user today is omnidriver-opencarp's
+#: catalog.
 VALUE_KINDS = frozenset({
     "scalar", "integer", "boolean", "word", "enum", "vector3",
     "dimensioned_scalar", "dimensioned_tensor",
@@ -112,8 +90,8 @@ def validate_value_shape(kind: str, value: Any) -> tuple[str, ...]:
     if kind == "boolean":
         return () if isinstance(value, bool) else ("must be a boolean",)
     if kind == "string":
-        # K6 (spec 2026-09-25 §5): any text, including empty or with spaces.
-        # openCARP's String/RFile/WFile parameters need it; ``word`` refuses both.
+        # Any text, including empty or with spaces: openCARP's
+        # String/RFile/WFile parameters need it; ``word`` refuses both.
         return () if isinstance(value, str) else ("must be a string",)
     if kind in {"word", "enum"}:
         if not isinstance(value, str) or not value:
@@ -171,15 +149,12 @@ def validate_value_shape(kind: str, value: Any) -> tuple[str, ...]:
             reasons.extend(f"element {index} {r}" for r in item_reasons)
         return tuple(reasons)
     if kind == "mapping":
-        # Added 2026-09-25 (docs/superpowers/specs/2026-09-24-tutorials-are-
-        # pointers-design.md, step 4b/pilot restitutionCurves): a tutorial-
-        # record axis's OWN study value is not always one of the shapes
-        # above -- an S1-S2 protocol axis takes ONE mapping of named
-        # parameters (e.g. {"s1_interval_ms": ..., "n_s1": ..., ...}) as its
-        # single study value, not a document key's value. Generic shape
-        # only, same posture as every other kind here: a mapping with
-        # arbitrary keys/values, never checked against a specific protocol's
-        # own required keys (the axis's own `resolve` does that, by name).
+        # A tutorial-record axis's own study value is not always one of the
+        # shapes above -- an S1-S2 protocol axis takes one mapping of named
+        # parameters as its single study value, not a document key's value.
+        # Generic shape only: arbitrary keys/values, never checked against a
+        # specific protocol's required keys (the axis's own `resolve` does
+        # that, by name).
         if isinstance(value, (str, bytes)) or not isinstance(value, _Mapping):
             return ("must be a mapping",)
         return ()
@@ -190,17 +165,11 @@ def validate_value_shape(kind: str, value: Any) -> tuple[str, ...]:
 class DictEntry:
     driver_path: str
     description: str
-    # Mandatory since 2026-09-23 (R2 finding 8). It defaulted to "literal",
-    # which said nothing, then to "word" once that vocabulary closed --
-    # "word" says something specific and can be WRONG, and three production
-    # entries silently declared it by omission
-    # ($ELECTRO_MODEL_COEFFS.ecgDomains.<name>.sampling.{start,end,deltaT},
-    # each really a "scalar"). A `grep` for `value_kind=` cannot find an
-    # entry that omits it, which is how they were missed; a mandatory field
-    # cannot be missed the same way. Placed right after `description` --
-    # before every field that still defaults -- because a dataclass field
-    # with no default cannot follow one that has one; every call site here
-    # already uses keyword arguments, so the reorder changes no call site.
+    # No default: a default here (previously "literal", then "word") hides a
+    # missing declaration from grep and review, since a field that always has
+    # some value looks declared either way. Placed before every field that
+    # still defaults, since a dataclass field with no default cannot follow
+    # one that has one.
     value_kind: str
     source_refs: tuple[str, ...] = ()
     notes: str = ""
@@ -221,38 +190,16 @@ class DictEntry:
     # on every member of the group to make the relation symmetric.
     co_required_with: tuple[str, ...] = ()
     # A dynamic path's declared domain per placeholder, e.g.
-    # ``{"<ventKey>": ("lv", "rv")}``. Most placeholders in this catalog
-    # (``<name>``, ``<electrode>``, ``<region_name>``, ...) are open-ended,
-    # case-author-chosen instance identifiers with no closed domain to
-    # declare. Leaving `allowed_bindings` entirely empty (the default) for
-    # such an entry is still accepted -- there is nothing to check for an
-    # open identifier that is never even named here -- but
-    # `omnidriver.cardiacfoam.dict_entries_catalog`'s ecgDomains/
-    # conductionNetworkDomains/domainCouplings entries instead declare it
-    # explicitly, with ``None`` as the placeholder's domain:
-    #
-    #     allowed_bindings={"<name>": None}
-    #
-    # Corrected 2026-09-23 (Phase 3, the decision closing Task 2's Gap 2).
-    # ``None`` and "key absent" both mean "no closed domain", so neither
-    # constrains what value can bind -- but they are not the same STATEMENT.
-    # An entry that omits the key says nothing about the placeholder; an
-    # entry that maps it to ``None`` says, explicitly, "this is open, and
-    # that was decided, not overlooked". Audit finding S1 was that nothing
-    # was declared for ``<ventKey>`` at all; the fix docstring above already
-    # distinguished "no closed domain to declare" from "unchecked" for the
-    # open case, but had no way to WRITE that distinction down -- every
-    # open placeholder was, textually, indistinguishable from one nobody had
-    # audited yet. A caller resolving a binding against an explicitly open
-    # domain still validates it as a word (non-empty, no whitespace) and
-    # still applies every other syntax refusal a written key must pass
-    # (`;`/`#`/newline -- see `omnidriver.openfoam.mutators`); only a fully
-    # *closed* domain additionally restricts membership. What is refused
-    # unconditionally, for both an open and a closed domain, is still a
-    # *partial* declaration: naming some of an entry's placeholders (open or
-    # closed) and silently omitting a sibling, which is how ``<ventKey>``
-    # accepted ``"banana"`` while a sibling placeholder went unchecked
-    # (audit finding S1).
+    # ``{"<ventKey>": ("lv", "rv")}``. Most placeholders here are open-ended,
+    # case-author-chosen identifiers with no closed domain, and leaving this
+    # empty is fine for those. Where an entry instead maps a placeholder to
+    # ``None`` explicitly, that states "open by decision", not "unaudited" --
+    # distinct from a key that is merely absent. Naming some but not all of
+    # an entry's placeholders is refused either way: a partial declaration is
+    # how an undeclared placeholder goes unchecked. A binding against an open
+    # domain still validates as a word and still passes every other syntax
+    # refusal a written key must (`omnidriver.openfoam.mutators`); only a
+    # closed domain further restricts membership.
     allowed_bindings: dict[str, tuple[str, ...] | None] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -261,15 +208,10 @@ class DictEntry:
                 f"{self.driver_path!r} declares value_kind {self.value_kind!r}, "
                 f"which is not one of {sorted(VALUE_KINDS)}"
             )
-        # R2 finding 12: three one-line guards, latent on the 258 production
-        # declarations R2 scanned (zero instances today) but cheap to close
-        # regardless. `_PLACEHOLDER` is `<[A-Za-z][A-Za-z0-9_]*>` and so
-        # cannot see a placeholder spelled `<_x>` or `<x-y>` -- reported as a
-        # known, separate gap rather than widened here, since no current
-        # declaration is affected and widening it is a larger, cross-module
-        # change (specs/validation.py's `_predicate_matches` and
-        # `dict_builder.py`'s own `_PLACEHOLDER_RE` copy would need to move
-        # together, not be fixed one at a time).
+        # `_PLACEHOLDER` (`<[A-Za-z][A-Za-z0-9_]*>`) does not match a
+        # placeholder spelled `<_x>` or `<x-y>`; not widened here since
+        # `specs/validation.py`'s `_predicate_matches` and
+        # `dict_builder.py`'s own copy would need to move together.
         has_placeholder = bool(_PLACEHOLDER.search(self.driver_path))
         if has_placeholder and not self.dynamic_path:
             raise ValueError(

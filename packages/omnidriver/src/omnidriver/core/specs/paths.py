@@ -9,9 +9,8 @@ def repo_root_default() -> Path:
 
     Every tier walks up from this file and recognises its target by marker
     files/directories, never by counting path segments — a fixed
-    ``parents[N]`` silently breaks the moment this file's nesting depth
-    changes (it did, twice, across the package split), and breaks silently
-    because every candidate directory exists, it's just the wrong one.
+    ``parents[N]`` breaks silently the moment this file's nesting depth
+    changes, because every candidate directory exists, just the wrong one.
 
     Tier 1 (monorepo): ancestor directory that has both ``tutorials/`` and
         ``src/`` siblings — the full cardiacFoam checkout.
@@ -51,13 +50,6 @@ def repo_root_default() -> Path:
         f"from {current}: no ancestor has both tutorials/+src/ (monorepo), "
         f"tutorials/ alone, or packages/+ARCHITECTURE.md (standalone repo)."
     )
-
-
-# No tutorials_root_default() here any more. It returned repo_root_default() /
-# "tutorials", so core invented a location for a caller's cases and raised
-# outside a checkout -- which is why core could not plan a case from an
-# installed wheel. A base is supplied now; see future/ENVIRONMENT_CONTRACT.md
-# §12 on supplied-versus-discovered.
 
 
 def repo_root_or_none() -> Path | None:
@@ -102,18 +94,8 @@ def resolve_scratch_root(
     never refuse for want of a scratch root it does not use.
 
     When ``cases_root`` is given, a scratch root at or inside it is refused
-    (:class:`ScratchRootInsideCasesRoot`, naming both) -- the rule
-    ``ConformanceTarget`` already enforced.
-
-    Replaced ``scratch_root(base)`` on 2026-09-26 (owner decision). That
-    defaulted to ``<base>/.omnidriver`` and its callers passed ``cases_root``,
-    so planning a tutorial record wrote ``.omnidriver/`` into the native tree
-    and failed with ``PermissionError`` on a read-only install (openCARP's
-    ``/usr/local/lib/opencarp/share/tutorials``). A scratch location has no
-    ambient truth, so defaulting one invents it
-    (future/ENVIRONMENT_CONTRACT.md §12). Renamed rather than re-signed so a
-    stale ``scratch_root(cases_root)`` call fails to import instead of
-    silently treating the cases root as a supplied scratch root.
+    (:class:`ScratchRootInsideCasesRoot`, naming both): staging there would
+    write the native tree.
     """
     if supplied is not None and str(supplied) != "":
         root = Path(supplied).expanduser()
@@ -178,18 +160,12 @@ def resolve_spec_paths(
     case_root = resolved_cases_root / resolved_case_dir
     setup_root = case_root / resolved_setup_dir
     output_dir_path = Path(resolved_output_dir)
-    # A caller that has already isolated this case at case_root (staged
-    # sweep cases; see sweep_runner._materialize_entry_case) has nothing
-    # left for output_dir_name to distinguish, and passes "." to say so
-    # explicitly. Collapse to case_root itself rather than case_root/".":
-    # OpenFOAM's own convention is that postProcessing/, constant/, system/,
-    # 0/ all sit directly under the case directory -- there is exactly one
-    # real location a solve writes into, and output_dir must name that one
-    # location, not a second path nothing ever populates. Confirmed
-    # directly: a real cardiacFoam solve wrote postProcessing/ under
-    # case_root, while the workflow's own artifact check looked for it
-    # under case_root/case_root's-own-output-dir-name and reported the
-    # (present, correct) artifacts as missing.
+    # "." (a case already isolated at case_root; see
+    # sweep_runner._materialize_entry_case) collapses to case_root itself,
+    # not case_root/".": OpenFOAM's convention puts postProcessing/,
+    # constant/, system/, 0/ directly under the case directory, so
+    # output_dir must name that one real location, not a second path
+    # nothing populates.
     output_dir = (
         case_root
         if output_dir_path == Path(".")
@@ -206,11 +182,8 @@ def resolve_run_script_path(
     if run_script_relpath.is_absolute():
         return run_script_relpath
 
-    # A relative run-script path is relative to the workspace, not to a
-    # repository that may not exist. Both repo-root lookups are gone: they were
-    # appended EAGERLY, so this raised from a wheel install even when
-    # cases_root had been supplied and the script existed under it -- the
-    # candidate list was built before the loop that would have found it.
+    # Relative to the workspace (cases_root, then cwd), never to a
+    # repository root that may not exist (a wheel install).
     candidate_roots: list[Path] = []
     if cases_root is not None:
         candidate_roots.append(Path(cases_root))

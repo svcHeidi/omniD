@@ -1,16 +1,9 @@
 """C1-C12. Each check is self-contained: it builds its own context, stages
 its own copy, and returns a verdict naming what it saw. No check skips; a
-check that cannot run is a failure saying why.
-
-Corrected 2026-09-26: this said checks are not thread-parallel within one
-process, because in-process planning read core's scratch root from the
-process environment (``_scratch_environment``, serialised behind one
-module-level lock; fix round 1 I2, 2026-09-25). Core's scratch root is now
-supplied explicitly (``specs.paths.resolve_scratch_root``): every in-process
-call passes ``target.scratch_root`` as an argument, a child process gets
-``--scratch-dir`` or the variable in its own env dict, and nothing here
-mutates ``os.environ`` -- so the override, its lock and that restriction are
-gone."""
+check that cannot run is a failure saying why. Checks are thread-parallel
+within one process: the scratch root is supplied explicitly
+(``specs.paths.resolve_scratch_root``) rather than read from ``os.environ``.
+"""
 from __future__ import annotations
 
 import hashlib
@@ -65,7 +58,7 @@ def check_load(target: ConformanceTarget) -> CheckVerdict:
     non-FOAM solver never asked for) means the stack depends on something
     it does not declare. The loaded stack must also serve the target's
     record: a stack that loads but lacks the record is not the stack the
-    target names (added 2026-09-25, fix round 1 I3)."""
+    target names."""
     ctx = _context(target)
     ids = [provider.plugin_id for provider in ctx.providers]
     required = {rid for provider in ctx.providers for rid in provider.get_profile().requires}
@@ -99,7 +92,7 @@ def _quotes(message: str, name: str) -> bool:
 
 def _names(message: str, name: str) -> bool:
     """Whether ``message`` names ``name`` as a whole token, not merely
-    contains it (fix round 1 M6, 2026-09-25): a short unknown name such as
+    contains it: a short unknown name such as
     ``"x"`` is a substring of almost any message. Quoted (``'n'``, ``"n"``,
     `` `n` ``) always counts; otherwise ``name`` must not continue into a
     longer identifier or ``document:dotted.path`` on either side. A
@@ -223,8 +216,7 @@ def check_strict_plan(target: ConformanceTarget) -> CheckVerdict:
 
 def _missing_required(reconciliation: Mapping[str, Any]) -> list[str]:
     """Ids of the non-optional artifacts a reconciliation found missing. One
-    rule for C6 and C7: an absent optional artifact fails neither (fix round
-    1 M3, 2026-09-25; C7 used to count ``missing_count``, optional included)."""
+    rule for C6 and C7: an absent optional artifact fails neither."""
     return [
         a["artifact_id"] for a in reconciliation.get("artifacts", ())
         if a["status"] == "missing" and not a.get("optional")
@@ -232,8 +224,8 @@ def _missing_required(reconciliation: Mapping[str, Any]) -> list[str]:
 
 
 def _execute(target: ConformanceTarget, ctx, report) -> tuple[subprocess.CompletedProcess, dict[str, Any] | None]:
-    # Never hand-build a run command (main, 2026-09-25): the canonical builder
-    # carries --plugin from ctx.plugin_selector, set by load_plugin_context.
+    # Never hand-build a run command: the canonical builder carries --plugin
+    # from ctx.plugin_selector, set by load_plugin_context.
     proc = subprocess.run(
         omnidriver_run_command(ctx, "--run-document", str(_run_document_path(report))),
         capture_output=True, text=True, env=_child_env(target), timeout=target.timeout_s,
@@ -340,8 +332,8 @@ def check_provenance(target: ConformanceTarget) -> CheckVerdict:
 
     Listed is not fingerprinted: ``enumerate_case_inputs`` adds every
     consumed path unconditionally, and a missing one becomes a component
-    with strength ``unavailable`` (fix round 1 I1, 2026-09-25). Only a
-    component carrying a real fingerprint counts."""
+    with strength ``unavailable``. Only a component carrying a real
+    fingerprint counts."""
     ctx = _context(target)
     report = _plan(target, ctx)
     if report.status != "ok" or report.workflow_dag is None:
@@ -373,11 +365,9 @@ def check_environment(target: ConformanceTarget) -> CheckVerdict:
     solver when the solver cannot be found.
 
     "Names" means quotes the command as a token (:func:`_quotes`), after the
-    empty PATH this check supplied is removed from each message. Corrected
-    2026-09-25 (final review S-I2, A-M5, W2-M2): this matched
-    ``solver_command in m``, and a preflight that echoes the PATH it searched
-    lives under ``scratch_root``, so a preflight that never named the solver
-    passed whenever the scratch path contained its name (``~/openCARP-runs``).
+    empty PATH this check supplied is removed from each message -- a bare
+    substring match would pass whenever the scratch path itself happened to
+    contain the solver's name (e.g. ``~/openCARP-runs``).
     """
     ctx = _context(target)
     report = _plan(target, ctx)
@@ -413,22 +403,14 @@ def check_discoverable(target: ConformanceTarget) -> CheckVerdict:
     and keys the record takes, and what to read first.
 
     The target's patch key is looked up through ``record_surface``'s key
-    grammar (``[Int]``, ``<name>`` segments, open documents). Corrected
-    2026-09-26 (conformance Task 14 step 4): this matched a key literally,
-    or with each concrete index rewritten to ``[Int]``, so a catalogue could
-    list neither a named segment (cardiacFOAM's
-    ``regions.<region_name>.baseline``) nor a document whose keys have no
-    catalogue.
-
-    Corrected 2026-09-26 (review 54b M3): the axis half compared
-    ``record_surface.axes`` with ``record.axis_names()`` only. Both come
-    from ``record.axes``, so it said little about what an agent is told, and
-    a surface listing an axis under the wrong value kind passed. It now also
-    requires each listed axis's kind to be its contract's, and every bare
-    study name the target itself uses (``base_study`` and ``sweep_name``,
-    less the record's selector and the sweep naming keys) to be listed: an
-    agent reading ``describe`` must find the axes a real study of this
-    record needs."""
+    grammar (``[Int]``, ``<name>`` segments, open documents), so a catalogue
+    may list a named segment (cardiacFOAM's
+    ``regions.<region_name>.baseline``) or a document whose keys have no
+    catalogue. Each listed axis's kind must match its contract's, and every
+    bare study name the target itself uses (``base_study`` and
+    ``sweep_name``, less the record's selector and the sweep naming keys)
+    must be listed: an agent reading ``describe`` must find the axes a real
+    study of this record needs."""
     ctx = _context(target)
     record = _record(ctx, target.record)
     payload = describe_entry(target.record, overrides={"cases_root": str(target.cases_root)}, driver_context=ctx)
@@ -462,7 +444,7 @@ def check_discoverable(target: ConformanceTarget) -> CheckVerdict:
     if not surface["guidance"]:
         problems.append("no agent guidance")
     if "inputs" not in surface:
-        problems.append("record_surface has no 'inputs' key (step S §2.5)")
+        problems.append("record_surface has no 'inputs' key")
     elif {i["name"] for i in surface["inputs"]} != {i.name for i in record.inputs}:
         problems.append(
             f"record_surface lists inputs {sorted(i['name'] for i in surface['inputs'])}, "
@@ -478,30 +460,19 @@ def _relpaths(root: Path) -> set[str]:
 
 def check_restage_is_clean(target: ConformanceTarget) -> CheckVerdict:
     """C11: staging a record from a case one run has written carries nothing
-    that run wrote (spec 2026-09-26-core-generality-design.md §4, A5).
+    that run wrote, and drops nothing authored.
 
     A native case someone has already run in, or a copy of an earlier
     stage, holds that run's state (core's run records) and its outputs.
     Staging it again must give exactly the paths the untouched native case
-    has -- no more, no fewer. Every mismatched path is named.
+    has -- no more, no fewer, checked in both directions. Every mismatched
+    path is named.
 
-    Corrected 2026-09-26 (R1 fix, finding M1): two things about this used to
-    be wrong.
-
-    First, this only asserted ``restaged <= native`` (subset), which cannot
-    see a staging rule that wrongly *drops* an authored native file: a
-    restage missing content the native case has passed just as cleanly as
-    a clean one. It is now ``restaged == native`` (equality), checked in
-    both directions.
-
-    Second, the docstring and verdict claimed "nothing the run wrote was
-    carried" as if content were untouched too. That overstates what this
-    check verifies: it compares path *sets* only, not file contents. A
-    restage with ``study_by_source={"base": {}}`` (below) still inherits
-    whatever values the first run's plan patched into the case's documents
-    -- carrying that content forward is intended (a restage continues from
-    the inputs the case holds), but it is not "nothing was carried", and
-    this check does not audit it.
+    This compares path *sets* only, not file contents: a restage with
+    ``study_by_source={"base": {}}`` (below) still inherits whatever values
+    the first run's plan patched into the case's documents -- carrying that
+    content forward is intended (a restage continues from the inputs the
+    case holds), but content is not audited here.
     """
     ctx = _context(target)
     record = _record(ctx, target.record)
@@ -525,10 +496,10 @@ def check_restage_is_clean(target: ConformanceTarget) -> CheckVerdict:
         study_by_source={"base": {}}, driver_context=ctx, inputs=target.inputs,
     )
     restaged_paths = _relpaths(restaged)
-    # Step S: an input's destination is never part of the native case folder
-    # (§2.5's C11 row), so it is added to the expected set here -- the
-    # native folder's paths plus every input destination and its ancestor
-    # directories (``restaged_paths`` lists directories too).
+    # An input's destination is never part of the native case folder, so it
+    # is added to the expected set here -- the native folder's paths plus
+    # every input destination and its ancestor directories (``restaged_paths``
+    # lists directories too).
     input_paths = {
         str(PurePosixPath(*parts[:i]))
         for input_ in record.inputs for destination in input_.destinations()
@@ -556,15 +527,13 @@ def check_restage_is_clean(target: ConformanceTarget) -> CheckVerdict:
 
 def check_readable_quantities(target: ConformanceTarget) -> CheckVerdict:
     """C12: every record output that declares a format has a reader for it,
-    through the reader contract, with a declaration core can use (results
-    as quantities, spec 2026-09-26 §4). A record whose outputs declare no
-    format passes and says so: not every record is compared.
+    through the reader contract, with a valid declaration. A record whose
+    outputs declare no format passes and says so: not every record is
+    compared.
 
-    Corrected 2026-09-26 (controller review M3): this checks the reader's
-    *declaration* only (``check_reader``) -- it never calls ``read``, so a
-    reader whose ``read`` always raises still passes C12. Spec §4 says "a
-    record that declares quantity outputs returns them through the reader
-    contract"; that stronger claim is not proved here."""
+    This checks the reader's *declaration* only (``check_reader``) -- it
+    never calls ``read``, so a reader whose ``read`` always raises still
+    passes C12."""
     ctx = _context(target)
     record = _record(ctx, target.record)
     formats = sorted({step.produced_format(path) for step in record.workflow_steps for path in step.produces}
@@ -581,7 +550,7 @@ def check_readable_quantities(target: ConformanceTarget) -> CheckVerdict:
             check_reader(reader, artifact_format=artifact_format)
         except ReaderDeclarationError as exc:
             problems.append(str(exc))
-    return _verdict("C12", not problems, "; ".join(problems) or f"readers declared for {formats} (declaration checked, not read; 2026-09-26)")
+    return _verdict("C12", not problems, "; ".join(problems) or f"readers declared for {formats} (declaration checked, not read)")
 
 
 CHECKS: dict[str, Callable[[ConformanceTarget], CheckVerdict]] = {
@@ -637,10 +606,10 @@ def run_check(check_id: str, target: ConformanceTarget) -> CheckVerdict:
     load, a misnamed record, a plan refusal) is a failed verdict naming why,
     so a runner looping over ``CHECKS`` always gets one verdict per check.
 
-    Every check runs inside one suite-wide native guard (fix round 1 I4,
-    2026-09-25): a stat snapshot of the whole ``target.cases_root``, taken
-    before and after. Any difference fails the verdict and names the
-    changed paths, whatever the check itself concluded."""
+    Every check runs inside one suite-wide native guard: a stat snapshot of
+    the whole ``target.cases_root``, taken before and after. Any difference
+    fails the verdict and names the changed paths, whatever the check itself
+    concluded."""
     if check_id not in CHECKS:
         raise KeyError(f"no conformance check {check_id!r}; known: {sorted(CHECKS)}")
     try:

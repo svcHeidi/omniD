@@ -1,8 +1,7 @@
-"""Identity over a composed stack, not a single plugin.
+"""Identity over a composed stack of providers, not a single plugin.
 
-`PluginIdentity` covered one plugin, because `DriverContext` held one. Under
-composition two different stacks could otherwise produce the same provenance
-record, and the digest is what makes a run reproducible.
+Two different stacks must never produce the same provenance record; the
+digest here is what makes a run reproducible.
 """
 
 from __future__ import annotations
@@ -27,12 +26,8 @@ STACK_IDENTITY_COMPARISON_KEYS = ("composition_rule_version", "capability_digest
 #: Bumped whenever a composition rule in `provider_stack` changes meaning.
 #: Without it, the same providers at the same versions would digest
 #: identically across a semantic change core made -- the one case no other
-#: element of the digest covers.
-#:
-#: Bumped 2026-09-22: `resolutions()` records the provider that supplied the
-#: value under the `single` rule, and `<unclaimed>` where no provider
-#: implements the capability at all (audit finding C3). A digest computed
-#: before this date is not comparable with one computed after it.
+#: element of the digest covers. A digest computed under a different version
+#: is not comparable.
 COMPOSITION_RULE_VERSION = "2"
 
 
@@ -93,8 +88,7 @@ def build_stack_identity(
     placeholder and contribute only their winner.
 
     Known limit: a content change inside a non-digested capability, in an
-    editable install with no version bump, is invisible here. Recorded
-    2026-09-20 rather than discovered later; see spec §4.4.
+    editable install with no version bump, is invisible here. See spec §4.4.
     """
     payload = {
         "composition_rule_version": composition_rule_version,
@@ -123,19 +117,14 @@ def stack_identity_mismatch(planned: Mapping[str, Any], selected: Mapping[str, A
     """The ``STACK_IDENTITY_COMPARISON_KEYS`` on which two ``StackIdentity.to_json()``
     payloads disagree, empty when they agree on every one.
 
-    **Corrected 2026-09-26 (final review M4):** this used to say it was the
-    single source of truth for "was this run planned with the stack now
-    selected", full stop. That overreached: it is the rule for *plan/run/
-    compare* stack binding only --
+    This is the rule for *plan/run/compare* stack binding only --
     ``run_document_exec.build_execution_inputs``, ``cli.py``'s
-    ``_context_from_run_document``, and
-    ``quantities.comparison._resolve_run`` all call this rather than each
-    keeping its own copy of the key list and the reasoning above (found
-    2026-09-26: a copy that instead compared full provider records,
-    ``source`` included, refused two same-content stacks loaded from
-    different import paths, which the reasoning above says is not a real
-    mismatch). *Resume* is a separate, deliberately stricter rule -- see
-    ``runtime.provenance.compare`` and ``runtime.resume.checkpoint_snapshot``
-    for why the two disagree on purpose rather than by drift.
+    ``_context_from_run_document``, and ``quantities.comparison._resolve_run``
+    all call this rather than each keeping its own copy of the key list and
+    reasoning, which would risk comparing full provider records (``source``
+    included) and refusing two same-content stacks loaded from different
+    import paths -- not a real mismatch. *Resume* is a separate, deliberately
+    stricter rule -- see ``runtime.provenance.compare`` and
+    ``runtime.resume.checkpoint_snapshot``.
     """
     return [key for key in STACK_IDENTITY_COMPARISON_KEYS if planned.get(key) != selected.get(key)]

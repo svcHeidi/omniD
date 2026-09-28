@@ -1,24 +1,10 @@
-"""The files omniD itself writes into a case, declared once, by core (K3).
+"""The files core itself writes into a case, declared once here so any stack
+(including one without the OpenFOAM layer) knows them when staging a case --
+``_CaseRuntimeConventionsAdapter.conventions`` merges this into whatever the
+plugin stack declares.
 
-Spec 2026-09-26-core-generality-design.md §2 (A5): the core half of K3
-(openCARP plan Task 15). These names used to be declared only by
-``openfoam_case_runtime_conventions()``, so a stack without the OpenFOAM
-layer (openCARP) did not know them. Staging a case a run had written then
-copied that run's state into the next stage (conformance C11).
-``_CaseRuntimeConventionsAdapter.conventions`` merges these into whatever
-a stack declares. The OpenFOAM layer's own copies are removed in Task 15.
-
-Corrected 2026-09-26 (R1 fix, finding I3): the module docstring said this
-list names "every file core writes into a case" while two names core
-actually writes were missing -- the remediation-transaction marker and its
-``remediation_transactions``/``remediation_candidates`` directories
-(``core.runtime.remediation_transaction``, written through ``step
---apply``/``step_candidate.begin_remediation_transaction``, and persisting
-past a rejected repair -- exactly the state A5 and C11 exist to exclude).
-Both are now added below, taken from that module's own constants.
 ``.omnidriver-repair-control`` is not one of these: it is written to
-``output_dir.parent``, outside the case (``repair_loop.py``'s
-``_control_dir``), so it is never staged into a case in the first place.
+``output_dir.parent``, outside the case, so it never gets staged.
 """
 from __future__ import annotations
 
@@ -40,15 +26,10 @@ from .runtime.workflow_orchestrator import STATE_FILENAME, WORKFLOW_LOGS_DIRNAME
 #: ``case_transaction``'s per-case journal directory, named by its owner.
 _CASE_TRANSACTION_DIRECTORY = _JOURNAL_RELATIVE_PATH.parts[0]
 
-#: Every name below is now read from its owning module's own constant
-#: (final review M6, 2026-09-26) rather than restated as a literal here --
-#: this closed the gap ``test_core_names_every_file_it_writes_into_a_case``
-#: could not see: its docstring claimed the set was "derived from each
-#: owning module's own constant" while three of the five core-record names
-#: (``workflow_state.json``, ``run_document.json``, ``sweep_manifest.json``,
-#: ``case_record.json``, ``workflow_logs``) were still spelled here directly.
-#: See ``fresh._OMNIDRIVER_MARKER_NAMES`` for why THAT marker set is a
-#: deliberately different three names, not a copy-paste drift of this one.
+#: Every name is read from its owning module's own constant, never restated
+#: as a literal, so this set cannot drift from what those modules actually
+#: write. Distinct from ``fresh._OMNIDRIVER_MARKER_NAMES``, a smaller,
+#: deliberately different set -- not a copy-paste of this one.
 CORE_RUNTIME_RECORDS = CaseRuntimeConventions(
     generated_directory_names=(
         WORKFLOW_LOGS_DIRNAME, _CASE_TRANSACTION_DIRECTORY,

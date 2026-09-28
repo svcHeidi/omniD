@@ -1,10 +1,6 @@
 """Core's solver-neutral view of the stack's dictionary vocabulary.
 
-Corrected 2026-09-26 (spec 2026-09-26-core-generality-design.md §2, A6):
-``get_heterogeneity_models`` and ``get_electro_property_entry_groups``
-lived here. They are cardiac vocabulary and moved to
-``omnidriver.cardiacfoam.dict_entries``. ``DictEntry`` and ``build_group``
-stay re-exported for existing importers.
+``DictEntry`` and ``build_group`` are re-exported here for existing importers.
 """
 from __future__ import annotations
 

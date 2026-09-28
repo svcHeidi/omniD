@@ -1,35 +1,9 @@
 """Solver-neutral report-catalog infrastructure.
 
-After a run completes, downstream tools can select report definitions whose
-``applicable_when`` predicate matches the run's configuration. This module
-owns the shared machinery -- the ``ReportDefinition`` record, the
-``applicable_when`` predicate evaluator, and the JSON record shape -- but
-not any concrete catalog: which reports exist is solver-specific data owned
-by the plugin that authors them (the built-in cardiac plugin's catalog lives
-at ``plugins/cardiacfoam/reports.py``). ``scripts/export-report-catalog.py``
-reaches the active plugin's catalog through
-``driver_context.capabilities.report_catalog.reports()`` and serializes it
-to JSON.
-
-Two design choices worth re-reading later:
-
-1. **URLs are templates, not absolute.** v1 ships
-   ``http://localhost:{port}/{kind}`` for entries served by the user's
-   standalone Quart app, **4Dpapers**, plus a bundled fallback at
-   ``/reports/stub.html``. ``{port}`` and ``{kind}`` are substituted by the
-   consumer. **No ``{runId}``** in v1 — 4Dpapers does not route by run yet
-   (the user confirmed: "it does not read IDs yet but that is a simple
-   implementation in the future"). When 4Dpapers learns to route by run, the
-   template becomes ``.../{runId}/{kind}`` and JSON consumers pick that up
-   without a code change.
-
-2. **``applicable_when`` is flat key-equality only.** ``None`` ⇒ always
-   applicable; ``{"phase.field": value}`` ⇒ AND of equality checks via
-   shallow get on the run's resolved config. Anything richer
-   (``$in``, ``$gt``, regex) is intentionally rejected so v2 can layer
-   in a real predicate language without silently mis-filtering v1
-   docs. The same predicate language is shared by tutorials' ``preset``
-   field (Spec § Backend contract alignment).
+Owns the shared machinery -- ``ReportDefinition``, the ``applicable_when``
+predicate evaluator, and the JSON record shape. Which reports exist is
+solver-specific data owned by the plugin that authors them, reached through
+``driver_context.capabilities.report_catalog.reports()``.
 """
 
 from __future__ import annotations
@@ -40,9 +14,8 @@ from typing import Any, Mapping
 
 # --- v1 URL templates -------------------------------------------------------
 
-#: The 4Dpapers backend (user's existing standalone Quart app) does not
-#: route by ``runId`` in v1. ``{port}`` is supplied by the consumer and
-#: ``{kind}`` is filled from the report's ``id``.
+#: ``{port}``/``{kind}`` are substituted by the consumer. No ``{runId}``
+#: placeholder yet -- the report frontend does not route by run.
 URL_TEMPLATE = "http://localhost:{port}/{kind}"
 
 #: Bundled offline fallback path.
@@ -54,11 +27,7 @@ STUB_URL = "/reports/stub.html"
 
 @dataclass(frozen=True)
 class ReportDefinition:
-    """One row of the report catalog.
-
-    Fields are emitted directly by the report catalog exporter. Naming stays
-    Pythonic (``snake_case``).
-    """
+    """One row of the report catalog; fields are emitted directly by the exporter."""
 
     id: str
     title: str
@@ -73,11 +42,8 @@ class ReportDefinition:
 
 
 def _shallow_get(cfg: Mapping[str, Any], dotted: str) -> Any | _Missing:
-    """Resolve a dotted ``"a.b.c"`` path against a nested mapping.
-
-    Returns ``MISSING`` if any segment is absent — a missing path is
-    treated as "does not match", not as "matches None".
-    """
+    """Resolve a dotted ``"a.b.c"`` path; ``MISSING`` if any segment is absent
+    (an absent path does not match, rather than matching ``None``)."""
     cur: Any = cfg
     for seg in dotted.split("."):
         if not isinstance(cur, Mapping) or seg not in cur:
@@ -87,12 +53,8 @@ def _shallow_get(cfg: Mapping[str, Any], dotted: str) -> Any | _Missing:
 
 
 class _Missing:
-    """Sentinel for "this path is absent from the config".
-
-    Distinct from ``None`` because a config field explicitly set to
-    ``None`` should still be considered present (and equal to ``None``
-    for matching purposes).
-    """
+    """Sentinel for "path absent"; distinct from ``None`` so a field
+    explicitly set to ``None`` still counts as present."""
 
     _instance: "_Missing | None" = None
 
@@ -114,13 +76,10 @@ def matches(
 ) -> bool:
     """Evaluate the v1 ``applicable_when`` predicate against a config.
 
-    Rules:
-    - ``predicate is None`` ⇒ always matches.
-    - Each entry must be ``"dotted.path": scalar``. AND across entries.
-    - A value that is itself a mapping is treated as an *operator
-      object* and rejected with ``ValueError`` — v2 will introduce
-      operators (``$in``, ``$gt``, …) but v1 must fail loudly so a
-      forward-compat doc never silently mis-filters.
+    ``None`` always matches; otherwise each ``"dotted.path": scalar`` entry
+    is ANDed together. A mapping value is rejected with ``ValueError`` --
+    v1 is flat key-equality only, and must fail loudly rather than silently
+    mis-filter once richer operators (``$in``, ``$gt``, ...) exist.
     """
     if predicate is None:
         return True
@@ -143,9 +102,8 @@ def matches(
 def to_record(r: ReportDefinition) -> dict:
     """Serialize one definition to the JSON record shape.
 
-    Kept here (not in the export script) so tests can call it without
-    spawning a subprocess and so any future programmatic consumer
-    (a CI lint, a docs renderer) gets the same shape.
+    Kept here, not in the export script, so tests and other consumers can
+    call it directly without spawning a subprocess.
     """
     return {
         "id": r.id,

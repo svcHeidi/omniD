@@ -345,15 +345,12 @@ fallback, which runs instead; no fallback branches on plugin identity, so a
 given fallback answers the same for every plugin. An `optional-refusing`
 member's fallback cannot be neutral and refuses by hook name instead.
 
-Corrected 2026-09-26 (R1 fix, finding M7): this said every optional member
-degrades through *the named* `compatibility.py` fallback, as if that were
-the only mechanism. The table's `fallback` column below names one only
-where one exists (`none` otherwise) -- the four members A3 (2026-09-26)
-made optional-neutral (`dictionaries`'s `entries`, `catalog`, `groups`;
-`tutorials`'s `get_tutorial_displays`) answer a neutral
-value inline, in the adapter itself, with no named fallback function and
-no entry in `_instrumented` fallback accounting -- `phases` on the same
-`dictionaries` capability is the contrast: it names `absent_phases`.
+The table's `fallback` column below names one only where one exists (`none`
+otherwise) -- some optional-neutral members instead answer a neutral value
+inline, in the adapter itself, with no named fallback function (for example
+`dictionaries`'s `entries`, `catalog`, and `groups`, and `tutorials`'s
+`get_tutorial_displays`; contrast `phases` on the same `dictionaries`
+capability, which does name `absent_phases`).
 
 | capability | protocol | adapts | consumed by | fallback | status |
 |---|---|---|---|---|---|

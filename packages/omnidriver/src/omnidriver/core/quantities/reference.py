@@ -1,10 +1,8 @@
 """A point-sampling reference: named points, and where every fact came from.
 
-Schema: ``omnidriver/schemas/point-reference.schema.json`` (packaged). The
-loader checks form and citations, and computes nothing. Whether a value is
-the source's own is a review question, answered by each file's ``sources``.
-A point the source does not settle has ``coordinates: null`` and says why;
-the comparison refuses to use it.
+Schema: ``omnidriver/schemas/point-reference.schema.json``. The loader checks
+form and citations only; it computes nothing. A point the source does not
+settle has ``coordinates: null``, and the comparison refuses to use it.
 """
 from __future__ import annotations
 

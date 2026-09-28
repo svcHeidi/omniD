@@ -25,12 +25,7 @@ def _path_safe_case_id(value: str) -> str:
 
 
 def _label_for(value: Any) -> str:
-    """Render one axis value as a label fragment.
-
-    List/tuple values (e.g. some_tutorial.py's dx_values=[0.5]) are flattened
-    element-wise rather than stringified as a Python literal (str([0.5]) ==
-    "[0.5]", which is not path-safe).
-    """
+    """List/tuple values are flattened element-wise, not stringified as a Python literal, so the label stays path-safe."""
     if isinstance(value, (list, tuple)):
         return "-".join(str(v) for v in value)
     return str(value)
@@ -46,12 +41,7 @@ def _case_id_template(values: dict[str, Any]) -> dict[str, Any]:
 
 
 def _output_dir_name_template(values: dict[str, Any]) -> dict[str, Any]:
-    """Join every named value into a single filesystem-safe output_dir_name.
-
-    For entry-based sweeps (an existing registered tutorial's own make_spec),
-    this plays the same role case_id_template plays for generic case_folder
-    sweeps: naming this case's on-disk output directory.
-    """
+    """Join every named value into a filesystem-safe output_dir_name; the case_id_template counterpart for entry-based sweeps."""
     return {"output_dir_name": _join_values_path_safe(values)}
 
 
@@ -60,19 +50,14 @@ SWEEP_DERIVATION_CATALOG: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] 
     "output_dir_name_template": _output_dir_name_template,
 }
 
-#: The output keys the two naming derivations above produce -- explicit and
-#: hand-listed, not "every dependent output" (item 3, docs/superpowers/specs/
-#: 2026-09-24-tutorials-are-pointers-design.md §4's worked example): a
-#: sweep's ``dependent`` block derives names such as ``caseId`` purely for
-#: the sweep machinery's own case/output-directory naming, never for case
-#: content and never an axis. A tutorial-record study resolves its bare
-#: names against a record's declared axes (``tutorial_records
-#: .sort_study_name``); handing it one of these two keys unfiltered is
-#: refused as an unrecognized axis, which is exactly the bug this constant
-#: fixes -- the record pipeline strips these keys before classifying study
-#: names, rather than growing a fallback that accepts any unrecognized bare
-#: name. Kept in sync with ``_case_id_template``/``_output_dir_name_template``
-#: by test_sweep_derivation_naming_output_keys_matches_the_catalog below.
+#: The output keys the two naming derivations above produce, hand-listed
+#: rather than "every dependent output": these names (e.g. ``caseId``) exist
+#: only for the sweep machinery's own case/output-directory naming, never as
+#: case content or an axis. A tutorial-record study resolves bare names
+#: against a record's declared axes, so the record pipeline strips these two
+#: keys first rather than letting them fail as unrecognized axes. Kept in
+#: sync with ``_case_id_template``/``_output_dir_name_template`` by
+#: test_sweep_derivation_naming_output_keys_matches_the_catalog.
 NAMING_OUTPUT_KEYS: frozenset[str] = frozenset({"caseId", "output_dir_name"})
 
 

@@ -1,23 +1,10 @@
 """Run-document validator.
 
-The validator reports three kinds of issue:
-
-1. **Required-field omissions.** Each ``DictEntry`` flagged ``required=True``
-   must have a value in the Run document slice owned by its *primary* phase.
-2. **Enum violations.** Entries with ``value_kind="enum"`` whose value is not
-   one of the declared ``enum_values``.
-3. **Structured constraints.** Each ``DictEntry`` may declare
-   ``applicable_when``, ``forbidden_when``, ``required_when``, and
-   ``mutually_exclusive_with``, and ``co_required_with``. The validator
-   evaluates these against a
-   flattened view of the run config. The legacy hardcoded ``eikonalSolver``/
-   ``ionicModel`` cross-field check is now encoded as
-   ``forbidden_when={"myocardiumSolver": "eikonalSolver"}`` on the
-   ``ionicModel`` entry and evaluated programmatically here.
-
-The *primary* phase is the first phase in the adapter-declared workflow order
-that the entry claims. Multi-phase entries are validated there; the other
-phases do not duplicate validation errors.
+Checks required-field omissions, enum violations, and each ``DictEntry``'s
+structured constraints (``applicable_when``, ``forbidden_when``,
+``required_when``, ``mutually_exclusive_with``, ``co_required_with``)
+against a flattened view of the run config, evaluated once per entry at its
+*primary* phase -- the first phase in the adapter-declared order it claims.
 """
 
 from __future__ import annotations
@@ -97,14 +84,6 @@ def _lookup_slot(mapping: dict[str, Any], driver_path: str):
     documents never collide has always written. Try the full path first,
     then the stripped one, so both spellings resolve correctly without this
     module knowing which one a given adapter chose.
-
-    Added 2026-09-22 alongside cardiacCore's qualified addressing (audit
-    findings S1, S3). Before this, only :func:`_slice_value` tried the full
-    path; :func:`_entry_value_present` and :func:`_predicate_matches` still
-    read only the stripped form, so a qualified slice made every
-    ``co_required_with``/``mutually_exclusive_with``/``forbidden_when``
-    check (:func:`_evaluate_structured`) blind to a slot that was genuinely
-    present.
     """
     if driver_path in mapping:
         return mapping[driver_path]
@@ -121,8 +100,8 @@ def _non_mapping_phase_errors(run, phase_order: tuple[str, ...]) -> list[StrictD
     """Reject any ``run.config`` phase slice that is not a mapping.
 
     ``RunDocument.config`` is plugin-defined and the core JSON Schema only
-    constrains it to be an object -- per-phase values are unconstrained
-    (P2.2). Both :func:`_flatten_context` (``slice_.items()``) and
+    constrains it to be an object -- per-phase values are unconstrained.
+    Both :func:`_flatten_context` (``slice_.items()``) and
     :func:`_slice_value` (``slice_.get(...)``) assume every slice is
     dict-shaped, so an agent-authored document such as
     ``config={"anatomy": "not-an-object"}`` would otherwise raise an
@@ -192,20 +171,16 @@ def _predicate_matches(
     keys are ordinarily in resolved slot-key form: prefix stripped, and any
     placeholder replaced by the concrete instance name the caller actually
     configured -- both transforms have to be undone before doing the lookup,
-    or the predicate can never match anything and silently evaluates to "not
-    applicable" -- which is exactly what happened to every
-    ``applicable_when`` gated on a real driver_path instead of a bare
-    virtual ``$..._present`` token (see the restitutionEikonalSolver1D
-    regression tests in tests/plugins/cardiacfoam/test_dict_builder.py and
-    tests/plugins/cardiacfoam/test_validation.py for the case this was found
-    from).
+    or an ``applicable_when`` gated on a real driver_path (rather than a bare
+    virtual ``$..._present`` token) can never match anything and silently
+    evaluates to "not applicable".
 
     An adapter whose documents share a leaf name may instead key its slice by
     the full, unstripped ``driver_path`` (see cardiacCore's
-    ``qualified_slot_key``, audit findings S1/S3). ``key`` is tried as given
-    first for that case, before falling back to the stripped form; a
-    placeholder condition is not affected, since dynamic-path templates are
-    not a qualified-addressing concern today. Corrected 2026-09-22.
+    ``qualified_slot_key``). ``key`` is tried as given first for that case,
+    before falling back to the stripped form; a placeholder condition is not
+    affected, since dynamic-path templates are not a qualified-addressing
+    concern today.
     """
     resolved_key = slot_key(key)
     if _PLACEHOLDER_RE.search(resolved_key):
@@ -291,7 +266,7 @@ def _entry_value_present(entry: DictEntry, context: dict[str, Any]) -> bool:
 
     Tries the entry's own full ``driver_path`` before the scope-stripped
     ``slot_key`` form (see :func:`_lookup_slot`), so a qualified slice is
-    read correctly. Corrected 2026-09-22 (audit findings S1, S3).
+    read correctly.
     """
     return _lookup_slot(context, entry.driver_path) not in (None, "")
 
@@ -365,10 +340,9 @@ def validate_run(
             continue
         ph = primary_phase(e, phase_order)
         if ph is None:
-            # Previously a silent `continue`, which skipped this check
-            # entirely for any entry whose phases fall outside the active
-            # plugin's declared order. Report it instead: an unvalidatable
-            # entry is a catalog defect, not a pass.
+            # An entry whose phases fall outside the active plugin's declared
+            # order is a catalog defect, not a pass -- report it rather than
+            # silently skipping the check.
             errors.append(diagnostic(
                 code="run_validation",
                 source=phase_order[0] if phase_order else "",
@@ -400,10 +374,9 @@ def validate_run(
             continue
         ph = primary_phase(e, phase_order)
         if ph is None:
-            # Previously a silent `continue`, which skipped this check
-            # entirely for any entry whose phases fall outside the active
-            # plugin's declared order. Report it instead: an unvalidatable
-            # entry is a catalog defect, not a pass.
+            # An entry whose phases fall outside the active plugin's declared
+            # order is a catalog defect, not a pass -- report it rather than
+            # silently skipping the check.
             errors.append(diagnostic(
                 code="run_validation",
                 source=phase_order[0] if phase_order else "",

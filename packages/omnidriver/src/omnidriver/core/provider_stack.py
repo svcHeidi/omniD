@@ -1,17 +1,8 @@
 """Compose N providers into one capability view.
 
-Core owns composition; a provider never embeds another provider. Before this
-module, each solver plugin embedded the environment adapter by hand -- and the
-two did it differently, so `get_config_value_reader` returned a different
-callable from each and a start-time hook was copy-pasted into both (that hook
-left the contract 2026-09-26, spec A2).
-
-This module implements one piece of that: the declared-vs-implemented guard.
-``ENVIRONMENT_CONTRACT.md`` §12 draws the line -- intent is supplied, the
-method set is discovered. ``PluginProfile.provides`` (Task 1) is the supplied
-intent; :func:`implemented_capabilities` is the discovery; :func:`check_provides`
-is where they are compared, so a misspelled hook name becomes a reported error
-instead of a silent fallback route.
+Core owns composition; a provider never embeds another provider.
+``PluginProfile.provides`` is the supplied intent, :func:`implemented_capabilities`
+is the discovery, and :func:`check_provides` compares them.
 """
 
 from __future__ import annotations
@@ -78,12 +69,9 @@ def order_providers(providers) -> tuple:
     `TopologicalSorter` sees one insertion order regardless of `PYTHONHASHSEED`.
     Independent providers therefore keep sorted-by-id order. That matters
     because `build_stack_identity` hashes this order into the stack digest,
-    which a reviewed plan is bound to.
-
-    Corrected 2026-09-22 (audit finding C1): the previous implementation passed
-    `set(requires)` to `TopologicalSorter`, which registers a node first seen as
-    a predecessor in set-iteration order. A three-dependency provider therefore
-    composed in four different orders across eight hash seeds.
+    which a reviewed plan is bound to. (Passing `set(requires)` to
+    `TopologicalSorter` directly is not equivalent: it registers a node in
+    set-iteration order, which varies with `PYTHONHASHSEED`.)
     """
     providers = tuple(providers)
     seen: dict[str, int] = {}
@@ -125,7 +113,7 @@ def order_providers(providers) -> tuple:
 
 
 # ---------------------------------------------------------------------------
-# Composition (spec §4.3, as amended 2026-09-20 by the Task 15 spike)
+# Composition (spec §4.3)
 # ---------------------------------------------------------------------------
 
 #: Composition rule per contract member. Spec §4.3 names six shapes; this
@@ -231,18 +219,13 @@ _SHAPE: dict[str, str] = {
 #: whose absence the error names. Generalises the single-plugin crash-safety
 #: check in ``_OverrideScopeAdapter.target_paths``: a provider that mutates
 #: without declaring what it touched is a data-loss risk, and splitting the
-#: pair across two providers reintroduces exactly that risk while satisfying
-#: "exactly one" for each member on its own. Spike finding #2, 2026-09-20.
-#: Corrected 2026-09-23 (R2 finding 2): ``get_supported_mutation_modes`` was
-#: classified ``set`` while ``resolve_case_mutation`` is ``single``. A stack
-#: where one provider declared only ``synthesize`` support and a *different*,
-#: more specific provider implemented the resolver composed to the union of
-#: both providers' modes, so ``resolve()`` could pass a mode into a resolver
-#: that never claimed to accept it. Reclassified to ``single`` -- matching
-#: ``resolve_case_mutation``'s own shape, so the same most-specific-provider
-#: overrides the whole pair rather than only one half of it -- and paired
-#: here so the two halves are enforced to come from one provider, the same
-#: guarantee ``apply_overrides``/``get_override_target_paths`` already gives.
+#: pair across two providers reintroduces that risk while satisfying "exactly
+#: one" for each member on its own. ``get_supported_mutation_modes`` is
+#: ``single``-shaped (not ``set``) to match ``resolve_case_mutation``'s own
+#: shape: were it a union, a stack where one provider declares only
+#: ``synthesize`` support and a different, more specific provider implements
+#: the resolver would compose to the union of both providers' modes, letting
+#: ``resolve()`` pass a mode into a resolver that never claimed to accept it.
 _CROSS_MEMBER_PAIRS: tuple[tuple[str, str], ...] = (
     ("apply_overrides", "get_override_target_paths"),
     ("resolve_case_mutation", "get_supported_mutation_modes"),
@@ -400,9 +383,9 @@ def _first_non_none(ordered, implementers, member):
 
 
 #: Recorded in place of a winner when no provider in the stack implements any
-#: member of a capability. Naming the most specific provider there asserted an
-#: ownership that did not exist; the capability adapter runs its declared
-#: fallback, which belongs to no provider. Added 2026-09-22 (audit finding C3).
+#: member of a capability. Naming the most specific provider there would
+#: assert an ownership that does not exist; the capability adapter runs its
+#: declared fallback, which belongs to no provider.
 UNCLAIMED = "<unclaimed>"
 
 
@@ -605,13 +588,12 @@ def _check_case_file_declarers(ordered) -> None:
 def _format_declarers(ordered) -> dict[str, str]:
     """Map each rendered format to the one provider that declares it.
 
-    Raises the same way :func:`_check_format_declarers` used to: two
-    providers claiming `openfoam_dictionary` makes the bytes that reach disk
-    depend on composition order, which is the same defect
-    `_check_case_file_declarers` refuses for case files. Returning the map
-    (rather than discarding it, as the check-only version used to) is what
-    lets `renderer_for` answer with the real declarer instead of the stack's
-    most-specific provider -- see `_ComposedProvider._format_declared_by`.
+    Two providers claiming `openfoam_dictionary` would make the bytes that
+    reach disk depend on composition order -- the same defect
+    `_check_case_file_declarers` refuses for case files. The map is returned
+    (not just checked) so `renderer_for` can answer with the real declarer
+    instead of the stack's most-specific provider -- see
+    `_ComposedProvider._format_declared_by`.
     """
     declared_by: dict[str, str] = {}
     for provider in ordered:
@@ -710,14 +692,11 @@ def resolutions(ordered_providers) -> dict[str, tuple[str, str]]:
     the composed callable returns" can never disagree. For every other
     capability the winner remains the most specific declaring implementer: it
     is the best available claim, not an assertion about content, and the
-    placeholder digest that accompanies it says so.
-
-    Corrected 2026-09-22 (audit finding C3): the winner used to be the most
-    specific provider that merely declared a member, for every capability --
-    including the three that are actually resolved here. A provider that
-    declared a ``single``-shaped hook and returned ``None`` was recorded as the
+    placeholder digest that accompanies it says so. (Using the most specific
+    *declarer* for the digested capabilities too would be wrong: a provider
+    that declares a ``single``-shaped hook and returns ``None`` is not the
     source of a value ``_first_non_none`` fell through to a less specific
-    provider to find.
+    provider to find.)
     """
     ordered = tuple(ordered_providers)
     if not ordered:
