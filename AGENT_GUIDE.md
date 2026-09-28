@@ -948,6 +948,36 @@ Without the root it notes `plugin_cxx_source_not_supplied` and scans
 nothing. openCARP has no C++ mapping (`cxx_source: null`): its catalogue is
 generated from the binary.
 
+## A solver's shell: `omnidriver env`
+
+```bash
+OPENCARP_MPI_BIN=/usr/local/lib/opencarp/lib/petsc/bin DYLD_LIBRARY_PATH=/opt/homebrew/lib \
+HYDRA_IFACE=lo0 omnidriver env --plugin opencarp
+```
+
+Each plugin's manifest declares its environment: the variables you supply
+(each with why it is needed and whether it is required), the file to source,
+the directories to put first on `PATH`, and its MPI launcher. The OpenFOAM
+layer declares one shell for cardiacFOAM and cardiacCore. `env` reads only
+what is set; it never searches the disk. It prints JSON with:
+- each variable, set or unset, with its value;
+- `shell_prefix`, the bash commands in the one safe order: source first, then
+  every export (macOS strips `DYLD_*` when bash starts), then `PATH`;
+- the launcher `mpirun` resolves to after that prefix: path, real path and
+  version;
+- every authorized command's path, or `null`;
+- `preflight`: the stack's own preflight on that environment, over its solver
+  command and a 2-rank solve.
+
+Run commands behind the prefix: `bash -c '<shell_prefix> omnidriver run ...'`.
+It exits 1, with the refusal named, when a required variable is unset or the
+check fails. Each solver's shell puts only its own MPI first, and a launcher
+from the other MPI is refused (`openfoam_mpi_launcher_mismatch`,
+`opencarp_mpi_launcher_mismatch`). Every step a run executes records where
+it ran in `workflow_state.json`, under `steps[].host`: host name, OS, CPU,
+core count, the scheduler and threading variables, the declared variables
+and, under a launcher, its path, version and rank count.
+
 ## Discovering what's valid
 
 Three layers of discovery:

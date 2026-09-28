@@ -65,3 +65,17 @@ case_profile:
       kind: case_script
       role: openfoam.entrypoint
       required: conditional
+# The shell every OpenFOAM-based stack (cardiacFOAM, cardiacCore) runs in,
+# declared once here (one reality). `omnidriver env --plugin P` renders and
+# checks it; nothing is searched for. Added 2026-09-28: this recipe lived only
+# as prose in CLAUDE.md.
+environment:
+  supplied:
+    - name: OPENFOAM_BASHRC
+      required: true
+      why: OpenFOAM's etc/bashrc, sourced first. It puts OpenFOAM's own MPI first on PATH, so no other solver's MPI bin may be added to this shell
+    - name: DYLD_LIBRARY_PATH
+      required: false
+      why: macOS only. Exported after the source, because macOS strips DYLD_* when bash starts
+  source: OPENFOAM_BASHRC
+  mpi_launcher: mpirun

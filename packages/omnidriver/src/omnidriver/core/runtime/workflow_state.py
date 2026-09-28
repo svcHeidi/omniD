@@ -26,12 +26,17 @@ class WorkflowStepState:
     stderr_log: str | None = None
     produced_artifacts: tuple[str, ...] = ()
     diagnostics: tuple[dict[str, Any], ...] = ()
+    #: Where this attempt ran (``host_facts.host_facts``), recorded when it
+    #: starts; absent for a step that never ran.
+    host: dict[str, Any] | None = None
 
     def to_json(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["args"] = list(self.args)
         payload["produced_artifacts"] = list(self.produced_artifacts)
         payload["diagnostics"] = list(self.diagnostics)
+        if self.host is None:
+            del payload["host"]
         return payload
 
 
@@ -50,6 +55,7 @@ def workflow_step_state_from_json(data: dict[str, Any]) -> WorkflowStepState:
         stderr_log=data.get("stderr_log"),
         produced_artifacts=tuple(str(item) for item in data.get("produced_artifacts", ())),
         diagnostics=tuple(dict(item) for item in data.get("diagnostics", ())),
+        host=data.get("host"),
     )
 
 

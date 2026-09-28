@@ -46,16 +46,6 @@ dt_where() {  # solver dt-ms
   esac
 }
 
-host_facts() {  # where, for the performance record (README, "What is recorded")
-  mkdir -p "$RUNS/hosts"
-  local out="$RUNS/hosts/$(date -u +%Y%m%dT%H%M%SZ)-$1.txt"
-  { echo "# $*"; date -u; hostname; uname -a
-    command -v lscpu >/dev/null && lscpu || sysctl -n machdep.cpu.brand_string hw.ncpu 2>/dev/null || true
-    env | grep -E '^(SLURM_|OMP_|OPENBLAS_|MKL_|HYDRA_)' | sort || true
-    command -v mpirun >/dev/null && { command -v mpirun; mpirun --version 2>&1 | head -3; } || true
-  } > "$out" 2>&1
-}
-
 # Runs `sweep-run` for one solver in that solver's own environment, from the
 # directory holding its tutorials tree (each study's cases_root is "tutorials").
 sweep_run() {  # solver spec output N
@@ -66,7 +56,6 @@ sweep_run() {  # solver spec output N
     # settings and files to source, and would otherwise see this function's.
     ( set -- ; set +eu; source "$OPENFOAM_BASHRC"; set -eu
       [ -n "${CAMPAIGN_DYLD_LIBRARY_PATH:-}" ] && export DYLD_LIBRARY_PATH="${DYLD_LIBRARY_PATH:+$DYLD_LIBRARY_PATH:}$CAMPAIGN_DYLD_LIBRARY_PATH"
-      host_facts "cardiacfoam-$(echo "${output#"$RUNS"/}" | tr / _)" "$spec" "N=$n"
       cd "$(dirname "$OMNIDRIVER_NATIVE_TUTORIALS")"
       # OpenFOAM's N is the case's numberOfSubdomains (set in the spec); --parallel takes no count.
       "$PYTHON" -m omnidriver sweep-run --plugin cardiacfoam --spec "$spec" --output-dir "$output" \
@@ -75,7 +64,6 @@ sweep_run() {  # solver spec output N
     need OMNIDRIVER_OPENCARP_TUTORIALS; need OPENCARP_MPI_BIN
     ( export PATH="$OPENCARP_MPI_BIN:$PATH"
       [ -n "${CAMPAIGN_DYLD_LIBRARY_PATH:-}" ] && export DYLD_LIBRARY_PATH="${DYLD_LIBRARY_PATH:+$DYLD_LIBRARY_PATH:}$CAMPAIGN_DYLD_LIBRARY_PATH"
-      host_facts "opencarp-$(echo "${output#"$RUNS"/}" | tr / _)" "$spec" "N=$n"
       cd "$(dirname "$OMNIDRIVER_OPENCARP_TUTORIALS")"
       "$PYTHON" -m omnidriver sweep-run --plugin opencarp --spec "$spec" --output-dir "$output" \
         --scratch-dir "$RUNS/scratch" $([ "$n" -gt 1 ] && echo --parallel "$n") )

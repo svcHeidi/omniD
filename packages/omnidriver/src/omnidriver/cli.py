@@ -898,8 +898,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "action",
         choices=[
-            "describe", "catalog", "plan", "step", "run", "recover", "sweep-plan", "sweep-run",
-            "compare",
+            "describe", "catalog", "env", "plan", "step", "run", "recover", "sweep-plan",
+            "sweep-run", "compare",
         ],
         help="Pipeline stage to execute",
     )
@@ -1301,8 +1301,13 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
                          "are not valid with action=compare: each run in the request names its own plugin and sweep")
     elif args.comparison_request or args.report:
         parser.error("--comparison-request/--report are only valid with action=compare")
+    if args.action == "env" and any((
+        args.entry, args.run_document, args.config, args.cases_root, args.spec, args.output_dir,
+        args.scratch_dir, args.parallel is not None, args.inputs, args.dry_run, args.continue_on_error,
+    )):
+        parser.error("action=env takes only --plugin: it reports the stack's environment, not a run's")
     if not args.run_document and not args.entry and args.action not in {
-        "recover", "sweep-plan", "sweep-run", "compare"
+        "recover", "sweep-plan", "sweep-run", "compare", "env",
     }:
         parser.error("--entry is required (or use --run-document with action=run/step)")
 
@@ -1366,6 +1371,13 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         parser.error(f"Failed to load plugin {args.plugin!r}: {exc}")
 
+
+    if args.action == "env":
+        from .core.environment_connection import environment_report
+
+        report = environment_report(driver_context)
+        print(json.dumps(report, indent=2))
+        return 0 if report["status"] == "ok" else 1
 
     selected_entry = args.entry
     # PAR (2026-09-26): the CLI's own study source, beside --config's.

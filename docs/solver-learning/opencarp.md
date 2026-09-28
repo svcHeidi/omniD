@@ -316,3 +316,12 @@ parameter table and the verdict. `bench` and `openCARP` need
 `-mass_lumping` (default 0), and no linear-solver options. The
 `niedererNVersion` record passes none of these; the campaign study supplies
 `mass_lumping 0`.
+
+## L. The declared shell (`omnidriver env`, 2026-09-28)
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| L1 | `omnidriver env --plugin opencarp` with `OPENCARP_MPI_BIN=/usr/local/lib/opencarp/lib/petsc/bin DYLD_LIBRARY_PATH=/opt/homebrew/lib HYDRA_IFACE=lo0` | `status: ok`; launcher `.../petsc/bin/mpirun`, `HYDRA build details:`, `Version: 4.0.1`; preflight `[]` | the declared recipe, rendered and checked, reproduces I1-I5 |
+| L2 | the same without `OPENCARP_MPI_BIN` | `opencarp_mpi_launcher_mismatch`: `/opt/homebrew/bin/mpirun` (Open MPI 5.0.9) "started 2 separate one-process openCARP runs" | the mixing mistake is refused before a run (I2) |
+| L3 | the same without `HYDRA_IFACE` | `opencarp_mpi_launcher_mismatch`: "could not start 2 openCARP processes: ... channel initialization failed" | I3, found by the same probe |
+| L4 | a first version applied the prefix with `bash -c '<prefix> env -0'` | `opencarp_binary_unloadable` although the prefix exported `DYLD_LIBRARY_PATH` | `/usr/bin/env` is a protected binary: macOS strips `DYLD_*` again when bash starts it (the I3 note). The environment is now dumped by the same Python, `exec`ed from that bash |

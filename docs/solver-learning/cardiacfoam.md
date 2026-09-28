@@ -733,3 +733,11 @@ Native tree: `git archive omnid/tutorials-are-pointers` (`c184d702`) `tutorials 
 | K4 | the same check over the whole `get_dict_entries()` (the test read only the physics and electro catalogues) | 4 more: `startFrom`, `stopAt`, `writeControl`, `writeFormat` | upstream OpenFOAM `controlDict` words read by `Foam::Time`, not tables; classified the same way |
 | K5 | stale waivers the new `unused_selector_mapping` list reports | `ecgDomains.<name>.manufactured.dimension` (no longer catalogued); internal `ecgVerificationModel`, `couplingVerificationModel`, `graphVerificationModel` (all mapped) | removed |
 | K6 | `scripts/regenerate-ionic-catalog.py --check` against the same source | exit 0 | the committed ionic catalogue matches the `*_Names.H` headers |
+
+## V. The declared shell (`omnidriver env`, 2026-09-28)
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| V1 | `bash -c 'source /Volumes/OpenFOAM-v2412/etc/bashrc; ...'` | `WM_MPLIB=SYSTEMOPENMPI`, `FOAM_MPI=sys-openmpi`, `MPI_ARCH_PATH=/opt/homebrew/Cellar/open-mpi/5.0.9`; `mpirun` is `/opt/homebrew/bin/mpirun`, `mpirun (Open MPI) 5.0.9` | the bashrc does not put an MPI bin on `PATH` for a system Open MPI; `mpirun` is whatever `PATH` finds first. `WM_MPLIB` names the family it must be |
+| V2 | `omnidriver env --plugin cardiacfoam` with `OPENFOAM_BASHRC`, `DYLD_LIBRARY_PATH`, `OMNIDRIVER_NATIVE_TUTORIALS` set | `status: ok`, preflight `[]`, `cardiacFoam` from `$FOAM_USER_APPBIN` | the declared recipe checks clean |
+| V3 | the same with `/usr/local/lib/opencarp/lib/petsc/bin` first on `PATH` | `openfoam_mpi_launcher_mismatch`: "mpirun on PATH (.../petsc/bin/mpirun, 'HYDRA build details:') is not the SYSTEMOPENMPI MPI OpenFOAM was sourced with" | the 2026-09-28 mixing mistake (two parallel tests failed) is now refused by name, by a parallel `plan --strict` too |

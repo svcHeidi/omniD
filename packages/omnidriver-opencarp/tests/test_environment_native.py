@@ -42,3 +42,16 @@ def test_a_binary_whose_tag_differs_from_the_catalogue_is_warned_naming_both(mon
     assert "'v0.0-catalogue'" in warnings[0].message
     assert [d for d in diagnostics if d.level == "error"] == []
     assert shutil.which("openCARP", path=env.get("PATH", ""))
+
+
+def test_the_declared_shell_checks_clean_in_the_native_shape():
+    """Added 2026-09-28: ``omnidriver env --plugin opencarp`` over the real
+    binary and launcher, in the shell this shape runs in (its MPI first on
+    PATH, the library path and, here, HYDRA_IFACE supplied)."""
+    from omnidriver.core.environment_connection import environment_report
+    from omnidriver.core.plugin_interface import load_plugin_context
+
+    report = environment_report(load_plugin_context("opencarp"), _env())
+    assert report["status"] == "ok", report["preflight"]
+    assert report["launcher"]["path"] is not None
+    assert report["commands"]["openCARP"] is not None

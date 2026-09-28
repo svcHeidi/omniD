@@ -47,6 +47,20 @@ def _safe_step_id(step_id: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", step_id).strip("_") or "step"
 
 
+def _host_facts(command, args, env, driver_context) -> dict[str, Any]:
+    """Ambient facts about where this step runs (``runtime.host_facts``),
+    with the values of the stack's declared environment variables."""
+    from .host_facts import host_facts
+
+    declared: tuple[str, ...] = ()
+    if driver_context is not None:
+        from omnidriver.core.environment_connection import stack_connection
+
+        connection, _ = stack_connection(driver_context)
+        declared = tuple(variable.name for variable in connection.supplied)
+    return host_facts(command, args, env, declared_variables=declared)
+
+
 def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f"{path.name}.tmp")
@@ -391,6 +405,7 @@ def run_workflow_step(
     command = str(step["command"])
     resolved_cwd = _resolve_case_cwd(Path(case_root), cwd)
     executable = _resolve_command(command, resolved_cwd, driver_context)
+    host = _host_facts(command, args, env, driver_context)
     running_step = WorkflowStepState(
         step_id=step_id,
         status="running",
@@ -405,6 +420,7 @@ def run_workflow_step(
         stderr_log=str(stderr_log),
         produced_artifacts=(),
         diagnostics=(),
+        host=host,
     )
     running_state = replace_step_state(
         workflow_state,
@@ -528,6 +544,7 @@ def run_workflow_step(
         stderr_log=str(stderr_log),
         produced_artifacts=produced_artifacts,
         diagnostics=diagnostics,
+        host=host,
     )
 
     completed_steps = workflow_state.completed_steps

@@ -12,3 +12,23 @@ provides:
   - record_surface
 case_profile:
   dictionaries: []
+# openCARP's shell: nothing is sourced (A6); its MPI's bin goes first on PATH.
+# `omnidriver env --plugin opencarp` renders and checks it; nothing is
+# searched for. Added 2026-09-28: this recipe lived only as prose in CLAUDE.md.
+environment:
+  supplied:
+    - name: DYLD_LIBRARY_PATH
+      required: false
+      why: macOS only. The directory holding libsundials_cvode, without which openCARP cannot start (docs/solver-learning/opencarp.md A4-A6)
+    - name: OPENCARP_MPI_BIN
+      required: false
+      why: the bin directory of the MPI openCARP was built against (a bundled-MPICH install has <prefix>/lib/petsc/bin), first on PATH for a parallel run. Another MPI's mpirun starts N serial runs of the whole problem (I2)
+    - name: HYDRA_IFACE
+      required: false
+      why: only on a host whose name does not resolve. MPICH's hydra launcher then needs a network interface, e.g. lo0 (I3)
+    - name: OMNIDRIVER_OPENCARP_TUTORIALS
+      required: false
+      why: the openCARP tutorials tree the native suites read (plan and run take it as --cases-root)
+  path_prepend:
+    - OPENCARP_MPI_BIN
+  mpi_launcher: mpirun

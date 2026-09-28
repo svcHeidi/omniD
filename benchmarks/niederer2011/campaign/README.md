@@ -41,7 +41,6 @@ runs/
   <solver>/cartesianConvergence/dx<mm>/        one sweep per solver and Δx: the agreement runs
   perf/<solver>/dx<mm>_dt<ms>/np<N>/rep<r>/    one sweep per scaling point
   reports/<request name>.json                  one report per request, written once
-  hosts/<time>-<solver>-<what>.txt             where each sweep ran (see "What is recorded")
   scratch/                                     omniD's staging (--scratch-dir)
 ```
 
@@ -411,21 +410,23 @@ What each run records:
   - openCARP ends with "Timings of individual physics", which splits
     Electrics and Ionics into Init, Compute and Output;
   - OpenFOAM prints `ExecutionTime`/`ClockTime` every step.
+- **Where each step ran** (added 2026-09-28): every step attempt in
+  `workflow_state.json` carries `host`: the host name, OS, CPU model and
+  core count, every set `SLURM_*`/`OMP_*`/`OPENBLAS_*`/`MKL_*` variable, the
+  stack's declared environment variables (`HYDRA_IFACE`, `OPENFOAM_BASHRC`,
+  ... as `omnidriver env` lists them) and, for the parallel solve, the
+  launcher's path, real path, version and `-np`.
 
 What omniD does not record:
-- **Where it ran.** No host name, CPU model, node list or job id.
-- **The threading and binding environment.** `OMP_NUM_THREADS`, MPI
-  binding and the `mpirun` version are not recorded.
+- **The MPI binding.** Neither solver's command sets one, and omniD reads
+  none.
 - **The solve's own I/O.** The `solve` step's wall time includes the
   solver's field writes: cardiacFOAM writes every 5 ms of simulated
   time, openCARP `vm.igb` every 1 ms. Only openCARP's log separates it.
 
-`campaign.sh` fills the first two for this campaign. Before each sweep it
-writes `runs/hosts/<time>-<solver>-<what>.txt`, holding the host name,
-`uname`, `lscpu` (or `sysctl` on macOS), every `SLURM_*`/`OMP_*`/`HYDRA_*`
-variable, and `mpirun`'s path and version as the solver's shell sees
-them. A neutral design for omniD itself is proposed in
-`.superpowers/sdd/campaign-report.md`; it is not built.
+Corrected 2026-09-28: `campaign.sh` wrote `runs/hosts/<time>-<solver>-<what>.txt`
+before each sweep because omniD recorded no host. The run's own record now
+holds those facts per step, so the script no longer writes them.
 
 ## Expected cost
 

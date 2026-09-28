@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shlex
 import shutil
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -166,6 +167,51 @@ def _build_staleness_diagnostics(
     return tuple(diagnostics)
 
 
+#: ``WM_MPLIB`` (set by OpenFOAM's bashrc) -> words ``mpirun --version``
+#: prints for that MPI family. Open MPI prints ``mpirun (Open MPI) 5.0.9``;
+#: MPICH's hydra prints ``HYDRA build details``.
+_MPI_FAMILY_MARKERS = {
+    "OPENMPI": ("Open MPI", "OpenRTE"),
+    "MPICH": ("HYDRA", "MPICH"),
+    "INTELMPI": ("Intel",),
+}
+
+
+def _mpi_family_diagnostics(checked_env: dict[str, str]) -> tuple[StrictDiagnostic, ...]:
+    """The ``mpirun`` on PATH must be the MPI OpenFOAM was sourced with.
+
+    Another MPI's launcher first on PATH (openCARP's bundled MPICH, say)
+    starts N separate serial solvers instead of one N-rank run; two parallel
+    tests failed that way on 2026-09-28. ``WM_MPLIB`` names the family the
+    sourced environment built against; an unknown family is not checked."""
+    mplib = checked_env.get("WM_MPLIB", "")
+    markers = next((words for family, words in _MPI_FAMILY_MARKERS.items() if family in mplib), None)
+    launcher = shutil.which("mpirun", path=checked_env.get("PATH"))
+    if markers is None or launcher is None:
+        return ()
+    try:
+        completed = subprocess.run(
+            (launcher, "--version"), capture_output=True, text=True,
+            env=checked_env, timeout=30, check=False,
+        )
+        version = (completed.stdout + completed.stderr).strip()
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        version = str(exc)
+    if any(word in version for word in markers):
+        return ()
+    first_line = version.splitlines()[0] if version else "no output"
+    return (diagnostic(
+        "error",
+        "openfoam_mpi_launcher_mismatch",
+        f"mpirun on PATH ({launcher}, {first_line!r}) is not the {mplib} MPI OpenFOAM was "
+        "sourced with; a parallel run would start one serial solver per rank. Put "
+        "OpenFOAM's MPI first on PATH (source its bashrc last, and never add another "
+        "solver's MPI bin to this shell)",
+        source="environment",
+        field="mpirun",
+    ),)
+
+
 def _environment_diagnostics(
     workflow_dag: dict[str, Any] | None,
     *,
@@ -265,6 +311,9 @@ def _environment_diagnostics(
             source="environment",
             field="mpirun",
         ))
+
+    if requirements.mpi_launcher_in_dag:
+        diagnostics.extend(_mpi_family_diagnostics(checked_env))
 
     diagnostics.extend(
         _build_staleness_diagnostics(

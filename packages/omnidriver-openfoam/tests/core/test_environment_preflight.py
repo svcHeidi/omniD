@@ -436,3 +436,24 @@ def test_the_stale_build_check_reads_the_supplied_source_root_only(tmp_path, mon
     assert _supplied_src_root(None) is None
     monkeypatch.setenv("TOY_TREE", str(tmp_path))
     assert _supplied_src_root(context) == (tmp_path / "src").resolve()
+
+
+@pytest.mark.parametrize("version, mismatched", [
+    ("mpirun (Open MPI) 5.0.9", False),
+    ("HYDRA build details:\n    Version: 4.0.1", True),
+])
+def test_an_mpirun_from_another_mpi_family_is_refused(tmp_path, version, mismatched):
+    """Added 2026-09-28: openCARP's MPICH first on PATH under OpenFOAM's
+    Open MPI failed two parallel tests. ``WM_MPLIB`` (from the sourced
+    bashrc) says which family ``mpirun --version`` must print."""
+    from omnidriver.openfoam.environment_preflight import _mpi_family_diagnostics
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    launcher = bin_dir / "mpirun"
+    launcher.write_text(f"#!/bin/sh\nprintf '%s\\n' '{version}'\n")
+    launcher.chmod(0o755)
+    env = {"PATH": str(bin_dir), "WM_MPLIB": "SYSTEMOPENMPI"}
+    codes = [d.code for d in _mpi_family_diagnostics(env)]
+    assert codes == (["openfoam_mpi_launcher_mismatch"] if mismatched else [])
+    assert _mpi_family_diagnostics({**env, "WM_MPLIB": "SOMETHINGELSE"}) == ()
