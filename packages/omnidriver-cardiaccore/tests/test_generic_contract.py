@@ -20,12 +20,14 @@ def test_plugin_has_a_valid_context() -> None:
     assert context.identity.to_json()["providers"][-1]["id"] == "org.omnidriver.cardiaccore"
     assert len(context.capabilities.dictionaries.entries()) == 87
     assert context.capabilities.dictionaries.phases() == ("preprocessing",)
-    assert context.capabilities.tutorials.catalog()["registered_tutorials"] == (
-        "cardiaccore-human-purkinje-slab",
-        "cardiaccore-human-purkinje-endocardial",
-        "cardiaccore-pig-morphometric-purkinje",
-        "cardiaccore-pig-transmural-purkinje",
-    )
+    # No factory tutorial survives (S5): every one migrated onto a tutorial
+    # record (see `context.capabilities.tutorial_records.catalog()`
+    # instead) or, for cardiaccore-pig-transmural-purkinje (no native
+    # tutorial at all), was dropped outright.
+    assert context.capabilities.tutorials.catalog()["registered_tutorials"] == ()
+    assert set(context.capabilities.tutorial_records.catalog()) == {
+        "humanSlab", "idealizedHeart", "idealizedHeartEndocardial", "idealizedHeartPigTransmural",
+    }
     assert context.capabilities.case_runtime_conventions.conventions().case_entrypoints == ("Allrun",)
 
 
@@ -77,18 +79,23 @@ def test_declared_vocabulary_names_the_current_coordinates_dictionary() -> None:
     assert "uvcConventionDict" not in declared
     assert "system/coordinatesConventionDict" in declared
 
-    factories = driver_context(
+    # S5: no more spec_factories to build and check; every record's own
+    # `consumes` is the modern equivalent (design 2026-09-28, tutorial
+    # records are inert data -- no plugin code runs to inspect them).
+    records = driver_context(
         OpenFOAMEnvironmentPlugin(), plugin, source="test",
-    ).capabilities.tutorials.catalog()[
-        "spec_factories"
-    ]
-    specs = {name: json.dumps(build(), default=str) for name, build in factories.items()}
-    for name, spec in specs.items():
-        assert "uvcConventionDict" not in spec, name
-    # Only the tutorials that run generatePurkinjeTree consume the convention
-    # dictionary; the slab tutorial reaches the endocardium another way. At
-    # least one must name it, or this gate would pass on a typo.
-    assert any("system/coordinatesConventionDict" in spec for spec in specs.values())
+    ).capabilities.tutorial_records.catalog()
+    consumed = {
+        path
+        for record in records.values()
+        for step in record.workflow_steps
+        for path in step.consumes
+    }
+    assert "uvcConventionDict" not in json.dumps(sorted(consumed))
+    # Only a record that runs generatePurkinjeTree/setPurkinjeSlab/
+    # setPurkinjeMorphometry consumes the convention dictionary; at least
+    # one must name it, or this gate would pass on a typo.
+    assert "system/coordinatesConventionDict" in consumed
 
 
 def test_declared_tree_extension_targets_are_wall_thickness_depths() -> None:

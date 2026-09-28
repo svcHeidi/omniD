@@ -16,17 +16,6 @@ from .agent_guidance import describe_guidance
 from .catalogs.support_boundary import FIELD_CONVENTIONS, SUPPORT_BOUNDARY
 from .catalogs.operations import OPERATIONS, utility_index
 from .catalogs.purkinje import TREE_VALIDATION_CONTRACT
-from .workflows.preprocessing import (
-    HUMAN_PURKINJE_ENDOCARDIAL_TUTORIAL_NAME,
-    HUMAN_PURKINJE_SLAB_TUTORIAL_NAME,
-    PIG_MORPHOMETRIC_PURKINJE_TUTORIAL_NAME,
-    PIG_TRANSMURAL_PURKINJE_TUTORIAL_NAME,
-    PURKINJE_TREE_INPUT_PATHS,
-    make_human_purkinje_endocardial_spec,
-    make_human_purkinje_slab_spec,
-    make_pig_morphometric_purkinje_spec,
-    make_pig_transmural_purkinje_spec,
-)
 from .catalogs.utilities import UTILITY_MANIFESTS
 
 
@@ -84,26 +73,14 @@ class CardiacCorePlugin:
         return {}
 
     def get_tutorial_catalog(self) -> dict[str, Any]:
-        return {
-            "registered_tutorials": (
-                HUMAN_PURKINJE_SLAB_TUTORIAL_NAME,
-                HUMAN_PURKINJE_ENDOCARDIAL_TUTORIAL_NAME,
-                PIG_MORPHOMETRIC_PURKINJE_TUTORIAL_NAME,
-                PIG_TRANSMURAL_PURKINJE_TUTORIAL_NAME,
-            ),
-            "spec_factories": {
-                HUMAN_PURKINJE_SLAB_TUTORIAL_NAME: make_human_purkinje_slab_spec,
-                HUMAN_PURKINJE_ENDOCARDIAL_TUTORIAL_NAME: (
-                    make_human_purkinje_endocardial_spec
-                ),
-                PIG_MORPHOMETRIC_PURKINJE_TUTORIAL_NAME: (
-                    make_pig_morphometric_purkinje_spec
-                ),
-                PIG_TRANSMURAL_PURKINJE_TUTORIAL_NAME: (
-                    make_pig_transmural_purkinje_spec
-                ),
-            },
-        }
+        # No factory tutorial survives (step S5, 2026-09-28): all four
+        # migrated onto a tutorial record (humanSlab; idealizedHeart,
+        # idealizedHeartEndocardial, idealizedHeartPigTransmural, the
+        # committed-mesh reconfiguration of humanEndocardial/
+        # pigMorphometricTransmural); cardiaccore-pig-transmural-purkinje had
+        # no native tutorial at all and was dropped outright. Same empty
+        # shape cardiacFOAM's and openCARP's plugins already return here.
+        return {"registered_tutorials": (), "spec_factories": {}}
 
     def get_tutorial_displays(self) -> tuple[Any, ...]:
         return ()
@@ -148,28 +125,6 @@ class CardiacCorePlugin:
     def get_samplable_fields(self, resolved: dict[str, Any]) -> dict[str, tuple[str, ...]]:
         del resolved
         return {}
-
-    def get_override_schema(self, tutorial_name: str, make_spec_info: dict[str, Any]) -> dict[str, Any]:
-        del make_spec_info
-        if tutorial_name in {
-            HUMAN_PURKINJE_ENDOCARDIAL_TUTORIAL_NAME,
-            PIG_MORPHOMETRIC_PURKINJE_TUTORIAL_NAME,
-            PIG_TRANSMURAL_PURKINJE_TUTORIAL_NAME,
-        }:
-            return {
-                "input_overrides": {
-                    "description": "JSON object mapping reviewed cardiacCore inputs to values. The tree dictionary is fixed in this workflow.",
-                    "paths": PURKINJE_TREE_INPUT_PATHS,
-                },
-            }
-        if tutorial_name != HUMAN_PURKINJE_SLAB_TUTORIAL_NAME:
-            return {}
-        return {
-            "input_overrides": {
-                "description": "JSON object mapping reviewed cardiacCore input paths to values.",
-                "paths": tuple(entry.driver_path for entry in CATALOG.entries),
-            },
-        }
 
     def get_run_document_config_schema(self) -> dict[str, Any]:
         return {

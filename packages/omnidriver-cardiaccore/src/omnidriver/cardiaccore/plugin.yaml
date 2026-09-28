@@ -79,7 +79,6 @@ provides:
   - named_catalogs
   - cxx_mapping
   - manifest
-  - override_schema
   - run_document_configuration
   # Added step S (2026-09-28, supplied-inputs design doc §5, S3): the sole
   # member get_record_key_validator adapts (record_key_validation) answers
@@ -88,6 +87,10 @@ provides:
   # never a stub -- the same standard cardiacFOAM's own plugin.yaml applies
   # to its own record_key_validation entry.
   - record_key_validation
+  # Removed step S5 (2026-09-28): override_schema's only implementation
+  # (get_override_schema) served the factory workflows' own agent-requested
+  # input_overrides channel, deleted with them -- a tutorial record
+  # addresses a document/key directly, never through this schema.
 case_profile:
   dictionaries:
     - path: system/setCardiacConductivityDict
