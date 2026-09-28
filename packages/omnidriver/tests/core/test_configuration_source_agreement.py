@@ -137,48 +137,74 @@ def test_tutorial_record_entry_is_case_sourced(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_factory_tutorial_entry_is_document_sourced() -> None:
-    """``cardiaccore-human-purkinje-slab`` is a registered factory tutorial
-    (§3: "a tutorial is a data record" is the record shape; a factory
-    tutorial's config lives in the document). This test has no real native
-    case on disk (no ``cases_root`` points at the monorepo), so planning
-    itself fails on missing case files -- but that failure is exactly the
-    proof this test wants: ``validate_run`` (``run_validation`` diagnostics,
-    naming real cardiac catalog fields like ``$CARDIAC_CONDUCTIVITY.df``) ran
-    at all, which only happens when ``configurationSource`` is "document". A
-    case-sourced entry (the two tests above) never produces these codes.
+def test_factory_tutorial_entry_is_document_sourced(tmp_path: Path) -> None:
+    """A registered factory tutorial's config lives in the document (§3: "a
+    tutorial is a data record" is the RECORD shape; a factory spec's is
+    not) -- ``configurationSource`` must be "document", and both
+    ``validate_run`` and the plugin's declared schema still apply (unlike
+    the two case-sourced kinds above).
 
-    Corrected 2026-09-27 (tutorials-are-pointers step C): this used
-    ``manufacturedMonodomainTotalLagrangianEM``, cardiacFoam's own last
-    factory tutorial (every earlier fixture -- ``singleCell``,
-    ``cable1DRestitution``, ``manufacturedMonodomain1D3D`` -- had already
-    migrated onto a tutorial record the same way; see each's own history in
-    prior revisions of this docstring). That one was deleted outright
-    (owner decision: electromechanics did not work and will be rebuilt as a
-    record later), leaving cardiacFoam with no factory tutorial at all.
-    cardiacCore's own factory tutorials (``cardiaccore/workflows/
-    preprocessing.py``) are unrelated to cardiacFoam's migration and still
-    exercise this generic, solver-agnostic contract with a real plugin, not
-    a mock -- see ``.superpowers/sdd/legacy-map.md`` §4."""
-    cardiaccore = pytest.importorskip("omnidriver.cardiaccore.plugin")
-    from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
+    Corrected 2026-09-28 (step S5): no adapter in this repository declares a
+    real factory tutorial any more -- cardiacFOAM's and openCARP's own last
+    ones were deleted earlier (see this test's own prior revisions), and
+    cardiacCore's (``cardiaccore/workflows/preprocessing.py``) went with
+    step S5's factory deletion, the last holdout. The "document-sourced"
+    contract itself is still real core behaviour with real callers
+    (``run_document_adapter``/``run_document_exec``), so it is tested here
+    against a synthetic factory-shaped spec (a real, catalog-backed
+    ``DictEntry``, a real ``TutorialSpec`` with no ``generic_case`` marker)
+    rather than skipped for want of a live adapter fixture.
+    """
+    from omnidriver.core.contracts.dictionary import DictEntry
+    from omnidriver.core.runtime.models import CaseConfig, TutorialSpec
 
-    context = driver_context(
-        OpenFOAMEnvironmentPlugin(), cardiaccore.CardiacCorePlugin(),
-        source="test:factory-tutorial",
+    entry = DictEntry(
+        driver_path="solverSettings.requiredField", description="A required field.",
+        value_kind="word", required=True, phases=frozenset({"setup"}),
     )
-    report = strict_plan("cardiaccore-human-purkinje-slab", driver_context=context)
 
-    assert report.run_document is not None
-    run_doc = report.run_document
+    class _FactoryPlugin(MinimalTestPlugin):
+        def get_dict_entries(self):
+            return (entry,)
+
+        def get_phases(self):
+            return ("setup",)
+
+        def get_run_document_config_schema(self):
+            return {"type": "object"}
+
+        def build_run_document_config(self, spec):
+            del spec
+            return {"setup": {}}, ()
+
+    case_root = tmp_path / "factoryCase"
+    case_root.mkdir()
+    (case_root / "run-test-case").write_text("#!/bin/sh\nexit 0\n")
+    spec = TutorialSpec(
+        name="factoryOnly", case_root=case_root, setup_root=case_root, output_dir=case_root,
+        build_cases=lambda: [CaseConfig(case_id="factoryOnly", params={})],
+        apply_case=lambda root, case: None,
+        metadata={
+            "entry_kind": "registered_tutorial", "entry_path": None, "source_type": "registered_tutorial",
+            "workflow_family": None, "resolution": "registered_tutorial",
+            "workflow_dag": {"steps": [{"id": "run", "command": "run-test-case", "args": [], "depends_on": []}]},
+        },
+    )
+    context = driver_context(_FactoryPlugin(entrypoint="run-test-case"), source="test:factory-tutorial")
+    run_doc, diagnostics = _run_document_from_case(
+        entry="factoryOnly", spec=spec, launch=_launch_for(case_root),
+        workflow_dag=spec.metadata["workflow_dag"], workflow_state=None,
+        expected_artifacts=(), driver_context=context,
+    )
+
     assert run_doc.configurationSource == "document"
 
-    codes = {d.code for d in report.validation_diagnostics}
-    assert "run_validation" in codes, report.validation_diagnostics
+    codes = {d.code for d in diagnostics}
+    assert "run_validation" in codes, diagnostics
     assert any(
-        d.code == "run_validation" and "$CARDIAC_CONDUCTIVITY.df" in d.message
-        for d in report.validation_diagnostics
-    ), report.validation_diagnostics
+        d.code == "run_validation" and "solverSettings.requiredField" in d.message
+        for d in diagnostics
+    ), diagnostics
     assert "case_configuration_source_carries_config" not in codes
 
 
