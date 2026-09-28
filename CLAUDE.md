@@ -193,11 +193,24 @@ tree. Both carry a banner saying so.
 
 ## House style
 
-Comments and docstrings here are dense and cite specific code locations, and
-that is deliberate — but citations rot. Prefer naming a **symbol** over a
-`file.py:123` line number, which drifts. When you correct a claim, record the
-correction with a date rather than silently overwriting it; that convention is
-why several defects in this repository were findable at all.
+Code explains what; comments explain why. This repository is prepared for
+publication, and these rules bind every agent:
+
+- **Comments only for the non-obvious:** a native solver quirk, a numerical
+  trade-off, a workaround, a rule the code cannot show. Never narrate what the
+  next line does.
+- **Docstrings on the public surface only:** the plugin contract, capability
+  seams, CLI commands, and names a package exports. Keep them short: what it
+  does, its arguments and errors where not obvious. Private helpers get none,
+  or one line.
+- **No history in code.** No dated corrections, review or task IDs, plan
+  references or "previously this did X". Git keeps history; evidence about a
+  solver goes to `docs/solver-learning/`; decisions go to `docs/superpowers/`.
+- **No commented-out code, and no untracked TODOs.** An open item goes to
+  `docs/superpowers/ROADMAP.md`, or a GitHub issue once the owner opens one.
+- **Name a symbol, never `file.py:123`.** Line numbers drift.
+- Review agent output like a junior's pull request: trim tutorial-style
+  comments and speculative notes before committing.
 
 The licence question is open: there is no `LICENSE` file and no `license`
 field in any `pyproject.toml`. Do not add one without asking.
