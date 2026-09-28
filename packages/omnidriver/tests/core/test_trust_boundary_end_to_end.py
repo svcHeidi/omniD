@@ -687,7 +687,7 @@ def test_invalid_config_blocks_execution_at_ingestion() -> None:
         entry.driver_path for entry in active_context.capabilities.dictionaries.entries()
     }:
         pytest.skip(
-            f"{active_context.identity.id!r} declares no myocardiumSolver "
+            f"{active_context.identity.providers[-1].id!r} declares no myocardiumSolver "
             "catalog entry; this claim needs a cardiac-aware default plugin."
         )
 

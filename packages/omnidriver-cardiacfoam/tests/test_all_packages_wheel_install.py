@@ -92,14 +92,9 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
     probe_root = tmp_path / "probe"
     cases_root = probe_root / "cases"
     cases_root.mkdir(parents=True)
-    # `niederer2011` migrated onto a tutorial record 2026-09-26 (5.4b-N): a
-    # record's own `describe`, unlike a factory tutorial's, resolves against
-    # a real (if empty) native case directory
-    # (`record_execution._native_case_root`, `is_dir()` only -- no file
-    # content is read without a study naming an axis), so this artifact gate
-    # supplies an empty stand-in rather than the real native tutorials tree
-    # (still "no source case... participates": nothing inside it is read).
+    # A record's describe needs its native case directory to exist; nothing in it is read.
     (cases_root / "NiedererEtAl2011verification").mkdir()
+    (cases_root / "cases" / "bivCase").mkdir(parents=True)
     clean_environment = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
     probe = textwrap.dedent(
         f"""
@@ -198,7 +193,7 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
             "--plugin",
             "cardiaccore",
             "--entry",
-            "cardiaccore-human-purkinje-slab",
+            "humanSlab",
             "--cases-root",
             str(cases_root),
         ],
@@ -206,7 +201,7 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
         env=clean_environment,
     )
     cardiaccore_payload = json.loads(cardiaccore_describe)
-    assert cardiaccore_payload["resolved_name"] == "cardiaccore-human-purkinje-slab"
+    assert cardiaccore_payload["resolved_name"] == "humanSlab"
     # Same migration as the cardiacFoam assertion above -- see
     # `test_generic_contract.py`'s `identity.to_json()["providers"][-1]["id"]`
     # for the established idiom this follows.

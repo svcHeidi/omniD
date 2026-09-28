@@ -71,11 +71,11 @@ FIELD_CONVENTIONS = {
 
 
 SUPPORT_BOUNDARY = {
-    "supported_workflows": (
-        "cardiaccore-human-purkinje-slab",
-        "cardiaccore-human-purkinje-endocardial",
-        "cardiaccore-pig-morphometric-purkinje",
-        "cardiaccore-pig-transmural-purkinje",
+    "supported_records": (
+        "humanSlab",
+        "idealizedHeart",
+        "idealizedHeartEndocardial",
+        "idealizedHeartPigTransmural",
     ),
     "pending": ("Automatic workflow integration of seed proposal, coverage, and coordinate-ring operations", "CObiveco VTU-to-legacy-VTK conversion with vector-field compatibility", "Workflow step for the refine1Dgraph/1DgraphToFoam graph hand-off, with -maxEdgeLength scaled from the mesh length unit"),
     "retired": "Standalone omnidriver and agent pipeline/catalog interfaces are not adapter authorities.",

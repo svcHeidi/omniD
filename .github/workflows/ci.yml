@@ -138,7 +138,7 @@ jobs:
                       pytest
 
       - name: Run tests
-        run: python -m pytest packages/omnidriver-cardiaccore/tests -q
+        run: python -m pytest packages/omnidriver-cardiaccore/tests -m "not native_cardiaccore" -q
 
   # openCARP drives a different binary entirely and needs no OpenFOAM, so this
   # job installs core and the opencarp adapter only -- which also proves the
