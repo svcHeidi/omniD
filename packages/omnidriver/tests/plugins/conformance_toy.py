@@ -20,7 +20,7 @@ import json as _json
 
 from omnidriver.core.case_write import RenderedFile, _digest_bytes
 from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
-from omnidriver.core.tutorial_records import TutorialRecord, WorkflowStep
+from omnidriver.core.tutorial_records import RecordInput, TutorialRecord, WorkflowStep
 
 from plugins.e2e_record_plugin import _TOY_RECORD, E2ERecordPlugin, _FORMAT, _deep_set, _number_cells_axis
 
@@ -416,6 +416,49 @@ class DefaultRoutePlugin(E2ERecordPlugin):
             variant_selector="route",
             default_variant="native",
         )}
+
+
+WITH_INPUT_PLUGIN = "plugins.conformance_toy:WithInputPlugin"
+#: The one file step S's toy bundle carries, and the destination its
+#: record's ``anatomy`` input writes it to.
+INPUT_BUNDLE_FILE = "bundle.json"
+INPUT_DESTINATION = "0/bundle.json"
+
+
+class WithInputPlugin(E2ERecordPlugin):
+    """Its record declares one input with no native location (step S,
+    design 2026-09-28-supplied-inputs §2.1): a toy stand-in for cardiacCore's
+    anatomy bundle. ``solve`` consumes the input's destination, so C8 covers
+    it and C11 expects it carried, never taken from the case folder."""
+
+    def get_tutorial_records(self):
+        return {"toyTutorial": TutorialRecord(
+            name="toyTutorial", native_case_relpath="toyTutorial",
+            axes=(_number_cells_axis(),),
+            inputs=(RecordInput(name="anatomy", files=((INPUT_BUNDLE_FILE, INPUT_DESTINATION),)),),
+            workflow_steps=(WorkflowStep(
+                step_id="solve", command=("touch", "solved.marker"),
+                consumes=("constant/mesh.json", INPUT_DESTINATION), produces=("solved.marker",),
+            ),),
+        )}
+
+
+def write_toy_input_bundle(root: Path) -> Path:
+    """A directory holding step S's one supplied file, for
+    ``--input anatomy=<this>`` / ``ConformanceTarget.inputs``."""
+    root.mkdir(parents=True, exist_ok=True)
+    (root / INPUT_BUNDLE_FILE).write_text(json.dumps({"from": "the supplied bundle"}))
+    return root
+
+
+def toy_conformance_target_with_input(tmp_path: Path) -> ConformanceTarget:
+    """Step S's own proof (design table, S2): a toy record with a supplied
+    bundle, passing C1-C12 in core -- no native tree, no solver, needed."""
+    from dataclasses import replace
+
+    bundle = write_toy_input_bundle(tmp_path / "bundle")
+    target = toy_conformance_target(tmp_path, plugin=WITH_INPUT_PLUGIN)
+    return replace(target, inputs={"anatomy": str(bundle)})
 
 
 DEFAULT_ARGUMENT_PLUGIN = "plugins.conformance_toy:DefaultArgumentPlugin"

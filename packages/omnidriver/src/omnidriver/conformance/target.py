@@ -6,7 +6,7 @@ Everything here is supplied by the caller; the suite discovers nothing
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -42,6 +42,11 @@ class ConformanceTarget:
     unknown_name: str
     solver_command: str
     environment: Mapping[str, str]
+    #: Step S: every ``--input NAME=PATH`` this record's own inputs need,
+    #: forwarded to every plan/run/sweep a check makes (C5-C7) and to a
+    #: direct ``commit_record_case`` call (C4, C11). Empty for a record with
+    #: no inputs, or one whose inputs all have a native location.
+    inputs: Mapping[str, str] = field(default_factory=dict)
     #: Wall-clock bound, in seconds, on each child process a check starts
     #: (C6's run, C7's sweep-run) and on each sweep case (``sweep-run
     #: --case-timeout-s``). A child that outlives it is a failed verdict

@@ -16,7 +16,7 @@ from plugins.conformance_toy import (
     NATIVE_WRITING_PLUGIN, NO_CONSUMES_PLUGIN, NO_PRODUCES_PLUGIN, OPEN_DOCUMENT_PLUGIN, OTHER_OPEN_DOCUMENT_PLUGIN,
     OVER_GENERATED_CONVENTIONS_PLUGIN, REPLACING_PLUGIN, SILENT_PREFLIGHT_PLUGIN, SILENT_SURFACE_PLUGIN,
     UNDECLARED_OUTPUT_PLUGIN, UNLISTED_KEY_PLUGIN, VALIDATED_KINDLESS_PLUGIN,
-    STRAY_NAME, STRAY_ROOT_VARIABLE, toy_conformance_target,
+    STRAY_NAME, STRAY_ROOT_VARIABLE, toy_conformance_target, toy_conformance_target_with_input,
 )
 from plugins.quantity_toy import BAD_DECLARATION_PLUGIN, QUANTITY_TOY_PLUGIN, UNREADABLE_PLUGIN
 
@@ -24,6 +24,15 @@ from plugins.quantity_toy import BAD_DECLARATION_PLUGIN, QUANTITY_TOY_PLUGIN, UN
 @pytest.mark.parametrize("check_id", ["C1", "C2", "C3", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12"])
 def test_toy_passes(check_id, tmp_path):
     verdict = run_check(check_id, toy_conformance_target(tmp_path))
+    assert verdict.passed, verdict.detail
+
+
+@pytest.mark.parametrize("check_id", sorted(CHECKS))
+def test_a_record_with_a_supplied_input_passes(check_id, tmp_path):
+    """Step S's own proof (2026-09-28-supplied-inputs-design.md §5, S2): a
+    toy record with a supplied bundle passes C1-C12 in core, no native tree
+    or solver needed."""
+    verdict = run_check(check_id, toy_conformance_target_with_input(tmp_path))
     assert verdict.passed, verdict.detail
 
 

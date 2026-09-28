@@ -160,6 +160,7 @@ def check_patch_preserves(target: ConformanceTarget) -> CheckVerdict:
     commit_record_case(
         record, cases_root=target.cases_root, staged_case_root=staged,
         study_by_source={"base": {patch_name: patch_value}}, driver_context=ctx,
+        inputs=target.inputs,
     )
     after_patched = reader(staged / patch_doc, patch_key)
     after_untouched = reader(staged / untouched_doc, untouched_key)
@@ -176,6 +177,7 @@ def _plan(target: ConformanceTarget, ctx):
         target.record,
         overrides={"cases_root": str(target.cases_root), **dict(target.base_study)},
         scratch_root=target.scratch_root,
+        inputs=target.inputs,
         driver_context=ctx,
     )
 
@@ -295,12 +297,13 @@ def check_sweep(target: ConformanceTarget) -> CheckVerdict:
     }
     spec_path = work / "sweep.json"
     spec_path.write_text(json.dumps(spec))
+    input_args = [arg for name, path in target.inputs.items() for arg in ("--input", f"{name}={path}")]
     try:
         proc = subprocess.run(
             [sys.executable, "-m", "omnidriver", "sweep-run", "--plugin", target.plugin,
              "--spec", str(spec_path), "--output-dir", str(work / "out"),
              "--scratch-dir", str(target.scratch_root),
-             "--case-timeout-s", str(target.timeout_s)],
+             "--case-timeout-s", str(target.timeout_s), *input_args],
             capture_output=True, text=True, env=_child_env(target), timeout=target.timeout_s,
         )
     except subprocess.TimeoutExpired:
@@ -458,6 +461,13 @@ def check_discoverable(target: ConformanceTarget) -> CheckVerdict:
         problems.append(f"the target's own patch key {document}:{key} is not in the catalogue")
     if not surface["guidance"]:
         problems.append("no agent guidance")
+    if "inputs" not in surface:
+        problems.append("record_surface has no 'inputs' key (step S §2.5)")
+    elif {i["name"] for i in surface["inputs"]} != {i.name for i in record.inputs}:
+        problems.append(
+            f"record_surface lists inputs {sorted(i['name'] for i in surface['inputs'])}, "
+            f"record declares {sorted(i.name for i in record.inputs)}"
+        )
     return _verdict("C10", not problems, "; ".join(problems) or
                     f"{len(surface['axes'])} axes, {len(surface['keys'])} keys, {len(surface['guidance'])} guidance item(s)")
 
@@ -512,10 +522,19 @@ def check_restage_is_clean(target: ConformanceTarget) -> CheckVerdict:
     restaged = work / "restaged" / record.name
     commit_record_case(
         record, cases_root=ran_cases_root, staged_case_root=restaged,
-        study_by_source={"base": {}}, driver_context=ctx,
+        study_by_source={"base": {}}, driver_context=ctx, inputs=target.inputs,
     )
     restaged_paths = _relpaths(restaged)
-    native_paths = _relpaths(target.cases_root / record.native_case_relpath)
+    # Step S: an input's destination is never part of the native case folder
+    # (§2.5's C11 row), so it is added to the expected set here -- the
+    # native folder's paths plus every input destination and its ancestor
+    # directories (``restaged_paths`` lists directories too).
+    input_paths = {
+        str(PurePosixPath(*parts[:i]))
+        for input_ in record.inputs for destination in input_.destinations()
+        for parts in (PurePosixPath(destination).parts,) for i in range(1, len(parts) + 1)
+    }
+    native_paths = _relpaths(target.cases_root / record.native_case_relpath) | input_paths
     carried = sorted(restaged_paths - native_paths)
     dropped = sorted(native_paths - restaged_paths)
     if carried or dropped:
