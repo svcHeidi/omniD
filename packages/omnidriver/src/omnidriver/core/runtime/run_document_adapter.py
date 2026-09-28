@@ -29,14 +29,11 @@ def _run_document_from_case(
     )
     diagnostics: list[StrictDiagnostic] = list(configuration_diagnostics)
 
-    # Planning is the one place that knows what it actually built: a factory
-    # tutorial's config lives in the document; a generic case or tutorial
-    # record's configuration lives in the case files it already staged or
-    # committed (spec.metadata["generic_case"] is set by
-    # generic_case.make_spec and record_execution.record_case_spec for
-    # exactly those two). That fact is stated explicitly on the document
-    # from here on -- see RunDocument.configurationSource -- rather than
-    # left for execution to re-infer from a spec it never sees.
+    # A generic case or tutorial record's configuration lives in the case
+    # files it already staged (spec.metadata["generic_case"]); a factory
+    # tutorial's lives in the document. Stated explicitly here
+    # (RunDocument.configurationSource) rather than re-inferred by execution,
+    # which never sees the spec.
     configuration_source = (
         "case" if spec.metadata and spec.metadata.get("generic_case") else "document"
     )
@@ -73,12 +70,10 @@ def _run_document_from_case(
             "sourceType": spec.metadata.get("source_type"),
             "workflowFamily": spec.metadata.get("workflow_family"),
             "isRunnable": True,
-            # PAR (2026-09-26): a record case run parallel says so, with the
-            # scheduler allocation it was checked against; a serial one
-            # carries no key (record_execution.record_case_spec).
+            # A record case run in parallel says so, with the scheduler
+            # allocation checked against; a serial one carries no key.
             **({"parallel": spec.metadata["parallel"]} if "parallel" in spec.metadata else {}),
-            # Step S (§2.4): every input this case resolved, name/kind/path/
-            # files -- absent when the record declares none.
+            # Every input this case resolved; absent when the record declares none.
             **({"inputs": spec.metadata["inputs"]} if "inputs" in spec.metadata else {}),
         },
         workflowDag=workflow_dag,
@@ -97,17 +92,7 @@ def _run_document_from_case(
     )
     # `validate_run` applies only when this document's own `config` is the
     # configuration to check -- the same `resolve_configuration_source`
-    # decision above, not a second, independent generic-case check (that
-    # duplication -- one inference here, none at all in `run_document_exec`
-    # -- was the defect step 4c closes; see `core.runtime.configuration_source`).
-    #
-    # `validate_run` already returns the canonical `StrictDiagnostic` shape
-    # (code="run_validation", source=<phase>), so these pass straight
-    # through. Before Phase 0 Task 10 this re-wrapped `ValidationError` --
-    # a different four-field shape with `.phase` instead of `.source` and
-    # no `.code` -- into a `StrictDiagnostic` field-for-field; now that
-    # `validate_run` speaks the canonical shape itself, that re-wrap was a
-    # genuine no-op and is gone.
+    # decision above, not a second, independent generic-case check.
     validator_diagnostics = (
         validate_run(run_doc, driver_context=driver_context)
         if source_decision.validate_document_config

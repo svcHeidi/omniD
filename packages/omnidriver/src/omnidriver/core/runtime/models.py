@@ -7,13 +7,11 @@ from typing import Any, Callable, Final
 
 
 ArtifactFormat = str
-"""Artifact output format. Open-ended by design, not a closed enum: nothing
-in core branches on this value today, and most format strings in practice
-(``openfoam_log``, ``vtk_sequence``, ``csv_probe``, ``openfoam_time_dirs``,
-...) are a solver plugin's own vocabulary for its own outputs -- core has no
-business validating spellings it does not own (future/ENVIRONMENT_CONTRACT.md
-§10, Tier 3). ``CORE_ARTIFACT_FORMATS`` below names the only two values core
-itself ever writes, for its own artifacts."""
+"""Artifact output format. Open-ended by design, not a closed enum: most
+format strings in practice are a solver plugin's own vocabulary for its own
+outputs -- core has no business validating spellings it does not own (see
+``future/ENVIRONMENT_CONTRACT.md`` §10). ``CORE_ARTIFACT_FORMATS`` below
+names the only two values core itself ever writes, for its own artifacts."""
 
 CORE_ARTIFACT_FORMATS: Final[frozenset[str]] = frozenset({"json_summary", "log"})
 """Format values used by artifacts core predicts for itself (see
@@ -65,15 +63,8 @@ class DataArtifact:
     OpenFOAM, a time directory). ``path_pattern`` then contains
     ``{instance}``, which reconciliation substitutes with each name the
     environment's ``CaseRuntimeConventions.instance_directory_pattern``
-    matches. Renamed from ``time_indexed`` 2026-09-26 (spec
-    2026-09-26-core-generality-design.md §2, A2).
-
-    Corrected 2026-09-26 (R2 fix, finding M2): said "each directory" the
-    pattern matches, and by implication only at the case root. The pattern
-    is matched against a name at every depth in the case tree, and applies
-    to files too, not only directories -- see
-    ``CaseRuntimeConventions.instance_directory_pattern``'s own docstring
-    for the same correction in full."""
+    matches -- against a name at any depth in the case tree, files
+    included, not only directories at the case root."""
 
     def __post_init__(self) -> None:
         # Catch typos like {caseId} or {run_id} at construction so they never
@@ -136,13 +127,9 @@ def expand_path_pattern(
 
 #: Exactly the JSON keys :class:`DataArtifact` reconstructs from -- the same
 #: closed set ``schemas/run-document.json``'s artifact object declares via
-#: ``additionalProperties: false``. Named once, generically, rather than as
-#: a hardcoded old-key comparison (R2 fix, finding M1): a renamed or removed
-#: field (any of them, not only the A2 rename this was written for) is then
+#: ``additionalProperties: false``. A renamed or removed field is then
 #: refused by name -- the actual key found, read back from the caller's own
-#: data -- without core's source needing to spell any one specific retired
-#: field name as a literal (scripts/check-core-shape.py's token scan is
-#: about coupling to a *shape*, not about a caller's data mentioning one).
+#: data -- rather than silently dropped.
 _ARTIFACT_JSON_KEYS: Final[frozenset[str]] = frozenset({
     "artifact_id", "path_pattern", "format", "variables", "description",
     "produced_by", "optional", "instance_indexed",
@@ -158,14 +145,10 @@ def data_artifact_from_json(data: dict[str, Any]) -> DataArtifact:
     malformed ``path_pattern`` (unknown placeholder) raises ``ValueError``
     here rather than reaching the executor.
 
-    An unrecognised key -- a pre-A2 artifact's now-renamed field among them
-    -- is refused by name (R2 fix, finding M1), never silently dropped:
-    ``load_run_document`` schema-validates and already refuses one (the
-    schema's ``additionalProperties: false``), but
+    An unrecognised key is refused by name, never silently dropped:
     ``core.quantities.comparison._artifact`` reads a run document as raw
-    JSON, with no schema validation -- that path used to accept an artifact
-    carrying an old key and silently discard it via ``data.get(...)``,
-    dropping the fact rather than refusing it.
+    JSON with no schema validation, so this is the one place that catches a
+    renamed or removed field on that path.
     """
     unrecognised = sorted(set(data) - _ARTIFACT_JSON_KEYS)
     if unrecognised:
@@ -194,22 +177,12 @@ CaseMutationFn = Callable[[Path], Any]
 class TutorialSpec:
     """Full tutorial definition consumed by the driver engine.
 
-    Step S6 (docs/superpowers/specs/2026-09-28-supplied-inputs-design.md):
-    shrunk to exactly what a case folder (``core.runtime.generic_case``) and
-    a tutorial record (``core.runtime.record_execution``) both actually
-    build -- the two remaining spec constructors, now that every factory
-    tutorial is gone (S5 deleted cardiacCore's, the last holdout). Dropped:
-    ``setup_root``/``output_dir`` (now ``metadata["setup_root"]``/
-    ``metadata["output_dir"]`` -- both builders already stashed comparable
-    strings in ``metadata``, e.g. ``run_script_relpath``), and
-    ``build_cases``/``apply_case``/``plan_case`` (a factory-tutorial spec
-    could build MULTIPLE ``CaseConfig``s from one spec -- a parameter sweep
-    baked into the factory itself; with no factory left, a spec is always
-    exactly one case, so ``case_mutation`` replaces all three: one optional
-    callable, called once, against the staged case root, returning whatever
-    ``CaseWriteRecord`` (or ``None``) it wrote -- no case-count check, no
-    deprecated non-reporting fallback, because there is no second authoring
-    style left to prefer between).
+    Built by exactly two constructors: a case folder
+    (``core.runtime.generic_case``) and a tutorial record
+    (``core.runtime.record_execution``) -- a spec is always exactly one
+    case. ``case_mutation`` is the one optional callable, called once
+    against the staged case root, returning whatever ``CaseWriteRecord``
+    (or ``None``) it wrote.
     """
 
     name: str

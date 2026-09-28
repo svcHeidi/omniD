@@ -1,12 +1,7 @@
 """Neutral path resolver for strict_plan().
 
-strict_plan() used to call describe_launch("sim", entry, ...) purely to get
-these four paths -- that re-resolved the entry (resolve_entry + factory) a
-second time (strict_plan already has the spec from load_entry_spec) and,
-worse, coupled the strict/workflow-DAG execution path (which never runs the
-legacy sim/post/all CLI) to describe_launch's VALID_DRIVER_ACTIONS vocabulary.
-This module takes the already-built TutorialSpec directly: no re-resolution,
-no action string, no dependency on which CLI actions happen to exist.
+Takes the already-built ``TutorialSpec`` directly: no re-resolution of the
+entry, and no dependency on the legacy CLI's action vocabulary.
 """
 
 from __future__ import annotations
@@ -53,14 +48,9 @@ class StepExecutionContext:
     expected_artifacts: tuple[Any, ...]
     setup_root: Path | None = None
     environment_diagnostics: tuple["StrictDiagnostic", ...] = ()
-    #: The plan-time coverage audit, when the caller has one. Populated from
-    #: ``StrictPlanReport.simulation_audit`` for an entry-based plan
-    #: (``cli._context_from_entry``); always empty for a RunDocument-based
-    #: execution (``cli._context_from_run_document``), because a RunDocument
-    #: carries no plan-time audit today -- ``schemas/run-document.json`` has
-    #: no such field. Added 2026-09-22 (audit finding C2) so the dispatch-time
-    #: ``is_launchable`` gate can see a required check that came back
-    #: ``unavailable``, rather than checking a value nobody supplied.
+    #: The plan-time coverage audit, when the caller has one; always empty for
+    #: a RunDocument-based execution, since schemas/run-document.json carries
+    #: no such field -- is_launchable must see "unavailable", not nothing.
     simulation_audit: tuple[SimulationAuditItem, ...] = ()
     execution_env: dict[str, str] | None = None
     source_path: str | None = None

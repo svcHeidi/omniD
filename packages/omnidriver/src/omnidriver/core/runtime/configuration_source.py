@@ -1,19 +1,8 @@
 """One rule for what a RunDocument's ``configurationSource`` implies.
 
-Step 4c (docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md)
-closes a defect recorded at the end of step 4b: planning
-(``run_document_adapter``) decided whether to validate a document's
-``config`` by inferring "generic case" from ``spec.metadata`` -- a marker
-execution (``run_document_exec``) cannot see, because a ``RunDocument`` never
-carried it forward. Execution therefore validated an intentionally-empty
-generic-case/tutorial-record config against the plugin's schema unconditionally,
-and refused every such run.
-
-The fix is explicit, not inferred, and shared: ``configurationSource`` is a
-required field the document itself states (schemas/run-document.json), and
-this module is the ONE function both producers call to turn that source into
-"which validations apply". Neither ``run_document_adapter`` nor
-``run_document_exec`` may re-derive this decision independently.
+Both producers (``run_document_adapter``, ``run_document_exec``) must call
+this rather than re-deriving the decision independently; see
+``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md``.
 """
 
 from __future__ import annotations
@@ -24,10 +13,9 @@ from typing import Any
 
 from ..planning_types import StrictDiagnostic, diagnostic
 
-#: The only two values schemas/run-document.json's "configurationSource"
-#: enum accepts. Kept here (not just in the schema) so this module's own
-#: "unknown source" branch below can name them in its message without
-#: importing the schema JSON.
+#: The two values schemas/run-document.json's "configurationSource" enum
+#: accepts, named here so the "unknown source" message below can cite them
+#: without importing the schema JSON.
 CONFIGURATION_SOURCES: tuple[str, ...] = ("document", "case")
 
 
@@ -35,18 +23,10 @@ CONFIGURATION_SOURCES: tuple[str, ...] = ("document", "case")
 class ConfigurationSourceDecision:
     """What ``configuration_source`` means for validating a document's config.
 
-    ``validate_document_config``: whether ``validate_run`` (dictionary/
-    semantic checks) and the plugin's declared JSON Schema apply to
-    ``config``. True for "document" (config carries the configuration);
-    false for "case" (the case files already do, so there is nothing in
-    ``config`` to check) and false for an unrecognized source (nothing is
-    trustworthy enough to validate).
-
-    ``diagnostics``: structural refusals found by this decision alone --
-    a "case" source whose ``config`` is not empty (a contradiction: two
-    sources claiming to own one fact), or a source outside
-    ``CONFIGURATION_SOURCES``. Always in addition to, never instead of,
-    whatever ``validate_run``/the schema check would separately find.
+    ``validate_document_config`` is true only for a "document" source.
+    ``diagnostics`` are structural refusals found by this decision alone
+    (e.g. a "case" source whose ``config`` is not empty), always additional
+    to whatever ``validate_run``/the schema check separately finds.
     """
 
     validate_document_config: bool
@@ -54,16 +34,7 @@ class ConfigurationSourceDecision:
 
 
 def _config_carries_values(value: Any) -> bool:
-    """True if ``value`` holds a real configuration value anywhere inside it.
-
-    A "case"-sourced document's ``config`` must be empty, but "empty" is a
-    structural claim, not ``config == {}``: a plugin's own config builder
-    (e.g. cardiacFoam's ``build_config``) represents "nothing to configure"
-    as a shell of empty phase dicts (``{"anatomy": {}, "physics": {}, ...}``),
-    which is truthy but carries no value. Recurses through mappings and
-    sequences; ``None`` and empty containers are not "values", anything else
-    (a string, number, bool, or a non-empty container containing one) is.
-    """
+    """True if ``value`` holds a real configuration value anywhere inside it; a shell of empty phase dicts does not count."""
     if value is None:
         return False
     if isinstance(value, Mapping):
@@ -76,14 +47,7 @@ def _config_carries_values(value: Any) -> bool:
 def resolve_configuration_source(
     configuration_source: Any, config: Mapping[str, Any],
 ) -> ConfigurationSourceDecision:
-    """The one decision both planning and execution consult.
-
-    Called by ``run_document_adapter._run_document_from_case`` (planning, on
-    the config it just built) and ``run_document_exec.build_execution_inputs``
-    (execution, on an ingested document's config) -- see each module's own
-    call site for how the resulting diagnostics and
-    ``validate_document_config`` flag are used.
-    """
+    """The one decision both planning (``run_document_adapter``) and execution (``run_document_exec``) consult."""
     if configuration_source == "case":
         if _config_carries_values(config):
             return ConfigurationSourceDecision(

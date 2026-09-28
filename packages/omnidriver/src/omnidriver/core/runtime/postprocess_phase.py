@@ -15,10 +15,9 @@ from typing import Any
 from .sweep_manifest import SWEEP_MANIFEST_FILENAME, read_manifest
 from .workflow_orchestrator import STATE_FILENAME
 
-#: The standalone case record's on-disk filename, named once here (final
-#: review M6, 2026-09-26) instead of restated as a literal at each write
-#: site (``cli.py``, ``sweep_runner.py``,
-#: ``runtime_records.CORE_RUNTIME_RECORDS``).
+#: The standalone case record's on-disk filename, named once here instead
+#: of restated as a literal at each write site (``cli.py``,
+#: ``sweep_runner.py``, ``runtime_records.CORE_RUNTIME_RECORDS``).
 CASE_RECORD_FILENAME = "case_record.json"
 
 
@@ -149,9 +148,8 @@ def build_sweep_context(
 ) -> SweepContext:
     """Read a sweep's durable Core records without inspecting solver outputs.
 
-    Inspection is read-only by default, including for archived results.  The
-    sweep executor opts into persistence once it has finished updating its
-    own manifest; a later reader must never rewrite that evidence.
+    Read-only by default; pass ``persist_case_records=True`` only once the
+    sweep executor has finished updating its own manifest.
     """
     output_dir = Path(output_dir)
     manifest = read_manifest(output_dir / SWEEP_MANIFEST_FILENAME)

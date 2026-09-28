@@ -1,34 +1,8 @@
 """Solver-neutral generic case spec implementation.
 
-This module owns the default case-folder execution contract. Environment
-adapters declare the case entrypoint and output convention; plugins may still
-call this factory for richer flows such as build-and-launch.
-
-**Decision, 2026-09-24 (Phase 3 Task 8, bypass 2):** a generic case folder
-declares no catalog -- that is precisely why core, and not a solver adapter,
-owns this module. With no catalog, core cannot resolve a ``ParameterAssignment``
-to a real qualified id, and must not invent one (``CLAUDE.md``: "a case root
-has no ambient truth, so discovering one invents an answer"). Every byte in
-the folder this factory runs over was placed there before the run -- by the
-user who authored the tutorial/case directory, or by whatever process staged
-it (``sweep_runner``'s ``copytree``) -- not by this factory. When no adapter
-supplies its own mutation callback (the common case: a marker-less folder
-with no recognised dictionary catalog, e.g. the ``controlled-case`` fixture in
-``test_generic_contract.py::test_controlled_allrun_executes_without_domain_claims``),
-the spec's ``case_mutation`` writes *nothing at all*; it is dispatch
-machinery, not a framework-authored mutation, the same reasoning that
-excludes declared workflow outputs (native solver/meshing output) from this
-channel.
-
-**Step S6** (docs/superpowers/specs/2026-09-28-supplied-inputs-design.md):
-``TutorialSpec`` no longer distinguishes a deprecated, non-reporting
-``apply_case`` from a channel-compliant ``plan_case`` -- there is only
-``case_mutation``, called once against the staged case root, and its return
-is whatever the callback itself reports (``None`` for the no-op sentinel
-above; cardiacfoam's own callback also returns ``None``, unchanged, since it
-mutates through ``apply_electro_property_overrides``/
-``apply_physics_property_overrides`` for side effect and reports nothing of
-its own either).
+Owns the default case-folder execution contract: environment adapters
+declare the case entrypoint and output convention, and a generic case folder
+declares no catalog, so core (not a solver adapter) owns this module.
 """
 
 from __future__ import annotations
@@ -48,13 +22,9 @@ from .models import TutorialSpec
 from omnidriver.core.plugin_profile import entrypoint_command
 
 # ``run_case.sh`` ships inside the installed package (``omnidriver/scripts/``),
-# not at any path relative to a repo checkout -- the pre-migration monorepo
-# layout this used to point at (``applications/scripts/driverFoam/...``) no
-# longer exists. Resolve it relative to this file, the same way
-# This core script resolves from its installed package rather than a repo
-# checkout.
-# The result is already absolute, so ``resolve_run_script_path`` returns it
-# unchanged instead of hunting for it under a repo root.
+# not at any path relative to a repo checkout, so it is resolved relative to
+# this file. The result is already absolute, so ``resolve_run_script_path``
+# returns it unchanged instead of hunting for it under a repo root.
 RUN_CASE_SCRIPT_RELPATH = (
     Path(__file__).resolve().parent.parent.parent / "scripts" / "run_case.sh"
 )
@@ -87,13 +57,9 @@ def _workflow_dag_for(
     pre_solve_commands: Sequence[str | Sequence[str]],
     driver_context: Any | None = None,
 ) -> dict[str, Any]:
-    """Build the workflow DAG for a generic case.
-
-    With no ``solver_command`` the whole run is one step invoking the case's
-    entrypoint. That entrypoint is the plugin's declared
-    environment's declared entrypoint, not a hardcoded script name. A plugin
-    naming its entrypoint anything else therefore gets a matching DAG.
-    """
+    """Build the workflow DAG for a generic case: with no ``solver_command``
+    the whole run is one step invoking the plugin's declared environment
+    entrypoint; otherwise the pre-solve commands chained into a solve step."""
     if solver_command is None:
         entrypoint = entrypoint_command(driver_context)
         return {"steps": [{"id": "run", "command": entrypoint, "depends_on": []}]}
@@ -188,18 +154,15 @@ def make_spec(
         default_output_dir_name=output_convention,
     )
 
-    # Task 8 (bypass 2), 2026-09-24: a generic case folder declares no
-    # catalog (module docstring), so this factory can never produce a
-    # ParameterAssignment with a real qualified id, nor RenderedFile bytes of
-    # its own -- inventing either would be exactly the "discovered versus
-    # supplied" mistake CLAUDE.md names. The one honest claim it can make is
-    # "nothing was written", and that claim is true only when no adapter
-    # supplied its own callback above -- i.e. ``mutation_callback`` is still
-    # the ``_no_solver_mutation`` sentinel. Step S6: there is no more
-    # deprecated ``apply_case``/channel-compliant ``plan_case`` split to
-    # choose between -- ``case_mutation`` is called once, either way, and its
-    # return (``CaseWriteRecord`` or ``None``) is exactly what the callback
-    # itself reports.
+    # A generic case folder declares no catalog, so this factory can never
+    # produce a ParameterAssignment with a real qualified id, nor
+    # RenderedFile bytes of its own -- inventing either would be a
+    # discovered-versus-supplied violation. The one honest claim it can make
+    # is "nothing was written", true only when no adapter supplied its own
+    # callback above (``mutation_callback`` still the ``_no_solver_mutation``
+    # sentinel). ``case_mutation`` is called once, either way, and its return
+    # (``CaseWriteRecord`` or ``None``) is exactly what the callback itself
+    # reports.
     dispatch_case_mutation = partial(
         _apply_case,
         dict_file_relpaths=resolved_relpaths,
@@ -247,11 +210,6 @@ def make_spec(
 
 
 def make_generic_case_spec(**kwargs: Any) -> TutorialSpec:
-    """Solver-neutral alias used by registry case-folder discovery.
-
-    Its ``_apply_case_mutation`` setdefault is gone: make_spec's own default is
-    now the same no-op, so this alias no longer has to opt out of a cardiac
-    default that no longer exists.
-    """
+    """Solver-neutral alias used by registry case-folder discovery."""
 
     return make_spec(**kwargs)

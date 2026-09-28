@@ -1,8 +1,7 @@
 """Bounded orchestration for evidence-driven repair experiments.
 
-This layer is intentionally independent of workflow retry. A retry repeats one
-execution policy; a repair experiment must bind a new hypothesis and proposal
-to the failure evidence that motivated it.
+Independent of workflow retry: a retry repeats one execution policy, while a
+repair experiment binds a new hypothesis and proposal to the failure evidence.
 """
 from __future__ import annotations
 

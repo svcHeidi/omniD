@@ -1,15 +1,7 @@
 """Discover past runs under a directory tree.
 
-`list_runs(root)` walks `root` recursively and yields one parsed
-state document per `workflow_state.json` found. Malformed state files are
-silently skipped so an unfinished or partially-written run does not
-break agent recovery workflows.
-
-Each yielded entry is the raw manifest dict augmented with a
-``_state_path`` key carrying the absolute path to the source file --
-agents use it to locate sibling sidecars: ``workflow_logs/`` (per-step
-stdout/stderr logs) and, if any override was ever applied via
-``--apply``, ``remediation_history.jsonl``.
+Yields one parsed ``workflow_state.json`` per run found, augmented with a
+``_state_path`` key; malformed state files are silently skipped.
 """
 from __future__ import annotations
 

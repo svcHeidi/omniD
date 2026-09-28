@@ -77,12 +77,7 @@ def _run_case_process(
 
 
 def _child_reconciliation(stdout: str) -> dict[str, Any] | None:
-    """The child ``run --run-document``'s artifact reconciliation.
-
-    K8 (docs/superpowers/specs/2026-09-25-solver-conformance-and-opencarp-
-    design.md): the child prints it, and a sweep used to discard it with
-    the rest of the child's stdout, so no record of a sweep said whether a
-    case produced its declared outputs."""
+    """The child ``run --run-document``'s artifact reconciliation, parsed from its stdout."""
     try:
         payload = json.loads(stdout)
     except (TypeError, ValueError):
@@ -99,22 +94,16 @@ def _entry_name(sweep_spec: dict[str, Any]) -> str | None:
     return sweep_spec.get("base", {}).get("entry")
 
 
-# ---------------------------------------------------------------------------
-# Item 2: a study whose "entry" names a tutorial_record dispatches through a
-# dedicated path -- staged from the record's native case, one
-# commit_record_case per case, then the record's own workflow steps run
-# through the SAME strict-plan/run-document/workflow-runner pipeline a
-# factory entry's spec runs through (record_execution.record_case_spec maps
-# the record onto the same workflow_dag shape). Never tried as a factory
-# entry first and reinterpreted -- resolve_entry's own explicit dispatch
-# (design §3/registry.resolve_entry) decides which this is, once, up front.
-# ---------------------------------------------------------------------------
+# A study whose "entry" names a tutorial record dispatches through a
+# dedicated path -- staged from the record's native case, then the
+# record's own workflow steps run through the same strict-plan/run-
+# document/workflow-runner pipeline a factory entry's spec runs through.
+# Never tried as a factory entry first and reinterpreted --
+# registry.resolve_entry's own explicit dispatch decides which this is,
+# once, up front.
 
 #: `entry`/`cases_root` are sweep-dispatch bookkeeping in `base`, not case
-#: content, a document key, or an axis -- stripped before a record's study
-#: values are resolved, the same treatment `sweep_routing
-#: ._ENTRY_NON_ROUTABLE_KEYS` already gives `entry`/`archive_dir_name` for a
-#: factory entry's own routing.
+#: content, so they are stripped before a record's study values are resolved.
 _RECORD_NON_STUDY_BASE_KEYS: frozenset[str] = frozenset({"entry", "cases_root"})
 
 
@@ -126,19 +115,14 @@ def _sweep_record(
 
     Classification -- including every record-vs-(factory/case-path/case-
     folder) ambiguity refusal -- is `registry.classify_entry`'s job, the
-    SAME function `registry.resolve_entry` calls (review findings B1/M6):
-    this used to carry its own duplicated copy of only the factory-ambiguity
-    check, which caught neither a record shadowed by a real case directory
-    under cwd nor one shadowed by a same-named case folder under
-    `cases_root` -- both now refuse identically here and through
-    `resolve_entry`/`describe`.
+    same function `registry.resolve_entry` calls.
 
-    A record has no ambient cases root (CLAUDE.md's "supplied versus
-    discovered"): ``base.cases_root`` must name it explicitly whenever
-    ``entry`` resolves to a record, refused by name otherwise. When
-    ``cases_root`` is absent, `classify_entry` is still called (so the
-    record-vs-factory/record-vs-cwd-case-path ambiguities are still caught),
-    just with no root to check the case-folder ambiguity against.
+    A record has no ambient cases root: ``base.cases_root`` must name it
+    explicitly whenever ``entry`` resolves to a record, refused by name
+    otherwise. When ``cases_root`` is absent, `classify_entry` is still
+    called (so the record-vs-factory/record-vs-cwd-case-path ambiguities
+    are still caught), just with no root to check the case-folder
+    ambiguity against.
     """
     entry = _entry_name(sweep_spec)
     if entry is None:
@@ -166,9 +150,8 @@ def _record_case_study_by_source(
     *, base: dict[str, Any], resolved_axis_values: dict[str, Any],
     cli_study: Mapping[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """``cli_study`` is the CLI's own study source (PAR, 2026-09-26:
-    ``--parallel``), kept apart from ``base`` so a disagreement with the
-    sweep file is refused by name (``_extract_reserved_names``), not merged."""
+    """``cli_study`` is the CLI's ``--parallel`` study source, kept apart from
+    ``base`` so a disagreement with the sweep file is refused by name, not merged."""
     stripped_base = {
         key: value for key, value in base.items()
         if key not in _RECORD_NON_STUDY_BASE_KEYS
@@ -179,21 +162,12 @@ def _record_case_study_by_source(
 def _validate_record_sweep_upfront(
     record: Any, sweep_spec: dict[str, Any], *, driver_context: "DriverContext",
 ) -> None:
-    """Study-name and capability refusals happen ONCE, up front, for the
-    WHOLE sweep -- before any case is staged (minor).
-
-    Before this fix, a missing capability (no record-key validator, case-
-    value comparator, or config-value reader) or a bad study name surfaced
-    independently for EVERY case in the sweep, each reported as its own
-    per-case ``materialization_error`` -- the same refusal, restated N
-    times, only after N cases had already been staged. Both kinds of
-    refusal are the same for every case in one sweep: the composed stack
-    either has these three capabilities or it does not, and a name's SHAPE
-    (a ``document:key`` literal vs an axis) never varies across cases even
-    when a swept axis's VALUE does -- only ``base``'s own direct-key
-    VALUES and each case's own axis VALUES differ, which is exactly what
-    stays per-case (the catalog/purity checks that need an actual value,
-    ``resolve_case_patches``'s own job, per staged case).
+    """Refuse a missing capability or a bad study name once, up front, for the
+    whole sweep -- before any case is staged. Both kinds of refusal are the
+    same for every case in one sweep, since the composed stack either has
+    these three capabilities or it does not, and a name's shape (a
+    ``document:key`` literal vs an axis) never varies across cases even when
+    a swept axis's value does.
     """
     if driver_context.capabilities.record_key_validation.validator() is None:
         raise TutorialRecordError(
@@ -253,9 +227,8 @@ def _record_sweep_plan(
             )
             report = _strict_plan_for_spec(record.name, spec, driver_context=driver_context)
         except Exception as exc:
-            # Same broad-catch reasoning sweep_plan's factory-entry branch
-            # already uses just below: one bad case costs one case, not the
-            # whole command.
+            # One bad case costs one case, not the whole command (same
+            # broad-catch reasoning as sweep_plan's factory-entry branch).
             case_reports.append({
                 "case_id": case.case_id,
                 "resolved_axis_values": case.resolved_axis_values,
@@ -269,10 +242,8 @@ def _record_sweep_plan(
             "status": report.status,
             "plan": report.to_json(),
             "record_commit_status": commit_result.status,
-            # M5-of-2a: a patch that already matched the case is real
-            # information about this case (design §4 step 7 already reports
-            # it in describe's own preview) -- persisted here too, not
-            # discarded the moment commit_record_case returns.
+            # A patch that already matched the case is real information
+            # about this case -- persisted here, not discarded.
             "unchanged_patches": [
                 _serialize_sourced_patch(sourced, status="unchanged")
                 for sourced in commit_result.unchanged
@@ -290,13 +261,11 @@ def _record_sweep_run(
 ) -> dict[str, Any]:
     """The record-entry counterpart of ``sweep_run``'s factory-entry branch.
 
-    Scope, deliberately narrower than the factory-entry path for this first
-    cut: every case is planned and run fresh, sequentially -- no manifest-
-    based resume/retry/skip across separate invocations yet (each of those
-    reads a prior run's SAVED workflow checkpoint, which a record case does
-    not yet have a settled shape for). A manifest is still written, so the
-    output directory carries the same bookkeeping shape a factory-entry
-    sweep's does.
+    Deliberately narrower than the factory-entry path: every case is
+    planned and run fresh, sequentially -- no manifest-based
+    resume/retry/skip across separate invocations yet. A manifest is still
+    written, so the output directory carries the same bookkeeping shape a
+    factory-entry sweep's does.
     """
     _validate_record_sweep_upfront(record, sweep_spec, driver_context=driver_context)
     execution_environment = driver_context.capabilities.environment_preflight.configure(
@@ -392,9 +361,8 @@ def _record_sweep_run(
         if commit_status is not None:
             case_summary["record_commit_status"] = commit_status
         if unchanged_patches:
-            # M5-of-2a: persisted here, not discarded the moment
-            # commit_record_case returns -- a patch that already matched
-            # the case is real information about this case.
+            # A patch that already matched the case is real information
+            # about this case -- persisted here, not discarded.
             case_summary["unchanged_patches"] = unchanged_patches
         if materialization_error is not None:
             case_summary["materialization_error"] = materialization_error
@@ -446,14 +414,10 @@ def _record_sweep_run(
 def _relative_or_absolute(path: Path, base: Path) -> str:
     """Path relative to `base` when possible, else the absolute path.
 
-    `run_document_path` is always written under the sweep's own
-    `--output-dir` (safe to make relative). `workflow_state_path` is not:
-    in entry mode it comes from `launch.outputDir`, which resolves to the
-    target tutorial's own case_root/output_dir_name -- a directory tree
-    entirely unrelated to the sweep's --output-dir (confirmed via a real,
-    non-mocked sweep-run: Path.relative_to raised ValueError there). Record
-    the absolute path in that case rather than crash the whole sweep over a
-    manifest cosmetic.
+    `workflow_state_path` may resolve outside the sweep's `--output-dir` in
+    entry mode (it comes from `launch.outputDir`), so this returns the
+    absolute path there rather than crash the whole sweep over a manifest
+    cosmetic.
     """
     try:
         return str(path.relative_to(base))
@@ -474,11 +438,9 @@ def _is_declared_generated_instance(name: str, conventions) -> bool:
 def _clean_stale_instances(case_root: Path, *, conventions) -> None:
     """Remove prior generated instance directories when the environment declares them.
 
-    Entry-based sweeps reuse one shared case_root across cases (see
-    _materialize_entry_case's docstring). A case with no authored initial
-    instance can otherwise consume a prior run's generated one. Clearing
-    declared generated instances before materialization prevents that
-    stale-state reuse. Renamed 2026-09-26 from _clean_stale_time_directories (spec A2).
+    Entry-based sweeps reuse one shared case_root across cases; without this,
+    a case with no authored initial instance could consume a prior run's
+    generated one.
     """
     if conventions.instance_directory_pattern is None or not case_root.is_dir():
         return
@@ -508,18 +470,10 @@ def _materialize_entry_case(
     """Materialize one entry-based sweep case via the tutorial's own spec.
 
     Entry-based sweeps target an existing case path or tutorial record whose
-    ``case_mutation()`` mutates a case root in place.  That root
-    must be a disposable staging copy, never the checked-in tutorial or the
-    user's case directory.  The returned entry and overrides point at that
-    staged case so strict planning and execution use exactly the same paths.
-
-    ``staging_root`` is optional for compatibility with low-level callers and
-    tests that provide an already-isolated fake spec.  Real sweep callers
-    always pass it.
-
-    Step S6: a ``TutorialSpec`` is always exactly one case now (no factory
-    ever built several from one spec), so there is no case count left to
-    collapse or refuse -- ``case_mutation`` is called once, unconditionally.
+    ``case_mutation()`` mutates a case root in place. That root must be a
+    disposable staging copy, never the checked-in tutorial or the user's
+    case directory. The returned entry and overrides point at that staged
+    case so strict planning and execution use exactly the same paths.
     """
     spec = load_entry_spec(entry, overrides=routed, driver_context=driver_context)
     effective_entry = entry
@@ -529,11 +483,8 @@ def _materialize_entry_case(
         staged_case_root = Path(staging_root).resolve()
         _stage_entry_case(source_case_root, staged_case_root, driver_context=driver_context)
         if spec.metadata["resolution"] == "case_path":
-            # A case path names its case by the path itself; resolve_entry
-            # refuses a case_dir_name that contradicts it. The staged copy is
-            # a case at its own path, so it becomes the entry. Until 7d672f1
-            # the staged name was silently dropped and the SOURCE case was
-            # mutated; from then until this fix it raised (2026-09-24).
+            # A case path names its case by the path itself; the staged
+            # copy becomes the entry so the source case is never mutated.
             effective_entry = str(staged_case_root)
         else:
             # ``make_spec`` resolves case_root as cases_root/case_dir_name.
@@ -542,27 +493,21 @@ def _materialize_entry_case(
             # tree below the scratch directory.
             effective_routed["cases_root"] = str(staged_case_root.parent)
             effective_routed["case_dir_name"] = staged_case_root.name
-        # Staging already isolates this one case at staged_case_root, so
-        # whatever output_dir_name the sweep spec's own "dependent" template
-        # derived (typically the case id again, e.g. for per-case archiving
-        # under a *shared* case_root) has nothing left to distinguish here --
-        # every sweep case already gets its own staged_case_root. Leaving it
-        # in place double-nests output_dir under
-        # staged_case_root/<that same case id>/, a directory the solve step
-        # never writes into (it writes generated output straight into
-        # staged_case_root under its environment convention), which then
-        # makes the workflow's artifact check report real, present output as
-        # missing. "." tells resolve_spec_paths there is nothing to append.
+        # Staging already isolates this case at staged_case_root, so any
+        # output_dir_name the sweep spec derived would double-nest output
+        # under staged_case_root/<case id>/, a directory the solve step
+        # never writes into -- making the workflow's artifact check report
+        # real, present output as missing. "." tells resolve_spec_paths
+        # there is nothing to append.
         effective_routed["output_dir_name"] = "."
         staged_spec = load_entry_spec(
             effective_entry, overrides=effective_routed, driver_context=driver_context,
         )
         # A real registered factory consumes cases_root/case_dir_name, and a
         # case path resolves to itself, so either returns the staged path.
-        # A factory that returns its own fixed root instead would have the
-        # SOURCE mutated below. That used to be kept "for compatibility with
-        # test doubles" by silently reverting to the unstaged overrides; it
-        # is refused instead (2026-09-24).
+        # A factory returning its own fixed root instead would mutate the
+        # source case below, so that is refused rather than silently
+        # falling back to the unstaged overrides.
         if Path(staged_spec.case_root).resolve() != staged_case_root:
             raise ValueError(
                 f"entry '{entry}' did not re-resolve to its staged copy "
@@ -594,29 +539,17 @@ def _stage_entry_case(
 
     Registered tutorial folders contain source dictionaries and scripts next
     to OpenFOAM's generated mesh, time, processor, log, and post-processing
-    trees.  Copying those generated trees would reintroduce the stale-state
+    trees. Copying those generated trees would reintroduce the stale-state
     bug this staging boundary is meant to prevent, so the filter is explicit
     and conservative: keep authored inputs (including ``0/``) and omit only
     known derived artifacts.
 
     ``excluded_relpaths`` names further case-relative paths (files, or whole
     directories, at any depth) that the caller knows are generated: a
-    tutorial record's step outputs (``record_execution
-    .record_generated_relpaths``, spec 2026-09-26 A5). Core's own run
-    records need no listing here ONLY when ``driver_context`` is supplied --
-    ``conventions`` then comes from ``driver_context.capabilities
-    .case_runtime_conventions.conventions()``, which every stack's adapter
-    merges with ``runtime_records.CORE_RUNTIME_RECORDS`` regardless of what
-    the plugin itself declares.
-
-    Corrected 2026-09-26 (R1 fix, finding M8): this used to claim that
-    unconditionally. With the default ``driver_context=None``, ``conventions``
-    below is a bare ``CaseRuntimeConventions()`` instead, which carries
-    NONE of core's own records -- every production caller supplies a real
-    ``driver_context`` (this is a keyword with a default only so tests that
-    do not need a plugin at all can omit it), but a caller that genuinely
-    has none, and stages a case a run has already written into, would carry
-    core's own state forward with nothing here excluding it.
+    tutorial record's step outputs. With no ``driver_context`` supplied,
+    ``conventions`` below is a bare ``CaseRuntimeConventions()`` that
+    carries none of core's own records, so every production caller must
+    supply a real ``driver_context``.
     """
     from ..plugin_capabilities import CaseRuntimeConventions
 
@@ -636,9 +569,9 @@ def _stage_entry_case(
             if (relative_directory / name).as_posix() in excluded_relpaths:
                 ignored.add(name)
                 continue
-            # A previous omnidriver case can have a descriptive directory name
-            # (for example ``gauss_linear_40_*``) rather than a numeric
-            # generated numeric-time name. Its workflow markers are the reliable
+            # A previous omnidriver case can have a descriptive directory
+            # name (e.g. ``gauss_linear_40_*``) rather than a generated
+            # time-directory name. Its workflow markers are the reliable
             # boundary between authored tutorial content and generated case
             # content, so omit the whole directory when they are present.
             if candidate.is_dir() and any(
@@ -751,12 +684,9 @@ def _journal_case_path(case_root: Path, payload: dict[str, Any], key: str) -> Pa
 def _recover_interrupted_case_staging(case_root: Path) -> None:
     """Restore a coherent case after a failed sibling-directory promotion.
 
-    The normal promotion never exposes a partial copy: the candidate is copied
-    under a private sibling and renamed only once complete.  If a process dies
-    between the two renames, preserving the prior live case is safer than
-    guessing that the candidate should run, so an existing case is restored
-    from its backup.  A brand-new case has no prior case to restore and may
-    promote its fully copied candidate.
+    If a process dies between the two renames, restoring the prior case
+    from its backup is safer than assuming the candidate should run; a
+    brand-new case has no backup and promotes its candidate instead.
     """
     payload = _load_staging_journal(case_root)
     if payload is None:
@@ -795,13 +725,13 @@ def _recover_interrupted_case_staging(case_root: Path) -> None:
 
 
 def _apply_overlay(source: Path, destination: Path) -> None:
-    """One ``(source, destination)`` pair (design §2.1's ``RecordInput.files``,
-    resolved by ``tutorial_records.ResolvedInput.overlays``) copied into a
-    staging candidate. ``source`` may be a file or a directory; either way
-    the copy is real bytes, never a link (design §2.3, "copy, never link" --
-    a step writes inside its input, e.g. ``generatePurkinjeTree`` rewriting
-    ``constant/polyMesh/sets/*``, and a link would send that write into the
-    supplied bundle or the native tree)."""
+    """Copy one ``(source, destination)`` pair into a staging candidate.
+
+    Always copies real bytes, never a link: a step can write inside its
+    input (e.g. ``generatePurkinjeTree`` rewriting
+    ``constant/polyMesh/sets/*``), and a link would send that write into
+    the supplied bundle or the native tree.
+    """
     if not source.exists():
         raise FileNotFoundError(f"record input overlay source does not exist: {source}")
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -819,9 +749,7 @@ def _copy_and_promote_staged_case(
     overlays: "Sequence[tuple[Path, str]]" = (),
 ) -> None:
     """Copy to a private sibling, apply every overlay, then replace a staged
-    case under its lease (design §2.3: "steps 1 and 2 happen in one
-    ``_stage_entry_case`` promotion... under the same lease. A crash then
-    never leaves a half-staged case.")."""
+    case under its lease, so a crash never leaves a half-staged case."""
     token = uuid.uuid4().hex
     candidate = _staging_path(staged_case_root, token, "candidate")
     backup = _staging_path(staged_case_root, token, "backup")
@@ -861,11 +789,13 @@ def sweep_plan(
     inputs: Mapping[str, str | Path] | None = None,
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
-    """``cli_study``: the CLI's own study values (``--parallel``), a record
-    sweep's ``"cli"`` source; a factory sweep given one is refused by name
-    (PAR, 2026-09-26). ``inputs`` (``--input NAME=PATH``): a record sweep's
-    inputs, supplied once and applied to every case (step S; a per-case
-    input is not built -- design §2.6); refused by name for a factory sweep."""
+    """Plan every case in a sweep spec without executing it.
+
+    ``cli_study``: the CLI's own study values (``--parallel``), a record
+    sweep's ``"cli"`` source; refused by name for a factory sweep.
+    ``inputs`` (``--input NAME=PATH``): a record sweep's inputs, applied
+    once to every case; refused by name for a factory sweep.
+    """
     try:
         sweep_spec = _load_spec(spec_path)
     except (OSError, ValueError) as exc:
@@ -880,9 +810,9 @@ def sweep_plan(
 
     record, cases_root = _sweep_record(sweep_spec, driver_context=driver_context)
     if record is not None:
-        # M4: resolved to absolute before staging -- see sweep_run's own
-        # record branch for why (a relative --output-dir otherwise reaches
-        # commit_record_case unresolved).
+        # Resolved to absolute before staging: a relative --output-dir
+        # otherwise reaches commit_record_case unresolved (see sweep_run's
+        # own record branch).
         return _record_sweep_plan(
             record, cases_root, sweep_spec, output_dir=Path(output_dir).resolve(),
             cli_study=cli_study, inputs=inputs, driver_context=driver_context,
@@ -985,9 +915,8 @@ def _completed_case_is_reusable(
 ) -> tuple[bool, str | None]:
     """Validate a completed sweep case before its manifest may skip it.
 
-    The manifest is a sweep index, not provenance.  It is insufficient to
-    establish that the case still has the same inputs or its required outputs.
-    Those claims remain owned by the saved workflow checkpoint and document.
+    The manifest is a sweep index, not provenance; the saved workflow
+    checkpoint and document own the claims about inputs and outputs.
     """
     if prior_entry is None:
         return False, "completed manifest entry is absent"
@@ -1029,14 +958,12 @@ def sweep_run(
     inputs: Mapping[str, str | Path] | None = None,
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
-    """``cli_study``/``inputs``: as :func:`sweep_plan`'s (PAR, 2026-09-26;
-    step S).
+    """Run every case in a sweep spec, then post-process the results.
 
-    `task` plays no part in the sweep loop itself -- expanding, routing,
-    materializing, and running cases is fully deterministic and has no use
-    for it. It is only consumed at the very end, handed to
-    run_postprocessing_module: the sweep is task(sweep), no reasoning
-    involved; the postprocess hand-off is where a task actually matters.
+    ``cli_study``/``inputs``: as :func:`sweep_plan`. `task` plays no part
+    in the sweep loop itself -- expanding, routing, materializing, and
+    running cases is fully deterministic and has no use for it. It is
+    only consumed at the very end, handed to run_postprocessing_module.
     """
     execution_environment = driver_context.capabilities.environment_preflight.configure(
         os.environ,
@@ -1049,16 +976,14 @@ def sweep_run(
 
     record, cases_root = _sweep_record(sweep_spec, driver_context=driver_context)
     if record is not None:
-        # M4: resolved to absolute BEFORE staging, matching the factory
-        # branch's own `--output-dir` (which the CLI already resolves) --
-        # a relative one used to reach `commit_record_case`
-        # (`CaseMutationRequest.case_root must be absolute`) unresolved,
-        # since this branch never went through the CLI's own resolution.
+        # Resolved to absolute before staging, matching the factory
+        # branch's own --output-dir (which the CLI already resolves):
+        # commit_record_case requires CaseMutationRequest.case_root to be
+        # absolute.
         output_dir = Path(output_dir).resolve()
-        # Scope, item 2 (see _record_sweep_run's own docstring): no
-        # manifest-based resume/retry across separate invocations yet.
-        # Refused BY NAME rather than silently ignored -- CLAUDE.md's
-        # "explicitly-contexted operation never falls back to the default".
+        # No manifest-based resume/retry across separate invocations yet
+        # (see _record_sweep_run's own scope note); refused by name rather
+        # than silently ignored.
         if retry_failed:
             raise TutorialRecordError(
                 "--retry-failed is not yet supported for a tutorial-record "
@@ -1069,15 +994,12 @@ def sweep_run(
         )
         if fresh_error is not None:
             raise SweepValidationError(fresh_error)
-        # B2: a record-entry sweep does not support resume (see
-        # `_record_sweep_run`'s own scope note) -- an existing manifest in
-        # this output directory (not cleared by --fresh) is refused by name
-        # rather than silently restaged and rerun from scratch, which used
-        # to both waste the prior run's work AND -- when the spec itself had
-        # changed -- leave stale case directories from the old spec sitting
-        # alongside the new ones with no warning at all. The SAME spec-hash
-        # check the factory branch below runs gives the more specific answer
-        # when the spec truly changed.
+        # A record-entry sweep does not support resume, so an existing
+        # manifest here (not cleared by --fresh) is refused by name instead
+        # of silently restaged, which would waste prior work and could
+        # leave stale case directories if the spec changed. The factory
+        # branch's spec-hash check below gives the specific reason when
+        # the spec did change.
         manifest_path = output_dir / SWEEP_MANIFEST_FILENAME
         if manifest_path.exists():
             existing = read_manifest(manifest_path)

@@ -17,21 +17,7 @@ if TYPE_CHECKING:
     from ..plugin_interface import DriverContext
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 SpecFactory = Callable[..., TutorialSpec]
-
 
 
 ENTRY_KIND_VALUES = (
@@ -57,9 +43,8 @@ def _is_case_directory(
         return False
     from ..plugin_capabilities import CaseCompatibilityRequest
 
-    # Was `has_case_marker(...) or _has_entrypoint(...)`, duplicating logic
-    # `case_compatibility.is_case` now composes in one place (marker,
-    # entrypoint, and a leftover generated-case marker). Task 10, 2026-09-22.
+    # `is_case` composes the marker check, the entrypoint check, and a
+    # leftover generated-case marker in one place.
     return driver_context.capabilities.case_compatibility.is_case(
         CaseCompatibilityRequest(path),
     )
@@ -161,9 +146,6 @@ def _entry_catalog_for_root(
     )
 
 
-
-
-
 def list_case_directories(
     cases_root: Path | None = None,
     *,
@@ -188,11 +170,6 @@ def list_entries(
     # No ambient default: core does not know where a caller keeps cases.
     resolved_root = Path.cwd() if cases_root is None else Path(cases_root)
     return _entry_catalog_for_root(resolved_root, driver_context)
-
-
-
-
-
 
 
 def load_entry_spec(
@@ -220,17 +197,7 @@ def _materialize_resolved_entry(
     driver_context: "DriverContext | None",
     consumer: str,
 ) -> TutorialSpec:
-    """Build a resolved entry while preserving its environment declaration.
-
-    Review finding B2: a ``tutorial_record`` resolution carries no
-    ``factory``/``factory_overrides`` at all (it is inert data, not a
-    factory -- design doc §3), so every consumer of a ``resolve_entry``
-    result must check the resolution kind EXPLICITLY and refuse by name
-    before reaching for either key. Wiring a record through ``describe``/
-    sweep is the next step's job (docs/superpowers/specs/2026-09-24-
-    tutorials-are-pointers-design.md); this only makes the refusal explicit,
-    naming the caller, instead of an opaque ``KeyError('factory_overrides')``.
-    """
+    """Build a resolved entry, refusing a ``tutorial_record`` resolution by name (it carries no factory)."""
     if resolution["resolution"] == "tutorial_record":
         from ..tutorial_records import TutorialRecordError
 
@@ -266,8 +233,8 @@ def _with_entry_metadata(
         }
     )
     # Plain case folders are owned by their on-disk entrypoint declared by the
-    # active environment. If a discovered
-    # folder has no entrypoint, do not preserve the generic-spec placeholder DAG.
+    # active environment; a folder with no entrypoint must not keep the
+    # generic-spec placeholder DAG.
     if (
         resolution["resolution"] == "case_folder"
         and not _has_entrypoint(Path(spec.case_root), driver_context)
@@ -287,14 +254,9 @@ def _match_entry(
         entry
         for entry in list_entries(cases_root, driver_context=driver_context)
         if (
-            # A tutorial-record entry is never a `_match_entry` candidate
-            # (review finding B2): it carries no factory of its own, and
-            # matching one here (e.g. by its `native_case_relpath`) used to
-            # let `resolve_entry` build a "case_folder" resolution out of a
-            # dict that also claimed `entry_kind: "tutorial_record"` --
-            # neither a record (no `record` key) nor a clean case_folder. A
-            # record dispatches ONLY through the explicit tutorial_records
-            # catalog check above, never through here.
+            # A tutorial-record entry is never a `_match_entry` candidate: it
+            # carries no factory of its own and dispatches only through the
+            # explicit tutorial_records catalog check.
             str(entry["entry_kind"]) != "tutorial_record"
             and normalized_name in {
                 str(entry["entry_name"]).casefold(),
@@ -325,25 +287,9 @@ def _match_entry(
 
 @dataclass(frozen=True)
 class EntryClassification:
-    """Which resolution kind an entry name names, with every cross-kind
-    ambiguity a tutorial record can have already refused (review findings
-    B1/M6).
-
-    ``resolve_entry`` and ``sweep_runner._sweep_record`` both call
-    :func:`classify_entry` for this -- there used to be a second, duplicated
-    copy of the record-vs-factory refusal living in ``_sweep_record`` alone,
-    which caught neither the record-vs-cwd-case-path ambiguity nor the
-    record-vs-case-folder-under-cases_root one at all (a sweep over a record
-    name that was ALSO shadowed by a real directory silently ran the record,
-    never refusing). Both callers now share one answer.
-
-    Exactly one of ``case_path``/``record`` is set, matching ``kind`` when
-    ``kind`` is ``"case_path"``/``"tutorial_record"``. ``kind ==
-    "unresolved"`` means none of the kinds this function decides among
-    matched -- the caller falls through to its own remaining resolution
-    (``resolve_entry``'s registered-tutorial/case-folder/generic-alias/
-    unknown-entry paths, which this classifier does not reproduce).
-    """
+    """Which resolution kind an entry name names. Exactly one of
+    ``case_path``/``record`` is set, matching ``kind``; ``kind ==
+    "unresolved"`` falls through to the caller's remaining resolution."""
 
     kind: str
     case_path: Path | None = None
@@ -357,17 +303,7 @@ def classify_entry(
     cases_root: Path | None,
     driver_context: "DriverContext",
 ) -> EntryClassification:
-    """Classify ``name`` among a literal case path (relative to cwd) and a
-    tutorial record -- refusing, BY NAME, every ambiguity a tutorial record
-    can have with a same-named case path or case folder under ``cases_root``
-    (design: "a record must never be silently shadowed... one name must not
-    name both").
-
-    ``cases_root=None`` skips only the case-folder-under-cases_root check --
-    there is no root to search yet (used when a sweep's ``base`` has not
-    supplied one; that caller refuses the missing root separately, by name,
-    before it can ever treat this as a real ``tutorial_record`` resolution).
-    """
+    """Classify ``name`` as a literal case path or a tutorial record, refusing by name any ambiguity between the two; ``cases_root=None`` skips only the case-folder-under-cases_root check."""
     key = name.strip()
     normalized_key = key.casefold()
     normalized_records = {
@@ -376,12 +312,10 @@ def classify_entry(
             driver_context.capabilities.tutorial_records.catalog() or {}
         ).items()
     }
-    # Matches the original per-branch gating this replaces: an explicitly
-    # requested entry_kind that is neither None nor "tutorial_record" means
-    # the caller is not asking for a record at all, so a same-named record's
-    # mere existence must not surface here -- neither as a resolution nor as
-    # an ambiguity refusal (there is nothing for it to be ambiguous WITH from
-    # this caller's point of view).
+    # An explicitly requested entry_kind that is neither None nor
+    # "tutorial_record" means the caller is not asking for a record at all,
+    # so a same-named record's mere existence must not surface here, not
+    # even as an ambiguity refusal.
     record_applicable = entry_kind in {None, "tutorial_record"}
     is_record = record_applicable and normalized_key in normalized_records
     record = normalized_records.get(normalized_key) if is_record else None
@@ -406,14 +340,9 @@ def classify_entry(
         if matched_case_folder is not None:
             matched_path = (cases_root / str(matched_case_folder["entry_path"])).resolve()
             own_native_case = (cases_root / record.native_case_relpath).resolve()
-            # A record's OWN native case is routinely ALSO independently
-            # recognizable as a plain case_folder (a real adapter's
-            # has_case_marker knows its own dictionary format, which the
-            # native case obviously has) -- that is not a naming collision
-            # with anything, it is the same directory discovered twice by
-            # two different catalogs. Only a DIFFERENT directory that
-            # happens to share this name is the real ambiguity design means
-            # ("one name must not name both").
+            # A record's own native case is routinely also recognizable as a
+            # plain case_folder (the same directory, discovered twice); only
+            # a different directory sharing the name is a real ambiguity.
             if matched_path != own_native_case:
                 raise KeyError(
                     f"Entry '{key}' is ambiguous: it is registered as a "
@@ -448,9 +377,8 @@ def resolve_entry(
 
     cases_root = Path(incoming_overrides.get("cases_root", Path.cwd()))
 
-    # B1/M6: one shared classifier decides the case-path/tutorial-record
-    # ambiguity refusals (see `classify_entry`'s own docstring); everything
-    # below it stays exactly as it was.
+    # `classify_entry` decides the case-path/tutorial-record ambiguity
+    # refusals; everything below it stays exactly as it was.
     classification = classify_entry(
         key, entry_kind=entry_kind, cases_root=cases_root, driver_context=driver_context,
     )
@@ -462,11 +390,8 @@ def resolve_entry(
     if classification.kind == "case_path":
         candidate = classification.case_path
         # The path names the case, so a differing `case_dir_name` is a
-        # contradiction. Refuse it rather than overwrite it below: that
-        # overwrite silently dropped a `--config` value, and discarded a
-        # case-path sweep entry's staged name so _materialize_entry_case
-        # mutated the source case (2026-09-24). A value that restates the
-        # path's own name is not a conflict.
+        # contradiction: overwriting it here instead of refusing silently
+        # drops a `--config` value and can mutate the source case.
         supplied_name = incoming_overrides.get("case_dir_name")
         if supplied_name is not None and str(supplied_name) != candidate.name:
             raise ValueError(
@@ -502,12 +427,9 @@ def resolve_entry(
             "workflow_family": None,
         }
 
-    # Tutorial records (docs/superpowers/specs/2026-09-24-tutorials-are-
-    # pointers-design.md §3) are dispatched EXPLICITLY, alongside a bare case
-    # path -- never tried as one kind and silently reinterpreted as another.
-    # A name registered as both a record and a case path (or a case folder)
-    # is refused outright rather than picking one by search order --
-    # `classify_entry` already checked that above.
+    # A tutorial record is dispatched explicitly, alongside a bare case path
+    # -- never tried as one kind and silently reinterpreted as another.
+    # `classify_entry` already refused any name registered as both.
     if classification.kind == "tutorial_record":
         record = classification.record
         return {

@@ -1,22 +1,4 @@
-"""What describe tells an agent about a tutorial record, the same for every solver (C10).
-
-**The catalogue key grammar** (``SolverPlugin.get_record_key_catalog``).
-Each entry names a ``document`` and a dotted ``key``. Two placeholders
-stand for what a study writes concretely (added 2026-09-26, conformance
-Task 14 step 4):
-
-- ``[Int]`` stands for any non-negative index: ``stim[Int].start`` lists
-  ``stim[0].start`` and ``stim[3].start``;
-- a whole segment ``<name>`` -- any identifier in angle brackets, such as
-  ``<region_name>`` -- stands for any single dot-free segment:
-  ``regions.<region_name>.baseline`` lists ``regions.lv.baseline``, not
-  ``regions.lv.inner.baseline``.
-
-A document whose keys are written as asked, with no catalogue behind them,
-is listed once, as ``{"document": d, "key": ANY_KEY, "validated": False}``.
-It needs no ``value_kind``, and lists every key of ``d``: a key matches it
-through its document, never through the pattern.
-"""
+"""What describe tells an agent about a tutorial record, the same for every solver (C10)."""
 from __future__ import annotations
 
 import re
@@ -39,8 +21,9 @@ def _segment_pattern(segment: str) -> str:
 
 
 def key_pattern(key: str) -> re.Pattern[str]:
-    """``key``, a catalogue key in the grammar above, as a pattern that
-    matches exactly the concrete keys it lists."""
+    """``key``, a catalogue key using ``[Int]`` (any index) and ``<name>``
+    (any single dot-free segment) placeholders, as a pattern that matches
+    exactly the concrete keys it lists."""
     return re.compile(r"\.".join(_segment_pattern(segment) for segment in key.split(".")))
 
 

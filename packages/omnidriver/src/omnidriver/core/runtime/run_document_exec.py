@@ -1,12 +1,7 @@
 """Load and adapt a RunDocument v3 for strict workflow execution.
 
-``load_run_document(path)`` reads and schema-validates a v3 document; raises ``ValueError`` or ``json.JSONDecodeError`` on malformed
-input. ``build_execution_inputs(doc)`` turns a document into the same
-``(workflow_dag, workflow_state, case_root, output_dir, expected_artifacts)``
-tuple ``strict_plan`` produces, so the CLI run/step path is identical for both
-producers. It enforces the same command allowlist as ``strict_plan``; anything
-that makes the document non-executable is returned as a diagnostic with
-``inputs is None``.
+``build_execution_inputs`` turns a document into the same executor inputs
+``strict_plan`` produces, so the CLI run/step path is identical for both.
 """
 
 from __future__ import annotations
@@ -19,9 +14,8 @@ from typing import TYPE_CHECKING, Any, Mapping
 
 from .configuration_source import resolve_configuration_source
 from .models import DataArtifact, data_artifact_from_json
-# _case_is_runnable is a private helper reused as-is: the plan treats this as
-# an accepted pragmatic tradeoff rather than promoting it to a public API
-# (out of scope here).
+# _case_is_runnable is a private helper reused as-is rather than promoted to
+# a public API.
 from .registry import _case_is_runnable
 from .run_model import RunDocument
 from .workflow import normalize_workflow_dag, validate_workflow_commands, workflow_output_artifacts
@@ -38,32 +32,18 @@ if TYPE_CHECKING:
     from ..plugin_interface import DriverContext
 
 
-#: The RunDocument's on-disk filename, named once here (final review M6,
-#: 2026-09-26) instead of restated as a literal at each write/read site
-#: (``cli.py``, ``strict_planning.py``, ``conformance/checks.py``,
-#: ``sweep_runner.py``, ``runtime_records.CORE_RUNTIME_RECORDS`` and
-#: ``fresh._OMNIDRIVER_MARKER_NAMES``).
+#: The RunDocument's on-disk filename, named once here rather than restated
+#: as a literal at each write/read site.
 RUN_DOCUMENT_FILENAME = "run_document.json"
 
 
 def _is_record_run_with_steps(run_doc: RunDocument) -> bool:
-    """A tutorial-record run whose document carries the record's steps.
-
-    Such a case is runnable because the record declares its steps: the
-    workflow DAG is the driver-owned workflow metadata, so the adapter's
-    ``is_case_runnable_without_workflow`` -- whether a case WITHOUT that
-    metadata is runnable -- is the wrong question, and core does not ask it
-    (wave-2 review I4, 2026-09-25). Before this, openCARP and the toy record
-    plugin each declared that hook only to get past this gate, and
-    cardiacFOAM's records passed it only because their native case holds an
-    ``Allrun`` the record never uses.
-
-    ``resolvedEntry.entryKind`` is stated by the planner
-    (``run_document_adapter`` copies it from the record spec's metadata,
-    ``record_execution.record_case_spec``), the same way
-    ``configurationSource`` is stated rather than inferred. A hand-authored
-    document claiming it gains nothing beyond this gate: its DAG is still
-    normalized and every command still goes through the allowlist above."""
+    """A tutorial-record run whose document carries the record's steps is
+    runnable without asking the adapter's ``is_case_runnable_without_workflow``,
+    since the record itself supplies the workflow DAG -- the wrong question
+    for core to ask here. ``resolvedEntry.entryKind`` is stated by the
+    planner, the same way ``configurationSource`` is stated rather than
+    inferred."""
     resolved = run_doc.resolvedEntry if isinstance(run_doc.resolvedEntry, dict) else {}
     dag = run_doc.workflowDag if isinstance(run_doc.workflowDag, dict) else {}
     return resolved.get("entryKind") == "tutorial_record" and bool(dag.get("steps"))
@@ -79,11 +59,8 @@ class RunDocumentExecutionInputs:
     output_dir: Path
     expected_artifacts: tuple[DataArtifact, ...]
     run_document: RunDocument
-    #: Always empty today: a RunDocument (``schemas/run-document.json``)
-    #: carries no plan-time simulation audit, so there is nothing to thread
-    #: through to the dispatch-time coverage gate (audit finding C2). Recorded
-    #: explicitly, 2026-09-22, rather than left as a silent default, so the
-    #: gap is visible on the type that is supposed to carry it.
+    #: Always empty: a RunDocument carries no plan-time simulation audit, so
+    #: there is nothing to thread through to the dispatch-time coverage gate.
     simulation_audit: tuple[SimulationAuditItem, ...] = ()
 
 
@@ -92,25 +69,10 @@ def load_run_document(path: str | Path) -> RunDocument:
 
     The document is validated against ``schemas/run-document.json``, whose
     ``version`` is the constant ``"3"``: any other version is refused, never
-    migrated. Raises ``ValueError`` / ``json.JSONDecodeError`` on malformed
-    input.
-
-    Corrected 2026-09-26 (R2 fix, finding I1): that ``ValueError`` claim was
-    false until this fix -- ``RunDocument.from_json`` validates
-    via ``jsonschema.validate``, whose ``ValidationError`` is not a
-    ``ValueError`` (MRO: ``ValidationError -> _Error -> Exception``), so a
-    schema-invalid document -- for example one from before A2, every
-    artifact still carrying a field the schema has since renamed -- escaped
-    uncaught into ``sweep_run`` and crashed the whole sweep instead of being
-    reported as one non-reusable case. Every schema failure is now re-raised
-    as ``ValueError`` here, at the one boundary between "bytes on disk" and
-    "a RunDocument", so this docstring's claim is true for every caller, not
-    only the ones that happen to catch ``jsonschema.ValidationError``
-    themselves. ``exc.message`` already names the specific offending key
-    from the document itself (e.g. "Additional properties are not allowed
-    ('time_indexed' was unexpected)") -- never restated here as a literal,
-    so this refusal reads correctly for a schema change core has not made
-    yet either.
+    migrated. Raises ``ValueError`` on malformed input or schema-validation
+    failure (a ``jsonschema.ValidationError`` is re-raised as ``ValueError``
+    here, since it is not one itself), and ``json.JSONDecodeError`` on
+    invalid JSON.
     """
     import jsonschema
 
@@ -131,23 +93,11 @@ def load_run_document(path: str | Path) -> RunDocument:
 
 #: Environment variable naming the only tree run outputs may be written to or
 #: deleted from.
-#:
-#: Removed 2026-09-26 (Task 9 close-out, owner decision 3): the legacy name
-#: this carried before 2026-09-14, ``DRIVERFOAM_ALLOWED_RUNS_ROOT``
-#: (``LEGACY_ALLOWED_RUNS_ROOT_ENV``), is no longer read. It was the
-#: project's own former name, not an OpenFOAM- or A1/A2-related debt --
-#: `future/ENVIRONMENT_CONTRACT.md`'s scope -- and the owner chose to drop
-#: it outright rather than keep reading it indefinitely.
 ALLOWED_RUNS_ROOT_ENV = "OMNIDRIVER_ALLOWED_RUNS_ROOT"
 
 
 def _allowed_runs_root(env: dict[str, str] | None = None) -> Path | None:
-    """Resolved allowed-runs root, or None when unset/empty.
-
-    Accepts an explicit ``env`` mapping so callers (including future tests)
-    can inject the value without mutating ``os.environ``; the current tests
-    use ``mock.patch.dict`` on real ``os.environ`` instead.
-    """
+    """Resolved allowed-runs root, or None when unset/empty."""
     source = env if env is not None else os.environ
     value = source.get(ALLOWED_RUNS_ROOT_ENV)
     if not value:
@@ -160,13 +110,9 @@ def _validate_config_against_plugin_schema(
     driver_context: "DriverContext",
     diagnostics: list[StrictDiagnostic],
 ) -> None:
-    """Append a ``plugin_config_schema_violation`` diagnostic per violation.
-
-    Same check, code, and message shape as
-    ``run_document_adapter._run_document_from_case`` uses on the emission
-    path -- kept symmetric so a config the planner would refuse to emit is
-    also a config the executor refuses to ingest.
-    """
+    """Append a ``plugin_config_schema_violation`` diagnostic per violation,
+    mirroring ``run_document_adapter``'s emission-side check so planner and
+    executor stay symmetric."""
     import jsonschema
 
     config_schema = driver_context.capabilities.run_document_configuration.schema()
@@ -218,27 +164,16 @@ def build_execution_inputs(
             ))
 
     # 1) Config validity against the selected plugin's live dictionary
-    # catalog and semantic validators, PLUS the plugin-declared config
+    # catalog and semantic validators, plus the plugin-declared config
     # schema (1b) -- but only when this document's own `config` is the
     # configuration to check. `run_doc.configurationSource` states that
-    # explicitly (schema-required; see schemas/run-document.json), and
-    # `resolve_configuration_source` is the SAME function
+    # explicitly, and `resolve_configuration_source` is the SAME function
     # `run_document_adapter._run_document_from_case` calls on the emission
     # path, so a config the planner would refuse to emit is a config the
     # executor refuses to ingest -- one rule, not two that can drift.
     #
-    # Before this field existed, this ran unconditionally: execution had no
-    # way to see the generic-case marker planning inferred from
-    # `spec.metadata`, so it validated an intentionally-empty generic-case
-    # or tutorial-record config against the plugin schema and refused every
-    # such run (recorded at the end of step 4b). `configurationSource` closes
-    # that gap by making planning state the fact explicitly instead of
-    # execution guessing it.
-    #
-    # An ingested, agent-authored document is untrusted: declaring "case"
-    # is refused outright when `config` is not actually empty
-    # (`resolve_configuration_source`'s own
-    # `case_configuration_source_carries_config` diagnostic) -- an attacker
+    # An ingested, agent-authored document is untrusted: declaring "case" is
+    # refused outright when `config` is not actually empty -- an attacker
     # cannot use "case" to smuggle unvalidated document config past this
     # gate, and the plugin-identity check just above still applies
     # regardless of `configurationSource`.
@@ -249,9 +184,7 @@ def build_execution_inputs(
     if source_decision.validate_document_config:
         # `validate_run` already returns the canonical `StrictDiagnostic`
         # shape (with `source` carrying the phase), so these pass through
-        # unchanged -- previously this folded `err.phase` into the message
-        # text and dropped it as a field, which was the worst of the four
-        # diagnostic shapes this module used to speak.
+        # unchanged.
         diagnostics.extend(validate_run(run_doc, driver_context=driver_context))
         _validate_config_against_plugin_schema(run_doc, driver_context, diagnostics)
 

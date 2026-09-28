@@ -1,23 +1,8 @@
 """The one place an ``omnidriver run`` child command is built.
 
-Every command omnidriver spawns or advertises for another process to run --
-a sweep's per-case ``run --run-document`` child, and the ``run --strict
---entry`` command a strict plan hands back to its caller -- must rebuild the
-SAME provider stack the current process holds. A child process cannot
-receive a ``DriverContext`` object, only the selector that rebuilds it, so
-the command carries ``--plugin <DriverContext.plugin_selector>``. Without it
-the child resolves the entry-point default, which is not the parent's stack
-whenever the parent was given one explicitly, and which refuses outright when
-two solver-tier adapters are installed.
-
-A context with no selector (hand-built, or itself the default) gets no flag:
-inventing one would be a guess. The run document's plugin identity check then
-refuses a child whose default is a different stack.
-
-Consolidated 2026-09-25 from three separately hand-built copies: the factory
-sweep child (``sweep_runner._case_run_command``), the record sweep child, and
-``strict_planning._run_launch_description`` -- the last two never carried
-``--plugin`` at all.
+Every spawned/advertised child must rebuild the parent's provider stack via
+``--plugin <DriverContext.plugin_selector>``; a context with no selector
+gets no flag rather than guessing one.
 """
 
 from __future__ import annotations

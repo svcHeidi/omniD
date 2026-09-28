@@ -1,33 +1,11 @@
 """Predict the data artifacts a tutorial run will (or did) produce.
 
-The predictor is the single agent-facing answer to "what raw data does this
-case produce?". It is consumed by the engine (to write
-``workflow_state.json``) and by agents
-exploring a case ahead of a real run.
-
-Design discipline (plan v2 section 3):
-
-* **Compose, do not branch.** Solver-aware logic is supplied by the active
-  adapter's artifact capability. Core reads those declarations rather than
-  reimplementing solver-specific branching; utility artifacts may likewise be
-  declared through command-authorization manifests.
-
-* **Never raise on shape divergence.** Agents may call the predictor before
-  ``apply_case`` has run, or against a partly-mutated case. Missing files,
-  unknown solver names, and unknown ionic models all degrade to "return
-  what we know" rather than throwing.
-* **Static override wins.** A tutorial that knows it produces something the
-  predictor cannot derive (e.g. analytic error norms for a manufactured
-  solution) declares it via ``spec.metadata['expected_artifacts']``; on
-  ``artifact_id`` collision the static entry replaces the derived one.
-
-Adding a new solver means implementing the adapter artifact capability. Core
-does not add solver-specific handlers or branch on solver names.
+Composes the active adapter's artifact-capability declarations with any
+static ``spec.metadata['expected_artifacts']`` override; never raises.
 """
 from __future__ import annotations
 
-#: ``produced_by`` for files the executor writes around a step, rather than the
-#: solver command.
+#: produced_by for files the executor itself writes, not the solver command.
 DRIVER_PRODUCED_BY = "omnidriver"
 
 from pathlib import Path
@@ -46,11 +24,7 @@ def _produces_entry_to_artifact(
     entry: "ProducesEntry",
     utility_name: str,
 ) -> DataArtifact:
-    """Translate a utility manifest's ProducesEntry into a DataArtifact.
-
-    `produced_by` defaults to the utility name when the manifest leaves
-    it blank — agents need to attribute the artifact regardless.
-    """
+    """Translate a utility manifest's ProducesEntry into a DataArtifact; produced_by defaults to the utility name when blank."""
     return DataArtifact(
         artifact_id=entry.artifact_id,
         path_pattern=entry.path_pattern,
@@ -67,14 +41,7 @@ def _predict_from_workflow_utilities(
     spec: TutorialSpec,
     driver_context: "DriverContext",
 ) -> tuple[DataArtifact, ...]:
-    """Walk spec.metadata['workflow_dag'].steps; for each step whose
-    `command` matches one of the active plugin's utility manifests, emit its
-    `produces` entries as DataArtifacts.
-
-    Returns ``()`` when the spec has no workflow_dag, no steps, or no
-    matching adapter utility commands. Unknown command names are silently
-    skipped.
-    """
+    """Emit DataArtifacts from each workflow_dag step whose command matches an active plugin utility manifest."""
     dag = spec.metadata.get("workflow_dag") if spec.metadata else None
     if not dag:
         return ()
@@ -106,16 +73,8 @@ def _merge_static_override(
 def _output_dir_prefix(spec: TutorialSpec) -> str:
     """The spec's output directory, as a case-relative POSIX prefix.
 
-    ``path_pattern`` is case-relative (see ``models.DataArtifact``), and core
-    writes its own state and logs under ``spec.metadata["output_dir"]`` --
-    never under a fixed ``postProcessing/``. Those two facts were previously
-    connected by a string literal, so overriding ``output_dir_name`` moved the
-    files and left the prediction behind.
-
-    ``resolve_spec_paths`` builds ``output_dir`` as ``case_root / name``, so
-    the relative form normally exists. An absolute ``output_dir_name`` escapes
-    the case root; there is no case-relative pattern for that, so predict
-    nothing rather than predict a wrong path.
+    An absolute output_dir_name escapes the case root, which has no
+    case-relative pattern; predict nothing rather than a wrong path.
     """
     try:
         return Path(spec.metadata["output_dir"]).relative_to(Path(spec.case_root)).as_posix()
@@ -158,13 +117,9 @@ def predict_data_artifacts(
 ) -> tuple[DataArtifact, ...]:
     """Return the artifacts ``case_root`` will (or does) produce.
 
-    Composes:
-
-    * the static ``spec.metadata['expected_artifacts']`` override (if any),
-    * solver-specific derivations returned by the active adapter.
-
-    Never raises. Returns ``()`` when nothing can be derived and no static
-    override is supplied.
+    Composes adapter-derived artifacts with any static
+    ``spec.metadata['expected_artifacts']`` override. Never raises;
+    returns ``()`` when nothing can be derived.
     """
     from omnidriver.core.plugin_capabilities import ArtifactPredictionRequest
 

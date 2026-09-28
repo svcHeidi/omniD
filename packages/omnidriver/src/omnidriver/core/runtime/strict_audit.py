@@ -16,10 +16,8 @@ if TYPE_CHECKING:
     from ..plugin_interface import DriverContext  # noqa: F401
 
 
-#: The operator's switch for declining mesh-scale checks. Renamed from
-#: ``SKIP_MESH_DIAGNOSTICS`` 2026-09-26 (spec 2026-09-26 §2, A7): the checks
-#: are the plugin's ``*_geometry_diagnostics`` hooks, and "mesh" named one
-#: kind of discretisation. The old name is not read.
+#: The operator's switch for declining the plugin's geometry-diagnostics
+#: checks.
 SKIP_GEOMETRY_DIAGNOSTICS_ENV = "SKIP_GEOMETRY_DIAGNOSTICS"
 
 
@@ -33,12 +31,10 @@ _READINESS_WEIGHTS = {
 }
 
 
-#: Outcomes for a stage that did not run, from
-#: docs/superpowers/specs/2026-09-18-coverage-as-evidence.md. Each is a distinct
-#: fact -- the operator declined the check, it cannot apply to this plan, or the
-#: thing it needs was absent -- and all three scored `passed` with full points
-#: until 2026-09-18, because every skip path returns an empty diagnostic tuple
-#: and an empty tuple has no error and no warning.
+#: Outcomes for a stage that did not run. Each is a distinct fact -- the
+#: operator declined the check, it cannot apply to this plan, or the thing
+#: it needs was absent -- that must not be conflated with `passed`: an empty
+#: diagnostic tuple has no error and no warning either way.
 UNCOVERED_OUTCOMES = frozenset({"not_requested", "not_applicable", "unavailable"})
 
 #: The stage ran. Its status is then derived from its diagnostics, as before.

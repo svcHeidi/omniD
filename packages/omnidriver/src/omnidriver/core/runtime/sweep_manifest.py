@@ -8,11 +8,8 @@ from pathlib import Path
 from typing import Any
 
 
-#: The sweep manifest's on-disk filename, named once here (final review M6,
-#: 2026-09-26) instead of restated as a literal at each write/read site
-#: (``sweep_runner.py``, ``postprocess_phase.py``,
-#: ``runtime_records.CORE_RUNTIME_RECORDS`` and
-#: ``fresh._OMNIDRIVER_MARKER_NAMES``).
+#: The sweep manifest's on-disk filename, named once here rather than
+#: restated as a literal at each write/read site.
 SWEEP_MANIFEST_FILENAME = "sweep_manifest.json"
 
 
@@ -29,7 +26,7 @@ class CaseManifestEntry:
     updated_at: str
     case_record_path: str = ""
     #: A tutorial-record case's patches that already matched the case and
-    #: were never written (M5-of-2a) -- each one the same JSON shape
+    #: were never written, each the same JSON shape
     #: `record_execution._serialize_sourced_patch` produces. Always `()`
     #: for a factory-entry case, which has no such concept.
     unchanged_patches: tuple[dict[str, Any], ...] = ()

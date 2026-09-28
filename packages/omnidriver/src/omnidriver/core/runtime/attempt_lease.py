@@ -27,19 +27,11 @@ elif os.name == "nt":
 _LOCAL_LEASES: dict[Path, tuple[str, int]] = {}
 
 def _guard_filename(lock_filename: str) -> str:
-    """The stable guard file ``_lease_record_guard`` keeps beside any lease
-    file. Named once (R1 fix, finding M3: this convention used to be
-    spelled twice -- here, to build ``ATTEMPT_LOCK_GUARD_FILENAME``, and
-    again inside ``_lease_record_guard`` itself as ``f"{path.name}.guard"``)
-    so both the attempt lock's guard name and ``_lease_record_guard``'s
-    per-call guard name (also used for the case lease, whose filename is
-    not one of the constants below) come from one function."""
+    """The stable guard filename kept beside any lease file, named once so every lease shares the convention."""
     return f"{lock_filename}.guard"
 
 
-#: The attempt lease's file in an output directory, and the guard file
-#: ``_acquire_local_lease`` keeps beside it. Named once here so core's run
-#: records (``core.runtime_records``) can name them too (spec 2026-09-26 A5).
+#: Attempt-lease filename; core.runtime_records names its own copy from this.
 ATTEMPT_LOCK_FILENAME = ".omnidriver-attempt.lock"
 ATTEMPT_LOCK_GUARD_FILENAME = _guard_filename(ATTEMPT_LOCK_FILENAME)
 
@@ -62,14 +54,7 @@ def attempt_lease_is_held(output_dir: Path) -> bool:
 
 
 def _case_lease_path(case_root: Path) -> Path:
-    """Stable ownership record for one mutable case directory.
-
-    A case can be transactionally replaced by staging.  Its lock therefore
-    cannot live *in* that directory: a rename would otherwise replace the
-    lock inode while a workflow still holds it.  Keep the record as a named
-    sibling, which is stable across replacement and also lets staging acquire
-    ownership before the case exists for the first time.
-    """
+    """Stable ownership record for a case: a named sibling, since a staging rename would replace an in-directory lock's inode."""
     root = Path(case_root).resolve()
     return root.parent / f".{root.name}.omnidriver-case.lock"
 
@@ -113,12 +98,7 @@ def _reclaimable_local_record(record: dict[str, object], hostname: str) -> bool:
 
 @contextmanager
 def _lease_record_guard(path: Path) -> Iterator[None]:
-    """Serialize inspection and replacement of the host-local lease record.
-
-    The guard file is intentionally stable rather than deleted after use.
-    Removing a lock file allows different contenders to lock different inodes,
-    recreating the same read/unlink race this guard closes.
-    """
+    """Serialize access to the lease record; the guard file stays put (deleting it would recreate the read/unlink race)."""
     if os.name not in {"posix", "nt"}:
         raise AttemptLeaseError(
             "attempt leases require host-local advisory locking for safe recovery"

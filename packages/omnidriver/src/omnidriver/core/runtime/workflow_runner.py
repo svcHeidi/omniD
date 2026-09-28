@@ -147,33 +147,18 @@ def _argv_for_execution(
 ) -> tuple[str, ...]:
     """Build the argv subprocess should exec for one workflow step.
 
-    Case-local adapter scripts are shebang-interpreted by `/bin/sh`,
-    which is SIP-protected on macOS: the OS silently strips inherited
-    `DYLD_*` environment variables before the script's own body runs, even
-    though `env=` correctly carries them into the subprocess call. Values a
-    running process sets on itself (as opposed to inheriting via exec)
-    survive SIP stripping, so DYLD_* values are re-exported as literal text
-    baked into an explicit shell preamble rather than relied upon via `env=`
-    alone. Critically, the preamble must `.` (dot-source) the script rather
-    than `exec` it: `exec` replaces the process image via another kernel-level
-    shebang exec of `/bin/sh`, which re-triggers SIP stripping on the *new*
-    process and wipes the just-exported values again; `.` runs the script's
-    commands inside the already-running (and now-exported) shell process, so
-    no further exec boundary is crossed before the solver process itself forks.
-    This is a no-op wrapper (falls through to plain argv) whenever the
-    command isn't a case script or there are no DYLD_* values to preserve.
-
-    Dot-sourcing on its own breaks common self-locating case-script idioms
-    `cd "${0%/*}"` (self-locate via one's own path): dot-sourcing does not
-    update `$0`, which would otherwise remain `/bin/sh`'s own `$0` --
-    `${0%/*}` on that resolves to `/bin`, so the script silently `cd`s away
-    from the case directory before its real body.
-    runs, no-op'ing case-script cleanup with no error. `sh -c cmd name arg...`
-    binds `name` to `$0` for the duration of `cmd`, so passing the resolved
-    script path as that extra argv element (and the rest of `args` after it,
-    read back via "$@") restores `$0` to the script's real path before it is
-    dot-sourced, fixing the self-location idiom without reintroducing the
-    exec-boundary SIP-stripping problem the dot-source was chosen to avoid.
+    Case-local adapter scripts are shebang-interpreted by `/bin/sh`, which is
+    SIP-protected on macOS: it silently strips inherited `DYLD_*` variables
+    before the script body runs, even though `env=` carries them into the
+    subprocess call. A running process's own exported values survive SIP
+    stripping, so DYLD_* is instead re-exported in an explicit shell
+    preamble that `.` (dot-sources) the script rather than `exec`s it --
+    `exec` would re-trigger a shebang exec of `/bin/sh` and strip them again.
+    Dot-sourcing alone breaks the common self-locate idiom `cd "${0%/*}"`,
+    since it leaves `$0` as `/bin/sh`'s own; passing the script path as
+    `sh -c cmd name arg...`'s `name` rebinds `$0` before dot-sourcing,
+    restoring that idiom. No-op whenever the command isn't a case script or
+    there are no DYLD_* values to preserve.
     """
     if command not in case_script_commands(driver_context) or not env:
         return (executable, *args)
@@ -276,14 +261,11 @@ def _has_live_group_members(process: subprocess.Popen[Any]) -> bool:
 
 
 def redact_step_logs(paths: Any, patterns: Any) -> None:
-    """Replace every match of each pattern, whole, with ``[REDACTED]`` (K9).
+    """Replace every match of each pattern, whole, with ``[REDACTED]``.
 
-    Corrected 2026-09-25 (wave-2 review I3): this used to keep capture group
-    1 and replace the rest, so the conventional capture-the-secret pattern
-    ``password=(\\S+)`` kept the secret and dropped its label. Groups now mean
-    nothing here; a pattern that must keep context around the secret says so
-    with lookarounds, e.g. ``(?<=://)[^/\\s@]+(?=@)`` matches only a URL's
-    credential."""
+    Capture groups are not preserved: a pattern that must keep context
+    around the secret uses lookarounds instead, e.g.
+    ``(?<=://)[^/\\s@]+(?=@)`` matches only a URL's credential."""
     compiled = [re.compile(p) for p in patterns]
     if not compiled:
         return
@@ -388,12 +370,8 @@ def run_workflow_step(
         raise ValueError(f"Workflow step {step_id!r} has incomplete dependencies")
 
     attempt = previous_step_state.attempt + 1
-    # log_dir is required rather than defaulted. The default it replaced --
-    # ``case_root / "postProcessing" / "workflow_logs"`` -- was wrong twice
-    # over: it hardcoded the default value of ``output_dir_name`` instead of
-    # reading it, and it anchored on case_root where every real caller anchors
-    # on output_dir. No shipped caller or test ever took it, so it was a dead
-    # default silently disagreeing with the live one.
+    # log_dir is required rather than defaulted: a default anchored on
+    # case_root would disagree with the output_dir every real caller uses.
     resolved_log_dir = Path(log_dir)
     resolved_log_dir.mkdir(parents=True, exist_ok=True)
     safe_id = _safe_step_id(step_id)

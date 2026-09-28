@@ -10,8 +10,8 @@ RETRYABLE_CODES = frozenset({"workflow_step_timeout"})
 def classify_failure(step_state, *, overrides: dict[str, str] | None = None) -> str:
     """Return "retryable" or "fatal" for a failed step.
 
-    overrides maps a diagnostic code to a forced classification — the extension
-    seam for problem #3 / agent reclassification. The mechanical retry path
+    overrides maps a diagnostic code to a forced classification -- the
+    extension seam for agent reclassification. The mechanical retry path
     never populates it.
     """
     overrides = overrides or {}

@@ -14,11 +14,9 @@ from omnidriver.core.plugin_profile import entrypoint_relpaths
 STEP_STATUS_VALUES = ("pending", "running", "completed", "failed", "skipped")
 
 
-# Single owner of the command allowlist, shared by strict_planning and the
-# run-document adapter (see threat model in the RunDocument execution plan).
-# Core-only process commands, always allowed and resolved via PATH. Solver and
-# environment commands arrive through CommandAuthorizationCapability; Core
-# must not name either kind here.
+# Core-only process commands, always allowed and resolved via PATH. Solver
+# and environment commands arrive through CommandAuthorizationCapability;
+# core must not name either kind here.
 CORE_NEUTRAL_COMMANDS = frozenset(
     {
         "mpirun",
@@ -27,23 +25,17 @@ CORE_NEUTRAL_COMMANDS = frozenset(
     }
 )
 
-# Compatibility name for older callers. Core itself declares no case-local
-# command names; adapters provide them through runtime conventions.
+# Core itself declares no case-local command names; adapters provide them
+# through runtime conventions.
 CASE_SCRIPT_COMMANDS = frozenset()
 
 def case_script_commands(driver_context: Any | None) -> frozenset[str]:
     """Bare command names that may resolve to a case-LOCAL executable, for
     the active plugin.
 
-    The active adapter supplies case-local command names through its runtime
-    convention declaration. Core adds only the adapter's declared entrypoint
-    paths; with no context the set is empty.
-
-    The value flowing in here is set in the plugin's own static profile,
-    never touched by an agent-authored ``RunDocument`` or case-folder
-    content -- the two things this module's trust boundary actually
-    distrusts (see the threat model doc above) -- so widening this set to
-    a plugin's own declared name does not change who can shadow PATH.
+    Comes from the plugin's own static profile, never from an agent-authored
+    ``RunDocument`` or case-folder content -- the two things this module's
+    trust boundary distrusts. With no context the set is empty.
     """
     if driver_context is None:
         return frozenset()
@@ -54,9 +46,7 @@ def case_script_commands(driver_context: Any | None) -> frozenset[str]:
 
 
 # MPI launcher recognition: generic to any parallel workflow step (OpenMPI,
-# MPICH, ...), not OpenFOAM-specific. Moved here from
-# omnidriver.openfoam.environment_preflight, which had no OpenFOAM content in
-# either constant -- environment_preflight now imports these back from core.
+# MPICH, ...), not OpenFOAM-specific.
 _MPI_LAUNCHERS = frozenset({"mpirun", "mpiexec", "orterun"})
 _MPI_VALUE_FLAGS = frozenset({"-np", "-n", "--np"})
 
@@ -259,12 +249,10 @@ def normalize_workflow_dag(
         if consumes_error is not None:
             diagnostics.append(consumes_error)
 
-        # Union, never replace (fix round 1 I6, 2026-09-25): before K4 a
-        # step's own ``produces`` replaced its utility manifest's. Once a
-        # record step could declare ``produces``, that dropped the manifest
-        # ids, left them unclaimed, and the unclaimed branch below credited
-        # them to the last solver step, which then failed for a file it
-        # never writes. No step in packages/*/src relied on replacement.
+        # Union with the utility manifest's own produces, never replace: a
+        # step's own ``produces`` dropping the manifest's ids would leave
+        # them unclaimed, and the unclaimed branch below would then credit
+        # them to the last solver step -- which fails for a file it never writes.
         produces = tuple(dict.fromkeys((*produces, *utility_produces.get(command, ()))))
         if produces:
             claimed_artifacts.update(produces)
@@ -420,17 +408,13 @@ def normalize_workflow_dag(
     unclaimed_artifacts = tuple(artifact_id for artifact_id in artifact_ids if artifact_id not in claimed_artifacts)
     if unclaimed_artifacts:
         # Only run-style steps may be credited with producing artifacts: the
-        # case run script plus whatever solver binaries the context authorizes.
-        # Cleanup and other adapter-declared scripts are deliberately excluded
-        # from artifact credit. Note solver_commands() only,
-        # NOT the full authorized set: auxiliary_commands() are authorized to
-        # run but are post-processing, and ``produces`` is enforced per-step
-        # (workflow_runner's missing_artifacts check), so crediting one would
-        # make a silent solver fail the wrong step.
-        # The entrypoint comes from the plugin's declared role, not a literal:
-        # registry.py already resolved it that way for case detection, so
-        # Resolving the entrypoint from adapter declarations keeps a plugin
-        # whose entrypoint has another name in the producer set.
+        # case run script plus whatever solver binaries the context
+        # authorizes -- solver_commands() only, not the full authorized set:
+        # auxiliary_commands() are post-processing, and crediting one would
+        # make a silent solver fail the wrong step. The entrypoint is
+        # resolved from the plugin's declared role (as registry.py also
+        # does), not a literal, so a differently-named entrypoint still lands
+        # in the producer set.
         producer_commands = set(entrypoint_relpaths(driver_context))
         if driver_context is not None:
             producer_commands |= (
@@ -484,25 +468,9 @@ def workflow_output_artifacts(
 
 
 def _is_authorized(command: str, driver_context: Any) -> bool:
-    """Return whether ``command`` is in the accepted command surface.
-
-    This is the ONE definition of "authorized" for a bare command name:
-    the union of :data:`CORE_NEUTRAL_COMMANDS`, :func:`case_script_commands`,
-    and -- when a ``driver_context`` is given -- the commands its
-    ``CommandAuthorizationCapability`` grants (``environment_commands``,
-    ``solver_commands() | auxiliary_commands()``, a ``utility_manifests()``
-    entry that declares ``produces``, and ``is_installed_environment_command``
-    as a runtime fallback). ``validate_workflow_commands`` calls this for
-    both a step's own command and, when that command is an MPI launcher, the
-    program it wraps -- a second, independent notion of "authorized" for the
-    wrapped program is exactly how it escaped review (an ``mpirun`` step was
-    accepted from :data:`CORE_NEUTRAL_COMMANDS` alone, and the binary it
-    wrapped was never checked against this surface at all).
-
-    Preserves the original per-step precedence: a utility manifest, once
-    present, decides the outcome for that command on its own (``produces``
-    or not) and is never overridden by ``is_installed_environment_command``.
-    """
+    """The ONE definition of "authorized" for a bare command name, applied
+    both to a step's own command and, for an MPI launcher, the program it
+    wraps -- no second, independent notion of "authorized" for either."""
     if command in CORE_NEUTRAL_COMMANDS or command in case_script_commands(driver_context):
         return True
     if driver_context is None:
@@ -529,27 +497,14 @@ def validate_workflow_commands(
 ) -> tuple[WorkflowDiagnostic, ...]:
     """Reject DAG steps whose command is not on the allowlist.
 
-    The allowlist is the union of :data:`CORE_NEUTRAL_COMMANDS`, the commands
-    ``driver_context`` authorizes through its
-    ``CommandAuthorizationCapability``, :func:`case_script_commands` (the
-    active adapter's declared case scripts and entrypoints), that context's
-    utility manifests that declare ``produces``,
-    and applications the active environment recognizes at runtime -- see
-    :func:`_is_authorized`, the single function that decides this for a bare
-    command name. Without a ``driver_context`` no environment, plugin
-    command, or utility is authorized, leaving only core-neutral commands and
-    case scripts. An explicit path form (``command`` containing ``/``) is
-    allowed only as ``./<name>`` where ``<name>`` is an adapter-declared case
-    script — this keeps the gate in parity with ``_resolve_command`` while
-    still refusing arbitrary ``./script`` and absolute paths. This is the one
-    owner of the command allowlist; both ``strict_plan`` and the run-document
-    adapter call it so neither can drift. Runs on the *normalized* DAG, where
-    ``command`` is the bare executable (args already split out).
-
-    A step whose command is an MPI launcher (:data:`_MPI_LAUNCHERS`) is
-    additionally checked on the program its args wrap: an authorized
-    launcher does not authorize an arbitrary wrapped binary, since
-    :func:`_is_authorized` is applied to that program too.
+    See :func:`_is_authorized` for what "authorized" means; without a
+    ``driver_context`` only core-neutral commands and case scripts qualify.
+    An explicit path form (``command`` containing ``/``) is allowed only as
+    ``./<name>`` for an adapter-declared case script, keeping parity with
+    ``_resolve_command`` while refusing an arbitrary ``./script`` or
+    absolute path. This is the one owner of the command allowlist; both
+    ``strict_plan`` and the run-document adapter call it so neither can
+    drift. Runs on the *normalized* DAG (bare executable, args split out).
     """
     case_scripts = case_script_commands(driver_context)
     if driver_context is not None:

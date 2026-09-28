@@ -14,22 +14,17 @@ from typing import Any, Literal
 
 import jsonschema
 
-# No ``Phase`` literal here any more. Core used to spell cardiacFoam's four
-# editing phases (anatomy/physics/stimulus/solver) as a closed type, which
-# put one solver's vocabulary in the solver-neutral package. A plugin
-# declares its own phases through ``get_phases()``; ``primary_phase()``
-# takes that order as a parameter. See test_phases_are_plugin_declared.py.
+# Deliberately no ``Phase`` literal: a plugin declares its own phases via
+# ``get_phases()``, keeping solver vocabulary out of this package. See
+# test_phases_are_plugin_declared.py.
 Status = Literal["draft", "queued", "planning", "planned", "running", "completed", "failed"]
 
-# Where a RunDocument's plugin configuration lives. See
-# schemas/run-document.json's own "configurationSource" description for the
-# full contract (step 4c, docs/superpowers/specs/
-# 2026-09-24-tutorials-are-pointers-design.md): "document" means `config`
-# itself carries the configuration; "case" means the staged/committed case
-# files do, and `config` must be empty. There is deliberately no third,
-# inferred value -- see `core.runtime.configuration_source`, the one
-# function both `run_document_adapter` (planning) and `run_document_exec`
-# (execution) call to decide what a given source implies.
+# Where a RunDocument's plugin configuration lives: "document" means
+# `config` itself carries it; "case" means the staged case files do, and
+# `config` must be empty. No third, inferred value -- see
+# `core.runtime.configuration_source`, the one function both
+# `run_document_adapter` and `run_document_exec` call to decide what a
+# given source implies.
 ConfigurationSource = Literal["document", "case"]
 
 _SCHEMA = json.loads(
@@ -51,8 +46,8 @@ class RunDocument:
     name: str
     status: Status
     # Plugin-defined: the core schema constrains ``config`` to an object but
-    # imposes no shape on the per-phase values (P2.2). Annotating the values
-    # as ``dict`` would assert a guarantee the schema no longer makes;
+    # imposes no shape on the per-phase values. Annotating the values as
+    # ``dict`` would assert a guarantee the schema no longer makes;
     # ``specs.validation.validate_run`` enforces the mapping shape and
     # reports violations as diagnostics.
     config: dict[str, Any]

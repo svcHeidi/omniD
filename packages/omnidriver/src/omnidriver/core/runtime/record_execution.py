@@ -1,21 +1,9 @@
-"""Run one tutorial-record case: stage, resolve, and commit (design §4).
+"""Run one tutorial-record case: stage the native case, resolve and split
+patches into changed/unchanged, and commit the changed ones through one
+``commit_case_write`` call.
 
-The impure counterpart to :mod:`omnidriver.core.tutorial_records`, which is
-pure data and pure functions. This module does the filesystem work design
-§4 describes end to end for one case:
-
-1. stage the native case into a disposable clone (never writing the native
-   tree itself);
-2. sort names and run axes against the staged clone (``tutorial_records
-   .resolve_case_patches``);
-3. drop patches already matching the staged case's current value
-   (``tutorial_records.split_unchanged``);
-4. commit everything that remains through the existing write channel, in
-   ONE ``commit_case_write`` call (design §4 step 7).
-
-``preview_record_case`` performs 1-3 without ever committing -- design §4's
-own words: "``describe`` performs steps 1-7 without committing: that is the
-preview." ``commit_record_case`` performs all four steps.
+``preview_record_case`` stages and resolves without ever committing;
+``commit_record_case`` also commits.
 """
 
 from __future__ import annotations
@@ -55,33 +43,23 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class RecordCommitResult:
-    """The outcome of :func:`commit_record_case` (review finding M5).
-
-    Before this existed, "every patch was unchanged" and "something was
-    committed" were told apart only by a bare ``CaseWriteRecord | None`` --
-    a caller seeing ``None`` learned that nothing was written, but not that
-    this was because every patch already matched, nor what those unchanged
-    patches even were. ``status`` says which case this is, explicitly;
-    ``unchanged`` carries the patches themselves either way (design §4 step
-    7 already reports them in ``preview_record_case``'s preview -- this is
-    the same information on the commit path).
+    """Outcome of a record case's commit: what was written, what was already
+    unchanged, and what its workflow needs to run.
     """
 
     write_record: CaseWriteRecord | None
     unchanged: tuple[SourcedPatch, ...]
     command_arguments: dict[str, tuple[str, ...]]
-    #: Item 4/item 2: the ordered step ids this case's workflow actually
-    #: runs -- the record's own steps, or one selected variant's, per
-    #: `_resolve_workflow_route`. The caller that runs the workflow (sweep
-    #: dispatch) needs this alongside `command_arguments` to build the DAG.
+    #: The ordered step ids this case's workflow actually runs -- the
+    #: record's own steps, or one selected variant's, per
+    #: `_resolve_workflow_route`. Needed alongside `command_arguments` to
+    #: build the DAG.
     workflow_step_ids: tuple[str, ...]
-    #: PAR (2026-09-26): the run's ``parallel`` request, ``None`` for serial
-    #: (absent, or ``False``). The caller that builds the DAG hands it to
-    #: the stack's parallel form (``record_case_spec``).
+    #: The run's ``parallel`` request, ``None`` for serial (absent, or
+    #: ``False``). Handed to the stack's parallel form (``record_case_spec``).
     parallel_request: Any = None
-    #: Step S: every input this case resolved (name, native/supplied, its
-    #: path, its files) -- ``record_case_spec`` carries it onto
-    #: ``resolvedEntry.inputs``.
+    #: Every input this case resolved (name, native/supplied, its path, its
+    #: files) -- carried onto ``resolvedEntry.inputs`` by ``record_case_spec``.
     resolved_inputs: tuple[ResolvedInput, ...] = ()
 
     @property
@@ -101,20 +79,13 @@ def _native_case_root(record: TutorialRecord, *, cases_root: Path) -> Path:
 
 def record_generated_relpaths(record: TutorialRecord) -> frozenset[str]:
     """The case-relative paths a record's steps write, which staging must
-    not carry from one run into the next stage (spec 2026-09-26 A5).
+    not carry over from a previous run.
 
-    Corrected 2026-09-26 (R1 fix, finding I2): this used to be "produced
-    minus consumed", treating any path some step consumes as "an input
-    updated in place", exempt from exclusion -- even when an EARLIER step
-    produced that same path. That path is an intermediate, not an authored
-    input (e.g. a mesh step's output a solve step reads): keeping it meant
-    a restage carried a previous run's mesh forward. The rule is now: a
-    produced path is excluded unless the FIRST step (in workflow order)
+    A produced path is excluded unless the first step (in workflow order)
     that touches it -- consumes or produces -- consumes it, meaning the
     path was already an authored input before this record ever produced it.
-    A path a single step both consumes and produces (rewritten in place,
-    with no earlier producer) still counts as consumed first, so it is
-    still never excluded.
+    A path a single step both consumes and produces, with no earlier
+    producer, still counts as consumed first, so it is never excluded.
     """
     first_touch: dict[str, str] = {}
     produced_overall: set[str] = set()
@@ -135,17 +106,12 @@ def _stage(
     inputs: Mapping[str, str | Path] | None = None,
     strict_inputs: bool = True,
 ) -> tuple[ResolvedInput, ...]:
-    """Design §2.3: copy the native case, excluding every input destination,
-    then overlay each resolved input's files into the same staged clone,
-    inside the one staging lease ``_stage_entry_case`` already holds.
+    """Copy the native case, excluding every input destination, then overlay
+    each resolved input's files into the same staged clone.
 
-    ``strict_inputs`` is ``False`` only for ``preview_record_case``
-    (``describe``): an unresolved or incomplete input is silently left
-    unstaged rather than refused (§2.2, "describe does not refuse") --
-    correct because a record with no ``axes`` reads nothing an unstaged
-    input would have held, and a record's own ``axes`` contract already
-    forbids writing the staged case it reads (`resolve_case_patches`'s
-    purity check).
+    ``strict_inputs`` is ``False`` only for ``preview_record_case``: an
+    unresolved or incomplete input is then silently left unstaged rather
+    than refused.
     """
     from .sweep_runner import _stage_entry_case
 
@@ -164,14 +130,9 @@ def _stage(
 
 def _reserved_study_names(record: TutorialRecord) -> frozenset[str]:
     """Reserved study names that name neither a document key nor an axis,
-    and must never reach ``sort_study_name`` (item 3, item 4): the two sweep
-    naming-derivation outputs (``NAMING_OUTPUT_KEYS`` -- pure sweep-machinery
-    bookkeeping, never case content) and THIS RECORD'S OWN
-    ``variant_selector`` name, if it declares one (a variant choice, never a
-    patch). Explicit, matching CLAUDE.md's "no fallback" standard -- nothing
-    here is inferred from shape, and core reserves no selector name of its
-    own (item 4's vocabulary fix: ``MESH_SELECTOR_NAME`` was deleted; each
-    record declares its own).
+    and must never reach ``sort_study_name``: the two sweep
+    naming-derivation outputs (``NAMING_OUTPUT_KEYS``) and this record's own
+    ``variant_selector`` name, if it declares one.
     """
     reserved = NAMING_OUTPUT_KEYS | frozenset({PARALLEL_STUDY_NAME})
     if record.variant_selector is None:
@@ -180,10 +141,9 @@ def _reserved_study_names(record: TutorialRecord) -> frozenset[str]:
 
 
 def _parallel_request(record: TutorialRecord, reserved_values: Mapping[str, Any]) -> Any:
-    """PAR: the study's ``parallel`` value, or ``None`` for serial (absent,
-    or ``False``). Any other value is the solver layer's to interpret. A
-    ``null`` is refused by name rather than read as "no choice", as a null
-    variant selector is (``resolve_variant_selector``)."""
+    """The study's ``parallel`` value, or ``None`` for serial (absent, or
+    ``False``). Any other value is the solver layer's to interpret. A
+    ``null`` is refused by name rather than read as "no choice"."""
     if PARALLEL_STUDY_NAME not in reserved_values:
         return None
     value = reserved_values[PARALLEL_STUDY_NAME]
@@ -201,18 +161,12 @@ def _extract_reserved_names(
     reserved_names: frozenset[str],
 ) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
     """Strip every reserved name out of every source, refusing a value that
-    conflicts across sources by name (item 3 + item 4's selector).
-
-    Returns ``(stripped_study_by_source, reserved_values)`` -- the latter
-    maps each reserved name actually present in the study to its one agreed
-    value.
-
-    Conflict is checked with strict same-type equality (``_strictly_equal``,
-    shared with ``tutorial_records.combine_patches``'s own patch-conflict
-    check), not plain ``==`` -- ``1`` and ``True`` compare equal under
-    Python's numeric tower but come from two callers who each meant a
-    different value, and a plain ``!=`` would silently let the second (a
-    real conflict) through as "agreement".
+    conflicts across sources by name. Returns
+    ``(stripped_study_by_source, reserved_values)``, the latter mapping each
+    reserved name actually present to its one agreed value. Conflict is
+    checked with strict same-type equality (``_strictly_equal``), not plain
+    ``==``, since ``1`` and ``True`` compare equal under Python's numeric
+    tower but may come from callers who each meant a different value.
     """
     stripped: dict[str, dict[str, Any]] = {}
     reserved_values: dict[str, Any] = {}
@@ -238,21 +192,16 @@ def _extract_reserved_names(
 def _resolve_workflow_route(
     record: TutorialRecord, reserved_values: Mapping[str, Any],
 ) -> tuple[tuple[str, ...], dict[str, Any] | None]:
-    """Item 4: the record's own steps, or one selected variant's steps, and
-    which variant that is.
+    """The record's own steps, or one selected variant's steps, and which
+    variant that is.
 
     A record that declares ``workflow_variants`` runs the variant the study
     names through the record's ``variant_selector``, or, when the study does
-    not name the selector at all, the record's ``default_variant`` (owner
-    Q2, 2026-09-26). A study that names the selector with a value that is not
-    a declared variant -- ``None`` included -- is refused by
-    ``resolve_variant_selector``, never read as "no choice" and defaulted.
-    A record with no variants at all refuses a study that names its
-    selector ("declares no workflow_variants").
-
-    Corrected 2026-09-26 (owner Q2): a variant record used to REQUIRE the
-    study to name the selector, so ``describe`` with no study values (design
-    §6's zero-change test, conformance C2) refused every variant record.
+    not name the selector at all, the record's ``default_variant``. A study
+    that names the selector with a value that is not a declared variant --
+    ``None`` included -- is refused by ``resolve_variant_selector``, never
+    read as "no choice" and defaulted. A record with no variants at all
+    refuses a study that names its selector.
 
     The second value is ``None`` for a record without variants, otherwise
     the choice as ``describe`` reports it: the selector name, the selected
@@ -286,13 +235,11 @@ def _resolve_and_split(
     tuple[SourcedPatch, ...], tuple[SourcedPatch, ...],
     dict[str, tuple[str, ...]], tuple[str, ...], dict[str, Any] | None, Any,
 ]:
-    # M1: neither of these two capabilities has a compatibility fallback any
-    # more (`:fallback: none`, matching ConfigValueCapability/
-    # CaseWriterCapability) -- a stack that composes no record-key validator
-    # or no case-value comparator cannot run a tutorial-record case at all,
-    # and must say so BY NAME rather than silently accepting every key
-    # unchecked or reporting every no-op patch as "changed" and writing it
-    # (review finding M4/E8).
+    # Neither capability has a compatibility fallback (`:fallback: none`) --
+    # a stack missing a record-key validator or a case-value comparator
+    # cannot run a tutorial-record case at all, and must say so by name
+    # rather than silently accepting every key unchecked or reporting every
+    # no-op patch as "changed" and writing it.
     validator = driver_context.capabilities.record_key_validation.validator()
     if validator is None:
         raise TutorialRecordError(
@@ -319,7 +266,7 @@ def _resolve_and_split(
     )
     workflow_step_ids, workflow_variant = _resolve_workflow_route(record, reserved_values)
     if workflow_variant is not None:
-        # Review 54b I3: before any axis runs or any patch is proposed.
+        # Must run before any axis runs or any patch is proposed.
         check_variant_constraints(record, workflow_variant["selected"], study_by_source)
     parallel_request = _parallel_request(record, reserved_values)
     combined, command_arguments = resolve_case_patches(
@@ -343,15 +290,11 @@ def _reader_refusing_as_record_error(
     record: TutorialRecord, read_current_value: Any, *, case_root: Path,
 ) -> Any:
     """``read_current_value``, with a ``ValueError`` it raises -- the config
-    reader refusing the native value it found, e.g. openCARP's F1/F10
-    ``ParFormatError`` -- turned into a ``TutorialRecordError`` naming the
-    record, the document and the key, the original chained (final review
-    S-M1, 2026-09-25). The reader is the third layer that can refuse a
-    record case, after the key validator and the case writer (I2's
-    :func:`_refusal_as_record_error`); without this its refusal escaped
-    ``plan --strict`` and ``describe`` as a traceback with empty stdout.
-    ``split_unchanged`` still lets the refusal propagate, never reading it as
-    "changed"; only its type and message change."""
+    reader refusing the native value it found -- turned into a
+    ``TutorialRecordError`` naming the record, the document and the key,
+    the original chained. ``split_unchanged`` still lets the refusal
+    propagate, never reading it as "changed"; only its type and message
+    change."""
 
     def read_or_refuse(document_path: Path, key_path: Any) -> Any:
         document = Path(document_path).relative_to(case_root).as_posix()
@@ -366,9 +309,9 @@ def _reader_refusing_as_record_error(
 
 def _serialize_sourced_patch(sourced: SourcedPatch, *, status: str) -> dict[str, Any]:
     """One patch's JSON shape, shared by ``preview_record_case``'s preview
-    and (M5-of-2a) the sweep manifest/summary's own per-case
-    ``unchanged_patches`` -- one definition of "what a patch looks like on
-    the wire", not two independently maintained ones."""
+    and the sweep manifest/summary's own per-case ``unchanged_patches`` --
+    one definition of "what a patch looks like on the wire", not two
+    independently maintained ones."""
     return {
         "document": sourced.patch.document,
         "key_path": list(sourced.patch.key_path),
@@ -384,27 +327,12 @@ def _seed_snapshot_root(
     snapshot_root: Path, *, case_root: Path, documents: frozenset[str],
 ) -> None:
     """Copy each target document from the real (staged) case into
-    ``snapshot_root`` before a renderer ever sees it -- P2 fix,
-    docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md,
-    "Owner decisions" dated 2026-09-25.
-
-    ``render_case_files``'s own contract (``plugin_interface.py``) already
-    promises this: "writes nothing outside ``snapshot_root``, an isolated
-    copy core provides." Before this fix, core handed a renderer an EMPTY
-    directory instead -- true for the OpenFOAM renderer only by accident
-    (``openfoam.case_rendering`` reads ``resolved.request.case_root``
-    directly and re-seeds its own copy from there, never trusting core's
-    ``snapshot_root`` to already hold anything), and silently wrong for any
-    renderer that takes the contract at its word (the ``tests/plugins
-    /e2e_record_plugin.py`` fixture: it reads ``snapshot_root/<document>``,
-    finds nothing, and treats an EXISTING multi-key document as brand new --
-    a patch that then holds only the just-touched keys, discarding every
-    sibling key the moment it is committed). A document the case does not
-    yet hold is left unseeded: the renderer legitimately sees it as new,
-    the only situation where ``exists_before=False`` is true, and
-    :func:`omnidriver.core.case_transaction._check_render_exists_before`
-    (the P2 fix's other half) now refuses a renderer that gets this wrong
-    in either direction, before a single byte is written.
+    ``snapshot_root`` before a renderer ever sees it, so a renderer that
+    reads ``snapshot_root/<document>`` (per ``render_case_files``'s own
+    isolated-copy contract) finds the real prior content rather than an
+    empty directory. A document the case does not yet hold is left
+    unseeded: the renderer legitimately sees it as new, the only situation
+    where ``exists_before=False`` is true.
     """
     for document in sorted(documents):
         source = Path(case_root) / document
@@ -423,14 +351,14 @@ def preview_record_case(
     driver_context: "DriverContext",
     inputs: Mapping[str, str | Path] | None = None,
 ) -> dict[str, Any]:
-    """Design §4 steps 1-7 without committing -- ``describe``'s preview.
+    """Stage and resolve a record case without committing -- ``describe``'s
+    preview.
 
     Stages the native case into a scratch directory that is discarded when
     this function returns; the real case (if one already exists at this
-    entry's staged location) is never touched. Returns a JSON-shaped preview:
-    every patch, its status (``"changed"``/``"unchanged"``), its document,
-    key, value, and ``validated`` flag -- the round trip design item 6/the
-    task's own instruction asks for.
+    entry's staged location) is never touched. Returns a JSON-shaped
+    preview: every patch, its status (``"changed"``/``"unchanged"``), its
+    document, key, value, and ``validated`` flag.
     """
     import tempfile
 
@@ -476,11 +404,9 @@ def preview_record_case(
 def _workflow_commands(dag: Mapping[str, Any]) -> dict[str, list[str]]:
     """The command line each step of the DAG a run would build runs, as
     ``describe`` shows it: its command, the default arguments no axis
-    replaced, and the axis's contribution (``WorkflowStep.argv``; owner Q3,
-    2026-09-26). The preview's ``command_arguments`` shows only what axes
-    contributed, so without this a default argument was invisible before a
-    run. Corrected 2026-09-26 (PAR): read from the DAG, not the record's
-    steps, so a parallel request's form is what the preview shows."""
+    replaced, and the axis's contribution (``WorkflowStep.argv``). Read
+    from the DAG, not the record's steps, so a parallel request's form is
+    what the preview shows."""
     return {step["id"]: [step["command"], *step.get("args", ())] for step in dag["steps"]}
 
 
@@ -493,16 +419,11 @@ def _refusal_as_record_error(
     rendering -- its contract's refusal type, e.g. a renderer refusing a
     value the key validator could not see was wrong -- becomes a
     ``TutorialRecordError`` naming the record and the document(s), with the
-    original message and the original exception chained (wave-2 review I2).
+    original message and the original exception chained. A non-``ValueError``
+    is a defect, not a refusal, and still propagates as itself.
 
-    Without this, ``plan --strict`` reported a validator refusal as JSON but a
-    renderer refusal as a traceback on stderr with empty stdout: the shape of
-    a refusal depended on which layer refused. A non-``ValueError`` is a
-    defect, not a refusal, and still propagates as itself.
-
-    ``refused_by`` names the layer; the config-value reader uses it too, with
-    ``document:key`` labels (final review S-M1,
-    :func:`_reader_refusing_as_record_error`)."""
+    ``refused_by`` names the layer; the config-value reader uses it too,
+    with ``document:key`` labels (:func:`_reader_refusing_as_record_error`)."""
     try:
         yield
     except TutorialRecordError:
@@ -525,20 +446,17 @@ def commit_record_case(
     requested_by: str = "tutorial_record",
     inputs: Mapping[str, str | Path] | None = None,
 ) -> RecordCommitResult:
-    """Design §4 steps 1-8's write half: stage, resolve, and commit ONE case
-    in ONE ``commit_case_write`` call (step 7's own words: "everything goes
-    in one ``commit_case_write``").
+    """Stage, resolve, and commit one case in one ``commit_case_write``
+    call.
 
     ``staged_case_root`` persists after this call (unlike
     ``preview_record_case``'s scratch clone) -- it is the sweep's real,
     per-case staging directory, the same one a later workflow-step run reads.
 
-    Returns a :class:`RecordCommitResult` (review finding M5). Its
-    ``write_record`` is ``None`` when every patch was already unchanged
-    (design §4 step 7: "unchanged... not written") -- a legitimate no-op, not
-    a failure, so nothing is committed and no transaction is created -- but
-    ``result.status``/``result.unchanged`` say so explicitly rather than
-    leaving a bare ``None`` for the caller to interpret.
+    Returns a :class:`RecordCommitResult` whose ``write_record`` is ``None``
+    when every patch was already unchanged -- a legitimate no-op, not a
+    failure, so nothing is committed and no transaction is created --
+    reported explicitly via ``result.status``/``result.unchanged``.
     """
     import tempfile
 
@@ -559,13 +477,9 @@ def commit_record_case(
             resolved_inputs=resolved_inputs,
         )
 
-    # `DriverContext.identity` has no default -- it is always present, never
-    # a defensive `getattr(..., None)` away from missing (minor m1: that
-    # fallback, and the "0" * 64 digest placeholder it justified, were dead
-    # code). `identity.resolutions["case_writer"]` names whichever provider
-    # in the composed stack actually answers `case_writer` -- correct even
-    # when that is not the most specific provider, unlike the
-    # `providers[-1].id` guess this replaces.
+    # `identity.resolutions["case_writer"]` names whichever provider in the
+    # composed stack actually answers `case_writer` -- correct even when
+    # that is not the most specific provider.
     identity = driver_context.identity
     adapter_id = identity.resolutions["case_writer"]
     parameters = patches_to_parameters(to_write, owner=adapter_id)
@@ -579,29 +493,11 @@ def commit_record_case(
         resolved = driver_context.capabilities.case_writer.resolve(
             request, driver_context=driver_context,
         )
-    # `snapshot_root` MUST be a directory distinct from `request.case_root`
-    # (module docstring of `openfoam.case_rendering`: "the real case is read
-    # only to seed [a] copy" under `snapshot_root` -- never the same
-    # directory). Passing `staged_case_root` for both used to make every
-    # real (non-test-double) renderer's seeding copy a no-op `shutil.copy2`
-    # of a file onto itself, raising `shutil.SameFileError` the first time
-    # this path ever ran against the real OpenFOAM dictionary renderer
-    # (found running `restitutionCurves`'s pilot sweep end to end, step 4b:
-    # every existing test of this function used a toy case_writer test
-    # double whose own renderer does not perform that seeding copy, so nothing
-    # caught it earlier). A fresh scratch directory, discarded once `rendered`
-    # is captured, matches `cardiacfoam.overrides.commit_case_overrides`'s own
-    # established pattern exactly.
-    #
-    # P2 fix (2026-09-25): that scratch directory is now SEEDED before the
-    # renderer ever sees it -- `_seed_snapshot_root` copies each target
-    # document's CURRENT bytes in from the staged case, so a renderer that
-    # reads `snapshot_root/<document>` (per `render_case_files`'s own "an
-    # isolated copy core provides" contract) finds the real prior content,
-    # not an always-empty directory. The OpenFOAM renderer does not depend
-    # on this (it reads `resolved.request.case_root` directly and seeds its
-    # own copy from there); this closes the gap for every renderer that
-    # takes the framework's own documented contract at its word instead.
+    # `snapshot_root` must be a directory distinct from `request.case_root`:
+    # reusing it makes a real renderer's seeding copy a no-op `shutil.copy2`
+    # onto itself, raising `shutil.SameFileError`. `_seed_snapshot_root`
+    # seeds this scratch copy with the staged case's current bytes before a
+    # renderer ever sees it.
     with tempfile.TemporaryDirectory(prefix="omnidriver-record-render-") as scratch:
         snapshot_root = Path(scratch)
         _seed_snapshot_root(
@@ -629,9 +525,9 @@ def commit_record_case(
 
 
 # ---------------------------------------------------------------------------
-# Item 2: running a committed record case's workflow through the SAME
-# workflow-DAG shape and the SAME planning/run machinery a factory tutorial
-# uses -- no second runner.
+# Running a committed record case's workflow through the same workflow-DAG
+# shape and the same planning/run machinery a factory tutorial uses -- no
+# second runner.
 # ---------------------------------------------------------------------------
 
 
@@ -644,15 +540,12 @@ def _workflow_dag_for_record(
     """The record's selected steps, in the exact ``{"steps": [...]}`` shape
     ``generic_case._workflow_dag_for`` already produces for factory
     tutorials: one entry per step, ``command``/``args`` split, chained by
-    ``depends_on`` in declaration order (design's own worked example runs a
-    meshing step then a solve step, one after another -- core knows neither
-    tool by name).
+    ``depends_on`` in declaration order -- core knows neither tool by name.
 
     An axis's command arguments for a step (``AxisResult.command_arguments``,
-    already merged and conflict-checked by ``resolve_case_patches``, M6) are
+    already merged and conflict-checked by ``resolve_case_patches``) are
     appended after the step's own declared ``command`` tail and the default
-    arguments they do not replace (``WorkflowStep.argv``; owner Q3,
-    2026-09-26).
+    arguments they do not replace (``WorkflowStep.argv``).
     """
     steps_by_id = {step.step_id: step for step in record.workflow_steps}
     dag_steps: list[dict[str, Any]] = []
@@ -675,18 +568,16 @@ def _workflow_dag_for_record(
 
 
 # ---------------------------------------------------------------------------
-# PAR (owner Q6, 2026-09-26): serial versus parallel belongs to the solver's
-# own layer. Core finds the solve step, hands it over, and rewires the DAG.
+# Serial versus parallel belongs to the solver's own layer: core finds the
+# solve step, hands it over, and rewires the DAG.
 # ---------------------------------------------------------------------------
 
 
 #: Where core looks for the processes a batch scheduler allocated to this
-#: job. It is the one execution resource core reads, and it is read only
-#: when a run asks for parallel: a scheduler's allocation is an ambient
-#: fact (CLAUDE.md, "supplied versus discovered"; ENVIRONMENT_CONTRACT §12),
-#: so discovering it is right, provided the place looked in is declared --
-#: this tuple is that declaration. Slurm's ``SLURM_NTASKS`` only, the one
-#: scheduler the owner's campaign runs on; another is one more entry.
+#: job. Read only when a run asks for parallel: a scheduler's allocation is
+#: an ambient fact (see CLAUDE.md's "supplied versus discovered"), so
+#: discovering it is right, provided the place looked in is declared here.
+#: Slurm's ``SLURM_NTASKS`` only; another scheduler is one more entry.
 SCHEDULER_ALLOCATION_VARIABLES = ("SLURM_NTASKS",)
 
 
@@ -694,8 +585,8 @@ SCHEDULER_ALLOCATION_VARIABLES = ("SLURM_NTASKS",)
 class SchedulerAllocation:
     """How many processes the ambient scheduler allocated, and where that
     was read. Handed to the solver layer's parallel form, which decides
-    what an allocation that disagrees with its own count means (always a
-    refusal by name in the shipped layers, never an override)."""
+    what a disagreeing allocation means (a refusal in the shipped layers,
+    never an override)."""
 
     variable: str
     ranks: int
@@ -729,12 +620,9 @@ def _case_value_reader(
     record: TutorialRecord, driver_context: "DriverContext", *, case_root: Path,
     pending: Sequence[SourcedPatch] = (),
 ):
-    """``read_value(document, key_path)`` for the parallel form: the value
-    the run's case will hold -- a ``pending`` (not yet committed) patch's
-    value, else the staged case's, through the stack's config-value reader.
-    The preview passes its uncommitted patches, so ``describe`` shows the
-    form the committed case will get; the commit path passes none, because
-    by then they are on disk."""
+    """``read_value(document, key_path)`` for the parallel form: a
+    ``pending`` (not yet committed) patch's value if present, else the
+    staged case's, through the stack's config-value reader."""
     pending_values = {
         (sourced.patch.document, tuple(sourced.patch.key_path)): sourced.patch.value
         for sourced in pending
@@ -756,11 +644,10 @@ def _apply_parallel_request(
     record: TutorialRecord, dag: dict[str, Any], *, request: Any,
     driver_context: "DriverContext", read_value: Any,
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """``dag`` unchanged and ``None`` for a serial run; otherwise the parallel
-    DAG and what provenance records of the request: the requested value and
-    the scheduler allocation the form was checked against (``None`` outside
-    a scheduler). The allocation is read here, lazily, only for a parallel
-    run."""
+    """``dag`` unchanged and ``None`` for a serial run; otherwise the
+    parallel DAG and what provenance records of the request: the requested
+    value and the scheduler allocation the form was checked against (``None``
+    outside a scheduler)."""
     if request is None:
         return dag, None
     allocation = scheduler_allocation(os.environ)
@@ -780,7 +667,6 @@ def _parallel_workflow_dag(
     allocation: SchedulerAllocation | None,
 ) -> dict[str, Any]:
     """Replace each step whose command the stack declares a solve command
-    (``get_solve_step_commands``, the record's solve step, declared once)
     with the parallel form the stack's ``get_parallel_steps`` returns, and
     make the next step follow the form's last step.
 
@@ -864,7 +750,7 @@ def record_artifact_id(step_id: str, index: int) -> str:
 
 
 def record_step_artifacts(record: TutorialRecord, workflow_step_ids: Sequence[str]) -> tuple[DataArtifact, ...]:
-    """The record's expected artifacts: one per ``produces`` path of each selected step (K4)."""
+    """The record's expected artifacts: one per ``produces`` path of each selected step."""
     selected = set(workflow_step_ids)
     artifacts: list[DataArtifact] = []
     for step in record.workflow_steps:
@@ -894,18 +780,15 @@ def commit_and_build_record_spec(
     inputs: Mapping[str, str | Path] | None = None,
 ) -> tuple[RecordCommitResult, Any]:
     """Stage, commit, and build the ``TutorialSpec`` for one record case --
-    design §4 steps 1-8's write half plus the spec that maps the committed
-    case onto the factory-tutorial workflow shape (``record_case_spec``).
+    the spec that maps the committed case onto the factory-tutorial
+    workflow shape (``record_case_spec``).
 
-    This is the ONE "stage + commit + spec" sequence a record case needs
+    This is the one "stage + commit + spec" sequence a record case needs
     before it can be planned/run through ``strict_planning
     ._strict_plan_for_spec`` -- both ``sweep_runner`` (one case out of a
     sweep) and ``strict_planning.strict_plan`` (a single ``plan --strict
     --entry <record>`` invocation) call this, never each keeping its own
-    copy (P1 fix, docs/superpowers/specs/2026-09-24-tutorials-are-pointers-
-    design.md, "Owner decisions" dated 2026-09-25: "Factor the shared
-    'stage + commit + spec' sequence into ONE function that both
-    sweep_runner and strict_plan call. No duplicate.").
+    copy.
     """
     commit_result = commit_record_case(
         record, cases_root=cases_root, staged_case_root=staged_case_root,
@@ -937,14 +820,11 @@ def record_case_spec(
     """Build the ``TutorialSpec`` a committed record case's workflow runs
     through -- the same ``strict_planning._strict_plan_for_spec``/run-
     document/workflow-runner pipeline a factory tutorial's ``case_folder``
-    spec runs through (item 2: "map the record's steps onto the same
-    workflow DAG shape factory tutorials use... through the existing
-    workflow runner. do not build a second runner").
+    spec runs through, so there is no second runner.
 
     The case's content was already written by ``commit_record_case`` before
-    this is ever called -- design §4 step 7 (commit) happens strictly before
-    step 8 (run). This spec's own ``case_mutation`` is therefore a genuine
-    no-op, never a second write: there is nothing left for it to do.
+    this is ever called, so this spec's own ``case_mutation`` is a genuine
+    no-op, never a second write.
 
     ``metadata["generic_case"] = True`` matches ``generic_case.make_spec``'s
     own convention for a spec with no solver-specific config to validate --
@@ -952,12 +832,12 @@ def record_case_spec(
     not a solver's config vocabulary, so there is no plugin config schema to
     validate a record spec's (empty) ``config`` against.
 
-    PAR (2026-09-26): a ``parallel_request`` (``RecordCommitResult``'s)
-    rewrites the solve step into the stack's parallel form, reading the
-    committed case; it needs the ``driver_context``, and a serial spec does
-    not. ``metadata["parallel"]`` then records the request, and the run
-    document carries it (``resolvedEntry.parallel``), so a serial and a
-    parallel run of one case are told apart by more than their DAG digest.
+    A ``parallel_request`` (``RecordCommitResult``'s) rewrites the solve
+    step into the stack's parallel form, reading the committed case; it
+    needs the ``driver_context``, and a serial spec does not.
+    ``metadata["parallel"]`` then records the request, and the run document
+    carries it (``resolvedEntry.parallel``), so a serial and a parallel run
+    of one case are told apart by more than their DAG digest.
     """
     from .models import TutorialSpec
 

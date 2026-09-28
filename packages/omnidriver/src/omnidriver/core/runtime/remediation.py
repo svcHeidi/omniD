@@ -77,12 +77,9 @@ def build_candidate_remediations(failure_context: dict[str, Any]) -> tuple[Remed
     front from the catalog's typical values, not repaired after the fact.
     """
     try:
-        # Exact diagnostic code matches from the structured catalog.
         hints = _static_hints(failure_context)
         if hints:
             return hints
-
-        # No structured hint found; return empty so the agent can reason.
         return ()
     except Exception:
         return ()

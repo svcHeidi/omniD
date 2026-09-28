@@ -18,12 +18,9 @@ from .transaction_mechanics import fsync_directory as _fsync_directory
 MARKER_NAME = ".omnidriver-remediation-transaction.json"
 
 #: The two directories this module writes under ``output_dir`` (for a
-#: tutorial-record run, ``output_dir`` is ``case_root`` itself). Named once
-#: here, alongside ``MARKER_NAME``, so core's run records
-#: (``core.runtime_records``) can name all three (R1 fix, finding I3: the
-#: marker and ``TRANSACTIONS_DIRECTORY`` were missing from
-#: ``CORE_RUNTIME_RECORDS``; ``CANDIDATES_DIRECTORY`` -- written by
-#: ``_archive_candidate_files`` -- was missing from that fix's own plan too).
+#: tutorial-record run, ``output_dir`` is ``case_root`` itself); named once
+#: here, alongside ``MARKER_NAME``, so ``core.runtime_records`` can name all
+#: three.
 TRANSACTIONS_DIRECTORY = "remediation_transactions"
 CANDIDATES_DIRECTORY = "remediation_candidates"
 
@@ -41,10 +38,6 @@ def _marker(case_root: Path) -> Path:
 
 
 def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
-    """Phase 2 Task 12: delegates to the primitive
-    :mod:`transaction_mechanics` and :mod:`case_transaction` now share --
-    what "goes away" here is the duplicate write-tmp/fsync/rename/fsync-dir
-    implementation this function used to carry itself."""
     _atomic_write_json(path, payload)
 
 

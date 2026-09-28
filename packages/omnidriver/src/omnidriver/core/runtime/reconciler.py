@@ -1,34 +1,7 @@
-"""Post-run artifact reconciliation.
-
-`reconcile_artifacts(case_root, predicted, *, case_id=None)` walks the
-predicted `DataArtifact` set and reports which expected paths exist on
-disk under `case_root`. The resulting `ReconciliationReport` tells the
-agent which predictions were realised, which were not, and for matched
-entries whether the realisation is a file or a directory.
-
-Design notes (rewritten after the 2026-05-21 audit):
-
-* **Matching uses `pathlib.Path.glob`**, not literal `exists()`. The
-  predictor's `path_pattern` may contain placeholders (`{case_id}`,
-  `{instance}`) AND shell-glob wildcards once substituted. Globbing handles
-  both literal paths (degenerate glob) and wildcards uniformly.
-* **Directories are valid match targets.** The monodomain/bidomain/eikonal
-  predictors emit `path_pattern="{instance}"` — an environment-declared
-  instance directory itself, not a file inside it. Earlier code rejected
-  directories via `is_file()`; the new code accepts both kinds and tags each
-  match with `kind: "file" | "dir"`.
-* **`{case_id}` substitution is explicit.** Callers pass `case_id=` when
-  they want a literal substitution. When omitted, `{case_id}` is replaced
-  with the glob wildcard `*` so the reconciler still finds matches across
-  all per-case outputs in a sweep. Earlier code silently stripped
-  `{case_id}` to empty string, producing malformed paths with an empty file
-  prefix that never matched anything.
-* **Instance-indexed iteration** receives instance directory names from the
-  active environment contract. Core does not infer which case directories
-  are instances.
-* **"Extra files"** (on-disk content not advertised by any prediction)
-  remain out of scope. The case tree is large and the value of
-  enumerating every unmodelled file is low.
+"""Post-run artifact reconciliation: matches predicted ``DataArtifact``
+paths -- which may contain placeholders and glob wildcards, and may name
+either a file or a directory -- against what exists on disk under
+``case_root``.
 """
 from __future__ import annotations
 
@@ -98,9 +71,7 @@ def _sha256_of(path: Path) -> str | None:
 
 
 def _entries_for_match(path: Path) -> dict | None:
-    """Build the per-match dict for a single glob hit. Returns None for
-    matches that are neither files nor directories (symlinks to nowhere,
-    etc.) so the caller can skip them silently."""
+    """Build the per-match dict for a single glob hit, or None if it is neither a file nor a directory."""
     if path.is_file():
         entry = {
             "path": str(path),
@@ -127,8 +98,7 @@ def _entries_for_match(path: Path) -> dict | None:
 
 
 def _glob_under(case_root: Path, pattern: str) -> list[dict]:
-    """Glob `case_root` for `pattern` (relative). Returns one match dict
-    per hit. Skips entries that are neither file nor directory."""
+    """Glob `case_root` for `pattern`, returning one match dict per hit (skipping neither-file-nor-dir entries)."""
     results: list[dict] = []
     try:
         hits = sorted(case_root.glob(pattern))
@@ -142,9 +112,7 @@ def _glob_under(case_root: Path, pattern: str) -> list[dict]:
 
 
 def _substitute_case_id(pattern: str, case_id: str | None) -> str:
-    """Replace `{case_id}` with the literal case_id when supplied, else
-    with the glob wildcard ``*`` so the matcher still finds per-case
-    outputs across a sweep."""
+    """Replace `{case_id}` with the literal case_id when supplied, else with the glob wildcard ``*``."""
     return pattern.replace("{case_id}", case_id if case_id is not None else "*")
 
 

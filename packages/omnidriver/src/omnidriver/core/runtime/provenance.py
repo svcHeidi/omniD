@@ -169,13 +169,7 @@ def component_for_path(
     mtime_ns = stat_result.st_mtime_ns
 
     def _build(method: str, strength: str, digest: str | None) -> ProvenanceComponent:
-        """One construction site for all three outcomes.
-
-        The three branches differ only in method/strength/digest. Building them
-        separately invites a later field being added to two of three -- and a
-        component that silently loses a field is exactly the class of defect
-        this module exists to detect.
-        """
+        """One construction site for all three outcomes, so a new field can't be added to only some of them."""
         return ProvenanceComponent(
             kind=resolved_kind,
             path=rel_path,
@@ -204,11 +198,7 @@ def component_for_path(
 
 
 def _component_digest_payload(component: ProvenanceComponent) -> dict[str, Any]:
-    """Content identity ignores mtime; weak metadata identity must include it.
-
-    Metadata remains insufficient evidence of unchanged bytes even when size
-    and timestamp agree. It must not produce a complete content snapshot.
-    """
+    """Content identity ignores mtime; weak metadata identity must include it, since metadata alone is insufficient evidence of unchanged bytes."""
     return {
         "kind": component.kind,
         "path": component.path,
@@ -264,15 +254,7 @@ def snapshot_from_components(
 
 
 def _reject_nondeterministic(value: Any) -> Any:
-    """Refuse to serialise a type whose text form is not guaranteed stable.
-
-    The aggregate digest is only meaningful if it reproduces byte-for-byte for
-    an unchanged case. A permissive ``default=str`` would quietly accept an
-    object whose ``repr`` embeds a memory address, reintroducing exactly the
-    non-determinism the sorting and key-canonicalisation above exist to remove
-    -- and it would do so silently, showing up as a spurious stale_inputs
-    refusal. Fail loudly instead, so the offending type is fixed at its source.
-    """
+    """Refuse to serialise a type whose text form isn't guaranteed stable (e.g. a ``repr`` embedding a memory address), which would silently break the aggregate digest's reproducibility."""
     raise TypeError(
         f"provenance payload contains a value of type {type(value).__name__!r} "
         "with no deterministic serialisation; add explicit handling rather than "
@@ -312,9 +294,9 @@ def compare(
     added/modified, then ``before.components`` for removed, then the two
     synthetic scalar diffs -- source order throughout, never sorted.
 
-    **Why the ``plugin`` diff is stricter than ``stack_identity_mismatch``
-    (added 2026-09-26, final review M4):** ``before.plugin_identity`` and
-    ``after.plugin_identity`` are compared as full dicts here, not just the
+    **Why the ``plugin`` diff is stricter than ``stack_identity_mismatch``:**
+    ``before.plugin_identity`` and ``after.plugin_identity`` are compared as
+    full dicts here, not just the
     ``provider_identity.STACK_IDENTITY_COMPARISON_KEYS`` subset --
     ``resume.checkpoint_snapshot`` builds them from the full
     ``driver_context.identity.to_json()`` (``providers`` and its embedded

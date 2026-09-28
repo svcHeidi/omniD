@@ -1,36 +1,8 @@
 """Enumerate a case's canonical provenance inputs.
 
-Classification is by **consumption, not authorship** (I1). ``constant/polyMesh``
-is written by ``blockMesh`` and then read by the solver -- generated, and
-still a mandatory input. The resolution precedence, first match wins:
-
-1. A DAG step's ``consumes`` declaration.
-2. A plugin ``CaseProvenanceCapability.required_inputs()`` entry.
-3. A plugin ``CaseProvenanceCapability.generated_output_globs()`` match
-   (excludes).
-4. Otherwise: **required input**. This is the safety property, not laziness
-   -- an unclassified file that turns out to matter causes a spurious
-   refusal (recoverable); the reverse is the silent stale replay this whole
-   phase exists to prevent.
-
-Concretely, the top-level roots declared by the active adapter, and every
-input root the plugin declares (``CaseProvenanceCapability.input_roots``; for
-OpenFOAM, the selected start time serially and in each replica) are walked.
-Corrected 2026-09-26 (spec A2): core used to compute the start time and the
-replica walk itself. The exact case scripts named by the DAG are added
-directly. Adapter-declared generated directories and state/manifest files are
-excluded by construction rather than by a Core-owned naming rule.
-
-Step executables -- including an MPI launcher's payload -- are resolved through
-``workflow_runner._resolve_command``, the executor's own resolution, so a
-provenance digest is never computed against a different binary than the one
-that actually runs. A bare command not found locally is looked up on
-``PATH`` (via the same MPI-payload-unwrapping rule
-``environment_preflight`` already uses) and folded into a
-:class:`RuntimeDependency`, then fingerprinted through
-``component_for_runtime_dependency`` -- so a required-but-unresolved
-executable surfaces as ``unavailable``, never silently omitted, exactly like
-a plugin-declared library.
+Classification is by consumption, not authorship: e.g. ``constant/polyMesh``
+is written by ``blockMesh`` and then read by the solver, so it is generated
+and still a mandatory input.
 """
 
 from __future__ import annotations
@@ -57,11 +29,7 @@ if TYPE_CHECKING:
 
 
 def _case_root_dirnames(driver_context: "DriverContext") -> tuple[str, ...]:
-    """Top-level case directories the active plugin's declared case files
-    live under, derived from the first path segment of each ``case_files``
-    rule -- e.g. ``{"system", "constant"}`` for the OpenFOAM plugin. Not
-    hardcoded, so a plugin for a different environment (different top-level
-    directory names entirely) is walked correctly without a core change."""
+    """Top-level case directories the active plugin's declared case files live under, derived from each ``case_files`` rule's first path segment."""
     rules = driver_context.capabilities.case_files.all_rules()
     segments = {Path(rule.path).parts[0] for rule in rules if rule.path}
     return tuple(sorted(segments))
@@ -102,9 +70,8 @@ def _component_for_resolved_input(
 ) -> ProvenanceComponent | None:
     """A plugin-resolved required input, fingerprinted -- or, for a
     ``required`` input that failed to resolve, an explicit ``unavailable``
-    component (I2/I5). A ``required=False`` input with no resolved path was
-    genuinely absent and optional: nothing was going to be consumed, so
-    nothing is fingerprinted."""
+    component. A ``required=False`` input with no resolved path was
+    genuinely absent and optional: nothing is fingerprinted."""
     path = resolved_input.path
     if path is None:
         if not resolved_input.required:
@@ -238,10 +205,14 @@ def enumerate_case_inputs(
     ``case_root`` consumes: case files, case-local scripts, step executables,
     and plugin-declared runtime dependencies. Excludes generated outputs.
 
-    Never raises on an incomplete or minimal case (e.g. no ``constant/``) --
-    every filesystem read here degrades to an ``unavailable`` component via
-    ``component_for_path``/``component_for_runtime_dependency`` rather than
-    propagating an exception, consistent with those functions' own contract.
+    Resolution precedence, first match wins: a DAG step's ``consumes``
+    declaration; a plugin ``required_inputs()`` entry; a plugin
+    ``generated_output_globs()`` match (excluded); otherwise required
+    input -- an unclassified file must never look like a generated output.
+
+    Never raises on an incomplete or minimal case: every filesystem read
+    here degrades to an ``unavailable`` component rather than propagating
+    an exception.
     """
     case_root = Path(case_root)
     environment = dict(os.environ) if env is None else dict(env)
@@ -257,13 +228,11 @@ def enumerate_case_inputs(
     components: dict[tuple[str, str], ProvenanceComponent] = {}
     add = _ComponentAdder(components)
 
-    # -- every top-level directory the active plugin declares a case file
+    # Every top-level directory the active plugin declares a case file
     # under, plus every input root the plugin declares (for OpenFOAM: the
-    # selected start time, serially and in each replica, I9), classified
-    # by precedence steps 1 (consumes), 3 (generated_output_globs) and 4
-    # (fallback required). Step 2 (plugin required_inputs) is applied
-    # uniformly below instead, since a resolved input's path need not fall
-    # under any of these directories.
+    # selected start time, serially and in each replica). Plugin
+    # required_inputs are applied uniformly below instead, since a
+    # resolved input's path need not fall under any of these directories.
     walk_roots = [case_root / d for d in _case_root_dirnames(driver_context)]
     walk_roots.extend(
         case_root / root

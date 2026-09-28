@@ -1,29 +1,9 @@
 """Compose ``RuntimeDependency`` declarations into ``ProvenanceComponent``s.
 
-A runtime dependency's resolved path is not under any case root -- a library
-sits in ``$FOAM_USER_LIBBIN``, a case-local ``.so`` sits under the case's own
-``platforms/`` tree, and the solver binary sits wherever ``PATH`` says.
-``component_for_path`` fingerprints relative to a root the path is *under*,
-so this module fingerprints each dependency relative to its own parent
-directory and then restores the declared dependency name as the component's
-identity -- a library found via a different search directory, or under a
-different platform extension, must still compare as the same dependency
-rather than reading as added+removed.
-
-Every dependency always produces a component, present or not. An
-unresolved dependency (``path is None``) always degrades to
-``strength="unavailable"``, whether or not it was ``required``: reporting
-absence, never omitting it, is the fix for the incident this module exists
-to prevent (I3) -- a required-but-missing dependency must surface, not
-silently vanish the way the old ``tuple[Path, ...]`` contract allowed. An
-unavailable *optional* dependency (e.g. libelectroMechanicalModels absent in
-the maintainer's lightweight default build) is not an error, but it still
-shows up and still makes any snapshot built from it partial per I5 -- "the
-honest outcome" the plan calls for. What a resume does with that partiality
-is a later task's resume-policy question, not this module's.  A declared
-``#includeIfPresent`` is different: its absence is itself a known state, not
-a failed lookup. ``component_for_verified_absence`` records that state as a
-complete witness, and rechecks it at fingerprint time to avoid a race.
+A dependency's resolved path is not under any case root, so each is
+fingerprinted relative to its own parent directory and the declared
+dependency name is restored as the component's identity -- a library found
+via a different search directory must still compare as the same dependency.
 """
 
 from __future__ import annotations

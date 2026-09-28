@@ -1,13 +1,8 @@
 """Where a workflow step ran: ambient facts, recorded, never interpreted.
 
-Each step's state (``workflow_state.json``, ``steps[].host``) carries the
-machine's name, OS, CPU and core count, the scheduler and threading variables
-that are set (read from the declared prefixes below, the same ambient kind
-``record_execution.SCHEDULER_ALLOCATION_VARIABLES`` reads), the values of the
-stack's own declared environment variables (``environment.supplied`` in each
-provider's manifest), and, for a step run under an MPI launcher, that
-launcher's path, version and rank count. Nothing here is supplied or
-defaulted: an absent fact is absent.
+Machine/OS/CPU identity, ambient scheduler/threading variables, declared
+stack variables, and MPI launcher identity when applicable. Nothing here is
+supplied or defaulted: an absent fact is absent.
 """
 from __future__ import annotations
 

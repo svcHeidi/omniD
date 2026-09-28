@@ -21,10 +21,10 @@ if TYPE_CHECKING:
     from ..plugin_interface import DriverContext
 
 
-#: The workflow-state record's filename, named once here (final review M6,
-#: 2026-09-26) instead of restated as a literal at each write/read site
-#: (``cli.py``, ``postprocess_phase.py``, ``step_candidate.py``,
-#: ``sweep_runner.py``, ``execution_context.py``, ``run_discovery.py``,
+#: The workflow-state record's filename, named once here instead of
+#: restated as a literal at each write/read site (``cli.py``,
+#: ``postprocess_phase.py``, ``step_candidate.py``, ``sweep_runner.py``,
+#: ``execution_context.py``, ``run_discovery.py``,
 #: ``runtime_records.CORE_RUNTIME_RECORDS`` and ``fresh._OMNIDRIVER_MARKER_NAMES``).
 STATE_FILENAME = "workflow_state.json"
 
@@ -115,14 +115,9 @@ def _run_workflow_locked(
 ) -> WorkflowRunOutcome:
     """Run pending steps to completion, retrying retryable failures.
 
-    The retry decision block (classify -> policy -> backoff -> re-run) is the
-    extension point for a future remediation callback, which would drop in
-    immediately before the re-run. This path performs no remediation.
-
-    ``max_total_attempts`` caps the number of step executions across the whole
-    invocation, including successes and retries; resumed calls get a fresh budget.
-    Zero executes no steps. ``None`` disables the ceiling, leaving only the
-    per-step ``max_attempts`` bound in force.
+    ``max_total_attempts`` caps step executions across the whole call, including
+    retries; zero executes no steps and ``None`` leaves only each step's own
+    ``max_attempts`` in force.
     """
     if max_total_attempts is not None and max_total_attempts < 0:
         raise ValueError("max_total_attempts must be non-negative")
@@ -133,8 +128,7 @@ def _run_workflow_locked(
 
     while workflow_state.current_step_id is not None and workflow_state.status == "pending":
         if max_total_attempts is not None and total_attempts >= max_total_attempts:
-            # A zero budget must never dispatch, and a successful step must not
-            # bypass the ceiling when another step becomes ready.
+            # A zero budget must never dispatch, even once another step is ready.
             _atomic_write_json(resolved_state_path, workflow_state.to_json())
             break
         step_id = workflow_state.current_step_id
@@ -177,8 +171,7 @@ def _run_workflow_locked(
             and step_state.attempt < max_attempts
             and budget_available
         ):
-            # Persist a resumable state so a crash during backoff resumes into a
-            # retry rather than a refused "failed" state.
+            # Persisted before sleeping, so a crash during backoff resumes into a retry.
             resumable = replace_step_state(
                 workflow_state,
                 step_state,
