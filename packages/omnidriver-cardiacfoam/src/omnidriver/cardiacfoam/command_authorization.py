@@ -35,46 +35,23 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
-# Authorization is split into two accessors because the two facts are
-# different, and core consumes them differently:
-#
-#   solver_commands()    -- this plugin's artifact-producing solver binaries.
-#                           Authorized to run AND eligible to be credited with
-#                           a run's unclaimed expected artifacts.
-#   auxiliary_commands() -- other plugin-specific commands authorized to run
-#                           but which do not produce the run's artifacts.
-#
-# Their union is the plugin's accept-surface contribution; only
+# Split in two because core consumes them differently: only
 # solver_commands() feeds the artifact-producer heuristic in
-# normalize_workflow_dag. Conflating them would credit a post-processing
-# utility with the solver's outputs, and `produces` is enforced post-step
-# (workflow_runner's missing_artifacts check), so a silent solver would blame
-# the utility.
-#
-# These are NOT core knowledge: a different plugin authorizes different
-# commands.
+# normalize_workflow_dag, so conflating them would credit a post-processing
+# utility with the solver's outputs. Their union is the plugin's
+# accept-surface contribution; neither is core knowledge.
 CARDIAC_SOLVER_COMMANDS = frozenset({"cardiacFoam"})
 
 # gradientReconstructionOrder (applications/test/gradientReconstructionOrder)
 # is listed here rather than coming through utility_manifests() because it
-# ships no utility.manifest.toml -- yet it is a live workflow step in
-# manufactured_eikonal_ecg.py's gradient_reconstruction=True path, appended
-# after the solve step (see that module's _workflow_dag_for).
+# ships no utility.manifest.toml, though it is a live workflow step in
+# manufactured_eikonal_ecg.py's gradient_reconstruction=True path.
 #
-# bathBidomainInterfaceMetrics used to be listed here for the same reason
-# (no manifest); it now has one (see utilities/bathBidomainInterfaceMetrics/
-# utility.manifest.toml) and is authorized through utility_manifests()
-# instead -- listing it here too would be redundant, not wrong (see
-# runtime/workflow.py: plugin_commands and utilities are both checked, not
-# mutually exclusive), so it was dropped rather than left as dead weight.
-#
-# The error_localisation_analysis=True path's other two steps need no entry
-# here: `postProcess` is already core-authorized generically
-# (CORE_NEUTRAL_COMMANDS in core/runtime/workflow.py), and the analysis
-# script itself is invoked by its own relative path (containing "/"), which
-# command_authorization does not gate at all -- see
-# workflow_runner._resolve_command: a "/" in the command is used verbatim as
-# an explicit opt-in, the same as any case's own Allrun/Allclean script.
+# The error_localisation_analysis=True path's other two steps need no entry:
+# `postProcess` is core-authorized generically (CORE_NEUTRAL_COMMANDS), and
+# the analysis script is invoked by its own relative path, which
+# workflow_runner._resolve_command treats as an explicit opt-in regardless of
+# authorization, the same as any case's own Allrun/Allclean script.
 CARDIAC_AUXILIARY_COMMANDS = frozenset({
     "gradientReconstructionOrder",
 })

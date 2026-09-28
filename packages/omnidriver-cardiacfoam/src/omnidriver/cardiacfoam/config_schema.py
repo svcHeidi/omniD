@@ -67,10 +67,8 @@ CONFIG_SCHEMA: dict[str, Any] = {
                 },
                 "ionicHeterogeneity.field": {"type": "string"},
                 "ionicHeterogeneity.mode": {
-                    # Corrected 2026-09-26 (catalog drift fix, final review
-                    # AB Q7): native c7d6dd551 removed the transmuralBands
-                    # mode (and endoMInterface/mEpiInterface, which only it
-                    # used); only namedRegions and cellZoneRegions remain
+                    # namedRegions and cellZoneRegions only: native removed
+                    # transmuralBands, endoMInterface and mEpiInterface
                     # (ionicHeterogeneityOrchestrator.C).
                     "type": "string",
                     "enum": ["namedRegions", "cellZoneRegions"],

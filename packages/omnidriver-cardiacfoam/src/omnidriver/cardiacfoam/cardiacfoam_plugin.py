@@ -32,7 +32,6 @@ from functools import lru_cache
 from pathlib import Path
 from omnidriver.core.plugin_interface import SolverPlugin, CapabilityManifest
 
-# Note: now imported from the local plugin catalog instead of dict_entries
 from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS, HETEROGENEITY_MODELS
 from omnidriver.cardiacfoam.common_dict_entries import (
     CONTROL_DICT_ENTRIES,
@@ -82,9 +81,6 @@ class CardiacFoamPlugin:
     def get_configured_environment(self, env, driver_context):
         """Apply this plugin's declared backend and build-manifest contract.
 
-        Formerly a private ``configure_execution_environment`` hook that
-        `openfoam_environment.py` reached for by hand, via a `getattr` on the
-        context's selected provider. The stack now composes this directly:
         `provider_stack.py` classifies ``get_configured_environment`` as
         ``chain``, so when this provider is composed with
         openfoam-environment's, that provider's (generic, no-op)
@@ -165,23 +161,13 @@ class CardiacFoamPlugin:
         })
 
     def get_capabilities(self) -> CapabilityManifest:
-        """
-        Return cardiacFoam's domain catalogues: models, solvers, etc.
+        """Return cardiacFoam's domain catalogues: models, solvers, etc.
 
-        **Changed by Task 10 (2026-09-22).** This used to build the WHOLE
-        capability manifest itself (``allowed_commands``/``samplable_fields``,
-        by calling core's own manifest builder directly) and hand it back to
-        core, which just returned it unchanged. Since ``get_capabilities`` is a
-        ``single``-shape composed member, that meant only this plugin's own
-        self-authored answer ever won in a stack -- a companion environment
-        provider's ``environment_commands`` were discarded entirely, always
-        replaced by the ``frozenset()`` this method passed in their place.
-        Core (``plugin_capabilities._CapabilityManifestAdapter.manifest``)
-        now builds that base itself from the composed
+        Core builds the base capability manifest itself, composing
         ``command_authorization``/``case_introspection``/
-        ``case_runtime_conventions`` reads over the SAME provider stack, and
-        merges in only what follows: the domain catalogues core has no way
-        to compose, because they are cardiacFoam's own vocabulary.
+        ``case_runtime_conventions`` over the same provider stack; this
+        method merges in only the domain catalogues core has no way to
+        compose, because they are cardiacFoam's own vocabulary.
         """
         manifest: dict = {"heterogeneity_models": HETEROGENEITY_MODELS}
         # Copy on the way out, as get_utility_manifests() already does: these
@@ -234,7 +220,7 @@ class CardiacFoamPlugin:
         return telemetry_source_globs(command)
 
     def get_extra_provenance_paths(self, case_root) -> tuple:
-        """Extra inputs Phase 2 must digest beyond system/ and constant/."""
+        """Extra inputs the provenance snapshot must digest beyond system/ and constant/."""
         from omnidriver.cardiacfoam.runtime_evidence import (
             extra_provenance_paths,
         )
@@ -249,18 +235,17 @@ class CardiacFoamPlugin:
 
         return artifact_value_reader(artifact_format)
 
-    # -- CaseWriterCapability (Phase 2 Task 9) --------------------------------
+    # -- CaseWriterCapability --------------------------------------------
     def get_supported_mutation_modes(self) -> "frozenset[str]":
-        #: ``clone_and_patch`` added 2026-09-23 (Phase 3 Task 6): the eleven
-        #: tutorials that patch an already-rendered case now build a
-        #: `CaseMutationRequest` in this mode, resolved by
+        #: ``clone_and_patch``: a tutorial that patches an already-rendered
+        #: case builds a `CaseMutationRequest` in this mode, resolved by
         #: ``overrides.resolve_patch_mutation`` below.
         return frozenset({"synthesize", "clone_and_patch"})
 
     def resolve_case_mutation(self, request, *, driver_context):
         """Delegate to this package's semantic owner for the request's mode:
         ``dict_builder`` for a from-scratch case synthesis, ``overrides``
-        for an edit to a case that already exists (Phase 3 Task 6)."""
+        for an edit to a case that already exists."""
         del driver_context
         if request.mode == "synthesize":
             from omnidriver.cardiacfoam.dict_builder import resolve_synthesis_mutation
@@ -354,9 +339,7 @@ class CardiacFoamPlugin:
 
     def get_record_key_validator(self):
         """This plugin's one ``RecordKeyValidationCapability`` answer for a
-        cardiac stack (design doc
-        ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md``
-        §5, step 4a). See ``record_key_validation.py``'s module docstring
+        cardiac stack. See ``record_key_validation.py``'s module docstring
         for the three rules it implements."""
         from omnidriver.cardiacfoam.record_key_validation import record_key_validator
 
@@ -371,9 +354,9 @@ class CardiacFoamPlugin:
         return record_key_catalog(case_root)
 
     def get_agent_guidance(self) -> tuple:
-        """What this stack's validator and catalogues enforce, and the owner's
-        pre-processing rule (added 2026-09-26, review 54b M11), stated for an
-        agent before it writes a study (``guidance.md``; conformance C10).
+        """What this stack's validator and catalogues enforce, and the
+        pre-processing rule, stated for an agent before it writes a study
+        (``guidance.md``; conformance C10).
         The case's own README reaches the agent separately, through the
         ``case.documentation`` role this plugin's profile declares."""
         from importlib import resources
@@ -382,19 +365,16 @@ class CardiacFoamPlugin:
         return ({"title": "cardiacFOAM: how omniD checks a study's keys, and where the mesh comes from", "text": text},)
 
     def get_tutorial_records(self) -> dict:
-        """This plugin's ``TutorialRecordCapability`` answer (design doc
-        ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md``
-        §3, step 4b -- the pilot, ``restitutionCurves``). Every record this
-        package registers, aggregated by ``records/__init__.py``."""
+        """This plugin's ``TutorialRecordCapability`` answer: every record
+        this package registers, aggregated by ``records/__init__.py``."""
         from omnidriver.cardiacfoam.records import TUTORIAL_RECORDS
 
         return TUTORIAL_RECORDS
 
     def get_generic_case_factory(self):
-        # Step S6 (2026-09-28): replaces the deleted ``get_tutorial_catalog``'s
-        # smuggled ``"make_generic_case_spec"`` key -- this plugin's own
-        # marker-aware case-folder wrapper, supplying cardiacFOAM's dictionary
-        # files and mutation callback in place of core's neutral default.
+        # This plugin's own marker-aware case-folder wrapper, supplying
+        # cardiacFOAM's dictionary files and mutation callback in place of
+        # core's neutral default.
         from omnidriver.cardiacfoam.generic_case import make_generic_case_spec
 
         return make_generic_case_spec

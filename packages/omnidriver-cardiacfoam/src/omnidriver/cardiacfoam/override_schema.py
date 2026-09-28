@@ -71,21 +71,18 @@ def config_schema(
     Returns a machine-readable description of the --config JSON format accepted
     by the driver, including a worked example specific to this tutorial.
     """
-    # Collect spec-level parameters (exclude infrastructure keys)
     spec_params = {
         k: v
         for k, v in make_spec_info.get("parameters", {}).items()
         if k not in _INFRASTRUCTURE_SPEC_KEYS
     }
 
-    # Build a minimal worked example
     example_section: dict[str, Any] = {}
-    # Pick the first non-required spec param that has a readable default for demo
+    # First spec param with a readable default, as a representative demo value.
     for param_name, param_info in spec_params.items():
         if "default" in param_info and param_info["default"] is not None:
             example_section[param_name] = param_info["default"]
             break
-    # Always show an electro_property_overrides example with real driver_path keys
     example_section["electro_property_overrides"] = {
         "$ELECTRO_MODEL_COEFFS.maxSteps": "1000",
     }

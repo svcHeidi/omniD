@@ -1,102 +1,76 @@
 """``RecordKeyValidationCapability``'s one composed answer for a cardiac
-stack (design doc
-``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md`` §5,
-step 4a: "the cardiac stack support that every tutorial record needs before
-the first real record exists").
+stack.
 
-``get_record_key_validator`` is a ``single``-shape composed member
-(``provider_stack._SHAPE["get_record_key_validator"] == "single"``): exactly
-ONE provider's answer wins for a whole composed stack, most-specific first.
+``get_record_key_validator`` is a ``single``-shape composed member: exactly
+one provider's answer wins for a whole composed stack, most-specific first.
 cardiacFOAM is that provider on any stack it joins, so the one function this
 module builds must answer for EVERY document such a stack might see -- both
 the catalogued cardiac documents (``constant/electroProperties``,
 ``constant/physicsProperties``) AND the OpenFOAM-owned documents this
-package has no catalog for at all (``system/...``) -- not just the cardiac
+package has no catalog for at all (``system/...``), not just the cardiac
 half. It cannot delegate the OpenFOAM half to the OpenFOAM environment
 provider's own answer, because composition never runs two ``single``-shape
 answers together.
 
-Three outcomes, exactly the owner's three rules for this task:
+Three outcomes:
 
-1. ``constant/electroProperties`` or ``constant/physicsProperties`` (the two
-   documents ``cardiacfoam_plugin.py`` catalogues at all, per
-   ``ELECTRO_PROPERTY_ENTRY_GROUPS``/``PHYSICS_PROPERTY_ENTRIES``) -- the
+1. ``constant/electroProperties`` or ``constant/physicsProperties`` -- the
    literal key path is matched against that catalog, reusing
-   ``overrides._catalog_entry_for`` (the SAME lookup
-   ``resolve_entry_overrides`` already uses, not a second implementation of
-   it) for the actual literal-path/dynamic-path matching. A ``<solver>Coeffs``
-   first segment stands for the catalog's own ``$ELECTRO_MODEL_COEFFS``
-   token; which first-segment spellings are legal is derived from the
-   catalog's OWN ``myocardiumSolver`` entry's ``enum_values`` (never a
-   hard-coded list -- see ``_myocardium_solver_coeffs_names``). The value is
-   then checked against the matched entry's declared ``value_kind`` via
-   ``contracts.dictionary.validate_value_shape`` -- shape only, the same
-   scope every other consumer of that function stops at (no ``enum_values``
-   membership check, no ``applicable_when``/``forbidden_when`` evaluation:
-   design step 4a's own wording is "checked against the entry's value_kind
-   using the existing shape validation", not the whole catalog semantics).
-   ``validated=True``. An uncatalogued key, or a value that does not fit the
-   matched entry's declared shape, is refused BY NAME (raises, naming the
-   document and key) -- never silently written and never silently given an
-   invented kind, the same posture ``resolve_entry_overrides`` already
-   established for the override channel. Added 2026-09-26 (5.4a, owner Q4):
-   a map at a key whose members the catalogue declares as one dynamic
-   ``<name>`` segment (``bathPotentialDomain.groundPatches.<patch>``) is
-   checked member by member against that entry and validates as
+   ``overrides._catalog_entry_for`` (the same lookup ``resolve_entry_overrides``
+   already uses) for the literal-path/dynamic-path matching. A
+   ``<solver>Coeffs`` first segment stands for the catalog's own
+   ``$ELECTRO_MODEL_COEFFS`` token; which first-segment spellings are legal
+   is derived from the catalog's own ``myocardiumSolver`` entry's
+   ``enum_values`` (never a hard-coded list -- see
+   ``_myocardium_solver_coeffs_names``). The value is then checked against
+   the matched entry's declared ``value_kind`` via
+   ``contracts.dictionary.validate_value_shape`` -- shape only, no
+   ``enum_values`` membership check, no ``applicable_when``/``forbidden_when``
+   evaluation. ``validated=True``. An uncatalogued key, or a value that does
+   not fit the matched entry's declared shape, is refused by name -- never
+   silently written and never silently given an invented kind, the same
+   posture ``resolve_entry_overrides`` already established for the override
+   channel. A map at a key whose members the catalogue declares as one
+   dynamic ``<name>`` segment (``bathPotentialDomain.groundPatches.<patch>``)
+   is checked member by member against that entry and validates as
    ``"mapping"``; the writer replaces the whole sub-dictionary with it.
 2. Any other document under ``system/`` -- accepted, ``validated=False``.
-   This package owns no OpenFOAM key catalog (design §5's own exception --
-   "OpenFOAM-owned keys... have NO catalog today... no partial OpenFOAM
-   catalog is to be invented"), so it writes/compares the key as asked with
-   no opinion on whether it is a real key the C++ reads, but a genuine
-   opinion on its Python-level SHAPE (inferred from the value's own type),
-   so the case-value comparator downstream (``CaseValueComparisonCapability``)
-   has something typed to work with rather than a placeholder. Note this is
-   a deliberate simplification, not an oversight:
-   ``common_dict_entries.CONTROL_DICT_ENTRIES`` DOES catalogue
-   ``system/controlDict`` keys such as ``deltaT`` -- but for a different
-   capability entirely (``run_document_config.py``'s ``--config`` schema,
-   the CLI override namespace), not this one. The owner's own instruction
-   for this task names ``controlDict`` explicitly as one of the "OpenFOAM-
-   owned keys... [with] NO catalog today" for the tutorial-record pipeline,
-   and the required native test (``system/controlDict:deltaT`` validates
-   ``False``) confirms it: this validator checks only the two ``constant/``
-   documents above against a catalog, never ``system/controlDict`` against
-   ``CONTROL_DICT_ENTRIES``, even though that catalog exists.
+   This package owns no OpenFOAM key catalog, so it writes/compares the key
+   as asked with no opinion on whether it is a real key the C++ reads, but a
+   genuine opinion on its Python-level shape (inferred from the value's own
+   type), so the case-value comparator downstream
+   (``CaseValueComparisonCapability``) has something typed to work with
+   rather than a placeholder. Deliberate, not an oversight:
+   ``common_dict_entries.CONTROL_DICT_ENTRIES`` does catalogue
+   ``system/controlDict`` keys such as ``deltaT``, but for a different
+   capability (``run_document_config.py``'s ``--config`` schema), not this
+   one -- this validator checks only the two ``constant/`` documents above
+   against a catalog, never ``system/controlDict`` against
+   ``CONTROL_DICT_ENTRIES``.
 
-   **Corrected 2026-09-25** (the ``restitutionCurves`` real-run test's own
-   regression): ``_infer_unvalidated_value_kind`` only ever handled
-   ``bool``/``int``/``float``, falling back to ``"word"`` for everything
-   else -- including a ``str`` containing whitespace, which ``"word"``'s own
-   shape check refuses. That combination was never exercised until
-   ``block_mesh_resolution_axis`` first produced a real, COMMITTED (not
-   merely previewed) value for a ``system/``-owned key -- previously always
-   a pre-joined space-separated string. The axis itself no longer produces
-   that shape (see its own module docstring); this function now also
-   infers ``integer_list``/``scalar_list`` for a plain ``list``/``tuple``,
-   which is what a typed multi-value ``system/``-owned key actually looks
-   like, keeping the same "type only, no catalog opinion" posture for the
-   new branch.
-3. Anything else -- refused BY NAME (raises). Deliberate, and closes a real
-   hole: without it, a typo like ``constant/electroPropertie`` (missing the
-   final ``s``) would fall through as "an OpenFOAM-owned key, unvalidated but
+   ``_infer_unvalidated_value_kind`` infers ``integer_list``/``scalar_list``
+   for a plain ``list``/``tuple``, in addition to ``bool``/``int``/``float``
+   (falling back to ``"word"``): a ``system/``-owned key can be a real,
+   committed typed multi-value (e.g. from ``block_mesh_resolution_axis``),
+   not only a pre-joined space-separated string.
+3. Anything else -- refused by name. Deliberate, and closes a real hole:
+   without it, a typo like ``constant/electroPropertie`` (missing the final
+   ``s``) would fall through as "an OpenFOAM-owned key, unvalidated but
    accepted" instead of being the catalog miss it actually is.
 
-**The catalogue** (``record_key_catalog``, added 2026-09-26, conformance
-Task 14 step 4) is the same three rules, listed for one case so an agent can
-read them (``SolverPlugin.get_record_key_catalog``; the grammar is core's
+**The catalogue** (``record_key_catalog``) is the same three rules, listed
+for one case so an agent can read them
+(``SolverPlugin.get_record_key_catalog``; the grammar is core's
 ``runtime.record_surface``): rule 1's two catalogues, with the case's own
 ``<solver>Coeffs`` in place of ``$ELECTRO_MODEL_COEFFS``; rule 2's
 ``system/`` documents, each listed once as open (``validated: False``); and,
 by omission, rule 3. It reads the case; the validator below does not.
 
 No case root, no filesystem read. The ``<solver>Coeffs`` first-segment
-substitution above is a SYNTACTIC and CATALOG-VOCABULARY check only (it
+substitution above is a syntactic and catalog-vocabulary check only (it
 never reads which ``myocardiumSolver`` value is actually active in the
 staged case) -- the same as ``overrides._catalog_entry_for``'s own existing
-behaviour, which the real ``resolve_entry_overrides`` call sites already
-rely on without ever reading the case for this purpose either. Core's
-``DirectKeyValidator`` contract (``tutorial_records.py``) was therefore left
+behaviour. Core's ``DirectKeyValidator`` contract was therefore left
 unchanged: no staged-case-root parameter was added, because nothing this
 validator needs to do requires reading the case.
 """
@@ -197,11 +171,9 @@ def _declares_members(document: str, key_path: "tuple[str, ...]") -> bool:
     )
 
 
-#: Step S (2026-09-28), One reality: this used to be this module's own
-#: ``_infer_unvalidated_value_kind``, reimplementing exactly what
-#: cardiacCore's validator also needs for its own ``system/`` documents.
-#: Both now share ``omnidriver-openfoam``'s one copy -- the OpenFOAM half of
-#: rule 2, never a second variant (CLAUDE.md, "One reality").
+#: Shared with cardiacCore's own ``system/`` documents validator via
+#: ``omnidriver-openfoam``'s one copy -- the OpenFOAM half of rule 2, never a
+#: second variant (CLAUDE.md, "One reality").
 _infer_unvalidated_value_kind = infer_unvalidated_value_kind
 
 
@@ -219,9 +191,9 @@ def record_key_validator(
             # A whole map at a key whose members the catalog declares as a
             # dynamic ``<name>`` segment (``bathPotentialDomain.groundPatches
             # .<patch>``): each member is checked as that entry, and the map
-            # is written whole, replacing the sub-dictionary (owner Q4,
-            # 2026-09-26; the writer replaces rather than merges, logged as
-            # BB4 in docs/solver-learning/cardiacfoam.md).
+            # is written whole, replacing the sub-dictionary (the writer
+            # replaces rather than merges, logged as BB4 in
+            # docs/solver-learning/cardiacfoam.md).
             for member, member_value in value.items():
                 record_key_validator(document, key_path + (str(member),), member_value)
             return "mapping", True

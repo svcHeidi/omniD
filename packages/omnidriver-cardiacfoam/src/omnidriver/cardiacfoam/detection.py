@@ -22,11 +22,7 @@ def detect_electro_coeffs_scope(electro_properties_path: Path) -> str:
 
 
 def _coeffs_scope(electro_properties_path: Path):
-    """Return the FoamFile.SubDict for the active <solver>Coeffs block.
-
-    Raises the same KeyError shape the pre-migration scanner did if the
-    scope itself is missing or the file cannot be parsed at all.
-    """
+    """Return the FoamFile.SubDict for the active <solver>Coeffs block."""
     scope = detect_electro_coeffs_scope(electro_properties_path)
     try:
         return FoamFile(electro_properties_path)[scope]
@@ -54,10 +50,8 @@ def detect_ionic_export_list(
 ) -> tuple[str, ...] | None:
     """Return the names declared in <solver>Coeffs.outputVariables.ionic.export ( ... ).
 
-    Scoped to the active solver's Coeffs block -- the pre-migration regex
-    searched the whole file, so an export list belonging to an inactive
-    solver's Coeffs block could leak in. This is a deliberate behaviour
-    correction alongside the parser migration, not an accidental change.
+    Scoped to the active solver's Coeffs block, so an export list belonging to
+    an inactive solver's Coeffs block cannot leak in.
     """
     try:
         coeffs = _coeffs_scope(electro_properties_path)

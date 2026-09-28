@@ -1,10 +1,6 @@
-"""cardiacFOAM's own views of its dictionary vocabulary.
-
-Moved from core's ``omnidriver.dict_entries`` 2026-09-26 (spec
-2026-09-26-core-generality-design.md §2, A6). A list of
-ionic-heterogeneity models and the electroProperties groupings are cardiac
-vocabulary, and core names none. The bodies are unchanged.
-``all_documented_driver_paths`` stays in core: it is solver-neutral.
+"""cardiacFOAM's own views of its dictionary vocabulary: the ionic-heterogeneity
+models and electroProperties groupings are cardiac-specific, so core names
+none of them.
 """
 from __future__ import annotations
 

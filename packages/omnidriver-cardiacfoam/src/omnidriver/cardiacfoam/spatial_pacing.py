@@ -21,14 +21,6 @@ def generate_spatial_stimulus_lists(
     DI90 protocol schedules S2 at `t(repolarization90) + requestedDI90`,
     which is not a round number and does not survive being reconstructed
     from an interval.
-
-    Corrected 2026-09-27 (tutorials-are-pointers plan §5e, step 5.2): this
-    used to render each list as pre-joined, ``.12g``-formatted OpenFOAM
-    text -- a direct-write-channel concern from before this module's only
-    caller was a catalog-validated axis. The record-key-validated write
-    channel formats floats itself with full round-trip precision (Python's
-    own ``repr``), so the ``.12g`` precision fix this module was written
-    for is now the renderer's job, not this module's.
     """
     count = len(times_s)
     return {

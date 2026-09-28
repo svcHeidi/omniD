@@ -7,8 +7,7 @@ The native ``Allrun``'s commands, ``blockMesh`` then ``cardiacFoam``. The
 both its pacing modes (coupling-interval and requested-DI90), reading the
 stimulus geometry/duration/intensity and the S1 interval from the case's
 own native defaults at resolve time rather than restating them. A third
-``postprocess`` step runs the native ``Allrun.post`` (owner decision (b)):
-the axis passes the case's own resolved S1/S2 split to it as
+``postprocess`` step runs the native ``Allrun.post``: the axis passes the case's own resolved S1/S2 split to it as
 ``--n-s1``/``--n-s2``/``--reference-repolarization90-s``, since
 ``case_record.json`` never carries resolved axis values for a single,
 non-swept run. What each step reads/writes, the native defaults this axis
@@ -224,8 +223,7 @@ RECORD = TutorialRecord(
             ),
             # Not `postProcessing/cableProbes/*/Vm`: that is the `solve`
             # step's own `produces`, not an authored file this step fails
-            # without -- C8 fingerprints only pre-existing inputs (P4's own
-            # rule, `restitution_curves.py`'s docstring).
+            # without -- C8 fingerprints only pre-existing inputs.
             consumes=(ELECTRO_PROPERTIES,),
             produces=("postProcessing/*_event_summary.json", "postProcessing/*_events.csv", "postProcessing/*_restitution.csv"),
         ),

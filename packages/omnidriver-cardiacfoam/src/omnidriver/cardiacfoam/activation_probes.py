@@ -14,8 +14,8 @@ docs/solver-learning/cardiacfoam.md, section Q:
   step's ``postProcess -latestTime`` output, one row at the final time (N2),
   and the solve's own per-write-time rows before it are cumulative.
 
-**Sampling (corrected 2026-09-27, Q9): the reader requires
-``interpolationScheme cellPoint``**, read from the case's own
+**Sampling (Q9): the reader requires ``interpolationScheme cellPoint``**,
+read from the case's own
 ``system/<function>`` dict (one source of truth), never a Python default. A
 probe location is then the point itself (offset 0). Any other scheme --
 including OpenFOAM's own ``cell`` default -- is refused by name: a ``cell``

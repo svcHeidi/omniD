@@ -18,7 +18,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             phases=frozenset({'anatomy'}),
             description='Optional cell zone name. Restricts the myocardium domain and equations to a specific subset of the mesh cells.',
             source_refs=('src/electroModels/electroDomains/myocardiumDomain/myocardiumDomain.C', 'src/electroModels/electroDomains/myocardiumDomain/eikonalMyocardiumDomain.C'),
-            notes='Read from the resolved <solver>Coeffs block, NOT the electroProperties root: myocardiumDomain.C:35-52 queries the coeffs dictionary (electroModel.C:109 builds it as subDict(type + "Coeffs")). This path was previously catalogued bare, which emitted it at the file root where nothing reads it -- the run then silently used the whole mesh, bath included, instead of the requested zone.',
+            notes='Read from the resolved <solver>Coeffs block, NOT the electroProperties root: myocardiumDomain.C:35-52 queries the coeffs dictionary (electroModel.C:109 builds it as subDict(type + "Coeffs")).',
             value_kind='word',
         ),
         DictEntry(
@@ -177,14 +177,9 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             examples=('t',),
         ),
         DictEntry(
-            # Corrected 2026-09-26 (catalog drift fix, final review AB Q7):
-            # 'apexBaseBands' was renamed 'gradientAxes' natively in 3025230b9
-            # and generalised from a single fixed block into a dynamic-name
-            # dictionary of named axes (e.g. 'apicobasal') so more than one
-            # gradient can compose on the same run. The five apexBaseBands.*
-            # entries this replaces are deleted, not aliased -- nothing reads
-            # that name any more (verified against src/, applications/,
-            # modules/).
+            # 'gradientAxes' is a dynamic-name dictionary of named axes (e.g.
+            # 'apicobasal'), so more than one gradient can compose on the same
+            # run. The old fixed 'apexBaseBands' block is gone, not aliased.
             driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.gradientAxes.<axis_name>.field',
             description='Name of this named gradient axis\'s driving scalar field. Values are clamped to [0, 1] before the exponential scale is applied.',
             source_refs=('src/electroModels/electroDomains/myocardiumDomain/myocardiumDomainInterface.C', 'src/ionicModels/ionicModel/ionicHeterogeneityOrchestrator.C'),
@@ -233,7 +228,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.mode',
             description='Heterogeneity application mode.',
             source_refs=('src/electroModels/electroDomains/myocardiumDomain/myocardiumDomainInterface.C', 'src/ionicModels/ionicModel/ionicHeterogeneityOrchestrator.C'),
-            notes="Corrected 2026-09-26: 'transmuralBands' was removed from the enum -- native c7d6dd551 dropped that mode along with endoMInterface/mEpiInterface. Only namedRegions and cellZoneRegions remain (ionicHeterogeneityOrchestrator.C: 'mode is required: namedRegions or cellZoneRegions').",
+            notes="Only namedRegions and cellZoneRegions are accepted (ionicHeterogeneityOrchestrator.C: 'mode is required: namedRegions or cellZoneRegions').",
             value_kind='enum',
             enum_values=('namedRegions', 'cellZoneRegions'),
         ),
@@ -261,15 +256,13 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             dynamic_path=True, allowed_bindings={"<region_name>": None},
             applicable_when={"$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.mode": ("namedRegions",)},
         ),
-        # Corrected 2026-09-26 (catalog drift fix, final review AB Q7):
         # endoMInterface/mEpiInterface and the transmuralBands mode that used
-        # them were removed natively by c7d6dd551. Deleted, not aliased --
-        # zero hits in src/, applications/ or modules/ since that commit.
+        # them are not accepted; deleted natively, not aliased.
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.transitionWidth',
             description='Width of the smooth transition band between named regions. Required when transitionMode=blend; not read when transitionMode=hard (no longer defaults to 0.1).',
             source_refs=('src/ionicModels/ionicModel/ionicHeterogeneityOrchestrator.C',),
-            notes="Corrected 2026-09-26: this said 'Defaults to 0.1 in the solver.' ionicHeterogeneityOrchestrator.C fatals if transitionMode=blend and transitionWidth is absent -- there is no default.",
+            notes="ionicHeterogeneityOrchestrator.C fatals if transitionMode=blend and transitionWidth is absent -- there is no default.",
             value_kind='scalar',
             constraints=('Must be >= 0.',),
         ),
@@ -674,7 +667,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
                 'src/verificationModels/bathBidomainVerification/manufacturedFDABathBidomainVerifier.C',
                 'src/verificationModels/bidomainVerification/manufacturedFDABidomainVerifier.C',
             ),
-            notes='Corrected 2026-09-19: this said manufacturedFDABidomainVerifier read k from a manufacturedBidomain sub-dict instead. It does not, and never does now -- manufacturedFDABidomainVerifier::verificationDict() returns dict().subDict("verificationModel"), the same place the bath-bidomain verifier reads it. The manufacturedBidomain entries the old note pointed at were removed the same day: native reads that block only at electroProperties top level, for ECG inheritance, never under <solver>Coeffs. manufacturedFDAMonodomainVerifier reads no k at all. Corrected 2026-09-26 (tutorials-are-pointers, 5.4b-B): this entry\'s own source_refs and the note above already said manufacturedFDABidomainVerifier.C reads k, but applicable_when named only manufacturedFDABathBidomainVerifier, refusing the conformance-target patch this tutorial\'s record proof needs. Verified directly against the native source (manufacturedFDABidomainVerifier.C:56: `k_ = cfg.lookupOrDefault<scalar>("k", 1.0/Foam::sqrt(2.0))`, matching the bidomain case\'s own committed `k 0.707107`) -- manufacturedFDABidomainVerifier is added to applicable_when, not invented. Corrected 2026-09-26 (review 54b M6): the same change also gave this entry typical_value 0.707107, which restated that C++ default (a second copy of a native fact); removed.',
+            notes='manufacturedFDABidomainVerifier::verificationDict() returns dict().subDict("verificationModel"), the same place the bath-bidomain verifier reads it (manufacturedFDABidomainVerifier.C:56: `k_ = cfg.lookupOrDefault<scalar>("k", 1.0/Foam::sqrt(2.0))`, matching the bidomain case\'s own committed `k 0.707107`). manufacturedFDAMonodomainVerifier reads no k at all.',
             value_kind='scalar',
             applicable_when={"$ELECTRO_MODEL_COEFFS.verificationModel.type": (
                 "manufacturedFDABathBidomainVerifier",
@@ -1084,26 +1077,17 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             value_kind='enum', enum_values=('1D', '2D', '3D'), dynamic_path=True, allowed_bindings={"<name>": None},
             applicable_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.type": ('manufacturedPseudoECGVerifier', 'manufacturedEikonalECGVerifier')},
         ),
-        # Corrected 2026-09-23 (Phase 3, closing Task 2's fallback): missing
-        # from this catalog entirely -- found because deleting the fallback
-        # in cardiacfoam/overrides.py made
-        # test_manufactured_monodomain_pseudo_ecg_tet.py's
-        # test_tet_apply_case_renders_geo_installs_overlay_and_grad_scheme
-        # (and three siblings that share its ecg_enabled path) fail with
-        # "override ... verificationModel.anisotropic is not declared". Real,
-        # native-read key: manufacturedPseudoECGVerifier.C:420
-        # `anisotropic_ = cfg.lookupOrDefault<Switch>("anisotropic", false)`,
-        # a Switch this driver's tutorial has written unconditionally
-        # whenever ecgDomains.ECG is configured since before this task. Only
-        # manufacturedPseudoECGVerifier reads it (manufacturedEikonalECGVerifier.C
-        # and manufacturedBathBidomainECGVerifier.C do not: `grep -rl
-        # anisotropic src/verificationModels/ecgVerification/` finds only the
-        # pseudo-ECG verifier's .C/.H pair), so applicable_when is narrower
-        # than its dimension/referenceQuadratureOrder siblings above.
+        # Real, native-read key: manufacturedPseudoECGVerifier.C:420
+        # `anisotropic_ = cfg.lookupOrDefault<Switch>("anisotropic", false)`.
+        # Only manufacturedPseudoECGVerifier reads it
+        # (manufacturedEikonalECGVerifier.C and
+        # manufacturedBathBidomainECGVerifier.C do not), so applicable_when
+        # is narrower than its dimension/referenceQuadratureOrder siblings
+        # above.
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.anisotropic',
             phases=frozenset({'physics'}),
-            description="Whether the manufactured pseudo-ECG reference uses its anisotropic solution branch (the sin^2(pi x)*sin^2(pi y)*sin^2(pi z) field), rather than the isotropic default. Must be yes exactly when the tissue verifier ($ELECTRO_MODEL_COEFFS.verificationModel.type) is manufacturedAnisotropicMonodomainVerifier, and no otherwise: cardiacfoam.validation refuses a mismatch by name, in either direction (owner, 2026-09-26, plan §5g Q11). 3D-only: the solver raises a FatalError if this is set true while verificationModel.dimension resolves to anything but 3D.",
+            description="Whether the manufactured pseudo-ECG reference uses its anisotropic solution branch (the sin^2(pi x)*sin^2(pi y)*sin^2(pi z) field), rather than the isotropic default. Must be yes exactly when the tissue verifier ($ELECTRO_MODEL_COEFFS.verificationModel.type) is manufacturedAnisotropicMonodomainVerifier, and no otherwise: cardiacfoam.validation refuses a mismatch by name, in either direction. 3D-only: the solver raises a FatalError if this is set true while verificationModel.dimension resolves to anything but 3D.",
             source_refs=('src/verificationModels/ecgVerification/manufacturedPseudoECGVerifier.C',),
             value_kind='boolean', dynamic_path=True, allowed_bindings={"<name>": None},
             typical_value='false',

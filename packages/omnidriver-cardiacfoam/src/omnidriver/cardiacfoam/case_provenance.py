@@ -28,24 +28,15 @@
 
 """Solver-declared case classification for the provenance snapshot.
 
-``required_inputs`` intentionally returns ``()`` for now. The full
-model-dependent resolution -- which ``0/`` fields are present depends on the
-configured solver and ionic model, and their *locations* resolve by a
-backward ``Time::findInstance`` search with a ``constant/`` fallback, so a
-field's canonical path is not knowable from its name alone -- is the
-input-enumeration job's
-input-enumeration job, not this task's. Returning ``()`` here is still safe:
-the resolution precedence an unclassified file falls back to is
-``required_input``, so nothing here can under-classify a file that turns out
-to matter.
+``required_inputs`` returns ``()`` until full model-dependent input
+enumeration lands (which ``0/`` fields exist depends on the configured solver
+and ionic model, and their locations resolve by a backward
+``Time::findInstance`` search). Safe meanwhile: an unclassified file falls
+back to ``required_input``, so nothing here can under-classify one.
 
-``generated_output_globs`` is the one classification this task does own:
-``constant/C``, ``Cx``, ``Cy``, ``Cz`` and ``skewness`` are mesh-diagnostic
-byproducts. An exhaustive grep across ``src/`` and ``applications/`` found
-zero reads of any of them -- nothing in the solver or its utilities ever
-opens these files, so excluding them from the input snapshot (rather than
-fingerprinting large diagnostic arrays nothing depends on) does not risk a
-silent stale replay.
+``generated_output_globs`` excludes ``constant/C``, ``Cx``, ``Cy``, ``Cz`` and
+``skewness``: mesh-diagnostic byproducts an exhaustive grep across ``src/``
+and ``applications/`` found no reads of anywhere in the solver.
 """
 
 from __future__ import annotations

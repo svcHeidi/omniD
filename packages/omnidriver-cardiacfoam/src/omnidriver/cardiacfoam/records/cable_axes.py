@@ -1,7 +1,6 @@
-"""The ``dx`` axis ``cable1DRestitution`` and ``cable1DCVConvergence`` share
-(both point at ``electrophysiologyProtocols/cableProtocol/
-monodomain1DCableCV``). Real-run evidence and the resolved cell counts:
-``docs/solver-learning/cardiacfoam.md``, section CABLE.
+"""The ``dx`` axis ``cable1DRestitution`` and ``cable1DCVConvergence`` share,
+both pointing at ``electrophysiologyProtocols/cableProtocol/monodomain1DCableCV``.
+See ``docs/solver-learning/cardiacfoam.md`` section CABLE for real-run evidence.
 """
 
 from __future__ import annotations
@@ -18,10 +17,9 @@ def _dx_to_hex_cell_counts(
     dx_m: Any, current: tuple[int, int, int],
     extents: tuple[float, float, float] | None,
 ) -> tuple[int, int, int]:
-    """Owner decision (d): a direction whose CURRENT cell count is 1 stays
-    1; every other direction is resolved from ``dx`` (metres) against that
-    direction's own physical extent (:func:`cell_counts_from_dx`), read live
-    from ``system/blockMeshDict`` itself, never a Python constant.
+    """A direction whose current cell count is 1 stays 1; every other direction
+    is resolved from ``dx`` (metres) against that direction's own physical
+    extent, read live from ``system/blockMeshDict``, never a Python constant.
     """
     if extents is None:
         raise ValueError(

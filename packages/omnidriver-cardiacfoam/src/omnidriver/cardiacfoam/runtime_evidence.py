@@ -23,8 +23,9 @@
 #     where their logs land, what extra inputs belong in a provenance
 #     snapshot, and how to read values out of solver-specific artifacts.
 #     ``solve_step_commands``/``telemetry_source_globs``/
-#     ``artifact_value_reader`` stay declaration-only for later phases;
-#     ``extra_provenance_paths`` is consumed by Phase 2 now.
+#     ``artifact_value_reader`` stay declaration-only for later use;
+#     ``extra_provenance_paths`` is already consumed by the provenance
+#     snapshot.
 #
 # Author
 #     Simao Nieto de Castro, UCD.
@@ -83,8 +84,8 @@ def telemetry_source_globs(command: str) -> tuple[str, ...]:
 #                    overrides this default to required=True for those
 #                    cases; see _resolve_control_dict_libs_entry below).
 #
-# Verified live against a sourced OpenFOAM v2412 install (I3b), not assumed
-# from Make/files: FOAM_MODULE_LIBBIN is unset in a plain sourced shell, and
+# Verified live against a sourced OpenFOAM v2412 install, not assumed from
+# Make/files: FOAM_MODULE_LIBBIN is unset in a plain sourced shell, and
 # libphysicsModel is actually found in FOAM_USER_LIBBIN despite Make/files
 # declaring FOAM_MODULE_LIBBIN. See _defined_lib_dirs -- the search below
 # never maps a name to one fixed variable.
@@ -98,12 +99,11 @@ _LIBRARY_CATALOG: dict[str, bool] = {
     "verificationModels": False,
 }
 
-# Search every *defined* one of these, never one fixed variable per name
-# (I3b findings 1 and 2).
+# Search every *defined* one of these, never one fixed variable per name.
 _LIB_DIR_ENV_VARS = ("FOAM_USER_LIBBIN", "FOAM_MODULE_LIBBIN", "FOAM_LIBBIN")
 
-# The extension is platform-dependent -- .dylib here, .so on Linux (I3b
-# finding 3). Try both rather than branching on sys.platform.
+# The extension is platform-dependent -- .dylib here, .so on Linux. Try both
+# rather than branching on sys.platform.
 _LIB_EXTENSIONS = (".dylib", ".so")
 
 _BARE_LIB_RE = re.compile(r"^lib(.+)\.(?:so|dylib)$")
@@ -220,8 +220,7 @@ def resolve_runtime_dependencies(
     """The cardiacFoam binary, the libraries it links or loads, and anything
     this case's own controlDict pulls in through ``libs ( ... )``.
 
-    This is the fix for the incident Phase 2 exists to prevent: most cases
-    run through an ``Allrun`` script, so a workflow step's command
+    Most cases run through an ``Allrun`` script, so a workflow step's command
     fingerprints the script, never the solver binary the script invokes.
     Declaring the binary and its libraries here, independent of how a step
     happens to be launched, is what makes a rebuilt solver visible to
@@ -259,21 +258,15 @@ def resolve_runtime_dependencies(
             )
             # A case that names a library in its own controlDict cannot run
             # without it -- required regardless of the fixed catalog's
-            # default above (I2c: six manufactured-solution tutorials depend
-            # on exactly this for libverificationModels).
+            # default above: six manufactured-solution tutorials depend on
+            # exactly this for libverificationModels.
             dependencies[name] = RuntimeDependency(name=name, path=resolved, required=True)
 
     # A case carrying a gmsh geometry cannot mesh without the gmsh binary.
     # Same case-local reasoning as the controlDict libs above: the case itself
     # says what it needs, rather than a fixed list saying it for every case.
-    #
-    # This was previously expressed only as a pip dependency
-    # (omnidriver-openfoam declaring the `gmsh` wheel, which ships a `gmsh`
-    # executable). That made the binary happen to be on PATH without anything
-    # declaring it, so a missing gmsh surfaced as a workflow step dying
-    # mid-run rather than as an unavailable dependency at plan time -- and an
-    # import scan read the pip dependency as unused, because nothing imports
-    # the Python module.
+    # Declaring it here surfaces a missing gmsh at plan time, rather than as
+    # a workflow step dying mid-run.
     if any(case_root.rglob("*.geo")):
         gmsh_path = shutil.which("gmsh", path=environment.get("PATH"))
         dependencies["gmsh"] = RuntimeDependency(
@@ -290,12 +283,9 @@ def extra_provenance_paths(
     *,
     env: Mapping[str, str] | None = None,
 ) -> tuple[RuntimeDependency, ...]:
-    """Runtime dependencies Phase 2 must fingerprint beyond ``system/`` and
-    ``constant/``.
-
-    Replaces the earlier ``tuple[Path, ...]`` stub, which could not express
-    "this was required and I could not find it" -- a missing library would
-    have been silently omitted rather than reported (I3)."""
+    """Runtime dependencies the provenance snapshot must fingerprint beyond
+    ``system/`` and ``constant/``: a missing required library is reported,
+    never silently omitted."""
     return resolve_runtime_dependencies(case_root, env=env)
 
 
@@ -305,12 +295,10 @@ def artifact_value_reader(artifact_format: str):
     Returning ``None`` must make that consumer report ``not_evaluated`` with
     a reason -- never an implicit pass.
 
-    **Corrected 2026-09-26 (topic B Task 7):** this said "Empty today". It
-    now returns :class:`~omnidriver.cardiacfoam.activation_probes.
-    ActivationProbeReader` for ``ACTIVATION_PROBES_FORMAT``, the format
-    ``niederer2011``'s ``samplePoints`` output declares. Readers for other
-    cardiac formats (ECG traces, Purkinje time series) still register here
-    when they land."""
+    Returns :class:`~omnidriver.cardiacfoam.activation_probes.ActivationProbeReader`
+    for ``ACTIVATION_PROBES_FORMAT``, the format ``niederer2011``'s
+    ``samplePoints`` output declares. Readers for other cardiac formats (ECG
+    traces, Purkinje time series) register here when they land."""
     from omnidriver.cardiacfoam.activation_probes import ACTIVATION_PROBES_FORMAT, ActivationProbeReader
 
     if artifact_format == ACTIVATION_PROBES_FORMAT:

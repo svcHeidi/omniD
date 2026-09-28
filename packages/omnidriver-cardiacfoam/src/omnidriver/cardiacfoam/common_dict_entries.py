@@ -1,9 +1,7 @@
 """cardiacFoam-owned physicsProperties and controlDict catalog entries.
 
-``omnidriver.dict_entries`` re-exports these values, so Plan 1 changed
-ownership without changing import paths or serialized catalogs. (That
-re-export was spelled ``openfoam_driver.dict_entries`` before the package
-split; no module of that name exists now.)
+``omnidriver.dict_entries`` re-exports these values without changing import
+paths or serialized catalogs.
 """
 
 from __future__ import annotations
@@ -109,11 +107,9 @@ CONTROL_DICT_ENTRIES: Final[tuple[DictEntry, ...]] = (
         ),
         source_refs=("applications/solvers/cardiacFoam/cardiacFoam.C",),
         notes=(
-            "Corrected 2026-09-26 (tutorials-are-pointers 5.4a): enum_values "
-            "listed four of upstream OpenFOAM's seven names, so the native "
-            "bathBidomain case's own writeControl adjustableRunTime was "
-            "refused at strict planning. They are now Foam::Time::"
-            "writeControlNames (OpenFOAM v2412 src/OpenFOAM/db/Time/Time.C)."
+            "enum_values matches Foam::Time::writeControlNames (OpenFOAM "
+            "v2412 src/OpenFOAM/db/Time/Time.C): all seven names, including "
+            "adjustableRunTime, which the native bathBidomain case uses."
         ),
         value_kind="enum",
         enum_values=(

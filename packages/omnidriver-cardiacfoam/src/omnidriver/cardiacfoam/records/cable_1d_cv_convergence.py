@@ -1,16 +1,9 @@
 """``cable1DCVConvergence``: a tutorial record for the same case
 ``cable1DRestitution`` points at,
-``electrophysiologyProtocols/cableProtocol/monodomain1DCableCV``.
-
-The native ``Allrun``'s commands, ``blockMesh`` then ``cardiacFoam`` --
-no postprocess step (CV extraction is a manual script, never wired through
-``Allrun``/``Allrun.post``). Shares the ``dx`` axis with
-``cable1DRestitution`` (:mod:`.cable_axes`); everything else is a direct
-study key, including ``externalStimulus``'s catalogued leaves (owner
-decision: "its study states its own ``externalStimulus`` explicitly" --
-this tutorial derives no S1-S2 schedule). What each step reads/writes and
-the catalog facts behind these choices:
-``docs/solver-learning/cardiacfoam.md``, section CABLE.
+``electrophysiologyProtocols/cableProtocol/monodomain1DCableCV``. Runs
+``blockMesh`` then ``cardiacFoam``, with no postprocess step: CV extraction is
+a manual script, never wired through ``Allrun``/``Allrun.post``. See
+``docs/solver-learning/cardiacfoam.md`` section CABLE.
 """
 
 from __future__ import annotations

@@ -29,9 +29,6 @@ def apply_case_mutation(
     dict_file_relpaths: Mapping[str, str | Path] | None = None,
     dict_file_overrides: Mapping[str, Any] | None = None,
 ) -> None:
-    # Step S6: the overrides arrive explicitly; there is no ``CaseConfig``
-    # left to dig them out of, and no second case to distinguish this one
-    # from (TutorialSpec is always exactly one case now).
     relpaths = dict(dict_file_relpaths or {})
     overrides = dict(dict_file_overrides or {})
 

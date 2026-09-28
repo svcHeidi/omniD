@@ -69,7 +69,7 @@ from omnidriver.core.specs.validation import (
 from .common_dict_entries import PHYSICS_PROPERTY_ENTRIES
 
 #: This adapter's identity on every synthesis request and resolution it
-#: produces (Phase 2 Task 9).
+#: produces.
 PLUGIN_ID = "org.cardiacfoam"
 
 #: The one format `resolve_synthesis_mutation`'s targets declare. Rendered by
@@ -877,7 +877,7 @@ def build_physics_properties(
 
 
 # --------------------------------------------------------------------------
-# The write channel: `synthesize` (Phase 2 Task 9)
+# The write channel: `synthesize`
 # --------------------------------------------------------------------------
 
 
@@ -887,9 +887,9 @@ def _typed_value(value: Any) -> tuple[str, Any]:
 
     A selector/override value here is `Any`-typed at the call site
     (`electro_overrides: dict[str, Any]` in `sweep.py`), but a
-    `ParameterAssignment` carries typed data, never rendered text (2026-09-23
-    decision) -- so a value this cannot type is refused by name rather than
-    silently flattened to a string. No current caller supplies one (every
+    `ParameterAssignment` carries typed data, never rendered text -- so a
+    value this cannot type is refused by name rather than silently
+    flattened to a string. No current caller supplies one (every
     exercised override value is a plain word or a number); if one arises,
     that is a finding about this channel's coverage, not a reason to add a
     `literal`/`text` escape hatch back to `VALUE_KINDS`.
@@ -1062,7 +1062,7 @@ def resolve_synthesis_mutation(request: CaseMutationRequest) -> ResolvedMutation
             "document": _CONTROL_DOCUMENT, "format": _SYNTHESIS_FORMAT,
             "expanded_key_path": ["endTime"], "value": control_values["endTime_patch"],
         })
-    # Every solver meshes the same way now (2026-09-28, owner decision):
+    # Every solver meshes the same way:
     # `blockMesh` runs before every solver, not just the spatially-resolved
     # ones -- electroModel.C needs a real fvMesh regardless of solver.
     # `SINGLE_CELL_SOLVERS` has no geometry to derive a resolution from, so
@@ -1092,16 +1092,10 @@ def resolve_synthesis_mutation(request: CaseMutationRequest) -> ResolvedMutation
     })
 
     if include_allrun:
-        # Phase 3 Task 10 (bypass 5): sweep.py::materialize_case used to
-        # write this with a bare `write_text` + `chmod` after
-        # `build_and_launch` had already returned -- a second, unaudited
-        # write outside the channel, and a second transaction for one case
-        # materialization (a failure between the two left inputs with no
-        # runnable Allrun). Folded into this same plan instead: same one
-        # `commit_case_write` call as every other document here. Never
-        # `skip_if_present`: the pre-migration code always re-wrote Allrun's
-        # content unconditionally on every call, reused case_root or not.
-        # `blockMesh` always runs first -- every solver meshes now.
+        # Written through the same `commit_case_write` call as every other
+        # document here. Never `skip_if_present`: Allrun's content is
+        # re-written unconditionally on every call. `blockMesh` always runs
+        # first -- every solver meshes now.
         from omnidriver.openfoam.case_planning import plan_verbatim_content
 
         allrun_body = "#!/bin/sh\nblockMesh\ncardiacFoam\n"
@@ -1160,15 +1154,14 @@ def build_case(
     `test_dict_builder.py::test_existing_case_dir_is_not_overwritten_without_consent`
     asserts that specific type, and this migration does not change it).
 
-    Every `myocardiumSolver` meshes the same way (2026-09-28, owner
-    decision): a `system/blockMeshDict` joins the plan unconditionally,
-    never gated on `dry_run` -- a single-cell solver has no geometry to
-    derive a resolution from, so it gets a fixed one-cell dict instead of
-    the `dx`-derived default, and `dx` is rejected outright for it rather
-    than silently having no effect.
+    Every `myocardiumSolver` meshes the same way: a `system/blockMeshDict`
+    joins the plan unconditionally, never gated on `dry_run` -- a
+    single-cell solver has no geometry to derive a resolution from, so it
+    gets a fixed one-cell dict instead of the `dx`-derived default, and `dx`
+    is rejected outright for it rather than silently having no effect.
 
-    `include_allrun` (Phase 3 Task 10, bypass 5): when True, a hand-runnable
-    ``Allrun`` joins this same plan -- see `resolve_synthesis_mutation`'s own
+    `include_allrun`: when True, a hand-runnable ``Allrun`` joins this same
+    plan -- see `resolve_synthesis_mutation`'s own
     handling of the `$CARDIACFOAM.synthesis.include_allrun` meta parameter
     this sets below. This is not `dry_run`-gated either:
     `sweep.py::materialize_case` is the one production caller and always
@@ -1182,8 +1175,8 @@ def build_case(
     from omnidriver.core.case_write import CaseWritePlan
 
     # Made absolute here if it is not already: `CaseMutationRequest` below
-    # refuses a relative `case_root` outright (R3 blocker 2, 2026-09-23) -- a
-    # relative one would resolve against whatever directory the *committing*
+    # refuses a relative `case_root` outright -- a relative one would
+    # resolve against whatever directory the *committing*
     # process happens to be in, silently writing into a different case than
     # the caller named. Only a genuinely relative path is resolved (which
     # also normalizes `..`/symlinks) -- an already-absolute `case_dir` is
@@ -1334,9 +1327,9 @@ def build_and_launch(
             default slab's fixed size (no silent rounding). Meaningless for
             real anatomical meshes imported via ``vtkUnstructuredToFoam`` --
             this only controls the generic default slab.
-        include_allrun: when True (Phase 3 Task 10, bypass 5), a
-            hand-runnable ``Allrun`` joins the same committed plan as the
-            dictionaries above -- see ``build_case``'s own docstring for
+        include_allrun: when True, a hand-runnable ``Allrun`` joins the same
+            committed plan as the dictionaries above -- see ``build_case``'s
+            own docstring for
             the exact rule. ``sweep.py::materialize_case`` is the one
             production caller and always passes True; every other caller
             (tests, a direct launch with no sweep involved) keeps the
@@ -1356,22 +1349,19 @@ def build_and_launch(
     from omnidriver.core.case_transaction import commit_case_write
 
     # Made absolute if not already, without disturbing an already-absolute
-    # path's spelling: see the matching comment in `build_case`
-    # (R3 blocker 2, 2026-09-23).
+    # path's spelling: see the matching comment in `build_case`.
     case_dir = _Path(case_dir)
     if not case_dir.is_absolute():
         case_dir = case_dir.resolve()
     electro_path = case_dir / "constant" / "electroProperties"
 
-    # Preserved as a direct check, not a channel precondition (2026-09-23,
-    # Phase 2 Task 9): the pre-existing regression test
+    # Preserved as a direct check, not a channel precondition: the
+    # regression test
     # test_dict_builder.py::test_existing_case_dir_is_not_overwritten_without_consent
     # asserts this exact FileExistsError type. Routing it through
     # commit_case_write's precondition recheck instead would surface it as
-    # CaseTransactionError -- a real option (the plan's own Task 9 snippet
-    # assumes exactly that), but not one this migration commit takes, since
-    # it would break that external-facing exception contract for no
-    # behavioural gain.
+    # CaseTransactionError, breaking that external-facing exception contract
+    # for no behavioural gain.
     if electro_path.exists() and not overwrite:
         raise FileExistsError(
             f"{electro_path} already exists; pass overwrite=True to replace."
@@ -1398,9 +1388,9 @@ def build_and_launch(
     )
     commit_case_write(plan, driver_context=write_context, execution_env=None)
 
-    # Every solver meshes now (2026-09-28, owner decision): `build_case`
-    # always put a `blockMeshDict` in the plan, and `commit_case_write` just
-    # wrote it, journaled, the same way it wrote every other case document.
+    # Every solver meshes now: `build_case` always puts a `blockMeshDict` in
+    # the plan, and `commit_case_write` just wrote it, journaled, the same
+    # way it wrote every other case document.
     return {
         "case_dir": str(case_dir),
         "status": "dry_run_complete" if dry_run else "written",

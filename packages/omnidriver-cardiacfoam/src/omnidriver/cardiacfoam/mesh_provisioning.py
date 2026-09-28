@@ -26,28 +26,15 @@
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-"""electroModel.C requires a real fvMesh regardless of solver
-(`refCast<const fvMesh>(mesh())` at electroModel.C:344) -- even
-singleCellSolver needs one. Every solver therefore meshes the same way: a
-`system/blockMeshDict`, written by `dict_builder.build_case`/
-`resolve_synthesis_mutation`, with `blockMesh` run by the generated `Allrun`
-before the solver.
-
-`SINGLE_CELL_SOLVERS` has no real spatial geometry to size a mesh from, so it
-gets a fixed one-cell `blockMeshDict`
-(`omnidriver.openfoam.mesh_provisioning.single_cell_block_mesh_dict_text`)
-instead of the `dx`-derived generic default the other solvers use.
-
-**Corrected 2026-09-28 (owner decision):** this module used to instead copy a
-bundled static 1-cell `constant/polyMesh` fixture for `singleCellSolver`
-directly (`provision_mesh`/`meshless_polymesh_fixture`), skipped whenever
-`dry_run=True` -- and `sweep.py::materialize_case` always passes
-`dry_run=True`, so a from-scratch single-cell sweep case got no mesh at all.
-`singleCellSolver` now meshes exactly like every other solver instead: a
-`blockMeshDict` in the plan (never `dry_run`-gated, same as the other
-solvers') and `blockMesh` in `Allrun`.
+"""Which myocardiumSolver values need mesh provisioning outside the generic
+`dx`-derived default. `electroModel.C` requires a real `fvMesh` regardless of
+solver (`electroModel.C:344`), so every solver meshes: a `system/blockMeshDict`
+with `blockMesh` run by the generated `Allrun` before the solver.
 """
 
 from __future__ import annotations
 
+#: No real spatial geometry to size a mesh from, so it gets a fixed one-cell
+#: `blockMeshDict` (`single_cell_block_mesh_dict_text`) instead of the
+#: `dx`-derived default the other solvers use.
 SINGLE_CELL_SOLVERS = frozenset({"singleCellSolver"})

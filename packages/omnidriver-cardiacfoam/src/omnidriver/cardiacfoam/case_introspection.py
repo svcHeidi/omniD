@@ -41,17 +41,6 @@ _ELECTRO_SOLVER_FIELDS = ("Vm", "activationTime", "Iion", "phiE", "phiI")
 # catalog, always available regardless of build configuration.
 _SOLID_SOLVER_FIELDS = ("Ta", "lambda")
 
-# NOT YET ADDED: base solids4foam mechanics fields (D, DD, sigmaHyd, ...).
-# tutorials/manufacturedSolutions/monodomainTotalLagrangianEM verifies these
-# are the real, correct names (system/solid/fvSolution solves "D|DD|sigmaHyd";
-# its own postprocessing checks {"Vm", "D", "lambda", "Ta"} with L1/L2/Linf
-# error norms on D) -- so this is a known-good list, not a guess. Deliberately
-# withheld from _SOLID_SOLVER_FIELDS until solids4foam is a build
-# configuration this repo can actually run everywhere this catalog is
-# consulted (some builds set FORCE_LIGHTWEIGHT_PHYSICSMODEL=1 and never
-# link solids4foam in at all -- see buildAndTest.yml), so that "samplable"
-# never claims a field a given build genuinely cannot produce.
-
 
 def resolve_case_models(case_root: str | Path) -> dict[str, str | None]:
     """Best-effort resolution from ``constant/electroProperties``. Never raises;
@@ -95,12 +84,9 @@ def samplable_fields(resolved: dict[str, str | None]) -> dict[str, tuple[str, ..
         electro.update(ionic_entry.recommended_exports)
 
     solid: set[str] = set()
-    # A spatial active-tension model is positive evidence of electromechanical
-    # coupling. A spatial EP solver alone does not imply a mechanics region.
-    # This is the only detection signal available today -- every solid-region
-    # case in this repo also declares an active-tension model. It is not a
-    # guarantee: a hypothetical passive-only mechanics case (no active
-    # contraction) would have a genuine solid region this check would miss.
+    # An active-tension model is the only available signal for electromechanical
+    # coupling: a spatial EP solver alone does not imply a mechanics region, and
+    # a passive-only mechanics case (no active contraction) would be missed.
     active_tension = resolved.get("active_tension")
     solver = resolved.get("solver")
     has_solid_region = (

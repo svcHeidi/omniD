@@ -1,27 +1,16 @@
-"""cardiacFoam's own answer to the core generic case factory.
-
-The generic case-folder execution path is owned by
-``omnidriver.core.runtime.generic_case`` so the main driver remains
-solver-agnostic; this module supplies the two cardiac marker dict files
-(``electroProperties``/``physicsProperties``) and the plugin's own mutation
-callback core needs to recognize and mutate such a folder. Relocated here
-2026-09-27 (tutorials-are-pointers step C) from ``tutorials/generic_case.py``
-once the factory-tutorial package around it was deleted -- this was never
-part of that factory path (see ``.superpowers/sdd/legacy-map.md`` §2/§7).
+"""cardiacFoam's own answer to the core generic case factory: supplies the two
+cardiac marker dict files (``electroProperties``/``physicsProperties``) and
+the plugin's mutation callback core needs to recognize such a folder.
 """
 
 from omnidriver.core.runtime.generic_case import make_spec as _core_make_spec
 from omnidriver.cardiacfoam.generic_case_mutation import apply_case_mutation
 
 
-#: The dictionary files cardiacFoam's generic case factory has always
-#: addressed. Insertion order matters: core treats the first entry as the
-#: *primary* file whose presence marks a folder as belonging to this solver
-#: rather than being generic, and ``electroProperties`` has always been that
-#: marker. This pair used to live in core, as
-#: ``compatibility.legacy_generic_case_dict_file_relpaths`` -- core defaulting
-#: to two cardiac filenames for every caller. Same values, now declared by the
-#: plugin that means them.
+#: The dictionary files cardiacFoam's generic case factory addresses.
+#: Insertion order matters: core treats the first entry as the *primary* file
+#: marking a folder as belonging to this solver, and ``electroProperties`` is
+#: that marker.
 CARDIAC_DICT_FILE_RELPATHS = {
     "electro": "constant/electroProperties",
     "physics": "constant/physicsProperties",
@@ -29,11 +18,10 @@ CARDIAC_DICT_FILE_RELPATHS = {
 
 
 def make_spec(**kwargs):
-    # This adapter-owned wrapper is the public cardiacFOAM convenience entry
-    # point.  Supply the selected plugin context here so Core can obtain the
-    # adapter's declared entrypoint and output convention without inventing
-    # OpenFOAM behavior itself.  Callers that need a different explicit
-    # environment may still pass ``driver_context``.
+    """cardiacFOAM's entry point for core's generic case factory: supplies this
+    plugin's driver context, mutation callback and marker dict files by
+    default. A caller may still pass its own ``driver_context``.
+    """
     if kwargs.get("driver_context") is None:
         from omnidriver.cardiacfoam.own_context import own_driver_context
 

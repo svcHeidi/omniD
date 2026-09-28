@@ -107,15 +107,9 @@ def materialize_case(*, case_dir: Path, routed: dict[str, Any]) -> None:
     driver-owned ``run_document.json`` and ``workflow_state.json`` under the
     sweep output tree.
 
-    **Corrected 2026-09-24 (Phase 3 Task 10, bypass 5):** ``Allrun`` used to
-    be written here with a bare ``write_text`` + ``chmod`` call, after
-    ``build_and_launch`` had already committed everything else through the
-    channel -- a second, unaudited write, and a second transaction for one
-    case materialization (a failure between the two left a case with inputs
-    but no runnable ``Allrun``). ``include_allrun=True`` folds it into the
-    same plan ``build_and_launch`` commits in its one ``commit_case_write``
-    call instead; see ``dict_builder.build_case``'s docstring for the exact
-    body/mode rule.
+    ``include_allrun=True`` folds ``Allrun`` into the same plan
+    ``build_and_launch`` commits in its one ``commit_case_write`` call; see
+    ``dict_builder.build_case``'s docstring for the exact body/mode rule.
     """
     build_and_launch(
         electro_selectors=routed["electro_selectors"],

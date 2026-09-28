@@ -4,28 +4,24 @@ plugin:
   api_version: "2"
 requires:
   - org.omnidriver.openfoam.environment
-# provides: was audited two ways, and both matter -- neither alone is enough:
+# provides: is audited two ways, and both matter -- neither alone is enough:
 #
 # 1. Presence (check_provides()'s own gate, driver_context()-construction
-#    time): after deleting the five composed-concern delegations
-#    (command_authorization's environment half, profile's openfoam-role
-#    validation, config_values, time_selection, case_runtime_conventions),
-#    command_authorization, case_introspection, config_value, override_scopes
-#    and dict_diagnostics are absent from this list because this plugin no
-#    longer implements every member each of those adapts on its own (the
-#    environment half now comes only from org.omnidriver.openfoam.environment)
-#    -- declaring them would fail check_provides() outright. environment_preflight
-#    joins that list for the same reason (below): deleting
-#    get_environment_diagnostics left only 2 of its 3 members implemented here.
+#    time): command_authorization, case_introspection, config_value,
+#    override_scopes and dict_diagnostics are absent from this list because
+#    this plugin does not implement every member each of those adapts on its
+#    own (the environment half comes only from
+#    org.omnidriver.openfoam.environment) -- declaring them would fail
+#    check_provides() outright. environment_preflight joins that list for the
+#    same reason (below): only 2 of its 3 members are implemented here.
 #
-# 2. Realness (this file's own re-audit, 2026-09-21, corrected the same day
-#    after a review found the first pass had skipped it): presence is not
-#    intent -- a member callable that unconditionally ignores its arguments
-#    and returns a constant is not "genuinely answered" any more than an
-#    absent one, and provider_stack.implemented_capabilities() cannot tell
-#    the two apart (it only checks callability). Read every adapted member's
-#    actual body (not just its existence) against that test. Two capabilities
-#    that pass gate 1 fail this one and are also withheld:
+# 2. Realness: presence is not intent -- a member callable that
+#    unconditionally ignores its arguments and returns a constant is not
+#    "genuinely answered" any more than an absent one, and
+#    provider_stack.implemented_capabilities() cannot tell the two apart (it
+#    only checks callability). Read every adapted member's actual body (not
+#    just its existence) against that test. Two capabilities that pass gate 1
+#    fail this one and are also withheld:
 #      - case_provenance: get_generated_output_globs is real (a specific,
 #        deliberate glob list), but get_required_inputs is
 #        `del case_root, resolved_case; return ()`
@@ -40,10 +36,9 @@ requires:
 #        when observable extraction lands."
 #    One hollow member disqualifies the whole capability, same standard
 #    applied to org.omnidriver.openfoam.environment's provides: (see its
-#    plugin.yaml) and to org.omnidriver.cardiaccore's (see its plugin.yaml,
-#    corrected the same day for the same reason).
+#    plugin.yaml) and to org.omnidriver.cardiaccore's (see its plugin.yaml).
 #
-# environment_preflight is ALSO now absent for gate 1: get_environment_diagnostics
+# environment_preflight is ALSO absent for gate 1: get_environment_diagnostics
 # was deleted (not merely left unimplemented) because it was a pure passthrough
 # to a fresh OpenFOAMEnvironmentPlugin() with no cardiacFoam-specific content,
 # reachable in production via own_context.own_driver_context() (which always
@@ -53,16 +48,15 @@ requires:
 # (cardiacFoam-specific bashrc/build-manifest resolution), but a capability
 # needs every adapted member, not most of them.
 #
-# Correction, 2026-09-22 (final whole-branch review, Finding 4): gate 2's
-# realness standard above is still correct about what check_provides()
-# enforces -- a hollow member declared here would fail it. It does NOT
-# prevent resolutions()/the stack digest from crediting this provider for a
-# withheld capability (case_provenance, runtime_evidence): resolutions()
+# Gate 2's realness standard above is what check_provides() enforces -- a
+# hollow member declared here would fail it. It does NOT prevent
+# resolutions()/the stack digest from crediting this provider for a withheld
+# capability (case_provenance, runtime_evidence): resolutions()
 # (provider_stack.py) picks each capability's winner purely by which
 # provider has a callable member, never by consulting provides: at all. A
 # capability withheld here for realness can still win resolutions() if this
 # provider is the most-specific implementer -- the "false provenance claim"
-# this audit was meant to prevent still happens, just silently, in the
+# this audit is meant to prevent still happens, just silently, in the
 # digest. See ARCHITECTURE.md's "Provider composition" > "provides: /
 # requires:" section for the full explanation; not fixed there or here,
 # since changing resolutions() would change every capability_digest this
@@ -83,11 +77,11 @@ provides:
   - run_document_configuration
   - run_semantic_validator
   - sweep_materializer
-  # Added step 4a (2026-09-25, tutorial-records design doc §5): the sole
-  # member get_record_key_validator adapts (record_key_validation) is real,
-  # not a stub -- record_key_validation.record_key_validator answers for
-  # every document a cardiac stack might see (its own module docstring has
-  # the three rules), never a constant or an unconditionally-empty return.
+  # The sole member get_record_key_validator adapts (record_key_validation)
+  # is real, not a stub -- record_key_validation.record_key_validator
+  # answers for every document a cardiac stack might see (its own module
+  # docstring has the three rules), never a constant or an
+  # unconditionally-empty return.
   - record_key_validation
 runtime:
   openfoam:
@@ -156,11 +150,7 @@ case_profile:
       required: conditional
 # The C++ source the key scanner reads: supplied, never discovered. The
 # variable is the native tutorials tree; `relative` is the native repository's
-# own layout (src/ beside tutorials/). Corrected 2026-09-28: this was
-# `source_roots: [../../../../../../src]`, a path relative to this package
-# from the retired layout where the driver sat inside the native repository.
-# It resolved to a directory that does not exist, so every strict plan warned
-# and scanned nothing.
+# own layout (src/ beside tutorials/).
 cxx_mapping:
   source_root:
     variable: OMNIDRIVER_NATIVE_TUTORIALS

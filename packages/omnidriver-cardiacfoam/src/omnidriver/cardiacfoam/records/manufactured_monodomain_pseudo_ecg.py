@@ -27,10 +27,8 @@ from .manufactured_solution_axes import (
 )
 
 #: This tutorial's own `monodomainSolverCoeffs` scope, and the pseudo-ECG
-#: verifier's own nested echo of the tissue dimension (owner Q11's
-#: relation: `ecgDomains.ECG.verificationModel.anisotropic` must agree with
-#: `verificationModel.type`; this axis keeps `verificationModel.dimension`
-#: in step with the tissue `dimension` the same way).
+#: verifier's own nested echo of the tissue dimension: this axis keeps
+#: `verificationModel.dimension` in step with the tissue `dimension`.
 _MONODOMAIN_SOLVER_COEFFS = ("monodomainSolverCoeffs",)
 _ECG_VERIFICATION_MODEL = ("ecgDomains", "ECG", "verificationModel")
 
@@ -38,8 +36,8 @@ _TET_TEMPLATE = "setup/studies/tetConvergence/box.geo.template"
 _TET_MESH = "box.msh"
 
 #: The mesh step's default argument, copied verbatim from
-#: `regression/regressionTest.sh` (there is no native `Allrun` mesh step at
-#: all -- owner Q7, the same gap bidomain's record found).
+#: `regression/regressionTest.sh`: there is no native `Allrun` mesh step at
+#: all, the same gap bidomain's record found.
 _MESH_DICT_DEFAULT = "system/blockMeshDict.3D"
 
 AXES = (

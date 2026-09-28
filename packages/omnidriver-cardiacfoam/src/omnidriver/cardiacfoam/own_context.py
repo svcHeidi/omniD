@@ -27,26 +27,12 @@
 
 """The context this adapter means when it means itself.
 
-``default_driver_context()`` answers the question "which adapter should serve
-a caller who named none?" by looking at the ``omnidriver.plugins`` entry-point
-group. That is the right question at a *public edge*, where the caller really
-did decline to choose. It is the wrong question inside cardiacFOAM's own
-modules, which are not asking who the user selected -- they are asking which
-dictionary vocabulary to validate against, and the answer is statically known
-to be this one.
-
-Asking the registry instead made the answer depend on what else happened to be
-installed: with `omnidriver-openfoam` alongside `omnidriver-cardiacfoam` there
-are two entries and no unique default, so ``build_electro_properties`` raised
-``LookupError`` rather than building a dictionary. That is the
-supplied-versus-discovered rule in `future/ENVIRONMENT_CONTRACT.md` §12: a
-plugin's own identity has no ambient truth to discover, so discovering it
-invents an answer -- or, here, refuses to.
-
-Corrected 2026-09-18, when integrating the three adapter branches made a third
-plugin installable and the failure impossible to keep ignoring; it had in fact
-been failing for any install with more than one adapter, which is every install
-CI's test-cardiac job builds.
+Inside cardiacFOAM's own modules, the caller isn't asking who the user
+selected -- it's asking which dictionary vocabulary to validate against, which
+is statically known. Asking the plugin registry instead makes the answer
+depend on what else is installed (two adapters means no unique default, and
+``build_electro_properties`` would raise ``LookupError``); see
+``future/ENVIRONMENT_CONTRACT.md`` §12, the supplied-versus-discovered rule.
 """
 
 from __future__ import annotations
@@ -55,20 +41,14 @@ from __future__ import annotations
 def own_driver_context():
     """Build a ``DriverContext`` for cardiacFOAM without consulting the registry.
 
-    Fresh per call, matching ``default_discovered_context``'s contract -- a
-    context is cheap and callers are entitled to mutate what they are given.
+    Fresh per call -- a context is cheap and callers are entitled to mutate
+    what they are given. Imports are function-local because
+    ``cardiacfoam_plugin`` reaches back into ``generic_case``, one of this
+    helper's own callers.
 
-    The imports are function-local because ``cardiacfoam_plugin`` reaches back
-    into ``generic_case``, which is one of this helper's callers.
-
-    Composes the OpenFOAM environment adapter alongside this plugin (Task 9):
-    ``plugin.yaml`` now declares ``requires: [org.omnidriver.openfoam.environment]``,
-    since cardiacFoam no longer hand-embeds that adapter's environment
-    capabilities -- it composes them. A single-provider stack here would make
-    ``order_providers`` refuse every call for an unmet requirement, which is
-    exactly the "this adapter's own identity is statically known" case this
-    module exists to serve without consulting the registry; the environment
-    adapter is equally static here; it is not a registry lookup.
+    Composes the OpenFOAM environment adapter, which ``plugin.yaml`` declares
+    under ``requires``: a single-provider stack here would make
+    ``order_providers`` refuse every call for an unmet requirement.
     """
     from omnidriver.core.plugin_interface import driver_context
     from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin

@@ -1,8 +1,7 @@
 """Build the legacy RunDocument-v2 cardiac configuration from case files.
 
-This is the unchanged electroProperties/physicsProperties parser formerly
-embedded in core.  RunDocument v2 remains cardiac-shaped during Plan 1; Plan 2
-may replace this capability with a solver-neutral v3 configuration contract.
+The unchanged electroProperties/physicsProperties parser formerly embedded in
+core. RunDocument v2 remains cardiac-shaped.
 """
 
 from __future__ import annotations
@@ -53,11 +52,8 @@ def _read_control_dict_values(
     Resolved BY ROLE, never by literal path: the adapter declares
     ``openfoam.control_dict`` in its profile, and
     ``OpenFOAMEnvironmentPlugin.get_input_roots`` resolves the same file the
-    same way (corrected 2026-09-26: this named
-    ``CardiacFoamPlugin.get_selected_start_time``, which that class never
-    had, and which left the contract in spec A2). Spelling
-    ``system/controlDict`` here would be a second declaration of a fact the
-    profile already owns.
+    same way. Spelling ``system/controlDict`` here would be a second
+    declaration of a fact the profile already owns.
 
     A key silently defaulted would make the RunDocument's ``config`` lie
     about what the run actually used -- ``build_control_dict`` takes
@@ -98,8 +94,8 @@ def _read_control_dict_values(
 
     for entry in CONTROL_DICT_ENTRIES:
         key = entry.driver_path
-        # ConfigValueCapability's reader always takes a key path AS A TUPLE
-        # (review finding B1) -- the adapter itself splits scope from key.
+        # ConfigValueCapability's reader always takes a key path AS A TUPLE --
+        # the adapter itself splits scope from key.
         value = read_value(control_dict_path, (key,))
         if value is None:
             diagnostics.append(diagnostic(

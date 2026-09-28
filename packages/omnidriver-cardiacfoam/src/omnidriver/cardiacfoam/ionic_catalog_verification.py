@@ -70,12 +70,6 @@ The live check needs OpenFOAM sourced and the utility built::
 
 Without the utility on ``PATH`` every model reports ``skipped`` and
 ``all_match`` is ``False``. **A skip is never a pass.**
-
-Supersedes ``openfoam_driver/scripts/generate_catalog.py``, which did the same
-comparison but took a hand-supplied report file, was referenced by nothing, and
-has been broken since the catalog moved to ``plugins/cardiacfoam/`` (it still
-imports ``from ionic_model_catalog import ...`` against ``openfoam_driver/``).
-Its parser logic is correct and is lifted here.
 """
 
 from __future__ import annotations
@@ -148,9 +142,9 @@ class VerificationResult:
 def parse_report_text(text: str) -> dict[str, Any]:
     """Parse a listCellModelsVariables report into name lists.
 
-    Lifted from the (now-broken) ``scripts/generate_catalog.py``; the regexes
-    match the real output format at ``listCellModelsVariables.C:168-198``. Note
-    ``algebraic`` entries carry no ``-->`` value, unlike constants and states.
+    The regexes match the real output format at
+    ``listCellModelsVariables.C:168-198``. Note ``algebraic`` entries carry
+    no ``-->`` value, unlike constants and states.
 
     Unparseable text yields empty lists rather than raising -- the caller
     surfaces that as a mismatch, so garbage can never read as agreement.
@@ -277,9 +271,8 @@ def _synthesize_case(case_dir: Path, model: str, entry: Any) -> None:
 
     # electroModel.C requires a real fvMesh regardless of solver, so the
     # utility needs one meshed the same way as every other case_folder case:
-    # a blockMeshDict (2026-09-28, owner decision -- this used to copy a
-    # bundled static 1-cell polyMesh fixture instead). Writing it here costs
-    # no OpenFOAM binary -- `test_case_synthesis_works_without_the_solver`
+    # a blockMeshDict. Writing it here costs no OpenFOAM binary --
+    # `test_case_synthesis_works_without_the_solver`
     # exercises exactly this function without one; running `blockMesh`
     # itself is `_verify_one`'s job, which already requires the environment
     # this function does not.

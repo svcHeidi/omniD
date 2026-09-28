@@ -134,11 +134,9 @@ def purkinje_graph_diagnostics(case_root: Path) -> tuple[MeshDiagnostic, ...]:
     against the default mesh region when available.
 
     Like core's own mesh-scale gate, this returns nothing for a case with no
-    mesh region at all: the graph check has always been a companion to the
-    mesh check, and a case with no mesh has bigger problems that the planner
-    reports elsewhere. Preserved deliberately from when this loop lived inside
-    `specs/mesh_geometry.py::mesh_geometry_diagnostics`, whose
-    ``if not regions: return ()`` guard short-circuited it.
+    mesh region at all: the graph check is a companion to the mesh check, and
+    a case with no mesh has bigger problems that the planner reports
+    elsewhere.
     """
     if not discover_mesh_regions(case_root):
         return ()

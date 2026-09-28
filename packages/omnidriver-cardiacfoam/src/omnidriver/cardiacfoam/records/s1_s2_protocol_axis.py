@@ -1,48 +1,24 @@
-"""The S1-S2 protocol axis (design doc
-``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md``,
-step 4b -- the pilot, ``restitutionCurves``).
+"""The S1-S2 protocol axis.
 
-The owner's own instruction for this axis: "a mapping value (the protocol's
-parameters) gives the singleCellStimulus keys it sets plus the derived
-``system/controlDict:endTime`` and ``writeAfterTime``, using the old
-module's arithmetic, not new formulas. An axis must not silently read case
-values that the same study could also patch directly; take the protocol as
-the axis value."
+The whole protocol is one mapping value, not four separate axes/keys:
+``endTime``/``writeAfterTime`` are derived from all four numbers together
+(``s1_interval_ms``, ``n_s1``, ``s2_interval_ms``, ``n_s2``), and an axis must
+not read a value like ``s2_interval_ms`` back off the staged case if a study
+set it as a separate direct key. Requiring every number as part of one study
+value is the only way to compute the derived times without that back door. A
+sweep that varies ``s2_interval_ms`` per case therefore varies the whole
+protocol mapping per case.
 
-**Why the whole protocol is ONE mapping value, not four separate axes/keys.**
-``stim_period_S2``/``nstim2`` (the two S2 keys) could each be named directly
-by a study, the same way ``tissue`` is (design's own direct-key exception) --
-but ``endTime``/``writeAfterTime`` are DERIVED from all four numbers
-together (``s1_interval_ms``, ``n_s1``, ``s2_interval_ms``, ``n_s2``), and an
-axis is not allowed to read ``s2_interval_ms`` back off the staged case if a
-study set it as a separate direct key (design's own "must not silently read
-case values the same study could also patch directly") -- the ONLY way this
-axis can compute ``endTime``/``writeAfterTime`` without that back door is to
-require every number it needs as part of its own single study value. A
-sweep that varies ``s2_interval_ms`` per case therefore varies the WHOLE
-protocol mapping per case (each of a sweep's ``independent`` values is one
-complete protocol dict) -- more verbose per case than a bare
-``s2_interval_ms`` list, but it is the one honest way to keep this axis pure
-and self-contained.
-
-**The old module's arithmetic, reproduced exactly, not re-derived**
-(``cardiacfoam.tutorials.restitution_curves`` -- deleted alongside this
-pilot once parity against the real native case was proven; see this
-package's parity evidence for that proof)::
+The arithmetic below is reproduced exactly, not re-derived::
 
     write_after_time_s = (s1_interval_ms * (n_s1 - 1)) / 1000.0 - 2.0
     end_time = (
-        (s1_interval_ms * (n_s1 - 1) + s2_interval_ms * n_s2) / 1000.0
-        + 2.0  # end_time_buffer_s -- a `make_spec` parameter in the old
-               # module, but never varied by any real study (native
-               # driver_config.json included), so kept a literal here per
-               # the owner's "old module's arithmetic, not new formulas"
+        (s1_interval_ms * (n_s1 - 1) + s2_interval_ms * n_s2) / 1000.0 + 2.0
     )
 
 Both magic constants (``-2.0``, the "start writing 2s before the end of the
-S1 phase" offset; ``+2.0``, ``end_time_buffer_s``) are the old module's own
-literals, not something this axis makes newly configurable -- doing that
-would be a new formula, which the owner's instruction explicitly excludes.
+S1 phase" offset; ``+2.0``, the end-time buffer) are kept as literals, not
+exposed as new axis parameters.
 """
 
 from __future__ import annotations

@@ -1,22 +1,7 @@
-"""Legacy cardiacFoam case-folder evidence behind a plugin-owned seam.
-
-Why this exists
----------------
-Older cardiacFoam tutorial folders may not provide ``Allrun``. omnidriver
-historically discovered them from ``electroProperties*`` and considered them
-runnable when the matching physics and standard OpenFOAM system dictionaries
-were present.
-
-Activation
-----------
-The rule applies only while the cardiacFoam plugin is selected and core cannot
-establish runnability from an executable ``Allrun`` first.
-
-Compatibility
--------------
-Filesystem-ingest, registry, and RunDocument execution tests preserve this
-exact rule during Plan 1.  Plan 2 may replace it with broader user-facing
-pipeline resolution; this module is the named boundary for that decision.
+"""Legacy cardiacFoam case-folder detection: a case without ``Allrun`` is
+considered runnable when ``electroProperties*`` and the standard OpenFOAM
+system dictionaries are present. Applies only while core cannot establish
+runnability from an executable ``Allrun`` first.
 """
 
 from __future__ import annotations

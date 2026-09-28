@@ -10,16 +10,10 @@ if TYPE_CHECKING:
 
 
 def _diagnostic_from_phase(phase: str, field: str, message: str, level: str) -> "StrictDiagnostic":
-    """Build the canonical :class:`StrictDiagnostic` from this module's old
-    ``(phase, field, message, level)`` call shape.
-
-    Retired 2026-09-20 (Phase 0 Task 10): every call site below used to
-    construct ``core.specs.validation_types.ValidationError``, a four-field
-    dataclass with no ``code`` and ``phase`` where the canonical shape has
-    ``source``. That type is gone; this adapter keeps every call site below
-    unchanged in argument order while emitting the one canonical shape
-    (``core.planning_types.StrictDiagnostic``). ``code`` is the generic
-    ``"run_validation"`` -- none of these sites carried a more specific one.
+    """Build the canonical :class:`StrictDiagnostic` from this module's
+    ``(phase, field, message, level)`` call shape, keeping every call site
+    below unchanged in argument order. ``code`` is the generic
+    ``"run_validation"`` -- none of these sites carries a more specific one.
     """
     return diagnostic(level, "run_validation", message, source=phase, field=field)
 
@@ -383,14 +377,10 @@ def _evaluate_dynamic_required_fields(context: dict[str, Any]) -> list["StrictDi
 
 
 _HETEROGENEITY_PREFIX = "ionicHeterogeneity."
-# Corrected 2026-09-26 (catalog drift fix, final review AB Q7): native
-# 3025230b9 renamed 'apexBaseBands' to 'gradientAxes' and generalised it from
-# one fixed block into a dynamic-name dictionary of named axes (e.g.
-# 'apicobasal'), so the check below now groups by axis name instead of
-# assuming a single block. Native c7d6dd551 separately removed
-# endoMInterface/mEpiInterface and the transmuralBands mode entirely; the
-# ordering check that used to live here is deleted, not reworked -- there is
-# nothing left to order.
+# 'gradientAxes' is a dynamic-name dictionary of named axes (e.g.
+# 'apicobasal'), so the check below groups by axis name instead of assuming
+# a single block. endoMInterface/mEpiInterface and the transmuralBands mode
+# are not accepted, so there is no ordering check between them.
 _GRADIENT_AXES_PREFIX = "ionicHeterogeneity.gradientAxes."
 
 
@@ -607,13 +597,10 @@ def _evaluate_personalized_templates(context: dict[str, Any]) -> list["StrictDia
     manufactured verifier are solver science, not generic dictionary rules.
     This mirrors constructor checks in ``eikonalECG.C`` before a run starts.
 
-    **Corrected 2026-09-26** (native ``c15e2fcf``, cited by
-    ``docs/superpowers/plans/2026-09-25-tutorials-are-pointers-remaining.md``
-    §5c task 5.4b-E): the native ``manufacturedEikonalECG.`` legacy alias key
-    was deleted from the C++; a case selects its verifier only through
-    ``ecgVerificationModel``/``verificationModel.type``. The clause matching
-    any ``<domain>.manufacturedEikonalECG.*`` key is removed -- no context
-    built from a real case can ever hold that key again.
+    A case selects its verifier only through
+    ``ecgVerificationModel``/``verificationModel.type``; the native
+    ``manufacturedEikonalECG.`` legacy alias key does not exist, so no
+    context built from a real case can hold it.
     """
     errors: list["StrictDiagnostic"] = []
     domains = {
@@ -728,8 +715,7 @@ def _evaluate_ecg_anisotropic_consistency(context: dict[str, Any]) -> list["Stri
     is correct exactly when the tissue verifier is
     ``manufacturedAnisotropicMonodomainVerifier``, and wrong -- a silently
     mismatched reference -- otherwise, in either direction. This models the
-    relation between the two existing keys; it adds no new key (owner,
-    2026-09-26, plan §5g Q11: "get the physics right").
+    relation between the two existing keys; it adds no new key.
 
     Scoped to domains whose own ``ecgDomains.<name>.verificationModel.type``
     is ``manufacturedPseudoECGVerifier``: native only reads ``anisotropic``

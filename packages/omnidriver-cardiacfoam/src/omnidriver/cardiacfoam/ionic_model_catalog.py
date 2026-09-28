@@ -128,22 +128,13 @@ class IonicModelEntry:
     through dataclasses.replace()."""
 
     supports_gradient_axis_heterogeneity: bool = False
-    """Renamed 2026-09-26 from ``supports_apex_base_heterogeneity`` (owner):
-    native ``3025230b9`` renamed ``apexBaseBands`` to ``gradientAxes``, and the
-    flag now carries the C++ method's own name. No alias.
-
-    Whether the model implements gradientAxes overlay heterogeneity (a
+    """Whether the model implements gradientAxes overlay heterogeneity (a
     named-axis exponential scale, of which apex-to-base was the original and
-    still most common case) via configureGradientAxisHeterogeneity. Batched
-    variants inherit this flag through dataclasses.replace().
-
-    Corrected 2026-09-26 (catalog drift fix, final review AB Q7): this used
-    to cite 'apexBaseBands' and a function 'configureApexBaseBandsHeterogeneity'
-    that never existed under that name. Native 3025230b9 renamed the dict
-    block to the dynamic-name 'gradientAxes', and the base-class virtual is
-    (and, per ionicModel.C, always was) configureGradientAxisHeterogeneity.
-    The field name is kept as-is for API stability -- every model wired for
-    apex-to-base heterogeneity is wired for gradientAxes generally."""
+    still most common case) via configureGradientAxisHeterogeneity
+    (ionicModel.C). Batched variants inherit this flag through
+    dataclasses.replace(). The field name is kept for API stability -- every
+    model wired for apex-to-base heterogeneity is wired for gradientAxes
+    generally."""
 
     native_tissue_labels: tuple[str, ...] = ()
     """Tissue labels represented by distinct baseline physiology in the model equations."""

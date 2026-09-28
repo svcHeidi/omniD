@@ -42,9 +42,8 @@ enforces; none is new. The last section is about the mesh.
 
 ## Where a case's mesh comes from: the pre-processing stage
 
-The owner's rule (2026-09-26), for how records are built and used. Unlike
-the rules above, a validator does not check it; the refusals it names are
-the record's own.
+How records are built and used. Unlike the rules above, a validator does not
+check it; the refusals it names are the record's own.
 
 - **What the solver starts from.** Before the solve, a case needs a
   starting state: a mesh, and possibly fields or graphs. The steps that

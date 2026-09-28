@@ -211,9 +211,6 @@ def _predict_verification(case_root: Path) -> tuple[DataArtifact, ...]:
             #   rotatedAnisotropy_3D_19_cells.dat (manufacturedAnisotropicMonodomainVerifier.C:416)
             #   bathBidomain_3D_19_cells.dat      (manufacturedFDABathBidomainVerifier.C:426)
             #   <dimension>_19_cells.dat          (manufacturedFDABidomainVerifier.C:285)
-            # The previous "*_*_cells_*.dat" required a trailing "_<token>"
-            # between "cells" and ".dat" that none of them have, so this
-            # artifact was reported missing on every successful solve.
             path_pattern="postProcessing/manufactured*Summary*.dat" if "Eikonal" in verifier_type else "postProcessing/*_cells.dat",
             format="csv_probe",
             description=f"Manufactured-solution L1/L2/Linf error norms emitted by {verifier_type}",

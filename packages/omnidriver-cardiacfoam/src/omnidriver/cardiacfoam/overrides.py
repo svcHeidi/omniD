@@ -96,8 +96,7 @@ def _catalog_entry_for(
     or physicsProperties' ``type``) only ever tries the literal form -- there
     is no coeffs block to substitute.
 
-    **Added 2026-09-23 (Phase 3, the decision closing Task 2's Gap 2):** when
-    neither exact lookup matches, try a `dynamic_path` match against the
+    When neither exact lookup matches, try a `dynamic_path` match against the
     templated form -- e.g. an override addressing
     ``ecgDomains.ECG.electrodePositions.V1`` reaches here as templated_path
     ``$ELECTRO_MODEL_COEFFS.ecgDomains.ECG.electrodePositions.V1``, which no
@@ -129,16 +128,16 @@ def _validate_dynamic_binding(entry, placeholder: str, bound_value: str) -> None
     """Refuse a dynamic-path binding the entry's own catalog declaration
     does not sanction.
 
-    Three outcomes, per the 2026-09-23 decision:
+    Three outcomes:
 
     - The placeholder is absent from ``entry.allowed_bindings`` entirely --
       refused. This should not happen for any entry this module's catalog
       audit covered (every `dynamic_path` entry in ``dict_entries_catalog.py``
-      now declares a domain, open or closed, for each of its placeholders),
-      so reaching this branch is itself a catalog gap, not a normal refusal
+      declares a domain, open or closed, for each of its placeholders), so
+      reaching this branch is itself a catalog gap, not a normal refusal
       path -- and it is refused rather than silently treated as open,
-      because an *undeclared* placeholder is exactly audit finding S1's
-      hole, not a stated fact an agent can read.
+      because an *undeclared* placeholder is a hole in the catalog, not a
+      stated fact an agent can read.
     - The domain is ``None`` (explicitly open) -- validated as a word: a
       non-empty, whitespace-free string (`validate_value_shape("word", ...)`,
       the same generic shape check core already owns), and free of
@@ -176,11 +175,8 @@ def _validate_dynamic_binding(entry, placeholder: str, bound_value: str) -> None
 
 
 #: value_kind -> text-to-typed parser, for every kind a real caller of this
-#: module has been found passing as an already-rendered OpenFOAM literal
-#: rather than typed data. Added to incrementally as each was found
-#: (2026-09-23): `dimensioned_scalar`/`dimensioned_tensor` (the decision's
-#: own Gap 1), then `vector3`, the four list kinds, and `boolean` (all three
-#: corollaries found while closing Gap 2 -- see `_typed_value_for_entry`).
+#: module passes as an already-rendered OpenFOAM literal rather than typed
+#: data -- see `_typed_value_for_entry`.
 _TEXT_PARSERS: dict[str, Any] = {
     "dimensioned_scalar": parse_dimensioned_literal,
     "dimensioned_tensor": parse_dimensioned_literal,
@@ -205,9 +201,8 @@ _TEXT_PARSERS: dict[str, Any] = {
 #: tuple, which it renders wrong (`str(...)` on the container itself). Adding
 #: `boolean` here would change what an already-typed `True`/`False` (e.g.
 #: `ecgDomains.<name>.verificationModel.enabled`/`.anisotropic`, direct study
-#: keys since `manufactured_monodomain_pseudo_ecg.py`'s deletion,
-#: 2026-09-27) renders as, breaking every currently-passing test that
-#: asserts "yes"/"no" -- found by running the suite, not assumed.
+#: keys) renders as, breaking every currently-passing test that asserts
+#: "yes"/"no".
 _CONTAINER_FORMATTERS: dict[str, Any] = {
     "dimensioned_scalar": format_dimensioned_literal,
     "dimensioned_tensor": format_dimensioned_literal,
@@ -223,36 +218,26 @@ def _typed_value_for_entry(entry, value: Any) -> "tuple[Any, tuple[str, ...]]":
     """The value to store on a `ParameterAssignment`, plus any raw-text
     evidence to keep alongside it.
 
-    **Added 2026-09-23 (Phase 3, the decision closing Task 2's Gap 1, plus a
-    corollary found while closing it -- see below).** Every real caller of
-    this module passes an already-rendered OpenFOAM literal string for a
-    `dimensioned_scalar`/`dimensioned_tensor` entry (e.g. ``conductivity``),
-    never the ``{"value": ..., "dimensions": ...}`` mapping
-    `validate_value_shape` requires -- Phase 2's "typed data" decision
-    asserted an adapter already parsed such a string when building its
-    request; none ever did. Parsed here, with `literals.parse_dimensioned_literal`
-    (owned by ``omnidriver-openfoam``, since OpenFOAM owns this syntax, not
-    core and not this adapter).
+    Every real caller of this module passes an already-rendered OpenFOAM
+    literal string for a `dimensioned_scalar`/`dimensioned_tensor` entry
+    (e.g. ``conductivity``), never the ``{"value": ..., "dimensions": ...}``
+    mapping `validate_value_shape` requires. Parsed here, with
+    `literals.parse_dimensioned_literal` (owned by ``omnidriver-openfoam``,
+    since OpenFOAM owns this syntax, not core and not this adapter).
 
     The original spelling is kept, not discarded, as this assignment's
-    `evidence_refs` -- Gap 1's "the raw spelling is still evidence": the
-    transitional writer in `apply_entry_overrides` below uses it verbatim
-    when present, rather than a re-rendering that can differ from it in
-    ways no OpenFOAM parser cares about (bracket padding, an insignificant
-    trailing zero) but a byte-level comparison would (see
-    ``omnidriver.openfoam.literals``'s module docstring, and this
-    package's ``test_literals.py``).
+    `evidence_refs`: the transitional writer in `apply_entry_overrides` below
+    uses it verbatim when present, rather than a re-rendering that can differ
+    from it in ways no OpenFOAM parser cares about (bracket padding, an
+    insignificant trailing zero) but a byte-level comparison would (see
+    ``omnidriver.openfoam.literals``'s module docstring, and this package's
+    ``test_literals.py``).
 
-    **Corollary, found while closing Gap 2, not anticipated by the
-    decision:** the same gap exists for `vector3` -- a real catalog entry
+    The same gap exists for `vector3`: a real catalog entry
     (``ecgDomains.<name>.electrodePositions.<electrode>``) is
-    ``value_kind="vector3"`` but a real caller
-    (``test_dict_entries_catalog.py``'s
-    ``test_apply_electro_property_overrides_updates_dimensioned_and_dynamic_entries``)
-    passes it as text (``"(1 2 3)"``), not a Python tuple. Gap 2 alone
-    (declaring the dynamic path) makes that override *reach* a catalog
-    entry; without this, it would still fail `validate_value_shape` once it
-    did. Handled the same way, with `literals.parse_vector3_literal`.
+    ``value_kind="vector3"`` but a real caller passes it as text
+    (``"(1 2 3)"``), not a Python tuple. Handled the same way, with
+    `literals.parse_vector3_literal`.
     """
     parse = _TEXT_PARSERS.get(entry.value_kind)
     if parse is not None and isinstance(value, str):
@@ -374,14 +359,7 @@ def resolve_entry_overrides(
     `cardiaccore.workflows.overrides.validate_input_overrides` ("a key absent
     from the catalog is one no native utility reads... writing such a key is
     a silent no-op -- the one failure the solver cannot report and this layer
-    can"). See this task's report for a real instance this newly catches:
-    `manufactured_bath_bidomain.py` submits
-    ``<solver>Coeffs.manufacturedBidomain.fdaBathVariant``, a key
-    `dict_entries_catalog.py`'s own 2026-09-19 correction note says was
-    removed because no native code reads it there. Corrected 2026-09-26:
-    that module is deleted (5.4a, the bath tutorial record), and the key is
-    gone from every caller; the bath variant lives at
-    ``verificationModel.fdaBathVariant`` only.
+    can").
 
     Every assignment's ``source`` is ``"case"``. This function has no
     fallback of its own -- it only ever sees what its caller already decided
@@ -389,23 +367,17 @@ def resolve_entry_overrides(
     choice from a tutorial's own hardcoded default the way
     `dict_builder.py`'s synthesis resolver does (there, by checking
     ``is not None`` at the boundary where the default is actually applied).
-    That distinction belongs to each tutorial's own call site, not here; see
-    this task's report.
+    That distinction belongs to each tutorial's own call site, not here.
 
-    **Always was, and remains, strict with no fallback of its own** (unlike
-    `apply_entry_overrides` below, which had one for one transitional
-    release). Two gaps used to make it refuse real overrides that were not
-    actually catalog defects: a dynamic per-case identifier
+    **Strict, with no fallback of its own** (unlike `apply_entry_overrides`
+    below, which had one for one transitional release): `_catalog_entry_for`
+    also matches a `dynamic_path` template for a dynamic per-case identifier
     (``ecgDomains.<name>``, ``conductionNetworkDomains.<name>``,
-    ``domainCouplings.<name>``, ...) that `dict_entries_catalog.py` had no
-    way to declare, and a `dimensioned_scalar`/`dimensioned_tensor`/
-    `vector3`/list/`boolean` entry whose real callers pass an
-    already-rendered OpenFOAM literal string, not typed data. Both closed
-    2026-09-23: `_catalog_entry_for` now also matches a `dynamic_path`
-    template (`_validate_dynamic_binding` checks the binding against the
-    entry's own declared domain, open or closed), and `_typed_value_for_entry`
-    parses a rendered literal via `omnidriver.openfoam.literals` before this
-    function ever sees it.
+    ``domainCouplings.<name>``, ...), with `_validate_dynamic_binding`
+    checking the binding against the entry's own declared domain, and
+    `_typed_value_for_entry` parses a `dimensioned_scalar`/`dimensioned_tensor`/
+    `vector3`/list/`boolean` entry's already-rendered OpenFOAM literal string
+    via `omnidriver.openfoam.literals` before this function ever sees it.
     """
     is_electro = electro_properties_path is not None
     assignments = []
@@ -451,19 +423,13 @@ def apply_entry_overrides(
 ) -> None:
     """Write entry overrides directly into ``file_path``.
 
-    **Deprecated 2026-09-23 (Phase 3 Task 2).** Delegates to
-    `resolve_entry_overrides` for validation and typing, then applies the
-    result with `update_foam_entry` -- directly, not through
+    Delegates to `resolve_entry_overrides` for validation and typing, then
+    applies the result with `update_foam_entry` -- directly, not through
     `openfoam.case_rendering`'s renderer, because this function has only a
     bare ``file_path`` and no case root to render into and journal against.
     That makes this the one call site in this package still allowed to call
-    `update_foam_entry` outside a renderer, kept for one transitional
-    release for the sake of a caller outside this repository that already
-    depends on this exact signature and write behaviour. Remove this
-    direct-write body when no in-tree caller writes through it -- Task 6
-    migrates all eleven tutorials that reach this function (via
-    `apply_electro_property_overrides` / `apply_physics_property_overrides`)
-    onto `resolve_entry_overrides` plus the render/commit channel directly.
+    `update_foam_entry` outside a renderer, kept for a caller outside this
+    repository that depends on this exact signature and write behaviour.
 
     ``document`` is not a parameter here (unlike `resolve_entry_overrides`):
     this function's only caller-facing identity for the file it writes is
@@ -476,25 +442,13 @@ def apply_entry_overrides(
     reads `ParameterAssignment.document` for anything but its own
     constructor check.
 
-    **No longer falls back.** Task 2 had to catch `resolve_entry_overrides`'s
-    `ValueError` here and re-run the whole batch through the pre-Task-2
-    unchecked write, because two catalog/representation gaps made it refuse
-    real, currently-passing overrides: a dynamic per-case identifier the
-    catalog had no way to declare (`$ELECTRO_MODEL_COEFFS.ecgDomains.ECG.electrodePositions.V1`),
-    and a `dimensioned_scalar`/`dimensioned_tensor` (and, found while closing
-    the first gap, `vector3`) entry whose real callers pass an
-    already-rendered OpenFOAM literal string, never the typed shape
-    `validate_value_shape` requires. The 2026-09-23 decision closed both:
-    `omnidriver.core.contracts.dictionary.DictEntry.allowed_bindings` can now
-    declare a placeholder's domain *open*, explicitly, and this package's
-    catalog does so for every `dynamic_path` entry that needs it; and
-    `omnidriver.openfoam.literals` parses (and renders) the literal syntax
-    Phase 2 assumed already had a parser. With both gaps closed, this
-    function now refuses exactly what `resolve_entry_overrides` refuses --
-    the same strictness a direct caller (Task 6) already got. A test that
-    passed under the fallback and fails now encodes an override the catalog
-    genuinely does not declare; see this task's report for the two Phase 2
-    tests corrected on exactly that basis.
+    **No fallback.** This function refuses exactly what
+    `resolve_entry_overrides` refuses:
+    `omnidriver.core.contracts.dictionary.DictEntry.allowed_bindings` can
+    declare a placeholder's domain *open*, explicitly, for a dynamic
+    per-case identifier, and `omnidriver.openfoam.literals` parses (and
+    renders) an already-rendered OpenFOAM literal string for a
+    `dimensioned_scalar`/`dimensioned_tensor`/`vector3` entry.
     """
     document = Path(file_path).name
     assignments = resolve_entry_overrides(
@@ -516,11 +470,10 @@ def apply_entry_overrides(
 
 def _write_value_for_assignment(assignment: ParameterAssignment) -> Any:
     """The raw value that must actually reach `update_foam_entry` for
-    `assignment` to write the same bytes `apply_entry_overrides` always has
-    (extracted 2026-09-23, Phase 3 Task 6, from that function's own loop
-    body -- reused, not duplicated, by `resolve_patch_mutation` below, which
-    needs the identical mapping to give the render/commit channel the same
-    bytes as the direct writer).
+    `assignment` to write the same bytes `apply_entry_overrides` always has.
+    Reused, not duplicated, by `resolve_patch_mutation` below, which needs
+    the identical mapping to give the render/commit channel the same bytes
+    as the direct writer.
 
     If `assignment.evidence_refs` is non-empty, that is the original,
     already-rendered spelling this assignment was parsed from
@@ -548,43 +501,32 @@ def _write_value_for_assignment(assignment: ParameterAssignment) -> Any:
 
 
 def _target_for_parameter(parameter: ParameterAssignment) -> dict[str, Any]:
-    """One `render_patch_case_files` edit target for `parameter` (2026-09-23
-    decision, "a parameter asserts a final state, not only a value").
+    """One `render_patch_case_files` edit target for `parameter` -- a
+    parameter asserts a final state, not only a value.
 
-    **The hex-rewrite target (added 2026-09-25, the `restitutionCurves`
-    real-run test's own regression).** A parameter whose `key_path` is
+    **The hex-rewrite target.** A parameter whose `key_path` is
     `case_planning.HEX_CELL_COUNTS_KEY_PATH` (`block_mesh_resolution_axis`'s
     synthetic key -- see that module's own docstring) is not an ordinary
     key/value edit: it is `plan_block_mesh_resolution`'s own structural
     `"hex_cell_counts"`/`"expected_blocks"` shape, not `"expanded_key_path"`/
-    `"value"`. This is the "future writer" that axis's docstring anticipated
-    ("whichever future writer commits a `hex_cell_counts` patch for real
-    reuses that same already-tested check"); before this, `patches_to_
-    parameters` -> `resolve_case_mutation` had no such case at all, so a
-    tutorial-record commit of this key silently built an ordinary
-    `update_foam_entry` target instead -- one that would have SET a literal
-    top-level dictionary key named `hex_cell_counts`, never rewriting a
-    single `hex (` line. `parameter.value` is the axis's own typed tuple of
-    ints (its docstring's 2026-09-25 correction); this reconstructs the
-    exact space-joined text `plan_block_mesh_resolution` expects, reusing
-    that planner rather than re-implementing its formatting or security
-    check.
+    `"value"`, since it would otherwise SET a literal top-level dictionary
+    key named `hex_cell_counts`, never rewriting a single `hex (` line.
+    `parameter.value` is the axis's own typed tuple of ints; this
+    reconstructs the exact space-joined text `plan_block_mesh_resolution`
+    expects, reusing that planner rather than re-implementing its formatting
+    or security check.
 
     A `remove` carries no `"value"` key: there is nothing to format (its
-    `value` is `None`, refused as a value to write), and `render_patch_case_files`
-    never reads `"value"` for a `remove` edit -- matching the hex-rewrite
-    target's own shape, which also carries no `"value"`, for the same reason.
-    Every other operation keeps writing `_write_value_for_assignment`'s
-    result, unchanged from before this field existed.
+    `value` is `None`, refused as a value to write), and
+    `render_patch_case_files` never reads `"value"` for a `remove` edit --
+    matching the hex-rewrite target's own shape, which also carries no
+    `"value"`, for the same reason. Every other operation keeps writing
+    `_write_value_for_assignment`'s result.
 
-    **The block count travels with the patch (added 2026-09-26, P2).**
-    Before this, `expected_blocks` was never read from `parameter` at all --
-    this always called `plan_block_mesh_resolution(document, cell_counts_str)`
-    with THAT planner's own `expected_blocks=1` default, regardless of how
-    many blocks the record actually declared. Correct for every
-    single-block document (every migrated tutorial so far), but silently
-    wrong for a multi-block one (bathBidomain's three-block
-    `blockMeshDict.<dim>` files): a real rewrite would have raised
+    **The block count travels with the patch.** `expected_blocks` is read
+    from `parameter`, not assumed to be `plan_block_mesh_resolution`'s own
+    `expected_blocks=1` default: a multi-block document (bathBidomain's
+    three-block `blockMeshDict.<dim>` files) would otherwise raise
     "Expected to update 1 hex blocks, but found 3" no matter what the axis
     resolved. `hex_cell_counts_expected_blocks` parses the count
     `case_planning.hex_cell_counts_key_path` encoded into `parameter.key_path`
@@ -610,32 +552,27 @@ def _target_for_parameter(parameter: ParameterAssignment) -> dict[str, Any]:
 
 
 def resolve_patch_mutation(request: CaseMutationRequest) -> ResolvedMutation:
-    """The semantic owner's answer for a `clone_and_patch` request
-    (Phase 3 Task 6, "the eleven tutorials follow through").
+    """The semantic owner's answer for a `clone_and_patch` request.
 
     Mirrors `cardiaccore.workflows.overrides.resolve_patch_mutation` in
     shape -- pure, every parameter already addressed by the caller
     (`resolve_entry_overrides`) before this ever runs. The one real
-    difference:
-    `target["value"]` is `_write_value_for_assignment(parameter)`, not
-    `parameter.value` (the typed value) the way cardiacCore's resolver uses
-    directly. cardiacCore's own parameters carry no `evidence_refs` and need
-    no container formatting, so `parameter.value` already IS the write
-    value there; this package's do (Task 2's Gap 1/its vector3 corollary),
-    so writing `parameter.value` unmodified through
-    `case_rendering.render_patch_case_files`'s generic
+    difference: `target["value"]` is `_write_value_for_assignment(parameter)`,
+    not `parameter.value` (the typed value) the way cardiacCore's resolver
+    uses directly. cardiacCore's own parameters carry no `evidence_refs` and
+    need no container formatting, so `parameter.value` already IS the write
+    value there; this package's do, so writing `parameter.value` unmodified
+    through `case_rendering.render_patch_case_files`'s generic
     `update_foam_entry(..., edit["value"], ...)` would not reproduce
-    `apply_entry_overrides`'s bytes for a dimensioned/vector3/list kind --
-    see this task's report.
+    `apply_entry_overrides`'s bytes for a dimensioned/vector3/list kind.
 
-    **Carries `parameter.operation` through, 2026-09-23.** A `remove`
-    parameter has no value to format (`ParameterAssignment.__post_init__`
-    refuses one) -- `_write_value_for_assignment` is not called for it, and
-    its target carries no `"value"` key at all, matching the hex-rewrite
-    target's own shape (no `"value"` either, for the same reason: nothing
-    to write). `render_patch_case_files` reads `target["operation"]`,
-    defaulting to `"set"` for a target this still-unmodified `else` branch
-    would have built before this field existed.
+    **Carries `parameter.operation` through.** A `remove` parameter has no
+    value to format (`ParameterAssignment.__post_init__` refuses one) --
+    `_write_value_for_assignment` is not called for it, and its target
+    carries no `"value"` key at all, matching the hex-rewrite target's own
+    shape (no `"value"` either, for the same reason: nothing to write).
+    `render_patch_case_files` reads `target["operation"]`, defaulting to
+    `"set"`.
     """
     if request.mode != "clone_and_patch":
         raise ValueError(

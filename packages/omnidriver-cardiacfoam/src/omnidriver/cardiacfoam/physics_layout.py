@@ -7,14 +7,13 @@ A single-region row names its roles directly (``{"roles": ["electro"]}``):
 its documents sit under ``constant/``. A region-split row keeps
 ``names_in``/``model_key``/``regions`` instead of ``roles`` -- its roles are
 ``regions``'s own keys, and its documents sit under ``constant/<region>/``.
-The table never copies a region *name*; the case owns that. Added
-2026-09-26 (spec 2026-09-26-core-generality-design.md A7, owner amendment):
-the table replaces a one-off lookup, so electromechanics and later FSI are
-one row each.
+The table never copies a region *name*; the case owns that. The table
+replaces a one-off lookup, so electromechanics and later FSI are one row
+each.
 
 **A case without ``constant/physicsProperties`` is single-region, role
-``electro`` only** (R1 fix, finding I1 -- settled by source, not
-preference). cardiacFoam's ``physicsModel::New``
+``electro`` only** -- settled by source, not preference. cardiacFoam's
+``physicsModel::New``
 (``modules/physicsModel/src/solids4FoamModels/physicsModel/physicsModel.C``)
 opens ``physicsProperties`` with ``IOobject::MUST_READ``, so the solver
 itself cannot run a case that lacks one. A case without it runs a different
@@ -24,7 +23,7 @@ ionicHeterogeneityProbe;``, a utility that reads ``constant
 below -- not a row in the JSON table, since there is no ``type`` to key one
 on.
 
-**Refusals are named, never swallowed** (R1 fix, finding I1).
+**Refusals are named, never swallowed.**
 ``PhysicsLayoutError`` subclasses ``tutorial_records.TutorialRecordError``,
 so an unknown physics type, an unknown region role, or a missing/malformed
 coupling document reaches the CLI's existing ``plan --strict`` refusal
@@ -121,10 +120,9 @@ def region_of(case_root: Path, role: str) -> str | None:
     """The region the case names for ``role``; ``None`` for a single-region
     type.
 
-    Corrected 2026-09-26 (R1 fix, finding M2): the brief's interface said
-    this returned ``None`` for an unknown role too. It now refuses by name
-    instead, matching every other refusal in this module -- an unknown role
-    is a table/case mismatch, not a legitimate "no such region" answer.
+    Refuses by name for an unknown role, matching every other refusal in this
+    module -- an unknown role is a table/case mismatch, not a legitimate "no
+    such region" answer.
     """
     layout = _layout(case_root)
     if role not in _roles(layout):
