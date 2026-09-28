@@ -493,6 +493,14 @@ solver, environment or machine connection clear. **Kind:** *owner decision*,
 | 14 | **The electromechanics record** | owner work, with agent support for `WorkflowStep.cwd` (spec §5) | 10 | the owner's own test of the record form |
 | 15 | **The Niederer campaign rerun** with exact-point sampling, on a cluster | owner work; last | 9, 10 (step 3 and the campaign's own revision), 11 (SI requests) | the benchmark result, with readers already on `main` (`f2cd0fd`, `c0a48de`) |
 
+**Open defects found during the publication clean (2026-09-28):**
+- **Electrode units across cardiacCore and cardiacFOAM.** cardiacFOAM reads
+  electrode positions in metres. cardiacCore's `operations/electrodes.py`
+  takes a caller-declared `coordinate_unit` and converts nothing. A
+  millimetre case that feeds cardiacCore electrode coordinates into
+  cardiacFOAM runs cleanly, with a pseudo-ECG a factor of 1000 off. It
+  belongs with item 11 (SI and units).
+
 **Later, not scheduled:**
 - the cross-adapter workflow: one run using cardiacCore and cardiacFOAM
   steps (spec `2026-09-18-cross-adapter-workflow-design.md`), after item 4;
