@@ -8,7 +8,7 @@ import subprocess
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Mapping, NamedTuple
+from typing import TYPE_CHECKING, Any, Mapping, NamedTuple, Sequence
 
 from omnidriver.core.strict_planning import refuse_cli_study_for_non_record, strict_plan, _strict_plan_for_spec
 from omnidriver.core.plugin_profile import is_replica_directory_name, replica_directory_globs
@@ -233,6 +233,7 @@ def _validate_record_sweep_upfront(
 def _record_sweep_plan(
     record: Any, cases_root: Path, sweep_spec: dict[str, Any], *,
     output_dir: Path, cli_study: Mapping[str, Any] | None = None,
+    inputs: Mapping[str, str | Path] | None = None,
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
     _validate_record_sweep_upfront(record, sweep_spec, driver_context=driver_context)
@@ -248,7 +249,7 @@ def _record_sweep_plan(
             commit_result, spec = commit_and_build_record_spec(
                 record, case_id=case.case_id, cases_root=cases_root,
                 staged_case_root=staged_case_root, study_by_source=study_by_source,
-                driver_context=driver_context,
+                driver_context=driver_context, inputs=inputs,
             )
             report = _strict_plan_for_spec(record.name, spec, driver_context=driver_context)
         except Exception as exc:
@@ -284,6 +285,7 @@ def _record_sweep_run(
     record: Any, cases_root: Path, sweep_spec: dict[str, Any], *,
     output_dir: Path, case_timeout_s: float | None, task: str,
     cli_study: Mapping[str, Any] | None = None,
+    inputs: Mapping[str, str | Path] | None = None,
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
     """The record-entry counterpart of ``sweep_run``'s factory-entry branch.
@@ -336,7 +338,7 @@ def _record_sweep_run(
             commit_result, spec = commit_and_build_record_spec(
                 record, case_id=case.case_id, cases_root=cases_root,
                 staged_case_root=staged_case_root, study_by_source=study_by_source,
-                driver_context=driver_context,
+                driver_context=driver_context, inputs=inputs,
             )
             commit_status = commit_result.status
             unchanged_patches = [
@@ -591,6 +593,7 @@ def _materialize_entry_case(
 def _stage_entry_case(
     source_case_root: Path, staged_case_root: Path, *, driver_context=None,
     excluded_relpaths: frozenset[str] = frozenset(),
+    overlays: "Sequence[tuple[Path, str]]" = (),
 ) -> None:
     """Copy a registered case into scratch storage without old run output.
 
@@ -686,6 +689,7 @@ def _stage_entry_case(
             source_case_root,
             staged_case_root,
             ignore=ignore_generated,
+            overlays=overlays,
         )
 
 
@@ -795,18 +799,41 @@ def _recover_interrupted_case_staging(case_root: Path) -> None:
     _fsync_directory(case_root.parent)
 
 
+def _apply_overlay(source: Path, destination: Path) -> None:
+    """One ``(source, destination)`` pair (design §2.1's ``RecordInput.files``,
+    resolved by ``tutorial_records.ResolvedInput.overlays``) copied into a
+    staging candidate. ``source`` may be a file or a directory; either way
+    the copy is real bytes, never a link (design §2.3, "copy, never link" --
+    a step writes inside its input, e.g. ``generatePurkinjeTree`` rewriting
+    ``constant/polyMesh/sets/*``, and a link would send that write into the
+    supplied bundle or the native tree)."""
+    if not source.exists():
+        raise FileNotFoundError(f"record input overlay source does not exist: {source}")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if source.is_dir():
+        shutil.copytree(source, destination, dirs_exist_ok=True)
+    else:
+        shutil.copy2(source, destination)
+
+
 def _copy_and_promote_staged_case(
     source_case_root: Path,
     staged_case_root: Path,
     *,
     ignore: Any,
+    overlays: "Sequence[tuple[Path, str]]" = (),
 ) -> None:
-    """Copy to a private sibling, then replace a staged case under its lease."""
+    """Copy to a private sibling, apply every overlay, then replace a staged
+    case under its lease (design §2.3: "steps 1 and 2 happen in one
+    ``_stage_entry_case`` promotion... under the same lease. A crash then
+    never leaves a half-staged case.")."""
     token = uuid.uuid4().hex
     candidate = _staging_path(staged_case_root, token, "candidate")
     backup = _staging_path(staged_case_root, token, "backup")
     original_exists = staged_case_root.exists()
     shutil.copytree(source_case_root, candidate, ignore=ignore, symlinks=True)
+    for source, destination in overlays:
+        _apply_overlay(Path(source), candidate / destination)
     # From here on the journal deliberately remains after any failure. The
     # next holder restores a coherent tree before it considers replacement.
     _write_staging_journal(
@@ -836,11 +863,14 @@ def sweep_plan(
     output_dir: str | Path,
     max_cases: int = 200,
     cli_study: Mapping[str, Any] | None = None,
+    inputs: Mapping[str, str | Path] | None = None,
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
     """``cli_study``: the CLI's own study values (``--parallel``), a record
     sweep's ``"cli"`` source; a factory sweep given one is refused by name
-    (PAR, 2026-09-26)."""
+    (PAR, 2026-09-26). ``inputs`` (``--input NAME=PATH``): a record sweep's
+    inputs, supplied once and applied to every case (step S; a per-case
+    input is not built -- design §2.6); refused by name for a factory sweep."""
     try:
         sweep_spec = _load_spec(spec_path)
     except (OSError, ValueError) as exc:
@@ -860,10 +890,15 @@ def sweep_plan(
         # commit_record_case unresolved).
         return _record_sweep_plan(
             record, cases_root, sweep_spec, output_dir=Path(output_dir).resolve(),
-            cli_study=cli_study, driver_context=driver_context,
+            cli_study=cli_study, inputs=inputs, driver_context=driver_context,
         )
     try:
         refuse_cli_study_for_non_record(str(_entry_name(sweep_spec)), cli_study)
+        if inputs:
+            raise TutorialRecordError(
+                f"--input applies only to a tutorial record's sweep, and "
+                f"{_entry_name(sweep_spec)!r} is not one"
+            )
     except TutorialRecordError as exc:
         return {"case_count": 0, "cases": [], "spec_error": str(exc)}
 
@@ -996,9 +1031,11 @@ def sweep_run(
     fresh: bool = False,
     task: str = "summarize",
     cli_study: Mapping[str, Any] | None = None,
+    inputs: Mapping[str, str | Path] | None = None,
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
-    """``cli_study``: as :func:`sweep_plan`'s (PAR, 2026-09-26).
+    """``cli_study``/``inputs``: as :func:`sweep_plan`'s (PAR, 2026-09-26;
+    step S).
 
     `task` plays no part in the sweep loop itself -- expanding, routing,
     materializing, and running cases is fully deterministic and has no use
@@ -1067,9 +1104,14 @@ def sweep_run(
         return _record_sweep_run(
             record, cases_root, sweep_spec, output_dir=output_dir,
             case_timeout_s=case_timeout_s, task=task, cli_study=cli_study,
-            driver_context=driver_context,
+            inputs=inputs, driver_context=driver_context,
         )
     refuse_cli_study_for_non_record(str(_entry_name(sweep_spec)), cli_study)
+    if inputs:
+        raise TutorialRecordError(
+            f"--input applies only to a tutorial record's sweep, and "
+            f"{_entry_name(sweep_spec)!r} is not one"
+        )
 
     fresh_error = ensure_fresh_output_dir(
         output_dir, fresh=fresh, allowed_root=_allowed_runs_root(),

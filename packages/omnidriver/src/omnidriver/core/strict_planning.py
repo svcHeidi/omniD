@@ -469,9 +469,15 @@ def strict_plan(
     allow_unresolved_configuration: bool = False,
     scratch_root: str | Path | None = None,
     cli_study: Mapping[str, Any] | None = None,
+    inputs: Mapping[str, str | Path] | None = None,
     driver_context: "DriverContext",
 ) -> StrictPlanReport:
     """Build a non-mutating strict simulation plan report.
+
+    ``inputs`` (``--input NAME=PATH``, repeatable) supplies a tutorial
+    record's declared inputs (design 2026-09-28-supplied-inputs §2.2); it is
+    refused, by name, for any other entry (the same posture ``cli_study``
+    already has -- :func:`refuse_cli_study_for_non_record`).
 
     ``cli_study`` holds the study values the CLI itself supplies (PAR,
     2026-09-26: ``--parallel``), a record study's ``"cli"`` source beside
@@ -518,9 +524,15 @@ def strict_plan(
             allow_unresolved_configuration=allow_unresolved_configuration,
             scratch_root=scratch_root,
             cli_study=cli_study,
+            inputs=inputs,
             driver_context=driver_context,
         )
     refuse_cli_study_for_non_record(entry, cli_study)
+    if inputs:
+        raise TutorialRecordError(
+            f"--input applies only to a tutorial record's run, and {entry!r} is not a "
+            "tutorial record"
+        )
     spec = load_entry_spec(
         entry,
         entry_kind=entry_kind,
@@ -562,6 +574,7 @@ def _strict_plan_for_record(
     allow_unresolved_configuration: bool,
     scratch_root: str | Path | None,
     cli_study: Mapping[str, Any] | None = None,
+    inputs: Mapping[str, str | Path] | None = None,
     driver_context: "DriverContext",
 ) -> StrictPlanReport:
     """Plan (and commit) one tutorial-record case for `plan --strict --entry
@@ -623,6 +636,7 @@ def _strict_plan_for_record(
             staged_case_root=staged_case_root,
             study_by_source=study_by_source,
             driver_context=driver_context,
+            inputs=inputs,
         )
     except PermissionError as exc:
         # Final review S-I3 (2026-09-25) made a read-only scratch a refusal

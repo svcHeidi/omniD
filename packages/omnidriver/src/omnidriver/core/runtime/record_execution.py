@@ -35,13 +35,16 @@ from ..sweep.sweep_derivation_catalog import NAMING_OUTPUT_KEYS
 from .models import DataArtifact
 from ..tutorial_records import (
     PARALLEL_STUDY_NAME,
+    ResolvedInput,
     SourcedPatch,
     TutorialRecord,
     TutorialRecordError,
     _strictly_equal,
     check_variant_constraints,
     patches_to_parameters,
+    record_input_destinations,
     resolve_case_patches,
+    resolve_record_inputs,
     resolve_variant_selector,
     split_unchanged,
 )
@@ -76,6 +79,10 @@ class RecordCommitResult:
     #: (absent, or ``False``). The caller that builds the DAG hands it to
     #: the stack's parallel form (``record_case_spec``).
     parallel_request: Any = None
+    #: Step S: every input this case resolved (name, native/supplied, its
+    #: path, its files) -- ``record_case_spec`` carries it onto
+    #: ``resolvedEntry.inputs``.
+    resolved_inputs: tuple[ResolvedInput, ...] = ()
 
     @property
     def status(self) -> str:
@@ -125,14 +132,34 @@ def record_generated_relpaths(record: TutorialRecord) -> frozenset[str]:
 def _stage(
     record: TutorialRecord, *, cases_root: Path, staged_case_root: Path,
     driver_context: "DriverContext",
-) -> None:
+    inputs: Mapping[str, str | Path] | None = None,
+    strict_inputs: bool = True,
+) -> tuple[ResolvedInput, ...]:
+    """Design §2.3: copy the native case, excluding every input destination,
+    then overlay each resolved input's files into the same staged clone,
+    inside the one staging lease ``_stage_entry_case`` already holds.
+
+    ``strict_inputs`` is ``False`` only for ``preview_record_case``
+    (``describe``): an unresolved or incomplete input is silently left
+    unstaged rather than refused (§2.2, "describe does not refuse") --
+    correct because a record with no ``axes`` reads nothing an unstaged
+    input would have held, and a record's own ``axes`` contract already
+    forbids writing the staged case it reads (`resolve_case_patches`'s
+    purity check).
+    """
     from .sweep_runner import _stage_entry_case
 
     native_case_root = _native_case_root(record, cases_root=cases_root)
+    resolved_inputs = resolve_record_inputs(
+        record, inputs, cases_root=cases_root, strict=strict_inputs,
+    )
+    overlays = tuple(pair for resolved in resolved_inputs for pair in resolved.overlays())
+    excluded = record_generated_relpaths(record) | record_input_destinations(record)
     _stage_entry_case(
         native_case_root, staged_case_root, driver_context=driver_context,
-        excluded_relpaths=record_generated_relpaths(record),
+        excluded_relpaths=excluded, overlays=overlays,
     )
+    return resolved_inputs
 
 
 def _reserved_study_names(record: TutorialRecord) -> frozenset[str]:
@@ -394,6 +421,7 @@ def preview_record_case(
     cases_root: Path,
     study_by_source: Mapping[str, Mapping[str, Any]],
     driver_context: "DriverContext",
+    inputs: Mapping[str, str | Path] | None = None,
 ) -> dict[str, Any]:
     """Design §4 steps 1-7 without committing -- ``describe``'s preview.
 
@@ -410,7 +438,7 @@ def preview_record_case(
         staged_case_root = Path(scratch) / "case"
         _stage(
             record, cases_root=cases_root, staged_case_root=staged_case_root,
-            driver_context=driver_context,
+            driver_context=driver_context, inputs=inputs, strict_inputs=False,
         )
         (
             to_write, unchanged, command_arguments, workflow_step_ids, workflow_variant, parallel_request,
@@ -495,6 +523,7 @@ def commit_record_case(
     driver_context: "DriverContext",
     execution_env: Any | None = None,
     requested_by: str = "tutorial_record",
+    inputs: Mapping[str, str | Path] | None = None,
 ) -> RecordCommitResult:
     """Design §4 steps 1-8's write half: stage, resolve, and commit ONE case
     in ONE ``commit_case_write`` call (step 7's own words: "everything goes
@@ -513,9 +542,9 @@ def commit_record_case(
     """
     import tempfile
 
-    _stage(
+    resolved_inputs = _stage(
         record, cases_root=cases_root, staged_case_root=staged_case_root,
-        driver_context=driver_context,
+        driver_context=driver_context, inputs=inputs,
     )
     (
         to_write, unchanged, command_arguments, workflow_step_ids, _variant, parallel_request,
@@ -527,6 +556,7 @@ def commit_record_case(
         return RecordCommitResult(
             write_record=None, unchanged=unchanged, command_arguments=command_arguments,
             workflow_step_ids=workflow_step_ids, parallel_request=parallel_request,
+            resolved_inputs=resolved_inputs,
         )
 
     # `DriverContext.identity` has no default -- it is always present, never
@@ -594,6 +624,7 @@ def commit_record_case(
     return RecordCommitResult(
         write_record=record_, unchanged=unchanged, command_arguments=command_arguments,
         workflow_step_ids=workflow_step_ids, parallel_request=parallel_request,
+        resolved_inputs=resolved_inputs,
     )
 
 
@@ -860,6 +891,7 @@ def commit_and_build_record_spec(
     driver_context: "DriverContext",
     execution_env: Any | None = None,
     requested_by: str = "tutorial_record",
+    inputs: Mapping[str, str | Path] | None = None,
 ) -> tuple[RecordCommitResult, Any]:
     """Stage, commit, and build the ``TutorialSpec`` for one record case --
     design §4 steps 1-8's write half plus the spec that maps the committed
@@ -878,13 +910,14 @@ def commit_and_build_record_spec(
     commit_result = commit_record_case(
         record, cases_root=cases_root, staged_case_root=staged_case_root,
         study_by_source=study_by_source, driver_context=driver_context,
-        execution_env=execution_env, requested_by=requested_by,
+        execution_env=execution_env, requested_by=requested_by, inputs=inputs,
     )
     spec = record_case_spec(
         record, case_id=case_id, staged_case_root=staged_case_root,
         workflow_step_ids=commit_result.workflow_step_ids,
         command_arguments=commit_result.command_arguments,
         parallel_request=commit_result.parallel_request,
+        resolved_inputs=commit_result.resolved_inputs,
         driver_context=driver_context,
     )
     return commit_result, spec
@@ -898,6 +931,7 @@ def record_case_spec(
     workflow_step_ids: tuple[str, ...],
     command_arguments: Mapping[str, tuple[str, ...]],
     parallel_request: Any = None,
+    resolved_inputs: tuple[ResolvedInput, ...] = (),
     driver_context: "DriverContext | None" = None,
 ) -> Any:
     """Build the ``TutorialSpec`` a committed record case's workflow runs
@@ -946,6 +980,8 @@ def record_case_spec(
     metadata: dict[str, Any] = {}
     if parallel is not None:
         metadata["parallel"] = parallel
+    if resolved_inputs:
+        metadata["inputs"] = [resolved.to_json() for resolved in resolved_inputs]
     return TutorialSpec(
         name=case_id,
         case_root=case_root,

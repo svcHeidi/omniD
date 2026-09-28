@@ -516,6 +516,7 @@ def _describe_tutorial_record(
     *,
     overrides: dict[str, Any] | None,
     cli_study: Mapping[str, Any] | None = None,
+    inputs: Mapping[str, Any] | None = None,
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
     """Item 1: describe's own preview of a tutorial_record entry.
@@ -577,9 +578,11 @@ def _describe_tutorial_record(
         cases_root=cases_root,
         study_by_source={"base": incoming_overrides, "cli": dict(cli_study or {})},
         driver_context=driver_context,
+        inputs=inputs,
     )
     surface = record_surface(
         record, native_case_root=cases_root / record.native_case_relpath, driver_context=driver_context,
+        supplied=inputs,
     )
     return {
         "requested_entry": entry,
@@ -622,11 +625,14 @@ def describe_entry(
     overrides: dict[str, Any] | None = None,
     config_path: str | Path | None = None,
     cli_study: Mapping[str, Any] | None = None,
+    inputs: Mapping[str, Any] | None = None,
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
     """``cli_study``: the CLI's own study values (``--parallel``), previewed
     as a record study's ``"cli"`` source, as ``strict_plan`` plans them;
-    refused by name for an entry that is not a record (PAR, 2026-09-26)."""
+    refused by name for an entry that is not a record (PAR, 2026-09-26).
+    ``inputs`` (``--input NAME=PATH``): the same refusal, for the same
+    reason (step S)."""
     resolution = resolve_entry(
         entry,
         entry_kind=entry_kind,
@@ -636,11 +642,17 @@ def describe_entry(
     if resolution["resolution"] == "tutorial_record":
         return _describe_tutorial_record(
             entry, resolution, overrides=overrides, cli_study=cli_study,
-            driver_context=driver_context,
+            inputs=inputs, driver_context=driver_context,
         )
     from .strict_planning import refuse_cli_study_for_non_record
+    from .tutorial_records import TutorialRecordError
 
     refuse_cli_study_for_non_record(entry, cli_study)
+    if inputs:
+        raise TutorialRecordError(
+            f"--input applies only to a tutorial record's run, and {entry!r} is not a "
+            "tutorial record"
+        )
     from .runtime.registry import _materialize_resolved_entry
 
     spec = _materialize_resolved_entry(

@@ -496,6 +496,7 @@ def _context_from_entry(
     fresh: bool = False,
     scratch_dir: str | None = None,
     cli_study: dict | None = None,
+    inputs: dict | None = None,
 ) -> tuple[_ExecutionContext | None, int]:
     replan_entry = selected_entry
     replan_entry_kind = entry_kind
@@ -510,6 +511,7 @@ def _context_from_entry(
             allow_unresolved_configuration=allow_unresolved_configuration,
             scratch_root=scratch_dir,
             cli_study=cli_study,
+            inputs=inputs,
             driver_context=driver_context,
         )
     except TutorialRecordError as exc:
@@ -594,6 +596,7 @@ def _context_from_entry(
                 allow_unresolved_configuration=allow_unresolved_configuration,
                 scratch_root=scratch_dir,
                 cli_study=cli_study,
+                inputs=inputs,
                 driver_context=driver_context,
             )
         except TutorialRecordError as exc:
@@ -626,6 +629,7 @@ def _context_from_entry(
                 allow_unresolved_configuration=allow_unresolved_configuration,
                 scratch_root=scratch_dir,
                 cli_study=cli_study,
+                inputs=inputs,
                 driver_context=driver_context,
             )
         except (OSError, ValueError, TutorialRecordError) as exc:
@@ -987,6 +991,23 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--input",
+        dest="inputs",
+        action="append",
+        default=[],
+        metavar="NAME=PATH",
+        help=(
+            "For a tutorial record (describe, plan/step/run --strict, "
+            "sweep-plan/sweep-run): supply one of its declared inputs -- data "
+            "outside its native case folder (a patient anatomy bundle, a "
+            "shared mesh) that has no ambient location. Repeatable. A record "
+            "with no native location for an input refuses to plan/run "
+            "without it, by name; describe never refuses, and lists each "
+            "input's supplied status instead. Refused by name for an entry "
+            "that is not a tutorial record."
+        ),
+    )
+    parser.add_argument(
         "--step",
         help="Workflow step id to execute when action=step.",
     )
@@ -1329,6 +1350,15 @@ def main(argv: list[str] | None = None) -> int:
     selected_entry = args.entry
     # PAR (2026-09-26): the CLI's own study source, beside --config's.
     cli_study = {PARALLEL_STUDY_NAME: args.parallel} if args.parallel is not None else {}
+    # Step S: --input NAME=PATH, repeatable; never discovered (CLAUDE.md).
+    cli_inputs: dict[str, str] = {}
+    for raw in args.inputs:
+        name, separator, path = raw.partition("=")
+        if not separator or not name or not path:
+            parser.error(f"--input {raw!r} must be NAME=PATH")
+        if name in cli_inputs:
+            parser.error(f"--input {name!r} was given more than once")
+        cli_inputs[name] = path
 
     overrides = (
         _load_spec_overrides(
@@ -1367,6 +1397,7 @@ def main(argv: list[str] | None = None) -> int:
                 overrides=overrides,
                 config_path=args.config,
                 cli_study=cli_study,
+                inputs=cli_inputs,
                 driver_context=driver_context,
             )
         except TutorialRecordError as exc:
@@ -1393,6 +1424,7 @@ def main(argv: list[str] | None = None) -> int:
                 allow_unresolved_configuration=args.allow_unresolved_configuration,
                 scratch_root=args.scratch_dir,
                 cli_study=cli_study,
+                inputs=cli_inputs,
                 driver_context=driver_context,
             )
         except TutorialRecordError as exc:
@@ -1429,6 +1461,7 @@ def main(argv: list[str] | None = None) -> int:
             fresh=args.fresh,
             scratch_dir=args.scratch_dir,
             cli_study=cli_study,
+            inputs=cli_inputs,
         )
         if context is None:
             return failure_code
@@ -1451,6 +1484,7 @@ def main(argv: list[str] | None = None) -> int:
             fresh=args.fresh,
             scratch_dir=args.scratch_dir,
             cli_study=cli_study,
+            inputs=cli_inputs,
         )
         if context is None:
             return failure_code
@@ -1466,6 +1500,7 @@ def main(argv: list[str] | None = None) -> int:
                 output_dir=output_dir,
                 max_cases=args.max_cases,
                 cli_study=cli_study,
+                inputs=cli_inputs,
                 driver_context=driver_context,
             )
         except (SweepValidationError, TutorialRecordError) as exc:
@@ -1491,6 +1526,7 @@ def main(argv: list[str] | None = None) -> int:
                 case_timeout_s=args.case_timeout_s,
                 fresh=args.fresh,
                 cli_study=cli_study,
+                inputs=cli_inputs,
                 driver_context=driver_context,
             )
         except (SweepValidationError, TutorialRecordError) as exc:

@@ -33,7 +33,7 @@ scans this module at all.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Mapping, Sequence
 
 from .case_write import _check_case_relative
@@ -122,6 +122,40 @@ def _token_runs(tokens: Sequence[str], key: Sequence[str]) -> list[int]:
     return [i for i in range(len(tokens) - width + 1) if tuple(tokens[i:i + width]) == key]
 
 
+def _first_touching_step(
+    path_str: str, steps: Sequence["WorkflowStep"],
+) -> tuple[int, str] | None:
+    """The index of the first step (in declared order) that touches
+    ``path_str`` -- exactly, or through a directory relationship in either
+    direction (a step consuming ``constant/polyMesh/boundary`` touches a
+    destination of ``constant/polyMesh``, and vice versa) -- and whether it
+    was through that step's ``consumes`` or its ``produces``. ``None`` if no
+    step touches it at all. Shared by :meth:`TutorialRecord._check_inputs`
+    (§2.1's two input/step refusals)."""
+    path = PurePosixPath(path_str)
+
+    def _touches(other: str) -> bool:
+        other_path = PurePosixPath(str(other))
+        return other_path == path or path in other_path.parents or other_path in path.parents
+
+    for index, step in enumerate(steps):
+        if any(_touches(p) for p in step.consumes):
+            return index, "consumes"
+        if any(_touches(p) for p in step.produces):
+            return index, "produces"
+    return None
+
+
+def _any_step_consumes(path_str: str, steps: Sequence["WorkflowStep"]) -> bool:
+    path = PurePosixPath(path_str)
+    for step in steps:
+        for consumed in step.consumes:
+            consumed_path = PurePosixPath(str(consumed))
+            if consumed_path == path or path in consumed_path.parents or consumed_path in path.parents:
+                return True
+    return False
+
+
 def _string_tokens(label: str, value: Any, *, allow_empty_tuple: bool, allow_empty_token: bool) -> tuple[str, ...]:
     if isinstance(value, str):
         raise TutorialRecordError(f"{label} must be a sequence of strings, not the bare string {value!r}")
@@ -193,6 +227,176 @@ class DefaultArgument:
 
     def tokens(self) -> tuple[str, ...]:
         return self.key + self.values
+
+
+class RecordInputError(TutorialRecordError):
+    """A record input's declaration, or its resolution, was refused by name."""
+
+
+class RecordInputNotSupplied(RecordInputError):
+    """A record input has no native location, and none was supplied."""
+
+
+class RecordInputIncomplete(RecordInputError):
+    """A record input resolved to a directory missing one of its files."""
+
+
+def _check_input_relative(label: str, value: str) -> tuple[str, ...]:
+    """A record-input source or destination: case-relative shape, plus the
+    two extra refusals every ``produces``/``consumes`` path already gets
+    (``WorkflowStep.__post_init__``): no ``{``/``}``, and never the root
+    itself."""
+    if not isinstance(value, str) or not value:
+        raise TutorialRecordError(f"{label} must be a non-empty str, got {value!r}")
+    if "{" in value or "}" in value:
+        raise TutorialRecordError(f"{label} must not contain '{{' or '}}': placeholders are not supported")
+    try:
+        parts = _check_case_relative(label, value).parts
+    except ValueError as exc:
+        raise TutorialRecordError(str(exc)) from exc
+    if not parts:
+        raise TutorialRecordError(f"{label} must not be the case root")
+    return parts
+
+
+@dataclass(frozen=True)
+class RecordInput:
+    """Data a record's steps read but that is not in its native case folder
+    (design §2.1): a patient anatomy bundle, a shared mesh, a 1D graph.
+
+    ``files`` is a tuple of ``(path inside the input, case-relative
+    destination)`` pairs -- ``(".", destination)`` takes the input's own
+    root (which may itself be a file, e.g. one graph file). ``native_relpath``
+    is this input's default location under the environment's own cases root
+    (native fact, e.g. the idealized heart's tracked ``../mesh``); ``None``
+    means the input has no ambient location and must always be supplied
+    (``--input NAME=PATH``).
+
+    Checked here: a non-empty name, at least one file pair, every source and
+    destination shaped like a real case-relative path (no absolute path, no
+    ``..`` escape, no ``{``/``}``, never the root). Two destinations
+    conflicting with each other, or with a step's own consumes/produces, are
+    checked on the owning :class:`TutorialRecord` instead (§2.1's remaining
+    rules), because only the record knows its own steps.
+    """
+
+    name: str
+    files: tuple[tuple[str, str], ...]
+    native_relpath: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise TutorialRecordError("a record input must have a non-empty name")
+        if isinstance(self.files, str):
+            raise TutorialRecordError(
+                f"record input {self.name!r} files must be a sequence of (source, destination) "
+                f"pairs, not the bare string {self.files!r}"
+            )
+        pairs = tuple(self.files)
+        if not pairs:
+            raise TutorialRecordError(f"record input {self.name!r} must declare at least one file")
+        checked: list[tuple[str, str]] = []
+        for pair in pairs:
+            pair = tuple(pair)
+            if len(pair) != 2:
+                raise TutorialRecordError(
+                    f"record input {self.name!r} file {pair!r} must be a (source, destination) pair"
+                )
+            source, destination = pair
+            if source != ".":
+                _check_input_relative(f"record input {self.name!r}'s source {source!r}", source)
+            _check_input_relative(f"record input {self.name!r}'s destination {destination!r}", destination)
+            checked.append((source, destination))
+        object.__setattr__(self, "files", tuple(checked))
+        if self.native_relpath is not None:
+            _check_input_relative(
+                f"record input {self.name!r}'s native_relpath {self.native_relpath!r}", self.native_relpath,
+            )
+
+    def destinations(self) -> tuple[str, ...]:
+        return tuple(destination for _source, destination in self.files)
+
+
+@dataclass(frozen=True)
+class ResolvedInput:
+    """One input, resolved to a real directory (or file), for staging and
+    for provenance (§2.4's ``resolvedEntry.inputs``)."""
+
+    name: str
+    kind: str  # "native" | "supplied"
+    path: Path
+    files: tuple[tuple[str, str], ...]
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "name": self.name, "kind": self.kind, "path": str(self.path),
+            "files": [list(pair) for pair in self.files],
+        }
+
+    def overlays(self) -> tuple[tuple[Path, str], ...]:
+        return tuple(
+            (self.path if source == "." else self.path / source, destination)
+            for source, destination in self.files
+        )
+
+
+def resolve_record_inputs(
+    record: "TutorialRecord",
+    supplied: Mapping[str, str | Path] | None,
+    *,
+    cases_root: Path,
+    strict: bool = True,
+) -> tuple[ResolvedInput, ...]:
+    """Resolve every input a record declares (design §2.2).
+
+    A supplied path wins; otherwise the input's own native location, if it
+    has one; otherwise -- when ``strict`` -- refused by name
+    (:class:`RecordInputNotSupplied`). An input whose resolved directory is
+    missing one of its declared files is refused too
+    (:class:`RecordInputIncomplete`), naming the missing files.
+
+    ``strict=False`` is ``describe``'s own posture (§2.2: "describe does not
+    refuse"): an input with nothing to resolve, or an incomplete one, is
+    left out of the result rather than raising -- an agent learns the
+    record's input NAMES from :mod:`record_surface` before it has the data.
+    An unknown ``--input`` name is refused either way: that is a typo in
+    what the caller asked for, not a question of whether data exists yet.
+    """
+    supplied = dict(supplied or {})
+    declared = {input_.name: input_ for input_ in record.inputs}
+    unknown = sorted(set(supplied) - set(declared))
+    if unknown:
+        raise RecordInputError(
+            f"tutorial record {record.name!r} does not declare input(s) {unknown}; "
+            f"it declares {sorted(declared) or 'none'}"
+        )
+    resolved: list[ResolvedInput] = []
+    for name, input_ in declared.items():
+        if name in supplied:
+            path, kind = Path(supplied[name]).expanduser(), "supplied"
+        elif input_.native_relpath is not None:
+            path, kind = Path(cases_root) / input_.native_relpath, "native"
+        elif strict:
+            files = ", ".join(source for source, _dest in input_.files)
+            raise RecordInputNotSupplied(
+                f"record {record.name!r} needs input {name!r} "
+                f"({len(input_.files)} files: {files}); it has no native "
+                f"location; supply --input {name}=<dir>"
+            )
+        else:
+            continue
+        missing = [
+            source for source, _dest in input_.files
+            if not (path if source == "." else path / source).exists()
+        ]
+        if missing:
+            if strict:
+                raise RecordInputIncomplete(
+                    f"record {record.name!r} input {name!r} at {path} is missing file(s): {missing}"
+                )
+            continue
+        resolved.append(ResolvedInput(name=name, kind=kind, path=path, files=input_.files))
+    return tuple(resolved)
 
 
 @dataclass(frozen=True)
@@ -401,6 +605,11 @@ class TutorialRecord:
     name: str
     native_case_relpath: str
     workflow_steps: tuple[WorkflowStep, ...]
+    #: Data a step reads that is not in the native case folder (design
+    #: §2.1): each input's destinations are excluded from the native-case
+    #: copy at staging time and overlaid from wherever it resolves to
+    #: (``resolve_record_inputs``, ``record_execution._stage``).
+    inputs: tuple[RecordInput, ...] = ()
     axes: tuple[AxisContract, ...] = ()
     workflow_variants: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     #: The reserved study name that selects among ``workflow_variants`` --
@@ -467,6 +676,8 @@ class TutorialRecord:
                 f"step ids: {step_ids}"
             )
         known_steps = frozenset(step_ids)
+        object.__setattr__(self, "inputs", tuple(self.inputs))
+        self._check_inputs()
         variants = {
             selector: tuple(steps)
             for selector, steps in dict(self.workflow_variants).items()
@@ -563,6 +774,50 @@ class TutorialRecord:
 
     def axis_names(self) -> tuple[str, ...]:
         return tuple(axis.name for axis in self.axes)
+
+    def _check_inputs(self) -> None:
+        """Design §2.1's remaining refusals: the ones only the record, not a
+        lone :class:`RecordInput`, can check -- they read ``workflow_steps``."""
+        seen_names: set[str] = set()
+        seen_destinations: dict[str, str] = {}
+        for input_ in self.inputs:
+            if not isinstance(input_, RecordInput):
+                raise TutorialRecordError(
+                    f"tutorial record {self.name!r} inputs holds {input_!r}, which is not a RecordInput"
+                )
+            if input_.name in seen_names:
+                raise TutorialRecordError(
+                    f"tutorial record {self.name!r} declares input {input_.name!r} twice"
+                )
+            seen_names.add(input_.name)
+            for destination in input_.destinations():
+                for other_destination, other_input in seen_destinations.items():
+                    if destination == other_destination:
+                        raise TutorialRecordError(
+                            f"tutorial record {self.name!r}: input {input_.name!r} and "
+                            f"{other_input!r} both write destination {destination!r}"
+                        )
+                    first, second = sorted((destination, other_destination), key=len)
+                    if PurePosixPath(second) == PurePosixPath(first) or PurePosixPath(first) in PurePosixPath(second).parents:
+                        raise TutorialRecordError(
+                            f"tutorial record {self.name!r}: input {input_.name!r}'s destination "
+                            f"{destination!r} and {other_input!r}'s {other_destination!r} overlap"
+                        )
+                seen_destinations[destination] = input_.name
+                if not _any_step_consumes(destination, self.workflow_steps):
+                    raise TutorialRecordError(
+                        f"tutorial record {self.name!r}: input {input_.name!r}'s destination "
+                        f"{destination!r} is not consumed by any workflow step; a supplied file "
+                        "must be tied to a step so provenance covers it"
+                    )
+                touch = _first_touching_step(destination, self.workflow_steps)
+                if touch is not None and touch[1] == "produces":
+                    raise TutorialRecordError(
+                        f"tutorial record {self.name!r}: input {input_.name!r}'s destination "
+                        f"{destination!r} is produced by step "
+                        f"{self.workflow_steps[touch[0]].step_id!r} before any step consumes it; "
+                        "that path would be generated, not supplied"
+                    )
 
 
 # ---------------------------------------------------------------------------
@@ -1201,6 +1456,14 @@ def patches_to_parameters(
 # 2026-09-26; this closes it for two records sharing a name across a
 # plugin's own TUTORIAL_RECORDS).
 # ---------------------------------------------------------------------------
+
+
+def record_input_destinations(record: "TutorialRecord") -> frozenset[str]:
+    """Every case-relative destination any of ``record``'s inputs writes --
+    never taken from the native case folder at staging time (design §2.3),
+    the same exclusion role ``record_execution.record_generated_relpaths``
+    plays for a step's own outputs."""
+    return frozenset(destination for input_ in record.inputs for destination in input_.destinations())
 
 
 def build_tutorial_record_catalog(

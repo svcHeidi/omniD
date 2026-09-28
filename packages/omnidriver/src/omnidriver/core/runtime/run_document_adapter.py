@@ -77,6 +77,9 @@ def _run_document_from_case(
             # scheduler allocation it was checked against; a serial one
             # carries no key (record_execution.record_case_spec).
             **({"parallel": spec.metadata["parallel"]} if "parallel" in spec.metadata else {}),
+            # Step S (§2.4): every input this case resolved, name/kind/path/
+            # files -- absent when the record declares none.
+            **({"inputs": spec.metadata["inputs"]} if "inputs" in spec.metadata else {}),
         },
         workflowDag=workflow_dag,
         workflowState=workflow_state.to_json() if workflow_state else None,
