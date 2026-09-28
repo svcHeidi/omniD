@@ -36,7 +36,24 @@ differ. The rest of the file is the 9ec4e69 review and still holds.
 - **Agreement.** At Δx 0.1 mm and Δt 0.005 ms, P8 is 40.07 ms for openCARP and 45.50 ms for cardiacFOAM. Both are inside the paper's 37.8–48.7 ms, but the two differ by more than the pre-registered 5 ms, so all 9 cross-solver requests fail.
 - **Speed.** cardiacFOAM's solve step is 2.4–7.8× slower than openCARP's at N = 6. openCARP's own timing puts its time in the PDE solve (595 s) against 87 s in its ionic model. cardiacFOAM prints no breakdown. An estimate from `docs/solver-learning/cardiacfoam.md` T puts its ionic model at about 70% of the solve and about 15× openCARP's per node.
 
-**Next, in order:**
+**Update, same evening (`main` at `28c6ece`).** Items 1–5 below are done:
+- **1.** cardiacCore `main` is at `15c6dfe`, pushed. The seed script uses the C++ default and gives identical seeds on `bivCase`; the three idealized-heart cases and their regression tests are committed.
+- **2.** The five installed utilities were rebuilt from `15c6dfe`. The regression tests pass with them, and nothing else in the install changed.
+- **3.** The native post-processing scripts are ported (native `eb5897b3`, pushed), and `Niedererlines` samples with `cellPoint`.
+- **4.** The C++ source root is supplied, never guessed. Strict plans scan it, `rtst_scanner` is in `omnidriver-openfoam`, and `omnidriver catalog` answers "entries of dictionary X".
+- **5.** Each manifest declares its shell, `omnidriver env --plugin P` renders and checks it, and every step records its host.
+
+Tests: all packages, core, wheel and static gates at 0 failed; native cardiacFOAM 197 passed, native openCARP 32 passed, native cardiacCore 49 passed.
+
+Left over:
+- item 6 (cardiacFOAM timing split), not a priority;
+- `plan --strict` still searches the disk for OpenFOAM when no bashrc is supplied;
+- two sources for the bashrc: `OPENFOAM_BASHRC` and the runtime config;
+- the stale opt-in fixture `reference_experiments/niederer_tissue.json`: re-pin it or delete it;
+- tests that skip on every machine;
+- `campaign.sh` still builds its own shells.
+
+**Next, in order (as written before the update):**
 1. **Owner: review cardiacCore `omnid/records`,** then merge it to `main`. It holds:
    - the three idealized-heart cases, with the mesh in Git LFS;
    - their regression tests;
