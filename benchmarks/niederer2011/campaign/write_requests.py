@@ -72,7 +72,7 @@ TEMPORAL_TOLERANCE = {
 }
 BOTH_NOT_REACHED = "fail"   # every end time was chosen so every point activates; a point that does not is a failure
 
-#: The agent's pairing (topic B Task 8, cardiacfoam.md section X), read from
+#: The probe pairing (cardiacfoam.md section X), read from
 #: the native files: cardiacFOAM's stimulus box sits at the corner
 #: (0, 0, 7) mm of its 20 x 3 x 7 mm slab, fibres along x, so x = a, y = c,
 #: z = 7 mm - b, and probe k of system/Niedererpoints is P(k+1). Its expected

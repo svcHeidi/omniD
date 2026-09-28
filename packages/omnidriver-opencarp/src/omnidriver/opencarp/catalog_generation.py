@@ -1,9 +1,6 @@
-"""Build the catalog by asking the installed binary (evidence B1-B6, G6).
+"""Build the catalog by asking the installed binary.
 
-+Help lists every parameter with its type. +Help <name> gives the detail,
-and needs a concrete index (``stim[0]...``, not ``stim[Int]...``; B3/B4).
-Build identity comes from -buildinfo's tag and hash lines only: its
-repository line embeds a CI token (A8, G3)."""
++Help lists every parameter with its type; +Help <name> gives the detail and needs a concrete index (``stim[0]...``, not ``stim[Int]...``). Build identity comes from -buildinfo's tag and hash lines only, since its repository line embeds a CI token."""
 from __future__ import annotations
 
 import re
@@ -49,15 +46,7 @@ def _typed(value: str | None) -> str | None:
 
 
 def _menu_value(item_type: str, spelled: str) -> str:
-    """A menu item as the value a .par assigns, not +Help's source spelling.
-
-    **Added 2026-09-25 (review B-I4).** +Help prints each item as a typed C
-    literal: ``(Short)(1)``, but ``(String)("ref")`` for ``ginkgo_exec``, a
-    String menu, quotes included. Kept verbatim, every legal String value was
-    refused ("ref" is not ``'"ref"'``) and the quoted one was then refused by
-    ``format_value``, so the parameter could not be set at all. The quotes
-    are the C literal's, not part of the value, so a String item drops them.
-    """
+    """The value a .par assigns for a menu item: +Help prints each item as a typed C literal (``(Short)(1)``, ``(String)("ref")``), so a String menu drops the literal's quotes rather than keeping them as part of the value."""
     if item_type == "String" and len(spelled) >= 2 and spelled[0] == spelled[-1] == '"':
         return spelled[1:-1]
     return spelled
@@ -115,9 +104,9 @@ def build_catalog(binary: str = "openCARP", env: Mapping[str, str] | None = None
     parameters = []
     for name, opencarp_type in parse_help_list(_run(resolved, ["+Help"], env)):
         if opencarp_type.startswith("{"):
-            # B8: a whole-array shorthand has no detail block under any
-            # spelling; only its elements do. It is kept so the validator
-            # can name it and ask for elements.
+            # A whole-array shorthand has no detail block under any spelling;
+            # only its elements do. It is kept so the validator can name it
+            # and ask for elements.
             detail = {"default": None, "minimum": None, "maximum": None,
                       "menu": [], "allocates": [], "description": ""}
         else:

@@ -1,25 +1,17 @@
-"""cardiacCore's tutorial-record key validator and catalog (step S; design
-docs/superpowers/specs/2026-09-28-supplied-inputs-design.md §5, S3 row).
+"""cardiacCore's tutorial-record key validator and catalog.
 
-**One reality** (CLAUDE.md): the OpenFOAM half -- any ``system/`` document
-this package has no keyed catalog for -- is the exact rule
-``omnidriver-cardiacfoam``'s own validator uses, shared through
+**One reality** (CLAUDE.md): an uncatalogued ``system/`` document falls back
+to the same rule ``omnidriver-cardiacfoam``'s validator uses, shared through
 ``omnidriver-openfoam`` rather than reimplemented. cardiacCore adds only its
-own half: the utility dicts ``catalogs/inputs.py`` already catalogues, with
-evidence from the native C++ source (``setCardiacConductivityDict``,
-``setCardiacAnatomyDict``, ``setPurkinjeSlabDict``,
-``setPurkinjeMorphometryDict``, ``coordinatesConventionDict``,
-``generatePurkinjeTreeDict``, and the two scar dicts, declared-only since
-scar is off ``main``).
+own half: the utility dicts ``catalogs/inputs.py`` catalogues, with evidence
+from the native C++ source for each Dict.
 
 Three outcomes, the same three cardiacFOAM's validator has:
 
 1. A key one of ``catalogs/inputs.py``'s ``DictEntry`` tuples declares for
-   that document (matched against the entry's own ``driver_path`` suffix,
-   in ``record_surface``'s key grammar -- ``<name>`` stands for one dot-free
-   segment, exactly as ``generatePurkinjeTreeDict``'s ``<ventKey>`` entries
-   already spell it) -- checked against the entry's ``value_kind`` via
-   ``validate_value_shape``, ``validated=True``.
+   that document (matched against the entry's own ``driver_path`` suffix, in
+   ``record_surface``'s key grammar) -- checked against the entry's
+   ``value_kind`` via ``validate_value_shape``, ``validated=True``.
 2. Any other ``system/`` document (``controlDict``, ``fvSchemes``,
    ``fvSolution`` -- this package catalogues none of them) -- accepted,
    ``validated=False``, its shape inferred by the shared OpenFOAM function.
@@ -76,18 +68,15 @@ def _match(document: str, key_path: "tuple[str, ...]"):
 
 def record_key_validator(document: str, key_path: "tuple[str, ...]", value: Any) -> "tuple[str, bool]":
     """The one callable ``RecordKeyValidationCapability.validator()`` returns
-    for a cardiacCore stack (``CardiacCorePlugin.get_record_key_validator``).
-    See the module docstring for the three rules this implements.
+    for a cardiacCore stack. See the module docstring for the three rules
+    this implements.
 
-    **A catalogued document's own unmatched key is refused, not accepted
-    unvalidated** (found running ``humanSlab`` for real, S3): a document in
-    ``_ENTRIES_BY_DOCUMENT`` (``setPurkinjeSlabDict``, ...) has a real
-    catalog, so a key it does not declare (a typo, e.g. ``thicknes``) is a
-    catalog miss, exactly rule 3 -- falling through to rule 2's "any other
-    ``system/`` document" would silently accept it as an unvalidated
-    OpenFOAM-owned key instead, which is only correct for a document this
-    package declares NO catalog for at all (``controlDict``, ``fvSchemes``,
-    ``fvSolution``, ``coordinatesConventionDict``)."""
+    A catalogued document's own unmatched key is refused (rule 3), not
+    accepted unvalidated (rule 2): a document in ``_ENTRIES_BY_DOCUMENT`` has
+    a real catalog, so an undeclared key (e.g. a typo) is a catalog miss, not
+    an OpenFOAM-owned key this package simply declares no catalog for at all
+    (``controlDict``, ``fvSchemes``, ``fvSolution``,
+    ``coordinatesConventionDict``)."""
     dotted = ".".join(key_path)
     if document in _ENTRIES_BY_DOCUMENT:
         entry = _match(document, key_path)
@@ -115,7 +104,7 @@ def record_key_validator(document: str, key_path: "tuple[str, ...]", value: Any)
 
 def record_key_catalog(case_root: Path) -> "tuple[dict[str, Any], ...]":
     """Every key ``record_key_validator`` accepts for the case at
-    ``case_root``, in ``record_surface``'s grammar (C10)."""
+    ``case_root``, in ``record_surface``'s grammar."""
     case_root = Path(case_root)
     entries: list[dict[str, Any]] = [
         listed_entry(document, key, entry)

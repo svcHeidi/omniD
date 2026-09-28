@@ -1,14 +1,9 @@
-"""The case-owned ventricular coordinates convention.
+"""The case-owned ventricular coordinates convention: a case declares its own
+coordinate system, field names, and chamber/transmural values, and this module
+reads that declaration the same way every native utility does.
 
-cardiacCore does not have *a* coordinate convention. A case declares which
-ventricular coordinate system it uses, what its coordinate fields are called,
-and where its transmural and chamber values sit; every native utility then
-reads whatever that case declared. This module reads the same dictionary the
-same way, so the adapter chooses dictionary entries and field paths from the
-selected case rather than from a name frozen into the workflow.
-
-Mirrors ``src/coordinatesConvention/coordinatesConvention.H`` in native
-cardiacCore. Where the two could drift, native is the authority.
+Mirrors ``src/coordinatesConvention/coordinatesConvention.H``; where the two
+could drift, native is the authority.
 """
 
 from __future__ import annotations

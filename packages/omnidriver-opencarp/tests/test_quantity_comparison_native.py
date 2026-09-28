@@ -1,7 +1,6 @@
 """An agent compares two openCARP resolutions at the paper's points, end to
-end, exactly as it would: sweep-run, read the run documents, write a
-request from the reference, `omnidriver compare`, attach the report to the
-experiment (spec 2026-09-26 §4)."""
+end, exactly as it would: sweep-run, read the run documents, write a request
+from the reference, `omnidriver compare`, attach the report to the experiment."""
 from __future__ import annotations
 
 import json
@@ -34,7 +33,7 @@ def test_an_agent_compares_dx_500_with_dx_250_at_the_paper_points(tmp_path):
     cases = {case.resolved_axis_values["dx"]: case for case in build_sweep_context(output).cases}
     reference = load_point_reference(REFERENCE)
     # The agent's orientation step: openCARP's slab is the reference frame
-    # (F3: 0-20000 x 0-7000 x 0-3000 um, stimulus cube at the origin, fibres
+    # (0-20000 x 0-7000 x 0-3000 um, stimulus cube at the origin, fibres
     # along x), so the reference coordinates are written unchanged, in the
     # reference's own unit; core converts mm to the reader's um.
     labels = [label for label, point in reference.points.items() if point.coordinates is not None]
@@ -50,13 +49,12 @@ def test_an_agent_compares_dx_500_with_dx_250_at_the_paper_points(tmp_path):
         "schema_version": 1, "reference": str(REFERENCE),
         "tolerance": {"kind": "absolute", "value": TOLERANCE_MS, "unit": "ms",
                       "rationale": "declared before either run was read; exploratory, not a benchmark acceptance claim"},
-        # I2/M1, controller review 2026-09-26: pre-registered, no default.
-        # At tend 150 ms every P1-P9 corner activates on both resolutions
+        # Pre-registered, no default. At tend 150 ms every P1-P9 corner
+        # activates on both resolutions
         # (test_the_slab_corners_and_centre_at_dx_500_match_g4), so no pair
         # is expected to be both_not_reached either way; 'agree' is chosen
         # only because it must be chosen, not because it changes anything
-        # here -- the outside_tolerance pairs below are what fails this
-        # report, exactly as before this field existed.
+        # here -- the outside_tolerance pairs below are what fails this report.
         "both_not_reached": "agree",
         "runs": {"dx500": run(500.0), "dx250": run(250.0)},
         "pairs": [{"reference_label": label, "left": {"run": "dx500", "quantity": label},
@@ -68,10 +66,10 @@ def test_an_agent_compares_dx_500_with_dx_250_at_the_paper_points(tmp_path):
     assert proc.returncode == 0, proc.stdout[-2000:] + proc.stderr[-2000:]
     report = json.loads(report_path.read_text())
     assert report["both_not_reached"] == "agree"
-    # I2/M1: every side below is asserted "evaluated" -- no pair is ever
+    # Every side below is asserted "evaluated" -- no pair is ever
     # both_not_reached at tend 150 ms, so 'agree' vs 'fail' changes nothing
     # here. dx 500 vs dx 250 disagrees outside P1 (AGENT_GUIDE.md), so this
-    # stays "failed" for the same reason it always has.
+    # fails.
     assert report["status"] == "failed"
     by_label = {m["reference_label"]: m for m in report["metrics"]}
     assert set(by_label) == set(labels)
@@ -85,7 +83,7 @@ def test_an_agent_compares_dx_500_with_dx_250_at_the_paper_points(tmp_path):
         assert metric["status"] == ("within_tolerance" if difference <= TOLERANCE_MS else "outside_tolerance")
     for side in ("left", "right"):
         assert by_label["P1"][side]["value"] < by_label["P9"][side]["value"] < by_label["P8"][side]["value"]
-    assert by_label["P8"]["left"]["value"] == pytest.approx(126.45, abs=5e-3)   # G4, dx 500
+    assert by_label["P8"]["left"]["value"] == pytest.approx(126.45, abs=5e-3)   # dx 500
     experiment = inspect_sweep_experiment(output, comparisons=experiment_comparisons(report_path, sweep_output=output))
     assert {case.comparison.association_status for case in experiment.cases} == {"run_verified"}
     assert {case.comparison.status for case in experiment.cases} == {report["status"]}

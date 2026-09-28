@@ -9,23 +9,18 @@ Rules (see ARCHITECTURE.md "Architectural Rules"):
   3. No adapter imports omnidriver.opencarp, and omnidriver.opencarp imports
      no other adapter nor foamlib.
 
-**Corrected 2026-09-25 (solver-conformance B-I2).** When omnidriver-opencarp
-landed, only its outbound direction was guarded: core, openfoam, cardiacfoam
-and cardiaccore could all import ``omnidriver.opencarp`` and this gate said
-"OK". Core's forbidden list is now *derived* from every adapter package under
+Core's forbidden list is *derived* from every adapter package under
 ``packages/*/src/omnidriver/`` rather than listed by hand, and any adapter
-package with no block of its own below fails the gate by name -- so a sixth
-package cannot repeat that hole silently.
+package with no block of its own below fails the gate by name -- so a new
+adapter cannot land without a rule for it.
 
 A cardiac adapter may import omnidriver.openfoam -- that is the direction the
 layering allows, and omnidriver-cardiaccore does exactly that for
 ``read_foam_entry``/``update_foam_entry``. What is forbidden is the reverse.
 
-Added omnidriver.cardiaccore 2026-09-18, when that package was integrated. Until
-then this gate printed "boundaries OK" while saying nothing whatever about the
-new package -- the same too-narrow-scope failure the CORE_SRC comment below
-records. Whoever adds the fourth adapter must add it here too; a package this
-script has never heard of is a package it silently exempts.
+Whoever adds a new adapter package must add its rule to ``adapter_rules`` in
+``main()``; a package this script has never heard of is a package it
+silently exempts.
 
 Every Core module, including ``core/compatibility.py``, must remain independent
 of OpenFOAM, cardiacFOAM, and foamlib at runtime. Compatibility behavior is
@@ -44,12 +39,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# The WHOLE core package, not just its core/ subdirectory. Scanning only
-# core/ left packages/omnidriver/src/omnidriver/*.py unchecked -- which is
-# exactly where the worst violation lives: cli.py hard-imports
-# omnidriver.openfoam at module scope, so `import omnidriver.cli` raises
-# ModuleNotFoundError in the core-only install this project's test-core CI job
-# claims to verify. This gate reported "boundaries OK" throughout.
+# The WHOLE core package, not just its core/ subdirectory: scanning only
+# core/ would miss packages/omnidriver/src/omnidriver/*.py, where cli.py
+# hard-imports omnidriver.openfoam at module scope -- breaking
+# `import omnidriver.cli` in a core-only install.
 CORE_SRC = REPO_ROOT / "packages/omnidriver/src/omnidriver"
 OPENFOAM_SRC = REPO_ROOT / "packages/omnidriver-openfoam/src/omnidriver/openfoam"
 # CLAUDE.md's package table states what cardiaccore must not know about:
@@ -79,27 +72,13 @@ def _adapter_package_roots() -> dict[str, Path]:
         if init.parent.parent.parent.parent != core_dist
     }
 
-# Waived pre-existing violations. This list may only SHRINK. A new violation
-# fails the gate; a waiver that no longer matches anything also fails it, so
-# the list cannot rot into a lie the way the old narrow scope did.
+# Waived violations. This list may only SHRINK: a new violation fails the
+# gate, and a waiver that no longer matches anything fails it too, so this
+# list cannot rot into a stale exemption.
 #
-# It is now EMPTY, which is the point: core contains no runtime cardiac import
-# at all, so this gate no longer records exceptions to its own rule -- it
-# asserts the rule outright.
-#
-# The last two entries were core/compatibility.py's
-# absent_default_driver_context and legacy_generic_case_mutation, both of the
-# same shape: the historical public API lets a caller omit a plugin/context
-# entirely, and core answered by importing cardiacFoam. Both were described
-# here as "permanent compatibility edge (not debt)". They were not permanent.
-# The public no-argument API survives unchanged; what changed is that the
-# default now resolves through the omnidriver.plugins entry-point group, and
-# the cardiac dictionary vocabulary moved to the plugin that means it. See
-# docs/superpowers/specs/2026-09-02-neutral-default-context-design.md.
+# It is empty: core contains no runtime cardiac import at all, so this gate
+# asserts the rule outright rather than recording exceptions to it.
 KNOWN_VIOLATIONS: frozenset[str] = frozenset()
-# Removed once fixed: cli.py's two module-scope omnidriver.openfoam imports,
-# which made `import omnidriver.cli` fail in a core-only install. They now go
-# through EnvironmentPreflightCapability.load and OverrideScopeCapability.apply.
 
 
 def _module_name(node: ast.Import | ast.ImportFrom) -> list[str]:

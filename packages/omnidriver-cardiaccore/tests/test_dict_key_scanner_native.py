@@ -1,9 +1,6 @@
-"""cardiacCore's catalog against its own C++ (added 2026-09-28).
-
-The same scanner and allowlist format as cardiacFOAM's (one reality,
-``omnidriver.openfoam.dict_keys_scanner``), at the source root the plugin
-profile declares: ``<OMNIDRIVER_CARDIACCORE_TREE>/src``. Its first run found
-``setCardiacAnatomy``'s ``rvLocalBands`` uncatalogued."""
+"""cardiacCore's dict-key catalog checked against its own C++ source, at
+the source root the plugin profile declares -- the same scanner and
+allowlist format as cardiacFOAM's."""
 from __future__ import annotations
 
 import os

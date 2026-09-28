@@ -9,13 +9,9 @@ import yaml
 
 @lru_cache(maxsize=1)
 def _load_manifest() -> dict:
-    """Parse the guidance manifest once per process.
-
-    `describe_guidance` is reached through `get_named_catalogs()`, which
-    `describe` calls and which Phase 1's stack digest will call at context
-    construction. Re-reading package resources per call is affordable at the
-    first and not at the second.
-    """
+    """Parse the guidance manifest once per process: cheap for
+    `describe_guidance`'s current per-catalog-listing caller, not for a
+    hypothetical per-step caller."""
     return yaml.safe_load(files(__package__).joinpath("manifest.yaml").read_text(encoding="utf-8"))
 
 

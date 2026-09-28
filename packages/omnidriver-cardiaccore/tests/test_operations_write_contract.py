@@ -1,24 +1,7 @@
-"""Every write in `cardiaccore/operations/`, classified (Phase 2 Task 12,
-docs/superpowers/plans/2026-09-20-phase2-one-write-channel.md).
-
-`grep -rn "write_text\\|write_bytes\\|open(.*[\\"']w" .../operations/` finds
-exactly three hits:
-
-- `vtu_selection.py::write_cell_set` -- a case input, **not migrated this
-  batch**: the value shape fits (`value_kind="integer_list"` exists), but
-  there is no channel renderer for the `cellSet` format, and the function has
-  no case_root/adapter addressing to route through one. See its own
-  docstring for the full reasoning (dated 2026-09-23).
-- `electrodes.py::write_reference_offset_bundle` -- a standalone export: a
-  portable, unit-labelled coordinate bundle for cross-tool/human use, no case
-  dictionary involved.
-- `electrodes.py::write_electrode_positions` -- a standalone export, same
-  reasoning.
-
-This file asserts the structural facts the classification rests on, so a
-later change that would silently move one of these across the case-input/
-standalone-export line is caught here rather than only in a docstring.
-"""
+"""Classifies each of the three writes in ``cardiaccore/operations/``
+(found via ``grep -rn 'write_text\\|write_bytes\\|open(.*[\\"']w'``) as a
+case input or a standalone export, and asserts the facts each
+classification rests on."""
 from __future__ import annotations
 
 import inspect

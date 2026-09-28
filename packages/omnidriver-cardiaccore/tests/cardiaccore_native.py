@@ -1,10 +1,9 @@
 """Supplied inputs for native cardiacCore tests, and the ``humanSlab``
-conformance target (step S; design docs/superpowers/specs/2026-09-28-
-supplied-inputs-design.md).
+conformance target.
 
 A uniquely named module, not ``conftest`` (CLAUDE.md's conftest trap).
 Nothing here is discovered: the native tree comes from
-``OMNIDRIVER_CARDIACCORE_TREE`` (a clean native worktree/archive, D7 -- never
+``OMNIDRIVER_CARDIACCORE_TREE`` (a clean native worktree/archive -- never
 the owner's checkout, which has uncommitted work), the anatomy bundle from
 ``OMNIDRIVER_CARDIACCORE_ANATOMY``, and the OpenFOAM environment plus the
 cardiacCore utilities from the shell the tests run in, already sourced and
@@ -46,8 +45,8 @@ def native_cardiaccore_tree() -> Path:
 
 def native_cardiaccore_anatomy() -> Path:
     """The supplied ``humanSlab`` anatomy bundle -- the mesh, ``fiber``,
-    ``sheet`` and ``uvc_*`` fields that are not in the tracked case folder
-    (design §1.2). FAILS, never skips, when unset."""
+    ``sheet`` and ``uvc_*`` fields that are not in the tracked case folder.
+    FAILS, never skips, when unset."""
     value = os.environ.get("OMNIDRIVER_CARDIACCORE_ANATOMY")
     if not value:
         pytest.fail(
@@ -65,9 +64,9 @@ def native_cardiaccore_anatomy() -> Path:
 def require_sourced_openfoam(*commands: str) -> None:
     """The calling shell has OpenFOAM sourced and ``commands`` (the
     cardiacCore utilities, built from ``OMNIDRIVER_CARDIACCORE_TREE``'s own
-    committed source, never the owner's installed binaries -- D7) on its
-    PATH. Checked up front so a missing environment fails naming the fix,
-    rather than as C5-C11 verdicts about a plan that could not run."""
+    committed source, never the owner's installed binaries) on its PATH.
+    Checked up front so a missing environment fails naming the fix, rather
+    than as C5-C11 verdicts about a plan that could not run."""
     if "WM_PROJECT_DIR" not in os.environ:
         pytest.fail(
             "WM_PROJECT_DIR is not set: run the native cardiacCore "
@@ -92,8 +91,8 @@ TREE_UTILITIES = ("setCardiacConductivity", "setCardiacAnatomy", "generatePurkin
 
 
 def human_slab_conformance_target(tmp_path: Path) -> ConformanceTarget:
-    """``humanSlab``, the record S3 proves for real: the native
-    ``cases/bivCase`` case folder plus the supplied anatomy bundle."""
+    """``humanSlab``: the native ``cases/bivCase`` case folder plus the
+    supplied anatomy bundle."""
     require_sourced_openfoam(*HUMAN_SLAB_UTILITIES)
     return ConformanceTarget(
         plugin="cardiaccore",
@@ -106,7 +105,7 @@ def human_slab_conformance_target(tmp_path: Path) -> ConformanceTarget:
         # `multiplier 3.0;`): `setPurkinjeMorphometryDict` declares none at
         # all (relies on the compiled default), and the renderer can only
         # update an existing key, not insert one -- found running C7 for
-        # real (S3).
+        # real.
         patch=("system/setPurkinjeSlabDict:thickness", 0.2),
         untouched=("system/setCardiacAnatomyDict", ("zApicalMid",)),
         sweep_name="system/setPurkinjeSlabDict:multiplier",
@@ -123,10 +122,9 @@ def _idealized_target(
     record: str, tmp_path: Path, *, utilities: tuple[str, ...], timeout_s: float,
 ) -> ConformanceTarget:
     """Every idealized-heart variant shares one native mesh (no supplied
-    input at all -- design §3's own "native location" pattern) and one
-    physics phase (setCardiacConductivity + setCardiacAnatomy), so C4/C7's
-    patch/sweep keys are the same real, pre-existing `setCardiacAnatomyDict`
-    entries for all three (step S4)."""
+    input at all) and one physics phase (setCardiacConductivity +
+    setCardiacAnatomy), so C4/C7's patch/sweep keys are the same real,
+    pre-existing `setCardiacAnatomyDict` entries for all three."""
     require_sourced_openfoam(*utilities)
     return ConformanceTarget(
         plugin="cardiaccore",

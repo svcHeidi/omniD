@@ -52,18 +52,18 @@ def test_patch_refuses_a_repeated_key_F8():
 
 
 def test_unparseable_line_is_refused_by_line_number():
-    # Any "<key><space><value>" is valid syntax (F9), so only a line with no
-    # key at its start is malformed.
+    # Any "<key><space><value>" is valid syntax, so only a line with no key
+    # at its start is malformed.
     with pytest.raises(ParFormatError, match="line 2"):
         parse_par("a = 1\n= 5\n")
 
 
 @pytest.mark.parametrize(("value", "kind", "text"), [
-    (True, "boolean", "1"), (False, "boolean", "0"),       # F1: only 0 and false mean off
+    (True, "boolean", "1"), (False, "boolean", "0"),       # only 0 and false mean off
     (3, "integer", "3"), (0.17, "scalar", "0.17"), (500, "scalar", "500.0"),
-    # Every string is quoted (F13: quoting is transparent for a model name, a
-    # file name and a value with a space). Unquoted, "flags=ENDO" is silently
-    # read as "flags" (F10). "" is the empty string (F11).
+    # Every string is quoted -- quoting is transparent for a model name, a
+    # file name and a value with a space. Unquoted, "flags=ENDO" is silently
+    # read as "flags". "" is the empty string.
     ("tenTusscherPanfilov", "string", '"tenTusscherPanfilov"'), ("flags=EPI", "string", '"flags=EPI"'),
     ("two words", "string", '"two words"'), ("", "string", '""'), ("singlecell.sv", "string", '"singlecell.sv"'),
 ])
@@ -74,7 +74,7 @@ def test_format_value(value, kind, text):
 @pytest.mark.parametrize("text", ["a#b", "#", "x # y"])
 def test_format_refuses_a_hash_F12(text):
     # openCARP reads '"a#b"' as '"a' -- the # starts a comment even inside
-    # quotes (F12) -- so no spelling carries one.
+    # quotes -- so no spelling carries one.
     with pytest.raises(ParFormatError, match="F12"):
         format_value(text, "string")
 
@@ -99,8 +99,8 @@ def test_unquote():
 @pytest.mark.parametrize("text", ["x\nnum_stim = 0", "x\rnum_stim = 0", "a\tb", "nul\x00", "bell\x07", "del\x7f"])
 def test_format_refuses_a_control_character_B_I5(text):
     # A study value (an RFile name, say) must not be able to add a .par line:
-    # "x\nnum_stim = 0" used to be spelled '"x\nnum_stim = 0"', and patch_par
-    # then wrote a second assignment, num_stim = 0".
+    # unescaped, "x\nnum_stim = 0" spelled as '"x\nnum_stim = 0"' would let
+    # patch_par write a second assignment, num_stim = 0".
     with pytest.raises(ParFormatError, match="control character") as excinfo:
         format_value(text, "string")
     assert repr(text) in str(excinfo.value)

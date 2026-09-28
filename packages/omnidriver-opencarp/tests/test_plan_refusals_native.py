@@ -1,9 +1,8 @@
 """`plan --strict` refuses openCARP studies as JSON, whichever layer refuses.
 
-Wave-2 review I2: the F2 index-bound refusal comes from the renderer
-(``check_indices``), not the key validator, and used to escape as a traceback
-with empty stdout. Review I1: a key the record's command line owns (F14) is
-refused by the validator. Both must reach an agent through the same JSON.
+The index-bound refusal comes from the renderer (``check_indices``), not the
+key validator; a key the record's command line owns is refused by the
+validator instead. Both must reach an agent through the same JSON.
 Scratch goes to tmp_path; the native tree is only read."""
 from __future__ import annotations
 
@@ -45,10 +44,9 @@ def test_a_command_line_owned_key_is_refused_as_json_F14_I1(tmp_path, capsys):
 
 @pytest.mark.parametrize("action", [["plan", "--strict"], ["describe"]])
 def test_a_native_value_the_reader_refuses_comes_back_as_json_F10_S_M1(tmp_path, capsys, action):
-    """Final review S-M1: the config reader refuses an unquoted ``a=b``
-    string in the native file (F10), which openCARP would truncate. That
-    refusal used to escape as a ``ParFormatError`` traceback. A copy of the
-    tutorial with that one line unquoted; the native tree is only read."""
+    """The config reader refuses an unquoted ``a=b`` string in the native
+    file, which openCARP would truncate. A copy of the tutorial with that
+    one line unquoted; the native tree is only read."""
     import shutil
 
     cases_root = tmp_path / "tutorials"

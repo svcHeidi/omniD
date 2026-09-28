@@ -100,7 +100,7 @@ discipline (AGENT_GUIDE, "What pre-registration actually enforces").
 
 | requests | tolerance | rationale |
 |---|---|---|
-| `cross_dx<mm>_dt<ms>` (9): openCARP against cardiacFOAM at one level | **5 ms absolute**, every point, every level | The same bar everywhere, so the nine reports say at which level the two solvers agree to it. A coarse level outside it is a finding, not a reason to loosen it. 5 ms is about half the 10.9 ms spread of P8 across the paper's codes at its finest level (37.8–48.7 ms, section 6), so passing means agreeing more closely than two of the paper's codes may. It is the bar Task 8 fixed before its own runs, not one chosen from its numbers |
+| `cross_dx<mm>_dt<ms>` (9): openCARP against cardiacFOAM at one level | **5 ms absolute**, every point, every level | The same bar everywhere, so the nine reports say at which level the two solvers agree to it. A coarse level outside it is a finding, not a reason to loosen it. 5 ms is about half the 10.9 ms spread of P8 across the paper's codes at its finest level (37.8–48.7 ms, section 6), so passing means agreeing more closely than two of the paper's codes may. It is the bar fixed before this campaign's own runs, not one chosen from its numbers |
 | `temporal_<solver>_dx<mm>_dt<a>_vs_dt<b>` (12): successive time steps of one solver at one Δx | **1 ms absolute** | The owner's belief, made testable. It is a fifth of the cross-solver bar, so a time-step effect inside it cannot decide a cross-solver verdict by itself. It is also 20 times the coarsest step, so the step's own quantisation of the 0 mV crossing cannot fail it |
 
 In every request:
@@ -124,12 +124,13 @@ In every request:
     `interpolationScheme` (OpenFOAM's `cell` default), so the reader
     reported the containing cell's centre.
 
-**Sampling changed 2026-09-28 (owner decision).** From native `e9439c4f`,
-`system/Niedererpoints` sets `interpolationScheme cellPoint`, and the reader
-reports each probe at its own location (offset 0, inside the offsets above).
-Every cardiacFOAM result below, and the 2026-09-27 local run of the whole
-grid, used OpenFOAM's `cell` default: the containing cell's value. The
-requests and tolerances are unchanged; the owner reruns the campaign.
+**Reading the results below:** native `system/Niedererpoints` now sets
+`interpolationScheme cellPoint` (commit `e9439c4f`), so the reader reports
+each probe at its own location (offset 0, inside the offsets above). Every
+cardiacFOAM result below, and the local run of the whole grid, was produced
+under OpenFOAM's `cell` default instead: the containing cell's value. The
+requests and tolerances are unchanged; rerunning the campaign under
+`cellPoint` is still open.
 
 Digests (`requests/SHA256SUMS`; verify with `shasum -a 256 -c SHA256SUMS`
 in `requests/`):
@@ -168,8 +169,8 @@ in `requests/`):
   - The binary's own default is 1, lumped (`openCARP +Help
     mass_lumping`). The `niedererNVersion` record passes nothing, so
     without this key a run is lumped. Every earlier omniD openCARP run
-    was lumped, including Task 8.
-  - At Δx 0.5 mm and Δt 0.01 ms, P8 is 126.27 ms lumped (Task 8) and
+    was lumped.
+  - At Δx 0.5 mm and Δt 0.01 ms, P8 is 126.27 ms lumped and
     58.14 ms with the full mass matrix (this campaign):
     `docs/solver-learning/opencarp.md` G10.
 - **cardiacFOAM: the native case unchanged.** It runs
@@ -410,7 +411,7 @@ What each run records:
   - openCARP ends with "Timings of individual physics", which splits
     Electrics and Ionics into Init, Compute and Output;
   - OpenFOAM prints `ExecutionTime`/`ClockTime` every step.
-- **Where each step ran** (added 2026-09-28): every step attempt in
+- **Where each step ran**: every step attempt in
   `workflow_state.json` carries `host`: the host name, OS, CPU model and
   core count, every set `SLURM_*`/`OMP_*`/`OPENBLAS_*`/`MKL_*` variable, the
   stack's declared environment variables (`HYDRA_IFACE`, `OPENFOAM_BASHRC`,
@@ -423,10 +424,6 @@ What omniD does not record:
 - **The solve's own I/O.** The `solve` step's wall time includes the
   solver's field writes: cardiacFOAM writes every 5 ms of simulated
   time, openCARP `vm.igb` every 1 ms. Only openCARP's log separates it.
-
-Corrected 2026-09-28: `campaign.sh` wrote `runs/hosts/<time>-<solver>-<what>.txt`
-before each sweep because omniD recorded no host. The run's own record now
-holds those facts per step, so the script no longer writes them.
 
 ## Expected cost
 

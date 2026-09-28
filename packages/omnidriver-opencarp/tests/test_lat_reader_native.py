@@ -1,6 +1,6 @@
 """The LAT reader against the real binary: values at supplied points, in ms,
-interpolated over the mesh the solve used (F6, F16, F17, G4). Every mesh read
-here was written by mesher; no geometry is invented."""
+interpolated over the mesh the solve used. Every mesh read here was written
+by mesher; no geometry is invented."""
 from __future__ import annotations
 
 import dataclasses
@@ -18,8 +18,8 @@ CENTRE = {"centre": (10000.0, 3500.0, 1500.0)}
 
 
 def _read_mesh(case_root, mesh_name: str):
-    """Independent parse of mesher's own files (F3): a node list and a list
-    of ``(n0, n1, n2, n3)`` tetrahedra, both by point index."""
+    """Independent parse of mesher's own files: a node list and a list of
+    ``(n0, n1, n2, n3)`` tetrahedra, both by point index."""
     pts_count, *pts_rows = (case_root / f"{mesh_name}.pts").read_text().split("\n")
     points = [tuple(float(v) for v in row.split()) for row in pts_rows if row.strip()]
     assert len(points) == int(pts_count)
@@ -35,11 +35,11 @@ def test_the_slab_corners_and_centre_at_dx_500_match_g4(tmp_path):
     quantities = {q.name: q for q in read_quantities(
         LatPerNodeReader(), run.case_root, run.lat_artifact, ReadRequest(names=tuple(points), points=points))}
     assert all(q.status == "evaluated" and q.unit == "ms" and q.sampling_rule == "linear" for q in quantities.values())
-    # every requested point is a mesh node here (F3: 41 x 15 x 7), so the
+    # every requested point is a mesh node here (a 41 x 15 x 7 slab), so the
     # interpolated value is exactly that node's, and the offset is 0 either way
     assert all(q.sampled_at == points[name] and q.sampled_at_unit == "um" for name, q in quantities.items())
-    assert quantities["x0y0z0"].value == pytest.approx(1.355, abs=5e-4)             # G4: P1, 1.355 ms
-    assert quantities["x20000y7000z3000"].value == pytest.approx(126.45, abs=5e-3)  # G4: P8, 126.45 ms
+    assert quantities["x0y0z0"].value == pytest.approx(1.355, abs=5e-4)             # P1, 1.355 ms
+    assert quantities["x20000y7000z3000"].value == pytest.approx(126.45, abs=5e-3)  # P8, 126.45 ms
     assert quantities["x0y0z0"].value < quantities["centre"].value < quantities["x20000y7000z3000"].value
 
 
@@ -69,14 +69,14 @@ def test_a_point_inside_a_tet_returns_the_barycentric_mix(tmp_path):
 
 
 def test_p9_at_dx_0_2mm_is_the_mean_of_its_four_equidistant_nodes(tmp_path):
-    """The bug this reader fixes: at dx 0.2 mm, P9 (10000, 3500, 1500) um is
-    the centre of a square face shared by tets (y in {3400, 3600}, z in
-    {1400, 1600} um), equidistant from its four corners -- the tie the old
-    nearest-node reader refused. The mesh is real (mesher's dx-200 slab); the
-    LAT field is a synthetic affine function of position (not the solve's
-    own physics), so the analytically exact value at P9 is known and equals
-    the mean of the four corners regardless of which of the tets touching
-    that shared face answers the query."""
+    """At dx 0.2 mm, P9 (10000, 3500, 1500) um sits at the centre of a square
+    face shared by tets (y in {3400, 3600}, z in {1400, 1600} um), equidistant
+    from its four corners -- a tie between nodes that a nearest-node reader
+    cannot resolve, so the reader must interpolate instead. The mesh is real
+    (mesher's dx-200 slab); the LAT field is a synthetic affine function of
+    position (not the solve's own physics), so the analytically exact value
+    at P9 is known and equals the mean of the four corners regardless of
+    which of the tets touching that shared face answers the query."""
     run = niederer_run(tmp_path, dx=200.0, tend=10.0)
     points, _ = _read_mesh(run.case_root, "slab")
 
@@ -108,7 +108,7 @@ def test_a_point_outside_the_mesh_is_refused_by_name(tmp_path):
 
 
 def test_the_per_event_layout_is_refused_by_name(tmp_path):
-    """F17: with lats[0].all = 1 the declared per-node file is absent, and the
+    """With lats[0].all = 1 the declared per-node file is absent, and the
     file openCARP does write has two columns, which the reader refuses."""
     # nversion.par:lats[0].all is catalogued as an Int (0/1), not a Flag
     # (opencarp_parameters.json: "name": "lats[Int].all", "type": "Int"), so

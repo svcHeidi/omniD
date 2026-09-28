@@ -5,10 +5,9 @@ on:
     branches: [main]
   pull_request:
 
-# NOTE: the three test jobs below install `pytest` explicitly. They did not
-# until 2026-09-04, so every "Run tests" step died with `No module named
-# pytest` and CI had never actually run a test -- red continuously since at
-# least 2026-08-26 while looking like a normal failing build.
+# NOTE: the three test jobs below install `pytest` explicitly -- each
+# package's own dependencies don't include it, so omitting this step fails
+# every "Run tests" step with `No module named pytest`.
 jobs:
   test-core:
     name: test-core (py${{ matrix.python-version }})
@@ -54,7 +53,7 @@ jobs:
         run: pip install -e packages/omnidriver -e packages/omnidriver-openfoam pytest
 
       # `native` tests need OMNIDRIVER_NATIVE_TUTORIALS and FAIL (not skip)
-      # when it is unset, which it always is here (2026-09-26).
+      # when it is unset, which it always is here.
       - name: Run tests
         run: python -m pytest packages/omnidriver-openfoam/tests -m "not native" -q
 
@@ -62,9 +61,7 @@ jobs:
       # which default_driver_context() needs to resolve an implicit default --
       # test-core installs no adapter at all, and test-cardiac/test-cardiaccore
       # install two, so this is the only job where these two files' `_cli()`
-      # calls (none pass --plugin) can resolve one. Both files were previously
-      # skip_without_monorepo-gated and had never run in any CI job; see
-      # docs/PROGRESS_LEDGER.md and packages/omnidriver/tests/fixtures/single_cell_tutorial/README.md.
+      # calls (none pass --plugin) can resolve one.
       - name: Run core's plugin-dependent CLI/security regression tests
         run: |
           python -m pytest \
@@ -99,18 +96,16 @@ jobs:
                       pytest
 
       # `native` tests need OMNIDRIVER_NATIVE_TUTORIALS and FAIL (not skip)
-      # when it is unset, which it always is here. Corrected 2026-09-26: this
-      # was `-m "not slow"`, which collected and failed them.
+      # when it is unset, which it always is here.
       - name: Run tests
         run: python -m pytest packages/omnidriver-cardiacfoam/tests -m "not slow and not native" -q
 
-  # omnidriver-cardiaccore arrived with the 2026-09-18 branch integration and
-  # had no job of its own, so its 69 tests ran nowhere. It installs
-  # omnidriver-openfoam because it genuinely depends on it -- operations/
-  # and workflows/ use read_foam_entry/update_foam_entry -- which is the
-  # allowed direction: a cardiac adapter may know OpenFOAM, not the reverse.
-  # That also means two adapters are installed here, so this job is what would
-  # catch a regression of the ambient-default-context defect in this package.
+  # Installs omnidriver-openfoam because omnidriver-cardiaccore genuinely
+  # depends on it -- operations/ and workflows/ use
+  # read_foam_entry/update_foam_entry -- which is the allowed direction: a
+  # cardiac adapter may know OpenFOAM, not the reverse. That also means two
+  # adapters are installed here, so this job is what would catch a
+  # regression of the ambient-default-context defect in this package.
   test-cardiaccore:
     name: test-cardiaccore (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -144,8 +139,7 @@ jobs:
   # job installs core and the opencarp adapter only -- which also proves the
   # package declares every dependency it uses. Its `native_opencarp` tests
   # need the openCARP binary and OMNIDRIVER_OPENCARP_TUTORIALS, and fail (not
-  # skip) without them, so they are deselected here explicitly. (Marker was
-  # `native` until 2026-09-25, final review S-I1.)
+  # skip) without them, so they are deselected here explicitly.
   test-opencarp:
     name: test-opencarp (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -266,12 +260,10 @@ jobs:
       - name: Verify the installed artifact runs standalone
         run: /tmp/wheelenv/bin/python scripts/check-wheel-artifact.py
 
-      # The suite itself, against the wheel. Until 2026-09-04 this was
-      # impossible: core resolved a repository root by walking up from its own
-      # __file__, so eight modules could not even be collected outside a
-      # checkout and thirteen tests failed. Running it here is what stops that
-      # returning -- the artifact gate above cannot see it, because it
-      # deliberately does not import the test tree.
+      # The suite itself, against the wheel: the artifact gate above
+      # deliberately does not import the test tree, so this is what actually
+      # exercises the suite against an installed wheel rather than an
+      # editable install.
       - name: Run core's suite against the installed wheel
         run: |
           /tmp/wheelenv/bin/pip install pytest

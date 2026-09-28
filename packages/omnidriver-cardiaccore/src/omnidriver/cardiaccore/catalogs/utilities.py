@@ -36,18 +36,14 @@ def _manifest(
 
 
 UTILITY_MANIFESTS = {
-    # newVtkUnstructuredToFoam is NOT declared here (removed 2026-09-21): it
-    # duplicated cardiacFoam's own declaration
+    # newVtkUnstructuredToFoam is deliberately not declared here: it would
+    # duplicate cardiacFoam's own manifest
     # (omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/utilities/newVtkUnstructuredToFoam/utility.manifest.toml),
     # which core's provider_stack "map" composition rule refuses to merge
-    # without an overrides: marker UtilityManifest has no field for. Verified
-    # unused within this package (grepped source, workflows and tests -- no
-    # tutorial, workflow-DAG step, or test references the name), so cardiacCore
-    # never depended on its own copy. cardiacFoam's description is also the
-    # operationally complete one: it documents post-import mm-to-m geometry
-    # scaling and a conductivity-dimension fix cardiacCore's copy omitted
-    # entirely, so cardiacFoam's declaration is the intended sole source of
-    # truth for this utility, not merely the one composition happened to keep.
+    # without an overrides: marker UtilityManifest has no field for.
+    # cardiacFoam's declaration is the sole source of truth for this utility:
+    # it documents post-import mm-to-m geometry scaling and a
+    # conductivity-dimension fix this package's copy omitted entirely.
     "setCardiacConductivity": _manifest(
         "setCardiacConductivity",
         "Build orthotropic conductivity tensors from fiber and sheet fields.",
@@ -65,10 +61,8 @@ UTILITY_MANIFESTS = {
         (
             ProducesEntry("aha_segment", "0/AHA_Segment", "openfoam_field", "AHA segment label", "setCardiacAnatomy"),
             ProducesEntry("aha_angle", "0/aha_angle", "openfoam_field", "Short-axis polar angle", "setCardiacAnatomy"),
-            # Added 2026-09-28 (step S, design §1.2's first drift):
-            # setCardiacAnatomy.C's own four `.write()` calls also write
-            # these two -- omitted here and from the native README until
-            # now, which a record's restage (C11) would otherwise fail.
+            # setCardiacAnatomy.C's write() calls also produce these two fields;
+            # omitting them here fails a record's restage validation.
             ProducesEntry("phi_rv", "0/phiRV", "openfoam_field", "RV-relative circumferential angle", "setCardiacAnatomy"),
             ProducesEntry("groove_interface", "0/groove_interface", "openfoam_field", "Interventricular groove marker", "setCardiacAnatomy"),
         ),
@@ -107,11 +101,9 @@ UTILITY_MANIFESTS = {
             ProducesEntry("lv_endo_faces", "constant/polyMesh/sets/LVEndoFaces", "openfoam_face_set", "Generated LV endocardial face set", "generatePurkinjeTree"),
             ProducesEntry("rv_endo_faces", "constant/polyMesh/sets/RVEndoFaces", "openfoam_face_set", "Generated RV endocardial face set", "generatePurkinjeTree"),
             ProducesEntry("epi_faces", "constant/polyMesh/sets/EpiFaces", "openfoam_face_set", "Generated epicardial face set", "generatePurkinjeTree"),
-            # Added 2026-09-28 (step S4): optional=True, not required -- generatePurkinjeTree's
-            # own README says it is built only under `coordinateSystem uvc` (the RV-facing
-            # septal surface needs recovering there); `cobiveco` (the idealized-heart records)
-            # needs no septal recovery and never constructs it, confirmed running a real
-            # generatePurkinjeTree over a cobiveco case.
+            # optional: generatePurkinjeTree's README documents it as built only
+            # under coordinateSystem uvc (RV-facing septal recovery); a
+            # cobiveco case never constructs it.
             ProducesEntry("rv_septal_endo_faces", "constant/polyMesh/sets/RVSeptalEndoFaces", "openfoam_face_set", "Generated RV septal-recovery face set (uvc only)", "generatePurkinjeTree", optional=True),
             ProducesEntry("purkinje_vtk", "postProcessing/generatePurkinjeTree/purkinje.vtk", "vtk_polydata", "Glued solver-facing Purkinje tree", "generatePurkinjeTree"),
             ProducesEntry("lv_purkinje_vtk", "postProcessing/generatePurkinjeTree/lv-purkinje.vtk", "vtk_polydata", "LV inspection tree", "generatePurkinjeTree"),
@@ -162,17 +154,12 @@ UTILITY_MANIFESTS = {
             ProducesEntry("refined_purkinje_vtk", "<output-vtk>", "vtk_polydata", "Refined line graph at the caller-selected output path", "refine1Dgraph"),
         ),
     ),
-    # 1DgraphToFoam is NOT declared here either (removed 2026-09-21, found
-    # while re-verifying the newVtkUnstructuredToFoam fix above): the SAME
-    # collision, the same "map" composition refusal, and the same resolution
-    # -- cardiacFoam owns a dedicated manifest
+    # 1DgraphToFoam is deliberately not declared here either: the same
+    # provider_stack "map" composition collision as newVtkUnstructuredToFoam
+    # above. cardiacFoam owns the manifest
     # (omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/utilities/1DgraphToFoam/utility.manifest.toml)
-    # for what even this package's own (now-removed) description called "the
-    # cardiacFoam Purkinje graph dictionary." Verified unused within this
-    # package the same way: grepped workflows/ (no DAG step names it) and
-    # tests/ (nothing references it); the two mentions elsewhere in this
-    # package (catalogs/inputs.py, catalogs/support_boundary.py) are prose
-    # describing the native hand-off, not code that reads this catalog entry.
+    # for what its own description calls "the cardiacFoam Purkinje graph
+    # dictionary."
     "foamTo1Dgraph": UtilityManifest(
         name="foamTo1Dgraph",
         description="Export an OpenFOAM Purkinje graph dictionary as a legacy VTK line graph.",

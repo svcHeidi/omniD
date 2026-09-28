@@ -378,8 +378,8 @@ def main() -> int:
     return 0
 
 
-# Simple wildcard segment detector (no re import needed at module level,
-# but we need it here).
+# `re` is only needed for this one pattern, so it's imported here rather
+# than at module level.
 import re as _re  # noqa: E402
 _WILDCARD_RE_SIMPLE = _re.compile(r"<[^>]+>")
 

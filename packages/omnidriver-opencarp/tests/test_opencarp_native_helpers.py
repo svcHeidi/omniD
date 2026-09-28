@@ -17,9 +17,8 @@ def test_only_the_lat_artifact_missing_is_tolerated():
 
 
 def test_a_different_missing_artifact_stays_fatal():
-    """M11, controller review 2026-09-26: this used to accept ANY missing
-    declared artifact; a missing out/vm.igb (an actual defect) must not be
-    tolerated just because F17's opt-in is set."""
+    """A missing out/vm.igb (an actual defect) must not be tolerated just
+    because the LAT-artifact opt-in is set."""
     case = _case(artifacts=[{"artifact_id": "record.solve.5", "predicted_path": "out/vm.igb", "status": "missing"}])
     assert _only_a_declared_artifact_is_missing(case) is False
 

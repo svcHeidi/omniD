@@ -1,48 +1,32 @@
 """Evidence-labelled input catalog for cardiacCore preprocessing utilities.
 
-Every ``DictEntry`` below is backed by a native ``.get``/``.getOrDefault``/
+Every ``DictEntry`` is backed by a native ``.get``/``.getOrDefault``/
 ``.found`` read discovered with ``omnidriver.openfoam.dict_keys_scanner`` over
-``cardiacCoreStandalone/src`` (see ``docs/BUILDER_AGENT_EVIDENCE_CONTRACT.md``
-for the exact invocation). Conditionality that the native source expresses as
-an ``if``/``found`` branch is expressed here as ``applicable_when`` /
-``required_when`` / ``forbidden_when`` / ``mutually_exclusive_with`` rather
-than prose, following the vocabulary
-``omnidriver-cardiacfoam/dict_entries_catalog.py`` already uses -- see
+``cardiacCoreStandalone/src`` (see ``docs/BUILDER_AGENT_EVIDENCE_CONTRACT.md``).
+Conditionality the native source expresses as an ``if``/``found`` branch is
+expressed here as ``applicable_when``/``required_when``/``forbidden_when``/
+``mutually_exclusive_with`` rather than prose -- see
 ``omnidriver.core.specs.validation.entry_is_applicable`` /
-``is_required_in_context`` / ``_predicate_matches`` for how these fields are
+``is_required_in_context`` / ``_predicate_matches`` for how these are
 evaluated.
 
-Declaring a key here gives an agent KNOWLEDGE of it. It does not make the key
-mutable: every declared key is routable (``workflows/overrides.py`` resolves
-any path in this catalog, with no separate allowlist), but a value only
-becomes an overridable "x value" *in a given workflow* once it is also named
-in that workflow's ``active_input_paths``. ``generatePurkinjeTree``'s entries
-are staged this way, through ``workflows/preprocessing.py``'s
-``PURKINJE_TREE_INPUT_PATHS``. ``setCardiacScar``, ``setPurkinjeScar`` and
-``coordinatesConvention`` remain declared-only: no workflow below runs those
-utilities yet, so no ``active_input_paths`` names their entries -- see
-``catalogs/support_boundary.py``'s ``SUPPORT_BOUNDARY["pending"]`` for that
-boundary.
+Declaring a key here gives an agent knowledge of it, not mutability: every
+declared key is routable (``workflows/overrides.py`` resolves any path in
+this catalog), but a value becomes overridable in a given workflow only once
+it is also named in that workflow's ``active_input_paths``.
+``generatePurkinjeTree``'s entries are staged this way, through
+``workflows/preprocessing.py``'s ``PURKINJE_TREE_INPUT_PATHS``.
+``setCardiacScar``, ``setPurkinjeScar`` and ``coordinatesConvention`` remain
+declared-only: no workflow yet schedules those utilities (see
+``catalogs/support_boundary.py``'s ``SUPPORT_BOUNDARY["pending"]``).
 
-**Corrected 2026-09-23.** The paragraph above explains the two scar
-utilities as declared-but-unscheduled, which reads as "wired up later". The
-stronger fact, not previously written down anywhere in this package: they
-are **not on cardiacCore's main at all**. Commit ``c53a0d7`` (2026-09-18,
-"refactor(scar): remove scar and scar-Purkinje-coupling code from main")
-deleted ``src/setCardiacScar/`` and ``src/setPurkinjeScar/``; they survive
-on the ``scar`` branch, and main's ``src/Allwmake`` builds neither. Note
-that ``origin/scar`` is an *ancestor* of ``origin/main`` -- main merged it
-and then removed the files -- so an ancestry check ("is scar merged?")
-answers yes and is misleading; ``git ls-tree origin/main`` is what shows
-the truth. Consequently the first paragraph's claim that every entry is
-backed by a scan over ``cardiacCoreStandalone/src`` holds for main only for
-the NON-scar entries; the scar ones were scanned on that branch, and each
-of their ``source_refs`` now carries a ``scar-branch:`` prefix saying so
-rather than reading as a mainline path an agent would fail to find.
-Unlike ``omnidriver-cardiacfoam``, this package has no
-``test_source_refs_exist``-style drift guard resolving refs against the
-native tree, which is why the relocation went unnoticed; the prefix is a
-label, not that guard.
+``setCardiacScar`` and ``setPurkinjeScar`` are absent from cardiacCore's
+main branch entirely -- removed by commit c53a0d7 -- and exist only on its
+``scar`` branch; their ``source_refs`` carry a ``scar-branch:`` prefix
+saying so (an ancestry check is misleading here, since ``scar`` is an
+ancestor of ``main``; ``git ls-tree origin/main`` shows the truth). This
+package has no drift guard resolving refs against the native tree, so the
+prefix is a label, not an enforced guarantee.
 """
 
 from __future__ import annotations
@@ -58,11 +42,10 @@ _CONDUCTIVITY_SOURCE = "src/setCardiacConductivity/setCardiacConductivity.C"
 _ANATOMY_SOURCE = "src/setCardiacAnatomy/setCardiacAnatomy.C"
 _SLAB_SOURCE = "src/setPurkinjeSlab/setPurkinjeSlab.C"
 _MORPHOMETRY_SOURCE = "src/setPurkinjeMorphometry/setPurkinjeMorphometry.C"
-#: The five scar citations, prefixed because they do NOT resolve on
-#: cardiacCore's main -- see this module's dated docstring correction. The
-#: prefix is part of the string an agent reads, not a comment, because a
-#: comment does not travel with the entry. Defined once here so all 39
-#: citing entries inherit it; guarded by
+#: The five scar citations are prefixed because they resolve only on
+#: cardiacCore's 'scar' branch, not on main (see this module's docstring).
+#: The prefix travels with the string, since a comment would not travel with
+#: the entry; defined once so every citing entry inherits it, guarded by
 #: `test_every_scar_source_ref_names_the_branch_it_resolves_on`.
 _SCAR_BRANCH_PREFIX = "scar-branch:"
 _SCAR_SOURCE = _SCAR_BRANCH_PREFIX + "src/setCardiacScar/setCardiacScar.C"
@@ -123,21 +106,13 @@ CONDUCTIVITY_ENTRIES: Final[tuple[DictEntry, ...]] = (
         value_kind="word",
         required=True,
     ),
-    # --- Bidomain pair, folded in from the old CONDITIONAL_INPUTS prose. ---
-    # setCardiacConductivity.C: `hasIntracellular` and
-    # `hasExtracellular` are each a bare `diffDict.found(...)` check, and a
-    # FatalIOError fires when exactly one is present ("Bidomain output
-    # requires both ... subdictionaries."). When present, each subDict is
-    # passed to the same `writeConductivity` helper that reads the top-level
-    # df/ds/dn (lines 22-34), so the subDict shares that shape.
-    #
-    # This is a genuine co-requirement ("both or neither"): setCardiacConductivity
-    # raises a FatalIOError when exactly one subdictionary is present. It is NOT
-    # `mutually_exclusive_with`, which fires when BOTH siblings are set; here
-    # both-set is the required case. It is declared with `co_required_with` on
-    # every member of the group, so the relation is symmetric and the validator
-    # reports a half-set pair before a case is staged rather than leaving it to
-    # the native FatalIOError at run time.
+    # setCardiacConductivity.C: hasIntracellular and hasExtracellular are each
+    # a bare diffDict.found(...) check; a FatalIOError fires when exactly one
+    # is present ("Bidomain output requires both ... subdictionaries"). This is
+    # a genuine co-requirement (both or neither), not `mutually_exclusive_with`
+    # (which fires when both are set -- here both-set is required). Declared
+    # with `co_required_with` on every member so the validator reports a
+    # half-set pair before a case is staged, instead of at native run time.
     DictEntry(
         driver_path="$CARDIAC_CONDUCTIVITY.conductivityIntracellular.df",
         description="Longitudinal conductivity coefficient for the intracellular bidomain tensor.",
@@ -240,8 +215,6 @@ ANATOMY_ENTRIES: Final[tuple[DictEntry, ...]] = (
         value_kind="scalar",
         required=True,
     ),
-    # Added 2026-09-28: the first plan-time scan of main's src/ found this
-    # read (getOrDefault<label>, default 10) uncatalogued.
     DictEntry(
         driver_path="$CARDIAC_ANATOMY.rvLocalBands",
         description=(
@@ -274,13 +247,11 @@ SLAB_ENTRIES: Final[tuple[DictEntry, ...]] = (
     ),
 )
 
-# setPurkinjeMorphometryDict currently has no reviewed x-values other than
-# subendocardialWeight: groove detection is unconditional native behaviour
-# (never a dictionary input). subendocardialWeight was previously kept out of
-# CATALOG entirely (in CONDITIONAL_INPUTS) because bivCase does not set it and
-# relies on the compiled default; it is folded in below as a real, optional
-# DictEntry, matching the SLAB_ENTRIES precedent immediately above: declared,
-# not required, and not routed through `_TARGETS` (see workflows/overrides.py).
+# setPurkinjeMorphometryDict has no reviewed x-values other than
+# subendocardialWeight: groove detection is unconditional native behaviour,
+# never a dictionary input. subendocardialWeight is declared, optional, and
+# not routed through `_TARGETS` (see workflows/overrides.py), matching the
+# SLAB_ENTRIES precedent above.
 MORPHOMETRY_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
         driver_path="$PURKINJE_MORPHOMETRY.subendocardialWeight",
@@ -592,31 +563,18 @@ PURKINJE_SCAR_ENTRIES: Final[tuple[DictEntry, ...]] = (
         value_kind="scalar",
         constraints=("Must be non-negative (setPurkinjeScar.C validatePolicy).",),
     ),
-    # An optional `regions/<id>` subdictionary overrides any subset of the
-    # four purkinjeScarPolicy values for edges/PVJs whose region ID matches
-    # `<id>` (setPurkinjeScar.C, policyForRegion/readRegionPolicy).
-    # `<id>` is an open-ended region ID, so this is a genuine dynamic_path
-    # block, modelled the same way as generatePurkinjeTree's <ventKey> below.
-    #
-    # Added 2026-09-23: `allowed_bindings={"<region_id>": None}` on all four.
-    # They previously declared nothing, which is audit finding S1's shape --
-    # a placeholder no fact is stated about, indistinguishable from one
-    # nobody has audited. The domain was decided on evidence rather than
-    # assumed: unlike <ventKey>, whose two members the native source
-    # enumerates by hand, `policyForRegion` looks the sub-block up by
-    # `Foam::name(region)` for an integer `label`, so the set is unbounded
-    # and the honest declaration is *explicitly open*, not a closed tuple.
-    # See `_REGION_ID_CONSTRAINT` for the citation, which now travels with
-    # every one of the four entries.
-    #
-    # Corrected the same day, before landing: that citation first named
-    # `src/setPurkinjeScar/setPurkinjeScar.C` as though it were mainline. It
-    # is not -- `c53a0d7` (2026-09-18) removed the scar utilities from main
-    # and they survive only on the `scar` branch. The evidence itself stands
-    # (it was read from that branch's source, not from a fixture); what was
-    # wrong was the label on it. `_REGION_ID_CONSTRAINT` now says so, and
-    # `test_the_region_id_domain_is_declared_open_on_evidence` asserts the
-    # branch is named, so the qualifier cannot be quietly dropped again.
+    # An optional `regions/<id>` subdictionary overrides any subset of the four
+    # purkinjeScarPolicy values for edges/PVJs whose region ID matches <id>
+    # (setPurkinjeScar.C, policyForRegion/readRegionPolicy). `<id>` is modelled
+    # as a dynamic_path block, like generatePurkinjeTree's <ventKey> below, but
+    # its domain is declared open (`allowed_bindings={"<region_id>": None}`)
+    # rather than a closed tuple: unlike <ventKey>, whose two members the
+    # native source enumerates by hand, `policyForRegion` looks the sub-block
+    # up by `Foam::name(region)` for an arbitrary integer `label`, so the set
+    # is unbounded. See `_REGION_ID_CONSTRAINT` for the evidence, which travels
+    # with every one of the four entries and names the 'scar' branch it was
+    # read from; `test_the_region_id_domain_is_declared_open_on_evidence`
+    # asserts that qualifier stays present.
     DictEntry(
         driver_path="$PURKINJE_SCAR.regions.<region_id>.conductanceReduction",
         description="Region-specific override of conductanceReduction for edges/PVJs whose region ID matches <region_id>.",
@@ -669,19 +627,11 @@ PURKINJE_SCAR_ENTRIES: Final[tuple[DictEntry, ...]] = (
 
 # --- coordinatesConventionDict -----------------------------------------------
 #
-# NOTE (dated 2026-09-17): cardiacCoreStandalone/src/coordinatesConvention was
-# refactored (concurrently with this catalog rewrite, in the native repo, not
-# this one) from a fixed `uvc` convention to a `coordinateSystem`-selected
-# one (`uvc` or `cobiveco`). The dict file itself was renamed
-# `uvcConventionDict` -> `coordinatesConventionDict`, the `uvc` sub-block ->
-# `coordinates` (now getOrDefault with real field-name defaults instead of a
-# hard `found` requirement), `rotationalField` was dropped, and
-# `transmural.{min,max}` -> `transmural.{endocardium,epicardium}` (named by
-# anatomical meaning, since CObiveco's `tm` has endocardium > epicardium).
-# The entries below describe the CURRENT (post-refactor) shape, confirmed
-# against cases/bivCase/system/coordinatesConventionDict, which already uses
-# it. Superseded COORDINATES_CONVENTION_ENTRIES claims are corrected, not silently
-# overwritten, per house style.
+# coordinatesConventionDict selects a `coordinateSystem` (`uvc` or `cobiveco`);
+# the `coordinates` sub-block gives real field-name defaults via getOrDefault,
+# and `transmural.{endocardium,epicardium}` are named by anatomical meaning
+# because CObiveco's `tm` has endocardium > epicardium. Confirmed against
+# cases/bivCase/system/coordinatesConventionDict.
 #
 # Shared across setCardiacAnatomy, setPurkinjeSlab, setPurkinjeMorphometry
 # and generatePurkinjeTree: each utility's coordinatesConvention.H reader only
@@ -795,11 +745,10 @@ _TREE_ROOT_ENTRIES: Final[tuple[DictEntry, ...]] = (
 )
 
 TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
-    # R2 finding 9: all 21 <ventKey> entries below declared no
-    # allowed_bindings, including the ones audit finding S1 was about
-    # ("banana" as a ventricle). Declared from VENT_KEYS -- the closed
-    # domain generatePurkinjeTree.C actually reads -- rather than retyping
-    # the literal ("lv", "rv") on every entry.
+    # allowed_bindings is declared from VENT_KEYS -- the closed domain
+    # generatePurkinjeTree.C actually reads -- rather than retyped literally
+    # on every entry, so an invalid ventricle name (e.g. "banana") is rejected
+    # for all <ventKey> entries at once.
     {"allowed_bindings": {"<ventKey>": VENT_KEYS}},
     (
     # Per-ventricle block: the scanner reports scope <ventKey> (README: "the
@@ -1031,20 +980,8 @@ DOCUMENTS: Final[dict[str, tuple[DictEntry, ...]]] = {
 
 CATALOG: Final[DictionaryCatalog] = DictionaryCatalog(DOCUMENTS)
 
-# All source reads that were CONDITIONAL_INPUTS prose (the setCardiacConductivity
-# bidomain pair and setPurkinjeMorphometry's subendocardialWeight) are now real
-# DictEntry objects above, using applicable_when/required_when/constraints
-# instead of free-text "when"/"reason"/"status" dicts. CONDITIONAL_INPUTS is
-# therefore empty. The name stays bound (rather than removed) because
-# plugin.py's `cardiaccore_conditional_inputs` named catalog publishes it
-# unconditionally.
+# CONDITIONAL_INPUTS is empty: every conditional read is expressed as a real
+# DictEntry above via applicable_when/required_when/constraints. The name
+# stays bound rather than removed because plugin.py's
+# `cardiaccore_conditional_inputs` named catalog publishes it unconditionally.
 CONDITIONAL_INPUTS: Final[dict[str, tuple[dict[str, object], ...]]] = {}
-
-# Corrected 2026-09-20 (Phase 0 Task 11): this module previously also carried
-# GRAPH_FILE_KEYS (the on-disk shape of a `constant/<graphName>` 1D-graph
-# object) and UTILITY_CLI_OPTIONS (argList options the scanner
-# mis-classified as dictionary keys). Both were orphans -- referenced nowhere
-# outside this module -- and UTILITY_CLI_OPTIONS additionally contradicted
-# `catalogs/utilities.UTILITY_MANIFESTS` on `-internalRole`'s default.
-# `catalogs/utilities.py` is the single source for utility CLI metadata;
-# deleted rather than reconciled.

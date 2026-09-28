@@ -1,21 +1,6 @@
-"""openCARP in parallel (PAR, owner Q6, 2026-09-26; evidence I1-I8 in
-docs/solver-learning/opencarp.md).
+"""openCARP in parallel: the solve under an MPI launcher (``mpirun -np N openCARP ...``); PETSc partitions the mesh itself and the outputs keep the serial layout, node order and location.
 
-openCARP is its own environment and solver. Its parallel form is the solve
-under an MPI launcher, ``mpirun -np N openCARP ...``: PETSc partitions the
-mesh itself, and the outputs (``<simID>/vm.igb``, the LAT file) keep the
-serial layout, node order and location (I6, I7). There is no decomposition
-dictionary, so N has two possible sources, and neither is restated: the
-scheduler's allocation when one is ambient, otherwise a count the agent
-supplies with the request (``parallel: N``). Both present and disagreeing is
-refused; so is neither.
-
-The launcher must belong to the MPI openCARP was built against. Another
-MPI's ``mpirun`` starts N separate one-process runs of the whole problem,
-racing on one output directory, whose outputs equal the serial run's (I2):
-a parallel run that silently is not one. :func:`launcher_diagnostics` checks
-that fact before a run.
-"""
+There is no decomposition dictionary, so N comes from the scheduler's allocation or an explicit request (never both disagreeing, nor neither); the launcher must belong to the MPI openCARP was built against, or a parallel run silently is not one -- see docs/solver-learning/opencarp.md and :func:`launcher_diagnostics`."""
 from __future__ import annotations
 
 import shutil
@@ -27,7 +12,7 @@ from omnidriver.core.planning_types import StrictDiagnostic
 
 SOLVER = "openCARP"
 #: ``mpirun -np 2 openCARP +Default`` initialises MPI and prints the build
-#: header once per MPI world, then stops for want of a mesh (I5).
+#: header once per MPI world, then stops for want of a mesh.
 _PROBE_RANKS = 2
 _HEADER_MARK = "GIT tag"
 
@@ -67,9 +52,9 @@ def parallel_steps(step: Mapping[str, Any], *, request: Any, read_value: Any, al
 
 def launcher_diagnostics(workflow_dag: Mapping[str, Any], env: Mapping[str, str]) -> tuple[StrictDiagnostic, ...]:
     """For each launcher a step runs openCARP under, whether it starts ONE
-    MPI world of openCARP processes (I5): ``<launcher> -np 2 openCARP
-    +Default`` in a scratch directory must print the build header once. The
-    header itself is never echoed (G3)."""
+    MPI world of openCARP processes: ``<launcher> -np 2 openCARP +Default``
+    in a scratch directory must print the build header once. The header
+    itself is never echoed."""
     launchers = sorted({
         step["command"] for step in (workflow_dag or {}).get("steps", ())
         if step.get("command") != SOLVER and SOLVER in (step.get("args") or ())

@@ -14,15 +14,15 @@ Baseline line format: ``<path relative to core src>\\t<token>\\t<count>\\t<reaso
 Matching is normalised (casefold, with ``_``/``.``/``-`` stripped from both
 the token and the scanned text) so a snake_case or otherwise-punctuated
 spelling of the same layout concept is counted, not just the token's literal
-form (review 2026-09-25, C-I1: ``touch_case_foam`` is the same coupling as
-``case.foam``). Two tokens carry a hand-tuned exception to that normalisation
-rather than a per-file special case:
+form (``touch_case_foam`` is the same coupling as ``case.foam``). Two tokens
+carry a hand-tuned exception to that normalisation rather than a per-file
+special case:
 - ``FOAM_`` stays an exact, case-sensitive substring match with no boundary,
   because a boundary would stop it catching ``OPENFOAM_*`` -- itself real
-  coupling (review: "Should FOAM_ require a boundary? No.").
+  coupling.
 - ``processor`` gets a left boundary (not preceded by a letter) on the
   normalised text, so ``processor_dir`` still counts but ``postprocessor``/
-  ``preprocessor`` do not (review: "Does processor have the same problem?").
+  ``preprocessor`` do not.
 
 ``--write-baseline`` preserves the file's header and every hand-written
 reason for a (file, token) pair whose count did not change; a new pair or a
@@ -48,13 +48,11 @@ TOKENS = (
     "controlDict", "fvSchemes", "fvSolution", "polyMesh", "blockMesh", "decomposePar",
     "reconstructPar", "processor", "case.foam", "Allrun", "Allclean", "bashrc",
     "WM_PROJECT", "FOAM_", "foamlib",
-    # Added 2026-09-26 (R2 fix, finding M7): A2 removed core's own "start
-    # time"/"time-indexed" vocabulary (CaseIntrospectionCapability
-    # .selected_start_time, DataArtifact.time_indexed, the {time} path
-    # placeholder), but nothing in this list guarded against it regrowing --
-    # only the specific assertions in test_instance_directories.py
-    # ::test_the_time_vocabulary_is_gone covered {time}/time_indexed, and
-    # nothing covered "start time" itself.
+    # Core's own retired "start time"/time-indexed vocabulary
+    # (CaseIntrospectionCapability.selected_start_time, DataArtifact
+    # .time_indexed, the {time} path placeholder): guards against it
+    # regrowing, since only test_instance_directories.py's specific
+    # assertions would otherwise catch a regression.
     "start_time", "startTime", "latestTime", "time_indexed", "{time}",
 )
 
@@ -106,15 +104,9 @@ def _docstring_ids(tree: ast.AST) -> set[int]:
     but also a bare string statement anywhere else in a body -- the
     attribute/field "docstring" convention this codebase's own house style
     uses for a dated correction (CLAUDE.md: "record the correction with a
-    date rather than silently overwriting it").
-
-    Corrected 2026-09-26 (R2 fix, finding M7): before this, only body[0]
-    counted, so a dated correction on a dataclass field (e.g.
-    ``DataArtifact.instance_indexed``'s "Renamed from time_indexed ...")
-    was scanned as a literal despite being exactly the prose the module
-    docstring already says is exempt -- discovered when M7 added
-    ``time_indexed`` to TOKENS and two already-committed, pre-existing dated
-    corrections became new "hits" with no code change at all.
+    date rather than silently overwriting it"). Scanning only body[0] would
+    miss a dated correction attached to a dataclass field and count it as
+    coupling despite being exactly the prose this exemption exists for.
     """
     ids = set()
     for node in ast.walk(tree):

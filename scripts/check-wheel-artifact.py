@@ -76,8 +76,8 @@ def main() -> int:
     if result.returncode != 0:
         failures.append(f"CLI --help exited {result.returncode}: {result.stderr[:300]}")
 
-    # 4. The sweep-spec schema (Phase 2 Task 11) ships inside the installed
-    #    package -- a repository-only schemas/ file would pass every other
+    # 4. The sweep-spec schema ships inside the installed package -- a
+    #    repository-only schemas/ file would pass every other
     #    check here and still be absent from every wheel, which is exactly
     #    the defect class this script exists to catch.
     try:

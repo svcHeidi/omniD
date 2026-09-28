@@ -1,10 +1,6 @@
-"""The case-owned coordinates convention, read the way native reads it.
-
-Mirrors src/coordinatesConvention/coordinatesConvention.H in cardiacCore:
-`coordinateSystem` is required, the `coordinates` block is optional with
-canonical field-name defaults, and the transmural bounds are named by
-anatomy rather than by numeric order.
-"""
+"""The case-owned coordinates convention, mirroring
+``coordinatesConvention.H``: ``coordinateSystem`` is required, fields
+default canonically, and transmural bounds are named by anatomy."""
 
 import pytest
 
@@ -69,11 +65,8 @@ def test_a_case_names_only_the_field_that_differs(tmp_path):
 
 
 def test_transmural_bounds_are_named_not_ordered(tmp_path):
-    """CObiveco reads 1=endocardium, 0=epicardium -- the reverse of UVC.
-
-    The numeric bound must come from lower/upper, which do not assume that
-    endocardium is the smaller value.
-    """
+    """CObiveco reads 1=endocardium, 0=epicardium, the reverse of UVC --
+    the bound must come from lower/upper, not an assumed direction."""
     root = _write(tmp_path, (
         "coordinateSystem cobiveco; "
         "transmural { endocardium 1; epicardium 0; } " + _CHAMBERS
@@ -126,11 +119,8 @@ def test_a_missing_dictionary_names_the_file(tmp_path):
 
 
 def test_field_paths_default_to_canonical_when_no_convention_is_supplied():
-    """No case supplied means native's own defaults, not a guess.
-
-    The paths are declared, not discovered: nothing probes the filesystem
-    for a convention the caller did not hand over.
-    """
+    """Declared, not discovered: nothing probes the filesystem for a
+    convention the caller did not supply."""
     from omnidriver.cardiaccore.operations.coordinates_convention import (
         coordinate_field_paths,
     )

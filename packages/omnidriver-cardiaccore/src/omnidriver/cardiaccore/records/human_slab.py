@@ -1,10 +1,8 @@
-"""``humanSlab``: mirrors ``cases/bivCase/Allrun`` (design §1.3).
-
-The native tutorial's own name (D6, no ``cardiaccore-*`` alias): four
-utilities in series, exactly the order the native ``Allrun`` runs them.
-``1DgraphToFoam`` is left out (D4, owner decision): the factory workflow
-never ran it, and the edge-length scaling it needs is a separate open
-question.
+"""``humanSlab``: mirrors ``cases/bivCase/Allrun``, using the native
+tutorial's own name (no ``cardiaccore-*`` alias) and running the four
+utilities in the native ``Allrun``'s own order. ``1DgraphToFoam`` is left
+out: the factory workflow never ran it, and its edge-length scaling
+remains unresolved.
 """
 
 from __future__ import annotations
@@ -20,17 +18,10 @@ RECORD = TutorialRecord(
     workflow_steps=(
         CONDUCTIVITY,
         ANATOMY_STEP,
-        # `0/Conductivity` is not re-declared as consumed here (only as
-        # produced, rewritten in place): it is CONDUCTIVITY's own `produces`,
-        # not an authored input -- the same convention cardiacFOAM's
-        # restitutionCurves solve step already established ("the solve
-        # step's mesh comes from the mesh step's produces, so it is not
-        # re-declared as consumed"). Declaring it here made C8 (every
-        # consumed file fingerprinted) fail: at plan time, before any step
-        # has run, it genuinely does not exist yet, and staging excludes it
-        # from the native-case copy as a generated intermediate
-        # (`record_execution.record_generated_relpaths`) -- found running
-        # this record for real (S3).
+        # `0/Conductivity` is CONDUCTIVITY's own `produces`, not an authored
+        # input, so it is not re-declared as consumed: at plan time it does
+        # not exist yet, and `record_execution.record_generated_relpaths`
+        # excludes it from the native-case copy as a generated intermediate.
         step(
             "purkinje_slab", "setPurkinjeSlab",
             consumes=(CONV, "0/uvc_transmural"),

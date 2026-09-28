@@ -1,4 +1,4 @@
-"""Validation against the generated catalog (F1, F2, B4, G1)."""
+"""Validation against the generated catalog."""
 from __future__ import annotations
 
 import re
@@ -19,7 +19,7 @@ def test_known_keys_get_their_kind():
 
 @pytest.mark.parametrize(("document", "key_path", "value", "named"), [
     ("nversion.par", ("gregion[0]", "g_ill"), 0.2, "gregion[0].g_ill"),        # misspelled
-    ("nversion.par", ("compute_APD",), "no", "compute_APD"),                    # F1: not a bool
+    ("nversion.par", ("compute_APD",), "no", "compute_APD"),                    # not a bool
     ("nversion.par", ("bidomain",), 5, "bidomain"),                             # outside its menu
     ("nversion.par", ("num_stim",), -1, "num_stim"),                           # below its literal min
     ("mesh.pts", ("tend",), 1.0, "mesh.pts"),                                   # not a .par document
@@ -30,7 +30,7 @@ def test_refusals_name_the_key(document, key_path, value, named):
 
 
 def test_whole_array_shorthand_asks_for_elements():
-    # +Help lists '-phys_region[Int].ID' as '{ phys_region[PrMelem1].num_IDs x Int }' (B1)
+    # +Help lists '-phys_region[Int].ID' as '{ phys_region[PrMelem1].num_IDs x Int }'
     with pytest.raises(TutorialRecordError, match="element"):
         record_key_validator("nversion.par", ("phys_region[0]", "ID"), [1, 2, 3])
 
@@ -53,8 +53,8 @@ def test_a_string_menu_accepts_its_values_B_I4():
         record_key_validator("nversion.par", ("ginkgo_exec",), "nope")
 
 
-# -- I1 (wave-2 review): keys openCARP would silently ignore -------------------
-# F14: openCARP reads its arguments in order and the last assignment wins, so a
+# -- keys openCARP would silently ignore --------------------------------------
+# openCARP reads its arguments in order and the last assignment wins, so a
 # `-<key>` after `+F <doc>` overrides that document's value with no warning;
 # and it reads only the documents passed with `+F`. Both facts are derived from
 # the records' own steps, never from a hand-kept list.

@@ -1,8 +1,6 @@
 """Record-key validation against the generated catalog.
 
-Refusals name the key and cite the evidence (docs/solver-learning/opencarp.md).
-Bounds are checked only when +Help gives a literal number; expressions such
-as ``dt/1000.`` (G1) are left to openCARP itself."""
+Refusals name the key and cite the evidence (docs/solver-learning/opencarp.md). Bounds are checked only when +Help gives a literal number; expressions such as ``dt/1000.`` are left to openCARP itself."""
 from __future__ import annotations
 
 import re
@@ -30,8 +28,7 @@ class CommandLineAssignment:
 
 
 def _flag_assignments(arguments: tuple[str, ...]) -> list[tuple[str, str]]:
-    """The ``-<key> <value>`` pairs in ``arguments`` (every openCARP flag takes
-    a value); a nested ``+F <file>`` is skipped as a pair."""
+    """The ``-<key> <value>`` pairs in ``arguments`` (every openCARP flag takes a value); a nested ``+F <file>`` is skipped as a pair."""
     pairs, i = [], 0
     while i < len(arguments):
         token = arguments[i]
@@ -50,9 +47,9 @@ def read_documents(records: Mapping[str, TutorialRecord]) -> dict[str, dict[str,
     that step's command line assigns AFTER it.
 
     Derived from the records' own ``WorkflowStep.command`` (one source of
-    truth; review I1). openCARP reads only the ``+F`` documents, and it reads
-    its arguments in order with the last assignment winning, silently (F14):
-    a ``-<key>`` after ``+F <document>`` overrides that document's value, one
+    truth). openCARP reads only the ``+F`` documents, and reads its
+    arguments in order with the last assignment winning silently: a
+    ``-<key>`` after ``+F <document>`` overrides that document's value, one
     before it does not. Arguments an axis appends at resolve time
     (``AxisResult.command_arguments``) are not visible here; niedererNVersion's
     one axis (``dx``) appends only to the ``mesh`` step, which reads no
@@ -74,8 +71,8 @@ def make_record_key_validator(
     records: Mapping[str, TutorialRecord],
 ) -> Callable[[str, tuple[str, ...], Any], tuple[str, bool]]:
     """A key validator for these records: refuses a document no record step
-    reads and a key a record's command line owns (I1, F14), then checks the
-    key against the generated catalog."""
+    reads and a key a record's command line owns, then checks the key
+    against the generated catalog."""
     documents = read_documents(records)
 
     def validate(document: str, key_path: tuple[str, ...], value: Any) -> tuple[str, bool]:
@@ -125,11 +122,11 @@ record_key_validator = make_record_key_validator(TUTORIAL_RECORDS)
 
 
 def check_indices(text: str) -> None:
-    """Refuse an indexed key at or beyond its count (F2; openCARP exits 5 at startup).
+    """Refuse an indexed key at or beyond its count (openCARP exits 5 at startup).
 
-    A count absent from the text takes its catalog default (F7:
-    ``num_stim`` defaults to 2). Only top-level arrays are checked;
-    nested counts (``phys_region[0].num_IDs``) are left to openCARP."""
+    A count absent from the text takes its catalog default (``num_stim``
+    defaults to 2). Only top-level arrays are checked; nested counts
+    (``phys_region[0].num_IDs``) are left to openCARP."""
     catalog = load_catalog()
     count_key_for = {array: spec.name for spec in catalog.parameters.values() for array in spec.allocates}
     values = {a.key: a.value for a in parse_par(text)}

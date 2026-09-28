@@ -1,18 +1,6 @@
 """openCARP's .par format: parse, patch in place, and spell values.
 
-Pure text in, text out; nothing here touches the filesystem. Behaviour is
-taken from the binary (docs/solver-learning/opencarp.md):
-- F1: a Flag is off only for ``0`` or ``false``; ``no``/``off`` mean on,
-  so omniD writes ``1``/``0`` only.
-- F8: when a key is assigned twice, openCARP uses the last assignment.
-- F9: the separator is ``=`` or whitespace alone (``spacedt 2``); both are
-  read, and a patch keeps whichever the line used.
-- F10-F13 (added 2026-09-25, review B-I6): a string is always written
-  quoted. Unquoted, openCARP drops everything from an ``=`` on, silently
-  (F10); ``""`` is the empty string (F11); ``#`` starts a comment even
-  inside quotes, so a string holding one is refused (F12); quoting changes
-  nothing for a bare word, a file name or a spaced value (F13).
-"""
+Pure text in, text out; nothing here touches the filesystem. Behaviour (Flag spellings, repeated-key precedence, the ``=``-or-whitespace separator, and always-quoted strings) is taken from the real binary; see docs/solver-learning/opencarp.md."""
 from __future__ import annotations
 
 import re
@@ -53,7 +41,7 @@ def parse_par(text: str) -> tuple[ParAssignment, ...]:
 
 
 def read_raw(text: str, key: str) -> str | None:
-    """The raw value openCARP uses for ``key``: the last assignment (F8), or None if absent."""
+    """The raw value openCARP uses for ``key``: the last assignment wins, or None if absent."""
     value = None
     for assignment in parse_par(text):
         if assignment.key == key:
@@ -69,8 +57,8 @@ def patch_par(text: str, values: Mapping[str, str]) -> str:
     """Rewrite each key's value where it stands; append keys the text does not assign.
 
     ``values`` maps a key to its already-spelled value (``format_value``).
-    A key assigned more than once is refused: openCARP would read the last
-    one (F8), so which one a patch means is ambiguous."""
+    A key assigned more than once is refused: openCARP reads the last one,
+    so which one a patch means is ambiguous."""
     by_key: dict[str, list[ParAssignment]] = {}
     for assignment in parse_par(text):
         by_key.setdefault(assignment.key, []).append(assignment)
@@ -78,8 +66,8 @@ def patch_par(text: str, values: Mapping[str, str]) -> str:
     appended: list[str] = []
     for key, new_value in values.items():
         if _breaks_a_line(new_value):
-            # Review B-I5, defence in depth: values arrive already spelled,
-            # and one with a line break would write a second assignment.
+            # Defence in depth: values arrive already spelled, and one with
+            # a line break would write a second assignment.
             raise ParFormatError(f"{key}: the value {new_value!r} contains a line break; refusing to write it")
         found = by_key.get(key, [])
         if len(found) > 1:
@@ -131,10 +119,9 @@ def format_value(value: Any, value_kind: str) -> str:
     if value_kind == "string":
         text = str(value)
         if _control_characters(text):
-            # Review B-I5: "x\nnum_stim = 0" was spelled '"x\nnum_stim = 0"',
-            # and patch_par then wrote a second assignment. No run settles how
-            # openCARP reads a control character inside a value, so none is
-            # written.
+            # A value like "x\nnum_stim = 0" would let patch_par write a
+            # second assignment; no run settles how openCARP reads a control
+            # character inside a value, so none is written.
             raise ParFormatError(
                 f"a .par string cannot contain a control character "
                 f"({', '.join(repr(c) for c in _control_characters(text))}): {text!r}"
@@ -146,10 +133,10 @@ def format_value(value: Any, value_kind: str) -> str:
                 f"a .par string cannot contain '#': openCARP starts a comment there even "
                 f"inside quotes, so '\"a#b\"' is read as '\"a' (F12): {text!r}"
             )
-        # Always quoted (F13: quoting is transparent for a model name, a file
-        # name, a value with a space). Unquoted, text after an '=' is silently
-        # dropped -- "flags=ENDO" is read as "flags" (F10). '""' is the empty
-        # string (F11).
+        # Always quoted: quoting is transparent for a model name, a file
+        # name, or a value with a space. Unquoted, text after an '=' is
+        # silently dropped -- "flags=ENDO" is read as "flags". '""' is the
+        # empty string.
         return f'"{text}"'
     raise ParFormatError(f"no .par spelling for value kind {value_kind!r}")
 

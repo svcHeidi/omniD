@@ -1,4 +1,4 @@
-"""The committed catalog, as generated from openCARP v18.1's +Help (evidence B1-B5, G6)."""
+"""The committed catalog, as generated from openCARP v18.1's +Help."""
 from __future__ import annotations
 
 from omnidriver.opencarp.catalog import load_catalog, template_name
@@ -7,7 +7,7 @@ from omnidriver.opencarp.catalog import load_catalog, template_name
 def test_identity_is_the_binary_and_carries_no_repository_url():
     identity = load_catalog().identity
     assert identity["tag"] == "v18.1"
-    assert set(identity) == {"tag", "hash"}      # never the CI URL (G3)
+    assert set(identity) == {"tag", "hash"}      # never the CI URL
 
 
 def test_template_names():
@@ -35,7 +35,7 @@ def test_all_266_parameters():
 
 
 def test_a_string_menu_holds_values_not_their_quotes():
-    # +Help prints a String menu item as (String)("ref") (review B-I4); the
-    # catalog keeps the value a .par assigns, ref, not the C literal "ref".
+    # +Help prints a String menu item as (String)("ref"); the catalog keeps
+    # the value a .par assigns, ref, not the C literal "ref".
     menu = load_catalog().parameters["ginkgo_exec"].menu
     assert set(menu) == {"dpcpp", "hip", "cuda", "omp", "ref"}

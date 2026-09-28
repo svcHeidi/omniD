@@ -1,7 +1,6 @@
-"""openCARP tutorial-record registrations (Task 11 onward).
+"""openCARP tutorial-record registrations.
 
-Records address a study key and return a patch; they never write a case
-directly (scripts/check-case-writes.py scans this package for exactly that)."""
+Records address a study key and return a patch; they never write a case directly (scripts/check-case-writes.py scans this package for exactly that)."""
 from omnidriver.core.tutorial_records import build_tutorial_record_catalog
 
 from .niederer_n_version import RECORD

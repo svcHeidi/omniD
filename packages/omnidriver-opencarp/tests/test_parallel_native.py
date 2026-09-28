@@ -1,25 +1,24 @@
-"""PAR (owner Q6, 2026-09-26): ``niedererNVersion`` run serial and parallel
-gives the same P1-P9 activation times, on the real binary (evidence I1-I8 in
-docs/solver-learning/opencarp.md).
+"""``niedererNVersion`` run serial and parallel gives the same P1-P9
+activation times, on the real binary (see docs/solver-learning/opencarp.md).
 
 Both runs are the record unchanged at dx 500 um, dt 50 us, tend 150 ms, so
-that all nine points activate (G4, G8). The parallel run asks with
-``parallel: 2``: openCARP has no decomposition dictionary, and no scheduler
-allocation is ambient here, so the agent supplies N.
+that all nine points activate. The parallel run asks with ``parallel: 2``:
+openCARP has no decomposition dictionary, and no scheduler allocation is
+ambient here, so the agent supplies N.
 
 The environment is supplied, never discovered: the caller's PATH must reach
 the launcher of the MPI openCARP was built against first (for the owner's
 install, openCARP's bundled MPICH, ``/usr/local/lib/opencarp/lib/petsc/bin``),
-and on a machine whose host name does not resolve, ``HYDRA_IFACE=lo0`` (I3).
+and on a machine whose host name does not resolve, ``HYDRA_IFACE=lo0``.
 Otherwise this test FAILS up front, naming the launcher check's own finding
 (``opencarp_mpi_launcher_mismatch``, the diagnostic preflight refuses the plan
 with). ``PETSC_OPTIONS=-log_view`` is set for both runs,
-so each solve log states the size of the MPI world PETSc ran in (I4).
+so each solve log states the size of the MPI world PETSc ran in.
 
 Tolerance, 1e-5 ms absolute: ten units of the last digit the LAT file prints
-(six decimals, F6), a five-thousandth of ``dt``. openCARP's parallel solve
+(six decimals), a five-thousandth of ``dt``. openCARP's parallel solve
 reduces in a different order, so the printed times may differ in that last
-digit (I7), not more.
+digit, not more.
 """
 from __future__ import annotations
 
@@ -81,13 +80,13 @@ def test_serial_and_parallel_give_the_same_activation_times(runs):
 
 def test_the_outputs_keep_their_layout_and_location(runs):
     """Same files in the -simID directory, the LAT file one value per node in
-    the serial node order, vm.igb the same header (I6, I7)."""
+    the serial node order, vm.igb the same header."""
     serial, parallel = runs
     out_s, out_p = serial.case_root / "out", parallel.case_root / "out"
     assert sorted(p.name for p in out_s.iterdir()) == sorted(p.name for p in out_p.iterdir())
     lat_s = (serial.case_root / serial.lat_artifact.path_pattern).read_text().split()
     lat_p = (parallel.case_root / parallel.lat_artifact.path_pattern).read_text().split()
-    assert len(lat_s) == len(lat_p) == 41 * 15 * 7          # F3: nodes at dx 500
+    assert len(lat_s) == len(lat_p) == 41 * 15 * 7          # nodes at dx 500
     assert max(abs(float(a) - float(b)) for a, b in zip(lat_s, lat_p)) <= TOLERANCE_MS
     header = lambda path: path.read_bytes()[:1024]          # the igb header block
     assert header(out_s / "vm.igb") == header(out_p / "vm.igb")
@@ -101,8 +100,8 @@ def test_the_parallel_run_was_one_mpi_world_of_the_requested_size(runs):
     assert solve["command"] == "mpirun" and solve["args"][:3] == ["-np", str(RANKS), "openCARP"]
     assert document["resolvedEntry"]["parallel"] == {"requested": RANKS, "allocation": None}
     log = (parallel.case_root / "workflow_logs" / "solve.attempt1.stdout.log").read_text()
-    assert f"with {RANKS} processors" in log                  # PETSc's own -log_view line (I4)
-    assert log.count("GIT tag") == 1                          # one world, one header (I5)
+    assert f"with {RANKS} processors" in log                  # PETSc's own -log_view line
+    assert log.count("GIT tag") == 1                          # one world, one header
     serial_log = (serial.case_root / "workflow_logs" / "solve.attempt1.stdout.log").read_text()
     assert "with 1 processor," in serial_log
     assert "parallel" not in _document(serial)["resolvedEntry"]

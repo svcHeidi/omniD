@@ -14,9 +14,9 @@ def test_record_is_registered():
 
 
 def test_record_key_catalog_lists_only_addressable_documents_and_keys_I1(tmp_path):
-    """Review I1: only a document a record step passes with ``+F`` is read by
-    openCARP, and a key the record's command line sets after it is silently
-    overridden (F14); neither may be advertised to an agent."""
+    """Only a document a record step passes with ``+F`` is read by openCARP,
+    and a key the record's command line sets after it is silently overridden;
+    neither may be advertised to an agent."""
     from omnidriver.opencarp.plugin import OpenCARPPlugin
 
     (tmp_path / "nversion.par").write_text("")

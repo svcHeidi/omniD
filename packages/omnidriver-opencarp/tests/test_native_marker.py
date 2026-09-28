@@ -1,11 +1,6 @@
-"""openCARP's native tests carry their own marker, never cardiacFOAM's
-(final review S-I1, 2026-09-25).
-
-``native`` means "the cardiacFOAM native tree" (OMNIDRIVER_NATIVE_TUTORIALS):
-CLAUDE.md's ``packages/ -m native`` row runs it repo-wide. openCARP's native
-tests need a different tree and the real binary, and FAIL (not skip) without
-them, so under the shared marker that row reported openCARP failures that had
-nothing to do with cardiacFOAM. They are ``native_opencarp`` instead."""
+"""openCARP's native tests carry their own marker, distinct from
+cardiacFOAM's ``native``: they need a different tree and the real binary,
+and FAIL (not skip) without them, so they run under ``native_opencarp``."""
 from __future__ import annotations
 
 import re

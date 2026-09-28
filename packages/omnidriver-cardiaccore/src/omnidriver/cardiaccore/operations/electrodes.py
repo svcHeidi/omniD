@@ -1,9 +1,7 @@
 """Reference-frame ECG electrode transfer for supported comparative studies.
 
-This is a geometry-normalized approximation derived from the Strocchi-02
-reference anatomy. It is not a patient-specific electrode-placement model and
-must be selected explicitly by a workflow; it never supplies a default
-electrode configuration.
+A geometry-normalized approximation from the Strocchi-02 reference anatomy;
+not patient-specific, so a workflow must select it explicitly (no default).
 """
 
 from __future__ import annotations
@@ -234,12 +232,10 @@ def read_reference_offset_bundle(path: Path) -> dict[str, Any]:
 def write_reference_offset_bundle(path: Path, bundle: Mapping[str, Any]) -> None:
     """Validate and write one portable electrode-offset bundle as JSON.
 
-    **Classified 2026-09-23 (Phase 2 Task 12, batch P2-H): a standalone
-    export, not a case input.** A unit-labelled coordinate bundle for
-    cross-tool/human consumption -- no case-relative addressing, no
-    dictionary key, nothing a native OpenFOAM utility reads. Stays outside
-    the case-write channel, which is built for framework-authored case
-    inputs, not this kind of artifact.
+    A standalone export for cross-tool/human consumption, not a case input:
+    no case-relative addressing, no dictionary key, nothing a native
+    OpenFOAM utility reads. It stays outside the case-write channel, which
+    exists for framework-authored case inputs, not this kind of artifact.
     """
     validated = {
         "schema_version": ELECTRODE_OFFSET_BUNDLE_SCHEMA_VERSION,
@@ -301,10 +297,9 @@ def apply_offset_bundle_to_native_file(
 def write_electrode_positions(path: Path, positions: Mapping[str, Any]) -> None:
     """Write the explicit, unit-labelled target positions returned by the file bridge.
 
-    **Classified 2026-09-23 (Phase 2 Task 12, batch P2-H): a standalone
-    export, not a case input** -- same reasoning as
-    `write_reference_offset_bundle` above: a data product for a downstream
-    step, addressed by the caller, not a case dictionary.
+    A standalone export, not a case input -- same reasoning as
+    `write_reference_offset_bundle`: a data product for a downstream step,
+    addressed by the caller, not a case dictionary.
     """
     required = {"schema_version", "target_heart_vtk", "target_coordinate_unit", "electrodes"}
     missing = required.difference(positions)

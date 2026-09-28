@@ -1,4 +1,4 @@
-"""OpenCARPPlugin: openCARP as one self-contained provider (spec §7)."""
+"""OpenCARPPlugin: openCARP as one self-contained provider."""
 from __future__ import annotations
 
 import os
@@ -29,7 +29,7 @@ class OpenCARPPlugin:
     plugin_version = "0.1.0"
     plugin_api_version = "2"
 
-    # -- required contract (the dictionary-shaped members are optional since 2026-09-26, spec A3, so none are stubbed)
+    # -- required contract (the dictionary-shaped members are optional, so none are stubbed)
     def get_profile(self):
         with resources.as_file(resources.files(__package__).joinpath("opencarp.yaml")) as path:
             return load_plugin_profile(path)
@@ -44,12 +44,7 @@ class OpenCARPPlugin:
         return ()
 
     def predict_data_artifacts(self, case_root, spec):
-        return ()          # records declare their artifacts through step `produces` (K4)
-
-    # No is_case_runnable_without_workflow (removed 2026-09-25, wave-2 review
-    # I4): it answered, from one record's file (nversion.par), a question core
-    # asked only to gate record runs; core no longer asks it of a record run
-    # carrying its steps (run_document_exec._is_record_run_with_steps).
+        return ()          # records declare their artifacts through step `produces`
 
     # -- records
     def get_tutorial_records(self):
@@ -76,9 +71,9 @@ class OpenCARPPlugin:
                     "as on (F1). The native file must say 0 or 1."
                 )
             if spec is not None and spec.value_kind == "string" and not _is_quoted(raw) and "=" in raw:
-                # F10: unquoted, openCARP silently drops everything from an
-                # '=' on, so the raw text this reader parsed (everything up
-                # to the trailing whitespace/comment) is not what openCARP
+                # Unquoted, openCARP silently drops everything from an '='
+                # on, so the raw text this reader parsed (everything up to
+                # the trailing whitespace/comment) is not what openCARP
                 # actually reads. Refuse rather than report a value openCARP
                 # would truncate.
                 raise ParFormatError(
@@ -116,11 +111,11 @@ class OpenCARPPlugin:
             by_document.setdefault(target["document"], {})[target["key"]] = format_value(target["value"], target["value_kind"])
         rendered = []
         for document, values in by_document.items():
-            path = Path(snapshot_root) / document      # seeded from the case by core (P2)
+            path = Path(snapshot_root) / document      # seeded from the case by core
             exists_before = path.is_file()
             before = path.read_bytes() if exists_before else b""
             text = patch_par(before.decode(), values)
-            check_indices(text)                        # F2, refused by name before any run
+            check_indices(text)                        # refused by name before any run
             rendered.append(RenderedFile(
                 path=document, content=text.encode(), mode=None, exists_before=exists_before,
                 before_digest=_digest_bytes(before) if exists_before else None,
@@ -148,7 +143,7 @@ class OpenCARPPlugin:
         return ()
 
     def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None):
-        del environment_source, driver_context      # openCARP needs no environment source (evidence A4-A8)
+        del environment_source, driver_context      # openCARP needs no environment source
         return opencarp_environment_diagnostics(workflow_dag, env if env is not None else os.environ)
 
     def get_loaded_environment(self, *, environment_source=None, driver_context=None):
@@ -159,7 +154,7 @@ class OpenCARPPlugin:
         del driver_context
         return dict(env)
 
-    # -- parallel (PAR, owner Q6, 2026-09-26; evidence I1-I8)
+    # -- parallel
     def get_solve_step_commands(self):
         return SOLVER_COMMANDS      # the step a parallel request runs under mpirun
 
@@ -167,19 +162,18 @@ class OpenCARPPlugin:
         return parallel_steps(step, request=request, read_value=read_value, allocation=allocation)
 
     def get_log_redaction_patterns(self):
-        return REDACTION_PATTERNS     # consumed by core's redact_step_logs (K9); corrected 2026-09-25, was "once Task 12 lands"
+        return REDACTION_PATTERNS     # consumed by core's redact_step_logs
 
-    # -- record surface (C10, Task 10a)
+    # -- record surface
     def get_record_key_catalog(self, case_root):
-        # Review I1 (2026-09-25): was every ``*.par`` in the case against the
-        # binary's whole parameter list. Now only a document some record step
-        # passes with ``+F`` (the only ones openCARP reads), minus the keys a
-        # record's command line assigns after it (F14: silently overridden) --
-        # the same facts record_key_validator refuses by, from the same
-        # records. A template one of whose instances the command line owns
-        # (``imp_region[Int].im_sv_init``) is omitted whole: the catalogue has
-        # no "every index but 0" form, and listing a key the validator refuses
-        # is the defect I1 names.
+        # Only a document some record step passes with ``+F`` (the only ones
+        # openCARP reads), minus the keys a record's command line assigns
+        # after it (silently overridden) -- the same facts
+        # record_key_validator refuses by, from the same records. A template
+        # one of whose instances the command line owns
+        # (``imp_region[Int].im_sv_init``) is omitted whole: the catalogue
+        # has no "every index but 0" form, and listing a key the validator
+        # refuses would itself be a defect.
         entries = []
         catalog = load_catalog()
         # The catalogue's only source is the binary's +Help (catalog_generation.py).
@@ -202,7 +196,7 @@ class OpenCARPPlugin:
         text = resources.files(__package__).joinpath("guidance.md").read_text()
         return ({"title": "openCARP: what the binary does that a reader would not guess", "text": text},)
 
-    # -- results as quantities (results-as-quantities, Task 5)
+    # -- results as quantities
     def get_artifact_value_reader(self, artifact_format: str):
         """The LAT reader for the record's per-node LAT file; no other format is read."""
         return LatPerNodeReader() if artifact_format == LAT_FORMAT else None

@@ -1,8 +1,6 @@
 """openCARP's parameter catalog, generated from the binary (catalog_generation.py).
 
-Names are +Help's template form (``stim[Int].pulse.strength``). A whole-array
-shorthand (type ``{ 3 x Float }``) has no value kind; the validator asks for
-its indexed elements instead."""
+Names are +Help's template form (``stim[Int].pulse.strength``); a whole-array shorthand (type ``{ 3 x Float }``) has no value kind, so the validator asks for its indexed elements instead."""
 from __future__ import annotations
 
 import json
@@ -14,7 +12,7 @@ from importlib import resources
 VALUE_KIND_BY_TYPE = {
     "Int": "integer", "Short": "integer", "Long": "integer",
     "Float": "scalar", "Double": "scalar",
-    "Flag": "boolean",                               # written 1/0 only (F1)
+    "Flag": "boolean",                               # openCARP reads every other spelling as on, so this is always written 1/0
     "String": "string", "RFile": "string", "WFile": "string",
 }
 _INDEX = re.compile(r"\[\d+\]")

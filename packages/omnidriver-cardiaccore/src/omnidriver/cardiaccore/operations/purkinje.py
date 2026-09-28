@@ -1,20 +1,9 @@
 """Array methods for cardiacCore coverage observations.
 
-Native dictionaries remain the execution truth. Method constants and the
-named baseline policy are declared once in catalogs.purkinje; this module
-implements observations without judging scientific acceptance.
-
-Purkinje seed placement is NOT done here: it lives entirely in
-cardiacCoreStandalone's own scripts/place_purkinje_seeds.py (septal-midline
-method via aha_angle=0), not in this package. An earlier AHA-segment-based
-seed-deduction implementation (deduce_seeds, write_seed_dictionary,
-read_seed_dictionary, seed_area_placement_report,
-deduce_and_write_native_seed_dictionary, and the
-cardiaccore.purkinje.seed_proposal.v1 catalog entry) was removed 2026-09-23
-at the user's explicit instruction, after it was tried and rejected as a
-Purkinje seed-candidate method in cardiacCoreStandalone (AHA_Segment's
-~20-30deg wedges extend well past the true septal wall). Do not reintroduce
-seed-placement logic in this package.
+Native dictionaries are the execution truth; this module only observes
+coverage, never judging scientific acceptance. Purkinje seed placement
+itself lives in cardiacCoreStandalone's own scripts/place_purkinje_seeds.py,
+not here -- do not reintroduce seed-placement logic in this package.
 """
 
 from __future__ import annotations
@@ -116,10 +105,8 @@ def coverage_report_from_native_files(
         rv_aha = np.rint(
             np.asarray(volume.cell_data["AHA_Segment"])[rv_cells]
         ).astype(int)
-        # RVEndoFaces includes the native septal-recovery band.  Its samples
-        # can retain LV septal AHA labels, so remap only this surface as RV;
-        # applying the terminal remapper to the concatenated labels without
-        # zones would leave every value unchanged.
+        # RVEndoFaces can retain LV septal AHA labels near the native
+        # septal-recovery band; remap only this surface via normalize_rv_septal_segments.
         rv_aha = normalize_rv_septal_segments(
             rv_aha, np.full(len(rv_aha), 2, dtype=int)
         )

@@ -1,7 +1,6 @@
-"""openCARP's preflight against the real binary: the version guard (final
-review S-M3). The catalogue the validator certifies keys against is pinned to
-one openCARP build; a different binary is warned about, naming both tags.
-No second binary is needed: the test patches the catalogue's identity."""
+"""openCARP's preflight against the real binary: the version guard. The
+catalogue is pinned to one openCARP build; a different binary is warned about,
+naming both tags -- the test patches the catalogue rather than needing a second binary."""
 from __future__ import annotations
 
 import os
@@ -45,9 +44,8 @@ def test_a_binary_whose_tag_differs_from_the_catalogue_is_warned_naming_both(mon
 
 
 def test_the_declared_shell_checks_clean_in_the_native_shape():
-    """Added 2026-09-28: ``omnidriver env --plugin opencarp`` over the real
-    binary and launcher, in the shell this shape runs in (its MPI first on
-    PATH, the library path and, here, HYDRA_IFACE supplied)."""
+    """``omnidriver env --plugin opencarp`` checks clean in this shape's own
+    shell: its MPI first on PATH, the library path, and HYDRA_IFACE supplied."""
     from omnidriver.core.environment_connection import environment_report
     from omnidriver.core.plugin_interface import load_plugin_context
 

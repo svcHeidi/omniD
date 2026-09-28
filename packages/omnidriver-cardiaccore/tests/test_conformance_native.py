@@ -1,8 +1,6 @@
-"""cardiacCore's ``humanSlab`` record passes the conformance suite, every
-check in ``CHECKS``, against the real cardiacCore utilities, the native
-tree, and the owner's anatomy bundle (step S, S3's own proof point:
-docs/superpowers/specs/2026-09-28-supplied-inputs-design.md, table row S3).
-"""
+"""Every cardiacCore tutorial record passes the conformance suite (every
+check in ``CHECKS``), against the real cardiacCore utilities, the native
+tree, and the supplied anatomy bundle."""
 from __future__ import annotations
 
 import pytest

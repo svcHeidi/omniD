@@ -59,27 +59,21 @@ class CardiacCorePlugin:
     def get_capabilities(self) -> dict[str, Any]:
         """This provider has no domain catalogue core cannot already compose.
 
-        **Changed by Task 10 (2026-09-22).** This used to build the whole
-        manifest itself via ``build_capability_manifest`` and hand it back to
-        core, which just returned it unchanged -- duplicating what
-        ``plugin_capabilities._CapabilityManifestAdapter.manifest`` now
-        computes directly from the composed ``command_authorization``/
-        ``case_introspection``/``case_runtime_conventions`` reads over this
-        same provider stack. cardiacCore declares no domain vocabulary beyond
-        those (its named catalogues -- conditional inputs, tree validation,
-        etc. -- are exposed through ``get_named_catalogs`` instead), so there
-        is nothing left for this method to add.
+        ``plugin_capabilities._CapabilityManifestAdapter.manifest`` computes
+        the capability manifest directly from the composed
+        ``command_authorization``/``case_introspection``/
+        ``case_runtime_conventions`` reads over this provider stack.
+        cardiacCore's own named catalogues (conditional inputs, tree
+        validation, etc.) are exposed through ``get_named_catalogs`` instead.
         """
         return {}
 
     def validate_configuration(self, spec: Any) -> tuple[Any, ...]:
         """Check this spec's workflow-relevant catalog entries at plan time.
 
-        Wired 2026-09-22 (audit finding S2). This returned ``()``
-        unconditionally while a complete implementation sat unreachable in
-        ``workflows/run_config.py``, so a co-required pair left half-set in
-        the resolved case went unreported until a RunDocument happened to
-        expose it at run/step time.
+        Delegates to ``workflows.run_config.validate_configuration``, so a
+        co-required pair left half-set in the resolved case is reported here
+        rather than only surfacing later at run/step time.
         """
         from .workflows.run_config import validate_configuration
 
@@ -174,7 +168,7 @@ class CardiacCorePlugin:
         del artifact_format
         return None
 
-    # -- Tutorial records (step S; design 2026-09-28-supplied-inputs) --------
+    # -- Tutorial records -----------------------------------------------------
     def get_tutorial_records(self) -> dict[str, Any]:
         from .records import TUTORIAL_RECORDS
 
@@ -212,7 +206,7 @@ class CardiacCorePlugin:
 
     def resolve_case_mutation(self, request: Any, *, driver_context: Any) -> Any:
         """Delegate to ``workflows.overrides``, this package's one semantic
-        owner of a case mutation (Phase 2 Task 8)."""
+        owner of a case mutation."""
         from .workflows.overrides import resolve_patch_mutation
 
         del driver_context

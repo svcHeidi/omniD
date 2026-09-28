@@ -1,12 +1,9 @@
 """Declared method constants and coverage policy; no analysis is run here.
 
-Purkinje seed placement is not declared here: it lives in
-cardiacCoreStandalone's own scripts/place_purkinje_seeds.py. An earlier
-AHA-segment-based seed-candidate declaration (LV_SEPTAL_AHA_SEGMENTS,
-RV_BASAL_SEPTAL_AHA_SEGMENT, APICAL_STEP_NEIGHBOURS, and
-TREE_VALIDATION_CONTRACT's seed_placement key) was removed 2026-09-23 at
-the user's explicit instruction, after that method was tried and rejected
-in cardiacCoreStandalone. Do not reintroduce it.
+Purkinje seed placement lives in cardiacCoreStandalone's own
+scripts/place_purkinje_seeds.py, not here. Do not reintroduce an
+AHA-segment-based seed-candidate declaration: that method was tried and
+rejected in cardiacCoreStandalone.
 """
 
 from typing import Any

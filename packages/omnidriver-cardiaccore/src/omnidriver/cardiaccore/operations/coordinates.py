@@ -1,10 +1,8 @@
 """Coordinate-convention discovery and geometry prerequisites.
 
-These read-only checks precede anatomy and Purkinje work.  They establish
-which supported coordinate field triplet is present, then use the declared
-intraventricular, longitudinal, and transmural values to test endocardial-ring
-topology.  They neither construct native face sets nor change a coordinate
-field or a native dictionary.
+Read-only: discovers the coordinate field triplet and tests endocardial-ring
+topology from declared values, ahead of anatomy and Purkinje work; never
+writes a field or a native dictionary.
 """
 
 from __future__ import annotations
@@ -238,13 +236,9 @@ def _basal_ring_spacing_report(
     rings: tuple[dict[str, Any], ...],
     tolerance: float,
 ) -> dict[str, Any]:
-    """Measure the 0.1-to-0.4 ring separation against chamber extent.
-
-    The two iso-values alone cannot establish that their contours sample the
-    intended basal interval: a malformed coordinate can place a locally closed
-    0.1 contour near the valve end.  The axis is therefore defined by the two
-    contour centres and normalized by the selected endocardial surface extent
-    along that direction.
+    """Measure the 0.1-to-0.4 ring separation against chamber extent, via the
+    two contour centres (the iso-values alone can't rule out a malformed
+    contour placed near the valve end instead of the intended basal interval).
     """
     report: dict[str, Any] = {
         "from_longitudinal_level": float(_BASAL_RING_LEVELS[0]),
@@ -291,11 +285,9 @@ def _coordinate_field_candidates(
     binary_tolerance: float,
     seam_point_fraction_tolerance: float,
 ) -> tuple[tuple[str, tuple[float, float]], tuple[str, ...]]:
-    """Return numerical chamber and continuous-coordinate candidates.
-
-    This intentionally classifies field behaviour rather than names.  The
-    two-valued field is only a chamber *candidate*; topology later determines
-    whether a complete field triple supports the requested ring criterion.
+    """Return numerical chamber and continuous-coordinate candidates,
+    classified by field behaviour rather than name (topology later confirms
+    whether a two-valued chamber candidate actually supports the ring test).
     """
     scalar_names = []
     values_by_name: dict[str, np.ndarray] = {}

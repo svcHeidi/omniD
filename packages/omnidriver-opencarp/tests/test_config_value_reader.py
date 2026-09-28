@@ -1,12 +1,6 @@
-"""OpenCARPPlugin's get_config_value_reader: refusals it must make on the
-plugin's own behalf, beyond what par_format.read_raw alone reports.
-
-F1 (boolean spellings) is exercised elsewhere through the reader's own
-docstring intent; this file is F10 (addendum 2, task-11-brief.md): a native
-`.par` string value that is unquoted and contains `=` is not what openCARP
-actually reads (it silently truncates everything from the `=` on), so the
-reader must refuse it BY NAME rather than hand back a value that misrepresents
-the native file."""
+"""OpenCARPPlugin's get_config_value_reader: refusals beyond what
+par_format.read_raw alone reports -- e.g. an unquoted string value
+containing `=` is silently truncated by openCARP, so it is refused by name."""
 from __future__ import annotations
 
 import pytest

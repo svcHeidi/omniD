@@ -1,26 +1,6 @@
 """Activation times from openCARP's per-node LAT file, at points an agent supplies.
 
-Each fact below comes from the real binary (docs/solver-learning/opencarp.md):
-- ``init_acts_<lats[].ID>-thresh.dat`` with ``lats[].all = 0``: one value per
-  mesh point, in point order, ``-1`` for never activated, in ms (F6, G4). With
-  ``all = 1`` openCARP writes a two-column per-event file instead (F17),
-  which this reader refuses;
-- the mesh the solve used is ``meshname`` as the solver recorded it in
-  ``<simID>/parameters.par`` (D5, F16), relative to the case root, which is
-  the solve step's working directory (F5);
-- ``<meshname>.pts`` holds a point count, then ``x y z`` per point, in µm (F3);
-- ``<meshname>.elem`` holds an element count, then ``Tt n0 n1 n2 n3 tag`` per
-  line: linear tetrahedra, openCARP's only element type for this mesh.
-
-Sampling rule ``linear``: the barycentric interpolation of the four corner
-nodes' LAT over the tetrahedron containing the point -- the FE solution
-itself, defined and continuous everywhere in the mesh, including at a face,
-edge or node shared by several elements, so no tie needs a rule. The point
-requested is reported as ``sampled_at`` unchanged (the offset is always 0).
-A point in no element is refused by name. Points come from the agent's
-comparison request, already converted to µm by core. This reader orients
-nothing: openCARP's frame is whatever the mesh says.
-"""
+Format, mesh lookup and sampling behaviour are verified against the real binary; see docs/solver-learning/opencarp.md. This reader orients nothing: openCARP's frame is whatever the mesh says."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -97,8 +77,7 @@ def _read_lat(path: Path, *, point_count: int) -> list[float]:
 
 
 def _barycentric(points: list[Point], tet: Tet, target: Point) -> tuple[float, float, float, float] | None:
-    """``target``'s barycentric weights over ``tet``, or ``None`` if it lies
-    outside it (beyond ``_BARYCENTRIC_TOL``, so a face/edge/node is inside)."""
+    """``target``'s barycentric weights over ``tet``, or ``None`` if outside it (beyond ``_BARYCENTRIC_TOL``, so a face/edge/node counts as inside)."""
     v0, v1, v2, v3 = (points[n] for n in tet)
     ax, ay, az = v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]
     bx, by, bz = v2[0] - v0[0], v2[1] - v0[1], v2[2] - v0[2]
@@ -119,9 +98,7 @@ def _barycentric(points: list[Point], tet: Tet, target: Point) -> tuple[float, f
 
 
 class _TetLocator:
-    """Finds the tetrahedron containing a point, from a grid of nearby tets
-    (bucketed by centroid) rather than a scan of all of them -- the search
-    that keeps this usable at 2.1 M tets (Δx 0.1 mm)."""
+    """Finds the tetrahedron containing a point via a grid of nearby tets bucketed by centroid, rather than scanning all of them -- what keeps this usable at 2.1M tets (Δx 0.1 mm)."""
 
     def __init__(self, points: list[Point], tets: list[Tet]) -> None:
         self._points = points
@@ -171,8 +148,8 @@ class _TetLocator:
 
 class LatPerNodeReader:
     value_unit = "ms"
-    sentinels = frozenset({-1.0})
-    sampling_rule = "linear"
+    sentinels = frozenset({-1.0})     # openCARP's "never activated" marker
+    sampling_rule = "linear"          # barycentric interpolation of the FE solution itself, so a point on a shared face/edge/node needs no tie-break
     coordinate_unit = "um"
     takes_points = True
 

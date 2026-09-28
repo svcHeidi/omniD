@@ -29,7 +29,7 @@ UNLESS the module ALSO rebinds the name ``TYPE_CHECKING`` itself anywhere
 disabled: a locally shadowed sentinel means ``if TYPE_CHECKING:`` is not
 ``typing.TYPE_CHECKING`` at all, and the gate cannot tell a genuine
 type-only import from one hidden behind a look-alike guard, so it treats
-none of them as exempt in that file (review finding M2, evasion e23).
+none of them as exempt in that file.
 
 **Runtime purity is also enforced mechanically, not only statically**: see
 ``tutorial_records.resolve_case_patches``, which digests the staged case
@@ -55,22 +55,19 @@ RECORDS_SRC = (
     REPO_ROOT / "packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/records"
 )
 # The pure planners axes import (`plan_delta_t`, `plan_block_mesh_resolution`,
-# ...). Split from the writers once in `openfoam/utils.py` (deleted 2026-09-26,
-# review 54b M6, when its last writer had retired) so an axis never imports
-# a module that writes; scanned too, so that split cannot quietly regress.
-# Added 2026-09-25 (consolidation), when this module was found importing
-# `_format_value` from `mutators`, the live-file writer module.
+# ...), kept separate from the writers; scanned too, so an axis can never
+# reach a writer through this module.
 PLANNERS_SRC = (
     REPO_ROOT / "packages/omnidriver-openfoam/src/omnidriver/openfoam/case_planning.py"
 )
-# openCARP's own record modules (Task 11 onward), scoped narrowly the same
-# way: records address a study key and return a patch, they never write one.
+# openCARP's own record modules, scoped narrowly the same way: records
+# address a study key and return a patch, they never write one.
 OPENCARP_RECORDS_SRC = (
     REPO_ROOT / "packages/omnidriver-opencarp/src/omnidriver/opencarp/records"
 )
-# cardiacCore's own record modules (step S, 2026-09-28): the same shape as
-# cardiacfoam's -- humanSlab's workflow steps and its one anatomy input are
-# pure data, never a writer.
+# cardiacCore's own record modules: the same shape as cardiacfoam's --
+# humanSlab's workflow steps and its one anatomy input are pure data, never
+# a writer.
 CARDIACCORE_RECORDS_SRC = (
     REPO_ROOT / "packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/records"
 )
@@ -88,11 +85,11 @@ FORBIDDEN_IMPORT_MODULES: tuple[str, ...] = (
     "importlib",
     "omnidriver.openfoam.mutators",
     "omnidriver.openfoam.foam_backend",
-    # M2 (utils.py split): utils.py held ONLY writers (set_delta_t and kin);
-    # the pure planners moved to case_planning.py, which is not named here
-    # and remains importable. utils.py itself was deleted 2026-09-26 (review
-    # 54b M6); the name stays banned so a writer module re-created there is
-    # still unreachable from an axis or record.
+    # utils.py held only writers (set_delta_t and kin); the pure planners
+    # live in case_planning.py, which is not named here and stays
+    # importable. utils.py no longer exists; the name stays banned so a
+    # writer module re-created there is still unreachable from an axis or
+    # record.
     "omnidriver.openfoam.utils",
     "omnidriver.openfoam.apply_overrides",
     "omnidriver.core.case_transaction",
@@ -157,7 +154,7 @@ FORBIDDEN_CALL_NAMES: frozenset[str] = frozenset({
 
 #: Standalone references to one of these attributes (never called at all,
 #: e.g. ``wt = Path.write_text``) are just as much a writer handle as
-#: calling it directly -- evasion e02.
+#: calling it directly.
 FORBIDDEN_ATTRIBUTE_NAMES: frozenset[str] = FORBIDDEN_CALL_NAMES - {
     "__import__", "exec", "eval",
 }
@@ -172,7 +169,7 @@ def _runtime_nodes(tree: ast.Module, *, type_checking_shadowed: bool) -> list[as
     """All statements/expressions reachable at runtime.
 
     Skips ``if TYPE_CHECKING:`` bodies UNLESS ``type_checking_shadowed`` --
-    see the module docstring's note on evasion e23.
+    see the module docstring's note on a shadowed TYPE_CHECKING sentinel.
     """
     found: list[ast.stmt | ast.expr] = []
 
@@ -203,7 +200,7 @@ def _type_checking_is_shadowed(tree: ast.Module) -> bool:
     ``TYPE_CHECKING`` -- genuine ``typing.TYPE_CHECKING`` usage never
     rebinds that name, so any assignment to it means whatever ``if
     TYPE_CHECKING:`` appears in this file cannot be trusted to mean the real
-    sentinel (evasion e23)."""
+    sentinel."""
     for node in ast.walk(tree):
         targets: list[ast.expr] = []
         if isinstance(node, ast.Assign):
@@ -232,9 +229,9 @@ def _from_module(node: ast.ImportFrom, path: Path) -> str | None:
 
     A relative import (``from ..mutators import x``, ``from .. import
     mutators``) names the same module an absolute one does, so it is
-    resolved against the file's own package before any comparison. Added
-    2026-09-25: comparing only the literal text let a relative import of a
-    writer module pass whenever the imported name itself was not forbidden.
+    resolved against the file's own package before any comparison --
+    comparing only the literal text would let a relative import of a writer
+    module pass whenever the imported name itself was not forbidden.
     """
     if node.level == 0:
         return node.module
@@ -265,9 +262,8 @@ def _open_call_is_a_write(call: ast.Call) -> bool:
 
     Handles both the builtin's shape (``open(file, mode)``, mode at
     positional index 1) and a bound method's (``some_path.open(mode)``,
-    mode at positional index 0 since there is no separate ``file`` argument)
-    -- the builtin-only indexing used to let ``Path(...).open("w")`` evade
-    entirely (evasion e09).
+    mode at positional index 0 since there is no separate ``file`` argument),
+    so ``Path(...).open("w")`` cannot evade by using the method form.
 
     A non-literal (dynamic) mode cannot be proven read-only, so it is
     treated as a write too: this gate has an empty waiver list, and "I
@@ -309,8 +305,7 @@ def _call_receiver_name(call: ast.Call) -> str | None:
 def _foam_file_bound_names(tree: ast.Module) -> set[str]:
     """Local names assigned or ``with``-bound from a call to (something
     ending in) ``FoamFile`` -- e.g. ``x = FoamFile(...)`` or ``with
-    FoamFile(...) as x:`` (evasion e15's shape, the latter was not
-    recognized at all before)."""
+    FoamFile(...) as x:``."""
     bound: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
@@ -345,8 +340,8 @@ def _is_foam_file_receiver(receiver_text: str, foam_file_names: set[str]) -> boo
 
 def _getattr_string_args(call: ast.Call) -> list[str]:
     """String-literal arguments to a bare ``getattr(...)`` call -- catches
-    ``getattr(x, "write_text")(...)`` (evasion e03): the attribute name is
-    never a Python identifier in the source, so no other rule sees it."""
+    ``getattr(x, "write_text")(...)``: the attribute name is never a Python
+    identifier in the source, so no other rule sees it."""
     if _call_func_name(call) != "getattr" or isinstance(call.func, ast.Attribute):
         return []
     literals: list[str] = []
@@ -378,8 +373,8 @@ def _check_file(path: Path, root: Path) -> list[tuple[str, str]]:
                 # `from package import submodule` really imports the
                 # dotted name `package.submodule` -- `_module_names` alone
                 # only sees the "from" half (`package`), which misses this
-                # shape entirely (evasion e26: `from omnidriver.openfoam
-                # import utils` naming a forbidden SUBMODULE this way).
+                # shape entirely, e.g. `from omnidriver.openfoam import
+                # utils` naming a forbidden submodule this way.
                 candidate_module_names.extend(
                     f"{from_module}.{alias.name}" for alias in node.names
                 )

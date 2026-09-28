@@ -1,22 +1,6 @@
 """The Niederer 2011 N-version benchmark, as openCARP ships it.
 
-Native case: 02_EP_tissue/03E_study_resolution (nversion.par, singlecell.sv).
-Its run.py builds the rest in Python. What this record takes from run.py,
-each fact verified with the real binary (docs/solver-learning/opencarp.md):
-- the slab: ``mesh.Block(size=(20, 7, 3), resolution=dx/1000,
-  centre=(10, 3.5, 1.5))`` is ``mesher -size 2.0 0.7 0.3 -center 1.0 0.35
-  0.15`` in cm, with resolution in µm (F3: extents 0-20000 x 0-7000 x
-  0-3000 µm, fibres along x);
-- ``-imp_region[0].im_sv_init singlecell.sv``, case-relative, because
-  relative paths resolve against the working directory (F5), and every step
-  runs in the staged case root;
-- no physics-region options: outputs are byte-identical without them (F4).
-``tend``, ``dt`` and ``mass_lumping`` are ordinary .par keys, so a study
-names them as ``nversion.par:<key>`` (G5).
-
-The LAT file names its format so omniD reads it through `LatPerNodeReader`
-(results as quantities, 2026-09-26).
-"""
+Native case: 02_EP_tissue/03E_study_resolution (nversion.par, singlecell.sv), whose run.py builds the mesh and stimulus in Python; what this record takes from run.py is verified against the real binary -- see docs/solver-learning/opencarp.md."""
 from __future__ import annotations
 
 import math
@@ -43,6 +27,8 @@ def _dx_resolution(value: Any, staged_case_root: Path) -> AxisResult:
 
 DX_AXIS = AxisContract(name="dx", value_kind="scalar", resolve=_dx_resolution)
 
+# tend, dt and mass_lumping are ordinary nversion.par keys, so a study names
+# them directly as nversion.par:<key> rather than through an axis.
 RECORD = TutorialRecord(
     name="niedererNVersion",
     native_case_relpath="02_EP_tissue/03E_study_resolution",
@@ -50,16 +36,21 @@ RECORD = TutorialRecord(
     workflow_steps=(
         WorkflowStep(
             step_id="mesh",
+            # run.py's mesh.Block(size=(20, 7, 3), centre=(10, 3.5, 1.5)), in
+            # cm here: slab extents 0-20000 x 0-7000 x 0-3000 um, fibres along x.
             command=("mesher", "-size[0]", "2.0", "-size[1]", "0.7", "-size[2]", "0.3",
                      "-center[0]", "1.0", "-center[1]", "0.35", "-center[2]", "0.15", "-mesh", "slab"),
-            produces=("slab.pts", "slab.elem", "slab.lon", "slab.vec", "slab.vpts"),   # F15
+            produces=("slab.pts", "slab.elem", "slab.lon", "slab.vec", "slab.vpts"),
         ),
         WorkflowStep(
             step_id="solve",
+            # No physics-region options: outputs are byte-identical without
+            # them. singlecell.sv resolves against the staged case root,
+            # every step's working directory.
             command=("openCARP", "+F", "nversion.par", "-meshname", "slab", "-simID", "out",
                      "-imp_region[0].im_sv_init", "singlecell.sv"),
             consumes=("nversion.par", "singlecell.sv"),
-            produces=("out", "out/vm.igb", ProducedPath("out/init_acts_vm_act-thresh.dat", format=LAT_FORMAT)),   # F6; the whole -simID directory: F15; LAT format: results as quantities
+            produces=("out", "out/vm.igb", ProducedPath("out/init_acts_vm_act-thresh.dat", format=LAT_FORMAT)),   # "out" is the whole -simID directory; the LAT file feeds LatPerNodeReader
         ),
     ),
 )

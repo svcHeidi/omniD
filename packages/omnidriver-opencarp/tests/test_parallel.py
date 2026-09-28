@@ -1,7 +1,6 @@
-"""openCARP's parallel form and its launcher check, without the binary (PAR,
-2026-09-26). What the real binary does is settled in
-docs/solver-learning/opencarp.md, section I, and by test_parallel_native.py;
-these pin the rules that follow from it."""
+"""openCARP's parallel form and its launcher check, without the binary. What
+the real binary does is settled in docs/solver-learning/opencarp.md, section
+I, and by test_parallel_native.py; these pin the rules that follow from it."""
 from __future__ import annotations
 
 import stat
@@ -73,9 +72,9 @@ PARALLEL_DAG = {"steps": [{"id": "solve", "command": "mpirun", "args": ["-np", "
 
 @pytest.mark.parametrize("headers, verdict", [(1, None), (2, "2 separate one-process"), (0, "could not start")])
 def test_the_launcher_must_start_one_mpi_world(tmp_path, headers, verdict):
-    """A launcher of the MPI openCARP links prints the header once (I5);
-    another MPI's prints it once per process (I2); a launcher that cannot
-    start openCARP at all prints none."""
+    """A launcher of the MPI openCARP links prints the header once; another
+    MPI's prints it once per process; a launcher that cannot start openCARP
+    at all prints none."""
     _script(tmp_path, "openCARP", "exit 0\n")
     _script(tmp_path, "mpirun", "".join("echo '*** GIT tag: v18.1'\n" for _ in range(headers)) + "echo 'fatal: host not found' >&2\n")
     diagnostics = launcher_diagnostics(PARALLEL_DAG, {"PATH": str(tmp_path)})

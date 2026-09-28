@@ -16,7 +16,7 @@ def test_niederer_passes(check_id, tmp_path):
 
 
 def test_no_token_survives_in_workflow_logs(tmp_path):
-    """G3/K9: openCARP prints a CI token in every run header; kept logs must not carry it."""
+    """openCARP prints a CI token in every run header; kept logs must not carry it."""
     target = niederer_conformance_target(tmp_path)
     assert run_check("C6", target).passed
     logs = list(target.scratch_root.rglob("workflow_logs/*.log"))

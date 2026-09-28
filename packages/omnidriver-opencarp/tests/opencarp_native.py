@@ -1,6 +1,6 @@
 """Supplied inputs for native openCARP tests. Nothing here is discovered:
 the tutorials tree comes from OMNIDRIVER_OPENCARP_TUTORIALS, and the binary
-from the ambient PATH and DYLD_LIBRARY_PATH (evidence A4-A6)."""
+from the ambient PATH and DYLD_LIBRARY_PATH."""
 from __future__ import annotations
 
 import os
@@ -56,15 +56,15 @@ def niederer_sweep(tmp_path: Path, *, dx_values: tuple[float, ...], tend: float,
                    extra: Mapping[str, Any] | None = None,
                    allow_missing_declared_artifact: bool = False) -> Path:
     """Run niedererNVersion over ``dx_values`` through ``omnidriver sweep-run``
-    (dt 50 us, G4/G7). Returns the sweep's output directory.
+    (dt 50 us). Returns the sweep's output directory.
 
     By default any case that does not complete fails the caller loudly --
     including a missing declared artifact, e.g. the LAT file absent at
     ``all = 0`` (an actual solver or staging defect). Only
-    ``test_the_per_event_layout_is_refused_by_name`` (F17) passes
+    ``test_the_per_event_layout_is_refused_by_name`` passes
     ``allow_missing_declared_artifact=True``: with ``lats[0].all = 1`` the
     declared per-node LAT file is *expected* to be missing (openCARP writes
-    a different file instead, F17), and reconciliation marks that case
+    a different file instead), and reconciliation marks that case
     failed even though the solver itself exited 0 -- see
     ``_only_a_declared_artifact_is_missing``. Every other caller must not
     silently tolerate a missing artifact."""
@@ -98,19 +98,15 @@ def niederer_sweep(tmp_path: Path, *, dx_values: tuple[float, ...], tend: float,
 
 
 def _only_a_declared_artifact_is_missing(case: Mapping[str, Any]) -> bool:
-    """Whether ``case`` failed for exactly the reason F17 exercises: the solver
+    """Whether ``case`` failed for exactly the reason
+    ``test_the_per_event_layout_is_refused_by_name`` exercises: the solver
     exited fine, but the LAT artifact (``LAT_PATH``) specifically is absent, so
     reconciliation -- not a crash, a timeout or a refused patch -- marked the
     case failed. Anything else (``materialization_error``, ``plan_error``,
     ``timeout_error``) is a genuine failure and stays fatal, per the
     no-fallbacks rule: this only widens what counts as an *expected* shape,
-    it never silences an unexplained one.
-
-    Corrected 2026-09-26 (controller review M11): this used to accept ANY
-    missing declared artifact (``missing_count > 0``), so a missing
-    ``out/vm.igb`` -- an actual defect -- would have been tolerated right
-    alongside F17's expected absence. It now checks which artifact is
-    missing, by ``predicted_path``, and refuses to tolerate anything else."""
+    it never silences an unexplained one. A different missing artifact, such
+    as ``out/vm.igb``, is checked by ``predicted_path`` and stays fatal."""
     if case.get("status") != "failed":
         return False
     if case.get("materialization_error") or case.get("plan_error") or case.get("timeout_error"):
@@ -142,7 +138,7 @@ def niederer_run(tmp_path: Path, *, dx: float, tend: float, extra: Mapping[str, 
 
 
 def niederer_conformance_target(tmp_path: Path) -> ConformanceTarget:
-    """Coarse and short, so the native tier stays seconds long (G4, G7)."""
+    """Coarse and short, so the native tier stays seconds long."""
     require_opencarp_binary()
     return ConformanceTarget(
         plugin="opencarp",
@@ -162,7 +158,7 @@ def niederer_conformance_target(tmp_path: Path) -> ConformanceTarget:
 
 def require_opencarp_mpi_launcher() -> None:
     """The ``mpirun`` first on PATH starts one MPI world of openCARP processes
-    (PAR; docs/solver-learning/opencarp.md I2-I5), checked up front so a wrong
+    (see docs/solver-learning/opencarp.md), checked up front so a wrong
     environment fails naming the fix, not as a failed sweep case whose
     preflight message stayed in its child process."""
     from omnidriver.opencarp.parallel import launcher_diagnostics

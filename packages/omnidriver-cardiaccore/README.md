@@ -17,11 +17,6 @@ print(operation["preconditions"])
 print(operation["entrypoints"])
 ```
 
-<!-- Corrected 2026-09-19: the previous example indexed
-`cardiaccore.cobiveco.normalize.v1`, which is not one of the seven keys
-`CardiacCorePlugin().get_named_catalogs()["cardiaccore_operations"]` actually
-returns. -->
-
 The guide and its manifest are package resources: this works without a source
 checkout. The manifest identifies required catalogs for each role. It does
 not itself inject instructions into an agent; provider integration remains
@@ -73,15 +68,6 @@ reinterpret coordinates, or silently use a different method after an error.
 Distinguish invalid input, an unavailable reader, and unresolved scientific
 interpretation. Read the operation record for its limits and correct the
 identified prerequisite first.
-
-<!-- Corrected 2026-09-19: the previous example imported
-`normalize_cobiveco_coordinates` and `read_cobiveco_target_convention` from
-`omnidriver.cardiaccore.operations.cobiveco`. Neither that module nor those
-functions exist; the real, generalised module is
-`omnidriver.cardiaccore.operations.coordinates_convention`, with
-`read_coordinates_convention(case_root)` and `coordinate_field_paths(convention)`.
-The module covers both `uvc` and `cobiveco` (see `COORDINATE_SYSTEMS`) rather
-than being cobiveco-specific. -->
 
 ## Ownership within the package
 
@@ -179,10 +165,9 @@ Installing that extra does not implement the other pending VTK readers.
 ## Maintenance and verification
 
 Preserve operation IDs, named catalog IDs and the plugin entry point.
-The in-progress flat-module reorganization intentionally uses the callable
-paths now advertised by the catalog; no old-module forwarding layer is added.
-This is an import-path migration, not a claim that previous direct imports
-continue working. Existing callers must select the advertised paths.
+Callable paths follow the flat-module layout the catalog advertises; there
+is no forwarding layer for other module paths, so callers must use the
+advertised paths directly.
 
 Tests exercise plugin composition, workflows, operation behavior, and
 catalog-driven invocation. After changing package resources or imports, build

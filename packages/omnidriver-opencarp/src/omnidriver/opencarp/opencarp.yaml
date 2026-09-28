@@ -1,4 +1,4 @@
-# openCARP is its own environment and solver: no requires (spec §7; C1).
+# openCARP is its own environment and solver: no requires.
 schema_version: 1
 plugin:
   id: org.omnidriver.opencarp
@@ -12,9 +12,9 @@ provides:
   - record_surface
 case_profile:
   dictionaries: []
-# openCARP's shell: nothing is sourced (A6); its MPI's bin goes first on PATH.
+# openCARP's shell: nothing is sourced; its MPI's bin goes first on PATH.
 # `omnidriver env --plugin opencarp` renders and checks it; nothing is
-# searched for. Added 2026-09-28: this recipe lived only as prose in CLAUDE.md.
+# searched for.
 environment:
   supplied:
     - name: DYLD_LIBRARY_PATH
