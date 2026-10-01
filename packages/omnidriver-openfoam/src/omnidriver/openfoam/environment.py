@@ -253,9 +253,9 @@ class OpenFOAMEnvironmentPlugin:
         return ()
 
     def get_dict_key_scanner(self):
-        from .dict_keys_scanner import strict_dict_key_report
+        from .dict_keys_scanner import catalog_report
 
-        return strict_dict_key_report
+        return catalog_report
 
     def get_case_runtime_conventions(self):
         return openfoam_case_runtime_conventions()

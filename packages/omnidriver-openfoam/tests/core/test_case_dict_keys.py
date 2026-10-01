@@ -197,41 +197,6 @@ def test_strict_plan_reports_a_misspelled_key_without_failing(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# One matching set, shared with the C++ scanner
-# ---------------------------------------------------------------------------
-
-
-def test_catalogued_names_covers_wildcard_leaves_and_containers():
-    # Both directions must share this exact set: a second, subtly different
-    # copy produced false positives on the C++ side before.
-    from omnidriver.core.contracts.dictionary import DictEntry
-    from omnidriver.openfoam.dict_keys_scanner import catalogued_names
-
-    entries = [
-        DictEntry(
-            driver_path="$C.ecgDomains.<name>.sigmaExtracellular",
-            description="",
-            value_kind="scalar",
-            phases=frozenset({"physics"}),
-            dynamic_path=True,
-        ),
-        DictEntry(
-            driver_path="$C.singleCellSolverCoeffs.ionicModel",
-            description="",
-            value_kind="word",
-            phases=frozenset({"physics"}),
-        ),
-    ]
-    names = catalogued_names(entries)
-
-    assert "sigmaExtracellular" in names, "wildcard-path leaf must count as known"
-    assert "ecgDomains" in names, "container segment must count as known"
-    assert "singleCellSolverCoeffs" in names
-    assert "ionicModel" in names
-    assert "<name>" not in names, "wildcard placeholders are not real key names"
-
-
-# ---------------------------------------------------------------------------
 # Position-aware matching: a <placeholder> segment matches any instance name
 # ---------------------------------------------------------------------------
 

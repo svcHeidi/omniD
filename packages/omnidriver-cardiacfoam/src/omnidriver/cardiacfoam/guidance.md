@@ -8,9 +8,11 @@ this first part is one the record-key validator
 enforces; none is new. The last section is about the mesh.
 
 - **Two documents are catalogued**: `constant/electroProperties` and
-  `constant/physicsProperties`. A key in either must be in the catalogue,
-  which is drift-gated against the C++ (`test_strict_dict_key_scanner_allowlist_is_current`).
-  A key the catalogue lacks is refused by name, never written.
+  `constant/physicsProperties`. A key in either must be in the catalogue, or
+  read by the supplied C++ source: then it is `uncatalogued`, accepted, and
+  checked against the type the C++ reads it as
+  (`omnidriver catalog --uncatalogued` lists them). Any other key is refused
+  by name, never written.
 - **Write the active solver's scope.** Coefficients live under
   `<myocardiumSolver>Coeffs`: for `myocardiumSolver singleCellSolver;`, write
   `singleCellSolverCoeffs.tissue`. `describe` lists the case's own scope. A

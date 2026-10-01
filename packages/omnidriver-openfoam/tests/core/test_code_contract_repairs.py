@@ -1,7 +1,6 @@
 """Reproductions that need neither a solver nor a source checkout."""
 import pytest
 
-from omnidriver.openfoam.dict_keys_scanner import scan_dict_reads
 from omnidriver.openfoam.mutators import read_foam_entry, update_foam_entry
 from omnidriver.openfoam.openfoam_environment import load_openfoam_environment
 
@@ -75,11 +74,3 @@ def test_source_failure_is_not_masked_by_environment_export(tmp_path):
     assert loaded.error is not None
     assert "7" in loaded.error
     assert "WM_PROJECT_DIR" not in loaded.env
-
-
-def test_cpp_scanner_preserves_source_line_after_comments(tmp_path):
-    source = tmp_path / "model.C"
-    source.write_text('/*\ncomment\n*/\ndict.lookupOrDefault<scalar>("alpha", 2);\n')
-    reads = scan_dict_reads(tmp_path)
-    assert len(reads) == 1
-    assert reads[0].line == 4

@@ -17,10 +17,6 @@ import pytest
 
 from omnidriver.core import strict_planning
 from omnidriver.cli import main
-from omnidriver.openfoam.dict_keys_scanner import (
-    compute_dict_key_drift,
-    strict_dict_key_report,
-)
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
 from omnidriver.core.plugin_interface import driver_context as _driver_context
@@ -284,59 +280,12 @@ def test_strict_plan_fails_when_artifact_prediction_is_empty() -> None:
     )
 
 
-def test_strict_dict_key_scanner_allowlist_is_current() -> None:
-    """The committed ``dict_key_allowlist.json`` against the native C++ at ``cxx_mapping.source_root``."""
-    assert CARDIAC_MAPPING is not None
-    _native_tutorials_root()
-    src_root = CARDIAC_MAPPING.source_root(os.environ)
-    if not src_root.is_dir():
-        pytest.fail(
-            f"expected a 'src' sibling of OMNIDRIVER_NATIVE_TUTORIALS's "
-            f"tutorials directory at {src_root}, the native cardiacFOAM "
-            f"monorepo's C++ source tree"
-        )
-    report = strict_dict_key_report(
-        src_root,
-        allowlist_path=CARDIAC_MAPPING.allowlist_path,
-        entries=CARDIAC_PLUGIN.get_dict_entries(),
-    )
-    assert report.status == "ok", report.to_json()
-    assert report.to_json()["unused_allowlist"] == []
-
-
 def test_every_strict_plan_scans_the_supplied_source() -> None:
-    """With the source supplied, catalog diagnostics are the scan's (none), not ``plugin_cxx_source_not_supplied``."""
+    """With the source supplied, the catalogue diagnostics are the scan's:
+    no contradiction, and only ``uncatalogued`` notes."""
     _native_tutorials_root()
-    assert strict_planning._catalog_diagnostics(_CTX) == ()
-
-
-def test_strict_dict_key_scanner_fails_on_unallowlisted_key() -> None:
-    with tempfile.TemporaryDirectory() as temp_dir:
-        src_root = Path(temp_dir) / "src"
-        src_root.mkdir()
-        (src_root / "reader.C").write_text(
-            'void read(const Foam::dictionary& dict) { dict.lookup("unlistedStrictKey"); }\n'
-        )
-        drift = compute_dict_key_drift(
-            src_root,
-            entries=CARDIAC_PLUGIN.get_dict_entries(),
-        )
-        allowlist_path = Path(temp_dir) / "allowlist.json"
-        allowlist_path.write_text(json.dumps({
-            "unmatched_cxx_reads": sorted(drift["unmatched_cxx_reads"] - {"unlistedStrictKey"}),
-            "stale_paths": sorted(drift["stale_paths"]),
-            "unmatched_subdicts": sorted(drift["unmatched_subdicts"]),
-        }))
-
-        report = strict_dict_key_report(
-            src_root,
-            allowlist_path=allowlist_path,
-            entries=CARDIAC_PLUGIN.get_dict_entries(),
-        )
-
-    payload = report.to_json()
-    assert payload["status"] == "failed"
-    assert payload["unmatched_cxx_reads"] == ["unlistedStrictKey"]
+    diagnostics = strict_planning._catalog_diagnostics(_CTX)
+    assert {(d.level, d.code) for d in diagnostics} <= {("info", "plugin_catalog_uncatalogued")}
 
 
 def test_batched_ionic_model_does_not_require_optional_batched_keys(tmp_path: Path):

@@ -865,7 +865,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "action",
         choices=[
-            "describe", "catalog", "env", "plan", "step", "run", "recover", "sweep-plan",
+            "describe", "catalog", "env", "scan", "plan", "step", "run", "recover", "sweep-plan",
             "sweep-run", "compare",
         ],
         help="Pipeline stage to execute",
@@ -1114,6 +1114,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--uncatalogued",
+        action="store_true",
+        help=(
+            "For action=catalog: list every key the stack's C++ reads and its "
+            "catalogue lacks, with the scanned type, default and source "
+            "location (no --entry needed)."
+        ),
+    )
+    parser.add_argument(
         "--comparison-request",
         help="For action=compare: an agent's quantity comparison request (JSON; schema omnidriver/schemas/quantity-comparison.schema.json).",
     )
@@ -1194,8 +1203,10 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
     for flag_name, message in _FLAG_ERRORS_BY_ACTION.get(args.action, ()):
         if getattr(args, flag_name):
             parser.error(message)
-    if (args.document or args.key) and args.action != "catalog":
-        parser.error("--document/--key are only valid with action=catalog")
+    if (args.document or args.key or args.uncatalogued) and args.action != "catalog":
+        parser.error("--document/--key/--uncatalogued are only valid with action=catalog")
+    if args.uncatalogued and (args.entry or args.document or args.key):
+        parser.error("--uncatalogued lists the whole stack's C++ reads; it takes no --entry/--document/--key")
     if args.action not in {"plan", "step", "run"} and args.strict:
         parser.error("--strict is only valid with action=plan, action=step, or action=run")
     if args.allow_unresolved_configuration and args.action not in {"plan", "step", "run"}:
@@ -1272,8 +1283,13 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
         args.scratch_dir, args.parallel is not None, args.inputs, args.dry_run, args.continue_on_error,
     )):
         parser.error("action=env takes only --plugin: it reports the stack's environment, not a run's")
-    if not args.run_document and not args.entry and args.action not in {
-        "recover", "sweep-plan", "sweep-run", "compare", "env",
+    if args.action == "scan" and any((
+        args.entry, args.run_document, args.config, args.cases_root, args.spec, args.output_dir,
+        args.parallel is not None, args.inputs, args.dry_run, args.continue_on_error,
+    )):
+        parser.error("action=scan takes only --plugin and --scratch-dir: it rescans the stack's C++ source")
+    if not args.run_document and not args.entry and not args.uncatalogued and args.action not in {
+        "recover", "sweep-plan", "sweep-run", "compare", "env", "scan",
     }:
         parser.error("--entry is required (or use --run-document with action=run/step)")
 
@@ -1313,6 +1329,41 @@ def _sweep_refusal(args, exc: Exception) -> int:
     return 1
 
 
+def _scan_or_uncatalogued(args, driver_context) -> int:
+    """``scan`` rescans the stack's C++ into the supplied scratch root's
+    cache and prints a summary; ``catalog --uncatalogued`` lists what the
+    C++ reads and the catalogue lacks (cached when a scratch root is
+    supplied)."""
+    from .core.catalog_query import cxx_evidence, uncatalogued_query
+
+    try:
+        cache_root = resolve_scratch_root(args.scratch_dir)
+    except TutorialRecordError as exc:
+        if args.action == "scan":
+            print(json.dumps({"status": "failed", "action": "scan", "error": str(exc)}, indent=2))
+            return 1
+        cache_root = None
+    if args.action == "catalog":
+        print(json.dumps(uncatalogued_query(driver_context, cache_root=cache_root), indent=2))
+        return 0
+    cxx = cxx_evidence(driver_context, os.environ, cache_root=cache_root, force=True)
+    summary: dict = {
+        "action": "scan",
+        "plugin": [provider["id"] for provider in driver_context.identity.to_json()["providers"]],
+        "cxx_source": cxx,
+    }
+    if cxx is None or not cxx["scanned"]:
+        summary["status"] = "failed"
+        summary["error"] = "the stack declares no C++ source" if cxx is None else cxx["reason"]
+    else:
+        cxx.pop("selector_values")
+        cxx["uncatalogued"] = len(cxx["uncatalogued"])
+        cxx["unresolved"] = len(cxx["unresolved"])
+        summary["status"] = cxx["status"]
+    print(json.dumps(summary, indent=2))
+    return 0 if summary["status"] == "ok" else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -1340,6 +1391,9 @@ def main(argv: list[str] | None = None) -> int:
         report = environment_report(driver_context)
         print(json.dumps(report, indent=2))
         return 0 if report["status"] == "ok" else 1
+
+    if args.action == "scan" or args.uncatalogued:
+        return _scan_or_uncatalogued(args, driver_context)
 
     selected_entry = args.entry
     # The CLI's own study source, beside --config's.

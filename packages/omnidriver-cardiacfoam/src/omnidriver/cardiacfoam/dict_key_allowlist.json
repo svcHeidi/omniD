@@ -1,57 +1,36 @@
 {
-  "description": "Reviewed cardiacFoam allowlist for the approximate C++ dictionary-key scanner. RENAMED 2026-08-25: the former 'absent_keys' bucket is now 'unmatched_cxx_reads', and the scanner comparison was fixed at the same time. The old name asserted something untrue -- that the catalog was MISSING these keys -- when 59 of the 83 entries (71%) were catalogued all along and merely invisible to the comparison: 26 were container/parent segments (outputVariables, singleCellStimulus, bathPotentialDomain, ...) that the check never consulted, and 33 were leaves of dynamic wildcard paths (sigmaExtracellular under ecgDomains.<name>, graphFile and purkinjeConductivity under conductionNetworkDomains.<name>, ...) which were excluded from the leaf set because that same set also feeds stale_paths, where excluding wildcards IS correct. compute_dict_key_drift now builds two views: cat_leaves (concrete only, for stale_paths) and catalogued_names (all leaves plus parent segments, for unmatched_cxx_reads). Waiver count 83 -> 24. The 24 that remain are permanent and expected, in four groups. (a) NOT THIS CATALOG'S DICT FILE: 'TaScale', 'Tmax', 'V0', 'amplitude', 'gamma', 'initializeFields', 'electroMechanicalModel' belong to electroMechanicalProperties or the MMS verifiers, not to electroProperties; 'points', 'rootNode', 'pvjNodes', 'pvjLocations', 'pvjResistances' are read from constant/<graphFile> (e.g. constant/purkinjeGraph), a machine-generated file omnidriver never writes -- it only references it by the already-catalogued graphFile key. (b) UPSTREAM OPENFOAM'S KEY: 'nNonOrthogonalCorrectors' is read from a pimpleDict (extracellularPotentialDomain.C:55). OpenFOAM owns that contract; cataloguing it here would be claiming someone else's key. 'ODESolver' likewise. (c) NOT A DICTIONARY KEY AT ALL: 'Vm' and 'Iion' are field names in string comparisons and IOobject names (conductionSystemDomain.C:403,410); 'endocardialCells', 'mCells', 'epicardialCells' are tissue VALUES in tissues.found(...) membership tests (configuredBatchedIonicModel.H:155-157); 'global' is an ionicConstantOverrides <scope> value, not a literal path segment. (d) DEAD CODE: 'torsoSurface' is a genuine dict.get<fileName> read in ecgModelIO::loadSurface, but that function is declared and defined and never called anywhere in src/. Verified 2026-08-25. If loadSurface is ever wired up, torsoSurface becomes a real catalog gap and this waiver must be removed. The 10 stale_paths remain scanner BLIND SPOTS, not catalog bugs -- the regex cannot follow dimensioned<T>(name, dict) constructors, spec.dictionaryEntry struct indirection, or dictionaries handed to upstream OpenFOAM (ODESolver::New reads solver/absTol/relTol/maxSteps flat from the coeffs dict, exactly as catalogued). The unmatched_subdicts waivers 'groundPatches' and 'surfaceCurrentPatches' are catalogued under bathPotentialDomain, but the only reads the scanner recognises as subDict(...) lived in the removed manufacturedBathBidomainECGVerifier; extracellularPotentialDomain.C reads them with findDict(...) and ecgDomain.C through a pointer (->subDict), neither of which the scanner's patterns match. Corrected 2026-09-26 (catalog drift fix, final review AB Q7): this test had been skipped since it was written (converted from skip_without_monorepo to @pytest.mark.native only on 2026-09-26, R2 fix M6) and drift accumulated unseen from 2026-09-09 onward, both native and in-repo. Six more waivers land, in two more groups, and two stale ones are removed. (e) REJECTION GUARD: 'stimulus' -- restitutionEikonalSolver1D.C checks solverCoeffs.found('stimulus') only to raise FatalIOError; cataloguing it would advertise a key the solver rejects, not accepts. (f) REMOVED 2026-09-26 (owner): the 'manufacturedBidomain' dead pass-through (electrophysicsSystemBuilder.C findDict -> ecgDomain.C merge, never consumed) and the 'manufacturedEikonalECG' legacy alias (eikonalECG.C, superseded by verificationModel.type) were deleted natively on branch cleanup/manufactured-legacy-keys (c15e2fcf), so both waivers were removed. (g) UPSTREAM OPENFOAM's DOCUMENT, not this plugin's: 'endTime', 'purgeWrite', 'startFrom', 'stopAt', 'writeControl', 'writeFormat', 'writeInterval' are catalogued (common_dict_entries.CONTROL_DICT_ENTRIES, added to get_dict_entries() 2026-09-20) but read by upstream OpenFOAM's Foam::Time from controlDict (cardiacFoam.C includes createTime.H), never by cardiacFoam's own C++ -- the scanner only sees src/, so it cannot confirm an upstream read the way it confirms a plugin read. 'deltaT' and 'startTime' are NOT waived here despite the same controlDict provenance: cardiacFoam.C happens to also read them itself by the same names, so the scanner's match is a genuine (if coincidental) hit, and waiving them would hide a real regression if that direct read were ever removed. Ledger: the scanner should learn which document (controlDict vs electroProperties) an entry belongs to, so upstream-document entries are never compared against cardiacFoam's own C++ in the first place -- a later omnidriver-openfoam task, not fixed here. Removed: 'electromechanicalVerificationModel' (both the unmatched_cxx_reads and the unmatched_subdicts waiver) -- native c030b57fd replaced subDict('electromechanicalVerificationModel') with 'verificationModel', which the catalog's existing name already covers; only the class TypeName and includes remained, and those waivers were unused. Waiver count 24 -> 30 (net: +3 unmatched_cxx_reads, +7 stale_paths, -1 unmatched_cxx_reads, -1 unmatched_subdicts); corrected 2026-09-26: 30 -> 28 once the native cleanup removed manufacturedBidomain and manufacturedEikonalECG.",
-  "unmatched_cxx_reads": [
-    "Iion",
-    "ODESolver",
-    "TaScale",
-    "Tmax",
-    "V0",
-    "Vm",
-    "amplitude",
-    "electroMechanicalModel",
-    "endocardialCells",
-    "epicardialCells",
-    "gamma",
-    "global",
-    "initializeFields",
-    "mCells",
-    "nNonOrthogonalCorrectors",
-    "points",
-    "pvjLocations",
-    "pvjNodes",
-    "pvjResistances",
-    "rootNode",
-    "stimulus",
-    "torsoSurface"
-  ],
-  "stale_paths": [
-    "$ELECTRO_MODEL_COEFFS.absTol",
-    "$ELECTRO_MODEL_COEFFS.c0",
-    "$ELECTRO_MODEL_COEFFS.conductivity",
-    "$ELECTRO_MODEL_COEFFS.conductivityExtracellular",
-    "$ELECTRO_MODEL_COEFFS.conductivityIntracellular",
-    "$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusDuration",
-    "$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusIntensity",
-    "$ELECTRO_MODEL_COEFFS.maxSteps",
-    "$ELECTRO_MODEL_COEFFS.relTol",
-    "$ELECTRO_MODEL_COEFFS.solver",
-    "endTime",
-    "purgeWrite",
-    "startFrom",
-    "stopAt",
-    "writeControl",
-    "writeFormat",
-    "writeInterval"
-  ],
-  "unmatched_subdicts": [
-    "ODESolver",
-    "domainCouplings",
-    "global",
-    "groundPatches",
-    "surfaceCurrentPatches"
-  ],
+  "description": "Reviewed facts the C++ scan cannot establish for cardiacFOAM's catalogue (omnidriver.openfoam.dict_keys_scanner.catalog_report). unseen_reads: catalogued paths whose read the scan cannot see, grouped by why. runtime_selection: the table each enum's menu comes from.",
+  "unseen_reads": {
+    "read by upstream OpenFOAM's Foam::Time from system/controlDict, not by cardiacFOAM's source": [
+      "endTime",
+      "purgeWrite",
+      "startFrom",
+      "stopAt",
+      "writeControl",
+      "writeFormat",
+      "writeInterval"
+    ],
+    "read by upstream OpenFOAM's ODESolver from the dictionary ionicModel hands to ODESolver::New": [
+      "$ELECTRO_MODEL_COEFFS.absTol",
+      "$ELECTRO_MODEL_COEFFS.maxSteps",
+      "$ELECTRO_MODEL_COEFFS.relTol",
+      "$ELECTRO_MODEL_COEFFS.solver",
+      "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.absTol",
+      "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.maxSteps",
+      "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.relTol",
+      "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.solver",
+      "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.absTol",
+      "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.relTol",
+      "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.solver"
+    ],
+    "read by readConductivityField through conductivityFieldSpec::dictionaryEntry, a key the scan cannot name": [
+      "$ELECTRO_MODEL_COEFFS.conductivity",
+      "$ELECTRO_MODEL_COEFFS.conductivityExtracellular",
+      "$ELECTRO_MODEL_COEFFS.conductivityIntracellular"
+    ]
+  },
   "runtime_selection": {
-    "description": "Reviewed mapping from catalogue enum entries to the C++ runtime-selection tables (addToRunTimeSelectionTable) that supply their values; checked by omnidriver.openfoam.rtst_scanner.runtime_selection_report inside every strict plan whose source root is supplied. Moved 2026-09-28 from test_rtst_enum_contract.py's constants, which that test now reads from here. by_path: the table each enum exposes, with a comparison mode (strict: equal; subset: the catalogue lists some; polymorphic: the catalogue lists all, possibly more). not_runtime_selected: enums whose values are plain words, not a table. internal_bases: tables with no catalogue enum of their own. 2026-09-28, first production run against native c184d702: ecgDomains.<name>.verificationModel.type mapped to ecgVerificationModel; its dimension and personalizedTemplates.ionicModelConfig.{tissue,solver} classified as plain words, and the controlDict words startFrom, stopAt, writeControl and writeFormat (which the test never saw: it read only the physics and electro catalogues) likewise; ecgDomains.<name>.manufactured.dimension (no longer catalogued) and the internal ecgVerificationModel, couplingVerificationModel and graphVerificationModel (all now mapped) removed.",
+    "description": "Which C++ selection table (addToRunTimeSelectionTable) each catalogue enum draws its menu from. by_path: the table and how the menu relates to it (strict: the same names; subset: a curated part; polymorphic: several tables share the selector). not_runtime_selected: enums whose values are plain words. internal_bases: tables no catalogue enum selects directly.",
     "by_path": {
       "type": {
         "base": "physicsModel",
@@ -139,10 +118,10 @@
       "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.dimension": "1D/2D/3D, a plain word (cfg.lookup) in manufacturedPseudoECGVerifier.C and manufacturedEikonalECGVerifier.C",
       "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.tissue": "eikonalTemplateGenerator.C hands ionicModelConfig to ionicModel::New, which reads tissue as the top-level tissue enum",
       "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.solver": "eikonalTemplateGenerator.C hands ionicModelConfig to ionicModel::New, which reads solver as an OpenFOAM ODESolver name",
-      "startFrom": "an upstream OpenFOAM controlDict word read by Foam::Time (group (g) above), not a runtime table of cardiacFoam's",
-      "stopAt": "an upstream OpenFOAM controlDict word read by Foam::Time (group (g) above), not a runtime table of cardiacFoam's",
-      "writeControl": "an upstream OpenFOAM controlDict word read by Foam::Time (group (g) above), not a runtime table of cardiacFoam's",
-      "writeFormat": "an upstream OpenFOAM controlDict word read by Foam::Time (group (g) above), not a runtime table of cardiacFoam's"
+      "startFrom": "an upstream OpenFOAM controlDict word read by Foam::Time, not a runtime table of cardiacFoam's",
+      "stopAt": "an upstream OpenFOAM controlDict word read by Foam::Time, not a runtime table of cardiacFoam's",
+      "writeControl": "an upstream OpenFOAM controlDict word read by Foam::Time, not a runtime table of cardiacFoam's",
+      "writeFormat": "an upstream OpenFOAM controlDict word read by Foam::Time, not a runtime table of cardiacFoam's"
     },
     "internal_bases": {
       "electroModel": "a lower-level table the myocardiumSolver key resolves through; its values appear in the union enum",

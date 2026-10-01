@@ -878,25 +878,26 @@ class ConfigValueCapability(Protocol):
 
 
 class DictKeyScannerCapability(Protocol):
-    """Scan an adapter's C++ source for dictionary-key reads.
+    """Compare an adapter's dictionary catalogue with what its C++ reads.
 
-    The scan itself is C++/dictionary-format knowledge, not solver knowledge
-    (the regex over ``.lookup("key")``-shaped call sites in
-    ``dict_keys_scanner.py`` knows nothing about ionic models or myocardium
-    selectors), so it belongs to the OpenFOAM environment adapter, not to a
-    specific solver plugin. Not a mandatory ``SolverPlugin`` member, so
-    existing v2 third-party plugins keep loading; the fallback
-    (``absent_dict_key_scanner``) reports an empty drift -- no unmatched
-    reads, no stale paths -- until an adapter declares a real scanner.
+    The scan is C++/dictionary-format knowledge, so it belongs to the
+    environment adapter (``omnidriver-openfoam``), not to a solver plugin.
+    The report's JSON carries ``contradictions`` (catalogue claims the C++
+    refutes: strict planning fails on each), ``uncatalogued`` (what the C++
+    reads and the catalogue lacks: a note each, never a failure),
+    ``unresolved`` (reads the scan could not place) and ``selector_values``.
+    ``cache_root`` keeps the scan between processes; ``force`` rescans. The
+    fallback (``absent_dict_key_scanner``) reports nothing.
 
     :adapts: get_dict_key_scanner
-    :consumed-by: omnidriver/core/strict_planning.py
+    :consumed-by: omnidriver/core/strict_planning.py, omnidriver/core/catalog_query.py
     :fallback: absent_dict_key_scanner
     :status: optional-neutral
     """
 
     def scan(
         self, source_root: Any, *, allowlist_path: Any, entries: Any,
+        cache_root: Any = None, force: bool = False,
     ) -> Any: ...
 
 
@@ -1814,14 +1815,19 @@ class _ConfigValueAdapter:
 class _DictKeyScannerAdapter:
     plugin: "SolverPlugin"
 
-    def scan(self, source_root: Any, *, allowlist_path: Any, entries: Any) -> Any:
+    def scan(
+        self, source_root: Any, *, allowlist_path: Any, entries: Any,
+        cache_root: Any = None, force: bool = False,
+    ) -> Any:
         hook = getattr(self.plugin, "get_dict_key_scanner", None)
         scanner = hook() if callable(hook) else None
         if scanner is None:
             from .compatibility import absent_dict_key_scanner
 
             scanner = absent_dict_key_scanner()
-        return scanner(source_root, allowlist_path=allowlist_path, entries=entries)
+        return scanner(
+            source_root, allowlist_path=allowlist_path, entries=entries, cache_root=cache_root, force=force,
+        )
 
 
 @dataclass(frozen=True)

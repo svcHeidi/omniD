@@ -1,8 +1,9 @@
 """Evidence-labelled input catalog for cardiacCore preprocessing utilities.
 
 Every ``DictEntry`` is backed by a native ``.get``/``.getOrDefault``/
-``.found`` read discovered with ``omnidriver.openfoam.dict_keys_scanner`` over
-``cardiacCoreStandalone/src`` (see ``docs/BUILDER_AGENT_EVIDENCE_CONTRACT.md``).
+``.found`` read, which every strict plan checks with
+``omnidriver.openfoam.dict_keys_scanner`` over the supplied cardiacCore
+``src`` (see ``docs/BUILDER_AGENT_EVIDENCE_CONTRACT.md``).
 Conditionality the native source expresses as an ``if``/``found`` branch is
 expressed here as ``applicable_when``/``required_when``/``forbidden_when``/
 ``mutually_exclusive_with`` rather than prose -- see

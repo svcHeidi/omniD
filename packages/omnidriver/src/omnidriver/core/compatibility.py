@@ -242,27 +242,12 @@ def absent_case_dict_key_diagnostics(case_root, *, catalogued_paths, dict_relpat
 
 @_instrumented
 def absent_dict_key_scanner():
-    """Plugins predating a C++ dictionary-key scanner hook emit an empty
-    report. Format-specific source scanning belongs to the adapter.
-
-    Returns only the C++ REPORT. The catalogue-path vocabulary is core's own
-    (see core/contracts/catalogue_paths.py) and must not be routed through
-    here: format-specific parsing must remain in the adapter even when the
-    adapter implements get_case_dict_key_diagnostics and never reaches this
-    fallback.
-
-    Reached only as ``DictKeyScannerCapability``'s declared fallback
-    (``plugin_capabilities._DictKeyScannerAdapter.scan``), when a plugin
-    implements no ``get_dict_key_scanner`` hook of its own."""
+    """Plugins with no C++ dictionary-key scanner report nothing. Reached
+    only as ``DictKeyScannerCapability``'s declared fallback."""
 
     class _EmptyReport:
         def to_json(self):
-            return {
-                "unmatched_cxx_reads": [],
-                "stale_paths": [],
-                "unmatched_subdicts": [],
-                "unused_allowlist": [],
-            }
+            return {"contradictions": [], "uncatalogued": [], "unresolved": [], "selector_values": {}}
 
     def _report(*args, **kwargs):
         del args, kwargs

@@ -17,7 +17,7 @@ _TOY = "plugins.e2e_record_plugin:E2ERecordPlugin"
 def _context(mapping, *, report=None):
     scans = []
 
-    def scan(root, *, allowlist_path, entries):
+    def scan(root, *, allowlist_path, entries, cache_root=None, force=False):
         scans.append(root)
         return SimpleNamespace(to_json=lambda: report)
 
@@ -55,16 +55,19 @@ def test_a_supplied_root_that_is_not_a_directory_is_refused(tmp_path, monkeypatc
     assert scans == []
 
 
-def test_a_supplied_root_is_scanned_and_every_drift_list_is_an_error(tmp_path, monkeypatch):
+def test_a_contradiction_is_an_error_and_an_uncatalogued_read_a_note(tmp_path, monkeypatch):
     (tmp_path / "tree" / "src").mkdir(parents=True)
     monkeypatch.setenv("TOY_NATIVE_TREE", str(tmp_path / "tree"))
-    report = {"status": "failed", "stale_paths": ["a.b"], "any_new_kind": ["x"], "values": {"a": ["b"]}}
+    report = {
+        "status": "failed", "contradictions": ["a.b: catalogued, but the C++ reads no 'b'"],
+        "uncatalogued": [{"kind": "key", "key": "c"}], "unresolved": [{"key": "d"}],
+    }
     context, scans = _context(_mapping(tmp_path), report=report)
     diagnostics = _catalog_diagnostics(context)
     assert scans == [(tmp_path / "tree" / "src").resolve()]
-    assert {(d.level, d.code) for d in diagnostics} == {
-        ("error", "plugin_dict_key_stale_paths"), ("error", "plugin_dict_key_any_new_kind"),
-    }
+    assert [(d.level, d.code) for d in diagnostics] == [
+        ("error", "plugin_catalog_contradiction"), ("info", "plugin_catalog_uncatalogued"),
+    ]
 
 
 def test_the_profile_names_a_variable_and_a_relation_never_a_path(tmp_path):
@@ -121,3 +124,20 @@ def test_catalog_refuses_an_entry_that_is_not_a_record_as_json(tmp_path, capsys)
 def test_document_and_key_belong_to_catalog_only(tmp_path):
     with pytest.raises(SystemExit):
         main(["describe", "--plugin", _TOY, "--entry", "toyTutorial", "--key", "cells"])
+
+
+def test_catalog_uncatalogued_and_scan_answer_for_the_whole_stack(tmp_path, capsys):
+    assert main(["catalog", "--plugin", _TOY, "--uncatalogued"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert (payload["cxx_source"], payload["uncatalogued"]) == (None, [])
+    assert main(["scan", "--plugin", _TOY, "--scratch-dir", str(tmp_path)]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["error"] == "the stack declares no C++ source"
+
+
+def test_uncatalogued_takes_no_entry_and_scan_needs_a_scratch_root(tmp_path, capsys, monkeypatch):
+    with pytest.raises(SystemExit):
+        main(["catalog", "--plugin", _TOY, "--uncatalogued", "--entry", "toyTutorial"])
+    monkeypatch.delenv("OMNIDRIVER_SCRATCH_DIR", raising=False)
+    assert main(["scan", "--plugin", _TOY]) == 1
+    assert "scratch root" in json.loads(capsys.readouterr().out)["error"]
