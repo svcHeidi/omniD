@@ -39,20 +39,16 @@ an agent callback.
 ## Agent sequence
 
 1. Inspect and plan the case. Do not edit it while planning.
-2. Execute the planned step. Convert a failure report into a canonical
-   `RepairObservation`.
-3. Propose a finite, catalog-addressable `RepairProposal`, bound to that
-   observation digest.
-4. Run `run_repair_loop(...)` with a small `RepairBudgets` value. Its
-   `execute_candidate` callback calls `execute_repair_candidate(...)`, then
-   adapts the result with `repair_experiment_result(...)`.
-5. The executor acquires case/output leases, re-observes before mutation,
-   persists a reservation and before-images, applies the override, checks
-   effective configuration when the plugin supplies it, replans, and only
-   then dispatches the utility step.
-6. On restart, call the same repair loop with the durable output directory.
-   It reconciles the reservation and remediation transaction before consuming
-   another execution slot.
+2. Execute the planned step. A failure report carries `failure_context`.
+3. Propose a finite, catalog-addressable override list and run
+   `omnidriver step ... --apply overrides.json`; the file may carry a
+   `hypothesis` beside the `overrides`.
+4. The executor acquires case/output leases, persists before-images, applies
+   the override, checks effective configuration when the plugin supplies it,
+   replans, and only then dispatches the utility step.
+5. The result names the remediation transaction. An accepted transaction is
+   the case head; a rejected or interrupted one blocks reuse of the case
+   until it is restored or restaged.
 
 The adapter must declare every target through
 `get_override_target_paths(...)`; its `apply_overrides(...)` may reject an
@@ -64,18 +60,16 @@ it is never silently reused.
 ## Executable proof
 
 `packages/omnidriver/tests/core/test_core_generic_case.py` proves neutral
-read-only planning and configuration closure inspection. The utility repair
+read-only planning and configuration closure inspection. The utility patch
 slice is exercised with a real `Allrun` subprocess in
 `packages/omnidriver/tests/core/test_step_candidate.py`:
 
-- `test_neutral_utility_workflow_repairs_and_dispatches_a_real_allrun` —
-  successful repair/replan/dispatch and durable acceptance.
-- `test_stale_evidence_is_rejected_under_both_leases_before_mutation` — stale
-  proposals cannot mutate or dispatch.
-- `test_changed_plan_rejects_written_candidate_before_dispatch` and
-  `test_restart_recovers_terminal_transaction_before_callback_return` —
-  post-write replan rejection and interruption remain recoverable through the
-  durable journal.
+- `test_neutral_utility_workflow_patches_and_dispatches_a_declared_case_script` —
+  successful patch/replan/dispatch and durable acceptance.
+- `test_changed_plan_rejects_written_candidate_before_dispatch` — a
+  post-write replan rejection leaves a marked candidate and never dispatches.
+- `test_unowned_execution_never_starts_a_transaction` — without both leases
+  nothing is written.
 
 Run the focused proof with:
 

@@ -2,9 +2,6 @@
 (including one without the OpenFOAM layer) knows them when staging a case --
 ``_CaseRuntimeConventionsAdapter.conventions`` merges this into whatever the
 plugin stack declares.
-
-``.omnidriver-repair-control`` is not one of these: it is written to
-``output_dir.parent``, outside the case, so it never gets staged.
 """
 from __future__ import annotations
 

@@ -1,17 +1,12 @@
-"""Structured, solver-neutral execution of one validated repair candidate."""
+"""Structured, solver-neutral execution of one step, optionally under a configuration patch."""
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Literal, Mapping
 
-from .attempt_lease import (
-    acquire_attempt_lease,
-    acquire_case_lease,
-    attempt_lease_is_held,
-    case_lease_is_held,
-)
+from .attempt_lease import attempt_lease_is_held, case_lease_is_held
 from .execution_context import StepExecutionContext
 from .failure_context import build_failure_context
 from .launch_readiness import is_execution_successful
@@ -25,14 +20,6 @@ from .remediation_transaction import (
     mark_remediation_dispatching,
     record_remediation_outcome,
     require_reusable_case,
-)
-from .repair_loop import (
-    RepairExperimentResult,
-    RepairObservation,
-    RepairProposal,
-    RepairReservation,
-    claim_repair_reservation,
-    complete_repair_reservation,
 )
 from .resume import validate_resume
 from .workflow_orchestrator import STATE_FILENAME, WORKFLOW_LOGS_DIRNAME
@@ -48,81 +35,12 @@ class StepCandidateResult:
     dispatched: bool
 
 
-def execute_repair_candidate(
-    context: StepExecutionContext,
-    *,
-    step_id: str,
-    proposal: RepairProposal,
-    reservation: RepairReservation,
-    reobserve: Callable[[], RepairObservation],
-    tail_lines: int = 200,
-    run_step: Callable[..., WorkflowStepRunResult] = run_workflow_step,
-) -> StepCandidateResult:
-    """Acquire execution ownership and execute one durably reserved proposal."""
-    with acquire_case_lease(context.case_root):
-        with acquire_attempt_lease(context.output_dir):
-            if proposal.digest != reservation.proposal_digest:
-                raise ValueError("repair proposal does not match its reserved digest")
-            if proposal.based_on_observation_digest != reservation.observation_digest:
-                raise ValueError("repair proposal observation does not match its reservation")
-            claim_repair_reservation(
-                context.output_dir, reservation, case_root=context.case_root,
-            )
-            result = execute_step_candidate_owned(
-                context,
-                step_id=step_id,
-                overrides=list(proposal.overrides),
-                hypothesis=proposal.hypothesis,
-                reservation=reservation,
-                proposal=proposal,
-                reobserve=reobserve,
-                tail_lines=tail_lines,
-                run_step=run_step,
-            )
-            _validate_repair_result(result, reservation)
-            evidence = result.payload.get("repair_observation")
-            if not isinstance(evidence, Mapping):
-                raise ValueError("repair candidate did not return a structured observation")
-            complete_repair_reservation(
-                context.output_dir,
-                reservation,
-                status=result.status,
-                observation=RepairObservation(evidence),
-                transaction_id=result.transaction_id,
-            )
-            return result
-
-
-def repair_experiment_result(
-    result: StepCandidateResult,
-    reservation: RepairReservation,
-) -> RepairExperimentResult:
-    """Adapt a bound structured execution result to the repair-loop contract."""
-    _validate_repair_result(result, reservation)
-    evidence = result.payload.get("repair_observation")
-    if not isinstance(evidence, Mapping):
-        raise ValueError("repair candidate did not return a structured observation")
-    return RepairExperimentResult(
-        result.status,
-        RepairObservation(evidence),
-        loop_id=reservation.loop_id,
-        execution=reservation.execution,
-        reservation_id=reservation.reservation_id,
-        observation_digest=reservation.observation_digest,
-        proposal_digest=reservation.proposal_digest,
-        transaction_id=result.transaction_id,
-    )
-
-
 def execute_step_candidate_owned(
     context: StepExecutionContext,
     *,
     step_id: str,
     overrides: list[dict[str, Any]] | None = None,
     hypothesis: str | None = None,
-    reservation: RepairReservation | None = None,
-    proposal: RepairProposal | None = None,
-    reobserve: Callable[[], RepairObservation] | None = None,
     tail_lines: int = 200,
     run_step: Callable[..., WorkflowStepRunResult] = run_workflow_step,
 ) -> StepCandidateResult:
@@ -134,32 +52,6 @@ def execute_step_candidate_owned(
             "step candidate execution requires owned case and output leases"
         )
     require_reusable_case(case_root, explicit_repair=overrides is not None)
-
-    current_observation: RepairObservation | None = None
-    repair_binding: Mapping[str, Any] | None = None
-    if reservation is not None:
-        if proposal is None or reobserve is None:
-            raise ValueError("reserved repair execution requires proposal and re-observation")
-        if proposal.digest != reservation.proposal_digest:
-            raise ValueError("repair proposal does not match its reserved digest")
-        if proposal.based_on_observation_digest != reservation.observation_digest:
-            raise ValueError("repair proposal observation does not match its reservation")
-        current_observation = reobserve()
-        if current_observation.digest != reservation.observation_digest:
-            return StepCandidateResult(
-                "rejected",
-                {
-                    "status": "failed",
-                    "entry": context.entry_label,
-                    "step": step_id,
-                    "error": "repair proposal is based on stale execution evidence",
-                    "repair_observation": current_observation.evidence,
-                    "repair_observation_digest": current_observation.digest,
-                },
-                None,
-                False,
-            )
-        repair_binding = asdict(reservation)
 
     state_path = output_dir / STATE_FILENAME
     workflow_state = context.planned_state
@@ -194,7 +86,6 @@ def execute_step_candidate_owned(
                     case_root=case_root,
                     driver_context=context.driver_context,
                 ),
-                repair_binding=repair_binding,
             )
             effective_resolution = (
                 context.driver_context.capabilities.override_scopes.apply(
@@ -239,10 +130,6 @@ def execute_step_candidate_owned(
                 plan_digest=workflow_digest(workflow_dag),
             )
         except (OSError, ValueError) as exc:
-            repair_result = None
-            if reobserve is not None:
-                current_observation = reobserve()
-                repair_result = _repair_result_payload("rejected", current_observation)
             if transaction is not None:
                 restored = baseline_is_restored(
                     case_root, transaction, output_dir=output_dir,
@@ -253,7 +140,6 @@ def execute_step_candidate_owned(
                     status="rolled_back" if restored else "rejected",
                     effective_resolution=effective_resolution,
                     error=str(exc),
-                    repair_result=repair_result,
                 )
             if mutation_applied:
                 append_remediation_record(
@@ -271,9 +157,6 @@ def execute_step_candidate_owned(
                 "error": f"candidate rejected: {exc}",
             }
             _attach_transaction(payload, transaction)
-            if current_observation is not None:
-                payload["repair_observation"] = current_observation.evidence
-                payload["repair_observation_digest"] = current_observation.digest
             return StepCandidateResult(
                 "rejected", payload, _transaction_id(transaction), False,
             )
@@ -294,11 +177,6 @@ def execute_step_candidate_owned(
             leases_held=True,
         )
     except Exception as exc:
-        if reservation is not None:
-            # A repair-loop executor crash is not scientific evidence. Keep
-            # the durable transaction in dispatching so recovery can identify
-            # the interrupted candidate, and let the loop record executor_error.
-            raise
         if transaction is not None:
             transaction = record_remediation_outcome(
                 case_root,
@@ -323,10 +201,6 @@ def execute_step_candidate_owned(
             "workflow_state": workflow_state.to_json(),
         }
         _attach_transaction(payload, transaction)
-        if reobserve is not None:
-            current_observation = reobserve()
-            payload["repair_observation"] = current_observation.evidence
-            payload["repair_observation_digest"] = current_observation.digest
         return StepCandidateResult("failed", payload, _transaction_id(transaction), True)
 
     step_state = _step_state_by_id(run_result.state, step_id)
@@ -348,10 +222,6 @@ def execute_step_candidate_owned(
             hint.to_json() for hint in build_candidate_remediations(failure)
         ]
         payload["failure_context"] = failure
-    if reobserve is not None:
-        current_observation = reobserve()
-        payload["repair_observation"] = current_observation.evidence
-        payload["repair_observation_digest"] = current_observation.digest
     if overrides is not None:
         if transaction is not None:
             transaction = record_remediation_outcome(
@@ -359,13 +229,6 @@ def execute_step_candidate_owned(
                 transaction,
                 execution_status=cli_status,
                 attempt=step_state.attempt,
-                repair_result=(
-                    _repair_result_payload(
-                        "succeeded" if successful else "failed",
-                        current_observation,
-                    )
-                    if current_observation is not None else None
-                ),
             )
         append_remediation_record(
             output_dir,
@@ -392,16 +255,6 @@ def _attempt(state: object, step_id: str) -> int:
         return 0
 
 
-def _repair_result_payload(
-    status: str, observation: RepairObservation,
-) -> dict[str, Any]:
-    return {
-        "status": status,
-        "observation": observation.evidence,
-        "observation_digest": observation.digest,
-    }
-
-
 def _transaction_id(transaction: Mapping[str, Any] | None) -> str | None:
     return str(transaction["transaction_id"]) if transaction is not None else None
 
@@ -414,42 +267,9 @@ def _attach_transaction(
     payload["remediation_transaction"] = {
         key: transaction.get(key)
         for key in (
-            "transaction_id", "origin", "status", "hypothesis", "proposal_digest",
+            "transaction_id", "status", "hypothesis", "proposal_digest",
             "plan_digest", "parent_transaction_id", "repeats_failed_proposal",
             "candidate_archive", "execution_status", "execution_attempt",
-            "repair_binding",
         )
         if key in transaction
     }
-
-
-def _validate_repair_result(
-    result: StepCandidateResult,
-    reservation: RepairReservation,
-) -> None:
-    transaction = result.payload.get("remediation_transaction")
-    if result.transaction_id is None:
-        if result.status != "rejected" or result.dispatched:
-            raise RemediationTransactionError(
-                "a bound repair result without a transaction must be a pre-mutation rejection"
-            )
-        return
-    if not isinstance(transaction, Mapping):
-        raise RemediationTransactionError("bound repair result omitted its transaction")
-    if transaction.get("transaction_id") != result.transaction_id:
-        raise RemediationTransactionError("repair result transaction identity mismatch")
-    if transaction.get("repair_binding") != asdict(reservation):
-        raise RemediationTransactionError("repair result reservation binding mismatch")
-    expected_statuses = {
-        "succeeded": {"accepted"},
-        "failed": {"rejected"},
-        "rejected": {"rejected", "rolled_back"},
-    }[result.status]
-    if transaction.get("status") not in expected_statuses:
-        raise RemediationTransactionError(
-            "repair result does not match the terminal transaction status"
-        )
-    if result.status == "succeeded" and not result.dispatched:
-        raise RemediationTransactionError("successful repair result was not dispatched")
-    if result.status == "failed" and not result.dispatched:
-        raise RemediationTransactionError("failed repair result was not dispatched")
