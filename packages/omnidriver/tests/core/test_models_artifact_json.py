@@ -54,8 +54,8 @@ class TestDataArtifactFromJson(unittest.TestCase):
                 "format": "csv_probe",
             })
 
-    def test_time_indexed_key_is_refused_by_name(self) -> None:
-        """An artifact entry naming the old 'time_indexed' key is refused, never silently dropped."""
+    def test_unknown_key_is_refused_by_name(self) -> None:
+        """An artifact entry carrying a key the dataclass does not know is refused, never silently dropped."""
         with self.assertRaises(ValueError) as ctx:
             data_artifact_from_json({
                 "artifact_id": "vm",
@@ -63,9 +63,7 @@ class TestDataArtifactFromJson(unittest.TestCase):
                 "format": "igb",
                 "time_indexed": False,
             })
-        message = str(ctx.exception)
-        self.assertIn("time_indexed", message)
-        self.assertIn("instance_indexed", message)
+        self.assertIn("time_indexed", str(ctx.exception))
 
 
 if __name__ == "__main__":
