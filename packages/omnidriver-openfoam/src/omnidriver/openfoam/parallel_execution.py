@@ -5,38 +5,11 @@ from __future__ import annotations
 
 from typing import Any, Callable, Mapping
 
+from omnidriver.core.runtime import mpi
+
 DECOMPOSE_PAR_DICT = "system/decomposeParDict"
 _SUBDOMAINS_KEY_PATH = ("numberOfSubdomains",)
 _SUBDOMAINS = f"{DECOMPOSE_PAR_DICT}:{_SUBDOMAINS_KEY_PATH[0]}"
-
-
-def _parallel_form(
-    solve: Mapping[str, Any], *, n: int, decompose_id: str, reconstruct_id: str,
-) -> list[dict]:
-    """``solve`` (a DAG step) as its three parallel steps under ``mpirun -np n``."""
-    return [
-        {
-            "id": decompose_id,
-            "command": "decomposePar",
-            # -force: a shared case_root across sweep entries can leave a prior
-            # case's processor*/ dirs on disk; bare decomposePar refuses to run
-            # against those, but -force rmDirs each one first (decomposePar.C).
-            # No -time restriction: OpenFOAM's -time <value> matches the
-            # *nearest* existing time, not an exact one (timeSelector.C), so a
-            # case with no real 0/ could otherwise pick up a leftover
-            # reconstructed time from a prior sweep case; clearing stale time
-            # dirs between cases is sweep_runner._materialize_entry_case's job.
-            "args": ["-force"],
-            "depends_on": list(solve["depends_on"]),
-        },
-        {
-            **solve,
-            "command": "mpirun",
-            "args": ["-np", str(n), solve["command"], *solve.get("args", ()), "-parallel"],
-            "depends_on": [decompose_id],
-        },
-        {"id": reconstruct_id, "command": "reconstructPar", "depends_on": [solve["id"]]},
-    ]
 
 
 def parallel_steps_for_record(
@@ -48,16 +21,10 @@ def parallel_steps_for_record(
     ``<id>.decompose`` -> ``<id>`` under ``mpirun -np N ... -parallel`` ->
     ``<id>.reconstruct``; later steps follow the reconstruct step.
 
-    N is read from the case's own ``numberOfSubdomains`` via ``read_value``,
-    so the only request understood is ``True`` -- a count would be a second
-    source for a fact the case already states. A scheduler allocation that
-    disagrees with N is refused rather than overriding either value."""
-    if request is not True:
-        raise ValueError(
-            f"OpenFOAM runs parallel on the {_SUBDOMAINS} subdomains the case states, so the "
-            f"request takes no count (got {request!r}); ask with parallel true (or --parallel "
-            f"with no value) and set N through {_SUBDOMAINS}"
-        )
+    N is the case's own ``numberOfSubdomains``, read through ``read_value``.
+    A count in the request must equal it, and a scheduler allocation must
+    agree with it; neither overrides the other."""
+    supplied = mpi.requested(request)
     raw = read_value(DECOMPOSE_PAR_DICT, _SUBDOMAINS_KEY_PATH)
     if raw is None:
         raise ValueError(
@@ -70,14 +37,30 @@ def parallel_steps_for_record(
         n = 0
     if n < 1:
         raise ValueError(f"{_SUBDOMAINS} is {raw!r}, not a positive integer")
-    if allocation is not None and allocation.ranks != n:
+    if supplied is not None and supplied != n:
         raise ValueError(
-            f"the scheduler allocated {allocation.variable}={allocation.ranks} processes, but "
-            f"{_SUBDOMAINS} is {n}; set {_SUBDOMAINS} to {allocation.ranks} in the study, or "
-            f"request {n} processes from the scheduler"
+            f"the request asks for {supplied} processes, but {_SUBDOMAINS} is {n}; the "
+            f"decomposition and the launched ranks are one number, so set {_SUBDOMAINS} to "
+            f"{supplied} in the study, or ask with parallel true"
         )
-    steps = _parallel_form(
-        step, n=n, decompose_id=f"{step['id']}.decompose", reconstruct_id=f"{step['id']}.reconstruct",
-    )
-    steps[0]["consumes"] = [DECOMPOSE_PAR_DICT]
-    return steps
+    mpi.agree(n, allocation, stated_by=_SUBDOMAINS)
+    id_ = step["id"]
+    solve = mpi.wrap({**step, "args": [*step.get("args", ()), "-parallel"], "depends_on": [f"{id_}.decompose"]}, n)
+    return [
+        {
+            "id": f"{id_}.decompose",
+            "command": "decomposePar",
+            # -force: a shared case_root across sweep entries can leave a prior
+            # case's processor*/ dirs on disk; bare decomposePar refuses to run
+            # against those, but -force rmDirs each one first (decomposePar.C).
+            # No -time restriction: OpenFOAM's -time <value> matches the
+            # *nearest* existing time, not an exact one (timeSelector.C), so a
+            # case with no real 0/ could otherwise pick up a leftover
+            # reconstructed time from a prior sweep case.
+            "args": ["-force"],
+            "depends_on": list(step["depends_on"]),
+            "consumes": [DECOMPOSE_PAR_DICT],
+        },
+        solve,
+        {"id": f"{id_}.reconstruct", "command": "reconstructPar", "depends_on": [id_]},
+    ]

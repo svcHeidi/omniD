@@ -6,25 +6,13 @@ from __future__ import annotations
 import pytest
 
 from omnidriver.conformance import CHECKS, run_check
-from cardiaccore_native import (
-    human_slab_conformance_target,
-    idealized_heart_conformance_target,
-    idealized_heart_endocardial_conformance_target,
-    idealized_heart_pig_transmural_conformance_target,
-)
+from cardiaccore_native import TARGETS, conformance_target
 
 pytestmark = pytest.mark.native_cardiaccore
 
-_TARGETS = {
-    "humanSlab": human_slab_conformance_target,
-    "idealizedHeart": idealized_heart_conformance_target,
-    "idealizedHeartEndocardial": idealized_heart_endocardial_conformance_target,
-    "idealizedHeartPigTransmural": idealized_heart_pig_transmural_conformance_target,
-}
 
-
-@pytest.mark.parametrize("record", sorted(_TARGETS))
+@pytest.mark.parametrize("record", sorted(TARGETS))
 @pytest.mark.parametrize("check_id", sorted(CHECKS))
 def test_record_passes(record, check_id, tmp_path):
-    verdict = run_check(check_id, _TARGETS[record](tmp_path))
+    verdict = run_check(check_id, conformance_target(record, tmp_path))
     assert verdict.passed, verdict.detail

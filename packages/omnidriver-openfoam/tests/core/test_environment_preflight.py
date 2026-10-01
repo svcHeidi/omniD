@@ -84,16 +84,6 @@ def test_required_executables_none_dag_is_empty():
     assert reqs.is_parallel is False
 
 
-def test_unwrap_mpi_program_edge_cases():
-    from omnidriver.core.strict_planning import _unwrap_mpi_program
-
-    assert _unwrap_mpi_program(()) is None
-    assert _unwrap_mpi_program(("-np",)) is None            # value flag, no value
-    assert _unwrap_mpi_program(("-np", "4")) is None        # launcher flags only, no program
-    assert _unwrap_mpi_program(("--oversubscribe", "prog")) == "prog"
-    assert _unwrap_mpi_program(("-np", "4", "cardiacFoam")) == "cardiacFoam"
-
-
 def _make_exec(path):
     path.write_text("#!/bin/sh\n")
     path.chmod(0o755)

@@ -16,7 +16,9 @@ from plugins.conformance_toy import (
     NATIVE_WRITING_PLUGIN, NO_CONSUMES_PLUGIN, NO_PRODUCES_PLUGIN, OPEN_DOCUMENT_PLUGIN, OTHER_OPEN_DOCUMENT_PLUGIN,
     OVER_GENERATED_CONVENTIONS_PLUGIN, REPLACING_PLUGIN, SILENT_PREFLIGHT_PLUGIN, SILENT_SURFACE_PLUGIN,
     UNDECLARED_OUTPUT_PLUGIN, UNLISTED_KEY_PLUGIN, VALIDATED_KINDLESS_PLUGIN,
-    STRAY_NAME, STRAY_ROOT_VARIABLE, toy_conformance_target, toy_conformance_target_with_input,
+    REORDERING_PARALLEL_PLUGIN, SERIAL_PARALLEL_PLUGIN,
+    STRAY_NAME, STRAY_ROOT_VARIABLE, quantity_toy_conformance_target, toy_conformance_target,
+    toy_conformance_target_with_input,
 )
 from plugins.quantity_toy import BAD_DECLARATION_PLUGIN, QUANTITY_TOY_PLUGIN, UNREADABLE_PLUGIN
 
@@ -29,7 +31,7 @@ def test_toy_passes(check_id, tmp_path):
 
 @pytest.mark.parametrize("check_id", sorted(CHECKS))
 def test_a_record_with_a_supplied_input_passes(check_id, tmp_path):
-    """Step S's own proof (2026-09-28-supplied-inputs-design.md §5, S2): a toy record with a supplied bundle passes C1-C12 in core, no native tree or solver needed."""
+    """Step S's own proof (2026-09-28-supplied-inputs-design.md §5, S2): a toy record with a supplied bundle passes C1-C14 in core, no native tree or solver needed."""
     verdict = run_check(check_id, toy_conformance_target_with_input(tmp_path))
     assert verdict.passed, verdict.detail
 
@@ -153,12 +155,10 @@ def test_checks_take_the_scratch_root_as_an_argument_so_threads_do_not_interleav
     assert SCRATCH_ENV_VAR not in os.environ
 
 
-def test_a_write_into_the_native_cases_root_fails_the_check(tmp_path):
+def test_a_write_into_the_native_cases_root_fails_the_check(tmp_path, monkeypatch):
     """I4: the suite-wide guard watches all of cases_root, not only the record's subtree that C7 digests."""
     target = toy_conformance_target(tmp_path, plugin=NATIVE_WRITING_PLUGIN)
-    target = dataclasses.replace(
-        target, environment={**target.environment, STRAY_ROOT_VARIABLE: str(target.cases_root)},
-    )
+    monkeypatch.setenv(STRAY_ROOT_VARIABLE, str(target.cases_root))
     verdict = run_check("C7", target)
     assert not verdict.passed
     assert STRAY_NAME in verdict.detail
@@ -497,3 +497,39 @@ def test_c12_bites_a_declared_format_it_cannot_read(plugin, named, tmp_path):
     verdict = run_check("C12", toy_conformance_target(tmp_path, plugin=plugin))
     assert not verdict.passed
     assert named in verdict.detail and "toy_unreadable" in verdict.detail
+
+
+@pytest.mark.parametrize("check_id", sorted(CHECKS))
+def test_a_record_with_declared_quantities_passes_every_check(check_id, tmp_path):
+    verdict = run_check(check_id, quantity_toy_conformance_target(tmp_path))
+    assert verdict.passed, verdict.detail
+
+
+@pytest.mark.parametrize("check_id", ["C13", "C14"])
+def test_a_target_without_a_quantity_has_nothing_to_compare(check_id, tmp_path):
+    verdict = run_check(check_id, toy_conformance_target(tmp_path))
+    assert verdict.passed and "no quantity" in verdict.detail
+
+
+def test_c13_bites_a_parallel_run_that_writes_other_values(tmp_path):
+    verdict = run_check("C13", quantity_toy_conformance_target(tmp_path, plugin=REORDERING_PARALLEL_PLUGIN))
+    assert not verdict.passed
+    assert "'A': serial 0.0015, parallel 0.002" in verdict.detail
+
+
+def test_c13_bites_a_parallel_form_that_is_the_serial_run(tmp_path):
+    verdict = run_check("C13", quantity_toy_conformance_target(tmp_path, plugin=SERIAL_PARALLEL_PLUGIN))
+    assert not verdict.passed
+    assert "planned the serial steps" in verdict.detail
+
+
+def test_c14_bites_a_comparison_that_reads_nothing(tmp_path):
+    """Only B is paired, and B is never reached on either side."""
+    target = quantity_toy_conformance_target(tmp_path)
+    only_b = {"B": target.quantity.at["B"]}
+    target = dataclasses.replace(
+        target, quantity=dataclasses.replace(target.quantity, pairs={"B": "B"}, at=only_b),
+    )
+    verdict = run_check("C14", target)
+    assert not verdict.passed
+    assert "no pair is evaluated on both sides" in verdict.detail

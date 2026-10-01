@@ -21,7 +21,8 @@ from .provenance_dependencies import (
     component_for_runtime_dependency,
     component_for_verified_absence,
 )
-from .workflow import _MPI_LAUNCHERS, _unwrap_mpi_program, case_script_commands
+from . import mpi
+from .workflow import case_script_commands
 from .workflow_runner import _resolve_case_cwd, _resolve_command
 
 if TYPE_CHECKING:
@@ -285,8 +286,8 @@ def enumerate_case_inputs(
             dependencies=dependencies,
             driver_context=driver_context,
         )
-        if command in _MPI_LAUNCHERS:
-            payload = _unwrap_mpi_program(args)
+        if command in mpi.LAUNCHERS:
+            payload = mpi.program(args)
             if payload:
                 _register_step_executable(
                     payload,

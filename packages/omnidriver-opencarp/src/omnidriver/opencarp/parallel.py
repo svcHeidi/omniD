@@ -9,6 +9,7 @@ import tempfile
 from typing import Any, Mapping
 
 from omnidriver.core.planning_types import StrictDiagnostic
+from omnidriver.core.runtime import mpi
 
 SOLVER = "openCARP"
 #: ``mpirun -np 2 openCARP +Default`` initialises MPI and prints the build
@@ -19,35 +20,10 @@ _HEADER_MARK = "GIT tag"
 
 def parallel_steps(step: Mapping[str, Any], *, request: Any, read_value: Any, allocation: Any) -> list[dict]:
     """openCARP's ``get_parallel_steps``: the solve step under ``mpirun -np
-    N``, keeping its id, arguments, inputs and outputs. ``request`` is
-    ``True`` (N from the scheduler's allocation) or a positive integer N."""
+    N``. ``request`` is ``True`` (N from the scheduler's allocation) or a
+    positive integer N."""
     del read_value      # openCARP's case states no process count
-    if request is True:
-        supplied = None
-    elif type(request) is int and request >= 1:
-        supplied = request
-    else:
-        raise ValueError(
-            f"openCARP's parallel request is true or a positive process count, got {request!r}"
-        )
-    if supplied is None and allocation is None:
-        raise ValueError(
-            "openCARP has no decomposition of its own to read a process count from, and no "
-            "scheduler allocation is ambient (SLURM_NTASKS); supply the count with the "
-            "request: parallel N, or --parallel N"
-        )
-    if supplied is not None and allocation is not None and supplied != allocation.ranks:
-        raise ValueError(
-            f"the request asks for {supplied} processes, but the scheduler allocated "
-            f"{allocation.variable}={allocation.ranks}; ask for {allocation.ranks}, or for "
-            "parallel true to use the allocation"
-        )
-    n = supplied if supplied is not None else allocation.ranks
-    return [{
-        **step,
-        "command": "mpirun",
-        "args": ["-np", str(n), step["command"], *step.get("args", ())],
-    }]
+    return [mpi.wrap(step, mpi.agree(mpi.requested(request), allocation))]
 
 
 def launcher_diagnostics(workflow_dag: Mapping[str, Any], env: Mapping[str, str]) -> tuple[StrictDiagnostic, ...]:

@@ -27,7 +27,6 @@ from .runtime.run_model import RunDocument
 from .runtime.strict_audit import SKIP_GEOMETRY_DIAGNOSTICS_ENV, _build_simulation_audit
 from .runtime.workflow import (
     WorkflowDiagnostic,
-    _unwrap_mpi_program,
     normalize_workflow_dag,
     validate_workflow_commands,
     workflow_output_artifacts,

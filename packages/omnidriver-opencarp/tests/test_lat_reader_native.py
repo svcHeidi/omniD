@@ -8,8 +8,8 @@ import dataclasses
 import pytest
 
 from omnidriver.core.quantities import ReadRequest, read_quantities
-from omnidriver.opencarp.lat_reader import LatPerNodeReader
-from opencarp_native import niederer_run
+from omnidriver.opencarp.lat_reader import LAT_FORMAT, LatPerNodeReader
+from opencarp_native import LAT_PATH, niederer_run
 
 pytestmark = pytest.mark.native_opencarp
 
@@ -33,7 +33,7 @@ def test_the_slab_corners_and_centre_at_dx_500_match_g4(tmp_path):
     run = niederer_run(tmp_path, dx=500.0, tend=150.0)
     points = {**CORNERS, **CENTRE}
     quantities = {q.name: q for q in read_quantities(
-        LatPerNodeReader(), run.case_root, run.lat_artifact, ReadRequest(names=tuple(points), points=points))}
+        LatPerNodeReader(), run.case_root, run.artifact(LAT_FORMAT), ReadRequest(names=tuple(points), points=points))}
     assert all(q.status == "evaluated" and q.unit == "ms" and q.sampling_rule == "linear" for q in quantities.values())
     # every requested point is a mesh node here (a 41 x 15 x 7 slab), so the
     # interpolated value is exactly that node's, and the offset is 0 either way
@@ -46,7 +46,7 @@ def test_the_slab_corners_and_centre_at_dx_500_match_g4(tmp_path):
 def test_a_node_never_reached_is_not_reached_never_minus_one(tmp_path):
     run = niederer_run(tmp_path, dx=1000.0, tend=10.0)
     far = {"far": (20000.0, 7000.0, 3000.0)}
-    (quantity,) = read_quantities(LatPerNodeReader(), run.case_root, run.lat_artifact,
+    (quantity,) = read_quantities(LatPerNodeReader(), run.case_root, run.artifact(LAT_FORMAT),
                                   ReadRequest(names=("far",), points=far))
     assert (quantity.status, quantity.value) == ("not_reached", None)
 
@@ -56,12 +56,12 @@ def test_a_point_inside_a_tet_returns_the_barycentric_mix(tmp_path):
     against the solve's own LAT values -- no synthetic field needed."""
     run = niederer_run(tmp_path, dx=1000.0, tend=10.0)
     points, tets = _read_mesh(run.case_root, "slab")
-    lat_values = [float(v) for v in (run.case_root / run.lat_artifact.path_pattern).read_text().split()]
+    lat_values = [float(v) for v in (run.case_root / run.artifact(LAT_FORMAT).path_pattern).read_text().split()]
     tet = next(t for t in tets if all(lat_values[n] != -1.0 for n in t))  # inside the activated region
     corners = [points[n] for n in tet]
     centroid = tuple(sum(c[axis] for c in corners) / 4.0 for axis in range(3))
     expected = sum(lat_values[n] for n in tet) / 4.0
-    (quantity,) = read_quantities(LatPerNodeReader(), run.case_root, run.lat_artifact,
+    (quantity,) = read_quantities(LatPerNodeReader(), run.case_root, run.artifact(LAT_FORMAT),
                                   ReadRequest(names=("mid",), points={"mid": centroid}))
     assert quantity.status == "evaluated"
     assert quantity.value == pytest.approx(expected, abs=1e-9)
@@ -83,7 +83,7 @@ def test_p9_at_dx_0_2mm_is_the_mean_of_its_four_equidistant_nodes(tmp_path):
     def field(point: tuple[float, float, float]) -> float:
         return point[0] + 2.0 * point[1] + 3.0 * point[2]
 
-    lat_path = run.case_root / run.lat_artifact.path_pattern
+    lat_path = run.case_root / run.artifact(LAT_FORMAT).path_pattern
     lat_path.write_text("\n".join(repr(field(p)) for p in points) + "\n")
 
     corner_coords = [(10000.0, y, z) for y in (3400.0, 3600.0) for z in (1400.0, 1600.0)]
@@ -93,7 +93,7 @@ def test_p9_at_dx_0_2mm_is_the_mean_of_its_four_equidistant_nodes(tmp_path):
     assert p9 not in points  # the tie: no node sits at P9 itself
     assert expected_mean == pytest.approx(field(p9))  # true of any affine field at a parallelogram's centre
 
-    (quantity,) = read_quantities(LatPerNodeReader(), run.case_root, run.lat_artifact,
+    (quantity,) = read_quantities(LatPerNodeReader(), run.case_root, run.artifact(LAT_FORMAT),
                                   ReadRequest(names=("P9",), points={"P9": p9}))
     assert quantity.status == "evaluated"
     assert quantity.value == pytest.approx(expected_mean, abs=1e-6)
@@ -104,7 +104,7 @@ def test_a_point_outside_the_mesh_is_refused_by_name(tmp_path):
     run = niederer_run(tmp_path, dx=1000.0, tend=10.0)
     outside = {"outside": (-5000.0, 3500.0, 1500.0)}
     with pytest.raises(ValueError, match="'outside'.*no element"):
-        LatPerNodeReader().read(run.case_root, run.lat_artifact, ReadRequest(names=("outside",), points=outside))
+        LatPerNodeReader().read(run.case_root, run.artifact(LAT_FORMAT), ReadRequest(names=("outside",), points=outside))
 
 
 def test_the_per_event_layout_is_refused_by_name(tmp_path):
@@ -114,16 +114,13 @@ def test_the_per_event_layout_is_refused_by_name(tmp_path):
     # (opencarp_parameters.json: "name": "lats[Int].all", "type": "Int"), so
     # the study value must be an int -- a bool is refused by the generic
     # value-shape check ("must be an integer", contracts/dictionary.py).
-    # allow_missing_declared_artifact=True is this test's own concession, not
-    # the shared helper's default: with all = 1 the declared LAT file is
-    # expected to be absent (that is the point of this test), and
-    # reconciliation marks the case failed even though openCARP exits 0. Any
-    # other caller of niederer_run/niederer_sweep still fails loudly on a
-    # missing declared artifact.
+    # With all = 1 the declared LAT file is expected to be absent, and
+    # reconciliation marks the case failed though openCARP exits 0: this test
+    # alone tolerates exactly that.
     run = niederer_run(tmp_path, dx=1000.0, tend=10.0, extra={"nversion.par:lats[0].all": 1},
-                       allow_missing_declared_artifact=True)
-    assert not (run.case_root / run.lat_artifact.path_pattern).exists()
-    per_event = dataclasses.replace(run.lat_artifact, path_pattern="out/vm_act-thresh.dat")
+                       tolerate_missing=(LAT_PATH,))
+    assert not (run.case_root / run.artifact(LAT_FORMAT).path_pattern).exists()
+    per_event = dataclasses.replace(run.artifact(LAT_FORMAT), path_pattern="out/vm_act-thresh.dat")
     with pytest.raises(ValueError, match=r"lats\[\]\.all = 1"):
         LatPerNodeReader().read(run.case_root, per_event,
                                 ReadRequest(names=("origin",), points={"origin": (0.0, 0.0, 0.0)}))

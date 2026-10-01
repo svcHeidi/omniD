@@ -5,9 +5,9 @@ import json
 import os
 from pathlib import Path
 
-from omnidriver.conformance import ConformanceTarget
+from omnidriver.conformance import ConformanceTarget, QuantityTarget
+from omnidriver.core.runtime import mpi
 
-TESTS_ROOT = Path(__file__).resolve().parents[1]
 TOY_PLUGIN = "plugins.e2e_record_plugin:E2ERecordPlugin"
 
 import json as _json
@@ -17,6 +17,7 @@ from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 from omnidriver.core.tutorial_records import RecordInput, TutorialRecord, WorkflowStep
 
 from plugins.e2e_record_plugin import _TOY_RECORD, E2ERecordPlugin, _FORMAT, _deep_set, _number_cells_axis
+from plugins.quantity_toy import VALUES_FORMAT, QuantityToyPlugin, write_quantity_toy_case, write_toy_reference
 
 REPLACING_PLUGIN = "plugins.conformance_toy:ReplacingRendererPlugin"
 NO_CONSUMES_PLUGIN = "plugins.conformance_toy:NoConsumesPlugin"
@@ -62,10 +63,6 @@ def toy_conformance_target(tmp_path: Path, *, plugin: str = TOY_PLUGIN) -> Confo
         sweep_name="number_cells",
         sweep_values=(2, 3),
         unknown_name="cell_count",
-        solver_command="touch",
-        environment={
-            "PYTHONPATH": os.pathsep.join([str(TESTS_ROOT), os.environ.get("PYTHONPATH", "")]),
-        },
     )
 
 
@@ -97,7 +94,7 @@ class GhostConsumesPlugin(E2ERecordPlugin):
 
 NATIVE_WRITING_PLUGIN = "plugins.conformance_toy:NativeWritingPlugin"
 #: Where NativeWritingPlugin's axis writes its stray file. Supplied through
-#: the target's ``environment`` so it reaches the sweep's child processes.
+#: the environment so it reaches the sweep's child processes.
 STRAY_ROOT_VARIABLE = "CONFORMANCE_TOY_STRAY_ROOT"
 STRAY_NAME = "stray-from-axis.txt"
 
@@ -417,7 +414,7 @@ def write_toy_input_bundle(root: Path) -> Path:
 
 
 def toy_conformance_target_with_input(tmp_path: Path) -> ConformanceTarget:
-    """Step S's own proof (design table, S2): a toy record with a supplied bundle, passing C1-C12 in core -- no native tree, no solver, needed."""
+    """Step S's own proof (design table, S2): a toy record with a supplied bundle, passing C1-C14 in core -- no native tree, no solver, needed."""
     from dataclasses import replace
 
     bundle = write_toy_input_bundle(tmp_path / "bundle")
@@ -461,3 +458,64 @@ class DefaultArgumentPlugin(E2ERecordPlugin):
                 consumes=("constant/mesh.json",), produces=(DEFAULT_ARGUMENT_MARKER,),
             ),),
         )}
+
+
+PARALLEL_QUANTITY_PLUGIN = "plugins.conformance_toy:ParallelQuantityToyPlugin"
+REORDERING_PARALLEL_PLUGIN = "plugins.conformance_toy:ReorderingParallelPlugin"
+SERIAL_PARALLEL_PLUGIN = "plugins.conformance_toy:SerialParallelPlugin"
+
+
+class ParallelQuantityToyPlugin(QuantityToyPlugin):
+    """A toy whose record yields declared quantities and whose parallel form adds a split step and leaves the solve alone."""
+
+    def get_solve_step_commands(self):
+        return frozenset({"cp"})
+
+    def get_parallel_steps(self, step, *, request, read_value, allocation):
+        count = mpi.agree(mpi.requested(request), allocation)
+        split = {"id": f"{step['id']}.split", "command": "cp", "args": ["constant/mesh.json", f"split.{count}"],
+                 "depends_on": list(step["depends_on"])}
+        return (split, {**step, "depends_on": [split["id"]]})
+
+
+class ReorderingParallelPlugin(ParallelQuantityToyPlugin):
+    """A parallel solve that writes different values from the serial one."""
+
+    def get_parallel_steps(self, step, *, request, read_value, allocation):
+        split, solve = super().get_parallel_steps(step, request=request, read_value=read_value, allocation=allocation)
+        return split, {**solve, "args": ["seed/other.txt", "values.txt"]}
+
+
+class SerialParallelPlugin(ParallelQuantityToyPlugin):
+    """A parallel form that returns the serial step unchanged."""
+
+    def get_parallel_steps(self, step, *, request, read_value, allocation):
+        return (step,)
+
+
+def quantity_toy_conformance_target(tmp_path: Path, *, plugin: str = PARALLEL_QUANTITY_PLUGIN) -> ConformanceTarget:
+    """``toyQuantities`` with two quantities, A read in seconds and B never reached."""
+    cases_root = tmp_path / "native"
+    native = write_quantity_toy_case(cases_root, "A 0.0015 0 0 0.007\nB -1 0.02 0.003 0\n")
+    (native / "seed" / "other.txt").write_text("A 0.0020 0 0 0.007\nB -1 0.02 0.003 0\n")
+    return ConformanceTarget(
+        plugin=plugin,
+        record="toyQuantities",
+        cases_root=cases_root,
+        scratch_root=tmp_path / "scratch",
+        base_study={},
+        patch=("constant/mesh.json:cells", 7),
+        untouched=("constant/mesh.json", ("label",)),
+        sweep_name="number_cells",
+        sweep_values=(2, 3),
+        unknown_name="cell_count",
+        quantity=QuantityTarget(
+            artifact_format=VALUES_FORMAT,
+            reference=write_toy_reference(tmp_path / "reference.json"),
+            pairs={"A": "A", "B": "B"},
+            at={"A": (0.0, 0.0, 0.007), "B": (0.02, 0.003, 0.0)},
+            at_unit="m", max_sampling_offset=0.0,
+            study={"number_cells": 2}, sweep_values=(2, 3),
+            tolerance=5.0, tolerance_unit="ms", parallel_tolerance=1e-9,
+        ),
+    )

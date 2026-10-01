@@ -26,7 +26,7 @@ from dataclasses import asdict
 from typing import TYPE_CHECKING, Any, Mapping
 
 from .plugin_profile import EnvironmentConnection, SuppliedVariable
-from .runtime.host_facts import launcher_identity
+from .runtime import mpi
 
 if TYPE_CHECKING:
     from .plugin_interface import DriverContext
@@ -169,10 +169,9 @@ def environment_report(driver_context: "DriverContext", environ: Mapping[str, st
     }
     steps = [{"id": command, "command": command, "args": []} for command in solvers]
     if connection.mpi_launcher is not None:
-        report["launcher"] = launcher_identity(connection.mpi_launcher, applied)
+        report["launcher"] = mpi.identity(connection.mpi_launcher, applied)
         steps += [
-            {"id": f"{command}.parallel", "command": connection.mpi_launcher,
-             "args": ["-np", str(_PROBE_RANKS), command]}
+            mpi.wrap({"id": f"{command}.parallel", "command": command}, _PROBE_RANKS, connection.mpi_launcher)
             for command in solvers
         ]
     preflight = driver_context.capabilities.environment_preflight.diagnostics(

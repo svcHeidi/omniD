@@ -3,17 +3,13 @@ from __future__ import annotations
 import os
 import shlex
 import shutil
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
-from omnidriver.core.runtime.workflow import (
-    _MPI_LAUNCHERS,
-    _unwrap_mpi_program,
-    case_script_commands,
-)
+from omnidriver.core.runtime import mpi
+from omnidriver.core.runtime.workflow import case_script_commands
 from .openfoam_environment import load_openfoam_environment
 
 
@@ -59,11 +55,11 @@ def _required_executables(
         if not command:
             continue
         args = tuple(inline_args) + args
-        if command in _MPI_LAUNCHERS:
+        if command in mpi.LAUNCHERS:
             is_parallel = True
             mpi_launcher_in_dag = True
             _add(command)
-            wrapped = _unwrap_mpi_program(args)
+            wrapped = mpi.program(args)
             if wrapped is not None:
                 _add(wrapped)
             continue
@@ -177,20 +173,13 @@ def _mpi_family_diagnostics(checked_env: dict[str, str]) -> tuple[StrictDiagnost
     of one N-rank run. An unknown family is not checked."""
     mplib = checked_env.get("WM_MPLIB", "")
     markers = next((words for family, words in _MPI_FAMILY_MARKERS.items() if family in mplib), None)
-    launcher = shutil.which("mpirun", path=checked_env.get("PATH"))
-    if markers is None or launcher is None:
+    found = mpi.identity("mpirun", checked_env)
+    if markers is None or found["path"] is None:
         return ()
-    try:
-        completed = subprocess.run(
-            (launcher, "--version"), capture_output=True, text=True,
-            env=checked_env, timeout=30, check=False,
-        )
-        version = (completed.stdout + completed.stderr).strip()
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        version = str(exc)
+    launcher, version = found["path"], " ".join(found["version"] or ())
     if any(word in version for word in markers):
         return ()
-    first_line = version.splitlines()[0] if version else "no output"
+    first_line = found["version"][0] if found["version"] else "no output"
     return (diagnostic(
         "error",
         "openfoam_mpi_launcher_mismatch",

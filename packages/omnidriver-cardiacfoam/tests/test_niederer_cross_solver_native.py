@@ -3,13 +3,11 @@ one ``sweep-run`` per solver, one comparison request, ``omnidriver compare``. Ea
 its own solver's frame; the pairing :data:`PROBES` and the constants were pre-registered before any run."""
 from __future__ import annotations
 
-import importlib.util
 import json
 import math
 import subprocess
 import sys
 from pathlib import Path
-from types import ModuleType
 
 import pytest
 from foamlib import FoamFile
@@ -18,15 +16,14 @@ from omnidriver.cardiacfoam.activation_probes import ACTIVATION_PROBES_FORMAT
 from omnidriver.core.experiments import inspect_sweep_experiment
 from omnidriver.core.quantities import experiment_comparisons, load_point_reference
 from omnidriver.core.runtime.postprocess_phase import build_sweep_context
-from cardiacfoam_native import NIEDERER_2011_RELPATH, native_tutorials_root, niederer_sweep
+from omnidriver.conformance import record_sweep, require_commands, supplied_tree
+from cardiacfoam_native import NIEDERER_2011_RELPATH, PROBES, REFERENCE, native_tutorials_root
 
 #: Needs both native environments: the cardiacFOAM tree with OpenFOAM
 #: sourced, and openCARP's tutorials tree with its binary. Each marker fails,
 #: never skips, when its environment is missing.
 pytestmark = [pytest.mark.native, pytest.mark.native_opencarp]
 
-REFERENCE = Path(__file__).resolve().parents[3] / "benchmarks" / "niederer2011.json"
-_OPENCARP_NATIVE = Path(__file__).resolve().parents[2] / "omnidriver-opencarp" / "tests" / "opencarp_native.py"
 
 # --- pre-registered: the same resolution, step and duration on both sides ---
 # 200 ms is the native cartesianConvergence endTime at dx 0.5 mm, past the ~143 ms cardiacFOAM
@@ -55,37 +52,12 @@ CARDIACFOAM_MAX_OFFSET_M = 0.0
 #: an orientation error. In the reference's unit, mm: 1 µm.
 OPENCARP_MAX_OFFSET_MM = 0.001
 
-#: The reference frame has its origin at P1, the stimulus corner, with a along the 20 mm fibre edge,
-#: b along the 7 mm edge and c along the 3 mm edge, so x = a, y = c, z = 7 - b (mm) in cardiacFOAM's
-#: frame; openCARP's frame is the reference frame in µm.
-#: cardiacFOAM probe -> (its configured location in cardiacFOAM's frame, m;
-#: the reference label; that label's reference coordinates, mm).
-PROBES = {
-    "0": ((0.0, 0.0, 0.007), "P1", (0, 0, 0)),
-    "1": ((0.0, 0.0, 0.0), "P2", (0, 7, 0)),
-    "2": ((0.019999, 0.0, 0.007), "P3", (20, 0, 0)),
-    "3": ((0.019999, 0.0, 0.0), "P4", (20, 7, 0)),
-    "4": ((0.0, 0.003, 0.007), "P5", (0, 0, 3)),
-    "5": ((0.0, 0.003, 0.0), "P6", (0, 7, 3)),
-    "6": ((0.019999, 0.003, 0.007), "P7", (20, 0, 3)),
-    "7": ((0.019999, 0.003, 0.0), "P8", (20, 7, 3)),
-    "8": ((0.01, 0.0015, 0.0035), "P9", (10, 3.5, 1.5)),
-}
 def _note(probe: str) -> str:
     at, label, reference_at = PROBES[probe]
     return (f"{label} {list(reference_at)} mm in the reference frame. openCARP: the reference frame itself, in um "
             f"(stimulus box at the origin, nversion.par stim[0].elec; F3 slab). cardiacFOAM probe {probe} at "
             f"{list(at)} m in its own frame (system/Niedererpoints), where x = a, y = c, z = 7 mm - b, because "
             "constant/electroProperties puts the stimulus box at the corner (0, 0, 7) mm")
-
-
-def _opencarp_native() -> ModuleType:
-    """Loaded from its file: a per-package run does not put openCARP's tests on ``sys.path``."""
-    spec = importlib.util.spec_from_file_location("opencarp_native_for_cross_solver", _OPENCARP_NATIVE)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module     # its dataclass resolves its own module while it executes
-    spec.loader.exec_module(module)
-    return module
 
 
 def _artifact_id(output: Path, case, artifact_format: str) -> str:
@@ -110,16 +82,24 @@ def test_an_agent_compares_opencarp_with_cardiacfoam_at_p1_to_p9(tmp_path):
     for at, label, reference_at in PROBES.values():
         assert reference.points[label].coordinates == tuple(float(v) for v in reference_at)
 
-    opencarp_native = _opencarp_native()
     from omnidriver.opencarp.lat_reader import LAT_FORMAT   # openCARP is not installed in cardiacFOAM's CI job
+
+    require_commands("openCARP")
+    opencarp_tutorials = supplied_tree("OMNIDRIVER_OPENCARP_TUTORIALS", contains="02_EP_tissue/03E_study_resolution")
 
     (tmp_path / "opencarp").mkdir()
     (tmp_path / "cardiacfoam").mkdir()
-    oc_output = opencarp_native.niederer_sweep(tmp_path / "opencarp", dx_values=(OPENCARP_DX_UM,),
-                                               tend=OPENCARP_TEND_MS, extra={"nversion.par:dt": OPENCARP_DT_US})
-    cf_output = niederer_sweep(tmp_path / "cardiacfoam", dx_values=(CARDIACFOAM_DX_M,),
-                               end_time=CARDIACFOAM_END_TIME_S,
-                               extra={"system/controlDict:deltaT": CARDIACFOAM_DELTA_T_S})
+    oc_output = record_sweep(
+        tmp_path / "opencarp", plugin="opencarp", record="niedererNVersion", cases_root=opencarp_tutorials,
+        sweep={"dx": [OPENCARP_DX_UM]},
+        study={"nversion.par:tend": OPENCARP_TEND_MS, "nversion.par:dt": OPENCARP_DT_US}, timeout_s=600,
+    )
+    require_commands("blockMesh", "cardiacFoam")
+    cf_output = record_sweep(
+        tmp_path / "cardiacfoam", plugin="cardiacfoam", record="niederer2011", cases_root=native_tutorials_root(),
+        sweep={"dx": [CARDIACFOAM_DX_M]},
+        study={"system/controlDict:endTime": CARDIACFOAM_END_TIME_S, "system/controlDict:deltaT": CARDIACFOAM_DELTA_T_S},
+    )
     (oc_case,) = build_sweep_context(oc_output).cases
     (cf_case,) = build_sweep_context(cf_output).cases
 
