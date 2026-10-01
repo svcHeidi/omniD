@@ -8,6 +8,12 @@ from a ledger or report under `.superpowers/sdd/`, it says so.
 
 ---
 
+## Current plan (2026-10-01)
+
+Pass 2, convergence: `plans/2026-10-01-pass2-convergence.md`, with the owner's
+decisions A, B, G1, G4, G7, G13, G15 and G18. It supersedes items 5, 7, 8, 9,
+12 and 13 below.
+
 ## 0. Checkpoint, 2026-09-28 (end of day), `main` at `dc021e0`
 
 This section supersedes sections 1, 8, 9 and the first items of 10 where they
