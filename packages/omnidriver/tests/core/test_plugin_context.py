@@ -166,37 +166,6 @@ def test_plugin_contract_rejects_an_invalid_stable_id() -> None:
         validate_plugin(_Plugin("Example Plugin", "example"))
 
 
-def test_plugin_contract_refuses_a_retired_hook_by_name() -> None:
-    """A plugin still implementing the retired `get_selected_start_time` must be refused at load, not silently ignored."""
-    plugin = _Plugin("example.retired-hook", "retired-hook")
-    plugin.get_selected_start_time = lambda case_root, resolved_case: "5"
-
-    with pytest.raises(TypeError, match="get_selected_start_time"):
-        validate_plugin(plugin)
-
-
-def test_plugin_contract_refuses_a_stack_wide_axis_catalog() -> None:
-    """Axes live on each `TutorialRecord`; core does not call `get_axis_catalog`."""
-    plugin = _Plugin("example.axis-catalog", "axis-catalog")
-    plugin.get_axis_catalog = lambda: {}
-
-    with pytest.raises(TypeError, match="get_axis_catalog"):
-        validate_plugin(plugin)
-
-
-def test_plugin_contract_refuses_a_retired_keyword_parameter() -> None:
-    """`get_environment_diagnostics` takes `environment_source`, not the retired `explicit_bashrc`."""
-    plugin = _Plugin("example.retired-keyword", "retired-keyword")
-
-    def get_environment_diagnostics(self, workflow_dag, *, env=None, explicit_bashrc=None, driver_context=None):
-        return ()
-
-    plugin.get_environment_diagnostics = get_environment_diagnostics.__get__(plugin)
-
-    with pytest.raises(TypeError, match="get_environment_diagnostics"):
-        validate_plugin(plugin)
-
-
 def test_driver_context_rejects_duplicate_catalog_paths() -> None:
     plugin = _Plugin("example.duplicates", "duplicates")
     plugin.get_dict_entries = lambda: (

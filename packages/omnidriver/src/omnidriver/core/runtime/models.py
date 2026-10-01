@@ -147,15 +147,14 @@ def data_artifact_from_json(data: dict[str, Any]) -> DataArtifact:
 
     An unrecognised key is refused by name, never silently dropped:
     ``core.quantities.comparison._artifact`` reads a run document as raw
-    JSON with no schema validation, so this is the one place that catches a
-    renamed or removed field on that path.
+    JSON with no schema validation, so this is the one place that catches an
+    unknown field on that path.
     """
     unrecognised = sorted(set(data) - _ARTIFACT_JSON_KEYS)
     if unrecognised:
         raise ValueError(
             f"expectedArtifacts entry {data.get('artifact_id')!r} carries "
-            f"unrecognised key(s) {unrecognised!r}; a renamed or removed "
-            f"field (e.g. A2's instance_indexed rename, 2026-09-26) is "
+            f"unrecognised key(s) {unrecognised!r}; an unknown field is "
             f"refused, never silently dropped or translated"
         )
     return DataArtifact(

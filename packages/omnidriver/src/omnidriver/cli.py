@@ -1010,7 +1010,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--cases-root",
         help=(
-            "Optional path to the tutorials folder. Defaults to '<repo>/tutorials' when present."
+            "Path to the tutorials folder. Defaults to $OMNIDRIVER_CASES_ROOT, "
+            "then the current working directory."
         ),
     )
     parser.add_argument(

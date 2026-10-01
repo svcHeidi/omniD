@@ -84,10 +84,7 @@ def load_run_document(path: str | Path) -> RunDocument:
     except jsonschema.exceptions.ValidationError as exc:
         raise ValueError(
             f"Run document at {path} failed schema validation: {exc.message}. "
-            f"A document from before a schema rename (see the dated "
-            f"generality-log/spec notes for this document version) carries "
-            f"a field the schema no longer accepts, and is refused here, "
-            f"never silently translated."
+            f"A field the schema does not accept is refused, never translated."
         ) from exc
 
 

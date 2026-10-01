@@ -111,7 +111,6 @@ class CaseRuntimeConventions:
     output_collection_relpath: str | None = None
     generated_directory_names: tuple[str, ...] = ()
     generated_file_names: tuple[str, ...] = ()
-    generated_directory_prefixes: tuple[str, ...] = ()
     generated_file_prefixes: tuple[str, ...] = ()
     generated_file_suffixes: tuple[str, ...] = ()
     preserved_file_suffixes: tuple[str, ...] = ()

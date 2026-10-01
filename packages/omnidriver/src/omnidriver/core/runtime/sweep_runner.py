@@ -583,13 +583,7 @@ def _stage_entry_case(
             if name in conventions.generated_directory_names or name in conventions.generated_file_names:
                 ignored.add(name)
                 continue
-            if (
-                candidate.is_dir()
-                and (
-                    is_replica_directory_name(name, replica_globs)
-                    or any(name.startswith(prefix) for prefix in conventions.generated_directory_prefixes)
-                )
-            ):
+            if candidate.is_dir() and is_replica_directory_name(name, replica_globs):
                 ignored.add(name)
                 continue
             if (

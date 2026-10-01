@@ -143,12 +143,6 @@ class IonicModelEntry:
     """Extra runtime-accepted labels implemented only through overrides or scaling."""
 
 
-# SOLVER_COMPATIBILITY_RULES moved to omnidriver/cardiacfoam/solver_coupling.py;
-# re-exported here for backward compatibility with consumers that imported
-# it from this module. Prefer the new home for new imports.
-from omnidriver.cardiacfoam.solver_coupling import SOLVER_COMPATIBILITY_RULES  # noqa: E402, F401
-
-
 IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
     "AlievPanfilov": IonicModelEntry(
         states=("u", "recovery_r"),

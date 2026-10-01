@@ -69,12 +69,6 @@ class TestSolverCompatibilityRules(unittest.TestCase):
                     f"valid rule {rule!r} must declare its required_coupler",
                 )
 
-    def test_backward_compat_reexport_from_catalog(self) -> None:
-        from omnidriver.cardiacfoam.ionic_model_catalog import (
-            SOLVER_COMPATIBILITY_RULES as catalog_rules,
-        )
-        self.assertIs(catalog_rules, SOLVER_COMPATIBILITY_RULES)
-
 
 if __name__ == "__main__":
     unittest.main()
