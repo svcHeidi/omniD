@@ -1,7 +1,7 @@
 """`from conftest import X` in this tree must resolve to a name core also has.
 
 In a full-repo run core's conftest wins; a package-specific helper belongs in
-a uniquely named module such as ``regression_equivalence/tutorials_tree.py``.
+a uniquely named module inside an importable package.
 """
 from __future__ import annotations
 
@@ -58,5 +58,5 @@ def test_every_conftest_import_here_also_exists_in_cores() -> None:
         "conftest, which is the one that wins in a full-repo run:\n"
         + "\n".join(f"  {o}" for o in offenders)
         + "\nPut package-specific helpers in a uniquely named module inside an "
-        "importable package instead (e.g. regression_equivalence/tutorials_tree.py)."
+        "importable package instead."
     )

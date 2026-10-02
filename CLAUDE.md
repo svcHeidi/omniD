@@ -65,10 +65,7 @@ VIRTUAL_ENV=/tmp/wheelenv uv pip install -q "/tmp/wheeltest/omnidriver-*.whl[pos
 **No pytest test runs a solver.** The only tests that meet an OpenFOAM install
 are six probes of omnidriver's own dictionary reader against `foamDictionary` and
 `foamEtcFile`, which run when a bashrc is sourced and say nothing of any solver.
-Thirteen older files read real tutorials when this checkout sits inside the
-native repository (`skip_without_monorepo`) and skip otherwise; they are not
-part of any gate. The
-solvers are in development: their authors add required keys, rename models and
+The solvers are in development: their authors add required keys, rename models and
 rebuild on purpose, and a test pinned to their current state would fail for
 doing so. Pytest tests omnidriver itself: unit tests, the toy conformance
 target, and the scanner on verbatim snippets of the native C++ committed as
@@ -161,10 +158,10 @@ stages.
 
 **`from conftest import X` is unreliable.** Both packages' `tests` directories
 are reachable when the whole repo is collected, and **core's conftest wins**.
-The existing `from conftest import monorepo_root` in the cardiac tree only
-works because core's conftest happens to define the same name. For a
-package-specific helper, use a uniquely named module inside an importable
-package — see `packages/omnidriver-cardiacfoam/tests/regression_equivalence/tutorials_tree.py`.
+A `from conftest import X` in the cardiac tree only works because core's
+conftest happens to define the same name
+(`test_conftest_imports_are_unambiguous` enforces it). For a package-specific
+helper, use a uniquely named module inside an importable package.
 
 **A test module that calls a raising function at import time cannot be
 skipped.** It errors during collection, before any marker applies. Use
