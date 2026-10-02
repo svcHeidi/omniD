@@ -811,13 +811,13 @@ class ParallelQuantityToyPlugin(QuantityToyPlugin):
     def get_solve_step_commands(self):
         return frozenset({"cp"})
 
-    def reported_ranks(self, count):
+    def _reported_ranks(self, count):
         return count
 
     def get_parallel_steps(self, step, *, request, read_value, allocation):
         count = mpi.agree(mpi.requested(request), allocation)
         split = {"id": f"{step['id']}.split", "command": "sh",
-                 "args": ["-c", 'echo "nRanks=$0"; cp constant/mesh.json "split.$1"', str(self.reported_ranks(count)), str(count)],
+                 "args": ["-c", 'echo "nRanks=$0"; cp constant/mesh.json "split.$1"', str(self._reported_ranks(count)), str(count)],
                  "depends_on": list(step["depends_on"])}
         return (split, {**step, "depends_on": [split["id"]]})
 
@@ -833,7 +833,7 @@ class ReorderingParallelPlugin(ParallelQuantityToyPlugin):
 class SingleRankPlugin(ParallelQuantityToyPlugin):
     """A parallel form that plans the parallel steps but whose solver reports one rank."""
 
-    def reported_ranks(self, count):
+    def _reported_ranks(self, count):
         return 1
 
 
