@@ -6,10 +6,8 @@ Every ``DictEntry`` is backed by a native ``.get``/``.getOrDefault``/
 ``src`` (see ``docs/BUILDER_AGENT_EVIDENCE_CONTRACT.md``).
 Conditionality the native source expresses as an ``if``/``found`` branch is
 expressed here as ``applicable_when``/``required_when``/``forbidden_when``/
-``mutually_exclusive_with`` rather than prose -- see
-``omnidriver.core.specs.validation.entry_is_applicable`` /
-``is_required_in_context`` / ``_predicate_matches`` for how these are
-evaluated.
+``mutually_exclusive_with`` rather than prose; every resolved record case
+is judged against them (``omnidriver.openfoam.case_rules``).
 
 A study sets a declared key as ``system/<utility>Dict:key``
 (``record_key_validation``); a key this catalogue lacks is accepted when the

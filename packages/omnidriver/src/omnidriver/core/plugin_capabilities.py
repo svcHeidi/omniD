@@ -31,10 +31,10 @@ class ConfigurationValidationRequest:
 
 @dataclass(frozen=True)
 class RunSemanticValidationRequest:
-    """Input to :class:`RunSemanticValidatorCapability`: the loose run-context
-    mapping assembled at execution time, not a resolved ``TutorialSpec``."""
+    """Input to :class:`RunSemanticValidatorCapability`: a case whose files
+    already hold every study value."""
 
-    context: dict[str, Any]
+    case_root: Path
 
 
 @dataclass(frozen=True)
@@ -223,14 +223,13 @@ class ConfigurationValidatorCapability(Protocol):
 
 
 class RunSemanticValidatorCapability(Protocol):
-    """Validation of a run's semantics, as opposed to its configuration.
-
-    Distinct from :class:`ConfigurationValidatorCapability`: that one judges a
-    ``TutorialSpec``, this one judges a looser run context dictionary at
-    execution time. Required v1 member, no fallback.
+    """The catalogue's relations and the solver's cross-field rules, judged
+    over a resolved case before anything runs: every error refuses the record
+    case by name. Distinct from :class:`ConfigurationValidatorCapability`,
+    which judges a ``TutorialSpec``. Required v1 member, no fallback.
 
     :adapts: validate_run_semantics
-    :consumed-by: omnidriver/core/specs/validation.py
+    :consumed-by: omnidriver/core/runtime/record_execution.py
     :fallback: none
     :status: required
     """
@@ -913,7 +912,7 @@ class _RunSemanticValidatorAdapter:
     def validate(
         self, request: RunSemanticValidationRequest,
     ) -> tuple["StrictDiagnostic", ...]:
-        return self.plugin.validate_run_semantics(request.context)
+        return self.plugin.validate_run_semantics(request.case_root)
 
 
 @dataclass(frozen=True)

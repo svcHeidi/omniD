@@ -86,9 +86,12 @@ class CardiacCorePlugin:
         del spec
         return ()
 
-    def validate_run_semantics(self, context: dict[str, Any]) -> tuple[Any, ...]:
-        del context
-        return ()
+    def validate_run_semantics(self, case_root: Path) -> tuple[Any, ...]:
+        """The catalogue's relations over each utility dictionary the resolved
+        case holds."""
+        from .case_rules import case_diagnostics
+
+        return case_diagnostics(case_root)
 
     def predict_data_artifacts(self, case_root: Path, spec: Any) -> tuple[Any, ...]:
         del case_root, spec

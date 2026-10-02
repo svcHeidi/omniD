@@ -39,7 +39,7 @@ def _real_electro_properties_path() -> Path:
 
 
 def _context_from_electro_properties(path: Path) -> dict:
-    """Build the ``{slot_key: value}`` context the way ``run_document_config.build_config`` does for a plan."""
+    """Build the ``{slot_key: value}`` context from a real read."""
     from omnidriver.cardiacfoam.dict_builder import (
         parse_electro_properties, resolve_context, select_applicable_entries,
     )
@@ -74,11 +74,11 @@ def test_native_pseudo_ecg_anisotropic_validates_clean():
     assert errors == [], [e.message for e in errors]
 
 
-def test_native_pseudo_ecg_validates_clean_through_the_plugin():
-    from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+def test_native_pseudo_ecg_validates_clean_across_fields():
+    from omnidriver.cardiacfoam.validation import cross_field_diagnostics
 
     context = _context_from_electro_properties(_real_electro_properties_path())
-    diagnostics = CardiacFoamPlugin().validate_run_semantics(context)
+    diagnostics = cross_field_diagnostics(context)
     anisotropic_diagnostics = [
         d for d in diagnostics if d.field == "ecgDomains.ECG.verificationModel.anisotropic"
     ]

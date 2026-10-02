@@ -49,7 +49,6 @@ def _generic_plan(tmp_path: Path) -> dict:
 
 
 def test_generic_plan_contains_no_cardiac_semantics(tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
     blob = json.dumps(_generic_plan(tmp_path))
     leaked = [token for token in _CARDIAC_TOKENS if token in blob]
     assert leaked == [], f"cardiac semantics leaked into a generic plan: {leaked}"
@@ -57,16 +56,14 @@ def test_generic_plan_contains_no_cardiac_semantics(tmp_path, monkeypatch) -> No
 
 def test_generic_plan_still_produces_a_usable_contract(tmp_path, monkeypatch) -> None:
     """Emptiness is not the goal -- the plan must still be runnable."""
-    monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
     payload = _generic_plan(tmp_path)
     assert payload["workflow_dag"]["steps"], "generic plan must have runnable steps"
     assert payload["capability_manifest"]["allowed_commands"]["utilities"] == {}
     assert "cardiacFoam" not in payload["capability_manifest"]["allowed_commands"]["plugin"]
 
 
-def test_generic_describe_has_no_cardiac_semantics(tmp_path, monkeypatch) -> None:
+def test_generic_describe_has_no_cardiac_semantics(tmp_path) -> None:
     """``describe`` carries the key catalogue and the plugin's catalogues; for a stack with none, neither may name a cardiac term."""
-    monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
     context = driver_context(E2EFolderPlugin(), source="test")
     record, cases_root = case_folder_record(_minimal_case(tmp_path), driver_context=context)
     payload = describe_entry(record, overrides={"cases_root": str(cases_root)}, driver_context=context)

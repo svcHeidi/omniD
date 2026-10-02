@@ -35,17 +35,19 @@ from __future__ import annotations
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
-from omnidriver.core.specs.validation import validate_context
+from omnidriver.cardiacfoam.validation import cross_field_diagnostics
 
 _CTX = _driver_context(
     OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:ionic_heterogeneity",
 )
 
 
-def _validate(config, *, entries=None, driver_context):
-    """Flatten the per-phase slices into the flat context ``validate_context`` takes."""
-    context = {key: val for slice_ in config.values() for key, val in slice_.items()}
-    return validate_context(context, entries=entries, driver_context=driver_context)
+def _cross_field(config):
+    return cross_field_diagnostics({
+        key: value for slice_ in config.values() for key, value in slice_.items()
+        if value not in (None, "")
+    })
+
 
 _NATIVE_TISSUE_MODELS = ("BuenoOrovio", "TNNP", "TWorld", "ToRORd_dynCl")
 _OVERRIDE_ONLY_TISSUE_MODELS = (
@@ -281,9 +283,9 @@ def test_heterogeneity_with_incapable_model_is_error():
         "ionicHeterogeneity.field": "t",
         "ionicHeterogeneity.mode": "transmuralBands",
     })
-    errors = [e for e in _validate(run, driver_context=_CTX)
+    errors = [e for e in _cross_field(run)
               if e.level == "error" and "heterogeneity" in e.message.lower()]
-    assert len(errors) == 1, [e.message for e in _validate(run, driver_context=_CTX)]
+    assert len(errors) == 1, [e.message for e in _cross_field(run)]
 
 
 def test_heterogeneity_with_capable_model_no_het_error():
@@ -294,7 +296,7 @@ def test_heterogeneity_with_capable_model_no_het_error():
         "ionicHeterogeneity.field": "t",
         "ionicHeterogeneity.mode": "namedRegions",
     })
-    het_errors = [e for e in _validate(run, driver_context=_CTX)
+    het_errors = [e for e in _cross_field(run)
                   if e.level == "error" and "heterogeneity" in e.message.lower()]
     assert het_errors == []
 
@@ -305,9 +307,9 @@ def test_tissue_incompatible_with_model_is_error():
         "ionicModel": "AlievPanfilovcompactBatched",   # myocyte-only
         "tissue": "epicardialCells",
     })
-    errors = [e for e in _validate(run, driver_context=_CTX)
+    errors = [e for e in _cross_field(run)
               if e.level == "error" and "compatible tissues" in e.message]
-    assert len(errors) == 1, [e.message for e in _validate(run, driver_context=_CTX)]
+    assert len(errors) == 1, [e.message for e in _cross_field(run)]
 
 
 def test_tissue_compatible_with_model_is_silent():
@@ -316,7 +318,7 @@ def test_tissue_compatible_with_model_is_silent():
         "ionicModel": "BuenoOrovio",
         "tissue": "epicardialCells",
     })
-    issues = [e for e in _validate(run, driver_context=_CTX) if "compatible tissues" in e.message]
+    issues = [e for e in _cross_field(run) if "compatible tissues" in e.message]
     assert issues == []
 
 
@@ -330,9 +332,9 @@ def test_gradient_axes_with_incapable_model_is_error():
         "ionicHeterogeneity.gradientAxes.apicobasal.field": "longitudinal",
         "ionicHeterogeneity.gradientAxes.apicobasal.variables": "(g_Ks)",
     })
-    errors = [e for e in _validate(run, driver_context=_CTX)
+    errors = [e for e in _cross_field(run)
               if e.level == "error" and "gradient-axis" in e.message]
-    assert len(errors) == 1, [e.message for e in _validate(run, driver_context=_CTX)]
+    assert len(errors) == 1, [e.message for e in _cross_field(run)]
 
 
 def test_gradient_axes_with_capable_model_no_error():
@@ -346,7 +348,7 @@ def test_gradient_axes_with_capable_model_no_error():
         "ionicHeterogeneity.gradientAxes.apicobasal.scalingMax": "5.0",
         "ionicHeterogeneity.gradientAxes.apicobasal.variables": "(g_Ks)",
     })
-    ga_errors = [e for e in _validate(run, driver_context=_CTX)
+    ga_errors = [e for e in _cross_field(run)
                  if e.level == "error" and "gradientaxes" in e.message.lower()]
     assert ga_errors == []
 
@@ -361,7 +363,7 @@ def test_gradient_axes_negative_beta_is_silent():
         "ionicHeterogeneity.gradientAxes.apicobasal.beta": "-1.0",
         "ionicHeterogeneity.gradientAxes.apicobasal.variables": "(g_Ks)",
     })
-    errors = [e for e in _validate(run, driver_context=_CTX) if "beta" in e.message]
+    errors = [e for e in _cross_field(run) if "beta" in e.message]
     assert errors == []
 
 
@@ -375,7 +377,7 @@ def test_gradient_axes_scalingMin_must_not_exceed_scalingMax():
         "ionicHeterogeneity.gradientAxes.apicobasal.scalingMax": "2.0",
         "ionicHeterogeneity.gradientAxes.apicobasal.variables": "(g_Ks)",
     })
-    errors = [e for e in _validate(run, driver_context=_CTX)
+    errors = [e for e in _cross_field(run)
               if e.level == "error" and "scalingMin" in e.message]
     assert len(errors) == 1
 
@@ -390,7 +392,7 @@ def test_gradient_axes_valid_scaling_range_is_silent():
         "ionicHeterogeneity.gradientAxes.apicobasal.scalingMax": "5.0",
         "ionicHeterogeneity.gradientAxes.apicobasal.variables": "(g_Ks)",
     })
-    errors = [e for e in _validate(run, driver_context=_CTX) if "scalingMin" in e.message]
+    errors = [e for e in _cross_field(run) if "scalingMin" in e.message]
     assert errors == []
 
 
@@ -402,7 +404,7 @@ def test_gradient_axes_empty_variables_is_error():
         "ionicHeterogeneity.gradientAxes.apicobasal.field": "longitudinal",
         "ionicHeterogeneity.gradientAxes.apicobasal.variables": "()",
     })
-    errors = [e for e in _validate(run, driver_context=_CTX)
+    errors = [e for e in _cross_field(run)
               if e.level == "error" and "variables" in e.message]
     assert len(errors) == 1
 
@@ -419,7 +421,7 @@ def test_transmural_and_gradient_axes_can_coexist():
         "ionicHeterogeneity.gradientAxes.apicobasal.variables": "(g_Ks)",
     })
     het_errors = [
-        e for e in _validate(run, driver_context=_CTX)
+        e for e in _cross_field(run)
         if e.level == "error" and "heterogeneity" in e.message.lower()
     ]
     assert het_errors == []

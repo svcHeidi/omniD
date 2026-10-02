@@ -57,8 +57,7 @@ def slot_key(driver_path: str) -> str:
     """Map a driver_path to its slot key inside a phase slice.
 
     Strips a leading ``$SCOPE_TOKEN.`` prefix when present (any plugin's
-    override scope, not just the built-in cardiac plugin's
-    ``$ELECTRO_MODEL_COEFFS.``); otherwise returns the path as-is.
+    scope token); otherwise returns the path as-is.
     Multi-segment unprefixed paths are kept intact so that nested-group
     leaves don't collide with top-level keys of the same name (e.g.
     ``$ELECTRO_MODEL_COEFFS.bathPotentialDomain.phiEReferenceValue`` must
@@ -223,11 +222,8 @@ def validate_context(
     """Validate a flat ``{slot_key: value}`` context against the catalogue.
 
     ``entries`` overrides the live catalogue for callers that validate against
-    a curated subset (the dictionary builders). The plugin's own run-semantics
-    rules are appended last.
+    a curated subset (the dictionary builders).
     """
-    from omnidriver.core.plugin_capabilities import RunSemanticValidationRequest
-
     phase_order = driver_context.capabilities.dictionaries.phases()
     entry_list: list[DictEntry] = (
         list(entries) if entries is not None
@@ -245,7 +241,7 @@ def validate_context(
             continue
         if e.dynamic_path:
             # A template names no concrete instance, so its required leaves
-            # are the plugin's run-semantics rules to check.
+            # are the resolved-case check's (`run_semantic_validator`).
             continue
         if primary_phase(e, phase_order) is None:
             errors.append(_phase_defect(e, phase_order))
@@ -281,11 +277,6 @@ def validate_context(
             ))
 
     errors.extend(_evaluate_structured(entry_list, context, phase_order))
-    errors.extend(
-        driver_context.capabilities.run_semantic_validator.validate(
-            RunSemanticValidationRequest(context),
-        )
-    )
     return tuple(errors)
 
 
@@ -340,7 +331,7 @@ def _evaluate_structured(
         if not _entry_is_applicable(e, context):
             continue
 
-        # required_when: handled by section 1 of validate_run via
+        # required_when: handled by section 1 of validate_context via
         # is_required_in_context. Section 3 does NOT re-emit a violation
         # to avoid double-firing on the same entry. The structured
         # required_when field is still consumed — its predicates feed

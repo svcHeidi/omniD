@@ -28,7 +28,6 @@ from ..tutorial_records import (
     TutorialRecord,
     TutorialRecordError,
     _strictly_equal,
-    check_variant_constraints,
     patches_to_parameters,
     record_input_destinations,
     resolve_case_patches,
@@ -265,15 +264,13 @@ def _resolve_and_split(
         study_by_source, reserved_names=_reserved_study_names(record),
     )
     workflow_step_ids, workflow_variant = _resolve_workflow_route(record, reserved_values)
-    if workflow_variant is not None:
-        # Must run before any axis runs or any patch is proposed.
-        check_variant_constraints(record, workflow_variant["selected"], study_by_source)
     parallel_request = _parallel_request(record, reserved_values)
     combined, command_arguments = resolve_case_patches(
         record,
         study_by_source=study_by_source,
         staged_case_root=staged_case_root,
         direct_key_validator=validator,
+        workflow_step_ids=workflow_step_ids,
     )
     to_write, unchanged = split_unchanged(
         combined,
@@ -435,6 +432,28 @@ def _refusal_as_record_error(
         ) from exc
 
 
+def _refuse_a_case_that_breaks_a_rule(
+    record: TutorialRecord, case_root: Path, driver_context: "DriverContext",
+) -> None:
+    """Refuse the resolved case by name, with each rule's own message, when
+    the stack's catalogue relations or cross-field rules find an error in it:
+    the one check every plan, run and sweep case passes before anything
+    executes."""
+    from ..plugin_capabilities import RunSemanticValidationRequest
+
+    broken = [
+        item for item in driver_context.capabilities.run_semantic_validator.validate(
+            RunSemanticValidationRequest(case_root),
+        ) if item.level == "error"
+    ]
+    if broken:
+        raise TutorialRecordError(
+            f"tutorial record {record.name!r}: the resolved case breaks "
+            f"{len(broken)} rule(s): "
+            + "; ".join(f"{item.field or item.source}: {item.message}" for item in broken)
+        )
+
+
 def _commit_patches(
     record: TutorialRecord,
     *,
@@ -532,6 +551,7 @@ def commit_record_case(
             driver_context=driver_context, execution_env=execution_env,
             requested_by=requested_by,
         )
+    _refuse_a_case_that_breaks_a_rule(record, staged_case_root, driver_context)
     return RecordCommitResult(
         write_record=write_record, unchanged=unchanged, command_arguments=command_arguments,
         workflow_step_ids=workflow_step_ids, parallel_request=parallel_request,

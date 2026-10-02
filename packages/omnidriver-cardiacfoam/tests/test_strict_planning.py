@@ -86,8 +86,7 @@ def test_cli_plan_strict_prints_json_and_returns_zero(tmp_path: Path) -> None:
     assert payload["launch"]["command"]
 
 
-def test_strict_plan_status_ignores_environment_only_errors(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.delenv("SKIP_ENV_DIAGNOSTICS", raising=False)
+def test_strict_plan_status_ignores_environment_only_errors(tmp_path: Path, monkeypatch, real_preflight) -> None:
     monkeypatch.delenv("WM_PROJECT_DIR", raising=False)
     monkeypatch.setattr(
         shutil,
@@ -115,8 +114,7 @@ def test_strict_plan_status_ignores_environment_only_errors(tmp_path: Path, monk
     )
 
 
-def test_cli_run_strict_refuses_environment_errors_before_execution(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.delenv("SKIP_ENV_DIAGNOSTICS", raising=False)
+def test_cli_run_strict_refuses_environment_errors_before_execution(tmp_path: Path, monkeypatch, real_preflight) -> None:
     monkeypatch.delenv("WM_PROJECT_DIR", raising=False)
     monkeypatch.setattr(
         shutil,
@@ -232,12 +230,13 @@ def test_every_strict_plan_scans_the_supplied_source(tmp_path: Path) -> None:
 
 
 def test_batched_ionic_model_does_not_require_optional_batched_keys(tmp_path: Path):
-    """Both keys are read via lookupOrDefault; the batched model is set explicitly since the native default is Stewart."""
+    """Both keys are read via lookupOrDefault; the batched model is set explicitly since the native default is Stewart, with a tissue it accepts."""
     report = strict_plan(
         "cable1DCVConvergence", driver_context=_CTX,
         overrides={
             "cases_root": str(_native_tutorials_root()),
             "constant/electroProperties:monodomainSolverCoeffs.ionicModel": "TWorldcompactBatched",
+            "constant/electroProperties:monodomainSolverCoeffs.tissue": "epicardialCells",
         },
         scratch_root=str(tmp_path / "scratch"),
     ).to_json()

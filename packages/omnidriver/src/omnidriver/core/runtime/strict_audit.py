@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from omnidriver.core.planning_types import (
@@ -133,17 +132,8 @@ def _build_simulation_audit(
             success_summary="The current environment satisfies the commands declared by the workflow.",
             warning_summary="The environment can be used, but preflight emitted warnings.",
             error_summary="The current environment is missing executables or runtime setup needed to run.",
-            outcome=(
-                "not_requested" if "SKIP_ENV_DIAGNOSTICS" in os.environ else EXECUTED
-            ),
-            uncovered_summary=(
-                "Environment preflight was not requested: SKIP_ENV_DIAGNOSTICS is "
-                "set, so nothing was checked about this environment."
-            ),
-            evidence={
-                "skipped": "SKIP_ENV_DIAGNOSTICS" in os.environ,
-                "diagnostic_count": len(environment_diagnostics),
-            },
+            outcome=EXECUTED,
+            evidence={"diagnostic_count": len(environment_diagnostics)},
         ),
     ]
     score = sum(item.points for item in items)

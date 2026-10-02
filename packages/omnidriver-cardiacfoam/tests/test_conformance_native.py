@@ -1,6 +1,5 @@
 """Every cardiacFOAM record in ``TARGETS`` passes every conformance check against the real binary.
-C9 is OpenFOAM's preflight, which the suite-wide ``SKIP_ENV_DIAGNOSTICS`` turns off, so this
-module removes that variable for its own tests."""
+C9 is OpenFOAM's preflight, which the suite stubs out, so this module keeps it."""
 from __future__ import annotations
 
 import pytest
@@ -8,12 +7,7 @@ import pytest
 from omnidriver.conformance import CHECKS, run_check
 from cardiacfoam_native import TARGETS, conformance_target
 
-pytestmark = pytest.mark.native
-
-
-@pytest.fixture(autouse=True)
-def _real_preflight(monkeypatch):
-    monkeypatch.delenv("SKIP_ENV_DIAGNOSTICS", raising=False)
+pytestmark = [pytest.mark.native, pytest.mark.usefixtures("real_preflight")]
 
 
 @pytest.mark.parametrize("record", sorted(TARGETS))

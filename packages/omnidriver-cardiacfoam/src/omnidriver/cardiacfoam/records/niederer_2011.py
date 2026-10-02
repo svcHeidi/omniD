@@ -63,8 +63,9 @@ from omnidriver.openfoam.axes import block_mesh_resolution_axis
 from omnidriver.openfoam.mesh_provisioning import cell_counts_from_dx
 
 from ..activation_probes import ACTIVATION_PROBES_FORMAT
-from .case_outputs import ELECTRO_PROPERTIES, POLY_MESH_OUTPUTS, WITH_DEFAULT_VALUES, gmsh_to_foam_outputs
+from .case_outputs import WITH_DEFAULT_VALUES
 from .manufactured_solution_axes import GMSH_LC_KEY
+from .routes import block_mesh_step, gmsh_route, solve_step
 
 _PHYSICS_DOCUMENT = "constant/physicsProperties"
 _BLOCK_MESH_DICT_DOCUMENT = "system/blockMeshDict"
@@ -166,32 +167,9 @@ RECORD = TutorialRecord(
         TET_VARIANT: ("gmsh", "gmshToFoam", "checkMesh", "solve", "samplePoints", "sampleLines"),
     },
     workflow_steps=(
-        WorkflowStep(
-            step_id="mesh", command=("blockMesh",),
-            consumes=(_BLOCK_MESH_DICT_DOCUMENT,),
-            produces=POLY_MESH_OUTPUTS,
-        ),
-        WorkflowStep(
-            step_id="gmsh",
-            command=("gmsh", "-3", _TET_GEO_TEMPLATE_RELPATH, "-o", _TET_MSH_RELPATH, "-format", "msh2"),
-            consumes=(_TET_GEO_TEMPLATE_RELPATH,),
-            produces=(_TET_MSH_RELPATH,),
-        ),
-        WorkflowStep(
-            step_id="gmshToFoam", command=("gmshToFoam", _TET_MSH_RELPATH),
-            consumes=(_TET_MSH_RELPATH,),
-            produces=gmsh_to_foam_outputs("internal"),
-        ),
-        WorkflowStep(step_id="checkMesh", command=("checkMesh",)),
-        WorkflowStep(
-            step_id="solve", command=("cardiacFoam",),
-            consumes=(
-                ELECTRO_PROPERTIES, _PHYSICS_DOCUMENT, "system/controlDict",
-                "system/fvSchemes", "system/fvSolution",
-                "system/Niedererpoints", "system/Niedererlines",
-            ),
-            produces=(WITH_DEFAULT_VALUES,),
-        ),
+        block_mesh_step((_BLOCK_MESH_DICT_DOCUMENT,)),
+        *gmsh_route(_TET_GEO_TEMPLATE_RELPATH, _TET_MSH_RELPATH, "internal"),
+        solve_step((WITH_DEFAULT_VALUES,), consumes=("system/Niedererpoints", "system/Niedererlines")),
         WorkflowStep(
             step_id="samplePoints",
             command=("postProcess", "-func", _POINTS_FUNCTION, "-latestTime"),

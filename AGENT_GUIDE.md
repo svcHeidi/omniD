@@ -941,22 +941,29 @@ keyed by region. **Both blocks are plugin-dependent.** For cardiacFoam the
 regions are `electro` / `solid`; read the keys that are there rather than
 assuming a fixed set. Author `workflowDag` commands and `functions{}` field lists against this instead of guessing — a command outside `allowed_commands` is rejected before execution, and a field outside `samplable_fields` is dropped silently by the solver (see below).
 
-## What the validator catches
+## What the rules catch
 
-`validate_context(context, entries=, driver_context=)` checks a flat
-`{slot_key: value}` context against the catalogue, then appends the plugin's
-own `validate_run_semantics` rules. cardiacFOAM's dict builders call it. Seven
-families of checks:
+Every record case passes the stack's rules once its study is written and
+before anything runs: `plan --strict`, `run` and each case of a sweep. A rule
+that finds an error refuses the case by name (`tutorial record 'X': the
+resolved case breaks N rule(s): <field>: <message>`), with the rule's own
+message. The rules read the resolved case's files, so a direct key, an axis
+and the native case all count.
 
-- **Required fields** — every `required` entry has a value.
-- **Enum membership** — values for enum-typed entries are in `enum_values`.
-- **Structured constraints** — `applicable_when` / `forbidden_when` / `required_when` / `mutually_exclusive_with`.
+- **Catalogue relations** (cardiacFOAM's `electroProperties`, each cardiacCore
+  utility dictionary) — `applicable_when` / `required_when` / `forbidden_when` /
+  `mutually_exclusive_with` / `co_required_with`, once per instance of a
+  `<name>` block. Menus and value types are not judged here: the C++ owns them.
 - **Solver coupling** — pairings like (`singleCellSolver`, any Purkinje) reject with the table's stated reason.
 - **Block references** — `domainCouplings.<name>.conductionNetworkDomain` must point at a declared block.
-- **Tissue heterogeneity** — `ionicHeterogeneity` requires a supported `ionicModel` and `endoMInterface < mEpiInterface`.
+- **Tissue heterogeneity** — `ionicHeterogeneity` requires a supported `ionicModel` and well-formed regions and gradient axes.
 - **Tissue compatibility** — `tissue` must be in the `ionicModel`'s `compatible_tissues`.
+- **ECG consistency** — `personalizedTemplates` and the pseudo-ECG `anisotropic` switch must agree with the verifier and solver they sit beside.
+- **Purkinje resistance** — `reactionDiffusionPvjCoupler` needs `rPvj` unless its materialized graph carries `pvjResistances`.
 
-If the dict builder rejects your input with `ValueError`, the message lists every violation. Fix the selectors or overrides and call again.
+A rule refuses a combination it knows is wrong, never a name it does not know:
+an ionic model, tissue or verifier the catalogue lacks (reported `uncatalogued`
+by the scan) passes every rule.
 
 ## Function objects (probes, sampling, sets, …)
 
@@ -1022,8 +1029,7 @@ against the electro fields (`capability_manifest.samplable_fields`). This is
 **non-blocking**: it never fails a plan, because the catalog can lag the C++
 solver and a false positive must not block a run — but it turns the solver's
 otherwise-silent field drop into a visible signal. `#includeFunc` shorthands are
-not parsed (their field lists live in `$FOAM_ETC/caseDicts`). Set
-`SKIP_FUNCTION_OBJECT_DIAGNOSTICS=1` to bypass the check entirely.
+not parsed (their field lists live in `$FOAM_ETC/caseDicts`).
 
 ## Common patterns
 
@@ -1174,8 +1180,11 @@ These are real limitations; the agent must not assume them:
   from `PATH`, if `WM_PROJECT_DIR` is unset, or if the plan is parallel but no
   `mpirun`/`mpiexec` is found. It warns on a partially-sourced environment
   (`WM_PROJECT_VERSION` / `FOAM_USER_LIBBIN` unset). It does **not** yet check free
-  disk space or output-directory writability. Set `SKIP_ENV_DIAGNOSTICS=1` to bypass
-  the gate (used by the test suite).
+  disk space or output-directory writability. The OpenFOAM bashrc is supplied, never
+  searched for: `--environment-source`, else `OPENFOAM_BASHRC`, else `openfoam.bashrc`
+  in the file `OMNIDRIVER_RUNTIME_CONFIG` names, else the `etc/bashrc` of the install
+  a sourced shell names through `WM_PROJECT_DIR`; a plan that needs OpenFOAM and has
+  none refuses with `missing_openfoam_env`.
 
 - **Active-tension models beyond NashPanfilov and GoktepeKuhl** are not in `active_tension_catalog.py`. Future C++ models must be registered there before artifact prediction will cover their state variables.
 
@@ -1266,7 +1275,7 @@ plugin_api_version      # str — "2", the only supported contract version
 get_profile()           # PluginProfile from load_plugin_profile("plugin.yaml")
 get_capabilities()      # CapabilityManifest via build_capability_manifest()
 validate_configuration(spec)   # tuple[StrictDiagnostic, ...]
-validate_run_semantics(context) # tuple[...]
+validate_run_semantics(case_root) # tuple[StrictDiagnostic, ...]: the resolved case's rules
 predict_data_artifacts(case_root, spec) # tuple[DataArtifact, ...]
 ```
 

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from omnidriver.openfoam.effective_dictionary import inspect_effective_foam_configuration
-from omnidriver.openfoam.openfoam_environment import discover_openfoam_bashrc
+from omnidriver.openfoam.openfoam_environment import openfoam_bashrc
 
 
 HEADER = "FoamFile { version 2.0; format ascii; class dictionary; object d; }\n"
@@ -15,10 +15,10 @@ ETC_KEYS = (
     "FOAM_API", "FOAM_CONFIG_ETC", "FOAM_CONFIG_MODE", "FOAM_ETC", "HOME",
     "WM_PROJECT_DIR", "WM_PROJECT_INST_DIR", "WM_PROJECT_SITE", "WM_PROJECT_VERSION",
 )
-NATIVE_BASHRC = discover_openfoam_bashrc()
+NATIVE_BASHRC = openfoam_bashrc()
 native = pytest.mark.skipif(
     NATIVE_BASHRC is None,
-    reason="no OpenFOAM installation discoverable; native effective resolution is not verified",
+    reason="no OpenFOAM bashrc is supplied or sourced; native effective resolution is not verified",
 )
 
 

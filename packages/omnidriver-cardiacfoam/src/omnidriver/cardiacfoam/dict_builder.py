@@ -66,6 +66,7 @@ from omnidriver.core.specs.validation import (
 )
 
 from .common_dict_entries import PHYSICS_PROPERTY_ENTRIES
+from .validation import cross_field_diagnostics
 
 #: This adapter's identity on every synthesis request and resolution it
 #: produces.
@@ -306,9 +307,12 @@ def build_electro_properties(
     # does), so we don't pre-call `check_required` from the public builder
     # entry-point. `check_required` stays exported for callers that want
     # just the required-field subset.
+    populated_values = {key: value for key, value in populated.items() if value not in (None, "")}
     errors = [
-        e for e in validate_context(populated, entries=entries, driver_context=own_driver_context())
-        if e.level == "error"
+        e for e in (
+            *validate_context(populated, entries=entries, driver_context=own_driver_context()),
+            *cross_field_diagnostics(populated_values),
+        ) if e.level == "error"
     ]
     if errors:
         raise ValueError(

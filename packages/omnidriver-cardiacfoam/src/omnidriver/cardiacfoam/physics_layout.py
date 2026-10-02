@@ -143,3 +143,14 @@ def region_of(case_root: Path, role: str) -> str | None:
             f"case {case_root} names region role {role!r} via {document_path}, "
             f"but reading it failed: {exc!r}"
         ) from exc
+
+
+def region_document(case_root: Path, role: str, name: str) -> Path | None:
+    """``constant/<region>/<name>`` for a region-split type, or
+    ``constant/<name>`` for a single-region one; ``None`` if the resolved
+    path does not exist. Raises ``PhysicsLayoutError`` (via ``region_of``)
+    for an unknown physics type or an unknown region role."""
+    region = region_of(case_root, role)
+    base = Path(case_root) / "constant"
+    path = base / region / name if region else base / name
+    return path if path.exists() else None

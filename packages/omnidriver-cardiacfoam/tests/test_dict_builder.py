@@ -305,7 +305,7 @@ class TestRequiredCheck(unittest.TestCase):
 
 
 class TestValidatorIntegration(unittest.TestCase):
-    """build_electro_properties runs validate_run before returning."""
+    """build_electro_properties runs validate_context before returning."""
 
     def test_build_raises_on_mutex_violation_via_overrides(self) -> None:
         from omnidriver.cardiacfoam.dict_builder import build_electro_properties

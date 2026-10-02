@@ -2,6 +2,8 @@
 and an explicit non-cardiac v2 context must call none of them."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from omnidriver.core import compatibility
 
 
@@ -23,5 +25,5 @@ def test_explicit_v2_plugin_calls_no_legacy_fallback() -> None:
 
     context = driver_context(MinimalTestPlugin(), source="test:minimal")
     with compatibility.track_fallback_calls() as calls:
-        context.capabilities.dictionaries.documents()
+        context.capabilities.case_introspection.resolve_case_models(Path("case"))
     assert calls == []

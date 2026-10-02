@@ -9,6 +9,7 @@ import pytest
 
 from omnidriver.core import compatibility
 from omnidriver.core.case_write import ParameterAssignment, ResolvedMutation, RenderedFile, _digest_bytes
+from omnidriver.core.planning_types import diagnostic
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime import record_execution
 from omnidriver.core.sweep import sweep_expansion
@@ -1153,85 +1154,66 @@ def test_commit_record_case_reports_the_selected_variants_steps(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Variant constraints: a route may admit a study name only at some values. A
-# route that builds one shape of case cannot honour a study value asking for
-# another; the value is refused by name before anything is written.
+# A contribution to a step the selected route does not run is refused by name.
 # ---------------------------------------------------------------------------
 
 
-def _cells_axis() -> AxisContract:
-    """A toy axis that only patches a document (no step contribution), so it fits ``_record_with_variants``'s steps."""
+def _meshA_axis() -> AxisContract:
+    """A toy axis whose only effect is a command argument for ``meshA``, a step only ``variantA`` runs."""
     def resolve(value, staged_case_root: Path) -> AxisResult:
         del staged_case_root
-        return AxisResult(patches=(AxisPatch(
-            document="constant/mesh.json", key_path=("cells",),
-            value=int(value), value_kind="integer",
-        ),))
+        return AxisResult(command_arguments={"meshA": ("--cells", str(value))})
 
     return AxisContract(name="number_cells", value_kind="integer", resolve=resolve)
 
 
-def _constrained_record(constraints, **overrides) -> TutorialRecord:
-    return _record_with_variants(
-        axes=(_cells_axis(),), variant_constraints=constraints, **overrides,
+def _preview(tmp_path, study):
+    _native_case(tmp_path, {})
+    return record_execution.preview_record_case(
+        _record_with_variants(axes=(_meshA_axis(),)), cases_root=tmp_path / "cases",
+        study_by_source={"base": study}, driver_context=_context_with_writer(),
     )
 
 
-def test_a_variant_constraint_refuses_a_study_value_it_does_not_admit(tmp_path):
-    _native_case(tmp_path, {"constant/mesh.json": {"cells": "5"}})
-    record = _constrained_record({"variantB": {"number_cells": (5,)}})
+def test_an_axis_for_a_step_the_selected_route_does_not_run_is_refused(tmp_path):
     with pytest.raises(TutorialRecordError) as exc:
-        record_execution.preview_record_case(
-            record, cases_root=tmp_path / "cases",
-            study_by_source={"base": {"mesh": "variantB"}, "sweep": {"number_cells": 7}},
-            driver_context=_context_with_writer(),
-        )
+        _preview(tmp_path, {"mesh": "variantB", "number_cells": 7})
     message = str(exc.value)
-    for fragment in ("'toyTutorial'", "'variantB'", "'number_cells'", "[5]", "7", "'sweep'"):
+    for fragment in ("'number_cells'", "'meshA'", "'toyTutorial'", "['meshB', 'solve']"):
         assert fragment in message, (fragment, message)
 
 
-def test_a_variant_constraint_admits_its_value_and_an_unset_name(tmp_path):
-    _native_case(tmp_path, {"constant/mesh.json": {"cells": "5"}})
-    record = _constrained_record({"variantB": {"number_cells": (5,)}})
-    for study in ({"mesh": "variantB", "number_cells": 5}, {"mesh": "variantB"}):
-        preview = record_execution.preview_record_case(
-            record, cases_root=tmp_path / "cases", study_by_source={"base": study},
-            driver_context=_context_with_writer(),
+def test_an_axis_that_also_writes_the_case_is_not_refused_for_a_step_the_route_skips(tmp_path):
+    def resolve(value, staged_case_root: Path) -> AxisResult:
+        del staged_case_root
+        return AxisResult(
+            patches=(AxisPatch(
+                document="constant/mesh.json", key_path=("cells",), value=int(value), value_kind="integer",
+            ),),
+            command_arguments={"meshA": ("--cells", str(value))},
         )
-        assert preview["workflow_step_ids"] == ["meshB", "solve"]
 
-
-def test_a_variant_constraint_binds_only_its_own_variant(tmp_path):
     _native_case(tmp_path, {"constant/mesh.json": {"cells": "5"}})
-    record = _constrained_record({"variantB": {"number_cells": (5,)}})
     preview = record_execution.preview_record_case(
-        record, cases_root=tmp_path / "cases",
-        study_by_source={"base": {"mesh": "variantA", "number_cells": 7}},
+        _record_with_variants(axes=(AxisContract(name="number_cells", value_kind="integer", resolve=resolve),)),
+        cases_root=tmp_path / "cases", study_by_source={"base": {"mesh": "variantB", "number_cells": 7}},
         driver_context=_context_with_writer(),
     )
-    assert preview["workflow_step_ids"] == ["meshA", "solve"]
+    assert preview["workflow_step_ids"] == ["meshB", "solve"]
+    assert preview["workflow_commands"]["meshB"] == ["toolB"]
 
 
-def test_a_variant_constraint_binds_the_default_variant_too(tmp_path):
-    """A study that names no route runs the default one, and that route's constraints hold for it exactly as if the study had named it."""
+def test_an_axis_for_a_step_the_default_route_runs_is_admitted(tmp_path):
+    preview = _preview(tmp_path, {"number_cells": 7})
+    assert preview["command_arguments"] == {"meshA": ["--cells", "7"]}
+
+
+def test_the_refusal_comes_before_a_commit_writes_anything(tmp_path):
     _native_case(tmp_path, {"constant/mesh.json": {"cells": "5"}})
-    record = _constrained_record({"variantA": {"number_cells": (5,)}})
-    with pytest.raises(TutorialRecordError, match="'variantA'"):
-        record_execution.preview_record_case(
-            record, cases_root=tmp_path / "cases",
-            study_by_source={"base": {"number_cells": 7}},
-            driver_context=_context_with_writer(),
-        )
-
-
-def test_a_variant_constraint_refuses_before_a_commit_writes_anything(tmp_path):
-    """The same refusal on the commit path (``plan --strict``, a sweep), and nothing is staged into the committed case's place."""
-    _native_case(tmp_path, {"constant/mesh.json": {"cells": "5"}})
-    record = _constrained_record({"variantB": {"number_cells": (5,)}})
     with pytest.raises(TutorialRecordError, match="'number_cells'"):
         record_execution.commit_record_case(
-            record, cases_root=tmp_path / "cases", staged_case_root=tmp_path / "staged",
+            _record_with_variants(axes=(_meshA_axis(),)), cases_root=tmp_path / "cases",
+            staged_case_root=tmp_path / "staged",
             study_by_source={"base": {"mesh": "variantB", "number_cells": 7}},
             driver_context=_context_with_writer(),
         )
@@ -1239,48 +1221,69 @@ def test_a_variant_constraint_refuses_before_a_commit_writes_anything(tmp_path):
     assert not staged_mesh.exists() or json.loads(staged_mesh.read_text()) == {"cells": "5"}
 
 
-def test_a_variant_constraint_compares_values_strictly(tmp_path):
-    """``True == 1`` in Python; a constraint admitting ``1`` does not admit ``True`` (the same strict comparison a selector value gets)."""
-    _native_case(tmp_path, {"constant/mesh.json": {"cells": "1"}})
-    record = _constrained_record({"variantB": {"number_cells": (1,)}})
-    with pytest.raises(TutorialRecordError, match="'number_cells'"):
-        record_execution.preview_record_case(
-            record, cases_root=tmp_path / "cases",
-            study_by_source={"base": {"mesh": "variantB", "number_cells": True}},
-            driver_context=_context_with_writer(),
+# ---------------------------------------------------------------------------
+# The resolved case passes the stack's rules before anything runs.
+# ---------------------------------------------------------------------------
+
+
+class _RuleCheckingPlugin(_RecordCaseWriterPlugin):
+    """A stack whose one rule says a case holds at most 10 cells, and warns above 5."""
+
+    def validate_run_semantics(self, case_root):
+        cells = json.loads((Path(case_root) / "constant" / "mesh.json").read_text())["cells"]
+        found = []
+        if int(cells) > 10:
+            found.append(diagnostic("error", "too_many_cells", f"{cells} cells exceed 10", field="cells"))
+        if int(cells) > 5:
+            found.append(diagnostic("warning", "many_cells", f"{cells} cells", field="cells"))
+        return tuple(found)
+
+
+def _commit(tmp_path, cells):
+    _native_case(tmp_path, {"constant/mesh.json": {"cells": str(cells)}})
+    return record_execution.commit_record_case(
+        _record(), cases_root=tmp_path / "cases", staged_case_root=tmp_path / "staged",
+        study_by_source={"base": {"number_cells": 7}},
+        driver_context=driver_context(
+            _RuleCheckingPlugin(tutorial_records={}, record_key_validator=_known_catalog_validator),
+            source="test:rules",
+        ),
+    )
+
+
+def test_a_resolved_case_that_breaks_a_rule_is_refused_with_the_rules_own_message(tmp_path):
+    _native_case(tmp_path, {"constant/mesh.json": {"cells": "5"}})
+    with pytest.raises(TutorialRecordError) as exc:
+        record_execution.commit_record_case(
+            _record(), cases_root=tmp_path / "cases", staged_case_root=tmp_path / "staged",
+            study_by_source={"base": {"number_cells": 12}},
+            driver_context=driver_context(
+                _RuleCheckingPlugin(tutorial_records={}, record_key_validator=_known_catalog_validator),
+                source="test:rules",
+            ),
         )
+    message = str(exc.value)
+    for fragment in ("'toyTutorial'", "cells: 12 cells exceed 10"):
+        assert fragment in message, (fragment, message)
+    assert "many_cells" not in message
 
 
-def test_a_variant_constraint_may_name_a_document_key(tmp_path):
-    _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
-    record = _constrained_record({"variantB": {"constant/physics.json:modelName": ("modelAlpha",)}})
-    with pytest.raises(TutorialRecordError, match="constant/physics.json:modelName"):
-        record_execution.preview_record_case(
-            record, cases_root=tmp_path / "cases",
-            study_by_source={"base": {"mesh": "variantB", "constant/physics.json:modelName": "modelBeta"}},
-            driver_context=_context_with_writer(),
+def test_a_warning_does_not_refuse_the_case(tmp_path):
+    assert _commit(tmp_path, 5).status == "committed"
+
+
+def test_an_unchanged_case_is_checked_too(tmp_path):
+    """A case that needs no patch is the native case as it stands, and the rules judge it all the same."""
+    _native_case(tmp_path, {"constant/mesh.json": {"cells": "12"}})
+    with pytest.raises(TutorialRecordError, match="12 cells exceed 10"):
+        record_execution.commit_record_case(
+            _record(), cases_root=tmp_path / "cases", staged_case_root=tmp_path / "staged",
+            study_by_source={"base": {}},
+            driver_context=driver_context(
+                _RuleCheckingPlugin(tutorial_records={}, record_key_validator=_known_catalog_validator),
+                source="test:rules",
+            ),
         )
-
-
-@pytest.mark.parametrize(("constraints", "fragment"), [
-    ({"variantC": {"number_cells": (5,)}}, "'variantC'"),
-    ({"variantB": {"mesh": ("variantB",)}}, "selector"),
-    ({"variantB": {"no_such_axis": (5,)}}, "'no_such_axis'"),
-    ({"variantB": {"number_cells": ()}}, "no value"),
-    ({"variantB": {"number_cells": "5"}}, "bare"),
-    ({"variantB": {"number_cells": 5}}, "sequence"),
-    ({"variantB": (("number_cells", (5,)),)}, "mapping"),
-    ((("variantB", {"number_cells": (5,)}),), "mapping"),
-])
-def test_a_variant_constraint_is_refused_at_construction_by_name(constraints, fragment):
-    with pytest.raises(TutorialRecordError, match="variant_constraints") as exc:
-        _constrained_record(constraints)
-    assert fragment in str(exc.value), str(exc.value)
-
-
-def test_variant_constraints_without_variants_are_refused():
-    with pytest.raises(TutorialRecordError, match="variant_constraints"):
-        _record(variant_constraints={"variantA": {"number_cells": (5,)}})
 
 
 def test_commit_record_case_writes_one_case_with_validated_flags_in_the_record(tmp_path):

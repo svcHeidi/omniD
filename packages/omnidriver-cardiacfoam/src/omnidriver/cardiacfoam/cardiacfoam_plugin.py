@@ -95,32 +95,6 @@ class CardiacFoamPlugin:
         configured_env, _error = configure_runtime_environment(env)
         return configured_env
 
-    def get_loaded_environment(self, *, environment_source=None, driver_context=None):
-        """Resolve this plugin's configured bashrc, then source it via OpenFOAM.
-
-        ``environment_source``, when supplied, is the bashrc to source;
-        absent, this plugin's configured one (``runtime_profile
-        .configured_openfoam_bashrc``) is used. ``get_loaded_environment``
-        is ``single`` in `provider_stack.py` (first non-``None``,
-        most-specific provider first), so this provider resolves the bashrc
-        itself rather than rely on the generic OpenFOAM provider to ask it.
-        """
-        from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
-
-        if environment_source is None:
-            import os
-
-            from omnidriver.cardiacfoam.runtime_profile import (
-                configured_openfoam_bashrc,
-            )
-
-            environment_source = configured_openfoam_bashrc(os.environ)
-
-        return OpenFOAMEnvironmentPlugin().get_loaded_environment(
-            environment_source=environment_source,
-            driver_context=driver_context,
-        )
-
     def get_phases(self) -> tuple[str, ...]:
         """This plugin's four editing phases, in the order the RunDocument
         config and the validation slices use."""
@@ -380,49 +354,14 @@ class CardiacFoamPlugin:
                     field="ionicModel",
                 ))
 
-            from omnidriver.cardiacfoam.validation import (
-                _evaluate_pvj_resistance_requirement,
-            )
-            try:
-                diagnostics.extend(
-                    _evaluate_pvj_resistance_requirement(case_root, electro_path)
-                )
-            except KeyError as exc:
-                # This re-parses electroProperties, so it re-raises the same
-                # KeyError detect_myocardium_solver_name already reported as
-                # missing_solver above. Letting it escape would take the whole
-                # strict plan down with a traceback: the caller gets zero bytes
-                # on stdout and has to read English off stderr, when every
-                # other failure -- including a missing ionicModel -- answers
-                # with a JSON document. Failing is right; failing outside the
-                # contract is not.
-                diagnostics.append(_diagnostic(
-                    "error", "missing_solver", str(exc), source=str(electro_path),
-                ))
-
         return tuple(diagnostics)
 
-    def validate_run_semantics(self, context):
-        """Apply cardiacFoam's cross-field rules after core validation."""
-        from omnidriver.cardiacfoam.validation import (
-            _evaluate_block_references,
-            _evaluate_dynamic_required_fields,
-            _evaluate_ecg_anisotropic_consistency,
-            _evaluate_heterogeneity,
-            _evaluate_personalized_templates,
-            _evaluate_solver_coupling,
-            _evaluate_tissue_compatibility,
-        )
+    def validate_run_semantics(self, case_root):
+        """The catalogue's relations and cardiacFOAM's cross-field rules,
+        over the resolved case's ``electroProperties``."""
+        from omnidriver.cardiacfoam.validation import case_diagnostics
 
-        return tuple(
-            _evaluate_solver_coupling(context)
-            + _evaluate_block_references(context)
-            + _evaluate_dynamic_required_fields(context)
-            + _evaluate_heterogeneity(context)
-            + _evaluate_personalized_templates(context)
-            + _evaluate_tissue_compatibility(context)
-            + _evaluate_ecg_anisotropic_consistency(context)
-        )
+        return case_diagnostics(case_root)
 
     def predict_data_artifacts(self, case_root: Path, spec: TutorialSpec) -> tuple[DataArtifact, ...]:
         from omnidriver.cardiacfoam.artifacts_predictor import predict_cardiac_artifacts

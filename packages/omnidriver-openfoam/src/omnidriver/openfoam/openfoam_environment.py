@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import glob
 import os
 import shlex
 import subprocess
@@ -9,38 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-
-def _discover_openfoam_bashrcs() -> tuple[Path, ...]:
-    """Search common OpenFOAM install locations and `which foamVersion`."""
-    candidates: set[Path] = set()
-
-    for search_pattern in [
-        "/opt/openfoam*/etc/bashrc",
-        "/usr/local/openfoam*/etc/bashrc",
-        "/Volumes/OpenFOAM-v*/etc/bashrc",
-    ]:
-        for path in glob.glob(search_pattern):
-            candidates.add(Path(path))
-
-    try:
-        result = subprocess.run(
-            ("which", "foamVersion"),
-            capture_output=True,
-            text=True,
-            timeout=2,
-            check=False,
-        )
-        if result.returncode == 0:
-            foam_exe = Path(result.stdout.strip())
-            if foam_exe.exists():
-                wm_project_dir = foam_exe.parent.parent.parent
-                bashrc = wm_project_dir / "etc" / "bashrc"
-                if bashrc.exists():
-                    candidates.add(bashrc)
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        pass
-
-    return tuple(sorted(candidates, reverse=True))
+import yaml
 
 
 @dataclass(frozen=True)
@@ -70,50 +38,44 @@ def _parse_exported_environment(payload: str) -> dict[str, str]:
     return env
 
 
-def _candidate_bashrcs(
-    *,
-    bashrc_path: str | Path | None = None,
-    base_env: Mapping[str, str] | None = None,
-) -> tuple[Path, ...]:
-    env = base_env or os.environ
-    candidates: list[Path] = []
-
-    if bashrc_path:
-        return (Path(bashrc_path).expanduser(),)
-
-    openfoam_bashrc = env.get("OPENFOAM_BASHRC")
-    if openfoam_bashrc:
-        candidates.append(Path(openfoam_bashrc).expanduser())
-
-    wm_project_dir = env.get("WM_PROJECT_DIR")
-    if wm_project_dir:
-        candidates.append(Path(wm_project_dir).expanduser() / "etc" / "bashrc")
-
-    candidates.extend(_discover_openfoam_bashrcs())
-
-    seen: set[str] = set()
-    unique: list[Path] = []
-    for candidate in candidates:
-        key = str(candidate)
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append(candidate)
-    return tuple(unique)
+RUNTIME_CONFIG_ENV = "OMNIDRIVER_RUNTIME_CONFIG"
 
 
-def discover_openfoam_bashrc(
+def configured_openfoam_bashrc(env: Mapping[str, str]) -> str | None:
+    """The ``openfoam.bashrc`` of the host runtime file ``OMNIDRIVER_RUNTIME_CONFIG``
+    names, or ``None`` when no file is declared or it names none."""
+    config_name = env.get(RUNTIME_CONFIG_ENV)
+    if not config_name:
+        return None
+    config_path = Path(os.path.expandvars(config_name)).expanduser().resolve()
+    if not config_path.is_file():
+        return None
+    payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    openfoam = payload.get("openfoam") if isinstance(payload, dict) else None
+    value = openfoam.get("bashrc") if isinstance(openfoam, dict) else None
+    return str(value) if value else None
+
+
+def openfoam_bashrc(
     *,
     bashrc_path: str | Path | None = None,
     base_env: Mapping[str, str] | None = None,
 ) -> Path | None:
-    for candidate in _candidate_bashrcs(
-        bashrc_path=bashrc_path,
-        base_env=base_env,
-    ):
-        if candidate.is_file():
-            return candidate
-    return None
+    """The bashrc to source: ``bashrc_path`` (``--environment-source``), else
+    ``OPENFOAM_BASHRC``, else the runtime file's ``openfoam.bashrc``, else the
+    ``etc/bashrc`` of the install a sourced shell already names through
+    ``WM_PROJECT_DIR`` (macOS strips ``DYLD_*`` when bash starts, so a step
+    needs that bashrc sourced again). Nothing is searched for; a supplied path
+    that is not a file is the caller's to refuse."""
+    if bashrc_path:
+        return Path(bashrc_path).expanduser()
+    env = os.environ if base_env is None else base_env
+    named = env.get("OPENFOAM_BASHRC") or configured_openfoam_bashrc(env)
+    if named:
+        return Path(named).expanduser()
+    install = env.get("WM_PROJECT_DIR")
+    sourced = Path(install).expanduser() / "etc" / "bashrc" if install else None
+    return sourced if sourced is not None and sourced.is_file() else None
 
 
 def load_openfoam_environment(
@@ -130,18 +92,11 @@ def load_openfoam_environment(
     executables.
     """
     env = dict(base_env or os.environ)
-    bashrc = discover_openfoam_bashrc(
-        bashrc_path=bashrc_path,
-        base_env=env,
-    )
+    bashrc = openfoam_bashrc(bashrc_path=bashrc_path, base_env=env)
     if bashrc is None:
-        if bashrc_path:
-            return OpenFOAMEnvironment(
-                env=env,
-                error=f"OpenFOAM bashrc not found: {bashrc_path}",
-            )
-        sourced = OpenFOAMEnvironment(env=env)
-        return _configure_plugin_environment(sourced, driver_context)
+        return _configure_plugin_environment(OpenFOAMEnvironment(env=env), driver_context)
+    if not bashrc.is_file():
+        return OpenFOAMEnvironment(env=env, error=f"OpenFOAM bashrc not found: {bashrc}")
 
     script = (
         'set +e +u\n'

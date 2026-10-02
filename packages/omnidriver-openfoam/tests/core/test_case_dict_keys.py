@@ -73,16 +73,9 @@ def test_node_read_failure_discards_partial_key_warnings(tmp_path, monkeypatch):
     assert "node read failed" in diags[0].message
 
 
-@pytest.mark.parametrize("skip", [False, True])
-def test_missing_or_explicitly_skipped_file_is_silent(tmp_path, monkeypatch, skip):
-    if skip:
-        _write(tmp_path, "malformed {")
-        monkeypatch.setenv("SKIP_CASE_DICT_KEY_DIAGNOSTICS", "1")
-    else:
-        monkeypatch.delenv("SKIP_CASE_DICT_KEY_DIAGNOSTICS", raising=False)
-
+def test_a_missing_file_is_silent(tmp_path, monkeypatch):
     def unexpected_read(path):
-        pytest.fail("missing or skipped dictionaries must not be read")
+        pytest.fail("a missing dictionary must not be read")
 
     monkeypatch.setattr("foamlib.FoamFile", unexpected_read)
     assert case_dict_key_diagnostics(

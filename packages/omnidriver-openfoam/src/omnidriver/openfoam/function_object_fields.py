@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Mapping, Sequence
 
@@ -64,11 +63,8 @@ def function_object_field_diagnostics(
     a key in ``samplable`` is skipped rather than checked against a guessed
     bucket.
 
-    Degrades to silence on any parse or IO failure. Honors
-    ``SKIP_FUNCTION_OBJECT_DIAGNOSTICS`` to bypass the check entirely.
+    Degrades to silence on any parse or IO failure.
     """
-    if os.environ.get("SKIP_FUNCTION_OBJECT_DIAGNOSTICS"):
-        return ()
     normalized = {region: set(fields) for region, fields in samplable.items()}
     root = Path(case_root)
     diagnostics: list[StrictDiagnostic] = []

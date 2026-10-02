@@ -12,9 +12,10 @@ from typing import Any, Mapping
 
 import yaml
 
+from omnidriver.openfoam.openfoam_environment import RUNTIME_CONFIG_ENV
+
 
 _PLUGIN_ID = "org.cardiacfoam"
-_RUNTIME_CONFIG_ENV = "OMNIDRIVER_RUNTIME_CONFIG"
 _BACKEND_ENV = "OMNIDRIVER_CARDIACFOAM_BACKEND"
 _SOLIDS_ROOT_ENV = "OMNIDRIVER_CARDIACFOAM_SOLIDS4FOAM_ROOT"
 _MANIFEST_ENV = "OMNIDRIVER_CARDIACFOAM_BUILD_MANIFEST"
@@ -43,7 +44,7 @@ def _profile_contract() -> dict[str, Any]:
 
 
 def _user_selection(env: Mapping[str, str]) -> dict[str, Any]:
-    config_name = env.get(_RUNTIME_CONFIG_ENV)
+    config_name = env.get(RUNTIME_CONFIG_ENV)
     if not config_name:
         return {}
     config_path = Path(os.path.expandvars(config_name)).expanduser().resolve()
@@ -62,22 +63,6 @@ def _user_selection(env: Mapping[str, str]) -> dict[str, Any]:
     if not isinstance(selection, dict):
         raise ValueError(f"omnidriver runtime selection for {_PLUGIN_ID} must be a mapping")
     return selection
-
-
-def configured_openfoam_bashrc(env: Mapping[str, str]) -> str | None:
-    """Return the OpenFOAM bashrc from the selected host runtime file."""
-    config_name = env.get(_RUNTIME_CONFIG_ENV)
-    if not config_name:
-        return None
-    config_path = Path(os.path.expandvars(config_name)).expanduser().resolve()
-    if not config_path.is_file():
-        return None
-    payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        return None
-    openfoam = payload.get("openfoam", {})
-    value = openfoam.get("bashrc") if isinstance(openfoam, dict) else None
-    return str(value) if value else None
 
 
 def configure_runtime_environment(env: Mapping[str, str]) -> tuple[dict[str, str], str | None]:

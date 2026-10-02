@@ -11,13 +11,13 @@ from pathlib import Path
 import pytest
 
 from omnidriver.openfoam.mutators import read_foam_entry
-from omnidriver.openfoam.openfoam_environment import discover_openfoam_bashrc
+from omnidriver.openfoam.openfoam_environment import openfoam_bashrc
 
 
-FOAM_BASHRC = discover_openfoam_bashrc()
+FOAM_BASHRC = openfoam_bashrc()
 native = pytest.mark.skipif(
     FOAM_BASHRC is None,
-    reason="no OpenFOAM installation discoverable; native conformance is not verified",
+    reason="no OpenFOAM bashrc is supplied or sourced; native conformance is not verified",
 )
 
 

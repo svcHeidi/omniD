@@ -83,61 +83,54 @@ def test_a_record_refuses_an_axis_only_another_record_declares():
         sort_study_name("ionicModel", axes=catalog["manufacturedBidomain"].axes)
 
 
-#: Every tet route of every record that has a ``dimension`` axis; the
-#: unit-cube tet mesh has no 1D/2D variant.
-_TET_ROUTES = [
-    ("manufacturedBidomain", "tet"),
+#: eikonalECG's ``dimension`` axis writes no document key: the mesh step's
+#: ``-dict`` is its whole effect, so a route that never runs ``blockMesh``
+#: refuses it. The other records' axis also writes the solver's ``dimension``,
+#: which a tet study states.
+_EIKONAL_TET_ROUTES = [
     ("manufacturedEikonalECG", "tet"),
     ("manufacturedEikonalECG", "tet-errorLocalisation"),
     ("manufacturedEikonalECG", "tet-gradientReconstruction"),
+]
+_TET_ROUTES_WRITING_DIMENSION = [
+    ("manufacturedBidomain", "tet"),
+    ("manufacturedBathBidomain", "tet"),
     ("manufacturedMonodomainPseudoECG", "tet"),
 ]
 
 
-@pytest.mark.parametrize(("record_name", "variant"), _TET_ROUTES)
-@pytest.mark.parametrize("dimension", ["1D", "2D"])
-def test_a_tet_route_refuses_a_dimension_its_3d_template_cannot_build(record_name, variant, dimension):
-    from omnidriver.core.tutorial_records import check_variant_constraints
-
+def _resolve_on_route(record_name: str, variant: str, study: dict, tmp_path):
     record = _CTX.capabilities.tutorial_records.catalog()[record_name]
+    return resolve_case_patches(
+        record, study_by_source={"base": study}, staged_case_root=tmp_path,
+        direct_key_validator=_CTX.capabilities.record_key_validation.validator(),
+        workflow_step_ids=record.workflow_variants[variant],
+    )
+
+
+@pytest.mark.parametrize(("record_name", "variant"), _EIKONAL_TET_ROUTES)
+@pytest.mark.parametrize("dimension", ["1D", "2D", "3D"])
+def test_a_tet_route_refuses_an_axis_whose_only_effect_is_the_blockmesh_dict(
+    record_name, variant, dimension, tmp_path,
+):
     with pytest.raises(TutorialRecordError) as exc:
-        check_variant_constraints(record, variant, {"base": {"dimension": dimension}})
-    for fragment in (record_name, repr(variant), "'dimension'", "'3D'", repr(dimension)):
+        _resolve_on_route(record_name, variant, {"dimension": dimension}, tmp_path)
+    for fragment in (record_name, "'dimension'", "'mesh'", "does not run"):
         assert fragment in str(exc.value), (fragment, str(exc.value))
 
 
-@pytest.mark.parametrize(("record_name", "variant"), _TET_ROUTES)
-def test_a_tet_route_admits_3d_or_no_dimension(record_name, variant):
-    from omnidriver.core.tutorial_records import check_variant_constraints
-
-    record = _CTX.capabilities.tutorial_records.catalog()[record_name]
-    check_variant_constraints(record, variant, {"base": {"dimension": "3D"}})
-    check_variant_constraints(record, variant, {"base": {}})
+@pytest.mark.parametrize(("record_name", "variant"), _TET_ROUTES_WRITING_DIMENSION)
+def test_a_tet_study_may_state_the_solvers_dimension(record_name, variant, tmp_path):
+    patches, _ = _resolve_on_route(record_name, variant, {"dimension": "3D"}, tmp_path)
+    assert any(sourced.patch.key_path[-1] == "dimension" for sourced in patches)
 
 
-@pytest.mark.parametrize(
-    "record_name",
-    ["manufacturedBidomain", "manufacturedEikonalECG", "manufacturedMonodomainPseudoECG"],
-)
+@pytest.mark.parametrize("record_name", [
+    "manufacturedBidomain", "manufacturedEikonalECG", "manufacturedMonodomainPseudoECG",
+])
 @pytest.mark.parametrize("dimension", ["1D", "2D", "3D"])
-def test_the_hex_route_admits_every_dimension(record_name, dimension):
-    from omnidriver.core.tutorial_records import check_variant_constraints
-
-    record = _CTX.capabilities.tutorial_records.catalog()[record_name]
-    check_variant_constraints(record, "hex", {"base": {"dimension": dimension}})
-
-
-def test_every_route_that_skips_the_mesh_step_constrains_dimension():
-    """``dimension`` picks the blockMesh dict, so a route without ``mesh`` must admit only its template's 3D."""
-    for record in _CTX.capabilities.tutorial_records.catalog().values():
-        if "dimension" not in record.axis_names():
-            continue
-        for variant, steps in record.workflow_variants.items():
-            if "mesh" in steps:
-                continue
-            assert record.variant_constraints.get(variant, {}).get("dimension") == ("3D",), (
-                record.name, variant,
-            )
+def test_the_hex_route_admits_every_dimension(record_name, dimension, tmp_path):
+    _resolve_on_route(record_name, "hex", {"dimension": dimension}, tmp_path)
 
 
 def _records_with_a_gmsh_step():

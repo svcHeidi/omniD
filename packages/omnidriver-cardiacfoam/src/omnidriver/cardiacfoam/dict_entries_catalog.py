@@ -1,12 +1,21 @@
 from typing import Final, Any
 from omnidriver.core.contracts.dictionary import DictEntry, build_group
 
+from .ionic_model_catalog import BATCHED_MODELS, IONIC_MODEL_CATALOG
+
 HETEROGENEITY_MODELS: tuple[str, ...] = (
     "BuenoOrovio", "TNNP", "TWorld", "ToRORd_dynCl",
     "AlievPanfilov", "Courtemanche", "Fabbri", "Gaur",
     "Grandi", "PerisYague", "Stewart", "Trovato",
     "BuenoOroviocompactBatched", "TNNPcompactBatched",
     "TWorldcompactBatched", "ToRORd_dynClcompactBatched",
+)
+
+#: The models that build OpenFOAM's ODESolver and so read ``solver`` and
+#: ``maxSteps``; the batched models integrate in ``batchedIonicModel.H`` and
+#: never do (``ionicModel::odeSolver``).
+ODE_SOLVER_MODELS: tuple[str, ...] = tuple(
+    name for name in IONIC_MODEL_CATALOG if name not in BATCHED_MODELS
 )
 
 ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
@@ -355,6 +364,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             value_kind='enum',
             enum_values=('RKF45', 'Euler'),
             required=True,
+            required_when={"ionicModel": ODE_SOLVER_MODELS},
             typical_value='RKF45',
         ),
         DictEntry(
@@ -364,6 +374,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             notes='Pass-through key; commonly used in repository tutorials.',
             value_kind='integer',
             required=True,
+            required_when={"ionicModel": ODE_SOLVER_MODELS},
             typical_value='1000',
         ),
         DictEntry(
@@ -1132,13 +1143,11 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.phiERefPoint',
             description='Point [m] used to locate the cell that pins the extracellular potential reference. The bidomain φE equation has pure Neumann boundary conditions, leaving φE determined only up to an additive constant — one cell must be clamped to break the indeterminacy. Monodomain solves only Vm with mixed BCs and does not need a reference point.',
-            notes='Applies to plain bidomain and bath-bidomain alike — both run on bidomainSolver, only the extracellular domain (heart-only vs heart+bath) differs. If the supplied point falls outside the mesh the solver falls back to a default cell.',
+            notes='Read by bidomainSolver::referenceCell when it solves the local extracellular potential. A bath-bidomain case binds a global phiE through bathPotentialDomain instead, and sets bathPotentialDomain.phiERefPoint.',
             value_kind='vector3',
             unit='m',
-            required=True,
-            constraints=('Required for bidomainSolver.',),
+            constraints=('Required for bidomainSolver unless bathPotentialDomain binds the global phiE.',),
             typical_value='(0 0 0)',
-            required_when={"myocardiumSolver": "bidomainSolver"},
             applicable_when={"myocardiumSolver": "bidomainSolver"},
         ),
         DictEntry(

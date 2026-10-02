@@ -327,7 +327,7 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
     try:
         run_doc = load_run_document(args.run_document)
     except Exception as exc:
-        # A load failure never reached validate_run, so it has no other
+        # A load failure never reached validation, so it has no other
         # diagnostic -- synthesize one here in the one canonical shape an
         # agent parsing `diagnostics` can rely on.
         print(json.dumps({
