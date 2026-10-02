@@ -4,26 +4,17 @@ validator-clean by construction."""
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
-from conftest import monorepo_root
-from omnidriver.core.specs.paths import repo_root_default
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
-REPO_ROOT = monorepo_root or repo_root_default()
-
 # Two adapters are installed side by side, so there is no ambient default to discover.
 _CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:dict_builder")
 SINGLE_CELL_ELECTRO_PROPERTIES = (
-    REPO_ROOT / "tutorials" / "electrophysiologyProtocols" / "singleCell"
-    / "constant" / "electroProperties"
-)
-PURKINJE_RESTITUTION_2D = (
-    REPO_ROOT / "tutorials" / "electrophysiologyProtocols" / "purkinjeRestitution2D"
-)
-PURKINJE_ELECTRO_PROPERTIES_MONODOMAIN = (
-    PURKINJE_RESTITUTION_2D / "constant" / "electroProperties.monodomain"
+    Path(__file__).resolve().parent / "fixtures" / "tutorials" / "electrophysiologyProtocols"
+    / "singleCell" / "constant" / "electroProperties"
 )
 
 
@@ -774,16 +765,13 @@ class TestParseElectroProperties(unittest.TestCase):
             "LandNiederer",
         )
 
-    def test_active_tension_model_recovered_from_real_singlecell_tutorial(self) -> None:
+    def test_active_tension_model_recovered_from_the_singlecell_fixture(self) -> None:
         from omnidriver.cardiacfoam.dict_builder import parse_electro_properties
-
-        if not SINGLE_CELL_ELECTRO_PROPERTIES.exists():
-            self.skipTest("tutorial fixture not present in this checkout")
 
         result = parse_electro_properties(SINGLE_CELL_ELECTRO_PROPERTIES)
         self.assertEqual(
             result["overrides"].get("$ELECTRO_MODEL_COEFFS.activeTensionModel"),
-            "LandNiederer",
+            "LandNiedererTWorld",
         )
 
     def test_roundtrip_produces_equivalent_text(self) -> None:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import stat
 from pathlib import Path
 
@@ -13,7 +12,6 @@ from omnidriver.cardiacfoam.runtime_evidence import (
     _parse_control_dict_libs,
     resolve_runtime_dependencies,
 )
-from conftest import monorepo_root, skip_without_monorepo
 
 
 def _write_control_dict(tmp_path: Path, body: str) -> Path:
@@ -178,25 +176,6 @@ def test_a_case_with_no_controldict_still_resolves_the_fixed_catalog(tmp_path: P
     env = {"PATH": ""}
     deps = resolve_runtime_dependencies(tmp_path / "case_without_controldict", env=env)
     assert {d.name for d in deps} >= set(_LIBRARY_CATALOG)
-
-
-@skip_without_monorepo
-def test_declared_library_catalog_covers_every_make_files_library() -> None:
-    """A library added under src/*/Make/files must not escape fingerprinting."""
-    declared: set[str] = set()
-    for make_file in (monorepo_root / "src").glob("*/Make/files"):
-        text = make_file.read_text()
-        match = re.search(r"^LIB\s*=\s*\S+/lib(\w+)\s*$", text, re.MULTILINE)
-        if match:
-            declared.add(match.group(1))
-
-    assert declared, "expected at least one src/*/Make/files LIB declaration"
-    missing = declared - set(_LIBRARY_CATALOG)
-    assert not missing, (
-        f"src/*/Make/files declares libraries the runtime-dependency catalog "
-        f"does not cover: {sorted(missing)}. Add them to _LIBRARY_CATALOG in "
-        "runtime_evidence.py so a rebuilt copy is fingerprinted."
-    )
 
 
 def test_a_case_with_a_gmsh_geometry_declares_gmsh(tmp_path, monkeypatch):

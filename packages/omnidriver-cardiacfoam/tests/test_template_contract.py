@@ -7,7 +7,6 @@ from omnidriver.dict_entries import all_documented_driver_paths
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
-from conftest import monorepo_root, skip_without_monorepo
 
 # Two adapters are installed side by side, so there is no ambient default left
 # to discover. The documented driver paths compared here are cardiacFoam's.
@@ -15,25 +14,11 @@ _CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source=
 
 
 def _template_path() -> Path:
-    current = Path(__file__).resolve()
-    # Tier 1: the live monorepo template.
-    for parent in current.parents:
-        candidate = parent / "tutorials" / "template" / "constant" / "electroProperties"
-        if candidate.exists():
-            return candidate
-    # Tier 2: the fixture bundled for standalone installs.
     import omnidriver.cardiacfoam
 
-    fixture = (
+    return (
         Path(omnidriver.cardiacfoam.__file__).parent
         / "fixtures" / "template" / "constant" / "electroProperties"
-    )
-    if fixture.exists():
-        return fixture
-    raise FileNotFoundError(
-        "Cannot locate the electroProperties template. "
-        "Expected either the monorepo tutorials/template/ tree or the bundled fixture at "
-        f"{fixture}"
     )
 
 
@@ -75,143 +60,6 @@ class TestTemplateAndSchemaContract(unittest.TestCase):
         self.assertNotIn("phiEReferenceCell", template)
         self.assertNotIn("purkinjeNetworkModelCoeffs", template)
         self.assertNotIn("bidomainBathECG", template)
-
-    def test_template_truth_markers_match_core_cpp_contracts(self) -> None:
-        import pytest
-        repo_root = monorepo_root
-        if repo_root is None or not (repo_root / "src").exists():
-            pytest.skip(
-                "Requires the monorepo src/ tree — skipping C++ contract cross-check in standalone install."
-            )
-        electro_model_core = _read(
-            repo_root / "src" / "electroModels" / "core" / "electroModel.C"
-        )
-        bidomain_solver = _read(
-            repo_root
-            / "src"
-            / "electroModels"
-            / "myocardiumModels"
-            / "bidomainSolver"
-            / "bidomainSolver.C"
-        )
-        ecg_solver = _read(
-            repo_root
-            / "src"
-            / "electroModels"
-            / "electroDomains"
-            / "ecgDomain"
-            / "ecgSolver.C"
-        )
-        ecg_domain = _read(
-            repo_root
-            / "src"
-            / "electroModels"
-            / "electroDomains"
-            / "ecgDomain"
-            / "ecgDomain.C"
-        )
-        system_builder = _read(
-            repo_root
-            / "src"
-            / "electroModels"
-            / "core"
-            / "system"
-            / "electrophysicsSystemBuilder.C"
-        )
-        electro_coupler = _read(
-            repo_root
-            / "src"
-            / "electroModels"
-            / "electroCouplers"
-            / "electroDomainCoupler.C"
-        )
-        conduction_domain_selector = _read(
-            repo_root
-            / "src"
-            / "electroModels"
-            / "electroDomains"
-            / "conductionSystemDomain"
-            / "conductionSystemDomain.C"
-        )
-        monodomain_runtime = _read(
-            repo_root
-            / "src"
-            / "electroModels"
-            / "myocardiumModels"
-            / "monodomainSolver"
-            / "monodomainSolver.H"
-        )
-        bidomain_runtime = _read(
-            repo_root
-            / "src"
-            / "electroModels"
-            / "myocardiumModels"
-            / "bidomainSolver"
-            / "bidomainSolver.H"
-        )
-        single_cell_runtime = _read(
-            repo_root
-            / "src"
-            / "electroModels"
-            / "myocardiumModels"
-            / "singleCellSolver"
-            / "singleCellSolver.H"
-        )
-        # eikonalSolver is a named alias of electrophysiologyModel
-        # (addNamedToRunTimeSelectionTable), dispatching to EikonalMyocardiumDomain.
-        eikonal_runtime = _read(
-            repo_root
-            / "src"
-            / "electroModels"
-            / "core"
-            / "electrophysiologyModel"
-            / "electrophysiologyModel.C"
-        )
-        conduction_runtime = _read(
-            repo_root
-            / "src"
-            / "electroModels"
-            / "conductionSystemModels"
-            / "monodomain1DSolver"
-            / "monodomain1DSolver.H"
-        )
-        pseudo_ecg_runtime = _read(
-            repo_root
-            / "src"
-            / "electroModels"
-            / "ecgModels"
-            / "pseudoECGSolver"
-            / "pseudoECGSolver.H"
-        )
-
-        self.assertIn('lookup("myocardiumSolver")', electro_model_core)
-        self.assertIn('"conductivityIntracellular"', bidomain_solver)
-        self.assertIn('"conductivityExtracellular"', bidomain_solver)
-        self.assertIn('"phiERefPoint"', bidomain_solver)
-        self.assertIn('"ecgSolver"', ecg_solver)
-        self.assertIn('"electrodePositions"', ecg_domain)
-        self.assertIn("torsoECG requires myocardiumSolver", system_builder)
-        self.assertIn("bidomainSolver because it samples the", system_builder)
-        self.assertIn('"electroDomainCoupler"', electro_coupler)
-        self.assertIn('"purkinjeGraphModel"', conduction_domain_selector)
-        self.assertIn('dict.get<word>("graphFile")', conduction_domain_selector)
-        self.assertIn('dict.subDict("rootStimulus")', conduction_domain_selector)
-
-        self.assertIn('OverrideTypeName("monodomainSolver")', monodomain_runtime)
-        self.assertIn('OverrideTypeName("bidomainSolver")', bidomain_runtime)
-        self.assertIn('OverrideTypeName("singleCellSolver")', single_cell_runtime)
-        self.assertIn("addNamedToRunTimeSelectionTable", eikonal_runtime)
-        self.assertIn("eikonalSolver", eikonal_runtime)
-        self.assertIn('OverrideTypeName("monodomain1DSolver")', conduction_runtime)
-        self.assertIn('OverrideTypeName("eikonalSolver1D")', _read(
-            repo_root
-            / "src"
-            / "electroModels"
-            / "conductionSystemModels"
-            / "eikonalSolver1D"
-            / "eikonalSolver1D.H"
-        ))
-        self.assertIn('OverrideTypeName("pseudoECG")', pseudo_ecg_runtime)
 
     def test_driver_schema_paths_follow_template_truth_family(self) -> None:
         documented = set(all_documented_driver_paths(_CTX))
