@@ -6,7 +6,6 @@ authors them from scratch. Every rendering happens against a copy under
 """
 from __future__ import annotations
 
-import os
 import shutil
 from pathlib import Path
 from typing import Any, Mapping
@@ -14,7 +13,6 @@ from typing import Any, Mapping
 from omnidriver.core.case_write import (
     CaseMutationRequest,
     ParameterAssignment,
-    Precondition,
     RenderedFile,
     ResolvedMutation,
     _digest_bytes,
@@ -26,7 +24,6 @@ from .case_planning import (
     hex_cell_counts_expected_blocks,
     plan_block_mesh_resolution,
 )
-from .effective_dictionary import _inspect_source_closure
 from .literals import CONTAINER_FORMATTERS
 from .mutators import remove_foam_dict, remove_foam_entry, update_foam_entry
 
@@ -230,15 +227,6 @@ def render_patch_case_files(
     return tuple(rendered)
 
 
-def _case_relative(case_root: Path, path: Path) -> str:
-    """Case-relative target when under the case, else the resolved absolute path (an ``etc`` file, typically)."""
-    resolved = path.resolve()
-    try:
-        return resolved.relative_to(case_root.resolve()).as_posix()
-    except ValueError:
-        return str(resolved)
-
-
 def render_synthesis_case_files(
     resolved: Any,
     *,
@@ -327,79 +315,3 @@ def render_synthesis_case_files(
             renderer_id=renderer_id, format=FORMAT,
         ))
     return tuple(rendered)
-
-
-def _environment_preconditions(
-    keys: tuple[str, ...], environment: Mapping[str, str],
-) -> tuple[Precondition, ...]:
-    """One ``environment`` precondition per key; an unset key is recorded as an absence, not skipped, since it can affect ``findEtcFile`` selection as much as a changed one can."""
-    preconditions: list[Precondition] = []
-    for key in sorted(set(keys)):
-        value = environment.get(key)
-        if value is None:
-            preconditions.append(Precondition(
-                kind="environment", target=key, digest=None, must_be_absent=True,
-            ))
-        else:
-            preconditions.append(Precondition(
-                kind="environment", target=key, digest=_digest_bytes(value.encode()),
-                must_be_absent=False,
-            ))
-    return tuple(preconditions)
-
-
-def patch_preconditions(
-    resolved: Any,
-    *,
-    case_root: Path,
-    execution_env: Mapping[str, str] | None = None,
-) -> tuple[Precondition, ...]:
-    """Every file -- and every environment value -- a patch's rendering depends on, as preconditions.
-
-    Follows the real ``findEtcFile`` search via
-    :func:`effective_dictionary._inspect_source_closure`: an absent
-    higher-priority candidate becomes an ``absence`` precondition, since a
-    file later appearing there would change which file the next run reads.
-    The environment keys that search consulted become ``environment``
-    preconditions, so drift (e.g. a changed ``WM_PROJECT_DIR``) between
-    planning and commit is caught.
-    """
-    case_root = Path(case_root)
-    environment: Mapping[str, str] = (
-        dict(execution_env) if execution_env is not None else dict(os.environ)
-    )
-    documents = sorted({str(target["document"]) for target in resolved.targets})
-    preconditions: list[Precondition] = []
-    seen_files: set[str] = set()
-    seen_absent: set[str] = set()
-    seen_env_keys: set[str] = set()
-    for document in documents:
-        dictionary = case_root / document
-        if not dictionary.is_file():
-            continue
-        inspected, absent_optional, environment_keys, _error = _inspect_source_closure(
-            dictionary, environment,
-        )
-        dictionary_resolved = dictionary.resolve()
-        for path in inspected:
-            target = _case_relative(case_root, path)
-            if target in seen_files:
-                continue
-            seen_files.add(target)
-            kind = "file" if path.resolve() == dictionary_resolved else "include"
-            preconditions.append(Precondition(
-                kind=kind, target=target, digest=_digest_bytes(path.read_bytes()),
-                must_be_absent=False,
-            ))
-        for path in absent_optional:
-            target = _case_relative(case_root, path)
-            if target in seen_absent:
-                continue
-            seen_absent.add(target)
-            preconditions.append(Precondition(
-                kind="absence", target=target, digest=None, must_be_absent=True,
-            ))
-        new_env_keys = tuple(key for key in environment_keys if key not in seen_env_keys)
-        seen_env_keys.update(new_env_keys)
-        preconditions.extend(_environment_preconditions(new_env_keys, environment))
-    return tuple(preconditions)

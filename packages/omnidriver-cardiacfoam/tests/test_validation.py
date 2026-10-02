@@ -565,7 +565,6 @@ def test_applicable_when_matches_a_dynamic_placeholder_sibling_key():
     entry = _entry(
         "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>."
         "purkinjeGraphModelCoeffs.useEdgeConductance",
-        dynamic_path=True,
         applicable_when={
             "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>."
             "purkinjeGraphModelCoeffs.conductionSystemSolver": (

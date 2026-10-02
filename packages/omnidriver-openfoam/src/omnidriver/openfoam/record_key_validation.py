@@ -49,21 +49,37 @@ def infer_unvalidated_value_kind(value: Any) -> str:
     return "word"
 
 
+def _listed_relation(relation: Mapping[str, Any]) -> dict[str, Any]:
+    return {name: list(value) if isinstance(value, tuple) else value for name, value in relation.items()}
+
+
 def listed_entry(document: str, key: str, entry: Any) -> dict[str, Any]:
     """One key-catalogue listing (`record_surface`'s grammar) for a
     catalogued `DictEntry`: what `describe` and `omnidriver catalog` show
-    for it. The catalogues record no default, only a `typical_value`."""
-    return {
+    for it, including the relations ``case_rules`` judges a case by, so an
+    agent reads a rule before a plan refuses it. The catalogues record no
+    default, only a `typical_value`; a field the entry leaves empty is not
+    listed."""
+    listing = {
         "document": document, "key": key, "driver_path": entry.driver_path,
         "value_kind": entry.value_kind, "unit": entry.unit,
         "description": entry.description, "menu": list(entry.enum_values),
         "typical_value": entry.typical_value,
-        "applicable_when": {
-            name: list(value) if isinstance(value, tuple) else value
-            for name, value in entry.applicable_when.items()
-        },
+        "applicable_when": _listed_relation(entry.applicable_when),
         "source_refs": list(entry.source_refs),
     }
+    extras = {
+        "required": entry.required,
+        "required_when": _listed_relation(entry.required_when),
+        "forbidden_when": _listed_relation(entry.forbidden_when),
+        "mutually_exclusive_with": list(entry.mutually_exclusive_with),
+        "co_required_with": list(entry.co_required_with),
+        "allowed_bindings": {name: None if domain is None else list(domain) for name, domain in entry.allowed_bindings.items()},
+        "constraints": list(entry.constraints),
+        "examples": list(entry.examples),
+        "notes": entry.notes,
+    }
+    return {**listing, **{name: value for name, value in extras.items() if value}}
 
 
 def _supplied_scan(mapping: Any):

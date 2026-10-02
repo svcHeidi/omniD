@@ -5,9 +5,10 @@ builders live in the owning plugin, and judge what they build with
 """
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any
 
-from omnidriver.core.contracts.catalogue_paths import slot_key
+from omnidriver.core.contracts.catalogue_paths import PLACEHOLDER, slot_key
 
 from .case_rules import applicable_entries
 
@@ -35,7 +36,6 @@ def populate_values(
     """Resolve each entry's value to write: an explicit value in `context`,
     else `entry.typical_value` when `typical_value_fallback`, else omitted
     (left for the caller's rule check to flag if required)."""
-    import re
     populated: dict[str, str] = {}
 
     dynamic_entries = []
@@ -44,7 +44,7 @@ def populate_values(
             template = slot_key(entry.driver_path)
             # Any <placeholder> segment is a wildcard, not a fixed set of names --
             # a template can use any placeholder name and must still match.
-            pattern = _PLACEHOLDER_RE.sub(r"([^.]+)", re.escape(template))
+            pattern = PLACEHOLDER.sub(r"([^.]+)", re.escape(template))
             dynamic_entries.append((entry, template, re.compile(f"^{pattern}$")))
 
     active_instances: dict[str, set[tuple[str, ...]]] = {}
@@ -66,7 +66,7 @@ def populate_values(
                 for groups in active_instances[prefix]:
                     concrete_key = template
                     for captured in groups:
-                        concrete_key = _PLACEHOLDER_RE.sub(captured, concrete_key, count=1)
+                        concrete_key = PLACEHOLDER.sub(captured, concrete_key, count=1)
 
                     if concrete_key in context and context[concrete_key] not in (None, ""):
                         populated[concrete_key] = str(context[concrete_key])
@@ -91,11 +91,6 @@ def populate_values(
     return populated
 
 
-import re as _re
-
-_PLACEHOLDER_RE = _re.compile(r"<[A-Za-z_][A-Za-z0-9_]*>")
-
-
 def match_dynamic_entry(
     key: str, entries,
 ) -> "tuple[DictEntry, dict[str, str]] | None":
@@ -111,9 +106,9 @@ def match_dynamic_entry(
         if not getattr(entry, "dynamic_path", False):
             continue
         entry_key = slot_key(entry.driver_path)
-        placeholders = _PLACEHOLDER_RE.findall(entry_key)
-        pattern = _PLACEHOLDER_RE.sub(r"([^.]+)", _re.escape(entry_key))
-        match = _re.fullmatch(pattern, normalized)
+        placeholders = PLACEHOLDER.findall(entry_key)
+        pattern = PLACEHOLDER.sub(r"([^.]+)", re.escape(entry_key))
+        match = re.fullmatch(pattern, normalized)
         if match:
             return entry, dict(zip(placeholders, match.groups()))
     return None

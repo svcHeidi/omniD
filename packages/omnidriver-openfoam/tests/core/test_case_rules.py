@@ -59,8 +59,8 @@ def test_a_switch_is_compared_by_meaning_not_spelling():
 
 def test_each_instance_of_a_block_is_judged_on_its_own_values():
     entries = [
-        _entry("$S.nets.<name>.kind", dynamic_path=True),
-        _entry("$S.nets.<name>.cv", dynamic_path=True, required=True, applicable_when={"nets.<name>.kind": "fast"}),
+        _entry("$S.nets.<name>.kind"),
+        _entry("$S.nets.<name>.cv", required=True, applicable_when={"nets.<name>.kind": "fast"}),
     ]
     context = {"nets.a.kind": "fast", "nets.b.kind": "slow", "nets.c.kind": "fast", "nets.c.cv": 4.0}
     assert _violations(entries, context) == {("nets.a.cv", "nets.a.cv is required.")}
@@ -68,8 +68,8 @@ def test_each_instance_of_a_block_is_judged_on_its_own_values():
 
 def test_a_literal_the_catalogue_uses_beside_a_block_is_not_an_instance():
     entries = [
-        _entry("$S.ecg.<name>.solver", dynamic_path=True, required=True),
-        _entry("$S.ecg.electrodes.<electrode>", dynamic_path=True),
+        _entry("$S.ecg.<name>.solver", required=True),
+        _entry("$S.ecg.electrodes.<electrode>"),
     ]
     assert _violations(entries, {"ecg.electrodes.V1": "(0 0 0)", "ecg.main.other": 1}) == {
         ("ecg.main.solver", "ecg.main.solver is required."),
@@ -93,3 +93,16 @@ def test_leaves_are_read_through_blocks(tmp_path):
     assert read_leaves(path) == {"top": 1, "block.inner.leaf": True, "block.other": "word"}
     assert read_leaves(path, ("block",)) == {"inner.leaf": True, "other": "word"}
     assert flatten({"a": {"b": 1}, None: 2}) == {"a.b": 1}
+
+
+def test_a_listing_shows_the_relations_a_case_is_judged_by_and_omits_what_an_entry_leaves_empty():
+    from omnidriver.openfoam.record_key_validation import listed_entry
+
+    entry = _entry(
+        "$S.depth", required=True, required_when={"mode": ("deep", "abyssal")}, mutually_exclusive_with=("$S.height",),
+        notes="metres", examples=("3",),
+    )
+    listing = listed_entry("system/dict", "depth", entry)
+    assert listing["required"] is True and listing["required_when"] == {"mode": ["deep", "abyssal"]}
+    assert (listing["mutually_exclusive_with"], listing["notes"], listing["examples"]) == (["$S.height"], "metres", ["3"])
+    assert not {"forbidden_when", "co_required_with", "allowed_bindings", "constraints"} & set(listing)

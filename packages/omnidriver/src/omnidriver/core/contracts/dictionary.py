@@ -9,11 +9,12 @@ interpretation are the adapter's.
 from __future__ import annotations
 
 import math
-import re
 from collections.abc import Mapping as _Mapping, Sequence as _Sequence
 from dataclasses import dataclass, field, replace
 from numbers import Integral, Real
 from typing import Any
+
+from .catalogue_paths import PLACEHOLDER
 
 #: Generic value SHAPES, closed. Adding a member here is a real change to what
 #: every adapter and renderer must handle; do not add one that no declaration
@@ -58,7 +59,6 @@ _LIST_ELEMENT_KIND = {
     "integer_list": "integer",
 }
 
-_PLACEHOLDER = re.compile(r"<[A-Za-z][A-Za-z0-9_]*>")
 
 
 def _finite(value: Any) -> bool:
@@ -175,7 +175,6 @@ class DictEntry:
     notes: str = ""
     enum_values: tuple[str, ...] = ()
     examples: tuple[str, ...] = ()
-    dynamic_path: bool = False
     required: bool = False
     constraints: tuple[str, ...] = ()
     unit: str = ""
@@ -202,34 +201,24 @@ class DictEntry:
     # closed domain further restricts membership.
     allowed_bindings: dict[str, tuple[str, ...] | None] = field(default_factory=dict)
 
+    @property
+    def dynamic_path(self) -> bool:
+        """Whether the path names instances of a block: it holds a ``<placeholder>``."""
+        return bool(PLACEHOLDER.search(self.driver_path))
+
     def __post_init__(self) -> None:
         if self.value_kind not in VALUE_KINDS:
             raise ValueError(
                 f"{self.driver_path!r} declares value_kind {self.value_kind!r}, "
                 f"which is not one of {sorted(VALUE_KINDS)}"
             )
-        # `_PLACEHOLDER` (`<[A-Za-z][A-Za-z0-9_]*>`) does not match a
-        # placeholder spelled `<_x>` or `<x-y>`; not widened here since
-        # `case_rules` and `dict_builder` match the same shape.
-        has_placeholder = bool(_PLACEHOLDER.search(self.driver_path))
-        if has_placeholder and not self.dynamic_path:
-            raise ValueError(
-                f"{self.driver_path!r} contains a placeholder but does not "
-                f"declare dynamic_path=True"
-            )
-        if self.dynamic_path and not has_placeholder:
-            raise ValueError(
-                f"{self.driver_path!r} declares dynamic_path=True but "
-                f"contains no placeholder for it to expand"
-            )
         if self.allowed_bindings and not self.dynamic_path:
             raise ValueError(
-                f"{self.driver_path!r} declares allowed_bindings but is not a "
-                f"dynamic_path entry; bindings only apply to a placeholder in "
-                f"the path"
+                f"{self.driver_path!r} declares allowed_bindings but its path has "
+                f"no placeholder; bindings only apply to a placeholder in the path"
             )
         if self.allowed_bindings:
-            placeholders = set(_PLACEHOLDER.findall(self.driver_path))
+            placeholders = set(PLACEHOLDER.findall(self.driver_path))
             declared = set(self.allowed_bindings)
             unknown = sorted(declared - placeholders)
             if unknown:

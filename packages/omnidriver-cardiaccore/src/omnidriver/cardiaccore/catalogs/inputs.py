@@ -575,7 +575,6 @@ PURKINJE_SCAR_ENTRIES: Final[tuple[DictEntry, ...]] = (
         description="Region-specific override of conductanceReduction for edges/PVJs whose region ID matches <region_id>.",
         source_refs=(_PURKINJE_SCAR_SOURCE, _PURKINJE_SCAR_README),
         value_kind="scalar",
-        dynamic_path=True,
         allowed_bindings={"<region_id>": None},
         constraints=(
             "Falls back to purkinjeScarPolicy.conductanceReduction when omitted; validated with the same [0,1] range.",
@@ -587,7 +586,6 @@ PURKINJE_SCAR_ENTRIES: Final[tuple[DictEntry, ...]] = (
         description="Region-specific override of conductanceBlockThreshold.",
         source_refs=(_PURKINJE_SCAR_SOURCE, _PURKINJE_SCAR_README),
         value_kind="scalar",
-        dynamic_path=True,
         allowed_bindings={"<region_id>": None},
         constraints=(
             "Falls back to purkinjeScarPolicy.conductanceBlockThreshold when omitted; validated with the same [0,1] range.",
@@ -599,7 +597,6 @@ PURKINJE_SCAR_ENTRIES: Final[tuple[DictEntry, ...]] = (
         description="Region-specific override of basePvjResistance.",
         source_refs=(_PURKINJE_SCAR_SOURCE, _PURKINJE_SCAR_README),
         value_kind="scalar",
-        dynamic_path=True,
         allowed_bindings={"<region_id>": None},
         constraints=(
             "Falls back to purkinjeScarPolicy.basePvjResistance when omitted; validated as positive.",
@@ -611,7 +608,6 @@ PURKINJE_SCAR_ENTRIES: Final[tuple[DictEntry, ...]] = (
         description="Region-specific override of resistanceMultiplier.",
         source_refs=(_PURKINJE_SCAR_SOURCE, _PURKINJE_SCAR_README),
         value_kind="scalar",
-        dynamic_path=True,
         allowed_bindings={"<region_id>": None},
         constraints=(
             "Falls back to purkinjeScarPolicy.resistanceMultiplier when omitted; validated as non-negative.",
@@ -710,7 +706,7 @@ VENT_KEYS: Final[tuple[str, ...]] = ("lv", "rv")
 # --- generatePurkinjeTreeDict -------------------------------------------------
 #
 # These tree parameters document the native contract.
-#: Not per-ventricle: no <ventKey> placeholder, dynamic_path=False. Kept out
+#: Not per-ventricle: no <ventKey> placeholder, no dynamic path. Kept out
 #: of the build_group below, which would otherwise fill allowed_bindings on
 #: an entry with no placeholder to bind -- DictEntry.__post_init__ refuses
 #: exactly that.
@@ -742,20 +738,18 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
     # Per-ventricle block: the scanner reports scope <ventKey> (README: "the
     # same block structure is used for lv and rv"). Modelled the way
     # cardiacFoam models ionicHeterogeneity.regions.<region_name>.* --
-    # dynamic_path=True with a <ventKey> placeholder segment.
+    # a dynamic path: a <ventKey> placeholder segment.
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.seed",
         description="Initial point of the ventricular tree.",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="vector3",
-        dynamic_path=True,
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.lineEnd",
         description="Point defining the initial trunk direction together with seed (direction = lineEnd - seed).",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="vector3",
-        dynamic_path=True,
         mutually_exclusive_with=("$PURKINJE_TREE.<ventKey>.initDir",),
         constraints=(
             "Alternative to initDir; a ventricular block must provide exactly one "
@@ -771,7 +765,6 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
         description="Initial trunk direction vector, used directly instead of deriving it from lineEnd.",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="vector3",
-        dynamic_path=True,
         mutually_exclusive_with=("$PURKINJE_TREE.<ventKey>.lineEnd",),
         constraints=("Alternative to lineEnd; see lineEnd sibling entry.",),
     ),
@@ -780,28 +773,24 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
         description="Initial trunk length.",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="scalar",
-        dynamic_path=True,
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.N_it",
         description="Number of branching generations grown after the trunk.",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="integer",
-        dynamic_path=True,
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.length",
         description="Mean length of each new branch.",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="scalar",
-        dynamic_path=True,
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.l_segment",
         description="Discretization step length used while growing each branch.",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="scalar",
-        dynamic_path=True,
         constraints=("Must suit local mesh resolution (README): too coarse relative to surface triangle size/curvature can walk the march out of its local projection neighbourhood.",),
     ),
     DictEntry(
@@ -810,21 +799,18 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="scalar",
         unit="rad",
-        dynamic_path=True,
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.repulsivity",
         description="Local branch-separation correction weight.",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="scalar",
-        dynamic_path=True,
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.transmuralMin",
         description="Minimum accepted transmural coordinate for a surface growth point.",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="scalar",
-        dynamic_path=True,
         notes="Defaults to transmuralLowerValue($COORDINATES_CONVENTION.transmural) = min(endocardium, epicardium) when omitted (generatePurkinjeTree.C's transmuralMin getOrDefault and its range guard); not a fixed literal, so no typical_value is given.",
         constraints=("Must satisfy transmuralLowerValue <= transmuralMin <= transmuralMax <= transmuralUpperValue (the numeric bounds of $COORDINATES_CONVENTION.transmural, not necessarily endocardium <= epicardium -- see that document's notes on CObiveco).",),
     ),
@@ -833,7 +819,6 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
         description="Maximum accepted transmural coordinate for a surface growth point.",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="scalar",
-        dynamic_path=True,
         notes="Defaults to transmuralUpperValue($COORDINATES_CONVENTION.transmural) = max(endocardium, epicardium) when omitted (generatePurkinjeTree.C's transmuralMax getOrDefault and its range guard); not a fixed literal, so no typical_value is given.",
         constraints=("Must satisfy transmuralLowerValue <= transmuralMin <= transmuralMax <= transmuralUpperValue; see transmuralMin sibling entry.",),
     ),
@@ -842,7 +827,6 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
         description="Minimum accepted longitudinal coordinate for a surface growth point.",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="scalar",
-        dynamic_path=True,
         typical_value="-GREAT (unbounded)",
     ),
     DictEntry(
@@ -850,7 +834,6 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
         description="Maximum accepted longitudinal coordinate for a surface growth point.",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="scalar",
-        dynamic_path=True,
         typical_value="GREAT (unbounded)",
     ),
     DictEntry(
@@ -860,7 +843,6 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
         value_kind="enum",
         enum_values=("endocardial", "transmural"),
         typical_value="endocardial",
-        dynamic_path=True,
         notes="'endocardial': terminals stay on the grown tree. 'transmural': each terminal marches inward toward a depth sampled from [extension.depthMin, extension.depthMax]; requires the extension sub-block.",
     ),
     DictEntry(
@@ -869,7 +851,6 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="enum",
         enum_values=("straightSegment", "gradientFollow"),
-        dynamic_path=True,
         applicable_when={"$PURKINJE_TREE.<ventKey>.terminalModel": ("transmural",)},
         required_when={"$PURKINJE_TREE.<ventKey>.terminalModel": ("transmural",)},
         notes="'straightSegment' samples one inward direction; 'gradientFollow' re-evaluates it every step and produces fewer marches that exit the mesh (README). Both march in wall-thickness depth, so neither assumes a transmural orientation (cardiacCore 1ea6d23).",
@@ -879,7 +860,6 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
         description="Minimum depth into the wall, as a fraction of thickness from the endocardium, sampled as a terminal-extension target.",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="scalar",
-        dynamic_path=True,
         applicable_when={"$PURKINJE_TREE.<ventKey>.terminalModel": ("transmural",)},
         required_when={"$PURKINJE_TREE.<ventKey>.terminalModel": ("transmural",)},
         constraints=("Must satisfy 0 <= depthMin <= depthMax <= 1 (generatePurkinjeTree.C's extension depth guard). 0 is the endocardial surface and 1 the epicardial one, whichever numeric transmural value each carries, so one value means the same place under uvc and cobiveco.",),
@@ -889,7 +869,6 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
         description="Maximum depth into the wall sampled as a terminal-extension target; the effective ceiling since the march stops as soon as it crosses the sampled depth.",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="scalar",
-        dynamic_path=True,
         applicable_when={"$PURKINJE_TREE.<ventKey>.terminalModel": ("transmural",)},
         required_when={"$PURKINJE_TREE.<ventKey>.terminalModel": ("transmural",)},
         constraints=("Must satisfy 0 <= depthMin <= depthMax <= 1; see the depthMin sibling entry.",),
@@ -899,7 +878,6 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
         description="Terminal-extension marching step length.",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="scalar",
-        dynamic_path=True,
         applicable_when={"$PURKINJE_TREE.<ventKey>.terminalModel": ("transmural",)},
         required_when={"$PURKINJE_TREE.<ventKey>.terminalModel": ("transmural",)},
         constraints=("Must be positive (generatePurkinjeTree.C's extension.stepLen/maxSteps guard).",),
@@ -909,7 +887,6 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
         description="Safety limit on the number of marching steps for one terminal extension.",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="integer",
-        dynamic_path=True,
         applicable_when={"$PURKINJE_TREE.<ventKey>.terminalModel": ("transmural",)},
         required_when={"$PURKINJE_TREE.<ventKey>.terminalModel": ("transmural",)},
         constraints=("Must be positive (generatePurkinjeTree.C's extension.stepLen/maxSteps guard).",),
@@ -921,7 +898,6 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
         value_kind="enum",
         enum_values=("allLeaves", "weightedField"),
         typical_value="allLeaves",
-        dynamic_path=True,
         constraints=(
             "weightedField is supported for the lv block only in v1 "
             "(generatePurkinjeTree.C's weightedField ventKey guard raises a FatalError for "
@@ -937,7 +913,6 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
         description="Number of distinct LV source leaves sampled by terminalSelectionModel=weightedField.",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="integer",
-        dynamic_path=True,
         applicable_when={"$PURKINJE_TREE.<ventKey>.terminalSelectionModel": ("weightedField",)},
         required_when={"$PURKINJE_TREE.<ventKey>.terminalSelectionModel": ("weightedField",)},
         constraints=("Must be positive (generatePurkinjeTree.C's terminalCount positivity guard).",),

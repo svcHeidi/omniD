@@ -425,3 +425,18 @@ def test_the_renderer_still_refuses_the_wrong_expected_blocks_independently_of_t
             resolved, snapshot_root=tmp_path / "scratch", driver_context=None,
             execution_env=None, renderer_id="test",
         )
+
+
+def test_a_real_three_block_block_mesh_dict_is_refined_through_the_key_path_that_names_its_blocks(tmp_path):
+    """bathBidomain's ``blockMeshDict.3D``, committed verbatim: three ``hex (`` blocks, each at 80 80 80."""
+    real = Path(__file__).resolve().parent / "fixtures" / "blockMeshDict.bathBidomain3D"
+    staged = tmp_path / "case" / "system" / "blockMeshDict.3D"
+    staged.parent.mkdir(parents=True)
+    staged.write_text(real.read_text())
+    assert real.read_text().count("hex (") == 3
+    axis = block_mesh_resolution_axis(
+        "number_cells", documents=("system/blockMeshDict.3D",), resolution=lambda n, current, extents=None: (n, n, n),
+        expected_blocks=3,
+    )
+    (patch,) = axis.resolve(20, tmp_path / "case").patches
+    assert (patch.document, patch.value, patch.key_path) == ("system/blockMeshDict.3D", (20, 20, 20), ("hex_cell_counts", "3"))

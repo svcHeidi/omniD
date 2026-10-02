@@ -11,17 +11,17 @@ _ENTRIES = (
     DictEntry(
         driver_path="$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.ecgSolver",
         description="", value_kind="enum", enum_values=("pseudoECG",),
-        dynamic_path=True, allowed_bindings={"<name>": None},
+        allowed_bindings={"<name>": None},
     ),
     DictEntry(
         driver_path="$ELECTRO_MODEL_COEFFS.ecgDomains.electrodePositions.<electrode>",
         description="", value_kind="vector3",
-        dynamic_path=True, allowed_bindings={"<electrode>": None},
+        allowed_bindings={"<electrode>": None},
     ),
     DictEntry(
         driver_path="$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.electrodePositions.<electrode>",
         description="", value_kind="vector3",
-        dynamic_path=True, allowed_bindings={"<name>": None, "<electrode>": None},
+        allowed_bindings={"<name>": None, "<electrode>": None},
     ),
     DictEntry(
         driver_path="$A.static.key",

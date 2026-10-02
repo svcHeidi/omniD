@@ -48,7 +48,6 @@ from typing import Any
 from omnidriver.dict_entries import DictEntry
 from omnidriver.cardiacfoam.dict_entries import get_electro_property_entry_groups
 from omnidriver.openfoam.dict_builder import (
-    _PLACEHOLDER_RE,
     _openfoam_value_token,
     _serialize_block,
     _set_nested,
@@ -59,7 +58,7 @@ from omnidriver.openfoam.dict_builder import (
 )
 from omnidriver.cardiacfoam.own_context import own_driver_context
 from omnidriver.core.case_write import CaseMutationRequest, ParameterAssignment, ResolvedMutation
-from omnidriver.core.contracts.catalogue_paths import slot_key
+from omnidriver.core.contracts.catalogue_paths import PLACEHOLDER, slot_key
 from omnidriver.openfoam.case_rules import forbidden_in, rule_diagnostics
 
 from .common_dict_entries import PHYSICS_PROPERTY_ENTRIES
@@ -303,7 +302,7 @@ def _serialize(
             # failed to match its own catalog entry, so the ROUTING fell
             # through to top_level -- emitting a $ELECTRO_MODEL_COEFFS.* key at
             # the electroProperties root, where the solver never reads it.
-            pattern = _PLACEHOLDER_RE.sub(r"([^.]+)", re.escape(template))
+            pattern = PLACEHOLDER.sub(r"([^.]+)", re.escape(template))
             dynamic_patterns.append((entry, re.compile(f"^{pattern}$")))
 
     for concrete_key, value in populated.items():
@@ -418,7 +417,7 @@ def parse_electro_properties(
       present and applicable).
     - ``overrides``: full ``driver_path → value`` for every non-default entry
       found in the file. Values equal to ``entry.typical_value`` are omitted
-      (the builder fills them automatically). For ``dynamic_path=True``
+      (the builder fills them automatically). For a dynamic path
       entries whose catalog template names a placeholder segment (e.g.
       ``conductionNetworkDomains.<name>.*``), :func:`_foamlib_child_names`
       structurally discovers which concrete instances (``networkA``,
@@ -453,7 +452,7 @@ def parse_electro_properties(
             sk = slot_key(entry.driver_path)
             parts = sk.split(".")
             placeholder_idx = next(
-                (i for i, p in enumerate(parts) if _PLACEHOLDER_RE.fullmatch(p)),
+                (i for i, p in enumerate(parts) if PLACEHOLDER.fullmatch(p)),
                 None,
             )
             if placeholder_idx is None:
@@ -469,7 +468,7 @@ def parse_electro_properties(
 
             expanded_any = False
             for instance in instances:
-                concrete_driver_path = _PLACEHOLDER_RE.sub(
+                concrete_driver_path = PLACEHOLDER.sub(
                     instance, entry.driver_path, count=1,
                 )
                 scope_path, key = _entry_scope_and_key(concrete_driver_path, coeffs_scope)
@@ -879,7 +878,7 @@ def build_case(
         # default when the caller gave none). `_patch`: only present when the
         # caller explicitly gave a value, and folded in as a second effect on
         # top of whichever body `render_synthesis_case_files` used as the
-        # base -- matching `update_control_dict`'s pre-migration per-key
+        # base -- matching the per-key
         # `is not None` guard exactly (patching only the key that was
         # actually given, never both together by default).
         ParameterAssignment(

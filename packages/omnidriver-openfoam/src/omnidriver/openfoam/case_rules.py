@@ -20,10 +20,9 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
-from omnidriver.core.contracts.catalogue_paths import slot_key
+from omnidriver.core.contracts.catalogue_paths import PLACEHOLDER, slot_key
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 
-_PLACEHOLDER = re.compile(r"<[A-Za-z_][A-Za-z0-9_]*>")
 _SWITCH = {
     "true": True, "yes": True, "on": True, "y": True, "t": True,
     "false": False, "no": False, "off": False, "n": False, "f": False,
@@ -101,7 +100,7 @@ class _Instance:
     def __init__(self, context: Mapping[str, Any], template: str | None = None, name: str | None = None):
         self.context = context
         self.template = template
-        self.bound = None if template is None else _PLACEHOLDER.sub(name, template, count=1)
+        self.bound = None if template is None else PLACEHOLDER.sub(name, template, count=1)
 
     def resolve(self, path: str) -> str:
         key = slot_key(path)
@@ -111,9 +110,9 @@ class _Instance:
 
     def holds(self, path: str, expected: Any) -> bool:
         key = self.resolve(path)
-        if not _PLACEHOLDER.search(key):
+        if not PLACEHOLDER.search(key):
             return key in self.context and _matches(self.context[key], expected)
-        pattern = re.compile(_PLACEHOLDER.sub("[^.]+", re.escape(key)))
+        pattern = re.compile(PLACEHOLDER.sub("[^.]+", re.escape(key)))
         return any(
             pattern.fullmatch(name) and _present(value) and _matches(value, expected)
             for name, value in self.context.items()
@@ -190,7 +189,7 @@ def _scan_requirement(
     unjudged = [read for read in reads if ties(read) is None]
     segments = path[1:] if path[0].startswith("$") else path
     block, key = segments[:-1], segments[-1]
-    pattern = re.compile(r"\.".join(r"[^.]+" if _PLACEHOLDER.fullmatch(s) or s == "*" else re.escape(s) for s in block))
+    pattern = re.compile(r"\.".join(r"[^.]+" if PLACEHOLDER.fullmatch(s) or s == "*" else re.escape(s) for s in block))
     blocks = sorted({
         ".".join(name.split(".")[:len(block)]) for name in context
         if len(name.split(".")) > len(block) and pattern.fullmatch(".".join(name.split(".")[:len(block)]))
@@ -234,7 +233,7 @@ def rule_diagnostics(
         key[: match.end()]
         for entry in entries if entry.dynamic_path
         for key in (slot_key(entry.driver_path),)
-        for match in (_PLACEHOLDER.search(key),) if match
+        for match in (PLACEHOLDER.search(key),) if match
     }
     found: list[StrictDiagnostic] = []
 
@@ -243,7 +242,7 @@ def rule_diagnostics(
 
     for entry in entries:
         key = slot_key(entry.driver_path)
-        match = _PLACEHOLDER.search(key) if entry.dynamic_path else None
+        match = PLACEHOLDER.search(key) if entry.dynamic_path else None
         if match is None:
             bound = [_Instance(context)]
         else:
@@ -251,7 +250,7 @@ def rule_diagnostics(
             reserved = {
                 segment for template in templates if template.startswith(prefix)
                 for segment in (template[len(prefix):].split(".")[0],)
-                if not _PLACEHOLDER.fullmatch(segment)
+                if not PLACEHOLDER.fullmatch(segment)
             }
             bound = [
                 _Instance(context, key[: match.end()], name)
@@ -259,7 +258,7 @@ def rule_diagnostics(
             ]
         for instance in bound:
             concrete = instance.resolve(entry.driver_path)
-            if _PLACEHOLDER.search(concrete):
+            if PLACEHOLDER.search(concrete):
                 continue
             set_here = instance.is_set(entry.driver_path)
             forbidden = instance.forbidden_by(entry)

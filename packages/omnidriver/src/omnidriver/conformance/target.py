@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping
 
-from omnidriver.core.conformance_study import ConformanceStudy, QuantityTarget
+from omnidriver.core.conformance_study import ConformanceStudy
 from omnidriver.core.specs.paths import resolve_scratch_root
 
 

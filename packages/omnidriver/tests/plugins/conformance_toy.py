@@ -141,6 +141,19 @@ class SilentPreflightPlugin(E2ERecordPlugin):
         return ()
 
 
+FAILING_PREFLIGHT_PLUGIN = "plugins.conformance_toy:FailingPreflightPlugin"
+
+
+class FailingPreflightPlugin(E2ERecordPlugin):
+    """A preflight that finds the solver's environment broken."""
+
+    def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None) -> tuple:
+        from omnidriver.core.planning_types import StrictDiagnostic
+
+        del workflow_dag, env, environment_source, driver_context
+        return (StrictDiagnostic(level="error", code="toy_environment_missing", message="the toy's environment is not sourced"),)
+
+
 AUXILIARY_ONLY_PREFLIGHT_PLUGIN = "plugins.conformance_toy:AuxiliaryOnlyPreflightPlugin"
 
 

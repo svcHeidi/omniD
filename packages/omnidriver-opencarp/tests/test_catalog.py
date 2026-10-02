@@ -47,9 +47,11 @@ def test_a_parameter_only_the_binary_lists_is_uncatalogued():
     committed = json.loads(_COMMITTED)
     built = {**committed, "parameters": committed["parameters"] + [{"name": "newParameter", "type": "Float"}]}
     report = compare_catalogs(committed, built)
-    assert (report["contradictions"], [p["name"] for p in report["uncatalogued"]]) == ([], ["newParameter"])
+    assert (report["disagreements"], report["unread"], [p["name"] for p in report["uncatalogued"]]) == ([], [], ["newParameter"])
     changed = {**committed, "parameters": [{**committed["parameters"][0], "type": "Int"}, *committed["parameters"][1:]]}
-    assert compare_catalogs(committed, changed)["contradictions"]
+    assert compare_catalogs(committed, changed)["disagreements"]
+    gone = {**committed, "parameters": committed["parameters"][1:]}
+    assert compare_catalogs(committed, gone)["unread"]
 
 
 def test_the_record_declares_how_omnidriver_check_exercises_it():

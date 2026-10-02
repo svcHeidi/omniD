@@ -79,7 +79,7 @@ def test_a_badly_shaped_value_is_reported_with_a_reason(kind, value, reason):
 def test_a_dynamic_path_declares_its_allowed_bindings():
     entry = dictionary.DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.seed", description="",
-        value_kind="vector3", dynamic_path=True,
+        value_kind="vector3", 
         allowed_bindings={"<ventKey>": ("lv", "rv")},
     )
     assert entry.allowed_bindings["<ventKey>"] == ("lv", "rv")
@@ -90,7 +90,7 @@ def test_a_partially_declared_binding_is_refused():
     with pytest.raises(ValueError, match="<layer>"):
         dictionary.DictEntry(
             driver_path="$A.<ventKey>.<layer>.x", description="",
-            value_kind="scalar", dynamic_path=True,
+            value_kind="scalar", 
             allowed_bindings={"<ventKey>": ("lv", "rv")},
         )
 
@@ -99,7 +99,7 @@ def test_an_undeclared_dynamic_path_is_accepted():
     """Leaving bindings undeclared is honest, not an unchecked hole: there is nothing to check for an open, case-author-chosen identifier."""
     entry = dictionary.DictEntry(
         driver_path="$A.<name>.x", description="",
-        value_kind="scalar", dynamic_path=True,
+        value_kind="scalar", 
     )
     assert entry.allowed_bindings == {}
 
@@ -108,7 +108,7 @@ def test_an_explicitly_open_domain_is_declared_not_absent():
     """`None` is a legal, stated domain, distinct from the placeholder being absent from `allowed_bindings` altogether."""
     entry = dictionary.DictEntry(
         driver_path="$A.<name>.x", description="",
-        value_kind="scalar", dynamic_path=True,
+        value_kind="scalar", 
         allowed_bindings={"<name>": None},
     )
     assert entry.allowed_bindings == {"<name>": None}
@@ -119,7 +119,7 @@ def test_an_open_domain_does_not_trip_the_empty_domain_refusal():
     """`None` (open, declared) must not be confused with `()` (closed and impossible to satisfy)."""
     entry = dictionary.DictEntry(
         driver_path="$A.<ventKey>.<name>.x", description="",
-        value_kind="scalar", dynamic_path=True,
+        value_kind="scalar", 
         allowed_bindings={"<ventKey>": ("lv", "rv"), "<name>": None},
     )
     assert entry.allowed_bindings["<ventKey>"] == ("lv", "rv")
@@ -130,13 +130,13 @@ def test_a_closed_empty_domain_is_still_refused_even_alongside_an_open_one():
     with pytest.raises(ValueError, match="empty domain"):
         dictionary.DictEntry(
             driver_path="$A.<ventKey>.<name>.x", description="",
-            value_kind="scalar", dynamic_path=True,
+            value_kind="scalar", 
             allowed_bindings={"<ventKey>": (), "<name>": None},
         )
 
 
 def test_declared_bindings_on_a_static_path_are_refused():
-    with pytest.raises(ValueError, match="dynamic_path"):
+    with pytest.raises(ValueError, match="no placeholder"):
         dictionary.DictEntry(
             driver_path="$A.x", description="", value_kind="scalar",
             allowed_bindings={"<ventKey>": ("lv",)},
@@ -147,27 +147,17 @@ def test_a_binding_key_absent_from_the_path_is_refused():
     with pytest.raises(ValueError, match="<typo>"):
         dictionary.DictEntry(
             driver_path="$A.<ventKey>.x", description="",
-            value_kind="scalar", dynamic_path=True,
+            value_kind="scalar", 
             allowed_bindings={"<ventKey>": ("lv", "rv"), "<typo>": ("lv",)},
         )
 
 
-# --- Three one-line DictEntry guards, latent but cheap to close. ---
+# --- A path with a placeholder is a dynamic path; nothing declares it. ---
 
 
-def test_a_placeholder_without_dynamic_path_is_refused():
-    with pytest.raises(ValueError, match="placeholder"):
-        dictionary.DictEntry(
-            driver_path="$A.<ventKey>.x", description="", value_kind="scalar",
-        )
-
-
-def test_dynamic_path_with_no_placeholder_is_refused():
-    with pytest.raises(ValueError, match="no placeholder"):
-        dictionary.DictEntry(
-            driver_path="$A.x", description="", value_kind="scalar",
-            dynamic_path=True,
-        )
+def test_a_path_is_dynamic_exactly_when_it_holds_a_placeholder():
+    assert dictionary.DictEntry(driver_path="$A.<ventKey>.x", description="", value_kind="scalar").dynamic_path
+    assert not dictionary.DictEntry(driver_path="$A.x", description="", value_kind="scalar").dynamic_path
 
 
 def test_an_empty_binding_domain_is_refused():
@@ -175,7 +165,7 @@ def test_an_empty_binding_domain_is_refused():
     with pytest.raises(ValueError, match="empty domain"):
         dictionary.DictEntry(
             driver_path="$A.<ventKey>.x", description="", value_kind="scalar",
-            dynamic_path=True, allowed_bindings={"<ventKey>": ()},
+            allowed_bindings={"<ventKey>": ()},
         )
 
 

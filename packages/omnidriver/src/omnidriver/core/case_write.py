@@ -41,10 +41,8 @@ PRECONDITION_KINDS = frozenset({
                          # appearing there changes which file is selected
 })
 
-#: ``"environment"`` is implemented end to end -- built by
-#: ``openfoam/case_rendering.py::patch_preconditions`` and checked by
-#: ``case_transaction._check_preconditions`` -- but has exactly one emitter
-#: today. Thin is not the same claim as unused; do not delete it.
+#: A renderer may declare these; the shipped renderers declare none, and
+#: ``case_transaction._check_preconditions`` rechecks whatever a plan carries.
 
 MUTATION_MODES = frozenset({"clone_and_patch", "synthesize"})
 

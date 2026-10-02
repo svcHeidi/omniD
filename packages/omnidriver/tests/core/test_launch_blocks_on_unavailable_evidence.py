@@ -28,17 +28,6 @@ def test_an_unavailable_check_blocks_launch() -> None:
     assert "mesh_geometry" in readiness.blocking_reason
 
 
-def test_a_declined_check_does_not_block_launch() -> None:
-    """An operator may still choose to run with a check switched off."""
-    readiness = is_launchable(
-        plan_status="ok",
-        environment_diagnostics=(),
-        simulation_audit=(_item("environment_preflight", "not_requested"),),
-    )
-
-    assert readiness.launchable is True
-
-
 def test_an_inapplicable_check_does_not_block_launch() -> None:
     """Nothing to check is not a missing check."""
     readiness = is_launchable(

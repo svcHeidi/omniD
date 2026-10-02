@@ -20,12 +20,10 @@ _READINESS_WEIGHTS = {
 }
 
 
-#: Outcomes for a stage that did not run. Each is a distinct fact -- the
-#: operator declined the check, or the thing it needs was absent -- that must
-#: not be conflated with `passed`: an empty diagnostic tuple has no error and
-#: no warning either way. Both are gaps: work owed and not done costs the plan
-#: its points.
-UNCOVERED_OUTCOMES = frozenset({"not_requested", "unavailable"})
+#: The outcome of a stage that did not run: the thing it needs was absent. It
+#: must not be conflated with `passed`: an empty diagnostic tuple has no error
+#: and no warning either way. Work owed and not done costs the plan its points.
+UNCOVERED_OUTCOMES = frozenset({"unavailable"})
 
 #: The stage ran. Its status is then derived from its diagnostics, as before.
 EXECUTED = "executed"

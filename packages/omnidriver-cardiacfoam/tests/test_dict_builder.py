@@ -87,6 +87,20 @@ class TestMinimalSingleCellBuild(unittest.TestCase):
         self.assertIn("singleCellSolver", text)
 
 
+    def test_an_absent_stimulus_block_is_not_invented_from_defaults(self) -> None:
+        """stimulusIO.C returns a no-op protocol when ``singleCellStimulus`` is absent, so no stimulus is legal."""
+        from omnidriver.cardiacfoam.dict_builder import build_electro_properties
+
+        text = build_electro_properties({
+            "myocardiumSolver": "singleCellSolver", "ionicModel": "AlievPanfilov", "tissue": "myocyte",
+        })
+        invented = [
+            line.strip() for line in text.splitlines()
+            if any(key in line for key in ("stim_start", "stim_duration", "stim_amplitude", "stim_period", "nstim"))
+        ]
+        self.assertEqual(invented, [])
+
+
 class TestContextResolution(unittest.TestCase):
     def test_resolve_context_collapses_selectors_and_overrides(self) -> None:
         from omnidriver.cardiacfoam.dict_builder import resolve_context

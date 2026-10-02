@@ -350,7 +350,7 @@ def test_each_catalogue_claim_the_cxx_refutes_is_reported_with_both_sides_and_fa
 
 def test_a_catalogue_that_calls_optional_a_key_the_cxx_requires_is_reported(tmp_path):
     cited = ("src/generatePurkinjeTree.C",)
-    entries = (_entry("$PURKINJE_TREE.<ventKey>.seed", "vector3", dynamic_path=True, source_refs=cited),)
+    entries = (_entry("$PURKINJE_TREE.<ventKey>.seed", "vector3", source_refs=cited),)
     report = _report(tmp_path, entries, **{"generatePurkinjeTree.C": READ_VENT_PARAMS})
     assert report["disagreements"] == [
         "$PURKINJE_TREE.<ventKey>.seed: catalogue says optional; the C++ reads it with no default (generatePurkinjeTree.C:15)",
@@ -388,7 +388,7 @@ def _mapping(tmp_path, monkeypatch, **files):
 def test_a_study_may_set_an_uncatalogued_key_the_cxx_reads_at_that_path(tmp_path, monkeypatch):
     mapping = _mapping(tmp_path, monkeypatch, **{"generatePurkinjeTree.C": READ_VENT_PARAMS})
     catalogued = (_entry(
-        "$PURKINJE_TREE.<ventKey>.seed", "vector3", dynamic_path=True, source_refs=("src/generatePurkinjeTree.C",),
+        "$PURKINJE_TREE.<ventKey>.seed", "vector3", source_refs=("src/generatePurkinjeTree.C",),
     ),)
     document = "system/generatePurkinjeTreeDict"
     found = scanned_key(document, ("$PURKINJE_TREE", "lv", "terminalCount"), 3, mapping=mapping, entries=catalogued)

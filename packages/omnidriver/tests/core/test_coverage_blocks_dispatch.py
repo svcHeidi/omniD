@@ -23,19 +23,6 @@ def test_an_unavailable_required_check_blocks():
     assert "effective_configuration" in readiness.blocking_reason
 
 
-def test_a_declined_check_does_not_block():
-    readiness = is_launchable(
-        plan_status="ok",
-        simulation_audit=(
-            SimulationAuditItem(
-                stage="environment_preflight", status="not_requested",
-                points=0, max_points=10, summary="x", evidence={},
-            ),
-        ),
-    )
-    assert readiness.launchable
-
-
 def test_omitting_the_audit_still_never_blocks():
     """Offline planning must keep working with no runtime installed."""
     assert is_launchable(plan_status="ok").launchable
