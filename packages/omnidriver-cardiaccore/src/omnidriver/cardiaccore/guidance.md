@@ -49,9 +49,8 @@ block naming its fields, the transmural endocardium/epicardium values and the
 `intraventricularChambers` LV/RV values. Both systems are first-class; never
 infer one from field names, and never convert one into the other's spelling.
 
-- Read the declaration with
-  `omnidriver.cardiaccore.operations.coordinates_convention.read_coordinates_convention`
-  and take field paths and values from it. Orientation is case-declared:
+- Read the declaration with the repository's `coordinates_convention.py`
+  script and take field paths and values from it. Orientation is case-declared:
   endocardium may be the larger transmural value, and LV/RV values are not
   always -1/+1.
 - `generatePurkinjeTree` recovers the RV-facing septum and applies a
@@ -60,41 +59,29 @@ infer one from field names, and never convert one into the other's spelling.
 - `setCardiacAnatomy` writes `AHA_Segment` and `aha_angle` in separate LV/RV
   angle frames; do not compare raw angles across chambers.
 
-## Python operations and named catalogs
+## Helper scripts
 
-Read the plugin's named catalogs rather than this file for contracts:
-`cardiaccore_operations` (the canonical callable contract and example of each
-operation), `cardiaccore_field_conventions`, `cardiaccore_support_boundary`,
-`cardiaccore_python_utilities` (an index derived from the operations),
-`cardiaccore_conditional_inputs` and `cardiaccore_tree_validation`.
+The cardiacCore repository keeps its helper scripts in `applications/scripts/`.
+`describe` lists each with its usage line, next to the records, when omniD is
+pointed at the repository (`--repo`). They are the repository's, not omniD's:
+read a script's `--help` before running it, and run it by hand when a record
+fails and one of them looks relevant (the coordinate convention a case
+declares, the Purkinje seeds, a tree's AHA coverage, an electrode transfer, a
+VTU selection as a `cellSet`). A record may also name one as a step, and then
+it runs like any other.
 
-1. Select an operation by its ID and read its applicability, status,
-   preconditions and failure conditions. Preparation/read, calculation and
-   write entrypoints have separate inputs and side effects; use their exact
-   `module:function` references.
-2. The selected case supplies the actual values; do not hardcode matching
-   values to satisfy a validator.
-3. An array method is not a native-file reader, and a proposal is not
-   permission to change a case. Report what was computed and any missing
-   capability.
-4. On failure, address the declared prerequisite. Do not search old
-   standalone scripts for another algorithm, and do not read an operation
-   returning successfully as scientific acceptance. Coverage categories are a
-   named baseline; electrode transfer needs an explicit comparative-study
-   selection; neither establishes general scientific acceptance.
+Read the plugin's named catalogs for the rest: `cardiaccore_field_conventions`,
+`cardiaccore_support_boundary` and `cardiaccore_conditional_inputs`. A helper's
+output is an observation or a proposal, never a scientific acceptance, and not
+permission to change a case.
 
 ## Extending the adapter
 
-- Add an operation's usage record in `catalogs/operations.py` and its
-  implementation in `operations/`. Keep `module:function` references and
-  argument names aligned with the code. Each record needs an example,
-  preconditions, outputs, side effects, evidence, and distinct
-  mechanical, missing-capability and scientific limits. Do not copy an
-  operation's status into another table.
+- A helper script goes in the repository's `applications/scripts/`, with a
+  docstring or `--help` whose first line says what it does; omniD reads it from
+  there and keeps no catalogue of it.
 - A utility is declared by one `utilities/<name>/utility.manifest.toml`; the
   directory name is the utility's name.
-- Shared Purkinje method constants and baseline categories live in
-  `catalogs/purkinje.py`; changing them is a method change, not formatting.
 - Native C++ behaviour, field conventions, units and supported combinations
   need source evidence or an explicit domain decision. Record a pending reader
   or an unresolved interpretation rather than inferring it from a Python

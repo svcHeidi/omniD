@@ -5,8 +5,8 @@ FIELD_CONVENTIONS = {
         "Every case declares its own convention in system/coordinatesConventionDict: "
         "a required coordinateSystem (uvc or cobiveco), an optional coordinates block "
         "naming its coordinate fields, the transmural endocardium/epicardium values, and "
-        "the intraventricularChambers LV/RV values. Read it with "
-        "omnidriver.cardiaccore.operations.coordinates_convention.read_coordinates_convention "
+        "the intraventricularChambers LV/RV values. Read it with the repository's "
+        "applications/scripts/coordinates_convention.py (`describe` lists it) "
         "and choose field paths and dictionary entries from what it says. There is no "
         "package-wide field naming or numeric orientation to assume."
     ),
@@ -49,14 +49,6 @@ FIELD_CONVENTIONS = {
         "setCardiacAnatomy writes AHA_Segment and aha_angle in separate LV/RV angle frames; "
         "do not compare their raw angles across chambers."
     ),
-    "coordinate_ring_closure": (
-        "The preprocessing coordinate-ring check can infer topology-supported scalar-field "
-        "candidates without treating names as a convention. When LV/RV naming matters, it "
-        "expects declared binary values, a varying longitudinal field, and an endocardial "
-        "transmural value. It selects the closed basal 0.1/0.4 component nearest the largest "
-        "connected ab=0 region and requires approximately 0.3 normalized spacing; it does not "
-        "use AHA angles or pre-exported face sets."
-    ),
     "outputs": "generatePurkinjeTree writes LVEndoFaces/RVEndoFaces/RVSeptalEndoFaces/EpiFaces",
     "cobiveco_raw": {
         "tv": "0=LV, 1=RV", "tm": "0=epicardium, 1=endocardium",
@@ -77,6 +69,6 @@ SUPPORT_BOUNDARY = {
         "idealizedHeartEndocardial",
         "idealizedHeartPigTransmural",
     ),
-    "pending": ("Automatic workflow integration of seed proposal, coverage, and coordinate-ring operations", "CObiveco VTU-to-legacy-VTK conversion with vector-field compatibility", "Workflow step for the refine1Dgraph/1DgraphToFoam graph hand-off, with -maxEdgeLength scaled from the mesh length unit"),
+    "pending": ("CObiveco VTU-to-legacy-VTK conversion with vector-field compatibility", "Workflow step for the refine1Dgraph/1DgraphToFoam graph hand-off, with -maxEdgeLength scaled from the mesh length unit"),
     "retired": "Standalone omnidriver and agent pipeline/catalog interfaces are not adapter authorities.",
 }
