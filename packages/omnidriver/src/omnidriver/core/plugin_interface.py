@@ -30,17 +30,6 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class ResolvedInput:
-    """One input a case's model resolves to an on-disk path, or fails to.
-    ``consumer`` names the model that resolved it, for diagnostics only."""
-
-    name: str
-    path: Path | None
-    required: bool
-    consumer: str
-
-
-@dataclass(frozen=True)
 class RuntimeDependency:
     """Something a run's executable consumes outside the case tree: the
     solver binary, a library it loads, a case-local shared object. ``path``
@@ -218,12 +207,9 @@ class SolverPlugin(Protocol):
     def get_samplable_fields(self, resolved: dict[str, Any]) -> dict[str, tuple[str, ...]]:
         """Fields the resolved model exposes for sampling, by region."""
 
-    def get_required_inputs(self, case_root: Path, resolved_case: dict[str, Any]) -> tuple[ResolvedInput, ...]:
-        """Resolved input paths the case reads. Without them every unknown
-        file is a required input."""
-
     def get_generated_output_globs(self, case_root: Path, resolved_case: dict[str, Any]) -> tuple[str, ...]:
-        """Globs for files the case generates rather than consumes."""
+        """Globs for files the case generates rather than consumes; every
+        other unknown file is a required input."""
 
     def get_input_roots(
         self, case_root: Path, resolved_case: dict[str, Any], *, conventions: CaseRuntimeConventions,

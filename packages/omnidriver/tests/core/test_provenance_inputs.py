@@ -13,7 +13,6 @@ import pytest
 
 from omnidriver.core.plugin_interface import (
     CaseRuntimeConventions,
-    ResolvedInput,
     RuntimeDependency,
 )
 from omnidriver.core.plugin_interface import driver_context
@@ -48,15 +47,11 @@ def _make_executable(path: Path, content: bytes) -> None:
 
 
 class _FakePlugin(ToyProvider):
-    """A v1 plugin that declares CaseProvenanceCapability / RuntimeEvidence hooks inline, so precedence can be exercised without a tutorial."""
+    """Declares its provenance members inline, so precedence can be exercised without a tutorial."""
 
-    def __init__(self, *, required_inputs=(), generated_output_globs=(), extra_provenance_paths=()):
-        self._required_inputs = required_inputs
+    def __init__(self, *, generated_output_globs=(), extra_provenance_paths=()):
         self._generated_output_globs = generated_output_globs
         self._extra_provenance_paths = extra_provenance_paths
-
-    def get_required_inputs(self, case_root, resolved_case):
-        return self._required_inputs
 
     def get_generated_output_globs(self, case_root, resolved_case):
         return self._generated_output_globs
@@ -342,41 +337,6 @@ def test_dag_consumes_declaration_wins_over_a_generated_output_glob(tmp_path: Pa
     )
 
     assert "constant/C" in _paths(components, kind="case_file")
-
-
-def test_plugin_required_inputs_entry_wins_over_a_generated_output_glob(tmp_path: Path) -> None:
-    """I1's resolution precedence: a plugin required_inputs() entry beats its own generated_output_globs exclusion."""
-    _write_control_dict(tmp_path, start_from="startTime", start_time="0")
-    (tmp_path / "constant").mkdir()
-    target = tmp_path / "constant" / "C"
-    target.write_bytes(b"actually consumed this time")
-
-    plugin = _FakePlugin(
-        required_inputs=(ResolvedInput(name="C", path=target, required=True, consumer="test"),),
-        generated_output_globs=("constant/C",),
-    )
-    context = driver_context(plugin, source="test")
-
-    components = enumerate_case_inputs(
-        tmp_path, workflow_dag={"steps": []}, driver_context=context,
-    )
-
-    assert "constant/C" in _paths(components, kind="case_file")
-
-
-def test_optional_required_input_that_is_absent_is_not_added(tmp_path: Path) -> None:
-    """READ_IF_PRESENT and absent is not the same as MUST_READ and missing -- nothing was going to be consumed, so nothing is fingerprinted."""
-    _write_control_dict(tmp_path, start_from="startTime", start_time="0")
-    plugin = _FakePlugin(
-        required_inputs=(ResolvedInput(name="Optional", path=None, required=False, consumer="test"),),
-    )
-    context = driver_context(plugin, source="test")
-
-    components = enumerate_case_inputs(
-        tmp_path, workflow_dag={"steps": []}, driver_context=context,
-    )
-
-    assert "Optional" not in _paths(components)
 
 
 def test_processor_selected_time_is_included_other_processor_times_excluded(tmp_path: Path) -> None:

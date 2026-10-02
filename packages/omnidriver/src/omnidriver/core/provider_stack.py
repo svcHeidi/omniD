@@ -91,7 +91,6 @@ MEMBERS: dict[str, tuple[str, Any]] = {
     # provenance
     "resolve_case_models": ("map", None),
     "get_samplable_fields": ("map", None),
-    "get_required_inputs": ("sequence", None),
     "get_generated_output_globs": ("sequence", None),
     "get_input_roots": ("sequence", None),
     "get_extra_provenance_paths": ("sequence", None),

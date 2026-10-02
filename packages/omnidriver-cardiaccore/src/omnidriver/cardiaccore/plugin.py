@@ -1,4 +1,4 @@
-"""Compose the declared cardiacCore workflows, catalogs and OpenFOAM capabilities."""
+"""cardiacCore as a provider over the OpenFOAM layer: its records, catalogues and utilities."""
 
 from __future__ import annotations
 

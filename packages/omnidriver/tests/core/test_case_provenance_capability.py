@@ -1,19 +1,6 @@
-"""A stack declaring no provenance answers empty, which means "everything unknown is a required input", the safe default."""
+"""Provenance declarations' shapes."""
 
 from __future__ import annotations
-
-from pathlib import Path
-
-from omnidriver.core.plugin_interface import (
-    driver_context
-)
-from plugins.toy import ToyProvider
-
-
-def test_a_plugin_with_no_provenance_members_gets_empty_answers(tmp_path: Path) -> None:
-    context = driver_context(ToyProvider(), source="test")
-    assert context.stack.call("get_required_inputs", tmp_path, {}) == ()
-    assert context.stack.call("get_generated_output_globs", tmp_path, {}) == ()
 
 
 def test_extra_provenance_paths_is_annotated_as_dependencies():

@@ -11,11 +11,10 @@ import fnmatch
 import os
 import shlex
 import shutil
-from dataclasses import replace
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Mapping, TYPE_CHECKING
 
-from ..plugin_interface import ResolvedInput, RuntimeDependency
+from ..plugin_interface import RuntimeDependency
 from .provenance import ProvenanceComponent, component_for_path
 from .provenance_dependencies import (
     component_for_runtime_dependency,
@@ -64,36 +63,6 @@ def _collect_consumed_relpaths(workflow_dag: Mapping[str, Any] | None) -> set[st
         for entry in step.get("consumes", ()) or ():
             relpaths.add(str(entry))
     return relpaths
-
-
-def _component_for_resolved_input(
-    resolved_input: ResolvedInput, case_root: Path
-) -> ProvenanceComponent | None:
-    """A plugin-resolved required input, fingerprinted -- or, for a
-    ``required`` input that failed to resolve, an explicit ``unavailable``
-    component. A ``required=False`` input with no resolved path was
-    genuinely absent and optional: nothing is fingerprinted."""
-    path = resolved_input.path
-    if path is None:
-        if not resolved_input.required:
-            return None
-        return ProvenanceComponent(
-            kind="case_file",
-            path=resolved_input.name,
-            role="required_input",
-            method="unavailable",
-            strength="unavailable",
-        )
-    try:
-        path.relative_to(case_root)
-    except ValueError:
-        # Resolved outside the case tree entirely (not even via a symlink
-        # component_for_path would classify as external_link) -- identify it
-        # by the plugin's own declared name, the same pattern
-        # provenance_dependencies.py uses for runtime dependencies.
-        component = component_for_path(path, kind="case_file", relative_to=path.parent)
-        return replace(component, path=resolved_input.name)
-    return component_for_path(path, kind="case_file", relative_to=case_root)
 
 
 def _is_case_local_script(
@@ -222,8 +191,8 @@ def enumerate_case_inputs(
     and plugin-declared runtime dependencies. Excludes generated outputs.
 
     Resolution precedence, first match wins: a DAG step's ``consumes``
-    declaration; a plugin ``required_inputs()`` entry; a plugin
-    ``generated_output_globs()`` match (excluded); otherwise required
+    declaration; a plugin ``generated_output_globs()`` match (excluded);
+    otherwise required
     input -- an unclassified file must never look like a generated output.
 
     Never raises on an incomplete or minimal case: every filesystem read
@@ -239,7 +208,6 @@ def enumerate_case_inputs(
     conventions = case_runtime_conventions(driver_context)
 
     consumed_relpaths = _collect_consumed_relpaths(workflow_dag)
-    required_inputs = stack.call("get_required_inputs", case_root, resolved_case)
     generated_globs = stack.call("get_generated_output_globs", case_root, resolved_case)
 
     components: dict[tuple[str, str], ProvenanceComponent] = {}
@@ -247,9 +215,7 @@ def enumerate_case_inputs(
 
     # Every top-level directory the active plugin declares a case file
     # under, plus every input root the plugin declares (for OpenFOAM: the
-    # selected start time, serially and in each replica). Plugin
-    # required_inputs are applied uniformly below instead, since a
-    # resolved input's path need not fall under any of these directories.
+    # selected start time, serially and in each replica).
     walk_roots = [case_root / d for d in _case_root_dirnames(driver_context)]
     walk_roots.extend(
         case_root / root
@@ -266,15 +232,8 @@ def enumerate_case_inputs(
                 continue
             add(component_for_path(path, kind="case_file", relative_to=case_root))
 
-    # -- Precedence step 2: plugin-resolved required inputs always win,
-    # regardless of whether the walk above already included or excluded
-    # them (e.g. a field resolved outside the selected time via backward
-    # findInstance, or one explicitly re-included over a generated glob).
-    for resolved_input in required_inputs:
-        add(_component_for_resolved_input(resolved_input, case_root))
-
-    # -- Precedence step 1, applied last so it always wins even for a path
-    # the walk above excluded or never visited at all.
+    # A step's consumes, applied last so it wins even for a path the walk
+    # above excluded or never visited at all.
     for rel in consumed_relpaths:
         add(component_for_path(case_root / rel, kind="case_file", relative_to=case_root))
 

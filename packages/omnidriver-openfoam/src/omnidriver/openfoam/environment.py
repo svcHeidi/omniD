@@ -45,7 +45,7 @@ def _read_config_value_by_key_path(file_path: Path, key_path):
 def _case_value_agree(value_kind: str, requested, current) -> bool:
     """Compares by the requested value's own Python type via
     ``values_agree``; ``value_kind`` is unused, kept only to match the
-    capability's signature."""
+    comparator's signature."""
     from .literals import values_agree
 
     del value_kind
