@@ -239,20 +239,13 @@ class OpenFOAMEnvironmentPlugin:
     def render_case_files(
         self, resolved, *, snapshot_root, driver_context, execution_env=None,
     ):
-        """Render this provider's declared format for whichever mode
-        ``resolved`` carries."""
+        """Render this provider's declared format for a ``clone_and_patch``
+        resolution."""
         mode = resolved.request.mode
         if mode == "clone_and_patch":
             from .case_rendering import render_patch_case_files
 
             return render_patch_case_files(
-                resolved, snapshot_root=snapshot_root, driver_context=driver_context,
-                execution_env=execution_env, renderer_id=self.plugin_id,
-            )
-        if mode == "synthesize":
-            from .case_rendering import render_synthesis_case_files
-
-            return render_synthesis_case_files(
                 resolved, snapshot_root=snapshot_root, driver_context=driver_context,
                 execution_env=execution_env, renderer_id=self.plugin_id,
             )

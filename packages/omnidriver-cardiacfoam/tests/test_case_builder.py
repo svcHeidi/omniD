@@ -56,12 +56,12 @@ PURKINJE_ELECTRO_PROPERTIES_MONODOMAIN = (
 
 class TestDictBuilderModule(unittest.TestCase):
     def test_module_exposes_build_electro_properties(self) -> None:
-        from omnidriver.cardiacfoam.dict_builder import build_electro_properties
+        from omnidriver.cardiacfoam.case_builder import build_electro_properties
         self.assertTrue(callable(build_electro_properties))
 
     def test_function_accepts_documented_kwargs(self) -> None:
         import inspect
-        from omnidriver.cardiacfoam.dict_builder import build_electro_properties
+        from omnidriver.cardiacfoam.case_builder import build_electro_properties
         sig = inspect.signature(build_electro_properties)
         params = sig.parameters
         self.assertIn("selectors", params)
@@ -73,7 +73,7 @@ class TestDictBuilderModule(unittest.TestCase):
 
 class TestMinimalSingleCellBuild(unittest.TestCase):
     def test_returns_string_with_foamfile_preamble(self) -> None:
-        from omnidriver.cardiacfoam.dict_builder import build_electro_properties
+        from omnidriver.cardiacfoam.case_builder import build_electro_properties
         text = build_electro_properties(
             selectors={
                 "myocardiumSolver": "singleCellSolver",
@@ -89,7 +89,7 @@ class TestMinimalSingleCellBuild(unittest.TestCase):
 
     def test_an_absent_stimulus_block_is_not_invented_from_defaults(self) -> None:
         """stimulusIO.C returns a no-op protocol when ``singleCellStimulus`` is absent, so no stimulus is legal."""
-        from omnidriver.cardiacfoam.dict_builder import build_electro_properties
+        from omnidriver.cardiacfoam.case_builder import build_electro_properties
 
         text = build_electro_properties({
             "myocardiumSolver": "singleCellSolver", "ionicModel": "AlievPanfilov", "tissue": "myocyte",
@@ -103,7 +103,7 @@ class TestMinimalSingleCellBuild(unittest.TestCase):
 
 class TestContextResolution(unittest.TestCase):
     def test_resolve_context_collapses_selectors_and_overrides(self) -> None:
-        from omnidriver.cardiacfoam.dict_builder import resolve_context
+        from omnidriver.cardiacfoam.case_builder import resolve_context
         ctx = resolve_context(
             selectors={"myocardiumSolver": "monodomainSolver", "ionicModel": "TNNP"},
             overrides={
@@ -118,7 +118,7 @@ class TestContextResolution(unittest.TestCase):
         self.assertEqual(ctx["singleCellStimulus.stim_amplitude"], "60")
 
     def test_resolve_context_overrides_silent_when_none(self) -> None:
-        from omnidriver.cardiacfoam.dict_builder import resolve_context
+        from omnidriver.cardiacfoam.case_builder import resolve_context
         ctx = resolve_context(
             selectors={"myocardiumSolver": "singleCellSolver"},
             overrides=None,
@@ -129,7 +129,7 @@ class TestContextResolution(unittest.TestCase):
 class TestApplicableEntrySelection(unittest.TestCase):
     def test_eikonal_context_excludes_ionic_model_entry(self) -> None:
         """ionicModel is forbidden_when under eikonal; the applicable_when-filtered entry is tissue."""
-        from omnidriver.cardiacfoam.dict_builder import (
+        from omnidriver.cardiacfoam.case_builder import (
             resolve_context,
             select_applicable_entries,
         )
@@ -141,7 +141,7 @@ class TestApplicableEntrySelection(unittest.TestCase):
         self.assertNotIn("$ELECTRO_MODEL_COEFFS.tissue", paths)
 
     def test_monodomain_context_includes_ionic_model_entry(self) -> None:
-        from omnidriver.cardiacfoam.dict_builder import (
+        from omnidriver.cardiacfoam.case_builder import (
             resolve_context,
             select_applicable_entries,
         )
@@ -154,7 +154,7 @@ class TestApplicableEntrySelection(unittest.TestCase):
         self.assertIn("$ELECTRO_MODEL_COEFFS.tissue", paths)
 
     def test_field_source_omits_monodomain_uniform_tensor(self) -> None:
-        from omnidriver.cardiacfoam.dict_builder import build_electro_properties
+        from omnidriver.cardiacfoam.case_builder import build_electro_properties
 
         text = build_electro_properties(
             selectors={
@@ -168,7 +168,7 @@ class TestApplicableEntrySelection(unittest.TestCase):
         self.assertNotIn("\n    conductivity ", text)
 
     def test_field_source_omits_both_bidomain_uniform_tensors(self) -> None:
-        from omnidriver.cardiacfoam.dict_builder import build_electro_properties
+        from omnidriver.cardiacfoam.case_builder import build_electro_properties
 
         text = build_electro_properties(
             selectors={
@@ -183,7 +183,7 @@ class TestApplicableEntrySelection(unittest.TestCase):
         self.assertNotIn("conductivityExtracellular", text)
 
     def test_spatial_solver_defaults_to_uniform_source(self) -> None:
-        from omnidriver.cardiacfoam.dict_builder import build_electro_properties
+        from omnidriver.cardiacfoam.case_builder import build_electro_properties
 
         text = build_electro_properties(
             selectors={
@@ -200,8 +200,8 @@ class TestValuePopulation(unittest.TestCase):
     """Precedence: explicit override, then typical_value (when fallback is enabled), then omit."""
 
     def test_override_wins_over_typical_value(self) -> None:
-        from omnidriver.openfoam.dict_builder import populate_values
-        from omnidriver.cardiacfoam.dict_builder import (
+        from omnidriver.openfoam.case_builder import populate_values
+        from omnidriver.cardiacfoam.case_builder import (
             resolve_context,
             select_applicable_entries,
         )
@@ -216,8 +216,8 @@ class TestValuePopulation(unittest.TestCase):
         self.assertEqual(populated["singleCellStimulus.stim_amplitude"], "0.4")
 
     def test_typical_value_fills_when_no_override(self) -> None:
-        from omnidriver.openfoam.dict_builder import populate_values
-        from omnidriver.cardiacfoam.dict_builder import (
+        from omnidriver.openfoam.case_builder import populate_values
+        from omnidriver.cardiacfoam.case_builder import (
             resolve_context,
             select_applicable_entries,
         )
@@ -232,8 +232,8 @@ class TestValuePopulation(unittest.TestCase):
         self.assertEqual(populated["singleCellStimulus.stim_amplitude"], "60")
 
     def test_fallback_disabled_omits_typical_value(self) -> None:
-        from omnidriver.openfoam.dict_builder import populate_values
-        from omnidriver.cardiacfoam.dict_builder import (
+        from omnidriver.openfoam.case_builder import populate_values
+        from omnidriver.cardiacfoam.case_builder import (
             resolve_context,
             select_applicable_entries,
         )
@@ -245,8 +245,8 @@ class TestValuePopulation(unittest.TestCase):
         self.assertNotIn("singleCellStimulus.stim_amplitude", populated)
 
     def test_selector_values_are_present_in_populated_dict(self) -> None:
-        from omnidriver.openfoam.dict_builder import populate_values
-        from omnidriver.cardiacfoam.dict_builder import (
+        from omnidriver.openfoam.case_builder import populate_values
+        from omnidriver.cardiacfoam.case_builder import (
             resolve_context,
             select_applicable_entries,
         )
@@ -265,7 +265,7 @@ class TestRequiredCheck(unittest.TestCase):
 
     @staticmethod
     def _errors(entries, populated):
-        from omnidriver.cardiacfoam.dict_builder import _with_virtual_presence
+        from omnidriver.cardiacfoam.case_builder import _with_virtual_presence
         from omnidriver.openfoam.case_rules import rule_diagnostics
 
         return [e.message for e in rule_diagnostics(
@@ -273,8 +273,8 @@ class TestRequiredCheck(unittest.TestCase):
         )]
 
     def test_fully_populated_entries_report_nothing(self) -> None:
-        from omnidriver.openfoam.dict_builder import populate_values
-        from omnidriver.cardiacfoam.dict_builder import (
+        from omnidriver.openfoam.case_builder import populate_values
+        from omnidriver.cardiacfoam.case_builder import (
             resolve_context,
             select_applicable_entries,
         )
@@ -286,8 +286,8 @@ class TestRequiredCheck(unittest.TestCase):
         self.assertEqual(self._errors(entries, populated), [])
 
     def test_reports_the_missing_required_paths(self) -> None:
-        from omnidriver.openfoam.dict_builder import populate_values
-        from omnidriver.cardiacfoam.dict_builder import (
+        from omnidriver.openfoam.case_builder import populate_values
+        from omnidriver.cardiacfoam.case_builder import (
             resolve_context,
             select_applicable_entries,
         )
@@ -319,7 +319,7 @@ class TestValidatorIntegration(unittest.TestCase):
     """build_electro_properties runs the rule pass before returning."""
 
     def test_build_raises_on_mutex_violation_via_overrides(self) -> None:
-        from omnidriver.cardiacfoam.dict_builder import build_electro_properties
+        from omnidriver.cardiacfoam.case_builder import build_electro_properties
         with self.assertRaises(ValueError) as ctx:
             build_electro_properties(
                 selectors={
@@ -335,7 +335,7 @@ class TestValidatorIntegration(unittest.TestCase):
         self.assertIn("mutually exclusive", str(ctx.exception).lower())
 
     def test_build_raises_on_forbidden_when_violation(self) -> None:
-        from omnidriver.cardiacfoam.dict_builder import build_electro_properties
+        from omnidriver.cardiacfoam.case_builder import build_electro_properties
         with self.assertRaises(ValueError) as ctx:
             build_electro_properties(
                 selectors={
@@ -348,7 +348,7 @@ class TestValidatorIntegration(unittest.TestCase):
 
 class TestSerialisation(unittest.TestCase):
     def test_singlecell_output_matches_snapshot(self) -> None:
-        from omnidriver.cardiacfoam.dict_builder import build_electro_properties
+        from omnidriver.cardiacfoam.case_builder import build_electro_properties
         text = build_electro_properties(
             selectors={
                 "myocardiumSolver": "singleCellSolver",
@@ -365,7 +365,7 @@ class TestSerialisation(unittest.TestCase):
         self.assertNotIn("stim_amplitude", text)
 
     def test_singlecell_stimulus_appears_once_configured(self) -> None:
-        from omnidriver.cardiacfoam.dict_builder import build_electro_properties
+        from omnidriver.cardiacfoam.case_builder import build_electro_properties
         text = build_electro_properties(
             selectors={
                 "myocardiumSolver": "singleCellSolver",
@@ -382,7 +382,7 @@ class TestSerialisation(unittest.TestCase):
         self.assertIn("stim_amplitude 60;", text)
 
     def test_monodomain_output_matches_snapshot(self) -> None:
-        from omnidriver.cardiacfoam.dict_builder import build_electro_properties
+        from omnidriver.cardiacfoam.case_builder import build_electro_properties
         text = build_electro_properties(
             selectors={
                 "myocardiumSolver": "monodomainSolver",
@@ -400,7 +400,7 @@ class TestPhysicsPropertiesBuilder(unittest.TestCase):
 
     def test_function_accepts_documented_kwargs(self) -> None:
         import inspect
-        from omnidriver.cardiacfoam.dict_builder import build_physics_properties
+        from omnidriver.cardiacfoam.case_builder import build_physics_properties
         sig = inspect.signature(build_physics_properties)
         params = sig.parameters
         self.assertIn("selectors", params)
@@ -409,7 +409,7 @@ class TestPhysicsPropertiesBuilder(unittest.TestCase):
         self.assertEqual(params["overrides"].kind, inspect.Parameter.KEYWORD_ONLY)
 
     def test_minimal_electroModel_build(self) -> None:
-        from omnidriver.cardiacfoam.dict_builder import build_physics_properties
+        from omnidriver.cardiacfoam.case_builder import build_physics_properties
         text = build_physics_properties(selectors={"type": "electroModel"})
         self.assertIn("type electroModel;", text)
         self.assertIn("FoamFile", text)
@@ -418,231 +418,137 @@ class TestPhysicsPropertiesBuilder(unittest.TestCase):
         self.assertNotIn("Coeffs", text)
 
     def test_missing_required_type_raises(self) -> None:
-        from omnidriver.cardiacfoam.dict_builder import build_physics_properties
+        from omnidriver.cardiacfoam.case_builder import build_physics_properties
         with self.assertRaises(ValueError) as ctx:
             build_physics_properties(selectors={})
         self.assertIn("type", str(ctx.exception))
 
     def test_invalid_enum_value_raises(self) -> None:
-        from omnidriver.cardiacfoam.dict_builder import build_physics_properties
+        from omnidriver.cardiacfoam.case_builder import build_physics_properties
         with self.assertRaises(ValueError) as ctx:
             build_physics_properties(selectors={"type": "notARealModel"})
         self.assertIn("notARealModel", str(ctx.exception))
 
 
-class TestBuildAndLaunch(unittest.TestCase):
-    """build_and_launch writes both dicts to a case directory and launches via the generic_case spec factory."""
+_SINGLE_CELL = {"myocardiumSolver": "singleCellSolver", "ionicModel": "AlievPanfilov", "tissue": "myocyte"}
+_MONODOMAIN = {"myocardiumSolver": "monodomainSolver", "ionicModel": "TNNP", "tissue": "epicardialCells"}
 
-    def test_writes_both_dicts_to_case_dir(self) -> None:
-        """dry_run=True writes the dicts without running cardiacFoam."""
+
+class TestBuildCase(unittest.TestCase):
+    """build_case commits a runnable case and holds it to the pre-run rules."""
+
+    def _build(self, selectors, **kwargs):
         import tempfile
         from pathlib import Path
-        from omnidriver.cardiacfoam.dict_builder import build_and_launch
+        from omnidriver.cardiacfoam.case_builder import build_case
 
-        with tempfile.TemporaryDirectory() as temp:
-            case_dir = Path(temp) / "case"
-            result = build_and_launch(
-                electro_selectors={
-                    "myocardiumSolver": "singleCellSolver",
-                    "ionicModel": "AlievPanfilov",
-                    "tissue": "myocyte",
-                },
-                physics_selectors={"type": "electroModel"},
-                case_dir=case_dir,
-                dry_run=True,
-            )
-            self.assertTrue((case_dir / "constant" / "electroProperties").exists())
-            self.assertTrue((case_dir / "constant" / "physicsProperties").exists())
-            self.assertEqual(result["case_dir"], str(case_dir))
-            self.assertEqual(result["status"], "dry_run_complete")
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        case_dir = Path(temp.name) / "case"
+        return case_dir, build_case(selectors, case_dir=case_dir, **kwargs)
 
-    def test_existing_case_dir_is_not_overwritten_without_consent(self) -> None:
+    def test_writes_every_input_and_an_executable_allrun(self) -> None:
+        case_dir, result = self._build(_MONODOMAIN)
+        self.assertEqual(result["status"], "ok", result["diagnostics"])
+        for name in (
+            "constant/electroProperties", "constant/physicsProperties", "system/fvSchemes",
+            "system/fvSolution", "system/controlDict", "system/blockMeshDict", "Allrun",
+        ):
+            self.assertTrue((case_dir / name).is_file(), name)
+        self.assertEqual((case_dir / "Allrun").read_text(), "#!/bin/sh\nblockMesh\ncardiacFoam\n")
+        self.assertEqual((case_dir / "Allrun").stat().st_mode & 0o777, 0o755)
+
+    def test_a_broken_selector_is_refused_before_anything_is_written(self) -> None:
         import tempfile
         from pathlib import Path
-        from omnidriver.cardiacfoam.dict_builder import build_and_launch
+        from omnidriver.cardiacfoam.case_builder import build_case
+
+        with tempfile.TemporaryDirectory() as temp, self.assertRaises(ValueError):
+            build_case({"myocardiumSolver": "eikonalSolver", "ionicModel": "TNNP"}, case_dir=Path(temp) / "case")
+        self.assertFalse((Path(temp) / "case" / "constant").exists())
+
+    def test_an_existing_case_is_replaced_only_with_consent(self) -> None:
+        import tempfile
+        from pathlib import Path
+        from omnidriver.cardiacfoam.case_builder import build_case
 
         with tempfile.TemporaryDirectory() as temp:
             case_dir = Path(temp) / "case"
             (case_dir / "constant").mkdir(parents=True)
             (case_dir / "constant" / "electroProperties").write_text("# pre-existing\n")
-
             with self.assertRaises(FileExistsError):
-                build_and_launch(
-                    electro_selectors={
-                        "myocardiumSolver": "singleCellSolver",
-                        "ionicModel": "AlievPanfilov",
-                        "tissue": "myocyte",
-                    },
-                    physics_selectors={"type": "electroModel"},
-                    case_dir=case_dir,
-                    dry_run=True,
-                )
+                build_case(_SINGLE_CELL, case_dir=case_dir)
+            build_case(_SINGLE_CELL, case_dir=case_dir, overwrite=True)
+            self.assertIn("myocardiumSolver singleCellSolver;", (case_dir / "constant" / "electroProperties").read_text())
 
-    def test_overwrite_true_replaces_existing_dicts(self) -> None:
+    def test_single_cell_gets_one_cell_and_refuses_dx(self) -> None:
+        case_dir, _ = self._build(_SINGLE_CELL)
+        self.assertIn("hex (0 1 2 3 4 5 6 7) (1 1 1)", (case_dir / "system" / "blockMeshDict").read_text())
+        with self.assertRaisesRegex(ValueError, "dx"):
+            self._build(_SINGLE_CELL, dx=0.0004)
+
+    def test_dx_sizes_the_spatial_mesh(self) -> None:
+        from omnidriver.openfoam.case_builder import default_block_mesh_dict_text
+
+        case_dir, _ = self._build(_MONODOMAIN, dx=0.0004)
+        self.assertEqual((case_dir / "system" / "blockMeshDict").read_text(), default_block_mesh_dict_text(dx_m=0.0004))
+
+    def test_a_hand_authored_mesh_is_kept(self) -> None:
         import tempfile
         from pathlib import Path
-        from omnidriver.cardiacfoam.dict_builder import build_and_launch
+        from omnidriver.cardiacfoam.case_builder import build_case
 
         with tempfile.TemporaryDirectory() as temp:
             case_dir = Path(temp) / "case"
-            (case_dir / "constant").mkdir(parents=True)
-            old_text = "# pre-existing electroProperties\n"
-            (case_dir / "constant" / "electroProperties").write_text(old_text)
+            (case_dir / "system").mkdir(parents=True)
+            (case_dir / "system" / "blockMeshDict").write_text("// custom mesh\n")
+            build_case(_MONODOMAIN, case_dir=case_dir)
+            self.assertEqual((case_dir / "system" / "blockMeshDict").read_text(), "// custom mesh\n")
 
-            build_and_launch(
-                electro_selectors={
-                    "myocardiumSolver": "singleCellSolver",
-                    "ionicModel": "AlievPanfilov",
-                    "tissue": "myocyte",
-                },
-                physics_selectors={"type": "electroModel"},
-                case_dir=case_dir,
-                dry_run=True,
-                overwrite=True,
+    def test_time_step_and_end_time_reach_the_control_dict(self) -> None:
+        case_dir, _ = self._build(_SINGLE_CELL, delta_t=0.001, end_time=0.002)
+        text = (case_dir / "system" / "controlDict").read_text()
+        self.assertIn("deltaT          0.001;", text)
+        self.assertIn("endTime         0.002;", text)
+
+    def test_a_failed_commit_leaves_no_partial_case(self) -> None:
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+        from omnidriver.cardiacfoam.case_builder import build_case
+        from omnidriver.core import case_transaction
+
+        real = case_transaction._write_one
+        calls = []
+
+        def die_on_third(*args, **kwargs):
+            calls.append(1)
+            if len(calls) == 3:
+                raise OSError("simulated failure")
+            return real(*args, **kwargs)
+
+        with tempfile.TemporaryDirectory() as temp:
+            case_dir = Path(temp) / "case"
+            with mock.patch.object(case_transaction, "_write_one", die_on_third):
+                with self.assertRaises(case_transaction.CaseTransactionError):
+                    build_case(_SINGLE_CELL, case_dir=case_dir)
+            self.assertFalse((case_dir / "constant" / "electroProperties").exists())
+
+    def test_the_cli_entry_point_splits_the_physics_type_from_the_selectors(self) -> None:
+        import tempfile
+        from pathlib import Path
+        from omnidriver.cardiacfoam.case_builder import build
+        from omnidriver.cardiacfoam.own_context import own_driver_context
+
+        with tempfile.TemporaryDirectory() as temp:
+            result = build(
+                own_driver_context(), Path(temp) / "case", select={**_SINGLE_CELL, "type": "electroModel"},
+                set_values={}, options={"endTime": "0.5"}, overwrite=False,
             )
-            text = (case_dir / "constant" / "electroProperties").read_text()
-            self.assertNotEqual(text, old_text)
-            self.assertIn("myocardiumSolver singleCellSolver;", text)
-
-
-class TestBuildAndLaunchMeshProvisioning(unittest.TestCase):
-    """electroModel requires a real fvMesh regardless of solver, even singleCellSolver."""
-
-    def test_single_cell_solver_gets_a_block_mesh_dict(self) -> None:
-        """A one-cell `system/blockMeshDict` joins the plan; `blockMesh` runs from `Allrun`, never Python."""
-        import tempfile
-        from pathlib import Path
-        from omnidriver.cardiacfoam.dict_builder import build_and_launch
-
-        with tempfile.TemporaryDirectory() as temp:
-            case_dir = Path(temp) / "case"
-            result = build_and_launch(
-                electro_selectors={
-                    "myocardiumSolver": "singleCellSolver",
-                    "ionicModel": "AlievPanfilov",
-                    "tissue": "myocyte",
-                },
-                physics_selectors={"type": "electroModel"},
-                case_dir=case_dir,
-                dry_run=True,
-            )
-            block_mesh_dict = case_dir / "system" / "blockMeshDict"
-            self.assertTrue(block_mesh_dict.exists())
-            self.assertIn("hex (0 1 2 3 4 5 6 7) (1 1 1)", block_mesh_dict.read_text())
-            self.assertFalse((case_dir / "constant" / "polyMesh").exists())
-            self.assertTrue(result.get("needs_block_mesh", False))
-
-    def test_single_cell_solver_dx_validation_still_fires_under_dry_run(self) -> None:
-        import tempfile
-        from pathlib import Path
-        from omnidriver.cardiacfoam.dict_builder import build_and_launch
-
-        with tempfile.TemporaryDirectory() as temp:
-            case_dir = Path(temp) / "case"
-            with self.assertRaisesRegex(ValueError, "dx"):
-                build_and_launch(
-                    electro_selectors={
-                        "myocardiumSolver": "singleCellSolver",
-                        "ionicModel": "AlievPanfilov",
-                        "tissue": "myocyte",
-                    },
-                    physics_selectors={"type": "electroModel"},
-                    case_dir=case_dir,
-                    dry_run=True,
-                    dx=0.0004,
-                )
-            self.assertFalse((case_dir / "constant" / "polyMesh").exists())
-
-    def test_spatial_solver_gets_a_block_mesh_dict(self) -> None:
-        import tempfile
-        from pathlib import Path
-        from omnidriver.cardiacfoam.dict_builder import build_and_launch
-
-        with tempfile.TemporaryDirectory() as temp:
-            case_dir = Path(temp) / "case"
-            result = build_and_launch(
-                electro_selectors={
-                    "myocardiumSolver": "monodomainSolver",
-                    "ionicModel": "TNNP",
-                    "tissue": "epicardialCells",
-                },
-                physics_selectors={"type": "electroModel"},
-                case_dir=case_dir,
-                dry_run=True,
-            )
-            block_mesh_dict = case_dir / "system" / "blockMeshDict"
-            self.assertTrue(block_mesh_dict.exists())
-            self.assertIn("blocks", block_mesh_dict.read_text())
-            self.assertFalse((case_dir / "constant" / "polyMesh").exists())
-            self.assertTrue(result.get("needs_block_mesh", False))
-
-    def test_dx_kwarg_controls_generated_block_mesh_resolution(self) -> None:
-        import tempfile
-        from pathlib import Path
-        from omnidriver.cardiacfoam.dict_builder import build_and_launch
-        from omnidriver.openfoam.mesh_provisioning import default_block_mesh_dict_text
-
-        with tempfile.TemporaryDirectory() as temp:
-            case_dir = Path(temp) / "case"
-            build_and_launch(
-                electro_selectors={
-                    "myocardiumSolver": "monodomainSolver",
-                    "ionicModel": "TNNP",
-                    "tissue": "epicardialCells",
-                },
-                physics_selectors={"type": "electroModel"},
-                case_dir=case_dir,
-                dry_run=True,
-                dx=0.0004,
-            )
-            written = (case_dir / "system" / "blockMeshDict").read_text()
-            self.assertEqual(written, default_block_mesh_dict_text(dx_m=0.0004))
-            self.assertNotEqual(written, default_block_mesh_dict_text())
-
-    def test_dx_kwarg_rejected_for_single_cell_solver(self) -> None:
-        import tempfile
-        from pathlib import Path
-        from omnidriver.cardiacfoam.dict_builder import build_and_launch
-
-        with tempfile.TemporaryDirectory() as temp:
-            case_dir = Path(temp) / "case"
-            with self.assertRaisesRegex(ValueError, "dx"):
-                build_and_launch(
-                    electro_selectors={
-                        "myocardiumSolver": "singleCellSolver",
-                        "ionicModel": "AlievPanfilov",
-                        "tissue": "myocyte",
-                    },
-                    physics_selectors={"type": "electroModel"},
-                    case_dir=case_dir,
-                    dry_run=True,
-                    dx=0.0004,
-                )
-
-    def test_existing_mesh_is_not_clobbered_without_overwrite(self) -> None:
-        import tempfile
-        from pathlib import Path
-        from omnidriver.cardiacfoam.dict_builder import build_and_launch
-
-        with tempfile.TemporaryDirectory() as temp:
-            case_dir = Path(temp) / "case"
-            block_mesh_dict = case_dir / "system" / "blockMeshDict"
-            block_mesh_dict.parent.mkdir(parents=True)
-            block_mesh_dict.write_text("// pre-existing custom mesh\n")
-            (case_dir / "constant").mkdir(parents=True)
-            (case_dir / "constant" / "electroProperties").write_text("# pre-existing\n")
-            build_and_launch(
-                electro_selectors={
-                    "myocardiumSolver": "monodomainSolver",
-                    "ionicModel": "TNNP",
-                    "tissue": "epicardialCells",
-                },
-                physics_selectors={"type": "electroModel"},
-                case_dir=case_dir,
-                dry_run=True,
-                overwrite=True,
-            )
-            self.assertEqual(block_mesh_dict.read_text(), "// pre-existing custom mesh\n")
+            self.assertEqual(result["status"], "ok", result["diagnostics"])
+            with self.assertRaisesRegex(ValueError, "unknown build option"):
+                build(own_driver_context(), Path(temp) / "other", select=_SINGLE_CELL, set_values={},
+                      options={"mesh": "1"}, overwrite=False)
 
 
 class TestParseElectroProperties(unittest.TestCase):
@@ -651,7 +557,7 @@ class TestParseElectroProperties(unittest.TestCase):
     @staticmethod
     def _build_and_write(tmp_dir, selectors, overrides=None):
         from pathlib import Path
-        from omnidriver.cardiacfoam.dict_builder import build_electro_properties
+        from omnidriver.cardiacfoam.case_builder import build_electro_properties
         text = build_electro_properties(selectors, overrides=overrides)
         p = Path(tmp_dir) / "electroProperties"
         p.write_text(text)
@@ -659,7 +565,7 @@ class TestParseElectroProperties(unittest.TestCase):
 
     def test_returns_dict_with_selectors_and_overrides_keys(self) -> None:
         import tempfile
-        from omnidriver.cardiacfoam.dict_builder import parse_electro_properties
+        from omnidriver.cardiacfoam.case_builder import parse_electro_properties
         with tempfile.TemporaryDirectory() as d:
             p = self._build_and_write(
                 d,
@@ -673,7 +579,7 @@ class TestParseElectroProperties(unittest.TestCase):
 
     def test_solver_in_selectors(self) -> None:
         import tempfile
-        from omnidriver.cardiacfoam.dict_builder import parse_electro_properties
+        from omnidriver.cardiacfoam.case_builder import parse_electro_properties
         with tempfile.TemporaryDirectory() as d:
             p = self._build_and_write(
                 d,
@@ -686,7 +592,7 @@ class TestParseElectroProperties(unittest.TestCase):
 
     def test_ionic_model_and_tissue_in_selectors(self) -> None:
         import tempfile
-        from omnidriver.cardiacfoam.dict_builder import parse_electro_properties
+        from omnidriver.cardiacfoam.case_builder import parse_electro_properties
         with tempfile.TemporaryDirectory() as d:
             p = self._build_and_write(
                 d,
@@ -700,7 +606,7 @@ class TestParseElectroProperties(unittest.TestCase):
 
     def test_ignored_keys_lists_structurally_skipped_dynamic_paths(self) -> None:
         import tempfile
-        from omnidriver.cardiacfoam.dict_builder import parse_electro_properties
+        from omnidriver.cardiacfoam.case_builder import parse_electro_properties
         with tempfile.TemporaryDirectory() as d:
             p = self._build_and_write(
                 d,
@@ -721,7 +627,7 @@ class TestParseElectroProperties(unittest.TestCase):
 
     def test_non_default_override_is_captured(self) -> None:
         import tempfile
-        from omnidriver.cardiacfoam.dict_builder import parse_electro_properties
+        from omnidriver.cardiacfoam.case_builder import parse_electro_properties
         with tempfile.TemporaryDirectory() as d:
             p = self._build_and_write(
                 d,
@@ -740,7 +646,7 @@ class TestParseElectroProperties(unittest.TestCase):
 
     def test_default_value_absent_from_overrides(self) -> None:
         import tempfile
-        from omnidriver.cardiacfoam.dict_builder import parse_electro_properties
+        from omnidriver.cardiacfoam.case_builder import parse_electro_properties
         with tempfile.TemporaryDirectory() as d:
             p = self._build_and_write(
                 d,
@@ -756,7 +662,7 @@ class TestParseElectroProperties(unittest.TestCase):
 
     def test_selector_keys_not_duplicated_in_overrides(self) -> None:
         import tempfile
-        from omnidriver.cardiacfoam.dict_builder import parse_electro_properties
+        from omnidriver.cardiacfoam.case_builder import parse_electro_properties
         with tempfile.TemporaryDirectory() as d:
             p = self._build_and_write(
                 d,
@@ -776,7 +682,7 @@ class TestParseElectroProperties(unittest.TestCase):
         """singleCellSolver reads activeTensionModel as a flat word in its Coeffs, not a sub-block."""
         import tempfile
         from pathlib import Path
-        from omnidriver.cardiacfoam.dict_builder import (
+        from omnidriver.cardiacfoam.case_builder import (
             build_electro_properties,
             parse_electro_properties,
         )
@@ -802,7 +708,7 @@ class TestParseElectroProperties(unittest.TestCase):
         )
 
     def test_active_tension_model_recovered_from_real_singlecell_tutorial(self) -> None:
-        from omnidriver.cardiacfoam.dict_builder import parse_electro_properties
+        from omnidriver.cardiacfoam.case_builder import parse_electro_properties
 
         if not SINGLE_CELL_ELECTRO_PROPERTIES.exists():
             self.skipTest("tutorial fixture not present in this checkout")
@@ -817,7 +723,7 @@ class TestParseElectroProperties(unittest.TestCase):
         """Compares re-parsed dicts, not raw text: `foamDictionary` canonicalizes numbers (`1e-6` -> `1e-06`)."""
         import tempfile
         from pathlib import Path
-        from omnidriver.cardiacfoam.dict_builder import (
+        from omnidriver.cardiacfoam.case_builder import (
             build_electro_properties,
             parse_electro_properties,
         )
@@ -848,104 +754,12 @@ class TestParseElectroProperties(unittest.TestCase):
         self.assertEqual(parsed, reparsed)
 
 
-class TestBuildAndLaunchControlDict(unittest.TestCase):
-    """build_and_launch delta_t / end_time patch an existing system/controlDict."""
-
-    @staticmethod
-    def _selectors():
-        return (
-            {"myocardiumSolver": "singleCellSolver",
-             "ionicModel": "AlievPanfilov",
-             "tissue": "myocyte"},
-            {"type": "electroModel"},
-        )
-
-    @staticmethod
-    def _make_case_with_control_dict(d: str) -> "object":
-        from pathlib import Path
-        case_dir = Path(d) / "case"
-        (case_dir / "system").mkdir(parents=True)
-        (case_dir / "system" / "controlDict").write_text(
-            "deltaT    0.05;\nendTime   1.0;\n"
-        )
-        return case_dir
-
-    def test_delta_t_written_to_control_dict(self) -> None:
-        import tempfile
-        from omnidriver.cardiacfoam.dict_builder import build_and_launch
-        electro, physics = self._selectors()
-        with tempfile.TemporaryDirectory() as d:
-            case_dir = self._make_case_with_control_dict(d)
-            build_and_launch(
-                electro,
-                physics_selectors=physics,
-                case_dir=case_dir,
-                delta_t=0.001,
-                dry_run=True,
-            )
-            text = (case_dir / "system" / "controlDict").read_text()
-            self.assertIn("0.001", text)
-
-    def test_end_time_written_to_control_dict(self) -> None:
-        import tempfile
-        from omnidriver.cardiacfoam.dict_builder import build_and_launch
-        electro, physics = self._selectors()
-        with tempfile.TemporaryDirectory() as d:
-            case_dir = self._make_case_with_control_dict(d)
-            build_and_launch(
-                electro,
-                physics_selectors=physics,
-                case_dir=case_dir,
-                end_time=0.002,
-                dry_run=True,
-            )
-            text = (case_dir / "system" / "controlDict").read_text()
-            self.assertIn("0.002", text)
-
-    def test_none_params_leave_control_dict_unchanged(self) -> None:
-        import tempfile
-        from omnidriver.cardiacfoam.dict_builder import build_and_launch
-        electro, physics = self._selectors()
-        with tempfile.TemporaryDirectory() as d:
-            case_dir = self._make_case_with_control_dict(d)
-            original = (case_dir / "system" / "controlDict").read_text()
-            build_and_launch(
-                electro,
-                physics_selectors=physics,
-                case_dir=case_dir,
-                dry_run=True,
-            )
-            self.assertEqual(
-                (case_dir / "system" / "controlDict").read_text(),
-                original,
-            )
-
-    def test_control_dict_is_generated_when_delta_t_set(self) -> None:
-        import tempfile
-        from pathlib import Path
-        from omnidriver.cardiacfoam.dict_builder import build_and_launch
-        electro, physics = self._selectors()
-        with tempfile.TemporaryDirectory() as d:
-            case_dir = Path(d) / "case"
-            case_dir.mkdir()
-            build_and_launch(
-                electro,
-                physics_selectors=physics,
-                case_dir=case_dir,
-                delta_t=0.001,
-                dry_run=True,
-            )
-            control_dict_path = case_dir / "system" / "controlDict"
-            self.assertTrue(control_dict_path.exists())
-            self.assertIn("deltaT", control_dict_path.read_text())
-
-
 class TestEikonalECGHeterogeneity(unittest.TestCase):
     """sigmaExtracellular and ionicHeterogeneity entries under eikonalSolver + eikonalECG."""
 
     def test_sigmaExtracellular_in_catalog_when_ecgDomains_present(self) -> None:
         """Any ecgDomains override sets the virtual ``$ecgDomains_present`` key."""
-        from omnidriver.cardiacfoam.dict_builder import (
+        from omnidriver.cardiacfoam.case_builder import (
             resolve_context,
             select_applicable_entries,
         )
@@ -965,7 +779,7 @@ class TestEikonalECGHeterogeneity(unittest.TestCase):
         )
 
     def test_sigmaExtracellular_absent_without_ecgDomains(self) -> None:
-        from omnidriver.cardiacfoam.dict_builder import (
+        from omnidriver.cardiacfoam.case_builder import (
             resolve_context,
             select_applicable_entries,
         )
@@ -979,7 +793,7 @@ class TestEikonalECGHeterogeneity(unittest.TestCase):
         )
 
     def test_ionic_heterogeneity_entries_applicable_for_eikonalSolver(self) -> None:
-        from omnidriver.cardiacfoam.dict_builder import (
+        from omnidriver.cardiacfoam.case_builder import (
             resolve_context,
             select_applicable_entries,
         )
@@ -997,7 +811,7 @@ class TestEikonalECGHeterogeneity(unittest.TestCase):
         self.assertTrue(expected.issubset(paths), f"Missing: {expected - paths}")
 
     def test_ionic_heterogeneity_entries_applicable_for_monodomainSolver(self) -> None:
-        from omnidriver.cardiacfoam.dict_builder import (
+        from omnidriver.cardiacfoam.case_builder import (
             resolve_context,
             select_applicable_entries,
         )
@@ -1011,7 +825,7 @@ class TestEikonalECGHeterogeneity(unittest.TestCase):
         self.assertIn("$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.smoothing", paths)
 
     def test_eikonalSolver_with_ionicHeterogeneity_overrides_round_trips(self) -> None:
-        from omnidriver.cardiacfoam.dict_builder import build_electro_properties
+        from omnidriver.cardiacfoam.case_builder import build_electro_properties
 
         text = build_electro_properties(
             selectors={"myocardiumSolver": "eikonalSolver"},
@@ -1074,7 +888,7 @@ class TestRestitutionEikonalSolver1D(unittest.TestCase):
         }
 
     def _build(self, conduction_system_solver: str) -> str:
-        from omnidriver.cardiacfoam.dict_builder import build_electro_properties
+        from omnidriver.cardiacfoam.case_builder import build_electro_properties
 
         return build_electro_properties(
             {
@@ -1086,7 +900,7 @@ class TestRestitutionEikonalSolver1D(unittest.TestCase):
         )
 
     def test_restitution_specific_keys_appear_in_applicable_entries(self) -> None:
-        from omnidriver.cardiacfoam.dict_builder import (
+        from omnidriver.cardiacfoam.case_builder import (
             resolve_context,
             select_applicable_entries,
         )

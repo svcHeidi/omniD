@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from omnidriver.openfoam.axes import block_mesh_resolution_axis
-from omnidriver.openfoam.mesh_provisioning import cell_counts_from_dx
+from omnidriver.openfoam.case_planning import cell_counts_from_dx
 
 BLOCK_MESH_DICT_DOCUMENT = "system/blockMeshDict"
 

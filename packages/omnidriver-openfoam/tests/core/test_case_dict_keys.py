@@ -238,7 +238,7 @@ def test_a_misspelled_key_is_silently_replaced_by_the_catalogue_default(tmp_path
     # key carrying one is structurally immune to the required-field check.
     import shutil
 
-    from omnidriver.cardiacfoam import dict_builder as DB
+    from omnidriver.cardiacfoam import case_builder as DB
     from omnidriver.core.plugin_interface import load_plugin_context
     from omnidriver.core.strict_planning import strict_plan
     from omnidriver.core.tutorial_records import case_folder_record

@@ -3,7 +3,7 @@ electroProperties unparseable, so $ELECTRO_MODEL_COEFFS.dimension was unusable."
 
 from __future__ import annotations
 
-from omnidriver.cardiacfoam.dict_builder import build_electro_properties
+from omnidriver.cardiacfoam.case_builder import build_electro_properties
 
 
 def test_dimension_reaches_the_dict_in_a_form_openfoam_can_parse():

@@ -19,7 +19,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from omnidriver.openfoam.dict_builder import match_dynamic_entry
+from omnidriver.openfoam.case_rules import match_dynamic_entry
 from omnidriver.openfoam.record_key_validation import (
     CataloguedDocument, listed_entry, make_validator, open_system_documents,
 )

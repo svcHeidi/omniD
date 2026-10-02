@@ -60,7 +60,7 @@ from omnidriver.core.tutorial_records import (
     AxisContract, AxisResult, ProducedPath, TutorialRecord, WorkflowStep,
 )
 from omnidriver.openfoam.axes import block_mesh_resolution_axis
-from omnidriver.openfoam.mesh_provisioning import cell_counts_from_dx
+from omnidriver.openfoam.case_planning import cell_counts_from_dx
 
 from ..activation_probes import ACTIVATION_PROBES_FORMAT
 from .case_outputs import WITH_DEFAULT_VALUES

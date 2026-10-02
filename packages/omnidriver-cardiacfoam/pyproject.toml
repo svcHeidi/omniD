@@ -17,6 +17,9 @@ dependencies = [
 [project.entry-points."omnidriver.plugins"]
 cardiacfoam = "omnidriver.cardiacfoam.cardiacfoam_plugin:CardiacFoamPlugin"
 
+[project.entry-points."omnidriver.builders"]
+cardiacfoam = "omnidriver.cardiacfoam.case_builder:build"
+
 [project.optional-dependencies]
 post = [
   "matplotlib>=3.7",

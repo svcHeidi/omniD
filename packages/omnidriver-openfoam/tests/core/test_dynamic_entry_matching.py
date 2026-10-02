@@ -1,11 +1,11 @@
-"""`dict_builder.match_dynamic_entry` -- captures a dynamic-path binding,
+"""`case_rules.match_dynamic_entry` -- captures a dynamic-path binding,
 not just whether one matched, for a caller that must also validate what
 was bound (e.g. a per-case name against its entry's declared domain)."""
 
 from __future__ import annotations
 
 from omnidriver.core.contracts.dictionary import DictEntry
-from omnidriver.openfoam.dict_builder import match_dynamic_entry
+from omnidriver.openfoam.case_rules import match_dynamic_entry
 
 _ENTRIES = (
     DictEntry(

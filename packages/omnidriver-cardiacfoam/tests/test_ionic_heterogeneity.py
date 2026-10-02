@@ -198,7 +198,7 @@ def test_heterogeneity_entries_are_optional_except_what_a_declared_axis_must_set
         assert e.required is (under_axis and e.driver_path.rsplit(".", 1)[-1] in axis_keys), e.driver_path
 
 
-# dict_builder round-trip
+# case_builder round-trip
 
 _HET_OVERRIDES = {
     "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.field": "t",
@@ -213,7 +213,7 @@ _HET_OVERRIDES = {
 
 
 def test_build_emits_nested_heterogeneity_block():
-    from omnidriver.cardiacfoam.dict_builder import build_electro_properties
+    from omnidriver.cardiacfoam.case_builder import build_electro_properties
     text = build_electro_properties(
         selectors={
             "myocardiumSolver": "monodomainSolver",
@@ -228,7 +228,7 @@ def test_build_emits_nested_heterogeneity_block():
 
 
 def test_build_then_parse_round_trips_heterogeneity(tmp_path):
-    from omnidriver.cardiacfoam.dict_builder import (
+    from omnidriver.cardiacfoam.case_builder import (
         build_electro_properties,
         parse_electro_properties,
     )
@@ -250,7 +250,7 @@ def test_build_then_parse_round_trips_heterogeneity(tmp_path):
 
 
 def test_default_build_omits_heterogeneity_block():
-    from omnidriver.cardiacfoam.dict_builder import build_electro_properties
+    from omnidriver.cardiacfoam.case_builder import build_electro_properties
     text = build_electro_properties(
         selectors={
             "myocardiumSolver": "monodomainSolver",

@@ -218,70 +218,29 @@ def find_listCellModelsVariables_binary(env: Mapping[str, str] | None = None) ->
 
 
 def _synthesize_case(case_dir: Path, model: str, entry: Any) -> None:
-    """Write a minimal single-cell case for one ionic model.
-
-    Uses the driver's own dictionary synthesis rather than hand-written text,
-    so this exercises the same path an agent would use to configure a run.
-    """
-    from omnidriver.cardiacfoam.dict_builder import (
-        build_electro_properties,
-        build_physics_properties,
-    )
+    """Build a single-cell case for one ionic model with the case builder."""
+    from omnidriver.cardiacfoam.case_builder import build_case
 
     # The selector takes a tissue the model itself defines; the others are
     # applied through heterogeneity.
     tissues = tuple(entry.native_tissue_labels or entry.compatible_tissues or ("myocyte",))
-    (case_dir / "constant").mkdir(parents=True, exist_ok=True)
-    (case_dir / "system").mkdir(parents=True, exist_ok=True)
 
-    # The *compactBatched models declare batchedIntegrator required
-    # (dict_entries_catalog.py:305-311), so a bare selector set is rejected by
-    # the validator. Supply the documented default rather than failing to
-    # verify every batched model.
+    # The *compactBatched models require batchedIntegrator, and the FDA
+    # manufactured models select their analytical solution by dimensionality
+    # and fatal without it (ionicSelector.C). Any valid choice exposes the same
+    # variable set.
     overrides: dict[str, str] = {}
     if "Batched" in model:
         overrides["$ELECTRO_MODEL_COEFFS.batchedIntegrator"] = "rushLarsen"
-    # The FDA manufactured models select their analytical solution by
-    # dimensionality and fatal without it (ionicSelector.C:73). Any valid
-    # choice exposes the same variable set, so 3D is arbitrary but sufficient.
-    # Found by the first live run.
     if "Manufactured" in model:
-        # Plain value: dict_builder quotes tokens OpenFOAM cannot lex bare
-        # (see _openfoam_value_token). Any valid choice exposes the same
-        # variable set, so 3D is arbitrary but sufficient.
         overrides["$ELECTRO_MODEL_COEFFS.dimension"] = "3D"
 
-    (case_dir / "constant" / "electroProperties").write_text(
-        build_electro_properties(
-            selectors={
-                "myocardiumSolver": "singleCellSolver",
-                "ionicModel": model,
-                "tissue": tissues[0],
-            },
-            overrides=overrides or None,
-        )
+    built = build_case(
+        {"myocardiumSolver": "singleCellSolver", "ionicModel": model, "tissue": tissues[0]},
+        case_dir=case_dir, electro_overrides=overrides or None, overwrite=True,
     )
-    (case_dir / "constant" / "physicsProperties").write_text(
-        build_physics_properties(selectors={"type": "electroModel"})
-    )
-
-    # Every OpenFOAM application reads system/controlDict via createTime.H
-    # before anything else, so the utility fatals without it even though it
-    # needs no mesh. Found by the first live run, not by inspection.
-    from omnidriver.cardiacfoam.system_templates import build_control_dict
-
-    (case_dir / "system" / "controlDict").write_text(build_control_dict())
-
-    # electroModel.C requires a real fvMesh regardless of solver, so the
-    # utility needs one meshed the same way as every other case: a
-    # blockMeshDict. Writing it here costs no OpenFOAM binary --
-    # `test_case_synthesis_works_without_the_solver`
-    # exercises exactly this function without one; running `blockMesh`
-    # itself is `_verify_one`'s job, which already requires the environment
-    # this function does not.
-    from omnidriver.openfoam.mesh_provisioning import single_cell_block_mesh_dict_text
-
-    (case_dir / "system" / "blockMeshDict").write_text(single_cell_block_mesh_dict_text())
+    if built["status"] != "ok":
+        raise ValueError("; ".join(item["message"] for item in built["diagnostics"] if item["level"] == "error"))
 
 
 def _verify_one(

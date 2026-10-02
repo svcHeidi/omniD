@@ -138,3 +138,19 @@ def test_a_remove_carries_no_value_and_another_mode_is_refused(tmp_path: Path):
     assert target["operation"] == "remove" and "value" not in target
     with pytest.raises(ValueError, match="clone_and_patch"):
         patch_mutation(SimpleNamespace(mode="synthesize"), owner_id=OWNER)
+
+
+def test_a_patch_against_a_missing_document_is_refused(tmp_path: Path):
+    parameter = ParameterAssignment(
+        qualified_id="deltaT", owner=OWNER, document="system/controlDict",
+        key_path=("deltaT",), value=1e-4, value_kind="scalar", source="case",
+    )
+    request = CaseMutationRequest(
+        mode="clone_and_patch", case_root=tmp_path, adapter_id=OWNER,
+        workflow="test", source_artifacts=(), parameters=(parameter,), requested_by="test",
+    )
+    with pytest.raises(ValueError, match="system/controlDict"):
+        case_rendering.render_patch_case_files(
+            patch_mutation(request, owner_id=OWNER), snapshot_root=tmp_path / "scratch",
+            driver_context=None, renderer_id="test",
+        )

@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 from regression_equivalence.tutorials_tree import tutorials_root
-from omnidriver.cardiacfoam.dict_builder import (
+from omnidriver.cardiacfoam.case_builder import (
     build_electro_properties,
     parse_electro_properties,
 )
