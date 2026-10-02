@@ -86,7 +86,7 @@ results directory — it is not forced under `caseRoot`.
   `#codeStream` / `#calc` / coded-function-object value can no longer reach a
   dict file through `update_foam_entry` to be compiled and executed by the
   solver at run time. This guard covers `update_foam_entry` specifically —
-  see the dict synthesis gap noted below, which it does not cover.
+  see the case builder gap noted below, which it does not cover.
 
 ## Explicitly NOT mitigated
 
@@ -98,11 +98,11 @@ results directory — it is not forced under `caseRoot`.
   invokes it directly with an unvalidated `case_root` / `log_dir` / `state_path`
   / command bypasses path and command validation. Untrusted document content
   never reaches the runner except through validated ingestion.
-- The dict synthesis path is not screened for injection. `synthesize`
-  requests serialize their values via `specs/dict_builder._openfoam_value_token` /
-  `_serialize_block` in `omnidriver/cardiacfoam/dict_builder.py`. That path
-  performs no injection screening at all — a `#codeStream` payload routed
-  through it reaches the written dict file unrejected. Only
-  `update_foam_entry`'s direct write path (both tiers, above) is guarded.
-  This is a pre-existing gap; `dict_builder.py` synthesizes dicts rather than
-  mutating them and was never migrated to the guarded write path.
+- The case builder (`omnidriver build`) is not screened for injection. It
+  serialises catalogue values through `value_token` / `serialize_block` in
+  `omnidriver/openfoam/case_builder.py`, called by
+  `omnidriver/cardiacfoam/case_builder.py`. That path performs no injection
+  screening at all: a `#codeStream` payload passed to `--set` reaches the
+  written dict file unrejected. Only `update_foam_entry`'s direct write path
+  (both tiers, above) is guarded. The builder authors dicts rather than
+  mutating them, and was never migrated to the guarded write path.

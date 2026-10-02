@@ -327,8 +327,8 @@ not re-run for this review; their last results are in the reports.
 
 | piece | reads | runs in production? |
 |---|---|---|
-| cardiacFOAM `dict_builder` (build and parse `electroProperties`, `physicsProperties`) | the catalogs | yes |
-| `openfoam/dict_builder`, `openfoam/literals` | caller's entries | yes (`check_required`, `format_boolean_literal` are test-only) |
+| cardiacFOAM `case_builder` (build and parse `electroProperties`, `physicsProperties`; `omnidriver build`) | the catalogs | `omnidriver build` and the `check` ionic probe |
+| `openfoam/case_builder`, `openfoam/literals` | caller's entries | `omnidriver build`; `literals` in the record path |
 | `openfoam/dict_keys_scanner` (C++ dictionary reads) | C++ at the supplied `cxx_mapping.source_root` | every strict plan, cached by source digest; `omnidriver scan` and `catalog --uncatalogued` |
 | `cardiacfoam/rtst_scanner` (runtime-selection tables) | C++, found by walking up (`monorepo.py`) | test-only, behind a silent `skip_without_monorepo` |
 | `names_parser`, `ionic_catalog_verification` | C++ headers; the `listCellModelsVariables` binary | a script; tests behind skips |
