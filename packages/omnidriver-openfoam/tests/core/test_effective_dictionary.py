@@ -1,21 +1,20 @@
-"""Contract tests for explicit native effective dictionary resolution."""
+"""Contract tests for the read-only inspection of a dictionary's include closure."""
 from __future__ import annotations
 
-import inspect
-import os
 import subprocess
 from pathlib import Path
 
 import pytest
 
-from omnidriver.openfoam.effective_dictionary import (
-    inspect_effective_foam_configuration,
-    resolve_effective_foam_entry,
-)
+from omnidriver.openfoam.effective_dictionary import inspect_effective_foam_configuration
 from omnidriver.openfoam.openfoam_environment import discover_openfoam_bashrc
 
 
 HEADER = "FoamFile { version 2.0; format ascii; class dictionary; object d; }\n"
+ETC_KEYS = (
+    "FOAM_API", "FOAM_CONFIG_ETC", "FOAM_CONFIG_MODE", "FOAM_ETC", "HOME",
+    "WM_PROJECT_DIR", "WM_PROJECT_INST_DIR", "WM_PROJECT_SITE", "WM_PROJECT_VERSION",
+)
 NATIVE_BASHRC = discover_openfoam_bashrc()
 native = pytest.mark.skipif(
     NATIVE_BASHRC is None,
@@ -23,184 +22,69 @@ native = pytest.mark.skipif(
 )
 
 
-def test_bashrc_default_is_not_a_hardcoded_machine_path():
-    sig = inspect.signature(resolve_effective_foam_entry)
-    default = sig.parameters["bashrc"].default
-    assert not isinstance(default, (str, Path)), (
-        f"bashrc default is a hardcoded path: {default!r}; "
-        "it must be a sentinel that triggers ambient discovery instead"
-    )
+def _inspect(path: Path, env: dict[str, str]) -> dict:
+    (evidence,) = inspect_effective_foam_configuration(path.parent, (path.name,), env=env)
+    return evidence
 
 
-def test_unspecified_bashrc_does_not_mask_lexical_execution_required(monkeypatch, tmp_path):
-    import omnidriver.openfoam.effective_dictionary as effective_dictionary_module
-
-    monkeypatch.setattr(effective_dictionary_module, "discover_openfoam_bashrc", lambda: None)
-    path = tmp_path / "d"
-    path.write_text(
-        HEADER + f'pwned #codeStream {{ code #{{ system("touch dummy"); #}}; }};\n'
-    )
-
-    result = effective_dictionary_module.resolve_effective_foam_entry(path, "pwned")
-
-    assert result.status == "execution_required"
-
-
-def test_missing_runtime_is_explicit_not_a_lexical_fallback(tmp_path: Path) -> None:
-    path = tmp_path / "d"
-    path.write_text(HEADER + "value 1;\n")
-    result = resolve_effective_foam_entry(path, "value", bashrc=tmp_path / "missing-bashrc")
-    assert result.status == "runtime_unavailable"
-    assert result.value is None
-    assert result.parser == "foamDictionary"
-
-
-def test_configured_execution_environment_runs_native_parser_without_resourcing(
-    monkeypatch, tmp_path: Path,
-) -> None:
-    path = tmp_path / "d"
-    path.write_text(HEADER + "value 1;\n")
-    executable = tmp_path / "foamDictionary"
-    executable.write_text("")
-    seen: dict = {}
-
-    monkeypatch.setattr(
-        "omnidriver.openfoam.effective_dictionary.shutil.which",
-        lambda name, path: str(executable),
-    )
-
-    def fake_run(command, **kwargs):
-        seen["command"] = command
-        seen["env"] = kwargs["env"]
-        return subprocess.CompletedProcess(command, 0, stdout="7\n", stderr="")
-
-    monkeypatch.setattr(
-        "omnidriver.openfoam.effective_dictionary.subprocess.run", fake_run,
-    )
-    result = resolve_effective_foam_entry(
-        path,
-        "value",
-        bashrc=None,
-        env={"PATH": str(tmp_path), "WM_PROJECT_DIR": "/runtime/openfoam"},
-    )
-
-    assert (result.status, result.value) == ("resolved", "7")
-    assert seen["command"] == (str(executable), str(path), "-entry", "value", "-value")
-    assert result.runtime == "/runtime/openfoam"
-
-
-@native
-def test_v2412_resolves_local_include_substitution_and_duplicate(tmp_path: Path) -> None:
+def test_a_local_include_is_followed(tmp_path: Path) -> None:
     included = tmp_path / "inc"
     included.write_text("base 7;\n")
     path = tmp_path / "d"
-    path.write_text(
-        HEADER + '#include "inc"\n' + "dup 1;\ndup 2;\nref $base;\n"
-    )
-    ref = resolve_effective_foam_entry(path, "ref")
-    duplicate = resolve_effective_foam_entry(path, "dup")
-    assert (ref.status, ref.value) == ("resolved", "7")
-    assert (duplicate.status, duplicate.value) == ("resolved", "2")
-    assert {str(path.resolve()), str(included.resolve())} == set(ref.inspected_files)
+    path.write_text(HEADER + '#include "inc"\nref $base;\n')
+    evidence = _inspect(path, {})
+    assert evidence["status"] == "inspected"
+    assert set(evidence["inspected_files"]) == {str(path.resolve()), str(included.resolve())}
 
 
-def test_executable_directive_requires_explicit_capability_without_running(tmp_path: Path) -> None:
+def test_an_executable_directive_is_unresolved_and_never_run(tmp_path: Path) -> None:
     sentinel = tmp_path / "must-not-exist"
     path = tmp_path / "d"
     path.write_text(
         HEADER + f'pwned #codeStream {{ code #{{ system("touch {sentinel}"); #}}; }};\n'
     )
-    result = resolve_effective_foam_entry(path, "pwned")
-    assert result.status == "execution_required"
-    assert "allow_executable_directives=True" in result.message
+    evidence = _inspect(path, {})
+    assert evidence["status"] == "unresolved"
+    assert "executable dictionary directive" in evidence["message"]
     assert not sentinel.exists()
 
 
 def test_runtime_dependent_include_is_explicitly_unresolved(tmp_path: Path) -> None:
     path = tmp_path / "d"
     path.write_text(HEADER + "#includeFunc residuals\n")
-    result = resolve_effective_foam_entry(path, "anything")
-    assert result.status == "unresolved"
-    assert "runtime-dependent include" in result.message
+    evidence = _inspect(path, {})
+    assert evidence["status"] == "unresolved"
+    assert "runtime-dependent include" in evidence["message"]
 
 
-def test_include_etc_requires_explicit_root_without_running(tmp_path: Path) -> None:
+def test_include_etc_without_a_configured_root_is_unresolved_and_reports_every_key(tmp_path: Path) -> None:
     """Every key find_etc_file's search chain depends on is reported, not just FOAM_ETC."""
     path = tmp_path / "d"
     path.write_text(HEADER + '#includeEtc "caseDicts/example"\n')
 
-    result = resolve_effective_foam_entry(path, "anything", bashrc=None, env={})
+    evidence = _inspect(path, {})
 
-    assert result.status == "unresolved"
-    assert result.environment_keys == (
-        "FOAM_API", "FOAM_CONFIG_ETC", "FOAM_CONFIG_MODE", "FOAM_ETC", "HOME",
-        "WM_PROJECT_DIR", "WM_PROJECT_INST_DIR", "WM_PROJECT_SITE",
-        "WM_PROJECT_VERSION",
-    )
-    assert "no location configured" in result.message
+    assert evidence["status"] == "unresolved"
+    assert evidence["environment_keys"] == list(ETC_KEYS)
+    assert "no location configured" in evidence["message"]
 
 
-def test_include_etc_dependency_is_inspected_from_configured_root(
-    monkeypatch, tmp_path: Path,
-) -> None:
+def test_include_etc_dependency_is_inspected_from_configured_root(tmp_path: Path) -> None:
     etc_root = tmp_path / "etc"
     included = etc_root / "caseDicts" / "example"
     included.parent.mkdir(parents=True)
     included.write_text("fromEtc 23;\n")
     path = tmp_path / "d"
     path.write_text(HEADER + '#includeEtc "caseDicts/example"\n')
-    executable = tmp_path / "foamDictionary"
-    executable.write_text("")
-    monkeypatch.setattr(
-        "omnidriver.openfoam.effective_dictionary.shutil.which",
-        lambda name, path: str(executable),
-    )
-    monkeypatch.setattr(
-        "omnidriver.openfoam.effective_dictionary.subprocess.run",
-        lambda command, **kwargs: subprocess.CompletedProcess(
-            command, 0, stdout="23\n", stderr="",
-        ),
-    )
 
-    result = resolve_effective_foam_entry(
-        path,
-        "fromEtc",
-        bashrc=None,
-        env={"PATH": str(tmp_path), "FOAM_ETC": str(etc_root)},
-    )
+    evidence = _inspect(path, {"FOAM_ETC": str(etc_root)})
 
-    assert (result.status, result.value) == ("resolved", "23")
-    # every key find_etc_file's search chain depends on is recorded, not just
-    # FOAM_ETC.
-    assert result.environment_keys == (
-        "FOAM_API", "FOAM_CONFIG_ETC", "FOAM_CONFIG_MODE", "FOAM_ETC", "HOME",
-        "WM_PROJECT_DIR", "WM_PROJECT_INST_DIR", "WM_PROJECT_SITE",
-        "WM_PROJECT_VERSION",
-    )
-    assert set(result.inspected_files) == {str(path.resolve()), str(included.resolve())}
+    assert evidence["status"] == "inspected"
+    assert evidence["environment_keys"] == list(ETC_KEYS)
+    assert set(evidence["inspected_files"]) == {str(path.resolve()), str(included.resolve())}
 
 
-@native
-def test_v2412_resolves_include_etc_and_records_runtime_dependency(
-    tmp_path: Path,
-) -> None:
-    path = tmp_path / "d"
-    path.write_text(HEADER + '#includeEtc "caseDicts/profiling/parallel.cfg"\n')
-
-    result = resolve_effective_foam_entry(path, "type")
-
-    dependency = NATIVE_BASHRC.parent / "caseDicts" / "profiling" / "parallel.cfg"
-    assert (result.status, result.value) == ("resolved", "parProfiling")
-    assert result.environment_keys == (
-        "FOAM_API", "FOAM_CONFIG_ETC", "FOAM_CONFIG_MODE", "FOAM_ETC", "HOME",
-        "WM_PROJECT_DIR", "WM_PROJECT_INST_DIR", "WM_PROJECT_SITE",
-        "WM_PROJECT_VERSION",
-    )
-    assert str(dependency.resolve()) in result.inspected_files
-
-
-@native
-def test_v2412_ignores_commented_out_directives_and_includes(tmp_path: Path) -> None:
+def test_commented_out_directives_and_includes_are_not_directives(tmp_path: Path) -> None:
     path = tmp_path / "d"
     path.write_text(
         HEADER
@@ -209,35 +93,38 @@ def test_v2412_ignores_commented_out_directives_and_includes(tmp_path: Path) -> 
         + 'description "a literal #includeEtc is not a directive";\n'
         + "value 19;\n"
     )
-    result = resolve_effective_foam_entry(path, "value")
-    assert (result.status, result.value) == ("resolved", "19")
-    assert result.inspected_files == (str(path.resolve()),)
+    evidence = _inspect(path, {})
+    assert evidence["status"] == "inspected"
+    assert evidence["inspected_files"] == [str(path.resolve())]
 
 
 def test_environment_include_without_the_required_value_is_unresolved(tmp_path: Path) -> None:
     path = tmp_path / "d"
     path.write_text(HEADER + '#include "$OMNIDRIVER_TEST_INCLUDE"\n')
-    result = resolve_effective_foam_entry(path, "anything", env={})
-    assert result.status == "unresolved"
-    assert result.environment_keys == ("OMNIDRIVER_TEST_INCLUDE",)
-    assert "unset environment variable" in result.message
+    evidence = _inspect(path, {})
+    assert evidence["status"] == "unresolved"
+    assert evidence["environment_keys"] == ["OMNIDRIVER_TEST_INCLUDE"]
+    assert "unset environment variable" in evidence["message"]
 
 
-def test_missing_optional_include_is_recorded_as_absence_evidence(
-    tmp_path: Path, monkeypatch,
-) -> None:
+def test_environment_include_is_followed_and_its_key_recorded(tmp_path: Path) -> None:
+    included = tmp_path / "environment.inc"
+    included.write_text("fromEnvironment 17;\n")
+    path = tmp_path / "d"
+    path.write_text(HEADER + '#include "$OMNIDRIVER_TEST_INCLUDE"\n')
+    evidence = _inspect(path, {"OMNIDRIVER_TEST_INCLUDE": str(included)})
+    assert evidence["status"] == "inspected"
+    assert evidence["environment_keys"] == ["OMNIDRIVER_TEST_INCLUDE"]
+    assert str(included.resolve()) in evidence["inspected_files"]
+
+
+def test_missing_optional_include_is_recorded_as_absence_evidence(tmp_path: Path) -> None:
     path = tmp_path / "d"
     missing = tmp_path / "runtime" / "optional.cfg"
     path.write_text(HEADER + f'#includeIfPresent "{missing}"\nvalue 3;\n')
-
-    monkeypatch.setattr(
-        "omnidriver.openfoam.effective_dictionary.shutil.which",
-        lambda _name, path: None,
-    )
-    result = resolve_effective_foam_entry(path, "value", bashrc=None, env={})
-
-    assert result.status == "runtime_unavailable"
-    assert result.absent_optional_files == (str(missing.resolve()),)
+    evidence = _inspect(path, {})
+    assert evidence["status"] == "inspected"
+    assert evidence["absent_optional_files"] == [str(missing.resolve())]
 
 
 def test_configuration_inspection_identifies_the_selected_evaluator(
@@ -260,43 +147,6 @@ def test_configuration_inspection_identifies_the_selected_evaluator(
     assert evidence[0]["evaluator"] == {
         "name": "foamDictionary", "path": str(evaluator),
     }
-
-
-@native
-def test_v2412_executes_calc_only_with_explicit_opt_in(tmp_path: Path) -> None:
-    path = tmp_path / "d"
-    path.write_text(HEADER + 'answer #calc "6 * 7";\n')
-
-    gated = resolve_effective_foam_entry(path, "answer")
-    resolved = resolve_effective_foam_entry(
-        path, "answer", allow_executable_directives=True,
-    )
-
-    assert gated.status == "execution_required"
-    assert (resolved.status, resolved.value) == ("resolved", "42")
-
-
-@native
-def test_v2412_ignores_a_missing_optional_include(tmp_path: Path) -> None:
-    path = tmp_path / "d"
-    path.write_text(HEADER + '#includeIfPresent "missing.inc"\nvalue 3;\n')
-    result = resolve_effective_foam_entry(path, "value")
-    assert (result.status, result.value) == ("resolved", "3")
-
-
-@native
-def test_v2412_resolves_explicit_environment_include_and_records_key(tmp_path: Path) -> None:
-    included = tmp_path / "environment.inc"
-    included.write_text("fromEnvironment 17;\n")
-    path = tmp_path / "d"
-    path.write_text(HEADER + '#include "$OMNIDRIVER_TEST_INCLUDE"\n')
-    result = resolve_effective_foam_entry(
-        path, "fromEnvironment",
-        env={**os.environ, "OMNIDRIVER_TEST_INCLUDE": str(included)},
-    )
-    assert (result.status, result.value) == ("resolved", "17")
-    assert result.environment_keys == ("OMNIDRIVER_TEST_INCLUDE",)
-    assert str(included.resolve()) in result.inspected_files
 
 
 def _sourced_native_environment(bashrc: Path, home: Path) -> dict[str, str]:

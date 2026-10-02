@@ -175,45 +175,6 @@ def absent_load_environment(*, environment_source, driver_context) -> dict:
 
 
 @_instrumented
-def absent_apply_overrides(
-    overrides, *, case_root, driver_context, execution_env=None,
-) -> tuple[dict, ...]:
-    """Plugins predating apply_overrides() cannot apply format-specific
-    overrides.
-
-    Validation and application are one call because core has only ever used
-    them together, and splitting them would let a caller apply without
-    validating. Raises OverrideError, a ValueError subclass, so core catches
-    ValueError and needs no import of the exception type.
-
-    There is no neutral default here the way there is for e.g. environment
-    diagnostics: applying an override means writing bytes into a dict file
-    whose syntax only the selected adapter's mutators understand, so a
-    plugin with no own ``apply_overrides()`` hook genuinely cannot be swept
-    into this path (future/ENVIRONMENT_CONTRACT.md §10, Tier 3) -- same shape as ``route_sweep_case_values``/
-    ``materialize_sweep_case`` refusing by name rather than pretending to be
-    neutral. Without this catch, the import raised ModuleNotFoundError
-    uncaught -- cli.py's ``except (OSError, ValueError)`` around this call
-    does not catch it, so it reached the terminal as a raw traceback."""
-
-    del overrides, case_root, driver_context, execution_env
-    raise ValueError(
-        "the selected adapter does not implement apply_overrides(); "
-        "strict applying is not supported for this plugin"
-    )
-
-
-@_instrumented
-def absent_override_target_paths(overrides, *, case_root, driver_context) -> tuple:
-    """An adapter without a mutator cannot declare mutation targets."""
-
-    del overrides, case_root, driver_context
-    raise ValueError(
-        "the selected adapter does not implement override target declaration"
-    )
-
-
-@_instrumented
 def absent_inspect_effective_configuration(
     *, case_root, driver_context, execution_env=None,
 ) -> tuple[dict, ...]:
@@ -369,20 +330,9 @@ def absent_samplable_fields(plugin, resolved) -> dict:
 
 
 @_instrumented
-def absent_override_schema(plugin, tutorial_name: str, make_spec_info: dict) -> dict:
-    """get_override_schema() is optional. A plugin that does not
-    implement it gets an empty schema and must declare its own by
-    implementing get_override_schema()."""
-
-    del plugin, tutorial_name, make_spec_info
-    return {}
-
-
-@_instrumented
 def absent_dict_entry_catalog(plugin) -> dict:
-    """get_dict_entry_catalog() is optional. Same rule as
-    :func:`absent_override_schema`: a plugin that does not implement it
-    gets no dictionary catalog."""
+    """get_dict_entry_catalog() is optional: a plugin that does not
+    implement it gets no dictionary catalog."""
 
     del plugin
     return {}
@@ -436,9 +386,8 @@ def absent_case_runtime_conventions():
 
 @_instrumented
 def absent_report_catalog(plugin) -> tuple:
-    """get_report_catalog() is optional. Same rule as
-    :func:`absent_override_schema`: a plugin that does not implement it
-    gets no reports and must declare its own by implementing
+    """get_report_catalog() is optional: a plugin that does not implement
+    it gets no reports and must declare its own by implementing
     get_report_catalog()."""
 
     del plugin
@@ -447,33 +396,12 @@ def absent_report_catalog(plugin) -> tuple:
 
 @_instrumented
 def absent_named_catalogs(plugin) -> dict:
-    """get_named_catalogs() is optional. Same rule as
-    :func:`absent_override_schema`: a plugin that does not implement it
-    gets no named catalogs and must declare its own by implementing
+    """get_named_catalogs() is optional: a plugin that does not implement
+    it gets no named catalogs and must declare its own by implementing
     get_named_catalogs()."""
 
     del plugin
     return {}
-
-
-@_instrumented
-def absent_override_scopes(plugin) -> tuple:
-    """get_override_scopes() is optional. A plugin that does not
-    implement it gets no override scopes and must declare its own by
-    implementing get_override_scopes()."""
-
-    del plugin
-    return ()
-
-
-@_instrumented
-def absent_dict_regeneration_scopes(plugin) -> tuple:
-    """get_regeneration_scopes() is optional. A plugin that does not
-    implement it gets no regeneration scopes and must declare its own
-    by implementing get_regeneration_scopes()."""
-
-    del plugin
-    return ()
 
 
 #: TutorialRecordCapability, RecordKeyValidationCapability and

@@ -20,6 +20,7 @@ from .core.runtime.postprocess_phase import (
     write_case_record,
 )
 from .core.runtime.workflow_orchestrator import STATE_FILENAME
+from .core.case_transaction import CaseTransactionError, pending_transaction, recover_case_transaction
 from .core.runtime.registry import ENTRY_KIND_VALUES
 from .core.runtime.sweep_runner import (
     _materialize_entry_case,
@@ -139,28 +140,6 @@ def _attach_failure_context(payload: dict, state, step_id: str | None, *, tail_l
         payload["failure_context"] = fc
 
 
-def _remediation_transaction_payload(transaction: dict | None) -> dict | None:
-    if transaction is None:
-        return None
-    return {
-        key: transaction.get(key)
-        for key in (
-            "transaction_id",
-            "origin",
-            "status",
-            "hypothesis",
-            "proposal_digest",
-            "plan_digest",
-            "parent_transaction_id",
-            "repeats_failed_proposal",
-            "candidate_archive",
-            "execution_status",
-            "execution_attempt",
-        )
-        if key in transaction
-    }
-
-
 def _execute_step(
     *,
     entry_label: str,
@@ -172,30 +151,20 @@ def _execute_step(
     expected_artifacts,
     tail_lines: int,
     execution_env: dict[str, str] | None = None,
-    apply_overrides_path: str | None = None,
+    apply_path: str | None = None,
     driver_context: DriverContext | None = None,
+    apply_study: Callable[[dict], tuple[dict, ...]] | None = None,
     replan_after_mutation: Callable[[], _ReplannedExecution] | None = None,
 ) -> int:
     """CLI JSON adapter over the structured core step executor."""
-    from .core.runtime.step_candidate import execute_step_candidate_owned
+    from .core.runtime.step_execution import execute_step_owned
 
-    overrides = None
-    hypothesis = None
-    if apply_overrides_path is not None:
+    study = None
+    if apply_path is not None:
         try:
-            raw = json.loads(Path(apply_overrides_path).read_text())
-            if isinstance(raw, dict):
-                overrides = raw.get("overrides")
-                hypothesis = raw.get("hypothesis")
-                if hypothesis is not None and not isinstance(hypothesis, str):
-                    raise ValueError("--apply hypothesis must be a string")
-            else:
-                overrides = raw
-            if not isinstance(overrides, list):
-                raise ValueError(
-                    "--apply must be an override list or an object containing "
-                    "an overrides list and optional hypothesis"
-                )
+            study = json.loads(Path(apply_path).read_text())
+            if not isinstance(study, dict):
+                raise ValueError("--apply must be a JSON object of 'document:key' patches")
         except (OSError, ValueError) as exc:
             print(json.dumps({
                 "status": "failed",
@@ -214,19 +183,19 @@ def _execute_step(
         expected_artifacts=tuple(expected_artifacts or ()),
         execution_env=execution_env,
         driver_context=driver_context,
+        apply_study=apply_study,
         replan_after_mutation=replan_after_mutation,
     )
     try:
-        result = execute_step_candidate_owned(
+        result = execute_step_owned(
             context,
             step_id=step_id,
-            overrides=overrides,
-            hypothesis=hypothesis,
+            study=study,
             tail_lines=tail_lines,
             run_step=run_workflow_step,
         )
     except Exception as exc:
-        prefix = "--apply rejected: " if apply_overrides_path is not None else ""
+        prefix = "--apply rejected: " if apply_path is not None else ""
         payload = {
             "status": "failed",
             "entry": entry_label,
@@ -443,6 +412,18 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
             expected_artifacts=current_inputs.expected_artifacts,
         )
 
+    def apply_study(study: dict) -> tuple[dict, ...]:
+        from .core.runtime.record_execution import apply_record_study
+
+        records = driver_context.capabilities.tutorial_records.catalog() or {}
+        record = records.get(run_doc.name)
+        if record is None:
+            raise ValueError(f"run document {run_doc.name!r} is not a tutorial record of this plugin")
+        return apply_record_study(
+            record, case_root=inputs.case_root, study=study,
+            driver_context=driver_context, execution_env=execution_env,
+        )
+
     return _ExecutionContext(
         entry_label=run_doc.name,
         workflow_dag=inputs.workflow_dag,
@@ -460,6 +441,7 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
         execution_env=execution_env,
         driver_context=driver_context,
         source_path=args.run_document,
+        apply_study=apply_study,
         replan_after_mutation=replan_after_mutation,
     )
 
@@ -623,43 +605,6 @@ def _context_from_entry(
         driver_context=driver_context,
     )
 
-    planned_case_root = Path(report.launch["case_root"]).resolve()
-    planned_output_dir = Path(report.launch["output_dir"]).resolve()
-
-    def replan_after_mutation() -> _ReplannedExecution:
-        replanned_report = strict_plan(
-            replan_entry,
-            entry_kind=replan_entry_kind,
-            overrides=replan_overrides,
-            config_path=config_path,
-            environment_source=environment_source,
-            allow_unresolved_configuration=allow_unresolved_configuration,
-            scratch_root=scratch_dir,
-            cli_study=cli_study,
-            driver_context=driver_context,
-        )
-        replanned_readiness = is_launchable(
-            plan_status=replanned_report.status,
-            environment_diagnostics=replanned_report.environment_diagnostics,
-        )
-        if not replanned_readiness.structural_ok:
-            raise ValueError(
-                "replanned entry is invalid: "
-                + json.dumps(replanned_report.to_json(), sort_keys=True)
-            )
-        if replanned_report.workflow_dag is None or replanned_report.workflow_state is None:
-            raise ValueError("replanned entry did not produce an executable workflow")
-        if (
-            Path(replanned_report.launch["case_root"]).resolve() != planned_case_root
-            or Path(replanned_report.launch["output_dir"]).resolve() != planned_output_dir
-        ):
-            raise ValueError("replanned entry changed its case or output identity")
-        return _ReplannedExecution(
-            workflow_dag=replanned_report.workflow_dag,
-            planned_state=replanned_report.workflow_state,
-            expected_artifacts=replanned_report.expected_artifacts,
-        )
-
     return (
         _ExecutionContext(
             entry_label=selected_entry,
@@ -673,7 +618,6 @@ def _context_from_entry(
             simulation_audit=report.simulation_audit,
             execution_env=execution_env,
             driver_context=driver_context,
-            replan_after_mutation=replan_after_mutation,
         ),
         0,
     )
@@ -720,22 +664,16 @@ def _dispatch_context_owned(args, context: _ExecutionContext) -> int:
                     "error": fresh_error,
                 }, indent=2))
                 return 1
-        from .core.runtime.remediation_transaction import (
-            RemediationTransactionError,
-            require_reusable_case,
-        )
-
-        try:
-            require_reusable_case(
-                context.case_root,
-                explicit_repair=args.action == "step" and args.apply is not None,
-            )
-        except RemediationTransactionError as exc:
+        pending = pending_transaction(context.case_root)
+        if pending is not None:
             print(json.dumps({
                 "status": "failed",
                 "entry": context.entry_label,
                 "action": args.action,
-                "error": str(exc),
+                "error": (
+                    f"case transaction {pending.get('transaction_id')} was interrupted; "
+                    f"run `omnidriver recover --case-root {context.case_root}` first"
+                ),
             }, indent=2))
             return 1
         if args.action == "step":
@@ -749,8 +687,9 @@ def _dispatch_context_owned(args, context: _ExecutionContext) -> int:
                 expected_artifacts=context.expected_artifacts,
                 tail_lines=args.tail_lines,
                 execution_env=context.execution_env,
-                apply_overrides_path=args.apply,
+                apply_path=args.apply,
                 driver_context=context.driver_context,
+                apply_study=context.apply_study,
                 replan_after_mutation=context.replan_after_mutation,
             )
         return _execute_run(
@@ -776,37 +715,17 @@ def _run_document_dispatch(args, driver_context) -> int:
     return _dispatch_context(args, context)
 
 
-def _recover_remediation(args) -> int:
-    """Restore one interrupted/rejected transaction without planning or running."""
-    from .core.runtime.remediation_transaction import (
-        RemediationTransactionError,
-        read_remediation_transaction,
-        restore_remediation_transaction,
-    )
-
+def _recover(args) -> int:
+    """Restore the before-images of an interrupted case transaction, without
+    planning or running."""
     case_root = Path(args.case_root).resolve()
-    output_dir = Path(args.output_dir).resolve()
     try:
-        with acquire_case_lease(case_root):
-            with acquire_attempt_lease(output_dir):
-                current = read_remediation_transaction(case_root)
-                if current is None:
-                    raise RemediationTransactionError(
-                        "case has no remediation transaction to restore"
-                    )
-                restored = restore_remediation_transaction(
-                    case_root,
-                    output_dir=output_dir,
-                    transaction_id=args.transaction_id or str(current["transaction_id"]),
-                    expected_revision=int(current.get("revision", 0)),
-                    expected_status=str(current["status"]),
-                )
-    except (AttemptLeaseError, RemediationTransactionError, OSError) as exc:
+        recovered = recover_case_transaction(case_root)
+    except CaseTransactionError as exc:
         print(json.dumps({
             "status": "failed",
             "action": "recover",
             "case_root": str(case_root),
-            "output_dir": str(output_dir),
             "error": str(exc),
         }, indent=2))
         return 1
@@ -814,9 +733,7 @@ def _recover_remediation(args) -> int:
         "status": "ok",
         "action": "recover",
         "case_root": str(case_root),
-        "output_dir": str(output_dir),
-        "transaction": _remediation_transaction_payload(restored),
-        "restored_targets": restored.get("restored_targets", []),
+        "transaction_id": recovered.transaction_id if recovered else None,
     }, indent=2))
     return 0
 
@@ -988,11 +905,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--apply",
-        metavar="OVERRIDES_JSON",
+        metavar="PATCHES_JSON",
         help=(
-            "action=step only: apply an override set (JSON list of "
-            "{driver_path, value}, or {hypothesis, overrides}) to the case, "
-            "validate a new plan, then rerun the step."
+            "action=step with --run-document only: edit the staged case with a "
+            "JSON object of 'document:key' patches, the same a study takes, "
+            "then rerun the step."
         ),
     )
     parser.add_argument(
@@ -1017,17 +934,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--case-root",
-        help=(
-            "For action=recover: exact case directory carrying the current "
-            "remediation transaction marker."
-        ),
-    )
-    parser.add_argument(
-        "--transaction-id",
-        help=(
-            "For action=recover: optional expected current transaction id; "
-            "a mismatch fails without restoring anything."
-        ),
+        help="For action=recover: the case directory whose interrupted transaction to restore.",
     )
     parser.add_argument(
         "--spec",
@@ -1221,8 +1128,8 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
         )
     if args.action != "step" and args.step:
         parser.error("--step is only valid with action=step")
-    if args.apply is not None and args.action != "step":
-        parser.error("--apply is only valid with action=step")
+    if args.apply is not None and (args.action != "step" or not args.run_document):
+        parser.error("--apply is only valid with action=step and --run-document: it edits an already staged case")
     if args.action not in {"step", "run"} and args.tail_lines != 200:
         parser.error("--tail-lines is only valid with action=step or action=run")
     if args.run_document and args.action not in {"run", "step"}:
@@ -1257,18 +1164,18 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
         parser.error("--fresh and --retry-failed are mutually exclusive")
     if args.max_cases != 200 and args.action not in {"sweep-plan", "sweep-run"}:
         parser.error("--max-cases is only valid with action=sweep-plan or action=sweep-run")
-    if args.action not in {"sweep-plan", "sweep-run", "recover"} and (args.spec or args.output_dir):
+    if args.action not in {"sweep-plan", "sweep-run"} and (args.spec or args.output_dir):
         parser.error("--spec/--output-dir are only valid with action=sweep-plan or action=sweep-run")
     if args.action == "recover":
-        if not args.case_root or not args.output_dir:
-            parser.error("action=recover requires --case-root and --output-dir")
-        if any((args.entry, args.run_document, args.config, args.cases_root, args.spec)):
+        if not args.case_root:
+            parser.error("action=recover requires --case-root")
+        if any((args.entry, args.run_document, args.config, args.cases_root, args.spec, args.output_dir)):
             parser.error(
-                "--entry/--run-document/--config/--cases-root/--spec are not valid "
+                "--entry/--run-document/--config/--cases-root/--spec/--output-dir are not valid "
                 "with action=recover"
             )
-    elif args.case_root or args.transaction_id:
-        parser.error("--case-root/--transaction-id are only valid with action=recover")
+    elif args.case_root:
+        parser.error("--case-root is only valid with action=recover")
     if args.action == "recover" and args.scratch_dir:
         parser.error("--scratch-dir is not valid with action=recover")
     if args.action == "compare":
@@ -1376,7 +1283,7 @@ def main(argv: list[str] | None = None) -> int:
     _validate_args(parser, args)
 
     if args.action == "recover":
-        return _recover_remediation(args)
+        return _recover(args)
 
     if args.action == "compare":
         return _compare_quantities(args)

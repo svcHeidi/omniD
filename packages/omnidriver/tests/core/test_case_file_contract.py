@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime_records import CORE_RUNTIME_RECORDS
 from plugins.minimal_plugin import MinimalTestPlugin
@@ -31,71 +29,3 @@ def test_conditional_files_are_separated_from_required() -> None:
     ).capabilities.case_files
     assert "run-test-case" in contract.conditional_files()
     assert "run-test-case" not in contract.required_files()
-
-
-def test_apply_returns_the_plugins_records() -> None:
-    """The adapter must not swallow what the plugin reports it changed."""
-    from omnidriver.core import plugin_capabilities
-
-    sentinel = ({"path": "constant/x", "key": "a", "old": "1", "new": "2"},)
-
-    class _Plugin:
-        def apply_overrides(
-            self, overrides, *, case_root, driver_context, execution_env=None,
-        ):
-            del overrides, case_root, driver_context, execution_env
-            return sentinel
-
-        def get_override_target_paths(self, overrides, *, case_root, driver_context):
-            del overrides, case_root, driver_context
-            return ()
-
-    adapter = plugin_capabilities._OverrideScopeAdapter(plugin=_Plugin())
-    assert adapter.apply({}, case_root=None, driver_context=None) == sentinel
-
-
-def test_openfoam_environment_hooks_thread_the_callers_context(tmp_path: Path) -> None:
-    """The OpenFOAM environment plugin's ``apply_overrides``/ ``get_override_target_paths`` hooks must resolve scopes and catalog entries from the *caller's* ``DriverContext``, not one they build from themselves."""
-    pytest.importorskip(
-        "omnidriver.openfoam.environment", reason="omnidriver-openfoam is not installed",
-    )
-    from omnidriver.core.contracts.dictionary import DictEntry
-    from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
-    from omnidriver.openfoam.apply_overrides import OverrideScope
-    from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
-
-    class _CardiacIshPlugin(OpenFOAMEnvironmentPlugin):
-        """A caller-side plugin with vocabulary the bare environment plugin lacks -- standing in for a cardiacFoam-contexted caller."""
-
-        def get_dictionary_catalog(self):
-            return DictionaryCatalog({
-                "electroProperties": (
-                    DictEntry(
-                        driver_path="$ELECTRO_MODEL_COEFFS.myocardiumSolver",
-                        description="test-only cardiac-ish entry",
-                        value_kind="word",
-                    ),
-                ),
-            })
-
-        def get_override_scopes(self):
-            return (
-                OverrideScope(
-                    token="ELECTRO_MODEL_COEFFS",
-                    file_relpath="constant/electroProperties",
-                    catalog_group="electroProperties",
-                    resolve_entry=lambda dp, case_root: (None, "myocardiumSolver"),
-                ),
-            )
-
-    caller_context = driver_context(
-        _CardiacIshPlugin(), source="test:cardiac-ish-caller",
-    )
-
-    plugin = OpenFOAMEnvironmentPlugin()
-    targets = plugin.get_override_target_paths(
-        [{"driver_path": "$ELECTRO_MODEL_COEFFS.myocardiumSolver", "value": "eikonal"}],
-        case_root=tmp_path,
-        driver_context=caller_context,
-    )
-    assert targets == (tmp_path / "constant" / "electroProperties",)

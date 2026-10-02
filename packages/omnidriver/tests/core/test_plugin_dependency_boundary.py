@@ -121,9 +121,7 @@ def test_catalogue_paths_follow_adapter_case_file_rules(tmp_path: Path) -> None:
     context = SimpleNamespace(
         capabilities=SimpleNamespace(
             case_files=SimpleNamespace(all_rules=lambda: rules),
-            override_schema=SimpleNamespace(
-                dict_entry_catalog=lambda: {"solver.yaml": ()},
-            ),
+            dictionaries=SimpleNamespace(documents=lambda: {"solver.yaml": ()}),
         ),
     )
     spec = SimpleNamespace(case_root=case_root, metadata={})

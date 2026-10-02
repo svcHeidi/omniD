@@ -211,7 +211,7 @@ def _owned_dict_relpaths(spec, driver_context: "DriverContext") -> tuple[str, ..
         return tuple(relpaths)
 
     case_root = Path(spec.case_root)
-    documents = driver_context.capabilities.override_schema.dict_entry_catalog()
+    documents = driver_context.capabilities.dictionaries.documents()
     rules = driver_context.capabilities.case_files.all_rules()
     for document in documents:
         for rule in rules:
@@ -712,7 +712,7 @@ def _strict_plan_for_spec(
         exempt=mesh_geometry_exempt,
         driver_context=driver_context,
     )
-    configuration_evidence = driver_context.capabilities.override_scopes.inspect(
+    configuration_evidence = driver_context.capabilities.effective_configuration.inspect(
         case_root=Path(spec.case_root),
         driver_context=driver_context,
         execution_env=dict(os.environ),

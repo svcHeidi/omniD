@@ -197,12 +197,6 @@ class CardiacFoamPlugin:
 
         return samplable_fields(resolved)
 
-    def get_override_schema(self, tutorial_name: str, make_spec_info: dict) -> dict:
-        """cardiacFoam's authored --config schema, including a worked example."""
-        from omnidriver.cardiacfoam.override_schema import config_schema
-
-        return config_schema(tutorial_name, make_spec_info)
-
     def get_solve_step_commands(self) -> frozenset:
         """Commands that actually run the solver, for telemetry collection."""
         from omnidriver.cardiacfoam.runtime_evidence import (
@@ -278,14 +272,17 @@ class CardiacFoamPlugin:
         return generated_output_globs(case_root, resolved_case)
 
     def get_dict_entry_catalog(self) -> dict:
-        """Dictionary entries arranged by cardiacFoam's own document names."""
-        from omnidriver.cardiacfoam.override_schema import (
-            dict_entry_catalog,
-        )
+        """Dictionary entries arranged by cardiacFoam's own document names.
 
-        return dict_entry_catalog(
-            self.get_dictionary_catalog(), self.get_dict_groups(),
-        )
+        ``physicsProperties`` is a flat sequence while ``electroProperties``
+        is grouped: that mirrors the two OpenFOAM dictionaries this solver
+        reads and is deliberately not a core convention."""
+        return {
+            "physicsProperties": list(self.get_dictionary_catalog().entries_for("physicsProperties")),
+            "electroProperties": {
+                group_name: list(entries) for group_name, entries in self.get_dict_groups().items()
+            },
+        }
 
     def get_config_resolution_description(self) -> str:
         """Which files resolve into a valid RunDocument config, in one sentence.
@@ -315,27 +312,6 @@ class CardiacFoamPlugin:
         )
 
         return named_catalogs(self.get_capabilities())
-
-    def get_override_scopes(self) -> tuple:
-        """This plugin's one `step --strict --apply` override scope:
-        $ELECTRO_MODEL_COEFFS -> constant/electroProperties."""
-        from omnidriver.cardiacfoam.overrides import (
-            electro_model_coeffs_scope,
-        )
-
-        return (electro_model_coeffs_scope(),)
-
-    def get_regeneration_scopes(self) -> tuple:
-        """This plugin's one `step --strict --apply` regeneration scope:
-        myocardiumSolver -> constant/electroProperties. Switching
-        myocardiumSolver renames the active <solver>Coeffs sub-block and
-        changes which sibling keys are legal, so it needs a full rebuild
-        rather than the key-patch $ELECTRO_MODEL_COEFFS route above."""
-        from omnidriver.cardiacfoam.overrides import (
-            electro_properties_regeneration_scope,
-        )
-
-        return (electro_properties_regeneration_scope(),)
 
     def get_record_key_validator(self):
         """This plugin's one ``RecordKeyValidationCapability`` answer for a

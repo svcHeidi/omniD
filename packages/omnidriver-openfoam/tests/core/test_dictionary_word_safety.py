@@ -1,6 +1,6 @@
 """`mutators.check_dictionary_word_is_safe` -- `_format_value`'s security
 refusals, reused for a dictionary key or sub-block name, since neither
-`update_foam_entry` nor `ensure_foam_dict` routes those through it. See SECURITY.md."""
+`update_foam_entry` routes those through it. See SECURITY.md."""
 
 from __future__ import annotations
 

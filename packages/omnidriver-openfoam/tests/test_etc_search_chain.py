@@ -176,21 +176,20 @@ def test_a_missing_dependency_selects_nothing_but_still_reports_candidates(tmp_p
 
 def test_the_closure_records_the_shadowing_file(tmp_path):
     """The public consequence: `inspected_files` must name the selected file."""
-    from omnidriver.openfoam.effective_dictionary import resolve_effective_foam_entry
+    from omnidriver.openfoam.effective_dictionary import inspect_effective_foam_configuration
 
     dirs = _layout(tmp_path)
     (dirs["dist"] / "caseDicts" / "x").write_text("deltaT 1e-3;\n")
     (dirs["site_versioned"] / "caseDicts" / "x").write_text("deltaT 2e-3;\n")
-    case = tmp_path / "case" / "system"
-    case.mkdir(parents=True)
-    dictionary = case / "controlDict"
-    dictionary.write_text('#includeEtc "caseDicts/x"\n')
+    case = tmp_path / "case"
+    (case / "system").mkdir(parents=True)
+    (case / "system" / "controlDict").write_text('#includeEtc "caseDicts/x"\n')
 
-    result = resolve_effective_foam_entry(
-        dictionary, "deltaT", bashrc=None, env=_esi_environment(tmp_path, dirs),
+    (evidence,) = inspect_effective_foam_configuration(
+        case, ("system/controlDict",), env=_esi_environment(tmp_path, dirs),
     )
-    assert str(dirs["site_versioned"] / "caseDicts" / "x") in result.inspected_files
-    assert str(dirs["dist"] / "caseDicts" / "x") not in result.inspected_files
+    assert str(dirs["site_versioned"] / "caseDicts" / "x") in evidence["inspected_files"]
+    assert str(dirs["dist"] / "caseDicts" / "x") not in evidence["inspected_files"]
 
 
 # -- FOAM_CONFIG_ETC ----------------------------------------------------------

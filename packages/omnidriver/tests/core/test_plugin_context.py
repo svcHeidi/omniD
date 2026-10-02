@@ -97,10 +97,6 @@ class _Plugin:
         del resolved
         return {}
 
-    def get_override_schema(self, tutorial_name, make_spec_info):
-        del tutorial_name, make_spec_info
-        return {}
-
     def get_run_document_config_schema(self) -> dict:
         return {"type": "object", "additionalProperties": True}
 

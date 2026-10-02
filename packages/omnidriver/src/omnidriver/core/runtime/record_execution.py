@@ -435,47 +435,19 @@ def _refusal_as_record_error(
         ) from exc
 
 
-def commit_record_case(
+def _commit_patches(
     record: TutorialRecord,
     *,
-    cases_root: Path,
     staged_case_root: Path,
-    study_by_source: Mapping[str, Mapping[str, Any]],
+    to_write: Sequence[SourcedPatch],
     driver_context: "DriverContext",
-    execution_env: Any | None = None,
-    requested_by: str = "tutorial_record",
-    inputs: Mapping[str, str | Path] | None = None,
-) -> RecordCommitResult:
-    """Stage, resolve, and commit one case in one ``commit_case_write``
-    call.
-
-    ``staged_case_root`` persists after this call (unlike
-    ``preview_record_case``'s scratch clone) -- it is the sweep's real,
-    per-case staging directory, the same one a later workflow-step run reads.
-
-    Returns a :class:`RecordCommitResult` whose ``write_record`` is ``None``
-    when every patch was already unchanged -- a legitimate no-op, not a
-    failure, so nothing is committed and no transaction is created --
-    reported explicitly via ``result.status``/``result.unchanged``.
-    """
+    execution_env: Any | None,
+    requested_by: str,
+    case_lease_held: bool = False,
+) -> CaseWriteRecord:
+    """Resolve, render and commit ``to_write`` into ``staged_case_root`` in
+    one ``commit_case_write`` call."""
     import tempfile
-
-    resolved_inputs = _stage(
-        record, cases_root=cases_root, staged_case_root=staged_case_root,
-        driver_context=driver_context, inputs=inputs,
-    )
-    (
-        to_write, unchanged, command_arguments, workflow_step_ids, _variant, parallel_request,
-    ) = _resolve_and_split(
-        record, study_by_source=study_by_source,
-        staged_case_root=staged_case_root, driver_context=driver_context,
-    )
-    if not to_write:
-        return RecordCommitResult(
-            write_record=None, unchanged=unchanged, command_arguments=command_arguments,
-            workflow_step_ids=workflow_step_ids, parallel_request=parallel_request,
-            resolved_inputs=resolved_inputs,
-        )
 
     # `identity.resolutions["case_writer"]` names whichever provider in the
     # composed stack actually answers `case_writer` -- correct even when
@@ -514,13 +486,95 @@ def commit_record_case(
         created_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         expected_effects=resolved.expected_effects,
     )
-    record_ = commit_case_write(
+    return commit_case_write(
         plan, driver_context=driver_context, execution_env=execution_env,
+        case_lease_held=case_lease_held,
     )
+
+
+def commit_record_case(
+    record: TutorialRecord,
+    *,
+    cases_root: Path,
+    staged_case_root: Path,
+    study_by_source: Mapping[str, Mapping[str, Any]],
+    driver_context: "DriverContext",
+    execution_env: Any | None = None,
+    requested_by: str = "tutorial_record",
+    inputs: Mapping[str, str | Path] | None = None,
+) -> RecordCommitResult:
+    """Stage, resolve, and commit one case in one ``commit_case_write``
+    call.
+
+    ``staged_case_root`` persists after this call (unlike
+    ``preview_record_case``'s scratch clone) -- it is the sweep's real,
+    per-case staging directory, the same one a later workflow-step run reads.
+
+    Returns a :class:`RecordCommitResult` whose ``write_record`` is ``None``
+    when every patch was already unchanged -- a legitimate no-op, not a
+    failure, so nothing is committed and no transaction is created --
+    reported explicitly via ``result.status``/``result.unchanged``.
+    """
+    resolved_inputs = _stage(
+        record, cases_root=cases_root, staged_case_root=staged_case_root,
+        driver_context=driver_context, inputs=inputs,
+    )
+    (
+        to_write, unchanged, command_arguments, workflow_step_ids, _variant, parallel_request,
+    ) = _resolve_and_split(
+        record, study_by_source=study_by_source,
+        staged_case_root=staged_case_root, driver_context=driver_context,
+    )
+    write_record = None
+    if to_write:
+        write_record = _commit_patches(
+            record, staged_case_root=staged_case_root, to_write=to_write,
+            driver_context=driver_context, execution_env=execution_env,
+            requested_by=requested_by,
+        )
     return RecordCommitResult(
-        write_record=record_, unchanged=unchanged, command_arguments=command_arguments,
+        write_record=write_record, unchanged=unchanged, command_arguments=command_arguments,
         workflow_step_ids=workflow_step_ids, parallel_request=parallel_request,
         resolved_inputs=resolved_inputs,
+    )
+
+
+def apply_record_study(
+    record: TutorialRecord,
+    *,
+    case_root: Path,
+    study: Mapping[str, Any],
+    driver_context: "DriverContext",
+    execution_env: Any | None = None,
+) -> tuple[dict[str, Any], ...]:
+    """Edit an already staged case with ``document:key`` patches, the same a
+    study takes, through the record's own validator, comparison and
+    ``commit_case_write``. The caller holds the case lease.
+
+    Refuses a name that is not a ``document:key``: an axis or reserved name
+    changes the plan, which needs a new plan rather than an edit. Returns
+    every patch, serialized, as ``changed`` or ``unchanged``.
+    """
+    plan_changing = sorted(name for name in study if ":" not in name)
+    if plan_changing:
+        raise TutorialRecordError(
+            f"tutorial record {record.name!r}: {plan_changing} is not a 'document:key' "
+            "patch; an axis or reserved name changes the plan, so plan again with it"
+        )
+    to_write, unchanged, *_ = _resolve_and_split(
+        record, study_by_source={"apply": study}, staged_case_root=case_root,
+        driver_context=driver_context,
+    )
+    if to_write:
+        _commit_patches(
+            record, staged_case_root=case_root, to_write=to_write,
+            driver_context=driver_context, execution_env=execution_env,
+            requested_by="step_apply", case_lease_held=True,
+        )
+    return tuple(
+        _serialize_sourced_patch(sourced, status=status)
+        for status, patches in (("changed", to_write), ("unchanged", unchanged))
+        for sourced in patches
     )
 
 

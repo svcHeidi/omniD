@@ -44,8 +44,6 @@ def test_reading_every_capability_under_cardiac_fires_no_gated_fallback() -> Non
         caps.case_files.describe_config_resolution()
         caps.report_catalog.reports()
         caps.named_catalogs.catalogs()
-        caps.override_scopes.scopes()
-        caps.dict_regeneration.scopes()
         caps.command_authorization.solver_commands()
         caps.command_authorization.auxiliary_commands()
         caps.command_authorization.utility_manifests()

@@ -213,25 +213,26 @@ class DictionaryCatalogCapability(Protocol):
 
     ``entries`` is the flat tuple of ``DictEntry`` values; ``catalog`` is the
     same data as a queryable ``DictionaryCatalog`` (``entries_for(document)``);
-    ``groups`` buckets entries by the plugin's own document names. Core does
+    ``groups`` buckets entries by the plugin's own group names; ``documents``
+    arranges them by the plugin's own document names, unserialized. Core does
     not know those names -- ``electroProperties`` is cardiac vocabulary, and a
     solids4foam plugin would say ``solidProperties`` instead.
 
-    All three are optional-neutral. A plugin without dictionaries (openCARP,
-    the toy) omits them, and each answers empty: ``()``,
-    ``DictionaryCatalog({})``, ``{}``. This is the seam that keeps dictionary
-    *syntax* knowledge (core's) apart from dictionary *meaning* (the
-    plugin's).
+    All are optional-neutral. A plugin without dictionaries (openCARP, the
+    toy) omits them, and each answers empty: ``()``, ``DictionaryCatalog({})``,
+    ``{}``. This is the seam that keeps dictionary *syntax* knowledge (core's)
+    apart from dictionary *meaning* (the plugin's).
 
-    :adapts: get_dict_entries, get_dict_groups, get_dictionary_catalog, get_phases
-    :consumed-by: omnidriver/dict_entries.py, omnidriver/cardiacfoam/dict_entries.py, omnidriver/cardiacfoam/sweep.py, omnidriver/openfoam/apply_overrides.py, omnidriver/openfoam/dict_builder.py, omnidriver/core/specs/validation.py, omnidriver/core/strict_planning.py
-    :fallback: absent_phases
+    :adapts: get_dict_entries, get_dict_groups, get_dict_entry_catalog, get_dictionary_catalog, get_phases
+    :consumed-by: omnidriver/dict_entries.py, omnidriver/cardiacfoam/dict_entries.py, omnidriver/cardiacfoam/sweep.py, omnidriver/openfoam/dict_builder.py, omnidriver/core/specs/validation.py, omnidriver/core/strict_planning.py
+    :fallback: absent_phases, absent_dict_entry_catalog
     :status: optional-neutral
     """
 
     def entries(self) -> tuple[Any, ...]: ...
     def catalog(self) -> Any: ...
     def groups(self) -> dict[str, tuple[Any, ...]]: ...
+    def documents(self) -> dict[str, Any]: ...
     def phases(self) -> tuple[str, ...]: ...
 
 
@@ -617,32 +618,6 @@ class EnvironmentPreflightCapability(Protocol):
     ) -> dict[str, str]: ...
 
 
-class OverrideSchemaCapability(Protocol):
-    """The plugin's authored configuration vocabulary.
-
-    ``config_schema`` is the machine-readable description of the ``--config``
-    JSON an agent writes, including a worked example for the named tutorial,
-    when the plugin has one to give. When it does not (an unrecognized
-    tutorial, or no hook at all), the adapter derives the answer from
-    :class:`RunDocumentConfigurationCapability`'s validated schema instead of
-    handing back a second, independently-authored empty answer -- see
-    :meth:`_OverrideSchemaAdapter.config_schema`. ``dict_entry_catalog``
-    returns the plugin's dictionary entries arranged by its own document
-    names, **unserialized** -- core owns serialization, the plugin owns the
-    vocabulary and the document shape.
-
-    :adapts: get_dict_entry_catalog, get_override_schema
-    :consumed-by: omnidriver/core/introspection.py
-    :fallback: absent_dict_entry_catalog, absent_override_schema
-    :status: optional-neutral
-    """
-
-    def config_schema(
-        self, tutorial_name: str, make_spec_info: dict[str, Any],
-    ) -> dict[str, Any]: ...
-    def dict_entry_catalog(self) -> dict[str, Any]: ...
-
-
 class RuntimeEvidenceCapability(Protocol):
     """Where the plugin's runtime evidence lives.
 
@@ -801,63 +776,6 @@ class NamedCatalogsCapability(Protocol):
     def catalogs(self) -> dict[str, Any]: ...
 
 
-class OverrideScopeCapability(Protocol):
-    """Plugin-declared ``$TOKEN.`` override scopes for the agent-facing
-    ``step --strict --apply`` path.
-
-    Generalizes adapter-defined scope tokens without assuming a particular
-    token count or path. Not a mandatory ``SolverPlugin`` member, so existing
-    v2 third-party plugins keep loading; the fallback
-    (``absent_override_scopes``) returns no scopes until an adapter declares
-    them.
-
-    :adapts: get_override_scopes, get_override_target_paths, apply_overrides, inspect_effective_configuration
-    :consumed-by: omnidriver/openfoam/apply_overrides.py, omnidriver/core/runtime/provenance_inputs.py, omnidriver/core/runtime/step_candidate.py, omnidriver/core/strict_planning.py
-    :fallback: absent_override_scopes, absent_override_target_paths, absent_apply_overrides, absent_inspect_effective_configuration
-    :status: get_override_scopes=optional-neutral, get_override_target_paths=optional-refusing, apply_overrides=optional-refusing, inspect_effective_configuration=optional-neutral
-    """
-
-    def scopes(self) -> tuple[Any, ...]: ...
-
-    def target_paths(
-        self, overrides: Any, *, case_root: Any, driver_context: Any,
-    ) -> tuple[Path, ...]: ...
-
-    def apply(
-        self, overrides: Any, *, case_root: Any, driver_context: Any,
-        execution_env: Any | None = None,
-    ) -> tuple[dict[str, Any], ...]: ...
-
-    def inspect(
-        self, *, case_root: Any, driver_context: Any,
-        execution_env: Any | None = None,
-    ) -> tuple[dict[str, Any], ...]: ...
-
-
-class DictRegenerationCapability(Protocol):
-    """Plugin-declared bare "selector" overrides that must REGENERATE a
-    dict file rather than key-patch it, for the agent-facing
-    ``step --strict --apply`` path.
-
-    A sibling of :class:`OverrideScopeCapability`: that one covers
-    ``$TOKEN.``-scoped leaves that patch in place; this one covers bare
-    selectors (e.g. cardiacFoam's ``myocardiumSolver``) whose value change
-    restructures the file -- renames a sub-block, changes which sibling
-    keys are legal -- so a single key/value/scope patch cannot express it.
-    Not a mandatory ``SolverPlugin`` member, so existing v2 third-party
-    plugins keep loading; the fallback (``absent_dict_regeneration_scopes``)
-    declares no regeneration scopes for any plugin, matching
-    :class:`OverrideScopeCapability`, with no ``plugin_id`` check.
-
-    :adapts: get_regeneration_scopes
-    :consumed-by: omnidriver/openfoam/apply_overrides.py
-    :fallback: absent_dict_regeneration_scopes
-    :status: optional-neutral
-    """
-
-    def scopes(self) -> tuple[Any, ...]: ...
-
-
 class ConfigValueCapability(Protocol):
     """Read one configuration value from an adapter's own file format.
 
@@ -874,6 +792,27 @@ class ConfigValueCapability(Protocol):
     """
 
     def reader(self): ...
+
+
+class EffectiveConfigurationCapability(Protocol):
+    """The files a case's configuration depends on, read without running
+    anything: what the adapter's own format resolves, files outside the
+    case included.
+
+    Strict planning reports what it finds, and provenance fingerprints it,
+    so a later edit to an included file invalidates a reused run. A plugin
+    that declares nothing contributes no evidence.
+
+    :adapts: inspect_effective_configuration
+    :consumed-by: omnidriver/core/runtime/provenance_inputs.py, omnidriver/core/strict_planning.py
+    :fallback: absent_inspect_effective_configuration
+    :status: optional-neutral
+    """
+
+    def inspect(
+        self, *, case_root: Any, driver_context: Any,
+        execution_env: Any | None = None,
+    ) -> tuple[dict[str, Any], ...]: ...
 
 
 class DictKeyScannerCapability(Protocol):
@@ -1081,6 +1020,14 @@ class _DictionaryCatalogAdapter:
     def groups(self) -> dict[str, tuple[Any, ...]]:
         hook = getattr(self.plugin, "get_dict_groups", None)
         return dict(hook()) if callable(hook) else {}
+
+    def documents(self) -> dict[str, Any]:
+        hook = getattr(self.plugin, "get_dict_entry_catalog", None)
+        if callable(hook):
+            return dict(hook())
+        from .compatibility import absent_dict_entry_catalog
+
+        return absent_dict_entry_catalog(self.plugin)
 
     def phases(self) -> tuple[str, ...]:
         hook = getattr(self.plugin, "get_phases", None)
@@ -1550,43 +1497,6 @@ class _EnvironmentPreflightAdapter:
 
 
 @dataclass(frozen=True)
-class _OverrideSchemaAdapter:
-    plugin: "SolverPlugin"
-
-    def config_schema(
-        self, tutorial_name: str, make_spec_info: dict[str, Any],
-    ) -> dict[str, Any]:
-        """Return the plugin's config documentation, or the validated schema.
-
-        A plugin with real per-tutorial vocabulary to document (e.g.
-        cardiacFoam's worked examples) supplies it here and that answer wins
-        unchanged. When a plugin has nothing tutorial-specific to say -- an
-        unrecognized tutorial name, or no ``get_override_schema`` hook at all
-        -- the answer derives from
-        ``RunDocumentConfigurationCapability.schema()`` instead, so it never
-        diverges from the schema core actually validates against.
-        """
-        hook = getattr(self.plugin, "get_override_schema", None)
-        if callable(hook):
-            answer = dict(hook(tutorial_name, make_spec_info))
-        else:
-            from .compatibility import absent_override_schema
-
-            answer = absent_override_schema(self.plugin, tutorial_name, make_spec_info)
-        if answer:
-            return answer
-        return _RunDocumentConfigurationAdapter(self.plugin).schema()
-
-    def dict_entry_catalog(self) -> dict[str, Any]:
-        hook = getattr(self.plugin, "get_dict_entry_catalog", None)
-        if callable(hook):
-            return dict(hook())
-        from .compatibility import absent_dict_entry_catalog
-
-        return absent_dict_entry_catalog(self.plugin)
-
-
-@dataclass(frozen=True)
 class _RuntimeEvidenceAdapter:
     plugin: "SolverPlugin"
 
@@ -1698,79 +1608,17 @@ class _NamedCatalogsAdapter:
 
 
 @dataclass(frozen=True)
-class _OverrideScopeAdapter:
+class _ConfigValueAdapter:
     plugin: "SolverPlugin"
 
-    def scopes(self) -> tuple["OverrideScope", ...]:
-        hook = getattr(self.plugin, "get_override_scopes", None)
-        if callable(hook):
-            return tuple(hook())
-        from .compatibility import absent_override_scopes
+    def reader(self):
+        hook = getattr(self.plugin, "get_config_value_reader", None)
+        return hook() if callable(hook) else None
 
-        return absent_override_scopes(self.plugin)
 
-    def apply(
-        self, overrides: Any, *, case_root: Any, driver_context: Any,
-        execution_env: Any | None = None,
-    ) -> tuple[dict[str, Any], ...]:
-        """Apply adapter-owned overrides, or leave them unsupported.
-
-        The context and the execution environment are both passed through to
-        the hook -- not just held here -- so an adapter can resolve its own
-        transaction and provenance requirements under the caller's context, and
-        read each written value back under the caller's runtime, rather than
-        substituting either from itself. Core does not delegate to a
-        solver-specific mutator when the hook is absent.
-        """
-        hook = getattr(self.plugin, "apply_overrides", None)
-        if callable(hook):
-            records = tuple(
-                hook(
-                    overrides,
-                    case_root=case_root,
-                    driver_context=driver_context,
-                    execution_env=execution_env,
-                )
-            )
-        else:
-            from .compatibility import absent_apply_overrides
-
-            records = absent_apply_overrides(
-                overrides, case_root=case_root, driver_context=driver_context,
-                execution_env=execution_env,
-            )
-        if execution_env is not None and overrides and not records:
-            raise ValueError(
-                f"provider {self.plugin.plugin_id!r} applied "
-                f"{len(tuple(overrides))} override(s) under an explicit "
-                f"execution environment but returned no effective-value "
-                f"evidence; an empty record set must not satisfy a required "
-                f"readback"
-            )
-        return records
-
-    def target_paths(
-        self, overrides: Any, *, case_root: Any, driver_context: Any,
-    ) -> tuple[Path, ...]:
-        hook = getattr(self.plugin, "get_override_target_paths", None)
-        if callable(hook):
-            return tuple(
-                Path(path)
-                for path in hook(
-                    overrides, case_root=case_root, driver_context=driver_context,
-                )
-            )
-        if callable(getattr(self.plugin, "apply_overrides", None)):
-            raise ValueError(
-                f"plugin {self.plugin.plugin_id!r} implements apply_overrides() "
-                "but does not declare get_override_target_paths(); crash-safe "
-                "--apply is unavailable"
-            )
-        from .compatibility import absent_override_target_paths
-
-        return absent_override_target_paths(
-            overrides, case_root=case_root, driver_context=driver_context,
-        )
+@dataclass(frozen=True)
+class _EffectiveConfigurationAdapter:
+    plugin: "SolverPlugin"
 
     def inspect(
         self, *, case_root: Any, driver_context: Any,
@@ -1786,28 +1634,6 @@ class _OverrideScopeAdapter:
             driver_context=driver_context,
             execution_env=execution_env,
         )
-
-
-@dataclass(frozen=True)
-class _DictRegenerationAdapter:
-    plugin: "SolverPlugin"
-
-    def scopes(self) -> tuple["RegenerationScope", ...]:
-        hook = getattr(self.plugin, "get_regeneration_scopes", None)
-        if callable(hook):
-            return tuple(hook())
-        from .compatibility import absent_dict_regeneration_scopes
-
-        return absent_dict_regeneration_scopes(self.plugin)
-
-
-@dataclass(frozen=True)
-class _ConfigValueAdapter:
-    plugin: "SolverPlugin"
-
-    def reader(self):
-        hook = getattr(self.plugin, "get_config_value_reader", None)
-        return hook() if callable(hook) else None
 
 
 @dataclass(frozen=True)
@@ -2051,7 +1877,7 @@ class PluginCapabilities:
         (probed via ``getattr``; the fallback returns a neutral value), or
         ``optional-refusing`` (probed; the fallback raises, naming the
         hook). A capability whose members genuinely differ (``case_files``,
-        ``override_scopes``) declares one ``member=tier`` entry per member
+        ``case_writer``) declares one ``member=tier`` entry per member
         on the same line instead of one tier for the whole seam --
         :func:`capability_seams.status_tiers` reads either shape.
         ``:status:`` is the single declaration of a member's enforcement
@@ -2088,15 +1914,13 @@ class PluginCapabilities:
     case_runtime_conventions: CaseRuntimeConventionsCapability
     environment_preflight: EnvironmentPreflightCapability
     dict_diagnostics: DictDiagnosticsCapability
-    override_schema: OverrideSchemaCapability
     runtime_evidence: RuntimeEvidenceCapability
     record_surface: RecordSurfaceCapability
     case_provenance: CaseProvenanceCapability
     report_catalog: ReportCatalogCapability
     named_catalogs: NamedCatalogsCapability
-    override_scopes: OverrideScopeCapability
-    dict_regeneration: DictRegenerationCapability
     config_value: ConfigValueCapability
+    effective_configuration: EffectiveConfigurationCapability
     dict_key_scanner: DictKeyScannerCapability
     case_writer: CaseWriterCapability
     tutorial_records: TutorialRecordCapability
@@ -2133,15 +1957,13 @@ def adapt_plugin_capabilities(plugin: "SolverPlugin") -> PluginCapabilities:
         case_runtime_conventions=_CaseRuntimeConventionsAdapter(plugin),
         environment_preflight=_EnvironmentPreflightAdapter(plugin),
         dict_diagnostics=_DictDiagnosticsAdapter(plugin),
-        override_schema=_OverrideSchemaAdapter(plugin),
         runtime_evidence=_RuntimeEvidenceAdapter(plugin),
         record_surface=_RecordSurfaceAdapter(plugin),
         case_provenance=_CaseProvenanceAdapter(plugin),
         report_catalog=_ReportCatalogAdapter(plugin),
         named_catalogs=_NamedCatalogsAdapter(plugin),
-        override_scopes=_OverrideScopeAdapter(plugin),
-        dict_regeneration=_DictRegenerationAdapter(plugin),
         config_value=_ConfigValueAdapter(plugin),
+        effective_configuration=_EffectiveConfigurationAdapter(plugin),
         dict_key_scanner=_DictKeyScannerAdapter(plugin),
         case_writer=_CaseWriterAdapter(plugin),
         tutorial_records=_TutorialRecordAdapter(plugin),

@@ -25,8 +25,7 @@
 #     longer hardcodes the field names ``ionic_model_catalog``/
 #     ``active_tension_catalog``. Kept as a plain function, not a method, so
 #     both the plugin's real hook and the v1-compatibility fallback in
-#     ``core/compatibility.py`` share one authored shape, the same split
-#     ``override_schema.py`` uses for ``config_schema``/``dict_entry_catalog``.
+#     ``core/compatibility.py`` share one authored shape.
 #
 # Author
 #     Simao Nieto de Castro, UCD.

@@ -153,7 +153,7 @@ def _mutable_entries(
 ) -> list[dict[str, Any]]:
     """One item per entry `dictionary_catalog.entries()` declares -- the same
     flat, adapter-agnostic `DictEntry` tuple `validate_value_shape` checks
-    against elsewhere. Not `override_schema.dict_entry_catalog()`, whose
+    against elsewhere. Not `dictionaries.documents()`, whose
     shape is adapter-declared and nested differently per adapter, so core
     cannot walk it generically to recover qualified ids.
 
@@ -374,7 +374,7 @@ def _dict_entry_catalog(driver_context: "DriverContext") -> dict[str, Any]:
     # The document names and their shape are plugin vocabulary; core only
     # serializes whatever structure the plugin declares.
     return _serialize(
-        driver_context.capabilities.override_schema.dict_entry_catalog()
+        driver_context.capabilities.dictionaries.documents()
     )
 
 
@@ -384,21 +384,6 @@ def _plugin_catalogs(driver_context: "DriverContext") -> dict[str, Any]:
     # namespaces the whole mapping under this key and serializes it.
     return _serialize(
         dict(driver_context.capabilities.named_catalogs.catalogs())
-    )
-
-
-def _describe_config_schema(
-    tutorial_name: str,
-    make_spec_info: dict[str, Any],
-    driver_context: "DriverContext",
-) -> dict[str, Any]:
-    """Return the plugin-authored config_schema payload for a tutorial.
-
-    The vocabulary (override tokens, examples, document names) is solver
-    knowledge and lives in the active plugin; core only routes the request.
-    """
-    return driver_context.capabilities.override_schema.config_schema(
-        tutorial_name, make_spec_info,
     )
 
 
@@ -477,7 +462,7 @@ def _describe_tutorial_record(
 
     A record has no ``spec``, so most of ``describe_entry``'s spec-derived
     sections (``spec``, ``tutorial_contract``, ``strict_launch``,
-    ``config_schema``, ``write_surface``) do not apply and are simply
+    ``write_surface``) do not apply and are simply
     absent, never a fabricated empty answer. ``record_preview`` -- each
     patch's document/key/value/status/validated flag, plus the command
     arguments per workflow step -- sits beside where ``write_surface`` would
@@ -637,11 +622,6 @@ def describe_entry(
             driver_context=driver_context,
             entry_kind=resolution["entry_kind"],
             config_path=config_path,
-        ),
-        "config_schema": _describe_config_schema(
-            resolution["resolved_name"],
-            make_spec_info,
-            driver_context,
         ),
         "run_state_schema": _run_state_schema(),
         "capability_manifest": _serialize({

@@ -231,58 +231,6 @@ def test_run_document_respects_allowed_runs_root() -> None:
         assert payload["status"] == "ok"
 
 
-def test_step_via_run_document_apply_mutates_reruns_and_audits() -> None:
-    # A flat "deltaT" override is only accepted against a catalog-declared
-    # controlDict entry (apply_overrides._catalog_entries reads the active
-    # plugin's declared catalog, never the case's live file -- see
-    # apply_overrides.py). Core and the generic OpenFOAM environment plugin
-    # declare no dict entries at all, so this claim needs a solver-adapter
-    # default; see test_invalid_config_blocks_execution_at_ingestion in
-    # test_trust_boundary_end_to_end.py for the same shape of guard.
-    from omnidriver.core.plugin_interface import default_driver_context
-
-    active_context = default_driver_context()
-    if "deltaT" not in {
-        entry.driver_path for entry in active_context.capabilities.dictionaries.entries()
-    }:
-        # StackIdentity has no singular id -- name every provider in the
-        # composed stack instead.
-        provider_ids = [p.id for p in active_context.identity.providers]
-        pytest.skip(
-            f"{provider_ids!r} declares no deltaT controlDict "
-            "entry; this claim needs a solver-adapter default plugin."
-        )
-
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        case_root = _write_case(
-            cases_root,
-            allrun="#!/bin/sh\nmkdir -p postProcessing 0.001\ntouch postProcessing/runDocCase_1.txt 0.001/Vm 0.001/AV_Ta\nexit 0\n",
-            steps=[{"id": "run", "command": "Allrun", "depends_on": []}],
-        )
-        (case_root / "system" / "controlDict").write_text("deltaT    0.001;\nendTime    1;\n")
-        doc_path = cases_root / "run.json"
-        _plan_to_file(cases_root, doc_path)
-        good = cases_root / "ov.json"
-        good.write_text('[{"driver_path": "deltaT", "value": "0.0005"}]')
-
-        out = StringIO()
-        with redirect_stdout(out):
-            code = main([
-                "step", "--run-document", str(doc_path), "--step", "run",
-                "--apply", str(good),
-            ])
-
-        payload = json.loads(out.getvalue())
-        assert code == 0, payload
-        assert payload["status"] == "ok"
-        assert "0.0005" in (case_root / "system" / "controlDict").read_text()
-        output_dir = Path(payload["workflow_state_path"]).parent
-        rec = json.loads((output_dir / "remediation_history.jsonl").read_text().splitlines()[0])
-        assert rec["applied_overrides"][0]["driver_path"] == "deltaT"
-        assert rec["resulting_status"] == "ok"
-
-
 @pytest.fixture
 def invalid_run_document_report() -> dict:
     """Run the ``--run-document`` path against a document with a known-bad ``config`` phase slice and return the parsed JSON payload."""

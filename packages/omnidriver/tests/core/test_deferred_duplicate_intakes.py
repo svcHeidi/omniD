@@ -19,15 +19,6 @@ def stack_context():
     )
 
 
-def test_config_schema_has_one_source(stack_context):
-    """Two capabilities answered "what may config contain"."""
-    caps = stack_context.capabilities
-    assert (
-        caps.override_schema.config_schema("any", {})
-        == caps.run_document_configuration.schema()
-    ), "the two config schemas must no longer be independently authored"
-
-
 def test_core_builds_the_capability_manifest(stack_context):
     """The plugin must not assemble what core can compose."""
     import inspect

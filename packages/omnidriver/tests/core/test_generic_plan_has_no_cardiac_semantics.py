@@ -66,7 +66,7 @@ def test_generic_plan_still_produces_a_usable_contract(tmp_path, monkeypatch) ->
 def test_generic_describe_override_surface_has_no_cardiac_semantics(
     tmp_path, monkeypatch
 ) -> None:
-    """The spec's exit gate names "override semantics", but those live in the describe payload (``config_schema``, ``dict_entries``) -- ``strict_plan`` does not emit them, so gating only on the plan left the one clause naming the override surface checked against a payload that cannot contain it."""
+    """The spec's exit gate names "override semantics", but those live in the describe payload (``dict_entries``) -- ``strict_plan`` does not emit them, so gating only on the plan left the one clause naming the override surface checked against a payload that cannot contain it."""
     monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
     monkeypatch.setenv("SKIP_GEOMETRY_DIAGNOSTICS", "1")
     case = _minimal_case(tmp_path)
@@ -75,11 +75,7 @@ def test_generic_describe_override_surface_has_no_cardiac_semantics(
         overrides={"cases_root": str(tmp_path)},
         driver_context=driver_context(DeclaredCasePlugin(), source="test"),
     )
-    override_surface = {
-        "config_schema": payload["config_schema"],
-        "dict_entries": payload["dict_entries"],
-    }
-    blob = json.dumps(override_surface)
+    blob = json.dumps(payload["dict_entries"])
     leaked = [token for token in _CARDIAC_TOKENS if token in blob]
     assert leaked == [], f"cardiac override semantics leaked: {leaked}"
 

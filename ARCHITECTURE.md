@@ -355,7 +355,7 @@ capability, which does name `absent_phases`).
 | capability | protocol | adapts | consumed by | fallback | status |
 |---|---|---|---|---|---|
 | `generic_case_factory` | `GenericCaseFactoryCapability` | `get_generic_case_factory` | `omnidriver/core/runtime/registry.py` | none | get_generic_case_factory=optional-neutral |
-| `dictionaries` | `DictionaryCatalogCapability` | `get_dict_entries`, `get_dict_groups`, `get_dictionary_catalog`, `get_phases` | `omnidriver/dict_entries.py`, `omnidriver/cardiacfoam/dict_entries.py`, `omnidriver/cardiacfoam/sweep.py`, `omnidriver/openfoam/apply_overrides.py`, `omnidriver/openfoam/dict_builder.py`, `omnidriver/core/specs/validation.py`, `omnidriver/core/strict_planning.py` | `absent_phases` | optional-neutral |
+| `dictionaries` | `DictionaryCatalogCapability` | `get_dict_entries`, `get_dict_groups`, `get_dict_entry_catalog`, `get_dictionary_catalog`, `get_phases` | `omnidriver/dict_entries.py`, `omnidriver/cardiacfoam/dict_entries.py`, `omnidriver/cardiacfoam/sweep.py`, `omnidriver/openfoam/dict_builder.py`, `omnidriver/core/specs/validation.py`, `omnidriver/core/strict_planning.py` | `absent_phases`, `absent_dict_entry_catalog` | optional-neutral |
 | `manifest` | `CapabilityManifestCapability` | `get_capabilities` | `omnidriver/cardiacfoam/dict_entries.py`, `omnidriver/core/introspection.py`, `omnidriver/core/strict_planning.py` | none | required |
 | `configuration_validator` | `ConfigurationValidatorCapability` | `validate_configuration` | `omnidriver/core/strict_planning.py` | none | required |
 | `run_semantic_validator` | `RunSemanticValidatorCapability` | `validate_run_semantics` | `omnidriver/core/specs/validation.py` | none | required |
@@ -371,15 +371,13 @@ capability, which does name `absent_phases`).
 | `case_runtime_conventions` | `CaseRuntimeConventionsCapability` | `get_case_runtime_conventions` | `omnidriver/core/runtime/registry.py`, `omnidriver/core/runtime/sweep_runner.py` | `absent_case_runtime_conventions` | optional-neutral |
 | `environment_preflight` | `EnvironmentPreflightCapability` | `get_environment_diagnostics`, `get_configured_environment`, `get_loaded_environment` | `omnidriver/core/strict_planning.py`, `omnidriver/core/runtime/sweep_runner.py`, `omnidriver/cli.py`, `omnidriver/conformance/checks.py` | `absent_environment_diagnostics`, `absent_configured_environment`, `absent_load_environment` | optional-neutral |
 | `dict_diagnostics` | `DictDiagnosticsCapability` | `get_function_object_field_diagnostics`, `get_case_dict_key_diagnostics` | `omnidriver/core/strict_planning.py` | `absent_function_object_field_diagnostics`, `absent_case_dict_key_diagnostics` | optional-neutral |
-| `override_schema` | `OverrideSchemaCapability` | `get_dict_entry_catalog`, `get_override_schema` | `omnidriver/core/introspection.py` | `absent_dict_entry_catalog`, `absent_override_schema` | optional-neutral |
 | `runtime_evidence` | `RuntimeEvidenceCapability` | `get_artifact_value_reader`, `get_extra_provenance_paths`, `get_log_redaction_patterns`, `get_solve_step_commands`, `get_telemetry_source_globs` | `omnidriver/conformance/checks.py`, `omnidriver/core/quantities/comparison.py`, `omnidriver/core/runtime/provenance_inputs.py`, `omnidriver/core/runtime/record_execution.py`, `omnidriver/core/runtime/workflow_runner.py` | none | optional-neutral |
 | `record_surface` | `RecordSurfaceCapability` | `get_agent_guidance`, `get_record_key_catalog` | `omnidriver/core/runtime/record_surface.py` | none | optional-neutral |
 | `case_provenance` | `CaseProvenanceCapability` | `get_generated_output_globs`, `get_input_roots`, `get_required_inputs` | `omnidriver/core/runtime/provenance_inputs.py` | none | optional-neutral |
 | `report_catalog` | `ReportCatalogCapability` | `get_report_catalog` | `scripts/export-report-catalog.py` | `absent_report_catalog` | optional-neutral |
 | `named_catalogs` | `NamedCatalogsCapability` | `get_named_catalogs` | `omnidriver/core/introspection.py` | `absent_named_catalogs` | optional-neutral |
-| `override_scopes` | `OverrideScopeCapability` | `get_override_scopes`, `get_override_target_paths`, `apply_overrides`, `inspect_effective_configuration` | `omnidriver/openfoam/apply_overrides.py`, `omnidriver/core/runtime/provenance_inputs.py`, `omnidriver/core/runtime/step_candidate.py`, `omnidriver/core/strict_planning.py` | `absent_override_scopes`, `absent_override_target_paths`, `absent_apply_overrides`, `absent_inspect_effective_configuration` | get_override_scopes=optional-neutral, get_override_target_paths=optional-refusing, apply_overrides=optional-refusing, inspect_effective_configuration=optional-neutral |
-| `dict_regeneration` | `DictRegenerationCapability` | `get_regeneration_scopes` | `omnidriver/openfoam/apply_overrides.py` | `absent_dict_regeneration_scopes` | optional-neutral |
 | `config_value` | `ConfigValueCapability` | `get_config_value_reader` | `omnidriver/cardiacfoam/run_document_config.py`, `omnidriver/core/runtime/record_execution.py`, `omnidriver/conformance/checks.py` | none | optional-neutral |
+| `effective_configuration` | `EffectiveConfigurationCapability` | `inspect_effective_configuration` | `omnidriver/core/runtime/provenance_inputs.py`, `omnidriver/core/strict_planning.py` | `absent_inspect_effective_configuration` | optional-neutral |
 | `dict_key_scanner` | `DictKeyScannerCapability` | `get_dict_key_scanner` | `omnidriver/core/strict_planning.py`, `omnidriver/core/catalog_query.py` | `absent_dict_key_scanner` | optional-neutral |
 | `case_writer` | `CaseWriterCapability` | `resolve_case_mutation`, `get_supported_mutation_modes`, `get_rendered_formats`, `render_case_files` | none | none | resolve_case_mutation=optional-refusing, get_supported_mutation_modes=optional-refusing, get_rendered_formats=optional-refusing, render_case_files=optional-refusing |
 | `tutorial_records` | `TutorialRecordCapability` | `get_tutorial_records` | `omnidriver/core/runtime/registry.py`, `omnidriver/conformance/checks.py` | none | optional-neutral |
@@ -387,6 +385,6 @@ capability, which does name `absent_phases`).
 | `case_value_comparison` | `CaseValueComparisonCapability` | `get_case_value_comparator` | `omnidriver/core/runtime/record_execution.py`, `omnidriver/conformance/checks.py` | none | optional-neutral |
 | `parallel_execution` | `ParallelExecutionCapability` | `get_parallel_steps` | `omnidriver/core/runtime/record_execution.py` | none | optional-neutral |
 
-32 capability seams.
+30 capability seams.
 
 <!-- END GENERATED: capability-seams -->

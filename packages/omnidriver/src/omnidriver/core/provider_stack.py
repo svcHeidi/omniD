@@ -177,8 +177,6 @@ _SHAPE: dict[str, str] = {
     "get_generated_output_globs": "sequence",
     "get_input_roots": "sequence",
     "get_report_catalog": "sequence",
-    "get_regeneration_scopes": "sequence",
-    "get_override_scopes": "sequence",
     "inspect_effective_configuration": "sequence",
     "render_case_files": "sequence",
     "get_record_key_catalog": "sequence",
@@ -193,7 +191,6 @@ _SHAPE: dict[str, str] = {
     "get_case_value_comparator": "single",
     "get_case_runtime_conventions": "single",
     "get_config_resolution_description": "single",
-    "get_override_schema": "single",
     "get_run_document_config_schema": "single",
     "build_run_document_config": "single",
     "get_artifact_value_reader": "single",
@@ -209,25 +206,18 @@ _SHAPE: dict[str, str] = {
     # -- exclusive ---------------------------------------------------------
     "materialize_sweep_case": "exclusive",
     "route_sweep_case_values": "exclusive",
-    "apply_overrides": "exclusive",
-    "get_override_target_paths": "exclusive",
     # -- profile -----------------------------------------------------------
     "get_profile": "profile",
 }
 
 #: Members that must be answered by the SAME provider, keyed by the member
-#: whose absence the error names. Generalises the single-plugin crash-safety
-#: check in ``_OverrideScopeAdapter.target_paths``: a provider that mutates
-#: without declaring what it touched is a data-loss risk, and splitting the
-#: pair across two providers reintroduces that risk while satisfying "exactly
-#: one" for each member on its own. ``get_supported_mutation_modes`` is
+#: whose absence the error names. ``get_supported_mutation_modes`` is
 #: ``single``-shaped (not ``set``) to match ``resolve_case_mutation``'s own
 #: shape: were it a union, a stack where one provider declares only
 #: ``synthesize`` support and a different, more specific provider implements
 #: the resolver would compose to the union of both providers' modes, letting
 #: ``resolve()`` pass a mode into a resolver that never claimed to accept it.
 _CROSS_MEMBER_PAIRS: tuple[tuple[str, str], ...] = (
-    ("apply_overrides", "get_override_target_paths"),
     ("resolve_case_mutation", "get_supported_mutation_modes"),
 )
 

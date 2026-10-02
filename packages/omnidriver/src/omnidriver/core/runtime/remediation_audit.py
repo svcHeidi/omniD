@@ -11,20 +11,17 @@ def append_remediation_record(
     *,
     step_id: str,
     attempt: int,
-    applied_overrides: list[dict[str, Any]],
+    applied_patches: list[dict[str, Any]],
     resulting_status: str,
-    effective_resolution: tuple[dict[str, Any], ...] = (),
 ) -> None:
     """Append one audit line. Best-effort: never raises (must not crash a rerun)."""
     record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "step_id": step_id,
         "attempt": attempt,
-        "applied_overrides": applied_overrides,
+        "applied_patches": applied_patches,
         "resulting_status": resulting_status,
     }
-    if effective_resolution:
-        record["effective_dictionary_resolution"] = list(effective_resolution)
     try:
         path = Path(output_dir) / "remediation_history.jsonl"
         with path.open("a", encoding="utf-8") as handle:

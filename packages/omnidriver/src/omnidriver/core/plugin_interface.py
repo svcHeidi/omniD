@@ -118,13 +118,6 @@ class SolverPlugin(Protocol):
         ...
 
     # -- Configuration vocabulary --------------------------------------------
-    def get_override_schema(
-        self, tutorial_name: str, make_spec_info: dict[str, Any],
-    ) -> dict[str, Any]:
-        """Machine-readable description of the ``--config`` JSON an agent may
-        write for this tutorial, including a worked example."""
-        ...
-
     def get_run_document_config_schema(self) -> dict[str, Any]:
         """JSON Schema for this plugin's RunDocument ``config`` object. Core
         validates against it dynamically and reports structured diagnostics,
@@ -448,40 +441,6 @@ class SolverPluginOptionalHooks(Protocol):
         Absent -> the current process environment is used unchanged."""
         ...
 
-    # -- OverrideScopeCapability ---------------------------------------------
-    def apply_overrides(
-        self, overrides: Any, *, case_root: "Path", driver_context: Any,
-        execution_env: Any | None = None,
-    ) -> tuple[dict[str, Any], ...]:
-        """Validate and apply a ``--apply`` override document to a case.
-
-        One call, not two: core has only ever validated and applied together,
-        and separating them would let a caller apply without validating. Raise
-        a ``ValueError`` subclass to reject. ``driver_context`` is the
-        caller's context -- an adapter must thread it through, not build a
-        substitute from itself, or it silently discards whatever solver
-        semantics the caller carried.
-
-        ``execution_env`` is the selected runtime's environment. When it is
-        supplied the adapter MUST read each written value back under it and
-        return one evidence record per override; returning ``()`` with an
-        environment in hand is refused by the capability adapter, because "I
-        wrote it and can say nothing about the result" is not a passed check.
-        When it is absent the write still happens and the adapter reports
-        whatever it can, which may be nothing. Absent -> applying overrides is
-        unsupported for this adapter."""
-        ...
-
-    def get_override_target_paths(
-        self, overrides: Any, *, case_root: "Path", driver_context: Any,
-    ) -> tuple["Path", ...]:
-        """Return every file ``apply_overrides`` may mutate, without writing.
-
-        Required when a plugin supplies its own mutator so core can persist
-        exact before-images before publishing an applying transaction.
-        ``driver_context`` is the caller's context (see ``apply_overrides``)."""
-        ...
-
     def inspect_effective_configuration(
         self, *, case_root: "Path", execution_env: dict[str, str] | None = None,
     ) -> tuple[dict[str, Any], ...]:
@@ -503,18 +462,6 @@ class SolverPluginOptionalHooks(Protocol):
     def get_named_catalogs(self) -> dict[str, Any]:
         """Plugin-chosen catalogs, namespaced under ``plugin_catalogs`` in
         ``describe``. Core imposes no key set. Absent -> ``{}``."""
-        ...
-
-    # -- OverrideScopeCapability / DictRegenerationCapability ----------------
-    def get_override_scopes(self) -> tuple[Any, ...]:
-        """``$TOKEN.``-scoped override targets that patch a dict in place.
-        Absent -> ``()``."""
-        ...
-
-    def get_regeneration_scopes(self) -> tuple[Any, ...]:
-        """Bare selector overrides whose value change REGENERATES a dict file
-        rather than patching it -- renaming sub-blocks or changing which
-        sibling keys are legal. Absent -> ``()``."""
         ...
 
     # -- DictKeyScannerCapability ---------------------------------------------

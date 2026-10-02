@@ -240,6 +240,82 @@ def parse_vector3_list_literal(text: str) -> tuple[tuple[float, float, float], .
 def format_vector3_list_literal(value: Sequence[Sequence[Any]]) -> str:
     return "(" + " ".join(format_vector3_literal(item) for item in value) + ")"
 
+def _as_comparable_text(text: str):
+    """Parse one native scalar/word/vector spelling into a comparable value.
+
+    Returns a float for a number, a bool for an OpenFOAM boolean word, a tuple
+    of floats for a parenthesised or unparenthesised whitespace-separated
+    vector (``blockMeshDict``'s hex-cell-counts convention omits the
+    parentheses), and the stripped text otherwise.
+    """
+    stripped = text.strip().rstrip(";").strip()
+    if not stripped:
+        return None
+    if stripped in {"true", "yes", "on"}:
+        return True
+    if stripped in {"false", "no", "off"}:
+        return False
+    if stripped.startswith("(") and stripped.endswith(")"):
+        parts = stripped[1:-1].split()
+        try:
+            return tuple(float(part) for part in parts)
+        except ValueError:
+            return stripped
+    parts = stripped.split()
+    if len(parts) > 1:
+        try:
+            return tuple(float(part) for part in parts)
+        except ValueError:
+            return stripped
+    try:
+        return float(stripped)
+    except ValueError:
+        return stripped
+
+
+def _as_comparable(value: Any):
+    """Parse a requested value into a comparable one, dispatching on the
+    Python type in hand rather than round-tripping through ``str()``
+    (``str([1, 2, 3])`` is not the OpenFOAM vector spelling ``"(1 2 3)"``).
+
+    A number becomes a ``float``, an OpenFOAM boolean word or a Python
+    ``bool`` stays a ``bool``, a list/tuple or vector string becomes a tuple
+    of floats, and anything else is compared as text.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, (list, tuple)):
+        try:
+            return tuple(float(item) for item in value)
+        except (TypeError, ValueError):
+            return tuple(value)
+    if isinstance(value, str):
+        return _as_comparable_text(value)
+    return value
+
+
+def values_agree(requested: Any, current: str | None) -> bool:
+    """Whether the value a case holds is the one requested, compared as
+    parsed values rather than text (a requested ``1e-3`` may read back as
+    ``0.001``).
+
+    Deliberately not a tolerance: two different values are never called
+    equal. An unparseable or absent value is a non-match, never a passed
+    check.
+    """
+    if current is None:
+        return False
+    left = _as_comparable(requested)
+    right = _as_comparable_text(current)
+    if left is None or right is None:
+        return False
+    if isinstance(left, bool) != isinstance(right, bool):
+        return False
+    return left == right
+
+
 # Kept out of `mutators` (which writes live case files) because the
 # writer-free `case_planning` module needs this pure rendering step too.
 def _format_value(value: Any) -> str:
