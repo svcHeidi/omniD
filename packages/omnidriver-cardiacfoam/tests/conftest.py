@@ -25,7 +25,6 @@
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-import os
 import re
 import pytest
 from pathlib import Path

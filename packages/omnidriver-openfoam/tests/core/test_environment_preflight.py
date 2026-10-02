@@ -404,17 +404,22 @@ def test_an_mpirun_from_another_mpi_family_is_refused(tmp_path, version, mismatc
     assert _mpi_family_diagnostics({**env, "WM_MPLIB": "SOMETHINGELSE"}) == ()
 
 
-def test_the_bashrc_is_only_ever_supplied(tmp_path):
-    from omnidriver.openfoam.openfoam_environment import supplied_openfoam_bashrc
+def test_the_bashrc_is_never_searched_for(tmp_path):
+    from omnidriver.openfoam.openfoam_environment import openfoam_bashrc
 
     runtime_file = tmp_path / "runtime.yaml"
     runtime_file.write_text("openfoam:\n  bashrc: /from/runtime/file\n")
     named = {"OMNIDRIVER_RUNTIME_CONFIG": str(runtime_file)}
 
-    assert supplied_openfoam_bashrc(bashrc_path="/explicit", base_env={**named, "OPENFOAM_BASHRC": "/env"}).as_posix() == "/explicit"
-    assert supplied_openfoam_bashrc(base_env={**named, "OPENFOAM_BASHRC": "/env"}).as_posix() == "/env"
-    assert supplied_openfoam_bashrc(base_env=named).as_posix() == "/from/runtime/file"
-    assert supplied_openfoam_bashrc(base_env={"WM_PROJECT_DIR": str(tmp_path)}) is None
+    assert openfoam_bashrc(bashrc_path="/explicit", base_env={**named, "OPENFOAM_BASHRC": "/env"}).as_posix() == "/explicit"
+    assert openfoam_bashrc(base_env={**named, "OPENFOAM_BASHRC": "/env"}).as_posix() == "/env"
+    assert openfoam_bashrc(base_env=named).as_posix() == "/from/runtime/file"
+    install = tmp_path / "install"
+    (install / "etc").mkdir(parents=True)
+    (install / "etc" / "bashrc").write_text("")
+    assert openfoam_bashrc(base_env={"WM_PROJECT_DIR": str(install)}) == install / "etc" / "bashrc"
+    assert openfoam_bashrc(base_env={"WM_PROJECT_DIR": str(tmp_path)}) is None
+    assert openfoam_bashrc(base_env={}) is None
 
 
 def test_a_supplied_bashrc_that_does_not_exist_is_refused_by_name(tmp_path):

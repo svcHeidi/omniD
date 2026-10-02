@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Mapping
 
 from .mutators import _mask_comments
-from .openfoam_environment import supplied_openfoam_bashrc
+from .openfoam_environment import openfoam_bashrc
 
 _EXECUTABLE_DIRECTIVE = re.compile(r"#(?:calc|codeStream|eval)\b")
 _QUOTED_INCLUDE = re.compile(r'^\s*#include(?P<optional>IfPresent)?\s+"(?P<path>[^"]+)"', re.MULTILINE)
@@ -246,7 +246,7 @@ def resolve_effective_foam_entry(
 ) -> EffectiveDictionaryResult:
     """Resolve one entry through native ``foamDictionary`` explicitly.
 
-    ``bashrc`` defaults to :func:`supplied_openfoam_bashrc`; ``None``, supplied or
+    ``bashrc`` defaults to :func:`openfoam_bashrc`; ``None``, supplied or
     defaulted, resolves ``foamDictionary`` from ``PATH`` instead. Executable directives
     return ``execution_required`` unless ``allow_executable_directives`` opts
     in; dependency closure past that gate is still reported only by the
@@ -254,7 +254,7 @@ def resolve_effective_foam_entry(
     """
     dictionary = Path(path)
     if bashrc is _UNSET:
-        bashrc = supplied_openfoam_bashrc(base_env=env)
+        bashrc = openfoam_bashrc(base_env=env)
     runtime = Path(bashrc) if bashrc is not None else None
     if not dictionary.is_file():
         return EffectiveDictionaryResult(

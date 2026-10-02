@@ -56,18 +56,26 @@ def configured_openfoam_bashrc(env: Mapping[str, str]) -> str | None:
     return str(value) if value else None
 
 
-def supplied_openfoam_bashrc(
+def openfoam_bashrc(
     *,
     bashrc_path: str | Path | None = None,
     base_env: Mapping[str, str] | None = None,
 ) -> Path | None:
-    """The bashrc the caller supplied: ``bashrc_path`` (``--environment-source``),
-    else ``OPENFOAM_BASHRC``, else the runtime file's. Nothing is searched for."""
+    """The bashrc to source: ``bashrc_path`` (``--environment-source``), else
+    ``OPENFOAM_BASHRC``, else the runtime file's ``openfoam.bashrc``, else the
+    ``etc/bashrc`` of the install a sourced shell already names through
+    ``WM_PROJECT_DIR`` (macOS strips ``DYLD_*`` when bash starts, so a step
+    needs that bashrc sourced again). Nothing is searched for; a supplied path
+    that is not a file is the caller's to refuse."""
     if bashrc_path:
         return Path(bashrc_path).expanduser()
     env = os.environ if base_env is None else base_env
     named = env.get("OPENFOAM_BASHRC") or configured_openfoam_bashrc(env)
-    return Path(named).expanduser() if named else None
+    if named:
+        return Path(named).expanduser()
+    install = env.get("WM_PROJECT_DIR")
+    sourced = Path(install).expanduser() / "etc" / "bashrc" if install else None
+    return sourced if sourced is not None and sourced.is_file() else None
 
 
 def load_openfoam_environment(
@@ -84,7 +92,7 @@ def load_openfoam_environment(
     executables.
     """
     env = dict(base_env or os.environ)
-    bashrc = supplied_openfoam_bashrc(bashrc_path=bashrc_path, base_env=env)
+    bashrc = openfoam_bashrc(bashrc_path=bashrc_path, base_env=env)
     if bashrc is None:
         return _configure_plugin_environment(OpenFOAMEnvironment(env=env), driver_context)
     if not bashrc.is_file():

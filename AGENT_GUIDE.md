@@ -1245,7 +1245,8 @@ These are real limitations; the agent must not assume them:
   (`WM_PROJECT_VERSION` / `FOAM_USER_LIBBIN` unset). It does **not** yet check free
   disk space or output-directory writability. The OpenFOAM bashrc is supplied, never
   searched for: `--environment-source`, else `OPENFOAM_BASHRC`, else `openfoam.bashrc`
-  in the file `OMNIDRIVER_RUNTIME_CONFIG` names; a plan that needs OpenFOAM and has
+  in the file `OMNIDRIVER_RUNTIME_CONFIG` names, else the `etc/bashrc` of the install
+  a sourced shell names through `WM_PROJECT_DIR`; a plan that needs OpenFOAM and has
   none refuses with `missing_openfoam_env`.
 
 - **Active-tension models beyond NashPanfilov and GoktepeKuhl** are not in `active_tension_catalog.py`. Future C++ models must be registered there before artifact prediction will cover their state variables.
