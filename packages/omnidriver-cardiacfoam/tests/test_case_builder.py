@@ -481,6 +481,10 @@ class TestBuildCase(unittest.TestCase):
             build_case(_SINGLE_CELL, case_dir=case_dir, overwrite=True)
             self.assertIn("myocardiumSolver singleCellSolver;", (case_dir / "constant" / "electroProperties").read_text())
 
+    def test_an_override_no_catalogue_entry_places_is_refused_not_dropped(self) -> None:
+        with self.assertRaisesRegex(ValueError, "sealedWallTrace"):
+            self._build(_MONODOMAIN, electro_overrides={"$ELECTRO_MODEL_COEFFS.sealedWallTrace": "zeroGradient"})
+
     def test_single_cell_gets_one_cell_and_refuses_dx(self) -> None:
         case_dir, _ = self._build(_SINGLE_CELL)
         self.assertIn("hex (0 1 2 3 4 5 6 7) (1 1 1)", (case_dir / "system" / "blockMeshDict").read_text())

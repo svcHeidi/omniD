@@ -175,7 +175,8 @@ def build_electro_properties(
 
     Raises:
         ValueError: required+applicable entry has no value, mutex violation,
-            or any catalogue relation `case_rules` finds violated.
+            an override no applicable catalogue entry places, or any catalogue
+            relation `case_rules` finds violated.
     """
     context = resolve_context(selectors, overrides=overrides)
 
@@ -187,6 +188,14 @@ def build_electro_properties(
     populated = populate_values(
         entries, context, typical_value_fallback=typical_value_fallback,
     )
+
+    unplaced = [path for path in overrides or () if slot_key(path) not in populated]
+    if unplaced:
+        raise ValueError(
+            f"build_electro_properties: {unplaced} match no applicable catalogue entry, so the "
+            f"builder cannot place them; `omnidriver catalog --uncatalogued` lists what the C++ "
+            f"reads and the catalogue lacks"
+        )
 
     populated_values = {key: value for key, value in populated.items() if value not in (None, "")}
     errors = [
@@ -565,7 +574,7 @@ endTime         {end_time};
 deltaT          {delta_t};
 
 writeControl    runTime;
-writeInterval   0.1;
+writeInterval   {min(0.1, end_time)};
 purgeWrite      0;
 writeFormat     ascii;
 writePrecision  6;
