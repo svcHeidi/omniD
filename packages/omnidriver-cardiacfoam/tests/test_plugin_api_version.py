@@ -16,10 +16,3 @@ def test_cardiacfoam_plugin_satisfies_the_full_protocol() -> None:
     from omnidriver.core.plugin_interface import validate_plugin
 
     validate_plugin(CardiacFoamPlugin())  # must not raise
-
-
-def test_cardiacfoam_declares_its_phases_in_order() -> None:
-    context = driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:phases")
-    assert context.capabilities.dictionaries.phases() == (
-        "anatomy", "physics", "stimulus", "solver",
-    )

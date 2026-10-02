@@ -35,9 +35,9 @@ text from selectors + overrides. The pipeline reuses the existing dict-entry
 catalog (`dict_entries.py`), the structured-constraint validator
 (`validation.py`), and the path conventions encoded in `slot_key`.
 
-The builder composes existing primitives. Every output passes through `validate_context`
-before being returned; an agent that gets a string back is guaranteed it
-is validator-clean.
+The builder composes existing primitives. Every output passes through
+`case_rules.rule_diagnostics` before being returned; an agent that gets a
+string back is guaranteed it is rule-clean.
 """
 from __future__ import annotations
 
@@ -59,14 +59,11 @@ from omnidriver.openfoam.dict_builder import (
 )
 from omnidriver.cardiacfoam.own_context import own_driver_context
 from omnidriver.core.case_write import CaseMutationRequest, ParameterAssignment, ResolvedMutation
-from omnidriver.core.specs.validation import (
-    _predicate_matches,
-    slot_key,
-    validate_context,
-)
+from omnidriver.core.contracts.catalogue_paths import slot_key
+from omnidriver.openfoam.case_rules import forbidden_in, rule_diagnostics
 
 from .common_dict_entries import PHYSICS_PROPERTY_ENTRIES
-from .validation import cross_field_diagnostics
+from .validation import cross_field_diagnostics, infer_virtual_presence
 
 #: This adapter's identity on every synthesis request and resolution it
 #: produces.
@@ -131,48 +128,6 @@ def _all_electro_entries() -> list[DictEntry]:
     return out
 
 
-# Block-presence virtual keys auto-inferred from override prefixes.
-# When an agent declares any override under `bathPotentialDomain.*`,
-# `ecgDomains.*`, or `conductionNetworkDomains.*`, the dict_builder sets
-# the corresponding `$..._present`/`$..._configured` virtual key on the
-# resolved context. Entries gated by `applicable_when={"$..._...": True}`
-# then become visible and their typical_value fallbacks fire. Without an
-# override under one of these prefixes the block stays off — plain
-# bidomain does not get bath leaves leaking in.
-_VIRTUAL_PRESENCE_TRIGGERS: tuple[tuple[str, str], ...] = (
-    ("bathPotentialDomain.", "$bathPotentialDomain_configured"),
-    ("ecgDomains.", "$ecgDomains_present"),
-    ("conductionNetworkDomains.", "$conductionNetworkDomains_present"),
-    # A single-cell run with no stimulus is legal: stimulusIO.C:149-155
-    # returns a no-op protocol when the sub-dict is absent. Gating the
-    # stimulus family on presence rather than on myocardimSolver keeps the
-    # builder from inventing stim_amplitude/nstim1 defaults and quietly
-    # pacing a case that asked for none.
-    ("singleCellStimulus.", "$singleCellStimulus_present"),
-)
-
-
-def _infer_virtual_presence(ctx: dict[str, Any]) -> None:
-    """Set block-presence virtual keys in-place on `ctx` whenever any
-    real slot_key starts with one of the documented block prefixes.
-    Idempotent and safe to call after the override merge."""
-    for prefix, virtual_key in _VIRTUAL_PRESENCE_TRIGGERS:
-        if virtual_key in ctx:
-            continue
-        for existing_key in ctx:
-            if existing_key.startswith(prefix):
-                ctx[virtual_key] = True
-                break
-
-    # Support OR logic for ionicHeterogeneity applicability
-    from omnidriver.cardiacfoam.dict_entries import get_heterogeneity_models
-    if (
-        ctx.get("myocardiumSolver") == "eikonalSolver"
-        or ctx.get("ionicModel") in get_heterogeneity_models(own_driver_context())
-    ):
-        ctx["$ionicHeterogeneity_supported"] = True
-
-
 def resolve_context(
     selectors: dict[str, str],
     *,
@@ -198,7 +153,7 @@ def resolve_context(
         "monodomainSolver", "eikonalSolver", "bidomainSolver"
     }:
         ctx.setdefault("conductivitySource", "uniform")
-    _infer_virtual_presence(ctx)
+    infer_virtual_presence(ctx)
     return ctx
 
 
@@ -248,22 +203,20 @@ def _foamfile_preamble(object_name: str) -> str:
 _FOAMFILE_PREAMBLE = _foamfile_preamble("electroProperties")
 
 
+def _with_virtual_presence(values: dict[str, str]) -> dict[str, Any]:
+    context: dict[str, Any] = dict(values)
+    infer_virtual_presence(context)
+    return context
+
+
 def _check_no_forbidden_selectors(context: dict[str, Any]) -> None:
     """Raise ValueError if the caller explicitly set a key that is forbidden
-    in the current context.  'Explicitly set' means the slot key appears in
-    *context* — i.e., the caller passed it as a selector or override."""
-    for entry in _all_electro_entries():
-        if not entry.forbidden_when:
-            continue
-        key = slot_key(entry.driver_path)
-        if key not in context:
-            continue
-        for pred_key, expected in entry.forbidden_when.items():
-            if _predicate_matches(context, pred_key, expected):
-                raise ValueError(
-                    f"build_electro_properties: '{key}' is forbidden when "
-                    f"{pred_key}={context.get(pred_key)!r}."
-                )
+    in the current context."""
+    for entry, predicate in forbidden_in(_all_electro_entries(), context):
+        raise ValueError(
+            f"build_electro_properties: '{slot_key(entry.driver_path)}' is forbidden when "
+            + ", ".join(f"{key}={context.get(slot_key(key))!r}" for key in predicate) + "."
+        )
 
 
 def build_electro_properties(
@@ -288,7 +241,7 @@ def build_electro_properties(
 
     Raises:
         ValueError: required+applicable entry has no value, mutex violation,
-            or any structured-constraint violation from `validate_context`.
+            or any catalogue relation `case_rules` finds violated.
     """
     context = resolve_context(selectors, overrides=overrides)
 
@@ -301,16 +254,10 @@ def build_electro_properties(
         entries, context, typical_value_fallback=typical_value_fallback,
     )
 
-    # Safety net: run the full validator scoped to electro entries only.
-    # The validator now subsumes required-field checks (its section 1
-    # honours `required_when` + `dynamic_path` the same way `check_required`
-    # does), so we don't pre-call `check_required` from the public builder
-    # entry-point. `check_required` stays exported for callers that want
-    # just the required-field subset.
     populated_values = {key: value for key, value in populated.items() if value not in (None, "")}
     errors = [
         e for e in (
-            *validate_context(populated, entries=entries, driver_context=own_driver_context()),
+            *rule_diagnostics(entries, _with_virtual_presence(populated_values), document=_ELECTRO_DOCUMENT),
             *cross_field_diagnostics(populated_values),
         ) if e.level == "error"
     ]
@@ -578,7 +525,7 @@ def build_physics_properties(
 
     Raises:
         ValueError: required entry has no value, or any structured
-            constraint violation from `validate_context`.
+            relation `case_rules` finds violated.
     """
     context = resolve_context(selectors, overrides=overrides)
     # Scope to physics entries — electro entries don't belong here.
@@ -588,7 +535,7 @@ def build_physics_properties(
     )
 
     errors = [
-        e for e in validate_context(populated, entries=entries, driver_context=own_driver_context())
+        e for e in rule_diagnostics(entries, populated, document=_PHYSICS_DOCUMENT)
         if e.level == "error"
     ]
     if errors:

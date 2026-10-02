@@ -43,7 +43,7 @@ def _context_from_electro_properties(path: Path) -> dict:
     from omnidriver.cardiacfoam.dict_builder import (
         parse_electro_properties, resolve_context, select_applicable_entries,
     )
-    from omnidriver.core.specs.validation import slot_key
+    from omnidriver.core.contracts.catalogue_paths import slot_key
     from omnidriver.openfoam.dict_builder import populate_values
 
     parsed = parse_electro_properties(path)

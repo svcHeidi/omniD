@@ -1,23 +1,26 @@
-"""The catalogue's conditional logic, run over one resolved dictionary.
+"""The one evaluator of a catalogue's conditional logic and of the keys the
+solver's C++ requires, run over one resolved dictionary.
 
 A ``DictEntry`` states when it applies (``applicable_when``), when it is
 required (``required``, ``required_when``), and what it forbids, excludes or
 needs beside it (``forbidden_when``, ``mutually_exclusive_with``,
 ``co_required_with``). :func:`rule_diagnostics` reads those relations against
 the values a case holds, once per concrete instance for an entry under a
-``<name>`` block, and names every violated one. Menus and value types are not
-judged here: the C++ owns them, and the scan reports what the catalogue lacks.
+``<name>`` block, and names every violated one. The same pass names a key the
+supplied C++ reads without a default that the catalogue lacks and the case
+does not set. Menus and value types are not judged here: the C++ owns them.
 """
 
 from __future__ import annotations
 
+import os
 import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from omnidriver.core.contracts.catalogue_paths import slot_key
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
-from omnidriver.core.specs.validation import slot_key
 
 _PLACEHOLDER = re.compile(r"<[A-Za-z_][A-Za-z0-9_]*>")
 _SWITCH = {
@@ -119,13 +122,108 @@ class _Instance:
         key = self.resolve(path)
         return _present(self.context.get(key)) or any(name.startswith(key + ".") for name in self.context)
 
+    def forbidden_by(self, entry: Any) -> dict[str, Any]:
+        return {k: v for k, v in entry.forbidden_when.items() if self.holds(k, v)}
+
+    def applies(self, entry: Any) -> bool:
+        return not self.forbidden_by(entry) and all(self.holds(k, v) for k, v in entry.applicable_when.items())
+
+    def requires(self, entry: Any) -> bool:
+        if entry.required_when:
+            return any(self.holds(k, v) for k, v in entry.required_when.items())
+        return entry.required
+
+
+def applicable_entries(entries: Iterable[Any], context: Mapping[str, Any]) -> list[Any]:
+    """The entries whose ``applicable_when`` holds in ``context`` and whose
+    ``forbidden_when`` does not."""
+    instance = _Instance(context)
+    return [entry for entry in entries if instance.applies(entry)]
+
+
+def forbidden_in(entries: Iterable[Any], context: Mapping[str, Any]) -> list[tuple[Any, dict[str, Any]]]:
+    """Each entry ``context`` sets that its own ``forbidden_when`` forbids,
+    with the predicates that hold."""
+    instance = _Instance(context)
+    return [(entry, forbidden) for entry in entries if instance.is_set(entry.driver_path) and (forbidden := instance.forbidden_by(entry))]
+
+
+def _scan_facts(mapping: Any, entries: tuple[Any, ...], document: str):
+    """What the supplied C++ adds to the catalogue's rules: the keys it
+    requires that ``entries`` lack, the classes that build them, and the names
+    its selection tables register for each enum. Nothing when the source is
+    not supplied."""
+    import json
+
+    from .dict_keys_scanner import built_when, cached_scan, registered_menus, required_reads
+
+    root = mapping.source_root(os.environ) if mapping is not None else None
+    if root is None or not root.is_dir():
+        return {}, {}, {}
+    scan = cached_scan(root, cache_root=None)
+    reviewed = json.loads(Path(mapping.allowlist_path).read_text())
+    return (
+        required_reads(scan, entries, document=document.rsplit("/", 1)[-1]),
+        registered_menus(reviewed, scan, entries),
+        built_when(reviewed, scan),
+    )
+
+
+def _scan_requirement(
+    path: tuple[str, ...], reads: list[Any], context: Mapping[str, Any], document: str,
+    built: Mapping[str, frozenset[str]],
+) -> list[StrictDiagnostic]:
+    """A key the C++ requires, absent from the case, in each block of the
+    case that a class the case builds reads it from. A class is built when a
+    selection table registers it under a name the case selects, or when the
+    plugin's reviewed ``built_when`` says the case's selectors build it; a
+    class neither says anything about is not judged."""
+    from .dict_keys_scanner import owner_of
+
+    selected = {str(_word(value)) for value in context.values()}
+    reads = [
+        read for read in reads
+        if any(name in selected for _base, name in read.selected_as)
+        or (not read.selected_as and built.get(owner_of(read), frozenset()) & selected)
+    ]
+    if not reads:
+        return []
+    segments = path[1:] if path[0].startswith("$") else path
+    block, key = segments[:-1], segments[-1]
+    pattern = re.compile(r"\.".join(r"[^.]+" if _PLACEHOLDER.fullmatch(s) or s == "*" else re.escape(s) for s in block))
+    blocks = sorted({
+        ".".join(name.split(".")[:len(block)]) for name in context
+        if len(name.split(".")) > len(block) and pattern.fullmatch(".".join(name.split(".")[:len(block)]))
+    }) if block else [""]
+    first = reads[0]
+    found = []
+    for scope in blocks:
+        concrete = f"{scope}.{key}" if scope else key
+        if _present(context.get(concrete)) or any(name.startswith(concrete + ".") for name in context):
+            continue
+        sources = ", ".join(sorted({f"{read.file}:{read.line} ({read.function})" for read in reads}))
+        found.append(diagnostic(
+            "error", "cxx_required_key",
+            f"{concrete} is required: the supplied C++ reads it as {first.method}<{first.type or 'an unresolved type'}> "
+            f"with no default at {sources}, and the catalogue does not list it "
+            f"(omnidriver catalog --uncatalogued describes it). Set {concrete} in {document}"
+            + (f" (below {path[0]})" if path[0].startswith("$") else "") + ".",
+            source=document, field=concrete,
+        ))
+    return found
+
 
 def rule_diagnostics(
-    entries: Iterable[Any], context: Mapping[str, Any], *, document: str,
+    entries: Iterable[Any], context: Mapping[str, Any], *, document: str, mapping: Any = None,
 ) -> list[StrictDiagnostic]:
     """Every catalogue relation ``context`` (a dictionary's leaves, keyed by
-    dotted path below the catalogue's scope token) violates."""
+    dotted path below the catalogue's scope token) violates, each enum value
+    outside its menu and, when the plugin's ``mapping`` supplies its C++
+    source, each key that C++ requires and ``context`` lacks. A menu is the names
+    the C++ registers for the enum when its source is supplied and maps it to a
+    selection table, the catalogue's otherwise."""
     entries = tuple(entries)
+    requirements, registered, built = _scan_facts(mapping, entries, document)
     templates = {
         key[: match.end()]
         for entry in entries if entry.dynamic_path
@@ -158,24 +256,27 @@ def rule_diagnostics(
             if _PLACEHOLDER.search(concrete):
                 continue
             set_here = instance.is_set(entry.driver_path)
-            forbidden = {k: v for k, v in entry.forbidden_when.items() if instance.holds(k, v)}
+            forbidden = instance.forbidden_by(entry)
             if set_here and forbidden:
                 violated(concrete, f"{concrete} is forbidden when {_format(forbidden)}.")
-            if forbidden or not all(instance.holds(k, v) for k, v in entry.applicable_when.items()):
+            if not instance.applies(entry):
                 continue
-            required = (
-                any(instance.holds(k, v) for k, v in entry.required_when.items())
-                if entry.required_when else entry.required
-            )
-            if required and not set_here:
+            if instance.requires(entry) and not set_here:
                 condition = f" when {_format(entry.required_when)}" if entry.required_when else ""
                 violated(concrete, f"{concrete} is required{condition}.")
             if not set_here:
                 continue
+            menu = registered.get(entry.driver_path) or set(entry.enum_values)
+            value = _word(context.get(instance.resolve(entry.driver_path)))
+            if entry.value_kind == "enum" and menu and _present(value) and value not in menu:
+                source = "the supplied C++ registers" if entry.driver_path in registered else "the catalogue lists"
+                violated(concrete, f"{concrete} is {value!r}, not one of the values {source}: {sorted(menu)}.")
             for sibling in entry.mutually_exclusive_with:
                 if instance.is_set(sibling):
                     violated(concrete, f"{concrete} is mutually exclusive with {instance.resolve(sibling)}.")
             for sibling in entry.co_required_with:
                 if not instance.is_set(sibling):
                     violated(concrete, f"{concrete} requires {instance.resolve(sibling)} to be set as well.")
+    for path, reads in requirements.items():
+        found += _scan_requirement(path, reads, context, document, built)
     return found

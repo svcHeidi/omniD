@@ -4,6 +4,7 @@ resolved case holds."""
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 from omnidriver.openfoam.case_rules import read_leaves, rule_diagnostics
@@ -11,7 +12,7 @@ from omnidriver.openfoam.case_rules import read_leaves, rule_diagnostics
 from .catalogs.inputs import CATALOG
 
 
-def case_diagnostics(case_root: Path) -> tuple[StrictDiagnostic, ...]:
+def case_diagnostics(case_root: Path, *, mapping: Any = None) -> tuple[StrictDiagnostic, ...]:
     found: list[StrictDiagnostic] = []
     for name, entries in CATALOG.documents.items():
         path = Path(case_root) / "system" / name
@@ -25,5 +26,5 @@ def case_diagnostics(case_root: Path) -> tuple[StrictDiagnostic, ...]:
                 source=f"system/{name}",
             ))
             continue
-        found += rule_diagnostics(entries, leaves, document=f"system/{name}")
+        found += rule_diagnostics(entries, leaves, document=f"system/{name}", mapping=mapping)
     return tuple(found)

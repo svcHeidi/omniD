@@ -60,6 +60,9 @@ class CardiacCorePlugin:
     def get_dict_entries(self) -> tuple[Any, ...]:
         return CATALOG.entries
 
+    def get_dict_entries(self) -> tuple[Any, ...]:
+        return CATALOG.entries
+
     def get_phases(self) -> tuple[str, ...]:
         """The selected workflow has one utility-preprocessing configuration phase."""
         return ("preprocessing",)
@@ -91,7 +94,7 @@ class CardiacCorePlugin:
         case holds."""
         from .case_rules import case_diagnostics
 
-        return case_diagnostics(case_root)
+        return case_diagnostics(case_root, mapping=self.get_profile().cxx_mapping)
 
     def predict_data_artifacts(self, case_root: Path, spec: Any) -> tuple[Any, ...]:
         del case_root, spec

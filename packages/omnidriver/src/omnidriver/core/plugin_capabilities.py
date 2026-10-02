@@ -171,9 +171,9 @@ class DictionaryCatalogCapability(Protocol):
     ``{}``. This is the seam that keeps dictionary *syntax* knowledge (core's)
     apart from dictionary *meaning* (the plugin's).
 
-    :adapts: get_dict_entries, get_dict_groups, get_dict_entry_catalog, get_dictionary_catalog, get_phases
-    :consumed-by: omnidriver/dict_entries.py, omnidriver/cardiacfoam/dict_entries.py, omnidriver/openfoam/plan_diagnostics.py, omnidriver/core/catalog_query.py, omnidriver/core/specs/validation.py
-    :fallback: absent_phases, absent_dict_entry_catalog
+    :adapts: get_dict_entries, get_dict_groups, get_dict_entry_catalog, get_dictionary_catalog
+    :consumed-by: omnidriver/dict_entries.py, omnidriver/cardiacfoam/dict_entries.py, omnidriver/openfoam/plan_diagnostics.py, omnidriver/core/catalog_query.py
+    :fallback: absent_dict_entry_catalog
     :status: optional-neutral
     """
 
@@ -181,7 +181,6 @@ class DictionaryCatalogCapability(Protocol):
     def catalog(self) -> Any: ...
     def groups(self) -> dict[str, tuple[Any, ...]]: ...
     def documents(self) -> dict[str, Any]: ...
-    def phases(self) -> tuple[str, ...]: ...
 
 
 class CapabilityManifestCapability(Protocol):
@@ -841,14 +840,6 @@ class _DictionaryCatalogAdapter:
         from .compatibility import absent_dict_entry_catalog
 
         return absent_dict_entry_catalog(self.plugin)
-
-    def phases(self) -> tuple[str, ...]:
-        hook = getattr(self.plugin, "get_phases", None)
-        if callable(hook):
-            return tuple(hook())
-        from .compatibility import absent_phases
-
-        return absent_phases(self.plugin)
 
 
 @dataclass(frozen=True)

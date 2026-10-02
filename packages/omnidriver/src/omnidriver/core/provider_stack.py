@@ -158,7 +158,6 @@ _SHAPE: dict[str, str] = {
     "get_dictionary_catalog": "catalog",
     # -- sequence ----------------------------------------------------------
     "get_dict_entries": "sequence",
-    "get_phases": "sequence",
     "validate_configuration": "sequence",
     "validate_run_semantics": "sequence",
     "predict_data_artifacts": "sequence",

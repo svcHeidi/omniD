@@ -95,11 +95,6 @@ class CardiacFoamPlugin:
         configured_env, _error = configure_runtime_environment(env)
         return configured_env
 
-    def get_phases(self) -> tuple[str, ...]:
-        """This plugin's four editing phases, in the order the RunDocument
-        config and the validation slices use."""
-        return ("anatomy", "physics", "stimulus", "solver")
-
     def get_dict_groups(self) -> dict[str, tuple[DictEntry, ...]]:
         """
         Return the dictionary entries organized by logical group.
@@ -307,10 +302,7 @@ class CardiacFoamPlugin:
 
     def validate_configuration(self, spec: TutorialSpec) -> tuple[StrictDiagnostic, ...]:
         from pathlib import Path
-        from omnidriver.cardiacfoam.detection import (
-            detect_myocardium_solver_name,
-            detect_ionic_model_name,
-        )
+        from omnidriver.cardiacfoam.detection import detect_myocardium_solver_name
         from omnidriver.core.planning_types import diagnostic as _diagnostic
 
         diagnostics = []
@@ -331,29 +323,6 @@ class CardiacFoamPlugin:
             except KeyError as exc:
                 diagnostics.append(_diagnostic("error", "missing_solver", str(exc), source=str(electro_path)))
 
-            try:
-                ionic_model = detect_ionic_model_name(electro_path)
-            except KeyError:
-                ionic_model = None
-            
-            from omnidriver.openfoam.dict_keys_scanner import registered_menu
-
-            capabilities = self.get_capabilities()
-            # A model the scanned selection table registers but the catalogue
-            # lacks is accepted; the plan reports it as uncatalogued.
-            if (
-                ionic_model is not None and ionic_model not in capabilities.get("ionic_models", {})
-                and ionic_model not in registered_menu(self.get_profile().cxx_mapping, "$ELECTRO_MODEL_COEFFS.ionicModel")
-            ):
-                diagnostics.append(_diagnostic(
-                    "error",
-                    "unknown_ionic_model",
-                    f"Ionic model {ionic_model!r} is neither catalogued nor registered by a "
-                    "scanned ionicModel selection table",
-                    source=str(electro_path),
-                    field="ionicModel",
-                ))
-
         return tuple(diagnostics)
 
     def validate_run_semantics(self, case_root):
@@ -361,7 +330,7 @@ class CardiacFoamPlugin:
         over the resolved case's ``electroProperties``."""
         from omnidriver.cardiacfoam.validation import case_diagnostics
 
-        return case_diagnostics(case_root)
+        return case_diagnostics(case_root, mapping=self.get_profile().cxx_mapping)
 
     def predict_data_artifacts(self, case_root: Path, spec: TutorialSpec) -> tuple[DataArtifact, ...]:
         from omnidriver.cardiacfoam.artifacts_predictor import predict_cardiac_artifacts

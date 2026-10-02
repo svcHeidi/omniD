@@ -76,10 +76,12 @@ def test_a_literal_the_catalogue_uses_beside_a_block_is_not_an_instance():
     }
 
 
-def test_an_unlisted_value_is_never_judged():
-    """Menus belong to the C++; a name the catalogue lacks passes every relation."""
-    entries = [_entry("$S.model", value_kind="enum", enum_values=("a",)), _entry("$S.x", required=True, applicable_when={"model": "a"})]
-    assert _violations(entries, {"model": "scannedNewModel"}) == set()
+def test_a_value_outside_the_menu_is_refused_and_a_value_inside_is_not():
+    entries = [_entry("$S.model", value_kind="enum", enum_values=("a", "b"))]
+    assert _violations(entries, {"model": "b"}) == set()
+    assert _violations(entries, {"model": "c"}) == {
+        ("model", "model is 'c', not one of the values the catalogue lists: ['a', 'b']."),
+    }
 
 
 def test_leaves_are_read_through_blocks(tmp_path):

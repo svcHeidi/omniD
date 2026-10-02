@@ -927,11 +927,9 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
             "(generatePurkinjeTree.C's weightedField ventKey guard raises a FatalError for "
             "ventKey != 'lv'). This restricts one *instance* of the "
             "<ventKey> dynamic block relative to another (lv vs rv), which "
-            "the applicable_when/forbidden_when predicate model cannot "
-            "express -- applicability is evaluated once per catalog entry, "
-            "not once per resolved instance name (see "
-            "omnidriver.core.specs.validation._predicate_matches docstring). "
-            "Left as a cited constraint; see the report.",
+            "the applicable_when/forbidden_when predicates cannot express: "
+            "they compare values, never an instance's name "
+            "(omnidriver.openfoam.case_rules).",
         ),
     ),
     DictEntry(

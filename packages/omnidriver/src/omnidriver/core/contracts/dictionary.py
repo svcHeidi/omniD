@@ -210,8 +210,7 @@ class DictEntry:
             )
         # `_PLACEHOLDER` (`<[A-Za-z][A-Za-z0-9_]*>`) does not match a
         # placeholder spelled `<_x>` or `<x-y>`; not widened here since
-        # `specs/validation.py`'s `_predicate_matches` and
-        # `dict_builder.py`'s own copy would need to move together.
+        # `case_rules` and `dict_builder` match the same shape.
         has_placeholder = bool(_PLACEHOLDER.search(self.driver_path))
         if has_placeholder and not self.dynamic_path:
             raise ValueError(

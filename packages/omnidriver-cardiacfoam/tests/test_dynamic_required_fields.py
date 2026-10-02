@@ -30,9 +30,9 @@ def test_configured_domain_coupling_missing_required_leaf_is_reported():
 def test_a_complete_domain_coupling_is_silent():
     context = {
         "myocardiumSolver": "monodomainSolver",
-        "domainCouplings.couplingA.electroDomainCoupler": "monodomainPvjCoupler",
+        "domainCouplings.couplingA.electroDomainCoupler": "reactionDiffusionPvjCoupler",
         "domainCouplings.couplingA.conductionNetworkDomain": "purkinjeNetwork",
-        "domainCouplings.couplingA.couplingMode": "twoWay",
+        "domainCouplings.couplingA.couplingMode": "bidirectional",
     }
     assert _evaluate_dynamic_required_fields(context) == []
 
@@ -45,10 +45,10 @@ def test_sibling_instances_are_scoped_independently():
     """One coupling's value must never satisfy another's requirement."""
     context = {
         "myocardiumSolver": "monodomainSolver",
-        "domainCouplings.couplingA.electroDomainCoupler": "monodomainPvjCoupler",
+        "domainCouplings.couplingA.electroDomainCoupler": "reactionDiffusionPvjCoupler",
         "domainCouplings.couplingA.conductionNetworkDomain": "netA",
-        "domainCouplings.couplingA.couplingMode": "twoWay",
-        "domainCouplings.couplingB.electroDomainCoupler": "monodomainPvjCoupler",
+        "domainCouplings.couplingA.couplingMode": "bidirectional",
+        "domainCouplings.couplingB.electroDomainCoupler": "reactionDiffusionPvjCoupler",
     }
     fields = _fields(_evaluate_dynamic_required_fields(context))
     assert all(f.startswith("domainCouplings.couplingB.") for f in fields), fields

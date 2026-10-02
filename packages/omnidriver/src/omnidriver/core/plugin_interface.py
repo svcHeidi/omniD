@@ -490,20 +490,6 @@ class SolverPluginOptionalHooks(Protocol):
         Absent -> none, which C10 reports as a failure."""
         ...
 
-    # -- DictionaryCatalogCapability ------------------------------------------
-    def get_phases(self) -> tuple[str, ...]:
-        """This plugin's dictionary editing phases, in order.
-
-        The ORDER is the semantics, not decoration: ``primary_phase()`` returns
-        the first phase in this tuple that an entry claims, and every other
-        phase the entry declares is a read-only mirror. These strings are also
-        the top-level keys of ``RunDocument.config``.
-
-        Absent -> the phases the plugin's own ``DictEntry`` values declare,
-        which is correct but unordered. Declare this hook if any entry is
-        multi-phase, because otherwise which phase is "primary" is arbitrary."""
-        ...
-
     # -- CaseWriterCapability -------------------------------------------------
     def resolve_case_mutation(
         self, request: Any, *, driver_context: Any,

@@ -14,9 +14,8 @@ from typing import Any, Literal
 
 import jsonschema
 
-# Deliberately no ``Phase`` literal: a plugin declares its own phases via
-# ``get_phases()``, keeping solver vocabulary out of this package. See
-# test_phases_are_plugin_declared.py.
+# Deliberately no ``Phase`` literal: a plugin's phase names are its own, which
+# keeps solver vocabulary out of this package.
 Status = Literal["draft", "queued", "planning", "planned", "running", "completed", "failed"]
 
 _SCHEMA = json.loads(

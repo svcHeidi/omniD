@@ -1346,7 +1346,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             enum_values=('AlievPanfilov', 'BuenoOrovio', 'Courtemanche', 'Fabbri', 'Gaur', 'Grandi', 'Stewart', 'TNNP', 'ToRORd_dynCl', 'Trovato', 'monodomainFDAManufactured', 'bidomainFDAManufactured', 'AlievPanfilovcompactBatched', 'BuenoOroviocompactBatched', 'CourtemanchecompactBatched', 'FabbricompactBatched', 'GaurcompactBatched', 'GrandicompactBatched', 'PerisYaguecompactBatched', 'StewartcompactBatched', 'TNNPcompactBatched', 'ToRORd_dynClcompactBatched', 'TrovatocompactBatched', 'TWorldcompactBatched'),
             dynamic_path=True, allowed_bindings={"<name>": None},
             constraints=('Required when conductionSystemSolver=monodomain1DSolver.',),
-            required_when={"$conductionNetworkDomains_present": True},
+            required_when={"$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.conductionSystemSolver": ("monodomain1DSolver",)},
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.tissue',

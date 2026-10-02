@@ -227,8 +227,9 @@ the scanner already finds):
 - `openfoam.plan_diagnostics.plan_diagnostics` warns, in a strict plan's
   `plugin_diagnostics`, about keys written in a supplied case that the catalog
   does not know (`uncatalogued_case_dict_key`).
-- `openfoam.dict_builder` (`select_applicable_entries`, `check_required`,
-  `populate_values`) materializes dictionary text from catalog entries.
+- `openfoam.dict_builder` (`select_applicable_entries`, `populate_values`)
+  materializes dictionary text from catalog entries; `openfoam.case_rules`
+  judges what it built.
 - `core.utility_catalog.UtilityManifest` / `ProducesEntry` declare a native
   command's inputs and produced artifacts.
 

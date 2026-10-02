@@ -130,51 +130,6 @@ def test_core_exports_no_phase_vocabulary():
     assert not hasattr(dict_entries, "Phase")
 
 
-class TestCoRequiredWithEvaluation(unittest.TestCase):
-    """``co_required_with`` is the inverse of ``mutually_exclusive_with``: a declared group must be set as a whole or not at all."""
-
-    def _group(self) -> list["DictEntry"]:
-        names = ("alpha", "beta", "gamma")
-        return [
-            DictEntry(
-                driver_path=name,
-                description="fixture",
-                value_kind="word",
-                source_refs=("ref.C",),
-                co_required_with=tuple(o for o in names if o != name),
-            )
-            for name in names
-        ]
-
-    def _errors(self, context: dict) -> list[str]:
-        from omnidriver.core.specs.validation import _evaluate_structured
-        return [e.message for e in _evaluate_structured(self._group(), context, ())]
-
-    def test_no_error_when_the_whole_group_is_absent(self) -> None:
-        self.assertEqual(self._errors({}), [])
-
-    def test_no_error_when_the_whole_group_is_set(self) -> None:
-        self.assertEqual(
-            self._errors({"alpha": 1.0, "beta": 2.0, "gamma": 3.0}), [],
-        )
-
-    def test_one_error_per_missing_sibling_on_a_partial_group(self) -> None:
-        errors = self._errors({"alpha": 1.0})
-        self.assertEqual(len(errors), 2)
-        self.assertIn("alpha requires beta to be set as well.", errors)
-        self.assertIn("alpha requires gamma to be set as well.", errors)
-
-    def test_each_set_member_reports_its_own_missing_sibling(self) -> None:
-        errors = self._errors({"alpha": 1.0, "beta": 2.0})
-        self.assertEqual(
-            sorted(errors),
-            [
-                "alpha requires gamma to be set as well.",
-                "beta requires gamma to be set as well.",
-            ],
-        )
-
-
 def test_entries_and_catalog_agree(driver_context_for_installed_plugins):
     """One capability must not give two answers."""
     for context in driver_context_for_installed_plugins:

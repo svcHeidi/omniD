@@ -199,7 +199,7 @@ not resolved most-specific-first like every other opaque document) — adding
 | `set` | union of every implementer's declared set | `get_solver_commands`, `get_environment_commands` |
 | `map` | merge in stack order; a duplicate key is an error unless the more specific entry carries `overrides: <provider id>` naming whose declaration it replaces | `get_dict_groups`, `get_named_catalogs`, `get_tutorial_records` |
 | `catalog` | the `map` rule applied to a `DictionaryCatalog`'s `documents`, then rebuilt into a catalog — core owns that type, so a provider cannot merge it itself | `get_dictionary_catalog` |
-| `sequence` | concatenate every implementer's result, in stack order | `get_phases`, `validate_configuration`, `get_record_key_catalog` |
+| `sequence` | concatenate every implementer's result, in stack order | `validate_configuration`, `get_record_key_catalog` |
 | `single` | first non-`None` answer, most-specific provider first | `get_capabilities`, `get_config_value_reader`, `get_case_runtime_conventions` |
 | `chain` | thread the first argument through every implementer, in stack order | `get_configured_environment` |
 | `profile` | the declarative profile itself: `case_files` concatenated (see the single-declarer rule below), `provides` unioned, everything else from the most specific provider | `get_profile` |
@@ -316,12 +316,11 @@ member's fallback cannot be neutral and refuses by hook name instead.
 The table's `fallback` column below names one only where one exists (`none`
 otherwise) -- some optional-neutral members instead answer a neutral value
 inline, in the adapter itself, with no named fallback function (for example
-`dictionaries`'s `entries`, `catalog`, and `groups`; contrast `phases` on the
-same `dictionaries` capability, which does name `absent_phases`).
+`dictionaries`'s `entries`, `catalog`, and `groups`).
 
 | capability | protocol | adapts | consumed by | fallback | status |
 |---|---|---|---|---|---|
-| `dictionaries` | `DictionaryCatalogCapability` | `get_dict_entries`, `get_dict_groups`, `get_dict_entry_catalog`, `get_dictionary_catalog`, `get_phases` | `omnidriver/dict_entries.py`, `omnidriver/cardiacfoam/dict_entries.py`, `omnidriver/openfoam/plan_diagnostics.py`, `omnidriver/core/catalog_query.py`, `omnidriver/core/specs/validation.py` | `absent_phases`, `absent_dict_entry_catalog` | optional-neutral |
+| `dictionaries` | `DictionaryCatalogCapability` | `get_dict_entries`, `get_dict_groups`, `get_dict_entry_catalog`, `get_dictionary_catalog` | `omnidriver/dict_entries.py`, `omnidriver/cardiacfoam/dict_entries.py`, `omnidriver/openfoam/plan_diagnostics.py`, `omnidriver/core/catalog_query.py` | `absent_dict_entry_catalog` | optional-neutral |
 | `manifest` | `CapabilityManifestCapability` | `get_capabilities` | `omnidriver/cardiacfoam/dict_entries.py`, `omnidriver/core/introspection.py`, `omnidriver/core/strict_planning.py` | none | required |
 | `configuration_validator` | `ConfigurationValidatorCapability` | `validate_configuration` | `omnidriver/core/strict_planning.py` | none | required |
 | `run_semantic_validator` | `RunSemanticValidatorCapability` | `validate_run_semantics` | `omnidriver/core/runtime/record_execution.py` | none | required |

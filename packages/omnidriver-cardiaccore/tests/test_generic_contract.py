@@ -18,7 +18,6 @@ def test_plugin_has_a_valid_context() -> None:
     # `identity.to_json()["providers"][-1]["id"]`.
     assert context.identity.to_json()["providers"][-1]["id"] == "org.omnidriver.cardiaccore"
     assert len(context.capabilities.dictionaries.entries()) == 88  # includes rvLocalBands
-    assert context.capabilities.dictionaries.phases() == ("preprocessing",)
     assert set(context.capabilities.tutorial_records.catalog()) == {
         "humanSlab", "idealizedHeart", "idealizedHeartEndocardial", "idealizedHeartPigTransmural",
     }

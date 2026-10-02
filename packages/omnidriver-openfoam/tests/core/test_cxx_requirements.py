@@ -1,0 +1,152 @@
+"""The keys the supplied C++ requires: the scan's reads of them, and the rule
+that judges a case against them."""
+from __future__ import annotations
+
+import json
+from types import SimpleNamespace
+
+from omnidriver.core.contracts.dictionary import DictEntry
+from omnidriver.openfoam import case_rules
+from omnidriver.openfoam.case_rules import rule_diagnostics
+from omnidriver.openfoam.dict_keys_scanner import DictRead, Scan, required_reads, scan_source
+
+# cardiacFOAM src/electroModels/myocardiumModels/monodomainSolver/monodomainSolver.C:
+# the registration and the constructor.
+MONODOMAIN_SOLVER = '''defineTypeNameAndDebug(monodomainSolver, 0);
+addToRunTimeSelectionTable
+(
+    myocardiumSolver,
+    monodomainSolver,
+    dictionary
+);
+
+
+monodomainSolver::monodomainSolver
+(
+    const fvMesh& mesh,
+    const fvMesh& supportMesh,
+    const fvMeshSubset* meshSubsetPtr,
+    const dictionary& electroProperties
+)
+:
+    conductivity_
+    (
+        initialiseConductivity
+        (
+            mesh,
+            supportMesh,
+            meshSubsetPtr,
+            electroProperties
+        )
+    ),
+    sealedHeartBoundary_
+    (
+        electroProperties.get<Switch>("sealedHeartBoundary")
+    )
+{}
+'''
+
+# cardiacFOAM src/electroModels/electroDomains/myocardiumDomain/myocardiumSolver.C:
+# the selector, which hands its dictionary to the constructor of the class it selects.
+MYOCARDIUM_SOLVER_NEW = '''autoPtr<myocardiumSolver> myocardiumSolver::New
+(
+    const fvMesh& mesh,
+    const fvMesh& supportMesh,
+    const fvMeshSubset* meshSubsetPtr,
+    const word& solverType,
+    const dictionary& coeffs
+)
+{
+
+
+    auto* ctorPtr = dictionaryConstructorTable(solverType);
+
+    if (!ctorPtr)
+    {
+        FatalIOErrorInLookup
+        (
+            coeffs,
+            "myocardiumSolver",
+            solverType,
+            *dictionaryConstructorTablePtr_
+        ) << exit(FatalIOError);
+    }
+
+    return autoPtr<myocardiumSolver>
+    (
+        ctorPtr(mesh, supportMesh, meshSubsetPtr, coeffs)
+    );
+}
+'''
+
+ROOT = "param:Solver::Solver:electroProperties"
+
+
+def _entry(path, **fields):
+    return DictEntry(driver_path=path, description="d", **{"value_kind": "word", **fields})
+
+
+def _read(key, method="get", *, function="Solver::Solver", root=ROOT, selected_as=()):
+    return DictRead(
+        key=key, method=method, type="word", default=None, scope=(), root=root,
+        file="Solver.C", line=3, function=function, selected_as=selected_as,
+    )
+
+
+def test_the_selector_hands_its_dictionary_to_the_constructor_of_every_registered_class(tmp_path):
+    root = tmp_path / "src"
+    root.mkdir()
+    (root / "monodomainSolver.C").write_text(MONODOMAIN_SOLVER)
+    (root / "myocardiumSolver.C").write_text(MYOCARDIUM_SOLVER_NEW)
+    scan = scan_source(root)
+    assert scan.registrations == {"myocardiumSolver": {"monodomainSolver": "monodomainSolver"}}
+    assert ("monodomainSolver::monodomainSolver", 3, 4, "param:myocardiumSolver::New:coeffs", ()) in scan.calls
+    (read,) = [r for r in scan.reads if r.key == "sealedHeartBoundary"]
+    assert (read.method, read.type, read.selected_as) == ("get", "Switch", (("myocardiumSolver", "monodomainSolver"),))
+
+
+def test_only_a_read_without_a_default_that_nothing_tests_first_is_required():
+    reads = (
+        _read("state"), _read("tissue", "getOrDefault"), _read("patch"), _read("patch", "found"),
+        _read("depth", "get", function="Other::Other"), _read("depth", "found", function="Third::Third"),
+    )
+    scan = Scan(digest="d", reads=reads, registrations={})
+    catalogued = (_entry("$S.state", source_refs=("src/Solver.C",)),)
+    assert list(required_reads(scan, catalogued, document="doc")) == [("$S", "depth")]
+
+
+def _facts(monkeypatch, reads, *, built=None):
+    path = ("$S", "sealedHeartBoundary")
+    monkeypatch.setattr(case_rules, "_scan_facts", lambda mapping, entries, document: ({path: reads}, {}, built or {}))
+    return lambda context: rule_diagnostics((), context, document="constant/electroProperties", mapping=object())
+
+
+def test_a_class_the_case_selects_requires_its_key(monkeypatch):
+    judge = _facts(monkeypatch, [_read("sealedHeartBoundary", selected_as=(("myocardiumSolver", "monodomainSolver"),))])
+    (found,) = judge({"myocardiumSolver": "monodomainSolver"})
+    assert (found.level, found.code, found.field) == ("error", "cxx_required_key", "sealedHeartBoundary")
+    for fragment in ("get<word>", "Solver.C:3", "Solver::Solver", "catalogue does not list it"):
+        assert fragment in found.message, (fragment, found.message)
+    assert judge({"myocardiumSolver": "monodomainSolver", "sealedHeartBoundary": "no"}) == []
+    assert judge({"myocardiumSolver": "bidomainSolver"}) == []
+
+
+def test_a_class_no_table_registers_is_judged_only_when_the_plugin_says_the_case_builds_it(monkeypatch):
+    judge = _facts(
+        monkeypatch, [_read("sealedHeartBoundary", function="eikonalDomain::eikonalDomain")],
+        built={"eikonalDomain": frozenset({"eikonalSolver"})},
+    )
+    assert [item.field for item in judge({"myocardiumSolver": "eikonalSolver"})] == ["sealedHeartBoundary"]
+    assert judge({"myocardiumSolver": "monodomainSolver"}) == []
+    unknown = _facts(monkeypatch, [_read("sealedHeartBoundary", function="otherDomain::otherDomain")])
+    assert unknown({"myocardiumSolver": "eikonalSolver"}) == []
+
+
+def test_each_instance_of_a_block_the_case_holds_must_set_the_key(monkeypatch):
+    path = ("$S", "domains", "<name>", "depth")
+    monkeypatch.setattr(case_rules, "_scan_facts", lambda mapping, entries, document: (
+        {path: [_read("depth", selected_as=(("kind", "deep"),))]}, {}, {},
+    ))
+    context = {"domains.a.kind": "deep", "domains.a.depth": 3, "domains.b.kind": "deep"}
+    assert [item.field for item in rule_diagnostics((), context, document="doc", mapping=object())] == ["domains.b.depth"]
+    assert rule_diagnostics((), {}, document="doc", mapping=object()) == []

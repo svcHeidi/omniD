@@ -17,7 +17,7 @@ from cardiacfoam_assertions import assert_foam_entry
 # Two adapters are installed side by side, so there is no ambient default.
 _CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:dict_entries_catalog")
 
-VALID_PHASES = set(CardiacFoamPlugin().get_phases())
+VALID_PHASES = {"anatomy", "physics", "stimulus", "solver"}
 
 
 class TestDictEntryCatalog(unittest.TestCase):

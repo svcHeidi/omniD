@@ -1,5 +1,5 @@
 {
-  "description": "Reviewed facts the C++ scan cannot establish for cardiacFOAM's catalogue (omnidriver.openfoam.dict_keys_scanner.catalog_report). unseen_reads: catalogued paths whose read the scan cannot see, grouped by why. runtime_selection: the table each enum's menu comes from.",
+  "description": "Reviewed facts the C++ scan cannot establish for cardiacFOAM's catalogue (omnidriver.openfoam.dict_keys_scanner.catalog_report). unseen_reads: catalogued paths whose read the scan cannot see, grouped by why. runtime_selection: the table each enum's menu comes from, and built_when: the selector values that build a class no table registers.",
   "unseen_reads": {
     "read by upstream OpenFOAM's Foam::Time from system/controlDict, not by cardiacFOAM's source": [
       "endTime",
@@ -130,6 +130,16 @@
       "electroStateDomain": "one bath-potential implementation; selected by adding bathPotentialDomain, not by typing a type",
       "electromechanicalVerificationModel": "selected via the verificationModel subdict; no catalogue type selector",
       "eikonalVerificationModel": "selected via the verificationModel subdict; no catalogue type selector"
+    },
+    "built_when": {
+      "myocardiumDomain": {
+        "tables": ["myocardiumSolver"],
+        "why": "myocardiumDomainInterface::New builds it for every myocardiumSolver the myocardiumSolver table registers."
+      },
+      "eikonalMyocardiumDomain": {
+        "names": ["eikonalSolver"],
+        "why": "myocardiumDomainInterface::New builds it when myocardiumSolver is eikonalSolver, which no table registers."
+      }
     }
   }
 }

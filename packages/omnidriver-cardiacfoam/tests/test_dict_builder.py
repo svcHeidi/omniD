@@ -247,13 +247,19 @@ class TestValuePopulation(unittest.TestCase):
 
 
 class TestRequiredCheck(unittest.TestCase):
-    """check_required reports only required, applicable entries missing from the populated dict."""
+    """The rule pass reports only required, applicable entries missing from the populated dict."""
 
-    def test_silent_when_all_required_present(self) -> None:
-        from omnidriver.openfoam.dict_builder import (
-            check_required,
-            populate_values,
-        )
+    @staticmethod
+    def _errors(entries, populated):
+        from omnidriver.cardiacfoam.dict_builder import _with_virtual_presence
+        from omnidriver.openfoam.case_rules import rule_diagnostics
+
+        return [e.message for e in rule_diagnostics(
+            entries, _with_virtual_presence(populated), document="constant/electroProperties",
+        )]
+
+    def test_fully_populated_entries_report_nothing(self) -> None:
+        from omnidriver.openfoam.dict_builder import populate_values
         from omnidriver.cardiacfoam.dict_builder import (
             resolve_context,
             select_applicable_entries,
@@ -263,14 +269,10 @@ class TestRequiredCheck(unittest.TestCase):
         )
         entries = select_applicable_entries(ctx)
         populated = populate_values(entries, ctx, typical_value_fallback=True)
-        # typical_value fallback fills every required leaf.
-        check_required(entries, populated, context=ctx)
+        self.assertEqual(self._errors(entries, populated), [])
 
-    def test_raises_listing_missing_required_paths(self) -> None:
-        from omnidriver.openfoam.dict_builder import (
-            check_required,
-            populate_values,
-        )
+    def test_reports_the_missing_required_paths(self) -> None:
+        from omnidriver.openfoam.dict_builder import populate_values
         from omnidriver.cardiacfoam.dict_builder import (
             resolve_context,
             select_applicable_entries,
@@ -280,16 +282,11 @@ class TestRequiredCheck(unittest.TestCase):
             overrides={"$ELECTRO_MODEL_COEFFS.singleCellStimulus.stim_start": "20"},
         )
         entries = select_applicable_entries(ctx)
-        # The stimulus override makes the stimulus family applicable, so its guarded keys are listed.
         populated = populate_values(entries, ctx, typical_value_fallback=False)
-        with self.assertRaises(ValueError) as ctx_mgr:
-            check_required(entries, populated, context=ctx)
-        msg = str(ctx_mgr.exception)
-        self.assertIn("singleCellStimulus", msg)
+        self.assertTrue(any("singleCellStimulus" in message for message in self._errors(entries, populated)))
 
-    def test_optional_unset_entries_do_not_raise(self) -> None:
+    def test_optional_unset_entries_report_nothing(self) -> None:
         from omnidriver.dict_entries import DictEntry
-        from omnidriver.openfoam.dict_builder import check_required
 
         only_optional = [
             DictEntry(
@@ -301,11 +298,11 @@ class TestRequiredCheck(unittest.TestCase):
                 phases=frozenset({"physics"}),
             ),
         ]
-        check_required(only_optional, {})
+        self.assertEqual(self._errors(only_optional, {}), [])
 
 
 class TestValidatorIntegration(unittest.TestCase):
-    """build_electro_properties runs validate_context before returning."""
+    """build_electro_properties runs the rule pass before returning."""
 
     def test_build_raises_on_mutex_violation_via_overrides(self) -> None:
         from omnidriver.cardiacfoam.dict_builder import build_electro_properties
@@ -938,7 +935,7 @@ class TestEikonalECGHeterogeneity(unittest.TestCase):
             resolve_context,
             select_applicable_entries,
         )
-        from omnidriver.core.specs.validation import slot_key
+        from omnidriver.core.contracts.catalogue_paths import slot_key
 
         context = resolve_context(
             selectors={"myocardiumSolver": "eikonalSolver"},

@@ -25,7 +25,7 @@
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-"""Tests for ``validate_context``: required fields, enums and cross-field constraints, per entry's primary phase.
+"""Tests for the catalogue relations (``case_rules``) and the cross-field rules over a flat context.
 
 ``_filled_run`` supplies every required ``$ELECTRO_MODEL_COEFFS.*`` leaf so a test isolates validator behaviour."""
 
@@ -44,15 +44,18 @@ from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.core.planning_types import StrictDiagnostic
 from omnidriver.cardiacfoam.validation import cross_field_diagnostics
-from omnidriver.core.specs.validation import slot_key, validate_context
+from omnidriver.core.contracts.catalogue_paths import slot_key
+from omnidriver.openfoam.case_rules import rule_diagnostics
 
 _CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:validation")
 
 
 def _validate(config, *, entries=None, driver_context):
-    """Flatten the per-phase slices into the flat context ``validate_context`` takes."""
-    context = {key: val for slice_ in config.values() for key, val in slice_.items()}
-    return validate_context(context, entries=entries, driver_context=driver_context)
+    """The catalogue relations over the flat context the per-phase slices make."""
+    context = {key: val for slice_ in config.values() for key, val in slice_.items() if val not in (None, "")}
+    if entries is None:
+        entries = driver_context.capabilities.dictionaries.entries()
+    return tuple(rule_diagnostics(entries, context, document="constant/electroProperties"))
 
 _PHASE_ORDER = ("anatomy", "physics", "stimulus", "solver")
 
@@ -144,11 +147,9 @@ def _filled_run(**overrides) -> dict:
     return config
 
 
-def test_empty_run_reports_missing_required_fields_per_phase():
-    # A diagnostic's phase is its `source`.
+def test_empty_run_reports_missing_required_fields():
     errors = _validate(_blank_run(), driver_context=_CTX)
-    sources_with_errors = {e.source for e in errors}
-    assert {"physics"} <= sources_with_errors
+    assert any(e.field == "myocardiumSolver" and "is required" in e.message for e in errors)
     assert all(isinstance(e, StrictDiagnostic) for e in errors)
 
 
@@ -936,7 +937,8 @@ from omnidriver.cardiacfoam.common_dict_entries import (
     CONTROL_DICT_ENTRIES,
     PHYSICS_PROPERTY_ENTRIES,
 )
-from omnidriver.core.specs.validation import slot_key, validate_context
+from omnidriver.core.contracts.catalogue_paths import slot_key
+from omnidriver.openfoam.case_rules import rule_diagnostics
 
 _PHASE_ORDER = ("anatomy", "physics", "stimulus", "solver")
 
@@ -1102,6 +1104,7 @@ def _build_pvj_case(tmp_path, *, coupler="reactionDiffusionPvjCoupler",
         "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.purkinjeNetwork"
         ".conductionSystemDomain": "purkinjeGraphModel",
         f"{prefix}.conductionSystemSolver": conduction_solver,
+        f"{prefix}.ionicModel": "BuenoOrovio",
         f"{prefix}.vm1DRest": "-0.084",
         f"{prefix}.rootStimulus.node": "0",
         f"{prefix}.rootStimulus.startTime": "0.0",
@@ -1193,3 +1196,16 @@ def test_pvj_resistance_irrelevant_for_a_different_coupler(tmp_path):
     )
     diagnostics = _pvj_diagnostics(tmp_path)
     assert diagnostics == ()
+
+
+def test_a_block_the_case_holds_turns_on_the_rules_gated_on_its_presence():
+    from omnidriver.cardiacfoam.record_key_validation import _ELECTRO_ENTRIES_BY_PATH
+    from omnidriver.cardiacfoam.validation import infer_virtual_presence
+
+    context = {"myocardiumSolver": "singleCellSolver", "singleCellStimulus.stim_start": 20.0}
+    entries = _ELECTRO_ENTRIES_BY_PATH.values()
+    without = {item.field for item in rule_diagnostics(entries, dict(context), document="doc")}
+    with_presence = dict(context)
+    infer_virtual_presence(with_presence)
+    gated = {item.field for item in rule_diagnostics(entries, with_presence, document="doc")} - without
+    assert gated and all(field.startswith("singleCellStimulus.") for field in gated)

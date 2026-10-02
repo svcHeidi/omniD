@@ -29,6 +29,45 @@ def _catalogued(driver_path: str, value: Any) -> bool:
     return entry is not None and value in entry.enum_values
 
 
+# Block-presence virtual keys: a catalogue entry gated on `$..._present` or
+# `$..._configured` applies only to a context that holds a leaf under the
+# block. Without one the block stays off, so plain bidomain gets no bath
+# leaves.
+_VIRTUAL_PRESENCE_TRIGGERS: tuple[tuple[str, str], ...] = (
+    ("bathPotentialDomain.", "$bathPotentialDomain_configured"),
+    ("ecgDomains.", "$ecgDomains_present"),
+    ("conductionNetworkDomains.", "$conductionNetworkDomains_present"),
+    # A single-cell run with no stimulus is legal: stimulusIO.C:149-155
+    # returns a no-op protocol when the sub-dict is absent. Gating the
+    # stimulus family on presence rather than on myocardimSolver keeps the
+    # builder from inventing stim_amplitude/nstim1 defaults and quietly
+    # pacing a case that asked for none.
+    ("singleCellStimulus.", "$singleCellStimulus_present"),
+)
+
+
+def infer_virtual_presence(ctx: dict[str, Any]) -> None:
+    """Set, in place, the virtual keys that a leaf of `ctx` under a block
+    implies. Idempotent."""
+    for prefix, virtual_key in _VIRTUAL_PRESENCE_TRIGGERS:
+        if virtual_key in ctx:
+            continue
+        for existing_key in ctx:
+            if existing_key.startswith(prefix):
+                ctx[virtual_key] = True
+                break
+
+    from omnidriver.cardiacfoam.dict_entries import get_heterogeneity_models
+    from omnidriver.cardiacfoam.own_context import own_driver_context
+
+    if (
+        ctx.get("myocardiumSolver") == "eikonalSolver"
+        or ctx.get("ionicModel") in get_heterogeneity_models(own_driver_context())
+    ):
+        ctx["$ionicHeterogeneity_supported"] = True
+
+
+
 _CONDUCTION_SOLVER_SUFFIX = ".purkinjeGraphModelCoeffs.conductionSystemSolver"
 _COUPLER_SUFFIX = ".electroDomainCoupler"
 _NETWORK_REF_SUFFIX = ".conductionNetworkDomain"
@@ -651,9 +690,11 @@ def cross_field_diagnostics(context: dict[str, Any]) -> list["StrictDiagnostic"]
     )
 
 
-def case_diagnostics(case_root: Path) -> tuple["StrictDiagnostic", ...]:
-    """Every rule the resolved case at ``case_root`` violates. A case with no
-    ``electroProperties`` violates none."""
+def case_diagnostics(case_root: Path, *, mapping: Any = None) -> tuple["StrictDiagnostic", ...]:
+    """Every rule the resolved case at ``case_root`` violates: the catalogue's
+    relations, the keys the supplied C++ (``mapping``) requires, and
+    cardiacFOAM's cross-field rules. A case with no ``electroProperties``
+    violates none."""
     from foamlib import FoamFile
 
     from omnidriver.openfoam.case_rules import flatten, rule_diagnostics
@@ -676,8 +717,11 @@ def case_diagnostics(case_root: Path) -> tuple["StrictDiagnostic", ...]:
             source=str(electro_path), field="myocardiumSolver",
         ),)
     document = electro_path.relative_to(case_root).as_posix()
+    entries = tuple(_ELECTRO_ENTRIES_BY_PATH.values())
+    rule_context = dict(context)
+    infer_virtual_presence(rule_context)
     return tuple(
-        rule_diagnostics(_ELECTRO_ENTRIES_BY_PATH.values(), context, document=document)
+        rule_diagnostics(entries, rule_context, document=document, mapping=mapping)
         + cross_field_diagnostics(context)
         + _evaluate_pvj_resistance_requirement(case_root, context, electro_path)
     )

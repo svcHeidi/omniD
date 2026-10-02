@@ -85,6 +85,9 @@ _CLASS_HEAD = re.compile(r"\b(?:class|struct)\s+(?P<name>[A-Za-z_]\w*)\s*(?:fina
 _TEMPLATE_PREFIX = re.compile(r"^\s*template\s*<")
 _DICTIONARY_BASES = {"dictionary", "IOdictionary"}
 _NOT_A_CALL = {"if", "for", "while", "switch", "return", "sizeof", "catch", "defined"}
+#: A local holding a constructor looked up in a runtime-selection table:
+#: ``auto* ctorPtr = dictionaryConstructorTable(type);``.
+_CONSTRUCTOR_VARIABLE = re.compile(r"\b(\w+)\s*=\s*[^;=]*\w*ConstructorTable\w*\s*\(")
 
 
 @dataclass(frozen=True)
@@ -257,7 +260,7 @@ def scan_source(source_root: Path, *, digest: str | None = None) -> Scan:
                 match = _DICT_PARAM.search(param)
                 if match:
                     parameters.add((function.name, index, len(params), f"param:{function.name}:{match.group('name')}"))
-            reads.extend(_reads_in(text, structure, function, relative, classes, selected, calls))
+            reads.extend(_reads_in(text, structure, function, relative, classes, selected, registrations, calls))
     return Scan(
         digest=digest or source_digest(source_root), reads=tuple(reads), registrations=registrations,
         parameters=tuple(sorted(parameters)), calls=tuple(calls),
@@ -771,9 +774,15 @@ def _open_before(structure: str, close_at: int, floor: int) -> int:
 def _reads_in(
     text: str, structure: str, function: _Function, relative: str,
     classes: dict[str, _Class], selected: dict[str, list[tuple[str, str]]],
+    registrations: dict[str, dict[str, str]],
     calls: list[tuple[str, int, int, str, tuple[str, ...]]],
 ) -> Iterator[DictRead]:
     region = structure[function.start:function.end]
+    constructors = (
+        {name: sorted(registrations[function.owner].values())
+         for name in _CONSTRUCTOR_VARIABLE.findall(region)}
+        if function.owner in registrations else {}
+    )
     environment = _Environment(text, structure, function, classes)
     candidates = [(m.start(), m, "member") for m in _METHOD_CALL.finditer(region)]
     candidates += [(m.start(), m, "bare") for m in _BARE_CALL.finditer(region)]
@@ -793,7 +802,7 @@ def _reads_in(
             continue
         args = _split_args(text[open_at + 1:close_at])
         if kind == "call":
-            _record_call(re.sub(r"\s+", "", match.group("callee")), args, environment, calls)
+            _record_call(re.sub(r"\s+", "", match.group("callee")), args, environment, calls, constructors)
             continue
         key = _literal(args[0]) if args else None
         if kind == "dimensioned":
@@ -836,12 +845,21 @@ def _read(key, method, value_type, default, scope, text, position, function, rel
     )
 
 
-def _record_call(callee: str, args: list[str], environment: "_Environment", calls: list) -> None:
+def _record_call(
+    callee: str, args: list[str], environment: "_Environment", calls: list,
+    constructors: dict[str, list[str]],
+) -> None:
     """A call passing a resolved dictionary: ``callee`` receives it as
     argument ``index``. A dictionary member initialised from it is recorded
     as ``=<member root>``, and a base-class constructor as ``^<class>``:
-    both hold the same dictionary as the caller."""
+    both hold the same dictionary as the caller. A constructor taken from a
+    runtime-selection table (``constructors``: its variable, to the classes
+    the table registers) is called with it by every registered class."""
     if callee in _KEY_METHODS | _SUBDICT_METHODS | _NOT_A_CALL | _KEYWORDS:
+        return
+    if callee in constructors:
+        for derived in constructors[callee]:
+            _record_call(f"{derived}::{derived}", args, environment, calls, {})
         return
     if callee in environment.members:
         callee = f"={environment.members[callee]}"
@@ -1024,6 +1042,39 @@ def reads_at(scan: Scan, placed: dict[str, frozenset[tuple[str, ...]]], trail: t
     return False
 
 
+#: The methods that fail when the key is absent: no default to fall back on.
+_REQUIRED_METHODS = {"get", "getCheck", "lookup"}
+#: Methods that test a key before it is read.
+_GUARDS = {"found", "isDict", "readIfPresent"}
+
+
+def required_reads(scan: Scan, entries: Iterable, *, document: str) -> dict[tuple[str, ...], list[DictRead]]:
+    """The keys of ``document`` that the C++ reads without a default and that
+    ``entries`` do not list, by their path from the document's root (a
+    ``$TOKEN`` first segment kept), each with the reads that require it. A
+    read whose dictionary ``locate`` cannot place in ``document`` is not
+    here: its path is unknown. A key the same function tests first
+    (``found``, ``isDict``) or reads only if present is optional."""
+    entries = tuple(entries)
+    placed = locate(scan, entries, document=document)
+    guarded = {
+        (read.file, read.function, read.root, read.scope, read.key)
+        for read in scan.reads if read.method in _GUARDS
+    }
+    listed = [tuple(entry.driver_path.split(".")) for entry in entries]
+    required: dict[tuple[str, ...], list[DictRead]] = {}
+    for read in scan.reads:
+        if read.method not in _REQUIRED_METHODS or not read.value_read:
+            continue
+        if (read.file, read.function, read.root, read.scope, read.key) in guarded:
+            continue
+        for place in placed.get(read.root, ()):
+            path = place + read.scope + (read.key,)
+            if not any(len(path) == len(known) and all(map(_segment_matches, path, known)) for known in listed):
+                required.setdefault(path, []).append(read)
+    return required
+
+
 def _same_function(defined: str, called: str) -> bool:
     """A definition and a call name one function when one spelling is the
     other with more of its namespace or class qualification."""
@@ -1135,16 +1186,34 @@ def catalog_report(
     )
 
 
-def registered_menu(mapping, driver_path: str) -> frozenset[str]:
-    """The names the scanned selection table behind the enum at
-    ``driver_path`` registers, when the plugin's source is supplied and its
-    reviewed ``runtime_selection`` maps the enum to a table (not as a
-    curated ``subset``); empty otherwise. A menu check accepts these and the
-    plan reports the ones the catalogue lacks as uncatalogued."""
-    root = mapping.source_root(os.environ) if mapping is not None else None
-    if root is None or not root.is_dir():
-        return frozenset()
-    rule = json.loads(mapping.allowlist_path.read_text()).get("runtime_selection", {}).get("by_path", {}).get(driver_path)
-    if rule is None or rule.get("mode") == "subset":
-        return frozenset()
-    return frozenset(cached_scan(root, cache_root=None).registrations.get(rule["base"], {}))
+def registered_menus(reviewed: dict, scan: Scan, entries: Iterable) -> dict[str, frozenset[str]]:
+    """The values each enum may take according to the scanned selection
+    table the plugin's ``reviewed`` ``runtime_selection`` maps it to, by the
+    enum's ``driver_path``: the names the table registers (and, for a
+    ``polymorphic`` enum, whose menu several tables share, the catalogue's
+    too). A curated ``subset`` has no entry: its menu is the catalogue's."""
+    by_path = reviewed.get("runtime_selection", {}).get("by_path", {})
+    listed = {entry.driver_path: entry.enum_values for entry in entries}
+    return {
+        path: frozenset(scan.registrations.get(rule["base"], {})) | (
+            frozenset(listed.get(path, ())) if rule.get("mode") == "polymorphic" else frozenset()
+        )
+        for path, rule in by_path.items() if rule.get("mode") != "subset"
+    }
+
+
+def built_when(reviewed: dict, scan: Scan) -> dict[str, frozenset[str]]:
+    """For a class no selection table registers, the values of a case's
+    selectors that build it, from the plugin's ``reviewed``
+    ``runtime_selection.built_when``: ``names`` it lists, and the names of the
+    ``tables`` it lists."""
+    return {
+        name: frozenset(spec.get("names", ())).union(*(scan.registrations.get(table, {}) for table in spec.get("tables", ())))
+        for name, spec in reviewed.get("runtime_selection", {}).get("built_when", {}).items()
+    }
+
+
+def owner_of(read: DictRead) -> str:
+    """The class (or free function) whose code makes ``read``."""
+    names = (read.function or "").split("::")
+    return names[-2] if len(names) > 1 else names[0]

@@ -190,29 +190,6 @@ def absent_dict_entry_catalog(plugin) -> dict:
 
 
 @_instrumented
-def absent_phases(plugin) -> tuple[str, ...]:
-    """The dictionary phases for a plugin that does not implement
-    ``get_phases()``: those its own ``DictEntry`` values declare, sorted for
-    determinism.
-
-    Sorted, not ordered -- and the order is the semantics, since
-    ``primary_phase()`` returns the first phase in it that an entry claims. A
-    plugin with multi-phase entries should implement ``get_phases()`` rather
-    than accept an alphabetical guess. What this must never do is hand back
-    phases from another adapter to a plugin that never declared them: that
-    was the silent defect this replaces.
-
-    Ungated -- no ``plugin_id`` check. It derives from the plugin's own
-    ``DictEntry`` values, so it is correct for every plugin."""
-
-    declared: set[str] = set()
-    hook = getattr(plugin, "get_dict_entries", None)
-    for entry in (hook() if callable(hook) else ()):
-        declared.update(entry.phases)
-    return tuple(sorted(declared))
-
-
-@_instrumented
 def absent_case_runtime_conventions():
     """Neutral fallback for plugins that declare no generated case paths.
 

@@ -41,10 +41,15 @@ _WILDCARD_RE = re.compile(r"<[^>]+>")
 _SCOPE_TOKEN_PREFIX_RE = re.compile(r"^\$[A-Z][A-Z0-9_]*\.")
 
 
+def slot_key(driver_path: str) -> str:
+    """A driver path without its leading ``$SCOPE_TOKEN.``: the key a resolved
+    dictionary's leaf has below that scope. A multi-segment path stays whole,
+    so nested leaves never collide with a top-level key of the same name."""
+    return _SCOPE_TOKEN_PREFIX_RE.sub("", driver_path, count=1)
+
 
 def _parse_path(driver_path: str, is_dynamic: bool) -> CataloguePath:
-    normalised = _SCOPE_TOKEN_PREFIX_RE.sub("", driver_path, count=1)
-
+    normalised = slot_key(driver_path)
     segments = normalised.split(".")
     leaf = segments[-1]
     parents = tuple(segments[:-1])

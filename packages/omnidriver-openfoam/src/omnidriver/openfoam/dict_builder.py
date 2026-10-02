@@ -1,16 +1,15 @@
 """Solver-neutral primitives for synthesising OpenFOAM dictionary text: entry
-selection, required-field checking, value resolution, and block
-serialisation. Solver-specific builders live in the owning plugin.
+selection, value resolution, and block serialisation. Solver-specific
+builders live in the owning plugin, and judge what they build with
+``case_rules``.
 """
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from omnidriver.core.specs.validation import (
-    _entry_is_applicable,
-    _predicate_matches,
-    slot_key,
-)
+from omnidriver.core.contracts.catalogue_paths import slot_key
+
+from .case_rules import applicable_entries
 
 if TYPE_CHECKING:
     from omnidriver.core.contracts.dictionary import DictEntry
@@ -24,61 +23,7 @@ def select_applicable_entries(
     """Return entries whose `applicable_when` predicate matches `context` and
     whose `forbidden_when` predicate does not. `entries` is always supplied
     by the caller; this module knows no solver's catalog."""
-    return [
-        e for e in entries
-        if _entry_is_applicable(e, context)
-        and not any(
-            _predicate_matches(context, key, expected)
-            for key, expected in e.forbidden_when.items()
-        )
-    ]
-
-
-def _is_required_in_context(
-    entry: DictEntry,
-    context: dict[str, Any],
-) -> bool:
-    """When `required_when` is set it narrows `required` to matching
-    predicates only — otherwise an entry required for one solver variant
-    would fire missing-required errors on every other variant too."""
-    if entry.required_when:
-        return any(
-            _predicate_matches(context, key, expected)
-            for key, expected in entry.required_when.items()
-        )
-    return entry.required
-
-
-def check_required(
-    entries: list[DictEntry],
-    populated: dict[str, str],
-    *,
-    context: dict[str, Any] | None = None,
-) -> None:
-    """Raise `ValueError` if any required entry in `entries` has no value in
-    `populated`. Assumes inapplicable entries are already filtered out by
-    `select_applicable_entries`.
-
-    `dynamic_path=True` entries are skipped: this generic function cannot
-    discover which concrete `<name>` instances a run configures, so
-    required-field enforcement for those is left to the owning plugin.
-    """
-    missing: list[str] = []
-    ctx = context if context is not None else {}
-    for entry in entries:
-        if entry.dynamic_path:
-            continue
-        if not _is_required_in_context(entry, ctx):
-            continue
-        key = slot_key(entry.driver_path)
-        if key not in populated or populated[key] in (None, ""):
-            missing.append(entry.driver_path)
-    if missing:
-        raise ValueError(
-            "check_required: required entries have no value and "
-            "no typical_value fallback was applicable:\n  - "
-            + "\n  - ".join(missing)
-        )
+    return applicable_entries(entries, context)
 
 
 def populate_values(
@@ -89,7 +34,7 @@ def populate_values(
 ) -> dict[str, str]:
     """Resolve each entry's value to write: an explicit value in `context`,
     else `entry.typical_value` when `typical_value_fallback`, else omitted
-    (left for the caller's `check_required` to flag if required)."""
+    (left for the caller's rule check to flag if required)."""
     import re
     populated: dict[str, str] = {}
 

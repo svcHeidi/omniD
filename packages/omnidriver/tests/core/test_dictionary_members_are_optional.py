@@ -33,7 +33,6 @@ def test_a_plugin_without_them_loads_and_composes_to_empty_answers():
     assert ctx.capabilities.dictionaries.entries() == ()
     assert ctx.capabilities.dictionaries.groups() == {}
     assert dict(ctx.capabilities.dictionaries.catalog().documents) == {}
-    assert ctx.capabilities.dictionaries.phases() == ()
 
 
 @pytest.mark.parametrize("check_id", ["C1", "C2", "C6", "C10"])

@@ -16,7 +16,7 @@
 | Execute one strict workflow step | `run_workflow_step(...)` | `omnidriver.core.runtime.workflow_runner` |
 | Read/write strict workflow state | `workflow_state_from_json(...)`, `WorkflowRunState.to_json()` | `omnidriver.core.runtime.workflow_state` |
 | Validate RunDocument v3 (any other version is refused) | `RunDocument.from_json(...)` | `omnidriver.core.runtime.run_model` |
-| Check a flat `{slot_key: value}` context against the catalogue's rules | `validate_context(context, entries=, driver_context=)` | `omnidriver.core.specs.validation` |
+| Check a flat `{slot_key: value}` context against the catalogue's rules, its menus and, given the plugin's `cxx_mapping`, the keys its C++ requires | `rule_diagnostics(entries, context, document=, mapping=)` | `omnidriver.openfoam.case_rules` |
 | Synthesize a fresh `electroProperties` / `physicsProperties` | `build_electro_properties(...)`, `build_physics_properties(...)` | `omnidriver.cardiacfoam.dict_builder` |
 | Parse an existing `electroProperties` back to selectors + overrides | `parse_electro_properties(path)` | `omnidriver.cardiacfoam.dict_builder` |
 | Write a from-scratch case's dicts as one committed plan (nothing is launched) | `build_and_launch(...)` | `omnidriver.cardiacfoam.dict_builder` |
@@ -953,7 +953,17 @@ and the native case all count.
 - **Catalogue relations** (cardiacFOAM's `electroProperties`, each cardiacCore
   utility dictionary) — `applicable_when` / `required_when` / `forbidden_when` /
   `mutually_exclusive_with` / `co_required_with`, once per instance of a
-  `<name>` block. Menus and value types are not judged here: the C++ owns them.
+  `<name>` block. An enum value outside its menu is refused: the names the
+  supplied C++'s selection table registers when the source is supplied, the
+  catalogue's menu otherwise. Value types are the C++'s: a study's value is
+  checked against them when it is written.
+- **Keys the C++ requires** — a key the supplied C++ reads with `get<T>` or
+  `lookup` and no default, in a class the case selects (a selection table
+  registers it under a name the case holds, or the plugin's reviewed
+  `built_when` says the case builds it), that the catalogue lacks and the case
+  does not set. The refusal names the key, its dictionary, its type, the C++ file
+  and class, and says the catalogue does not list it. A key the same function
+  tests with `found` first is optional.
 - **Solver coupling** — pairings like (`singleCellSolver`, any Purkinje) reject with the table's stated reason.
 - **Block references** — `domainCouplings.<name>.conductionNetworkDomain` must point at a declared block.
 - **Tissue heterogeneity** — `ionicHeterogeneity` requires a supported `ionicModel` and well-formed regions and gradient axes.
@@ -961,9 +971,11 @@ and the native case all count.
 - **ECG consistency** — `personalizedTemplates` and the pseudo-ECG `anisotropic` switch must agree with the verifier and solver they sit beside.
 - **Purkinje resistance** — `reactionDiffusionPvjCoupler` needs `rPvj` unless its materialized graph carries `pvjResistances`.
 
-A rule refuses a combination it knows is wrong, never a name it does not know:
-an ionic model, tissue or verifier the catalogue lacks (reported `uncatalogued`
-by the scan) passes every rule.
+A rule refuses a combination it knows is wrong, never a name the C++ accepts:
+an ionic model, tissue or verifier the catalogue lacks but the scan finds
+registered (reported `uncatalogued`) passes every rule. `step --apply` runs the
+same rules after its edit commits; a refusal leaves the edit in the case, so
+patch it again.
 
 ## Function objects (probes, sampling, sets, …)
 
