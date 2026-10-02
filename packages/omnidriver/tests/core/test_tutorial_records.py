@@ -1312,6 +1312,26 @@ def test_an_axis_for_a_step_the_selected_route_does_not_run_is_refused(tmp_path)
         assert fragment in message, (fragment, message)
 
 
+def test_an_axis_that_also_writes_the_case_is_not_refused_for_a_step_the_route_skips(tmp_path):
+    def resolve(value, staged_case_root: Path) -> AxisResult:
+        del staged_case_root
+        return AxisResult(
+            patches=(AxisPatch(
+                document="constant/mesh.json", key_path=("cells",), value=int(value), value_kind="integer",
+            ),),
+            command_arguments={"meshA": ("--cells", str(value))},
+        )
+
+    _native_case(tmp_path, {"constant/mesh.json": {"cells": "5"}})
+    preview = record_execution.preview_record_case(
+        _record_with_variants(axes=(AxisContract(name="number_cells", value_kind="integer", resolve=resolve),)),
+        cases_root=tmp_path / "cases", study_by_source={"base": {"mesh": "variantB", "number_cells": 7}},
+        driver_context=_context_with_writer(),
+    )
+    assert preview["workflow_step_ids"] == ["meshB", "solve"]
+    assert preview["workflow_commands"]["meshB"] == ["toolB"]
+
+
 def test_an_axis_for_a_step_the_default_route_runs_is_admitted(tmp_path):
     preview = _preview(tmp_path, {"number_cells": 7})
     assert preview["command_arguments"] == {"meshA": ["--cells", "7"]}

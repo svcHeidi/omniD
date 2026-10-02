@@ -1112,9 +1112,9 @@ def resolve_case_patches(
     ``SourcedPatch.validated``.
 
     ``workflow_step_ids`` are the steps the selected route runs (default: all
-    the record's). An axis contributing command arguments to a declared step
-    that route does not run is refused by name: the value would otherwise
-    have no effect.
+    the record's). An axis whose only effect is command arguments for a
+    declared step that route does not run is refused by name: its value would
+    otherwise have no effect.
 
     Returns ``(combined_patches, command_arguments_by_step)`` -- the latter
     is every axis's ``AxisResult.command_arguments``, merged by step id in
@@ -1202,9 +1202,9 @@ def resolve_case_patches(
                     f"{step_id!r}, which tutorial record {record.name!r} "
                     f"does not declare (declared steps: {sorted(known_step_ids)})"
                 )
-            if step_id not in route_step_ids:
+            if step_id not in route_step_ids and not result.patches:
                 raise TutorialRecordError(
-                    f"axis {name!r} contributes command arguments to step {step_id!r}, which "
+                    f"axis {name!r} only contributes command arguments to step {step_id!r}, which "
                     f"the selected route of tutorial record {record.name!r} does not run "
                     f"(it runs {list(route_step_ids)}); drop {name!r} or select a route that "
                     f"runs {step_id!r}"

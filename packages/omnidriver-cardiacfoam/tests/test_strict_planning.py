@@ -287,12 +287,13 @@ def test_every_strict_plan_scans_the_supplied_source() -> None:
 
 
 def test_batched_ionic_model_does_not_require_optional_batched_keys(tmp_path: Path):
-    """Both keys are read via lookupOrDefault; the batched model is set explicitly since the native default is Stewart."""
+    """Both keys are read via lookupOrDefault; the batched model is set explicitly since the native default is Stewart, with a tissue it accepts."""
     report = strict_plan(
         "cable1DCVConvergence", driver_context=_CTX,
         overrides={
             "cases_root": str(_native_tutorials_root()),
             "constant/electroProperties:monodomainSolverCoeffs.ionicModel": "TWorldcompactBatched",
+            "constant/electroProperties:monodomainSolverCoeffs.tissue": "epicardialCells",
         },
         scratch_root=str(tmp_path / "scratch"),
     ).to_json()

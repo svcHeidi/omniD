@@ -83,13 +83,18 @@ def test_a_record_refuses_an_axis_only_another_record_declares():
         sort_study_name("ionicModel", axes=catalog["manufacturedBidomain"].axes)
 
 
-#: Every tet route of every record that has a ``dimension`` axis.
-_TET_ROUTES = [
-    ("manufacturedBidomain", "tet"),
-    ("manufacturedBathBidomain", "tet"),
+#: eikonalECG's ``dimension`` axis writes no document key: the mesh step's
+#: ``-dict`` is its whole effect, so a route that never runs ``blockMesh``
+#: refuses it. The other records' axis also writes the solver's ``dimension``,
+#: which a tet study states.
+_EIKONAL_TET_ROUTES = [
     ("manufacturedEikonalECG", "tet"),
     ("manufacturedEikonalECG", "tet-errorLocalisation"),
     ("manufacturedEikonalECG", "tet-gradientReconstruction"),
+]
+_TET_ROUTES_WRITING_DIMENSION = [
+    ("manufacturedBidomain", "tet"),
+    ("manufacturedBathBidomain", "tet"),
     ("manufacturedMonodomainPseudoECG", "tet"),
 ]
 
@@ -103,15 +108,21 @@ def _resolve_on_route(record_name: str, variant: str, study: dict, tmp_path):
     )
 
 
-@pytest.mark.parametrize(("record_name", "variant"), _TET_ROUTES)
+@pytest.mark.parametrize(("record_name", "variant"), _EIKONAL_TET_ROUTES)
 @pytest.mark.parametrize("dimension", ["1D", "2D", "3D"])
-def test_a_tet_route_refuses_the_dimension_axis_because_it_never_runs_blockmesh(
+def test_a_tet_route_refuses_an_axis_whose_only_effect_is_the_blockmesh_dict(
     record_name, variant, dimension, tmp_path,
 ):
     with pytest.raises(TutorialRecordError) as exc:
         _resolve_on_route(record_name, variant, {"dimension": dimension}, tmp_path)
     for fragment in (record_name, "'dimension'", "'mesh'", "does not run"):
         assert fragment in str(exc.value), (fragment, str(exc.value))
+
+
+@pytest.mark.parametrize(("record_name", "variant"), _TET_ROUTES_WRITING_DIMENSION)
+def test_a_tet_study_may_state_the_solvers_dimension(record_name, variant, tmp_path):
+    patches, _ = _resolve_on_route(record_name, variant, {"dimension": "3D"}, tmp_path)
+    assert any(sourced.patch.key_path[-1] == "dimension" for sourced in patches)
 
 
 @pytest.mark.parametrize("record_name", [

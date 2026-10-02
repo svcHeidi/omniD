@@ -23,7 +23,7 @@ def test_the_tet_route_runs_through_the_record(tmp_path: Path) -> None:
     run = record_run(
         tmp_path, plugin="cardiacfoam", record="manufacturedBathBidomain", cases_root=native_tutorials_root(),
         sweep={"tetNumberCells": [10]},
-        study={"mesh": "tet", "system/controlDict:endTime": 0.02}, timeout_s=600,
+        study={"mesh": "tet", "dimension": "3D", "system/controlDict:endTime": 0.02}, timeout_s=600,
     )
     # The verifier names its summary from the tet mesh's own resolution.
     (summary,) = sorted((run.case_root / "postProcessing").glob("3D_*_cells.dat"))
