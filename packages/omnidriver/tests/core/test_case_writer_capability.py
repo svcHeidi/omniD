@@ -53,18 +53,6 @@ def test_two_providers_claiming_one_format_are_refused():
         )
 
 
-def test_a_format_nobody_declares_is_refused_by_name_not_silently_skipped():
-    """An unrenderable file must stop the plan."""
-    capabilities = plugin_capabilities.adapt_plugin_capabilities(_Renderer())
-    with pytest.raises(ValueError, match="vtk_unstructured"):
-        capabilities.case_writer.renderer_for("vtk_unstructured")
-
-
-def test_the_declared_renderer_is_the_one_asked():
-    capabilities = plugin_capabilities.adapt_plugin_capabilities(_Renderer())
-    assert capabilities.case_writer.renderer_for("openfoam_dictionary") == "org.format"
-
-
 class _SemanticOnly:
     """A more-specific provider that renders nothing -- only resolves."""
 
@@ -77,14 +65,6 @@ class _SemanticOnly:
         return case_write.ResolvedMutation(
             request=request, targets=(), expected_effects=(), semantic_owner_id=self.plugin_id,
         )
-
-
-def test_the_declared_renderer_is_the_one_asked_in_a_composed_stack():
-    """`_ComposedProvider.plugin_id` is the most-specific provider's id, which is not necessarily who declared the format being asked about."""
-    capabilities = provider_stack.compose(
-        provider_stack.order_providers([_Renderer(), _SemanticOnly()])
-    )
-    assert capabilities.case_writer.renderer_for("openfoam_dictionary") == "org.format"
 
 
 def test_resolution_must_not_touch_the_filesystem(tmp_path, monkeypatch):

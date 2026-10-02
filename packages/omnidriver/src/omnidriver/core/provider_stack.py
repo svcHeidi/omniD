@@ -1,8 +1,8 @@
 """Compose N providers into one capability view.
 
 Core owns composition; a provider never embeds another provider.
-``PluginProfile.provides`` is the supplied intent, :func:`implemented_capabilities`
-is the discovery, and :func:`check_provides` compares them.
+``PluginProfile.provides`` is the supplied intent; :func:`check_provides`
+compares it with what the provider object exposes.
 """
 
 from __future__ import annotations
@@ -20,20 +20,6 @@ def capability_members() -> dict[str, frozenset[str]]:
     seam's ``:adapts:`` field -- this does not re-split the text itself.
     """
     return {seam.field: adapts_members(seam) for seam in collect_seams()}
-
-
-def implemented_capabilities(provider: Any) -> frozenset[str]:
-    """Capabilities whose every member this provider actually implements.
-
-    Discovery, not intent: a capability appears here purely because the
-    provider object exposes a callable of that name for each member the
-    capability adapts, regardless of what the provider's profile declares.
-    """
-    return frozenset(
-        capability
-        for capability, members in capability_members().items()
-        if all(callable(getattr(provider, member, None)) for member in members)
-    )
 
 
 def check_provides(provider: Any) -> list[str]:
@@ -531,15 +517,12 @@ def _check_case_file_declarers(ordered) -> None:
             declared_by[path] = provider.plugin_id
 
 
-def _format_declarers(ordered) -> dict[str, str]:
-    """Map each rendered format to the one provider that declares it.
+def _check_format_declarers(ordered) -> None:
+    """One declarer per rendered format, always.
 
     Two providers claiming `openfoam_dictionary` would make the bytes that
     reach disk depend on composition order -- the same defect
-    `_check_case_file_declarers` refuses for case files. The map is returned
-    (not just checked) so `renderer_for` can answer with the real declarer
-    instead of the stack's most-specific provider -- see
-    `_ComposedProvider._format_declared_by`.
+    `_check_case_file_declarers` refuses for case files.
     """
     declared_by: dict[str, str] = {}
     for provider in ordered:
@@ -553,17 +536,6 @@ def _format_declarers(ordered) -> dict[str, str]:
                     f"bytes on disk depend on composition order"
                 )
             declared_by[file_format] = provider.plugin_id
-    return declared_by
-
-
-def _check_format_declarers(ordered) -> None:
-    """One declarer per rendered format, always.
-
-    Two providers claiming `openfoam_dictionary` makes the bytes that reach
-    disk depend on composition order, which is the same defect
-    `_check_case_file_declarers` refuses for case files.
-    """
-    _format_declarers(ordered)
 
 
 def compose(ordered_providers):
@@ -586,14 +558,8 @@ def compose(ordered_providers):
         raise ValueError("compose() requires at least one provider")
     _check_cross_member_pairs(ordered)
     _check_case_file_declarers(ordered)
-    format_declared_by = _format_declarers(ordered)
-    composed = _ComposedProvider(ordered)
-    # Attached after construction, not computed inside __init__: __init__ is
-    # also used by resolutions() below with a stack that has not passed the
-    # eager checks above yet, and duplicating the raise there would surface it
-    # at the wrong place. Here the format-declarer map is already known safe.
-    composed._format_declared_by = format_declared_by
-    return adapt_plugin_capabilities(composed)
+    _check_format_declarers(ordered)
+    return adapt_plugin_capabilities(_ComposedProvider(ordered))
 
 
 #: Capabilities whose resolved CONTENT is hashed into the stack digest. Spec

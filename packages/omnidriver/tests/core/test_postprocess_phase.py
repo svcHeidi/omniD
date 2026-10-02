@@ -10,7 +10,6 @@ from omnidriver.core.runtime.postprocess_phase import (
     CaseRecord,
     build_standalone_case_record,
     build_sweep_context,
-    read_case_workflow_state,
     run_postprocess_phase,
     run_postprocessing_module,
     write_case_record,
@@ -61,17 +60,6 @@ def test_context_retains_output_location_even_if_output_was_deleted(tmp_path: Pa
     context = build_sweep_context(tmp_path)
     assert context.cases[0].status == "completed"
     assert context.cases[0].case_output_dir == str(tmp_path / "case-a" / "outputs")
-
-
-def test_workflow_state_is_the_core_execution_evidence(tmp_path: Path) -> None:
-    _manifest(tmp_path)
-    state_path = tmp_path / "case-a" / "outputs" / "workflow_state.json"
-    state_path.parent.mkdir(parents=True)
-    state_path.write_text(json.dumps({"status": "completed", "steps": [{"step_id": "solve"}]}))
-    context = build_sweep_context(tmp_path)
-    assert read_case_workflow_state(context, "case-a")["status"] == "completed"
-    with pytest.raises(KeyError, match="unknown case_id"):
-        read_case_workflow_state(context, "unknown")
 
 
 def test_standalone_record_does_not_inventory_outputs(tmp_path: Path) -> None:

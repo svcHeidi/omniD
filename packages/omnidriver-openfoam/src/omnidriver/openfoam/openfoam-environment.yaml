@@ -7,8 +7,8 @@ plugin:
 # enforces that at driver_context() construction, per provider, before
 # composition runs.
 #
-# Not declared, though implemented_capabilities() reports them with stubs
-# still present: command_authorization (only get_environment_commands /
+# Not declared, though their members are implemented with stubs still
+# present: command_authorization (only get_environment_commands /
 # is_installed_environment_command are real here), case_introspection. Not
 # implemented at all: case_files -- solver-specific, and cardiacFoam is the only
 # current implementer.

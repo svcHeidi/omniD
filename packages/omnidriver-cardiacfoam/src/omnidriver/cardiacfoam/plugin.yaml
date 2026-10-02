@@ -18,7 +18,7 @@ requires:
 # 2. Realness: presence is not intent -- a member callable that
 #    unconditionally ignores its arguments and returns a constant is not
 #    "genuinely answered" any more than an absent one, and
-#    provider_stack.implemented_capabilities() cannot tell the two apart (it
+#    provider_stack.check_provides() cannot tell the two apart (it
 #    only checks callability). Read every adapted member's actual body (not
 #    just its existence) against that test. Two capabilities that pass gate 1
 #    fail this one and are also withheld:

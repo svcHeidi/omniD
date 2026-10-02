@@ -215,8 +215,8 @@ A `PluginProfile` declares two things about how it joins a stack:
 
 - **`provides:`** is intent, not discovery — the set of capability names the
   provider claims to fully implement. `check_provides()` compares it against
-  what the provider object actually exposes (`implemented_capabilities()`,
-  built from the same seam table the generated section below documents) and
+  what the provider object actually exposes (built from the same seam table
+  the generated section below documents) and
   reports a declared-but-absent capability as an error — how a misspelled
   hook name becomes visible instead of silently taking a fallback route.
   Implementing a member without declaring it is not an error: a provider may

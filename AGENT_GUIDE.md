@@ -22,7 +22,6 @@
 | Write a from-scratch case's dicts as one committed plan (nothing is launched) | `build_and_launch(...)` | `omnidriver.cardiacfoam.dict_builder` |
 | Locate predicted outputs | `strict_plan(...)`'s `expected_artifacts` field (also in `omnidriver plan --strict` JSON) | `omnidriver.core.strict_planning` |
 | Verify outputs vs predictions | `artifact_reconciliation` in `run --strict`/`step --strict` JSON output | `omnidriver.core.runtime.reconciler` |
-| List past runs | `list_runs(root)` | `omnidriver.core.runtime.run_discovery` |
 | Plan/run a study over a record | `omnidriver sweep-plan/sweep-run --spec sweep.json --output-dir <dir>` | `omnidriver.core.runtime.sweep_runner` |
 
 ## Selecting the stack
@@ -456,8 +455,7 @@ The execution engine hands off to the postprocessing phase once a workflow or sw
 2. **The postprocessing module (`run_postprocessing_module`)**: A separate function that receives the `SweepContext` and a task. It always refuses (`not_configured`) rather than guessing an undeclared generic analysis task -- there is no automatic per-case script discovery.
 
 If an agent needs deeper reasoning than the flat summary, it reads one case's
-durable execution state with `read_case_workflow_state(context, case_id)`,
-which raises clearly on an unknown case ID.
+`workflow_state.json` from the `workflow_state_path` the `SweepContext` records for it.
 
 ### Post-processing utilities
 
@@ -1199,14 +1197,6 @@ omnidriver does not shell out to the `foamDictionary` binary, and its
 behaviour does not depend on whether OpenFOAM is sourced. If you are writing
 tools that query these dictionaries, use the `mutators.py` API -- not `grep`
 or `sed`.
-
-### Find past runs
-
-```python
-from omnidriver.core.runtime.run_discovery import list_runs
-for state in list_runs("/path/to/runs/dir"):
-    print(state["status"], state["_state_path"])
-```
 
 ## Known gaps
 

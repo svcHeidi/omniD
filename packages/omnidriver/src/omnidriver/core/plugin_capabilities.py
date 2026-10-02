@@ -813,9 +813,8 @@ class CaseWriterCapability(Protocol):
     The fallback cannot be neutral for any of the four members. An empty
     resolution silently yields a case that is not the one requested, so an
     adapter without these hooks is refused by name; ``get_rendered_formats``'s
-    own fallback returns a neutral ``frozenset()``, but that empty set then
-    reaches ``renderer_for``, which refuses BY NAME the moment any format is
-    looked up against it. See ``_CaseWriterAdapter.supported_modes`` for the
+    own fallback returns a neutral ``frozenset()``, but ``render`` then refuses
+    BY NAME any file whose format that set does not declare. See ``_CaseWriterAdapter.supported_modes`` for the
     three-state resolver/mode logic.
 
     :adapts: resolve_case_mutation, get_supported_mutation_modes, get_rendered_formats, render_case_files
@@ -826,7 +825,6 @@ class CaseWriterCapability(Protocol):
 
     def resolve(self, request: Any, *, driver_context: Any) -> Any: ...
     def supported_modes(self) -> "frozenset[str]": ...
-    def renderer_for(self, file_format: str) -> str: ...
     def render(
         self, resolved: Any, *, snapshot_root: Any, driver_context: Any,
         execution_env: Any | None = None,
@@ -1416,30 +1414,6 @@ class _CaseWriterAdapter:
                 f"mode {request.mode!r}; it supports {sorted(supported)}"
             )
         return _resolved_purely(hook, request, driver_context=driver_context)
-
-    def renderer_for(self, file_format: str) -> str:
-        hook = getattr(self.plugin, "get_rendered_formats", None)
-        declared = frozenset(hook()) if callable(hook) else frozenset()
-        if file_format not in declared:
-            raise ValueError(
-                f"no provider in this stack renders {file_format!r}; declared "
-                f"formats are {sorted(declared)}. A file whose format nobody "
-                f"renders stops the plan rather than being dropped from it"
-            )
-        # `self.plugin` is a `_ComposedProvider` for a composed stack, whose
-        # own `.plugin_id` is the most-specific provider -- not necessarily
-        # the one that declared `file_format`. `provider_stack.compose`
-        # attaches the real per-format map as instance state (not a plugin
-        # hook, so read via `vars()` rather than `getattr(self.plugin, ...)`
-        # -- the latter pattern is reserved for probing the plugin protocol,
-        # see test_every_probed_hook_is_declared_somewhere). A single,
-        # uncomposed plugin (as `adapt_plugin_capabilities` is also called
-        # directly in tests) carries no such map and is trivially its own
-        # declarer.
-        declared_by = vars(self.plugin).get("_format_declared_by")
-        if declared_by is not None:
-            return declared_by[file_format]
-        return self.plugin.plugin_id
 
     def render(
         self, resolved: Any, *, snapshot_root: Any, driver_context: Any,

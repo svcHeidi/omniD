@@ -63,10 +63,6 @@ class CardiacCorePlugin:
     def get_dict_entries(self) -> tuple[Any, ...]:
         return CATALOG.entries
 
-    def get_phases(self) -> tuple[str, ...]:
-        """The selected workflow has one utility-preprocessing configuration phase."""
-        return ("preprocessing",)
-
     def get_dictionary_catalog(self) -> DictionaryCatalog:
         return CATALOG
 

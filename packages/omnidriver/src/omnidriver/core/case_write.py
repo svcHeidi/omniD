@@ -653,14 +653,9 @@ class ResolvedMutation:
     Pure. Produced without reading the case, so a dry run costs nothing and
     changes nothing. The renderer reads; this does not.
 
-    ``targets`` is genuinely consumed, not forwarded whole --
-    ``case_rendering._document_edits`` groups it by document and
-    ``formats()`` derives a value from it that neither producer hands over
-    directly.
-
-    ``semantic_owner_id``, by contrast, is passed straight through unchanged
-    by both producers into ``CaseWritePlan`` -- expected of a resolve/render
-    boundary, not itself a defect.
+    ``targets`` is consumed by the renderer (``case_rendering._document_edits``
+    groups it by document); ``semantic_owner_id`` is passed straight through
+    into ``CaseWritePlan``.
     """
 
     request: CaseMutationRequest
@@ -675,6 +670,3 @@ class ResolvedMutation:
         # dataclasses -- so it needs `_freeze`, not just `tuple()`.
         object.__setattr__(self, "targets", tuple(_freeze(target) for target in self.targets))
         object.__setattr__(self, "expected_effects", tuple(self.expected_effects))
-
-    def formats(self) -> tuple[str, ...]:
-        return tuple(sorted({str(target["format"]) for target in self.targets}))

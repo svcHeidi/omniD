@@ -451,11 +451,6 @@ IONIC_MODEL_CATALOG: Final[dict[str, IonicModelEntry]] = {
 }
 
 
-def planning_tissues(entry: IonicModelEntry) -> tuple[str, ...]:
-    """Return the tissue labels to enumerate by default in planning workflows."""
-    return entry.native_tissue_labels or entry.compatible_tissues
-
-
 BATCHED_MODELS = [
     "AlievPanfilovcompactBatched",
     "BuenoOroviocompactBatched",

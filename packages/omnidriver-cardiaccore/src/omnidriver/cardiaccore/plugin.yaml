@@ -11,7 +11,7 @@ requires:
 #
 # 2. Realness: the member's body actually computes something rather than
 #    unconditionally ignoring its arguments and returning a constant.
-#    provider_stack.implemented_capabilities() only checks callability, so
+#    provider_stack.check_provides() only checks callability, so
 #    passing gate 1 does not imply gate 2 -- read every adapted member's
 #    actual body. One hollow member disqualifies the whole capability, the
 #    same standard applied to org.omnidriver.openfoam.environment's

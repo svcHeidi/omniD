@@ -188,16 +188,3 @@ def run_postprocessing_module(context: SweepContext, *, task: str) -> Postproces
     """Refuse an undeclared generic analysis task rather than guessing one."""
     del context, task
     return _not_configured()
-
-
-def read_case_workflow_state(context: SweepContext, case_id: str) -> dict[str, Any]:
-    """Read Core's durable execution state for one known case."""
-    case = next((item for item in context.cases if item.case_id == case_id), None)
-    if case is None:
-        raise KeyError(f"unknown case_id {case_id!r}")
-    state_path = Path(case.workflow_state_path)
-    if not state_path.is_file():
-        raise FileNotFoundError(
-            f"workflow_state_path for case {case_id!r} no longer exists: {state_path}"
-        )
-    return json.loads(state_path.read_text())

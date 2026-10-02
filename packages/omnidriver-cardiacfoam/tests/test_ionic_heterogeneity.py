@@ -113,15 +113,6 @@ def test_override_only_models_advertise_approximate_tissue_labels_explicitly():
         assert IONIC_MODEL_CATALOG[name].approximate_tissue_labels == expected, name
 
 
-def test_planning_tissues_uses_native_tissues_only_for_other_models():
-    """``planning_tissues`` (which ``restitutionCurvesIonicModelAxis`` derives ``tissue`` from) for TNNP and Courtemanche."""
-    from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG, planning_tissues
-    assert planning_tissues(IONIC_MODEL_CATALOG["TNNP"]) == (
-        "epicardialCells", "mCells", "endocardialCells",
-    )
-    assert planning_tissues(IONIC_MODEL_CATALOG["Courtemanche"]) == ("myocyte",)
-
-
 def test_manufactured_models_do_not_support_gradient_axis_heterogeneity():
     from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG
     for name in (
