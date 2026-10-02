@@ -218,10 +218,10 @@ def _scan_requirement(
         groups: dict[str, list[Any]] = {"judged": [], "branch": [], "not_tied": []}
         for read in reads:
             names = ties(read)
-            if names is None:
-                groups["not_tied"].append(read)
-            elif names & selected:
+            if (read.root or "").startswith("document:") or (names is not None and names & selected):
                 groups["branch" if read.conditional else "judged"].append(read)
+            elif names is None:
+                groups["not_tied"].append(read)
         for name, group in groups.items():
             if not group:
                 continue
@@ -235,7 +235,10 @@ def _scan_requirement(
             if name == "judged":
                 found.append(diagnostic(
                     "error", "cxx_required_key",
-                    head + f"this case builds the class that reads it, so set {concrete} in {document}{tail}.",
+                    head + (
+                        "the utility reads this document" if (lead.root or "").startswith("document:")
+                        else "this case builds the class that reads it"
+                    ) + f", so set {concrete} in {document}{tail}.",
                     source=document, field=concrete,
                 ))
             else:

@@ -344,3 +344,14 @@ def test_a_block_builds_a_class_from_its_own_values_not_from_a_sibling_blocks(mo
     assert judge({"ecgDomains.b.type": "pseudoECG"}) == []
     assert judge({**both, "ecgDomains.a.nBeats": 3}) == []
     assert judge({"ecgDomains.a.type": "pseudoECG", "ecgDomains.b.type": "eikonalECG", "ecgDomains.b.nBeats": 3}) == []
+
+
+def test_a_required_read_of_the_document_itself_in_a_utilitys_main_is_enforced_whatever_the_case_selects(monkeypatch):
+    path = ("fiberField",)
+    monkeypatch.setattr(case_rules, "_scan_facts", lambda mapping, entries, document: (
+        {path: [_read("fiberField", function="main", root="document:setCardiacConductivityDict")]}, {}, {}, set(),
+    ))
+    (found,) = rule_diagnostics((), {}, document="system/setCardiacConductivityDict", mapping=object())
+    assert (found.level, found.code, found.field) == ("error", "cxx_required_key", "fiberField")
+    assert "the utility reads this document" in found.message
+    assert rule_diagnostics((), {"fiberField": "fibers"}, document="system/setCardiacConductivityDict", mapping=object()) == []
