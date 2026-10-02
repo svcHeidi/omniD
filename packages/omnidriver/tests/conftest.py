@@ -12,8 +12,10 @@ def _toy_plugins_are_importable(monkeypatch):
 
 
 def _repo_root_or_none() -> Path | None:
-    """The repository root, or ``None`` outside a checkout (e.g. an installed wheel)."""
-    for parent in Path(__file__).resolve().parents:
+    """The checkout the installed ``omnidriver`` lives in, or ``None`` for an installed wheel."""
+    import omnidriver.core
+
+    for parent in Path(omnidriver.core.__file__).resolve().parents:
         if (parent / "packages").is_dir() and (parent / "ARCHITECTURE.md").is_file():
             return parent
     return None
