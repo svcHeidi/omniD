@@ -9,26 +9,6 @@ def _environment_preflight_is_stubbed(monkeypatch):
     monkeypatch.setattr(OpenFOAMEnvironmentPlugin, "get_environment_diagnostics", lambda *args, **kwargs: ())
 
 
-def _cardiacfoam_monorepo_root() -> Path | None:
-    """First ancestor holding ``tutorials/`` and ``applications/`` (checkout inside the native repo)."""
-    for parent in Path(__file__).resolve().parents:
-        if (parent / "tutorials").exists() and (parent / "applications").exists():
-            return parent
-    return None
-
-
-monorepo_root: Path | None = _cardiacfoam_monorepo_root()
-
-#: Skips a test that reads real tutorial cases from the monorepo ``tutorials/`` tree.
-skip_without_monorepo = pytest.mark.skipif(
-    monorepo_root is None,
-    reason=(
-        "Requires the full cardiacFoam monorepo tree (tutorials/ + applications/). "
-        "Clone the full repository or run with --cases-root to enable this test."
-    ),
-)
-
-
 def _foam_tokens(value: str) -> list[str]:
     """Split an OpenFOAM value into tokens, with brackets as their own."""
     return re.findall(r"[()\[\]]|[^\s()\[\]]+", value)

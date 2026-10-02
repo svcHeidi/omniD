@@ -5,50 +5,18 @@ from ..tutorial_records import TutorialRecordError
 
 
 def repo_root_default() -> Path:
-    """Locate the repository root using a three-tier fallback.
+    """The omnidriver repository root: the ancestor of this file holding ``packages/`` and ``ARCHITECTURE.md``.
 
-    Every tier walks up from this file and recognises its target by marker
-    files/directories, never by counting path segments — a fixed
-    ``parents[N]`` breaks silently the moment this file's nesting depth
-    changes, because every candidate directory exists, just the wrong one.
-
-    Tier 1 (monorepo): ancestor directory that has both ``tutorials/`` and
-        ``src/`` siblings — the full cardiacFoam checkout.
-    Tier 2 (standalone-with-tutorials): ancestor directory that has a
-        ``tutorials/`` sibling but no ``src/`` — omnidriver cloned with a
-        companion tutorials tree.
-    Tier 3 (fully standalone): the ancestor directory that has both
-        ``packages/`` and ``ARCHITECTURE.md`` — the omnidriver monorepo
-        root itself. This is the fallback when neither a cardiacFoam
-        monorepo nor an external tutorials tree is present, e.g. in a
-        temp-folder clone or CI.
-
-    Raises ``RuntimeError`` if no tier matches, rather than returning some
-    existing-but-wrong ancestor directory (e.g. a package's own ``src/``) —
-    a caller silently writing scratch output or resolving tutorials against
-    the wrong root is worse than a loud, early failure.
+    Raises ``RuntimeError`` outside a checkout (e.g. an installed wheel) rather
+    than returning some existing-but-wrong ancestor directory.
     """
     current = Path(__file__).resolve()
-    tier2_candidate: Path | None = None
-    for parent in current.parents:
-        has_tutorials = (parent / "tutorials").exists()
-        has_src = (parent / "src").exists()
-        # Tier 1: full monorepo layout
-        if has_tutorials and has_src:
-            return parent
-        # Remember first ancestor with tutorials/ only (Tier 2)
-        if has_tutorials and tier2_candidate is None:
-            tier2_candidate = parent
-    if tier2_candidate is not None:
-        return tier2_candidate
-    # Tier 3: the omnidriver monorepo root, recognised by its own markers.
     for parent in current.parents:
         if (parent / "packages").is_dir() and (parent / "ARCHITECTURE.md").is_file():
             return parent
     raise RuntimeError(
-        f"Could not locate the omnidriver repository root by walking up "
-        f"from {current}: no ancestor has both tutorials/+src/ (monorepo), "
-        f"tutorials/ alone, or packages/+ARCHITECTURE.md (standalone repo)."
+        f"Could not locate the omnidriver repository root by walking up from {current}: "
+        "no ancestor has both packages/ and ARCHITECTURE.md."
     )
 
 
