@@ -15,6 +15,14 @@ Owner decisions of 2026-10-01. Findings G1–G18 are in `.superpowers/sdd/genera
 | G15 | `regression_equivalence/` is deleted. Regression runs through omnidriver with the native `tutorials/Alltest-regression`. |
 | G18 | Each solver repository has an `omnidriver.toml` at its root, naming `plugin`, `tutorials`, `source` and `scripts`. omnidriver reads it from the repository it is pointed at. The default-plugin selection graph is deleted. `--plugin` remains for a solver with no repository; when both are given, they must agree. |
 
+**Added 2026-10-02 (owner):**
+- **No tests on development code.** Solver runs live in `omnidriver check`, which reports and never gates; pytest tests omnidriver itself.
+- **Before a run, the case passes the catalogue's rules and the C++'s required keys.** A key that appears in or disappears from the C++ is explained, never a failure.
+- **Case synthesis, launch and the dictionary builder are kept** as a clearly separate build with its own command, outside the record path.
+- **`omnidriver.postprocessing` stays in core** as generic helpers; anything OpenFOAM-specific moves to its package.
+- **All GPL licence headers are removed.** The licence itself is still open.
+- **cardiacCore's `operations/` moves to `applications/scripts/`,** as G13 says.
+
 The cardiacFOAM native branch stays on `omnid/tutorials-are-pointers`. Merging native `main` waits for the owner. A later rescan then shows its new keys as `uncatalogued`, which is the intended behaviour.
 
 ## Tracks
@@ -38,9 +46,12 @@ Tracks within a wave touch disjoint files and can run in parallel. Every track l
 6. **One edit format (G4).**
 7. **One reality in the OpenFOAM layer (G6),** shared route helpers (G11), OpenFOAM supplied only (G12), and plan diagnostics through one hook (G5).
 
+**Wave 1 landed** `6b9ff91`. **Wave 2 landed** with the `omnidriver check` command and the pre-run rules.
+
 **Wave 3**
 8. **The plugin contract collapsed (G2).**
 9. **Script discovery (G13)**, with cardiacCore's native move. **Toy plugins merged (G14).** **Always-skipping tests deleted or made native (G8).** **`regression_equivalence/` deleted (G15).**
-10. **The final prose sweep.**
+10. **The separate build** (synthesis, launch and the dictionary builder behind one command). **The post-processing split. The licence headers removed. N-rank evidence in `check`'s C13.**
+11. **The final prose sweep.**
 
 **Target:** package source at most 31,000 non-blank lines, from 48,209; tests at most 45,000. After these: electrophysiology testing and training, then electromechanics.
