@@ -14,7 +14,7 @@ plugin:
 # case_files, dict_regeneration, mesh_diagnostic_policy -- those three are
 # solver-specific and cardiacFoam is the only current implementer.
 #
-# get_dict_key_scanner returns dict_keys_scanner.strict_dict_key_report
+# get_dict_key_scanner returns dict_keys_scanner.catalog_report
 # unconditionally: a real scanner, not a stub.
 #
 # `provides:` is a realness declaration only -- resolutions()

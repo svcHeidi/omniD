@@ -114,3 +114,24 @@ def build_catalog(binary: str = "openCARP", env: Mapping[str, str] | None = None
             detail = parse_help_detail(concrete, _run(resolved, ["+Help", concrete], env))
         parameters.append({"name": name, "type": opencarp_type, **detail})
     return {"opencarp": build_identity(resolved, env), "parameters": parameters}
+
+
+def compare_catalogs(committed: Mapping[str, Any], built: Mapping[str, Any]) -> dict[str, list]:
+    """The committed catalog against the binary's, in the OpenFOAM scan's
+    vocabulary: a parameter the binary lists and the catalog lacks is
+    ``uncatalogued``; a committed claim the binary refutes (a parameter it no
+    longer lists, or another type, default, bound or menu) is a
+    ``contradiction``."""
+    have = {parameter["name"]: parameter for parameter in built["parameters"]}
+    listed = {parameter["name"]: parameter for parameter in committed["parameters"]}
+    tag = built["opencarp"].get("tag")
+    contradictions = [
+        f"{name}: catalogued, but openCARP {tag} lists no such parameter" for name in sorted(set(listed) - set(have))
+    ]
+    for name in sorted(set(listed) & set(have)):
+        for field in ("type", "default", "minimum", "maximum", "menu"):
+            if listed[name].get(field) != have[name].get(field):
+                contradictions.append(
+                    f"{name}: catalogue {field} {listed[name].get(field)!r}; openCARP {tag} says {have[name].get(field)!r}"
+                )
+    return {"contradictions": contradictions, "uncatalogued": [have[name] for name in sorted(set(have) - set(listed))]}

@@ -734,6 +734,21 @@ Native tree: `git archive omnid/tutorials-are-pointers` (`c184d702`) `tutorials 
 | K5 | stale waivers the new `unused_selector_mapping` list reports | `ecgDomains.<name>.manufactured.dimension` (no longer catalogued); internal `ecgVerificationModel`, `couplingVerificationModel`, `graphVerificationModel` (all mapped) | removed |
 | K6 | `scripts/regenerate-ionic-catalog.py --check` against the same source | exit 0 | the committed ionic catalogue matches the `*_Names.H` headers |
 
+## S. The scan as data (pass 2, 2026-10-01)
+
+Native tree: `git archive omnid/tutorials-are-pointers` (`eb5897b3`) `tutorials src`. Scanner: `omnidriver.openfoam.dict_keys_scanner` (decisions A and B, `docs/superpowers/plans/2026-10-01-pass2-convergence.md`).
+
+| # | probe | observed | conclusion |
+|---|---|---|---|
+| S1 | `scan_source(<tree>/src)` | 285 files, 539 reads (440 key reads, 99 sub-dictionary reads) in 0.86 s; digest 0.09 s; a cached scan loads in 0.12 s | cheap enough to recompute the digest every plan |
+| S2 | resolution over the 440 key reads | scope resolved 80.2 % (literal keys 80.6 %); type resolved for 92.7 % of the 259 value reads; 40 % read inside a class a selection table registers | the unresolved 20 % are receivers the scan cannot show to be a dictionary: `dict.parent()`, helper-returned pointers (`singleCellStimulusDict(dict)`), `auto` locals |
+| S3 | every literal read the regex scanner found, against the new scan | all found but five: `Vm`/`Iion` (`debugVars_`, a `wordHashSet` member), `endocardialCells`/`mCells`/`epicardialCells` (`const wordList tissues`) | not dictionary reads; they were allowlist waivers |
+| S4 | the catalogue against the scan | `$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.reportElectrodeLookup` and `...purkinjeGraphModelCoeffs.outputVariables.probeNodes`: no read | native removed both in `5c465ac47` ("remove unused/unwired debug toggles"); the old check skipped every path with a `<name>` segment, so it never saw them. Removed from the catalogue |
+| S5 | catalogued keys with no literal read | the seven `controlDict` keys (`Foam::Time`), `solver`/`absTol`/`relTol`/`maxSteps` at three scopes (upstream `ODESolver`, handed the dictionary by `ionicModel`), `conductivity{,Intracellular,Extracellular}` (`conductivityFieldSpec::dictionaryEntry`) | reviewed as `unseen_reads` in `dict_key_allowlist.json`, each group with why |
+| S6 | `required` against the C++ | 22 catalogue-optional keys are read with `get`/`lookup` (inside optional sub-dictionaries or selected classes); `graphFile` and `conductivitySource` are catalogue-required and read under a `found` guard with no default | a contradiction only when the C++ gives a required key a default; control flow decides the rest |
+| S7 | reads the catalogue lacks | 14: `ODESolver` (sub-dictionary), `electroMechanicalModel`, `TaScale`, `Tmax`, `V0`, `gamma`, `amplitude`, `initializeFields` (`electroMechanicalProperties`), `conductionEdges`, `pvjResistances` (the generated graph file), `torsoSurface` (`ecgModelIO::loadSurface`) | each a `plugin_catalog_uncatalogued` note; none needs a waiver |
+| S8 | a read of `omnidriverProbe` added to a scratch copy of `ionicModel::New`, the key set in `singleCell`'s `electroProperties`, `plan --strict` with `singleCellSolverCoeffs.omnidriverProbe: 2.5` | plan `ok`; one uncatalogued note naming it (`scalar`, default `1.0`, `ionicModels/ionicModel/ionicModel.C`); staged case holds `2.5`; the value `"high"` is refused by the scanned type; without the C++ read the study is refused | decision B end to end: `test_cxx_scan_native.py` |
+
 ## V. The declared shell (`omnidriver env`, 2026-09-28)
 
 | # | command | observed | conclusion |

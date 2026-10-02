@@ -7,9 +7,10 @@ agent can ask for a document or a key without reading all of ``describe``.
 
 When the stack's C++ source root is supplied (``cxx_mapping.source_root``),
 the stack's own scanner runs, and every entry whose values the C++ registers
-(a runtime-selection table) carries them as ``cxx_values``. Core names no
-solver, no document and no scanner schema: it filters what the plugin lists
-and attaches what the scanner returns.
+(a runtime-selection table) carries them as ``cxx_values``.
+``uncatalogued_query`` lists what the C++ reads and the catalogue lacks, so
+an agent can describe it and add it. Core names no solver and no document:
+it filters what the plugin lists and attaches what the scanner returns.
 """
 from __future__ import annotations
 
@@ -34,7 +35,10 @@ def _matches(entry: Mapping[str, Any], document: str | None, key: str | None) ->
     return listed != ANY_KEY and (listed == key or key_pattern(listed).fullmatch(key) is not None)
 
 
-def cxx_evidence(driver_context: "DriverContext", environ: Mapping[str, str]) -> dict[str, Any] | None:
+def cxx_evidence(
+    driver_context: "DriverContext", environ: Mapping[str, str], *,
+    cache_root: Path | None = None, force: bool = False,
+) -> dict[str, Any] | None:
     """What the stack's scanner reports for its supplied C++ source, or
     ``None`` for a stack that declares no C++ mapping (openCARP: its catalogue
     is generated from the binary itself)."""
@@ -54,12 +58,27 @@ def cxx_evidence(driver_context: "DriverContext", environ: Mapping[str, str]) ->
     report = driver_context.capabilities.dict_key_scanner.scan(
         root, allowlist_path=mapping.allowlist_path,
         entries=driver_context.capabilities.dictionaries.entries(),
+        cache_root=cache_root, force=force,
     ).to_json()
     evidence["scanned"] = True
-    evidence["status"] = report.get("status")
-    evidence["drift"] = {key: items for key, items in report.items() if isinstance(items, list) and items}
-    evidence["selector_values"] = report.get("selector_values", {})
+    evidence.update(report)
     return evidence
+
+
+def uncatalogued_query(driver_context: "DriverContext", *, cache_root: Path | None) -> dict[str, Any]:
+    """``omnidriver catalog --uncatalogued``: every read the C++ makes that
+    the catalogue lacks, with its scanned type, default, scope and source
+    location, and the reads the scan could not place."""
+    cxx = cxx_evidence(driver_context, os.environ, cache_root=cache_root)
+    return {
+        "plugin": [provider["id"] for provider in driver_context.identity.to_json()["providers"]],
+        "cxx_source": {
+            key: value for key, value in (cxx or {}).items()
+            if key not in ("uncatalogued", "unresolved", "selector_values")
+        } if cxx is not None else None,
+        "uncatalogued": (cxx or {}).get("uncatalogued", []),
+        "unresolved": (cxx or {}).get("unresolved", []),
+    }
 
 
 def catalog_query(
@@ -90,8 +109,10 @@ def catalog_query(
         if listed.get("driver_path") in values:
             listed["cxx_values"] = values[listed["driver_path"]]
         entries.append(listed)
-    if cxx is not None:
-        cxx.pop("selector_values", None)
+    if cxx is not None and cxx["scanned"]:
+        cxx.pop("selector_values")
+        cxx["uncatalogued"] = len(cxx["uncatalogued"])
+        cxx["unresolved"] = len(cxx["unresolved"])
     return {
         "entry": entry,
         "plugin": [provider["id"] for provider in driver_context.identity.to_json()["providers"]],

@@ -904,12 +904,45 @@ cardiacCore entries add `driver_path`, `unit`, `menu`, `typical_value`,
 never discovered. For cardiacFOAM it is `$OMNIDRIVER_NATIVE_TUTORIALS/../src`,
 and for cardiacCore `$OMNIDRIVER_CARDIACCORE_TREE/src`; the plugin profile's
 `cxx_mapping.source_root` declares both. When the root is supplied, the
-stack's scanner runs and reports any drift. Every entry whose values a C++
-runtime-selection table registers (every `ionicModel`, say) then carries
-them as `cxx_values`. `plan --strict` runs the same scan and fails on drift.
-Without the root it notes `plugin_cxx_source_not_supplied` and scans
+stack's scanner runs. Every entry whose values a C++ runtime-selection table
+registers (every `ionicModel`, say) then carries them as `cxx_values`.
+Without the root a plan notes `plugin_cxx_source_not_supplied` and scans
 nothing. openCARP has no C++ mapping (`cxx_source: null`): its catalogue is
 generated from the binary.
+
+## The C++ scan: `omnidriver scan` and `catalog --uncatalogued`
+
+The scan (`omnidriver.openfoam.dict_keys_scanner`) reads every dictionary
+read in the C++: the key, the method (`get<T>`, `lookupOrDefault`, `found`,
+`subDict`, ...), the type, the default, whether it is required (a guarding
+`found` makes it optional unless the key-absent branch raises), the
+sub-dictionary scope where it resolves, and the selection-table names of the
+class that reads it. A read whose receiver it cannot show to be a dictionary
+is listed as unresolved, never guessed. The scan is cached under the scratch
+root, keyed by a digest of the `*.C`/`*.H` files: every plan recomputes the
+digest and rescans only when the source changed.
+
+The catalogues stay the source of truth. A plan compares them with the scan:
+- a key, sub-dictionary or menu value the C++ reads and the catalogue lacks
+  is a `plugin_catalog_uncatalogued` note, never a failure. A study may set
+  such a key, and its value is checked against the scanned type;
+- a catalogue claim the C++ refutes fails the plan as
+  `plugin_catalog_contradiction`, naming both sides: a type the C++ cannot
+  read, a menu value no table registers, a required key the C++ gives a
+  default, or a catalogued key the C++ no longer reads.
+
+```bash
+omnidriver scan --plugin cardiacfoam --scratch-dir <dir>        # rescan, print a summary
+omnidriver catalog --plugin cardiacfoam --uncatalogued         # every uncatalogued read
+```
+
+`catalog --uncatalogued` lists each uncatalogued read with its type,
+`value_kind`, default, scope and source location: what an agent needs to
+describe it and add it to the catalogue. Each plugin's
+`dict_key_allowlist.json` records what the scan cannot establish:
+`unseen_reads` (catalogued keys read outside the source, such as by
+OpenFOAM's `Foam::Time`, or through a non-literal key) and, for
+cardiacFOAM, `runtime_selection` (which table each enum's menu comes from).
 
 ## A solver's shell: `omnidriver env`
 
@@ -949,7 +982,7 @@ Three layers of discovery:
 2. **What dict keys can I set?** Iterate `omnidriver.cardiacfoam.dict_entries_catalog.ELECTRO_PROPERTY_ENTRY_GROUPS` and `omnidriver.cardiacfoam.common_dict_entries.PHYSICS_PROPERTY_ENTRIES` for case-physics entries. For time-control use `omnidriver.cardiacfoam.common_dict_entries.CONTROL_DICT_ENTRIES` (`deltaT`, `endTime`). Each entry carries `driver_path`, `value_kind`, `enum_values`, `unit`, `typical_value`, and structured constraints (`applicable_when`, `forbidden_when`, `required_when`, `mutually_exclusive_with`). These live in the `omnidriver-cardiacfoam` package, not `omnidriver.dict_entries` in core — core's `dict_entries.py` only exposes context-aware helpers such as `get_electro_property_entry_groups(driver_context)`.
 3. **What ionic models can I pick?** `from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG`. Each entry carries `states`, `algebraic`, `compatible_solvers`, `compatible_tissues`, `species`, `cardiac_region`, `recommended_exports`.
 4. **What utilities are known?** `from omnidriver.core.utility_catalog import load_utility_manifests`; call it with a plugin's utility root(s) (`plugin.get_utility_roots()`) to get a `dict[str, UtilityManifest]`. Strict planning fails when a workflow command has missing required `produces` metadata. There is no `UTILITY_CATALOG` module-level constant — core names no solver's utilities by design; see `future/UTILITY_CATALOG_STANDALONE_GAP.md`.
-5. **What dict keys have parser limitations?** Read `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/dict_key_allowlist.json` (cardiacCore has its own beside its `plugin.yaml`). Strict dict-key scanning fails when new uncatalogued keys appear, stale catalog paths remain, or allowlist entries become unused, and, through its `runtime_selection` section, when an enum's values stop matching the C++ runtime-selection table they come from. (`omnidriver.plugins` is the entry-point group name, not a package path.)
+5. **What does the C++ read that the catalogue lacks?** `omnidriver catalog --plugin P --uncatalogued` (see "The C++ scan" above). (`omnidriver.plugins` is the entry-point group name, not a package path.)
 6. **What commands may a workflow step run, and what fields may a function object sample?** Read the `capability_manifest` block emitted by both `describe --entry <name>` and `plan --strict --entry <name>` (and `describe_entry(...)` / `strict_plan(...).to_json()` programmatically). It is the authoritative, machine-readable accept-surface: `allowed_commands` (`core`, `case_scripts`, `utilities`, plus the `$FOAM_APPBIN` note) mirrors the command allowlist exactly, and `samplable_fields` lists the field names the *resolved* model exposes,
 keyed by region. **Both blocks are plugin-dependent.** For cardiacFoam the
 regions are `electro` / `solid`; under `--plugin none` neither key is

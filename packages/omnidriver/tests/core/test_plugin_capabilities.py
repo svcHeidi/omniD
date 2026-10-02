@@ -191,12 +191,7 @@ def test_dict_key_scanner_uses_the_fallback_for_a_plugin_that_declares_nothing()
         entries=(),
     )
 
-    assert report.to_json() == {
-        "unmatched_cxx_reads": [],
-        "stale_paths": [],
-        "unmatched_subdicts": [],
-        "unused_allowlist": [],
-    }
+    assert report.to_json() == {"contradictions": [], "uncatalogued": [], "unresolved": [], "selector_values": {}}
 
 
 def test_dict_key_scanner_calls_through_to_the_plugin_hook() -> None:
@@ -204,8 +199,8 @@ def test_dict_key_scanner_calls_through_to_the_plugin_hook() -> None:
 
     calls = []
 
-    def _scan(source_root, *, allowlist_path, entries):
-        calls.append((source_root, allowlist_path, entries))
+    def _scan(source_root, *, allowlist_path, entries, cache_root, force):
+        calls.append((source_root, allowlist_path, entries, cache_root, force))
         return "sentinel-report"
 
     class ScannerPlugin(MinimalTestPlugin):
@@ -219,4 +214,4 @@ def test_dict_key_scanner_calls_through_to_the_plugin_hook() -> None:
     )
 
     assert report == "sentinel-report"
-    assert calls == [(Path("/src"), Path("/allow.json"), ("e",))]
+    assert calls == [(Path("/src"), Path("/allow.json"), ("e",), None, False)]

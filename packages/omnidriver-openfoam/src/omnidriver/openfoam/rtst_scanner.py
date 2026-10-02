@@ -25,133 +25,77 @@
 #     Simao Nieto de Castro, UCD.
 #----------------------------------------------------------------------------#
 
-"""Scans OpenFOAM C++ for `addToRunTimeSelectionTable` registrations and
-resolves each derived class's registered type name (which may differ via
-`OverrideTypeName`), for comparison against a catalogue's enum entries.
+"""OpenFOAM runtime-selection tables: every ``addToRunTimeSelectionTable``
+registration, under the name it registers (``OverrideTypeName`` when the
+class declares one), and the comparison of a catalogue's enum menus with
+them.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
-from dataclasses import dataclass
-from pathlib import Path
+from collections.abc import Iterable, Mapping
+from typing import Any
 
-from typing import Any, Mapping
-
-
-# `addToRunTimeSelectionTable(base, derived, ctor);` — argument layout is
-# whitespace-tolerant including newlines.
+# `addToRunTimeSelectionTable(base, derived, ctor);` -- whitespace-tolerant
+# including newlines.
 _RTST_RE = re.compile(
     r"addToRunTimeSelectionTable\s*\(\s*"
     r"(?P<base>[A-Za-z_]\w*)\s*,\s*"
     r"(?P<derived>[A-Za-z_]\w*)\s*,\s*"
     r"(?P<ctor>[A-Za-z_]\w*)\s*\)",
-    re.DOTALL,
 )
-
-_OVERRIDE_TYPENAME_RE = re.compile(
-    r'OverrideTypeName\s*\(\s*"([^"]+)"\s*\)'
-)
-
-# `class Foo`, `class Foo final`, `class Foo : public Bar`, etc.
-# Skip forward declarations (`class Foo;` with no `{`).
-_CLASS_DECL_RE = re.compile(
-    r"\bclass\s+([A-Za-z_]\w*)\b(?![^;{]*;)"
-)
+_OVERRIDE_TYPENAME_RE = re.compile(r'OverrideTypeName\s*\(\s*"([^"]+)"\s*\)')
+# A class head, not a forward declaration (`class Foo;`).
+_CLASS_DECL_RE = re.compile(r"\bclass\s+([A-Za-z_]\w*)\b(?![^;{]*;)")
 
 
-@dataclass(frozen=True)
-class RtstReg:
-    base: str
-    registered_name: str
-    derived_class: str
-    source_file: Path
-
-
-def _iter_src_files(src_root: Path, suffix: str) -> Iterable[Path]:
-    for path in src_root.rglob(f"*{suffix}"):
-        parts = path.parts
-        if "lnInclude" in parts or "Make" in parts:
+def scan_rtst_registrations(texts: Mapping[str, str]) -> dict[str, dict[str, str]]:
+    """``{base: {registered name: derived class}}`` from comment-stripped
+    sources keyed by relative path. An ``OverrideTypeName`` belongs to the
+    nearest preceding class head in its header; a class without one
+    registers under its own name."""
+    override: dict[str, str] = {}
+    for relative, text in texts.items():
+        if not relative.endswith(".H"):
             continue
-        yield path
-
-
-def _index_override_type_names(src_root: Path) -> dict[str, str]:
-    """Map C++ class name -> registered name, pairing each `OverrideTypeName`
-    with the nearest preceding `class <Name>` declaration in the same file.
-    A class absent from the index has no override; the caller falls back to
-    the class name."""
-    index: dict[str, str] = {}
-    for header in _iter_src_files(src_root, ".H"):
-        text = header.read_text(encoding="utf-8", errors="replace")
-        # Strip comments first so commented-out code never matches.
-        text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
-        text = re.sub(r"//[^\n]*", "", text)
-        class_positions: list[tuple[int, str]] = [
-            (m.start(), m.group(1)) for m in _CLASS_DECL_RE.finditer(text)
-        ]
-        if not class_positions:
-            continue
-        for override in _OVERRIDE_TYPENAME_RE.finditer(text):
-            pos = override.start()
-            enclosing = None
-            for cls_pos, cls_name in class_positions:
-                if cls_pos < pos:
-                    enclosing = cls_name
-                else:
-                    break
-            if enclosing is not None:
-                index[enclosing] = override.group(1)
-    return index
-
-
-def scan_rtst_registrations(
-    src_root: Path,
-) -> dict[str, dict[str, RtstReg]]:
-    """Return `{base_class: {registered_name: RtstReg}}` for every RTST
-    registration found under `src_root`."""
-    override_map = _index_override_type_names(src_root)
-    out: dict[str, dict[str, RtstReg]] = {}
-    for source in _iter_src_files(src_root, ".C"):
-        text = source.read_text(encoding="utf-8", errors="replace")
-        text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
-        text = re.sub(r"//[^\n]*", "", text)
-        for match in _RTST_RE.finditer(text):
-            base = match.group("base")
-            derived = match.group("derived")
-            registered = override_map.get(derived, derived)
-            out.setdefault(base, {})[registered] = RtstReg(
-                base=base,
-                registered_name=registered,
-                derived_class=derived,
-                source_file=source,
-            )
-    return out
+        classes = [(match.start(), match.group(1)) for match in _CLASS_DECL_RE.finditer(text)]
+        for match in _OVERRIDE_TYPENAME_RE.finditer(text):
+            enclosing = [name for position, name in classes if position < match.start()]
+            if enclosing:
+                override[enclosing[-1]] = match.group(1)
+    registrations: dict[str, dict[str, str]] = {}
+    for relative, text in sorted(texts.items()):
+        if relative.endswith(".C"):
+            for match in _RTST_RE.finditer(text):
+                derived = match.group("derived")
+                registrations.setdefault(match.group("base"), {})[override.get(derived, derived)] = derived
+    return {base: dict(sorted(names.items())) for base, names in sorted(registrations.items())}
 
 
 # ---------------------------------------------------------------------------
 # Catalogue side
 
-#: How a catalogue enum's values relate to the registered names of its base.
-#: strict: equal. subset: the catalogue lists some of them (one field exposes
-#: a curated part of a table). polymorphic: the catalogue lists all of them,
-#: and may list more (several tables share one selector).
+#: How a catalogue enum's menu relates to the names its table registers.
+#: strict: the same names. subset: the field offers a curated part of the
+#: table. polymorphic: several tables share the selector, so the menu may
+#: list names this table does not register.
 _MODES = frozenset({"strict", "subset", "polymorphic"})
 
 
 def runtime_selection_report(
-    src_root: Path, *, entries: Iterable[Any], mapping: Mapping[str, Any],
+    registrations: Mapping[str, Mapping[str, str]], *, entries: Iterable[Any], mapping: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """Drift between a catalogue's enum entries and the C++ registrations.
+    """A catalogue's enum menus against the C++ selection tables.
 
+    ``registrations`` is ``{base: {registered name: derived class}}``;
     ``mapping`` is the reviewed ``runtime_selection`` section: ``by_path``
     (``driver_path`` -> ``{"base", "mode"}``), ``not_runtime_selected``
-    (``driver_path`` -> why) and ``internal_bases`` (base -> why). Each drift
-    list is empty when the catalogue and the C++ agree; ``selector_values``
-    maps every checked ``driver_path`` to the names the C++ registers.
-    """
-    registrations = scan_rtst_registrations(src_root)
+    (``driver_path`` -> why) and ``internal_bases`` (base -> why). A menu
+    value no table registers, a mapped table that no longer exists, an
+    unclassified enum or a stale mapping entry is a contradiction; a name a
+    table registers that the menu lacks, and a table nothing maps, are
+    uncatalogued."""
     enums = {
         entry.driver_path: entry for entry in entries
         if entry.value_kind == "enum" and entry.enum_values
@@ -161,44 +105,46 @@ def runtime_selection_report(
     internal = dict(mapping.get("internal_bases", {}))
     mapped_bases = {rule["base"] for rule in by_path.values()}
 
-    drift: list[str] = []
-    unused: list[str] = []
+    contradictions: list[str] = []
+    uncatalogued: list[dict[str, Any]] = []
     values: dict[str, list[str]] = {}
     for path, rule in sorted(by_path.items()):
         base, mode = rule["base"], rule["mode"]
         if mode not in _MODES:
-            drift.append(f"{path}: unknown comparison mode {mode!r}")
-            continue
-        if path not in enums:
-            unused.append(f"by_path:{path}")
-            continue
-        if base not in registrations:
-            drift.append(f"{path}: no addToRunTimeSelectionTable({base}, ...) found")
-            continue
-        registered = set(registrations[base])
-        catalogued = set(enums[path].enum_values)
-        values[path] = sorted(registered)
-        only_catalogue = sorted(catalogued - registered)
-        only_cxx = sorted(registered - catalogued)
-        if (mode == "strict" and (only_catalogue or only_cxx)) or (
-            mode == "subset" and only_catalogue
-        ) or (mode == "polymorphic" and only_cxx):
-            drift.append(
-                f"{path} ({mode}, {base}): catalogue only {only_catalogue}; C++ only {only_cxx}"
-            )
-    unused += [f"not_runtime_selected:{path}" for path in sorted(not_selected) if path not in enums]
-    unused += [
-        f"internal_bases:{base}" for base in sorted(internal)
-        if base not in registrations or base in mapped_bases
+            contradictions.append(f"runtime_selection maps {path} with unknown mode {mode!r}")
+        elif path not in enums:
+            contradictions.append(f"runtime_selection maps {path}, which is not a catalogue enum")
+        elif base not in registrations:
+            contradictions.append(f"{path}: menu drawn from {base}, but no addToRunTimeSelectionTable({base}, ...) exists")
+        else:
+            registered = set(registrations[base])
+            catalogued = set(enums[path].enum_values)
+            values[path] = sorted(registered)
+            if mode != "polymorphic" and catalogued - registered:
+                contradictions.append(
+                    f"{path}: menu lists {sorted(catalogued - registered)}, which {base} does not register"
+                )
+            if mode != "subset":
+                uncatalogued += [
+                    {"kind": "menu_value", "path": path, "value": name, "base": base,
+                     "class": registrations[base][name]}
+                    for name in sorted(registered - catalogued)
+                ]
+    contradictions += [
+        f"runtime_selection lists {path} as not runtime-selected, which is not a catalogue enum"
+        for path in sorted(not_selected) if path not in enums
     ]
-    return {
-        "selector_drift": drift,
-        "unclassified_selector_enums": sorted(
-            path for path in enums if path not in by_path and path not in not_selected
-        ),
-        "unmapped_selector_bases": sorted(
-            base for base in registrations if base not in mapped_bases and base not in internal
-        ),
-        "unused_selector_mapping": unused,
-        "selector_values": values,
-    }
+    contradictions += [
+        f"runtime_selection lists {base} as internal, but "
+        + ("no table registers it" if base not in registrations else "it is also mapped")
+        for base in sorted(internal) if base not in registrations or base in mapped_bases
+    ]
+    contradictions += [
+        f"{path}: catalogue enum with no runtime_selection classification"
+        for path in sorted(enums) if path not in by_path and path not in not_selected
+    ]
+    uncatalogued += [
+        {"kind": "selection_table", "base": base, "values": sorted(registrations[base])}
+        for base in sorted(registrations) if base not in mapped_bases and base not in internal
+    ]
+    return {"contradictions": contradictions, "uncatalogued": uncatalogued, "selector_values": values}

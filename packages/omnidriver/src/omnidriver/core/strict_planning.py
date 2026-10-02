@@ -237,9 +237,11 @@ def _owned_dict_relpaths(spec, driver_context: "DriverContext") -> tuple[str, ..
     return tuple(relpaths)
 
 
-def _catalog_diagnostics(driver_context: "DriverContext") -> tuple[StrictDiagnostic, ...]:
-    """Run only the resolved cxx_mapping provider's reviewed C++<->Python
-    mapping checks."""
+def _catalog_diagnostics(
+    driver_context: "DriverContext", *, scan_cache_root: Path | None = None,
+) -> tuple[StrictDiagnostic, ...]:
+    """The resolved cxx_mapping provider's catalogue compared with its C++:
+    an error per contradiction, a note per uncatalogued read."""
 
     mapping = driver_context.capabilities.cxx_mapping.profile().cxx_mapping
     if mapping is None:
@@ -273,19 +275,23 @@ def _catalog_diagnostics(driver_context: "DriverContext") -> tuple[StrictDiagnos
         source_root,
         allowlist_path=mapping.allowlist_path,
         entries=driver_context.capabilities.dictionaries.entries(),
+        cache_root=scan_cache_root,
+    ).to_json()
+    source = f"{cxx_mapping_source}:{source_root}"
+    contradictions = tuple(
+        _diagnostic("error", "plugin_catalog_contradiction", item, source=source)
+        for item in report.get("contradictions", ())
     )
-    # Every list in the report is one kind of drift; core names none of them
-    # (the report's schema is the scanner's, not core's).
-    return tuple(
+    notes = tuple(
         _diagnostic(
-            "error",
-            f"plugin_dict_key_{key}",
-            f"Plugin C++/catalog scanner reported {key}: {item}",
-            source=f"{cxx_mapping_source}:{source_root}",
+            "info", "plugin_catalog_uncatalogued",
+            f"the C++ reads {json.dumps(item, sort_keys=True)}, which the catalogue lacks "
+            "(omnidriver catalog --uncatalogued lists every one)",
+            source=source,
         )
-        for key, items in report.to_json().items() if isinstance(items, list)
-        for item in items
+        for item in report.get("uncatalogued", ())
     )
+    return contradictions + notes
 
 
 def _mesh_geometry_exempt(spec, driver_context: "DriverContext") -> bool:
@@ -597,10 +603,8 @@ def _strict_plan_for_record(
     }
     # Resolved here, after the cases_root refusal and only for a record --
     # lazily, so nothing else ever asks for a scratch root it does not use.
-    staged_case_root = (
-        resolve_scratch_root(scratch_root, cases_root=cases_root)
-        / "records" / record.name
-    )
+    resolved_scratch_root = resolve_scratch_root(scratch_root, cases_root=cases_root)
+    staged_case_root = resolved_scratch_root / "records" / record.name
     try:
         _commit_result, spec = commit_and_build_record_spec(
             record,
@@ -628,6 +632,7 @@ def _strict_plan_for_record(
         environment_source=environment_source,
         allow_unresolved_configuration=allow_unresolved_configuration,
         driver_context=driver_context,
+        scan_cache_root=resolved_scratch_root,
     )
     run_document_path = Path(report.launch["output_dir"]) / RUN_DOCUMENT_FILENAME
     run_document_path.parent.mkdir(parents=True, exist_ok=True)
@@ -644,6 +649,7 @@ def _strict_plan_for_spec(
     environment_source: str | None = None,
     allow_unresolved_configuration: bool = False,
     driver_context: "DriverContext",
+    scan_cache_root: Path | None = None,
 ) -> StrictPlanReport:
     """The diagnostics/run-document assembly ``strict_plan`` performs, taking
     an already-resolved ``spec`` directly rather than resolving ``entry``
@@ -688,7 +694,7 @@ def _strict_plan_for_spec(
         expected_artifacts=artifacts,
         driver_context=driver_context,
     )
-    catalog_diagnostics = _catalog_diagnostics(driver_context)
+    catalog_diagnostics = _catalog_diagnostics(driver_context, scan_cache_root=scan_cache_root)
     artifact_diagnostics = _artifact_diagnostics(
         spec, artifacts, workflow_dag, driver_context,
     )

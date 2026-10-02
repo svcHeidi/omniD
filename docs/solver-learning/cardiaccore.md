@@ -82,3 +82,14 @@ Tree: `git archive main` (`f0fc231`), supplied as `OMNIDRIVER_CARDIACCORE_TREE`;
 | K4 | `points`, `conductionEdges`, `pvjNodes`, `pvjResistances` | `graphDict.lookup` in `foamTo1Dgraph.C` | a generated Purkinje graph file, not a catalogued input; waived |
 | K5 | every `$CARDIAC_SCAR`/`$PURKINJE_SCAR` path, sub-dictionaries `channels`, `purkinjeScarPolicy`, `regions` | no reader on `main` | scar is off `main` (`c53a0d7`); catalogued from the scar branch; waived with that reason in `dict_key_allowlist.json` |
 | K6 | the scan with the allowlist | `status: ok` | `test_dict_key_scanner_native.py` (`native_cardiaccore`) keeps it so |
+
+## SC. The scan as data (pass 2, 2026-10-01)
+
+Tree: a scratch worktree of `origin/main` (`15c6dfe`), utilities built into scratch (`FOAM_APPBIN` overridden). The same scanner and rules as cardiacFOAM's.
+
+| # | probe | observed | conclusion |
+|---|---|---|---|
+| SC1 | `scan_source(<tree>/src)` | 19 files, 79 reads (72 key reads) in 0.07 s; scope resolved 68.1 % of key reads (75.4 % of literal keys); every utility dictionary read names its document (`IOdictionary` from a literal `IOobject` name) | the unresolved reads are `args.get`/`args.getOrDefault` (`argList` options, from `setRootCase.H`) and `foamTo1Dgraph`'s `graphDict`, whose object name is a variable |
+| SC2 | the catalogue against the scan | no contradiction, nothing uncatalogued; the 39 scar paths are `unseen_reads` (read on the scar branch only) | the K3/K4 waivers (`name`, `maxEdgeLength`, `internalRole`, the graph-file keys) are not needed: the scan does not take those receivers for dictionaries |
+| SC3 | a read of `omnidriverProbe` added to a scratch copy of `setPurkinjeSlab.C` | `record_key_validator("system/setPurkinjeSlabDict", ("omnidriverProbe",), 4)` is `("integer", True)`; `4.5` is refused by the scanned `label`; the same key in `setCardiacAnatomyDict` is refused | the same rule as cardiacFOAM, through `omnidriver-openfoam`'s `scanned_key` |
+
