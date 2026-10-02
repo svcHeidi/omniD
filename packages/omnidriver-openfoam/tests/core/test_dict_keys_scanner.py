@@ -1,6 +1,5 @@
 """The C++ scan on verbatim snippets of the native trees, each named by its
-file; the whole trees are covered by the ``native`` and
-``native_cardiaccore`` tests."""
+file; ``omnidriver scan`` and ``omnidriver check`` run against the whole trees."""
 from __future__ import annotations
 
 import json

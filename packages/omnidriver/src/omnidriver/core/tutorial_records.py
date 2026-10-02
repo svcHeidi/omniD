@@ -22,12 +22,16 @@ same way it guards every other core module.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import Any, Callable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
 from .case_write import _check_case_relative
 from .contracts.dictionary import validate_value_shape
+
+if TYPE_CHECKING:
+    from .conformance_study import ConformanceStudy
 
 
 class TutorialRecordError(ValueError):
@@ -588,6 +592,9 @@ class TutorialRecord:
     #: the class docstring). ``None`` exactly when the record declares no
     #: variants.
     default_variant: str | None = None
+    #: How ``omnidriver check`` exercises the record briefly against the real
+    #: solver; ``None`` for a record that declares none.
+    conformance: "ConformanceStudy | None" = None
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -1339,8 +1346,12 @@ def record_input_destinations(record: "TutorialRecord") -> frozenset[str]:
 
 def build_tutorial_record_catalog(
     records: Sequence[TutorialRecord],
+    *,
+    conformance: Mapping[str, "ConformanceStudy"] | None = None,
 ) -> dict[str, TutorialRecord]:
     """Build a ``name -> record`` catalog, refusing a duplicate name by name.
+    ``conformance`` gives each record it names its :class:`ConformanceStudy`,
+    and a name no record has is refused.
 
     A plugin's own ``TUTORIAL_RECORDS`` module constant is exactly this: a
     tuple of the records it registers, reduced to a dict keyed by
@@ -1353,7 +1364,13 @@ def build_tutorial_record_catalog(
     both ``cardiacfoam.records`` and ``opencarp.records`` share it.
     """
     catalog: dict[str, TutorialRecord] = {}
+    studies = dict(conformance or {})
+    unknown = sorted(set(studies) - {record.name for record in records})
+    if unknown:
+        raise TutorialRecordError(f"conformance studies for {unknown}, which are no record of this catalog")
     for record in records:
+        if record.name in studies:
+            record = dataclasses.replace(record, conformance=studies[record.name])
         if record.name in catalog:
             raise TutorialRecordError(
                 f"duplicate tutorial record name {record.name!r}: both "

@@ -34,15 +34,6 @@ def test_cardiac_profile_source_root_is_supplied_never_guessed(tmp_path: Path) -
     assert mapping.source_root({"OMNIDRIVER_NATIVE_TUTORIALS": str(tutorials)}) == tmp_path / "src"
 
 
-@pytest.mark.native
-def test_cardiac_profile_source_root_exists_in_the_native_tree() -> None:
-    mapping = CardiacFoamPlugin().get_profile().cxx_mapping
-    root = mapping.source_root(os.environ)
-    assert root is not None and root.is_dir(), (
-        f"{mapping.source_root_variable} must name the native tutorials tree beside src/; got {root}"
-    )
-
-
 def test_cardiac_catalog_partitions_entries_by_document() -> None:
     catalog = CardiacFoamPlugin().get_dictionary_catalog()
 

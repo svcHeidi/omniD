@@ -227,3 +227,9 @@ def test_the_catalog_records_that_the_scar_utilities_are_off_main() -> None:
     doc = inputs.__doc__ or ""
     assert "c53a0d7" in doc, "the removal commit is not cited in the module docstring"
     assert "scar" in doc and "branch" in doc
+
+
+def test_every_record_declares_how_omnidriver_check_exercises_it() -> None:
+    from omnidriver.cardiaccore.records import TUTORIAL_RECORDS
+
+    assert all(record.conformance is not None for record in TUTORIAL_RECORDS.values())

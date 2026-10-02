@@ -1,20 +1,14 @@
-"""Supplied inputs for native cardiacFOAM tests, and the conformance target
-table. Not ``conftest``: core's conftest wins ``from conftest import``.
-Nothing is discovered: the tree and the sourced OpenFOAM shell are supplied.
-"""
+"""How ``omnidriver check`` exercises each cardiacFOAM record briefly against the real binary: a
+short run, a patch, a sweep, and for ``niederer2011`` the quantity C13 and C14 compare."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 from omnidriver.cardiacfoam.activation_probes import ACTIVATION_PROBES_FORMAT
-from omnidriver.conformance import (
-    ConformanceTarget, QuantityTarget, RecordRun, record_run, require_commands, supplied_tree,
-)
+from omnidriver.core.conformance_study import ConformanceStudy, QuantityTarget
 
-RESTITUTION_CURVES_RELPATH = "electrophysiologyProtocols/restitutionCurves_s1s2Protocol"
-NIEDERER_2011_RELPATH = "NiedererEtAl2011verification"
-REFERENCE = Path(__file__).resolve().parents[3] / "benchmarks" / "niederer2011.json"
+#: The benchmark C13 and C14 compare against, found under ``--benchmarks``.
+REFERENCE = Path("niederer2011.json")
 
 #: The reference frame has its origin at P1, the stimulus corner, with a along the 20 mm fibre edge,
 #: b along the 7 mm edge and c along the 3 mm edge, so x = a, y = c, z = 7 - b (mm) in cardiacFOAM's
@@ -32,31 +26,16 @@ PROBES = {
     "8": ((0.01, 0.0015, 0.0035), "P9", (10, 3.5, 1.5)),
 }
 
-
-def native_tutorials_root() -> Path:
-    return supplied_tree("OMNIDRIVER_NATIVE_TUTORIALS")
-
-
-def niederer_run(tmp_path: Path, *, dx: float, end_time: float | None = None) -> RecordRun:
-    require_commands("blockMesh", "cardiacFoam")
-    study = {"system/controlDict:endTime": end_time} if end_time is not None else {}
-    return record_run(
-        tmp_path, plugin="cardiacfoam", record="niederer2011", cases_root=native_tutorials_root(),
-        sweep={"dx": (dx,)}, study=study,
-    )
-
-
 _CABLE_CONDUCTIVITY = {
     "value": [2.3, 0.0, 0.0, 2.3, 0.0, 2.3],
     "dimensions": [-1, -3, 3, 0, 0, 2, 0],
 }
 _COMMANDS = ("blockMesh", "cardiacFoam")
+_PARALLEL = ("decomposePar", "reconstructPar", "mpirun")
 
-# One row per record, each cut short so a real run takes seconds. A `patch` is a catalogued key the
-# native case sets to something else; `untouched` is a sibling it must leave alone; `unknown_name`
-# is a typo of a real key. `requires` are the commands the record's pipeline runs.
-TARGETS: dict[str, dict[str, Any]] = {
-    "manufacturedEikonalECG": dict(
+# One study per record, each cut short so a real run takes seconds.
+STUDIES: dict[str, ConformanceStudy] = {
+    "manufacturedEikonalECG": ConformanceStudy(
         # Coarsest study resolution (numberCells 10); a real run takes ~13 s.
         requires=_COMMANDS,
         base_study={"numberCells": 10},
@@ -67,7 +46,7 @@ TARGETS: dict[str, dict[str, Any]] = {
         sweep_values=(10, 20),
         unknown_name="constant/electroProperties:eikonalSolverCoeffs.verificationModel.writeErrorFiel",
     ),
-    "singleCell": dict(
+    "singleCell": ConformanceStudy(
         # endTime 0.05 s, not the native 2 s (2e6 steps, ~25 s per real run).
         requires=_COMMANDS,
         base_study={"system/controlDict:endTime": 0.05},
@@ -79,7 +58,7 @@ TARGETS: dict[str, dict[str, Any]] = {
         sweep_values=("TNNP", "TWorld"),
         unknown_name="constant/electroProperties:singleCellSolverCoeffs.tissu",
     ),
-    "restitutionCurves": dict(
+    "restitutionCurves": ConformanceStudy(
         # Coarsest mesh the native blockMeshDict documents (40x6x14); a real run takes seconds.
         requires=_COMMANDS,
         base_study={"blockMeshResolution": [40, 6, 14]},
@@ -90,7 +69,7 @@ TARGETS: dict[str, dict[str, Any]] = {
         sweep_values=([40, 6, 14], [100, 15, 35]),
         unknown_name="constant/electroProperties:singleCellSolverCoeffs.tissu",
     ),
-    "manufacturedBidomain": dict(
+    "manufacturedBidomain": ConformanceStudy(
         # Hex route, 1D at numberCells 10; a real run takes well under a second.
         requires=_COMMANDS,
         base_study={"mesh": "hex", "dimension": "1D", "numberCells": 10},
@@ -101,7 +80,7 @@ TARGETS: dict[str, dict[str, Any]] = {
         sweep_values=(10, 20),
         unknown_name="constant/electroProperties:bidomainSolverCoeffs.verificationModel.q",
     ),
-    "manufacturedBathBidomain": dict(
+    "manufacturedBathBidomain": ConformanceStudy(
         # Hex route, 1D N=10, endTime 0.02 (36 steps); a real run takes about a second.
         requires=("blockMesh", "topoSet", "setTorsoOrganConductivityField", "cardiacFoam"),
         base_study={"dimension": "1D", "numberCells": 10, "system/controlDict:endTime": 0.02},
@@ -112,7 +91,7 @@ TARGETS: dict[str, dict[str, Any]] = {
         sweep_values=(10, 20),
         unknown_name="constant/electroProperties:bidomainSolverCoeffs.bathPredictorCorector",
     ),
-    "manufacturedMonodomainPseudoECG": dict(
+    "manufacturedMonodomainPseudoECG": ConformanceStudy(
         # Hex route, 3D at numberCells 5 (~4 s real run). 3D, unlike the other manufactured targets:
         # the native default verifier manufacturedAnisotropicMonodomainVerifier is FatalError at any
         # other dimension unless verificationModel.type/anisotropic change too.
@@ -131,7 +110,7 @@ TARGETS: dict[str, dict[str, Any]] = {
             ".verificationModel.referenceQuadratureOrde"
         ),
     ),
-    "cable1DRestitution": dict(
+    "cable1DRestitution": ConformanceStudy(
         # dx 1 mm and the smallest legal s1s2SpatialProtocol, so endTime is 1.5 ms. writeInterval is
         # pinned below endTime: ``predict_data_artifacts`` requires one elapsed monodomainSolver
         # field write, which the native 4.25 s never reaches.
@@ -151,7 +130,7 @@ TARGETS: dict[str, dict[str, Any]] = {
         sweep_values=(0.001, 0.0005),
         unknown_name="constant/electroProperties:monodomainSolverCoeffs.conductivit",
     ),
-    "cable1DCVConvergence": dict(
+    "cable1DCVConvergence": ConformanceStudy(
         # Mesh + solve only; endTime/writeInterval pinned short as for cable1DRestitution.
         requires=_COMMANDS,
         base_study={
@@ -171,7 +150,7 @@ TARGETS: dict[str, dict[str, Any]] = {
         sweep_values=(0.001, 0.0005),
         unknown_name="constant/electroProperties:monodomainSolverCoeffs.conductivit",
     ),
-    "manufacturedMonodomain1D3D": dict(
+    "manufacturedMonodomain1D3D": ConformanceStudy(
         # Coarsest coupledConvergence point, not the native N=20 (~13 s per run).
         requires=_COMMANDS,
         base_study={
@@ -186,12 +165,12 @@ TARGETS: dict[str, dict[str, Any]] = {
         sweep_values=("purkinjeGraph.nodes011", "purkinjeGraph.nodes021"),
         unknown_name="constant/electroProperties:monodomainSolverCoeffs.domainCouplings.couplingA.rPv",
     ),
-    "niederer2011": dict(
+    "niederer2011": ConformanceStudy(
         # Hex route at the coarsest cartesianConvergence dx (0.5 mm); a few seconds. The quantity
         # runs to 0.15 s so all nine probes activate (P8 at 0.143 s); a decomposed solve differs
         # from the serial one only at the solver tolerance, and probes are written at
         # writePrecision 6, so the parallel tolerance requires equal written values.
-        requires=_COMMANDS,
+        requires=_COMMANDS + _PARALLEL,
         base_study={"mesh": "hex", "dx": 0.0005, "system/controlDict:endTime": 0.015},
         patch=("constant/electroProperties:monodomainSolverCoeffs.tissue", "endocardialCells"),
         untouched=("constant/electroProperties", ("monodomainSolverCoeffs", "ionicModel")),
@@ -211,11 +190,3 @@ TARGETS: dict[str, dict[str, Any]] = {
         timeout_s=1500.0,
     ),
 }
-
-
-def conformance_target(record: str, tmp_path: Path) -> ConformanceTarget:
-    row = dict(TARGETS[record])
-    require_commands(*row.pop("requires"), *(("decomposePar", "reconstructPar", "mpirun") if row.get("quantity") else ()))
-    return ConformanceTarget(
-        plugin="cardiacfoam", record=record, cases_root=native_tutorials_root(), scratch_root=tmp_path / "scratch", **row,
-    )

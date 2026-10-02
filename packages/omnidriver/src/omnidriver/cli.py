@@ -664,7 +664,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "action",
         choices=[
-            "describe", "catalog", "env", "scan", "plan", "step", "run", "recover", "sweep-plan",
+            "describe", "catalog", "env", "scan", "check", "plan", "step", "run", "recover", "sweep-plan",
             "sweep-run", "compare",
         ],
         help="Pipeline stage to execute",
@@ -919,6 +919,30 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--record",
+        help=(
+            "For action=check: check only this record (default: every record that declares a "
+            "conformance study)."
+        ),
+    )
+    parser.add_argument(
+        "--checks",
+        help="For action=check: the conformance checks to run, comma-separated (default: C1 to C14).",
+    )
+    parser.add_argument(
+        "--benchmarks",
+        metavar="DIR",
+        help="For action=check: the directory of benchmark references a record's quantity cites (C13, C14).",
+    )
+    parser.add_argument(
+        "--regression",
+        action="store_true",
+        help=(
+            "For action=check: also run each record's native regression script (the one its case-file "
+            "rules name) in a copy of the native case under the scratch root."
+        ),
+    )
+    parser.add_argument(
         "--comparison-request",
         help="For action=compare: an agent's quantity comparison request (JSON; schema omnidriver/schemas/quantity-comparison.schema.json).",
     )
@@ -966,6 +990,17 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
             parser.error(message)
     if (args.document or args.key or args.uncatalogued or args.unread) and args.action != "catalog":
         parser.error("--document/--key/--uncatalogued/--unread are only valid with action=catalog")
+    if (args.record or args.checks or args.benchmarks or args.regression) and args.action != "check":
+        parser.error("--record/--checks/--benchmarks/--regression are only valid with action=check")
+    if args.action == "check":
+        if any((
+            args.entry, args.case, args.run_document, args.spec, args.output_dir, args.strict,
+            args.parallel is not None, args.dry_run, args.continue_on_error, args.step, args.apply is not None,
+        )):
+            parser.error(
+                "action=check takes --plugin or --repo, --cases-root, --scratch-dir, --input, --record, "
+                "--checks, --benchmarks and --regression only"
+            )
     if args.uncatalogued and args.unread:
         parser.error("--uncatalogued and --unread are separate listings: pass one")
     if (args.uncatalogued or args.unread) and (args.entry or args.case or args.document or args.key):
@@ -1058,7 +1093,7 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
     )):
         parser.error("action=scan takes only --plugin or --repo, and --scratch-dir: it rescans the stack's C++ source")
     if not args.run_document and not args.entry and not args.case and not (args.uncatalogued or args.unread) and args.action not in {
-        "recover", "sweep-plan", "sweep-run", "compare", "env", "scan",
+        "recover", "sweep-plan", "sweep-run", "compare", "env", "scan", "check",
     }:
         parser.error("--entry or --case is required (or use --run-document with action=run/step)")
 
@@ -1135,6 +1170,28 @@ def _scan_or_uncatalogued(args, driver_context) -> int:
         summary["status"] = "ok"
     print(json.dumps(summary, indent=2))
     return 0 if summary["status"] == "ok" else 1
+
+
+def _check(args, driver_context, repository, cases_root: Path, inputs: dict[str, str]) -> int:
+    """``check``: the conformance checks and native regression against the
+    real solver, reported as JSON. It reports and gates nothing: the exit code
+    is 0 whenever the checks ran."""
+    from .conformance.report import check_report
+
+    try:
+        scratch_root = resolve_scratch_root(args.scratch_dir, cases_root=cases_root)
+        report = check_report(
+            driver_context, plugin=args.plugin or repository.plugin, cases_root=cases_root,
+            scratch_root=scratch_root, records=[args.record] if args.record else [],
+            check_ids=[name.strip() for name in (args.checks or "").split(",") if name.strip()],
+            inputs=inputs, benchmarks=Path(args.benchmarks) if args.benchmarks else None,
+            regression=args.regression,
+        )
+    except (TutorialRecordError, KeyError) as exc:
+        print(json.dumps({"status": "failed", "action": "check", "error": str(exc.args[0] if exc.args else exc)}, indent=2))
+        return 1
+    print(json.dumps(report, indent=2))
+    return 0
 
 
 def _select_stack(parser: argparse.ArgumentParser, args):
@@ -1264,6 +1321,9 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
         cases_root = resolve_cases_root(args.cases_root)
     overrides = {"cases_root": str(cases_root)}
     entry_label = getattr(selected_entry, "name", selected_entry)
+
+    if args.action == "check":
+        return _check(args, driver_context, repository, cases_root, cli_inputs)
 
     if args.action == "catalog":
         from .core.catalog_query import catalog_query

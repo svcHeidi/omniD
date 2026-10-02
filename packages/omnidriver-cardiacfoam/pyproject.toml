@@ -33,11 +33,6 @@ post = [
 markers = [
     "integration: tests requiring a real cardiacFoam binary (skipped by default in CI)",
     "slow: builds all three wheels in a throwaway venv; minutes, not seconds",
-    "native: needs OMNIDRIVER_NATIVE_TUTORIALS; fails (not skips) if unset",
-    # Added 2026-09-26 (topic B Task 8): the cross-solver benchmark,
-    # tests/test_niederer_cross_solver_native.py, needs openCARP's native
-    # environment as well as cardiacFOAM's, and carries both markers.
-    "native_opencarp: needs OMNIDRIVER_OPENCARP_TUTORIALS and the openCARP binary; fails (not skips) if unset",
 ]
 testpaths = ["tests"]
 pythonpath = ["tests"]

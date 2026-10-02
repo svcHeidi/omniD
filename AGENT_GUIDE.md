@@ -944,6 +944,26 @@ it ran in `workflow_state.json`, under `steps[].host`: host name, OS, CPU,
 core count, the scheduler and threading variables, the declared variables
 and, under a launcher, its path, version and rank count.
 
+## Checking a solver you are working on: `omnidriver check`
+
+```bash
+omnidriver check --repo <cardiacFOAM> --scratch-dir <dir> --record singleCell --checks C1,C4,C6 \
+  --benchmarks <omnidriver>/benchmarks
+```
+
+`check` runs the conformance checks C1 to C14, and with `--regression` the
+record's native regression script (the one its case-file rules name) in a copy
+under the scratch root, against the solver your shell holds, and prints the
+verdicts as JSON. It **reports and gates nothing**: the exit code is 0 whenever
+the checks ran, and a failing check is the report doing its job. Each record
+declares how it is exercised briefly (`TutorialRecord.conformance`: a short
+study, a patch, a sweep and, for a record that compares against a benchmark, the
+quantity C13 and C14 compare); a record that declares none is reported
+`no_study`. A record whose commands are not on `PATH` is `not_run`, naming them:
+run from the solver's shell (`omnidriver env`). A record that needs a supplied
+input takes `--input NAME=PATH`, as in a plan. The native tree is never written:
+a check fails if anything under the cases root changed while it ran.
+
 ## Discovering what's valid
 
 Three layers of discovery:

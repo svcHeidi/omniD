@@ -208,3 +208,11 @@ def test_a_near_miss_document_name_is_refused_not_treated_as_unvalidated():
 def test_an_unrelated_document_is_refused():
     with pytest.raises(KeyError):
         record_key_validator("constant/mesh.json", ("cells",), 5)
+
+
+def test_every_record_declares_how_omnidriver_check_exercises_it():
+    from omnidriver.cardiacfoam.records import TUTORIAL_RECORDS
+
+    assert all(record.conformance is not None for record in TUTORIAL_RECORDS.values())
+    quantity = TUTORIAL_RECORDS["niederer2011"].conformance.quantity
+    assert quantity.reference.name == "niederer2011.json" and not quantity.reference.is_absolute()

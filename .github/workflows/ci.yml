@@ -52,10 +52,8 @@ jobs:
       - name: Install omnidriver + omnidriver-openfoam
         run: pip install -e packages/omnidriver -e packages/omnidriver-openfoam pytest
 
-      # `native` tests need OMNIDRIVER_NATIVE_TUTORIALS and FAIL (not skip)
-      # when it is unset, which it always is here.
       - name: Run tests
-        run: python -m pytest packages/omnidriver-openfoam/tests -m "not native" -q
+        run: python -m pytest packages/omnidriver-openfoam/tests -q
 
       # This installs exactly one omnidriver.plugins adapter (openfoam-environment),
       # which default_driver_context() needs to resolve an implicit default --
@@ -95,10 +93,8 @@ jobs:
                       -e packages/omnidriver-cardiacfoam \
                       pytest
 
-      # `native` tests need OMNIDRIVER_NATIVE_TUTORIALS and FAIL (not skip)
-      # when it is unset, which it always is here.
       - name: Run tests
-        run: python -m pytest packages/omnidriver-cardiacfoam/tests -m "not slow and not native" -q
+        run: python -m pytest packages/omnidriver-cardiacfoam/tests -m "not slow" -q
 
   # Installs omnidriver-openfoam because omnidriver-cardiaccore genuinely
   # depends on it -- operations/ and workflows/ use
@@ -133,13 +129,11 @@ jobs:
                       pytest
 
       - name: Run tests
-        run: python -m pytest packages/omnidriver-cardiaccore/tests -m "not native_cardiaccore" -q
+        run: python -m pytest packages/omnidriver-cardiaccore/tests -q
 
   # openCARP drives a different binary entirely and needs no OpenFOAM, so this
   # job installs core and the opencarp adapter only -- which also proves the
-  # package declares every dependency it uses. Its `native_opencarp` tests
-  # need the openCARP binary and OMNIDRIVER_OPENCARP_TUTORIALS, and fail (not
-  # skip) without them, so they are deselected here explicitly.
+  # package declares every dependency it uses.
   test-opencarp:
     name: test-opencarp (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -165,7 +159,7 @@ jobs:
                       pytest
 
       - name: Run tests
-        run: python -m pytest packages/omnidriver-opencarp/tests -m "not native_opencarp" -q
+        run: python -m pytest packages/omnidriver-opencarp/tests -q
 
   test-all-package-wheels:
     name: test-all-package-wheels (py3.11)

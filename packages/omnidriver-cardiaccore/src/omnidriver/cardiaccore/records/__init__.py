@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from omnidriver.core.tutorial_records import build_tutorial_record_catalog
 
+from ..conformance_studies import STUDIES
+
 from .human_slab import RECORD as _HUMAN_SLAB_RECORD
 from .idealized_heart import (
     IDEALIZED_HEART as _IDEALIZED_HEART_RECORD,
@@ -23,4 +25,4 @@ TUTORIAL_RECORDS = build_tutorial_record_catalog((
     _IDEALIZED_HEART_RECORD,
     _IDEALIZED_HEART_ENDOCARDIAL_RECORD,
     _IDEALIZED_HEART_PIG_TRANSMURAL_RECORD,
-))
+), conformance=STUDIES)

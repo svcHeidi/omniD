@@ -1705,3 +1705,15 @@ def test_build_tutorial_record_catalog_refuses_a_duplicate_name():
     second = _record(name="dup", native_case_relpath="caseTwo")
     with pytest.raises(TutorialRecordError, match="duplicate tutorial record name 'dup'"):
         build_tutorial_record_catalog((first, second))
+
+
+def test_a_catalog_gives_each_record_its_conformance_study_and_refuses_a_stranger(tmp_path):
+    from omnidriver.core.conformance_study import ConformanceStudy
+
+    study = ConformanceStudy(
+        base_study={}, patch=("a:b", 1), untouched=("a", ("c",)), sweep_name="n", sweep_values=(1, 2), unknown_name="x",
+    )
+    catalog = build_tutorial_record_catalog((_record(),), conformance={"toyTutorial": study})
+    assert catalog["toyTutorial"].conformance is study
+    with pytest.raises(TutorialRecordError, match="no record of this catalog"):
+        build_tutorial_record_catalog((_record(),), conformance={"other": study})

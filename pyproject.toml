@@ -14,31 +14,6 @@ markers = [
     # other, and an unregistered marker is one typo away from silently
     # selecting nothing.
     "slow: builds a wheel in a throwaway venv; minutes, not seconds",
-    # Needs the real native cardiacFOAM tutorials tree, supplied ONLY via
-    # OMNIDRIVER_NATIVE_TUTORIALS (never discovered -- CLAUDE.md's "supplied
-    # versus discovered" rule). Unlike `slow`, a native-marked test FAILS,
-    # rather than skips, when that variable is unset: the point is to catch
-    # a run that meant to exercise the real tree but forgot to supply it, not
-    # to quietly pass over it. Deselect explicitly with -m "not native".
-    # Corrected 2026-09-25 (final review S-I1): this marker also covered
-    # openCARP's native tests, so the documented repo-wide `-m native` run
-    # failed 15 openCARP tests on any machine without openCARP. openCARP's
-    # native tests now carry `native_opencarp` below, and `native` means the
-    # cardiacFOAM native tree only.
-    "native: needs OMNIDRIVER_NATIVE_TUTORIALS (the cardiacFOAM native tree); fails (not skips) if unset",
-    # Needs openCARP's tutorials tree, supplied ONLY via
-    # OMNIDRIVER_OPENCARP_TUTORIALS, and the real openCARP binary (on macOS
-    # with DYLD_LIBRARY_PATH). Same rule as `native`: FAILS, not skips, when
-    # unset. Also registered in packages/omnidriver-opencarp/pyproject.toml
-    # for a per-package run.
-    "native_opencarp: needs OMNIDRIVER_OPENCARP_TUTORIALS and the openCARP binary; fails (not skips) if unset",
-    # Step S (2026-09-28): needs a real cardiacCore native worktree
-    # (OMNIDRIVER_CARDIACCORE_TREE) and the humanSlab anatomy bundle
-    # (OMNIDRIVER_CARDIACCORE_ANATOMY), plus the cardiacCore utilities built
-    # from that same tree and on PATH. Same rule as `native`: FAILS, not
-    # skips, when either variable is unset. Also registered in
-    # packages/omnidriver-cardiaccore/pyproject.toml for a per-package run.
-    "native_cardiaccore: needs OMNIDRIVER_CARDIACCORE_TREE and OMNIDRIVER_CARDIACCORE_ANATOMY; fails (not skips) if unset",
 ]
 addopts = "--import-mode=importlib"
 pythonpath = [

@@ -29,15 +29,8 @@ import re
 import pytest
 from pathlib import Path
 
-@pytest.fixture
-def real_preflight():
-    """Request this to keep OpenFOAM's environment preflight in a test."""
-
-
 @pytest.fixture(autouse=True)
-def _environment_preflight_is_stubbed(request, monkeypatch):
-    if "real_preflight" in request.fixturenames:
-        return
+def _environment_preflight_is_stubbed(monkeypatch):
     from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
     monkeypatch.setattr(OpenFOAMEnvironmentPlugin, "get_environment_diagnostics", lambda *args, **kwargs: ())

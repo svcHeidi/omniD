@@ -27,7 +27,7 @@ to add a waiver, you are solving the wrong problem.
 
 ## How to verify anything
 
-The suites must pass in four different shapes, and each catches something the
+The suites must pass in three different shapes, and each catches something the
 others cannot. Editable installs leave the repository on `sys.path`, so a
 module that reads repo-relative state at import time still works — that class
 of defect is only visible from a wheel.
@@ -45,12 +45,9 @@ uv venv --python 3.11 /tmp/odcore && VIRTUAL_ENV=/tmp/odcore uv pip install -q \
 
 | shape | command | catches |
 |---|---|---|
-| all packages | `python -m pytest packages/ -q -m "not slow and not native and not native_opencarp and not native_cardiaccore"` | ordinary regressions |
+| all packages | `python -m pytest packages/ -q -m "not slow"` | ordinary regressions |
 | core alone | `python -m pytest packages/omnidriver/tests -q` | core reaching into a sibling package |
 | **installed wheel** | see below | core reading repo-relative state at import time |
-| native tree | `OMNIDRIVER_NATIVE_TUTORIALS=<path> python -m pytest packages/ -q -m native`, from the cardiacFOAM shell (below) | drift against the real native cardiacFOAM tree: its tutorials and its C++ source, `$OMNIDRIVER_NATIVE_TUTORIALS/../src` (the profile's `cxx_mapping.source_root`), which every strict plan then scans. Supplied, never discovered; a `native` test FAILS, not skips, without it. It runs the real solver, serial and parallel, so it needs the cardiacFOAM shell: `omnidriver env --plugin cardiacfoam` lists each variable to supply and prints the `shell_prefix` (source OpenFOAM, then export `DYLD_LIBRARY_PATH`, which macOS strips when bash starts). The tree must be clean (a `git archive` of the native branch), since C11 reads git-ignored run output in a case as authored. `test_niederer_cross_solver_native.py` also needs `OMNIDRIVER_OPENCARP_TUTORIALS`. About 25 min |
-| native openCARP | `python -m pytest packages/omnidriver-opencarp/tests -m native_opencarp`, from the openCARP shell | drift against the real openCARP binary and its tutorials tree. `omnidriver env --plugin opencarp` lists what to supply and checks it: `OMNIDRIVER_OPENCARP_TUTORIALS`, `DYLD_LIBRARY_PATH` (macOS, `libsundials_cvode`), `OPENCARP_MPI_BIN` first on `PATH` and, on a host whose name does not resolve, `HYDRA_IFACE`. A `native_opencarp` test FAILS, not skips, when one is missing. Outside these tests, planning or running a record against this tree needs `--scratch-dir` outside it |
-| native cardiacCore | `OMNIDRIVER_CARDIACCORE_TREE=<clean native worktree/archive> OMNIDRIVER_CARDIACCORE_ANATOMY=<humanSlab bundle dir> python -m pytest packages/omnidriver-cardiaccore/tests -m native_cardiaccore` | drift against the real cardiacCore utilities, its C++ source (`$OMNIDRIVER_CARDIACCORE_TREE/src`) and the native `humanSlab` tutorial; both variables supplied, never discovered — a `native_cardiaccore`-marked test FAILS, not skips, when either is unset. Needs the OpenFOAM shell (`omnidriver env --plugin cardiaccore`) and the cardiacCore utilities (`setCardiacConductivity`, `setCardiacAnatomy`, `setPurkinjeSlab`, `setPurkinjeMorphometry`) built from that same tree's committed `main` into scratch (override `FOAM_APPBIN`) and on `PATH`/`DYLD_LIBRARY_PATH` first — never the owner's own installed binaries, whose build commit is unknown |
 | static gates | `python3 scripts/check-import-boundaries.py`, `scripts/export-capability-seams.py --check`, `scripts/check-case-writes.py`, `scripts/check-core-shape.py`, and `scripts/check-benchmark-references.py` | import direction; a stale generated table; a tutorial-record/axis module writing a case directly instead of through `commit_case_write`; core gaining a new OpenFOAM layout token or growing its recorded debt; a benchmark reference under `benchmarks/` that fails to load, misnames its own id, or cites nothing |
 
 The wheel shape is the one people skip and the one that found the worst
@@ -65,31 +62,39 @@ VIRTUAL_ENV=/tmp/wheelenv uv pip install -q "/tmp/wheeltest/omnidriver-*.whl[pos
 /tmp/wheelenv/bin/python -m pytest packages/omnidriver/tests -q   # 0 failed
 ```
 
-openCARP's native tests carry `native_opencarp`, a marker distinct from
-cardiacFOAM's `native`: `-m native` collects cardiacFOAM's native tests
-only, and the all-packages row excludes both markers.
+**No pytest test runs a real solver or reads a solver's native tree.** The
+solvers are in development: their authors add required keys, rename models and
+rebuild on purpose, and a test pinned to their current state would fail for
+doing so. Pytest tests omnidriver itself: unit tests, the toy conformance
+target, and the scanner on verbatim snippets of the native C++ committed as
+fixtures (a snippet is real source, never invented).
 
-**Both native shapes run a solver in parallel:** conformance C13 runs the
-target's declared quantity serial and at N = 2 and compares them, and C14
-compares it across a two-case sweep; a target that declares no quantity passes
-both and says so. `test_parallel_evidence_native.py` in each package proves the
-run really used two ranks. **The two MPIs must never mix:** each
-solver's shell puts only its own MPI first on `PATH` (OpenFOAM's from its
-bashrc, openCARP's from `OPENCARP_MPI_BIN`), and preflight refuses the other
-one by name (`openfoam_mpi_launcher_mismatch`,
-`opencarp_mpi_launcher_mismatch`). Inside a Slurm allocation, `SLURM_NTASKS`
-must equal 2 for these checks. One example,
-the whole cardiacFOAM shape:
+**Against a solver you are working on, `omnidriver check` reports; it never
+gates.** It runs the conformance checks C1-C14 (and with `--regression` the
+record's native regression script, in a copy) against the real solver and
+prints the verdicts as JSON; the exit code is 0 whenever the checks ran. Each
+record declares how it is exercised briefly (`TutorialRecord.conformance`).
+Run it from the solver's own shell: `omnidriver env --plugin <p>` lists each
+variable to supply and prints the `shell_prefix` (source OpenFOAM, then
+export `DYLD_LIBRARY_PATH`, which macOS strips when bash starts).
 
 ```bash
-OPENFOAM_BASHRC=/Volumes/OpenFOAM-v2412/etc/bashrc DYLD_LIBRARY_PATH=/opt/homebrew/lib \
-OMNIDRIVER_NATIVE_TUTORIALS=<archive>/tutorials python -m omnidriver env --plugin cardiacfoam
-# status ok: run the suite behind the printed shell_prefix
-bash -c '<shell_prefix> OMNIDRIVER_OPENCARP_TUTORIALS=<opencarp>/share/tutorials python -m pytest packages/ -q -m native'
+omnidriver check --repo <cardiacFOAM> --scratch-dir <scratch> --record singleCell --benchmarks <omnidriver>/benchmarks
+omnidriver check --plugin opencarp --cases-root <opencarp>/share/tutorials --scratch-dir <scratch> --benchmarks <omnidriver>/benchmarks
+omnidriver check --plugin cardiaccore --cases-root <cardiacCore>/cases --scratch-dir <scratch> --input anatomy=<humanSlab bundle>
 ```
 
+The tree under check should be clean (a `git archive` of the branch), since C11
+reads git-ignored run output in a case as authored. **The two MPIs must never
+mix:** each solver's shell puts only its own MPI first on `PATH` (OpenFOAM's from
+its bashrc, openCARP's from `OPENCARP_MPI_BIN`), and preflight refuses the other
+one by name (`openfoam_mpi_launcher_mismatch`, `opencarp_mpi_launcher_mismatch`).
+C13 runs a record's declared quantity serial and at N = 2 and compares them, and
+C14 compares it across a two-case sweep; a record that declares no quantity passes
+both and says so. Inside a Slurm allocation, `SLURM_NTASKS` must equal 2.
+
 **The scratch root is supplied, never invented.** Anything that
-stages — `plan --strict`/`step`/`run --strict` over a tutorial record or a
+stages — `plan --strict`/`step`/`run --strict`/`check` over a tutorial record or a
 `--case` folder, or a sweep with no `--output-dir` — needs `--scratch-dir <dir>`
 or `OMNIDRIVER_SCRATCH_DIR`; with neither it is refused by name as JSON
 (`ScratchRootNotSupplied`), and a scratch dir inside the cases root is refused
@@ -121,12 +126,12 @@ A skip here hides exactly what the guard exists to find.
 | a solver repository names its plugin, tutorials, C++ source and scripts in `omnidriver.toml`, read only from `--repo` or the repository of a supplied cases root (never searched for); `--plugin` alone serves a solver with no repository, and when both are given they must select the same stack | `test_repository.py`; `test_repository_source.py` (cardiacfoam) |
 | a plan report carries one `plugin_diagnostics` list, composed by the stack's `get_plan_diagnostics`; core names no function-object, nondimensional or dictionary-resolution concept | `scripts/check-core-shape.py`; `test_strict_planning.py`; `test_plan_diagnostics.py` (openfoam) |
 | a tutorial record/axis module never writes a case directly | `scripts/check-case-writes.py` (empty waiver list, scoped to `openfoam/axes/`, `cardiacfoam/records/`, `opencarp/records/`, `cardiaccore/records/` and the writer-free planner module `openfoam/case_planning.py`; relative imports are resolved before matching) |
-| a strict plan reads C++ only at a supplied source root (`cxx_mapping.source_root`), scans it when supplied, and says `plugin_cxx_source_not_supplied` once when not | `test_plan_diagnostics.py` (openfoam); against the real trees `test_strict_planning.py::test_every_strict_plan_scans_the_supplied_source`, `test_cxx_scan_native.py` (`native`) and cardiacCore's `test_dict_key_scanner_native.py` (`native_cardiaccore`) |
-| a key or model the C++ reads and the catalog lacks is an `uncatalogued` note, never a failure, and a study may set the key at exactly the path the scan places its read, whether or not the case holds it; a catalog claim an anchored read refutes fails the plan | `test_cxx_scan_native.py` (`native`): `test_keys_added_to_the_cxx_plan_are_uncatalogued_and_settable`, `test_a_new_key_is_refused_at_a_path_the_cxx_does_not_read_or_with_the_wrong_type`, `test_a_model_a_scanned_selection_table_registers_plans_uncatalogued`; `test_dict_keys_scanner.py` (openfoam) |
-| a resolved record case passes the catalogue's relations and the solver's cross-field rules before it runs, and a rule never refuses a name the catalogue lacks | `test_case_rules.py` (openfoam, cardiacCore), the commit tests in core's `test_tutorial_records.py`; against the real trees `test_catalogue_rules_native.py` in cardiacFOAM (`native`) and cardiacCore (`native_cardiaccore`) |
-| a solver's shell is declared in its manifest and rendered from supplied values only; a launcher from the other solver's MPI is refused | `test_environment_and_machine.py`; `test_an_mpirun_from_another_mpi_family_is_refused` (openfoam); openCARP's `opencarp_mpi_launcher_mismatch` (`native_opencarp`) |
+| a strict plan reads C++ only at a supplied source root (`cxx_mapping.source_root`), scans it when supplied, caches the scan under the supplied scratch root by a digest of the source and the scanner, and says `plugin_cxx_source_not_supplied` once when not | `test_plan_diagnostics.py`, `test_dict_keys_scanner.py` (openfoam) |
+| a key or model the C++ reads and the catalog lacks is an `uncatalogued` note carrying what the scan knows, a catalogued key the C++ no longer reads an `unread` note (a case that sets it a warning), a catalog claim the C++ refutes a `disagreement` warning stating both sides: none of them fails a plan, and a study may set an uncatalogued key at exactly the path the scan places its read; a value is judged against the kind the C++ reads | `test_dict_keys_scanner.py`, `test_plan_diagnostics.py`, `test_runtime_selection_report.py`, `test_cxx_requirements.py` (openfoam) |
+| a resolved record case passes the catalogue's relations, the enum menus (the names the C++'s selection table registers when its source is supplied) and the cross-field rules before it runs, `omnidriver.openfoam.case_rules` being the one evaluator of them; a key the supplied C++ reads with no default in a class the case builds is refused when missing, and noted when the scan cannot tell whether the case builds the class; `step --apply` runs the same rules after its edit | `test_case_rules.py`, `test_cxx_requirements.py` (openfoam), `test_case_rules.py` (cardiacCore), the commit and apply tests in core's `test_tutorial_records.py` |
+| a solver's shell is declared in its manifest and rendered from supplied values only; a launcher from the other solver's MPI is refused | `test_environment_and_machine.py`; `test_an_mpirun_from_another_mpi_family_is_refused` (openfoam) |
 | core names no OpenFOAM layout beyond its recorded, shrinking debt | `scripts/check-core-shape.py` (baseline `scripts/core-shape-baseline.txt`; new tokens never added) |
-| every conformance target passes C1-C14 (toy, openCARP, cardiacFOAM, cardiacCore), including C11 (restaging a run case carries nothing the run wrote and drops nothing authored), C12 (every declared output format has a reader whose declaration is valid), C13 (a serial run and a parallel run give the same value of a declared quantity) and C14 (a declared quantity compares across a two-case sweep), both vacuous for a target that declares no quantity; every migrated record joins its table of targets | `omnidriver.conformance`, parametrized per package (toy in core; openCARP `native_opencarp`; cardiacFOAM `native`, `test_conformance_native.py`, run from a shell with OpenFOAM sourced and `OMNIDRIVER_NATIVE_TUTORIALS` at a clean native tree) |
+| every conformance check C1-C14 passes for the toy target, and each is given a deliberately broken toy plugin it must catch; a real solver's records are exercised by `omnidriver check`, which reports and never gates | `test_conformance_toy.py` (core); `test_check_command.py` (core) |
 
 ## One reality
 

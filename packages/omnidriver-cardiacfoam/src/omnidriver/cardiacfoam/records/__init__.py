@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from omnidriver.core.tutorial_records import build_tutorial_record_catalog
 
+from ..conformance_studies import STUDIES
+
 from .niederer_2011 import RECORD as _NIEDERER_2011_RECORD
 from .manufactured_eikonal_ecg import RECORD as _MANUFACTURED_EIKONAL_ECG_RECORD
 from .restitution_curves import RECORD as _RESTITUTION_CURVES_RECORD
@@ -34,4 +36,4 @@ TUTORIAL_RECORDS = build_tutorial_record_catalog((
     _CABLE_1D_RESTITUTION_RECORD,
     _CABLE_1D_CV_CONVERGENCE_RECORD,
     _MANUFACTURED_MONODOMAIN_1D3D_RECORD,
-))
+), conformance=STUDIES)

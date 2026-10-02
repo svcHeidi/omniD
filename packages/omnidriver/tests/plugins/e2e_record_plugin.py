@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 
+from omnidriver.core.conformance_study import ConformanceStudy
 from omnidriver.core.case_write import RenderedFile, ResolvedMutation, _digest_bytes
 from omnidriver.core.tutorial_records import AxisContract, AxisResult, TutorialRecord, WorkflowStep
 
@@ -62,6 +63,11 @@ _TOY_RECORD = TutorialRecord(
         step_id="solve", command=("touch", "solved.marker"),
         consumes=("constant/mesh.json",), produces=("solved.marker",),
     ),),
+    conformance=ConformanceStudy(
+        requires=("touch",), base_study={}, patch=("constant/mesh.json:cells", 7),
+        untouched=("constant/mesh.json", ("label",)), sweep_name="number_cells", sweep_values=(2, 3),
+        unknown_name="cell_count",
+    ),
 )
 
 

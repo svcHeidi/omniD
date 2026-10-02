@@ -17,8 +17,6 @@ AUXILIARY_COMMANDS = frozenset({"mesher", "igbextract", "igbhead"})
 # Every openCARP run prints its build header, whose repository line embeds
 # a CI token. Core's workflow_runner.redact_step_logs replaces every match
 # whole, so the pattern matches only the credential part of that URL.
-# Exercised on the real binary by
-# test_conformance_native.py::test_no_token_survives_in_workflow_logs.
 REDACTION_PATTERNS = (r"(?<=://)[^/\s@]+(?=@)",)
 # ``-buildinfo``'s tag line, e.g. ``*** GIT tag:            v18.1`` (v18.1).
 _GIT_TAG = re.compile(r"GIT tag:\s*(\S+)")

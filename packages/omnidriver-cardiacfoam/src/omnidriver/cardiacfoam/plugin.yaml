@@ -138,7 +138,7 @@ case_profile:
       kind: documentation
       role: case.documentation
       required: conditional
-    - path: runRegressionTest.sh
+    - path: regression/regressionTest.sh
       kind: case_script
       role: case.regression_test
       required: conditional

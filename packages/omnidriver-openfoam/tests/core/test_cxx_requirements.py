@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from omnidriver.core.contracts.dictionary import DictEntry
 from omnidriver.openfoam import case_rules
 from omnidriver.openfoam.case_rules import rule_diagnostics
-from omnidriver.openfoam.dict_keys_scanner import DictRead, Scan, required_reads, scan_source
+from omnidriver.openfoam.dict_keys_scanner import DictRead, Scan, _guards, required_reads, scan_source
 
 # cardiacFOAM src/electroModels/myocardiumModels/monodomainSolver/monodomainSolver.C:
 # the registration and the constructor.
@@ -108,6 +108,43 @@ MYOCARDIUM_DOMAIN_INTERFACE_NEW = '''autoPtr<myocardiumDomainInterface> myocardi
 }
 '''
 
+# cardiacFOAM src/ionicModels/ionicModel/ionicModel.C: the selector reading its model by
+# lookup, a destructor, and utilitiesMode, which tests a key with found() before it reads it.
+IONIC_MODEL = '''Foam::autoPtr<Foam::ionicModel> Foam::ionicModel::New(
+    const dictionary& dict, const label nIntegrationPoints,
+    const scalar initialDeltaT, const Switch solveVmWithinODESolver)
+{
+    const word modelType(dict.lookup("ionicModel"));
+    auto *ctorPtr = dictionaryConstructorTable(modelType);
+
+    if (!ctorPtr)
+    {
+        FatalIOErrorInLookup(dict, "ionicModel", modelType,
+                             *dictionaryConstructorTablePtr_)
+            << exit(FatalIOError);
+    }
+
+    return autoPtr<ionicModel>
+    (
+        ctorPtr(dict, nIntegrationPoints, initialDeltaT, solveVmWithinODESolver)
+    );
+}
+
+// * * * * * * * * * * * * * * * * Destructor  * * * * * * * * * * * * * * * //
+
+Foam::ionicModel::~ionicModel()
+{}
+
+// * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
+
+
+bool Foam::ionicModel::utilitiesMode() const
+{
+    return dict_.found("utilities")
+        && readBool(dict_.lookup("utilities"));
+}
+'''
+
 ROOT = "param:Solver::Solver:electroProperties"
 
 
@@ -139,6 +176,17 @@ def test_a_class_built_only_inside_an_if_on_a_literal_is_tied_to_that_literal(tm
     root.mkdir()
     (root / "myocardiumDomainInterface.C").write_text(MYOCARDIUM_DOMAIN_INTERFACE_NEW)
     assert scan_source(root).dispatch == (("eikonalMyocardiumDomain", "eikonalSolver"),)
+
+
+def test_a_lookup_is_typed_by_its_wrapper_and_a_key_tested_first_is_not_required(tmp_path):
+    root = tmp_path / "src"
+    root.mkdir()
+    (root / "ionicModel.C").write_text(IONIC_MODEL)
+    scan = scan_source(root)
+    (model,) = [read for read in scan.reads if read.key == "ionicModel"]
+    assert (model.method, model.type, model.default, model.scope) == ("lookup", "word", None, ())
+    (utilities,) = [read for read in scan.reads if read.key == "utilities" and read.method == "lookup"]
+    assert (utilities.file, utilities.function, utilities.root, utilities.scope, utilities.key) in _guards(scan)
 
 
 def test_only_a_read_without_a_default_that_nothing_tests_first_is_required():

@@ -50,3 +50,10 @@ def test_a_parameter_only_the_binary_lists_is_uncatalogued():
     assert (report["contradictions"], [p["name"] for p in report["uncatalogued"]]) == ([], ["newParameter"])
     changed = {**committed, "parameters": [{**committed["parameters"][0], "type": "Int"}, *committed["parameters"][1:]]}
     assert compare_catalogs(committed, changed)["contradictions"]
+
+
+def test_the_record_declares_how_omnidriver_check_exercises_it():
+    from omnidriver.opencarp.records import TUTORIAL_RECORDS
+
+    quantity = TUTORIAL_RECORDS["niedererNVersion"].conformance.quantity
+    assert quantity.artifact_format and quantity.at is None and quantity.pairs is None
