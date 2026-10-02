@@ -130,7 +130,7 @@ Each `DictEntry.driver_path` must be globally unique across your entire catalog.
 
 | File | Role |
 |---|---|
-| `packages/omnidriver/src/omnidriver/postprocessing/__init__.py` | Plotting and table utilities (`PostprocessingProtocol`, `PlotSpec`, `TraceSpec`, `build_line_traces`, `load_csv_folder`, `apply_plotly_layout`, `write_plotly_html`, `DEFAULT_PALETTE`, `TableWriter`) that the native cardiacFOAM post-processing scripts import directly (`omnidriver.postprocessing`); core's own plan/run/sweep-run path never imports it. |
+| `packages/omnidriver/src/omnidriver/postprocessing/__init__.py` | Generic plotting and table helpers (`style`, `plotting_common`, `table_writer`) that the native post-processing scripts import directly (`omnidriver.postprocessing`); core's own plan/run/sweep-run path never imports it. |
 | `packages/omnidriver/src/omnidriver/core/runtime/postprocess_phase.py` | `build_sweep_context()` (brain, the single source of truth for a sweep result's context) and `run_postprocessing_module()`, which always refuses (`not_configured`) rather than guessing an undeclared generic analysis task. |
 
 See `AGENT_GUIDE.md`'s "Post-processing phase" section for the full protocol.

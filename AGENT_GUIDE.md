@@ -458,10 +458,11 @@ If an agent needs deeper reasoning than the flat summary, it reads one case's
 
 ### Post-processing utilities
 
-`omnidriver.postprocessing` is the plotting and table utilities the native
-cardiacFOAM post-processing scripts import directly (`PlotSpec`, `TraceSpec`,
-`build_line_traces`, `load_csv_folder`, `apply_plotly_layout`,
-`write_plotly_html`, `TableWriter`, `DEFAULT_PALETTE`) -- core's own
+`omnidriver.postprocessing` is the generic plotting and table helpers the
+native post-processing scripts import directly (`style`: `apply_plotly_layout`,
+`write_plotly_html` and the matplotlib helpers; `plotting_common`;
+`table_writer`: `TableMetadata`, `TableWriter`). Nothing in it knows a solver:
+a reader of a solver's output belongs in that solver's package. Core's own
 plan/run/sweep-run path never imports it, and nothing discovers or invokes a
 script automatically; a caller runs its own post-processing script by hand
 and may use these utilities from it.

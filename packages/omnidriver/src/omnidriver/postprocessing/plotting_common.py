@@ -1,31 +1,8 @@
 from __future__ import annotations
 
-import re
 from collections.abc import Iterable, Mapping
 
 import plotly.colors as plotly_colors
-
-
-
-
-
-_DX_PATTERN = re.compile(r"DX(\d+)")
-_DT_PATTERN = re.compile(r"DT(\d+)")
-
-
-def extract_dx_dt(filename: str) -> tuple[float, float]:
-    """Extract DX and DT values from filenames like ...DX5...DT005..."""
-    from pathlib import Path
-    basename = Path(filename).name
-    dx_match = _DX_PATTERN.search(basename)
-    dt_match = _DT_PATTERN.search(basename)
-    if not dx_match or not dt_match:
-        return float("inf"), float("inf")
-
-    dx = int(dx_match.group(1)) / 10.0
-    dt_token = dt_match.group(1)
-    dt = int(dt_token) / (10 ** (len(dt_token) - 1))
-    return dx, dt
 
 
 def lighten_hex_color(color: str, amount: float) -> str:
