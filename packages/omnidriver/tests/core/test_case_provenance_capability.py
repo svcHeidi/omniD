@@ -45,12 +45,12 @@ def test_extra_provenance_paths_is_annotated_as_dependencies():
     )
 
 
-def test_capability_manifest_does_not_hand_out_a_live_catalog():
-    """`get_utility_manifests` was hardened against this; the model catalogues were not, and one of them is mutated at import."""
+def test_the_named_catalogues_do_not_hand_out_a_live_catalog():
+    """One of the model catalogues is mutated at import."""
     import pytest
     pytest.importorskip("omnidriver.cardiacfoam")
     from omnidriver.cardiacfoam import ionic_model_catalog
     from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
-    manifest = CardiacFoamPlugin().get_capabilities()
-    assert manifest["ionic_models"] is not ionic_model_catalog.IONIC_MODEL_CATALOG
+    named = CardiacFoamPlugin().get_named_catalogs()
+    assert named["ionic_model_catalog"]["ionic_models"] is not ionic_model_catalog.IONIC_MODEL_CATALOG

@@ -38,9 +38,6 @@ from omnidriver.cardiacfoam.common_dict_entries import (
     PHYSICS_PROPERTY_ENTRIES,
 )
 from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
-from omnidriver.cardiacfoam.active_tension_catalog import ACTIVE_TENSION_MODEL_CATALOG
-from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG
-from omnidriver.cardiacfoam.solver_coupling import SOLVER_COMPATIBILITY_RULES
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 
 if TYPE_CHECKING:
@@ -130,24 +127,15 @@ class CardiacFoamPlugin:
         })
 
     def get_capabilities(self) -> CapabilityManifest:
-        """Return cardiacFoam's domain catalogues: models, solvers, etc.
+        """Return what only cardiacFoam can add to the capability manifest.
 
         Core builds the base capability manifest itself, composing
         ``command_authorization``/``case_introspection``/
-        ``case_runtime_conventions`` over the same provider stack; this
-        method merges in only the domain catalogues core has no way to
-        compose, because they are cardiacFoam's own vocabulary.
+        ``case_runtime_conventions`` over the same provider stack. The model
+        catalogues are not here: ``describe`` carries them once, as
+        ``plugin_catalogs`` (:meth:`get_named_catalogs`).
         """
-        manifest: dict = {"heterogeneity_models": HETEROGENEITY_MODELS}
-        # Copy on the way out, as get_utility_manifests() already does: these
-        # are the live module-level catalogues, and IONIC_MODEL_CATALOG is
-        # additionally written into at import by the BATCHED_MODELS loop. A
-        # shallow copy is enough -- the values are frozen dataclasses, so the
-        # only hazard is the mutable dict itself.
-        manifest["ionic_models"] = dict(IONIC_MODEL_CATALOG)
-        manifest["active_tension_models"] = dict(ACTIVE_TENSION_MODEL_CATALOG)
-        manifest["solver_compatibility_rules"] = SOLVER_COMPATIBILITY_RULES
-        return manifest
+        return {"heterogeneity_models": HETEROGENEITY_MODELS}
 
     def resolve_case_models(self, case_root: Path) -> dict:
         """Best-effort ``{"solver", "ionic_model", "active_tension"}`` from a
@@ -264,7 +252,7 @@ class CardiacFoamPlugin:
             named_catalogs,
         )
 
-        return named_catalogs(self.get_capabilities())
+        return named_catalogs()
 
     def get_record_key_validator(self):
         """This plugin's one ``RecordKeyValidationCapability`` answer for a

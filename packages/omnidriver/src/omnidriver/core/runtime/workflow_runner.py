@@ -39,7 +39,7 @@ class WorkflowStepRunResult:
     stderr_log: str
 
 
-def _utc_now() -> str:
+def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
@@ -391,7 +391,7 @@ def run_workflow_step(
         command=command,
         args=args,
         cwd=cwd,
-        started_at=_utc_now(),
+        started_at=utc_now(),
         finished_at=None,
         exit_code=None,
         stdout_log=str(stdout_log),
@@ -516,7 +516,7 @@ def run_workflow_step(
         args=args,
         cwd=cwd,
         started_at=running_step.started_at,
-        finished_at=_utc_now(),
+        finished_at=utc_now(),
         exit_code=exit_code,
         stdout_log=str(stdout_log),
         stderr_log=str(stderr_log),

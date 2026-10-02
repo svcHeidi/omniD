@@ -6,7 +6,6 @@ import re
 import shutil
 import subprocess
 import uuid
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
@@ -26,7 +25,7 @@ from .record_execution import (
 from .run_command import omnidriver_run_command
 from .run_document_exec import RUN_DOCUMENT_FILENAME, _allowed_runs_root
 from .workflow_orchestrator import STATE_FILENAME
-from .workflow_runner import _terminate_process_group
+from .workflow_runner import _terminate_process_group, utc_now
 from .sweep_manifest import (
     SWEEP_MANIFEST_FILENAME,
     CaseManifestEntry,
@@ -244,7 +243,7 @@ def _record_sweep_run(
     spec_hash = compute_spec_hash(sweep_spec)
     manifest = SweepManifest(
         schema_version="1.0", sweep_spec_hash=spec_hash,
-        created_at=_now(), updated_at=_now(), cases=[],
+        created_at=utc_now(), updated_at=utc_now(), cases=[],
     )
 
     completed_count = 0
@@ -348,13 +347,13 @@ def _record_sweep_run(
                 workflow_state_path=_relative_or_absolute(workflow_state_path, output_dir),
                 status=status,
                 outcome="fresh",
-                started_at=_now(),
-                updated_at=_now(),
+                started_at=utc_now(),
+                updated_at=utc_now(),
                 case_record_path=_relative_or_absolute(case_record_path, output_dir),
                 unchanged_patches=tuple(unchanged_patches),
             )
         )
-        manifest.updated_at = _now()
+        manifest.updated_at = utc_now()
         write_manifest(manifest_path, manifest)
 
     context = build_sweep_context(output_dir, persist_case_records=True)
@@ -675,10 +674,6 @@ def sweep_plan(
         record, cases_root, sweep_spec, output_dir=Path(output_dir).resolve(),
         cli_study=cli_study, inputs=inputs, driver_context=driver_context,
     )
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _workflow_state_path_from_run_document(run_document: dict[str, Any]) -> Path:

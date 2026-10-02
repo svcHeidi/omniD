@@ -32,6 +32,7 @@ from omnidriver.core.planning_types import (
     SimulationAuditItem,
     artifact_to_json as _artifact_to_json,
     diagnostic as _diagnostic,
+    has_error,
 )
 from .specs.paths import resolve_scratch_root
 from .tutorial_records import TutorialRecord, TutorialRecordError, lookup_record
@@ -148,10 +149,6 @@ def _artifact_diagnostics(
         ))
 
     return tuple(diagnostics)
-
-
-def _has_error(diagnostics: tuple[StrictDiagnostic, ...]) -> bool:
-    return any(diagnostic.level == "error" for diagnostic in diagnostics)
 
 
 _EXPLORABLE_CONFIGURATION_STATUSES = frozenset({
@@ -387,7 +384,7 @@ def _strict_plan_for_spec(
     raw_capability_manifest["plugin_identity"] = driver_context.identity.to_json()
     capability_manifest = _jsonable(raw_capability_manifest)
     all_diagnostics = plan_diagnostics + env_diagnostics
-    failed = _has_error(plan_diagnostics)
+    failed = has_error(plan_diagnostics)
     run_document.status = "failed" if failed else "planned"
     run_document.validation = {
         "status": "failed" if failed else "ok",
