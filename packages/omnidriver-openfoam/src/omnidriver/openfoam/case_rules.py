@@ -145,6 +145,22 @@ def forbidden_in(entries: Iterable[Any], context: Mapping[str, Any]) -> list[tup
     return [(entry, forbidden) for entry in entries if instance.is_set(entry.driver_path) and (forbidden := instance.forbidden_by(entry))]
 
 
+def match_dynamic_entry(key: str, entries: Iterable[Any]) -> tuple[Any, dict[str, str]] | None:
+    """Match ``key`` against a ``dynamic_path`` entry's template, returning the
+    entry and the concrete value each placeholder captured, or ``None``. The
+    first match wins."""
+    normalized = slot_key(key)
+    for entry in entries:
+        if not getattr(entry, "dynamic_path", False):
+            continue
+        entry_key = slot_key(entry.driver_path)
+        placeholders = PLACEHOLDER.findall(entry_key)
+        match = re.fullmatch(PLACEHOLDER.sub(r"([^.]+)", re.escape(entry_key)), normalized)
+        if match:
+            return entry, dict(zip(placeholders, match.groups()))
+    return None
+
+
 def _scan_facts(mapping: Any, entries: tuple[Any, ...], document: str):
     """What the supplied C++ adds to the catalogue's rules: the keys it
     requires that ``entries`` lack, the classes that build them, and the names

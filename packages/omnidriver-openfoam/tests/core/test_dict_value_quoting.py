@@ -7,12 +7,12 @@ from __future__ import annotations
 
 import pytest
 
-from omnidriver.openfoam.dict_builder import _openfoam_value_token
+from omnidriver.openfoam.case_builder import value_token
 
 
 @pytest.mark.parametrize("value", ["3D", "1D", "2D", "3Dfoo"])
 def test_a_word_starting_with_a_digit_is_quoted(value):
-    assert _openfoam_value_token(value) == f'"{value}"'
+    assert value_token(value) == f'"{value}"'
 
 
 @pytest.mark.parametrize(
@@ -27,4 +27,4 @@ def test_a_word_starting_with_a_digit_is_quoted(value):
     ],
 )
 def test_everything_else_is_left_untouched(value):
-    assert _openfoam_value_token(value) == value
+    assert value_token(value) == value

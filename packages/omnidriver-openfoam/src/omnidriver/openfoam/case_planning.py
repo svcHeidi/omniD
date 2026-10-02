@@ -262,34 +262,34 @@ def read_nested_entry(document_path: Path, key: str, *, scope: Sequence[str]) ->
     return match.group(1).strip()
 
 
-def plan_verbatim_content(
-    document: str, content: str, *, executable: bool = False,
-) -> Mapping[str, Any]:
-    """Resolve a whole document's exact bytes into a
-    `render_patch_case_files`/`render_synthesis_case_files` content target.
-
-    `executable=True` also folds `S_IEXEC|S_IXGRP|S_IXOTH` into the mode
-    each renderer computes (for a hand-runnable script such as `Allrun`);
-    defaults `False` so an ordinary dictionary template is unaffected. Not a
-    `ParameterAssignment`: this replaces a document's whole structure, not
-    one key's value. `content` must be `str`, not `bytes` --
-    `ResolvedMutation.__post_init__` freezes targets JSON-shaped and refuses
-    `bytes` with `TypeError`; a caller holding raw bytes must decode them
-    first.
-    """
-    target: dict[str, Any] = {
-        "document": document,
-        "format": _patch_format(),
-        "content": content,
-    }
-    if executable:
-        target["executable"] = True
-    return target
-
-
 def _patch_format() -> str:
     """`case_rendering.FORMAT`, imported lazily to avoid a module cycle
     (`case_rendering.py` imports `_rewrite_hex_block_lines` from here)."""
     from .case_rendering import FORMAT
 
     return FORMAT
+
+
+def cell_counts_from_dx(dx: float, slab_size: Sequence[float]) -> tuple[int, ...]:
+    """Integer cell count per axis for isotropic cell size ``dx`` over
+    ``slab_size``'s axis lengths (same unit for both, no conversion).
+
+    Raises ``ValueError`` if ``dx`` does not evenly divide an axis length,
+    rather than rounding.
+    """
+    if dx <= 0:
+        raise ValueError(f"dx must be positive; got {dx}")
+    counts: list[int] = []
+    for axis_length in slab_size:
+        raw_cells = float(axis_length) / dx
+        rounded_cells = round(raw_cells)
+        if abs(raw_cells - rounded_cells) > 1e-9:
+            raise ValueError(
+                f"dx={dx} does not evenly divide slab axis length {axis_length}"
+            )
+        if rounded_cells <= 0:
+            raise ValueError(
+                f"Computed non-positive cell count for axis length {axis_length} with dx={dx}"
+            )
+        counts.append(int(rounded_cells))
+    return tuple(counts)

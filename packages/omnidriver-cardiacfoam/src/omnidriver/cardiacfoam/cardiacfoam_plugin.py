@@ -136,24 +136,14 @@ class CardiacFoamPlugin:
         return artifact_value_reader(artifact_format)
 
     def get_supported_mutation_modes(self) -> "frozenset[str]":
-        return frozenset({"synthesize", "clone_and_patch"})
+        return frozenset({"clone_and_patch"})
 
     def resolve_case_mutation(self, request, *, driver_context):
-        """``dict_builder`` resolves a from-scratch case synthesis; the shared
-        OpenFOAM layer resolves an edit to a case that already exists."""
+        """The shared OpenFOAM layer resolves an edit to an existing case."""
         del driver_context
-        if request.mode == "synthesize":
-            from omnidriver.cardiacfoam.dict_builder import resolve_synthesis_mutation
+        from omnidriver.openfoam.case_rendering import patch_mutation
 
-            return resolve_synthesis_mutation(request)
-        if request.mode == "clone_and_patch":
-            from omnidriver.openfoam.case_rendering import patch_mutation
-
-            return patch_mutation(request, owner_id=self.plugin_id)
-        raise ValueError(
-            f"cardiacFoam resolves synthesize and clone_and_patch requests "
-            f"only, not {request.mode!r}"
-        )
+        return patch_mutation(request, owner_id=self.plugin_id)
 
     def get_generated_output_globs(self, case_root, resolved_case) -> tuple:
         """Fixed mesh-diagnostic outputs nothing in src/ or applications/ reads."""

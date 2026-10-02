@@ -262,10 +262,10 @@ monodomainSolverCoeffs
 
 def _context_from_electro_properties(path) -> dict:
     """Build the ``{slot_key: value}`` context from a real read."""
-    from omnidriver.cardiacfoam.dict_builder import (
+    from omnidriver.cardiacfoam.case_builder import (
         parse_electro_properties, resolve_context, select_applicable_entries,
     )
-    from omnidriver.openfoam.dict_builder import populate_values
+    from omnidriver.openfoam.case_builder import populate_values
 
     parsed = parse_electro_properties(path)
     context = resolve_context(parsed["selectors"], overrides=parsed.get("overrides") or None)
@@ -540,7 +540,7 @@ def test_tuple_predicate_matches_membership():
 
 def test_applicable_when_matches_a_scope_prefixed_predicate_key():
     """applicable_when keys carry the scope token; it is stripped before comparing against slot_key context."""
-    from omnidriver.openfoam.dict_builder import select_applicable_entries
+    from omnidriver.openfoam.case_rules import applicable_entries
 
     entry = _entry(
         "$ELECTRO_MODEL_COEFFS.gatedByPrefixedKey",
@@ -550,20 +550,16 @@ def test_applicable_when_matches_a_scope_prefixed_predicate_key():
             ),
         },
     )
-    inactive = select_applicable_entries(
-        {"verificationModel.type": "manufacturedEikonalVerifier"}, entries=[entry],
-    )
+    inactive = applicable_entries([entry], {"verificationModel.type": "manufacturedEikonalVerifier"})
     assert inactive == []
 
-    active = select_applicable_entries(
-        {"verificationModel.type": "manufacturedFDABidomainVerifier"}, entries=[entry],
-    )
+    active = applicable_entries([entry], {"verificationModel.type": "manufacturedFDABidomainVerifier"})
     assert active == [entry]
 
 
 def test_applicable_when_matches_a_dynamic_placeholder_sibling_key():
     """A ``<name>`` placeholder in a sibling predicate key matches any configured instance name."""
-    from omnidriver.openfoam.dict_builder import select_applicable_entries
+    from omnidriver.openfoam.case_rules import applicable_entries
 
     entry = _entry(
         "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>."
@@ -575,22 +571,16 @@ def test_applicable_when_matches_a_dynamic_placeholder_sibling_key():
             ),
         },
     )
-    inactive = select_applicable_entries(
-        {
+    inactive = applicable_entries([entry], {
             "conductionNetworkDomains.purkinjeNetwork.purkinjeGraphModelCoeffs"
             ".conductionSystemSolver": "eikonalSolver1D",
-        },
-        entries=[entry],
-    )
+        })
     assert inactive == []
 
-    active = select_applicable_entries(
-        {
+    active = applicable_entries([entry], {
             "conductionNetworkDomains.purkinjeNetwork.purkinjeGraphModelCoeffs"
             ".conductionSystemSolver": "restitutionEikonalSolver1D",
-        },
-        entries=[entry],
-    )
+        })
     assert active == [entry]
 
 
@@ -1069,7 +1059,7 @@ def _build_pvj_case(tmp_path, *, coupler="reactionDiffusionPvjCoupler",
                      conduction_solver="monodomain1DSolver",
                      set_rpvj=False, graph_present=None, graph_has_resistances=False,
                      graph_file_key=True):
-    from omnidriver.cardiacfoam.dict_builder import build_electro_properties
+    from omnidriver.cardiacfoam.case_builder import build_electro_properties
 
     prefix = (
         "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.purkinjeNetwork"

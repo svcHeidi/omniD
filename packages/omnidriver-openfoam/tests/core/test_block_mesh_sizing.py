@@ -1,16 +1,12 @@
-"""Tests the generic default blockMeshDict render and its dx arithmetic.
-The solver-keyed provisioning strategy is the active plugin's; see
-tests/plugins/cardiacfoam/test_solver_mesh_provisioning.py.
-"""
+"""The generic default blockMeshDict render and its dx arithmetic. Which solver
+wants it, or a fixed one-cell mesh, is the solver package's decision."""
 
 import re
 
 import pytest
 
-from omnidriver.openfoam.mesh_provisioning import (
-    cell_counts_from_dx,
-    default_block_mesh_dict_text,
-)
+from omnidriver.openfoam.case_builder import default_block_mesh_dict_text
+from omnidriver.openfoam.case_planning import cell_counts_from_dx
 
 
 def _cell_counts(text: str) -> tuple[int, int, int]:

@@ -9,6 +9,23 @@ from typing import Any, Callable, Mapping
 
 
 @dataclass(frozen=True, kw_only=True)
+class RankEvidence:
+    """What a solver's own output shows of how many ranks it ran on, so that
+    ``ranks`` serial copies cannot pass for one ``ranks``-rank run.
+
+    ``log_pattern`` is a regex with one group that captures a rank count; it is
+    searched in the step logs of the run, and one capture must equal the
+    requested ranks, none may exceed it. ``environment`` is set for the parallel
+    run when the solver prints that line only on request. ``paths`` is a glob
+    under the case root that must match exactly one entry per rank.
+    """
+
+    log_pattern: str
+    environment: Mapping[str, str] = field(default_factory=dict)
+    paths: str | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
 class QuantityTarget:
     """A quantity a record's run yields, and what C13 and C14 compare.
 
@@ -23,7 +40,8 @@ class QuantityTarget:
     solver's own physics: ``parallel_tolerance`` bounds, in the reader's unit,
     how far a parallel run may sit from the serial one; ``tolerance`` is the
     declared bound of C14's comparison, in ``tolerance_unit``.
-    ``parallel_study`` adds what a parallel run needs beyond ``parallel: ranks``.
+    ``parallel_study`` adds what a parallel run needs beyond ``parallel: ranks``,
+    and ``rank_evidence`` is how C13 sees that the run used them.
     """
 
     artifact_format: str
@@ -35,6 +53,7 @@ class QuantityTarget:
     tolerance: float
     tolerance_unit: str
     parallel_tolerance: float
+    rank_evidence: RankEvidence
     parallel_study: Mapping[str, Any] = field(default_factory=dict)
     ranks: int = 2
     both_not_reached: str = "agree"

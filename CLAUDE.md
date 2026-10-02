@@ -91,7 +91,9 @@ reads git-ignored run output in a case as authored. **The two MPIs must never
 mix:** each solver's shell puts only its own MPI first on `PATH` (OpenFOAM's from
 its bashrc, openCARP's from `OPENCARP_MPI_BIN`), and preflight refuses the other
 one by name (`openfoam_mpi_launcher_mismatch`, `opencarp_mpi_launcher_mismatch`).
-C13 runs a record's declared quantity serial and at N = 2 and compares them, and
+C13 runs a record's declared quantity serial and at N = 2, compares them, and
+reads the solver's own output for the rank count (`RankEvidence`: a log pattern,
+and for OpenFOAM the `processor*` directories), so N serial copies cannot pass;
 C14 compares it across a two-case sweep; a record that declares no quantity passes
 both and says so. Inside a Slurm allocation, `SLURM_NTASKS` must equal 2.
 

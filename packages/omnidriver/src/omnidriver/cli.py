@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
@@ -668,7 +669,12 @@ def _parallel_value(text: str) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Simulation experiment automation driver")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Simulation experiment automation driver. `omnidriver build --help` builds a case "
+            "from a solver's catalogue when there is no native case."
+        ),
+    )
     parser.add_argument(
         "action",
         choices=[
@@ -1265,6 +1271,11 @@ def _select_stack(parser: argparse.ArgumentParser, args):
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["build"]:
+        from .core.case_build import main as build_main
+
+        return build_main(argv[1:])
     parser = build_parser()
     args = parser.parse_args(argv)
     _validate_args(parser, args)

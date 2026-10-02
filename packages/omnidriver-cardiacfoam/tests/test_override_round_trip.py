@@ -9,7 +9,7 @@ import pytest
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
-from omnidriver.cardiacfoam.dict_builder import (
+from omnidriver.cardiacfoam.case_builder import (
     build_electro_properties,
     select_applicable_entries,
 )

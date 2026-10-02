@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from omnidriver.cardiacfoam.dict_builder import build_electro_properties
+from omnidriver.cardiacfoam.case_builder import build_electro_properties
 
 _SELECTORS = {
     "myocardiumSolver": "singleCellSolver",

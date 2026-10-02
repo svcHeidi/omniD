@@ -17,9 +17,9 @@
 | Read/write strict workflow state | `workflow_state_from_json(...)`, `WorkflowRunState.to_json()` | `omnidriver.core.runtime.workflow_state` |
 | Validate RunDocument v3 (any other version is refused) | `RunDocument.from_json(...)` | `omnidriver.core.runtime.run_model` |
 | Check a flat `{slot_key: value}` context against the catalogue's rules, its menus and, given the plugin's `cxx_mapping`, the keys its C++ requires | `rule_diagnostics(entries, context, document=, mapping=)` | `omnidriver.openfoam.case_rules` |
-| Synthesize a fresh `electroProperties` / `physicsProperties` | `build_electro_properties(...)`, `build_physics_properties(...)` | `omnidriver.cardiacfoam.dict_builder` |
-| Parse an existing `electroProperties` back to selectors + overrides | `parse_electro_properties(path)` | `omnidriver.cardiacfoam.dict_builder` |
-| Write a from-scratch case's dicts as one committed plan (nothing is launched) | `build_and_launch(...)` | `omnidriver.cardiacfoam.dict_builder` |
+| Synthesize a fresh `electroProperties` / `physicsProperties` | `build_electro_properties(...)`, `build_physics_properties(...)` | `omnidriver.cardiacfoam.case_builder` |
+| Parse an existing `electroProperties` back to selectors + overrides | `parse_electro_properties(path)` | `omnidriver.cardiacfoam.case_builder` |
+| Build a runnable case from the catalogue when there is no native case | `omnidriver build --plugin cardiacfoam --out <dir>` (see "Build a case from the catalogue") | `omnidriver.cardiacfoam.case_builder` |
 | Locate predicted outputs | `strict_plan(...)`'s `expected_artifacts` field (also in `omnidriver plan --strict` JSON) | `omnidriver.core.strict_planning` |
 | Verify outputs vs predictions | `artifact_reconciliation` in `run --strict`/`step --strict` JSON output | `omnidriver.core.runtime.reconciler` |
 | Plan/run a study over a record | `omnidriver sweep-plan/sweep-run --spec sweep.json --output-dir <dir>` | `omnidriver.core.runtime.sweep_runner` |
@@ -192,8 +192,7 @@ print(payload["workflow_state"]["current_step_id"])
 ### Running a case folder that is not a record
 
 `--case <dir>` stands in for `--entry` when you hold a case folder that is no
-record: one you wrote, or one `build_and_launch(..., include_allrun=True)`
-produced.
+record: one you wrote, or one `omnidriver build` produced.
 
 ```bash
 omnidriver run --strict --plugin cardiacfoam --case <dir> --scratch-dir <scratch>
@@ -459,10 +458,11 @@ If an agent needs deeper reasoning than the flat summary, it reads one case's
 
 ### Post-processing utilities
 
-`omnidriver.postprocessing` is the plotting and table utilities the native
-cardiacFOAM post-processing scripts import directly (`PlotSpec`, `TraceSpec`,
-`build_line_traces`, `load_csv_folder`, `apply_plotly_layout`,
-`write_plotly_html`, `TableWriter`, `DEFAULT_PALETTE`) -- core's own
+`omnidriver.postprocessing` is the generic plotting and table helpers the
+native post-processing scripts import directly (`style`: `apply_plotly_layout`,
+`write_plotly_html` and the matplotlib helpers; `plotting_common`;
+`table_writer`: `TableMetadata`, `TableWriter`). Nothing in it knows a solver:
+a reader of a solver's output belongs in that solver's package. Core's own
 plan/run/sweep-run path never imports it, and nothing discovers or invokes a
 script automatically; a caller runs its own post-processing script by hand
 and may use these utilities from it.
@@ -1122,7 +1122,7 @@ Declaring any `bathPotentialDomain.*` override auto-enables the bath block — t
 ### Read back an existing dict
 
 ```python
-from omnidriver.cardiacfoam.dict_builder import parse_electro_properties
+from omnidriver.cardiacfoam.case_builder import parse_electro_properties
 
 parsed = parse_electro_properties("/path/to/case/constant/electroProperties")
 # {"selectors": {"myocardiumSolver": "monodomainSolver", "ionicModel": "TNNP", ...},
@@ -1132,7 +1132,7 @@ parsed = parse_electro_properties("/path/to/case/constant/electroProperties")
 Pass the result directly to `build_electro_properties` to round-trip:
 
 ```python
-from omnidriver.cardiacfoam.dict_builder import build_electro_properties, parse_electro_properties
+from omnidriver.cardiacfoam.case_builder import build_electro_properties, parse_electro_properties
 
 parsed = parse_electro_properties(existing_path)
 text = build_electro_properties(parsed["selectors"], overrides=parsed["overrides"] or None)
@@ -1143,39 +1143,48 @@ Only non-default values appear in `overrides`. Entries matching the catalog's
 catalog are silently ignored by the parser, but strict planning and the strict
 dict-key scanner are the contract gates for new generated plans.
 
-### Write a case, then run it separately
+### Build a case from the catalogue
 
-```python
-build_and_launch(
-    electro_selectors={
-        "myocardiumSolver": "monodomainSolver",
-        "ionicModel": "TNNP",
-        "tissue": "epicardialCells",
-    },
-    physics_selectors={"type": "electroModel"},
-    case_dir="/path/to/case",
-    end_time=0.001,   # 1 ms — a quick check before widening for production
-    delta_t=0.0001,
-)
+A native case is the default: a solver repository's tutorial already holds a
+case that runs, and a record points at it. `omnidriver build` is for when there
+is no native case to run. It writes a case from the dict-entry catalogue into
+`--out`, and nothing in the record path uses it.
+
+```bash
+omnidriver build --plugin cardiacfoam --out <dir> \
+  --select myocardiumSolver=monodomainSolver --select ionicModel=TNNP \
+  --select tissue=epicardialCells --option dx=0.0004 --option endTime=0.2 \
+  --set '$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusLocationMin=(0 0 0)'
+omnidriver run --strict --plugin cardiacfoam --case <dir> --scratch-dir <scratch>
 ```
 
-`build_and_launch` only writes the case's dicts (plus `system/blockMeshDict`,
-and `Allrun` when `include_allrun=True`) through one committed case-write
-plan; it never launches anything itself. If the call returns without
-raising, the case structure, boundary conditions, and property files are
-consistent enough to run. Run the written case, with `include_allrun=True`
-so it holds an entrypoint, as `omnidriver run --strict --case <case_dir>` (see
-"Running a case folder that is not a record").
+- `--select NAME=VALUE`: the discriminators the catalogue branches on
+  (`myocardiumSolver`, `ionicModel`, `tissue`, `conductivitySource`), and
+  `type` for `physicsProperties` (default `electroModel`).
+- `--set PATH=VALUE`: a catalogue key by its driver path. A key no applicable
+  catalogue entry places is refused by name; `omnidriver catalog
+  --uncatalogued` lists what the C++ reads and the catalogue lacks.
+- `--option`: `dx` (metres, isotropic cell size), `deltaT`, `endTime`.
+  `--overwrite` replaces the dictionaries of an existing case.
 
-A case with no mesh gets a generic `system/blockMeshDict`, and the generated
-`Allrun` runs `blockMesh` before `cardiacFoam`. `singleCellSolver` gets one
-hex cell. `monodomainSolver`/`bidomainSolver`/`eikonalSolver` get a small cubic
-slab sized by `dx` (metres, isotropic cell size; not tuned to any tutorial).
-`dx` must divide the slab evenly (`cell_counts_from_dx` in
-`omnidriver.openfoam.mesh_provisioning` refuses silent rounding) and raises
-`ValueError` for `singleCellSolver`. A mesh already under `constant/polyMesh/`
-or `system/blockMeshDict` is never clobbered, whatever `overwrite` says, and
-`dx` never touches an anatomical mesh imported with `vtkUnstructuredToFoam`.
+The command commits one journaled write: `constant/electroProperties` and
+`physicsProperties`, `system/fvSchemes`, `fvSolution`, `controlDict`, a
+`system/blockMeshDict` and an executable `Allrun` (`blockMesh`, then
+`cardiacFoam`). It then holds the written case to the pre-run rules a record's
+case passes and reports them as `diagnostics`; `status` is `failed`, with exit
+code 1, when one is an error.
+
+The mesh is a generic slab sized by `dx`, which must divide it evenly
+(`cell_counts_from_dx` refuses rounding); `singleCellSolver` gets one cell and
+refuses `dx`. An existing `system/blockMeshDict` is kept. A short `endTime`
+still writes its last time step. The case holds only what the catalogue
+places: keys the built solver requires that the catalogue lacks are yours to
+`--set` or add, and a binary built from a different source than the scanned
+tree may require more.
+
+The module is `omnidriver.cardiacfoam.case_builder`, and its OpenFOAM
+primitives are `omnidriver.openfoam.case_builder`. A solver package offers a
+builder by naming one under the `omnidriver.builders` entry-point group.
 
 ### Parsing Complex OpenFOAM Dictionaries
 

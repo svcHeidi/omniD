@@ -18,7 +18,7 @@ import shutil
 from pathlib import Path
 from typing import Mapping
 
-from omnidriver.conformance import ConformanceTarget, QuantityTarget
+from omnidriver.conformance import ConformanceTarget, QuantityTarget, RankEvidence
 from omnidriver.core.capability_manifest import build_capability_manifest
 from omnidriver.core.case_write import RenderedFile, ResolvedMutation, _digest_bytes
 from omnidriver.core.conformance_study import ConformanceStudy
@@ -804,14 +804,20 @@ class BadDeclarationPlugin(UnreadableFormatPlugin):
 
 
 class ParallelQuantityToyPlugin(QuantityToyPlugin):
-    """Its parallel form adds a split step and leaves the solve alone."""
+    """Its parallel form adds a split step, which prints the rank count, and leaves the solve alone."""
+
+    SOLVER_COMMANDS = frozenset({"cp", "sh"})
 
     def get_solve_step_commands(self):
         return frozenset({"cp"})
 
+    def reported_ranks(self, count):
+        return count
+
     def get_parallel_steps(self, step, *, request, read_value, allocation):
         count = mpi.agree(mpi.requested(request), allocation)
-        split = {"id": f"{step['id']}.split", "command": "cp", "args": ["constant/mesh.json", f"split.{count}"],
+        split = {"id": f"{step['id']}.split", "command": "sh",
+                 "args": ["-c", 'echo "nRanks=$0"; cp constant/mesh.json "split.$1"', str(self.reported_ranks(count)), str(count)],
                  "depends_on": list(step["depends_on"])}
         return (split, {**step, "depends_on": [split["id"]]})
 
@@ -822,6 +828,13 @@ class ReorderingParallelPlugin(ParallelQuantityToyPlugin):
     def get_parallel_steps(self, step, *, request, read_value, allocation):
         split, solve = super().get_parallel_steps(step, request=request, read_value=read_value, allocation=allocation)
         return split, {**solve, "args": ["seed/other.txt", "values.txt"]}
+
+
+class SingleRankPlugin(ParallelQuantityToyPlugin):
+    """A parallel form that plans the parallel steps but whose solver reports one rank."""
+
+    def reported_ranks(self, count):
+        return 1
 
 
 class SerialParallelPlugin(ParallelQuantityToyPlugin):
@@ -898,6 +911,7 @@ def quantity_toy_conformance_target(tmp_path: Path, *, plugin: str | None = None
             pairs={"A": "A", "B": "B"}, at={"A": (0.0, 0.0, 0.007), "B": (0.02, 0.003, 0.0)},
             at_unit="m", max_sampling_offset=0.0, study={"number_cells": 2}, sweep_values=(2, 3),
             tolerance=5.0, tolerance_unit="ms", parallel_tolerance=1e-9,
+            rank_evidence=RankEvidence(log_pattern=r"nRanks=(\d+)"),
         ),
     )
 
@@ -947,3 +961,4 @@ NO_WHERE_READER_PLUGIN = _selector("NoWhereReaderPlugin")
 PARALLEL_QUANTITY_PLUGIN = _selector("ParallelQuantityToyPlugin")
 REORDERING_PARALLEL_PLUGIN = _selector("ReorderingParallelPlugin")
 SERIAL_PARALLEL_PLUGIN = _selector("SerialParallelPlugin")
+SINGLE_RANK_PLUGIN = _selector("SingleRankPlugin")

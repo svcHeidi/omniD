@@ -117,7 +117,7 @@ def test_the_embedded_fixture_matches_its_cited_digest():
 
 
 def test_real_content_is_not_reproducible_by_the_generic_synthesis_template():
-    from omnidriver.openfoam.mesh_provisioning import default_block_mesh_dict_text
+    from omnidriver.openfoam.case_builder import default_block_mesh_dict_text
 
     generic = default_block_mesh_dict_text()
     assert generic.count("hex (") == 1  # the real fixture has three

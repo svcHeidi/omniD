@@ -230,12 +230,14 @@ def _missing_required(reconciliation: Mapping[str, Any]) -> list[str]:
     ]
 
 
-def _execute(target: ConformanceTarget, ctx, report) -> tuple[subprocess.CompletedProcess, dict[str, Any] | None]:
+def _execute(
+    target: ConformanceTarget, ctx, report, env: Mapping[str, str] = {},
+) -> tuple[subprocess.CompletedProcess, dict[str, Any] | None]:
     # Never hand-build a run command: the canonical builder carries --plugin
     # from ctx.plugin_selector, set by load_plugin_context.
     proc = subprocess.run(
         omnidriver_run_command(ctx, "--run-document", str(_run_document_path(report))),
-        capture_output=True, text=True, env=_child_env(target), timeout=target.timeout_s,
+        capture_output=True, text=True, env={**_child_env(target), **env}, timeout=target.timeout_s,
     )
     try:
         payload = json.loads(proc.stdout)
@@ -584,24 +586,45 @@ def _artifact_and_quantities(target: ConformanceTarget, ctx, report) -> tuple[di
     return document, {q.name: q for q in quantities}
 
 
-def _run_for_quantities(target: ConformanceTarget, ctx, study: Mapping[str, Any], label: str):
-    """Plan and run the target under ``study``; the run document and the declared quantities, or a failed verdict's detail."""
+def _run_for_quantities(
+    target: ConformanceTarget, ctx, study: Mapping[str, Any], label: str, env: Mapping[str, str] = {},
+):
+    """Plan and run the target under ``study``; the run document, the declared quantities and the
+    run's case root and step logs, or a failed verdict's detail."""
     report = _plan(target, ctx, study)
     if report.status != "ok":
         return f"the {label} plan failed: {_plan_errors(report)}"
     try:
-        proc, payload = _execute(target, ctx, report)
+        proc, payload = _execute(target, ctx, report, env)
     except subprocess.TimeoutExpired:
         return f"the {label} run timed out after {target.timeout_s}s (ConformanceTarget.timeout_s)"
     if payload is None or payload.get("status") != "ok":
         return f"the {label} run did not complete (rc={proc.returncode}); stderr tail: {proc.stderr[-800:]}"
-    return _artifact_and_quantities(target, ctx, report)
+    document, quantities = _artifact_and_quantities(target, ctx, report)
+    logs = [Path(step[key]) for step in payload["workflow_state"]["steps"] for key in ("stdout_log", "stderr_log") if step.get(key)]
+    return document, quantities, Path(report.launch["case_root"]), logs
+
+
+def _rank_problems(evidence, ranks: int, case_root: Path, logs: list[Path]) -> list[str]:
+    """Why the parallel run does not show ``ranks`` ranks in the solver's own output, if it does not."""
+    problems = []
+    counts = [int(m) for log in logs if log.is_file() for m in re.findall(evidence.log_pattern, log.read_text(errors="replace"))]
+    if ranks not in counts:
+        problems.append(f"no step log matches {evidence.log_pattern!r} with {ranks} ranks (it names {sorted(set(counts)) or 'none'})")
+    elif max(counts) > ranks:
+        problems.append(f"a step log names {max(counts)} ranks, beyond the {ranks} requested")
+    if evidence.paths is not None:
+        found = sorted(path.name for path in case_root.glob(evidence.paths))
+        if len(found) != ranks:
+            problems.append(f"{evidence.paths!r} matches {len(found)} entries under the case root, not {ranks}: {found}")
+    return problems
 
 
 def check_parallel_agrees(target: ConformanceTarget) -> CheckVerdict:
     """C13: a serial run and a parallel run of the record give the same value
     of every declared quantity, within the target's ``parallel_tolerance``,
-    and the parallel run says it asked for those ranks.
+    the parallel run says it asked for those ranks, and the solver's own
+    output shows it ran on them (``QuantityTarget.rank_evidence``).
 
     A target that declares no quantity passes and says so."""
     ctx = _context(target)
@@ -613,11 +636,11 @@ def check_parallel_agrees(target: ConformanceTarget) -> CheckVerdict:
     if isinstance(serial, str):
         return _verdict("C13", False, serial)
     parallel_study = {**declared.study, **declared.parallel_study, "parallel": declared.ranks}
-    parallel = _run_for_quantities(target, ctx, parallel_study, "parallel")
+    parallel = _run_for_quantities(target, ctx, parallel_study, "parallel", declared.rank_evidence.environment)
     if isinstance(parallel, str):
         return _verdict("C13", False, parallel)
-    (serial_doc, serial_values), (parallel_doc, parallel_values) = serial, parallel
-    problems = []
+    (serial_doc, serial_values, _, _), (parallel_doc, parallel_values, case_root, logs) = serial, parallel
+    problems = _rank_problems(declared.rank_evidence, declared.ranks, case_root, logs)
     if "parallel" in serial_doc["resolvedEntry"]:
         problems.append("the serial run's document records a parallel request")
     requested = (parallel_doc["resolvedEntry"].get("parallel") or {}).get("requested")
@@ -635,7 +658,7 @@ def check_parallel_agrees(target: ConformanceTarget) -> CheckVerdict:
         problems.append("no declared quantity is evaluated in the serial run, so nothing was compared")
     return _verdict(
         "C13", not problems,
-        "; ".join(problems) or f"{len(serial_values)} quantit(ies) agree between serial and {declared.ranks} ranks",
+        "; ".join(problems) or f"{len(serial_values)} quantit(ies) agree between serial and {declared.ranks} ranks, which the solver's own output shows",
     )
 
 
