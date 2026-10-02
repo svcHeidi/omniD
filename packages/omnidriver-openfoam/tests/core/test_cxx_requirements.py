@@ -355,3 +355,21 @@ def test_a_required_read_of_the_document_itself_in_a_utilitys_main_is_enforced_w
     assert (found.level, found.code, found.field) == ("error", "cxx_required_key", "fiberField")
     assert "the utility reads this document" in found.message
     assert rule_diagnostics((), {"fiberField": "fibers"}, document="system/setCardiacConductivityDict", mapping=object()) == []
+
+
+def test_a_model_the_cxx_registers_is_accepted_and_one_it_no_longer_registers_is_refused(monkeypatch):
+    entry = _entry("$S.ionicModel", value_kind="enum", enum_values=("TNNP", "Retired"))
+    registered = {"$S.ionicModel": {"TNNP", "BrandNewModel"}}
+    monkeypatch.setattr(case_rules, "_scan_facts", lambda mapping, entries, document: ({}, registered, {}, set()))
+
+    def judge(value):
+        return [i.message for i in rule_diagnostics((entry,), {"ionicModel": value}, document="doc", mapping=object())]
+
+    assert judge("BrandNewModel") == []
+    (refused,) = judge("Retired")
+    assert "'Retired'" in refused and "the supplied C++ registers" in refused and "BrandNewModel" in refused
+
+    monkeypatch.setattr(case_rules, "_scan_facts", lambda mapping, entries, document: ({}, {}, {}, set()))
+    assert judge("Retired") == []
+    (listed,) = judge("BrandNewModel")
+    assert "the catalogue lists" in listed

@@ -596,3 +596,24 @@ class ExplainingFailurePlugin(E2ERecordPlugin):
         if "cannot find widget" not in log_text:
             return ()
         return (diagnostic("error", "widget_missing", f"widget is missing from {case_root.name}", field="widget"),)
+
+
+ACCEPTING_PLUGIN = "plugins.conformance_toy:AcceptingAnyKeyPlugin"
+BROKEN_RULE_PLUGIN = "plugins.conformance_toy:AlwaysBrokenCasePlugin"
+
+
+class AcceptingAnyKeyPlugin(E2ERecordPlugin):
+    """Its key validator accepts a key nobody declared, so a typo in a study reaches the case."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._record_key_validator = lambda document, key_path, value: ("integer", False)
+
+
+class AlwaysBrokenCasePlugin(E2ERecordPlugin):
+    """Its run-semantics rule finds an error in every case, so no plan of it can run."""
+
+    def validate_run_semantics(self, case_root):
+        from omnidriver.core.planning_types import diagnostic
+
+        return (diagnostic("error", "always_broken", "this toy's rule refuses every case", field="cells"),)

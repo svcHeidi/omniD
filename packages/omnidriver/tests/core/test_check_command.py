@@ -81,3 +81,54 @@ def test_a_probe_of_the_record_reports_beside_the_checks_and_a_drifted_one_fails
         "unreadable": (False, "OSError: the utility is not built"),
     }
     assert all(item["passed"] for item in record["checks"]) and record["status"] == "failed"
+
+
+def _native_with_script(tmp_path, body):
+    native = tmp_path / "native" / "case"
+    (native / "regression").mkdir(parents=True)
+    (native / "regression" / "regressionTest.sh").write_text(body)
+    return native, native / "regression" / "regressionTest.sh"
+
+
+def test_the_native_regression_runs_in_a_copy_and_leaves_the_native_case_alone(tmp_path):
+    from omnidriver.conformance.report import _regression
+
+    native, script = _native_with_script(tmp_path, "echo ran > produced.txt; echo compared\n")
+    result = _regression(script, native, tmp_path / "work", 30.0)
+    assert (result["status"], result["exit_code"], result["script"]) == ("passed", 0, "regression/regressionTest.sh")
+    assert "compared" in result["output_tail"]
+    assert (tmp_path / "work" / "case" / "produced.txt").is_file()
+    assert not (native / "produced.txt").exists()
+
+
+@pytest.mark.parametrize(("body", "status"), [("exit 77\n", "skipped"), ("echo drifted >&2; exit 3\n", "failed")])
+def test_a_regression_that_declines_or_fails_is_reported_as_such(tmp_path, body, status):
+    from omnidriver.conformance.report import _regression
+
+    native, script = _native_with_script(tmp_path, body)
+    result = _regression(script, native, tmp_path / "work", 30.0)
+    assert result["status"] == status
+    assert "drifted" in result["output_tail"] or status == "skipped"
+
+
+def test_a_regression_that_outlives_its_timeout_is_a_failure_naming_it(tmp_path):
+    from omnidriver.conformance.report import _regression
+
+    native, script = _native_with_script(tmp_path, "sleep 30\n")
+    result = _regression(script, native, tmp_path / "work", 0.5)
+    assert result["status"] == "failed" and "timed out" in result["detail"]
+
+
+def test_the_regression_script_is_where_the_stacks_case_file_rule_puts_it(tmp_path):
+    from types import SimpleNamespace
+
+    from omnidriver.conformance.report import regression_script
+
+    native, script = _native_with_script(tmp_path, "true\n")
+    rules = SimpleNamespace(all_rules=lambda: [
+        SimpleNamespace(role="case.documentation", path="README.md"),
+        SimpleNamespace(role="case.regression_test", path="regression/regressionTest.sh"),
+    ])
+    context = SimpleNamespace(capabilities=SimpleNamespace(case_files=rules))
+    assert regression_script(context, native) == script
+    assert regression_script(context, tmp_path) is None

@@ -134,7 +134,7 @@ A skip here hides exactly what the guard exists to find.
 | a resolved record case passes the catalogue's relations, the enum menus (the names the C++'s selection table registers when its source is supplied) and the cross-field rules before it runs, `omnidriver.openfoam.case_rules` being the one evaluator of them; a key the supplied C++ reads with no default in a class the case builds is refused when missing, and noted when the scan cannot tell whether the case builds the class; `step --apply` runs the same rules after its edit | `test_case_rules.py`, `test_cxx_requirements.py` (openfoam), `test_case_rules.py` (cardiacCore), the commit and apply tests in core's `test_tutorial_records.py` |
 | a solver's shell is declared in its manifest and rendered from supplied values only; a launcher from the other solver's MPI is refused | `test_environment_and_machine.py`; `test_an_mpirun_from_another_mpi_family_is_refused` (openfoam) |
 | core names no OpenFOAM layout beyond its recorded, shrinking debt | `scripts/check-core-shape.py` (baseline `scripts/core-shape-baseline.txt`; new tokens never added) |
-| every conformance check C1-C14 passes for the toy target, and each is given a deliberately broken toy plugin it must catch; a real solver's records are exercised by `omnidriver check`, which reports and never gates | `test_conformance_toy.py` (core); `test_check_command.py` (core) |
+| every conformance check C1-C14 passes for the toy target, and C3 to C14 are each given a deliberately broken toy plugin it must catch (C1 and C2 fail only for a record the stack does not serve); a real solver's records are exercised by `omnidriver check`, which reports and never gates | `test_conformance_toy.py` (core); `test_check_command.py` (core) |
 
 ## One reality
 

@@ -12,6 +12,7 @@ import pytest
 from omnidriver.conformance import CHECKS, run_check
 from omnidriver.core.runtime.sweep_runner import _child_reconciliation
 from plugins.conformance_toy import (
+    ACCEPTING_PLUGIN, BROKEN_RULE_PLUGIN,
     DEFAULT_ARGUMENT_MARKER, DEFAULT_ARGUMENT_PLUGIN, DEFAULT_ROUTE_MARKER, DEFAULT_ROUTE_PLUGIN, DOCUMENTED_PLUGIN, GHOST_CONSUMES_PLUGIN, INDEXED_KEY_PLUGIN, KINDLESS_KEY_PLUGIN, NAMED_KEY_PLUGIN,
     NATIVE_WRITING_PLUGIN, NO_CONSUMES_PLUGIN, NO_PRODUCES_PLUGIN, OPEN_DOCUMENT_PLUGIN, OTHER_OPEN_DOCUMENT_PLUGIN,
     OVER_GENERATED_CONVENTIONS_PLUGIN, REPLACING_PLUGIN, SILENT_PREFLIGHT_PLUGIN, SILENT_SURFACE_PLUGIN,
@@ -524,3 +525,23 @@ def test_c14_bites_a_comparison_that_reads_nothing(tmp_path):
     verdict = run_check("C14", target)
     assert not verdict.passed
     assert "no pair is evaluated on both sides" in verdict.detail
+
+
+def test_c1_and_c2_name_a_record_the_stack_does_not_serve(tmp_path):
+    target = dataclasses.replace(toy_conformance_target(tmp_path), record="notARecord")
+    for check_id in ("C1", "C2"):
+        verdict = run_check(check_id, target)
+        assert not verdict.passed and "notARecord" in verdict.detail, (check_id, verdict.detail)
+
+
+def test_c3_bites_a_validator_that_accepts_a_key_nobody_declared(tmp_path):
+    target = dataclasses.replace(
+        toy_conformance_target(tmp_path, plugin=ACCEPTING_PLUGIN), unknown_name="constant/mesh.json:nope",
+    )
+    verdict = run_check("C3", target)
+    assert not verdict.passed and "was accepted" in verdict.detail
+
+
+def test_c5_bites_a_stack_whose_rule_refuses_the_native_case(tmp_path):
+    verdict = run_check("C5", toy_conformance_target(tmp_path, plugin=BROKEN_RULE_PLUGIN))
+    assert not verdict.passed and "this toy's rule refuses every case" in verdict.detail
