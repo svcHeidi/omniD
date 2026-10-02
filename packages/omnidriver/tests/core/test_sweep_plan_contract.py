@@ -7,10 +7,10 @@ from pathlib import Path
 
 from omnidriver.core.runtime.sweep_runner import sweep_plan
 from omnidriver.core.plugin_interface import driver_context
-from plugins.conformance_toy import write_toy_native_case
-from plugins.e2e_record_plugin import E2ERecordPlugin
+from plugins.toy import write_toy_native_case
+from plugins.toy import ToyStack
 
-_CTX = driver_context(E2ERecordPlugin(), source="test:sweep-plan")
+_CTX = driver_context(ToyStack(), source="test:sweep-plan")
 
 
 def _spec(cases_root: Path) -> dict:

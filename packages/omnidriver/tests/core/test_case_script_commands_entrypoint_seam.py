@@ -15,10 +15,10 @@ from omnidriver.core.runtime.workflow import (
     validate_workflow_commands,
 )
 from omnidriver.core.runtime.workflow_runner import _argv_for_execution, _resolve_command
-from plugins.minimal_plugin import MinimalTestPlugin
+from plugins.toy import ToyProvider
 
 
-class _ForeignEntrypointPlugin(MinimalTestPlugin):
+class _ForeignEntrypointPlugin(ToyProvider):
     """Declares its entrypoint as "run.sh" -- proves the seam is a genuine escape from the fixed name, not just a coincidence of every shipped plugin happening to use "Allrun" today."""
 
     def get_profile(self) -> PluginProfile:

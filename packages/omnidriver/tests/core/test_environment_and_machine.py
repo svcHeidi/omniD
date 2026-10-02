@@ -14,7 +14,7 @@ from omnidriver.core.environment_connection import environment_report, render_pr
 from omnidriver.core.plugin_profile import EnvironmentConnection, SuppliedVariable, load_plugin_profile
 from omnidriver.core.runtime.host_facts import host_facts
 
-_TOY = "plugins.e2e_record_plugin:E2ERecordPlugin"
+_TOY = "plugins.toy:ToyStack"
 
 
 def _connection() -> EnvironmentConnection:

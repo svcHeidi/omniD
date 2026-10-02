@@ -7,23 +7,23 @@ import pytest
 
 from omnidriver.core import plugin_discovery
 from omnidriver.core.plugin_interface import load_plugin_context
-from plugins.minimal_plugin import MinimalTestPlugin
+from plugins.toy import ToyProvider
 
 
 class _FakeEntryPoint:
     name = "fakeplugin"
-    value = "plugins.minimal_plugin:MinimalTestPlugin"
+    value = "plugins.toy:ToyProvider"
     dist = type("D", (), {"name": "fake-dist", "version": "9.9"})()
 
     def load(self):
-        from plugins.minimal_plugin import MinimalTestPlugin
+        from plugins.toy import ToyProvider
 
-        return MinimalTestPlugin
+        return ToyProvider
 
 
 def test_a_colon_still_means_a_trusted_local_import() -> None:
     context = load_plugin_context(
-        "plugins.minimal_plugin:MinimalTestPlugin"
+        "plugins.toy:ToyProvider"
     )
     # StackIdentity has no singular id/source -- one per provider, on
     # StackIdentity.providers (a tuple of ProviderIdentity). A single-plugin
@@ -56,7 +56,7 @@ def test_a_discovered_id_wins_only_when_there_is_no_colon(monkeypatch) -> None:
     )
     # A colon always means the trusted import form, never discovery.
     context = load_plugin_context(
-        "plugins.minimal_plugin:MinimalTestPlugin"
+        "plugins.toy:ToyProvider"
     )
     assert context.identity.providers[0].source.startswith("trusted-import:")
 
@@ -66,7 +66,7 @@ def test_a_loaded_context_records_the_selector_that_rebuilds_it(monkeypatch) -> 
     monkeypatch.setattr(
         plugin_discovery, "_entry_points", lambda: (_FakeEntryPoint(),)
     )
-    target = "plugins.minimal_plugin:MinimalTestPlugin"
+    target = "plugins.toy:ToyProvider"
     assert load_plugin_context(target).plugin_selector == target
     assert load_plugin_context("fakeplugin").plugin_selector == "fakeplugin"
 
@@ -75,13 +75,13 @@ def test_a_hand_built_context_claims_no_selector() -> None:
     """No selector string produced it, so it must not pretend one would."""
     from omnidriver.core.plugin_interface import driver_context
 
-    context = driver_context(MinimalTestPlugin(), source="test:hand-built")
+    context = driver_context(ToyProvider(), source="test:hand-built")
     assert context.plugin_selector is None
 
 
 def test_the_selector_is_not_part_of_context_equality() -> None:
     """It says how to rebuild a context, not what the context is."""
-    context = load_plugin_context("plugins.minimal_plugin:MinimalTestPlugin")
+    context = load_plugin_context("plugins.toy:ToyProvider")
     rebuilt = dataclasses.replace(context, plugin_selector=None)
     assert rebuilt == context
 
@@ -124,14 +124,14 @@ def test_loading_an_ambiguous_name_fails_loudly(monkeypatch) -> None:
 
 # -- Solver-tier root detection -----------------------------------------------
 #
-# These fakes are `MinimalTestPlugin` with a chosen `plugin_id` and
+# These fakes are `ToyProvider` with a chosen `plugin_id` and
 # `requires:`, so the graph these tests exercise (one shared "environment"
 # id, one or two "solver" ids that only require it) does not depend on any
 # real adapter package being installed.
 
 
-class _NamedTestPlugin(MinimalTestPlugin):
-    """A `MinimalTestPlugin` whose id and `requires:` are chosen per instance."""
+class _NamedTestPlugin(ToyProvider):
+    """A `ToyProvider` whose id and `requires:` are chosen per instance."""
 
     def __init__(self, plugin_id: str, requires: tuple[str, ...] = ()) -> None:
         super().__init__()

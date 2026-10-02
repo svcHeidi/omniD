@@ -9,12 +9,12 @@ from omnidriver.core.plugin_interface import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime.models import DataArtifact, expand_path_pattern
 from omnidriver.core.runtime.reconciler import declared_instance_names, reconcile_artifacts
-from plugins.minimal_plugin import MinimalTestPlugin
+from plugins.toy import ToyProvider
 
 _DECLARED = CaseRuntimeConventions(instance_directory_pattern=r"^step-\d+$", preserved_instance_names=("step-0",))
 
 
-class _DeclaresInstances(MinimalTestPlugin):
+class _DeclaresInstances(ToyProvider):
     def get_case_runtime_conventions(self):
         return _DECLARED
 
@@ -30,7 +30,7 @@ _ARTIFACT = DataArtifact(artifact_id="a", path_pattern="{instance}/out.dat", for
 
 def test_a_stack_that_declares_no_instances_has_none(tmp_path):
     _dirs(tmp_path, "0", "0.5", "step-1")
-    ctx = driver_context(MinimalTestPlugin(), source="test")
+    ctx = driver_context(ToyProvider(), source="test")
     names = declared_instance_names(tmp_path, driver_context=ctx)
     assert names == ()
     assert reconcile_artifacts(tmp_path, (_ARTIFACT,), instance_names=names).missing_count == 1

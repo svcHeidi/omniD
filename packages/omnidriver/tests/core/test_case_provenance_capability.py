@@ -7,11 +7,11 @@ from pathlib import Path
 from omnidriver.core.plugin_interface import (
     driver_context
 )
-from plugins.minimal_plugin import MinimalTestPlugin
+from plugins.toy import ToyProvider
 
 
 def test_a_plugin_with_no_provenance_members_gets_empty_answers(tmp_path: Path) -> None:
-    context = driver_context(MinimalTestPlugin(), source="test")
+    context = driver_context(ToyProvider(), source="test")
     assert context.stack.call("get_required_inputs", tmp_path, {}) == ()
     assert context.stack.call("get_generated_output_globs", tmp_path, {}) == ()
 

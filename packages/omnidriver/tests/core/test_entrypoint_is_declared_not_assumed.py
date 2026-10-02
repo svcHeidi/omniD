@@ -4,12 +4,12 @@ from __future__ import annotations
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.plugin_profile import entrypoint_relpaths
 
-import plugins.minimal_plugin as minimal_plugin
+import plugins.toy as toy
 
 
 def _context(entrypoint):
     return driver_context(
-        minimal_plugin.MinimalTestPlugin(entrypoint=entrypoint),
+        toy.ToyProvider(entrypoint=entrypoint),
         source="test:entrypoint",
     )
 

@@ -11,9 +11,9 @@ import pytest
 
 from omnidriver.cli import main
 from omnidriver.core import case_transaction
-from plugins.conformance_toy import EXPLAINING_PLUGIN, RULE_CHECKING_PLUGIN, write_toy_native_case
+from plugins.toy import EXPLAINING_PLUGIN, RULE_CHECKING_PLUGIN, write_toy_native_case
 
-PLUGIN = "plugins.e2e_record_plugin:E2ERecordPlugin"
+PLUGIN = "plugins.toy:ToyStack"
 
 
 def _cli(*argv: str) -> tuple[int, dict]:

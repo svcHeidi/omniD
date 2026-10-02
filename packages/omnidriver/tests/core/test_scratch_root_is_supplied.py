@@ -16,7 +16,7 @@ from omnidriver.core.specs.paths import (
 )
 from omnidriver.core.tutorial_records import TutorialRecordError
 
-RECORD_PLUGIN = "plugins.e2e_record_plugin:E2ERecordPlugin"
+RECORD_PLUGIN = "plugins.toy:ToyStack"
 
 
 @pytest.fixture(autouse=True)

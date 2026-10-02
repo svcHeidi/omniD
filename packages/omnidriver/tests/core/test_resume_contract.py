@@ -17,7 +17,7 @@ from omnidriver.core.runtime.attempt_lease import acquire_attempt_lease, acquire
 from omnidriver.core.runtime.resume import validate_resume
 from omnidriver.core.runtime.workflow_runner import run_workflow_step
 from omnidriver.core.runtime.workflow_state import initial_workflow_state, workflow_state_from_json
-from plugins.resume_test_plugin import ResumeTestPlugin
+from plugins.toy import ResumeTestPlugin
 
 
 def _completed(tmp_path):
@@ -195,7 +195,7 @@ def test_run_document_embedded_completed_state_refuses_changed_inputs(tmp_path) 
     first_out = StringIO()
     with redirect_stdout(first_out):
         first_code = cli.main([
-            "run", "--plugin", "plugins.resume_test_plugin:ResumeTestPlugin",
+            "run", "--plugin", "plugins.toy:ResumeTestPlugin",
             "--run-document", str(doc_path),
         ])
     first = json.loads(first_out.getvalue())
@@ -212,7 +212,7 @@ def test_run_document_embedded_completed_state_refuses_changed_inputs(tmp_path) 
     resumed_out = StringIO()
     with redirect_stdout(resumed_out):
         resumed_code = cli.main([
-            "run", "--plugin", "plugins.resume_test_plugin:ResumeTestPlugin",
+            "run", "--plugin", "plugins.toy:ResumeTestPlugin",
             "--run-document", str(doc_path),
         ])
     resumed = json.loads(resumed_out.getvalue())

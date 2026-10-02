@@ -10,10 +10,10 @@ from omnidriver.core.runtime.workflow_runner import run_workflow_step
 from omnidriver.core.runtime.workflow_state import initial_workflow_state
 from omnidriver.core.plugin_interface import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context
-from plugins.minimal_plugin import MinimalTestPlugin
+from plugins.toy import ToyProvider
 
 
-class _ParallelEnvironment(MinimalTestPlugin):
+class _ParallelEnvironment(ToyProvider):
     def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
         return CaseRuntimeConventions(replica_directory_globs=("processor*",))
 

@@ -11,7 +11,7 @@ import pytest
 
 from omnidriver.conformance import CHECKS, run_check
 from omnidriver.core.runtime.sweep_runner import _child_reconciliation
-from plugins.conformance_toy import (
+from plugins.toy import (
     ACCEPTING_PLUGIN, BROKEN_RULE_PLUGIN,
     DEFAULT_ARGUMENT_MARKER, DEFAULT_ARGUMENT_PLUGIN, DEFAULT_ROUTE_MARKER, DEFAULT_ROUTE_PLUGIN, DOCUMENTED_PLUGIN, GHOST_CONSUMES_PLUGIN, INDEXED_KEY_PLUGIN, KINDLESS_KEY_PLUGIN, NAMED_KEY_PLUGIN,
     NATIVE_WRITING_PLUGIN, NO_CONSUMES_PLUGIN, NO_PRODUCES_PLUGIN, OPEN_DOCUMENT_PLUGIN, OTHER_OPEN_DOCUMENT_PLUGIN,
@@ -21,7 +21,7 @@ from plugins.conformance_toy import (
     STRAY_NAME, STRAY_ROOT_VARIABLE, quantity_toy_conformance_target, toy_conformance_target,
     toy_conformance_target_with_input,
 )
-from plugins.quantity_toy import BAD_DECLARATION_PLUGIN, QUANTITY_TOY_PLUGIN, UNREADABLE_PLUGIN
+from plugins.toy import BAD_DECLARATION_PLUGIN, QUANTITY_TOY_PLUGIN, UNREADABLE_PLUGIN
 
 
 @pytest.mark.parametrize("check_id", ["C1", "C2", "C3", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12"])
@@ -296,7 +296,7 @@ def test_c9_bites_a_preflight_that_never_reports_a_missing_solver(tmp_path):
 @pytest.mark.parametrize("scratch_dir", ["touch", "my touch runs", "the 'touch' runs", 'a "touch" dir'])
 def test_c9_is_not_satisfied_by_the_solver_name_in_the_echoed_scratch_path_S_I2(tmp_path, scratch_dir):
     """A preflight that never names the solver must not pass just because the scratch path it echoes happens to contain the solver's name."""
-    from plugins.conformance_toy import AUXILIARY_ONLY_PREFLIGHT_PLUGIN
+    from plugins.toy import AUXILIARY_ONLY_PREFLIGHT_PLUGIN
 
     target = toy_conformance_target(tmp_path, plugin=AUXILIARY_ONLY_PREFLIGHT_PLUGIN)
     target = dataclasses.replace(target, scratch_root=tmp_path / scratch_dir / "scratch")

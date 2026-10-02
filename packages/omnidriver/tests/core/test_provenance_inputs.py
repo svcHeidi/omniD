@@ -19,7 +19,7 @@ from omnidriver.core.plugin_interface import (
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile
 from omnidriver.core.runtime.provenance_inputs import enumerate_case_inputs
-from plugins.minimal_plugin import MinimalTestPlugin
+from plugins.toy import ToyProvider
 
 
 def _paths(components, *, kind: str | None = None) -> set[str]:
@@ -47,7 +47,7 @@ def _make_executable(path: Path, content: bytes) -> None:
     path.chmod(path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
 
-class _FakePlugin(MinimalTestPlugin):
+class _FakePlugin(ToyProvider):
     """A v1 plugin that declares CaseProvenanceCapability / RuntimeEvidence hooks inline, so precedence can be exercised without a tutorial."""
 
     def __init__(self, *, required_inputs=(), generated_output_globs=(), extra_provenance_paths=()):
@@ -120,7 +120,7 @@ def test_selected_start_time_directory_is_included_others_excluded(tmp_path: Pat
     assert "1/Vm" not in included
 
 
-class _ForeignEnvironmentPlugin(MinimalTestPlugin):
+class _ForeignEnvironmentPlugin(ToyProvider):
     """A plugin that declares its input roots without case-file roles."""
 
     def __init__(self, *, roots: tuple[str, ...]) -> None:

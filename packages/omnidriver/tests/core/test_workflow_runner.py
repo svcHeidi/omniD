@@ -12,10 +12,10 @@ from omnidriver.core.plugin_interface import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime.workflow_runner import run_workflow_step
 from omnidriver.core.runtime.workflow_state import initial_workflow_state
-from plugins.minimal_plugin import MinimalTestPlugin
+from plugins.toy import ToyProvider
 
 
-class _ParallelOutputPlugin(MinimalTestPlugin):
+class _ParallelOutputPlugin(ToyProvider):
     def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
         return CaseRuntimeConventions(replica_directory_globs=("processor*",))
 
@@ -310,7 +310,7 @@ def test_case_script_step_preserves_dyld_vars_through_shell_hop() -> None:
         state = initial_workflow_state(dag)
         assert state is not None
         context = driver_context(
-            MinimalTestPlugin(entrypoint="run-case"),
+            ToyProvider(entrypoint="run-case"),
             source="test:workflow-runner",
         )
 
@@ -343,7 +343,7 @@ def test_case_script_invocation_embeds_dyld_vars_literally_in_argv() -> None:
         "run-case", "/case/run-case", (),
         {"PATH": __import__("os").environ.get("PATH", ""), "DYLD_LIBRARY_PATH": "/marker/xyz"},
         driver_context(
-            MinimalTestPlugin(entrypoint="run-case"),
+            ToyProvider(entrypoint="run-case"),
             source="test:workflow-runner",
         ),
     )

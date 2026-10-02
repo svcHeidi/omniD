@@ -13,7 +13,7 @@ from omnidriver.core.runtime.workflow_runner import (
     _resolve_case_cwd,
     _resolve_command,
 )
-from plugins.minimal_plugin import MinimalTestPlugin
+from plugins.toy import ToyProvider
 
 
 def _make_executable(path: Path) -> None:
@@ -31,7 +31,7 @@ class TestValidateWorkflowCommands(unittest.TestCase):
         # that genuinely assert cardiac-authorized commands moved to
         # omnidriver-cardiacfoam's tests/test_workflow_command_security.py.
         self.context = driver_context(
-            MinimalTestPlugin(solver_commands={"gmsh", "gmshToFoam", "checkMesh"}),
+            ToyProvider(solver_commands={"gmsh", "gmshToFoam", "checkMesh"}),
             source="test:commands",
         )
 
@@ -94,7 +94,7 @@ class TestValidateWorkflowCommands(unittest.TestCase):
 class TestResolveCommandShadowing(unittest.TestCase):
     def setUp(self) -> None:
         self.context = driver_context(
-            MinimalTestPlugin(entrypoint="run-test-case"), source="test:commands",
+            ToyProvider(entrypoint="run-test-case"), source="test:commands",
         )
 
     def test_bare_binary_name_is_never_resolved_to_case_local_file(self) -> None:

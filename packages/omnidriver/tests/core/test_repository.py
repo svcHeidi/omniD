@@ -13,10 +13,10 @@ from omnidriver.core.repository import (
     read_repository,
     repository_of_cases_root,
 )
-from plugins.conformance_toy import write_toy_native_case
+from plugins.toy import write_toy_native_case
 
-PLUGIN = "plugins.e2e_record_plugin:E2ERecordPlugin"
-OTHER_PLUGIN = "plugins.neutral_environment_plugin:NeutralEnvironmentPlugin"
+PLUGIN = "plugins.toy:ToyStack"
+OTHER_PLUGIN = "plugins.toy:NeutralEnvironmentPlugin"
 
 
 def _repo(root: Path, *, plugin: str = PLUGIN, tutorials: str = "tutorials", **overrides: str) -> Path:

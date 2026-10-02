@@ -27,8 +27,8 @@ from omnidriver.core.tutorial_records import (
 # Neutral placeholder plugins, not cardiacFoam: this file proves core's own
 # sweep bookkeeping (staging, timeout, manifest), not cardiac routing, which
 # is tested against the real plugin in the cardiacfoam package.
-from plugins.declared_case_plugin import DeclaredCasePlugin
-from plugins.minimal_plugin import MinimalTestPlugin
+from plugins.toy import DeclaredCasePlugin
+from plugins.toy import ToyProvider
 
 _CTX = _driver_context(DeclaredCasePlugin(), source="test:sweep_runner")
 
@@ -177,7 +177,7 @@ def test_case_run_command_forwards_the_selector_the_sweep_was_given():
     from omnidriver.core.plugin_interface import load_plugin_context
     from omnidriver.core.runtime.run_command import omnidriver_run_command
 
-    selector = "plugins.e2e_record_plugin:E2ERecordPlugin"
+    selector = "plugins.toy:ToyStack"
     command = omnidriver_run_command(
         load_plugin_context(selector), "--run-document", "doc.json",
     )
@@ -294,7 +294,7 @@ def _record_number_cells_axis() -> AxisContract:
     return AxisContract(name="number_cells", value_kind="integer", resolve=resolve)
 
 
-class _RecordSweepWriterPlugin(MinimalTestPlugin):
+class _RecordSweepWriterPlugin(ToyProvider):
     """A toy JSON case_writer, matching test_tutorial_records.py's ``_RecordCaseWriterPlugin`` -- duplicated locally rather than imported to keep this file's existing zero-cardiac-dependency test isolation."""
 
     def get_supported_mutation_modes(self):
@@ -681,12 +681,12 @@ def test_sweep_run_case_timeout_marks_failed_and_continues(tmp_path):
 def test_sweep_run_child_process_rebuilds_the_parent_context(tmp_path, monkeypatch):
     """Not mocked: each case really runs in a `python -m omnidriver` child."""
     from omnidriver.core.plugin_interface import load_plugin_context
-    from plugins.conformance_toy import write_toy_native_case
+    from plugins.toy import write_toy_native_case
 
     tests_root = str(Path(__file__).resolve().parents[1])
     inherited = os.environ.get("PYTHONPATH")
     monkeypatch.setenv("PYTHONPATH", tests_root if not inherited else f"{tests_root}{os.pathsep}{inherited}")
-    ctx = load_plugin_context("plugins.e2e_record_plugin:E2ERecordPlugin")
+    ctx = load_plugin_context("plugins.toy:ToyStack")
     cases_root = tmp_path / "native"
     write_toy_native_case(cases_root)
     (tmp_path / "sweep.json").write_text(json.dumps(_record_sweep_spec(cases_root=cases_root, values=(2, 3))))

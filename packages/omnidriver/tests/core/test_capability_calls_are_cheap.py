@@ -17,9 +17,9 @@ def test_profile_contract_reuses_the_cached_profile_parse():
 def test_the_capability_manifest_is_never_a_shared_copy():
     from omnidriver.core.capability_manifest import capability_manifest
     from omnidriver.core.plugin_interface import driver_context
-    from plugins.minimal_plugin import MinimalTestPlugin
+    from plugins.toy import ToyProvider
 
-    context = driver_context(MinimalTestPlugin(), source="test")
+    context = driver_context(ToyProvider(), source="test")
     first = capability_manifest(context)
     second = capability_manifest(context)
     assert first == second

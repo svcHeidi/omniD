@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from omnidriver.core.plugin_interface import driver_context
-from plugins.minimal_plugin import MinimalTestPlugin
+from plugins.toy import ToyProvider
 
 
 def _cardiac_case(root: Path) -> Path:
@@ -17,7 +17,7 @@ def _cardiac_case(root: Path) -> Path:
 
 
 def test_generic_plugin_exposes_no_cardiac_fields(tmp_path: Path) -> None:
-    stack = driver_context(MinimalTestPlugin(), source="test:neutral-introspection").stack
+    stack = driver_context(ToyProvider(), source="test:neutral-introspection").stack
     resolved = stack.call("resolve_case_models", _cardiac_case(tmp_path))
     fields = stack.call("get_samplable_fields", resolved)
     flat = [name for names in fields.values() for name in names]

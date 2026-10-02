@@ -178,7 +178,7 @@ def test_a_malformed_or_shadowing_escape_role_still_raises(
 def test_a_non_openfoam_role_survives_driver_context_end_to_end() -> None:
     """Beyond the loader: a hand-built PluginProfile (as a real plugin's get_profile() would return, whether or not it was sourced from YAML) carrying an escape-tier role must be accepted by driver_context(...), and the rule must come back out of capabilities.case_files intact -- proving the seam works all the way through, not just at parse time."""
     from omnidriver.core.plugin_interface import driver_context
-    from plugins.minimal_plugin import MinimalTestPlugin
+    from plugins.toy import ToyProvider
 
     fenics_rule = CaseFileRule(
         path="mesh.xml",
@@ -187,7 +187,7 @@ def test_a_non_openfoam_role_survives_driver_context_end_to_end() -> None:
         required="always",
     )
 
-    class _FenicsLikePlugin(MinimalTestPlugin):
+    class _FenicsLikePlugin(ToyProvider):
         @property
         def plugin_id(self) -> str:
             return "org.example.fenics-e2e"

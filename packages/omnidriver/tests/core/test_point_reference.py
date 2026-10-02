@@ -6,7 +6,7 @@ import json
 import pytest
 
 from omnidriver.core.quantities import PointReferenceError, load_point_reference
-from plugins.quantity_toy import write_toy_reference
+from plugins.toy import write_toy_reference
 
 
 def _edit(path, change):

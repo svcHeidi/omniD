@@ -7,7 +7,7 @@ import pathlib
 import pytest
 
 import omnidriver.core
-from plugins.minimal_plugin import MinimalTestPlugin
+from plugins.toy import ToyProvider
 
 from conftest import skip_without_repo
 
@@ -285,8 +285,8 @@ def test_each_provider_records_its_own_source_not_a_shared_one():
     """Spec 4.4: a provenance record must say which adapter came from where."""
     from omnidriver.core.plugin_interface import driver_context
 
-    class _NamedProvider(MinimalTestPlugin):
-        """A MinimalTestPlugin whose plugin_id is chosen per instance, so two can compose together as distinct providers without a real adapter's case files ever entering the picture."""
+    class _NamedProvider(ToyProvider):
+        """A ToyProvider whose plugin_id is chosen per instance, so two can compose together as distinct providers without a real adapter's case files ever entering the picture."""
 
         def __init__(self, plugin_id: str) -> None:
             super().__init__()
@@ -314,7 +314,7 @@ def test_a_single_source_string_still_broadcasts_to_every_provider():
     """The common single-provider call shape, and a multi-provider stack that genuinely shares one origin, must keep working with one plain string."""
     from omnidriver.core.plugin_interface import driver_context
 
-    class _NamedProvider(MinimalTestPlugin):
+    class _NamedProvider(ToyProvider):
         def __init__(self, plugin_id: str) -> None:
             super().__init__()
             self._named_plugin_id = plugin_id
@@ -336,7 +336,7 @@ def test_a_single_source_string_still_broadcasts_to_every_provider():
 def test_source_count_must_match_provider_count():
     from omnidriver.core.plugin_interface import driver_context
 
-    class _NamedProvider(MinimalTestPlugin):
+    class _NamedProvider(ToyProvider):
         def __init__(self, plugin_id: str) -> None:
             super().__init__()
             self._named_plugin_id = plugin_id

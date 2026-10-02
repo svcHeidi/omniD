@@ -35,7 +35,7 @@ from omnidriver.core.tutorial_records import (
     split_unchanged,
 )
 
-from plugins.minimal_plugin import MinimalTestPlugin
+from plugins.toy import ToyProvider
 
 _FORMAT = "test_json_dictionary"
 
@@ -92,8 +92,8 @@ def _read_test_value_by_key_path(document_path: Path, key_path):
     return _read_test_value(document_path, key, scope=scope or None)
 
 
-class _RecordCaseWriterPlugin(MinimalTestPlugin):
-    """MinimalTestPlugin plus a toy JSON case_writer, for full-pipeline tests."""
+class _RecordCaseWriterPlugin(ToyProvider):
+    """ToyProvider plus a toy JSON case_writer, for full-pipeline tests."""
 
     def get_supported_mutation_modes(self):
         return frozenset({"clone_and_patch"})
@@ -874,7 +874,7 @@ def test_parameter_assignment_refuses_a_string_for_validated():
 
 def test_lookup_record_resolves_a_registered_name_case_insensitively():
     record = _record()
-    context = driver_context(MinimalTestPlugin(tutorial_records={"toyTutorial": record}), source="test:records")
+    context = driver_context(ToyProvider(tutorial_records={"toyTutorial": record}), source="test:records")
 
     assert lookup_record("toyTutorial", driver_context=context) is record
     assert lookup_record(" TOYTUTORIAL ", driver_context=context) is record
@@ -882,7 +882,7 @@ def test_lookup_record_resolves_a_registered_name_case_insensitively():
 
 
 def test_lookup_record_refuses_an_unregistered_name_listing_the_registered_ones():
-    context = driver_context(MinimalTestPlugin(tutorial_records={"toyTutorial": _record()}), source="test:records")
+    context = driver_context(ToyProvider(tutorial_records={"toyTutorial": _record()}), source="test:records")
 
     with pytest.raises(TutorialRecordError, match=r"unknown tutorial record 'natives/toy'.*toyTutorial"):
         lookup_record("natives/toy", driver_context=context)
@@ -1333,7 +1333,7 @@ def test_commit_record_case_writes_one_case_with_validated_flags_in_the_record(t
 
 
 def test_commit_record_case_preserves_sibling_keys_in_a_multi_key_document(tmp_path):
-    """P2 fix (docs/superpowers/specs/2026-09-24-tutorials-are-pointers- design.md, "Owner decisions" dated 2026-09-25): before this fix, `commit_record_case` handed the renderer an EMPTY `snapshot_root`, so a renderer that patches one key in a document holding others (this test's `_RecordCaseWriterPlugin.render_case_files`, which reads `snapshot_root/<document>` and merges on top of whatever it finds there -- the same shape `tests/plugins/e2e_record_plugin.py ::E2ERecordPlugin` uses) silently treated every pre-existing document as brand new, losing every sibling key the moment its render committed."""
+    """P2 fix (docs/superpowers/specs/2026-09-24-tutorials-are-pointers- design.md, "Owner decisions" dated 2026-09-25): before this fix, `commit_record_case` handed the renderer an EMPTY `snapshot_root`, so a renderer that patches one key in a document holding others (this test's `_RecordCaseWriterPlugin.render_case_files`, which reads `snapshot_root/<document>` and merges on top of whatever it finds there -- the same shape `tests/plugins/e2e_record_plugin.py ::ToyStack` uses) silently treated every pre-existing document as brand new, losing every sibling key the moment its render committed."""
     _native_case(tmp_path, {
         "constant/mesh.json": {"cells": "1", "material": "myocardium"},
     })
@@ -1529,12 +1529,12 @@ def test_strict_plan_over_a_tutorial_record_commits_and_plans_with_a_working_run
     """`plan --strict --entry <record>`'s own pipeline, in process: commits the record's case (the same thing `sweep-plan` over a record entry already does at plan time), and persists a `run_document.json` at the exact path its own advertised `run --run-document <path>` command names."""
     from omnidriver.core.plugin_interface import driver_context as _dc
     from omnidriver.core.strict_planning import strict_plan
-    from plugins.e2e_record_plugin import E2ERecordPlugin
+    from plugins.toy import ToyStack
 
     native = tmp_path / "cases" / "toyTutorial" / "constant"
     native.mkdir(parents=True)
     (native / "mesh.json").write_text(json.dumps({"cells": "1"}))
-    context = _dc(E2ERecordPlugin(), source="test:strict-plan-record")
+    context = _dc(ToyStack(), source="test:strict-plan-record")
 
     report = strict_plan(
         "toyTutorial",

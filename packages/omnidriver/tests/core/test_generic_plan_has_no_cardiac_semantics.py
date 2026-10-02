@@ -9,7 +9,7 @@ from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.introspection import describe_entry
 from omnidriver.core.strict_planning import strict_plan
 from omnidriver.core.tutorial_records import case_folder_record
-from plugins.e2e_record_plugin import E2EFolderPlugin
+from plugins.toy import E2EFolderPlugin
 
 # Every token that would betray a cardiac assumption leaking into a plan
 # produced for a non-cardiac solver.

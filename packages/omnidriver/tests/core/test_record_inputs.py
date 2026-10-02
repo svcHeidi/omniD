@@ -21,7 +21,7 @@ from omnidriver.core.tutorial_records import (
     resolve_record_inputs,
 )
 
-from plugins.minimal_plugin import MinimalTestPlugin
+from plugins.toy import ToyProvider
 
 _FORMAT = "test_record_input_json"
 
@@ -234,7 +234,7 @@ def _validator(document: str, key_path: tuple, value) -> tuple[str, bool]:
     return "word", False
 
 
-class _InputWriterPlugin(MinimalTestPlugin):
+class _InputWriterPlugin(ToyProvider):
     """A toy case_writer, so a record with inputs can be staged and committed end to end -- the "One case, step by step" pipeline, minus any solver vocabulary."""
 
     def get_supported_mutation_modes(self):

@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 
 from omnidriver.cli import main
-from plugins.conformance_toy import FAILING_PREFLIGHT_PLUGIN, write_toy_native_case
+from plugins.toy import FAILING_PREFLIGHT_PLUGIN, write_toy_native_case
 
 
 def _run(tmp_path, capsys, action):

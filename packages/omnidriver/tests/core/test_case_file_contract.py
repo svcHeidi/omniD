@@ -6,12 +6,12 @@ from pathlib import Path
 
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime_records import CORE_RUNTIME_RECORDS, case_runtime_conventions
-from plugins.minimal_plugin import MinimalTestPlugin
+from plugins.toy import ToyProvider
 
 
 def test_minimal_plugin_declares_no_case_files() -> None:
     context = driver_context(
-        MinimalTestPlugin(), source="test:minimal-case-files",
+        ToyProvider(), source="test:minimal-case-files",
     )
     assert context.stack.call("get_profile").case_files == ()
     assert case_runtime_conventions(context) == CORE_RUNTIME_RECORDS
@@ -20,6 +20,6 @@ def test_minimal_plugin_declares_no_case_files() -> None:
 
 def test_a_declared_case_script_is_a_rule_of_the_contract() -> None:
     profile = driver_context(
-        MinimalTestPlugin(entrypoint="run-test-case"), source="test"
+        ToyProvider(entrypoint="run-test-case"), source="test"
     ).stack.call("get_profile")
     assert [(rule.path, rule.required) for rule in profile.case_files] == [("run-test-case", "conditional")]

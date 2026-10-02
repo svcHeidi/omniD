@@ -44,7 +44,7 @@ def test_sweep_run_cli_propagates_the_plugin_to_its_spawned_children(tmp_path):
     result = subprocess.run(
         [
             sys.executable, "-m", "omnidriver", "sweep-run",
-            "--plugin", "plugins.e2e_record_plugin:E2ERecordPlugin",
+            "--plugin", "plugins.toy:ToyStack",
             "--spec", str(spec_path),
             "--output-dir", str(output_dir),
         ],

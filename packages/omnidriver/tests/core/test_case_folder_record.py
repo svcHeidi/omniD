@@ -12,9 +12,9 @@ from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.strict_planning import strict_plan
 from omnidriver.core.tutorial_records import TutorialRecordError, case_folder_record, lookup_record
 
-from plugins.e2e_record_plugin import E2EFolderPlugin, E2ERecordPlugin
+from plugins.toy import E2EFolderPlugin, ToyStack
 
-_DECLARED = "plugins.e2e_record_plugin:E2EFolderPlugin"
+_DECLARED = "plugins.toy:E2EFolderPlugin"
 
 
 def _case(root: Path, name: str = "myCase") -> Path:
@@ -37,7 +37,7 @@ def test_a_folder_with_the_declared_entrypoint_is_a_one_step_record(tmp_path):
 
 
 def test_a_stack_that_declares_no_entrypoint_refuses_the_folder_by_name(tmp_path):
-    ctx = driver_context(E2ERecordPlugin(), source="test:case-folder")
+    ctx = driver_context(ToyStack(), source="test:case-folder")
     with pytest.raises(TutorialRecordError, match="declares none"):
         case_folder_record(_case(tmp_path), driver_context=ctx)
 

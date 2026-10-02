@@ -15,7 +15,7 @@ pytestmark = [skip_without_repo]
 
 from omnidriver.cli import main
 
-PLUGIN = "plugins.e2e_record_plugin:E2EFolderPlugin"
+PLUGIN = "plugins.toy:E2EFolderPlugin"
 SCRIPT = "run-test-case"
 CASE_SCRIPT = "#!/bin/sh\ntouch ran.marker\nprintf 'ran\\n'\n"
 

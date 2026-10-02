@@ -7,7 +7,7 @@ from omnidriver.core.runtime.workflow import (
     validate_workflow_commands,
 )
 from omnidriver.core.plugin_interface import driver_context
-from plugins.minimal_plugin import MinimalTestPlugin
+from plugins.toy import ToyProvider
 
 
 def _dag(command: str) -> dict:
@@ -24,7 +24,7 @@ def test_core_neutral_commands_contain_no_solver_names() -> None:
 
 
 def test_minimal_plugin_does_not_authorize_a_solver_command() -> None:
-    context = driver_context(MinimalTestPlugin(), source="test:commands")
+    context = driver_context(ToyProvider(), source="test:commands")
     codes = {
         d.code for d in validate_workflow_commands(
             _dag("solver-command"), driver_context=context
@@ -39,7 +39,7 @@ def test_no_context_accepts_only_core_commands() -> None:
 
 
 def test_minimal_plugin_does_not_authorize_undeclared_commands() -> None:
-    context = driver_context(MinimalTestPlugin(), source="test:commands")
+    context = driver_context(ToyProvider(), source="test:commands")
 
     codes = {
         diagnostic.code
@@ -52,13 +52,13 @@ def test_minimal_plugin_does_not_authorize_undeclared_commands() -> None:
 
 
 def test_case_scripts_remain_core_owned() -> None:
-    context = driver_context(MinimalTestPlugin(entrypoint="run-test-case"), source="test:commands")
+    context = driver_context(ToyProvider(entrypoint="run-test-case"), source="test:commands")
     assert validate_workflow_commands(_dag("run-test-case"), driver_context=context) == ()
     assert validate_workflow_commands(_dag("./run-test-case"), driver_context=context) == ()
 
 
 def test_generic_plugin_authorizes_neither_kind_of_command() -> None:
-    stack = driver_context(MinimalTestPlugin(), source="test:commands").stack
+    stack = driver_context(ToyProvider(), source="test:commands").stack
     assert stack.call("get_solver_commands") == frozenset()
     assert stack.call("get_auxiliary_commands") == frozenset()
 
@@ -67,7 +67,7 @@ def test_mpi_wrapped_payload_is_authorized() -> None:
     """An mpirun wrapper must not launder an unauthorized binary."""
     from omnidriver.core.runtime import workflow
 
-    context = driver_context(MinimalTestPlugin(), source="test:commands")
+    context = driver_context(ToyProvider(), source="test:commands")
     dag = {"steps": [{
         "id": "solve",
         "command": "mpirun",
@@ -84,7 +84,7 @@ def test_mpi_wrapped_authorized_solver_is_accepted() -> None:
     from omnidriver.core.runtime import workflow
 
     context = driver_context(
-        MinimalTestPlugin(solver_commands={"authorized-solver"}),
+        ToyProvider(solver_commands={"authorized-solver"}),
         source="test:commands",
     )
     solver = next(iter(context.stack.call("get_solver_commands")))

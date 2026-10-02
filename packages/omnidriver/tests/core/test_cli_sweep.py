@@ -8,7 +8,7 @@ from unittest import mock
 from omnidriver.cli import main
 
 
-_PLUGIN = "plugins.minimal_plugin:MinimalTestPlugin"
+_PLUGIN = "plugins.toy:ToyProvider"
 
 
 class TestCliSweepActions(unittest.TestCase):

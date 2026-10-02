@@ -8,7 +8,7 @@ from omnidriver.cli import main
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime.run_document_exec import build_execution_inputs
 from omnidriver.core.runtime.run_model import RunDocument
-from plugins.minimal_plugin import MinimalTestPlugin
+from plugins.toy import ToyProvider
 
 
 def test_trusted_neutral_plugin_executes_its_declared_case_script(
@@ -25,7 +25,7 @@ def test_trusted_neutral_plugin_executes_its_declared_case_script(
         "run",
         "--strict",
         "--plugin",
-        "plugins.e2e_record_plugin:E2EFolderPlugin",
+        "plugins.toy:E2EFolderPlugin",
         "--case", str(case_root),
         "--scratch-dir", str(tmp_path / "scratch"),
     ])
@@ -45,7 +45,7 @@ def test_run_document_validation_uses_the_selected_plugin(tmp_path: Path) -> Non
     script.chmod(script.stat().st_mode | stat.S_IXUSR)
 
     context = driver_context(
-        MinimalTestPlugin(entrypoint="run-test-case"), source="test"
+        ToyProvider(entrypoint="run-test-case"), source="test"
     )
     run_doc = RunDocument(
         id="minimal-plugin-document",
@@ -77,7 +77,7 @@ def test_run_document_rejects_a_mismatched_supplied_plugin(tmp_path: Path) -> No
     script.chmod(script.stat().st_mode | stat.S_IXUSR)
 
     context = driver_context(
-        MinimalTestPlugin(entrypoint="run-test-case"), source="test"
+        ToyProvider(entrypoint="run-test-case"), source="test"
     )
     planned_plugin = context.identity.to_json() | {"capability_digest": "sha256:wrong"}
     run_doc = RunDocument(
@@ -110,7 +110,7 @@ def test_cli_context_from_run_document_rejects_a_mismatched_supplied_plugin(
     from omnidriver.cli import _context_from_run_document
 
     context = driver_context(
-        MinimalTestPlugin(entrypoint="run-test-case"), source="test"
+        ToyProvider(entrypoint="run-test-case"), source="test"
     )
     selected = context.identity.to_json()
     planned_plugin = selected | {

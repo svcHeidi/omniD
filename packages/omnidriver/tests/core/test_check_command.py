@@ -6,7 +6,7 @@ import json
 import pytest
 
 from omnidriver.cli import main
-from plugins.conformance_toy import PROBING_PLUGIN, TOY_PLUGIN, write_toy_native_case
+from plugins.toy import PROBING_PLUGIN, TOY_PLUGIN, write_toy_native_case
 
 
 def _check(tmp_path, capsys, *extra, prepare=None, plugin=TOY_PLUGIN):

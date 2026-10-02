@@ -6,7 +6,7 @@ from omnidriver.core.plugin_interface import (
     SUPPORTED_PLUGIN_API_VERSIONS,
     driver_context
 )
-from plugins.minimal_plugin import MinimalTestPlugin
+from plugins.toy import ToyProvider
 
 
 def test_supported_version_is_two() -> None:
@@ -17,12 +17,12 @@ def test_neutral_plugin_is_v2() -> None:
     # StackIdentity has no singular api_version -- one per provider, on
     # StackIdentity.providers (a tuple of ProviderIdentity). A single-plugin
     # driver_context composes to a one-entry stack.
-    context = driver_context(MinimalTestPlugin(), source="test:plugin-api")
+    context = driver_context(ToyProvider(), source="test:plugin-api")
     assert context.identity.providers[0].api_version == "2"
 
 
 def test_unsupported_version_is_rejected_before_any_catalog_runs() -> None:
-    class FuturePlugin(MinimalTestPlugin):
+    class FuturePlugin(ToyProvider):
         @property
         def plugin_api_version(self) -> str:
             return "99"
@@ -38,5 +38,5 @@ def test_unsupported_version_is_rejected_before_any_catalog_runs() -> None:
 
 
 def test_neutral_plugin_builds_an_explicit_context() -> None:
-    context = driver_context(MinimalTestPlugin(), source="test:plugin-api")
+    context = driver_context(ToyProvider(), source="test:plugin-api")
     assert context.identity.providers[0].id == "org.omnidriver.test-minimal"

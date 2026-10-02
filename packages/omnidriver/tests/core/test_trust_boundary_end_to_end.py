@@ -30,7 +30,7 @@ REPO_ROOT = repo_root or NO_REPO_ROOT
 # code these tests drive against lives here.
 SECURITY_MD = REPO_ROOT / "SECURITY.md"
 
-PLUGIN = "plugins.e2e_record_plugin:E2EFolderPlugin"
+PLUGIN = "plugins.toy:E2EFolderPlugin"
 SCRIPT = "run-test-case"
 CASE_NAME = "trustBoundaryCase"
 RAN = "ran.marker"
@@ -372,13 +372,13 @@ def test_case_directory_cannot_shadow_a_trusted_path_binary(tmp_path) -> None:
 
 def test_a_plugins_declared_entrypoint_resolves_case_locally_but_blockmesh_still_never_does(tmp_path) -> None:
     """SECURITY.md: "No command shadowing", extended to the Tier 4 entrypoint seam (future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md) -- a plugin naming its entrypoint anything gets the same case-local resolution, but a command the stack does not declare as a case script must never resolve case-locally, regardless of which plugin is active."""
-    from plugins.minimal_plugin import MinimalTestPlugin
+    from plugins.toy import ToyProvider
 
     from omnidriver.core.plugin_interface import CaseRuntimeConventions
     from omnidriver.core.plugin_interface import driver_context as _driver_context
     from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile
 
-    class _ForeignEntrypointPlugin(MinimalTestPlugin):
+    class _ForeignEntrypointPlugin(ToyProvider):
         def get_profile(self) -> PluginProfile:
             return PluginProfile(
                 path=Path(__file__),

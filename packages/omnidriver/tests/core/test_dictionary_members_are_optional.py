@@ -8,9 +8,9 @@ from omnidriver.conformance import run_check
 from omnidriver.core import provider_stack
 from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 from omnidriver.core.plugin_interface import driver_context
-from plugins.conformance_toy import toy_conformance_target
-from plugins.e2e_record_plugin import E2ERecordPlugin
-from plugins.minimal_plugin import MinimalTestPlugin
+from plugins.toy import toy_conformance_target
+from plugins.toy import ToyStack
+from plugins.toy import ToyProvider
 
 _NOW_OPTIONAL = ("get_dict_entries", "get_dict_groups", "get_dictionary_catalog")
 
@@ -18,11 +18,11 @@ _NOW_OPTIONAL = ("get_dict_entries", "get_dict_groups", "get_dictionary_catalog"
 @pytest.mark.parametrize("member", _NOW_OPTIONAL)
 def test_the_toy_implements_none_of_them(member):
     """Non-vacuity: the proofs below drive a plugin that really lacks them."""
-    assert not callable(getattr(E2ERecordPlugin(), member, None))
+    assert not callable(getattr(ToyStack(), member, None))
 
 
 def test_a_plugin_without_them_loads_and_composes_to_empty_answers():
-    ctx = driver_context(MinimalTestPlugin(), source="test")
+    ctx = driver_context(ToyProvider(), source="test")
     assert ctx.stack.call("get_dict_entries") == ()
     assert ctx.stack.call("get_dict_groups") == {}
     assert dict(ctx.stack.call("get_dictionary_catalog").documents) == {}
@@ -34,7 +34,7 @@ def test_a_plugin_without_them_loads_describes_and_runs(check_id, tmp_path):
     assert verdict.passed, verdict.detail
 
 
-class _EmptyStubs(MinimalTestPlugin):
+class _EmptyStubs(ToyProvider):
     """Dictionary members that answer empty."""
 
     def get_dict_entries(self):
@@ -48,11 +48,11 @@ class _EmptyStubs(MinimalTestPlugin):
 
 
 def test_no_dictionary_entries_digests_exactly_as_an_empty_stub_did():
-    absent = driver_context(MinimalTestPlugin(), source="test").identity.providers[0].provider_digest
+    absent = driver_context(ToyProvider(), source="test").identity.providers[0].provider_digest
     stubbed = driver_context(_EmptyStubs(), source="test").identity.providers[0].provider_digest
     assert absent == stubbed
 
 
 def test_a_stack_with_no_dictionary_implementer_records_the_member_unclaimed():
-    assert driver_context(MinimalTestPlugin(), source="test").identity.resolutions["get_dict_entries"] == provider_stack.UNCLAIMED
+    assert driver_context(ToyProvider(), source="test").identity.resolutions["get_dict_entries"] == provider_stack.UNCLAIMED
     assert driver_context(_EmptyStubs(), source="test").identity.resolutions["get_dict_entries"] == "org.omnidriver.test-minimal"

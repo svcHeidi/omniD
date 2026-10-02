@@ -15,7 +15,7 @@ from omnidriver.core import plugin_discovery
 from omnidriver.core.experiments import inspect_sweep_experiment
 from omnidriver.core.quantities import QuantityComparisonError, experiment_comparisons, run_quantity_comparison
 from omnidriver.core.runtime.postprocess_phase import build_sweep_context
-from plugins.quantity_toy import (
+from plugins.toy import (
     DIFFERENT_VERSION_QUANTITY_TOY_PLUGIN, GRID_FORMAT, NO_WHERE_READER_PLUGIN, QUANTITY_TOY_PLUGIN,
     RAISING_READER_PLUGIN, write_quantity_toy_case, write_toy_reference, write_toy_sweep,
 )
@@ -237,11 +237,11 @@ class _FakeQuantityToyEntryPoint:
     """A discovered (no-colon) form of QUANTITY_TOY_PLUGIN, so a run can be re-loaded by name instead of by its trusted import path."""
 
     name = "quantity-toy"
-    value = "plugins.quantity_toy:QuantityToyPlugin"
+    value = "plugins.toy:QuantityToyPlugin"
     dist = type("D", (), {"name": "toy-dist", "version": "1"})()
 
     def load(self):
-        from plugins.quantity_toy import QuantityToyPlugin
+        from plugins.toy import QuantityToyPlugin
 
         return QuantityToyPlugin
 
@@ -503,7 +503,7 @@ def test_the_n1_guard_is_not_bypassed_by_an_unnormalised_path(tmp_path):
 
 def test_a_refused_request_never_calls_the_reader(tmp_path, monkeypatch):
     """A bad-tolerance request is refused before any run is resolved, so patching the reader to explode changes nothing."""
-    from plugins.quantity_toy import ToyRowReader
+    from plugins.toy import ToyRowReader
 
     def _spy(self, case_root, artifact, request):
         raise AssertionError("reader.read must not be called for a refused request")

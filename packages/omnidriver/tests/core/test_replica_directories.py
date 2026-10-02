@@ -9,10 +9,10 @@ from omnidriver.core.plugin_interface import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.plugin_profile import is_replica_directory_name
 from omnidriver.core.runtime.sweep_runner import _stage_entry_case
-from plugins.minimal_plugin import MinimalTestPlugin
+from plugins.toy import ToyProvider
 
 
-class _DeclaresReplicas(MinimalTestPlugin):
+class _DeclaresReplicas(ToyProvider):
     def get_case_runtime_conventions(self):
         return CaseRuntimeConventions(replica_directory_globs=("rank*",))
 
@@ -33,7 +33,7 @@ def test_the_name_rule_is_the_declared_globs():
 
 def test_a_stack_that_declares_no_replicas_stages_every_directory(tmp_path):
     staged = tmp_path / "staged"
-    _stage_entry_case(_source(tmp_path), staged, driver_context=driver_context(MinimalTestPlugin(), source="test"))
+    _stage_entry_case(_source(tmp_path), staged, driver_context=driver_context(ToyProvider(), source="test"))
     assert (staged / "processor0" / "f").is_file() and (staged / "rank0" / "f").is_file()
 
 

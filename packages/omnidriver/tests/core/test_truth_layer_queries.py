@@ -9,7 +9,7 @@ import pytest
 from omnidriver.cli import main
 from omnidriver.core.plugin_profile import load_plugin_profile
 
-_TOY = "plugins.e2e_record_plugin:E2ERecordPlugin"
+_TOY = "plugins.toy:ToyStack"
 
 
 def test_the_profile_names_a_variable_and_a_relation_never_a_path(tmp_path):

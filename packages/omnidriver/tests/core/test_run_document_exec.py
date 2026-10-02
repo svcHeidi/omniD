@@ -16,11 +16,11 @@ from omnidriver.core.runtime.run_document_exec import (
 )
 from omnidriver.core.runtime.run_model import RunDocument
 from omnidriver.core.plugin_interface import driver_context
-from plugins.minimal_plugin import MinimalTestPlugin
+from plugins.toy import ToyProvider
 
 # This test declares the one case-script spelling it consumes.  Its executor
 # diagnostics do not need dictionary syntax or another environment convention.
-_CTX = driver_context(MinimalTestPlugin(entrypoint="run-test-case"), source="test:run-document")
+_CTX = driver_context(ToyProvider(entrypoint="run-test-case"), source="test:run-document")
 
 
 def _make_runnable_case(root: Path) -> Path:

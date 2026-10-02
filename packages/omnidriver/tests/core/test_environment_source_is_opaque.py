@@ -2,18 +2,20 @@
 (spec 2026-09-26-core-generality-design.md §2, A1)."""
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from omnidriver.core.environment_connection import load_environment
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.strict_planning import strict_plan
-from plugins.conformance_toy import write_toy_native_case
-from plugins.e2e_record_plugin import E2ERecordPlugin
+from plugins.toy import write_toy_native_case
+from plugins.toy import ToyStack
 
 _OPAQUE = "not-a-path: {anything} ; what it means is the plugin's"
 
 
-class _RecordingPlugin(E2ERecordPlugin):
+class _RecordingPlugin(ToyStack):
     def __init__(self) -> None:
         super().__init__()
         self.seen: list[tuple[str, object]] = []
@@ -24,7 +26,7 @@ class _RecordingPlugin(E2ERecordPlugin):
 
     def get_loaded_environment(self, *, environment_source=None, driver_context=None):
         self.seen.append(("load", environment_source))
-        return super().get_loaded_environment(environment_source=environment_source, driver_context=driver_context)
+        return dict(os.environ)
 
 
 def test_the_preflight_adapter_hands_the_value_over_unchanged():

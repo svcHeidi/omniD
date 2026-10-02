@@ -9,7 +9,7 @@ from omnidriver.core.quantities import (
     check_reader, convert, converted, read_quantities,
 )
 from omnidriver.core.runtime.models import DataArtifact
-from plugins.quantity_toy import (
+from plugins.toy import (
     GRID_FORMAT, VALUES_FORMAT, ToyNearestRowReader, ToyRowReader, _FurlongReader, write_toy_values,
 )
 

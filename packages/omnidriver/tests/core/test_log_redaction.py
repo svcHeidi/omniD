@@ -30,7 +30,7 @@ def test_no_patterns_leave_the_file_untouched(tmp_path):
 def test_a_plugin_declared_pattern_redacts_the_real_workflow_runner_s_kept_log(tmp_path):
     """Runs through the real workflow runner (conformance C6), not a direct call to `redact_step_logs`, so a wiring mistake there is still caught."""
     from omnidriver.conformance import run_check
-    from plugins.conformance_toy import FAKE_CREDENTIAL_URL, LOG_REDACTION_PLUGIN, toy_conformance_target
+    from plugins.toy import FAKE_CREDENTIAL_URL, LOG_REDACTION_PLUGIN, toy_conformance_target
 
     target = toy_conformance_target(tmp_path, plugin=LOG_REDACTION_PLUGIN)
     verdict = run_check("C6", target)

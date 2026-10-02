@@ -18,7 +18,7 @@ from omnidriver.core.runtime.sweep_runner import _stage_entry_case
 from omnidriver.core.runtime.workflow_orchestrator import STATE_FILENAME, WORKFLOW_LOGS_DIRNAME
 from omnidriver.core.runtime_records import CORE_RUNTIME_RECORDS, case_runtime_conventions, with_core_runtime_records
 from omnidriver.core.tutorial_records import TutorialRecord, WorkflowStep
-from plugins.minimal_plugin import MinimalTestPlugin
+from plugins.toy import ToyProvider
 
 
 def _tree(root: Path) -> list[str]:
@@ -37,7 +37,7 @@ def test_core_names_every_file_it_writes_into_a_case():
 
 
 def test_a_stack_that_declares_nothing_still_knows_cores_records():
-    ctx = driver_context(MinimalTestPlugin(), source="test")
+    ctx = driver_context(ToyProvider(), source="test")
     assert case_runtime_conventions(ctx) == CORE_RUNTIME_RECORDS
 
 
@@ -87,7 +87,7 @@ def test_staging_drops_excluded_paths_at_any_depth_and_cores_records(tmp_path):
         (source / relpath).write_text(relpath)
     staged = tmp_path / "staged"
     _stage_entry_case(
-        source, staged, driver_context=driver_context(MinimalTestPlugin(), source="test"),
+        source, staged, driver_context=driver_context(ToyProvider(), source="test"),
         excluded_relpaths=frozenset({"out", "keep/gen.txt"}),
     )
     assert _tree(staged) == ["input.par", "keep", "keep/b.txt"]

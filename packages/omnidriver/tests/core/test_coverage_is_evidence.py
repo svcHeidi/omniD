@@ -6,7 +6,7 @@ from pathlib import Path
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.strict_planning import strict_plan
 from omnidriver.core.tutorial_records import case_folder_record
-from plugins.e2e_record_plugin import E2EFolderPlugin
+from plugins.toy import E2EFolderPlugin
 
 
 def _plan(tmp_path: Path):

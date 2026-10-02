@@ -19,11 +19,11 @@ from omnidriver.core.tutorial_records import (
     PARALLEL_STUDY_NAME, AxisContract, AxisResult, TutorialRecord, TutorialRecordError, WorkflowStep,
 )
 
-from plugins.parallel_toy import PARALLEL_TOY_PLUGIN
+from plugins.toy import PARALLEL_TOY_PLUGIN
 
 TESTS_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = Path(__file__).resolve().parents[4]
-E2E_PLUGIN = "plugins.e2e_record_plugin:E2ERecordPlugin"
+E2E_PLUGIN = "plugins.toy:ToyStack"
 
 THREE_STEPS = TutorialRecord(
     name="threeSteps", native_case_relpath="threeSteps",

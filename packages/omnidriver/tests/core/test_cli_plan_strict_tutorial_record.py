@@ -24,7 +24,7 @@ def test_plan_strict_over_a_tutorial_record_advertises_a_working_run_document_co
 
     exit_code = main([
         "plan", "--strict",
-        "--plugin", "plugins.e2e_record_plugin:E2ERecordPlugin",
+        "--plugin", "plugins.toy:ToyStack",
         "--entry", "toyTutorial",
         "--cases-root", str(cases_root),
         "--scratch-dir", str(tmp_path / "scratch"),
@@ -69,7 +69,7 @@ def test_run_strict_entry_over_a_tutorial_record_also_works_end_to_end(tmp_path,
 
     exit_code = main([
         "run", "--strict",
-        "--plugin", "plugins.e2e_record_plugin:E2ERecordPlugin",
+        "--plugin", "plugins.toy:ToyStack",
         "--entry", "toyTutorial",
         "--cases-root", str(cases_root),
         "--scratch-dir", str(tmp_path / "scratch"),
@@ -89,7 +89,7 @@ def test_plan_strict_over_a_tutorial_record_whose_native_case_is_missing_refuses
 
     exit_code = main([
         "plan", "--strict",
-        "--plugin", "plugins.e2e_record_plugin:E2ERecordPlugin",
+        "--plugin", "plugins.toy:ToyStack",
         "--entry", "toyTutorial",
         "--cases-root", str(empty_cases_root),
         "--scratch-dir", str(tmp_path / "scratch"),
@@ -110,13 +110,13 @@ def _one_case_sweep(tmp_path, cases_root):
 
 
 @pytest.mark.parametrize("plugin", [
-    "plugins.conformance_toy:RefusingRendererPlugin",
-    "plugins.conformance_toy:RefusingResolverPlugin",
-    "plugins.conformance_toy:RefusingReaderPlugin",
+    "plugins.toy:RefusingRendererPlugin",
+    "plugins.toy:RefusingResolverPlugin",
+    "plugins.toy:RefusingReaderPlugin",
 ])
 def test_a_renderer_resolver_or_reader_refusal_comes_back_as_the_cases_structured_error(tmp_path, capsys, plugin):
     """A refusal the plugin raises (a `ValueError` subclass, like openCARP's `ParFormatError`) while a case is committed -- from its case writer, or from the config-value reader reached through `split_unchanged` -- is that case's `materialization_error`, never a traceback."""
-    from plugins.conformance_toy import TOY_REFUSAL
+    from plugins.toy import TOY_REFUSAL
 
     cases_root = _native_toy_case(tmp_path)
     exit_code = main([
@@ -141,7 +141,7 @@ def test_plan_strict_against_a_read_only_tree_without_a_scratch_dir_refuses_as_j
     monkeypatch.delenv("OMNIDRIVER_SCRATCH_DIR", raising=False)
     before = sorted(p.relative_to(cases_root).as_posix() for p in cases_root.rglob("*"))
     argv = [
-        "plan", "--strict", "--plugin", "plugins.e2e_record_plugin:E2ERecordPlugin",
+        "plan", "--strict", "--plugin", "plugins.toy:ToyStack",
         "--entry", "toyTutorial", "--cases-root", str(cases_root),
     ]
     cases_root.chmod(stat.S_IRUSR | stat.S_IXUSR)
@@ -193,7 +193,7 @@ def test_a_record_sweep_refusal_is_the_clis_json_failure(
     spec = _write_spec(tmp_path, {"base": base, "sweep": sweep})
 
     exit_code = main([
-        action, "--plugin", "plugins.e2e_record_plugin:E2ERecordPlugin",
+        action, "--plugin", "plugins.toy:ToyStack",
         "--spec", str(spec), "--output-dir", str(tmp_path / "out"),
     ])
     captured = capsys.readouterr()
