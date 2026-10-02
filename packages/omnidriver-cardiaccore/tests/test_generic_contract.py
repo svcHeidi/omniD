@@ -32,7 +32,7 @@ def test_plugin_has_a_valid_context() -> None:
     assert context.capabilities.case_runtime_conventions.conventions().case_entrypoints == ("Allrun",)
 
 
-def test_plugin_exposes_agent_guidance_catalogs() -> None:
+def test_plugin_exposes_named_catalogs() -> None:
     catalogs = CardiacCorePlugin().get_named_catalogs()
     assert catalogs["cardiaccore_field_conventions"]["cobiveco_raw"]["tm"] == "0=epicardium, 1=endocardium"
     assert catalogs["cardiaccore_python_utilities"]["purkinje_coverage"]["status"] == "supported_array_method"
@@ -40,9 +40,6 @@ def test_plugin_exposes_agent_guidance_catalogs() -> None:
     conventions = catalogs["cardiaccore_field_conventions"]
     assert "coordinatesConventionDict" in conventions["authority"]
     assert set(conventions["coordinate_system_effects"]) == {"uvc", "cobiveco"}
-    guidance = catalogs["cardiaccore_agent_guidance"]
-    assert guidance["discovery"] == "plugin_named_catalogs"
-    assert guidance["runner"].endswith("agent_guidance/runner.md")
 
 
 def test_controlled_allrun_executes_without_domain_claims(tmp_path: Path, capsys) -> None:

@@ -1,0 +1,41 @@
+name = "refine1Dgraph"
+description = "Subdivide VTK line-graph segments longer than a maximum edge length."
+category = "io-conversion"
+
+purpose = """\
+Reads a legacy ASCII VTK line graph and splits every segment longer than \
+-maxEdgeLength into ceil(length/maxEdgeLength) equal straight sub-segments, writing \
+VTK POLYDATA 2-point lines. Inserted points lie on the chord between the segment \
+endpoints. Original node ids are kept; inserted nodes get interpolated point data and \
+the internal node role, and sub-segments inherit parent cell data plus parentCellId. \
+-maxEdgeLength is in metres; scale it to the mesh's length unit (e.g. 0.3 for a \
+millimetre mesh)."""
+inputs = [
+  "<input-vtk>",
+]
+positional_args = [
+  {name = "input", argument_kind = "path", description = "Input legacy ASCII VTK line graph."},
+  {name = "output", argument_kind = "path", description = "Output legacy ASCII VTK POLYDATA line graph."},
+]
+requires_mesh = false
+example = "refine1Dgraph postProcessing/generatePurkinjeTree/purkinje.vtk postProcessing/generatePurkinjeTree/purkinje-refined.vtk -maxEdgeLength 3e-4"
+
+[[flags]]
+name = "-maxEdgeLength"
+description = "Maximum segment length after refinement, in metres; scale it for non-metre meshes."
+takes_value = true
+argument_kind = "scalar"
+default = "3e-4"
+
+[[flags]]
+name = "-internalRole"
+description = "Node-role value written on inserted nodes (default: 1 for NodeType, 0 for nodeRole/node_role/role)."
+takes_value = true
+argument_kind = "label"
+
+[[produces]]
+artifact_id = "refined_purkinje_vtk"
+path_pattern = "<output-vtk>"
+format = "vtk_polydata"
+description = "Refined line graph at the caller-selected output path"
+produced_by = "refine1Dgraph"

@@ -227,7 +227,7 @@ name rather than guessed.
 | `compare` | a report checked against a pre-registered request | high; written once; relative paths resolve from the request's own directory | none known |
 | records | pointers, steps, routes, axes | high; pure data, gated | cardiacCore has none |
 | catalogs | cardiacFOAM hand-curated with C++ `source_refs`; openCARP generated from its binary | openCARP high (drift-gated); cardiacFOAM medium; cardiacCore low (one manual scan, no gate) | section 5.4 |
-| guidance | `record_surface` guidance; `guidance.md` for cardiacFOAM and openCARP; cardiacCore `agent_guidance/`; `AGENTS.md` and `agent-handbook/` | prose, by nature | the environment and machine steps an agent needs are in `CLAUDE.md`, not in any of these |
+| guidance | `record_surface` guidance; `guidance.md` for cardiacFOAM, cardiacCore and openCARP; `AGENTS.md` and `agent-handbook/` | prose, by nature | the environment and machine steps an agent needs are in `CLAUDE.md`, not in any of these |
 
 ---
 

@@ -8,19 +8,16 @@ the owner of its executables, dictionaries and case assets.
 
 ```python
 from omnidriver.cardiaccore import CardiacCorePlugin
-from omnidriver.cardiaccore.agent_guidance import read_guidance
 
-print(read_guidance("runner"))
+print(CardiacCorePlugin().get_agent_guidance()[0]["text"])
 catalogs = CardiacCorePlugin().get_named_catalogs()
 operation = catalogs["cardiaccore_operations"]["cardiaccore.coordinates.convention.v1"]
 print(operation["preconditions"])
 print(operation["entrypoints"])
 ```
 
-The guide and its manifest are package resources: this works without a source
-checkout. The manifest identifies required catalogs for each role. It does
-not itself inject instructions into an agent; provider integration remains
-outside this adapter.
+`guidance.md` is a package resource: this works without a source checkout.
+`describe` lists it under the record surface.
 
 An operation has an exact primary `module:function` reference and separate
 `entrypoints` for preparation, calculation or writing. Read each entrypoint's
@@ -75,13 +72,13 @@ identified prerequisite first.
 | --- | --- |
 | `plugin.py` / `plugin.yaml` | Compose capabilities and expose public catalogs |
 | `catalogs/inputs.py` | Reviewed input descriptions and conditional inputs |
-| `catalogs/utilities.py` | Native commands and their input/output contracts |
+| `utilities/<name>/utility.manifest.toml` | Native commands and their input/output contracts |
 | `catalogs/operations.py` | Canonical callable usage contracts |
 | `catalogs/purkinje.py` | Shared method constants and named baseline categories |
 | `catalogs/support_boundary.py` | Field context and workflow support boundary |
 | `workflows/` | Workflow order, allowed overrides and RunDocument configuration |
 | `operations/` | Python transformations, proposals and observations |
-| `agent_guidance/` | Packaged role manifest and short usage guidance |
+| `guidance.md` | Packaged agent guidance |
 
 `cardiaccore_python_utilities` remains a convenience index, derived from
 `cardiaccore_operations`; it is not another maintained set of claims.

@@ -5,18 +5,32 @@ from __future__ import annotations
 import os
 from copy import deepcopy
 from functools import lru_cache
+from importlib import resources
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 from omnidriver.core.plugin_profile import load_plugin_profile
+from omnidriver.core.utility_catalog import load_utility_manifests
 
 from .catalogs.inputs import CATALOG, CONDITIONAL_INPUTS, DOCUMENTS
-from .agent_guidance import describe_guidance
 from .catalogs.support_boundary import FIELD_CONVENTIONS, SUPPORT_BOUNDARY
 from .catalogs.operations import OPERATIONS, utility_index
 from .catalogs.purkinje import TREE_VALIDATION_CONTRACT
-from .catalogs.utilities import UTILITY_MANIFESTS
+
+
+# cardiacFoam's own manifests declare newVtkUnstructuredToFoam and
+# 1DgraphToFoam; declaring them here too would collide in the provider stack's
+# "map" composition, which refuses duplicate names without an overrides marker.
+_UTILITIES_ROOT = Path(__file__).parent / "utilities"
+
+
+@lru_cache(maxsize=1)
+def _utility_manifests() -> Any:
+    """Parsed once: loading walks the sidecar tree. Read-only so the shared
+    cache cannot be corrupted through a returned mapping."""
+    return MappingProxyType(load_utility_manifests(_UTILITIES_ROOT))
 
 
 class CardiacCorePlugin:
@@ -69,15 +83,9 @@ class CardiacCorePlugin:
         return {}
 
     def validate_configuration(self, spec: Any) -> tuple[Any, ...]:
-        """Check this spec's workflow-relevant catalog entries at plan time.
-
-        Delegates to ``workflows.run_config.validate_configuration``, so a
-        co-required pair left half-set in the resolved case is reported here
-        rather than only surfacing later at run/step time.
-        """
-        from .workflows.run_config import validate_configuration
-
-        return validate_configuration(spec, self)
+        """A generic case carries its configuration in its own files."""
+        del spec
+        return ()
 
     def validate_run_semantics(self, context: dict[str, Any]) -> tuple[Any, ...]:
         del context
@@ -91,13 +99,13 @@ class CardiacCorePlugin:
         return frozenset()
 
     def get_auxiliary_commands(self) -> frozenset[str]:
-        return frozenset(UTILITY_MANIFESTS)
+        return frozenset(_utility_manifests())
 
     def get_utility_manifests(self) -> dict[str, Any]:
-        return UTILITY_MANIFESTS
+        return dict(_utility_manifests())
 
     def get_utility_roots(self) -> tuple[Path, ...]:
-        return ()
+        return (_UTILITIES_ROOT,)
 
     def resolve_case_models(self, case_root: Path) -> dict[str, Any]:
         del case_root
@@ -116,9 +124,10 @@ class CardiacCorePlugin:
         }
 
     def build_run_document_config(self, spec):
-        from .workflows.run_config import build_config
-
-        return build_config(spec)
+        """Every spec is a generic case: its configuration lives in the case
+        files, never in the run document."""
+        del spec
+        return {}, ()
 
     def get_dict_entry_catalog(self) -> dict[str, Any]:
         return {name: list(entries) for name, entries in DOCUMENTS.items()}
@@ -132,7 +141,6 @@ class CardiacCorePlugin:
             "cardiaccore_python_utilities": utility_index(),
             "cardiaccore_support_boundary": SUPPORT_BOUNDARY,
             "cardiaccore_operations": OPERATIONS,
-            "cardiaccore_agent_guidance": describe_guidance(),
         })
 
     def get_solve_step_commands(self) -> frozenset[str]:
@@ -160,7 +168,7 @@ class CardiacCorePlugin:
         del case_root, resolved_case
         return tuple(sorted({
             produced.path_pattern
-            for manifest in UTILITY_MANIFESTS.values()
+            for manifest in _utility_manifests().values()
             for produced in manifest.produces
         }))
 
@@ -185,20 +193,8 @@ class CardiacCorePlugin:
         return record_key_catalog(case_root)
 
     def get_agent_guidance(self) -> tuple[dict[str, str], ...]:
-        return (
-            {
-                "title": "cardiacCore tutorial records",
-                "text": (
-                    "humanSlab runs setCardiacConductivity, setCardiacAnatomy, "
-                    "setPurkinjeSlab and setPurkinjeMorphometry over cases/bivCase. "
-                    "It needs one supplied input, 'anatomy' (--input anatomy=<dir>): "
-                    "the mesh, fiber, sheet and uvc_* fields, none of which are in "
-                    "the tracked case folder. A study addresses "
-                    "system/<utility>Dict directly, e.g. "
-                    "system/setPurkinjeSlabDict:thickness."
-                ),
-            },
-        )
+        text = resources.files(__package__).joinpath("guidance.md").read_text()
+        return ({"title": "cardiacCore: records, study keys and coordinate conventions", "text": text},)
 
     # -- CaseWriterCapability -------------------------------------------------
     def get_supported_mutation_modes(self) -> "frozenset[str]":

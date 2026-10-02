@@ -1,0 +1,96 @@
+name = "setCardiacScar"
+description = "Create myocardial scar severity fields from a selected cell region and optionally scale conductivity."
+category = "field-setup"
+
+purpose = """\
+Reads system/setCardiacScarDict and resolves its required selection as an OpenFOAM \
+cellSet or a VTU cell-data selection. It always writes Scar and ScarSeverity (or their \
+configured names), writes depth/channel/region debug fields only when writeDebugFields \
+is true, and optionally updates Conductivity plus existing intracellular/extracellular \
+conductivity tensors. The source supports topological or centre-to-centre euclidean \
+depth; euclidean depth has length dimensions, while topological depth is \
+dimensionless."""
+inputs = [
+  "system/setCardiacScarDict",
+  "<selection named by system/setCardiacScarDict>",
+]
+requires_mesh = true
+example = "setCardiacScar -case ."
+
+[[produces]]
+artifact_id = "scar"
+path_pattern = "<current-time>/Scar"
+format = "openfoam_field"
+description = "Scar-selection mask; the configured field name may differ."
+produced_by = "setCardiacScar"
+
+[[produces]]
+artifact_id = "scar_severity"
+path_pattern = "<current-time>/ScarSeverity"
+format = "openfoam_field"
+description = "Dimensionless scar severity field; the configured field name may differ."
+produced_by = "setCardiacScar"
+
+[[produces]]
+artifact_id = "scar_depth"
+path_pattern = "<current-time>/ScarDepth"
+format = "openfoam_field"
+description = "Scar depth; length for euclidean mode and dimensionless for topological mode. Written only with writeDebugFields true."
+produced_by = "setCardiacScar"
+optional = true
+
+[[produces]]
+artifact_id = "scar_normalized_depth"
+path_pattern = "<current-time>/ScarNormalizedDepth"
+format = "openfoam_field"
+description = "Per-component normalized scar depth, written only with writeDebugFields true."
+produced_by = "setCardiacScar"
+optional = true
+
+[[produces]]
+artifact_id = "scar_channel"
+path_pattern = "<current-time>/ScarChannel"
+format = "openfoam_field"
+description = "Channel-selection mask, written only with writeDebugFields true."
+produced_by = "setCardiacScar"
+optional = true
+
+[[produces]]
+artifact_id = "scar_region_id"
+path_pattern = "<current-time>/ScarRegionID"
+format = "openfoam_field"
+description = "Scar connected-component identifier, written only with writeDebugFields true."
+produced_by = "setCardiacScar"
+optional = true
+
+[[produces]]
+artifact_id = "scar_channel_region_id"
+path_pattern = "<current-time>/ScarChannelRegionID"
+format = "openfoam_field"
+description = "Channel connected-component identifier, written only with writeDebugFields true."
+produced_by = "setCardiacScar"
+optional = true
+
+[[produces]]
+artifact_id = "conductivity"
+path_pattern = "<current-time>/Conductivity"
+format = "openfoam_field"
+description = "Conductivity tensor updated when scaleConductivity is true."
+produced_by = "setCardiacScar"
+optional = true
+
+[[produces]]
+artifact_id = "conductivity_intracellular"
+path_pattern = "<current-time>/ConductivityIntracellular"
+format = "openfoam_field"
+description = "Existing intracellular tensor updated when conductivity scaling is enabled."
+produced_by = "setCardiacScar"
+optional = true
+
+[[produces]]
+artifact_id = "conductivity_extracellular"
+path_pattern = "<current-time>/ConductivityExtracellular"
+format = "openfoam_field"
+description = "Existing extracellular tensor updated when conductivity scaling is enabled."
+produced_by = "setCardiacScar"
+optional = true

@@ -29,16 +29,8 @@ requires:
 # run_document_configuration is genuinely implemented: a per-tutorial
 # $CARDIAC_CONDUCTIVITY/... schema, not a stub.
 #
-# configuration_validator's validate_configuration is also genuinely
-# implemented, wired to workflows/run_config.validate_configuration: it
-# checks the spec's own workflow-relevant catalog entries against the
-# resolved case at plan time (required / enum / co_required_with /
-# mutually_exclusive_with), by composing this provider with the OpenFOAM
-# environment adapter it requires and reusing core's validate_run, and it
-# exempts a generic case_folder run (spec.metadata["generic_case"]). It is
-# still not declared in provides: below -- undeclared-but-real is a
-# different gap than hollowness, and the realness standard above does not
-# settle it.
+# configuration_validator is withheld: validate_configuration returns () for
+# every spec, since a generic case carries its configuration in its own files.
 #
 # Realness governs check_provides(); it does not reach resolutions()
 # (provider_stack.py), which picks each capability's winner purely by

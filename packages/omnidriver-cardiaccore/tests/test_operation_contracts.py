@@ -1,4 +1,4 @@
-"""Exercise the public discovery-to-call path, including packaged guidance."""
+"""Exercise the public discovery-to-call path."""
 
 import importlib
 import inspect
@@ -8,7 +8,6 @@ import numpy as np
 import pytest
 
 from omnidriver.cardiaccore import CardiacCorePlugin
-from omnidriver.cardiaccore.agent_guidance import read_guidance
 
 
 def _resolve(reference):
@@ -36,16 +35,9 @@ def test_advertised_operations_have_resolvable_interfaces():
             assert entry["outputs"] and entry["side_effects"]
 
 
-def test_guidance_is_readable_and_catalogs_are_independent_snapshots():
+def test_catalogs_are_independent_snapshots():
     plugin = CardiacCorePlugin()
     catalogs = plugin.get_named_catalogs()
-    guide = catalogs["cardiaccore_agent_guidance"]
-    reader = _resolve(guide["reader"])
-    for role, record in guide["roles"].items():
-        assert reader(role) == read_guidance(role)
-        assert set(record["required_catalogs"]) <= catalogs.keys()
-    with pytest.raises(ValueError, match="Unknown"):
-        reader("../../README")
     operation_id = "cardiaccore.purkinje.coverage_observation.v1"
     catalogs["cardiaccore_operations"][operation_id]["status"]["array_api"] = "broken"
     fresh = plugin.get_named_catalogs()
